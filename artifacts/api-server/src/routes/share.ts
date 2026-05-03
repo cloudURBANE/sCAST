@@ -2,6 +2,8 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { usersTable, userFragrancesTable, userSettingsTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
+import { getCatalogEntry } from "../services/catalogService";
+import { searchImageUrl } from "../services/imageService";
 
 const router = Router();
 
@@ -54,9 +56,27 @@ router.get("/share/:userId", async (req, res) => {
     db.select().from(userFragrancesTable).where(eq(userFragrancesTable.userId, userId)),
   ]);
 
-  const fragrances = fragranceRows
+  const rawFragrances = fragranceRows
     .map(r => r.fragranceData as Record<string, any>)
     .filter(data => !data.shareHidden);
+
+  const fragrances = await Promise.all(
+    rawFragrances.map(async (frag) => {
+      if (frag.imageUrl) return frag;
+      const name = frag.name as string | undefined;
+      const brand = frag.brand as string | undefined;
+      if (!name || !brand) return frag;
+      try {
+        const catalog = await getCatalogEntry(brand, name);
+        if (catalog?.imageUrl) return { ...frag, imageUrl: catalog.imageUrl };
+        const freshUrl = await searchImageUrl(`${brand} ${name}`);
+        if (freshUrl) return { ...frag, imageUrl: freshUrl };
+      } catch {
+        /* non-fatal */
+      }
+      return frag;
+    })
+  );
 
   res.json({ fragrances, hideImages: settings.shareHideImages });
 });

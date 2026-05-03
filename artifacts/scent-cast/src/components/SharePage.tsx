@@ -36,6 +36,12 @@ function amazonUrl(brand: string, name: string): string {
   return `https://www.amazon.com/s?k=${query}`;
 }
 
+function proxiedImageUrl(url: string): string {
+  if (!url) return "";
+  if (url.startsWith("data:")) return url;
+  return `/api/image-proxy?url=${encodeURIComponent(url)}`;
+}
+
 export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
   const [data, setData] = useState<ShareData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -102,14 +108,25 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                     className="glass-acrylic rounded-scent overflow-hidden cursor-pointer transition-all duration-500 hover:-translate-y-2 hover:shadow-[0_20px_50px_rgba(255,255,255,0.08)]"
                     onClick={() => setExpanded(expanded === item.id ? null : item.id)}
                   >
-                    {!data.hideImages && item.imageUrl && (
+                    {!data.hideImages && (
                       <div className="aspect-[3/4] p-8 flex items-center justify-center bg-white/[0.02]">
-                        <img
-                          src={item.imageUrl}
-                          alt={item.name}
-                          referrerPolicy="no-referrer"
-                          className="max-w-full max-h-full w-auto h-auto object-contain brightness-[1.05] group-hover:scale-105 transition-transform duration-700"
-                        />
+                        {item.imageUrl ? (
+                          <img
+                            src={proxiedImageUrl(item.imageUrl)}
+                            alt={item.name}
+                            className="max-w-full max-h-full w-auto h-auto object-contain brightness-[1.05] group-hover:scale-105 transition-transform duration-700"
+                            onError={(e) => {
+                              const target = e.currentTarget;
+                              target.style.display = "none";
+                              const fallback = target.nextElementSibling as HTMLElement | null;
+                              if (fallback) fallback.style.display = "flex";
+                            }}
+                          />
+                        ) : null}
+                        <div className="text-center space-y-2 px-6" style={{ display: item.imageUrl ? "none" : "flex", flexDirection: "column", alignItems: "center" }}>
+                          <p className="text-[9px] uppercase tracking-[0.5em] text-white/20 font-bold">{item.brand}</p>
+                          <p className="font-serif italic text-2xl text-white leading-tight">{item.name}</p>
+                        </div>
                       </div>
                     )}
                     {data.hideImages && (
