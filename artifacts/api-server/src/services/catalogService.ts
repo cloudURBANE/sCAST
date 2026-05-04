@@ -14,6 +14,9 @@ export async function getCatalogEntry(brand: string, name: string): Promise<Scen
     .from(globalFragrancesTable)
     .where(eq(globalFragrancesTable.lookupKey, key))
     .limit(1);
+  // #region agent log
+  fetch('http://127.0.0.1:7745/ingest/484c0150-587d-4568-9bd7-b30ce5dec585',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'6001a3'},body:JSON.stringify({sessionId:'6001a3',hypothesisId:'C_catalog_lookup',location:'catalogService.ts:getCatalogEntry',message:'exact lookup_key result',data:{inputBrand:brand,inputName:name,key,hit:rows.length>0,returnedName:rows[0]?.name??null,returnedBrand:rows[0]?.brand??null,returnedLookupKey:rows[0]?.lookupKey??null},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
   if (rows.length === 0) return null;
   return rows[0].profileData as ScentProfile;
 }
@@ -37,6 +40,10 @@ export async function searchCatalog(query: string): Promise<ScentProfile | null>
       )
     )
     .limit(1);
+
+  // #region agent log
+  fetch('http://127.0.0.1:7745/ingest/484c0150-587d-4568-9bd7-b30ce5dec585',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'6001a3'},body:JSON.stringify({sessionId:'6001a3',hypothesisId:'C_fuzzy_match',location:'catalogService.ts:searchCatalog',message:'fuzzy ILIKE result',data:{inputQuery:query,normalizedQ:q,hit:rows.length>0,returnedName:rows[0]?.name??null,returnedBrand:rows[0]?.brand??null,returnedLookupKey:rows[0]?.lookupKey??null},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
 
   if (rows.length === 0) return null;
   return rows[0].profileData as ScentProfile;
