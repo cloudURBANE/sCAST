@@ -79,17 +79,10 @@ router.get("/wardrobe", async (req, res) => {
     .from(userFragrancesTable)
     .where(eq(userFragrancesTable.userId, user.id));
 
-  // #region agent log
-  fetch('http://127.0.0.1:7745/ingest/484c0150-587d-4568-9bd7-b30ce5dec585',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'6001a3'},body:JSON.stringify({sessionId:'6001a3',hypothesisId:'A_data_audit',location:'wardrobe.ts:GET /wardrobe',message:'rows fetched from user_fragrances',data:{userEmail:user.email,userId:user.id,rowCount:rows.length,rowSummaries:rows.map(r=>{const d=r.fragranceData as Record<string,any>;return {dbId:r.id,topName:d?.name??null,topBrand:d?.brand??null,productName:d?.product?.name??null,productBrand:d?.product?.brand??null,hasImageUrl:Boolean(d?.imageUrl),imageUrlLen:typeof d?.imageUrl==='string'?d.imageUrl.length:0,imageUrlKind:typeof d?.imageUrl==='string'?(d.imageUrl.startsWith('data:')?'data':d.imageUrl.startsWith('http')?'http':d.imageUrl===''?'empty':'other'):'missing',shareHidden:Boolean(d?.shareHidden)};})},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
-
   const fragrances = await Promise.all(
     rows.map(async (r) => {
       const data = normalizeFragrance(r.fragranceData as Record<string, any>);
       const hydrated = await hydrateImageUrl(data);
-      // #region agent log
-      fetch('http://127.0.0.1:7745/ingest/484c0150-587d-4568-9bd7-b30ce5dec585',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'6001a3'},body:JSON.stringify({sessionId:'6001a3',hypothesisId:'A_data_audit',location:'wardrobe.ts:GET /wardrobe row',message:'post-normalize+hydrate row',data:{dbId:r.id,name:hydrated?.name??null,brand:hydrated?.brand??null,hasImageUrl:Boolean(hydrated?.imageUrl),imageUrlKind:typeof hydrated?.imageUrl==='string'?(hydrated.imageUrl.startsWith('data:')?'data':hydrated.imageUrl.startsWith('http')?'http':hydrated.imageUrl===''?'empty':'other'):'missing'},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       return { ...hydrated, _dbId: r.id };
     })
   );
@@ -166,10 +159,6 @@ router.post("/wardrobe/rebuild", async (req, res) => {
           (typeof data.product?.perfumer === "string" ? data.product.perfumer : undefined),
         imageUrl: typeof data.imageUrl === "string" ? data.imageUrl : undefined,
       });
-
-      // #region agent log
-      fetch('http://127.0.0.1:7745/ingest/484c0150-587d-4568-9bd7-b30ce5dec585',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'6001a3'},body:JSON.stringify({sessionId:'6001a3',hypothesisId:'D_rebuild_overwrite',location:'wardrobe.ts:rebuild row',message:'buildProfile result vs input',data:{dbId:r.id,inputName:name,inputBrand:brand,outputName:('product' in profile)?profile.product?.name:null,outputBrand:('product' in profile)?profile.product?.brand:null,nameDrift:('product' in profile)?(profile.product?.name??'').toLowerCase()!==name.toLowerCase():null,brandDrift:('product' in profile)?(profile.product?.brand??'').toLowerCase()!==brand.toLowerCase():null,hasError:!('product' in profile),errorMsg:!('product' in profile)?profile.error:null,outputImageKind:('product' in profile && typeof profile.imageUrl==='string')?(profile.imageUrl.startsWith('data:')?'data':profile.imageUrl.startsWith('http')?'http':'empty'):'missing'},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
 
       if (!("product" in profile)) {
         skipped++;

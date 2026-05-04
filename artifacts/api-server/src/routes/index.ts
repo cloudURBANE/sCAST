@@ -6,6 +6,7 @@ import oauthRouter from "./oauth";
 import wardrobeRouter from "./wardrobe";
 import shareRouter from "./share";
 import imageProxyRouter from "./imageProxy";
+import debugRouter from "./debug";
 
 const router: IRouter = Router();
 
@@ -16,5 +17,6 @@ router.use(oauthRouter);
 router.use(wardrobeRouter);
 router.use(shareRouter);
 router.use(imageProxyRouter);
+router.use(debugRouter);
 
 export default router;
