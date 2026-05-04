@@ -6,6 +6,7 @@ import { getCatalogEntry, saveCatalogEntry, flattenProfile } from "../services/c
 import { ai } from "@workspace/integrations-gemini-ai";
 import { logger } from "../lib/logger";
 import type { ScentProfile } from "../services/scentEngine";
+import { resolveSharedImageUrl } from "../services/imageHydration";
 
 const router = Router();
 
@@ -40,8 +41,8 @@ async function hydrateImageUrl(fragrance: Record<string, any>): Promise<Record<s
   const brand = fragrance.brand as string | undefined;
   if (!name || !brand) return fragrance;
   try {
-    const catalog = await getCatalogEntry(brand, name);
-    if (catalog?.imageUrl) return { ...fragrance, imageUrl: catalog.imageUrl };
+    const imageUrl = await resolveSharedImageUrl(brand, name);
+    if (imageUrl) return { ...fragrance, imageUrl };
   } catch {
     /* non-fatal */
   }
