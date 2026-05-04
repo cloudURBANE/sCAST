@@ -1,0 +1,23 @@
+# Dependencies and build outputs (reinstalled / rebuilt in image)
+**/node_modules
+**/dist
+**/.turbo
+**/.cache
+
+# Git and tooling
+.git
+.github
+.cursor
+**/*.tsbuildinfo
+
+# Secrets and local env (never copy into image layers)
+.env
+.env.*
+!.env.example
+ScentCast.env
+**/*.pem
+
+# Large or irrelevant for API image
+**/coverage
+**/.expo
+**/.expo-shared
