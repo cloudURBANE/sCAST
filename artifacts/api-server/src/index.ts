@@ -1,3 +1,6 @@
+// Must run before `./app` — ES modules evaluate imports before other statements,
+// so dotenv side effects live in this dependency-free module.
+import "./env-bootstrap";
 import app from "./app";
 import { logger } from "./lib/logger";
 
@@ -15,7 +18,7 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-app.listen(port, (err) => {
+app.listen(port, "0.0.0.0", (err) => {
   if (err) {
     logger.error({ err }, "Error listening on port");
     process.exit(1);

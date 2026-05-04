@@ -6,6 +6,18 @@ import { eq, and } from "drizzle-orm";
 const router = Router();
 
 function getBaseUrl(req: import("express").Request): string {
+  const explicit = process.env.OAUTH_PUBLIC_URL?.trim().replace(/\/+$/, "");
+  if (explicit) {
+    return explicit;
+  }
+  const publicApp = process.env.PUBLIC_APP_URL?.trim().replace(/\/+$/, "");
+  if (publicApp) {
+    return publicApp;
+  }
+  const frontend = process.env.FRONTEND_URL?.trim().replace(/\/+$/, "");
+  if (frontend) {
+    return frontend;
+  }
   const domains = process.env.REPLIT_DOMAINS;
   if (domains) {
     return `https://${domains.split(",")[0]}`;
