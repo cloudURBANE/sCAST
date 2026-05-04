@@ -6,7 +6,7 @@ let initAttempted = false;
 
 // In-flight deduplication: prevents cache stampede when multiple users
 // request the same uncached fragrance simultaneously. All concurrent callers
-// share one Promise instead of each spawning their own remove.bg API call.
+// share one Promise instead of each spawning their own background-removal API call.
 const inFlight = new Map<string, Promise<string | null>>();
 
 function normalizeKey(brand: string, name: string): string {
@@ -131,7 +131,7 @@ export async function getOrCreateCachedImage(
         }
       }
 
-      // 2. Cache miss — run the caller's fetch (image search + remove.bg)
+      // 2. Cache miss — run the caller's fetch (image search + background removal)
       const result = await fetchFn();
 
       // 3. Persist valid PNG results only

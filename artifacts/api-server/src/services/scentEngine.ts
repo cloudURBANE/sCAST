@@ -73,7 +73,7 @@ export async function buildProfile(
   if (fuzzy) return fuzzy;
 
   // 2. Resolve image: check Firestore by name+brand first; on miss, run image
-  // search + remove.bg exactly once even if many users request simultaneously.
+  // search + background removal exactly once even if many users request simultaneously.
   const cleanImageUrl = await getOrCreateCachedImage(
     brand,
     name,

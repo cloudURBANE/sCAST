@@ -58,7 +58,7 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
 **Services:**
 - `weatherService.ts` — OpenWeatherMap (3.0 + 2.5 fallback)
 - `imageService.ts` — Google CSE → Bing scraper → Unsplash image search
-- `bgService.ts` — remove.bg API + sharp normalization
+- `bgService.ts` — Poof API + sharp normalization
 - `scentEngine.ts` — Core orchestrator for profile building
 - `scentParser.ts` — Parse fragrance data
 - `scentVectorizer.ts` — Compute 6-axis scent vector + performance + context
@@ -70,5 +70,5 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
 ## Environment Variables (Optional)
 - `WEATHER_API_KEY` — OpenWeatherMap API key for live weather data
 - `GOOGLE_API_KEY` + `GOOGLE_CSE_ID` — Google Custom Search for fragrance images
-- `REMOVE_BG_API_KEY` — remove.bg for background removal from bottle images
+- `REMOVE_BG_API_KEY` — Poof API key for background removal from bottle images
 - `AI_INTEGRATIONS_GEMINI_BASE_URL` + `AI_INTEGRATIONS_GEMINI_API_KEY` — Replit Gemini integration (auto-provisioned)

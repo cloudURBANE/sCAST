@@ -268,7 +268,7 @@ router.post("/refresh-image", async (req, res) => {
       return;
     }
 
-    // Background removal is best-effort — a URL parse error here must not kill the route
+    // Background removal is best-effort — a provider error here must not kill the route
     let finalImageUrl = safeUrl;
     try {
       const { cleanImage } = await removeBg(safeUrl, true);
