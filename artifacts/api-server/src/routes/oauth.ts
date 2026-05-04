@@ -18,6 +18,12 @@ function getBaseUrl(req: import("express").Request): string {
   if (frontend) {
     return frontend;
   }
+  // Vercel (and other proxies) set these; Host is still the upstream (e.g. Railway).
+  const forwardedHost = req.get("x-forwarded-host")?.split(",")[0]?.trim();
+  const forwardedProto = req.get("x-forwarded-proto")?.split(",")[0]?.trim();
+  if (forwardedHost) {
+    return `${forwardedProto || "https"}://${forwardedHost}`;
+  }
   const domains = process.env.REPLIT_DOMAINS;
   if (domains) {
     return `https://${domains.split(",")[0]}`;

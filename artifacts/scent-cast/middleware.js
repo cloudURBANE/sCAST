@@ -47,5 +47,15 @@ export default async function middleware(request) {
     init.duplex = "half";
   }
 
-  return fetch(targetUrl, init);
+  try {
+    return await fetch(targetUrl, init);
+  } catch (err) {
+    console.error("[middleware] proxy fetch failed:", targetUrl, err?.message ?? err);
+    return new Response(
+      JSON.stringify({
+        error: "Could not reach API backend. Check BACKEND_ORIGIN on Vercel matches your Railway URL.",
+      }),
+      { status: 502, headers: { "content-type": "application/json" } },
+    );
+  }
 }
