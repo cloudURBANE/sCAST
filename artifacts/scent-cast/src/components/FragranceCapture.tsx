@@ -23,6 +23,7 @@ export const FragranceCapture: React.FC<{ onAdd?: (item: any) => void }> = ({ on
   const [mode, setMode] = useState<'vision' | 'search'>('vision');
   const [errorStatus, setErrorStatus] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
+  const enableSearchFallback = import.meta.env.VITE_ENABLE_SEARCH_FALLBACK === 'true';
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0];
@@ -82,25 +83,26 @@ export const FragranceCapture: React.FC<{ onAdd?: (item: any) => void }> = ({ on
         setErrorStatus(finalProfile?.error || "Synthesis failed");
       }
     } catch (err: any) {
-      try {
-        // #region agent log
-        fetch('http://127.0.0.1:7745/ingest/484c0150-587d-4568-9bd7-b30ce5dec585',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4aee09'},body:JSON.stringify({sessionId:'4aee09',runId:'pre-fix',hypothesisId:'H6',location:'FragranceCapture.tsx:handleSearch:catch',message:'Search catch triggered; fallback route about to run',data:{errorMessage:String(err?.message||'unknown'),path:window.location.pathname,origin:window.location.origin,queryLength:searchQuery.trim().length},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
-        setLoadingStatus("Retrying via Fallback Engine...");
-        const res = await fetch('/api/search-scent', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query: searchQuery }),
-        });
-        const data = await res.json();
-        if (data && !data.error) {
-          setMatches([data]);
-          setSelectedIdx(0);
-        } else {
-          setErrorStatus(err.message || "Search failed.");
+      if (!enableSearchFallback) {
+        setErrorStatus(err?.message || "Search failed.");
+      } else {
+        try {
+          setLoadingStatus("Retrying via Fallback Engine...");
+          const res = await fetch('/api/search-scent', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: searchQuery }),
+          });
+          const data = await res.json();
+          if (data && !data.error) {
+            setMatches([data]);
+            setSelectedIdx(0);
+          } else {
+            setErrorStatus(err.message || "Search failed.");
+          }
+        } catch {
+          setErrorStatus("Identification failed. Please check your connection.");
         }
-      } catch {
-        setErrorStatus("Identification failed. Please check your connection.");
       }
     } finally {
       setUploading(false);
