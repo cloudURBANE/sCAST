@@ -83,6 +83,9 @@ export const FragranceCapture: React.FC<{ onAdd?: (item: any) => void }> = ({ on
       }
     } catch (err: any) {
       try {
+        // #region agent log
+        fetch('http://127.0.0.1:7745/ingest/484c0150-587d-4568-9bd7-b30ce5dec585',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4aee09'},body:JSON.stringify({sessionId:'4aee09',runId:'pre-fix',hypothesisId:'H6',location:'FragranceCapture.tsx:handleSearch:catch',message:'Search catch triggered; fallback route about to run',data:{errorMessage:String(err?.message||'unknown'),path:window.location.pathname,origin:window.location.origin,queryLength:searchQuery.trim().length},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
         setLoadingStatus("Retrying via Fallback Engine...");
         const res = await fetch('/api/search-scent', {
           method: 'POST',
