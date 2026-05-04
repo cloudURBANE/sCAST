@@ -579,11 +579,7 @@ export default function App() {
               items={items}
               onDelete={handleDeleteItem}
               onUpdateImage={handleUpdateImage}
-              onSynthesized={(id, updated) => {
-                setItems(prev => prev.map(item => item.id === id ? updated : item));
-              }}
               featuredItem={activeRecommendation}
-              authToken={authToken}
             />
           </div>
         </div>

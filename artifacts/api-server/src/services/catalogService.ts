@@ -61,7 +61,7 @@ export async function saveCatalogEntry(brand: string, name: string, profile: Sce
     });
 }
 
-/** Flatten a ScentProfile into the flat shape the frontend/Gemini route expects */
+/** Flatten a ScentProfile into the flat shape the frontend expects */
 export function flattenProfile(profile: ScentProfile): Record<string, unknown> {
   return {
     name: profile.product.name,

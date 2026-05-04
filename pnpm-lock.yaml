@@ -83,18 +83,12 @@ importers:
 
   artifacts/api-server:
     dependencies:
-      '@google/genai':
-        specifier: ^1.44.0
-        version: 1.51.0
       '@workspace/api-zod':
         specifier: workspace:*
         version: link:../../lib/api-zod
       '@workspace/db':
         specifier: workspace:*
         version: link:../../lib/db
-      '@workspace/integrations-gemini-ai':
-        specifier: workspace:*
-        version: link:../../lib/integrations-gemini-ai
       axios:
         specifier: ^1.9.0
         version: 1.15.2

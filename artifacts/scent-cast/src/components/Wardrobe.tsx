@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Trash2, ShieldCheck, Wind, Check, RefreshCw, Zap } from 'lucide-react';
+import { X, Trash2, ShieldCheck, Wind, Check, RefreshCw } from 'lucide-react';
 
 export interface ScentVector {
   freshness: number;
@@ -37,47 +37,19 @@ export const Wardrobe: React.FC<{
   items: Fragrance[];
   onDelete: (id: string) => void;
   onUpdateImage?: (id: string, imageUrl: string) => void;
-  onSynthesized?: (id: string, updated: Fragrance) => void;
   featuredItem?: Fragrance | null;
-  authToken?: string | null;
-}> = ({ items, onDelete, onUpdateImage, onSynthesized, featuredItem, authToken }) => {
+}> = ({ items, onDelete, onUpdateImage, featuredItem }) => {
   const [selectedItem, setSelectedItem] = React.useState<Fragrance | null>(null);
   const [searchQuery, setSearchQuery] = React.useState("");
   const [clickCounts, setClickCounts] = React.useState<Record<string, number>>({});
   const [refreshingId, setRefreshingId] = React.useState<string | null>(null);
   const [refreshError, setRefreshError] = React.useState<string | null>(null);
-  const [synthesizingId, setSynthesizingId] = React.useState<string | null>(null);
-  const [synthesisError, setSynthesisError] = React.useState<string | null>(null);
-
   const CLICK_THRESHOLD = 9;
 
   const handleCardClick = (item: Fragrance) => {
     const next = (clickCounts[item.id] ?? 0) + 1;
     setClickCounts(prev => ({ ...prev, [item.id]: next }));
     if (next < CLICK_THRESHOLD) setSelectedItem(item);
-  };
-
-  const handleSynthesize = async (item: Fragrance) => {
-    setSynthesizingId(item.id);
-    setSynthesisError(null);
-    try {
-      const res = await fetch(`/api/wardrobe/${item.id}/synthesize`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-        },
-      });
-      const data = await res.json();
-      if (!res.ok || data.error) throw new Error(data.error || 'Synthesis failed');
-      const updated: Fragrance = { ...item, ...data, synthesized: true };
-      setSelectedItem(updated);
-      onSynthesized?.(item.id, updated);
-    } catch (err: any) {
-      setSynthesisError(err.message || 'Synthesis failed');
-    } finally {
-      setSynthesizingId(null);
-    }
   };
 
   const handleDismissOverlay = (e: React.MouseEvent, id: string) => {
@@ -379,32 +351,10 @@ export const Wardrobe: React.FC<{
                 className="px-5 pt-3 shrink-0 border-t border-white/5 flex flex-col gap-2"
                 style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))' }}
               >
-                {synthesisError && (
-                  <p className="text-[9px] text-red-400/80 text-center leading-snug px-2 py-1">{synthesisError}</p>
-                )}
                 <div className="flex gap-3">
-                  {!selectedItem.synthesized && (
-                    <button
-                      onClick={() => handleSynthesize(selectedItem)}
-                      disabled={synthesizingId === selectedItem.id}
-                      className="flex-1 py-4 bg-white text-black uppercase tracking-[0.3em] text-[10px] font-bold hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-                    >
-                      {synthesizingId === selectedItem.id ? (
-                        <><RefreshCw size={11} className="animate-spin" /> Synthesizing...</>
-                      ) : (
-                        <><Zap size={11} /> Initialize Synthesis</>
-                      )}
-                    </button>
-                  )}
-                  {selectedItem.synthesized && (
-                    <div className="flex-1 py-4 border border-white/10 text-white/30 uppercase tracking-[0.3em] text-[10px] font-bold flex items-center justify-center gap-2">
-                      <Check size={11} className="text-scent-accent" />
-                      <span>Synthesis Complete</span>
-                    </div>
-                  )}
                   <button
                     onClick={() => { onDelete(selectedItem.id); setSelectedItem(null); }}
-                    className="px-5 py-4 bg-transparent border border-white/10 text-white/30 uppercase tracking-[0.3em] text-[10px] font-bold hover:border-red-500/50 hover:text-red-500 transition-all flex items-center justify-center gap-2 group"
+                    className="w-full px-5 py-4 bg-transparent border border-white/10 text-white/30 uppercase tracking-[0.3em] text-[10px] font-bold hover:border-red-500/50 hover:text-red-500 transition-all flex items-center justify-center gap-2 group"
                   >
                     <Trash2 size={14} className="group-hover:animate-bounce" />
                   </button>
