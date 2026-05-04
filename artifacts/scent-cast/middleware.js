@@ -4,13 +4,18 @@
  *
  * Set BACKEND_ORIGIN in Vercel → Environment Variables (no trailing slash), e.g.
  * https://your-service.up.railway.app
+ *
+ * Implemented as .js (not .ts) so Vercel’s middleware bundler is not affected by
+ * tsconfig.json "noEmit": true, which otherwise yields "Emit skipped".
  */
+
 export const config = {
   matcher: "/api/:path*",
   runtime: "nodejs",
 };
 
-export default async function middleware(request: Request): Promise<Response> {
+/** @param {Request} request @returns {Promise<Response>} */
+export default async function middleware(request) {
   const backend = process.env.BACKEND_ORIGIN?.trim().replace(/\/+$/, "");
   if (!backend) {
     return new Response(
@@ -30,7 +35,8 @@ export default async function middleware(request: Request): Promise<Response> {
   headers.set("x-forwarded-host", url.host);
   headers.set("x-forwarded-proto", url.protocol.replace(":", ""));
 
-  const init: RequestInit & { duplex?: "half" } = {
+  /** @type {RequestInit & { duplex?: "half" }} */
+  const init = {
     method: request.method,
     headers,
     redirect: "manual",
