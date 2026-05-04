@@ -82,7 +82,7 @@ export async function buildProfile(
       try {
         const searchQuery = `${brand} ${name} single fragrance bottle no box HQ`;
         const searchRes = await searchImageUrl(searchQuery);
-        if (searchRes && !searchRes.includes("unsplash-placeholder")) {
+        if (searchRes) {
           imageUrl = searchRes;
         }
       } catch {

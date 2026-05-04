@@ -1,31 +1,47 @@
 import axios from "axios";
 import sharp from "sharp";
+import { logger } from "../lib/logger";
 
 const POOF_API = "https://api.poof.bg/v1/remove";
+const CANVAS_SIZE = 768;
+const EDGE_PADDING = 30;
+const CONTENT_SIZE = CANVAS_SIZE - EDGE_PADDING * 2;
 
-async function padAndCenter(buffer: Buffer): Promise<Buffer> {
+async function normalizeToBottleCanvas(buffer: Buffer): Promise<Buffer> {
   try {
-    return await sharp(buffer)
-      .resize(600, 600, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
-      .extend({ top: 30, bottom: 30, left: 30, right: 30, background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    const normalized = await sharp(buffer)
+      .resize(CONTENT_SIZE, CONTENT_SIZE, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
+      .extend({ top: EDGE_PADDING, bottom: EDGE_PADDING, left: EDGE_PADDING, right: EDGE_PADDING, background: { r: 0, g: 0, b: 0, alpha: 0 } })
+      .resize(CANVAS_SIZE, CANVAS_SIZE, { fit: "fill", background: { r: 0, g: 0, b: 0, alpha: 0 } })
       .png()
       .toBuffer();
+
+    const meta = await sharp(normalized).metadata();
+    if (meta.width !== CANVAS_SIZE || meta.height !== CANVAS_SIZE) {
+      throw new Error(`normalize canvas mismatch: ${meta.width}x${meta.height}`);
+    }
+
+    return normalized;
   } catch {
-    return buffer;
+    return sharp(buffer)
+      .resize(CONTENT_SIZE, CONTENT_SIZE, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
+      .extend({ top: EDGE_PADDING, bottom: EDGE_PADDING, left: EDGE_PADDING, right: EDGE_PADDING, background: { r: 0, g: 0, b: 0, alpha: 0 } })
+      .png()
+      .toBuffer();
   }
 }
 
 async function trimWhiteAndNormalize(buffer: Buffer): Promise<Buffer> {
   try {
-    return await sharp(buffer)
+    const trimmed = await sharp(buffer)
       .flatten({ background: { r: 255, g: 255, b: 255 } })
       .trim({ threshold: 40 })
-      .resize(600, 600, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
-      .extend({ top: 30, bottom: 30, left: 30, right: 30, background: { r: 0, g: 0, b: 0, alpha: 0 } })
+      .ensureAlpha()
       .png()
       .toBuffer();
+    return normalizeToBottleCanvas(trimmed);
   } catch {
-    return buffer;
+    return normalizeToBottleCanvas(buffer);
   }
 }
 
@@ -89,7 +105,7 @@ export async function removeBg(input: string, isUrl = false) {
 
     const result = await removeBgByFile(Buffer.from(b64, "base64"), apiKey);
     if (result) {
-      const padded = await padAndCenter(result);
+      const padded = await normalizeToBottleCanvas(result);
       return { cleanImage: toDataUri(padded) };
     }
 
@@ -114,11 +130,12 @@ export async function removeBg(input: string, isUrl = false) {
 
   const byFile = await removeBgByFile(raw, apiKey);
   if (byFile) {
-    const padded = await padAndCenter(byFile);
+    const padded = await normalizeToBottleCanvas(byFile);
     return { cleanImage: toDataUri(padded) };
   }
 
   // Strategy 2: local white-trim normalization as last resort
+  logger.warn("[bgService] Poof remove failed; using local normalization fallback");
   const normalized = await trimWhiteAndNormalize(raw);
   return { cleanImage: toDataUri(normalized) };
 }
