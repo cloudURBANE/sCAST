@@ -12,12 +12,15 @@ interface FragranceMatch {
   pyramid?: any;
 }
 
+type ConcentrationHint = 'any' | 'edt' | 'edp';
+
 export const FragranceCapture: React.FC<{ onAdd?: (item: any) => void }> = ({ onAdd }) => {
   const [uploading, setUploading] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState("");
   const [matches, setMatches] = useState<FragranceMatch[]>([]);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [concentrationHint, setConcentrationHint] = useState<ConcentrationHint>('any');
   const [errorStatus, setErrorStatus] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
 
@@ -33,7 +36,10 @@ export const FragranceCapture: React.FC<{ onAdd?: (item: any) => void }> = ({ on
       const res = await fetch('/api/search-scent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: searchQuery }),
+        body: JSON.stringify({
+          query: searchQuery,
+          concentrationHint: concentrationHint === 'any' ? undefined : concentrationHint,
+        }),
       });
       if (!res.ok) throw new Error(`Search failed: HTTP ${res.status}`);
       const profileData = await res.json();
@@ -180,6 +186,33 @@ export const FragranceCapture: React.FC<{ onAdd?: (item: any) => void }> = ({ on
               {uploading ? <RefreshCw size={16} className="animate-spin" /> : <Search size={18} />}
             </button>
           </form>
+          <div className="flex items-center justify-center gap-3">
+            <span className="text-[8px] uppercase tracking-[0.3em] text-white/25 font-bold">Concentration</span>
+            <div className="flex items-center gap-1.5">
+              {[
+                { id: 'any', label: 'Any' },
+                { id: 'edt', label: 'EDT' },
+                { id: 'edp', label: 'EDP' },
+              ].map((option) => {
+                const selected = concentrationHint === option.id;
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => setConcentrationHint(option.id as ConcentrationHint)}
+                    className={`px-3 py-1 rounded-full text-[8px] uppercase tracking-widest border transition-all ${
+                      selected
+                        ? 'bg-white text-black border-white'
+                        : 'bg-white/5 text-scent-muted border-white/10 hover:text-white hover:border-white/30'
+                    }`}
+                    aria-pressed={selected}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
           <div className="flex flex-wrap gap-2 justify-center">
             {['Aventus', 'Rouge 540', 'Santal 33'].map(tag => (
               <button

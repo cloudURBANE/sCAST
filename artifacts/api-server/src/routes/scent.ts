@@ -9,6 +9,14 @@ import { logger } from "../lib/logger";
 
 const router = Router();
 
+type ConcentrationHint = "edt" | "edp";
+
+function concentrationToQueryText(hint?: ConcentrationHint): string {
+  if (hint === "edt") return "eau de toilette EDT";
+  if (hint === "edp") return "eau de parfum EDP";
+  return "";
+}
+
 router.get("/weather", async (req, res) => {
   const { lat, lon } = req.query as { lat?: string; lon?: string };
   const data = await getWeather({ lat, lon });
@@ -47,20 +55,22 @@ router.post("/scent-profile", async (req, res) => {
 });
 
 router.post("/search-scent", async (req, res) => {
-  const { query } = req.body as { query?: string };
+  const { query, concentrationHint } = req.body as { query?: string; concentrationHint?: ConcentrationHint };
   if (!query) {
     res.status(400).json({ error: "Query is required" });
     return;
   }
+  const normalizedHint = concentrationHint === "edt" || concentrationHint === "edp" ? concentrationHint : undefined;
+  const queryWithHint = [query, concentrationToQueryText(normalizedHint)].filter(Boolean).join(" ").trim();
 
   // Check global catalog before hitting local dataset or scraper
-  const catalogHit = await searchCatalog(query);
+  const catalogHit = await searchCatalog(queryWithHint);
   if (catalogHit) {
     res.json(catalogHit);
     return;
   }
 
-  const local = searchFragrances(query);
+  const local = searchFragrances(queryWithHint);
   if (local.length > 0) {
     const first = local[0];
     const profile = await buildProfile(first.name, first.brand, {
@@ -74,7 +84,7 @@ router.post("/search-scent", async (req, res) => {
     return;
   }
 
-  const scraped = await deepScrapeFragrance(query);
+  const scraped = await deepScrapeFragrance(queryWithHint);
   const profile = await buildProfile(scraped.name, scraped.brand, {
     notes: scraped.notes,
     family: scraped.family,
@@ -86,7 +96,7 @@ router.post("/search-scent", async (req, res) => {
 });
 
 router.post("/refresh-image", async (req, res) => {
-  const { name, brand } = req.body as { name?: string; brand?: string };
+  const { name, brand, concentrationHint } = req.body as { name?: string; brand?: string; concentrationHint?: ConcentrationHint };
   if (!name || !brand) {
     res.status(400).json({ error: "name and brand are required" });
     return;
@@ -95,7 +105,9 @@ router.post("/refresh-image", async (req, res) => {
     // Normalize to ASCII so accented chars (é, ü, etc.) don't break URL parsing
     const asciiName  = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\x20-\x7E]/g, "");
     const asciiBrand = brand.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\x20-\x7E]/g, "");
-    const query = `${asciiBrand} ${asciiName} single perfume bottle no box product photo`;
+    const normalizedHint = concentrationHint === "edt" || concentrationHint === "edp" ? concentrationHint : undefined;
+    const concentrationText = concentrationToQueryText(normalizedHint);
+    const query = `${asciiBrand} ${asciiName} ${concentrationText} single fragrance bottle bottle only no box centered product photo`;
 
     const rawUrl = await searchImageUrl(query);
     if (!rawUrl) {

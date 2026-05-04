@@ -49,10 +49,30 @@ const BLOCKED_TEXT_HINTS = [
   "dupe",
   "inspired by",
   "box only",
+  "with box",
+  "boxed",
+  "in box",
+  "box packaging",
+  "set of",
+  "bundle",
+  "lot of",
   "review",
   "render",
   "3d model",
   "mockup",
+];
+const STRONG_DETAIL_HINTS = [
+  "no box",
+  "single bottle",
+  "bottle only",
+  "fragrance bottle",
+  "perfume bottle",
+  "centered",
+  "centered bottle",
+  "product photo",
+  "packshot",
+  "transparent background",
+  "isolated",
 ];
 
 type SerperImageResult = {
@@ -78,6 +98,10 @@ function toNumber(value: unknown): number | null {
 
 function includesAny(text: string, terms: string[]): boolean {
   return terms.some((term) => text.includes(term));
+}
+
+function countMatches(text: string, terms: string[]): number {
+  return terms.reduce((count, term) => (text.includes(term) ? count + 1 : count), 0);
 }
 
 function getHost(url: string): string {
@@ -115,12 +139,14 @@ function scoreCandidate(candidate: SerperImageResult): number {
   const text = `${candidate.title ?? ""} ${candidate.source ?? ""}`.toLowerCase();
   if (includesAny(text, BLOCKED_TEXT_HINTS)) return -Infinity;
   const hasBottleSignal = includesAny(text, REQUIRED_TEXT_HINTS);
+  const strongDetailMatches = countMatches(text, STRONG_DETAIL_HINTS);
   const trustedHost = TRUSTED_HOST_HINTS.some((hint) => host.includes(hint));
   if (!hasBottleSignal && !trustedHost) return -Infinity;
 
   let score = 0;
   if (hasBottleSignal) score += 4;
   if (trustedHost) score += 5;
+  score += Math.min(5, strongDetailMatches);
   if (/\.png(\?.*)?$/i.test(imageUrl)) score += 1;
   if (width && height) score += Math.min(4, Math.floor(Math.min(width, height) / 400));
 
@@ -136,7 +162,7 @@ export async function searchSerperImageUrl(query: string): Promise<string | null
   }
 
   const endpoint = process.env.SERPER_IMAGE_API_URL || DEFAULT_SERPER_IMAGES_URL;
-  const refinedQuery = `${query.trim()} single fragrance bottle product photo no box transparent background`;
+  const refinedQuery = `${query.trim()} single fragrance bottle bottle only no box centered product packshot front view transparent background`;
 
   try {
     const response = await axios.post<SerperResponse>(

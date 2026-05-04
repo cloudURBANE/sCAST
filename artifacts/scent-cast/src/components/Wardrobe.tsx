@@ -43,6 +43,13 @@ function entryBrand(item: Fragrance): string {
   return item?.brand || item?.product?.brand || "";
 }
 
+function concentrationHintFromValue(value?: string): "edt" | "edp" | undefined {
+  const normalized = value?.toLowerCase() ?? "";
+  if (normalized.includes("eau de toilette") || normalized.includes("edt")) return "edt";
+  if (normalized.includes("eau de parfum") || normalized.includes("edp")) return "edp";
+  return undefined;
+}
+
 export const Wardrobe: React.FC<{
   items: Fragrance[];
   onDelete: (id: string) => void;
@@ -95,7 +102,11 @@ export const Wardrobe: React.FC<{
       const res = await fetch('/api/refresh-image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: entryName(item), brand: entryBrand(item) }),
+        body: JSON.stringify({
+          name: entryName(item),
+          brand: entryBrand(item),
+          concentrationHint: concentrationHintFromValue(item.concentration),
+        }),
       });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || 'Refresh failed');
@@ -285,6 +296,19 @@ export const Wardrobe: React.FC<{
                 style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
               >
                 <div className="space-y-6 sm:space-y-10 pt-2">
+                  <div className="border border-white/10 bg-white/[0.02] p-4 sm:p-6">
+                    <p className="text-[9px] uppercase tracking-[0.35em] text-white/30 font-bold mb-3">Bottle Visual</p>
+                    <div className="relative h-48 sm:h-64 flex items-center justify-center overflow-hidden">
+                      <img
+                        key={selectedItem.imageUrl || 'missing-image'}
+                        src={selectedItem.imageUrl}
+                        alt={entryName(selectedItem)}
+                        className="max-h-full max-w-full object-contain transition-all duration-300"
+                        referrerPolicy="no-referrer"
+                      />
+                    </div>
+                  </div>
+
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-8 py-5 border-y border-white/5">
                     {[
                       { label: 'Concentration', value: selectedItem.concentration || 'EDP' },
