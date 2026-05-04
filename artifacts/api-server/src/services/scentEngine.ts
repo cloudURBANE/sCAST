@@ -141,7 +141,7 @@ export async function buildProfile(
     family: finalFamily,
     concentration: parsed.concentration,
     accords: parsed.accords,
-    imageUrl: cleanImageUrl,
+    imageUrl: cleanImageUrl ?? undefined,
     description: finalDescription,
   };
 

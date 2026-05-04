@@ -41,7 +41,13 @@ router.get("/image-proxy", async (req, res) => {
       validateStatus: (s) => s < 400,
     });
 
-    const contentType: string = upstream.headers["content-type"] ?? "image/jpeg";
+    const rawCt = upstream.headers["content-type"];
+    const contentType: string =
+      typeof rawCt === "string"
+        ? rawCt
+        : Array.isArray(rawCt)
+          ? String(rawCt[0] ?? "image/jpeg")
+          : "image/jpeg";
     if (!contentType.startsWith("image/")) {
       res.status(400).json({ error: "URL does not point to an image" });
       return;

@@ -1,6 +1,7 @@
 import { createHash } from "crypto";
+import type { Firestore } from "firebase-admin/firestore";
 
-let firestoreDb: FirebaseFirestore.Firestore | null = null;
+let firestoreDb: Firestore | null = null;
 let initAttempted = false;
 
 // In-flight deduplication: prevents cache stampede when multiple users
@@ -30,7 +31,7 @@ function isValidDataUri(value: unknown): value is string {
   );
 }
 
-function getDb(): FirebaseFirestore.Firestore | null {
+function getDb(): Firestore | null {
   if (initAttempted) return firestoreDb;
   initAttempted = true;
 
@@ -64,7 +65,7 @@ function getDb(): FirebaseFirestore.Firestore | null {
 }
 
 async function readFromFirestore(
-  db: FirebaseFirestore.Firestore,
+  db: Firestore,
   key: string,
 ): Promise<string | null> {
   try {
@@ -80,7 +81,7 @@ async function readFromFirestore(
 }
 
 async function writeToFirestore(
-  db: FirebaseFirestore.Firestore,
+  db: Firestore,
   key: string,
   brand: string,
   name: string,

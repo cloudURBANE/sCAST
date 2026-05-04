@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, ArrowRight, Home, Sunset, Briefcase, Moon, Coffee, Zap, Flame, Users, Bed } from 'lucide-react';
+import { X, ArrowRight, Home, Sunset, Briefcase, Moon, Coffee, Zap, Flame, Users, Bed, type LucideIcon } from 'lucide-react';
 import { DestinationType, EnergyState } from './Wardrobe';
 
 interface ScentIntentModalProps {
@@ -9,14 +9,14 @@ interface ScentIntentModalProps {
   onComplete: (intent: { destination: DestinationType; energy: EnergyState }) => void;
 }
 
-const DESTINATIONS: { type: DestinationType; icon: React.ElementType; desc: string }[] = [
+const DESTINATIONS: { type: DestinationType; icon: LucideIcon; desc: string }[] = [
   { type: 'Staying In', icon: Home, desc: 'Indoor sanctuary' },
   { type: 'Going Out', icon: Sunset, desc: 'The transition' },
   { type: 'Work', icon: Briefcase, desc: 'Professional focus' },
   { type: 'Night Out', icon: Moon, desc: 'Social engagement' },
 ];
 
-const ENERGIES: { type: EnergyState; icon: React.ElementType; desc: string }[] = [
+const ENERGIES: { type: EnergyState; icon: LucideIcon; desc: string }[] = [
   { type: 'Calm', icon: Coffee, desc: 'Subtle presence' },
   { type: 'Focused', icon: Zap, desc: 'Mental clarity' },
   { type: 'Confident', icon: Flame, desc: 'Bold signature' },

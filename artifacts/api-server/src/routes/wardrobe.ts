@@ -237,7 +237,10 @@ Only return valid JSON, no markdown or extra text.`;
         sillage: Number(enriched.performance?.sillage ?? 6),
         longevity: Number(enriched.performance?.longevity ?? 7),
       },
-      context: existingCatalog?.context ?? { weather: ["Universal"], time: ["Universal"], occasion: ["Daily Wear"] },
+      context: existingCatalog?.context ?? {
+        weather: ["Universal"],
+        occasion: ["Daily Wear", "Universal"],
+      },
       notes: enriched.notes ?? existing.notes ?? [],
       pyramid: enriched.pyramid ?? existing.pyramid,
       family: enriched.family ?? existing.family ?? "Unknown",
