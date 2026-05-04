@@ -85,6 +85,9 @@ export async function buildProfile(
         if (searchRes) {
           imageUrl = searchRes;
         }
+        // #region agent log
+        fetch('http://127.0.0.1:7745/ingest/484c0150-587d-4568-9bd7-b30ce5dec585',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4aee09'},body:JSON.stringify({sessionId:'4aee09',runId:'pre-fix',hypothesisId:'H3',location:'scentEngine.ts:buildProfile:imageChoice',message:'Image source selected in buildProfile',data:{hasSearchResult:Boolean(searchRes),usedFallbackImage:Boolean(!searchRes&&Boolean(fallback?.imageUrl)),finalImageSource:searchRes?'serper':(fallback?.imageUrl?'fallbackPayload':'none')},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
       } catch {
         /* keep fallback */
       }

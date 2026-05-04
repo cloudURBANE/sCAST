@@ -46,6 +46,9 @@ router.post("/scent-profile", async (req, res) => {
 
 router.post("/search-scent", async (req, res) => {
   const { query } = req.body as { query?: string };
+  // #region agent log
+  fetch('http://127.0.0.1:7745/ingest/484c0150-587d-4568-9bd7-b30ce5dec585',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4aee09'},body:JSON.stringify({sessionId:'4aee09',runId:'pre-fix',hypothesisId:'H5',location:'scent.ts:POST/search-scent',message:'Fallback scent route invoked',data:{hasQuery:Boolean(query),queryLength:query?.length??0},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
   if (!query) {
     res.status(400).json({ error: "Query is required" });
     return;

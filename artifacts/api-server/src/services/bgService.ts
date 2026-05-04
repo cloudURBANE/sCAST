@@ -114,6 +114,9 @@ export async function removeBg(input: string, isUrl = false) {
   }
 
   // --- Handle http/https URL inputs ---
+  // #region agent log
+  fetch('http://127.0.0.1:7745/ingest/484c0150-587d-4568-9bd7-b30ce5dec585',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4aee09'},body:JSON.stringify({sessionId:'4aee09',runId:'pre-fix',hypothesisId:'H4',location:'bgService.ts:removeBg:urlInput',message:'removeBg URL branch entered',data:{hasRemoveBgApiKey:Boolean(apiKey),isUrl,inputHost:(()=>{try{return input.startsWith("http")?new URL(input).hostname:null;}catch{return "invalid";}})()},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
 
   if (!apiKey) {
     const raw = await downloadImage(input);
@@ -135,6 +138,9 @@ export async function removeBg(input: string, isUrl = false) {
   }
 
   // Strategy 2: local white-trim normalization as last resort
+  // #region agent log
+  fetch('http://127.0.0.1:7745/ingest/484c0150-587d-4568-9bd7-b30ce5dec585',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4aee09'},body:JSON.stringify({sessionId:'4aee09',runId:'pre-fix',hypothesisId:'H4',location:'bgService.ts:removeBg:localFallback',message:'Poof path failed, using local fallback',data:{hasRemoveBgApiKey:Boolean(apiKey),downloadSucceeded:Boolean(raw)},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
   logger.warn("[bgService] Poof remove failed; using local normalization fallback");
   const normalized = await trimWhiteAndNormalize(raw);
   return { cleanImage: toDataUri(normalized) };

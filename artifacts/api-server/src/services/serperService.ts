@@ -130,6 +130,9 @@ function scoreCandidate(candidate: SerperImageResult): number {
 export async function searchSerperImageUrl(query: string): Promise<string | null> {
   if (!query.trim()) return null;
   const apiKey = process.env.SERPER_API_KEY;
+  // #region agent log
+  fetch('http://127.0.0.1:7745/ingest/484c0150-587d-4568-9bd7-b30ce5dec585',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4aee09'},body:JSON.stringify({sessionId:'4aee09',runId:'pre-fix',hypothesisId:'H1',location:'serperService.ts:searchSerperImageUrl:start',message:'Serper search entry',data:{queryLength:query.trim().length,hasSerperApiKey:Boolean(apiKey)},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
   if (!apiKey) {
     logger.warn("[serper] SERPER_API_KEY missing; image search disabled");
     return null;
@@ -153,17 +156,26 @@ export async function searchSerperImageUrl(query: string): Promise<string | null
     );
 
     if (response.status !== 200) {
+      // #region agent log
+      fetch('http://127.0.0.1:7745/ingest/484c0150-587d-4568-9bd7-b30ce5dec585',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4aee09'},body:JSON.stringify({sessionId:'4aee09',runId:'pre-fix',hypothesisId:'H2',location:'serperService.ts:searchSerperImageUrl:non200',message:'Serper non-200 response',data:{status:response.status},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       logger.warn({ status: response.status }, "[serper] image search non-200");
       return null;
     }
 
     const images = Array.isArray(response.data?.images) ? response.data.images : [];
+    // #region agent log
+    fetch('http://127.0.0.1:7745/ingest/484c0150-587d-4568-9bd7-b30ce5dec585',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4aee09'},body:JSON.stringify({sessionId:'4aee09',runId:'pre-fix',hypothesisId:'H2',location:'serperService.ts:searchSerperImageUrl:images',message:'Serper image candidates received',data:{imageCount:images.length},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     if (images.length === 0) return null;
 
     const ranked = images
       .map((candidate) => ({ candidate, score: scoreCandidate(candidate) }))
       .filter((item) => Number.isFinite(item.score))
       .sort((a, b) => b.score - a.score);
+    // #region agent log
+    fetch('http://127.0.0.1:7745/ingest/484c0150-587d-4568-9bd7-b30ce5dec585',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4aee09'},body:JSON.stringify({sessionId:'4aee09',runId:'pre-fix',hypothesisId:'H2',location:'serperService.ts:searchSerperImageUrl:ranked',message:'Serper strict ranking result',data:{rankedCount:ranked.length,topHost:ranked[0]?.candidate?.imageUrl?new URL(ranked[0].candidate.imageUrl).hostname:null},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
 
     if (ranked.length === 0) {
       logger.info("[serper] no candidate passed strict filters");
