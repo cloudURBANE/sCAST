@@ -31,6 +31,16 @@ export interface Fragrance {
   context?: { weather: string[]; time: string[]; occasion: string[] };
   synthesized?: boolean;
   shareHidden?: boolean;
+  /** Legacy ScentProfile shape — some old vault rows only have product.name/brand */
+  product?: { name?: string; brand?: string; perfumer?: string };
+}
+
+/** Resolve the human-facing name/brand even if the row predates the flat shape. */
+function entryName(item: Fragrance): string {
+  return item?.name || item?.product?.name || "";
+}
+function entryBrand(item: Fragrance): string {
+  return item?.brand || item?.product?.brand || "";
 }
 
 export const Wardrobe: React.FC<{
@@ -38,13 +48,37 @@ export const Wardrobe: React.FC<{
   onDelete: (id: string) => void;
   onUpdateImage?: (id: string, imageUrl: string) => void;
   featuredItem?: Fragrance | null;
-}> = ({ items, onDelete, onUpdateImage, featuredItem }) => {
+  onRebuild?: () => Promise<{ total: number; rebuilt: number; skipped: number } | null>;
+}> = ({ items, onDelete, onUpdateImage, featuredItem, onRebuild }) => {
   const [selectedItem, setSelectedItem] = React.useState<Fragrance | null>(null);
   const [searchQuery, setSearchQuery] = React.useState("");
   const [clickCounts, setClickCounts] = React.useState<Record<string, number>>({});
   const [refreshingId, setRefreshingId] = React.useState<string | null>(null);
   const [refreshError, setRefreshError] = React.useState<string | null>(null);
+  const [rebuilding, setRebuilding] = React.useState(false);
+  const [rebuildResult, setRebuildResult] = React.useState<string | null>(null);
   const CLICK_THRESHOLD = 9;
+
+  const handleRebuildClick = async () => {
+    if (!onRebuild || rebuilding) return;
+    setRebuilding(true);
+    setRebuildResult(null);
+    try {
+      const result = await onRebuild();
+      if (result) {
+        setRebuildResult(
+          `Rebuilt ${result.rebuilt} of ${result.total}` +
+            (result.skipped ? ` · ${result.skipped} skipped` : "")
+        );
+      } else {
+        setRebuildResult("Rebuild failed");
+      }
+    } catch (err: any) {
+      setRebuildResult(err?.message || "Rebuild failed");
+    } finally {
+      setRebuilding(false);
+    }
+  };
 
   const handleCardClick = (item: Fragrance) => {
     const next = (clickCounts[item.id] ?? 0) + 1;
@@ -66,7 +100,7 @@ export const Wardrobe: React.FC<{
       const res = await fetch('/api/refresh-image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: item.name, brand: item.brand }),
+        body: JSON.stringify({ name: entryName(item), brand: entryBrand(item) }),
       });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || 'Refresh failed');
@@ -80,11 +114,13 @@ export const Wardrobe: React.FC<{
   };
 
   const filteredItems = items.filter(item => {
-    if (!item?.name || !item?.brand) return false;
+    const name = entryName(item);
+    const brand = entryBrand(item);
+    if (!name || !brand) return false;
     const q = searchQuery.toLowerCase();
     return (
-      item.name.toLowerCase().includes(q) ||
-      item.brand.toLowerCase().includes(q) ||
+      name.toLowerCase().includes(q) ||
+      brand.toLowerCase().includes(q) ||
       item.family?.toLowerCase().includes(q) ||
       item.notes?.some(note => note?.toLowerCase().includes(q))
     );
@@ -115,6 +151,28 @@ export const Wardrobe: React.FC<{
               />
             </div>
             <span className="font-serif italic text-white/20 text-xl sm:text-3xl whitespace-nowrap">{filteredItems.length} ENTRIES</span>
+
+            {onRebuild && (
+              <div className="flex flex-col items-center gap-2">
+                {!searchQuery && items.length > filteredItems.length && (
+                  <p className="text-[9px] uppercase tracking-[0.35em] text-amber-300/60 font-bold">
+                    {items.length - filteredItems.length} legacy {items.length - filteredItems.length === 1 ? "entry" : "entries"} need a rebuild
+                  </p>
+                )}
+                <button
+                  type="button"
+                  onClick={handleRebuildClick}
+                  disabled={rebuilding || items.length === 0}
+                  className="px-5 py-2.5 border border-white/10 text-[9px] uppercase tracking-[0.4em] text-white/50 hover:text-white hover:border-white/30 transition-all flex items-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  <RefreshCw size={11} className={rebuilding ? "animate-spin" : ""} />
+                  {rebuilding ? "Rebuilding Vault…" : "Rebuild Vault"}
+                </button>
+                {rebuildResult && (
+                  <p className="text-[9px] uppercase tracking-[0.3em] text-white/30 font-bold">{rebuildResult}</p>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -135,10 +193,10 @@ export const Wardrobe: React.FC<{
                     onClick={() => setSelectedItem(featuredItem)}
                   >
                     <div className="absolute top-10 left-10 text-[9px] uppercase tracking-[0.6em] text-white/30 font-bold">Recommended Manifest</div>
-                    <img src={featuredItem.imageUrl} alt={featuredItem.name} className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-1000 brightness-[1.15] relative z-10" referrerPolicy="no-referrer" />
+                    <img src={featuredItem.imageUrl} alt={entryName(featuredItem)} className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-1000 brightness-[1.15] relative z-10" referrerPolicy="no-referrer" />
                     <div className="text-center mt-12 space-y-3">
-                      <p className="text-[10px] uppercase text-white/50 tracking-[0.5em] font-bold font-sans">{featuredItem.brand}</p>
-                      <h4 className="font-serif italic text-3xl sm:text-5xl text-white tracking-tighter">{featuredItem.name}</h4>
+                      <p className="text-[10px] uppercase text-white/50 tracking-[0.5em] font-bold font-sans">{entryBrand(featuredItem)}</p>
+                      <h4 className="font-serif italic text-3xl sm:text-5xl text-white tracking-tighter">{entryName(featuredItem)}</h4>
                     </div>
                   </motion.div>
                 </div>
@@ -163,11 +221,11 @@ export const Wardrobe: React.FC<{
                       <div className="aspect-[3/4] p-10 flex flex-col items-center justify-center relative">
                         <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/[0.01] to-white/[0.05] pointer-events-none" />
                         <div className="w-full h-full flex items-center justify-center relative z-10 group-hover:scale-110 transition-transform duration-1000">
-                          <img src={item.imageUrl} alt={item.name} className="max-w-full max-h-full w-auto h-auto object-contain brightness-[1.05]" style={{ maxHeight: '100%', maxWidth: '100%' }} referrerPolicy="no-referrer" />
+                          <img src={item.imageUrl} alt={entryName(item)} className="max-w-full max-h-full w-auto h-auto object-contain brightness-[1.05]" style={{ maxHeight: '100%', maxWidth: '100%' }} referrerPolicy="no-referrer" />
                         </div>
                         <div className="absolute bottom-8 left-8 right-8 text-center opacity-0 group-hover:opacity-100 transition-all duration-500 translate-y-4 group-hover:translate-y-0">
-                          <p className="text-[9px] uppercase tracking-widest text-white/60 mb-1 leading-tight">{item.brand}</p>
-                          <h4 className="font-serif italic text-lg text-white leading-tight">{item.name}</h4>
+                          <p className="text-[9px] uppercase tracking-widest text-white/60 mb-1 leading-tight">{entryBrand(item)}</p>
+                          <h4 className="font-serif italic text-lg text-white leading-tight">{entryName(item)}</h4>
                         </div>
 
                         {/* Image quality overlay — appears after 9 clicks */}
@@ -188,7 +246,7 @@ export const Wardrobe: React.FC<{
 
                               <div className="text-center space-y-1">
                                 <p className="text-[9px] uppercase tracking-[0.4em] text-white/40 font-bold">Image Control</p>
-                                <p className="font-serif italic text-white text-sm leading-tight">{item.name}</p>
+                                <p className="font-serif italic text-white text-sm leading-tight">{entryName(item)}</p>
                               </div>
 
                               {refreshError && refreshingId === null && (
@@ -223,8 +281,8 @@ export const Wardrobe: React.FC<{
                       </div>
                     </div>
                     <div className="text-center mt-6 space-y-1 transition-opacity duration-500 group-hover:opacity-30">
-                      <p className="text-[8px] uppercase text-white/30 tracking-[0.4em] font-bold font-sans">{item.brand}</p>
-                      <h3 className="font-serif italic text-xl text-white leading-tight uppercase tracking-tighter">{item.name}</h3>
+                      <p className="text-[8px] uppercase text-white/30 tracking-[0.4em] font-bold font-sans">{entryBrand(item)}</p>
+                      <h3 className="font-serif italic text-xl text-white leading-tight uppercase tracking-tighter">{entryName(item)}</h3>
                     </div>
                   </motion.div>
                 ))}
@@ -269,8 +327,8 @@ export const Wardrobe: React.FC<{
 
               {/* Fragrance name — pinned, always readable */}
               <div className="px-5 pt-4 pb-3 shrink-0">
-                <h2 className="font-serif italic text-3xl sm:text-6xl leading-tight text-white tracking-tighter uppercase">{selectedItem.name}</h2>
-                <p className="text-base text-white/40 font-serif italic mt-1">{selectedItem.brand}</p>
+                <h2 className="font-serif italic text-3xl sm:text-6xl leading-tight text-white tracking-tighter uppercase">{entryName(selectedItem)}</h2>
+                <p className="text-base text-white/40 font-serif italic mt-1">{entryBrand(selectedItem)}</p>
               </div>
 
               {/* Scrollable detail body */}

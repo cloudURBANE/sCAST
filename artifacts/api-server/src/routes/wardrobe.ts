@@ -3,6 +3,9 @@ import { db } from "@workspace/db";
 import { usersTable, userFragrancesTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { resolveSharedImageUrl } from "../services/imageHydration";
+import { buildProfile } from "../services/scentEngine";
+import { flattenProfile } from "../services/catalogService";
+import { logger } from "../lib/logger";
 
 const router = Router();
 
@@ -28,6 +31,25 @@ function sanitizeFragrance(fragrance: Record<string, any>): Record<string, any> 
     clean.imageUrl = "";
   }
   return clean;
+}
+
+/**
+ * Older inserts stored a raw ScentProfile (only `product.name`/`product.brand`).
+ * Surface the canonical top-level fields the dashboard expects so legacy rows
+ * stop falling through the `if (!item.name || !item.brand)` filter on the client.
+ */
+function normalizeFragrance(fragrance: Record<string, any>): Record<string, any> {
+  const product = fragrance.product as Record<string, any> | undefined;
+  const name = fragrance.name || product?.name;
+  const brand = fragrance.brand || product?.brand;
+  const perfumer = fragrance.perfumer || product?.perfumer;
+
+  return {
+    ...fragrance,
+    ...(name ? { name } : {}),
+    ...(brand ? { brand } : {}),
+    ...(perfumer ? { perfumer } : {}),
+  };
 }
 
 /** Fill in imageUrl from the global catalog if the stored record has none */
@@ -59,7 +81,7 @@ router.get("/wardrobe", async (req, res) => {
 
   const fragrances = await Promise.all(
     rows.map(async (r) => {
-      const data = r.fragranceData as Record<string, any>;
+      const data = normalizeFragrance(r.fragranceData as Record<string, any>);
       const hydrated = await hydrateImageUrl(data);
       return { ...hydrated, _dbId: r.id };
     })
@@ -81,7 +103,7 @@ router.post("/wardrobe", async (req, res) => {
     return;
   }
 
-  const clean = sanitizeFragrance(fragrance);
+  const clean = sanitizeFragrance(normalizeFragrance(fragrance));
 
   const [row] = await db
     .insert(userFragrancesTable)
@@ -90,6 +112,88 @@ router.post("/wardrobe", async (req, res) => {
 
   const hydrated = await hydrateImageUrl(row.fragranceData as Record<string, any>);
   res.json({ ...hydrated, _dbId: row.id });
+});
+
+/**
+ * Rebuild every fragrance in the caller's vault. Re-runs the full profile
+ * pipeline (catalog → fuzzy → scrape → image cache) so legacy rows that were
+ * persisted before the catalog existed (or that lost top-level name/brand)
+ * become first-class records again. Idempotent: catalog hits short-circuit,
+ * so re-running on a healthy vault is cheap.
+ */
+router.post("/wardrobe/rebuild", async (req, res) => {
+  const token = getToken(req);
+  if (!token) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const user = await getUserByToken(token);
+  if (!user) { res.status(401).json({ error: "Invalid token" }); return; }
+
+  const rows = await db
+    .select()
+    .from(userFragrancesTable)
+    .where(eq(userFragrancesTable.userId, user.id));
+
+  const failures: { id: string; reason: string }[] = [];
+  let rebuilt = 0;
+  let skipped = 0;
+
+  for (const r of rows) {
+    const data = r.fragranceData as Record<string, any>;
+    const name = (data.name as string | undefined) || (data.product?.name as string | undefined);
+    const brand = (data.brand as string | undefined) || (data.product?.brand as string | undefined);
+
+    if (!name || !brand) {
+      skipped++;
+      failures.push({ id: r.id, reason: "missing name/brand" });
+      continue;
+    }
+
+    try {
+      const profile = await buildProfile(name, brand, {
+        notes: Array.isArray(data.notes) ? data.notes : undefined,
+        family: typeof data.family === "string" ? data.family : undefined,
+        description: typeof data.description === "string" ? data.description : undefined,
+        pyramid: data.pyramid,
+        perfumer:
+          (typeof data.perfumer === "string" && data.perfumer) ||
+          (typeof data.product?.perfumer === "string" ? data.product.perfumer : undefined),
+        imageUrl: typeof data.imageUrl === "string" ? data.imageUrl : undefined,
+      });
+
+      if (!("product" in profile)) {
+        skipped++;
+        failures.push({ id: r.id, reason: profile.error });
+        continue;
+      }
+
+      const flat = flattenProfile(profile);
+      const flatImageUrl = typeof flat.imageUrl === "string" ? flat.imageUrl : "";
+      const merged = sanitizeFragrance({
+        ...data,
+        ...flat,
+        // Don't overwrite a real stored URL with an empty one if the rebuild
+        // didn't manage to resolve a fresh image (e.g. Firestore cache miss).
+        imageUrl: flatImageUrl || (typeof data.imageUrl === "string" ? data.imageUrl : ""),
+        id: typeof data.id === "string" ? data.id : r.id,
+        season: typeof data.season === "string" && data.season ? data.season : "Universal",
+        intents: data.intents,
+        energies: data.energies,
+        shareHidden: data.shareHidden,
+      });
+
+      await db
+        .update(userFragrancesTable)
+        .set({ fragranceData: merged as any })
+        .where(eq(userFragrancesTable.id, r.id));
+      rebuilt++;
+    } catch (err: any) {
+      logger.warn({ err: err?.message, id: r.id }, "wardrobe/rebuild: row failed");
+      skipped++;
+      failures.push({ id: r.id, reason: err?.message ?? "rebuild error" });
+    }
+  }
+
+  res.json({ total: rows.length, rebuilt, skipped, failures });
 });
 
 router.patch("/wardrobe/:fragranceId/visibility", async (req, res) => {

@@ -184,6 +184,27 @@ export default function App() {
     }
   }, [authToken, loadWardrobe]);
 
+  // Background refresh: poll the vault every 60s while authed so newly
+  // synced/normalized fragrances appear without forcing a hard reload.
+  // Pauses when the tab is hidden to avoid burning quota in background tabs.
+  useEffect(() => {
+    if (!authToken) return;
+    const REFRESH_MS = 60_000;
+    const tick = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      loadWardrobe(authToken);
+    };
+    const id = window.setInterval(tick, REFRESH_MS);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') tick();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [authToken, loadWardrobe]);
+
   const handleAuth = (token: string, email: string) => {
     localStorage.setItem('scent_token', token);
     localStorage.setItem('scent_email', email);
@@ -250,6 +271,27 @@ export default function App() {
   const handleUpdateImage = async (id: string, imageUrl: string) => {
     setItems(prev => prev.map(item => item.id === id ? { ...item, imageUrl } : item));
   };
+
+  const handleRebuildWardrobe = useCallback(async () => {
+    if (!authToken) return null;
+    try {
+      const res = await fetch('/api/wardrobe/rebuild', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+      const data = await res.json() as { total: number; rebuilt: number; skipped: number };
+      // Refetch with the now-normalized records so the dashboard surfaces them
+      await loadWardrobe(authToken);
+      return data;
+    } catch (err) {
+      console.error('Rebuild failed', err);
+      return null;
+    }
+  }, [authToken, loadWardrobe]);
 
   const handleDeleteItem = async (id: string) => {
     setItems((prev) => prev.filter(item => item.id !== id));
@@ -580,6 +622,7 @@ export default function App() {
               onDelete={handleDeleteItem}
               onUpdateImage={handleUpdateImage}
               featuredItem={activeRecommendation}
+              onRebuild={authToken ? handleRebuildWardrobe : undefined}
             />
           </div>
         </div>

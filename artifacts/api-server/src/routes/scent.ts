@@ -2,7 +2,7 @@ import { Router } from "express";
 import { getWeather } from "../services/weatherService";
 import { buildProfile, searchFragrances } from "../services/scentEngine";
 import { deepScrapeFragrance } from "../services/fallbackIntelligence";
-import { searchCatalog, getCatalogEntry, saveCatalogEntry } from "../services/catalogService";
+import { searchCatalog, getCatalogEntry, saveCatalogEntry, flattenProfile } from "../services/catalogService";
 import { searchImageUrl } from "../services/imageService";
 import { removeBg } from "../services/bgService";
 import { logger } from "../lib/logger";
@@ -40,7 +40,10 @@ router.post("/scent-profile", async (req, res) => {
     pyramid,
     perfumer,
   });
-  res.json(result);
+  // Always return a flat shape ({ name, brand, ... } alongside `product`) so the
+  // client can rely on top-level keys when it persists this object verbatim.
+  if (!("product" in result)) { res.json(result); return; }
+  res.json(flattenProfile(result));
 });
 
 router.post("/search-scent", async (req, res) => {

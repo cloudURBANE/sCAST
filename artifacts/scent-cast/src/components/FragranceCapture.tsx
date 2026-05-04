@@ -95,7 +95,17 @@ export const FragranceCapture: React.FC<{ onAdd?: (item: any) => void }> = ({ on
           if (!profileRes.ok) throw new Error(`HTTP ${profileRes.status}`);
           const data = await profileRes.json();
           if (data && !data.error) {
-            onAdd({ ...data, id: Math.random().toString(36).substr(2, 9), season: 'Universal' });
+            // Defensive: older /scent-profile responses returned a raw ScentProfile
+            // (only product.name/brand). Always surface flat keys so the wardrobe
+            // dashboard's `if (!item.name || !item.brand)` filter never hides this row.
+            onAdd({
+              ...data,
+              name: data.name || data.product?.name || selected.name,
+              brand: data.brand || data.product?.brand || selected.brand,
+              imageUrl: data.imageUrl || selected.imageUrl || '',
+              id: Math.random().toString(36).substr(2, 9),
+              season: 'Universal',
+            });
           } else {
             setErrorStatus(data?.error || "Could not sync to vault. Please try again.");
             return;
