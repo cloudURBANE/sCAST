@@ -5,6 +5,8 @@ import { eq, and } from "drizzle-orm";
 
 const router = Router();
 
+type UserRow = typeof usersTable.$inferSelect;
+
 function getBaseUrl(req: import("express").Request): string {
   const explicit = process.env.OAUTH_PUBLIC_URL?.trim().replace(/\/+$/, "");
   if (explicit) {
@@ -33,6 +35,74 @@ function getBaseUrl(req: import("express").Request): string {
     return `https://${dev}`;
   }
   return `${req.protocol}://${req.get("host")}`;
+}
+
+async function findUserByOAuthSubject(
+  subject: string,
+  req: import("express").Request,
+): Promise<UserRow | null> {
+  try {
+    return (
+      await db
+        .select()
+        .from(usersTable)
+        .where(and(eq(usersTable.oauthProvider, "google"), eq(usersTable.oauthSubject, subject)))
+        .limit(1)
+    )[0] ?? null;
+  } catch (err) {
+    // Some migrated DBs may not yet have oauth columns; keep auth working via email fallback.
+    req.log.warn({ err }, "OAuth subject lookup unavailable, falling back to email lookup");
+    return null;
+  }
+}
+
+async function findUserByEmail(email: string): Promise<UserRow | null> {
+  return (
+    await db.select().from(usersTable).where(eq(usersTable.email, email)).limit(1)
+  )[0] ?? null;
+}
+
+async function linkGoogleSubjectBestEffort(
+  userId: string,
+  subject: string,
+  req: import("express").Request,
+): Promise<void> {
+  try {
+    await db
+      .update(usersTable)
+      .set({ oauthProvider: "google", oauthSubject: subject })
+      .where(eq(usersTable.id, userId));
+  } catch (err) {
+    // Do not fail login when optional OAuth-link columns are missing/unmigrated.
+    req.log.warn({ err, userId }, "Skipping OAuth column update for user");
+  }
+}
+
+async function createGoogleUserWithFallback(
+  email: string,
+  subject: string,
+  req: import("express").Request,
+): Promise<UserRow> {
+  try {
+    const [created] = await db
+      .insert(usersTable)
+      .values({ email, oauthProvider: "google", oauthSubject: subject })
+      .returning();
+    if (created) return created;
+  } catch (err) {
+    req.log.warn({ err, email }, "Creating OAuth-linked user failed, retrying email-only user");
+  }
+
+  const [createdEmailOnly] = await db
+    .insert(usersTable)
+    .values({ email })
+    .returning();
+
+  if (!createdEmailOnly) {
+    throw new Error("Failed to create user during Google OAuth callback");
+  }
+
+  return createdEmailOnly;
 }
 
 router.get("/auth/google", (req, res) => {
@@ -114,34 +184,20 @@ router.get("/auth/google/callback", async (req, res) => {
 
     const email = googleUser.email.toLowerCase();
     const subject = googleUser.sub;
-
-    let user = (
-      await db
-        .select()
-        .from(usersTable)
-        .where(and(eq(usersTable.oauthProvider, "google"), eq(usersTable.oauthSubject, subject)))
-        .limit(1)
-    )[0];
+    let user = await findUserByOAuthSubject(subject, req);
 
     if (!user) {
-      const byEmail = (
-        await db.select().from(usersTable).where(eq(usersTable.email, email)).limit(1)
-      )[0];
-
+      const byEmail = await findUserByEmail(email);
       if (byEmail) {
-        const [updated] = await db
-          .update(usersTable)
-          .set({ oauthProvider: "google", oauthSubject: subject })
-          .where(eq(usersTable.id, byEmail.id))
-          .returning();
-        user = updated;
+        user = byEmail;
+        await linkGoogleSubjectBestEffort(byEmail.id, subject, req);
       } else {
-        const [created] = await db
-          .insert(usersTable)
-          .values({ email, oauthProvider: "google", oauthSubject: subject })
-          .returning();
-        user = created;
+        user = await createGoogleUserWithFallback(email, subject, req);
       }
+    }
+
+    if (!user?.token || !user.email) {
+      throw new Error("OAuth callback resolved user without token/email");
     }
 
     const params = new URLSearchParams({
@@ -151,7 +207,10 @@ router.get("/auth/google/callback", async (req, res) => {
 
     res.redirect(`/?${params}`);
   } catch (err) {
-    req.log.error(err, "Google OAuth callback error");
+    req.log.error(
+      { err, query: req.query, resolvedBaseUrl: getBaseUrl(req) },
+      "Google OAuth callback error",
+    );
     res.redirect("/?oauth_error=server_error");
   }
 });
