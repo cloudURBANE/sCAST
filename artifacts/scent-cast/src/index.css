@@ -165,7 +165,7 @@ body {
   }
 
   .animate-infinite-scroll {
-    animation: infinite-scroll 35s linear infinite;
+    animation: infinite-scroll 60s linear infinite;
   }
 
   .animate-infinite-scroll-slow {
@@ -180,7 +180,7 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .animate-infinite-scroll {
-    animation: infinite-scroll 180s linear infinite;
+    animation: infinite-scroll 240s linear infinite;
   }
 
   .animate-infinite-scroll-slow {
