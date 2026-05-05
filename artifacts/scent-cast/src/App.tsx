@@ -182,7 +182,10 @@ const LiveClock: React.FC = React.memo(() => {
     return () => clearInterval(timer);
   }, []);
   return (
-    <span className="font-mono tracking-widest text-2xl sm:text-4xl text-white tabular-nums" style={{ fontVariantNumeric: 'tabular-nums' }}>
+    <span
+      className="font-serif italic tracking-tighter text-3xl sm:text-5xl text-white tabular-nums"
+      style={{ fontVariantNumeric: 'tabular-nums' }}
+    >
       {time.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}
     </span>
   );
@@ -735,7 +738,7 @@ export default function App() {
             <div className="flex flex-col items-center justify-center space-y-16 pt-32 text-center">
               <header className="space-y-10 flex flex-col items-center">
                 <div className="w-full max-w-4xl overflow-hidden py-4 border-y border-white/5 flex select-none relative group">
-                  <div className="flex animate-infinite-scroll gap-20 text-[11px] uppercase font-bold tracking-[0.5em] text-scent-muted font-sans whitespace-nowrap">
+                  <div className="flex animate-infinite-scroll gap-20 text-[11px] uppercase tracking-[0.5em] text-white/80 font-serif italic whitespace-nowrap">
                     {[...Array(4)].map((_, i) => (
                       <span key={i} className="flex items-center gap-20">
                         {tickerPhrases.map((phrase, j) => (
