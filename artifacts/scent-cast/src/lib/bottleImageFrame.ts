@@ -23,21 +23,36 @@ export type BottleImageVariant = "featured" | "grid" | "detail" | "thumb" | "sha
  *    artboard edge; large sources **shrink**. No artificial `max-h: 70%` cap — the
  *    only limit is the artboard itself, so “resize up” is the default for small assets.
  *
- * 4. **What this cannot fix** — If a vendor JPEG has huge empty margins *inside* the
+ * 4. **One shared axis (uniform alignment)** — After scaling, we use `object-bottom`
+ *    (not `object-center`). Every bottle sits on the **same horizontal baseline** at the
+ *    bottom of the artboard, centered left–right. That matches a retail “shelf” and
+ *    stops mismatched crops from floating at random vertical positions. (`object-center`
+ *    looked inconsistent across SKUs.)
+ *
+ * 5. **Odd aspect ratios (wide flat lays vs ultra-tall skins)** — `object-contain`
+ *    always fits the full bitmap in the artboard; one dimension “hits first”. Tall
+ *    narrow PNGs letterbox left/right; panoramic shots letterbox top (extra space sits
+ *    above the bottle). **Bottom** pinning keeps every SKU anchored on the same shelf
+ *    line so layouts don’t drift. Hover scale uses **`origin-bottom`** so magnification
+ *    grows upward from that line instead of floating around the visual centroid (bad
+ *    for squat vs skinny bottles).
+ *
+ * 6. **What this cannot fix** — If a vendor JPEG has huge empty margins *inside* the
  *    file, the bottle will still look small until that file is trimmed or replaced
  *    server-side. CSS only sees the full bitmap box.
  */
 
-/** Uniform inset from the slot edge → identical artboard across cards (strict). */
+/** Uniform inset + clip so scaled/hover paints don’t bleed into card chrome. */
 const ARTBOARD_INSET: Record<BottleImageVariant, string> = {
-  /** Hero: same % as grid so shelves and spotlight match. */
-  featured: "absolute inset-[6%] sm:inset-[7%] flex items-center justify-center min-h-0 min-w-0",
-  grid: "absolute inset-[6%] sm:inset-[7%] flex items-center justify-center min-h-0 min-w-0",
-  share: "absolute inset-[6%] sm:inset-[7%] flex items-center justify-center min-h-0 min-w-0",
-  /** Modal strip: fixed px inset inside the bordered preview box. */
-  detail: "absolute inset-3 sm:inset-4 flex items-center justify-center min-h-0 min-w-0",
-  /** List thumbnails: nearly full tiny cell. */
-  thumb: "absolute inset-0.5 flex items-center justify-center min-h-0 min-w-0",
+  featured:
+    "absolute inset-[6%] sm:inset-[7%] flex items-center justify-center overflow-hidden min-h-0 min-w-0 rounded-[0.125rem]",
+  grid:
+    "absolute inset-[6%] sm:inset-[7%] flex items-center justify-center overflow-hidden min-h-0 min-w-0 rounded-[0.125rem]",
+  share:
+    "absolute inset-[6%] sm:inset-[7%] flex items-center justify-center overflow-hidden min-h-0 min-w-0 rounded-[0.125rem]",
+  detail: "absolute inset-3 sm:inset-4 flex items-center justify-center overflow-hidden min-h-0 min-w-0 rounded-sm",
+  /** Slightly looser than 0.5px so round / non-rectangular pack shots don’t hug the border. */
+  thumb: "absolute inset-[6%] flex items-center justify-center overflow-hidden min-h-0 min-w-0 rounded-[0.125rem]",
 };
 
 /**
@@ -50,13 +65,13 @@ export function bottleArtboardClass(variant: BottleImageVariant, ...extra: Class
 }
 
 /**
- * Classes for the `<img>` that **fill the artboard** and let the browser scale the
- * bitmap to the largest size that still fits (resize **up** for small images, down for
- * large), centered, aspect ratio preserved — `object-contain` is the workhorse.
+ * Fill the artboard: `object-contain` + `object-bottom` for the shared shelf line;
+ * `origin-bottom` keeps Framer/hover `scale-*` growth anchored for odd silhouettes;
+ * `transform-gpu` helps subpixel edges on non-rectangular or high-contrast pack art.
  */
 export function bottleImageFillClass(...extra: ClassValue[]): string {
   return cn(
-    "block h-full w-full max-h-full max-w-full min-h-0 min-w-0 object-contain object-center select-none",
+    "block h-full w-full max-h-full max-w-full min-h-0 min-w-0 object-contain object-bottom origin-bottom transform-gpu select-none",
     ...extra,
   );
 }
