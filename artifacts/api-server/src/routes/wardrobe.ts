@@ -120,6 +120,9 @@ router.post("/wardrobe", async (req, res) => {
  * persisted before the catalog existed (or that lost top-level name/brand)
  * become first-class records again. Idempotent: catalog hits short-circuit,
  * so re-running on a healthy vault is cheap.
+ *
+ * Display sizing of bottle images is purely client-side CSS; rebuild updates stored
+ * URLs and profile fields, not bitmap dimensions in the browser.
  */
 router.post("/wardrobe/rebuild", async (req, res) => {
   const token = getToken(req);

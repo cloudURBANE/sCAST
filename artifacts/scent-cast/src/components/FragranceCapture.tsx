@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Search, RefreshCw, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { bottleImageImgClass } from '@/lib/bottleImageFrame';
+import { BottleImage } from '@/components/BottleImage';
 
 /**
  * Generate a stable, collision-resistant id for newly added wardrobe items.
@@ -320,20 +320,13 @@ export const FragranceCapture: React.FC<{ onAdd?: (item: any) => void }> = ({ on
                     className={`flex items-center justify-between p-3 border transition-all cursor-pointer rounded-[1.25rem] ${selectedIdx === i ? 'border-white bg-white/10' : 'border-white/10 hover:bg-white/5'}`}
                   >
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-white/5 p-1 rounded-sm overflow-hidden flex items-center justify-center border border-white/10">
+                      <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-sm border border-white/10 bg-white/5">
                         {m.imageUrl ? (
-                          <img
-                            src={m.imageUrl}
-                            alt={m.name}
-                            className={bottleImageImgClass('thumb')}
-                            referrerPolicy="no-referrer"
-                            onError={(e) => {
-                              const target = e.target as HTMLImageElement;
-                              target.style.display = 'none';
-                            }}
-                          />
+                          <BottleImage variant="thumb" src={m.imageUrl} alt={m.name} className="h-full w-full" />
                         ) : (
-                          <div className="text-[8px] text-white/20 font-bold uppercase text-center">N/A</div>
+                          <div className="flex h-full w-full items-center justify-center text-[8px] font-bold uppercase text-white/20">
+                            N/A
+                          </div>
                         )}
                       </div>
                       <div>

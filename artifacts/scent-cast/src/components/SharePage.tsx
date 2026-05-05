@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Wind, ShoppingBag, ShieldCheck, Wind as WindIcon } from 'lucide-react';
 import { LavaBackground } from './LavaBackground';
-import { bottleImageImgClass } from '@/lib/bottleImageFrame';
+import { BottleImage } from '@/components/BottleImage';
 
 interface ScentVector {
   freshness: number;
@@ -35,12 +35,6 @@ interface ShareData {
 function amazonUrl(brand: string, name: string): string {
   const query = encodeURIComponent(`${brand} ${name} fragrance perfume`);
   return `https://www.amazon.com/s?k=${query}`;
-}
-
-function proxiedImageUrl(url: string): string {
-  if (!url) return "";
-  if (url.startsWith("data:")) return url;
-  return `/api/image-proxy?url=${encodeURIComponent(url)}`;
 }
 
 export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
@@ -110,27 +104,21 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                     onClick={() => setExpanded(expanded === item.id ? null : item.id)}
                   >
                     {!data.hideImages && (
-                      <div className="aspect-[3/4] p-8 flex items-center justify-center bg-white/[0.02]">
+                      <div className="relative aspect-[3/4] bg-white/[0.02]">
                         {item.imageUrl ? (
-                          <img
-                            src={proxiedImageUrl(item.imageUrl)}
+                          <BottleImage
+                            variant="share"
+                            src={item.imageUrl}
                             alt={item.name}
-                            className={bottleImageImgClass(
-                              'share',
-                              'brightness-[1.05] group-hover:scale-105 transition-transform duration-700',
-                            )}
-                            onError={(e) => {
-                              const target = e.currentTarget;
-                              target.style.display = "none";
-                              const fallback = target.nextElementSibling as HTMLElement | null;
-                              if (fallback) fallback.style.display = "flex";
-                            }}
+                            className="absolute inset-0"
+                            imgClassName="brightness-[1.05] group-hover:scale-105 transition-transform duration-700"
                           />
-                        ) : null}
-                        <div className="text-center space-y-2 px-6" style={{ display: item.imageUrl ? "none" : "flex", flexDirection: "column", alignItems: "center" }}>
-                          <p className="text-[9px] uppercase tracking-[0.5em] text-white/20 font-bold">{item.brand}</p>
-                          <p className="font-serif italic text-2xl text-white leading-tight">{item.name}</p>
-                        </div>
+                        ) : (
+                          <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
+                            <p className="text-[9px] uppercase tracking-[0.5em] text-white/20 font-bold">{item.brand}</p>
+                            <p className="font-serif italic text-2xl text-white leading-tight">{item.name}</p>
+                          </div>
+                        )}
                       </div>
                     )}
                     {data.hideImages && (

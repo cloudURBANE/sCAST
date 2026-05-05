@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Link, Check, Eye, EyeOff, ExternalLink, Search } from 'lucide-react';
-import { bottleImageImgClass } from '@/lib/bottleImageFrame';
+import { BottleImage } from '@/components/BottleImage';
 
 interface FragranceItem {
   id: string;
@@ -222,13 +222,13 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                       } ${isPending ? 'cursor-wait' : 'cursor-pointer'}`}
                     >
                       {/* Bottle thumbnail */}
-                      <div className="w-8 h-10 shrink-0 flex items-center justify-center overflow-hidden">
+                      <div className="relative h-10 w-8 shrink-0 overflow-hidden">
                         {item.imageUrl && !isHidden ? (
-                          <img
+                          <BottleImage
+                            variant="thumb"
                             src={item.imageUrl}
                             alt={item.name}
-                            referrerPolicy="no-referrer"
-                            className={bottleImageImgClass('thumb')}
+                            className="h-full w-full"
                           />
                         ) : (
                           <div className="w-full h-full border border-white/10 flex items-center justify-center">
