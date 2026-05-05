@@ -23,11 +23,10 @@ export type BottleImageVariant = "featured" | "grid" | "detail" | "thumb" | "sha
  *    artboard edge; large sources **shrink**. No artificial `max-h: 70%` cap — the
  *    only limit is the artboard itself, so “resize up” is the default for small assets.
  *
- * 4. **One shared axis (uniform alignment)** — After scaling, we use `object-bottom`
- *    (not `object-center`). Every bottle sits on the **same horizontal baseline** at the
- *    bottom of the artboard, centered left–right. That matches a retail “shelf” and
- *    stops mismatched crops from floating at random vertical positions. (`object-center`
- *    looked inconsistent across SKUs.)
+ * 4. **One shared axis (uniform alignment)** — After scaling, we pin `object-position`
+ *    to **center bottom** (not vertical center). Every bottle sits on the **same baseline**
+ *    at the bottom of the artboard, centered left–right. That matches a retail “shelf” and
+ *    stops mismatched crops from floating at random vertical positions.
  *
  * 5. **Odd aspect ratios (wide flat lays vs ultra-tall skins)** — `object-contain`
  *    always fits the full bitmap in the artboard; one dimension “hits first”. Tall
@@ -65,13 +64,13 @@ export function bottleArtboardClass(variant: BottleImageVariant, ...extra: Class
 }
 
 /**
- * Fill the artboard: `object-contain` + `object-bottom` for the shared shelf line;
+ * Fill the artboard: `object-contain` + `object-[center_bottom]` for the shared shelf line;
  * `origin-bottom` keeps Framer/hover `scale-*` growth anchored for odd silhouettes;
  * `transform-gpu` helps subpixel edges on non-rectangular or high-contrast pack art.
  */
 export function bottleImageFillClass(...extra: ClassValue[]): string {
   return cn(
-    "block h-full w-full max-h-full max-w-full min-h-0 min-w-0 object-contain object-bottom origin-bottom transform-gpu select-none",
+    "block h-full w-full max-h-full max-w-full min-h-0 min-w-0 object-contain object-[center_bottom] origin-bottom transform-gpu select-none",
     ...extra,
   );
 }

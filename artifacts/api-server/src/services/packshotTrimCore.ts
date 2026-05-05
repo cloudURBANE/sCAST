@@ -1,7 +1,7 @@
 import sharp from "sharp";
 
 /** Bump when trim logic changes (e.g. for cache keys). */
-export const PACKSHOT_TRIM_VERSION = 1;
+export const PACKSHOT_TRIM_VERSION = 2;
 
 const DEFAULT_MAX_INPUT_BYTES = 12 * 1024 * 1024;
 const DEFAULT_MAX_LONG_EDGE = 4096;
@@ -43,7 +43,8 @@ export type TrimPackshotOk = {
 
 export type TrimPackshotResult = TrimPackshotOk | { ok: false; reason: string };
 
-async function sampleCornerBackground(buf: Buffer): Promise<{ r: number; g: number; b: number }> {
+/** Median of four corners plus edge midpoints on a downscaled raster — stable vs one bad corner. */
+async function sampleEdgeBackground(buf: Buffer): Promise<{ r: number; g: number; b: number }> {
   const { data, info } = await sharp(buf)
     .resize(64, 64, { fit: "inside", withoutEnlargement: true })
     .ensureAlpha()
@@ -60,21 +61,32 @@ async function sampleCornerBackground(buf: Buffer): Promise<{ r: number; g: numb
     return [data[i] ?? 0, data[i + 1] ?? 0, data[i + 2] ?? 0] as const;
   };
 
-  const corners = [sample(0, 0), sample(w - 1, 0), sample(0, h - 1), sample(w - 1, h - 1)];
+  const midX = Math.max(0, Math.floor(w / 2));
+  const midY = Math.max(0, Math.floor(h / 2));
+  const points = [
+    sample(0, 0),
+    sample(w - 1, 0),
+    sample(0, h - 1),
+    sample(w - 1, h - 1),
+    sample(midX, 0),
+    sample(midX, h - 1),
+    sample(0, midY),
+    sample(w - 1, midY),
+  ];
   const median1 = (xs: number[]) => {
     const s = [...xs].sort((a, b) => a - b);
     return s[Math.floor(s.length / 2)] ?? 0;
   };
 
   return {
-    r: median1(corners.map((p) => p[0])),
-    g: median1(corners.map((p) => p[1])),
-    b: median1(corners.map((p) => p[2])),
+    r: median1(points.map((p) => p[0])),
+    g: median1(points.map((p) => p[1])),
+    b: median1(points.map((p) => p[2])),
   };
 }
 
 function resolveBackground(mode: PackshotTrimBg, work: Buffer): Promise<{ r: number; g: number; b: number }> {
-  if (mode === "corners") return sampleCornerBackground(work);
+  if (mode === "corners") return sampleEdgeBackground(work);
   return Promise.resolve(mode);
 }
 
@@ -164,6 +176,11 @@ export async function trimPackshotBuffer(input: Buffer, options: TrimPackshotOpt
 
   if (!after.width || !after.height) {
     return { ok: false, reason: "output_missing_dimensions" };
+  }
+
+  if (after.width === W && after.height === H) {
+    log?.debug({ W, H }, "packshot-trim: no border removed, passthrough original");
+    return { ok: false, reason: "no_trim_benefit" };
   }
 
   const minFrac = 1 - maxTrimFraction;

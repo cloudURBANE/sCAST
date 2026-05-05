@@ -280,10 +280,6 @@ export const Wardrobe: React.FC<{
                           className="absolute inset-0 z-10"
                           imgClassName="brightness-[1.05] group-hover:scale-110 transition-transform duration-1000"
                         />
-                        <div className="absolute bottom-8 left-8 right-8 z-20 text-center opacity-0 group-hover:opacity-100 transition-all duration-500 translate-y-4 group-hover:translate-y-0 pointer-events-none">
-                          <p className="text-[9px] uppercase tracking-widest text-white/60 mb-1 leading-tight">{entryBrand(item)}</p>
-                          <h4 className="font-serif italic text-lg text-white leading-tight">{entryName(item)}</h4>
-                        </div>
                       </div>
                     </div>
                     <div className="text-center mt-6 space-y-1 transition-opacity duration-500 group-hover:opacity-30">
