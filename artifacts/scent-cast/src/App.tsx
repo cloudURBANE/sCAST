@@ -675,13 +675,9 @@ export default function App() {
       <LavaBackground />
       <nav className="fixed top-0 left-0 right-0 h-24 border-b border-white/5 bg-black/40 backdrop-blur-2xl z-50 px-8">
         <div className="max-w-[1400px] mx-auto h-full flex items-center relative">
-          <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2">
-            <Wind size={24} strokeWidth={1} className="text-white" />
-            <h1 className="font-serif text-2xl italic tracking-tighter uppercase">Scent Cast</h1>
-          </div>
-          <div className="ml-auto flex items-center gap-4">
+          <div className="flex items-center gap-4">
             {authEmail ? (
-              <span className="text-[10px] uppercase tracking-[0.2em] text-white/30 font-bold hidden sm:block">
+              <span className="text-[10px] uppercase tracking-[0.2em] text-white/30 font-bold hidden md:block">
                 {authEmail}
               </span>
             ) : (
@@ -701,6 +697,14 @@ export default function App() {
             >
               <span className={`w-2 h-2 rounded-full ${locationStatus === 'granted' ? 'bg-green-400' : locationStatus === 'requesting' ? 'bg-yellow-400 animate-pulse' : locationStatus === 'denied' ? 'bg-red-400' : 'bg-white/20'}`} />
             </button>
+          </div>
+
+          <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2">
+            <Wind size={24} strokeWidth={1} className="text-white" />
+            <h1 className="font-serif text-2xl italic tracking-tighter uppercase">Scent Cast</h1>
+          </div>
+
+          <div className="ml-auto flex items-center gap-4">
             {authToken ? (
               <>
                 <button
