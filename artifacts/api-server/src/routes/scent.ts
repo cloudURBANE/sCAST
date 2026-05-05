@@ -5,6 +5,13 @@ import { deepScrapeFragrance } from "../services/fallbackIntelligence";
 import { searchCatalog, getCatalogEntry, saveCatalogEntry, flattenProfile } from "../services/catalogService";
 import { searchImageUrl } from "../services/imageService";
 import { removeBg } from "../services/bgService";
+import {
+  isImageSolverId,
+  resolveRefreshSerperInput,
+  solverSkipsBgRemoval,
+  solverWantsPoofProductType,
+  type ImageSolverId,
+} from "../services/imageSolvers";
 import { logger } from "../lib/logger";
 
 const router = Router();
@@ -96,20 +103,72 @@ router.post("/search-scent", async (req, res) => {
 });
 
 router.post("/refresh-image", async (req, res) => {
-  const { name, brand, concentrationHint } = req.body as { name?: string; brand?: string; concentrationHint?: ConcentrationHint };
+  const body = req.body as {
+    name?: string;
+    brand?: string;
+    concentrationHint?: ConcentrationHint;
+    solverId?: unknown;
+    refreshCount?: unknown;
+    skipBg?: unknown;
+    poofOptions?: { type?: unknown };
+  };
+  const { name, brand, concentrationHint } = body;
   if (!name || !brand) {
     res.status(400).json({ error: "name and brand are required" });
     return;
   }
+
+  const rawSolver = body.solverId;
+  let solverId: ImageSolverId | undefined;
+  if (rawSolver === undefined || rawSolver === null || rawSolver === "") {
+    solverId = undefined;
+  } else if (isImageSolverId(rawSolver)) {
+    solverId = rawSolver;
+  } else {
+    res.status(400).json({ error: "Invalid solverId" });
+    return;
+  }
+
+  const rc = body.refreshCount;
+  const refreshCount =
+    typeof rc === "number" && Number.isFinite(rc) && rc >= 0 && rc <= 10_000 ? Math.floor(rc) : undefined;
+
+  let skipBg = solverSkipsBgRemoval(solverId);
+  if (typeof body.skipBg === "boolean") skipBg = body.skipBg;
+
+  let poofType = solverWantsPoofProductType(solverId);
+  const pt = body.poofOptions?.type;
+  if (pt === "product" || pt === "auto") poofType = pt;
+
+  const removeBgOpts = poofType === "product" ? ({ poofType: "product" } as const) : undefined;
+
   try {
     // Normalize to ASCII so accented chars (é, ü, etc.) don't break URL parsing
-    const asciiName  = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\x20-\x7E]/g, "");
+    const asciiName = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\x20-\x7E]/g, "");
     const asciiBrand = brand.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\x20-\x7E]/g, "");
     const normalizedHint = concentrationHint === "edt" || concentrationHint === "edp" ? concentrationHint : undefined;
     const concentrationText = concentrationToQueryText(normalizedHint);
-    const query = `${asciiBrand} ${asciiName} ${concentrationText} single fragrance bottle bottle only no box centered product photo studio packshot no plants`;
 
-    const rawUrl = await searchImageUrl(query);
+    const { query: serperQuery, refine } = resolveRefreshSerperInput({
+      asciiBrand,
+      asciiName,
+      concentrationText,
+      solverId,
+    });
+
+    logger.info(
+      {
+        solverId: solverId ?? null,
+        refreshCount: refreshCount ?? null,
+        refine,
+        skipBg,
+        poofType: poofType ?? null,
+        qPreview: serperQuery.slice(0, 220),
+      },
+      "refresh-image",
+    );
+
+    const rawUrl = await searchImageUrl(serperQuery, { refine });
     if (!rawUrl) {
       res.status(404).json({ error: "No image found for this fragrance" });
       return;
@@ -124,13 +183,14 @@ router.post("/refresh-image", async (req, res) => {
       return;
     }
 
-    // Background removal is best-effort — a provider error here must not kill the route
     let finalImageUrl = safeUrl;
-    try {
-      const { cleanImage } = await removeBg(safeUrl, true);
-      if (cleanImage) finalImageUrl = cleanImage;
-    } catch (bgErr: any) {
-      logger.warn({ err: bgErr.message }, "refresh-image: bg removal skipped, using raw URL");
+    if (!skipBg) {
+      try {
+        const { cleanImage } = await removeBg(safeUrl, true, removeBgOpts);
+        if (cleanImage) finalImageUrl = cleanImage;
+      } catch (bgErr: any) {
+        logger.warn({ err: bgErr.message }, "refresh-image: bg removal skipped, using raw URL");
+      }
     }
 
     // Persist to global catalog so every future user gets the refreshed image.

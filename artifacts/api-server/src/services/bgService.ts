@@ -50,12 +50,20 @@ function baseParams() {
   };
 }
 
-async function removeBgByFile(buffer: Buffer, apiKey: string): Promise<Buffer | null> {
+export type RemoveBgOptions = {
+  /** Poof API removal preset when supported (e.g. product vs auto). */
+  poofType?: "auto" | "product";
+};
+
+async function removeBgByFile(buffer: Buffer, apiKey: string, opts?: RemoveBgOptions): Promise<Buffer | null> {
   try {
     const FormData = (await import("form-data")).default;
     const form = new FormData();
     form.append("image_file", buffer, { filename: "image.jpg", contentType: "image/jpeg" });
     Object.entries(baseParams()).forEach(([k, v]) => form.append(k, v));
+    if (opts?.poofType === "product") {
+      form.append("type", "product");
+    }
 
     const res = await axios.post(POOF_API, form, {
       headers: { ...form.getHeaders(), "x-api-key": apiKey },
@@ -86,7 +94,7 @@ async function downloadImage(url: string): Promise<Buffer | null> {
   }
 }
 
-export async function removeBg(input: string, isUrl = false) {
+export async function removeBg(input: string, isUrl = false, opts?: RemoveBgOptions) {
   const apiKey = process.env.REMOVE_BG_API_KEY;
   const toDataUri = (buf: Buffer) => `data:image/png;base64,${buf.toString("base64")}`;
 
@@ -100,7 +108,7 @@ export async function removeBg(input: string, isUrl = false) {
       return { cleanImage: toDataUri(normalized) };
     }
 
-    const result = await removeBgByFile(Buffer.from(b64, "base64"), apiKey);
+    const result = await removeBgByFile(Buffer.from(b64, "base64"), apiKey, opts);
     if (result) {
       const padded = await normalizeToBottleCanvas(result);
       return { cleanImage: toDataUri(padded) };
@@ -125,7 +133,7 @@ export async function removeBg(input: string, isUrl = false) {
   const raw = await downloadImage(input);
   if (!raw) return { cleanImage: input };
 
-  const byFile = await removeBgByFile(raw, apiKey);
+  const byFile = await removeBgByFile(raw, apiKey, opts);
   if (byFile) {
     const padded = await normalizeToBottleCanvas(byFile);
     return { cleanImage: toDataUri(padded) };

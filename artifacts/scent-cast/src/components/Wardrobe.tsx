@@ -1,8 +1,13 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Trash2, ShieldCheck, Wind, RefreshCw, Wrench, Undo2 } from 'lucide-react';
+import { X, Trash2, ShieldCheck, Wind, RefreshCw, Wrench, Undo2, HelpCircle } from 'lucide-react';
 import { bottleFeaturedSlotClass } from '@/lib/bottleImageFrame';
 import { BottleImage } from '@/components/BottleImage';
+import {
+  WARDROBE_CLARIFY_SOLVERS,
+  WARDROBE_REFRESH_COUNT_STORAGE_KEY,
+  type WardrobeImageSolverId,
+} from '@/lib/imageRefreshSolvers';
 
 export interface ScentVector {
   freshness: number;
@@ -81,6 +86,23 @@ export const Wardrobe: React.FC<{
   
   const [refreshingId, setRefreshingId] = React.useState<string | null>(null);
   const [refreshError, setRefreshError] = React.useState<string | null>(null);
+  const [refreshCounts, setRefreshCounts] = React.useState<Record<string, number>>(() => {
+    if (typeof sessionStorage === 'undefined') return {};
+    try {
+      const raw = sessionStorage.getItem(WARDROBE_REFRESH_COUNT_STORAGE_KEY);
+      if (!raw) return {};
+      const o = JSON.parse(raw) as unknown;
+      if (!o || typeof o !== 'object' || Array.isArray(o)) return {};
+      const out: Record<string, number> = {};
+      for (const [k, v] of Object.entries(o as Record<string, unknown>)) {
+        if (typeof v === 'number' && Number.isFinite(v) && v >= 0) out[k] = Math.floor(v);
+      }
+      return out;
+    } catch {
+      return {};
+    }
+  });
+  const [clarifySolverId, setClarifySolverId] = React.useState<WardrobeImageSolverId | ''>('');
 
   const openDetail = (item: Fragrance) => {
     setRefreshError(null);
@@ -111,7 +133,27 @@ export const Wardrobe: React.FC<{
     };
   }, [selectedItem]);
 
-  const handleRefreshImage = async (item: Fragrance) => {
+  React.useEffect(() => {
+    setClarifySolverId('');
+  }, [selectedItem?.id]);
+
+  const handleRefreshImage = async (item: Fragrance, solverId?: WardrobeImageSolverId) => {
+    const prev = refreshCounts[item.id] ?? 0;
+    if (!solverId && prev > 2) {
+      setRefreshError('Too many automatic tries. Choose what looks wrong, then search with a fix.');
+      return;
+    }
+    const nextCount = prev + 1;
+    setRefreshCounts((p) => {
+      const next = { ...p, [item.id]: nextCount };
+      try {
+        sessionStorage.setItem(WARDROBE_REFRESH_COUNT_STORAGE_KEY, JSON.stringify(next));
+      } catch {
+        /* ignore quota / privacy mode */
+      }
+      return next;
+    });
+
     setRefreshingId(item.id);
     setRefreshError(null);
     try {
@@ -122,12 +164,14 @@ export const Wardrobe: React.FC<{
           name: entryName(item),
           brand: entryBrand(item),
           concentrationHint: concentrationHintFromValue(item.concentration),
+          refreshCount: nextCount,
+          ...(solverId ? { solverId } : {}),
         }),
       });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || 'Refresh failed');
       onUpdateImage?.(item.id, data.imageUrl);
-      
+
       setSelectedItem((current) =>
         current && current.id === item.id ? { ...current, imageUrl: data.imageUrl } : current,
       );
@@ -164,6 +208,9 @@ export const Wardrobe: React.FC<{
     }
     return chunked;
   }, [filteredItems]);
+
+  const detailNeedsClarify =
+    selectedItem !== null && (refreshCounts[selectedItem.id] ?? 0) > 2;
 
   return (
     <div className="relative">
@@ -437,12 +484,40 @@ export const Wardrobe: React.FC<{
                 {refreshError && (
                   <p className="text-[9px] text-red-400/80 text-center leading-snug px-2 py-1">{refreshError}</p>
                 )}
+                {detailNeedsClarify && (
+                  <div className="rounded-lg border border-amber-500/35 bg-amber-500/[0.07] px-3 py-3 space-y-2 mb-1">
+                    <div className="flex items-center gap-2">
+                      <HelpCircle size={14} className="text-amber-200/90 shrink-0" aria-hidden />
+                      <p className="text-[9px] uppercase tracking-[0.28em] text-amber-100/85 font-bold">Clarify</p>
+                    </div>
+                    <p className="text-[11px] text-white/55 leading-snug font-sans">
+                      Automatic search paused after several tries. Pick the closest issue — we&apos;ll tune the query and processing.
+                    </p>
+                    <label htmlFor="wardrobe-clarify-solver" className="sr-only">
+                      What looks wrong with the bottle image
+                    </label>
+                    <select
+                      id="wardrobe-clarify-solver"
+                      value={clarifySolverId}
+                      onChange={(e) => setClarifySolverId((e.target.value || '') as WardrobeImageSolverId | '')}
+                      className="w-full bg-black/50 border border-white/15 text-white text-[11px] py-2.5 px-2 rounded-md font-sans outline-none focus:border-amber-400/40"
+                    >
+                      <option value="">What looks wrong?</option>
+                      {WARDROBE_CLARIFY_SOLVERS.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <div className="flex gap-3">
                   <button
                     type="button"
                     onClick={() => handleRefreshImage(selectedItem)}
-                    disabled={refreshingId === selectedItem.id}
+                    disabled={detailNeedsClarify || refreshingId === selectedItem.id}
                     aria-label="Refresh bottle image"
+                    title={detailNeedsClarify ? 'Use clarify options below' : undefined}
                     className="flex-1 py-4 bg-white text-black uppercase tracking-[0.3em] text-[10px] font-bold hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {refreshingId === selectedItem.id ? (
@@ -461,6 +536,23 @@ export const Wardrobe: React.FC<{
                     <Trash2 size={14} className="group-hover:animate-bounce" />
                   </button>
                 </div>
+                {detailNeedsClarify && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!clarifySolverId) return;
+                      void handleRefreshImage(selectedItem, clarifySolverId);
+                    }}
+                    disabled={!clarifySolverId || refreshingId === selectedItem.id}
+                    className="w-full py-4 bg-amber-500/90 text-black uppercase tracking-[0.28em] text-[10px] font-bold hover:bg-amber-400 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed rounded-md border border-amber-300/40"
+                  >
+                    {refreshingId === selectedItem.id ? (
+                      <><RefreshCw size={12} className="animate-spin" /> Searching…</>
+                    ) : (
+                      <>Search with fix</>
+                    )}
+                  </button>
+                )}
               </div>
             </motion.div>
           </div>

@@ -1,5 +1,8 @@
 import axios from "axios";
 import { logger } from "../lib/logger";
+import type { SerperRefineMode } from "./imageSolvers";
+
+export type { SerperRefineMode } from "./imageSolvers";
 
 const DEFAULT_SERPER_IMAGES_URL = "https://google.serper.dev/images";
 const REQUEST_TIMEOUT_MS = 12000;
@@ -162,7 +165,25 @@ function scoreCandidate(candidate: SerperImageResult): number {
   return score;
 }
 
-export async function searchSerperImageUrl(query: string): Promise<string | null> {
+/** Full packshot refinement appended for normal refresh paths. */
+const SERPER_SUFFIX_DEFAULT =
+  "single fragrance bottle bottle only no box centered product packshot front view plain background no plants no lifestyle studio shot";
+
+/** Shorter suffix on clarify/solver paths so negative keywords stay meaningful. */
+const SERPER_SUFFIX_SOLVER = "fragrance bottle packshot isolated product photo";
+
+function applySerperRefinement(rawQuery: string, refine: SerperRefineMode): string {
+  const q = rawQuery.trim();
+  if (!q) return q;
+  if (refine === "none") return q;
+  if (refine === "solver") return `${q} ${SERPER_SUFFIX_SOLVER}`.trim();
+  return `${q} ${SERPER_SUFFIX_DEFAULT}`.trim();
+}
+
+export async function searchSerperImageUrl(
+  query: string,
+  options?: { refine?: SerperRefineMode },
+): Promise<string | null> {
   if (!query.trim()) return null;
   const apiKey = process.env.SERPER_API_KEY;
   if (!apiKey) {
@@ -171,7 +192,7 @@ export async function searchSerperImageUrl(query: string): Promise<string | null
   }
 
   const endpoint = process.env.SERPER_IMAGE_API_URL || DEFAULT_SERPER_IMAGES_URL;
-  const refinedQuery = `${query.trim()} single fragrance bottle bottle only no box centered product packshot front view plain background no plants no lifestyle studio shot`;
+  const refinedQuery = applySerperRefinement(query, options?.refine ?? "default");
 
   try {
     const response = await axios.post<SerperResponse>(
