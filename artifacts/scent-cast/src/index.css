@@ -128,9 +128,17 @@ body {
   100% { transform: translate3d(0, 0px, 0); }
 }
 
-/* Accessibility Hardening: Disable endless and sweeping motion 
-  for users with vestibular motion sensitivities.
-*/
+/* Marquee rows: keep layout + compositing outside motion prefs so tickers
+   don’t break when reduced motion is on (common on mobile). Speed scales down. */
+.animate-infinite-scroll,
+.animate-infinite-scroll-slow {
+  display: flex;
+  width: max-content;
+  will-change: transform;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .glass-acrylic-animate {
     animation: glass-aura-pulsate 8s ease-in-out infinite;
@@ -138,25 +146,25 @@ body {
   }
 
   .animate-infinite-scroll {
-    display: flex;
-    width: max-content;
     animation: infinite-scroll 35s linear infinite;
-    will-change: transform;
-    transform: translateZ(0);
-    backface-visibility: hidden;
   }
 
   .animate-infinite-scroll-slow {
-    display: flex;
-    width: max-content;
     animation: infinite-scroll 60s linear infinite;
-    will-change: transform;
-    transform: translateZ(0);
-    backface-visibility: hidden;
   }
 
-  .animate-float { 
-    animation: float 6s ease-in-out infinite; 
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
     will-change: transform;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-infinite-scroll {
+    animation: infinite-scroll 180s linear infinite;
+  }
+
+  .animate-infinite-scroll-slow {
+    animation: infinite-scroll 240s linear infinite;
   }
 }
