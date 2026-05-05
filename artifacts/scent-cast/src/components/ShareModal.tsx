@@ -8,6 +8,8 @@ interface FragranceItem {
   brand: string;
   imageUrl?: string;
   shareHidden?: boolean;
+  /** DB row UUID, preferred for visibility PATCH (B9). */
+  _dbId?: string;
 }
 
 interface ShareModalProps {
@@ -54,10 +56,11 @@ export const ShareModal: React.FC<ShareModalProps> = ({
 
   const handleToggle = async (item: FragranceItem) => {
     const newHidden = !item.shareHidden;
+    const apiId = item._dbId ?? item.id;
     setPendingIds(prev => new Set(prev).add(item.id));
     onToggleVisibility(item.id, newHidden);
     try {
-      await fetch(`/api/wardrobe/${item.id}/visibility`, {
+      await fetch(`/api/wardrobe/${apiId}/visibility`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',

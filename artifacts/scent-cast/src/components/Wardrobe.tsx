@@ -33,6 +33,8 @@ export interface Fragrance {
   shareHidden?: boolean;
   /** Legacy ScentProfile shape — some old vault rows only have product.name/brand */
   product?: { name?: string; brand?: string; perfumer?: string };
+  /** Postgres row UUID — surfaced by GET /wardrobe; preferred for delete/patch (B9). */
+  _dbId?: string;
 }
 
 /** Resolve the human-facing name/brand even if the row predates the flat shape. */
@@ -41,6 +43,19 @@ function entryName(item: Fragrance): string {
 }
 function entryBrand(item: Fragrance): string {
   return item?.brand || item?.product?.brand || "";
+}
+
+/**
+ * Route remote http(s) images through the same /api/image-proxy the share
+ * page uses. Without this, hosts that block hotlinks/referrer return 403
+ * and the dashboard ends up looking emptier than the share view (B4).
+ * Data URIs and same-origin assets are passed through untouched.
+ */
+function proxiedImageUrl(url: string | undefined | null): string {
+  if (!url) return "";
+  if (url.startsWith("data:")) return url;
+  if (!/^https?:\/\//i.test(url)) return url;
+  return `/api/image-proxy?url=${encodeURIComponent(url)}`;
 }
 
 function concentrationHintFromValue(value?: string): "edt" | "edp" | undefined {
@@ -52,7 +67,7 @@ function concentrationHintFromValue(value?: string): "edt" | "edp" | undefined {
 
 export const Wardrobe: React.FC<{
   items: Fragrance[];
-  onDelete: (id: string) => void;
+  onDelete: (item: Fragrance) => void;
   onUpdateImage?: (id: string, imageUrl: string) => void;
   featuredItem?: Fragrance | null;
   onRebuild?: () => Promise<{ total: number; rebuilt: number; skipped: number } | null>;
@@ -203,7 +218,7 @@ export const Wardrobe: React.FC<{
                     onClick={() => setSelectedItem(featuredItem)}
                   >
                     <div className="absolute top-10 left-10 text-[9px] uppercase tracking-[0.6em] text-white/30 font-bold">Recommended Manifest</div>
-                    <img src={featuredItem.imageUrl} alt={entryName(featuredItem)} className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-1000 brightness-[1.15] relative z-10" referrerPolicy="no-referrer" />
+                    <img src={proxiedImageUrl(featuredItem.imageUrl)} alt={entryName(featuredItem)} className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-1000 brightness-[1.15] relative z-10" referrerPolicy="no-referrer" />
                     <div className="text-center mt-12 space-y-3">
                       <p className="text-[10px] uppercase text-white/50 tracking-[0.5em] font-bold font-sans">{entryBrand(featuredItem)}</p>
                       <h4 className="font-serif italic text-3xl sm:text-5xl text-white tracking-tighter">{entryName(featuredItem)}</h4>
@@ -231,7 +246,7 @@ export const Wardrobe: React.FC<{
                       <div className="aspect-[3/4] p-10 flex flex-col items-center justify-center relative">
                         <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/[0.01] to-white/[0.05] pointer-events-none" />
                         <div className="w-full h-full flex items-center justify-center relative z-10 group-hover:scale-110 transition-transform duration-1000">
-                          <img src={item.imageUrl} alt={entryName(item)} className="max-w-full max-h-full w-auto h-auto object-contain brightness-[1.05]" style={{ maxHeight: '100%', maxWidth: '100%' }} referrerPolicy="no-referrer" />
+                          <img src={proxiedImageUrl(item.imageUrl)} alt={entryName(item)} className="max-w-full max-h-full w-auto h-auto object-contain brightness-[1.05]" style={{ maxHeight: '100%', maxWidth: '100%' }} referrerPolicy="no-referrer" />
                         </div>
                         <div className="absolute bottom-8 left-8 right-8 text-center opacity-0 group-hover:opacity-100 transition-all duration-500 translate-y-4 group-hover:translate-y-0">
                           <p className="text-[9px] uppercase tracking-widest text-white/60 mb-1 leading-tight">{entryBrand(item)}</p>
@@ -400,7 +415,7 @@ export const Wardrobe: React.FC<{
                   </button>
                   <button
                     type="button"
-                    onClick={() => { onDelete(selectedItem.id); closeDetail(); }}
+                    onClick={() => { onDelete(selectedItem); closeDetail(); }}
                     disabled={refreshingId === selectedItem.id}
                     aria-label="Delete from vault"
                     className="px-6 py-4 bg-transparent border border-white/10 text-white/30 uppercase tracking-[0.3em] text-[10px] font-bold hover:border-red-500/50 hover:text-red-500 transition-all flex items-center justify-center gap-2 group disabled:opacity-30 disabled:cursor-not-allowed"

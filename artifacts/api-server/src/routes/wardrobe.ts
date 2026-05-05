@@ -149,16 +149,23 @@ router.post("/wardrobe/rebuild", async (req, res) => {
     }
 
     try {
-      const profile = await buildProfile(name, brand, {
-        notes: Array.isArray(data.notes) ? data.notes : undefined,
-        family: typeof data.family === "string" ? data.family : undefined,
-        description: typeof data.description === "string" ? data.description : undefined,
-        pyramid: data.pyramid,
-        perfumer:
-          (typeof data.perfumer === "string" && data.perfumer) ||
-          (typeof data.product?.perfumer === "string" ? data.product.perfumer : undefined),
-        imageUrl: typeof data.imageUrl === "string" ? data.imageUrl : undefined,
-      });
+      const profile = await buildProfile(
+        name,
+        brand,
+        {
+          notes: Array.isArray(data.notes) ? data.notes : undefined,
+          family: typeof data.family === "string" ? data.family : undefined,
+          description: typeof data.description === "string" ? data.description : undefined,
+          pyramid: data.pyramid,
+          perfumer:
+            (typeof data.perfumer === "string" && data.perfumer) ||
+            (typeof data.product?.perfumer === "string" ? data.product.perfumer : undefined),
+          imageUrl: typeof data.imageUrl === "string" ? data.imageUrl : undefined,
+        },
+        // B2: never let a substring catalog match swap the user's fragrance
+        // for a different product during rebuild.
+        { allowCatalogFuzzy: false },
+      );
 
       if (!("product" in profile)) {
         skipped++;
@@ -171,6 +178,16 @@ router.post("/wardrobe/rebuild", async (req, res) => {
       const merged = sanitizeFragrance({
         ...data,
         ...flat,
+        // Pin the user's name/brand. The catalog row may have a slightly
+        // different display string (case, trailing edition tags) but the
+        // rebuild must never relabel a row.
+        name,
+        brand,
+        product: {
+          ...(typeof flat.product === "object" && flat.product ? flat.product : {}),
+          name,
+          brand,
+        },
         // Don't overwrite a real stored URL with an empty one if the rebuild
         // didn't manage to resolve a fresh image (e.g. Firestore cache miss).
         imageUrl: flatImageUrl || (typeof data.imageUrl === "string" ? data.imageUrl : ""),
@@ -196,6 +213,33 @@ router.post("/wardrobe/rebuild", async (req, res) => {
   res.json({ total: rows.length, rebuilt, skipped, failures });
 });
 
+/**
+ * Resolve a wardrobe row owned by `userId`. Prefers the DB primary key
+ * (the canonical, unique `_dbId` the GET response surfaces). Falls back
+ * to matching `fragrance_data.id` only when the param doesn't look like
+ * a UUID, so legacy clients that still send the `Math.random()`-based id
+ * keep working but the DB UUID is always tried first (B9).
+ */
+function isUuidish(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
+async function findUserRow(userId: string, idParam: string) {
+  const rows = await db
+    .select()
+    .from(userFragrancesTable)
+    .where(eq(userFragrancesTable.userId, userId));
+
+  if (isUuidish(idParam)) {
+    const byDbId = rows.find(r => r.id === idParam);
+    if (byDbId) return byDbId;
+  }
+  return rows.find(r => {
+    const data = r.fragranceData as any;
+    return data?.id === idParam;
+  });
+}
+
 router.patch("/wardrobe/:fragranceId/visibility", async (req, res) => {
   const token = getToken(req);
   if (!token) { res.status(401).json({ error: "Unauthorized" }); return; }
@@ -210,16 +254,7 @@ router.patch("/wardrobe/:fragranceId/visibility", async (req, res) => {
     return;
   }
 
-  const rows = await db
-    .select()
-    .from(userFragrancesTable)
-    .where(eq(userFragrancesTable.userId, user.id));
-
-  const match = rows.find((r) => {
-    const data = r.fragranceData as any;
-    return data?.id === fragranceId || r.id === fragranceId;
-  });
-
+  const match = await findUserRow(user.id, fragranceId);
   if (!match) { res.status(404).json({ error: "Fragrance not found" }); return; }
 
   const existing = match.fragranceData as Record<string, any>;
@@ -242,15 +277,7 @@ router.delete("/wardrobe/:id", async (req, res) => {
 
   const { id } = req.params;
 
-  const rows = await db
-    .select()
-    .from(userFragrancesTable)
-    .where(eq(userFragrancesTable.userId, user.id));
-
-  const match = rows.find((r) => {
-    const data = r.fragranceData as any;
-    return data?.id === id || r.id === id;
-  });
+  const match = await findUserRow(user.id, id);
 
   if (!match) {
     res.status(404).json({ error: "Not found" });

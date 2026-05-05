@@ -293,12 +293,20 @@ export default function App() {
     }
   }, [authToken, loadWardrobe]);
 
-  const handleDeleteItem = async (id: string) => {
-    setItems((prev) => prev.filter(item => item.id !== id));
+  const handleDeleteItem = async (target: Fragrance) => {
+    // Prefer the Postgres row UUID for the API call (B9). Fall back to the
+    // legacy `data.id` only when the row hasn't roundtripped through GET
+    // /wardrobe yet (e.g. just-added optimistic state).
+    const apiId = target._dbId ?? target.id;
+    setItems((prev) =>
+      prev.filter(item =>
+        target._dbId ? item._dbId !== target._dbId : item.id !== target.id,
+      ),
+    );
 
     if (authToken) {
       try {
-        await fetch(`/api/wardrobe/${id}`, {
+        await fetch(`/api/wardrobe/${apiId}`, {
           method: 'DELETE',
           headers: { Authorization: `Bearer ${authToken}` },
         });

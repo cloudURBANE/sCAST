@@ -2,6 +2,24 @@ import React, { useState } from 'react';
 import { Search, RefreshCw, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
+/**
+ * Generate a stable, collision-resistant id for newly added wardrobe items.
+ * `Math.random().toString(36).substr(2, 9)` is 9 alphanumeric chars (~52
+ * bits) — small enough that real users hit collisions, which then make
+ * `data.id`-keyed lookups in the wardrobe PATCH/DELETE routes ambiguous (B8).
+ */
+function newFragranceId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  // Fallback for very old browsers — full 128-bit space, hex.
+  const a = Math.floor(Math.random() * 0xffffffff).toString(16).padStart(8, '0');
+  const b = Math.floor(Math.random() * 0xffffffff).toString(16).padStart(8, '0');
+  const c = Math.floor(Math.random() * 0xffffffff).toString(16).padStart(8, '0');
+  const d = Math.floor(Math.random() * 0xffffffff).toString(16).padStart(8, '0');
+  return `${a}-${b}-${c}-${d}`;
+}
+
 interface FragranceMatch {
   name: string;
   brand: string;
@@ -76,7 +94,7 @@ export const FragranceCapture: React.FC<{ onAdd?: (item: any) => void }> = ({ on
       if ((selected as any).scent_vector) {
         onAdd({
           ...selected,
-          id: Math.random().toString(36).substr(2, 9),
+          id: newFragranceId(),
           season: (selected as any).family?.includes('Fresh') ? 'Summer' : (selected as any).family?.includes('Woody') ? 'Winter' : 'Universal'
         });
       } else {
@@ -109,7 +127,7 @@ export const FragranceCapture: React.FC<{ onAdd?: (item: any) => void }> = ({ on
               name: data.name || data.product?.name || selected.name,
               brand: data.brand || data.product?.brand || selected.brand,
               imageUrl: data.imageUrl || selected.imageUrl || '',
-              id: Math.random().toString(36).substr(2, 9),
+              id: newFragranceId(),
               season: 'Universal',
             });
           } else {

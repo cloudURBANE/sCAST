@@ -133,10 +133,19 @@ router.post("/refresh-image", async (req, res) => {
       logger.warn({ err: bgErr.message }, "refresh-image: bg removal skipped, using raw URL");
     }
 
-    // Persist to global catalog so every future user gets the refreshed image
-    const existing = await getCatalogEntry(brand, name);
-    if (existing) {
-      await saveCatalogEntry(brand, name, { ...existing, imageUrl: finalImageUrl });
+    // Persist to global catalog so every future user gets the refreshed image.
+    // B7: previously this was conditional on an existing entry, so a refresh
+    // against a fragrance that wasn't yet catalogued discarded the cleaned
+    // image. Now we always upsert: reuse the existing profile when present,
+    // otherwise build a minimal one (still without the catalog fuzzy fallback,
+    // so a partial substring match can't hijack the refresh).
+    let baseProfile = await getCatalogEntry(brand, name);
+    if (!baseProfile) {
+      const built = await buildProfile(name, brand, undefined, { allowCatalogFuzzy: false });
+      if ("product" in built) baseProfile = built;
+    }
+    if (baseProfile) {
+      await saveCatalogEntry(brand, name, { ...baseProfile, imageUrl: finalImageUrl });
     }
 
     res.json({ imageUrl: finalImageUrl });

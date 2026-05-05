@@ -1,6 +1,6 @@
 import { db } from "@workspace/db";
 import { globalFragrancesTable } from "@workspace/db/schema";
-import { eq, or, ilike, sql } from "drizzle-orm";
+import { eq, or, sql } from "drizzle-orm";
 import type { ScentProfile } from "./scentEngine";
 
 export function makeLookupKey(brand: string, name: string): string {
@@ -18,24 +18,35 @@ export async function getCatalogEntry(brand: string, name: string): Promise<Scen
   return rows[0].profileData as ScentProfile;
 }
 
+/**
+ * Fuzzy catalog search.
+ *
+ * Constraints (B1/B6): The previous implementation OR'd `name ILIKE %q%`
+ * and `brand ILIKE %q%` separately, so a query of "aventus" non-deterministically
+ * matched any fragrance whose name *contained* "aventus" — the first row
+ * returned by Postgres won. That silently corrupted user_fragrances rows
+ * during rebuild and surfaced wrong images during image hydration.
+ *
+ * New rules:
+ *  - Match only against the concatenated "brand name" or the lookup_key
+ *    (the same composite the catalog actually uses to identify products).
+ *  - Order shortest match first so "Aventus" beats "Aventus Cologne" /
+ *    "Aventus for Her" deterministically.
+ */
 export async function searchCatalog(query: string): Promise<ScentProfile | null> {
   const q = query.trim().toLowerCase();
+  if (!q) return null;
 
   const rows = await db
     .select()
     .from(globalFragrancesTable)
     .where(
       or(
-        // name alone matches the query
-        ilike(globalFragrancesTable.name, `%${q}%`),
-        // brand alone matches the query
-        ilike(globalFragrancesTable.brand, `%${q}%`),
-        // "brand name" concatenated matches (e.g. "Creed Aventus")
         sql`(${globalFragrancesTable.brand} || ' ' || ${globalFragrancesTable.name}) ILIKE ${"%" + q + "%"}`,
-        // query is contained in the lookup_key (e.g. "aventus" in "creed::aventus")
         sql`${globalFragrancesTable.lookupKey} ILIKE ${"%" + q + "%"}`,
-      )
+      ),
     )
+    .orderBy(sql`length(${globalFragrancesTable.name}) asc`)
     .limit(1);
 
   if (rows.length === 0) return null;

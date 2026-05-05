@@ -62,15 +62,29 @@ export async function buildProfile(
     imageUrl?: string;
     pyramid?: { top: string[]; heart: string[]; base: string[] };
     perfumer?: string;
-  }
+  },
+  opts?: {
+    /**
+     * When false, the catalog *fuzzy* fallback is skipped. The destructive
+     * rebuild path uses this so a partial substring match in `searchCatalog`
+     * can never replace the user's stored fragrance with a different
+     * product (B2). Exact `lookup_key` lookup, dataset/scrape, and image
+     * cache resolution still run.
+     */
+    allowCatalogFuzzy?: boolean;
+  },
 ): Promise<ScentProfile | { error: string }> {
+  const allowCatalogFuzzy = opts?.allowCatalogFuzzy ?? true;
+
   // 1. Check global catalog — exact match first, then fuzzy to catch AI naming variations
   const cached = await getCatalogEntry(brand, name);
   if (cached) return cached;
 
-  // Fuzzy search handles cases like "Sauvage EDP" matching stored "Sauvage"
-  const fuzzy = await searchCatalog(`${brand} ${name}`);
-  if (fuzzy) return fuzzy;
+  if (allowCatalogFuzzy) {
+    // Fuzzy search handles cases like "Sauvage EDP" matching stored "Sauvage"
+    const fuzzy = await searchCatalog(`${brand} ${name}`);
+    if (fuzzy) return fuzzy;
+  }
 
   // 2. Resolve image: check Firestore by name+brand first; on miss, run image
   // search + background removal exactly once even if many users request simultaneously.

@@ -9,15 +9,23 @@ let initAttempted = false;
 // share one Promise instead of each spawning their own background-removal API call.
 const inFlight = new Map<string, Promise<string | null>>();
 
+/**
+ * Build the bg_cache document key.
+ *
+ * Stays in lockstep with `makeLookupKey` in catalogService — both are derived
+ * from `${trim().toLowerCase(brand)}::${trim().toLowerCase(name)}` so a
+ * fragrance that resolves to one row in Postgres also resolves to one entry
+ * in Firestore. The previous implementation also stripped diacritics and
+ * punctuation, which collapsed legitimately distinct products onto the same
+ * cache key (e.g. "L'Eau" vs "Leau") and let one fragrance's image leak
+ * across to another (B5).
+ */
 function normalizeKey(brand: string, name: string): string {
   const normalize = (s: string) =>
     s
       .trim()
       .toLowerCase()
-      .replace(/\s+/g, " ")          // collapse multiple spaces
-      .normalize("NFD")              // decompose accented chars
-      .replace(/[\u0300-\u036f]/g, "") // strip diacritics
-      .replace(/[^\w\s-]/g, "");    // strip punctuation
+      .replace(/\s+/g, " "); // collapse internal whitespace only
 
   const normalized = `${normalize(brand)}::${normalize(name)}`;
   return createHash("sha256").update(normalized).digest("hex");
