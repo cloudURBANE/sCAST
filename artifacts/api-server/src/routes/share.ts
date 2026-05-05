@@ -69,7 +69,7 @@ router.get("/share/:userId", async (req, res) => {
       try {
         const imageUrl = await resolveSharedImageUrl(brand, name);
         if (imageUrl) return { ...frag, imageUrl };
-        const freshUrl = await searchImageUrl(`${brand} ${name}`);
+        const freshUrl = await searchImageUrl(`${brand} ${name} single fragrance bottle packshot studio no plants`);
         if (freshUrl) return { ...frag, imageUrl: freshUrl };
       } catch {
         /* non-fatal */

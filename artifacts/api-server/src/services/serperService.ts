@@ -60,6 +60,13 @@ const BLOCKED_TEXT_HINTS = [
   "render",
   "3d model",
   "mockup",
+  "houseplant",
+  "potted plant",
+  "monstera",
+  "fiddle leaf",
+  "plant background",
+  "succulent",
+  "lush greenery",
 ];
 const STRONG_DETAIL_HINTS = [
   "no box",
@@ -73,6 +80,8 @@ const STRONG_DETAIL_HINTS = [
   "packshot",
   "transparent background",
   "isolated",
+  "studio shot",
+  "plain background",
 ];
 
 type SerperImageResult = {
@@ -162,7 +171,7 @@ export async function searchSerperImageUrl(query: string): Promise<string | null
   }
 
   const endpoint = process.env.SERPER_IMAGE_API_URL || DEFAULT_SERPER_IMAGES_URL;
-  const refinedQuery = `${query.trim()} single fragrance bottle bottle only no box centered product packshot front view transparent background`;
+  const refinedQuery = `${query.trim()} single fragrance bottle bottle only no box centered product packshot front view plain background no plants no lifestyle studio shot`;
 
   try {
     const response = await axios.post<SerperResponse>(

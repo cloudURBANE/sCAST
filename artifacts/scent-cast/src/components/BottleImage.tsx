@@ -11,9 +11,8 @@ import { proxiedImageUrl } from '@/lib/imageProxy';
  * - You must give the root `className` so this component has a real size (e.g.
  *   `absolute inset-0` in a card, `h-full w-full` in a thumb, `min-h-0 w-full flex-1`
  *   in the featured hero). Framing does nothing if the slot has no dimensions.
- * - Inside: (1) symmetric **artboard** inset + clip, (2) `object-contain object-bottom`
- *   + **`origin-bottom`** so odd silhouettes share one shelf line and hover zoom grows
- *   from that line (not from the image centroid).
+ * - Inside: (1) symmetric **artboard** inset + clip + flex **items-end**, (2) packshot
+ *   CSS `object-fit/object-position` + **`origin-bottom`** so bottles share one shelf line.
  */
 
 type BottleImageProps = {
@@ -46,8 +45,7 @@ export const BottleImage: React.FC<BottleImageProps> = ({
     setBroken(false);
   }, [src, proxy]);
 
-  // ① Root: sized by parent. ② Artboard: percent inset. ③ object-contain + object-bottom
-  //    = largest scale + shared horizontal baseline (retail shelf alignment).
+  // ① Root: sized by parent. ② Artboard: inset + flex-end + .bottle-packshot-img shelf CSS.
   return (
     <div className={cn('relative min-h-0 min-w-0', className)}>
       <div className={bottleArtboardClass(variant)}>

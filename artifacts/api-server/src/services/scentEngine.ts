@@ -94,7 +94,7 @@ export async function buildProfile(
     async () => {
       let imageUrl = fallback?.imageUrl;
       try {
-        const searchQuery = `${brand} ${name} single fragrance bottle no box HQ`;
+        const searchQuery = `${brand} ${name} single fragrance bottle no box HQ product photo studio no plants`;
         const searchRes = await searchImageUrl(searchQuery);
         if (searchRes) {
           imageUrl = searchRes;

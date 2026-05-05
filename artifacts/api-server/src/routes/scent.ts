@@ -107,7 +107,7 @@ router.post("/refresh-image", async (req, res) => {
     const asciiBrand = brand.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\x20-\x7E]/g, "");
     const normalizedHint = concentrationHint === "edt" || concentrationHint === "edp" ? concentrationHint : undefined;
     const concentrationText = concentrationToQueryText(normalizedHint);
-    const query = `${asciiBrand} ${asciiName} ${concentrationText} single fragrance bottle bottle only no box centered product photo`;
+    const query = `${asciiBrand} ${asciiName} ${concentrationText} single fragrance bottle bottle only no box centered product photo studio packshot no plants`;
 
     const rawUrl = await searchImageUrl(query);
     if (!rawUrl) {

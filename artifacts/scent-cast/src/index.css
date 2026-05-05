@@ -80,6 +80,25 @@ body {
   pointer-events: none;
 }
 
+/* ─── Bottle packshot: magazine-rack baseline (flex end + explicit object-position) ─ */
+.bottle-artboard {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  min-height: 0;
+  min-width: 0;
+}
+
+.bottle-packshot-img {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  max-height: 100%;
+  object-fit: contain;
+  object-position: center bottom;
+}
+
 /* ─── Depth & Lighting Effects ────────────────────────────────────────────── */
 
 .pedestal {

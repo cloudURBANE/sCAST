@@ -17,11 +17,10 @@ export type BottleImageVariant = "featured" | "grid" | "detail" | "thumb" | "sha
  *    for featured/grid/share so every card uses an identical inner rectangle). That
  *    rectangle is the maximum drawable area for artwork.
  *
- * 3. **Bitmap scaling** (`bottleImageFillClass`) — The `<img>` is `h-full w-full` so
- *    it claims the full artboard. `object-contain` then **scales the image up or down**
- *    so the entire picture fits: small source images **grow** until they hit the
- *    artboard edge; large sources **shrink**. No artificial `max-h: 70%` cap — the
- *    only limit is the artboard itself, so “resize up” is the default for small assets.
+ * 3. **Bitmap scaling** (`.bottle-packshot-img`) — `max-width/max-height: 100%` with
+ *    `object-fit: contain` and **`object-position: center bottom`**. The artboard uses
+ *    **`align-items: flex-end`** so the image box sits on a shared **shelf** regardless of
+ *    intrinsic aspect ratio (magazine-rack baseline).
  *
  * 4. **One shared axis (uniform alignment)** — After scaling, we pin `object-position`
  *    to **center bottom** (not vertical center). Every bottle sits on the **same baseline**
@@ -60,19 +59,16 @@ const ARTBOARD_INSET: Record<BottleImageVariant, string> = {
  * {@link bottleImageFillClass} on the `<img>` so `object-contain` can resize up/down.
  */
 export function bottleArtboardClass(variant: BottleImageVariant, ...extra: ClassValue[]): string {
-  return cn(ARTBOARD_INSET[variant], ...extra);
+  return cn(ARTBOARD_INSET[variant], "bottle-artboard", ...extra);
 }
 
 /**
- * Fill the artboard: `object-contain` + `object-[center_bottom]` for the shared shelf line;
- * `origin-bottom` keeps Framer/hover `scale-*` growth anchored for odd silhouettes;
- * `transform-gpu` helps subpixel edges on non-rectangular or high-contrast pack art.
+ * Fill the artboard: `.bottle-packshot-img` (see index.css) sets object-fit/position;
+ * parent `.bottle-artboard` uses flex-end so the bitmap box sits on a shared shelf.
+ * `origin-bottom` keeps hover `scale-*` anchored at the baseline.
  */
 export function bottleImageFillClass(...extra: ClassValue[]): string {
-  return cn(
-    "block h-full w-full max-h-full max-w-full min-h-0 min-w-0 object-contain object-[center_bottom] origin-bottom transform-gpu select-none",
-    ...extra,
-  );
+  return cn("bottle-packshot-img min-h-0 min-w-0 origin-bottom transform-gpu select-none", ...extra);
 }
 
 /** Hero card: flex region that grows inside `aspect-[3/4]`; nest `<BottleImage className="min-h-0 w-full flex-1" />` */
