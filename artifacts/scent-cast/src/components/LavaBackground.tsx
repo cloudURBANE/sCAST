@@ -7,7 +7,7 @@ export const LavaBackground: React.FC = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const gl = canvas.getContext('webgl');
+    const gl = canvas.getContext('webgl', { alpha: true, antialias: false });
     if (!gl) return;
 
     const vertexShaderSource = `
@@ -17,6 +17,7 @@ export const LavaBackground: React.FC = () => {
       }
     `;
 
+    // Refactored fragment shader for a refined, dark-theme atmospheric fluid
     const fragmentShaderSource = `
       precision highp float;
       uniform float u_time;
@@ -44,7 +45,7 @@ export const LavaBackground: React.FC = () => {
         float a = 0.5;
         vec2 shift = vec2(100.0);
         mat2 rot = mat2(cos(0.5), sin(0.5), -sin(0.5), cos(0.5));
-        for (int i = 0; i < 5; ++i) {
+        for (int i = 0; i < 6; ++i) { // Increased iterations for smoother fluid dynamics
           v += a * noise(p);
           p = rot * p * 2.0 + shift;
           a *= 0.5;
@@ -55,30 +56,42 @@ export const LavaBackground: React.FC = () => {
       void main() {
         vec2 uv = gl_FragCoord.xy / u_resolution.xy;
         uv.x *= u_resolution.x / u_resolution.y;
-        float t = u_time * 0.12;
+        
+        // Slowed down the global time multiplier for a more elegant, creeping flow
+        float t = u_time * 0.06; 
+        
         vec2 q = vec2(0.0);
         q.x = fbm(uv + 0.1 * t);
         q.y = fbm(uv + vec2(1.0));
+        
         vec2 r = vec2(0.0);
         r.x = fbm(uv + 1.0 * q + vec2(1.7, 9.2) + 0.15 * t);
         r.y = fbm(uv + 1.0 * q + vec2(8.3, 2.8) + 0.126 * t);
         float f = fbm(uv + r);
 
-        float cracks = 1.0 - abs(f - 0.5) * 2.0;
-        cracks = pow(cracks, 5.0);
+        // Softened the hard lines for a more "viscous fluid" feel rather than cracked rock
+        float fluid = 1.0 - abs(f - 0.5) * 2.0;
+        fluid = pow(fluid, 3.5);
 
-        float intensity = 0.6 + 0.4 * noise(uv * 3.0 + t);
+        float intensity = 0.5 + 0.5 * noise(uv * 2.0 + t);
 
-        vec3 darkBase = vec3(0.04, 0.02, 0.01);
-        vec3 crackCore = vec3(1.0, 0.75, 0.3);
-        vec3 crackGlow = vec3(0.8, 0.35, 0.05);
+        // Refined Dark Theme Palette: Obsidian, Deep Violet, and soft Cyan
+        vec3 darkBase = vec3(0.03, 0.03, 0.04);     // Deep, rich dark gray/obsidian
+        vec3 fluidCore = vec3(0.3, 0.6, 1.0);       // Soft bioluminescent cyan core
+        vec3 fluidGlow = vec3(0.2, 0.1, 0.5);       // Deep amethyst/violet glow
 
         vec3 color = darkBase;
-        color = mix(color, crackGlow, cracks * 0.6);
-        color = mix(color, crackCore * intensity, pow(cracks, 2.5));
+        color = mix(color, fluidGlow, fluid * 0.8);
+        color = mix(color, fluidCore * intensity, pow(fluid, 2.0));
 
-        float halo = pow(cracks, 1.8) * 0.55;
-        color += crackGlow * halo;
+        // Add an ambient atmospheric haze
+        float halo = pow(fluid, 1.5) * 0.4;
+        color += fluidGlow * halo;
+        
+        // Subtle vignette to draw the eye to the center and blend into dark containers
+        vec2 centerUv = gl_FragCoord.xy / u_resolution.xy;
+        float vignette = smoothstep(1.5, 0.2, length(centerUv - 0.5));
+        color *= vignette;
 
         gl_FragColor = vec4(color, 1.0);
       }
@@ -90,6 +103,7 @@ export const LavaBackground: React.FC = () => {
       gl.shaderSource(shader, source);
       gl.compileShader(shader);
       if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        console.error('Shader compile error:', gl.getShaderInfoLog(shader));
         gl.deleteShader(shader);
         return null;
       }
@@ -119,29 +133,63 @@ export const LavaBackground: React.FC = () => {
     const resolutionLocation = gl.getUniformLocation(program, 'u_resolution');
 
     let animId: number;
-    const render = (time: number) => {
-      if (canvas.width !== canvas.clientWidth || canvas.height !== canvas.clientHeight) {
-        canvas.width = canvas.clientWidth;
-        canvas.height = canvas.clientHeight;
+    let startTime = performance.now();
+
+    const resizeCanvas = () => {
+      // Cap DPR to 1.5 to maintain high performance on 4K/Retina displays
+      const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+      const displayWidth = Math.floor(canvas.clientWidth * dpr);
+      const displayHeight = Math.floor(canvas.clientHeight * dpr);
+
+      if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
+        canvas.width = displayWidth;
+        canvas.height = displayHeight;
         gl.viewport(0, 0, canvas.width, canvas.height);
       }
-      gl.uniform1f(timeLocation, time * 0.001);
+    };
+
+    const render = (time: number) => {
+      resizeCanvas();
+      
+      const elapsedTime = time - startTime;
+      gl.uniform1f(timeLocation, elapsedTime * 0.001);
       gl.uniform2f(resolutionLocation, canvas.width, canvas.height);
-      gl.clearColor(0, 0, 0, 1);
+      
+      gl.clearColor(0.03, 0.03, 0.04, 1.0);
       gl.clear(gl.COLOR_BUFFER_BIT);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
+      
       animId = requestAnimationFrame(render);
     };
 
+    // Modern resize handling
+    const resizeObserver = new ResizeObserver(() => resizeCanvas());
+    resizeObserver.observe(canvas);
+
     animId = requestAnimationFrame(render);
-    return () => cancelAnimationFrame(animId);
+    
+    return () => {
+      cancelAnimationFrame(animId);
+      resizeObserver.disconnect();
+      gl.deleteProgram(program);
+      gl.deleteShader(vertexShader);
+      gl.deleteShader(fragmentShader);
+      gl.deleteBuffer(positionBuffer);
+    };
   }, []);
 
   return (
-    <canvas
-      ref={canvasRef}
-      className="fixed inset-0 w-full h-full pointer-events-none opacity-60"
-      style={{ zIndex: 40, mixBlendMode: 'screen' }}
-    />
+    <div className="absolute inset-0 w-full h-full overflow-hidden bg-neutral-950 pointer-events-none">
+      <canvas
+        ref={canvasRef}
+        className="w-full h-full opacity-80"
+        style={{ 
+          mixBlendMode: 'lighten', 
+          filter: 'blur(4px) contrast(1.1)' // Softens the fractal noise for a premium feel
+        }}
+      />
+      {/* Optional atmospheric overlay gradient to deepen the edges */}
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,rgba(10,10,12,0.8)_100%)]" />
+    </div>
   );
 };
