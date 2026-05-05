@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Search, RefreshCw, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -27,10 +27,18 @@ interface FragranceMatch {
   notes?: string[];
   family?: string;
   description?: string;
-  pyramid?: any;
+  pyramid?: unknown;
 }
 
 type ConcentrationHint = 'any' | 'edt' | 'edp';
+
+// Static Hoisting: Prevent memory reallocation on every render cycle
+const QUICK_SEARCH_TAGS = ['Aventus', 'Rouge 540', 'Santal 33'];
+const CONCENTRATION_OPTIONS: { id: ConcentrationHint; label: string }[] = [
+  { id: 'any', label: 'Any' },
+  { id: 'edt', label: 'EDT' },
+  { id: 'edp', label: 'EDP' },
+];
 
 export const FragranceCapture: React.FC<{ onAdd?: (item: any) => void }> = ({ onAdd }) => {
   const [uploading, setUploading] = useState(false);
@@ -42,24 +50,49 @@ export const FragranceCapture: React.FC<{ onAdd?: (item: any) => void }> = ({ on
   const [errorStatus, setErrorStatus] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
 
-  const handleSearch = async (e?: React.FormEvent) => {
+  // Network lifecycle management
+  const searchAbortController = useRef<AbortController | null>(null);
+  const syncAbortController = useRef<AbortController | null>(null);
+
+  // Cleanup pending requests on component unmount
+  useEffect(() => {
+    return () => {
+      searchAbortController.current?.abort();
+      syncAbortController.current?.abort();
+    };
+  }, []);
+
+  const handleSearch = async (e?: React.FormEvent, overrideQuery?: string) => {
     if (e) e.preventDefault();
-    if (!searchQuery.trim()) return;
+    
+    const targetQuery = overrideQuery !== undefined ? overrideQuery : searchQuery;
+    if (!targetQuery.trim()) return;
+
+    // Abort any in-flight searches to prevent race conditions
+    if (searchAbortController.current) {
+      searchAbortController.current.abort();
+    }
+    searchAbortController.current = new AbortController();
+
     setUploading(true);
     setLoadingStatus("Researching Fragrance...");
     setMatches([]);
     setErrorStatus(null);
     setHasSearched(false);
+
     try {
       const res = await fetch('/api/search-scent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          query: searchQuery,
+          query: targetQuery,
           concentrationHint: concentrationHint === 'any' ? undefined : concentrationHint,
         }),
+        signal: searchAbortController.current.signal,
       });
+      
       if (!res.ok) throw new Error(`Search failed: HTTP ${res.status}`);
+      
       const profileData = await res.json();
       if (!profileData || profileData.error) {
         throw new Error(profileData?.error || "Search returned no fragrance match");
@@ -67,8 +100,8 @@ export const FragranceCapture: React.FC<{ onAdd?: (item: any) => void }> = ({ on
 
       setHasSearched(true);
       setLoadingStatus(`Found: ${profileData.brand || "Unknown"} ${profileData.name}`);
-
       setLoadingStatus("Intelligence Collation Complete.");
+      
       setMatches([{
         ...profileData,
         name: profileData.product?.name || profileData.name,
@@ -76,7 +109,9 @@ export const FragranceCapture: React.FC<{ onAdd?: (item: any) => void }> = ({ on
         imageUrl: profileData.imageUrl || ""
       }]);
       setSelectedIdx(0);
+
     } catch (err: any) {
+      if (err.name === 'AbortError') return; // Ignore expected aborts
       setErrorStatus(err?.message || "Search failed.");
     } finally {
       setUploading(false);
@@ -89,63 +124,76 @@ export const FragranceCapture: React.FC<{ onAdd?: (item: any) => void }> = ({ on
   };
 
   const handleConfirm = async () => {
-    if (selectedIdx !== null && matches[selectedIdx] && onAdd) {
-      const selected = matches[selectedIdx];
-      if ((selected as any).scent_vector) {
-        onAdd({
-          ...selected,
-          id: newFragranceId(),
-          season: (selected as any).family?.includes('Fresh') ? 'Summer' : (selected as any).family?.includes('Woody') ? 'Winter' : 'Universal'
-        });
-      } else {
-        setUploading(true);
-        setLoadingStatus("Finalizing Neural Link...");
-        try {
-          const profileRes = await fetch('/api/scent-profile', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            // Pass all known AI-identified data so buildProfile can construct
-            // a full profile even for fragrances not in the local dataset.
-            body: JSON.stringify({
-              name: selected.name,
-              brand: selected.brand,
-              notes: (selected as any).notes,
-              family: (selected as any).family,
-              description: (selected as any).description,
-              pyramid: (selected as any).pyramid,
-              perfumer: (selected as any).perfumer,
-            })
-          });
-          if (!profileRes.ok) throw new Error(`HTTP ${profileRes.status}`);
-          const data = await profileRes.json();
-          if (data && !data.error) {
-            // Defensive: older /scent-profile responses returned a raw ScentProfile
-            // (only product.name/brand). Always surface flat keys so the wardrobe
-            // dashboard's `if (!item.name || !item.brand)` filter never hides this row.
-            onAdd({
-              ...data,
-              name: data.name || data.product?.name || selected.name,
-              brand: data.brand || data.product?.brand || selected.brand,
-              imageUrl: data.imageUrl || selected.imageUrl || '',
-              id: newFragranceId(),
-              season: 'Universal',
-            });
-          } else {
-            setErrorStatus(data?.error || "Could not sync to vault. Please try again.");
-            return;
-          }
-        } catch (err) {
-          setErrorStatus("Vault sync failed. Please check your connection.");
-          return;
-        } finally {
-          setUploading(false);
-        }
-      }
-      setMatches([]);
-      setSelectedIdx(null);
-      setHasSearched(false);
-      setSearchQuery("");
+    if (selectedIdx === null || !matches[selectedIdx] || !onAdd) return;
+    
+    const selected = matches[selectedIdx] as FragranceMatch & Record<string, unknown>;
+
+    if (selected.scent_vector) {
+      const familyStr = (selected.family as string) || '';
+      onAdd({
+        ...selected,
+        id: newFragranceId(),
+        season: familyStr.includes('Fresh') ? 'Summer' : familyStr.includes('Woody') ? 'Winter' : 'Universal'
+      });
+      resetState();
+      return;
     }
+
+    // Abort any in-flight syncs to prevent duplicate database writes
+    if (syncAbortController.current) {
+      syncAbortController.current.abort();
+    }
+    syncAbortController.current = new AbortController();
+
+    setUploading(true);
+    setLoadingStatus("Finalizing Neural Link...");
+    
+    try {
+      const profileRes = await fetch('/api/scent-profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: selected.name,
+          brand: selected.brand,
+          notes: selected.notes,
+          family: selected.family,
+          description: selected.description,
+          pyramid: selected.pyramid,
+          perfumer: selected.perfumer,
+        }),
+        signal: syncAbortController.current.signal,
+      });
+
+      if (!profileRes.ok) throw new Error(`HTTP ${profileRes.status}`);
+      
+      const data = await profileRes.json();
+      
+      if (data && !data.error) {
+        onAdd({
+          ...data,
+          name: data.name || data.product?.name || selected.name,
+          brand: data.brand || data.product?.brand || selected.brand,
+          imageUrl: data.imageUrl || selected.imageUrl || '',
+          id: newFragranceId(),
+          season: 'Universal',
+        });
+        resetState();
+      } else {
+        setErrorStatus(data?.error || "Could not sync to vault. Please try again.");
+      }
+    } catch (err: any) {
+      if (err.name === 'AbortError') return;
+      setErrorStatus("Vault sync failed. Please check your connection.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const resetState = () => {
+    setMatches([]);
+    setSelectedIdx(null);
+    setHasSearched(false);
+    setSearchQuery("");
   };
 
   return (
@@ -207,17 +255,13 @@ export const FragranceCapture: React.FC<{ onAdd?: (item: any) => void }> = ({ on
           <div className="flex items-center justify-center gap-3">
             <span className="text-[8px] uppercase tracking-[0.3em] text-white/25 font-bold">Concentration</span>
             <div className="flex items-center gap-1.5">
-              {[
-                { id: 'any', label: 'Any' },
-                { id: 'edt', label: 'EDT' },
-                { id: 'edp', label: 'EDP' },
-              ].map((option) => {
+              {CONCENTRATION_OPTIONS.map((option) => {
                 const selected = concentrationHint === option.id;
                 return (
                   <button
                     key={option.id}
                     type="button"
-                    onClick={() => setConcentrationHint(option.id as ConcentrationHint)}
+                    onClick={() => setConcentrationHint(option.id)}
                     className={`px-3 py-1 rounded-full text-[8px] uppercase tracking-widest border transition-all ${
                       selected
                         ? 'bg-white text-black border-white'
@@ -232,10 +276,14 @@ export const FragranceCapture: React.FC<{ onAdd?: (item: any) => void }> = ({ on
             </div>
           </div>
           <div className="flex flex-wrap gap-2 justify-center">
-            {['Aventus', 'Rouge 540', 'Santal 33'].map(tag => (
+            {QUICK_SEARCH_TAGS.map(tag => (
               <button
                 key={tag}
-                onClick={() => { setSearchQuery(tag); setTimeout(() => handleSearch(), 100); }}
+                type="button"
+                onClick={() => { 
+                  setSearchQuery(tag); 
+                  handleSearch(undefined, tag); 
+                }}
                 className="px-3 py-1 bg-white/5 rounded-full text-[8px] uppercase tracking-widest text-scent-muted hover:text-white hover:bg-white/10 transition-all border border-white/5"
               >
                 {tag}

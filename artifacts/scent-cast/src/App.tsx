@@ -20,6 +20,149 @@ interface WeatherData {
   error?: string;
 }
 
+const STORAGE_KEYS = {
+  TOKEN: 'scent_token',
+  EMAIL: 'scent_email',
+} as const;
+
+// --- Pure Functions ---
+
+const calculateOlfactoryAlignment = (
+  items: Fragrance[],
+  intent: { destination: DestinationType; energy: EnergyState },
+  weather: WeatherData | null
+) => {
+  const hour = new Date().getHours();
+  const isMorning = hour >= 6 && hour < 10;
+  const isEvening = hour >= 17 && hour < 21;
+  const isNight = hour >= 21 || hour < 6;
+
+  const destinationOccasions: Record<DestinationType, string[]> = {
+    'Staying In': ['Intimate', 'Date Night', 'Casual'],
+    'Work': ['Professional', 'Executive', 'Daytime'],
+    'Going Out': ['Social', 'Casual', 'Outdoor', 'Sport', 'Social Dominance'],
+    'Night Out': ['Evening', 'Formal', 'Date Night', 'Social Dominance', 'Intimate'],
+  };
+
+  const scored = items.map(item => {
+    const v = item.scent_vector || { freshness: 0, sweetness: 0, woodiness: 0, spice: 0, warmth: 0, musk: 0 };
+    const { freshness, sweetness, woodiness, spice, warmth, musk } = v;
+    const sillage = item.performance?.sillage ?? 5;
+    const longevity = item.performance?.longevity ?? 5;
+    const occasions = item.context?.occasion ?? [];
+
+    let score = 0;
+    const drivers: string[] = [];
+
+    // Destination Match
+    if (intent.destination === 'Staying In') {
+      const sub = musk * 2.0 + sweetness * 1.5 + warmth * 1.0 + (10 - sillage) * 1.2;
+      score += sub;
+      if (sub > 20) drivers.push('intimate projection suits the setting');
+    } else if (intent.destination === 'Work') {
+      const sub = woodiness * 2.0 + freshness * 1.5 + (8 - Math.abs(sillage - 5)) * 1.5;
+      score += sub;
+      if (spice > 6 || sweetness > 7) score -= 12;
+      if (sub > 20) drivers.push('clean, grounded character fits a professional space');
+    } else if (intent.destination === 'Going Out') {
+      const sub = freshness * 1.5 + woodiness * 1.2 + musk * 1.0 + sillage * 1.3;
+      score += sub;
+      if (sub > 20) drivers.push('versatile projection reads well in any setting');
+    } else if (intent.destination === 'Night Out') {
+      const sub = warmth * 2.0 + spice * 2.0 + woodiness * 1.2 + sillage * 2.5;
+      score += sub;
+      if (sub > 20) drivers.push('bold depth and projection command the room at night');
+    }
+
+    if (occasions.some(o => destinationOccasions[intent.destination].includes(o))) {
+      score += 15;
+      drivers.push(`its olfactory profile is calibrated for this context`);
+    }
+
+    // Energy Match
+    if (intent.energy === 'Calm') {
+      score += freshness * 1.2 + musk * 1.0 - spice * 0.6 - warmth * 0.4;
+      if (freshness >= 6) drivers.push('cool freshness supports a calm presence');
+    } else if (intent.energy === 'Focused') {
+      score += woodiness * 2.0 + freshness * 1.2 - sweetness * 0.8;
+      if (woodiness >= 6) drivers.push('grounded woodiness channels mental clarity');
+    } else if (intent.energy === 'Confident') {
+      score += spice * 2.0 + warmth * 1.5 + woodiness * 1.0 + sillage * 1.5;
+      if (spice >= 5 || sillage >= 7) drivers.push('its assertive character projects authority');
+    } else if (intent.energy === 'Social') {
+      score += musk * 1.8 + freshness * 1.2 + sweetness * 0.8 + sillage * 1.0;
+      if (musk >= 5) drivers.push('skin-close musk draws people in');
+    } else if (intent.energy === 'Relaxed') {
+      score += musk * 1.8 + warmth * 1.2 + sweetness * 0.8 + (10 - sillage) * 0.8;
+      if (warmth >= 5) drivers.push('enveloping warmth suits an unhurried mood');
+    }
+
+    // Weather Match
+    if (weather) {
+      const temp = weather.temp;
+      const cond = weather.condition.toLowerCase();
+      const humidity = weather.humidity ?? 50;
+
+      if (temp > 85) {
+        score += freshness * 2.5 - warmth * 2.0 - spice * 1.2;
+        if (freshness >= 6) drivers.push(`bright freshness suits ${Math.round(temp)}°F heat`);
+      } else if (temp > 72) {
+        score += freshness * 1.5 + musk * 0.8 - warmth * 0.6;
+        if (freshness >= 5) drivers.push(`light character aligns with ${Math.round(temp)}°F warmth`);
+      } else if (temp > 58) {
+        score += woodiness * 1.5 + freshness * 0.6;
+      } else if (temp > 44) {
+        score += warmth * 2.0 + woodiness * 1.2 + spice * 0.8 - freshness * 0.6;
+        if (warmth >= 5) drivers.push(`warmth cuts through the ${Math.round(temp)}°F chill`);
+      } else {
+        score += warmth * 2.5 + spice * 2.0 + woodiness * 1.0 - freshness * 1.5;
+        if (warmth >= 5 || spice >= 5) drivers.push(`rich density suits the cold`);
+      }
+
+      if (cond.includes('rain') || cond.includes('drizzle')) {
+        score += woodiness * 0.8 + warmth * 0.5;
+        const earthy = item.notes?.some(n =>
+          ['vetiver', 'patchouli', 'cedar', 'oakmoss'].some(k => n.toLowerCase().includes(k))
+        );
+        if (earthy) { score += 10; drivers.push('earthy base thrives in rain'); }
+      }
+      if (cond.includes('sun') || cond.includes('clear')) {
+        score += freshness * 0.5 + musk * 0.3;
+      }
+      if (humidity > 75) {
+        score += freshness * 0.8 - sweetness * 0.6 - warmth * 0.5;
+      }
+    }
+
+    // Time Match
+    if (isMorning) {
+      score += freshness * 1.2 - warmth * 0.4;
+      if (freshness >= 6) drivers.push('crisp freshness is made for mornings');
+    } else if (isEvening) {
+      score += warmth * 1.0 + spice * 0.6 + woodiness * 0.5;
+    } else if (isNight) {
+      score += warmth * 1.5 + spice * 1.0 + musk * 0.8;
+      if ((warmth >= 5 || spice >= 5) && intent.destination === 'Night Out') {
+        drivers.push('nocturnal richness reaches its peak after dark');
+      }
+    }
+
+    // Longevity Bonus
+    if (intent.destination === 'Work' || intent.destination === 'Going Out') {
+      score += longevity * 0.8;
+    }
+
+    // Tie-breaker noise
+    score += Math.random() * 4;
+
+    return { item, score, drivers, sillage, woodiness, freshness, warmth, spice, musk };
+  });
+
+  scored.sort((a, b) => b.score - a.score);
+  return scored[0];
+};
+
+// --- Components ---
 
 const LiveClock: React.FC = React.memo(() => {
   const [time, setTime] = useState(new Date());
@@ -102,18 +245,20 @@ export default function App() {
     const oauthToken = params.get('oauth_token');
     const oauthEmail = params.get('oauth_email');
     if (oauthToken && oauthEmail) {
-      localStorage.setItem('scent_token', oauthToken);
-      localStorage.setItem('scent_email', oauthEmail);
+      localStorage.setItem(STORAGE_KEYS.TOKEN, oauthToken);
+      localStorage.setItem(STORAGE_KEYS.EMAIL, oauthEmail);
       window.history.replaceState({}, '', window.location.pathname);
       return oauthToken;
     }
-    return localStorage.getItem('scent_token');
+    return localStorage.getItem(STORAGE_KEYS.TOKEN);
   });
+  
   const [authEmail, setAuthEmail] = useState<string | null>(() => {
     const params = new URLSearchParams(window.location.search);
     const oauthEmail = params.get('oauth_email');
-    return oauthEmail ?? localStorage.getItem('scent_email');
+    return oauthEmail ?? localStorage.getItem(STORAGE_KEYS.EMAIL);
   });
+
   const [items, setItems] = useState<Fragrance[]>([]);
   const [wardrobeLoaded, setWardrobeLoaded] = useState(false);
   const [isIntentModalOpen, setIsIntentModalOpen] = useState(false);
@@ -125,79 +270,96 @@ export default function App() {
   const [locationStatus, setLocationStatus] = useState<'idle' | 'requesting' | 'granted' | 'denied'>('idle');
   const [userId, setUserId] = useState<string | null>(null);
 
-  const fetchWeather = useCallback(async (lat?: number, lon?: number) => {
+  const fetchWeather = useCallback(async (lat?: number, lon?: number, signal?: AbortSignal) => {
     try {
       const url = lat && lon ? `/api/weather?lat=${lat}&lon=${lon}` : '/api/weather';
-      const response = await axios.get(url);
+      const response = await axios.get(url, { signal });
       setWeather(response.data);
     } catch (err) {
-      console.error("Failed to fetch weather", err);
+      if (!axios.isCancel(err)) {
+        console.error("Failed to fetch weather", err);
+      }
     } finally {
       setWeatherLoading(false);
     }
   }, []);
 
-  // Auto-request location on mount so weather is accurate from the start
   useEffect(() => {
+    const abortController = new AbortController();
+
     if (!navigator.geolocation) {
-      fetchWeather();
-      return;
+      fetchWeather(undefined, undefined, abortController.signal);
+      return () => abortController.abort();
     }
+    
     setLocationStatus('requesting');
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setLocationStatus('granted');
-        fetchWeather(pos.coords.latitude, pos.coords.longitude);
+        fetchWeather(pos.coords.latitude, pos.coords.longitude, abortController.signal);
       },
       () => {
         setLocationStatus('denied');
-        fetchWeather();
+        fetchWeather(undefined, undefined, abortController.signal);
       },
       { timeout: 10000, enableHighAccuracy: false }
     );
+
+    return () => abortController.abort();
   }, [fetchWeather]);
 
-  const loadWardrobe = useCallback(async (token: string) => {
+  const loadWardrobe = useCallback(async (token: string, signal?: AbortSignal) => {
     try {
       const res = await fetch('/api/wardrobe', {
         headers: { Authorization: `Bearer ${token}` },
+        signal
       });
       if (!res.ok) return;
       const data: Fragrance[] = await res.json();
       setItems(data);
-    } catch {
-      // ignore
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') {
+        console.error("Failed to load wardrobe", err);
+      }
     } finally {
       setWardrobeLoaded(true);
     }
   }, []);
 
   useEffect(() => {
+    const abortController = new AbortController();
+
     if (authToken) {
-      loadWardrobe(authToken);
-      fetch('/api/share-settings', { headers: { Authorization: `Bearer ${authToken}` } })
+      loadWardrobe(authToken, abortController.signal);
+      fetch('/api/share-settings', { 
+        headers: { Authorization: `Bearer ${authToken}` },
+        signal: abortController.signal 
+      })
         .then(r => r.json())
         .then(d => { if (d.userId) setUserId(d.userId); })
         .catch(() => {});
     } else {
       setWardrobeLoaded(true);
     }
+
+    return () => abortController.abort();
   }, [authToken, loadWardrobe]);
 
-  // Background refresh: poll the vault every 60s while authed so newly
-  // synced/normalized fragrances appear without forcing a hard reload.
-  // Pauses when the tab is hidden to avoid burning quota in background tabs.
   useEffect(() => {
     if (!authToken) return;
     const REFRESH_MS = 60_000;
+    
     const tick = () => {
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       loadWardrobe(authToken);
     };
+    
     const id = window.setInterval(tick, REFRESH_MS);
+    
     const onVisible = () => {
       if (document.visibilityState === 'visible') tick();
     };
+    
     document.addEventListener('visibilitychange', onVisible);
     return () => {
       window.clearInterval(id);
@@ -206,15 +368,15 @@ export default function App() {
   }, [authToken, loadWardrobe]);
 
   const handleAuth = (token: string, email: string) => {
-    localStorage.setItem('scent_token', token);
-    localStorage.setItem('scent_email', email);
+    localStorage.setItem(STORAGE_KEYS.TOKEN, token);
+    localStorage.setItem(STORAGE_KEYS.EMAIL, email);
     setAuthToken(token);
     setAuthEmail(email);
   };
 
   const handleSignOut = () => {
-    localStorage.removeItem('scent_token');
-    localStorage.removeItem('scent_email');
+    localStorage.removeItem(STORAGE_KEYS.TOKEN);
+    localStorage.removeItem(STORAGE_KEYS.EMAIL);
     setAuthToken(null);
     setAuthEmail(null);
     setItems([]);
@@ -222,7 +384,7 @@ export default function App() {
   };
 
   const requestLocation = () => {
-    if (!navigator.geolocation) { return; }
+    if (!navigator.geolocation) return;
     setLocationStatus('requesting');
     setWeatherLoading(true);
     navigator.geolocation.getCurrentPosition(
@@ -284,7 +446,6 @@ export default function App() {
         throw new Error(err.error || `HTTP ${res.status}`);
       }
       const data = await res.json() as { total: number; rebuilt: number; skipped: number };
-      // Refetch with the now-normalized records so the dashboard surfaces them
       await loadWardrobe(authToken);
       return data;
     } catch (err) {
@@ -294,9 +455,6 @@ export default function App() {
   }, [authToken, loadWardrobe]);
 
   const handleDeleteItem = async (target: Fragrance) => {
-    // Prefer the Postgres row UUID for the API call (B9). Fall back to the
-    // legacy `data.id` only when the row hasn't roundtripped through GET
-    // /wardrobe yet (e.g. just-added optimistic state).
     const apiId = target._dbId ?? target.id;
     setItems((prev) =>
       prev.filter(item =>
@@ -320,139 +478,8 @@ export default function App() {
     setIsIntentModalOpen(false);
     if (items.length === 0) return;
 
-    const hour = new Date().getHours();
-    const isMorning = hour >= 6 && hour < 10;
-    const isEvening = hour >= 17 && hour < 21;
-    const isNight = hour >= 21 || hour < 6;
+    const winner = calculateOlfactoryAlignment(items, intent, weather);
 
-    // Occasion strings from calculateContext — map destinations to matching occasions
-    const destinationOccasions: Record<DestinationType, string[]> = {
-      'Staying In':  ['Intimate', 'Date Night', 'Casual'],
-      'Work':        ['Professional', 'Executive', 'Daytime'],
-      'Going Out':   ['Social', 'Casual', 'Outdoor', 'Sport', 'Social Dominance'],
-      'Night Out':   ['Evening', 'Formal', 'Date Night', 'Social Dominance', 'Intimate'],
-    };
-
-    const scored = items.map(item => {
-      const v = item.scent_vector || { freshness: 0, sweetness: 0, woodiness: 0, spice: 0, warmth: 0, musk: 0 };
-      const { freshness, sweetness, woodiness, spice, warmth, musk } = v;
-      const sillage   = item.performance?.sillage   ?? 5;
-      const longevity = item.performance?.longevity  ?? 5;
-      const family    = (item.family ?? '').toLowerCase();
-      const occasions = item.context?.occasion ?? [];
-
-      let score = 0;
-      const drivers: string[] = [];
-
-      // ── DESTINATION ──────────────────────────────────────────────────
-      if (intent.destination === 'Staying In') {
-        const sub = musk * 2.0 + sweetness * 1.5 + warmth * 1.0 + (10 - sillage) * 1.2;
-        score += sub;
-        if (sub > 20) drivers.push('intimate projection suits the setting');
-      } else if (intent.destination === 'Work') {
-        const sub = woodiness * 2.0 + freshness * 1.5 + (8 - Math.abs(sillage - 5)) * 1.5;
-        score += sub;
-        if (spice > 6 || sweetness > 7) score -= 12; // overpowering in office
-        if (sub > 20) drivers.push('clean, grounded character fits a professional space');
-      } else if (intent.destination === 'Going Out') {
-        const sub = freshness * 1.5 + woodiness * 1.2 + musk * 1.0 + sillage * 1.3;
-        score += sub;
-        if (sub > 20) drivers.push('versatile projection reads well in any setting');
-      } else if (intent.destination === 'Night Out') {
-        const sub = warmth * 2.0 + spice * 2.0 + woodiness * 1.2 + sillage * 2.5;
-        score += sub;
-        if (sub > 20) drivers.push('bold depth and projection command the room at night');
-      }
-
-      // Occasion match bonus
-      if (occasions.some(o => destinationOccasions[intent.destination].includes(o))) {
-        score += 15;
-        drivers.push(`its olfactory profile is calibrated for this context`);
-      }
-
-      // ── ENERGY ───────────────────────────────────────────────────────
-      if (intent.energy === 'Calm') {
-        score += freshness * 1.2 + musk * 1.0 - spice * 0.6 - warmth * 0.4;
-        if (freshness >= 6) drivers.push('cool freshness supports a calm presence');
-      } else if (intent.energy === 'Focused') {
-        score += woodiness * 2.0 + freshness * 1.2 - sweetness * 0.8;
-        if (woodiness >= 6) drivers.push('grounded woodiness channels mental clarity');
-      } else if (intent.energy === 'Confident') {
-        score += spice * 2.0 + warmth * 1.5 + woodiness * 1.0 + sillage * 1.5;
-        if (spice >= 5 || sillage >= 7) drivers.push('its assertive character projects authority');
-      } else if (intent.energy === 'Social') {
-        score += musk * 1.8 + freshness * 1.2 + sweetness * 0.8 + sillage * 1.0;
-        if (musk >= 5) drivers.push('skin-close musk draws people in');
-      } else if (intent.energy === 'Relaxed') {
-        score += musk * 1.8 + warmth * 1.2 + sweetness * 0.8 + (10 - sillage) * 0.8;
-        if (warmth >= 5) drivers.push('enveloping warmth suits an unhurried mood');
-      }
-
-      // ── WEATHER ──────────────────────────────────────────────────────
-      if (weather) {
-        const temp     = weather.temp;
-        const cond     = weather.condition.toLowerCase();
-        const humidity = weather.humidity ?? 50;
-
-        if (temp > 85) {
-          score += freshness * 2.5 - warmth * 2.0 - spice * 1.2;
-          if (freshness >= 6) drivers.push(`bright freshness suits ${Math.round(temp)}°F heat`);
-        } else if (temp > 72) {
-          score += freshness * 1.5 + musk * 0.8 - warmth * 0.6;
-          if (freshness >= 5) drivers.push(`light character aligns with ${Math.round(temp)}°F warmth`);
-        } else if (temp > 58) {
-          score += woodiness * 1.5 + freshness * 0.6;
-        } else if (temp > 44) {
-          score += warmth * 2.0 + woodiness * 1.2 + spice * 0.8 - freshness * 0.6;
-          if (warmth >= 5) drivers.push(`warmth cuts through the ${Math.round(temp)}°F chill`);
-        } else {
-          score += warmth * 2.5 + spice * 2.0 + woodiness * 1.0 - freshness * 1.5;
-          if (warmth >= 5 || spice >= 5) drivers.push(`rich density suits the cold`);
-        }
-
-        if (cond.includes('rain') || cond.includes('drizzle')) {
-          score += woodiness * 0.8 + warmth * 0.5;
-          const earthy = item.notes?.some(n =>
-            ['vetiver', 'patchouli', 'cedar', 'oakmoss'].some(k => n.toLowerCase().includes(k))
-          );
-          if (earthy) { score += 10; drivers.push('earthy base thrives in rain'); }
-        }
-        if (cond.includes('sun') || cond.includes('clear')) {
-          score += freshness * 0.5 + musk * 0.3;
-        }
-        if (humidity > 75) {
-          score += freshness * 0.8 - sweetness * 0.6 - warmth * 0.5;
-        }
-      }
-
-      // ── TIME OF DAY ───────────────────────────────────────────────────
-      if (isMorning) {
-        score += freshness * 1.2 - warmth * 0.4;
-        if (freshness >= 6) drivers.push('crisp freshness is made for mornings');
-      } else if (isEvening) {
-        score += warmth * 1.0 + spice * 0.6 + woodiness * 0.5;
-      } else if (isNight) {
-        score += warmth * 1.5 + spice * 1.0 + musk * 0.8;
-        if ((warmth >= 5 || spice >= 5) && intent.destination === 'Night Out') {
-          drivers.push('nocturnal richness reaches its peak after dark');
-        }
-      }
-
-      // ── LONGEVITY BONUS for full-day destinations ─────────────────────
-      if (intent.destination === 'Work' || intent.destination === 'Going Out') {
-        score += longevity * 0.8;
-      }
-
-      // ── SMALL RANDOM NOISE — prevents lockstep ties ───────────────────
-      score += Math.random() * 4;
-
-      return { item, score, drivers, sillage, woodiness, freshness, warmth, spice, musk };
-    });
-
-    scored.sort((a, b) => b.score - a.score);
-    const winner = scored[0];
-
-    // Build a concise, honest reason from the top scoring drivers
     const uniqueDrivers = Array.from(new Set(winner.drivers));
     const reason = uniqueDrivers.length > 0
       ? uniqueDrivers.slice(0, 2).join(', and ')
@@ -473,10 +500,6 @@ export default function App() {
 
     const phrases: string[] = [];
 
-    // Vault size
-    phrases.push(`${items.length} scent${items.length === 1 ? '' : 's'} archived in your vault`);
-
-    // Dominant scent family
     const families = items.map(i => i.family).filter(Boolean) as string[];
     if (families.length > 0) {
       const fc: Record<string, number> = {};
@@ -485,7 +508,6 @@ export default function App() {
       phrases.push(`Predominantly ${topFamily.toLowerCase()} olfactory signature`);
     }
 
-    // Most recurring note
     const allNotes = items.flatMap(i => i.notes || []);
     if (allNotes.length > 0) {
       const nc: Record<string, number> = {};
@@ -494,7 +516,6 @@ export default function App() {
       if (topCount > 1) phrases.push(`Recurring molecule detected: ${topNote}`);
     }
 
-    // Scent vector lean
     const vectors = items.map(i => i.scent_vector).filter(Boolean) as NonNullable<Fragrance['scent_vector']>[];
     if (vectors.length > 0) {
       const dims = ['freshness', 'sweetness', 'woodiness', 'spice', 'warmth', 'musk'] as const;
@@ -509,7 +530,6 @@ export default function App() {
       if (top.avg >= 4.5) phrases.push(`Your vault reads ${labels[top.d]}`);
     }
 
-    // Season lean
     const seasons = items.map(i => i.season).filter(Boolean) as string[];
     if (seasons.length > 0) {
       const sc: Record<string, number> = {};
@@ -518,11 +538,9 @@ export default function App() {
       if (topSeasonCount > 1) phrases.push(`Calibrated for ${topSeason.toLowerCase()} conditions`);
     }
 
-    // Brand spread
     const brands = new Set(items.map(i => i.brand).filter(Boolean));
     if (brands.size > 1) phrases.push(`${brands.size} houses represented in your collection`);
 
-    // Pad if short
     if (phrases.length < 3) phrases.push('Olfactory intelligence active', 'Atmospheric pairing in progress');
 
     return phrases;

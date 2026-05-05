@@ -74,8 +74,10 @@ export const Wardrobe: React.FC<{
 }> = ({ items, onDelete, onUpdateImage, featuredItem, onRebuild }) => {
   const [selectedItem, setSelectedItem] = React.useState<Fragrance | null>(null);
   const [searchQuery, setSearchQuery] = React.useState("");
+  
   const [refreshingId, setRefreshingId] = React.useState<string | null>(null);
   const [refreshError, setRefreshError] = React.useState<string | null>(null);
+  
   const [rebuilding, setRebuilding] = React.useState(false);
   const [rebuildResult, setRebuildResult] = React.useState<string | null>(null);
 
@@ -88,6 +90,25 @@ export const Wardrobe: React.FC<{
     setRefreshError(null);
     setSelectedItem(null);
   };
+
+  // UX Hardening: Bind escape key and prevent body scroll when modal is active
+  React.useEffect(() => {
+    if (!selectedItem) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        closeDetail();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = '';
+    };
+  }, [selectedItem]);
 
   const handleRebuildClick = async () => {
     if (!onRebuild || rebuilding) return;
@@ -126,8 +147,7 @@ export const Wardrobe: React.FC<{
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || 'Refresh failed');
       onUpdateImage?.(item.id, data.imageUrl);
-      // Reflect the new image in the open modal so users see the refresh take
-      // effect without bouncing back to the grid.
+      
       setSelectedItem((current) =>
         current && current.id === item.id ? { ...current, imageUrl: data.imageUrl } : current,
       );
@@ -138,24 +158,32 @@ export const Wardrobe: React.FC<{
     }
   };
 
-  const filteredItems = items.filter(item => {
-    const name = entryName(item);
-    const brand = entryBrand(item);
-    if (!name || !brand) return false;
+  // Performance Optimization: Memoize computationally heavy filter operations
+  const filteredItems = React.useMemo(() => {
     const q = searchQuery.toLowerCase();
-    return (
-      name.toLowerCase().includes(q) ||
-      brand.toLowerCase().includes(q) ||
-      item.family?.toLowerCase().includes(q) ||
-      item.notes?.some(note => note?.toLowerCase().includes(q))
-    );
-  });
+    return items.filter(item => {
+      const name = entryName(item);
+      const brand = entryBrand(item);
+      if (!name || !brand) return false;
+      
+      return (
+        name.toLowerCase().includes(q) ||
+        brand.toLowerCase().includes(q) ||
+        item.family?.toLowerCase().includes(q) ||
+        item.notes?.some(note => note?.toLowerCase().includes(q))
+      );
+    });
+  }, [items, searchQuery]);
 
-  const itemsPerShelf = 4;
-  const shelves = [];
-  for (let i = 0; i < filteredItems.length; i += itemsPerShelf) {
-    shelves.push(filteredItems.slice(i, i + itemsPerShelf));
-  }
+  // Performance Optimization: Memoize shelf chunking
+  const shelves = React.useMemo(() => {
+    const itemsPerShelf = 4;
+    const chunked = [];
+    for (let i = 0; i < filteredItems.length; i += itemsPerShelf) {
+      chunked.push(filteredItems.slice(i, i + itemsPerShelf));
+    }
+    return chunked;
+  }, [filteredItems]);
 
   return (
     <div className="relative">
@@ -280,7 +308,12 @@ export const Wardrobe: React.FC<{
 
       <AnimatePresence>
         {selectedItem && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden">
+          <div 
+            className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="fragrance-detail-title"
+          >
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={closeDetail} className="absolute inset-0 bg-black/95 backdrop-blur-3xl" />
             <motion.div
               className="relative w-full h-full sm:h-auto sm:max-h-[88dvh] sm:max-w-4xl sm:mx-6 bg-neutral-900 shadow-2xl sm:rounded-[2rem] overflow-hidden flex flex-col border-0 sm:border border-white/5"
@@ -294,14 +327,18 @@ export const Wardrobe: React.FC<{
                   <div className="w-1.5 h-1.5 rounded-full bg-scent-accent animate-pulse shrink-0" />
                   <p className="text-[9px] uppercase tracking-[0.4em] text-scent-accent font-bold truncate">Intelligence Profile</p>
                 </div>
-                <button onClick={closeDetail} className="ml-3 shrink-0 p-2 bg-white/5 hover:bg-white/10 transition-all rounded-full border border-white/10 text-white group">
+                <button 
+                  onClick={closeDetail} 
+                  aria-label="Close profile"
+                  className="ml-3 shrink-0 p-2 bg-white/5 hover:bg-white/10 transition-all rounded-full border border-white/10 text-white group"
+                >
                   <X size={18} className="group-hover:rotate-90 transition-transform duration-300" />
                 </button>
               </div>
 
               {/* Fragrance name — pinned, always readable */}
               <div className="px-5 pt-4 pb-3 shrink-0">
-                <h2 className="font-serif italic text-3xl sm:text-6xl leading-tight text-white tracking-tighter uppercase">{entryName(selectedItem)}</h2>
+                <h2 id="fragrance-detail-title" className="font-serif italic text-3xl sm:text-6xl leading-tight text-white tracking-tighter uppercase">{entryName(selectedItem)}</h2>
                 <p className="text-base text-white/40 font-serif italic mt-1">{entryBrand(selectedItem)}</p>
               </div>
 
