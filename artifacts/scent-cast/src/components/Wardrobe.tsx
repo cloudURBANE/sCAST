@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Trash2, ShieldCheck, Wind, RefreshCw } from 'lucide-react';
+import { bottleFeaturedSlotClass, bottleImageImgClass } from '@/lib/bottleImageFrame';
 
 export interface ScentVector {
   freshness: number;
@@ -195,12 +196,22 @@ export const Wardrobe: React.FC<{
                 <div className="pedestal p-1">
                   <motion.div
                     initial={{ scale: 0.98, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-                    className="glass-acrylic glass-acrylic-animate rounded-scent p-20 aspect-[3/4] flex flex-col items-center justify-center relative overflow-hidden cursor-pointer"
+                    className="glass-acrylic glass-acrylic-animate rounded-scent p-20 aspect-[3/4] flex flex-col items-center relative overflow-hidden cursor-pointer"
                     onClick={() => setSelectedItem(featuredItem)}
                   >
-                    <div className="absolute top-10 left-10 text-[9px] uppercase tracking-[0.6em] text-white/30 font-bold">Recommended Manifest</div>
-                    <img src={proxiedImageUrl(featuredItem.imageUrl)} alt={entryName(featuredItem)} className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-1000 brightness-[1.15] relative z-10" referrerPolicy="no-referrer" />
-                    <div className="text-center mt-12 space-y-3">
+                    <div className="absolute top-10 left-10 text-[9px] uppercase tracking-[0.6em] text-white/30 font-bold z-20 pointer-events-none">Recommended Manifest</div>
+                    <div className={bottleFeaturedSlotClass()}>
+                      <img
+                        src={proxiedImageUrl(featuredItem.imageUrl)}
+                        alt={entryName(featuredItem)}
+                        className={bottleImageImgClass(
+                          'featured',
+                          'group-hover:scale-105 transition-transform duration-1000 brightness-[1.15]',
+                        )}
+                        referrerPolicy="no-referrer"
+                      />
+                    </div>
+                    <div className="text-center mt-4 mb-2 space-y-3 shrink-0 px-2">
                       <p className="text-[10px] uppercase text-white/50 tracking-[0.5em] font-bold font-sans">{entryBrand(featuredItem)}</p>
                       <h4 className="font-serif italic text-3xl sm:text-5xl text-white tracking-tighter">{entryName(featuredItem)}</h4>
                     </div>
@@ -227,7 +238,12 @@ export const Wardrobe: React.FC<{
                       <div className="aspect-[3/4] p-10 flex flex-col items-center justify-center relative">
                         <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/[0.01] to-white/[0.05] pointer-events-none" />
                         <div className="w-full h-full flex items-center justify-center relative z-10 group-hover:scale-110 transition-transform duration-1000">
-                          <img src={proxiedImageUrl(item.imageUrl)} alt={entryName(item)} className="max-w-full max-h-full w-auto h-auto object-contain brightness-[1.05]" style={{ maxHeight: '100%', maxWidth: '100%' }} referrerPolicy="no-referrer" />
+                          <img
+                            src={proxiedImageUrl(item.imageUrl)}
+                            alt={entryName(item)}
+                            className={bottleImageImgClass('grid', 'brightness-[1.05]')}
+                            referrerPolicy="no-referrer"
+                          />
                         </div>
                         <div className="absolute bottom-8 left-8 right-8 text-center opacity-0 group-hover:opacity-100 transition-all duration-500 translate-y-4 group-hover:translate-y-0">
                           <p className="text-[9px] uppercase tracking-widest text-white/60 mb-1 leading-tight">{entryBrand(item)}</p>
@@ -308,7 +324,7 @@ export const Wardrobe: React.FC<{
                         key={selectedItem.imageUrl || 'missing-image'}
                         src={selectedItem.imageUrl}
                         alt={entryName(selectedItem)}
-                        className="max-h-full max-w-full object-contain transition-all duration-300"
+                        className={bottleImageImgClass('detail', 'transition-all duration-300')}
                         referrerPolicy="no-referrer"
                       />
                     </div>

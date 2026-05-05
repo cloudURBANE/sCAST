@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Link, Check, Eye, EyeOff, ExternalLink, Search } from 'lucide-react';
+import { bottleImageImgClass } from '@/lib/bottleImageFrame';
 
 interface FragranceItem {
   id: string;
@@ -227,7 +228,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                             src={item.imageUrl}
                             alt={item.name}
                             referrerPolicy="no-referrer"
-                            className="w-full h-full object-contain"
+                            className={bottleImageImgClass('thumb')}
                           />
                         ) : (
                           <div className="w-full h-full border border-white/10 flex items-center justify-center">

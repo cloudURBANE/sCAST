@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Search, RefreshCw, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { bottleImageImgClass } from '@/lib/bottleImageFrame';
 
 /**
  * Generate a stable, collision-resistant id for newly added wardrobe items.
@@ -324,7 +325,7 @@ export const FragranceCapture: React.FC<{ onAdd?: (item: any) => void }> = ({ on
                           <img
                             src={m.imageUrl}
                             alt={m.name}
-                            className="w-full h-full object-contain"
+                            className={bottleImageImgClass('thumb')}
                             referrerPolicy="no-referrer"
                             onError={(e) => {
                               const target = e.target as HTMLImageElement;

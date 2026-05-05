@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Wind, ShoppingBag, ShieldCheck, Wind as WindIcon } from 'lucide-react';
 import { LavaBackground } from './LavaBackground';
+import { bottleImageImgClass } from '@/lib/bottleImageFrame';
 
 interface ScentVector {
   freshness: number;
@@ -114,7 +115,10 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                           <img
                             src={proxiedImageUrl(item.imageUrl)}
                             alt={item.name}
-                            className="max-w-full max-h-full w-auto h-auto object-contain brightness-[1.05] group-hover:scale-105 transition-transform duration-700"
+                            className={bottleImageImgClass(
+                              'share',
+                              'brightness-[1.05] group-hover:scale-105 transition-transform duration-700',
+                            )}
                             onError={(e) => {
                               const target = e.currentTarget;
                               target.style.display = "none";
