@@ -106,6 +106,11 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
               <p className="text-[10px] uppercase tracking-[0.6em] text-white/40 font-bold">Shared Vault</p>
               <h2 className="font-serif italic text-5xl sm:text-7xl text-white tracking-tighter">Vault of Aromas</h2>
               <p className="text-white/30 font-sans text-sm">{data.fragrances.length} fragrance{data.fragrances.length !== 1 ? 's' : ''} archived</p>
+              {data.hideImages ? (
+                <p className="text-[10px] uppercase tracking-[0.3em] text-amber-200/65 font-bold">
+                  Owner currently hides bottle images on public view
+                </p>
+              ) : null}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">

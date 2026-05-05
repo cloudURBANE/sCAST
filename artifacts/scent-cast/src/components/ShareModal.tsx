@@ -33,6 +33,8 @@ export const ShareModal: React.FC<ShareModalProps> = ({
   const [copied, setCopied] = useState(false);
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
+  const [hideImages, setHideImages] = useState(false);
+  const [hideImagesBusy, setHideImagesBusy] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const shareUrl = userId ? `${window.location.origin}/share/${userId}` : '';
@@ -45,6 +47,25 @@ export const ShareModal: React.FC<ShareModalProps> = ({
       setTimeout(() => searchRef.current?.focus(), 150);
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || !authToken) return;
+    let cancelled = false;
+    fetch('/api/share-settings', {
+      headers: { Authorization: `Bearer ${authToken}` },
+    })
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled) return;
+        setHideImages(Boolean(d?.hideImages));
+      })
+      .catch(() => {
+        if (cancelled) return;
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, authToken]);
 
   const filtered = items.filter(item => {
     if (!item?.name || !item?.brand) return false;
@@ -84,6 +105,28 @@ export const ShareModal: React.FC<ShareModalProps> = ({
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
+  };
+
+  const handleToggleImagesOnSharePage = async () => {
+    if (!authToken || hideImagesBusy) return;
+    const next = !hideImages;
+    setHideImages(next);
+    setHideImagesBusy(true);
+    try {
+      const res = await fetch('/api/share-settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({ hideImages: next }),
+      });
+      if (!res.ok) throw new Error('Failed to update image visibility');
+    } catch {
+      setHideImages(!next);
+    } finally {
+      setHideImagesBusy(false);
+    }
   };
 
   const handleHideAll = async () => {
@@ -160,6 +203,15 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                 <ExternalLink size={10} />
                 Preview Shared Page
               </a>
+              <button
+                type="button"
+                onClick={() => void handleToggleImagesOnSharePage()}
+                disabled={!authToken || hideImagesBusy}
+                className="w-full py-2.5 border border-white/8 bg-white/[0.02] disabled:opacity-45 disabled:cursor-not-allowed text-[9px] uppercase tracking-[0.3em] font-bold transition-all flex items-center justify-center gap-2 text-white/70 hover:text-white hover:border-white/20"
+              >
+                {hideImages ? <EyeOff size={11} /> : <Eye size={11} />}
+                {hideImages ? 'Shared images hidden' : 'Shared images visible'}
+              </button>
             </div>
 
             {/* Per-cologne controls */}
