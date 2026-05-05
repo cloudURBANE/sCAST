@@ -19,6 +19,31 @@ function getToken(req: any): string | null {
   return null;
 }
 
+function isUuidish(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
+function shareHandleFromEmail(email: string): string {
+  const local = email.split("@")[0] ?? "";
+  const normalized = local.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return normalized || "user";
+}
+
+async function resolveShareUser(userRef: string) {
+  if (isUuidish(userRef)) {
+    const rows = await db.select().from(usersTable).where(eq(usersTable.id, userRef)).limit(1);
+    if (rows[0]) return rows[0];
+  }
+
+  const cleanRef = userRef.trim().toLowerCase().replace(/^@+/, "");
+  if (!cleanRef) return null;
+  const users = await db.select().from(usersTable);
+  return (
+    users.find((u) => shareHandleFromEmail(u.email) === cleanRef) ??
+    null
+  );
+}
+
 async function getUserByToken(token: string) {
   const users = await db
     .select()
@@ -43,32 +68,29 @@ async function getOrCreateSettings(userId: string) {
   return created;
 }
 
-router.get("/share/:userId", async (req, res) => {
-  const { userId } = req.params;
-  debugLog("routes/share.ts:47", "share route entry", "H1", { userId });
+router.get("/share/:userRef", async (req, res) => {
+  const { userRef } = req.params;
+  debugLog("routes/share.ts:47", "share route entry", "H1", { userRef });
 
-  const [user] = await db
-    .select()
-    .from(usersTable)
-    .where(eq(usersTable.id, userId))
-    .limit(1);
+  const user = await resolveShareUser(userRef);
 
   if (!user) {
-    debugLog("routes/share.ts:57", "share user missing", "H1", { userId });
+    debugLog("routes/share.ts:57", "share user missing", "H1", { userRef });
     res.status(404).json({ error: "Vault not found" });
     return;
   }
 
   const [settings, fragranceRows] = await Promise.all([
-    getOrCreateSettings(userId),
-    db.select().from(userFragrancesTable).where(eq(userFragrancesTable.userId, userId)),
+    getOrCreateSettings(user.id),
+    db.select().from(userFragrancesTable).where(eq(userFragrancesTable.userId, user.id)),
   ]);
 
   const rawFragrances = fragranceRows
     .map(r => r.fragranceData as Record<string, any>)
     .filter(data => !data.shareHidden);
   debugLog("routes/share.ts:71", "raw fragrances prepared", "H2", {
-    userId,
+    userRef,
+    userId: user.id,
     totalRows: fragranceRows.length,
     visibleRows: rawFragrances.length,
     missingTopLevelName: rawFragrances.filter((f) => !f?.name).length,
@@ -96,14 +118,15 @@ router.get("/share/:userId", async (req, res) => {
     })
   );
   debugLog("routes/share.ts:98", "share payload finalized", "H3", {
-    userId,
+    userRef,
+    userId: user.id,
     hideImages: settings.shareHideImages,
     totalVisibleFragrances: fragrances.length,
     withImageUrl: fragrances.filter((f) => typeof f?.imageUrl === "string" && f.imageUrl.trim().length > 0).length,
     withoutImageUrl: fragrances.filter((f) => !(typeof f?.imageUrl === "string" && f.imageUrl.trim().length > 0)).length,
   });
 
-  res.json({ fragrances, hideImages: settings.shareHideImages });
+  res.json({ fragrances, hideImages: settings.shareHideImages, shareUserId: user.id });
 });
 
 router.get("/share-settings", async (req, res) => {
@@ -114,7 +137,11 @@ router.get("/share-settings", async (req, res) => {
   if (!user) { res.status(401).json({ error: "Invalid token" }); return; }
 
   const settings = await getOrCreateSettings(user.id);
-  res.json({ userId: user.id, hideImages: settings.shareHideImages });
+  res.json({
+    userId: user.id,
+    shareId: `@${shareHandleFromEmail(user.email)}`,
+    hideImages: settings.shareHideImages,
+  });
 });
 
 router.post("/share-settings", async (req, res) => {
@@ -138,7 +165,11 @@ router.post("/share-settings", async (req, res) => {
       set: { shareHideImages: hideImages, updatedAt: new Date() },
     });
 
-  res.json({ userId: user.id, hideImages });
+  res.json({
+    userId: user.id,
+    shareId: `@${shareHandleFromEmail(user.email)}`,
+    hideImages,
+  });
 });
 
 export default router;

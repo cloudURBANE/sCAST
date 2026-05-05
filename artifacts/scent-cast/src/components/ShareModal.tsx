@@ -35,9 +35,13 @@ export const ShareModal: React.FC<ShareModalProps> = ({
   const [search, setSearch] = useState('');
   const [hideImages, setHideImages] = useState(false);
   const [hideImagesBusy, setHideImagesBusy] = useState(false);
+  const [shareId, setShareId] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  const shareUrl = userId ? `${window.location.origin}/share/${userId}` : '';
+  const sharePathId = shareId || userId || '';
+  const shareUrl = sharePathId
+    ? `${window.location.origin}/share/${encodeURIComponent(sharePathId)}`
+    : '';
 
   const visibleCount = items.filter(i => !i.shareHidden).length;
 
@@ -58,6 +62,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
       .then((d) => {
         if (cancelled) return;
         setHideImages(Boolean(d?.hideImages));
+        setShareId(typeof d?.shareId === 'string' && d.shareId.trim() ? d.shareId : null);
       })
       .catch(() => {
         if (cancelled) return;
