@@ -2,7 +2,7 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { usersTable, userFragrancesTable, userSettingsTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
-import { hydrateImageUrl, normalizeFragrance, sanitizeFragrance } from "../services/fragrancePayload";
+import { hydrateImageUrl, normalizeFragrance } from "../services/fragrancePayload";
 import { searchImageUrl } from "../services/imageService";
 
 const router = Router();
@@ -77,7 +77,7 @@ router.get("/share/:userId", async (req, res) => {
 
   const fragrances = await Promise.all(
     rawFragrances.map(async (raw) => {
-      let frag = sanitizeFragrance(normalizeFragrance(raw));
+      let frag = normalizeFragrance(raw);
       frag = await hydrateImageUrl(frag);
 
       const url = typeof frag.imageUrl === "string" ? frag.imageUrl.trim() : "";
