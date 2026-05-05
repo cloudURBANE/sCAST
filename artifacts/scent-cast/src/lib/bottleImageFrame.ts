@@ -45,14 +45,14 @@ export type BottleImageVariant = "featured" | "grid" | "detail" | "thumb" | "sha
 /** Uniform inset + clip so scaled/hover paints don’t bleed into card chrome. */
 const ARTBOARD_INSET: Record<BottleImageVariant, string> = {
   featured:
-    "absolute inset-[6%] sm:inset-[7%] flex items-center justify-center overflow-hidden min-h-0 min-w-0 rounded-[0.125rem]",
+    "absolute inset-[6%] sm:inset-[7%] overflow-hidden min-h-0 min-w-0 rounded-[0.125rem]",
   grid:
-    "absolute inset-[6%] sm:inset-[7%] flex items-center justify-center overflow-hidden min-h-0 min-w-0 rounded-[0.125rem]",
+    "absolute inset-[6%] sm:inset-[7%] overflow-hidden min-h-0 min-w-0 rounded-[0.125rem]",
   share:
-    "absolute inset-[6%] sm:inset-[7%] flex items-center justify-center overflow-hidden min-h-0 min-w-0 rounded-[0.125rem]",
-  detail: "absolute inset-3 sm:inset-4 flex items-center justify-center overflow-hidden min-h-0 min-w-0 rounded-sm",
+    "absolute inset-[6%] sm:inset-[7%] overflow-hidden min-h-0 min-w-0 rounded-[0.125rem]",
+  detail: "absolute inset-3 sm:inset-4 overflow-hidden min-h-0 min-w-0 rounded-sm",
   /** Slightly looser than 0.5px so round / non-rectangular pack shots don’t hug the border. */
-  thumb: "absolute inset-[6%] flex items-center justify-center overflow-hidden min-h-0 min-w-0 rounded-[0.125rem]",
+  thumb: "absolute inset-[6%] overflow-hidden min-h-0 min-w-0 rounded-[0.125rem]",
 };
 
 /**

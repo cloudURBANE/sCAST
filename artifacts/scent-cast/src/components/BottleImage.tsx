@@ -39,7 +39,7 @@ export const BottleImage: React.FC<BottleImageProps> = ({
   loading = 'lazy',
 }) => {
   const [broken, setBroken] = useState(false);
-  const url = proxy ? proxiedImageUrl(src) : (src ?? '');
+  const url = proxy ? proxiedImageUrl(src, { packshot: true }) : (src ?? '');
   const showPlaceholder = !url || broken;
 
   useEffect(() => {
@@ -59,6 +59,7 @@ export const BottleImage: React.FC<BottleImageProps> = ({
           </div>
         ) : (
           <img
+            key={url}
             src={url}
             alt={alt}
             className={bottleImageFillClass(imgClassName)}

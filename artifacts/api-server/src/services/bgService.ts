@@ -1,6 +1,7 @@
 import axios from "axios";
 import sharp from "sharp";
 import { logger } from "../lib/logger";
+import { trimPackshotForBgService } from "./packshotTrim";
 
 const POOF_API = "https://api.poof.bg/v1/remove";
 const CANVAS_SIZE = 768;
@@ -33,16 +34,12 @@ async function normalizeToBottleCanvas(buffer: Buffer): Promise<Buffer> {
 
 async function trimWhiteAndNormalize(buffer: Buffer): Promise<Buffer> {
   try {
-    const trimmed = await sharp(buffer)
-      .flatten({ background: { r: 255, g: 255, b: 255 } })
-      .trim({ threshold: 40 })
-      .ensureAlpha()
-      .png()
-      .toBuffer();
-    return normalizeToBottleCanvas(trimmed);
+    const trimmed = await trimPackshotForBgService(buffer);
+    if (trimmed) return await normalizeToBottleCanvas(trimmed);
   } catch {
-    return normalizeToBottleCanvas(buffer);
+    /* fall through */
   }
+  return normalizeToBottleCanvas(buffer);
 }
 
 function baseParams() {
