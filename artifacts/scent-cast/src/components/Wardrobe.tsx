@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Trash2, ShieldCheck, Wind, RefreshCw, Wrench, Undo2, HelpCircle, Eraser, Check } from 'lucide-react';
+import { X, Trash2, ShieldCheck, Wind, RefreshCw, Wrench, Undo2, HelpCircle, Eraser, Check, Maximize2 } from 'lucide-react';
 import { bottleFeaturedSlotClass } from '@/lib/bottleImageFrame';
 import { BottleImage } from '@/components/BottleImage';
 import {
@@ -8,6 +8,10 @@ import {
   WARDROBE_REFRESH_COUNT_STORAGE_KEY,
   type WardrobeImageSolverId,
 } from '@/lib/imageRefreshSolvers';
+import {
+  buildWardrobeSearchSuggestions,
+  type WardrobeSearchSuggestion,
+} from '@/lib/wardrobeSearchSuggest';
 
 export interface ScentVector {
   freshness: number;
@@ -45,10 +49,16 @@ export interface Fragrance {
 }
 
 /** Resolve the human-facing name/brand even if the row predates the flat shape. */
-function entryName(item: Fragrance): string {
+function entryName(item: {
+  name?: string;
+  product?: { name?: string };
+}): string {
   return item?.name || item?.product?.name || "";
 }
-function entryBrand(item: Fragrance): string {
+function entryBrand(item: {
+  brand?: string;
+  product?: { brand?: string };
+}): string {
   return item?.brand || item?.product?.brand || "";
 }
 
@@ -57,6 +67,41 @@ function concentrationHintFromValue(value?: string): "edt" | "edp" | undefined {
   if (normalized.includes("eau de toilette") || normalized.includes("edt")) return "edt";
   if (normalized.includes("eau de parfum") || normalized.includes("edp")) return "edp";
   return undefined;
+}
+
+function suggestionPrimaryLine(s: WardrobeSearchSuggestion): string {
+  if (s.kind === 'fragrance') return `${entryName(s.item)} — ${entryBrand(s.item)}`;
+  return s.label;
+}
+
+function SuggestionTypingLabel({ text, animate }: { text: string; animate: boolean }) {
+  const [n, setN] = React.useState(animate ? 0 : text.length);
+  React.useEffect(() => {
+    if (!animate) {
+      setN(text.length);
+      return;
+    }
+    setN(0);
+    let i = 0;
+    const id = window.setInterval(() => {
+      i += 1;
+      setN(Math.min(i, text.length));
+      if (i >= text.length) window.clearInterval(id);
+    }, 16);
+    return () => window.clearInterval(id);
+  }, [text, animate]);
+  const slice = text.slice(0, n);
+  return (
+    <span className="font-sans">
+      {slice}
+      {animate && n < text.length ? (
+        <span
+          className="inline-block w-px h-[1cap] ml-px bg-white/55 animate-pulse align-middle translate-y-[-0.06em]"
+          aria-hidden
+        />
+      ) : null}
+    </span>
+  );
 }
 
 export const Wardrobe: React.FC<{
@@ -107,25 +152,36 @@ export const Wardrobe: React.FC<{
   const [pendingPreview, setPendingPreview] = React.useState<{ itemId: string; url: string } | null>(null);
   const [stripBgBusy, setStripBgBusy] = React.useState(false);
   const [persistBusy, setPersistBusy] = React.useState(false);
+  const [vaultSolverBanner, setVaultSolverBanner] = React.useState<string | null>(null);
+  const [searchFocused, setSearchFocused] = React.useState(false);
+  const [searchHighlightIndex, setSearchHighlightIndex] = React.useState(0);
+  const [enlargeOpen, setEnlargeOpen] = React.useState(false);
+  const solverPrefillRef = React.useRef<WardrobeImageSolverId | null>(null);
+  const searchBlurTimerRef = React.useRef<number | null>(null);
 
-  const openDetail = (item: Fragrance) => {
+  const openDetail = React.useCallback((item: Fragrance) => {
     setRefreshError(null);
     setPendingPreview(null);
     setSelectedItem(item);
-  };
+  }, []);
 
-  const closeDetail = () => {
+  const closeDetail = React.useCallback(() => {
     setRefreshError(null);
     setPendingPreview(null);
     setSelectedItem(null);
-  };
+    setEnlargeOpen(false);
+  }, []);
 
-  // UX Hardening: Bind escape key and prevent body scroll when modal is active
+  // Modal scroll lock + Escape (enlarge closes first)
   React.useEffect(() => {
     if (!selectedItem) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      if (e.key !== 'Escape') return;
+      if (enlargeOpen) {
+        setEnlargeOpen(false);
+        e.preventDefault();
+      } else {
         closeDetail();
       }
     };
@@ -137,10 +193,18 @@ export const Wardrobe: React.FC<{
       document.removeEventListener('keydown', handleKeyDown);
       document.body.style.overflow = '';
     };
-  }, [selectedItem]);
+  }, [selectedItem, enlargeOpen, closeDetail]);
 
   React.useEffect(() => {
-    setClarifySolverId('');
+    if (!selectedItem?.id) return;
+    const pre = solverPrefillRef.current;
+    if (pre) {
+      setClarifySolverId(pre);
+      solverPrefillRef.current = null;
+      setVaultSolverBanner(null);
+    } else {
+      setClarifySolverId('');
+    }
   }, [selectedItem?.id]);
 
   const handleRefreshImage = async (item: Fragrance, solverId?: WardrobeImageSolverId) => {
@@ -253,6 +317,32 @@ export const Wardrobe: React.FC<{
     });
   }, [items, searchQuery]);
 
+  const searchSuggestions = React.useMemo(
+    () => buildWardrobeSearchSuggestions(items, searchQuery),
+    [items, searchQuery],
+  );
+
+  React.useEffect(() => {
+    setSearchHighlightIndex(0);
+  }, [searchQuery, searchSuggestions.length]);
+
+  const applySearchSuggestion = React.useCallback((s: WardrobeSearchSuggestion) => {
+    if (s.kind === 'fragrance') {
+      const nm = entryName(s.item);
+      const br = entryBrand(s.item);
+      setSearchQuery(`${br} ${nm}`.trim());
+      setSearchFocused(false);
+      setRefreshError(null);
+      setPendingPreview(null);
+      setSelectedItem(s.item as Fragrance);
+    } else {
+      solverPrefillRef.current = s.id;
+      setVaultSolverBanner(`Next profile: image hint — ${s.label}`);
+      setSearchQuery('');
+      setSearchFocused(false);
+    }
+  }, []);
+
   // Performance Optimization: Memoize shelf chunking
   const shelves = React.useMemo(() => {
     const itemsPerShelf = 4;
@@ -277,6 +367,24 @@ export const Wardrobe: React.FC<{
 
   const hasPendingPreview =
     !!selectedItem && !!pendingPreview && pendingPreview.itemId === selectedItem.id;
+
+  const searchDropdownOpen =
+    searchFocused && searchQuery.trim().length > 0 && searchSuggestions.length > 0;
+
+  const cancelSearchBlur = () => {
+    if (searchBlurTimerRef.current !== null) {
+      window.clearTimeout(searchBlurTimerRef.current);
+      searchBlurTimerRef.current = null;
+    }
+  };
+
+  const scheduleSearchBlur = () => {
+    cancelSearchBlur();
+    searchBlurTimerRef.current = window.setTimeout(() => {
+      setSearchFocused(false);
+      searchBlurTimerRef.current = null;
+    }, 160);
+  };
 
   return (
     <div className="relative">
@@ -320,14 +428,114 @@ export const Wardrobe: React.FC<{
                 ) : null}
               </div>
             )}
-            <div className="relative w-full max-w-2xl">
+            <div className="relative w-full max-w-2xl z-20">
+              <label htmlFor="wardrobe-vault-search" className="sr-only">
+                Search vault fragrances and image hints
+              </label>
               <input
+                id="wardrobe-vault-search"
                 type="text"
+                role="combobox"
+                aria-expanded={searchDropdownOpen}
+                aria-controls="wardrobe-search-suggestions"
+                aria-autocomplete="list"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search Olfactory Data..."
+                onFocus={() => {
+                  cancelSearchBlur();
+                  setSearchFocused(true);
+                }}
+                onBlur={scheduleSearchBlur}
+                onKeyDown={(e) => {
+                  if (!searchDropdownOpen) return;
+                  if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    setSearchHighlightIndex((i) =>
+                      Math.min(i + 1, Math.max(0, searchSuggestions.length - 1)),
+                    );
+                  } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    setSearchHighlightIndex((i) => Math.max(i - 1, 0));
+                  } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const pick = searchSuggestions[searchHighlightIndex];
+                    if (pick) applySearchSuggestion(pick);
+                  } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    setSearchFocused(false);
+                  }
+                }}
+                placeholder="Search vault or image hint (e.g. watermark, sauvage)…"
+                autoComplete="off"
                 className="w-full bg-white/[0.02] border border-white/5 rounded-none h-16 px-8 text-white font-sans text-sm focus:border-white/20 outline-none transition-all placeholder:text-white/10 uppercase tracking-widest"
               />
+              <AnimatePresence>
+                {searchDropdownOpen ? (
+                  <motion.ul
+                    initial={{ opacity: 0, y: -6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -4 }}
+                    transition={{ duration: 0.18 }}
+                    id="wardrobe-search-suggestions"
+                    role="listbox"
+                    className="absolute left-0 right-0 top-full mt-1 max-h-[min(320px,50vh)] overflow-y-auto rounded-lg border border-white/10 bg-neutral-950/98 shadow-[0_24px_48px_rgba(0,0,0,0.55)] backdrop-blur-xl scrollbar-hide z-30"
+                  >
+                    <li className="px-3 py-2 border-b border-white/8 pointer-events-none">
+                      <p className="text-[8px] uppercase tracking-[0.35em] text-white/35 font-bold font-sans">
+                        Matches
+                      </p>
+                    </li>
+                    {searchSuggestions.map((sug, idx) => {
+                      const active = idx === searchHighlightIndex;
+                      const primary = suggestionPrimaryLine(sug);
+                      const sub =
+                        sug.kind === 'solver'
+                          ? 'Image search tuning — Find image uses this hint'
+                          : [sug.item.family, ...(sug.item.notes ?? []).slice(0, 2)]
+                              .filter(Boolean)
+                              .join(' · ');
+                      return (
+                        <li key={`${sug.kind}-${sug.kind === 'fragrance' ? sug.item.id : sug.id}`} role="none">
+                          <button
+                            type="button"
+                            role="option"
+                            aria-selected={active}
+                            className={`w-full text-left px-3 py-2.5 transition-colors border-b border-white/[0.06] last:border-b-0 ${
+                              active ? 'bg-white/[0.09]' : 'hover:bg-white/[0.05]'
+                            }`}
+                            onMouseEnter={() => setSearchHighlightIndex(idx)}
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              cancelSearchBlur();
+                              applySearchSuggestion(sug);
+                            }}
+                          >
+                            <div className="text-[13px] text-white/92 leading-snug">
+                              <SuggestionTypingLabel text={primary} animate={active} />
+                            </div>
+                            {sub ? (
+                              <div className="text-[10px] text-white/40 mt-0.5 font-sans truncate">{sub}</div>
+                            ) : null}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </motion.ul>
+                ) : null}
+              </AnimatePresence>
+              {vaultSolverBanner ? (
+                <div className="mt-3 flex items-start gap-2 rounded-lg border border-scent-accent/35 bg-scent-accent/10 px-3 py-2.5 text-left">
+                  <p className="flex-1 text-[11px] text-white/80 font-sans leading-snug">{vaultSolverBanner}</p>
+                  <button
+                    type="button"
+                    onClick={() => setVaultSolverBanner(null)}
+                    className="shrink-0 text-[10px] uppercase tracking-widest text-white/45 hover:text-white px-1"
+                    aria-label="Dismiss hint"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ) : null}
             </div>
             <span className="font-serif italic text-white/20 text-xl sm:text-3xl whitespace-nowrap">{filteredItems.length} ENTRIES</span>
           </div>
@@ -462,7 +670,20 @@ export const Wardrobe: React.FC<{
               >
                 <div className="space-y-6 sm:space-y-10 pt-2">
                     <div className="border border-white/10 bg-white/[0.02] p-4 sm:p-6">
-                    <p className="text-[9px] uppercase tracking-[0.35em] text-white/30 font-bold mb-3">Bottle Visual</p>
+                    <div className="flex items-center justify-between gap-2 mb-3">
+                      <p className="text-[9px] uppercase tracking-[0.35em] text-white/30 font-bold">Bottle Visual</p>
+                      {detailBottleUrl ? (
+                        <button
+                          type="button"
+                          onClick={() => setEnlargeOpen(true)}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-white/12 bg-white/[0.06] text-[9px] uppercase tracking-[0.2em] font-bold text-white/65 hover:bg-white/[0.1] hover:text-white transition-colors"
+                          aria-label="Enlarge bottle image"
+                        >
+                          <Maximize2 size={13} strokeWidth={2} />
+                          Enlarge
+                        </button>
+                      ) : null}
+                    </div>
                     <div className="relative h-48 sm:h-64 overflow-hidden rounded-sm">
                       <BottleImage
                         key={detailBottleUrl || 'missing-image'}
@@ -701,6 +922,47 @@ export const Wardrobe: React.FC<{
                 </button>
               </div>
             </motion.div>
+            <AnimatePresence>
+              {enlargeOpen && detailBottleUrl ? (
+                <motion.div
+                  key="bottle-enlarge"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label="Enlarged bottle image"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="fixed inset-0 z-[130] flex flex-col items-center justify-center bg-black/93 px-4 py-12"
+                  onClick={() => setEnlargeOpen(false)}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setEnlargeOpen(false)}
+                    className="absolute top-4 right-4 z-10 p-2 rounded-full border border-white/15 bg-white/10 text-white hover:bg-white/20 transition-colors"
+                    aria-label="Close enlarged view"
+                  >
+                    <X size={22} />
+                  </button>
+                  <div
+                    className="relative w-full max-w-[min(100%,28rem)] aspect-[3/4] max-h-[78dvh] min-h-0"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <BottleImage
+                      variant="grid"
+                      src={detailBottleUrl}
+                      alt={entryName(selectedItem)}
+                      className="absolute inset-0"
+                      imgClassName="brightness-[1.08] scale-[1.02]"
+                      loading="eager"
+                    />
+                  </div>
+                  <p className="mt-5 text-[10px] uppercase tracking-[0.35em] text-white/35 font-bold font-sans">
+                    Tap outside or Esc to close
+                  </p>
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
           </div>
         )}
       </AnimatePresence>
