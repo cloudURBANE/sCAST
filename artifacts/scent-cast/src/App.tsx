@@ -486,57 +486,11 @@ export default function App() {
     }
   }, [authToken]);
 
-  const handleRebuildWardrobe = useCallback(async () => {
-    if (!authToken) return null;
-    try {
-      const res = await fetch('/api/wardrobe/rebuild', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || `HTTP ${res.status}`);
-      }
-      const data = await res.json() as { total: number; rebuilt: number; skipped: number };
-      await loadWardrobe(authToken);
-      return data;
-    } catch (err) {
-      console.error('Rebuild failed', err);
-      return null;
-    }
-  }, [authToken, loadWardrobe]);
-
-  const handleManualFixWardrobe = useCallback(async () => {
-    if (!authToken) return;
-    setWardrobeFixBusy(true);
-    setWardrobeFixHint(null);
-    setWardrobeRevertSnapshot(JSON.parse(JSON.stringify(items)) as Fragrance[]);
-    try {
-      const res = await fetch('/api/wardrobe/rebuild', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error((err as { error?: string }).error || `HTTP ${res.status}`);
-      }
-      const data = (await res.json()) as { total: number; rebuilt: number; skipped: number };
-      await loadWardrobe(authToken);
-      setWardrobeFixHint(
-        `Rebuild done: ${data.rebuilt} updated, ${data.skipped} skipped (${data.total} rows).`,
-      );
-    } catch (e) {
-      setWardrobeFixHint((e as Error).message || 'Fix failed');
-    } finally {
-      setWardrobeFixBusy(false);
-    }
-  }, [authToken, items, loadWardrobe]);
-
   const handleRevertWardrobe = useCallback(() => {
     if (!wardrobeRevertSnapshot) return;
     const snap = JSON.parse(JSON.stringify(wardrobeRevertSnapshot)) as Fragrance[];
     setItems(snap);
-    setWardrobeFixHint('Reverted to the in-memory snapshot from before the last Fix. Server data may differ; refresh loads the API again.');
+    setWardrobeFixHint('Reverted to the in-memory snapshot from before the last automatic rebuild. Server data may differ; refresh loads the API again.');
     setActiveRecommendation((prev) => {
       if (!prev) return null;
       const ok = snap.some(
@@ -552,8 +506,34 @@ export default function App() {
     if (!wardrobeNeedsLegacyRebuild(items)) return;
 
     autoWardrobeRebuildAttemptedRef.current = true;
-    void handleRebuildWardrobe();
-  }, [authToken, wardrobeLoaded, items, handleRebuildWardrobe]);
+    const snapshot = JSON.parse(JSON.stringify(items)) as Fragrance[];
+
+    void (async () => {
+      setWardrobeFixBusy(true);
+      setWardrobeFixHint(null);
+      setWardrobeRevertSnapshot(snapshot);
+      try {
+        const res = await fetch('/api/wardrobe/rebuild', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${authToken}` },
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error((err as { error?: string }).error || `HTTP ${res.status}`);
+        }
+        const data = (await res.json()) as { total: number; rebuilt: number; skipped: number };
+        await loadWardrobe(authToken);
+        setWardrobeFixHint(
+          `Rebuild done: ${data.rebuilt} updated, ${data.skipped} skipped (${data.total} rows).`,
+        );
+      } catch (e) {
+        console.error('Wardrobe rebuild failed', e);
+        setWardrobeFixHint((e as Error).message || 'Rebuild failed');
+      } finally {
+        setWardrobeFixBusy(false);
+      }
+    })();
+  }, [authToken, wardrobeLoaded, items, loadWardrobe]);
 
   const handleDeleteItem = async (target: Fragrance) => {
     const apiId = target._dbId ?? target.id;
@@ -764,7 +744,6 @@ export default function App() {
               onDelete={handleDeleteItem}
               onPersistWardrobeImage={handlePersistWardrobeImage}
               featuredItem={activeRecommendation}
-              onFixWardrobe={handleManualFixWardrobe}
               onRevertWardrobe={handleRevertWardrobe}
               fixWardrobeBusy={wardrobeFixBusy}
               revertAvailable={!!wardrobeRevertSnapshot}
