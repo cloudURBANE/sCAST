@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import axios from 'axios';
 import { FragranceCapture } from './components/FragranceCapture';
 import { Wardrobe, Fragrance, DestinationType, EnergyState } from './components/Wardrobe';
@@ -24,6 +24,17 @@ const STORAGE_KEYS = {
   TOKEN: 'scent_token',
   EMAIL: 'scent_email',
 } as const;
+
+/** Match Wardrobe grid visibility — legacy rows may lack flat name/brand until rebuilt */
+function wardrobeEntryName(item: Fragrance): string {
+  return item?.name || item?.product?.name || '';
+}
+function wardrobeEntryBrand(item: Fragrance): string {
+  return item?.brand || item?.product?.brand || '';
+}
+function wardrobeNeedsLegacyRebuild(items: Fragrance[]): boolean {
+  return items.some((item) => !wardrobeEntryName(item) || !wardrobeEntryBrand(item));
+}
 
 // --- Pure Functions ---
 
@@ -269,6 +280,11 @@ export default function App() {
   const [weatherLoading, setWeatherLoading] = useState(true);
   const [locationStatus, setLocationStatus] = useState<'idle' | 'requesting' | 'granted' | 'denied'>('idle');
   const [userId, setUserId] = useState<string | null>(null);
+  const autoWardrobeRebuildAttemptedRef = useRef(false);
+
+  useEffect(() => {
+    autoWardrobeRebuildAttemptedRef.current = false;
+  }, [authToken]);
 
   const fetchWeather = useCallback(async (lat?: number, lon?: number, signal?: AbortSignal) => {
     try {
@@ -454,24 +470,48 @@ export default function App() {
     }
   }, [authToken, loadWardrobe]);
 
+  useEffect(() => {
+    if (!authToken || !wardrobeLoaded) return;
+    if (autoWardrobeRebuildAttemptedRef.current) return;
+    if (!wardrobeNeedsLegacyRebuild(items)) return;
+
+    autoWardrobeRebuildAttemptedRef.current = true;
+    void handleRebuildWardrobe();
+  }, [authToken, wardrobeLoaded, items, handleRebuildWardrobe]);
+
   const handleDeleteItem = async (target: Fragrance) => {
     const apiId = target._dbId ?? target.id;
+
+    if (!authToken) {
+      setItems((prev) =>
+        prev.filter(item =>
+          target._dbId ? item._dbId !== target._dbId : item.id !== target.id,
+        ),
+      );
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/wardrobe/${apiId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      if (!res.ok) {
+        console.error('Failed to delete wardrobe item', res.status);
+        await loadWardrobe(authToken);
+        return;
+      }
+    } catch (err) {
+      console.error(err);
+      await loadWardrobe(authToken);
+      return;
+    }
+
     setItems((prev) =>
       prev.filter(item =>
         target._dbId ? item._dbId !== target._dbId : item.id !== target.id,
       ),
     );
-
-    if (authToken) {
-      try {
-        await fetch(`/api/wardrobe/${apiId}`, {
-          method: 'DELETE',
-          headers: { Authorization: `Bearer ${authToken}` },
-        });
-      } catch {
-        // ignore
-      }
-    }
   };
 
   const handleIntentComplete = (intent: { destination: DestinationType; energy: EnergyState }) => {
@@ -648,7 +688,6 @@ export default function App() {
               onDelete={handleDeleteItem}
               onUpdateImage={handleUpdateImage}
               featuredItem={activeRecommendation}
-              onRebuild={authToken ? handleRebuildWardrobe : undefined}
             />
           </div>
         </div>

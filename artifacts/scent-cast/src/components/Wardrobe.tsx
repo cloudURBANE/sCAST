@@ -70,16 +70,12 @@ export const Wardrobe: React.FC<{
   onDelete: (item: Fragrance) => void;
   onUpdateImage?: (id: string, imageUrl: string) => void;
   featuredItem?: Fragrance | null;
-  onRebuild?: () => Promise<{ total: number; rebuilt: number; skipped: number } | null>;
-}> = ({ items, onDelete, onUpdateImage, featuredItem, onRebuild }) => {
+}> = ({ items, onDelete, onUpdateImage, featuredItem }) => {
   const [selectedItem, setSelectedItem] = React.useState<Fragrance | null>(null);
   const [searchQuery, setSearchQuery] = React.useState("");
   
   const [refreshingId, setRefreshingId] = React.useState<string | null>(null);
   const [refreshError, setRefreshError] = React.useState<string | null>(null);
-  
-  const [rebuilding, setRebuilding] = React.useState(false);
-  const [rebuildResult, setRebuildResult] = React.useState<string | null>(null);
 
   const openDetail = (item: Fragrance) => {
     setRefreshError(null);
@@ -109,27 +105,6 @@ export const Wardrobe: React.FC<{
       document.body.style.overflow = '';
     };
   }, [selectedItem]);
-
-  const handleRebuildClick = async () => {
-    if (!onRebuild || rebuilding) return;
-    setRebuilding(true);
-    setRebuildResult(null);
-    try {
-      const result = await onRebuild();
-      if (result) {
-        setRebuildResult(
-          `Rebuilt ${result.rebuilt} of ${result.total}` +
-            (result.skipped ? ` · ${result.skipped} skipped` : "")
-        );
-      } else {
-        setRebuildResult("Rebuild failed");
-      }
-    } catch (err: any) {
-      setRebuildResult(err?.message || "Rebuild failed");
-    } finally {
-      setRebuilding(false);
-    }
-  };
 
   const handleRefreshImage = async (item: Fragrance) => {
     setRefreshingId(item.id);
@@ -204,28 +179,6 @@ export const Wardrobe: React.FC<{
               />
             </div>
             <span className="font-serif italic text-white/20 text-xl sm:text-3xl whitespace-nowrap">{filteredItems.length} ENTRIES</span>
-
-            {onRebuild && (
-              <div className="flex flex-col items-center gap-2">
-                {!searchQuery && items.length > filteredItems.length && (
-                  <p className="text-[9px] uppercase tracking-[0.35em] text-amber-300/60 font-bold">
-                    {items.length - filteredItems.length} legacy {items.length - filteredItems.length === 1 ? "entry" : "entries"} need a rebuild
-                  </p>
-                )}
-                <button
-                  type="button"
-                  onClick={handleRebuildClick}
-                  disabled={rebuilding || items.length === 0}
-                  className="px-5 py-2.5 border border-white/10 text-[9px] uppercase tracking-[0.4em] text-white/50 hover:text-white hover:border-white/30 transition-all flex items-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed"
-                >
-                  <RefreshCw size={11} className={rebuilding ? "animate-spin" : ""} />
-                  {rebuilding ? "Rebuilding Vault…" : "Rebuild Vault"}
-                </button>
-                {rebuildResult && (
-                  <p className="text-[9px] uppercase tracking-[0.3em] text-white/30 font-bold">{rebuildResult}</p>
-                )}
-              </div>
-            )}
           </div>
         </div>
 
