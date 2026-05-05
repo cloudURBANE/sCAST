@@ -4,9 +4,18 @@ import { Wind } from 'lucide-react';
 
 interface AuthModalProps {
   onAuth: (token: string, email: string) => void;
+  onClose?: () => void;
+  title?: React.ReactNode;
+  subtitle?: string;
+  allowDismiss?: boolean;
 }
 
-export const AuthModal: React.FC<AuthModalProps> = () => {
+export const AuthModal: React.FC<AuthModalProps> = ({
+  onClose,
+  title,
+  subtitle,
+  allowDismiss = false,
+}) => {
   const handleGoogleSignIn = () => {
     window.location.href = '/api/auth/google';
   };
@@ -27,9 +36,11 @@ export const AuthModal: React.FC<AuthModalProps> = () => {
           <div className="text-center space-y-3">
             <p className="text-[10px] uppercase tracking-[0.5em] text-white/30 font-bold">Olfactory Intelligence</p>
             <h1 className="font-serif italic text-4xl sm:text-5xl text-white tracking-tighter leading-tight">
-              Sign in to access<br />your vault
+              {title ?? <>Sign in to access<br />your vault</>}
             </h1>
-            <p className="text-sm text-white/30 font-sans">Your fragrances are saved to your account.</p>
+            <p className="text-sm text-white/30 font-sans">
+              {subtitle ?? 'Your fragrances are saved to your account.'}
+            </p>
           </div>
 
           <div className="w-full space-y-4">
@@ -40,6 +51,15 @@ export const AuthModal: React.FC<AuthModalProps> = () => {
               <GoogleIcon />
               Continue with Google
             </button>
+            {allowDismiss && onClose ? (
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-full h-11 border border-white/15 text-white/70 font-sans text-xs uppercase tracking-[0.25em] hover:text-white hover:border-white/35 transition-all rounded-2xl"
+              >
+                Continue as Guest
+              </button>
+            ) : null}
           </div>
         </div>
       </motion.div>

@@ -280,6 +280,8 @@ export default function App() {
   const [weatherLoading, setWeatherLoading] = useState(true);
   const [locationStatus, setLocationStatus] = useState<'idle' | 'requesting' | 'granted' | 'denied'>('idle');
   const [userId, setUserId] = useState<string | null>(null);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [guestPromptDismissed, setGuestPromptDismissed] = useState(false);
   const autoWardrobeRebuildAttemptedRef = useRef(false);
   const [wardrobeRevertSnapshot, setWardrobeRevertSnapshot] = useState<Fragrance[] | null>(null);
   const [wardrobeFixBusy, setWardrobeFixBusy] = useState(false);
@@ -391,6 +393,8 @@ export default function App() {
     localStorage.setItem(STORAGE_KEYS.EMAIL, email);
     setAuthToken(token);
     setAuthEmail(email);
+    setIsAuthModalOpen(false);
+    setGuestPromptDismissed(false);
   };
 
   const handleSignOut = () => {
@@ -433,7 +437,11 @@ export default function App() {
       context: item.context || { weather: ['Universal'], time: ['Universal'], occasion: ['Daily Wear'] }
     };
 
-    setItems((prev) => [newItem, ...prev]);
+    let nextCount = 0;
+    setItems((prev) => {
+      nextCount = prev.length + 1;
+      return [newItem, ...prev];
+    });
 
     if (authToken) {
       try {
@@ -448,8 +456,17 @@ export default function App() {
       } catch {
         // ignore - item is still in local state
       }
+    } else if (nextCount >= 2 && !guestPromptDismissed) {
+      setIsAuthModalOpen(true);
     }
   };
+
+  useEffect(() => {
+    if (authToken) return;
+    if (items.length >= 2 && !guestPromptDismissed) {
+      setIsAuthModalOpen(true);
+    }
+  }, [authToken, items.length, guestPromptDismissed]);
 
   const handlePersistWardrobeImage = useCallback(async (target: Fragrance): Promise<Fragrance | null> => {
     if (!authToken) return null;
@@ -653,10 +670,6 @@ export default function App() {
     return <SharePage userId={shareRef} />;
   }
 
-  if (!authToken) {
-    return <AuthModal onAuth={handleAuth} />;
-  }
-
   return (
     <div className="min-h-[100svh] bg-black selection:bg-scent-accent selection:text-black text-white relative overflow-x-hidden">
       <LavaBackground />
@@ -667,10 +680,18 @@ export default function App() {
             <h1 className="font-serif text-2xl italic tracking-tighter uppercase">Scent Cast</h1>
           </div>
           <div className="ml-auto flex items-center gap-4">
-            {authEmail && (
+            {authEmail ? (
               <span className="text-[10px] uppercase tracking-[0.2em] text-white/30 font-bold hidden sm:block">
                 {authEmail}
               </span>
+            ) : (
+              <button
+                onClick={() => setIsAuthModalOpen(true)}
+                title="Sign In"
+                className="h-8 px-3 rounded-full border border-white/10 hover:border-white/30 transition-all text-[9px] uppercase tracking-[0.2em] text-white/50 hover:text-white font-bold"
+              >
+                Sign In
+              </button>
             )}
             <button
               onClick={requestLocation}
@@ -680,20 +701,24 @@ export default function App() {
             >
               <span className={`w-2 h-2 rounded-full ${locationStatus === 'granted' ? 'bg-green-400' : locationStatus === 'requesting' ? 'bg-yellow-400 animate-pulse' : locationStatus === 'denied' ? 'bg-red-400' : 'bg-white/20'}`} />
             </button>
-            <button
-              onClick={() => setIsShareModalOpen(true)}
-              title="Share Vault"
-              className="flex items-center justify-center w-8 h-8 rounded-full border border-white/10 hover:border-white/30 transition-all text-white/30 hover:text-white"
-            >
-              <Share2 size={14} />
-            </button>
-            <button
-              onClick={handleSignOut}
-              title="Sign Out"
-              className="flex items-center justify-center w-8 h-8 rounded-full border border-white/10 hover:border-white/30 transition-all text-white/30 hover:text-white"
-            >
-              <LogOut size={14} />
-            </button>
+            {authToken ? (
+              <>
+                <button
+                  onClick={() => setIsShareModalOpen(true)}
+                  title="Share Vault"
+                  className="flex items-center justify-center w-8 h-8 rounded-full border border-white/10 hover:border-white/30 transition-all text-white/30 hover:text-white"
+                >
+                  <Share2 size={14} />
+                </button>
+                <button
+                  onClick={handleSignOut}
+                  title="Sign Out"
+                  className="flex items-center justify-center w-8 h-8 rounded-full border border-white/10 hover:border-white/30 transition-all text-white/30 hover:text-white"
+                >
+                  <LogOut size={14} />
+                </button>
+              </>
+            ) : null}
           </div>
         </div>
       </nav>
@@ -760,6 +785,23 @@ export default function App() {
       </main>
 
       <ScentIntentModal isOpen={isIntentModalOpen} onClose={() => setIsIntentModalOpen(false)} onComplete={handleIntentComplete} />
+
+      {isAuthModalOpen ? (
+        <AuthModal
+          onAuth={handleAuth}
+          onClose={() => {
+            setIsAuthModalOpen(false);
+            setGuestPromptDismissed(true);
+          }}
+          allowDismiss
+          title={items.length >= 2 ? 'Save your wardrobe before you lose it' : undefined}
+          subtitle={
+            items.length >= 2
+              ? 'You can keep exploring as a guest, but signing in will persist your fragrances to your account.'
+              : undefined
+          }
+        />
+      ) : null}
 
       <ShareModal
         isOpen={isShareModalOpen}
