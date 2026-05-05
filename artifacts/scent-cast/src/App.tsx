@@ -642,9 +642,15 @@ export default function App() {
     return phrases;
   }, [items, wardrobeLoaded]);
 
-  const sharePathMatch = window.location.pathname.match(/^\/share\/([a-f0-9-]{36})$/);
+  const sharePathMatch = window.location.pathname.match(/^\/share\/([^/?#]+)$/);
   if (sharePathMatch) {
-    return <SharePage userId={sharePathMatch[1]} />;
+    let shareRef = sharePathMatch[1];
+    try {
+      shareRef = decodeURIComponent(shareRef);
+    } catch {
+      // Keep raw segment if decode fails.
+    }
+    return <SharePage userId={shareRef} />;
   }
 
   if (!authToken) {
