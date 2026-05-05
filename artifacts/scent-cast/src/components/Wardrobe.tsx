@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Trash2, ShieldCheck, Wind, RefreshCw, Wrench, Undo2, HelpCircle } from 'lucide-react';
+import { X, Trash2, ShieldCheck, Wind, RefreshCw, Wrench, Undo2, HelpCircle, Eraser, Check } from 'lucide-react';
 import { bottleFeaturedSlotClass } from '@/lib/bottleImageFrame';
 import { BottleImage } from '@/components/BottleImage';
 import {
@@ -62,7 +62,8 @@ function concentrationHintFromValue(value?: string): "edt" | "edp" | undefined {
 export const Wardrobe: React.FC<{
   items: Fragrance[];
   onDelete: (item: Fragrance) => void;
-  onUpdateImage?: (id: string, imageUrl: string) => void;
+  /** Persist vault row image from catalog after preview (authenticated). */
+  onPersistWardrobeImage?: (item: Fragrance) => Promise<Fragrance | null>;
   featuredItem?: Fragrance | null;
   /** Dev/test: POST /api/wardrobe/rebuild and reload; snapshots items first for Revert. */
   onFixWardrobe?: () => void | Promise<void>;
@@ -73,7 +74,7 @@ export const Wardrobe: React.FC<{
 }> = ({
   items,
   onDelete,
-  onUpdateImage,
+  onPersistWardrobeImage,
   featuredItem,
   onFixWardrobe,
   onRevertWardrobe,
@@ -103,14 +104,19 @@ export const Wardrobe: React.FC<{
     }
   });
   const [clarifySolverId, setClarifySolverId] = React.useState<WardrobeImageSolverId | ''>('');
+  const [pendingPreview, setPendingPreview] = React.useState<{ itemId: string; url: string } | null>(null);
+  const [stripBgBusy, setStripBgBusy] = React.useState(false);
+  const [persistBusy, setPersistBusy] = React.useState(false);
 
   const openDetail = (item: Fragrance) => {
     setRefreshError(null);
+    setPendingPreview(null);
     setSelectedItem(item);
   };
 
   const closeDetail = () => {
     setRefreshError(null);
+    setPendingPreview(null);
     setSelectedItem(null);
   };
 
@@ -170,15 +176,63 @@ export const Wardrobe: React.FC<{
       });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || 'Refresh failed');
-      onUpdateImage?.(item.id, data.imageUrl);
-
-      setSelectedItem((current) =>
-        current && current.id === item.id ? { ...current, imageUrl: data.imageUrl } : current,
-      );
+      setPendingPreview({ itemId: item.id, url: data.imageUrl });
     } catch (err: any) {
       setRefreshError(err.message || 'Image refresh failed');
     } finally {
       setRefreshingId(null);
+    }
+  };
+
+  const handleStripBackground = async (item: Fragrance) => {
+    const src =
+      pendingPreview?.itemId === item.id ? pendingPreview.url : item.imageUrl;
+    if (!src?.trim()) {
+      setRefreshError('No image to process.');
+      return;
+    }
+    setStripBgBusy(true);
+    setRefreshError(null);
+    try {
+      const res = await fetch('/api/refresh-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: entryName(item),
+          brand: entryBrand(item),
+          concentrationHint: concentrationHintFromValue(item.concentration),
+          stripBgOnly: true,
+          imageUrl: src,
+          poofOptions: { type: 'product' },
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || 'Background removal failed');
+      setPendingPreview({ itemId: item.id, url: data.imageUrl });
+    } catch (err: any) {
+      setRefreshError(err.message || 'Background removal failed');
+    } finally {
+      setStripBgBusy(false);
+    }
+  };
+
+  const handleSavePreviewToVault = async () => {
+    if (!selectedItem || !pendingPreview || pendingPreview.itemId !== selectedItem.id) return;
+    if (!onPersistWardrobeImage) {
+      setRefreshError('Sign in to save this image to your vault.');
+      return;
+    }
+    setPersistBusy(true);
+    setRefreshError(null);
+    try {
+      const merged = await onPersistWardrobeImage(selectedItem);
+      if (!merged) throw new Error('Could not save — try again or check your connection.');
+      setPendingPreview(null);
+      setSelectedItem(merged);
+    } catch (err: any) {
+      setRefreshError(err.message || 'Save failed');
+    } finally {
+      setPersistBusy(false);
     }
   };
 
@@ -211,6 +265,18 @@ export const Wardrobe: React.FC<{
 
   const detailNeedsClarify =
     selectedItem !== null && (refreshCounts[selectedItem.id] ?? 0) > 2;
+
+  const detailBottleUrl =
+    selectedItem && pendingPreview?.itemId === selectedItem.id
+      ? pendingPreview.url
+      : selectedItem?.imageUrl ?? '';
+
+  const imageToolbarBusy =
+    !!selectedItem &&
+    (refreshingId === selectedItem.id || stripBgBusy || persistBusy);
+
+  const hasPendingPreview =
+    !!selectedItem && !!pendingPreview && pendingPreview.itemId === selectedItem.id;
 
   return (
     <div className="relative">
@@ -399,9 +465,9 @@ export const Wardrobe: React.FC<{
                     <p className="text-[9px] uppercase tracking-[0.35em] text-white/30 font-bold mb-3">Bottle Visual</p>
                     <div className="relative h-48 sm:h-64 overflow-hidden rounded-sm">
                       <BottleImage
-                        key={selectedItem.imageUrl || 'missing-image'}
+                        key={detailBottleUrl || 'missing-image'}
                         variant="detail"
-                        src={selectedItem.imageUrl}
+                        src={detailBottleUrl}
                         alt={entryName(selectedItem)}
                         className="absolute inset-0"
                         imgClassName="transition-all duration-300"
@@ -476,83 +542,163 @@ export const Wardrobe: React.FC<{
                 </div>
               </div>
 
-              {/* Pinned footer — actions always visible */}
+              {/* Pinned footer — bottle tools + delete */}
               <div
-                className="px-5 pt-3 shrink-0 border-t border-white/5 flex flex-col gap-2"
+                className="px-5 pt-3 shrink-0 border-t border-white/5 flex flex-col gap-3"
                 style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))' }}
               >
                 {refreshError && (
                   <p className="text-[9px] text-red-400/80 text-center leading-snug px-2 py-1">{refreshError}</p>
                 )}
-                {detailNeedsClarify && (
-                  <div className="rounded-lg border border-amber-500/35 bg-amber-500/[0.07] px-3 py-3 space-y-2 mb-1">
-                    <div className="flex items-center gap-2">
-                      <HelpCircle size={14} className="text-amber-200/90 shrink-0" aria-hidden />
-                      <p className="text-[9px] uppercase tracking-[0.28em] text-amber-100/85 font-bold">Clarify</p>
+
+                <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3 space-y-3">
+                  <div className="flex items-start gap-2">
+                    <HelpCircle size={14} className="text-white/35 shrink-0 mt-0.5" aria-hidden />
+                    <div className="min-w-0 space-y-1">
+                      <p className="text-[9px] uppercase tracking-[0.28em] text-white/45 font-bold">Bottle image</p>
+                      {detailNeedsClarify ? (
+                        <p className="text-[10px] text-amber-200/75 leading-snug font-sans">
+                          Automatic search paused after several tries — pick what looks wrong, then search again or strip the background.
+                        </p>
+                      ) : (
+                        <p className="text-[10px] text-white/40 leading-snug font-sans">
+                          Search with an optional issue hint; remove background on the preview; save when it looks right.
+                        </p>
+                      )}
                     </div>
-                    <p className="text-[11px] text-white/55 leading-snug font-sans">
-                      Automatic search paused after several tries. Pick the closest issue — we&apos;ll tune the query and processing.
-                    </p>
-                    <label htmlFor="wardrobe-clarify-solver" className="sr-only">
-                      What looks wrong with the bottle image
-                    </label>
-                    <select
-                      id="wardrobe-clarify-solver"
-                      value={clarifySolverId}
-                      onChange={(e) => setClarifySolverId((e.target.value || '') as WardrobeImageSolverId | '')}
-                      className="w-full bg-black/50 border border-white/15 text-white text-[11px] py-2.5 px-2 rounded-md font-sans outline-none focus:border-amber-400/40"
-                    >
-                      <option value="">What looks wrong?</option>
-                      {WARDROBE_CLARIFY_SOLVERS.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.label}
-                        </option>
-                      ))}
-                    </select>
                   </div>
-                )}
-                <div className="flex gap-3">
-                  <button
-                    type="button"
-                    onClick={() => handleRefreshImage(selectedItem)}
-                    disabled={detailNeedsClarify || refreshingId === selectedItem.id}
-                    aria-label="Refresh bottle image"
-                    title={detailNeedsClarify ? 'Use clarify options below' : undefined}
-                    className="flex-1 py-4 bg-white text-black uppercase tracking-[0.3em] text-[10px] font-bold hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+
+                  <label htmlFor="wardrobe-clarify-solver" className="sr-only">
+                    Search tuning for bottle image
+                  </label>
+                  <select
+                    id="wardrobe-clarify-solver"
+                    value={clarifySolverId}
+                    onChange={(e) =>
+                      setClarifySolverId((e.target.value || '') as WardrobeImageSolverId | '')
+                    }
+                    disabled={imageToolbarBusy}
+                    className="w-full bg-black/45 border border-white/12 text-white text-[11px] py-2.5 px-2 rounded-lg font-sans outline-none focus:border-scent-accent/50 disabled:opacity-40"
                   >
-                    {refreshingId === selectedItem.id ? (
-                      <><RefreshCw size={12} className="animate-spin" /> Searching…</>
+                    {!detailNeedsClarify ? (
+                      <option value="">Automatic search</option>
                     ) : (
-                      <><RefreshCw size={12} /> Refresh Image</>
+                      <option value="">Choose what looks wrong…</option>
                     )}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { onDelete(selectedItem); closeDetail(); }}
-                    disabled={refreshingId === selectedItem.id}
-                    aria-label="Delete from vault"
-                    className="px-6 py-4 bg-transparent border border-white/10 text-white/30 uppercase tracking-[0.3em] text-[10px] font-bold hover:border-red-500/50 hover:text-red-500 transition-all flex items-center justify-center gap-2 group disabled:opacity-30 disabled:cursor-not-allowed"
-                  >
-                    <Trash2 size={14} className="group-hover:animate-bounce" />
-                  </button>
+                    {WARDROBE_CLARIFY_SOLVERS.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.label}
+                      </option>
+                    ))}
+                  </select>
+
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void handleRefreshImage(selectedItem, clarifySolverId || undefined)
+                      }
+                      disabled={
+                        imageToolbarBusy ||
+                        (detailNeedsClarify && !clarifySolverId)
+                      }
+                      title={
+                        detailNeedsClarify && !clarifySolverId
+                          ? 'Select an issue first'
+                          : undefined
+                      }
+                      className="flex-1 min-h-[44px] py-3 bg-white text-black uppercase tracking-[0.22em] text-[10px] font-bold hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-45 disabled:cursor-not-allowed rounded-lg"
+                    >
+                      {refreshingId === selectedItem.id ? (
+                        <>
+                          <RefreshCw size={12} className="animate-spin" /> Searching…
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw size={12} /> Find image
+                        </>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleStripBackground(selectedItem)}
+                      disabled={
+                        imageToolbarBusy || !detailBottleUrl?.trim()
+                      }
+                      title={
+                        !detailBottleUrl?.trim()
+                          ? 'Need an image first'
+                          : 'Run AI background removal on the preview'
+                      }
+                      className="flex-1 min-h-[44px] py-3 bg-white/[0.06] text-white uppercase tracking-[0.18em] text-[10px] font-bold border border-white/15 hover:bg-white/[0.1] active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-35 disabled:cursor-not-allowed rounded-lg"
+                    >
+                      {stripBgBusy ? (
+                        <>
+                          <RefreshCw size={12} className="animate-spin" /> Stripping…
+                        </>
+                      ) : (
+                        <>
+                          <Eraser size={12} /> Remove BG
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  {hasPendingPreview && (
+                    <div className="flex flex-col gap-2 pt-1 border-t border-white/8">
+                      {!onPersistWardrobeImage ? (
+                        <p className="text-[10px] text-amber-200/75 text-center font-sans leading-snug px-1">
+                          Sign in to save this preview to your vault.
+                        </p>
+                      ) : null}
+                      <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void handleSavePreviewToVault()}
+                        disabled={persistBusy || !onPersistWardrobeImage}
+                        title={
+                          !onPersistWardrobeImage
+                            ? 'Sign in to save to your vault'
+                            : undefined
+                        }
+                        className="flex-1 min-h-[44px] py-3 bg-scent-accent text-black uppercase tracking-[0.2em] text-[10px] font-bold hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg"
+                      >
+                        {persistBusy ? (
+                          <>
+                            <RefreshCw size={12} className="animate-spin" /> Saving…
+                          </>
+                        ) : (
+                          <>
+                            <Check size={12} /> Save to vault
+                          </>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPendingPreview(null)}
+                        disabled={persistBusy}
+                        className="flex-1 min-h-[44px] py-3 bg-transparent text-white/50 uppercase tracking-[0.18em] text-[10px] font-bold border border-white/12 hover:bg-white/[0.05] hover:text-white/80 rounded-lg disabled:opacity-30"
+                      >
+                        Discard preview
+                      </button>
+                    </div>
+                    </div>
+                  )}
                 </div>
-                {detailNeedsClarify && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!clarifySolverId) return;
-                      void handleRefreshImage(selectedItem, clarifySolverId);
-                    }}
-                    disabled={!clarifySolverId || refreshingId === selectedItem.id}
-                    className="w-full py-4 bg-amber-500/90 text-black uppercase tracking-[0.28em] text-[10px] font-bold hover:bg-amber-400 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed rounded-md border border-amber-300/40"
-                  >
-                    {refreshingId === selectedItem.id ? (
-                      <><RefreshCw size={12} className="animate-spin" /> Searching…</>
-                    ) : (
-                      <>Search with fix</>
-                    )}
-                  </button>
-                )}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    onDelete(selectedItem);
+                    closeDetail();
+                  }}
+                  disabled={imageToolbarBusy}
+                  aria-label="Delete from vault"
+                  className="w-full py-3.5 bg-transparent border border-white/10 text-white/35 uppercase tracking-[0.28em] text-[10px] font-bold hover:border-red-500/45 hover:text-red-400 transition-all flex items-center justify-center gap-2 group disabled:opacity-25 disabled:cursor-not-allowed rounded-lg"
+                >
+                  <Trash2 size={14} className="group-hover:animate-bounce" />
+                  Delete from vault
+                </button>
               </div>
             </motion.div>
           </div>

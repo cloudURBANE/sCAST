@@ -271,6 +271,66 @@ router.patch("/wardrobe/:fragranceId/visibility", async (req, res) => {
   res.json({ id: fragranceId, shareHidden });
 });
 
+/**
+ * Merge the latest bottle image from the global catalog / cache into this vault row.
+ * Use after `/api/refresh-image` so the client does not rely on ephemeral local state.
+ */
+router.patch("/wardrobe/:id", async (req, res) => {
+  const token = getToken(req);
+  if (!token) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const user = await getUserByToken(token);
+  if (!user) {
+    res.status(401).json({ error: "Invalid token" });
+    return;
+  }
+
+  const { syncImageFromCatalog } = req.body as { syncImageFromCatalog?: boolean };
+  if (syncImageFromCatalog !== true) {
+    res.status(400).json({ error: "syncImageFromCatalog: true is required" });
+    return;
+  }
+
+  const match = await findUserRow(user.id, req.params.id);
+  if (!match) {
+    res.status(404).json({ error: "Fragrance not found" });
+    return;
+  }
+
+  const existing = normalizeFragrance(match.fragranceData as Record<string, any>);
+  const name = existing.name as string | undefined;
+  const brand = existing.brand as string | undefined;
+  if (!name || !brand) {
+    res.status(400).json({ error: "Fragrance must have name and brand to sync image" });
+    return;
+  }
+
+  let url: string | null = null;
+  try {
+    url = await resolveSharedImageUrl(brand, name);
+  } catch {
+    url = null;
+  }
+
+  if (!url || typeof url !== "string" || !url.trim()) {
+    res.status(409).json({ error: "No catalog image available yet for this fragrance; try refresh again." });
+    return;
+  }
+
+  const merged = normalizeFragrance({ ...existing, imageUrl: url });
+
+  await db
+    .update(userFragrancesTable)
+    .set({ fragranceData: merged as any })
+    .where(eq(userFragrancesTable.id, match.id));
+
+  const hydrated = normalizeFragrance(await hydrateImageUrl(merged));
+  res.json({ ...hydrated, _dbId: match.id });
+});
+
 router.delete("/wardrobe/:id", async (req, res) => {
   const token = getToken(req);
   if (!token) { res.status(401).json({ error: "Unauthorized" }); return; }

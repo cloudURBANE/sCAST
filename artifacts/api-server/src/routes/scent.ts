@@ -24,6 +24,33 @@ function concentrationToQueryText(hint?: ConcentrationHint): string {
   return "";
 }
 
+function parseIncomingImageUrl(raw: unknown): string | null {
+  if (typeof raw !== "string" || !raw.trim()) return null;
+  const s = raw.trim();
+  if (s.startsWith("data:image/")) {
+    if (s.length > 4_000_000) return null;
+    return s;
+  }
+  try {
+    const u = new URL(s);
+    if (u.protocol === "http:" || u.protocol === "https:") return u.toString();
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+async function upsertRefreshImageCatalog(brand: string, name: string, finalImageUrl: string): Promise<void> {
+  let baseProfile = await getCatalogEntry(brand, name);
+  if (!baseProfile) {
+    const built = await buildProfile(name, brand, undefined, { allowCatalogFuzzy: false });
+    if ("product" in built) baseProfile = built;
+  }
+  if (baseProfile) {
+    await saveCatalogEntry(brand, name, { ...baseProfile, imageUrl: finalImageUrl });
+  }
+}
+
 router.get("/weather", async (req, res) => {
   const { lat, lon } = req.query as { lat?: string; lon?: string };
   const data = await getWeather({ lat, lon });
@@ -111,6 +138,8 @@ router.post("/refresh-image", async (req, res) => {
     refreshCount?: unknown;
     skipBg?: unknown;
     poofOptions?: { type?: unknown };
+    stripBgOnly?: unknown;
+    imageUrl?: unknown;
   };
   const { name, brand, concentrationHint } = body;
   if (!name || !brand) {
@@ -118,14 +147,10 @@ router.post("/refresh-image", async (req, res) => {
     return;
   }
 
-  const rawSolver = body.solverId;
-  let solverId: ImageSolverId | undefined;
-  if (rawSolver === undefined || rawSolver === null || rawSolver === "") {
-    solverId = undefined;
-  } else if (isImageSolverId(rawSolver)) {
-    solverId = rawSolver;
-  } else {
-    res.status(400).json({ error: "Invalid solverId" });
+  const stripBgOnly = body.stripBgOnly === true;
+  const sourceForStrip = stripBgOnly ? parseIncomingImageUrl(body.imageUrl) : null;
+  if (stripBgOnly && !sourceForStrip) {
+    res.status(400).json({ error: "stripBgOnly requires a valid imageUrl (https URL or data:image/...)" });
     return;
   }
 
@@ -133,16 +158,62 @@ router.post("/refresh-image", async (req, res) => {
   const refreshCount =
     typeof rc === "number" && Number.isFinite(rc) && rc >= 0 && rc <= 10_000 ? Math.floor(rc) : undefined;
 
-  let skipBg = solverSkipsBgRemoval(solverId);
-  if (typeof body.skipBg === "boolean") skipBg = body.skipBg;
-
-  let poofType = solverWantsPoofProductType(solverId);
-  const pt = body.poofOptions?.type;
-  if (pt === "product" || pt === "auto") poofType = pt;
-
-  const removeBgOpts = poofType === "product" ? ({ poofType: "product" } as const) : undefined;
-
   try {
+    if (stripBgOnly && sourceForStrip) {
+      const skipBgStrip = typeof body.skipBg === "boolean" ? body.skipBg : false;
+      let poofT: "auto" | "product" | undefined;
+      const ptStrip = body.poofOptions?.type;
+      if (ptStrip === "product" || ptStrip === "auto") poofT = ptStrip;
+      if (poofT === undefined) poofT = "product";
+      const stripRemoveOpts = poofT === "product" ? ({ poofType: "product" } as const) : undefined;
+
+      logger.info(
+        {
+          stripBgOnly: true,
+          refreshCount: refreshCount ?? null,
+          skipBg: skipBgStrip,
+          poofType: poofT ?? null,
+          sourceKind: sourceForStrip.startsWith("data:") ? "data" : "url",
+        },
+        "refresh-image",
+      );
+
+      let finalImageUrl = sourceForStrip;
+      if (!skipBgStrip) {
+        try {
+          const isRemote = sourceForStrip.startsWith("http://") || sourceForStrip.startsWith("https://");
+          const { cleanImage } = await removeBg(sourceForStrip, isRemote, stripRemoveOpts);
+          if (cleanImage) finalImageUrl = cleanImage;
+        } catch (bgErr: any) {
+          logger.warn({ err: bgErr.message }, "refresh-image stripBgOnly: bg removal skipped");
+        }
+      }
+
+      await upsertRefreshImageCatalog(brand, name, finalImageUrl);
+      res.json({ imageUrl: finalImageUrl });
+      return;
+    }
+
+    const rawSolver = body.solverId;
+    let solverId: ImageSolverId | undefined;
+    if (rawSolver === undefined || rawSolver === null || rawSolver === "") {
+      solverId = undefined;
+    } else if (isImageSolverId(rawSolver)) {
+      solverId = rawSolver;
+    } else {
+      res.status(400).json({ error: "Invalid solverId" });
+      return;
+    }
+
+    let skipBg = solverSkipsBgRemoval(solverId);
+    if (typeof body.skipBg === "boolean") skipBg = body.skipBg;
+
+    let poofType = solverWantsPoofProductType(solverId);
+    const pt = body.poofOptions?.type;
+    if (pt === "product" || pt === "auto") poofType = pt;
+
+    const removeBgOpts = poofType === "product" ? ({ poofType: "product" } as const) : undefined;
+
     // Normalize to ASCII so accented chars (é, ü, etc.) don't break URL parsing
     const asciiName = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\x20-\x7E]/g, "");
     const asciiBrand = brand.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\x20-\x7E]/g, "");
@@ -174,7 +245,6 @@ router.post("/refresh-image", async (req, res) => {
       return;
     }
 
-    // Validate the URL before passing it downstream — avoids "did not match pattern" from axios
     let safeUrl: string;
     try {
       safeUrl = new URL(rawUrl).toString();
@@ -193,20 +263,7 @@ router.post("/refresh-image", async (req, res) => {
       }
     }
 
-    // Persist to global catalog so every future user gets the refreshed image.
-    // B7: previously this was conditional on an existing entry, so a refresh
-    // against a fragrance that wasn't yet catalogued discarded the cleaned
-    // image. Now we always upsert: reuse the existing profile when present,
-    // otherwise build a minimal one (still without the catalog fuzzy fallback,
-    // so a partial substring match can't hijack the refresh).
-    let baseProfile = await getCatalogEntry(brand, name);
-    if (!baseProfile) {
-      const built = await buildProfile(name, brand, undefined, { allowCatalogFuzzy: false });
-      if ("product" in built) baseProfile = built;
-    }
-    if (baseProfile) {
-      await saveCatalogEntry(brand, name, { ...baseProfile, imageUrl: finalImageUrl });
-    }
+    await upsertRefreshImageCatalog(brand, name, finalImageUrl);
 
     res.json({ imageUrl: finalImageUrl });
   } catch (err: any) {

@@ -451,9 +451,40 @@ export default function App() {
     }
   };
 
-  const handleUpdateImage = async (id: string, imageUrl: string) => {
-    setItems(prev => prev.map(item => item.id === id ? { ...item, imageUrl } : item));
-  };
+  const handlePersistWardrobeImage = useCallback(async (target: Fragrance): Promise<Fragrance | null> => {
+    if (!authToken) return null;
+    const apiId = target._dbId ?? target.id;
+    try {
+      const res = await fetch(`/api/wardrobe/${apiId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({ syncImageFromCatalog: true }),
+      });
+      const data = (await res.json()) as Partial<Fragrance> & { _dbId?: string; error?: string };
+      if (!res.ok) {
+        throw new Error(data.error || `HTTP ${res.status}`);
+      }
+      const next: Fragrance = {
+        ...target,
+        ...data,
+        id: target.id,
+        imageUrl: typeof data.imageUrl === 'string' ? data.imageUrl : target.imageUrl,
+        _dbId: data._dbId ?? target._dbId,
+      };
+      setItems((prev) =>
+        prev.map((item) =>
+          target._dbId && item._dbId === target._dbId ? next : item.id === target.id ? next : item,
+        ),
+      );
+      return next;
+    } catch (e) {
+      console.error(e);
+      return null;
+    }
+  }, [authToken]);
 
   const handleRebuildWardrobe = useCallback(async () => {
     if (!authToken) return null;
@@ -731,7 +762,7 @@ export default function App() {
             <Wardrobe
               items={items}
               onDelete={handleDeleteItem}
-              onUpdateImage={handleUpdateImage}
+              onPersistWardrobeImage={handlePersistWardrobeImage}
               featuredItem={activeRecommendation}
               onFixWardrobe={handleManualFixWardrobe}
               onRevertWardrobe={handleRevertWardrobe}

@@ -56,26 +56,35 @@ export type RemoveBgOptions = {
 };
 
 async function removeBgByFile(buffer: Buffer, apiKey: string, opts?: RemoveBgOptions): Promise<Buffer | null> {
-  try {
-    const FormData = (await import("form-data")).default;
-    const form = new FormData();
-    form.append("image_file", buffer, { filename: "image.jpg", contentType: "image/jpeg" });
-    Object.entries(baseParams()).forEach(([k, v]) => form.append(k, v));
-    if (opts?.poofType === "product") {
-      form.append("type", "product");
+  const post = async (o?: RemoveBgOptions): Promise<Buffer | null> => {
+    try {
+      const FormData = (await import("form-data")).default;
+      const form = new FormData();
+      form.append("image_file", buffer, { filename: "image.jpg", contentType: "image/jpeg" });
+      Object.entries(baseParams()).forEach(([k, v]) => form.append(k, v));
+      if (o?.poofType === "product") {
+        form.append("type", "product");
+      }
+
+      const res = await axios.post(POOF_API, form, {
+        headers: { ...form.getHeaders(), "x-api-key": apiKey },
+        responseType: "arraybuffer",
+        timeout: 25000,
+        validateStatus: (s) => s < 500,
+      });
+
+      return res.status === 200 ? Buffer.from(res.data) : null;
+    } catch {
+      return null;
     }
+  };
 
-    const res = await axios.post(POOF_API, form, {
-      headers: { ...form.getHeaders(), "x-api-key": apiKey },
-      responseType: "arraybuffer",
-      timeout: 25000,
-      validateStatus: (s) => s < 500,
-    });
-
-    return res.status === 200 ? Buffer.from(res.data) : null;
-  } catch {
-    return null;
+  if (opts?.poofType === "product") {
+    const withType = await post(opts);
+    if (withType) return withType;
+    logger.warn("[bgService] Poof type=product failed or non-200; retrying without type");
   }
+  return post(undefined);
 }
 
 async function downloadImage(url: string): Promise<Buffer | null> {
