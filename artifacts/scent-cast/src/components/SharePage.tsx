@@ -60,10 +60,14 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
 
       <nav className="fixed top-0 left-0 right-0 h-24 border-b border-white/5 bg-black/40 backdrop-blur-2xl z-50 px-8">
         <div className="max-w-[1400px] mx-auto h-full flex items-center justify-center">
-          <div className="flex items-center gap-2">
-            <Wind size={24} strokeWidth={1} className="text-white" />
-            <h1 className="font-serif text-2xl italic tracking-tighter uppercase">Scent Cast</h1>
-          </div>
+          <a
+            href="/"
+            aria-label="Back to dashboard"
+            className="flex items-center gap-2 text-white hover:opacity-85 transition-opacity outline-none focus-visible:ring-2 focus-visible:ring-white/30 rounded-sm"
+          >
+            <Wind size={24} strokeWidth={1} className="text-white shrink-0" aria-hidden />
+            <span className="font-serif text-2xl italic tracking-tighter uppercase">Scent Cast</span>
+          </a>
         </div>
       </nav>
 

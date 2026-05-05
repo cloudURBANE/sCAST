@@ -6,6 +6,7 @@ import { resolveSharedImageUrl } from "../services/imageHydration";
 import { buildProfile } from "../services/scentEngine";
 import { flattenProfile } from "../services/catalogService";
 import { logger } from "../lib/logger";
+import { hydrateImageUrl, normalizeFragrance, sanitizeFragrance } from "../services/fragrancePayload";
 
 const router = Router();
 
@@ -22,49 +23,6 @@ function getToken(req: any): string | null {
   const auth = req.headers["authorization"] as string | undefined;
   if (auth?.startsWith("Bearer ")) return auth.slice(7);
   return null;
-}
-
-/** Strip base64 data URLs — they're huge and already stored in the global catalog */
-function sanitizeFragrance(fragrance: Record<string, any>): Record<string, any> {
-  const clean = { ...fragrance };
-  if (typeof clean.imageUrl === "string" && clean.imageUrl.startsWith("data:")) {
-    clean.imageUrl = "";
-  }
-  return clean;
-}
-
-/**
- * Older inserts stored a raw ScentProfile (only `product.name`/`product.brand`).
- * Surface the canonical top-level fields the dashboard expects so legacy rows
- * stop falling through the `if (!item.name || !item.brand)` filter on the client.
- */
-function normalizeFragrance(fragrance: Record<string, any>): Record<string, any> {
-  const product = fragrance.product as Record<string, any> | undefined;
-  const name = fragrance.name || product?.name;
-  const brand = fragrance.brand || product?.brand;
-  const perfumer = fragrance.perfumer || product?.perfumer;
-
-  return {
-    ...fragrance,
-    ...(name ? { name } : {}),
-    ...(brand ? { brand } : {}),
-    ...(perfumer ? { perfumer } : {}),
-  };
-}
-
-/** Fill in imageUrl from the global catalog if the stored record has none */
-async function hydrateImageUrl(fragrance: Record<string, any>): Promise<Record<string, any>> {
-  if (fragrance.imageUrl) return fragrance;
-  const name = fragrance.name as string | undefined;
-  const brand = fragrance.brand as string | undefined;
-  if (!name || !brand) return fragrance;
-  try {
-    const imageUrl = await resolveSharedImageUrl(brand, name);
-    if (imageUrl) return { ...fragrance, imageUrl };
-  } catch {
-    /* non-fatal */
-  }
-  return fragrance;
 }
 
 router.get("/wardrobe", async (req, res) => {
@@ -110,7 +68,8 @@ router.post("/wardrobe", async (req, res) => {
     .values({ userId: user.id, fragranceData: clean })
     .returning();
 
-  const hydrated = await hydrateImageUrl(row.fragranceData as Record<string, any>);
+  const inserted = sanitizeFragrance(normalizeFragrance(row.fragranceData as Record<string, any>));
+  const hydrated = await hydrateImageUrl(inserted);
   res.json({ ...hydrated, _dbId: row.id });
 });
 

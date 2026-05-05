@@ -9,9 +9,12 @@ export type ProxiedImageOptions = {
 
 export function proxiedImageUrl(url: string | undefined | null, options?: ProxiedImageOptions): string {
   if (!url) return "";
-  if (url.startsWith("data:")) return url;
-  if (!/^https?:\/\//i.test(url)) return url;
-  const base = `/api/image-proxy?url=${encodeURIComponent(url)}`;
+  let u = url.trim();
+  if (u.startsWith("data:")) return u;
+  // Protocol-relative CDN URLs — normalize so we route through image-proxy.
+  if (u.startsWith("//")) u = `https:${u}`;
+  if (!/^https?:\/\//i.test(u)) return u;
+  const base = `/api/image-proxy?url=${encodeURIComponent(u)}`;
   if (options?.packshot) return `${base}&trim=1`;
   return base;
 }

@@ -2,7 +2,7 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { usersTable, userFragrancesTable, userSettingsTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
-import { resolveSharedImageUrl } from "../services/imageHydration";
+import { hydrateImageUrl, normalizeFragrance, sanitizeFragrance } from "../services/fragrancePayload";
 import { searchImageUrl } from "../services/imageService";
 
 const router = Router();
@@ -61,14 +61,17 @@ router.get("/share/:userId", async (req, res) => {
     .filter(data => !data.shareHidden);
 
   const fragrances = await Promise.all(
-    rawFragrances.map(async (frag) => {
-      if (frag.imageUrl) return frag;
+    rawFragrances.map(async (raw) => {
+      let frag = sanitizeFragrance(normalizeFragrance(raw));
+      frag = await hydrateImageUrl(frag);
+
+      const url = typeof frag.imageUrl === "string" ? frag.imageUrl.trim() : "";
+      if (url) return frag;
+
       const name = frag.name as string | undefined;
       const brand = frag.brand as string | undefined;
       if (!name || !brand) return frag;
       try {
-        const imageUrl = await resolveSharedImageUrl(brand, name);
-        if (imageUrl) return { ...frag, imageUrl };
         const freshUrl = await searchImageUrl(`${brand} ${name} single fragrance bottle packshot studio no plants`);
         if (freshUrl) return { ...frag, imageUrl: freshUrl };
       } catch {
