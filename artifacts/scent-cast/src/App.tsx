@@ -281,6 +281,9 @@ export default function App() {
   const [locationStatus, setLocationStatus] = useState<'idle' | 'requesting' | 'granted' | 'denied'>('idle');
   const [userId, setUserId] = useState<string | null>(null);
   const autoWardrobeRebuildAttemptedRef = useRef(false);
+  const [wardrobeRevertSnapshot, setWardrobeRevertSnapshot] = useState<Fragrance[] | null>(null);
+  const [wardrobeFixBusy, setWardrobeFixBusy] = useState(false);
+  const [wardrobeFixHint, setWardrobeFixHint] = useState<string | null>(null);
 
   useEffect(() => {
     autoWardrobeRebuildAttemptedRef.current = false;
@@ -397,6 +400,8 @@ export default function App() {
     setAuthEmail(null);
     setItems([]);
     setWardrobeLoaded(false);
+    setWardrobeRevertSnapshot(null);
+    setWardrobeFixHint(null);
   };
 
   const requestLocation = () => {
@@ -469,6 +474,46 @@ export default function App() {
       return null;
     }
   }, [authToken, loadWardrobe]);
+
+  const handleManualFixWardrobe = useCallback(async () => {
+    if (!authToken) return;
+    setWardrobeFixBusy(true);
+    setWardrobeFixHint(null);
+    setWardrobeRevertSnapshot(JSON.parse(JSON.stringify(items)) as Fragrance[]);
+    try {
+      const res = await fetch('/api/wardrobe/rebuild', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as { error?: string }).error || `HTTP ${res.status}`);
+      }
+      const data = (await res.json()) as { total: number; rebuilt: number; skipped: number };
+      await loadWardrobe(authToken);
+      setWardrobeFixHint(
+        `Rebuild done: ${data.rebuilt} updated, ${data.skipped} skipped (${data.total} rows).`,
+      );
+    } catch (e) {
+      setWardrobeFixHint((e as Error).message || 'Fix failed');
+    } finally {
+      setWardrobeFixBusy(false);
+    }
+  }, [authToken, items, loadWardrobe]);
+
+  const handleRevertWardrobe = useCallback(() => {
+    if (!wardrobeRevertSnapshot) return;
+    const snap = JSON.parse(JSON.stringify(wardrobeRevertSnapshot)) as Fragrance[];
+    setItems(snap);
+    setWardrobeFixHint('Reverted to the in-memory snapshot from before the last Fix. Server data may differ; refresh loads the API again.');
+    setActiveRecommendation((prev) => {
+      if (!prev) return null;
+      const ok = snap.some(
+        (i) => i.id === prev.id || (i._dbId && prev._dbId && i._dbId === prev._dbId),
+      );
+      return ok ? prev : null;
+    });
+  }, [wardrobeRevertSnapshot]);
 
   useEffect(() => {
     if (!authToken || !wardrobeLoaded) return;
@@ -688,6 +733,11 @@ export default function App() {
               onDelete={handleDeleteItem}
               onUpdateImage={handleUpdateImage}
               featuredItem={activeRecommendation}
+              onFixWardrobe={handleManualFixWardrobe}
+              onRevertWardrobe={handleRevertWardrobe}
+              fixWardrobeBusy={wardrobeFixBusy}
+              revertAvailable={!!wardrobeRevertSnapshot}
+              wardrobeFixHint={wardrobeFixHint}
             />
           </div>
         </div>

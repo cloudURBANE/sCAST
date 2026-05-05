@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Trash2, ShieldCheck, Wind, RefreshCw } from 'lucide-react';
+import { X, Trash2, ShieldCheck, Wind, RefreshCw, Wrench, Undo2 } from 'lucide-react';
 import { bottleFeaturedSlotClass, bottleImageImgClass } from '@/lib/bottleImageFrame';
 
 export interface ScentVector {
@@ -71,7 +71,23 @@ export const Wardrobe: React.FC<{
   onDelete: (item: Fragrance) => void;
   onUpdateImage?: (id: string, imageUrl: string) => void;
   featuredItem?: Fragrance | null;
-}> = ({ items, onDelete, onUpdateImage, featuredItem }) => {
+  /** Dev/test: POST /api/wardrobe/rebuild and reload; snapshots items first for Revert. */
+  onFixWardrobe?: () => void | Promise<void>;
+  onRevertWardrobe?: () => void;
+  fixWardrobeBusy?: boolean;
+  revertAvailable?: boolean;
+  wardrobeFixHint?: string | null;
+}> = ({
+  items,
+  onDelete,
+  onUpdateImage,
+  featuredItem,
+  onFixWardrobe,
+  onRevertWardrobe,
+  fixWardrobeBusy,
+  revertAvailable,
+  wardrobeFixHint,
+}) => {
   const [selectedItem, setSelectedItem] = React.useState<Fragrance | null>(null);
   const [searchQuery, setSearchQuery] = React.useState("");
   
@@ -170,6 +186,39 @@ export const Wardrobe: React.FC<{
             <h2 className="font-serif italic text-4xl sm:text-6xl md:text-8xl text-white tracking-tighter">Vault of Aromas</h2>
           </div>
           <div className="flex flex-col items-center gap-8 w-full">
+            {onFixWardrobe && (
+              <div className="flex flex-col items-center gap-3 w-full max-w-2xl">
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void onFixWardrobe()}
+                    disabled={!!fixWardrobeBusy}
+                    title="Run server wardrobe rebuild (legacy shape migration)"
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-amber-500/40 bg-amber-500/10 text-amber-100/90 text-[10px] uppercase tracking-[0.2em] font-bold hover:bg-amber-500/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Wrench size={14} className={fixWardrobeBusy ? 'animate-pulse' : ''} />
+                    {fixWardrobeBusy ? 'Fixing…' : 'Fix wardrobe'}
+                  </button>
+                  {onRevertWardrobe && (
+                    <button
+                      type="button"
+                      onClick={onRevertWardrobe}
+                      disabled={!revertAvailable || !!fixWardrobeBusy}
+                      title="Restore the vault list from before the last Fix (this tab only)"
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-white/15 bg-white/[0.04] text-white/70 text-[10px] uppercase tracking-[0.2em] font-bold hover:bg-white/[0.08] hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      <Undo2 size={14} />
+                      Revert
+                    </button>
+                  )}
+                </div>
+                {wardrobeFixHint ? (
+                  <p className="text-[11px] text-white/45 font-sans text-center leading-snug max-w-xl px-2">
+                    {wardrobeFixHint}
+                  </p>
+                ) : null}
+              </div>
+            )}
             <div className="relative w-full max-w-2xl">
               <input
                 type="text"
