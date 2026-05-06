@@ -7,9 +7,34 @@ const databaseUrl = process.env.DATABASE_URL;
 
 if (!databaseUrl) {
   throw new Error(
-    "DATABASE_URL must be set. Did you forget to provision a database?",
+    "DATABASE_URL must be set. Did you forget to provision a database?\n" +
+      "On Railway: add a Postgres service and reference its DATABASE_URL variable.",
   );
 }
+
+// Validate that DATABASE_URL is a parseable PostgreSQL connection string before
+// handing it to pg. pg-connection-string throws a bare "TypeError: Invalid URL"
+// that is hard to diagnose; this check surfaces a clear message instead.
+function validateDatabaseUrl(url: string): void {
+  const trimmed = url.trim();
+  if (!trimmed.startsWith("postgresql://") && !trimmed.startsWith("postgres://")) {
+    throw new Error(
+      `DATABASE_URL must begin with "postgresql://" or "postgres://". ` +
+        `Got: "${trimmed.slice(0, 40)}${trimmed.length > 40 ? "…" : ""}"\n` +
+        "On Railway: reference the Postgres service variable — e.g. ${{Postgres.DATABASE_URL}}",
+    );
+  }
+  try {
+    new URL(trimmed);
+  } catch {
+    throw new Error(
+      `DATABASE_URL is not a valid URL: "${trimmed.slice(0, 80)}${trimmed.length > 80 ? "…" : ""}"\n` +
+        "On Railway: reference the Postgres service variable — e.g. ${{Postgres.DATABASE_URL}}",
+    );
+  }
+}
+
+validateDatabaseUrl(databaseUrl);
 
 function parseSslMode(url: string): string | null {
   try {

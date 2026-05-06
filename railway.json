@@ -6,6 +6,7 @@
   },
   "deploy": {
     "startCommand": "pnpm start",
-    "restartPolicyType": "ON_FAILURE"
+    "restartPolicyType": "ON_FAILURE",
+    "healthcheckPath": "/api/healthz"
   }
 }
