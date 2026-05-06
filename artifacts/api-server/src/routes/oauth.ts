@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { randomUUID } from "node:crypto";
 import { db } from "@workspace/db";
 import { usersTable } from "@workspace/db/schema";
 import { eq, and } from "drizzle-orm";
@@ -93,16 +94,51 @@ async function createGoogleUserWithFallback(
     req.log.warn({ err, email }, "Creating OAuth-linked user failed, retrying email-only user");
   }
 
-  const [createdEmailOnly] = await db
-    .insert(usersTable)
-    .values({ email })
-    .returning();
+  try {
+    const [createdEmailOnly] = await db
+      .insert(usersTable)
+      .values({ email })
+      .returning();
 
-  if (!createdEmailOnly) {
-    throw new Error("Failed to create user during Google OAuth callback");
+    if (createdEmailOnly) {
+      return createdEmailOnly;
+    }
+  } catch (err) {
+    req.log.warn(
+      { err, email },
+      "Email-only user create failed during OAuth callback; retrying existing lookup",
+    );
   }
 
-  return createdEmailOnly;
+  const existing = await findUserByEmail(email);
+  if (existing) {
+    return existing;
+  }
+
+  throw new Error("Failed to create user during Google OAuth callback");
+}
+
+async function ensureUserToken(
+  user: UserRow,
+  req: import("express").Request,
+): Promise<UserRow> {
+  if (user.token) {
+    return user;
+  }
+
+  const nextToken = randomUUID();
+  req.log.warn({ userId: user.id }, "User missing token after DB migration; repairing");
+  const [updated] = await db
+    .update(usersTable)
+    .set({ token: nextToken })
+    .where(eq(usersTable.id, user.id))
+    .returning();
+
+  if (!updated?.token) {
+    throw new Error("Failed to repair missing user token");
+  }
+
+  return updated;
 }
 
 router.get("/auth/google", (req, res) => {
@@ -196,7 +232,13 @@ router.get("/auth/google/callback", async (req, res) => {
       }
     }
 
-    if (!user?.token || !user.email) {
+    if (!user?.email) {
+      throw new Error("OAuth callback resolved user without email");
+    }
+
+    user = await ensureUserToken(user, req);
+
+    if (!user.token) {
       throw new Error("OAuth callback resolved user without token/email");
     }
 
