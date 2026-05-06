@@ -38,9 +38,25 @@ function resolveSslConfig(url: string): pg.PoolConfig["ssl"] | undefined {
   return { rejectUnauthorized: false };
 }
 
+function stripPgSslParams(url: string): string {
+  try {
+    const parsed = new URL(url);
+    for (const key of ["ssl", "sslmode", "sslcert", "sslkey", "sslrootcert"]) {
+      parsed.searchParams.delete(key);
+    }
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
+const ssl = resolveSslConfig(databaseUrl);
+
 export const pool = new Pool({
-  connectionString: databaseUrl,
-  ssl: resolveSslConfig(databaseUrl),
+  // node-postgres parses sslmode from connectionString after spreading config,
+  // which can overwrite our explicit rejectUnauthorized override.
+  connectionString: ssl ? stripPgSslParams(databaseUrl) : databaseUrl,
+  ssl,
 });
 export const db = drizzle(pool, { schema });
 
