@@ -2,6 +2,7 @@ import axios from "axios";
 import sharp from "sharp";
 import { logger } from "../lib/logger";
 import { trimPackshotForBgService } from "./packshotTrim";
+import { fetchExternalImage } from "./safeImageFetch";
 
 const POOF_API = "https://api.poof.bg/v1/remove";
 const CANVAS_SIZE = 768;
@@ -87,69 +88,67 @@ async function removeBgByFile(buffer: Buffer, apiKey: string, opts?: RemoveBgOpt
   return post(undefined);
 }
 
-async function downloadImage(url: string): Promise<Buffer | null> {
+function decodeDataImage(input: string): Buffer | null {
+  if (!input.startsWith("data:image/")) return null;
+  const match = input.match(/^data:image\/(?:png|jpe?g|webp);base64,([a-z0-9+/=]+)$/i);
+  if (!match?.[1]) return null;
+  if (match[1].length > 6_000_000) return null;
   try {
-    const res = await axios.get(url, {
-      responseType: "arraybuffer",
-      timeout: 10000,
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Referer": "https://www.google.com/",
-      },
-    });
-    return Buffer.from(res.data);
+    return Buffer.from(match[1], "base64");
   } catch {
     return null;
   }
 }
 
-export async function removeBg(input: string, isUrl = false, opts?: RemoveBgOptions) {
+async function downloadImage(url: string): Promise<Buffer | null> {
+  try {
+    return (await fetchExternalImage(url)).buffer;
+  } catch (err: any) {
+    logger.warn({ err: err?.message }, "[bgService] safe image download rejected");
+    return null;
+  }
+}
+
+export type RemoveBgBufferResult = {
+  buffer: Buffer;
+  contentType: "image/png";
+  backgroundRemoved: boolean;
+};
+
+export async function removeBgBuffer(
+  rawInput: Buffer,
+  opts?: RemoveBgOptions,
+): Promise<RemoveBgBufferResult> {
   const apiKey = process.env.REMOVE_BG_API_KEY;
-  const toDataUri = (buf: Buffer) => `data:image/png;base64,${buf.toString("base64")}`;
-
-  // --- Handle base64 / data URI inputs (never cached — no stable key) ---
-  if (!isUrl || input.startsWith("data:")) {
-    const b64 = input.startsWith("data:") ? input.split(",")[1] : null;
-    if (!b64) return { cleanImage: input };
-
-    if (!apiKey) {
-      const normalized = await trimWhiteAndNormalize(Buffer.from(b64, "base64"));
-      return { cleanImage: toDataUri(normalized) };
-    }
-
-    const result = await removeBgByFile(Buffer.from(b64, "base64"), apiKey, opts);
-    if (result) {
-      const padded = await normalizeToBottleCanvas(result);
-      return { cleanImage: toDataUri(padded) };
-    }
-
-    const normalized = await trimWhiteAndNormalize(Buffer.from(b64, "base64"));
-    return { cleanImage: toDataUri(normalized) };
-  }
-
-  // --- Handle http/https URL inputs ---
-
   if (!apiKey) {
-    const raw = await downloadImage(input);
-    if (raw) {
-      const normalized = await trimWhiteAndNormalize(raw);
-      return { cleanImage: toDataUri(normalized) };
-    }
-    return { cleanImage: input };
+    const normalized = await trimWhiteAndNormalize(rawInput);
+    return { buffer: normalized, contentType: "image/png", backgroundRemoved: false };
   }
 
-  // Strategy 1: download ourselves, send as binary file to Poof API
+  const result = await removeBgByFile(rawInput, apiKey, opts);
+  if (result) {
+    const padded = await normalizeToBottleCanvas(result);
+    return { buffer: padded, contentType: "image/png", backgroundRemoved: true };
+  }
+
+  const normalized = await trimWhiteAndNormalize(rawInput);
+  return { buffer: normalized, contentType: "image/png", backgroundRemoved: false };
+}
+
+export async function removeBgToBuffer(
+  input: string,
+  isUrl = false,
+  opts?: RemoveBgOptions,
+): Promise<RemoveBgBufferResult | null> {
+  // Data URI support is only for explicit preview processing. It never becomes
+  // a persisted database source URL.
+  if (!isUrl || input.startsWith("data:")) {
+    const rawInput = decodeDataImage(input);
+    if (!rawInput) return null;
+    return removeBgBuffer(rawInput, opts);
+  }
+
   const raw = await downloadImage(input);
-  if (!raw) return { cleanImage: input };
-
-  const byFile = await removeBgByFile(raw, apiKey, opts);
-  if (byFile) {
-    const padded = await normalizeToBottleCanvas(byFile);
-    return { cleanImage: toDataUri(padded) };
-  }
-
-  // Strategy 2: local white-trim normalization as last resort
-  logger.warn("[bgService] Poof remove failed; using local normalization fallback");
-  const normalized = await trimWhiteAndNormalize(raw);
-  return { cleanImage: toDataUri(normalized) };
+  if (!raw) return null;
+  return removeBgBuffer(raw, opts);
 }

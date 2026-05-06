@@ -1,5 +1,6 @@
 import { createHash } from "crypto";
 import type { Firestore } from "firebase-admin/firestore";
+import { safeImageUrlForResponse } from "./persistenceGuards";
 
 let firestoreDb: Firestore | null = null;
 let initAttempted = false;
@@ -31,11 +32,12 @@ function normalizeKey(brand: string, name: string): string {
   return createHash("sha256").update(normalized).digest("hex");
 }
 
-function isValidDataUri(value: unknown): value is string {
+function isValidImageReference(value: unknown): value is string {
+  const url = safeImageUrlForResponse(value);
   return (
-    typeof value === "string" &&
-    value.startsWith("data:image/png;base64,") &&
-    value.length > 100
+    url.startsWith("http://") ||
+    url.startsWith("https://") ||
+    url.startsWith("/api/image-objects/")
   );
 }
 
@@ -80,8 +82,8 @@ async function readFromFirestore(
     const doc = await db.collection("bg_cache").doc(key).get();
     if (!doc.exists) return null;
     const data = doc.data();
-    const value = data?.cleanImage;
-    return isValidDataUri(value) ? value : null;
+    const value = data?.publicUrl ?? data?.imageUrl;
+    return isValidImageReference(value) ? value : null;
   } catch (err) {
     console.error("[firebaseCache] read error:", err);
     return null;
@@ -93,11 +95,12 @@ async function writeToFirestore(
   key: string,
   brand: string,
   name: string,
-  cleanImage: string,
+  imageUrl: string,
 ): Promise<void> {
   try {
+    if (!isValidImageReference(imageUrl)) return;
     await db.collection("bg_cache").doc(key).set({
-      cleanImage,
+      publicUrl: imageUrl,
       brand: brand.trim(),
       name: name.trim(),
       createdAt: new Date().toISOString(),
@@ -142,8 +145,9 @@ export async function getOrCreateCachedImage(
       // 2. Cache miss — run the caller's fetch (image search + background removal)
       const result = await fetchFn();
 
-      // 3. Persist valid PNG results only
-      if (result && isValidDataUri(result) && db) {
+      // 3. Persist lightweight image references only. Base64 image payloads
+      // are intentionally ignored by this legacy Firestore cache.
+      if (result && isValidImageReference(result) && db) {
         // Fire-and-forget so callers are not blocked by the write
         writeToFirestore(db, key, brand, name, result).catch(() => {});
       }

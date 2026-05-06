@@ -2,9 +2,18 @@ import { db } from "@workspace/db";
 import { globalFragrancesTable } from "@workspace/db/schema";
 import { eq, or, sql } from "drizzle-orm";
 import type { ScentProfile } from "./scentEngine";
+import {
+  assertNoPersistedBase64Image,
+  safeImageUrlForResponse,
+  stripBase64ImageDataUrls,
+} from "./persistenceGuards";
 
 export function makeLookupKey(brand: string, name: string): string {
   return `${brand.trim().toLowerCase()}::${name.trim().toLowerCase()}`;
+}
+
+function sanitizeCatalogProfile(profile: unknown): ScentProfile {
+  return stripBase64ImageDataUrls(profile) as ScentProfile;
 }
 
 export async function getCatalogEntry(brand: string, name: string): Promise<ScentProfile | null> {
@@ -15,7 +24,7 @@ export async function getCatalogEntry(brand: string, name: string): Promise<Scen
     .where(eq(globalFragrancesTable.lookupKey, key))
     .limit(1);
   if (rows.length === 0) return null;
-  return rows[0].profileData as ScentProfile;
+  return sanitizeCatalogProfile(rows[0].profileData);
 }
 
 /**
@@ -50,11 +59,12 @@ export async function searchCatalog(query: string): Promise<ScentProfile | null>
     .limit(1);
 
   if (rows.length === 0) return null;
-  return rows[0].profileData as ScentProfile;
+  return sanitizeCatalogProfile(rows[0].profileData);
 }
 
 export async function saveCatalogEntry(brand: string, name: string, profile: ScentProfile): Promise<void> {
   const key = makeLookupKey(brand, name);
+  assertNoPersistedBase64Image(profile, "global_fragrances.profile_data");
   await db
     .insert(globalFragrancesTable)
     .values({
@@ -87,7 +97,7 @@ export function flattenProfile(profile: ScentProfile): Record<string, unknown> {
     performance: profile.performance,
     context: profile.context,
     concentration: profile.concentration,
-    imageUrl: profile.imageUrl ?? "",
+    imageUrl: safeImageUrlForResponse(profile.imageUrl),
     product: profile.product,
   };
 }

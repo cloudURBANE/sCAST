@@ -95,6 +95,11 @@ type SerperImageResult = {
   imageHeight?: number;
 };
 
+export type SerperImageCandidate = SerperImageResult & {
+  imageUrl: string;
+  score: number;
+};
+
 type SerperResponse = {
   images?: SerperImageResult[];
 };
@@ -180,15 +185,15 @@ function applySerperRefinement(rawQuery: string, refine: SerperRefineMode): stri
   return `${q} ${SERPER_SUFFIX_DEFAULT}`.trim();
 }
 
-export async function searchSerperImageUrl(
+export async function searchSerperImageCandidates(
   query: string,
   options?: { refine?: SerperRefineMode },
-): Promise<string | null> {
-  if (!query.trim()) return null;
+): Promise<SerperImageCandidate[]> {
+  if (!query.trim()) return [];
   const apiKey = process.env.SERPER_API_KEY;
   if (!apiKey) {
     logger.warn("[serper] SERPER_API_KEY missing; image search disabled");
-    return null;
+    return [];
   }
 
   const endpoint = process.env.SERPER_IMAGE_API_URL || DEFAULT_SERPER_IMAGES_URL;
@@ -210,11 +215,11 @@ export async function searchSerperImageUrl(
 
     if (response.status !== 200) {
       logger.warn({ status: response.status }, "[serper] image search non-200");
-      return null;
+      return [];
     }
 
     const images = Array.isArray(response.data?.images) ? response.data.images : [];
-    if (images.length === 0) return null;
+    if (images.length === 0) return [];
 
     const ranked = images
       .map((candidate) => ({ candidate, score: scoreCandidate(candidate) }))
@@ -223,12 +228,22 @@ export async function searchSerperImageUrl(
 
     if (ranked.length === 0) {
       logger.info("[serper] no candidate passed strict filters");
-      return null;
+      return [];
     }
 
-    return ranked[0].candidate.imageUrl ?? null;
+    return ranked
+      .filter((item): item is { candidate: SerperImageResult & { imageUrl: string }; score: number } => !!item.candidate.imageUrl)
+      .map((item) => ({ ...item.candidate, imageUrl: item.candidate.imageUrl, score: item.score }));
   } catch (err: any) {
     logger.warn({ err: err?.message }, "[serper] image search failed");
-    return null;
+    return [];
   }
+}
+
+export async function searchSerperImageUrl(
+  query: string,
+  options?: { refine?: SerperRefineMode },
+): Promise<string | null> {
+  const candidates = await searchSerperImageCandidates(query, options);
+  return candidates[0]?.imageUrl ?? null;
 }

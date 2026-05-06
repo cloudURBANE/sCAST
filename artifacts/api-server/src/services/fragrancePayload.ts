@@ -1,12 +1,12 @@
 import { resolveSharedImageUrl } from "./imageHydration";
+import {
+  safeImageUrlForResponse,
+  stripBase64ImageDataUrls,
+} from "./persistenceGuards";
 
-/** Strip base64 data URLs — they're huge and already stored in the global catalog */
+/** Strip base64 data URLs. Postgres must never be used as the image CDN. */
 export function sanitizeFragrance(fragrance: Record<string, any>): Record<string, any> {
-  const clean = { ...fragrance };
-  if (typeof clean.imageUrl === "string" && clean.imageUrl.startsWith("data:")) {
-    clean.imageUrl = "";
-  }
-  return clean;
+  return stripBase64ImageDataUrls(fragrance);
 }
 
 /**
@@ -18,26 +18,29 @@ export function normalizeFragrance(fragrance: Record<string, any>): Record<strin
   const name = fragrance.name || product?.name;
   const brand = fragrance.brand || product?.brand;
   const perfumer = fragrance.perfumer || product?.perfumer;
+  const imageUrl = safeImageUrlForResponse(fragrance.imageUrl);
 
   return {
     ...fragrance,
+    imageUrl,
     ...(name ? { name } : {}),
     ...(brand ? { brand } : {}),
     ...(perfumer ? { perfumer } : {}),
   };
 }
 
-/** Fill in imageUrl from the global catalog if the stored record has none */
+/** Fill in imageUrl from shared metadata/object cache if the stored record has none. */
 export async function hydrateImageUrl(fragrance: Record<string, any>): Promise<Record<string, any>> {
-  if (fragrance.imageUrl) return fragrance;
+  const current = safeImageUrlForResponse(fragrance.imageUrl);
+  if (current) return { ...fragrance, imageUrl: current };
   const name = fragrance.name as string | undefined;
   const brand = fragrance.brand as string | undefined;
-  if (!name || !brand) return fragrance;
+  if (!name || !brand) return { ...fragrance, imageUrl: "" };
   try {
     const imageUrl = await resolveSharedImageUrl(brand, name);
     if (imageUrl) return { ...fragrance, imageUrl };
   } catch {
     /* non-fatal */
   }
-  return fragrance;
+  return { ...fragrance, imageUrl: "" };
 }

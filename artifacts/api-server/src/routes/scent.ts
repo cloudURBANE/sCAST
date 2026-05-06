@@ -3,8 +3,6 @@ import { getWeather } from "../services/weatherService";
 import { buildProfile, searchFragrances } from "../services/scentEngine";
 import { deepScrapeFragrance } from "../services/fallbackIntelligence";
 import { searchCatalog, getCatalogEntry, saveCatalogEntry, flattenProfile } from "../services/catalogService";
-import { searchImageUrl } from "../services/imageService";
-import { removeBg } from "../services/bgService";
 import {
   isImageSolverId,
   resolveRefreshSerperInput,
@@ -13,6 +11,7 @@ import {
   type ImageSolverId,
 } from "../services/imageSolvers";
 import { logger } from "../lib/logger";
+import { resolveProcessedFragranceImage } from "../services/imagePipeline";
 
 const router = Router();
 
@@ -29,6 +28,9 @@ function parseIncomingImageUrl(raw: unknown): string | null {
   const s = raw.trim();
   if (s.startsWith("data:image/")) {
     if (s.length > 4_000_000) return null;
+    return s;
+  }
+  if (s.startsWith("/api/image-objects/images/processed/")) {
     return s;
   }
   try {
@@ -150,7 +152,7 @@ router.post("/refresh-image", async (req, res) => {
   const stripBgOnly = body.stripBgOnly === true;
   const sourceForStrip = stripBgOnly ? parseIncomingImageUrl(body.imageUrl) : null;
   if (stripBgOnly && !sourceForStrip) {
-    res.status(400).json({ error: "stripBgOnly requires a valid imageUrl (https URL or data:image/...)" });
+    res.status(400).json({ error: "stripBgOnly requires a valid imageUrl (https URL or small data:image preview)" });
     return;
   }
 
@@ -178,19 +180,29 @@ router.post("/refresh-image", async (req, res) => {
         "refresh-image",
       );
 
-      let finalImageUrl = sourceForStrip;
-      if (!skipBgStrip) {
-        try {
-          const isRemote = sourceForStrip.startsWith("http://") || sourceForStrip.startsWith("https://");
-          const { cleanImage } = await removeBg(sourceForStrip, isRemote, stripRemoveOpts);
-          if (cleanImage) finalImageUrl = cleanImage;
-        } catch (bgErr: any) {
-          logger.warn({ err: bgErr.message }, "refresh-image stripBgOnly: bg removal skipped");
-        }
+      const processed = await resolveProcessedFragranceImage({
+        brand,
+        name,
+        sourceUrl: sourceForStrip,
+        sourceProvider: "manual",
+        allowLookupCache: false,
+        removeBackground: !skipBgStrip,
+        poofOptions: stripRemoveOpts,
+      });
+
+      if (!processed) {
+        res.status(422).json({ error: "Could not process this image source" });
+        return;
       }
 
+      const finalImageUrl = processed.imageUrl;
       await upsertRefreshImageCatalog(brand, name, finalImageUrl);
-      res.json({ imageUrl: finalImageUrl });
+      res.json({
+        imageUrl: finalImageUrl,
+        storagePath: processed.storagePath,
+        imageHash: processed.imageHash,
+        cached: processed.cached,
+      });
       return;
     }
 
@@ -207,6 +219,15 @@ router.post("/refresh-image", async (req, res) => {
 
     let skipBg = solverSkipsBgRemoval(solverId);
     if (typeof body.skipBg === "boolean") skipBg = body.skipBg;
+
+    if (!solverId && (refreshCount ?? 0) > 3) {
+      res.status(429).json({ error: "Automatic image regeneration paused. Choose what looks wrong and try with a hint." });
+      return;
+    }
+    if ((refreshCount ?? 0) > 10) {
+      res.status(429).json({ error: "Too many image regeneration attempts for this session." });
+      return;
+    }
 
     let poofType = solverWantsPoofProductType(solverId);
     const pt = body.poofOptions?.type;
@@ -239,33 +260,31 @@ router.post("/refresh-image", async (req, res) => {
       "refresh-image",
     );
 
-    const rawUrl = await searchImageUrl(serperQuery, { refine });
-    if (!rawUrl) {
+    const processed = await resolveProcessedFragranceImage({
+      brand,
+      name,
+      searchQuery: serperQuery,
+      allowLookupCache: false,
+      removeBackground: !skipBg,
+      poofOptions: removeBgOpts,
+      serperRefine: { refine },
+      maxCandidates: solverId ? 6 : 4,
+    });
+
+    if (!processed) {
       res.status(404).json({ error: "No image found for this fragrance" });
       return;
     }
 
-    let safeUrl: string;
-    try {
-      safeUrl = new URL(rawUrl).toString();
-    } catch {
-      res.status(422).json({ error: `Image URL invalid: ${rawUrl.slice(0, 80)}` });
-      return;
-    }
-
-    let finalImageUrl = safeUrl;
-    if (!skipBg) {
-      try {
-        const { cleanImage } = await removeBg(safeUrl, true, removeBgOpts);
-        if (cleanImage) finalImageUrl = cleanImage;
-      } catch (bgErr: any) {
-        logger.warn({ err: bgErr.message }, "refresh-image: bg removal skipped, using raw URL");
-      }
-    }
-
+    const finalImageUrl = processed.imageUrl;
     await upsertRefreshImageCatalog(brand, name, finalImageUrl);
 
-    res.json({ imageUrl: finalImageUrl });
+    res.json({
+      imageUrl: finalImageUrl,
+      storagePath: processed.storagePath,
+      imageHash: processed.imageHash,
+      cached: processed.cached,
+    });
   } catch (err: any) {
     logger.error({ err: err.message }, "refresh-image failed");
     res.status(500).json({ error: err.message || "Image refresh failed" });

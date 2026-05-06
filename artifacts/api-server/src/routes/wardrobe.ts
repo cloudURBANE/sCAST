@@ -7,6 +7,7 @@ import { buildProfile } from "../services/scentEngine";
 import { flattenProfile } from "../services/catalogService";
 import { logger } from "../lib/logger";
 import { hydrateImageUrl, normalizeFragrance, sanitizeFragrance } from "../services/fragrancePayload";
+import { assertNoPersistedBase64Image } from "../services/persistenceGuards";
 
 const router = Router();
 
@@ -62,6 +63,7 @@ router.post("/wardrobe", async (req, res) => {
   }
 
   const clean = sanitizeFragrance(normalizeFragrance(fragrance));
+  assertNoPersistedBase64Image(clean, "user_fragrances.fragrance_data");
 
   const [row] = await db
     .insert(userFragrancesTable)
@@ -151,7 +153,7 @@ router.post("/wardrobe/rebuild", async (req, res) => {
           brand,
         },
         // Don't overwrite a real stored URL with an empty one if the rebuild
-        // didn't manage to resolve a fresh image (e.g. Firestore cache miss).
+        // didn't manage to resolve a fresh image (e.g. metadata/object cache miss).
         imageUrl: flatImageUrl || (typeof data.imageUrl === "string" ? data.imageUrl : ""),
         id: typeof data.id === "string" ? data.id : r.id,
         season: typeof data.season === "string" && data.season ? data.season : "Universal",
@@ -159,6 +161,7 @@ router.post("/wardrobe/rebuild", async (req, res) => {
         energies: data.energies,
         shareHidden: data.shareHidden,
       });
+      assertNoPersistedBase64Image(merged, "user_fragrances.fragrance_data");
 
       await db
         .update(userFragrancesTable)
@@ -220,7 +223,8 @@ router.patch("/wardrobe/:fragranceId/visibility", async (req, res) => {
   if (!match) { res.status(404).json({ error: "Fragrance not found" }); return; }
 
   const existing = match.fragranceData as Record<string, any>;
-  const updated = { ...existing, shareHidden };
+  const updated = sanitizeFragrance({ ...existing, shareHidden });
+  assertNoPersistedBase64Image(updated, "user_fragrances.fragrance_data");
 
   await db
     .update(userFragrancesTable)
@@ -279,7 +283,8 @@ router.patch("/wardrobe/:id", async (req, res) => {
     return;
   }
 
-  const merged = normalizeFragrance({ ...existing, imageUrl: url });
+  const merged = sanitizeFragrance(normalizeFragrance({ ...existing, imageUrl: url }));
+  assertNoPersistedBase64Image(merged, "user_fragrances.fragrance_data");
 
   await db
     .update(userFragrancesTable)

@@ -1,8 +1,9 @@
 import { getCatalogEntry, searchCatalog } from "./catalogService";
-import { getOrCreateCachedImage } from "./firebaseCache";
+import { resolveCachedFragranceImage } from "./imagePipeline";
+import { safeImageUrlForResponse } from "./persistenceGuards";
 
 function hasImageUrl(value: unknown): value is string {
-  return typeof value === "string" && value.trim().length > 0;
+  return safeImageUrlForResponse(value).length > 0;
 }
 
 /**
@@ -33,7 +34,7 @@ export async function resolveSharedImageUrl(
 ): Promise<string | null> {
   try {
     const exact = await getCatalogEntry(brand, name);
-    if (hasImageUrl(exact?.imageUrl)) return exact.imageUrl;
+    if (hasImageUrl(exact?.imageUrl)) return safeImageUrlForResponse(exact?.imageUrl);
   } catch {
     /* non-fatal */
   }
@@ -50,7 +51,7 @@ export async function resolveSharedImageUrl(
         tokensSubsetOf(name, fuzzyName) &&
         tokensSubsetOf(brand, fuzzyBrand)
       ) {
-        return fuzzy.imageUrl;
+        return safeImageUrlForResponse(fuzzy.imageUrl);
       }
     }
   } catch {
@@ -58,9 +59,10 @@ export async function resolveSharedImageUrl(
   }
 
   try {
-    // Read-through from Firestore cache only; do not trigger new image generation here.
-    const cached = await getOrCreateCachedImage(brand, name, async () => null);
-    if (hasImageUrl(cached)) return cached;
+    // Metadata-only read-through from image_cache. This does not trigger Serper,
+    // downloads, or background removal.
+    const cached = await resolveCachedFragranceImage(brand, name);
+    if (hasImageUrl(cached?.imageUrl)) return cached.imageUrl;
   } catch {
     /* non-fatal */
   }

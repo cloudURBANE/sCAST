@@ -3,7 +3,6 @@ import { db } from "@workspace/db";
 import { usersTable, userFragrancesTable, userSettingsTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { hydrateImageUrl, normalizeFragrance } from "../services/fragrancePayload";
-import { searchImageUrl } from "../services/imageService";
 
 const router = Router();
 
@@ -102,18 +101,6 @@ router.get("/share/:userRef", async (req, res) => {
       let frag = normalizeFragrance(raw);
       frag = await hydrateImageUrl(frag);
 
-      const url = typeof frag.imageUrl === "string" ? frag.imageUrl.trim() : "";
-      if (url) return frag;
-
-      const name = frag.name as string | undefined;
-      const brand = frag.brand as string | undefined;
-      if (!name || !brand) return frag;
-      try {
-        const freshUrl = await searchImageUrl(`${brand} ${name} single fragrance bottle packshot studio no plants`);
-        if (freshUrl) return { ...frag, imageUrl: freshUrl };
-      } catch {
-        /* non-fatal */
-      }
       return frag;
     })
   );

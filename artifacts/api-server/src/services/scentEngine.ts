@@ -1,10 +1,9 @@
 import { loadDataset, type FragranceData } from "./datasetLoader";
 import { parseFragrance } from "./scentParser";
 import { vectorize, calculatePerformance, calculateContext, type ScentVector, type PerformanceMetrics, type ContextProfile } from "./scentVectorizer";
-import { searchImageUrl } from "./imageService";
-import { removeBg } from "./bgService";
-import { getOrCreateCachedImage } from "./firebaseCache";
 import { getCatalogEntry, saveCatalogEntry, searchCatalog } from "./catalogService";
+import { resolveProcessedFragranceImage } from "./imagePipeline";
+import { safeImageUrlForResponse } from "./persistenceGuards";
 
 export interface ScentProfile {
   product: { name: string; brand: string; perfumer?: string };
@@ -77,51 +76,66 @@ export async function buildProfile(
   const allowCatalogFuzzy = opts?.allowCatalogFuzzy ?? true;
 
   // 1. Check global catalog — exact match first, then fuzzy to catch AI naming variations
+  let catalogBase: ScentProfile | null = null;
   const cached = await getCatalogEntry(brand, name);
-  if (cached) return cached;
-
-  if (allowCatalogFuzzy) {
-    // Fuzzy search handles cases like "Sauvage EDP" matching stored "Sauvage"
-    const fuzzy = await searchCatalog(`${brand} ${name}`);
-    if (fuzzy) return fuzzy;
+  if (cached) {
+    if (safeImageUrlForResponse(cached.imageUrl)) return cached;
+    catalogBase = cached;
   }
 
-  // 2. Resolve image: check Firestore by name+brand first; on miss, run image
-  // search + background removal exactly once even if many users request simultaneously.
-  const cleanImageUrl = await getOrCreateCachedImage(
-    brand,
-    name,
-    async () => {
-      let imageUrl = fallback?.imageUrl;
-      try {
-        const searchQuery = `${brand} ${name} single fragrance bottle no box HQ product photo studio no plants`;
-        const searchRes = await searchImageUrl(searchQuery);
-        if (searchRes) {
-          imageUrl = searchRes;
-        }
-      } catch {
-        /* keep fallback */
+  if (!catalogBase && allowCatalogFuzzy) {
+    // Fuzzy search handles cases like "Sauvage EDP" matching stored "Sauvage"
+    const fuzzy = await searchCatalog(`${brand} ${name}`);
+    if (fuzzy) {
+      if (safeImageUrlForResponse(fuzzy.imageUrl)) return fuzzy;
+      catalogBase = fuzzy;
+    }
+  }
+
+  const effectiveFallback = catalogBase
+    ? {
+        notes: catalogBase.notes,
+        family: catalogBase.family,
+        description: catalogBase.description,
+        imageUrl: fallback?.imageUrl,
+        pyramid: catalogBase.pyramid,
+        perfumer: catalogBase.product.perfumer,
       }
-      if (!imageUrl) return null;
-      try {
-        const { cleanImage } = await removeBg(imageUrl, true);
-        return cleanImage ?? null;
-      } catch {
-        return null;
-      }
-    },
-  );
+    : fallback;
+
+  // 2. Resolve image through metadata/object cache. This checks image_cache
+  // before Serper and writes only object references to Postgres.
+  const searchQuery = `${brand} ${name} single fragrance bottle no box HQ product photo studio no plants`;
+  const processedImage =
+    await resolveProcessedFragranceImage({
+      brand,
+      name,
+      searchQuery,
+      removeBackground: true,
+    }).catch(() => null) ??
+    (effectiveFallback?.imageUrl
+      ? await resolveProcessedFragranceImage({
+          brand,
+          name,
+          sourceUrl: effectiveFallback.imageUrl,
+          sourceProvider: "manual",
+          allowLookupCache: false,
+          removeBackground: true,
+        }).catch(() => null)
+      : null);
+
+  const cleanImageUrl = processedImage?.imageUrl ?? null;
 
   const match = findFragrance(name, brand);
-  const finalName = match?.name || name;
-  const finalBrand = match?.brand || brand;
-  const finalNotes = match?.notes || fallback?.notes || [];
-  const finalFamily = match?.family || fallback?.family || "Unknown Family";
-  const finalDescription = match?.description || fallback?.description || "";
-  const finalPyramid = match?.pyramid || fallback?.pyramid;
-  const finalPerfumer = match?.perfumer || fallback?.perfumer;
+  const finalName = match?.name || catalogBase?.product.name || name;
+  const finalBrand = match?.brand || catalogBase?.product.brand || brand;
+  const finalNotes = match?.notes || effectiveFallback?.notes || [];
+  const finalFamily = match?.family || effectiveFallback?.family || "Unknown Family";
+  const finalDescription = match?.description || effectiveFallback?.description || "";
+  const finalPyramid = match?.pyramid || effectiveFallback?.pyramid;
+  const finalPerfumer = match?.perfumer || effectiveFallback?.perfumer;
 
-  if (!match && (!fallback || !fallback.notes)) {
+  if (!match && (!effectiveFallback || !effectiveFallback.notes)) {
     return { error: "Could not identify this fragrance. Try a more specific name." };
   }
 
