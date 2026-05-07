@@ -15,6 +15,7 @@ interface ScentVector {
 
 interface Fragrance {
   id: string;
+  _dbId?: string;
   name: string;
   brand: string;
   imageUrl: string;
@@ -32,9 +33,10 @@ interface ShareData {
   hideImages: boolean;
 }
 
-function amazonUrl(brand: string, name: string): string {
-  const query = encodeURIComponent(`${brand} ${name} fragrance perfume`);
-  return `https://www.amazon.com/s?k=${query}`;
+interface BuyLink {
+  buyUrl: string | null;
+  provider: string;
+  status: string;
 }
 
 export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
@@ -42,8 +44,10 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [buyLinks, setBuyLinks] = useState<Record<string, BuyLink>>({});
 
   useEffect(() => {
+    setBuyLinks({});
     // #region agent log
     fetch('http://127.0.0.1:7745/ingest/484c0150-587d-4568-9bd7-b30ce5dec585',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'db2024'},body:JSON.stringify({sessionId:'db2024',runId:'baseline-share-access',hypothesisId:'H4',location:'components/SharePage.tsx:49',message:'share page fetch start',data:{userId,path:`/api/share/${userId}`},timestamp:Date.now()})}).catch(()=>{});
     // #endregion
@@ -58,6 +62,29 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
       .then(d => {
         if (d.error) throw new Error(d.error);
         setData(d);
+
+        const fragranceIds = Array.isArray(d.fragrances)
+          ? d.fragrances.map((item: Fragrance) => item._dbId ?? item.id).filter(Boolean)
+          : [];
+
+        if (fragranceIds.length) {
+          Promise.all(
+            fragranceIds.map(async (fragranceId: string) => {
+              try {
+                const response = await fetch(`/api/fragrances/${encodeURIComponent(fragranceId)}/buy-link`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const buyLink = await response.json();
+                return [fragranceId, buyLink] as const;
+              } catch {
+                return [fragranceId, { provider: 'cj', buyUrl: null, status: 'unavailable' }] as const;
+              }
+            })
+          ).then(entries => {
+            setBuyLinks(Object.fromEntries(entries));
+          }).catch(() => {});
+        } else {
+          setBuyLinks({});
+        }
       })
       .catch(e => {
         // #region agent log
@@ -114,14 +141,19 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {data.fragrances.map((item, i) => (
-                <motion.div
-                  key={item.id}
-                  initial={{ opacity: 0, y: 24 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.05 }}
-                  className="group"
-                >
+              {data.fragrances.map((item, i) => {
+                const fragranceId = item._dbId ?? item.id;
+                const buyLink = buyLinks[fragranceId];
+                const buyUrl = buyLink?.status === 'active' ? buyLink.buyUrl : null;
+
+                return (
+                  <motion.div
+                    key={item.id}
+                    initial={{ opacity: 0, y: 24 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.05 }}
+                    className="group"
+                  >
                   <div
                     className="glass-acrylic rounded-scent overflow-hidden cursor-pointer transition-all duration-500 hover:-translate-y-2 hover:shadow-[0_20px_50px_rgba(255,255,255,0.08)]"
                     onClick={() => setExpanded(expanded === item.id ? null : item.id)}
@@ -234,20 +266,38 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                         </motion.div>
                       )}
 
-                      <a
-                        href={amazonUrl(item.brand, item.name)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={e => e.stopPropagation()}
-                        className="flex items-center justify-center gap-2 w-full py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition-all text-[9px] uppercase tracking-[0.35em] text-white/50 hover:text-white font-bold"
-                      >
-                        <ShoppingBag size={10} />
-                        Buy on Amazon
-                      </a>
+                      <div className="space-y-2" onClick={e => e.stopPropagation()}>
+                        {buyUrl ? (
+                          <a
+                            href={buyUrl}
+                            target="_blank"
+                            rel="nofollow sponsored noopener"
+                            onClick={e => e.stopPropagation()}
+                            className="flex items-center justify-center gap-2 w-full py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition-all text-[9px] uppercase tracking-[0.35em] text-white/50 hover:text-white font-bold"
+                          >
+                            <ShoppingBag size={10} />
+                            Buy Now
+                          </a>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled
+                            onClick={e => e.stopPropagation()}
+                            className="flex items-center justify-center gap-2 w-full py-2.5 bg-white/[0.02] border border-white/5 text-[9px] uppercase tracking-[0.28em] text-white/25 font-bold cursor-not-allowed"
+                          >
+                            <ShoppingBag size={10} />
+                            Buying options unavailable
+                          </button>
+                        )}
+                        <p className="text-[9px] leading-relaxed text-white/25 font-sans">
+                          Scent Cast may earn a commission from purchases made through this link.
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </motion.div>
-              ))}
+                  </motion.div>
+                );
+              })}
             </div>
 
             <div className="text-center pt-16 border-t border-white/5">

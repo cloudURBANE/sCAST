@@ -4,6 +4,7 @@ import express, { type Express } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
 import router from "./routes";
+import cjRedirectRouter from "./routes/cjRedirect";
 import { logger } from "./lib/logger";
 import { frontendStaticDir } from "./paths";
 
@@ -35,6 +36,7 @@ app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 app.use("/api", router);
+app.use(cjRedirectRouter);
 
 if (existsSync(frontendStaticDir)) {
   app.use(

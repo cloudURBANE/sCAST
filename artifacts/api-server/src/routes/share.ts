@@ -84,9 +84,10 @@ router.get("/share/:userRef", async (req, res) => {
     db.select().from(userFragrancesTable).where(eq(userFragrancesTable.userId, user.id)),
   ]);
 
-  const rawFragrances = fragranceRows
-    .map(r => r.fragranceData as Record<string, any>)
-    .filter(data => !data.shareHidden);
+  const visibleFragranceRows = fragranceRows
+    .map(r => ({ rowId: r.id, data: r.fragranceData as Record<string, any> }))
+    .filter(({ data }) => !data.shareHidden);
+  const rawFragrances = visibleFragranceRows.map(({ data }) => data);
   debugLog("routes/share.ts:71", "raw fragrances prepared", "H2", {
     userRef,
     userId: user.id,
@@ -96,12 +97,12 @@ router.get("/share/:userRef", async (req, res) => {
     missingTopLevelBrand: rawFragrances.filter((f) => !f?.brand).length,
   });
 
-  const fragrances = await Promise.all(
-    rawFragrances.map(async (raw) => {
+  const fragrances: Record<string, any>[] = await Promise.all(
+    visibleFragranceRows.map(async ({ rowId, data: raw }) => {
       let frag = normalizeFragrance(raw);
       frag = await hydrateImageUrl(frag);
 
-      return frag;
+      return { ...(frag as Record<string, any>), _dbId: rowId };
     })
   );
   debugLog("routes/share.ts:98", "share payload finalized", "H3", {
