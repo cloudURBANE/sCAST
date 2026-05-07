@@ -31,7 +31,7 @@ interface FragranceMatch {
   pyramid?: unknown;
 }
 
-type ConcentrationHint = 'any' | 'edt' | 'edp';
+type ConcentrationHint = 'any' | 'edt' | 'edp' | 'parfum' | 'extrait' | 'elixir';
 
 // Static Hoisting: Prevent memory reallocation on every render cycle
 const QUICK_SEARCH_TAGS = ['Aventus', 'Rouge 540', 'Santal 33'];
@@ -39,6 +39,9 @@ const CONCENTRATION_OPTIONS: { id: ConcentrationHint; label: string }[] = [
   { id: 'any', label: 'Any' },
   { id: 'edt', label: 'EDT' },
   { id: 'edp', label: 'EDP' },
+  { id: 'parfum', label: 'Parfum' },
+  { id: 'extrait', label: 'Extrait' },
+  { id: 'elixir', label: 'Elixir' },
 ];
 
 export const FragranceCapture: React.FC<{ onAdd?: (item: any) => void }> = ({ onAdd }) => {

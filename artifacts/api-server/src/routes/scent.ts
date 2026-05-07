@@ -22,12 +22,31 @@ import {
 
 const router = Router();
 
-type ConcentrationHint = "edt" | "edp";
+type ConcentrationHint = "edt" | "edp" | "parfum" | "extrait" | "elixir";
+
+const CONCENTRATION_HINT_SET = new Set<ConcentrationHint>([
+  "edt",
+  "edp",
+  "parfum",
+  "extrait",
+  "elixir",
+]);
 
 function concentrationToQueryText(hint?: ConcentrationHint): string {
   if (hint === "edt") return "EDT";
   if (hint === "edp") return "EDP";
+  if (hint === "parfum") return "Parfum";
+  if (hint === "extrait") return "Extrait";
+  if (hint === "elixir") return "Elixir";
   return "";
+}
+
+function normalizeConcentrationHint(raw: unknown): ConcentrationHint | undefined {
+  if (typeof raw !== "string") return undefined;
+  const lower = raw.toLowerCase();
+  return CONCENTRATION_HINT_SET.has(lower as ConcentrationHint)
+    ? (lower as ConcentrationHint)
+    : undefined;
 }
 
 function parseIncomingImageUrl(raw: unknown): string | null {
@@ -103,7 +122,7 @@ router.post("/search-scent", async (req, res) => {
     res.status(400).json({ error: "Query is required" });
     return;
   }
-  const normalizedHint = concentrationHint === "edt" || concentrationHint === "edp" ? concentrationHint : undefined;
+  const normalizedHint = normalizeConcentrationHint(concentrationHint);
   const resolvedQuery = resolveFragranceQuery(query);
   if (resolvedQuery?.corrected) {
     logger.info(
@@ -320,7 +339,7 @@ router.post("/refresh-image", async (req, res) => {
     // Normalize to ASCII so accented chars (é, ü, etc.) don't break URL parsing
     const asciiName = asciiForImageSearch(imageName);
     const asciiBrand = asciiForImageSearch(imageBrand);
-    const normalizedHint = concentrationHint === "edt" || concentrationHint === "edp" ? concentrationHint : undefined;
+    const normalizedHint = normalizeConcentrationHint(concentrationHint);
     const concentrationText = concentrationToQueryText(normalizedHint);
 
     const { query: serperQuery, refine } = resolveRefreshSerperInput({

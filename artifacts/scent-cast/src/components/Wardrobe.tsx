@@ -10,6 +10,7 @@ import {
 } from '@/lib/imageRefreshSolvers';
 import {
   buildWardrobeSearchSuggestions,
+  matchesWardrobeQuery,
   type WardrobeSearchSuggestion,
 } from '@/lib/wardrobeSearchSuggest';
 
@@ -77,10 +78,15 @@ function entryNotes(item: Fragrance): string {
   return pyramidNotes.length > 0 ? pyramidNotes.slice(0, 5).join(" • ") : "Not specified";
 }
 
-function concentrationHintFromValue(value?: string): "edt" | "edp" | undefined {
+function concentrationHintFromValue(
+  value?: string,
+): "edt" | "edp" | "parfum" | "extrait" | "elixir" | undefined {
   const normalized = value?.toLowerCase() ?? "";
   if (normalized.includes("eau de toilette") || normalized.includes("edt")) return "edt";
   if (normalized.includes("eau de parfum") || normalized.includes("edp")) return "edp";
+  if (normalized.includes("extrait") || normalized.includes("extract")) return "extrait";
+  if (normalized.includes("elixir")) return "elixir";
+  if (normalized.includes("parfum")) return "parfum";
   return undefined;
 }
 
@@ -316,18 +322,14 @@ export const Wardrobe: React.FC<{
 
   // Performance Optimization: Memoize computationally heavy filter operations
   const filteredItems = React.useMemo(() => {
-    const q = searchQuery.toLowerCase();
+    const q = searchQuery.trim();
+    if (!q) return items;
     return items.filter(item => {
       const name = entryName(item);
       const brand = entryBrand(item);
       if (!name || !brand) return false;
-      
-      return (
-        name.toLowerCase().includes(q) ||
-        brand.toLowerCase().includes(q) ||
-        item.family?.toLowerCase().includes(q) ||
-        item.notes?.some(note => note?.toLowerCase().includes(q))
-      );
+
+      return matchesWardrobeQuery(item, q);
     });
   }, [items, searchQuery]);
 

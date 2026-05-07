@@ -7,6 +7,7 @@ export type WardrobeSuggestionFragranceShape = {
   name?: string;
   brand?: string;
   family?: string;
+  concentration?: string;
   notes?: string[];
   product?: { name?: string; brand?: string };
 };
@@ -29,6 +30,72 @@ function entryBrand(item: WardrobeSuggestionFragranceShape): string {
   return item?.brand || item?.product?.brand || '';
 }
 
+function tokenizeQuery(value: string): string[] {
+  return value
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+function fieldTokenScore(field: string, token: string): number {
+  if (!field) return 0;
+  if (field === token) return 7;
+  if (field.startsWith(token)) return 5;
+  if (field.includes(` ${token}`)) return 4;
+  if (field.includes(token)) return 2;
+  return 0;
+}
+
+export function scoreWardrobeQueryMatch(
+  item: WardrobeSuggestionFragranceShape,
+  queryRaw: string,
+): number {
+  const q = queryRaw.trim().toLowerCase();
+  if (!q) return 0;
+
+  const name = entryName(item).toLowerCase();
+  const brand = entryBrand(item).toLowerCase();
+  const family = item.family?.toLowerCase() ?? '';
+  const concentration = item.concentration?.toLowerCase() ?? '';
+  const notes = (item.notes ?? []).join(' ').toLowerCase();
+  const all = `${name} ${brand} ${family} ${concentration} ${notes}`.trim();
+  if (!all) return 0;
+
+  const tokens = tokenizeQuery(q);
+  if (tokens.length === 0) return 0;
+
+  let score = 0;
+  for (const token of tokens) {
+    const tokenScore = Math.max(
+      fieldTokenScore(name, token),
+      fieldTokenScore(brand, token),
+      fieldTokenScore(family, token),
+      fieldTokenScore(concentration, token),
+      fieldTokenScore(notes, token),
+      fieldTokenScore(all, token),
+    );
+    if (tokenScore === 0) return 0;
+    score += tokenScore;
+  }
+
+  if (all.includes(q)) score += 6;
+  if (name.startsWith(q)) score += 5;
+  if (brand.startsWith(q)) score += 4;
+  if (family.includes(q)) score += 2;
+  if (concentration.includes(q)) score += 2;
+  if (notes.includes(q)) score += 1;
+
+  return score;
+}
+
+export function matchesWardrobeQuery(
+  item: WardrobeSuggestionFragranceShape,
+  queryRaw: string,
+): boolean {
+  return scoreWardrobeQueryMatch(item, queryRaw) > 0;
+}
+
 /** Vault filter + ranked fragrance hits + solver labels matched against the same query. */
 export function buildWardrobeSearchSuggestions(
   items: WardrobeSuggestionFragranceShape[],
@@ -45,20 +112,8 @@ export function buildWardrobeSearchSuggestions(
       const name = entryName(item);
       const brand = entryBrand(item);
       if (!name || !brand) return null;
-      const hn = name.toLowerCase();
-      const hb = brand.toLowerCase();
-      const hf = item.family?.toLowerCase() ?? '';
-      const notes = (item.notes ?? []).join(' ').toLowerCase();
-      const hay = `${hn} ${hb} ${hf} ${notes}`;
-      if (!hay.includes(q)) return null;
-
-      let score = 0;
-      if (hn.startsWith(q)) score += 14;
-      else if (hn.includes(q)) score += 8;
-      if (hb.startsWith(q)) score += 12;
-      else if (hb.includes(q)) score += 6;
-      if (hf.includes(q)) score += 3;
-      if (notes.includes(q)) score += 2;
+      const score = scoreWardrobeQueryMatch(item, q);
+      if (score <= 0) return null;
       return { item, score };
     })
     .filter(Boolean)
