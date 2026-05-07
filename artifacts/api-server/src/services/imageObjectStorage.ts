@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import path from "node:path";
 
 export type ImageStorageProvider = "firebase" | "supabase" | "local";
@@ -29,6 +30,8 @@ const DEFAULT_CACHE_CONTROL = "public, max-age=31536000, immutable";
 const LOCAL_STORAGE_ROOT = path.resolve(
   process.env.IMAGE_LOCAL_STORAGE_DIR || path.join(process.cwd(), ".image-cache"),
 );
+const runtimeRequire =
+  typeof globalThis.require === "function" ? globalThis.require : createRequire(import.meta.url);
 
 function encodeStoragePath(storagePath: string): string {
   return storagePath.split("/").map(encodeURIComponent).join("/");
@@ -88,7 +91,7 @@ class FirebaseImageObjectStorage implements ImageObjectStorage {
       throw new Error("Firebase Storage requires FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY");
     }
 
-    const admin = globalThis.require("firebase-admin");
+    const admin = runtimeRequire("firebase-admin");
     const app = admin.apps.length
       ? admin.app()
       : admin.initializeApp({

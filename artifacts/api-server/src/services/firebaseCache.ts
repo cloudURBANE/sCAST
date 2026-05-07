@@ -1,9 +1,12 @@
 import { createHash } from "crypto";
+import { createRequire } from "node:module";
 import type { Firestore } from "firebase-admin/firestore";
 import { safeImageUrlForResponse } from "./persistenceGuards";
 
 let firestoreDb: Firestore | null = null;
 let initAttempted = false;
+const runtimeRequire =
+  typeof globalThis.require === "function" ? globalThis.require : createRequire(import.meta.url);
 
 // In-flight deduplication: prevents cache stampede when multiple users
 // request the same uncached fragrance simultaneously. All concurrent callers
@@ -55,7 +58,7 @@ function getDb(): Firestore | null {
   }
 
   try {
-    const admin = globalThis.require("firebase-admin");
+    const admin = runtimeRequire("firebase-admin");
     const app = admin.apps.length
       ? admin.app()
       : admin.initializeApp({
