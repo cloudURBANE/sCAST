@@ -5,20 +5,41 @@ import { eq, sql } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { normalizeFragrance } from "../services/fragrancePayload";
 import { createRakutenProvider, rakutenEnvReady } from "../services/rakutenProvider";
+import {
+  buildAmazonAffiliateUrl,
+  isAmazonProductUrl,
+} from "../server/affiliate/providers/amazon/amazonAffiliateUrl";
 
 const router = Router();
 
 type BuyLinkStatus = "active" | "unavailable";
+type BuyLinkResponseOptions = {
+  buyUrl?: string | null;
+  affiliateApplied?: boolean;
+  affiliateUnavailableReason?: string;
+  network?: string;
+};
 
 function isUuidish(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 }
 
-function buyLinkResponse(provider: string, status: BuyLinkStatus, affiliateLinkId?: string, reason?: string) {
+function buyLinkResponse(
+  provider: string,
+  status: BuyLinkStatus,
+  affiliateLinkId?: string,
+  reason?: string,
+  options: BuyLinkResponseOptions = {},
+) {
   return {
     provider,
-    buyUrl: status === "active" && affiliateLinkId ? `/go/affiliate/${affiliateLinkId}` : null,
+    ...(options.network ? { network: options.network } : {}),
+    buyUrl: options.buyUrl ?? (status === "active" && affiliateLinkId ? `/go/affiliate/${affiliateLinkId}` : null),
     status,
+    ...(typeof options.affiliateApplied === "boolean" ? { affiliateApplied: options.affiliateApplied } : {}),
+    ...(options.affiliateUnavailableReason
+      ? { affiliateUnavailableReason: options.affiliateUnavailableReason }
+      : {}),
     ...(reason ? { reason } : {}),
   };
 }
@@ -58,6 +79,42 @@ function buildFragranceQuery(fragrance: typeof userFragrancesTable.$inferSelect)
   return [normalized.brand, normalized.name].filter(Boolean).join(" ").trim();
 }
 
+function amazonAffiliateEnabled(): boolean {
+  return process.env.AMAZON_AFFILIATE_ENABLED?.trim().toLowerCase() === "true";
+}
+
+function amazonAssociateTag(): string | undefined {
+  return process.env.AMAZON_ASSOCIATE_TAG?.trim() || undefined;
+}
+
+function findAmazonProductUrl(value: unknown): string | null {
+  const stack: unknown[] = [value];
+  const seen = new Set<unknown>();
+
+  while (stack.length > 0 && seen.size < 200) {
+    const current = stack.pop();
+    if (!current || seen.has(current)) continue;
+    seen.add(current);
+
+    if (typeof current === "string") {
+      const trimmed = current.trim();
+      if (trimmed && isAmazonProductUrl(trimmed)) return trimmed;
+      continue;
+    }
+
+    if (Array.isArray(current)) {
+      stack.push(...current);
+      continue;
+    }
+
+    if (typeof current === "object") {
+      stack.push(...Object.values(current as Record<string, unknown>));
+    }
+  }
+
+  return null;
+}
+
 router.get("/fragrances/:id/buy-link", async (req, res) => {
   try {
     const fragrance = await findFragranceRow(req.params.id);
@@ -65,6 +122,7 @@ router.get("/fragrances/:id/buy-link", async (req, res) => {
       res.status(404).json(buyLinkResponse("rakuten", "unavailable", undefined, "FRAGRANCE_NOT_FOUND"));
       return;
     }
+    let fallbackReason: string | undefined;
 
     const cachedRakuten = await findCachedAffiliateLink(fragrance.id, "rakuten");
     if (cachedRakuten) {
@@ -112,8 +170,7 @@ router.get("/fragrances/:id/buy-link", async (req, res) => {
         }
 
         logger.info({ fragranceId: fragrance.id, reason: result.reason }, "[rakuten] buy-link unavailable");
-        res.json(buyLinkResponse("rakuten", "unavailable", undefined, result.reason));
-        return;
+        fallbackReason = result.reason;
       }
     }
 
@@ -127,12 +184,31 @@ router.get("/fragrances/:id/buy-link", async (req, res) => {
       return;
     }
 
+    const originalAmazonUrl = findAmazonProductUrl(fragrance.fragranceData);
+    if (originalAmazonUrl) {
+      const amazon = buildAmazonAffiliateUrl({
+        productUrl: originalAmazonUrl,
+        associateTag: amazonAssociateTag(),
+        enabled: amazonAffiliateEnabled(),
+      });
+
+      res.json(
+        buyLinkResponse("amazon", "active", undefined, amazon.reason, {
+          network: "amazon",
+          buyUrl: amazon.url,
+          affiliateApplied: amazon.affiliateApplied,
+          affiliateUnavailableReason: amazon.reason,
+        }),
+      );
+      return;
+    }
+
     res.json(
       buyLinkResponse(
         "rakuten",
         "unavailable",
         undefined,
-        rakutenEnvReady() ? "EMPTY_FRAGRANCE_QUERY" : "RAKUTEN_CREDENTIALS_MISSING",
+        fallbackReason ?? (rakutenEnvReady() ? "EMPTY_FRAGRANCE_QUERY" : "RAKUTEN_CREDENTIALS_MISSING"),
       ),
     );
   } catch (err) {
