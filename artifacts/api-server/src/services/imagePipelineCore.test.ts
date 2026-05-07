@@ -68,11 +68,16 @@ test("source URL hashes and object keys are deterministic", async () => {
   );
 });
 
-test("local image object references must exist before they are usable", async () => {
-  const { imageReferenceDiagnostic, usableImageUrlForResponse } = await import("./imageReference.ts");
+test("local image object diagnostics do not erase saved response references", async () => {
+  const {
+    imageReferenceDiagnostic,
+    savedImageUrlForResponse,
+    usableImageUrlForResponse,
+  } = await import("./imageReference.ts");
 
   const missingUrl = "/api/image-objects/images/processed/missing.webp";
   assert.equal(await usableImageUrlForResponse(missingUrl), null);
+  assert.equal(savedImageUrlForResponse(missingUrl), missingUrl);
   assert.deepEqual(await imageReferenceDiagnostic(missingUrl), {
     kind: "local-object-missing",
     usable: false,

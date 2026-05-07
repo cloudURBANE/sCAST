@@ -70,6 +70,11 @@ export async function usableImageUrlForResponse(value: unknown): Promise<string 
   return url;
 }
 
+export function savedImageUrlForResponse(value: unknown): string | null {
+  const url = safeImageUrlForResponse(value);
+  return url || null;
+}
+
 export async function persistableImageReference(value: unknown): Promise<string | null> {
   const url = await usableImageUrlForResponse(value);
   if (!url) return null;
