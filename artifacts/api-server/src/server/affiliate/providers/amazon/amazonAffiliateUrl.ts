@@ -1,4 +1,5 @@
 const AMAZON_HOSTNAMES = new Set(["amazon.com", "www.amazon.com", "smile.amazon.com"]);
+const DEFAULT_AMAZON_MARKETPLACE = "amazon.com";
 
 export function isAmazonProductUrl(productUrl: string): boolean {
   try {
@@ -58,5 +59,44 @@ export function buildAmazonAffiliateUrl(input: {
   return {
     url: url.toString(),
     affiliateApplied: true,
+  };
+}
+
+function normalizeAmazonMarketplace(value?: string): string {
+  const raw = value?.trim().toLowerCase() || DEFAULT_AMAZON_MARKETPLACE;
+  const withoutScheme = raw.replace(/^https?:\/\//, "").replace(/^www\./, "");
+  const host = withoutScheme.split("/")[0] || DEFAULT_AMAZON_MARKETPLACE;
+  return /^[a-z0-9.-]+$/.test(host) && host.includes(".") ? host : DEFAULT_AMAZON_MARKETPLACE;
+}
+
+export function buildAmazonSearchUrl(input: {
+  query: string;
+  marketplace?: string;
+  associateTag?: string;
+  enabled?: boolean;
+}): {
+  url: string;
+  affiliateApplied: boolean;
+  reason?: string;
+} | null {
+  const query = input.query.trim();
+  if (!query) return null;
+
+  const marketplace = normalizeAmazonMarketplace(input.marketplace);
+  const url = new URL(`https://www.${marketplace}/s`);
+  url.searchParams.set("k", query);
+
+  const associateTag = input.associateTag?.trim();
+  if (input.enabled === true && associateTag) {
+    url.searchParams.set("tag", associateTag);
+    return { url: url.toString(), affiliateApplied: true };
+  }
+
+  return {
+    url: url.toString(),
+    affiliateApplied: false,
+    reason: associateTag
+      ? "AMAZON_AFFILIATE_ENABLED is not true. Showing Amazon search link."
+      : "Missing AMAZON_ASSOCIATE_TAG. Showing Amazon search link.",
   };
 }

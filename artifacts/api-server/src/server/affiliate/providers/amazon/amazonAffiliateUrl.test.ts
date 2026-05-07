@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildAmazonAffiliateUrl } from "./amazonAffiliateUrl.ts";
+import { buildAmazonAffiliateUrl, buildAmazonSearchUrl } from "./amazonAffiliateUrl.ts";
 
 test("buildAmazonAffiliateUrl adds tag to Amazon URL without query params", () => {
   const result = buildAmazonAffiliateUrl({
@@ -63,5 +63,32 @@ test("buildAmazonAffiliateUrl leaves invalid and non-Amazon URLs untouched", () 
       enabled: true,
     }).url,
     "https://example.com/dp/B000EXAMPLE",
+  );
+});
+
+test("buildAmazonSearchUrl builds a usable search URL with optional affiliate tag", () => {
+  assert.deepEqual(buildAmazonSearchUrl({ query: "Dior Sauvage", enabled: true, associateTag: "mytag-20" }), {
+    url: "https://www.amazon.com/s?k=Dior+Sauvage&tag=mytag-20",
+    affiliateApplied: true,
+  });
+
+  assert.deepEqual(buildAmazonSearchUrl({ query: "Dior Sauvage" }), {
+    url: "https://www.amazon.com/s?k=Dior+Sauvage",
+    affiliateApplied: false,
+    reason: "Missing AMAZON_ASSOCIATE_TAG. Showing Amazon search link.",
+  });
+
+  assert.equal(buildAmazonSearchUrl({ query: "   " }), null);
+});
+
+test("buildAmazonSearchUrl sanitizes marketplace host", () => {
+  assert.equal(
+    buildAmazonSearchUrl({ query: "Santal 33", marketplace: "https://www.amazon.co.uk/store" })?.url,
+    "https://www.amazon.co.uk/s?k=Santal+33",
+  );
+
+  assert.equal(
+    buildAmazonSearchUrl({ query: "Santal 33", marketplace: "not a host" })?.url,
+    "https://www.amazon.com/s?k=Santal+33",
   );
 });

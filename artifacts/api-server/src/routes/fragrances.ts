@@ -7,6 +7,7 @@ import { normalizeFragrance } from "../services/fragrancePayload";
 import { createRakutenProvider, rakutenEnvReady } from "../services/rakutenProvider";
 import {
   buildAmazonAffiliateUrl,
+  buildAmazonSearchUrl,
   isAmazonProductUrl,
 } from "../server/affiliate/providers/amazon/amazonAffiliateUrl";
 
@@ -74,6 +75,15 @@ async function findCachedAffiliateLink(fragranceId: string, provider: string) {
   return rows[0] ?? null;
 }
 
+async function findCachedAffiliateLinkSafe(fragranceId: string, provider: string) {
+  try {
+    return await findCachedAffiliateLink(fragranceId, provider);
+  } catch (err) {
+    logger.warn({ err, fragranceId, provider }, "affiliate link cache lookup failed");
+    return null;
+  }
+}
+
 function buildFragranceQuery(fragrance: typeof userFragrancesTable.$inferSelect): string {
   const normalized = normalizeFragrance(fragrance.fragranceData as Record<string, any>);
   return [normalized.brand, normalized.name].filter(Boolean).join(" ").trim();
@@ -85,6 +95,10 @@ function amazonAffiliateEnabled(): boolean {
 
 function amazonAssociateTag(): string | undefined {
   return process.env.AMAZON_ASSOCIATE_TAG?.trim() || undefined;
+}
+
+function amazonMarketplace(): string | undefined {
+  return process.env.AMAZON_MARKETPLACE?.trim() || undefined;
 }
 
 function findAmazonProductUrl(value: unknown): string | null {
@@ -124,7 +138,7 @@ router.get("/fragrances/:id/buy-link", async (req, res) => {
     }
     let fallbackReason: string | undefined;
 
-    const cachedRakuten = await findCachedAffiliateLink(fragrance.id, "rakuten");
+    const cachedRakuten = await findCachedAffiliateLinkSafe(fragrance.id, "rakuten");
     if (cachedRakuten) {
       res.json(buyLinkResponse("rakuten", "active", cachedRakuten.id));
       return;
@@ -138,34 +152,44 @@ router.get("/fragrances/:id/buy-link", async (req, res) => {
 
         if (result.status === "active") {
           const product = result.product;
-          const [created] = await db
-            .insert(affiliateLinksTable)
-            .values({
-              fragranceId: fragrance.id,
-              provider: "rakuten",
-              advertiserId: product.advertiserId,
-              advertiserName: product.advertiserName,
-              productTitle: product.title,
-              productBrand: product.brand,
-              destinationUrl: product.destinationUrl,
-              affiliateUrl: product.affiliateUrl,
-              imageUrl: product.imageUrl,
-              price: product.salePrice ?? product.price,
-              currency: product.currency,
-              matchScore: product.matchScore,
-              status: "active",
-              fetchedAt: new Date(),
-              lastVerifiedAt: new Date(),
-            })
-            .returning();
+          let created: typeof affiliateLinksTable.$inferSelect | undefined;
+          try {
+            [created] = await db
+              .insert(affiliateLinksTable)
+              .values({
+                fragranceId: fragrance.id,
+                provider: "rakuten",
+                advertiserId: product.advertiserId,
+                advertiserName: product.advertiserName,
+                productTitle: product.title,
+                productBrand: product.brand,
+                destinationUrl: product.destinationUrl,
+                affiliateUrl: product.affiliateUrl,
+                imageUrl: product.imageUrl,
+                price: product.salePrice ?? product.price,
+                currency: product.currency,
+                matchScore: product.matchScore,
+                status: "active",
+                fetchedAt: new Date(),
+                lastVerifiedAt: new Date(),
+              })
+              .returning();
+          } catch (err) {
+            logger.warn({ err, fragranceId: fragrance.id }, "[rakuten] active buy-link cache insert failed");
+          }
 
           if (created) {
             res.json(buyLinkResponse("rakuten", "active", created.id));
             return;
           }
 
-          logger.warn({ fragranceId: fragrance.id }, "[rakuten] active buy-link insert returned no row");
-          res.json(buyLinkResponse("rakuten", "unavailable", undefined, "AFFILIATE_LINK_INSERT_FAILED"));
+          res.json(
+            buyLinkResponse("rakuten", "active", undefined, "AFFILIATE_LINK_CACHE_BYPASSED", {
+              network: "rakuten",
+              buyUrl: product.affiliateUrl,
+              affiliateApplied: true,
+            }),
+          );
           return;
         }
 
@@ -174,7 +198,7 @@ router.get("/fragrances/:id/buy-link", async (req, res) => {
       }
     }
 
-    const cachedCj = await findCachedAffiliateLink(fragrance.id, "cj");
+    const cachedCj = await findCachedAffiliateLinkSafe(fragrance.id, "cj");
     if (cachedCj) {
       res.json({
         provider: "cj",
@@ -198,6 +222,25 @@ router.get("/fragrances/:id/buy-link", async (req, res) => {
           buyUrl: amazon.url,
           affiliateApplied: amazon.affiliateApplied,
           affiliateUnavailableReason: amazon.reason,
+        }),
+      );
+      return;
+    }
+
+    const searchQuery = buildFragranceQuery(fragrance);
+    const amazonSearch = buildAmazonSearchUrl({
+      query: searchQuery,
+      marketplace: amazonMarketplace(),
+      associateTag: amazonAssociateTag(),
+      enabled: amazonAffiliateEnabled(),
+    });
+    if (amazonSearch) {
+      res.json(
+        buyLinkResponse("amazon", "active", undefined, "AMAZON_SEARCH_FALLBACK", {
+          network: "amazon",
+          buyUrl: amazonSearch.url,
+          affiliateApplied: amazonSearch.affiliateApplied,
+          affiliateUnavailableReason: amazonSearch.reason,
         }),
       );
       return;
