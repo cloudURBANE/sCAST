@@ -1,4 +1,4 @@
-import fragrancesRaw from "../data/fragrances.json" assert { type: "json" };
+import fragrancesRaw from "../data/fragrances.json" with { type: "json" };
 
 export interface FragranceData {
   name: string;

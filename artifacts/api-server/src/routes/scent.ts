@@ -13,6 +13,11 @@ import {
 import { logger } from "../lib/logger";
 import { resolveProcessedFragranceImage } from "../services/imagePipeline";
 import { imageReferenceDiagnostic, usableImageUrlForResponse } from "../services/imageReference";
+import {
+  asciiForImageSearch,
+  resolveFragranceIdentity,
+  resolveFragranceQuery,
+} from "../services/fragranceNameResolver";
 
 const router = Router();
 
@@ -98,6 +103,27 @@ router.post("/search-scent", async (req, res) => {
     return;
   }
   const normalizedHint = concentrationHint === "edt" || concentrationHint === "edp" ? concentrationHint : undefined;
+  const resolvedQuery = resolveFragranceQuery(query);
+  if (resolvedQuery?.corrected) {
+    logger.info(
+      {
+        inputPreview: query.slice(0, 160),
+        brand: resolvedQuery.brand,
+        name: resolvedQuery.name,
+        confidence: resolvedQuery.confidence,
+      },
+      "search-scent canonicalized fragrance query",
+    );
+
+    const profile = await buildProfile(resolvedQuery.name, resolvedQuery.brand, undefined, {
+      allowCatalogFuzzy: false,
+    });
+    if ("product" in profile) {
+      res.json(flattenProfile(profile));
+      return;
+    }
+  }
+
   const queryWithHint = [query, concentrationToQueryText(normalizedHint)].filter(Boolean).join(" ").trim();
 
   // Check global catalog before hitting local dataset or scraper
@@ -183,6 +209,21 @@ router.post("/refresh-image", async (req, res) => {
     res.status(400).json({ error: "name and brand are required" });
     return;
   }
+  const resolvedIdentity = resolveFragranceIdentity(brand, name);
+  const imageBrand = resolvedIdentity.brand;
+  const imageName = resolvedIdentity.name;
+  if (resolvedIdentity.corrected) {
+    logger.info(
+      {
+        inputBrand: brand.slice(0, 80),
+        inputName: name.slice(0, 120),
+        brand: imageBrand,
+        name: imageName,
+        confidence: resolvedIdentity.confidence,
+      },
+      "refresh-image canonicalized fragrance identity",
+    );
+  }
 
   const stripBgOnly = body.stripBgOnly === true;
   const sourceForStrip = stripBgOnly ? parseIncomingImageUrl(body.imageUrl) : null;
@@ -216,8 +257,8 @@ router.post("/refresh-image", async (req, res) => {
       );
 
       const processed = await resolveProcessedFragranceImage({
-        brand,
-        name,
+        brand: imageBrand,
+        name: imageName,
         sourceUrl: sourceForStrip,
         sourceProvider: "manual",
         allowLookupCache: false,
@@ -231,7 +272,7 @@ router.post("/refresh-image", async (req, res) => {
       }
 
       const finalImageUrl = processed.imageUrl;
-      await upsertRefreshImageCatalog(brand, name, finalImageUrl);
+      await upsertRefreshImageCatalog(imageBrand, imageName, finalImageUrl);
       res.json({
         imageUrl: finalImageUrl,
         storagePath: processed.storagePath,
@@ -271,8 +312,8 @@ router.post("/refresh-image", async (req, res) => {
     const removeBgOpts = poofType === "product" ? ({ poofType: "product" } as const) : undefined;
 
     // Normalize to ASCII so accented chars (é, ü, etc.) don't break URL parsing
-    const asciiName = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\x20-\x7E]/g, "");
-    const asciiBrand = brand.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\x20-\x7E]/g, "");
+    const asciiName = asciiForImageSearch(imageName);
+    const asciiBrand = asciiForImageSearch(imageBrand);
     const normalizedHint = concentrationHint === "edt" || concentrationHint === "edp" ? concentrationHint : undefined;
     const concentrationText = concentrationToQueryText(normalizedHint);
 
@@ -296,8 +337,8 @@ router.post("/refresh-image", async (req, res) => {
     );
 
     const processed = await resolveProcessedFragranceImage({
-      brand,
-      name,
+      brand: imageBrand,
+      name: imageName,
       searchQuery: serperQuery,
       allowLookupCache: false,
       removeBackground: !skipBg,
@@ -312,7 +353,7 @@ router.post("/refresh-image", async (req, res) => {
     }
 
     const finalImageUrl = processed.imageUrl;
-    await upsertRefreshImageCatalog(brand, name, finalImageUrl);
+    await upsertRefreshImageCatalog(imageBrand, imageName, finalImageUrl);
 
     res.json({
       imageUrl: finalImageUrl,
