@@ -48,16 +48,9 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
 
   useEffect(() => {
     setBuyLinks({});
-    // #region agent log
-    fetch('http://127.0.0.1:7745/ingest/484c0150-587d-4568-9bd7-b30ce5dec585',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'db2024'},body:JSON.stringify({sessionId:'db2024',runId:'baseline-share-access',hypothesisId:'H4',location:'components/SharePage.tsx:49',message:'share page fetch start',data:{userId,path:`/api/share/${userId}`},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     fetch(`/api/share/${userId}`)
       .then(async (r) => {
-        const body = await r.json();
-        // #region agent log
-        fetch('http://127.0.0.1:7745/ingest/484c0150-587d-4568-9bd7-b30ce5dec585',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'db2024'},body:JSON.stringify({sessionId:'db2024',runId:'baseline-share-access',hypothesisId:'H5',location:'components/SharePage.tsx:56',message:'share page fetch response',data:{userId,status:r.status,ok:r.ok,error:body?.error ?? null,hideImages:body?.hideImages ?? null,count:Array.isArray(body?.fragrances)?body.fragrances.length:null,imageCount:Array.isArray(body?.fragrances)?body.fragrances.filter((f: any)=>typeof f?.imageUrl==='string'&&f.imageUrl.trim().length>0).length:null},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
-        return body;
+        return r.json();
       })
       .then(d => {
         if (d.error) throw new Error(d.error);
@@ -87,9 +80,6 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
         }
       })
       .catch(e => {
-        // #region agent log
-        fetch('http://127.0.0.1:7745/ingest/484c0150-587d-4568-9bd7-b30ce5dec585',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'db2024'},body:JSON.stringify({sessionId:'db2024',runId:'baseline-share-access',hypothesisId:'H5',location:'components/SharePage.tsx:69',message:'share page fetch error',data:{userId,error:e?.message ?? 'unknown'},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
         setError(e.message || 'Failed to load vault');
       })
       .finally(() => setLoading(false));

@@ -19,7 +19,7 @@ interface ShareModalProps {
   userId: string | null;
   authToken: string | null;
   items: FragranceItem[];
-  onToggleVisibility: (id: string, hidden: boolean) => void;
+  onToggleVisibility: (rowOrItemId: string, hidden: boolean) => void;
 }
 
 export const ShareModal: React.FC<ShareModalProps> = ({
@@ -84,10 +84,10 @@ export const ShareModal: React.FC<ShareModalProps> = ({
   const handleToggle = async (item: FragranceItem) => {
     const newHidden = !item.shareHidden;
     const apiId = item._dbId ?? item.id;
-    setPendingIds(prev => new Set(prev).add(item.id));
-    onToggleVisibility(item.id, newHidden);
+    setPendingIds(prev => new Set(prev).add(apiId));
+    onToggleVisibility(apiId, newHidden);
     try {
-      await fetch(`/api/wardrobe/${apiId}/visibility`, {
+      const res = await fetch(`/api/wardrobe/${apiId}/visibility`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -95,11 +95,13 @@ export const ShareModal: React.FC<ShareModalProps> = ({
         },
         body: JSON.stringify({ shareHidden: newHidden }),
       });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
     } catch {
+      onToggleVisibility(apiId, !newHidden);
     } finally {
       setPendingIds(prev => {
         const next = new Set(prev);
-        next.delete(item.id);
+        next.delete(apiId);
         return next;
       });
     }
@@ -263,12 +265,13 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                   <p className="text-center text-white/20 font-serif italic text-sm py-8">No fragrances found</p>
                 )}
                 {filtered.map((item) => {
+                  const rowOrItemId = item._dbId ?? item.id;
                   const isHidden = !!item.shareHidden;
-                  const isPending = pendingIds.has(item.id);
+                  const isPending = pendingIds.has(rowOrItemId);
 
                   return (
                     <motion.button
-                      key={item.id}
+                      key={rowOrItemId}
                       layout
                       onClick={() => !isPending && handleToggle(item)}
                       disabled={isPending}

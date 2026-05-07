@@ -877,7 +877,11 @@ export default function App() {
         authToken={authToken}
         items={items}
         onToggleVisibility={(id, hidden) => {
-          setItems(prev => prev.map(item => item.id === id ? { ...item, shareHidden: hidden } : item));
+          setItems(prev =>
+            prev.map(item =>
+              (item._dbId ?? item.id) === id ? { ...item, shareHidden: hidden } : item,
+            ),
+          );
         }}
       />
 
