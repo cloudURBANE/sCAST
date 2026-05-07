@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import { db } from "@workspace/db";
 import { affiliateLinksTable } from "@workspace/db/schema";
 import { eq, sql } from "drizzle-orm";
@@ -24,12 +24,13 @@ function withSafeSid(rawUrl: string, rawSid: unknown): string | null {
   }
 }
 
-router.get("/go/cj/:id", async (req, res) => {
+async function handleAffiliateRedirect(req: Request, res: Response, label: string) {
   try {
+    const affiliateLinkId = String(req.params.id ?? "");
     const rows = await db
       .select()
       .from(affiliateLinksTable)
-      .where(eq(affiliateLinksTable.id, req.params.id))
+      .where(eq(affiliateLinksTable.id, affiliateLinkId))
       .limit(1);
     const link = rows[0];
 
@@ -54,9 +55,17 @@ router.get("/go/cj/:id", async (req, res) => {
 
     res.redirect(302, redirectUrl);
   } catch (err) {
-    logger.warn({ err, affiliateLinkId: req.params.id }, "CJ redirect failed");
+    logger.warn({ err, affiliateLinkId: req.params.id }, `${label} redirect failed`);
     res.redirect(302, "/");
   }
+}
+
+router.get("/go/cj/:id", async (req, res) => {
+  await handleAffiliateRedirect(req, res, "CJ");
+});
+
+router.get("/go/affiliate/:id", async (req, res) => {
+  await handleAffiliateRedirect(req, res, "affiliate");
 });
 
 export default router;

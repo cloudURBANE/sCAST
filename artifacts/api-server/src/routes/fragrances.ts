@@ -3,6 +3,8 @@ import { db } from "@workspace/db";
 import { affiliateLinksTable, userFragrancesTable } from "@workspace/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { logger } from "../lib/logger";
+import { normalizeFragrance } from "../services/fragrancePayload";
+import { createRakutenProvider, rakutenEnvReady } from "../services/rakutenProvider";
 
 const router = Router();
 
@@ -12,11 +14,12 @@ function isUuidish(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 }
 
-function buyLinkResponse(status: BuyLinkStatus, affiliateLinkId?: string) {
+function buyLinkResponse(provider: string, status: BuyLinkStatus, affiliateLinkId?: string, reason?: string) {
   return {
-    provider: "cj",
-    buyUrl: status === "active" && affiliateLinkId ? `/go/cj/${affiliateLinkId}` : null,
+    provider,
+    buyUrl: status === "active" && affiliateLinkId ? `/go/affiliate/${affiliateLinkId}` : null,
     status,
+    ...(reason ? { reason } : {}),
   };
 }
 
@@ -40,50 +43,101 @@ async function findFragranceRow(id: string) {
   return byPayloadId[0] ?? null;
 }
 
-async function findCachedCjAffiliateLink(fragranceId: string) {
+async function findCachedAffiliateLink(fragranceId: string, provider: string) {
   const rows = await db
     .select()
     .from(affiliateLinksTable)
-    .where(sql`${affiliateLinksTable.fragranceId} = ${fragranceId} and ${affiliateLinksTable.provider} = 'cj' and ${affiliateLinksTable.status} = 'active'`)
+    .where(sql`${affiliateLinksTable.fragranceId} = ${fragranceId} and ${affiliateLinksTable.provider} = ${provider} and ${affiliateLinksTable.status} = 'active'`)
     .limit(1);
 
   return rows[0] ?? null;
 }
 
-function cjEnvReady() {
-  return Boolean(
-    process.env.CJ_PERSONAL_ACCESS_TOKEN &&
-      process.env.CJ_COMPANY_ID &&
-      process.env.CJ_PROPERTY_ID &&
-      (process.env.CJ_API_URL || "https://developers.cj.com/graphql"),
-  );
+function buildFragranceQuery(fragrance: typeof userFragrancesTable.$inferSelect): string {
+  const normalized = normalizeFragrance(fragrance.fragranceData as Record<string, any>);
+  return [normalized.brand, normalized.name].filter(Boolean).join(" ").trim();
 }
 
 router.get("/fragrances/:id/buy-link", async (req, res) => {
   try {
     const fragrance = await findFragranceRow(req.params.id);
     if (!fragrance) {
-      res.status(404).json(buyLinkResponse("unavailable"));
+      res.status(404).json(buyLinkResponse("rakuten", "unavailable", undefined, "FRAGRANCE_NOT_FOUND"));
       return;
     }
 
-    const cached = await findCachedCjAffiliateLink(fragrance.id);
-    if (cached) {
-      res.json(buyLinkResponse("active", cached.id));
+    const cachedRakuten = await findCachedAffiliateLink(fragrance.id, "rakuten");
+    if (cachedRakuten) {
+      res.json(buyLinkResponse("rakuten", "active", cachedRakuten.id));
       return;
     }
 
-    if (!cjEnvReady()) {
-      res.json(buyLinkResponse("unavailable"));
+    if (rakutenEnvReady()) {
+      const query = buildFragranceQuery(fragrance);
+      if (query) {
+        const rakuten = createRakutenProvider();
+        const result = await rakuten.resolveBuyLink({ query });
+
+        if (result.status === "active") {
+          const product = result.product;
+          const [created] = await db
+            .insert(affiliateLinksTable)
+            .values({
+              fragranceId: fragrance.id,
+              provider: "rakuten",
+              advertiserId: product.advertiserId,
+              advertiserName: product.advertiserName,
+              productTitle: product.title,
+              productBrand: product.brand,
+              destinationUrl: product.destinationUrl,
+              affiliateUrl: product.affiliateUrl,
+              imageUrl: product.imageUrl,
+              price: product.salePrice ?? product.price,
+              currency: product.currency,
+              matchScore: product.matchScore,
+              status: "active",
+              fetchedAt: new Date(),
+              lastVerifiedAt: new Date(),
+            })
+            .returning();
+
+          if (created) {
+            res.json(buyLinkResponse("rakuten", "active", created.id));
+            return;
+          }
+
+          logger.warn({ fragranceId: fragrance.id }, "[rakuten] active buy-link insert returned no row");
+          res.json(buyLinkResponse("rakuten", "unavailable", undefined, "AFFILIATE_LINK_INSERT_FAILED"));
+          return;
+        }
+
+        logger.info({ fragranceId: fragrance.id, reason: result.reason }, "[rakuten] buy-link unavailable");
+        res.json(buyLinkResponse("rakuten", "unavailable", undefined, result.reason));
+        return;
+      }
+    }
+
+    const cachedCj = await findCachedAffiliateLink(fragrance.id, "cj");
+    if (cachedCj) {
+      res.json({
+        provider: "cj",
+        buyUrl: `/go/cj/${cachedCj.id}`,
+        status: "active",
+      });
       return;
     }
 
-    // TODO: Add CJ Product Search GraphQL lookup once the CJ schema/query shape
-    // is available, then cache the selected product in affiliate_links.
-    res.json(buyLinkResponse("unavailable"));
+    res.json(
+      buyLinkResponse(
+        "rakuten",
+        "unavailable",
+        undefined,
+        rakutenEnvReady() ? "EMPTY_FRAGRANCE_QUERY" : "RAKUTEN_CREDENTIALS_MISSING",
+      ),
+    );
   } catch (err) {
     logger.warn({ err }, "fragrance buy-link resolver failed");
-    res.json(buyLinkResponse("unavailable"));
+    res.json(buyLinkResponse("rakuten", "unavailable", undefined, "BUY_LINK_RESOLUTION_FAILED"));
   }
 });
 
