@@ -1,9 +1,22 @@
 import { getCatalogEntry, searchCatalog } from "./catalogService";
 import { resolveCachedFragranceImage } from "./imagePipeline";
+import { localImageObjectExists, storagePathFromLocalImageObjectUrl } from "./imageObjectStorage";
 import { safeImageUrlForResponse } from "./persistenceGuards";
 
 function hasImageUrl(value: unknown): value is string {
   return safeImageUrlForResponse(value).length > 0;
+}
+
+export async function usableImageUrlForResponse(value: unknown): Promise<string | null> {
+  const url = safeImageUrlForResponse(value);
+  if (!url) return null;
+
+  const localStoragePath = storagePathFromLocalImageObjectUrl(url);
+  if (localStoragePath && !(await localImageObjectExists(localStoragePath))) {
+    return null;
+  }
+
+  return url;
 }
 
 /**
@@ -34,7 +47,8 @@ export async function resolveSharedImageUrl(
 ): Promise<string | null> {
   try {
     const exact = await getCatalogEntry(brand, name);
-    if (hasImageUrl(exact?.imageUrl)) return safeImageUrlForResponse(exact?.imageUrl);
+    const exactImageUrl = await usableImageUrlForResponse(exact?.imageUrl);
+    if (exactImageUrl) return exactImageUrl;
   } catch {
     /* non-fatal */
   }
@@ -51,7 +65,8 @@ export async function resolveSharedImageUrl(
         tokensSubsetOf(name, fuzzyName) &&
         tokensSubsetOf(brand, fuzzyBrand)
       ) {
-        return safeImageUrlForResponse(fuzzy.imageUrl);
+        const fuzzyImageUrl = await usableImageUrlForResponse(fuzzy.imageUrl);
+        if (fuzzyImageUrl) return fuzzyImageUrl;
       }
     }
   } catch {

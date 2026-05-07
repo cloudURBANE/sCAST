@@ -2,7 +2,7 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { usersTable, userFragrancesTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
-import { resolveSharedImageUrl } from "../services/imageHydration";
+import { resolveSharedImageUrl, usableImageUrlForResponse } from "../services/imageHydration";
 import { buildProfile } from "../services/scentEngine";
 import { flattenProfile } from "../services/catalogService";
 import { logger } from "../lib/logger";
@@ -189,6 +189,14 @@ function isUuidish(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 }
 
+async function persistableImageReference(value: unknown): Promise<string | null> {
+  const url = await usableImageUrlForResponse(value);
+  if (!url) return null;
+  if (url.startsWith("/api/image-objects/")) return url;
+  if (/^https?:\/\//i.test(url)) return url;
+  return null;
+}
+
 async function findUserRow(userId: string, idParam: string) {
   const rows = await db
     .select()
@@ -251,9 +259,17 @@ router.patch("/wardrobe/:id", async (req, res) => {
     return;
   }
 
-  const { syncImageFromCatalog } = req.body as { syncImageFromCatalog?: boolean };
-  if (syncImageFromCatalog !== true) {
-    res.status(400).json({ error: "syncImageFromCatalog: true is required" });
+  const { syncImageFromCatalog, imageUrl } = req.body as {
+    syncImageFromCatalog?: boolean;
+    imageUrl?: unknown;
+  };
+  const explicitImageUrl = await persistableImageReference(imageUrl);
+  if (syncImageFromCatalog !== true && !explicitImageUrl) {
+    res.status(400).json({ error: "syncImageFromCatalog: true or a valid imageUrl is required" });
+    return;
+  }
+  if (typeof imageUrl === "string" && imageUrl.trim() && !explicitImageUrl) {
+    res.status(400).json({ error: "imageUrl must be an http(s) URL or an existing /api/image-objects/... URL" });
     return;
   }
 
@@ -272,10 +288,14 @@ router.patch("/wardrobe/:id", async (req, res) => {
   }
 
   let url: string | null = null;
-  try {
-    url = await resolveSharedImageUrl(brand, name);
-  } catch {
-    url = null;
+  if (explicitImageUrl) {
+    url = explicitImageUrl;
+  } else {
+    try {
+      url = await resolveSharedImageUrl(brand, name);
+    } catch {
+      url = null;
+    }
   }
 
   if (!url || typeof url !== "string" || !url.trim()) {

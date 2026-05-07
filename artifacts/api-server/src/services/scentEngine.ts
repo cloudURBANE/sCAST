@@ -3,7 +3,7 @@ import { parseFragrance } from "./scentParser";
 import { vectorize, calculatePerformance, calculateContext, type ScentVector, type PerformanceMetrics, type ContextProfile } from "./scentVectorizer";
 import { getCatalogEntry, saveCatalogEntry, searchCatalog } from "./catalogService";
 import { resolveProcessedFragranceImage } from "./imagePipeline";
-import { safeImageUrlForResponse } from "./persistenceGuards";
+import { usableImageUrlForResponse } from "./imageHydration";
 
 export interface ScentProfile {
   product: { name: string; brand: string; perfumer?: string };
@@ -79,7 +79,8 @@ export async function buildProfile(
   let catalogBase: ScentProfile | null = null;
   const cached = await getCatalogEntry(brand, name);
   if (cached) {
-    if (safeImageUrlForResponse(cached.imageUrl)) return cached;
+    const cachedImageUrl = await usableImageUrlForResponse(cached.imageUrl);
+    if (cachedImageUrl) return { ...cached, imageUrl: cachedImageUrl };
     catalogBase = cached;
   }
 
@@ -87,7 +88,8 @@ export async function buildProfile(
     // Fuzzy search handles cases like "Sauvage EDP" matching stored "Sauvage"
     const fuzzy = await searchCatalog(`${brand} ${name}`);
     if (fuzzy) {
-      if (safeImageUrlForResponse(fuzzy.imageUrl)) return fuzzy;
+      const fuzzyImageUrl = await usableImageUrlForResponse(fuzzy.imageUrl);
+      if (fuzzyImageUrl) return { ...fuzzy, imageUrl: fuzzyImageUrl };
       catalogBase = fuzzy;
     }
   }

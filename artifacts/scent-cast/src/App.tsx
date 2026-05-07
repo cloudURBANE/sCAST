@@ -471,7 +471,10 @@ export default function App() {
     }
   }, [authToken, items.length, guestPromptDismissed]);
 
-  const handlePersistWardrobeImage = useCallback(async (target: Fragrance): Promise<Fragrance | null> => {
+  const handlePersistWardrobeImage = useCallback(async (
+    target: Fragrance,
+    imageUrl?: string,
+  ): Promise<Fragrance | null> => {
     if (!authToken) return null;
     const apiId = target._dbId ?? target.id;
     try {
@@ -481,7 +484,10 @@ export default function App() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${authToken}`,
         },
-        body: JSON.stringify({ syncImageFromCatalog: true }),
+        body: JSON.stringify({
+          syncImageFromCatalog: true,
+          ...(imageUrl ? { imageUrl } : {}),
+        }),
       });
       const data = (await res.json()) as Partial<Fragrance> & { _dbId?: string; error?: string };
       if (!res.ok) {

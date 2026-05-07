@@ -37,6 +37,19 @@ function encodeStoragePath(storagePath: string): string {
   return storagePath.split("/").map(encodeURIComponent).join("/");
 }
 
+export function storagePathFromLocalImageObjectUrl(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("/api/image-objects/")) return null;
+  try {
+    const encodedPath = trimmed.slice("/api/image-objects/".length).split(/[?#]/, 1)[0];
+    const storagePath = encodedPath.split("/").map(decodeURIComponent).join("/");
+    assertSafeStorageKey(storagePath);
+    return storagePath;
+  } catch {
+    return null;
+  }
+}
+
 function assertSafeStorageKey(key: string): void {
   if (!key || key.startsWith("/") || key.includes("\\") || key.includes("..")) {
     throw new Error("Unsafe image storage key");
@@ -231,4 +244,13 @@ export async function readLocalImageObject(storagePath: string): Promise<Buffer>
     throw new Error("Unsafe local image storage path");
   }
   return readFile(fullPath);
+}
+
+export async function localImageObjectExists(storagePath: string): Promise<boolean> {
+  try {
+    await readLocalImageObject(storagePath);
+    return true;
+  } catch {
+    return false;
+  }
 }

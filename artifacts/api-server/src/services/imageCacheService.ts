@@ -1,7 +1,11 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { imageCacheTable } from "@workspace/db/schema";
-import type { ImageStorageProvider } from "./imageObjectStorage";
+import {
+  localImageObjectExists,
+  storagePathFromLocalImageObjectUrl,
+  type ImageStorageProvider,
+} from "./imageObjectStorage";
 import { assertNoPersistedBase64Image, safeImageUrlForResponse } from "./persistenceGuards";
 export {
   buildProcessedImageStorageKey,
@@ -52,6 +56,22 @@ function rowToReference(row: typeof imageCacheTable.$inferSelect, cached: boolea
     sizeBytes: row.sizeBytes,
     backgroundRemoved: row.backgroundRemoved,
   };
+}
+
+async function rowToUsableReference(
+  row: typeof imageCacheTable.$inferSelect,
+  cached: boolean,
+): Promise<CachedImageReference | null> {
+  const ref = rowToReference(row, cached);
+  if (!ref) return null;
+
+  if (ref.storageProvider === "local" || ref.imageUrl.startsWith("/api/image-objects/")) {
+    const storagePath = ref.storagePath || storagePathFromLocalImageObjectUrl(ref.imageUrl);
+    if (!storagePath) return null;
+    if (!(await localImageObjectExists(storagePath))) return null;
+  }
+
+  return ref;
 }
 
 function readyInputToReference(input: {
@@ -119,7 +139,7 @@ export async function getReadyCachedImageBySourceHash(
   }
   const row = rows[0];
   if (!row) return null;
-  const ref = rowToReference(row, true);
+  const ref = await rowToUsableReference(row, true);
   if (ref) await markCacheHit(row.id);
   return ref;
 }
@@ -141,16 +161,19 @@ export async function getLatestReadyCachedImageByLookupKey(
         ),
       )
       .orderBy(desc(imageCacheTable.lastUsedAt), desc(imageCacheTable.createdAt))
-      .limit(1);
+      .limit(10);
   } catch (err) {
     if (isImageCacheUnavailableError(err)) return null;
     throw err;
   }
-  const row = rows[0];
-  if (!row) return null;
-  const ref = rowToReference(row, true);
-  if (ref) await markCacheHit(row.id);
-  return ref;
+  for (const row of rows) {
+    const ref = await rowToUsableReference(row, true);
+    if (ref) {
+      await markCacheHit(row.id);
+      return ref;
+    }
+  }
+  return null;
 }
 
 export async function getLatestReadyCachedImageBySearchQueryHash(
@@ -170,16 +193,19 @@ export async function getLatestReadyCachedImageBySearchQueryHash(
         ),
       )
       .orderBy(desc(imageCacheTable.lastUsedAt), desc(imageCacheTable.createdAt))
-      .limit(1);
+      .limit(10);
   } catch (err) {
     if (isImageCacheUnavailableError(err)) return null;
     throw err;
   }
-  const row = rows[0];
-  if (!row) return null;
-  const ref = rowToReference(row, true);
-  if (ref) await markCacheHit(row.id);
-  return ref;
+  for (const row of rows) {
+    const ref = await rowToUsableReference(row, true);
+    if (ref) {
+      await markCacheHit(row.id);
+      return ref;
+    }
+  }
+  return null;
 }
 
 export async function getCachedImageStatusBySourceHash(
@@ -282,7 +308,7 @@ export async function recordImageReady(input: {
     throw err;
   }
 
-  const ref = row ? rowToReference(row, false) : readyInputToReference(input);
+  const ref = row ? await rowToUsableReference(row, false) : readyInputToReference(input);
   if (!ref) throw new Error("Recorded image cache row was missing a usable public URL");
   return ref;
 }

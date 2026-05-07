@@ -12,6 +12,7 @@ import {
 } from "../services/imageSolvers";
 import { logger } from "../lib/logger";
 import { resolveProcessedFragranceImage } from "../services/imagePipeline";
+import { usableImageUrlForResponse } from "../services/imageHydration";
 
 const router = Router();
 
@@ -102,7 +103,32 @@ router.post("/search-scent", async (req, res) => {
   // Check global catalog before hitting local dataset or scraper
   const catalogHit = await searchCatalog(queryWithHint);
   if (catalogHit) {
-    res.json(catalogHit);
+    const catalogImageUrl = await usableImageUrlForResponse(catalogHit.imageUrl);
+    if (catalogImageUrl) {
+      res.json(flattenProfile({ ...catalogHit, imageUrl: catalogImageUrl }));
+      return;
+    }
+
+    const completed = await buildProfile(
+      catalogHit.product.name,
+      catalogHit.product.brand,
+      {
+        notes: catalogHit.notes,
+        family: catalogHit.family,
+        description: catalogHit.description,
+        imageUrl: catalogHit.imageUrl,
+        pyramid: catalogHit.pyramid,
+        perfumer: catalogHit.product.perfumer,
+      },
+      { allowCatalogFuzzy: false },
+    );
+
+    if ("product" in completed) {
+      res.json(flattenProfile(completed));
+      return;
+    }
+
+    res.json(flattenProfile(catalogHit));
     return;
   }
 

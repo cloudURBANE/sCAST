@@ -17,7 +17,11 @@ import {
   recordImageReady,
   type CachedImageReference,
 } from "./imageCacheService";
-import { getImageObjectStorage, readLocalImageObject } from "./imageObjectStorage";
+import {
+  getImageObjectStorage,
+  readLocalImageObject,
+  storagePathFromLocalImageObjectUrl,
+} from "./imageObjectStorage";
 import { safeImageUrlForResponse } from "./persistenceGuards";
 import { fetchExternalImage, parseAndValidateExternalImageUrl } from "./safeImageFetch";
 import { searchSerperImageCandidates, type SerperImageCandidate } from "./serperService";
@@ -72,8 +76,8 @@ function decodeDataImage(input: string): Buffer | null {
 function sourceFromInput(raw: string): PipelineSource {
   const trimmed = raw.trim();
   if (trimmed.startsWith("/api/image-objects/")) {
-    const encodedPath = trimmed.slice("/api/image-objects/".length);
-    const storagePath = encodedPath.split("/").map(decodeURIComponent).join("/");
+    const storagePath = storagePathFromLocalImageObjectUrl(trimmed);
+    if (!storagePath) throw new Error("Invalid local image object URL");
     const sourceUrlHash = hashString(`local-object:${storagePath}`);
     return {
       sourceUrlForProcessing: trimmed,

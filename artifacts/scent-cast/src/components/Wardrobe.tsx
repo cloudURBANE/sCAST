@@ -107,8 +107,8 @@ function SuggestionTypingLabel({ text, animate }: { text: string; animate: boole
 export const Wardrobe: React.FC<{
   items: Fragrance[];
   onDelete: (item: Fragrance) => void;
-  /** Persist vault row image from catalog after preview (authenticated). */
-  onPersistWardrobeImage?: (item: Fragrance) => Promise<Fragrance | null>;
+  /** Persist the preview image to the vault row (authenticated). */
+  onPersistWardrobeImage?: (item: Fragrance, imageUrl?: string) => Promise<Fragrance | null>;
   featuredItem?: Fragrance | null;
   /** Restore in-memory snapshot after an automatic legacy wardrobe rebuild (this tab only). */
   onRevertWardrobe?: () => void;
@@ -289,7 +289,7 @@ export const Wardrobe: React.FC<{
     setPersistBusy(true);
     setRefreshError(null);
     try {
-      const merged = await onPersistWardrobeImage(selectedItem);
+      const merged = await onPersistWardrobeImage(selectedItem, pendingPreview.url);
       if (!merged) throw new Error('Could not save — try again or check your connection.');
       closeDetail();
     } catch (err: any) {
