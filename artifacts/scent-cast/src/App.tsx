@@ -35,6 +35,14 @@ function wardrobeEntryBrand(item: Fragrance): string {
 function wardrobeNeedsLegacyRebuild(items: Fragrance[]): boolean {
   return items.some((item) => !wardrobeEntryName(item) || !wardrobeEntryBrand(item));
 }
+function sameWardrobeEntry(
+  item: Pick<Fragrance, 'id' | '_dbId'>,
+  target: Pick<Fragrance, 'id' | '_dbId'>,
+): boolean {
+  if (target._dbId) return item._dbId === target._dbId;
+  if (item._dbId) return false;
+  return item.id === target.id;
+}
 
 // --- Pure Functions ---
 
@@ -502,7 +510,7 @@ export default function App() {
       };
       setItems((prev) =>
         prev.map((item) =>
-          target._dbId && item._dbId === target._dbId ? next : item.id === target.id ? next : item,
+          sameWardrobeEntry(item, target) ? next : item,
         ),
       );
       return next;
@@ -567,7 +575,7 @@ export default function App() {
     if (!authToken) {
       setItems((prev) =>
         prev.filter(item =>
-          target._dbId ? item._dbId !== target._dbId : item.id !== target.id,
+          !sameWardrobeEntry(item, target),
         ),
       );
       return;
@@ -591,7 +599,7 @@ export default function App() {
 
     setItems((prev) =>
       prev.filter(item =>
-        target._dbId ? item._dbId !== target._dbId : item.id !== target.id,
+        !sameWardrobeEntry(item, target),
       ),
     );
   };

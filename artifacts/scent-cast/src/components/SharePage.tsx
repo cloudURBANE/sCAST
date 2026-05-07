@@ -133,12 +133,13 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {data.fragrances.map((item, i) => {
                 const fragranceId = item._dbId ?? item.id;
+                const isExpanded = expanded === fragranceId;
                 const buyLink = buyLinks[fragranceId];
                 const buyUrl = buyLink?.status === 'active' ? buyLink.buyUrl : null;
 
                 return (
                   <motion.div
-                    key={item.id}
+                    key={fragranceId}
                     initial={{ opacity: 0, y: 24 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: i * 0.05 }}
@@ -146,7 +147,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                   >
                   <div
                     className="glass-acrylic rounded-scent overflow-hidden cursor-pointer transition-all duration-500 hover:-translate-y-2 hover:shadow-[0_20px_50px_rgba(255,255,255,0.08)]"
-                    onClick={() => setExpanded(expanded === item.id ? null : item.id)}
+                    onClick={() => setExpanded(isExpanded ? null : fragranceId)}
                   >
                     {!data.hideImages && (
                       <div className="relative aspect-[3/4] bg-white/[0.02]">
@@ -184,7 +185,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                         )}
                       </div>
 
-                      {expanded === item.id && (
+                      {isExpanded && (
                         <motion.div
                           initial={{ opacity: 0, height: 0 }}
                           animate={{ opacity: 1, height: 'auto' }}
