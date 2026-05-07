@@ -121,7 +121,11 @@ export const LavaBackground: React.FC = () => {
     const timeLocation = gl.getUniformLocation(program, 'u_time');
     const resolutionLocation = gl.getUniformLocation(program, 'u_resolution');
 
-    let animId: number;
+    const prefersReducedMotion =
+      typeof window !== 'undefined' &&
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    let animId: number | null = null;
+
     const render = (time: number) => {
       if (canvas.width !== canvas.clientWidth || canvas.height !== canvas.clientHeight) {
         canvas.width = canvas.clientWidth;
@@ -136,8 +140,33 @@ export const LavaBackground: React.FC = () => {
       animId = requestAnimationFrame(render);
     };
 
-    animId = requestAnimationFrame(render);
-    return () => cancelAnimationFrame(animId);
+    const stop = () => {
+      if (animId !== null) {
+        cancelAnimationFrame(animId);
+        animId = null;
+      }
+    };
+
+    const start = () => {
+      if (prefersReducedMotion || animId !== null) return;
+      animId = requestAnimationFrame(render);
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        stop();
+      } else {
+        start();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    start();
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      stop();
+    };
   }, []);
 
   return (

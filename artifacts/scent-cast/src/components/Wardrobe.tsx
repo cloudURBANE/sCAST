@@ -148,6 +148,7 @@ export const Wardrobe: React.FC<{
 }) => {
   const [selectedItem, setSelectedItem] = React.useState<Fragrance | null>(null);
   const [searchQuery, setSearchQuery] = React.useState("");
+  const deferredSearchQuery = React.useDeferredValue(searchQuery);
   
   const [refreshingId, setRefreshingId] = React.useState<string | null>(null);
   const [refreshError, setRefreshError] = React.useState<string | null>(null);
@@ -322,7 +323,7 @@ export const Wardrobe: React.FC<{
 
   // Performance Optimization: Memoize computationally heavy filter operations
   const filteredItems = React.useMemo(() => {
-    const q = searchQuery.trim();
+    const q = deferredSearchQuery.trim();
     if (!q) return items;
     return items.filter(item => {
       const name = entryName(item);
@@ -331,11 +332,11 @@ export const Wardrobe: React.FC<{
 
       return matchesWardrobeQuery(item, q);
     });
-  }, [items, searchQuery]);
+  }, [items, deferredSearchQuery]);
 
   const searchSuggestions = React.useMemo(
-    () => buildWardrobeSearchSuggestions(items, searchQuery),
-    [items, searchQuery],
+    () => buildWardrobeSearchSuggestions(items, deferredSearchQuery),
+    [items, deferredSearchQuery],
   );
 
   React.useEffect(() => {

@@ -66,6 +66,8 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({ weather: propWeath
   const [internalWeather, setInternalWeather] = useState<WeatherData | null>(null);
   const [internalLoading, setInternalLoading] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
+  const hoverFrameRef = useRef<number | null>(null);
+  const pendingMouseRef = useRef<{ x: number; y: number } | null>(null);
 
   const weather = propWeather !== undefined ? propWeather : internalWeather;
   const loading = propLoading !== undefined ? propLoading : internalLoading;
@@ -95,11 +97,23 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({ weather: propWeath
     return () => { isMounted = false; };
   }, [propWeather]);
 
+  useEffect(() => {
+    return () => {
+      if (hoverFrameRef.current !== null) cancelAnimationFrame(hoverFrameRef.current);
+    };
+  }, []);
+
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    containerRef.current.style.setProperty('--mouse-x', `${e.clientX - rect.left}px`);
-    containerRef.current.style.setProperty('--mouse-y', `${e.clientY - rect.top}px`);
+    pendingMouseRef.current = { x: e.clientX, y: e.clientY };
+    if (hoverFrameRef.current !== null) return;
+
+    hoverFrameRef.current = requestAnimationFrame(() => {
+      hoverFrameRef.current = null;
+      if (!containerRef.current || !pendingMouseRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      containerRef.current.style.setProperty('--mouse-x', `${pendingMouseRef.current.x - rect.left}px`);
+      containerRef.current.style.setProperty('--mouse-y', `${pendingMouseRef.current.y - rect.top}px`);
+    });
   };
 
   if (loading) {
