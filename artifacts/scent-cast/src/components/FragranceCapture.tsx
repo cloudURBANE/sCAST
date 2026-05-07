@@ -243,7 +243,7 @@ export const FragranceCapture: React.FC<{ onAdd?: (item: any) => void }> = ({ on
               value={searchQuery}
               onChange={(e) => { setSearchQuery(e.target.value); setErrorStatus(null); }}
               placeholder="Enter Fragrance Name..."
-              className="w-full bg-white/[0.03] border border-white/10 rounded-[1.25rem] h-14 px-6 text-white font-sans text-sm outline-none focus:border-white/30 transition-colors placeholder:text-white/20"
+              className="scent-lux-input w-full h-14 px-6 text-center text-white font-sans text-sm outline-none transition-colors placeholder:text-white/28"
             />
             <button
               type="submit"
@@ -265,8 +265,8 @@ export const FragranceCapture: React.FC<{ onAdd?: (item: any) => void }> = ({ on
                     onClick={() => setConcentrationHint(option.id)}
                     className={`px-3 py-1 rounded-full text-[8px] uppercase tracking-widest border transition-all ${
                       selected
-                        ? 'bg-white text-black border-white'
-                        : 'bg-white/5 text-scent-muted border-white/10 hover:text-white hover:border-white/30'
+                        ? 'bg-scent-accent text-black border-scent-accent'
+                        : 'bg-white/5 text-scent-muted border-scent-accent/15 hover:text-white hover:border-scent-accent/45'
                     }`}
                     aria-pressed={selected}
                   >
@@ -285,7 +285,7 @@ export const FragranceCapture: React.FC<{ onAdd?: (item: any) => void }> = ({ on
                   setSearchQuery(tag); 
                   handleSearch(undefined, tag); 
                 }}
-                className="px-3 py-1 bg-white/5 rounded-full text-[8px] uppercase tracking-widest text-scent-muted hover:text-white hover:bg-white/10 transition-all border border-white/5"
+                className="px-3 py-1 bg-white/5 rounded-full text-[8px] uppercase tracking-widest text-scent-muted hover:text-white hover:bg-white/10 transition-all border border-scent-accent/10"
               >
                 {tag}
               </button>
@@ -340,7 +340,7 @@ export const FragranceCapture: React.FC<{ onAdd?: (item: any) => void }> = ({ on
               </div>
               <button
                 onClick={handleConfirm}
-                className="w-full mt-6 h-14 bg-white text-scent-bg font-serif italic text-lg hover:scale-[1.02] active:scale-95 transition-all rounded-[1.25rem] shadow-lg"
+                className="scent-primary-button w-full mt-6 h-14 font-serif italic text-lg hover:scale-[1.02] active:scale-95 transition-all rounded-[var(--radius-scent)]"
               >
                 Sync to Vault
               </button>

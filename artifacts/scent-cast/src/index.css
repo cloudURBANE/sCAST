@@ -2,18 +2,18 @@
 @import "tailwindcss";
 
 @theme {
-  --color-scent-bg: #000000;
-  --color-scent-surface: #0A0A0A;
-  --color-scent-border: #1A1A1A;
-  --color-scent-accent: #FFFFFF;
-  --color-scent-muted: #666666;
+  --color-scent-bg: #030201;
+  --color-scent-surface: #0a0704;
+  --color-scent-border: #3b250c;
+  --color-scent-accent: #c98b2c;
+  --color-scent-muted: #9c8f7f;
 
   --font-serif: "Cormorant Garamond", Georgia, serif;
   --font-sans: "Inter", system-ui, -apple-system, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 
-  --radius-scent: 24px;
-  --radius-scent-inner: 23px;
+  --radius-scent: 22px;
+  --radius-scent-inner: 21px;
 }
 
 /* ─── Core Rendering & Resets ─────────────────────────────────────────────── */
@@ -22,6 +22,9 @@
   background-color: var(--color-scent-bg);
   color: var(--color-scent-accent);
   color-scheme: dark;
+  --scent-amber-rgb: 201 139 44;
+  --scent-card-shadow: 0 24px 70px -38px rgb(var(--scent-amber-rgb) / 0.58), 0 18px 42px -24px rgba(0, 0, 0, 0.95);
+  --scent-card-glow: inset 0 1px 0 rgba(255, 222, 163, 0.09), inset 0 0 80px rgba(201, 139, 44, 0.035);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -42,30 +45,30 @@ body {
 /* ─── Glassmorphism System ────────────────────────────────────────────────── */
 
 .glass {
-  background: rgba(10, 10, 10, 0.4);
+  background: rgba(10, 7, 4, 0.52);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(201, 139, 44, 0.18);
   box-shadow:
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.1), /* Top-edge specular highlight */
-    inset 0 0 80px 0 rgba(255, 255, 255, 0.02),
-    0 20px 40px -10px rgba(0, 0, 0, 0.5);
+    inset 0 1px 0 0 rgba(255, 230, 180, 0.08), /* Top-edge specular highlight */
+    inset 0 0 80px 0 rgba(201, 139, 44, 0.025),
+    0 20px 40px -10px rgba(0, 0, 0, 0.65);
 }
 
 .glass-acrylic {
-  background: rgba(255, 255, 255, 0.015);
+  background: rgba(10, 7, 4, 0.74);
   backdrop-filter: blur(40px);
   -webkit-backdrop-filter: blur(40px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(201, 139, 44, 0.2);
   box-shadow: 
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.15), 
-    0 4px 24px -1px rgba(0, 0, 0, 0.2);
+    var(--scent-card-glow),
+    var(--scent-card-shadow);
 }
 
 .glass-shell {
   padding: 1px;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0));
-  box-shadow: 0 15px 35px -12px rgba(0, 0, 0, 0.8);
+  background: linear-gradient(135deg, rgba(201, 139, 44, 0.58), rgba(201, 139, 44, 0.16), rgba(201, 139, 44, 0.02));
+  box-shadow: 0 15px 35px -12px rgba(0, 0, 0, 0.9), 0 0 38px rgba(201, 139, 44, 0.08);
   overflow: hidden;
 }
 
@@ -102,7 +105,7 @@ body {
 /* ─── Depth & Lighting Effects ────────────────────────────────────────────── */
 
 .pedestal {
-  background: radial-gradient(circle at center, rgba(255, 255, 255, 0.1) 0%, transparent 70%);
+  background: radial-gradient(circle at center, rgba(201, 139, 44, 0.16) 0%, transparent 70%);
   position: relative;
 }
 
@@ -114,9 +117,137 @@ body {
   transform: translateX(-50%);
   width: 120%;
   height: 60px;
-  background: radial-gradient(ellipse at center, rgba(255, 255, 255, 0.2) 0%, transparent 70%);
+  background: radial-gradient(ellipse at center, rgba(201, 139, 44, 0.22) 0%, transparent 70%);
   filter: blur(20px);
   pointer-events: none;
+}
+
+.scent-topbar {
+  background: rgba(3, 2, 1, 0.78);
+  border-bottom: 1px solid rgba(201, 139, 44, 0.16);
+  box-shadow: 0 1px 0 rgba(255, 224, 174, 0.035), 0 18px 50px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+}
+
+.scent-account-pill {
+  border: 1px solid rgba(201, 139, 44, 0.28);
+  background: rgba(8, 6, 4, 0.64);
+  box-shadow: inset 0 0 24px rgba(201, 139, 44, 0.035);
+}
+
+.scent-icon-button {
+  border: 1px solid rgba(201, 139, 44, 0.28);
+  background: rgba(5, 4, 3, 0.7);
+  color: rgba(255, 243, 224, 0.72);
+  box-shadow: inset 0 0 22px rgba(201, 139, 44, 0.035), 0 10px 26px rgba(0, 0, 0, 0.35);
+}
+
+.scent-icon-button:hover {
+  border-color: rgba(201, 139, 44, 0.62);
+  color: #fff2dc;
+  box-shadow: inset 0 0 26px rgba(201, 139, 44, 0.07), 0 0 28px rgba(201, 139, 44, 0.12);
+}
+
+.scent-brandmark {
+  color: #fff7ec;
+  text-shadow: 0 0 26px rgba(255, 235, 198, 0.18);
+}
+
+.scent-lux-input {
+  background: rgba(8, 6, 4, 0.72);
+  border: 1px solid rgba(201, 139, 44, 0.58);
+  border-radius: var(--radius-scent);
+  box-shadow: inset 0 0 32px rgba(201, 139, 44, 0.035), 0 0 36px rgba(201, 139, 44, 0.08);
+}
+
+.scent-lux-input:focus {
+  border-color: rgba(239, 179, 82, 0.9);
+  box-shadow: inset 0 0 34px rgba(201, 139, 44, 0.055), 0 0 42px rgba(201, 139, 44, 0.16);
+}
+
+.scent-primary-button {
+  background: #c98b2c;
+  color: #070402;
+  border: 1px solid rgba(239, 179, 82, 0.68);
+  box-shadow: 0 0 42px rgba(201, 139, 44, 0.16);
+}
+
+.scent-primary-button:hover {
+  background: #e0a146;
+}
+
+.scent-entry-count {
+  display: grid;
+  grid-template-columns: minmax(54px, 150px) auto minmax(54px, 150px);
+  align-items: center;
+  gap: 1.4rem;
+  color: #d7a856;
+}
+
+.scent-entry-count::before,
+.scent-entry-count::after {
+  content: "";
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(201, 139, 44, 0.52), transparent);
+}
+
+.scent-fragrance-card {
+  background: linear-gradient(180deg, rgba(18, 12, 7, 0.84), rgba(5, 4, 3, 0.94));
+  border: 1px solid rgba(201, 139, 44, 0.34);
+  border-radius: var(--radius-scent);
+  box-shadow: var(--scent-card-shadow), var(--scent-card-glow);
+}
+
+.scent-fragrance-card:hover {
+  border-color: rgba(217, 160, 67, 0.68);
+  box-shadow: 0 30px 78px -38px rgb(var(--scent-amber-rgb) / 0.72), 0 22px 48px -22px rgba(0, 0, 0, 0.98), var(--scent-card-glow);
+}
+
+.scent-card-brand {
+  color: #d9a64d;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+}
+
+.scent-card-title {
+  color: #fff7ee;
+  font-family: var(--font-serif);
+  font-size: clamp(1.7rem, 2.2vw, 2.35rem);
+  font-style: italic;
+  line-height: 1;
+}
+
+.scent-card-type {
+  color: rgba(255, 245, 231, 0.62);
+  font-size: 0.95rem;
+}
+
+.scent-card-notes {
+  color: rgba(221, 166, 76, 0.9);
+  font-size: 0.92rem;
+  line-height: 1.65;
+}
+
+.scent-bottle-stage {
+  background: linear-gradient(180deg, rgba(201, 139, 44, 0.08), rgba(201, 139, 44, 0.025) 44%, transparent 78%);
+}
+
+.scent-marquee-band {
+  border-block: 1px solid rgba(201, 139, 44, 0.14);
+  background: linear-gradient(90deg, transparent, rgba(201, 139, 44, 0.045), transparent);
+}
+
+.scent-marquee-text {
+  color: rgba(255, 244, 225, 0.9);
+  text-shadow: 0 0 18px rgba(201, 139, 44, 0.22);
+}
+
+.scent-weather-value {
+  color: #fff7ec;
+  text-shadow: 0 0 24px rgba(201, 139, 44, 0.24);
 }
 
 /* ─── Utilities ───────────────────────────────────────────────────────────── */

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import axios from 'axios';
 import { FragranceCapture } from './components/FragranceCapture';
 import { Wardrobe, Fragrance, DestinationType, EnergyState } from './components/Wardrobe';
-import { Wind, Play, X, LogOut, Share2 } from 'lucide-react';
+import { Wind, Play, X, LogOut, Share2, ChevronDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ScentIntentModal } from './components/ScentIntentModal';
 import { LavaBackground } from './components/LavaBackground';
@@ -205,44 +205,44 @@ const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({ weather, weath
   const location = weather?.location ?? null;
 
   return (
-    <div className="py-20 border-y border-white/5 bg-transparent overflow-hidden flex select-none relative">
-      <div className="absolute inset-y-0 left-0 w-40 bg-gradient-to-r from-black via-black/40 to-transparent z-20 pointer-events-none" />
-      <div className="absolute inset-y-0 right-0 w-40 bg-gradient-to-l from-black via-black/40 to-transparent z-20 pointer-events-none" />
-      <div className="flex animate-infinite-scroll-slow gap-40 text-[18px] uppercase tracking-tighter text-white/40 font-serif italic whitespace-nowrap items-center">
+    <div className="scent-marquee-band py-20 overflow-hidden flex select-none relative">
+      <div className="absolute inset-y-0 left-0 w-28 bg-gradient-to-r from-scent-bg to-transparent z-20 pointer-events-none" />
+      <div className="absolute inset-y-0 right-0 w-28 bg-gradient-to-l from-scent-bg to-transparent z-20 pointer-events-none" />
+      <div className="flex animate-infinite-scroll-slow gap-40 text-[18px] uppercase tracking-tighter scent-marquee-text font-serif italic whitespace-nowrap items-center">
         {[...Array(ATMOSPHERE_COPIES)].map((_, i) => (
           <React.Fragment key={i}>
             <div className="flex items-center gap-8">
               <div className="flex flex-col items-start gap-1">
-                <span className="text-scent-accent/20 text-[9px] font-bold tracking-[0.4em] font-sans uppercase">Chronos:</span>
+                <span className="text-scent-accent/65 text-[9px] font-bold tracking-[0.4em] font-sans uppercase">Chronos:</span>
                 <LiveClock />
               </div>
             </div>
             <span className="opacity-5 font-sans font-thin text-3xl select-none mx-4">/</span>
             <div className="flex items-center gap-8">
               <div className="flex flex-col items-start gap-1">
-                <span className="text-scent-accent/20 text-[9px] font-bold tracking-[0.4em] font-sans uppercase">Atmosphere:</span>
-                <span className="text-white text-3xl sm:text-5xl font-serif italic tracking-tighter">{temp}</span>
+                <span className="text-scent-accent/65 text-[9px] font-bold tracking-[0.4em] font-sans uppercase">Atmosphere:</span>
+                <span className="scent-weather-value text-3xl sm:text-5xl font-serif italic tracking-tighter">{temp}</span>
               </div>
             </div>
             <span className="opacity-5 font-sans font-thin text-3xl select-none mx-4">/</span>
             <div className="flex items-center gap-8">
               <div className="flex flex-col items-start gap-1">
-                <span className="text-scent-accent/20 text-[9px] font-bold tracking-[0.4em] font-sans uppercase">Coordinate:</span>
-                <span className="text-white text-3xl sm:text-5xl font-serif italic tracking-tighter">{location ?? '—'}</span>
+                <span className="text-scent-accent/65 text-[9px] font-bold tracking-[0.4em] font-sans uppercase">Coordinate:</span>
+                <span className="scent-weather-value text-3xl sm:text-5xl font-serif italic tracking-tighter">{location ?? '—'}</span>
               </div>
             </div>
             <span className="opacity-5 font-sans font-thin text-3xl select-none mx-4">/</span>
             <div className="flex items-center gap-8">
               <div className="flex flex-col items-start gap-1">
-                <span className="text-scent-accent/20 text-[9px] font-bold tracking-[0.4em] font-sans uppercase">Matrix:</span>
-                <span className="text-white text-3xl sm:text-5xl font-serif italic tracking-tighter">{condition}</span>
+                <span className="text-scent-accent/65 text-[9px] font-bold tracking-[0.4em] font-sans uppercase">Matrix:</span>
+                <span className="scent-weather-value text-3xl sm:text-5xl font-serif italic tracking-tighter">{condition}</span>
               </div>
             </div>
             <span className="opacity-5 font-sans font-thin text-3xl select-none mx-4">/</span>
             <div className="flex items-center gap-8">
               <div className="flex flex-col items-start gap-1">
-                <span className="text-scent-accent/20 text-[9px] font-bold tracking-[0.4em] font-sans uppercase">Saturation:</span>
-                <span className="text-white text-3xl sm:text-5xl font-serif italic tracking-tighter">{humidity}</span>
+                <span className="text-scent-accent/65 text-[9px] font-bold tracking-[0.4em] font-sans uppercase">Saturation:</span>
+                <span className="scent-weather-value text-3xl sm:text-5xl font-serif italic tracking-tighter">{humidity}</span>
               </div>
             </div>
             <span className="opacity-5 font-sans font-thin text-3xl select-none mx-4">/</span>
@@ -680,20 +680,27 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-[100svh] bg-black selection:bg-scent-accent selection:text-black text-white relative overflow-x-hidden">
+    <div className="min-h-[100svh] bg-scent-bg selection:bg-scent-accent selection:text-black text-white relative overflow-x-hidden">
       <LavaBackground />
-      <nav className="fixed top-0 left-0 right-0 h-24 border-b border-white/5 bg-black/40 backdrop-blur-2xl z-50 px-8">
-        <div className="max-w-[1400px] mx-auto h-full flex items-center relative">
-          <div className="flex items-center gap-4">
+      <nav className="scent-topbar fixed top-0 left-0 right-0 h-20 sm:h-24 z-50 px-4 sm:px-8">
+        <div className="max-w-[1760px] mx-auto h-full flex items-center relative">
+          <div className="flex items-center gap-3 min-w-0">
             {authEmail ? (
-              <span className="text-[10px] uppercase tracking-[0.2em] text-white/30 font-bold hidden md:block">
-                {authEmail}
-              </span>
+              <div className="scent-account-pill h-11 sm:h-12 rounded-full pl-1.5 pr-3 sm:pr-4 flex items-center gap-3 min-w-0">
+                <div className="relative flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-full border border-scent-accent/45 bg-black/60 text-sm font-bold text-white">
+                  {authEmail.trim().charAt(0).toUpperCase() || 'S'}
+                  <span className={`absolute -right-0.5 bottom-0 h-2.5 w-2.5 rounded-full border border-black ${locationStatus === 'granted' ? 'bg-emerald-400' : locationStatus === 'requesting' ? 'bg-yellow-400 animate-pulse' : locationStatus === 'denied' ? 'bg-red-400' : 'bg-scent-accent/45'}`} />
+                </div>
+                <span className="hidden max-w-[220px] truncate text-sm text-white/72 md:block">
+                  {authEmail}
+                </span>
+                <ChevronDown size={16} strokeWidth={1.5} className="hidden text-white/55 md:block" />
+              </div>
             ) : (
               <button
                 onClick={() => setIsAuthModalOpen(true)}
                 title="Sign In"
-                className="h-8 px-3 rounded-full border border-white/10 hover:border-white/30 transition-all text-[9px] uppercase tracking-[0.2em] text-white/50 hover:text-white font-bold"
+                className="scent-account-pill h-11 px-4 rounded-full transition-all text-[10px] uppercase tracking-[0.22em] text-white/70 hover:text-white font-bold"
               >
                 Sign In
               </button>
@@ -702,33 +709,33 @@ export default function App() {
               onClick={requestLocation}
               disabled={locationStatus === 'requesting' || locationStatus === 'granted'}
               title={locationStatus === 'granted' ? 'Location Active' : locationStatus === 'denied' ? 'Location Denied' : 'Sync Location'}
-              className="hidden md:flex items-center justify-center w-8 h-8 rounded-full border border-white/10 hover:border-white/30 transition-all disabled:cursor-default"
+              className="scent-icon-button hidden md:flex items-center justify-center w-11 h-11 rounded-full transition-all disabled:cursor-default"
             >
               <span className={`w-2 h-2 rounded-full ${locationStatus === 'granted' ? 'bg-green-400' : locationStatus === 'requesting' ? 'bg-yellow-400 animate-pulse' : locationStatus === 'denied' ? 'bg-red-400' : 'bg-white/20'}`} />
             </button>
           </div>
 
-          <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2">
-            <Wind size={24} strokeWidth={1} className="text-white" />
-            <h1 className="font-serif text-2xl italic tracking-tighter uppercase">Scent Cast</h1>
+          <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-3">
+            <Wind size={25} strokeWidth={1.25} className="text-scent-accent" />
+            <h1 className="scent-brandmark font-serif text-2xl sm:text-4xl tracking-[0.16em] uppercase">SCENTCAST</h1>
           </div>
 
-          <div className="ml-auto flex items-center gap-4">
+          <div className="ml-auto flex items-center gap-3">
             {authToken ? (
               <>
                 <button
                   onClick={() => setIsShareModalOpen(true)}
                   title="Share Vault"
-                  className="flex items-center justify-center w-8 h-8 rounded-full border border-white/10 hover:border-white/30 transition-all text-white/30 hover:text-white"
+                  className="scent-icon-button flex items-center justify-center w-11 h-11 rounded-full transition-all"
                 >
-                  <Share2 size={14} />
+                  <Share2 size={17} strokeWidth={1.6} />
                 </button>
                 <button
                   onClick={handleSignOut}
                   title="Sign Out"
-                  className="flex items-center justify-center w-8 h-8 rounded-full border border-white/10 hover:border-white/30 transition-all text-white/30 hover:text-white"
+                  className="scent-icon-button flex items-center justify-center w-11 h-11 rounded-full transition-all"
                 >
-                  <LogOut size={14} />
+                  <LogOut size={17} strokeWidth={1.6} />
                 </button>
               </>
             ) : null}
@@ -736,11 +743,11 @@ export default function App() {
         </div>
       </nav>
 
-      <div className="pt-24" />
+      <div className="pt-20 sm:pt-24" />
 
-      <main className="pb-24 px-8 max-w-[1700px] mx-auto md:-mt-12 relative">
-        <div className="space-y-40">
-          <div className="w-full">
+      <main className="relative z-10 pb-24 px-4 sm:px-8 max-w-[1760px] mx-auto">
+        <div className="space-y-24 sm:space-y-32 pt-12 sm:pt-16">
+          <div className="hidden" aria-hidden="true">
             <div className="flex flex-col items-center justify-center space-y-16 pt-32 text-center">
               <header className="space-y-10 flex flex-col items-center">
                 <div className="w-full max-w-4xl overflow-hidden py-4 border-y border-white/5 flex select-none relative group">
@@ -780,9 +787,43 @@ export default function App() {
             </div>
           </div>
 
+          <div className="scent-marquee-band w-full overflow-hidden py-4 flex select-none relative">
+            <div className="flex animate-infinite-scroll gap-20 text-[11px] uppercase tracking-[0.48em] font-serif italic whitespace-nowrap scent-marquee-text">
+              {[...Array(4)].map((_, i) => (
+                <span key={i} className="flex items-center gap-20">
+                  {tickerPhrases.map((phrase, j) => (
+                    <React.Fragment key={j}>
+                      <span>{phrase}</span>
+                      <span className="text-scent-accent/35">•</span>
+                    </React.Fragment>
+                  ))}
+                </span>
+              ))}
+            </div>
+            <div className="absolute inset-y-0 left-0 w-28 bg-gradient-to-r from-scent-bg to-transparent z-10" />
+            <div className="absolute inset-y-0 right-0 w-28 bg-gradient-to-l from-scent-bg to-transparent z-10" />
+          </div>
+
+          <section className="mx-auto w-full max-w-2xl space-y-8 text-center">
+            <h2 className="font-serif italic text-3xl sm:text-5xl text-white leading-tight tracking-tight">
+              Find your signature for the current atmosphere.
+            </h2>
+            <FragranceCapture onAdd={handleAddItem} />
+            <button
+              onClick={() => {
+                if (items.length === 0) { alert("Your vault is empty! Add at least one fragrance to discover your match."); return; }
+                setIsIntentModalOpen(true);
+              }}
+              className="scent-primary-button w-full h-14 flex items-center justify-center gap-4 transition-all group rounded-[var(--radius-scent)]"
+            >
+              <Play size={19} className="fill-current group-hover:scale-110 transition-transform" />
+              <span className="font-serif italic text-xl sm:text-2xl">Discover Your Signature Scent</span>
+            </button>
+          </section>
+
           <AtmosphereBar weather={weather} weatherLoading={weatherLoading} />
 
-          <div className="pt-32 border-t border-white/5">
+          <div>
             <Wardrobe
               items={items}
               onDelete={handleDeleteItem}
@@ -794,6 +835,19 @@ export default function App() {
               wardrobeFixHint={wardrobeFixHint}
             />
           </div>
+          <section className="hidden">
+            <FragranceCapture onAdd={handleAddItem} />
+            <button
+              onClick={() => {
+                if (items.length === 0) { alert("Your vault is empty! Add at least one fragrance to discover your match."); return; }
+                setIsIntentModalOpen(true);
+              }}
+              className="scent-primary-button w-full h-14 flex items-center justify-center gap-4 transition-all group rounded-[var(--radius-scent)]"
+            >
+              <Play size={19} className="fill-current group-hover:scale-110 transition-transform" />
+              <span className="font-serif italic text-xl sm:text-2xl">Discover Your Signature Scent</span>
+            </button>
+          </section>
         </div>
       </main>
 
@@ -888,7 +942,7 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      <footer className="border-t border-white/5 py-16 px-8 mt-24">
+      <footer className="relative z-10 border-t border-scent-accent/10 py-16 px-8 mt-24">
         <div className="max-w-[1400px] mx-auto text-center space-y-4">
           <div className="flex items-center justify-center gap-2 opacity-30">
             <Wind size={18} />

@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Trash2, ShieldCheck, Wind, RefreshCw, Undo2, HelpCircle, Eraser, Check, Maximize2, ChevronDown } from 'lucide-react';
+import { X, Trash2, ShieldCheck, Wind, RefreshCw, Undo2, HelpCircle, Eraser, Check, Maximize2, ChevronDown, Search, Star } from 'lucide-react';
 import { bottleFeaturedSlotClass } from '@/lib/bottleImageFrame';
 import { BottleImage } from '@/components/BottleImage';
 import {
@@ -60,6 +60,21 @@ function entryBrand(item: {
   product?: { brand?: string };
 }): string {
   return item?.brand || item?.product?.brand || "";
+}
+
+function entryType(item: Fragrance): string {
+  return item.concentration || item.family || "Fragrance";
+}
+
+function entryNotes(item: Fragrance): string {
+  const notes = item.notes?.filter(Boolean);
+  if (notes && notes.length > 0) return notes.join(" • ");
+  const pyramidNotes = [
+    ...(item.pyramid?.top ?? []),
+    ...(item.pyramid?.heart ?? []),
+    ...(item.pyramid?.base ?? []),
+  ].filter(Boolean);
+  return pyramidNotes.length > 0 ? pyramidNotes.slice(0, 5).join(" • ") : "Not specified";
 }
 
 function concentrationHintFromValue(value?: string): "edt" | "edp" | undefined {
@@ -395,11 +410,11 @@ export const Wardrobe: React.FC<{
 
   return (
     <div className="relative">
-      <div className="space-y-32 relative z-10">
-        <div className="flex flex-col items-center justify-center text-center border-b border-white/5 pb-16 gap-12">
-          <div className="space-y-4">
-            <p className="text-[10px] uppercase tracking-[0.6em] text-white/40 font-bold">Archives // Private Vault</p>
-            <h2 className="font-serif italic text-4xl sm:text-6xl md:text-8xl text-white tracking-tighter">Vault of Aromas</h2>
+      <div className="space-y-16 sm:space-y-20 relative z-10">
+        <div className="flex flex-col items-center justify-center text-center gap-8 sm:gap-10">
+          <div className="space-y-3">
+            <p className="text-[10px] uppercase tracking-[0.5em] text-scent-accent/70 font-bold">Archives // Private Vault</p>
+            <h2 className="font-serif italic text-4xl sm:text-6xl md:text-7xl text-white tracking-tight">Vault of Aromas</h2>
           </div>
           <div className="flex flex-col items-center gap-8 w-full">
             {(wardrobeFixHint || revertAvailable || fixWardrobeBusy) && (
@@ -430,10 +445,11 @@ export const Wardrobe: React.FC<{
                 ) : null}
               </div>
             )}
-            <div className="relative w-full max-w-2xl z-20">
+            <div className="relative w-full max-w-[58rem] z-20">
               <label htmlFor="wardrobe-vault-search" className="sr-only">
                 Search vault fragrances and image hints
               </label>
+              <Search size={25} strokeWidth={1.5} className="pointer-events-none absolute left-6 top-1/2 z-10 -translate-y-1/2 text-white/76" />
               <input
                 id="wardrobe-vault-search"
                 type="text"
@@ -469,7 +485,7 @@ export const Wardrobe: React.FC<{
                 }}
                 placeholder="Search vault or image hint (e.g. watermark, sauvage)…"
                 autoComplete="off"
-                className="w-full bg-white/[0.02] border border-white/5 rounded-none h-16 px-8 text-white font-sans text-sm focus:border-white/20 outline-none transition-all placeholder:text-white/10 uppercase tracking-widest"
+                className="scent-lux-input w-full h-16 sm:h-20 pl-16 pr-6 text-white font-sans text-base outline-none transition-all placeholder:text-white/34"
               />
               <AnimatePresence>
                 {searchDropdownOpen ? (
@@ -480,7 +496,7 @@ export const Wardrobe: React.FC<{
                     transition={{ duration: 0.18 }}
                     id="wardrobe-search-suggestions"
                     role="listbox"
-                    className="absolute left-0 right-0 top-full mt-1 max-h-[min(320px,50vh)] overflow-y-auto rounded-lg border border-white/10 bg-neutral-950/98 shadow-[0_24px_48px_rgba(0,0,0,0.55)] backdrop-blur-xl scrollbar-hide z-30"
+                    className="absolute left-0 right-0 top-full mt-2 max-h-[min(320px,50vh)] overflow-y-auto rounded-[var(--radius-scent)] border border-scent-accent/25 bg-neutral-950/98 shadow-[0_24px_48px_rgba(0,0,0,0.72)] backdrop-blur-xl scrollbar-hide z-30"
                   >
                     <li className="px-3 py-2 border-b border-white/8 pointer-events-none">
                       <p className="text-[8px] uppercase tracking-[0.35em] text-white/35 font-bold font-sans">
@@ -539,7 +555,9 @@ export const Wardrobe: React.FC<{
                 </div>
               ) : null}
             </div>
-            <span className="font-serif italic text-white/20 text-xl sm:text-3xl whitespace-nowrap">{filteredItems.length} ENTRIES</span>
+            <div className="scent-entry-count font-serif italic text-xl sm:text-3xl whitespace-nowrap">
+              <span>{filteredItems.length} Entries</span>
+            </div>
           </div>
         </div>
 
@@ -581,42 +599,48 @@ export const Wardrobe: React.FC<{
           </section>
         )}
 
-        <div className="space-y-32 pb-40">
+        <div className="space-y-10 pb-28 sm:pb-36">
           {shelves.length > 0 ? shelves.map((shelfItems, shelfIndex) => (
             <div key={shelfIndex} className="relative group/shelf">
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-12 gap-y-24 mb-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5 lg:gap-7 mb-1">
                 {shelfItems.map((item, i) => (
                   <motion.div
                     key={item.id}
                     initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }} transition={{ delay: i * 0.1 }}
-                    className="group cursor-pointer relative"
+                    className="group cursor-pointer relative h-full"
                     onClick={() => openDetail(item)}
                   >
-                    <div className="glass-acrylic glass-acrylic-animate rounded-scent transition-all duration-700 group-hover:-translate-y-4 group-hover:shadow-[0_30px_70px_rgba(255,255,255,0.1)] relative overflow-hidden">
-                      <div className="aspect-[3/4] relative">
-                        <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/[0.01] to-white/[0.05] pointer-events-none" />
+                    <div className="scent-fragrance-card h-full min-h-[32rem] transition-all duration-500 group-hover:-translate-y-2 relative overflow-hidden p-5 flex flex-col">
+                      <Star size={24} strokeWidth={1.35} className="absolute right-5 top-5 z-20 text-scent-accent/90 drop-shadow-[0_0_12px_rgba(201,139,44,0.26)]" aria-hidden />
+                      <div className="aspect-[1.08/1] relative mb-5">
+                        <div className="scent-bottle-stage absolute inset-0 pointer-events-none" />
                         <BottleImage
                           variant="grid"
                           src={item.imageUrl}
                           alt={entryName(item)}
                           className="absolute inset-0 z-10"
-                          imgClassName="brightness-[1.05] group-hover:scale-110 transition-transform duration-1000"
+                          imgClassName="brightness-[1.08] group-hover:scale-105 transition-transform duration-1000"
                         />
                       </div>
-                    </div>
-                    <div className="text-center mt-6 space-y-1 transition-opacity duration-500 group-hover:opacity-30">
-                      <p className="text-[8px] uppercase text-white/30 tracking-[0.4em] font-bold font-sans">{entryBrand(item)}</p>
-                      <h3 className="font-serif italic text-xl text-white leading-tight uppercase tracking-tighter">{entryName(item)}</h3>
+                      <div className="space-y-2 px-1 pb-1 flex-1">
+                        <p className="scent-card-brand">{entryBrand(item)}</p>
+                        <h3 className="scent-card-title">{entryName(item)}</h3>
+                        <p className="scent-card-type">{entryType(item)}</p>
+                        <div className="h-px w-full bg-scent-accent/15 my-4" />
+                        <p className="scent-card-notes">
+                          <span className="font-semibold text-amber-200/85">Notes:</span> {entryNotes(item)}
+                        </p>
+                      </div>
                     </div>
                   </motion.div>
                 ))}
                 {shelfIndex === shelves.length - 1 && shelfItems.length < 4 && (
-                  <div className="glass-acrylic rounded-scent aspect-[3/4] flex flex-col items-center justify-center p-8 text-center group cursor-pointer border-dashed border-white/10 hover:bg-white/5 transition-all">
-                    <div className="w-12 h-12 border border-dashed border-white/20 flex items-center justify-center group-hover:rotate-90 transition-transform mb-4">
-                      <span className="text-white/20 text-3xl">+</span>
+                  <div className="scent-fragrance-card min-h-[28rem] flex flex-col items-center justify-center p-8 text-center group cursor-pointer border-dashed border-scent-accent/20 hover:bg-white/5 transition-all">
+                    <div className="w-12 h-12 border border-dashed border-scent-accent/35 flex items-center justify-center group-hover:rotate-90 transition-transform mb-4 rounded-full">
+                      <span className="text-scent-accent/55 text-3xl">+</span>
                     </div>
-                    <p className="font-serif italic text-white/20 text-2xl tracking-tighter uppercase">Expand Archive</p>
+                    <p className="font-serif italic text-scent-accent/45 text-2xl tracking-tighter uppercase">Expand Archive</p>
                   </div>
                 )}
               </div>

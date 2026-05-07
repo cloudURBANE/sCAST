@@ -64,20 +64,23 @@ export const LavaBackground: React.FC = () => {
         r.y = fbm(uv + 1.0 * q + vec2(8.3, 2.8) + 0.126 * t);
         float f = fbm(uv + r);
 
+        float smoke = smoothstep(0.18, 0.82, f);
         float cracks = 1.0 - abs(f - 0.5) * 2.0;
-        cracks = pow(cracks, 5.0);
+        cracks = pow(cracks, 7.0);
 
         float intensity = 0.6 + 0.4 * noise(uv * 3.0 + t);
 
-        vec3 darkBase = vec3(0.04, 0.02, 0.01);
-        vec3 crackCore = vec3(1.0, 0.75, 0.3);
-        vec3 crackGlow = vec3(0.8, 0.35, 0.05);
+        vec3 darkBase = vec3(0.015, 0.011, 0.007);
+        vec3 smokeTone = vec3(0.16, 0.075, 0.018);
+        vec3 crackCore = vec3(0.78, 0.46, 0.13);
+        vec3 crackGlow = vec3(0.48, 0.19, 0.035);
 
         vec3 color = darkBase;
-        color = mix(color, crackGlow, cracks * 0.6);
-        color = mix(color, crackCore * intensity, pow(cracks, 2.5));
+        color = mix(color, smokeTone, smoke * 0.18);
+        color = mix(color, crackGlow, cracks * 0.22);
+        color = mix(color, crackCore * intensity, pow(cracks, 2.7) * 0.58);
 
-        float halo = pow(cracks, 1.8) * 0.55;
+        float halo = pow(cracks, 1.9) * 0.24;
         color += crackGlow * halo;
 
         gl_FragColor = vec4(color, 1.0);
@@ -140,8 +143,8 @@ export const LavaBackground: React.FC = () => {
   return (
     <canvas
       ref={canvasRef}
-      className="fixed inset-0 w-full h-full pointer-events-none opacity-60"
-      style={{ zIndex: 40, mixBlendMode: 'screen' }}
+      className="fixed inset-0 w-full h-full pointer-events-none opacity-55"
+      style={{ zIndex: 0, mixBlendMode: 'screen' }}
     />
   );
 };
