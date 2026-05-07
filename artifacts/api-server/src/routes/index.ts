@@ -9,6 +9,7 @@ import fragrancesRouter from "./fragrances";
 import imageProxyRouter from "./imageProxy";
 import imageObjectsRouter from "./imageObjects";
 import debugRouter from "./debug";
+import scentFactsRouter from "./scentFacts";
 
 const router: IRouter = Router();
 
@@ -22,5 +23,6 @@ router.use(fragrancesRouter);
 router.use(imageProxyRouter);
 router.use(imageObjectsRouter);
 router.use(debugRouter);
+router.use(scentFactsRouter);
 
 export default router;
