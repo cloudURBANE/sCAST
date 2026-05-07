@@ -12,7 +12,7 @@ import {
 } from "../services/imageSolvers";
 import { logger } from "../lib/logger";
 import { resolveProcessedFragranceImage } from "../services/imagePipeline";
-import { usableImageUrlForResponse } from "../services/imageHydration";
+import { imageReferenceDiagnostic, usableImageUrlForResponse } from "../services/imageReference";
 
 const router = Router();
 
@@ -108,6 +108,15 @@ router.post("/search-scent", async (req, res) => {
       res.json(flattenProfile({ ...catalogHit, imageUrl: catalogImageUrl }));
       return;
     }
+    logger.info(
+      {
+        queryPreview: queryWithHint.slice(0, 160),
+        brand: catalogHit.product.brand,
+        name: catalogHit.product.name,
+        image: await imageReferenceDiagnostic(catalogHit.imageUrl),
+      },
+      "search-scent catalog hit has no usable image",
+    );
 
     const completed = await buildProfile(
       catalogHit.product.name,
@@ -116,7 +125,7 @@ router.post("/search-scent", async (req, res) => {
         notes: catalogHit.notes,
         family: catalogHit.family,
         description: catalogHit.description,
-        imageUrl: catalogHit.imageUrl,
+        imageUrl: catalogImageUrl ?? undefined,
         pyramid: catalogHit.pyramid,
         perfumer: catalogHit.product.perfumer,
       },

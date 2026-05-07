@@ -1,22 +1,11 @@
 import { getCatalogEntry, searchCatalog } from "./catalogService";
 import { resolveCachedFragranceImage } from "./imagePipeline";
-import { localImageObjectExists, storagePathFromLocalImageObjectUrl } from "./imageObjectStorage";
 import { safeImageUrlForResponse } from "./persistenceGuards";
+export { usableImageUrlForResponse } from "./imageReference";
+import { usableImageUrlForResponse } from "./imageReference";
 
 function hasImageUrl(value: unknown): value is string {
   return safeImageUrlForResponse(value).length > 0;
-}
-
-export async function usableImageUrlForResponse(value: unknown): Promise<string | null> {
-  const url = safeImageUrlForResponse(value);
-  if (!url) return null;
-
-  const localStoragePath = storagePathFromLocalImageObjectUrl(url);
-  if (localStoragePath && !(await localImageObjectExists(localStoragePath))) {
-    return null;
-  }
-
-  return url;
 }
 
 /**

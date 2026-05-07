@@ -13,8 +13,9 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { usersTable, userFragrancesTable, globalFragrancesTable } from "@workspace/db/schema";
-import { eq, ilike, or, sql } from "drizzle-orm";
+import { eq, or, sql } from "drizzle-orm";
 import { makeLookupKey } from "../services/catalogService";
+import { imageReferenceDiagnostic, type ImageReferenceDiagnostic } from "../services/imageReference";
 
 const router = Router();
 
@@ -22,14 +23,6 @@ function getToken(req: any): string | null {
   const auth = req.headers["authorization"] as string | undefined;
   if (auth?.startsWith("Bearer ")) return auth.slice(7);
   return null;
-}
-
-function imageKind(value: unknown): string {
-  if (typeof value !== "string") return "missing";
-  if (value === "") return "empty";
-  if (value.startsWith("data:")) return "data";
-  if (value.startsWith("http")) return "http";
-  return "other";
 }
 
 router.get("/_debug/wardrobe-audit", async (req, res) => {
@@ -65,7 +58,7 @@ router.get("/_debug/wardrobe-audit", async (req, res) => {
         returnedName: string | null;
         returnedBrand: string | null;
         returnedLookupKey: string | null;
-        catalogImageKind: string;
+        catalogImage: ImageReferenceDiagnostic;
       } | null = null;
       let fuzzyHit: {
         hit: boolean;
@@ -75,7 +68,7 @@ router.get("/_debug/wardrobe-audit", async (req, res) => {
         returnedLookupKey: string | null;
         nameDrift: boolean | null;
         brandDrift: boolean | null;
-        catalogImageKind: string;
+        catalogImage: ImageReferenceDiagnostic;
       } | null = null;
 
       if (effectiveName && effectiveBrand) {
@@ -92,7 +85,7 @@ router.get("/_debug/wardrobe-audit", async (req, res) => {
           returnedName: exactRow?.name ?? null,
           returnedBrand: exactRow?.brand ?? null,
           returnedLookupKey: exactRow?.lookupKey ?? null,
-          catalogImageKind: imageKind(exactProfile?.imageUrl),
+          catalogImage: await imageReferenceDiagnostic(exactProfile?.imageUrl),
         };
 
         // Fuzzy search (same logic searchCatalog uses)
@@ -102,12 +95,11 @@ router.get("/_debug/wardrobe-audit", async (req, res) => {
           .from(globalFragrancesTable)
           .where(
             or(
-              ilike(globalFragrancesTable.name, `%${q}%`),
-              ilike(globalFragrancesTable.brand, `%${q}%`),
               sql`(${globalFragrancesTable.brand} || ' ' || ${globalFragrancesTable.name}) ILIKE ${"%" + q + "%"}`,
               sql`${globalFragrancesTable.lookupKey} ILIKE ${"%" + q + "%"}`,
             ),
           )
+          .orderBy(sql`length(${globalFragrancesTable.name}) asc`)
           .limit(1);
         const fuzzyRow = fuzzyRows[0];
         const fuzzyProfile = fuzzyRow?.profileData as Record<string, any> | undefined;
@@ -119,7 +111,7 @@ router.get("/_debug/wardrobe-audit", async (req, res) => {
           returnedLookupKey: fuzzyRow?.lookupKey ?? null,
           nameDrift: fuzzyRow ? (fuzzyRow.name ?? "").toLowerCase() !== effectiveName.toLowerCase() : null,
           brandDrift: fuzzyRow ? (fuzzyRow.brand ?? "").toLowerCase() !== effectiveBrand.toLowerCase() : null,
-          catalogImageKind: imageKind(fuzzyProfile?.imageUrl),
+          catalogImage: await imageReferenceDiagnostic(fuzzyProfile?.imageUrl),
         };
       }
 
@@ -132,7 +124,7 @@ router.get("/_debug/wardrobe-audit", async (req, res) => {
         productBrand,
         effectiveName,
         effectiveBrand,
-        storedImageKind: imageKind(data?.imageUrl),
+        storedImage: await imageReferenceDiagnostic(data?.imageUrl),
         storedImageLen: typeof data?.imageUrl === "string" ? data.imageUrl.length : 0,
         shareHidden: Boolean(data?.shareHidden),
         hasNotes: Array.isArray(data?.notes) && data.notes.length > 0,

@@ -2,12 +2,13 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { usersTable, userFragrancesTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
-import { resolveSharedImageUrl, usableImageUrlForResponse } from "../services/imageHydration";
+import { resolveSharedImageUrl } from "../services/imageHydration";
 import { buildProfile } from "../services/scentEngine";
 import { flattenProfile } from "../services/catalogService";
 import { logger } from "../lib/logger";
 import { hydrateImageUrl, normalizeFragrance, sanitizeFragrance } from "../services/fragrancePayload";
 import { assertNoPersistedBase64Image } from "../services/persistenceGuards";
+import { persistableImageReference } from "../services/imageReference";
 
 const router = Router();
 
@@ -187,14 +188,6 @@ router.post("/wardrobe/rebuild", async (req, res) => {
  */
 function isUuidish(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
-}
-
-async function persistableImageReference(value: unknown): Promise<string | null> {
-  const url = await usableImageUrlForResponse(value);
-  if (!url) return null;
-  if (url.startsWith("/api/image-objects/")) return url;
-  if (/^https?:\/\//i.test(url)) return url;
-  return null;
 }
 
 async function findUserRow(userId: string, idParam: string) {

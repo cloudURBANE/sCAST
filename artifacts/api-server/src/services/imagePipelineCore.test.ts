@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdir, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import test from "node:test";
 import {
   assertNoPersistedBase64Image,
@@ -9,6 +12,9 @@ import {
   isPrivateIpAddress,
   parseAndValidateExternalImageUrl,
 } from "./safeImageFetch.ts";
+
+const testImageRoot = path.join(tmpdir(), `scent-image-cache-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+process.env.IMAGE_LOCAL_STORAGE_DIR = testImageRoot;
 
 test("database image guards reject and strip data image payloads", () => {
   assert.throws(
@@ -60,4 +66,39 @@ test("source URL hashes and object keys are deterministic", async () => {
       pipelineVersion: IMAGE_PIPELINE_VERSION,
     }),
   );
+});
+
+test("local image object references must exist before they are usable", async () => {
+  const { imageReferenceDiagnostic, usableImageUrlForResponse } = await import("./imageReference.ts");
+
+  const missingUrl = "/api/image-objects/images/processed/missing.webp";
+  assert.equal(await usableImageUrlForResponse(missingUrl), null);
+  assert.deepEqual(await imageReferenceDiagnostic(missingUrl), {
+    kind: "local-object-missing",
+    usable: false,
+    length: missingUrl.length,
+    storagePath: "images/processed/missing.webp",
+  });
+
+  await mkdir(path.join(testImageRoot, "images", "processed"), { recursive: true });
+  await writeFile(path.join(testImageRoot, "images", "processed", "ready.webp"), "x");
+
+  const readyUrl = "/api/image-objects/images/processed/ready.webp";
+  assert.equal(await usableImageUrlForResponse(readyUrl), readyUrl);
+  assert.equal((await imageReferenceDiagnostic(readyUrl)).kind, "local-object");
+});
+
+test("preview save accepts only persistable image references", async () => {
+  const { persistableImageReference } = await import("./imageReference.ts");
+
+  await mkdir(path.join(testImageRoot, "images", "processed"), { recursive: true });
+  await writeFile(path.join(testImageRoot, "images", "processed", "preview.webp"), "x");
+
+  assert.equal(
+    await persistableImageReference("/api/image-objects/images/processed/preview.webp"),
+    "/api/image-objects/images/processed/preview.webp",
+  );
+  assert.equal(await persistableImageReference("https://cdn.example.com/bottle.webp"), "https://cdn.example.com/bottle.webp");
+  assert.equal(await persistableImageReference("data:image/png;base64,AAAA"), null);
+  assert.equal(await persistableImageReference("/not-an-image-object/path.webp"), null);
 });
