@@ -33,6 +33,8 @@ const EXTRA_WORDS_ALLOWED = new Set([
 const DATASET = fragrancesRaw as FragranceData[];
 const RETAIL_NOISE_PATTERN =
   /\b(?:\d+(?:\.\d+)?\s*(?:m\s*l|ml|millilitre|milliliter|millilitres|milliliters|fl\.?\s*oz\.?|oz\.?|ounces?)|spray|natural\s+spray|vaporisateur|tester|sample|travel\s+size|mini|bottle|boxed|sealed|new\s+in\s+box|nib|refillable|refill|eau\s+de\s+parfum|eau\s+de\s+toilette|eau\s+de\s+cologne|extrait\s+de\s+parfum|edp|edt|edc)\b/i;
+const FRAGRANCE_INTENT_PATTERN =
+  /\b(?:cologne|fragrance|perfume|parfum|edt|edp|edc|eau\s+de\s+(?:toilette|parfum|cologne)|extrait\s+de\s+parfum)\b/i;
 
 function foldAscii(value: string): string {
   return value
@@ -200,6 +202,10 @@ export function resolveFragranceQuery(query: string): ResolvedFragranceIdentity 
   const cleaned = queryCompact(query);
   if (!cleaned) return null;
   return bestDatasetMatch("", cleaned);
+}
+
+export function shouldSearchExternalFragranceSources(query: string): boolean {
+  return FRAGRANCE_INTENT_PATTERN.test(query) || resolveFragranceQuery(query) !== null;
 }
 
 export function asciiForImageSearch(value: string): string {

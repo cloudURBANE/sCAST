@@ -17,6 +17,7 @@ import {
   asciiForImageSearch,
   resolveFragranceIdentity,
   resolveFragranceQuery,
+  shouldSearchExternalFragranceSources,
 } from "../services/fragranceNameResolver";
 
 const router = Router();
@@ -24,8 +25,8 @@ const router = Router();
 type ConcentrationHint = "edt" | "edp";
 
 function concentrationToQueryText(hint?: ConcentrationHint): string {
-  if (hint === "edt") return "eau de toilette EDT";
-  if (hint === "edp") return "eau de parfum EDP";
+  if (hint === "edt") return "EDT";
+  if (hint === "edp") return "EDP";
   return "";
 }
 
@@ -178,6 +179,11 @@ router.post("/search-scent", async (req, res) => {
       perfumer: first.perfumer,
     });
     res.json(profile);
+    return;
+  }
+
+  if (!shouldSearchExternalFragranceSources(queryWithHint)) {
+    res.status(422).json({ error: "Search only supports fragrance, perfume, or cologne names." });
     return;
   }
 

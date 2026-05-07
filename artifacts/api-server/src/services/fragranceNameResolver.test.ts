@@ -4,6 +4,7 @@ import {
   asciiForImageSearch,
   resolveFragranceIdentity,
   resolveFragranceQuery,
+  shouldSearchExternalFragranceSources,
 } from "./fragranceNameResolver.ts";
 
 test("resolves misspelled image identity to canonical dataset name", () => {
@@ -43,10 +44,22 @@ test("formats unknown fallback names by cutting retail suffixes", () => {
   assert.equal(resolved.corrected, true);
 });
 
+test("removes redundant long and short concentration labels from names", () => {
+  const resolved = resolveFragranceIdentity("Dior", "Sauvage Eau de Toilette EDT");
+  assert.equal(resolved.name, "Sauvage");
+  assert.equal(resolved.corrected, true);
+});
+
 test("resolves typed search query while ignoring image-search filler words", () => {
   const resolved = resolveFragranceQuery("sauvaj dior bottle image search");
   assert.equal(resolved?.brand, "Dior");
   assert.equal(resolved?.name, "Sauvage");
+});
+
+test("external search is fragrance-gated", () => {
+  assert.equal(shouldSearchExternalFragranceSources("running shoes"), false);
+  assert.equal(shouldSearchExternalFragranceSources("moon water perfume"), true);
+  assert.equal(shouldSearchExternalFragranceSources("sauvaj dior"), true);
 });
 
 test("formats non-ascii names for image search", () => {
