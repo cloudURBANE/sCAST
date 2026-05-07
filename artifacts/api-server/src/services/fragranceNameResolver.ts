@@ -31,6 +31,8 @@ const EXTRA_WORDS_ALLOWED = new Set([
   "toilette",
 ]);
 const DATASET = fragrancesRaw as FragranceData[];
+const RETAIL_NOISE_PATTERN =
+  /\b(?:\d+(?:\.\d+)?\s*(?:m\s*l|ml|millilitre|milliliter|millilitres|milliliters|fl\.?\s*oz\.?|oz\.?|ounces?)|spray|natural\s+spray|vaporisateur|tester|sample|travel\s+size|mini|bottle|boxed|sealed|new\s+in\s+box|nib|refillable|refill|eau\s+de\s+parfum|eau\s+de\s+toilette|eau\s+de\s+cologne|extrait\s+de\s+parfum|edp|edt|edc)\b/i;
 
 function foldAscii(value: string): string {
   return value
@@ -39,7 +41,26 @@ function foldAscii(value: string): string {
     .replace(/[^\x20-\x7E]/g, "");
 }
 
-function compact(value: string): string {
+function stripRetailNoise(value: string): string {
+  return foldAscii(value)
+    .replace(/\([^)]*\)/g, (part) => (RETAIL_NOISE_PATTERN.test(part) ? " " : part))
+    .replace(/\[[^\]]*\]/g, (part) => (RETAIL_NOISE_PATTERN.test(part) ? " " : part))
+    .replace(/\b\d+(?:\.\d+)?\s*(?:m\s*l|ml|millilitre|milliliter|millilitres|milliliters)\b/gi, " ")
+    .replace(/\b\d+(?:\.\d+)?\s*(?:fl\.?\s*)?oz\.?\b/gi, " ")
+    .replace(/\b\d+(?:\.\d+)?\s*ounces?\b/gi, " ")
+    .replace(/\b(?:natural\s+spray|vaporisateur|tester|sample|travel\s+size|mini|bottle|boxed|sealed|new\s+in\s+box|nib|refillable|refill|spray)\b/gi, " ")
+    .replace(/\b(?:eau\s+de\s+parfum|eau\s+de\s+toilette|eau\s+de\s+cologne|extrait\s+de\s+parfum|edp|edt|edc)\b/gi, " ")
+    .replace(/\s*[/|,;:-]\s*$/g, " ")
+    .replace(/^\s*[/|,;:-]\s*/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function cleanDisplayName(value: string): string {
+  return stripRetailNoise(value) || value.trim();
+}
+
+function compactRaw(value: string): string {
   return foldAscii(value)
     .toLowerCase()
     .replace(/&/g, " and ")
@@ -47,6 +68,10 @@ function compact(value: string): string {
     .replace(/[^a-z0-9]+/g, " ")
     .trim()
     .replace(/\s+/g, " ");
+}
+
+function compact(value: string): string {
+  return compactRaw(cleanDisplayName(value));
 }
 
 function queryCompact(value: string): string {
@@ -125,9 +150,13 @@ function unmatchedMeaningfulTokenCount(input: string, candidate: string): number
 }
 
 function bestDatasetMatch(brand: string, name: string): ResolvedFragranceIdentity | null {
-  const rawBrand = compact(brand);
-  const rawName = compact(name);
-  const rawFull = compact(`${brand} ${name}`);
+  const cleanBrand = brand.trim();
+  const cleanName = cleanDisplayName(name);
+  const originalBrand = compactRaw(brand);
+  const originalName = compactRaw(name);
+  const rawBrand = compact(cleanBrand);
+  const rawName = compact(cleanName);
+  const rawFull = compact(`${cleanBrand} ${cleanName}`);
   if (!rawFull) return null;
 
   let best: { item: FragranceData; score: number } | null = null;
@@ -146,7 +175,7 @@ function bestDatasetMatch(brand: string, name: string): ResolvedFragranceIdentit
   }
 
   if (!best || best.score < MIN_CONFIDENT_SCORE) return null;
-  const corrected = compact(best.item.brand) !== rawBrand || compact(best.item.name) !== rawName;
+  const corrected = compact(best.item.brand) !== originalBrand || compact(best.item.name) !== originalName;
   return {
     brand: best.item.brand,
     name: best.item.name,
@@ -156,11 +185,13 @@ function bestDatasetMatch(brand: string, name: string): ResolvedFragranceIdentit
 }
 
 export function resolveFragranceIdentity(brand: string, name: string): ResolvedFragranceIdentity {
+  const cleanBrand = brand.trim();
+  const cleanName = cleanDisplayName(name);
   const fallback = {
-    brand: brand.trim(),
-    name: name.trim(),
+    brand: cleanBrand,
+    name: cleanName,
     confidence: 0,
-    corrected: false,
+    corrected: compactRaw(cleanBrand) !== compactRaw(brand) || compactRaw(cleanName) !== compactRaw(name),
   };
   return bestDatasetMatch(brand, name) ?? fallback;
 }

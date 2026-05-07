@@ -4,6 +4,7 @@ import { vectorize, calculatePerformance, calculateContext, type ScentVector, ty
 import { getCatalogEntry, saveCatalogEntry, searchCatalog } from "./catalogService";
 import { resolveProcessedFragranceImage } from "./imagePipeline";
 import { usableImageUrlForResponse } from "./imageHydration";
+import { resolveFragranceIdentity } from "./fragranceNameResolver";
 
 export interface ScentProfile {
   product: { name: string; brand: string; perfumer?: string };
@@ -74,10 +75,13 @@ export async function buildProfile(
   },
 ): Promise<ScentProfile | { error: string }> {
   const allowCatalogFuzzy = opts?.allowCatalogFuzzy ?? true;
+  const identity = resolveFragranceIdentity(brand, name);
+  const profileBrand = identity.brand;
+  const profileName = identity.name;
 
   // 1. Check global catalog — exact match first, then fuzzy to catch AI naming variations
   let catalogBase: ScentProfile | null = null;
-  const cached = await getCatalogEntry(brand, name);
+  const cached = await getCatalogEntry(profileBrand, profileName);
   if (cached) {
     const cachedImageUrl = await usableImageUrlForResponse(cached.imageUrl);
     if (cachedImageUrl) return { ...cached, imageUrl: cachedImageUrl };
@@ -86,7 +90,7 @@ export async function buildProfile(
 
   if (!catalogBase && allowCatalogFuzzy) {
     // Fuzzy search handles cases like "Sauvage EDP" matching stored "Sauvage"
-    const fuzzy = await searchCatalog(`${brand} ${name}`);
+    const fuzzy = await searchCatalog(`${profileBrand} ${profileName}`);
     if (fuzzy) {
       const fuzzyImageUrl = await usableImageUrlForResponse(fuzzy.imageUrl);
       if (fuzzyImageUrl) return { ...fuzzy, imageUrl: fuzzyImageUrl };
@@ -107,18 +111,18 @@ export async function buildProfile(
 
   // 2. Resolve image through metadata/object cache. This checks image_cache
   // before Serper and writes only object references to Postgres.
-  const searchQuery = `${brand} ${name} single fragrance bottle no box HQ product photo studio no plants`;
+  const searchQuery = `${profileBrand} ${profileName} single fragrance bottle no box HQ product photo studio no plants`;
   const processedImage =
     await resolveProcessedFragranceImage({
-      brand,
-      name,
+      brand: profileBrand,
+      name: profileName,
       searchQuery,
       removeBackground: true,
     }).catch(() => null) ??
     (effectiveFallback?.imageUrl
       ? await resolveProcessedFragranceImage({
-          brand,
-          name,
+          brand: profileBrand,
+          name: profileName,
           sourceUrl: effectiveFallback.imageUrl,
           sourceProvider: "manual",
           allowLookupCache: false,
@@ -128,9 +132,9 @@ export async function buildProfile(
 
   const cleanImageUrl = processedImage?.imageUrl ?? null;
 
-  const match = findFragrance(name, brand);
-  const finalName = match?.name || catalogBase?.product.name || name;
-  const finalBrand = match?.brand || catalogBase?.product.brand || brand;
+  const match = findFragrance(profileName, profileBrand);
+  const finalName = match?.name || catalogBase?.product.name || profileName;
+  const finalBrand = match?.brand || catalogBase?.product.brand || profileBrand;
   const finalNotes = match?.notes || effectiveFallback?.notes || [];
   const finalFamily = match?.family || effectiveFallback?.family || "Unknown Family";
   const finalDescription = match?.description || effectiveFallback?.description || "";

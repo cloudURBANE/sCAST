@@ -21,6 +21,28 @@ test("does not drop meaningful edition words during canonicalization", () => {
   assert.equal(resolved.corrected, false);
 });
 
+test("strips retail bottle size and spray noise before canonical matching", () => {
+  const resolved = resolveFragranceIdentity("Dior", "Sauvage Eau de Parfum 100 ml / 3.4 oz Spray");
+  assert.equal(resolved.brand, "Dior");
+  assert.equal(resolved.name, "Sauvage");
+  assert.equal(resolved.corrected, true);
+});
+
+test("keeps edition words while removing size noise without a dataset hit", () => {
+  const resolved = resolveFragranceIdentity("Creed", "Aventus Cologne 100ml Tester Spray");
+  assert.equal(resolved.brand, "Creed");
+  assert.equal(resolved.name, "Aventus Cologne");
+  assert.equal(resolved.corrected, true);
+});
+
+test("formats unknown fallback names by cutting retail suffixes", () => {
+  const resolved = resolveFragranceIdentity("Imaginary House", "Moon Water EDP 50ml Natural Spray");
+  assert.equal(resolved.brand, "Imaginary House");
+  assert.equal(resolved.name, "Moon Water");
+  assert.equal(resolved.confidence, 0);
+  assert.equal(resolved.corrected, true);
+});
+
 test("resolves typed search query while ignoring image-search filler words", () => {
   const resolved = resolveFragranceQuery("sauvaj dior bottle image search");
   assert.equal(resolved?.brand, "Dior");

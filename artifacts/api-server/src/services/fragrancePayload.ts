@@ -3,6 +3,7 @@ import {
   safeImageUrlForResponse,
   stripBase64ImageDataUrls,
 } from "./persistenceGuards";
+import { resolveFragranceIdentity } from "./fragranceNameResolver";
 
 /** Strip base64 data URLs. Postgres must never be used as the image CDN. */
 export function sanitizeFragrance(fragrance: Record<string, any>): Record<string, any> {
@@ -19,12 +20,28 @@ export function normalizeFragrance(fragrance: Record<string, any>): Record<strin
   const brand = fragrance.brand || product?.brand;
   const perfumer = fragrance.perfumer || product?.perfumer;
   const imageUrl = safeImageUrlForResponse(fragrance.imageUrl);
+  const identity =
+    typeof name === "string" && typeof brand === "string"
+      ? resolveFragranceIdentity(brand, name)
+      : null;
+  const normalizedName = identity?.name || name;
+  const normalizedBrand = identity?.brand || brand;
+  const normalizedProduct =
+    product || normalizedName || normalizedBrand || perfumer
+      ? {
+          ...(product ?? {}),
+          ...(normalizedName ? { name: normalizedName } : {}),
+          ...(normalizedBrand ? { brand: normalizedBrand } : {}),
+          ...(perfumer ? { perfumer } : {}),
+        }
+      : product;
 
   return {
     ...fragrance,
     imageUrl,
-    ...(name ? { name } : {}),
-    ...(brand ? { brand } : {}),
+    ...(normalizedProduct ? { product: normalizedProduct } : {}),
+    ...(normalizedName ? { name: normalizedName } : {}),
+    ...(normalizedBrand ? { brand: normalizedBrand } : {}),
     ...(perfumer ? { perfumer } : {}),
   };
 }

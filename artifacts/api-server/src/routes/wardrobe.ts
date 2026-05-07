@@ -103,7 +103,7 @@ router.post("/wardrobe/rebuild", async (req, res) => {
   let skipped = 0;
 
   for (const r of rows) {
-    const data = r.fragranceData as Record<string, any>;
+    const data = normalizeFragrance(r.fragranceData as Record<string, any>);
     const name = (data.name as string | undefined) || (data.product?.name as string | undefined);
     const brand = (data.brand as string | undefined) || (data.product?.brand as string | undefined);
 
@@ -143,9 +143,8 @@ router.post("/wardrobe/rebuild", async (req, res) => {
       const merged = sanitizeFragrance({
         ...data,
         ...flat,
-        // Pin the user's name/brand. The catalog row may have a slightly
-        // different display string (case, trailing edition tags) but the
-        // rebuild must never relabel a row.
+        // Persist the normalized identity so legacy retail-size suffixes do
+        // not keep leaking back into the vault after rebuild.
         name,
         brand,
         product: {
