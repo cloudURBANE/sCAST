@@ -68,6 +68,8 @@ const RETAIL_NOISE_PATTERN =
   /\b(?:\d+(?:\.\d+)?\s*(?:m\s*l|ml|millilitre|milliliter|millilitres|milliliters|fl\.?\s*oz\.?|oz\.?|ounces?)|spray|natural\s+spray|vaporisateur|tester|sample|travel\s+size|mini|bottle|boxed|sealed|new\s+in\s+box|nib|refillable|refill|eau\s+de\s+parfum|eau\s+de\s+toilette|eau\s+de\s+cologne|extrait\s+de\s+parfum|edp|edt|edc)\b/i;
 const FRAGRANCE_INTENT_PATTERN =
   /\b(?:cologne|fragrance|perfume|parfum|edt|edp|edc|elixir|eau\s+de\s+(?:toilette|parfum|cologne)|extrait\s+de\s+parfum)\b/i;
+const NON_FRAGRANCE_CATEGORY_PATTERN =
+  /\b(?:shoe|shoes|sneaker|sneakers|boot|boots|shirt|shirts|pants|jeans|dress|dresses|jacket|jackets|bag|bags|watch|watches|phone|phones|laptop|laptops|tablet|tablets|lipstick|mascara|foundation|skincare|candle|candles)\b/i;
 
 function foldAscii(value: string): string {
   return value
@@ -340,6 +342,11 @@ export function hasMeaningfulFragranceQuery(query: string): boolean {
   return meaningfulQueryTokens(query).length > 0;
 }
 
+function looksLikeNamedFragranceQuery(query: string): boolean {
+  if (NON_FRAGRANCE_CATEGORY_PATTERN.test(query)) return false;
+  return meaningfulQueryTokens(query).length >= 2;
+}
+
 export function scoreFragranceCandidate(
   input: string | { brand?: string; name?: string },
   candidate: { brand?: string; name?: string },
@@ -409,7 +416,8 @@ export function shouldSearchExternalFragranceSources(query: string): boolean {
   if (!sanitized) return false;
   return (
     resolveFragranceQuery(sanitized) !== null ||
-    (FRAGRANCE_INTENT_PATTERN.test(sanitized) && hasMeaningfulFragranceQuery(sanitized))
+    (FRAGRANCE_INTENT_PATTERN.test(sanitized) && hasMeaningfulFragranceQuery(sanitized)) ||
+    looksLikeNamedFragranceQuery(sanitized)
   );
 }
 

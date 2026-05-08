@@ -64,6 +64,7 @@ test("resolves typed search query while ignoring image-search filler words", () 
 test("external search is fragrance-gated", () => {
   assert.equal(shouldSearchExternalFragranceSources("running shoes"), false);
   assert.equal(shouldSearchExternalFragranceSources("moon water perfume"), true);
+  assert.equal(shouldSearchExternalFragranceSources("French Avenue Liquid Brun"), true);
   assert.equal(shouldSearchExternalFragranceSources("sauvaj dior"), true);
   assert.equal(shouldSearchExternalFragranceSources("sauvage elixir"), true);
 });
@@ -96,6 +97,7 @@ test("non-fragrance inputs and brand-only queries do not pass fuzzy scoring", ()
   assert.equal(shouldSearchExternalFragranceSources("running shoes"), false);
   assert.equal(scoreFragranceCandidate("running shoes", { brand: "Dior", name: "Sauvage" }).matched, false);
   assert.equal(scoreFragranceCandidate("Dior", { brand: "Dior", name: "Sauvage" }).matched, false);
+  assert.equal(shouldSearchExternalFragranceSources("rouge lipstick"), false);
   assert.deepEqual(searchFragranceDataset("rouge lipstick"), []);
 });
 
