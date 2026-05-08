@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-export const IMAGE_PIPELINE_VERSION = "bg-v2-webp-768";
+export const IMAGE_PIPELINE_VERSION = "bg-v3-packshot-768";
 
 export function hashString(value: string): string {
   return createHash("sha256").update(value).digest("hex");

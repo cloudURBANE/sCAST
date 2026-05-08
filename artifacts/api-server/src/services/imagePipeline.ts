@@ -1,7 +1,7 @@
 import sharp from "sharp";
 import { logger } from "../lib/logger";
 import { makeLookupKey } from "./catalogService";
-import { removeBgBuffer, removeBgToBuffer, type RemoveBgOptions } from "./bgService";
+import { normalizePackshotBuffer, removeBgBuffer, removeBgToBuffer, type RemoveBgOptions } from "./bgService";
 import {
   buildProcessedImageStorageKey,
   getCachedImageStatusBySourceHash,
@@ -148,7 +148,10 @@ async function processSourceToWebp(
     ? source.localObjectPath
       ? await removeBgBuffer(await readLocalImageObject(source.localObjectPath), poofOptions)
       : await removeBgToBuffer(source.sourceUrlForProcessing, source.isRemote, poofOptions)
-    : await loadSourceWithoutBackgroundRemoval(source);
+    : await loadSourceWithoutBackgroundRemoval(source).then(async (loaded) => ({
+        buffer: await normalizePackshotBuffer(loaded.buffer),
+        backgroundRemoved: loaded.backgroundRemoved,
+      }));
 
   if (!processed) throw new Error("Image processing failed");
 

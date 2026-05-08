@@ -5,29 +5,62 @@ import { trimPackshotForBgService } from "./packshotTrim";
 import { fetchExternalImage } from "./safeImageFetch";
 
 const POOF_API = "https://api.poof.bg/v1/remove";
-const CANVAS_SIZE = 768;
-const EDGE_PADDING = 30;
-const CONTENT_SIZE = CANVAS_SIZE - EDGE_PADDING * 2;
+const NORMALIZED_LONG_EDGE = 768;
+const EDGE_PADDING_X = 30;
+const EDGE_PADDING_TOP = 34;
+const EDGE_PADDING_BOTTOM = 26;
+const CONTENT_LONG_EDGE =
+  NORMALIZED_LONG_EDGE -
+  Math.max(EDGE_PADDING_X * 2, EDGE_PADDING_TOP + EDGE_PADDING_BOTTOM);
 
-async function normalizeToBottleCanvas(buffer: Buffer): Promise<Buffer> {
+async function normalizeToBottleArtwork(buffer: Buffer): Promise<Buffer> {
   try {
-    const normalized = await sharp(buffer)
-      .resize(CONTENT_SIZE, CONTENT_SIZE, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
-      .extend({ top: EDGE_PADDING, bottom: EDGE_PADDING, left: EDGE_PADDING, right: EDGE_PADDING, background: { r: 0, g: 0, b: 0, alpha: 0 } })
-      .resize(CANVAS_SIZE, CANVAS_SIZE, { fit: "fill", background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    const resized = await sharp(buffer)
+      .rotate()
+      .resize(CONTENT_LONG_EDGE, CONTENT_LONG_EDGE, {
+        fit: "inside",
+        background: { r: 0, g: 0, b: 0, alpha: 0 },
+      })
+      .ensureAlpha()
       .png()
       .toBuffer();
 
-    const meta = await sharp(normalized).metadata();
-    if (meta.width !== CANVAS_SIZE || meta.height !== CANVAS_SIZE) {
-      throw new Error(`normalize canvas mismatch: ${meta.width}x${meta.height}`);
+    const meta = await sharp(resized).metadata();
+    if (!meta.width || !meta.height) {
+      throw new Error("normalize artwork metadata missing dimensions");
     }
 
-    return normalized;
+    const outW = meta.width + EDGE_PADDING_X * 2;
+    const outH = meta.height + EDGE_PADDING_TOP + EDGE_PADDING_BOTTOM;
+    if (Math.max(outW, outH) > NORMALIZED_LONG_EDGE) {
+      throw new Error(`normalize artwork too large: ${outW}x${outH}`);
+    }
+
+    return sharp(resized)
+      .extend({
+        top: EDGE_PADDING_TOP,
+        bottom: EDGE_PADDING_BOTTOM,
+        left: EDGE_PADDING_X,
+        right: EDGE_PADDING_X,
+        background: { r: 0, g: 0, b: 0, alpha: 0 },
+      })
+      .png()
+      .toBuffer();
   } catch {
     return sharp(buffer)
-      .resize(CONTENT_SIZE, CONTENT_SIZE, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
-      .extend({ top: EDGE_PADDING, bottom: EDGE_PADDING, left: EDGE_PADDING, right: EDGE_PADDING, background: { r: 0, g: 0, b: 0, alpha: 0 } })
+      .rotate()
+      .resize(CONTENT_LONG_EDGE, CONTENT_LONG_EDGE, {
+        fit: "inside",
+        background: { r: 0, g: 0, b: 0, alpha: 0 },
+      })
+      .ensureAlpha()
+      .extend({
+        top: EDGE_PADDING_TOP,
+        bottom: EDGE_PADDING_BOTTOM,
+        left: EDGE_PADDING_X,
+        right: EDGE_PADDING_X,
+        background: { r: 0, g: 0, b: 0, alpha: 0 },
+      })
       .png()
       .toBuffer();
   }
@@ -36,11 +69,15 @@ async function normalizeToBottleCanvas(buffer: Buffer): Promise<Buffer> {
 async function trimWhiteAndNormalize(buffer: Buffer): Promise<Buffer> {
   try {
     const trimmed = await trimPackshotForBgService(buffer);
-    if (trimmed) return await normalizeToBottleCanvas(trimmed);
+    if (trimmed) return await normalizeToBottleArtwork(trimmed);
   } catch {
     /* fall through */
   }
-  return normalizeToBottleCanvas(buffer);
+  return normalizeToBottleArtwork(buffer);
+}
+
+export async function normalizePackshotBuffer(buffer: Buffer): Promise<Buffer> {
+  return trimWhiteAndNormalize(buffer);
 }
 
 function baseParams() {
@@ -127,7 +164,7 @@ export async function removeBgBuffer(
 
   const result = await removeBgByFile(rawInput, apiKey, opts);
   if (result) {
-    const padded = await normalizeToBottleCanvas(result);
+    const padded = await trimWhiteAndNormalize(result);
     return { buffer: padded, contentType: "image/png", backgroundRemoved: true };
   }
 

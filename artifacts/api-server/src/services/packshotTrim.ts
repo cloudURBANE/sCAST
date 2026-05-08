@@ -23,7 +23,7 @@ export async function trimPackshotForImageProxy(input: Buffer): Promise<
   return trimPackshotForImageProxyCore(input, serverLog);
 }
 
-/** BG removal fallback: PNG with alpha for {@link normalizeToBottleCanvas} in bgService. */
+/** BG removal fallback: PNG with alpha for the normalized bottle-artwork path in bgService. */
 export async function trimPackshotForBgService(input: Buffer): Promise<Buffer | null> {
   return trimPackshotForBgServiceCore(input, serverLog);
 }
