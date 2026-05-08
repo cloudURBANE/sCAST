@@ -9,12 +9,20 @@ import { LavaBackground } from './components/LavaBackground';
 import { AuthModal } from './components/AuthModal';
 import { SharePage } from './components/SharePage';
 import { ShareModal } from './components/ShareModal';
+import {
+  calculateScentWeatherRecommendation,
+  type ScentFamily,
+  type ScentWeatherEngineInput,
+  type ScentWeatherRecommendation,
+} from './lib/scentWeatherEngine';
 
 interface WeatherData {
   temp: number;
   humidity: number;
   condition: string;
   icon: string;
+  windSpeed?: number;
+  wind_speed_mph?: number;
   location?: string;
   isLive?: boolean;
   error?: string;
@@ -44,141 +52,201 @@ function sameWardrobeEntry(
   return item.id === target.id;
 }
 
-// --- Pure Functions ---
+const RAIN_CONDITION_SIGNALS = ['rain', 'drizzle', 'storm'];
 
-const calculateOlfactoryAlignment = (
-  items: Fragrance[],
+const FAMILY_TRAIT_SIGNALS: Record<ScentFamily, string[]> = {
+  fresh: ['fresh', 'freshness', 'clean', 'mint'],
+  citrus: ['citrus', 'bergamot', 'lemon', 'lime', 'orange', 'grapefruit', 'mandarin'],
+  aquatic: ['aquatic', 'marine', 'ocean', 'sea', 'water'],
+  green: ['green', 'grass', 'leaf', 'leafy', 'herbal', 'vetiver'],
+  musky: ['musk', 'musky'],
+  woody: ['wood', 'woody', 'woodiness', 'cedar', 'sandalwood', 'patchouli', 'vetiver'],
+  amber: ['amber', 'resin', 'warmth', 'warm'],
+  sweet: ['sweet', 'sweetness', 'vanilla', 'tonka', 'caramel', 'honey'],
+  gourmand: ['gourmand', 'chocolate', 'coffee', 'praline', 'caramel'],
+  oud: ['oud', 'agarwood'],
+  smoky: ['smoke', 'smoky', 'incense'],
+  leather: ['leather', 'leathery', 'suede'],
+  tobacco: ['tobacco', 'cigar'],
+  spicy: ['spicy', 'spice', 'pepper', 'cardamom', 'cinnamon', 'clove', 'saffron'],
+  powdery: ['powder', 'powdery', 'iris', 'orris', 'violet'],
+};
+
+const mapDestinationToEngineType = (
+  destination: DestinationType,
+): ScentWeatherEngineInput['setting']['type'] => {
+  if (destination === 'Work') return 'work';
+  if (destination === 'Night Out') return 'night';
+  if (destination === 'Going Out') return 'mixed';
+  return 'indoor';
+};
+
+const normalizeTrait = (value: unknown): string =>
+  typeof value === 'string' ? value.trim().toLowerCase() : '';
+
+const titleCaseToken = (value: string): string =>
+  value
+    .replace(/_/g, ' ')
+    .split(' ')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+
+const getFragranceAccords = (item: Fragrance): string[] => {
+  const accords: string[] = [];
+  for (const note of item.notes ?? []) accords.push(note);
+  for (const note of item.pyramid?.top ?? []) accords.push(note);
+  for (const note of item.pyramid?.heart ?? []) accords.push(note);
+  for (const note of item.pyramid?.base ?? []) accords.push(note);
+  return Array.from(new Set(accords.map((note) => note.trim()).filter(Boolean)));
+};
+
+const getFragranceTraitTexts = (item: Fragrance): string[] => {
+  const traits: string[] = [];
+  if (item.family) traits.push(item.family);
+  traits.push(...getFragranceAccords(item));
+  if (item.scent_vector) {
+    for (const [key, value] of Object.entries(item.scent_vector)) {
+      if (Number.isFinite(value) && value > 0) traits.push(key);
+    }
+  }
+  return traits.map(normalizeTrait).filter(Boolean);
+};
+
+const fragranceHasFamilySignal = (item: Fragrance, family: ScentFamily): boolean => {
+  const traits = getFragranceTraitTexts(item);
+  return traits.some((trait) =>
+    FAMILY_TRAIT_SIGNALS[family].some((signal) => trait.includes(signal)),
+  );
+};
+
+const mapSillageToEngineLabel = (sillage?: number): string | undefined => {
+  if (typeof sillage !== 'number' || !Number.isFinite(sillage)) return undefined;
+  if (sillage >= 8) return 'strong';
+  if (sillage <= 3) return 'light';
+  return 'moderate';
+};
+
+const buildEngineInput = (
+  item: Fragrance,
   intent: { destination: DestinationType; energy: EnergyState },
-  weather: WeatherData | null
-) => {
-  const hour = new Date().getHours();
-  const isMorning = hour >= 6 && hour < 10;
-  const isEvening = hour >= 17 && hour < 21;
-  const isNight = hour >= 21 || hour < 6;
+  weather: WeatherData | null,
+): ScentWeatherEngineInput => {
+  const condition = weather?.condition ?? '';
+  const normalizedCondition = condition.toLowerCase();
+  const profileVector: Record<string, number> = item.scent_vector ? { ...item.scent_vector } : {};
 
-  const destinationOccasions: Record<DestinationType, string[]> = {
-    'Staying In': ['Intimate', 'Date Night', 'Casual'],
-    'Work': ['Professional', 'Executive', 'Daytime'],
-    'Going Out': ['Social', 'Casual', 'Outdoor', 'Sport', 'Social Dominance'],
-    'Night Out': ['Evening', 'Formal', 'Date Night', 'Social Dominance', 'Intimate'],
+  return {
+    weather: {
+      temperature_f: weather?.temp ?? Number.NaN,
+      humidity_percent: weather?.humidity ?? Number.NaN,
+      wind_speed_mph: weather?.windSpeed ?? weather?.wind_speed_mph ?? Number.NaN,
+      is_raining: RAIN_CONDITION_SIGNALS.some((signal) => normalizedCondition.includes(signal)),
+      condition,
+    },
+    setting: {
+      type: mapDestinationToEngineType(intent.destination),
+    },
+    fragrance: {
+      name: wardrobeEntryName(item),
+      brand: wardrobeEntryBrand(item),
+      concentration: item.concentration,
+      scent_families: item.family ? [item.family] : [],
+      accords: getFragranceAccords(item),
+      profile_vector: profileVector,
+      longevity: item.performance?.longevity,
+      sillage: mapSillageToEngineLabel(item.performance?.sillage),
+    },
+  };
+};
+
+const calculateRecommendationDisplayScore = (
+  recommendation: ScentWeatherRecommendation,
+): number => {
+  const confidenceBaseScore: Record<ScentWeatherRecommendation['confidence'], number> = {
+    high: 92,
+    medium: 78,
+    low: 62,
+  };
+  const projectionPenalty: Record<ScentWeatherRecommendation['projection_risk'], number> = {
+    low: 0,
+    medium: 4,
+    high: 10,
+    overpowering_risk: 18,
+  };
+  const wearWindowPenalty: Record<ScentWeatherRecommendation['wear_window'], number> = {
+    best_now: 0,
+    daytime_safe: 2,
+    better_later: 8,
+    nighttime_better: 10,
+    avoid_today: 28,
   };
 
-  const scored = items.map(item => {
-    const v = item.scent_vector || { freshness: 0, sweetness: 0, woodiness: 0, spice: 0, warmth: 0, musk: 0 };
-    const { freshness, sweetness, woodiness, spice, warmth, musk } = v;
-    const sillage = item.performance?.sillage ?? 5;
-    const longevity = item.performance?.longevity ?? 5;
-    const occasions = item.context?.occasion ?? [];
+  return Math.max(
+    0,
+    Math.min(
+      100,
+      confidenceBaseScore[recommendation.confidence] -
+        projectionPenalty[recommendation.projection_risk] -
+        wearWindowPenalty[recommendation.wear_window],
+    ),
+  );
+};
 
-    let score = 0;
-    const drivers: string[] = [];
+const scoreRecommendationCandidate = (
+  item: Fragrance,
+  recommendation: ScentWeatherRecommendation,
+  intent: { destination: DestinationType; energy: EnergyState },
+): number => {
+  const bestFamilyHits = recommendation.best_scent_families.filter((family) =>
+    fragranceHasFamilySignal(item, family),
+  ).length;
+  const avoidFamilyHits = recommendation.avoid_scent_families.filter((family) =>
+    fragranceHasFamilySignal(item, family),
+  ).length;
+  const intentBonus = item.intents?.includes(intent.destination) ? 4 : 0;
+  const energyBonus = item.energies?.includes(intent.energy) ? 3 : 0;
 
-    // Destination Match
-    if (intent.destination === 'Staying In') {
-      const sub = musk * 2.0 + sweetness * 1.5 + warmth * 1.0 + (10 - sillage) * 1.2;
-      score += sub;
-      if (sub > 20) drivers.push('intimate projection suits the setting');
-    } else if (intent.destination === 'Work') {
-      const sub = woodiness * 2.0 + freshness * 1.5 + (8 - Math.abs(sillage - 5)) * 1.5;
-      score += sub;
-      if (spice > 6 || sweetness > 7) score -= 12;
-      if (sub > 20) drivers.push('clean, grounded character fits a professional space');
-    } else if (intent.destination === 'Going Out') {
-      const sub = freshness * 1.5 + woodiness * 1.2 + musk * 1.0 + sillage * 1.3;
-      score += sub;
-      if (sub > 20) drivers.push('versatile projection reads well in any setting');
-    } else if (intent.destination === 'Night Out') {
-      const sub = warmth * 2.0 + spice * 2.0 + woodiness * 1.2 + sillage * 2.5;
-      score += sub;
-      if (sub > 20) drivers.push('bold depth and projection command the room at night');
-    }
+  return (
+    calculateRecommendationDisplayScore(recommendation) +
+    bestFamilyHits * 8 -
+    avoidFamilyHits * 14 +
+    intentBonus +
+    energyBonus
+  );
+};
 
-    if (occasions.some(o => destinationOccasions[intent.destination].includes(o))) {
-      score += 15;
-      drivers.push(`its olfactory profile is calibrated for this context`);
-    }
-
-    // Energy Match
-    if (intent.energy === 'Calm') {
-      score += freshness * 1.2 + musk * 1.0 - spice * 0.6 - warmth * 0.4;
-      if (freshness >= 6) drivers.push('cool freshness supports a calm presence');
-    } else if (intent.energy === 'Focused') {
-      score += woodiness * 2.0 + freshness * 1.2 - sweetness * 0.8;
-      if (woodiness >= 6) drivers.push('grounded woodiness channels mental clarity');
-    } else if (intent.energy === 'Confident') {
-      score += spice * 2.0 + warmth * 1.5 + woodiness * 1.0 + sillage * 1.5;
-      if (spice >= 5 || sillage >= 7) drivers.push('its assertive character projects authority');
-    } else if (intent.energy === 'Social') {
-      score += musk * 1.8 + freshness * 1.2 + sweetness * 0.8 + sillage * 1.0;
-      if (musk >= 5) drivers.push('skin-close musk draws people in');
-    } else if (intent.energy === 'Relaxed') {
-      score += musk * 1.8 + warmth * 1.2 + sweetness * 0.8 + (10 - sillage) * 0.8;
-      if (warmth >= 5) drivers.push('enveloping warmth suits an unhurried mood');
-    }
-
-    // Weather Match
-    if (weather) {
-      const temp = weather.temp;
-      const cond = weather.condition.toLowerCase();
-      const humidity = weather.humidity ?? 50;
-
-      if (temp > 85) {
-        score += freshness * 2.5 - warmth * 2.0 - spice * 1.2;
-        if (freshness >= 6) drivers.push(`bright freshness suits ${Math.round(temp)}°F heat`);
-      } else if (temp > 72) {
-        score += freshness * 1.5 + musk * 0.8 - warmth * 0.6;
-        if (freshness >= 5) drivers.push(`light character aligns with ${Math.round(temp)}°F warmth`);
-      } else if (temp > 58) {
-        score += woodiness * 1.5 + freshness * 0.6;
-      } else if (temp > 44) {
-        score += warmth * 2.0 + woodiness * 1.2 + spice * 0.8 - freshness * 0.6;
-        if (warmth >= 5) drivers.push(`warmth cuts through the ${Math.round(temp)}°F chill`);
-      } else {
-        score += warmth * 2.5 + spice * 2.0 + woodiness * 1.0 - freshness * 1.5;
-        if (warmth >= 5 || spice >= 5) drivers.push(`rich density suits the cold`);
-      }
-
-      if (cond.includes('rain') || cond.includes('drizzle')) {
-        score += woodiness * 0.8 + warmth * 0.5;
-        const earthy = item.notes?.some(n =>
-          ['vetiver', 'patchouli', 'cedar', 'oakmoss'].some(k => n.toLowerCase().includes(k))
-        );
-        if (earthy) { score += 10; drivers.push('earthy base thrives in rain'); }
-      }
-      if (cond.includes('sun') || cond.includes('clear')) {
-        score += freshness * 0.5 + musk * 0.3;
-      }
-      if (humidity > 75) {
-        score += freshness * 0.8 - sweetness * 0.6 - warmth * 0.5;
-      }
-    }
-
-    // Time Match
-    if (isMorning) {
-      score += freshness * 1.2 - warmth * 0.4;
-      if (freshness >= 6) drivers.push('crisp freshness is made for mornings');
-    } else if (isEvening) {
-      score += warmth * 1.0 + spice * 0.6 + woodiness * 0.5;
-    } else if (isNight) {
-      score += warmth * 1.5 + spice * 1.0 + musk * 0.8;
-      if ((warmth >= 5 || spice >= 5) && intent.destination === 'Night Out') {
-        drivers.push('nocturnal richness reaches its peak after dark');
-      }
-    }
-
-    // Longevity Bonus
-    if (intent.destination === 'Work' || intent.destination === 'Going Out') {
-      score += longevity * 0.8;
-    }
-
-    // Tie-breaker noise
-    score += Math.random() * 4;
-
-    return { item, score, drivers, sillage, woodiness, freshness, warmth, spice, musk };
+const calculateEngineAlignment = (
+  items: Fragrance[],
+  intent: { destination: DestinationType; energy: EnergyState },
+  weather: WeatherData | null,
+) => {
+  const candidates = items.map((item, index) => {
+    const recommendation = calculateScentWeatherRecommendation(buildEngineInput(item, intent, weather));
+    return {
+      item,
+      recommendation,
+      score: scoreRecommendationCandidate(item, recommendation, intent),
+      index,
+    };
   });
 
-  scored.sort((a, b) => b.score - a.score);
-  return scored[0];
+  candidates.sort((a, b) => b.score - a.score || a.index - b.index);
+  return candidates[0];
+};
+
+const formatFamilyList = (families: ScentFamily[]): string =>
+  families.length > 0 ? families.map(titleCaseToken).join(', ') : 'Flexible';
+
+const formatAvoidList = (families: ScentFamily[]): string =>
+  families.length > 0 ? families.map(titleCaseToken).join(', ') : 'None flagged';
+
+const formatSprayCount = (sprayCount: ScentWeatherRecommendation['spray_count']): string => {
+  const plural = sprayCount.recommended === 1 ? 'spray' : 'sprays';
+  if (sprayCount.min === sprayCount.max) {
+    return `${sprayCount.recommended} ${plural} recommended`;
+  }
+  return `${sprayCount.min}-${sprayCount.max} sprays (${sprayCount.recommended} recommended)`;
 };
 
 // --- Components ---
@@ -254,6 +322,7 @@ export default function App() {
   const [isIntentModalOpen, setIsIntentModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [activeRecommendation, setActiveRecommendation] = useState<Fragrance | null>(null);
+  const [activeEngineRecommendation, setActiveEngineRecommendation] = useState<ScentWeatherRecommendation | null>(null);
   const [recommendationReason, setRecommendationReason] = useState<string>('');
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [weatherLoading, setWeatherLoading] = useState(true);
@@ -576,16 +645,18 @@ export default function App() {
     setIsIntentModalOpen(false);
     if (items.length === 0) return;
 
-    const winner = calculateOlfactoryAlignment(items, intent, weather);
+    const winner = calculateEngineAlignment(items, intent, weather);
+    if (!winner) return;
 
-    const uniqueDrivers = Array.from(new Set(winner.drivers));
-    const reason = uniqueDrivers.length > 0
-      ? uniqueDrivers.slice(0, 2).join(', and ')
-      : 'its olfactory profile best matches your intent and current conditions';
-
-    setRecommendationReason(reason.charAt(0).toUpperCase() + reason.slice(1) + '.');
+    setActiveEngineRecommendation(winner.recommendation);
+    setRecommendationReason(winner.recommendation.explanation);
     setTimeout(() => setActiveRecommendation(winner.item), 800);
   };
+
+  const closeRecommendationOverlay = useCallback(() => {
+    setActiveRecommendation(null);
+    setActiveEngineRecommendation(null);
+  }, []);
 
   const tickerPhrases = useMemo(() => {
     if (!wardrobeLoaded || items.length === 0) {
@@ -875,7 +946,7 @@ export default function App() {
               style={{ paddingTop: 'max(1.25rem, env(safe-area-inset-top))' }}
             >
               <p className="text-[9px] uppercase tracking-[0.4em] text-scent-accent font-bold">Strategic Alignment Found</p>
-              <button onClick={() => setActiveRecommendation(null)} className="p-2 text-white/40 hover:text-white hover:bg-white/10 transition-all active:scale-95">
+              <button onClick={closeRecommendationOverlay} className="p-2 text-white/40 hover:text-white hover:bg-white/10 transition-all active:scale-95">
                 <X size={20} />
               </button>
             </div>
@@ -891,7 +962,7 @@ export default function App() {
                     <h2 className="font-serif italic text-2xl sm:text-6xl mb-4">You should wear</h2>
                     <div className="h-px w-16 bg-white/20 mx-auto" />
                   </header>
-                  <div className="py-6 sm:py-16 border-y border-white/10 group cursor-pointer" onClick={() => setActiveRecommendation(null)}>
+                  <div className="py-6 sm:py-16 border-y border-white/10 group cursor-pointer" onClick={closeRecommendationOverlay}>
                     <p className="text-sm uppercase tracking-[0.2em] text-white/40 mb-2 font-serif">{activeRecommendation.brand}</p>
                     <h3 className="font-serif italic text-3xl sm:text-8xl text-white leading-tight transition-transform group-hover:scale-105">{activeRecommendation.name}</h3>
                   </div>
@@ -904,6 +975,30 @@ export default function App() {
                       <p className="text-[8px] uppercase tracking-[0.3em] text-scent-muted mb-2 font-bold">Concentration</p>
                       <p className="text-sm italic text-scent-muted leading-relaxed">{activeRecommendation.concentration || 'Eau de Parfum'}</p>
                     </div>
+                    {activeEngineRecommendation ? (
+                      <>
+                        <div>
+                          <p className="text-[8px] uppercase tracking-[0.3em] text-scent-muted mb-2 font-bold">Best Families</p>
+                          <p className="text-sm italic text-scent-muted leading-relaxed">{formatFamilyList(activeEngineRecommendation.best_scent_families)}</p>
+                        </div>
+                        <div>
+                          <p className="text-[8px] uppercase tracking-[0.3em] text-scent-muted mb-2 font-bold">Avoid Today</p>
+                          <p className="text-sm italic text-scent-muted leading-relaxed">{formatAvoidList(activeEngineRecommendation.avoid_scent_families)}</p>
+                        </div>
+                        <div>
+                          <p className="text-[8px] uppercase tracking-[0.3em] text-scent-muted mb-2 font-bold">Sprays</p>
+                          <p className="text-sm italic text-scent-muted leading-relaxed">{formatSprayCount(activeEngineRecommendation.spray_count)}</p>
+                        </div>
+                        <div>
+                          <p className="text-[8px] uppercase tracking-[0.3em] text-scent-muted mb-2 font-bold">Projection Risk</p>
+                          <p className="text-sm italic text-scent-muted leading-relaxed">{titleCaseToken(activeEngineRecommendation.projection_risk)}</p>
+                        </div>
+                        <div>
+                          <p className="text-[8px] uppercase tracking-[0.3em] text-scent-muted mb-2 font-bold">Confidence</p>
+                          <p className="text-sm italic text-scent-muted leading-relaxed">{titleCaseToken(activeEngineRecommendation.confidence)}</p>
+                        </div>
+                      </>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -914,7 +1009,7 @@ export default function App() {
               className="px-5 pt-3 shrink-0 border-t border-white/5"
               style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))' }}
             >
-              <button onClick={() => setActiveRecommendation(null)} className="w-full py-4 bg-scent-accent text-black uppercase tracking-[0.3em] text-[10px] font-bold hover:opacity-90 transition-opacity active:scale-[0.98]">
+              <button onClick={closeRecommendationOverlay} className="w-full py-4 bg-scent-accent text-black uppercase tracking-[0.3em] text-[10px] font-bold hover:opacity-90 transition-opacity active:scale-[0.98]">
                 Confirm Alignment
               </button>
             </div>
