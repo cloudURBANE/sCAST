@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import { usersTable, userFragrancesTable, userSettingsTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { hydrateImageUrl, normalizeFragrance } from "../services/fragrancePayload";
+import { resolveShareUserFromList, shareIdForUser } from "../services/shareIdentity";
 
 const router = Router();
 
@@ -12,29 +13,14 @@ function getToken(req: any): string | null {
   return null;
 }
 
-function isUuidish(value: string): boolean {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
-}
-
-function shareHandleFromEmail(email: string): string {
-  const local = email.split("@")[0] ?? "";
-  const normalized = local.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-  return normalized || "user";
-}
-
 async function resolveShareUser(userRef: string) {
-  if (isUuidish(userRef)) {
-    const rows = await db.select().from(usersTable).where(eq(usersTable.id, userRef)).limit(1);
-    if (rows[0]) return rows[0];
-  }
-
-  const cleanRef = userRef.trim().toLowerCase().replace(/^@+/, "");
-  if (!cleanRef) return null;
   const users = await db.select().from(usersTable);
-  return (
-    users.find((u) => shareHandleFromEmail(u.email) === cleanRef) ??
-    null
-  );
+  return resolveShareUserFromList(userRef, users);
+}
+
+async function getShareIdForUser(user: typeof usersTable.$inferSelect): Promise<string> {
+  const users = await db.select().from(usersTable);
+  return shareIdForUser(user, users);
 }
 
 async function getUserByToken(token: string) {
@@ -100,9 +86,10 @@ router.get("/share-settings", async (req, res) => {
   if (!user) { res.status(401).json({ error: "Invalid token" }); return; }
 
   const settings = await getOrCreateSettings(user.id);
+  const shareId = await getShareIdForUser(user);
   res.json({
     userId: user.id,
-    shareId: `@${shareHandleFromEmail(user.email)}`,
+    shareId,
     hideImages: settings.shareHideImages,
   });
 });
@@ -128,9 +115,10 @@ router.post("/share-settings", async (req, res) => {
       set: { shareHideImages: hideImages, updatedAt: new Date() },
     });
 
+  const shareId = await getShareIdForUser(user);
   res.json({
     userId: user.id,
-    shareId: `@${shareHandleFromEmail(user.email)}`,
+    shareId,
     hideImages,
   });
 });
