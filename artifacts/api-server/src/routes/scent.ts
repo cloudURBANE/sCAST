@@ -202,7 +202,10 @@ router.post("/search-scent", async (req, res) => {
   }
 
   if (!shouldSearchExternalFragranceSources(queryWithHint)) {
-    res.status(422).json({ error: "Search only supports fragrance, perfume, or cologne names." });
+    res.status(422).json({
+      error:
+        "Search only supports fragrance, perfume, or cologne names. Try the brand plus fragrance name, or add 'perfume' for a newer scent.",
+    });
     return;
   }
 

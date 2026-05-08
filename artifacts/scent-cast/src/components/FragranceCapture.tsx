@@ -21,6 +21,22 @@ function newFragranceId(): string {
   return `${a}-${b}-${c}-${d}`;
 }
 
+async function apiErrorMessage(res: Response, fallback: string): Promise<string> {
+  try {
+    const data = await res.clone().json();
+    if (typeof data?.error === 'string' && data.error.trim()) return data.error;
+    if (typeof data?.message === 'string' && data.message.trim()) return data.message;
+  } catch {
+    try {
+      const text = await res.text();
+      if (text.trim()) return text.trim();
+    } catch {
+      /* fall through to fallback */
+    }
+  }
+  return fallback;
+}
+
 interface FragranceMatch {
   name: string;
   brand: string;
@@ -95,7 +111,9 @@ export const FragranceCapture: React.FC<{ onAdd?: (item: any) => void }> = ({ on
         signal: searchAbortController.current.signal,
       });
       
-      if (!res.ok) throw new Error(`Search failed: HTTP ${res.status}`);
+      if (!res.ok) {
+        throw new Error(await apiErrorMessage(res, `Search failed: HTTP ${res.status}`));
+      }
       
       const profileData = await res.json();
       if (!profileData || profileData.error) {
