@@ -2,8 +2,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   asciiForImageSearch,
+  fragranceCatalogSearchTerms,
+  hasMeaningfulFragranceQuery,
+  isLikelySameFragranceIdentity,
   resolveFragranceIdentity,
   resolveFragranceQuery,
+  scoreFragranceCandidate,
+  searchFragranceDataset,
   shouldSearchExternalFragranceSources,
 } from "./fragranceNameResolver.ts";
 
@@ -60,8 +65,62 @@ test("external search is fragrance-gated", () => {
   assert.equal(shouldSearchExternalFragranceSources("running shoes"), false);
   assert.equal(shouldSearchExternalFragranceSources("moon water perfume"), true);
   assert.equal(shouldSearchExternalFragranceSources("sauvaj dior"), true);
+  assert.equal(shouldSearchExternalFragranceSources("sauvage elixir"), true);
 });
 
 test("formats non-ascii names for image search", () => {
-  assert.equal(asciiForImageSearch("Bleu de Chánel"), "Bleu de Chanel");
+  assert.equal(asciiForImageSearch("Bleu de Ch\u00e1nel"), "Bleu de Chanel");
+});
+
+test("category-only fragrance words are too vague to resolve or score", () => {
+  for (const query of ["perfume", "fragrance", "cologne", "elixir", "show me a bottle"]) {
+    assert.equal(resolveFragranceQuery(query), null);
+    assert.equal(shouldSearchExternalFragranceSources(query), false);
+    assert.equal(hasMeaningfulFragranceQuery(query), false);
+    assert.deepEqual(fragranceCatalogSearchTerms(query), []);
+    assert.deepEqual(searchFragranceDataset(query), []);
+  }
+
+  assert.equal(
+    scoreFragranceCandidate("cologne", { brand: "Creed", name: "Aventus Cologne" }).matched,
+    false,
+  );
+  assert.equal(
+    scoreFragranceCandidate("elixir", { brand: "Dior", name: "Sauvage Elixir" }).matched,
+    false,
+  );
+});
+
+test("non-fragrance inputs and brand-only queries do not pass fuzzy scoring", () => {
+  assert.equal(resolveFragranceQuery("running shoes"), null);
+  assert.equal(shouldSearchExternalFragranceSources("running shoes"), false);
+  assert.equal(scoreFragranceCandidate("running shoes", { brand: "Dior", name: "Sauvage" }).matched, false);
+  assert.equal(scoreFragranceCandidate("Dior", { brand: "Dior", name: "Sauvage" }).matched, false);
+  assert.deepEqual(searchFragranceDataset("rouge lipstick"), []);
+});
+
+test("scorer rejects omitted flanker tokens while allowing concentration aliases", () => {
+  assert.equal(
+    scoreFragranceCandidate("Dior Sauvage", { brand: "Dior", name: "Sauvage Elixir" }).matched,
+    false,
+  );
+  assert.equal(
+    scoreFragranceCandidate("Dior Sauvage EDP", { brand: "Dior", name: "Sauvage" }).matched,
+    true,
+  );
+  assert.equal(
+    scoreFragranceCandidate("Baccarat", { brand: "Maison Francis Kurkdjian", name: "Baccarat Rouge 540" }).matched,
+    false,
+  );
+  assert.equal(
+    scoreFragranceCandidate("Baccarat Rouge", { brand: "Maison Francis Kurkdjian", name: "Baccarat Rouge 540" }).matched,
+    true,
+  );
+  assert.equal(
+    isLikelySameFragranceIdentity(
+      { brand: "Dior", name: "Sauvage" },
+      { brand: "Dior", name: "Sauvage Elixir" },
+    ),
+    false,
+  );
 });
