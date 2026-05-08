@@ -43,8 +43,17 @@ async function getOrCreateSettings(userId: string) {
   const [created] = await db
     .insert(userSettingsTable)
     .values({ userId })
+    .onConflictDoNothing({ target: userSettingsTable.userId })
     .returning();
-  return created;
+  if (created) return created;
+
+  const retry = await db
+    .select()
+    .from(userSettingsTable)
+    .where(eq(userSettingsTable.userId, userId))
+    .limit(1);
+  if (retry[0]) return retry[0];
+  throw new Error("Failed to create share settings");
 }
 
 router.get("/share/:userRef", async (req, res) => {

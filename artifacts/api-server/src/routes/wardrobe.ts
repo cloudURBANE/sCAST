@@ -139,18 +139,20 @@ router.post("/wardrobe/rebuild", async (req, res) => {
       }
 
       const flat = flattenProfile(profile);
+      const rebuiltName = typeof flat.name === "string" && flat.name.trim() ? flat.name : name;
+      const rebuiltBrand = typeof flat.brand === "string" && flat.brand.trim() ? flat.brand : brand;
       const flatImageUrl = typeof flat.imageUrl === "string" ? flat.imageUrl : "";
       const merged = sanitizeFragrance({
         ...data,
         ...flat,
         // Persist the normalized identity so legacy retail-size suffixes do
         // not keep leaking back into the vault after rebuild.
-        name,
-        brand,
+        name: rebuiltName,
+        brand: rebuiltBrand,
         product: {
           ...(typeof flat.product === "object" && flat.product ? flat.product : {}),
-          name,
-          brand,
+          name: rebuiltName,
+          brand: rebuiltBrand,
         },
         // Don't overwrite a real stored URL with an empty one if the rebuild
         // didn't manage to resolve a fresh image (e.g. metadata/object cache miss).

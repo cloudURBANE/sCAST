@@ -1,12 +1,18 @@
 import { db } from "@workspace/db";
 import { globalFragrancesTable } from "@workspace/db/schema";
-import { eq, or, sql } from "drizzle-orm";
+import { eq, or, sql, type SQL } from "drizzle-orm";
 import type { ScentProfile } from "./scentEngine";
 import {
   assertNoPersistedBase64Image,
   safeImageUrlForResponse,
   stripBase64ImageDataUrls,
 } from "./persistenceGuards";
+import {
+  fragranceCatalogSearchTerms,
+  hasMeaningfulFragranceQuery,
+  sanitizeFragranceQueryInput,
+  scoreFragranceCandidate,
+} from "./fragranceNameResolver";
 
 export function makeLookupKey(brand: string, name: string): string {
   return `${brand.trim().toLowerCase()}::${name.trim().toLowerCase()}`;
@@ -15,6 +21,19 @@ export function makeLookupKey(brand: string, name: string): string {
 function sanitizeCatalogProfile(profile: unknown): ScentProfile {
   return stripBase64ImageDataUrls(profile) as ScentProfile;
 }
+
+export type CatalogSearchOptions = {
+  minScore?: number;
+  limit?: number;
+};
+
+export type CatalogSearchHit = {
+  profile: ScentProfile;
+  score: number;
+};
+
+const DEFAULT_CATALOG_MIN_SCORE = 0.82;
+const MAX_CATALOG_CANDIDATES = 24;
 
 export async function getCatalogEntry(brand: string, name: string): Promise<ScentProfile | null> {
   const key = makeLookupKey(brand, name);
@@ -28,7 +47,7 @@ export async function getCatalogEntry(brand: string, name: string): Promise<Scen
 }
 
 /**
- * Fuzzy catalog search.
+ * Confidence-gated catalog search.
  *
  * Constraints (B1/B6): The previous implementation OR'd `name ILIKE %q%`
  * and `brand ILIKE %q%` separately, so a query of "aventus" non-deterministically
@@ -36,30 +55,54 @@ export async function getCatalogEntry(brand: string, name: string): Promise<Scen
  * returned by Postgres won. That silently corrupted user_fragrances rows
  * during rebuild and surfaced wrong images during image hydration.
  *
- * New rules:
- *  - Match only against the concatenated "brand name" or the lookup_key
- *    (the same composite the catalog actually uses to identify products).
- *  - Order shortest match first so "Aventus" beats "Aventus Cologne" /
- *    "Aventus for Her" deterministically.
+ * The DB query is only a cheap candidate fetch. The resolver makes the final
+ * decision, so a broad ILIKE hit cannot silently replace the user's fragrance
+ * with a nearby flanker.
  */
-export async function searchCatalog(query: string): Promise<ScentProfile | null> {
-  const q = query.trim().toLowerCase();
-  if (!q) return null;
+export async function searchCatalog(query: string, options: CatalogSearchOptions = {}): Promise<ScentProfile | null> {
+  const hits = await searchCatalogCandidates(query, { ...options, limit: 1 });
+  return hits[0]?.profile ?? null;
+}
+
+export async function searchCatalogCandidates(
+  query: string,
+  options: CatalogSearchOptions = {},
+): Promise<CatalogSearchHit[]> {
+  const q = sanitizeFragranceQueryInput(query).toLowerCase();
+  if (!q) return [];
+  if (!hasMeaningfulFragranceQuery(q)) return [];
+  const minScore = options.minScore ?? DEFAULT_CATALOG_MIN_SCORE;
+  const limit = Math.max(1, Math.min(options.limit ?? 1, 10));
+  const terms = fragranceCatalogSearchTerms(q);
+  const composite = sql`(${globalFragrancesTable.brand} || ' ' || ${globalFragrancesTable.name})`;
+  const conditions: SQL[] = [
+    sql`${composite} ILIKE ${"%" + q + "%"}`,
+    sql`${globalFragrancesTable.lookupKey} ILIKE ${"%" + q + "%"}`,
+    ...terms.map((term) => sql`${composite} ILIKE ${"%" + term + "%"}`),
+  ];
 
   const rows = await db
     .select()
     .from(globalFragrancesTable)
-    .where(
-      or(
-        sql`(${globalFragrancesTable.brand} || ' ' || ${globalFragrancesTable.name}) ILIKE ${"%" + q + "%"}`,
-        sql`${globalFragrancesTable.lookupKey} ILIKE ${"%" + q + "%"}`,
-      ),
-    )
+    .where(or(...conditions))
     .orderBy(sql`length(${globalFragrancesTable.name}) asc`)
-    .limit(1);
+    .limit(MAX_CATALOG_CANDIDATES);
 
-  if (rows.length === 0) return null;
-  return sanitizeCatalogProfile(rows[0].profileData);
+  return rows
+    .map((row) => {
+      const match = scoreFragranceCandidate(q, { brand: row.brand, name: row.name }, minScore);
+      return { row, match };
+    })
+    .filter(({ match }) => match.matched)
+    .sort((a, b) => {
+      if (b.match.score !== a.match.score) return b.match.score - a.match.score;
+      return a.row.name.length - b.row.name.length;
+    })
+    .slice(0, limit)
+    .map(({ row, match }) => ({
+      profile: sanitizeCatalogProfile(row.profileData),
+      score: match.score,
+    }));
 }
 
 export async function saveCatalogEntry(brand: string, name: string, profile: ScentProfile): Promise<void> {

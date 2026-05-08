@@ -197,7 +197,7 @@ router.post("/search-scent", async (req, res) => {
       pyramid: first.pyramid,
       perfumer: first.perfumer,
     });
-    res.json(profile);
+    res.json("product" in profile ? flattenProfile(profile) : profile);
     return;
   }
 
@@ -214,7 +214,7 @@ router.post("/search-scent", async (req, res) => {
     pyramid: scraped.pyramid,
     perfumer: scraped.perfumer,
   });
-  res.json(profile);
+  res.json("product" in profile ? flattenProfile(profile) : profile);
 });
 
 router.post("/refresh-image", async (req, res) => {
