@@ -191,7 +191,7 @@ const LiveClock: React.FC = React.memo(() => {
   }, []);
   return (
     <span
-      className="font-serif italic tracking-tighter text-3xl sm:text-5xl text-white tabular-nums"
+      className="font-serif italic tracking-normal text-2xl sm:text-3xl text-[#fff7ec] tabular-nums"
       style={{ fontVariantNumeric: 'tabular-nums' }}
     >
       {time.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}
@@ -204,60 +204,28 @@ interface AtmosphereBarProps {
   weatherLoading: boolean;
 }
 
-const ATMOSPHERE_COPIES = 6;
-
 const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({ weather, weatherLoading }) => {
   const temp = weatherLoading ? '—' : weather?.temp != null ? `${Math.round(weather.temp)}°F` : '—';
   const condition = weatherLoading ? '—' : weather?.condition ?? '—';
   const humidity = weatherLoading ? '—' : weather?.humidity != null ? `${weather.humidity}%` : '—';
   const location = weather?.location ?? null;
+  const metrics = [
+    { label: 'Matrix', value: condition },
+    { label: 'Saturation', value: humidity },
+    { label: 'Chronos', value: <LiveClock /> },
+    { label: 'Atmosphere', value: temp },
+    { label: 'Coordinate', value: location ?? '—' },
+  ];
 
   return (
-    <div className="scent-marquee-band py-20 overflow-hidden flex select-none relative">
-      <div className="absolute inset-y-0 left-0 w-28 bg-gradient-to-r from-scent-bg to-transparent z-20 pointer-events-none" />
-      <div className="absolute inset-y-0 right-0 w-28 bg-gradient-to-l from-scent-bg to-transparent z-20 pointer-events-none" />
-      <div className="flex animate-infinite-scroll-slow gap-40 text-[18px] uppercase tracking-tighter scent-marquee-text font-serif italic whitespace-nowrap items-center">
-        {[...Array(ATMOSPHERE_COPIES)].map((_, i) => (
-          <React.Fragment key={i}>
-            <div className="flex items-center gap-8">
-              <div className="flex flex-col items-start gap-1">
-                <span className="text-scent-accent/65 text-[9px] font-bold tracking-[0.4em] font-sans uppercase">Chronos:</span>
-                <LiveClock />
-              </div>
-            </div>
-            <span className="opacity-5 font-sans font-thin text-3xl select-none mx-4">/</span>
-            <div className="flex items-center gap-8">
-              <div className="flex flex-col items-start gap-1">
-                <span className="text-scent-accent/65 text-[9px] font-bold tracking-[0.4em] font-sans uppercase">Atmosphere:</span>
-                <span className="scent-weather-value text-3xl sm:text-5xl font-serif italic tracking-tighter">{temp}</span>
-              </div>
-            </div>
-            <span className="opacity-5 font-sans font-thin text-3xl select-none mx-4">/</span>
-            <div className="flex items-center gap-8">
-              <div className="flex flex-col items-start gap-1">
-                <span className="text-scent-accent/65 text-[9px] font-bold tracking-[0.4em] font-sans uppercase">Coordinate:</span>
-                <span className="scent-weather-value text-3xl sm:text-5xl font-serif italic tracking-tighter">{location ?? '—'}</span>
-              </div>
-            </div>
-            <span className="opacity-5 font-sans font-thin text-3xl select-none mx-4">/</span>
-            <div className="flex items-center gap-8">
-              <div className="flex flex-col items-start gap-1">
-                <span className="text-scent-accent/65 text-[9px] font-bold tracking-[0.4em] font-sans uppercase">Matrix:</span>
-                <span className="scent-weather-value text-3xl sm:text-5xl font-serif italic tracking-tighter">{condition}</span>
-              </div>
-            </div>
-            <span className="opacity-5 font-sans font-thin text-3xl select-none mx-4">/</span>
-            <div className="flex items-center gap-8">
-              <div className="flex flex-col items-start gap-1">
-                <span className="text-scent-accent/65 text-[9px] font-bold tracking-[0.4em] font-sans uppercase">Saturation:</span>
-                <span className="scent-weather-value text-3xl sm:text-5xl font-serif italic tracking-tighter">{humidity}</span>
-              </div>
-            </div>
-            <span className="opacity-5 font-sans font-thin text-3xl select-none mx-4">/</span>
-          </React.Fragment>
-        ))}
-      </div>
-    </div>
+    <section className="scent-atmosphere-strip" aria-label="Current atmosphere">
+      {metrics.map((metric) => (
+        <div key={metric.label} className="scent-atmosphere-cell">
+          <span className="scent-atmosphere-label">{metric.label}</span>
+          <span className="scent-atmosphere-value">{metric.value}</span>
+        </div>
+      ))}
+    </section>
   );
 });
 
@@ -688,27 +656,27 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-[100svh] bg-scent-bg selection:bg-scent-accent selection:text-black text-white relative overflow-x-hidden">
+    <div className="scent-app-shell min-h-[100svh] bg-scent-bg selection:bg-scent-accent selection:text-black text-white relative overflow-x-hidden">
       <LavaBackground />
-      <nav className="scent-topbar fixed top-0 left-0 right-0 h-20 sm:h-24 z-50 px-4 sm:px-8">
+      <nav className="scent-topbar fixed top-0 left-0 right-0 h-16 sm:h-[72px] z-50 px-3 sm:px-8">
         <div className="max-w-[1760px] mx-auto h-full flex items-center relative">
-          <div className="flex items-center gap-3 min-w-0">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             {authEmail ? (
-              <div className="scent-account-pill h-11 sm:h-12 rounded-full pl-1.5 pr-3 sm:pr-4 flex items-center gap-3 min-w-0">
+              <div className="scent-account-pill h-10 sm:h-11 rounded-full pl-1.5 pr-3 sm:pr-4 flex items-center gap-3 min-w-0">
                 <div className="relative flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-full border border-scent-accent/45 bg-black/60 text-sm font-bold text-white">
                   {authEmail.trim().charAt(0).toUpperCase() || 'S'}
                   <span className={`absolute -right-0.5 bottom-0 h-2.5 w-2.5 rounded-full border border-black ${locationStatus === 'granted' ? 'bg-emerald-400' : locationStatus === 'requesting' ? 'bg-yellow-400 animate-pulse' : locationStatus === 'denied' ? 'bg-red-400' : 'bg-scent-accent/45'}`} />
                 </div>
-                <span className="hidden max-w-[220px] truncate text-sm text-white/72 md:block">
+                <span className="hidden max-w-[180px] lg:max-w-[240px] truncate text-sm text-[#f4debd]/86 md:block">
                   {authEmail}
                 </span>
-                <ChevronDown size={16} strokeWidth={1.5} className="hidden text-white/55 md:block" />
+                <ChevronDown size={16} strokeWidth={1.5} className="hidden text-scent-accent/65 md:block" />
               </div>
             ) : (
               <button
                 onClick={() => setIsAuthModalOpen(true)}
                 title="Sign In"
-                className="scent-account-pill h-11 px-4 rounded-full transition-all text-[10px] uppercase tracking-[0.22em] text-white/70 hover:text-white font-bold"
+                className="scent-account-pill h-10 sm:h-11 px-4 rounded-full transition-all text-[10px] uppercase tracking-[0.18em] text-[#f4debd]/82 hover:text-white font-bold"
               >
                 Sign In
               </button>
@@ -717,31 +685,31 @@ export default function App() {
               onClick={requestLocation}
               disabled={locationStatus === 'requesting' || locationStatus === 'granted'}
               title={locationStatus === 'granted' ? 'Location Active' : locationStatus === 'denied' ? 'Location Denied' : 'Sync Location'}
-              className="scent-icon-button hidden md:flex items-center justify-center w-11 h-11 rounded-full transition-all disabled:cursor-default"
+              className="scent-icon-button hidden md:flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 rounded-full transition-all disabled:cursor-default"
             >
               <span className={`w-2 h-2 rounded-full ${locationStatus === 'granted' ? 'bg-green-400' : locationStatus === 'requesting' ? 'bg-yellow-400 animate-pulse' : locationStatus === 'denied' ? 'bg-red-400' : 'bg-white/20'}`} />
             </button>
           </div>
 
-          <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-3">
-            <Wind size={25} strokeWidth={1.25} className="text-scent-accent" />
-            <h1 className="scent-brandmark font-serif text-2xl sm:text-4xl tracking-[0.16em] uppercase">SCENTCAST</h1>
+          <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 sm:gap-3 pointer-events-none">
+            <Wind size={22} strokeWidth={1.25} className="text-scent-accent drop-shadow-[0_0_10px_rgba(201,139,44,0.22)]" />
+            <h1 className="scent-brandmark font-serif text-xl sm:text-3xl tracking-[0.14em] uppercase">SCENTCAST</h1>
           </div>
 
-          <div className="ml-auto flex items-center gap-3">
+          <div className="ml-auto flex items-center gap-2 sm:gap-3">
             {authToken ? (
               <>
                 <button
                   onClick={() => setIsShareModalOpen(true)}
                   title="Share Vault"
-                  className="scent-icon-button flex items-center justify-center w-11 h-11 rounded-full transition-all"
+                  className="scent-icon-button flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 rounded-full transition-all"
                 >
                   <Share2 size={17} strokeWidth={1.6} />
                 </button>
                 <button
                   onClick={handleSignOut}
                   title="Sign Out"
-                  className="scent-icon-button flex items-center justify-center w-11 h-11 rounded-full transition-all"
+                  className="scent-icon-button flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 rounded-full transition-all"
                 >
                   <LogOut size={17} strokeWidth={1.6} />
                 </button>
@@ -751,10 +719,10 @@ export default function App() {
         </div>
       </nav>
 
-      <div className="pt-20 sm:pt-24" />
+      <div className="pt-16 sm:pt-[72px]" />
 
       <main className="relative z-10 pb-24 px-4 sm:px-8 max-w-[1760px] mx-auto">
-        <div className="space-y-24 sm:space-y-32 pt-12 sm:pt-16">
+        <div className="space-y-20 sm:space-y-28 pt-10 sm:pt-14">
           <div className="hidden" aria-hidden="true">
             <div className="flex flex-col items-center justify-center space-y-16 pt-32 text-center">
               <header className="space-y-10 flex flex-col items-center">
@@ -812,8 +780,8 @@ export default function App() {
             <div className="absolute inset-y-0 right-0 w-28 bg-gradient-to-l from-scent-bg to-transparent z-10" />
           </div>
 
-          <section className="mx-auto w-full max-w-2xl space-y-8 text-center">
-            <h2 className="font-serif italic text-3xl sm:text-5xl text-white leading-tight tracking-tight">
+          <section className="scent-hero-zone mx-auto w-full max-w-2xl space-y-7 text-center">
+            <h2 className="font-serif italic text-[clamp(2.15rem,7vw,3.8rem)] text-[#fff7ec] leading-[0.98] tracking-normal">
               Find your signature for the current atmosphere.
             </h2>
             <FragranceCapture onAdd={handleAddItem} />
@@ -822,10 +790,10 @@ export default function App() {
                 if (items.length === 0) { alert("Your vault is empty! Add at least one fragrance to discover your match."); return; }
                 setIsIntentModalOpen(true);
               }}
-              className="scent-primary-button w-full h-14 flex items-center justify-center gap-4 transition-all group rounded-[var(--radius-scent)]"
+              className="scent-primary-button w-full h-[60px] sm:h-16 flex items-center justify-center gap-4 transition-all group rounded-[var(--radius-scent)]"
             >
               <Play size={19} className="fill-current group-hover:scale-110 transition-transform" />
-              <span className="font-serif italic text-xl sm:text-2xl">Discover Your Signature Scent</span>
+              <span className="font-serif italic text-xl sm:text-2xl leading-none">Discover Your Signature Scent</span>
             </button>
           </section>
 

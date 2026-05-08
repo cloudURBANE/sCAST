@@ -213,13 +213,13 @@ export const FragranceCapture: React.FC<{ onAdd?: (item: any) => void }> = ({ on
           <p className="text-white/30 text-[10px] uppercase tracking-[0.3em] font-sans font-bold italic animate-pulse">Processing Olfactory Data</p>
         </div>
       )}
-      <div className="glass rounded-[var(--radius-scent-inner)] p-4 md:p-5">
-        <div className="flex flex-col items-center text-center mb-8 px-2 gap-6">
+      <div className="glass rounded-[var(--radius-scent-inner)] p-4 md:p-6">
+        <div className="flex flex-col items-center text-center mb-7 px-2 gap-5">
           <div>
-            <p className="text-[8px] uppercase tracking-[0.3em] text-scent-muted font-bold mb-1">Add To Vault</p>
-            <h2 className="font-serif italic text-2xl text-white tracking-tighter">Capture Essence</h2>
+            <p className="text-[11px] uppercase tracking-[0.24em] text-scent-accent/82 font-bold mb-1">Add To Vault</p>
+            <h2 className="font-serif italic text-2xl text-[#fff7ec] tracking-normal">Capture Essence</h2>
           </div>
-          <p className="text-[9px] uppercase tracking-widest text-scent-muted font-bold">Search Mode</p>
+          <p className="text-[11px] uppercase tracking-[0.2em] text-[#d6c2a8]/78 font-bold">Search Mode</p>
         </div>
 
         <AnimatePresence>
@@ -239,26 +239,26 @@ export const FragranceCapture: React.FC<{ onAdd?: (item: any) => void }> = ({ on
           )}
         </AnimatePresence>
 
-        <div className="space-y-4">
+        <div className="space-y-5">
           <form onSubmit={handleSearch} className="relative">
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => { setSearchQuery(e.target.value); setErrorStatus(null); }}
               placeholder="Enter Fragrance Name..."
-              className="scent-lux-input w-full h-14 px-6 text-center text-white font-sans text-sm outline-none transition-colors placeholder:text-white/28"
+              className="scent-lux-input w-full h-[58px] sm:h-[62px] px-12 text-center text-[#fff7ec] font-sans text-[15px] outline-none transition-colors placeholder:text-[#d9c2a4]/56"
             />
             <button
               type="submit"
               disabled={uploading}
-              className="absolute right-3 top-1/2 -translate-y-1/2 p-2.5 text-scent-muted hover:text-white transition-colors disabled:opacity-50"
+              className="absolute right-3 top-1/2 -translate-y-1/2 p-2.5 text-scent-accent/78 hover:text-white transition-colors disabled:opacity-50"
             >
               {uploading ? <RefreshCw size={16} className="animate-spin" /> : <Search size={18} />}
             </button>
           </form>
-          <div className="flex items-center justify-center gap-3">
-            <span className="text-[8px] uppercase tracking-[0.3em] text-white/25 font-bold">Concentration</span>
-            <div className="flex items-center gap-1.5">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+            <span className="text-[10px] uppercase tracking-[0.24em] text-[#d6c2a8]/68 font-bold">Concentration</span>
+            <div className="flex flex-wrap items-center justify-center gap-1.5">
               {CONCENTRATION_OPTIONS.map((option) => {
                 const selected = concentrationHint === option.id;
                 return (
@@ -266,10 +266,10 @@ export const FragranceCapture: React.FC<{ onAdd?: (item: any) => void }> = ({ on
                     key={option.id}
                     type="button"
                     onClick={() => setConcentrationHint(option.id)}
-                    className={`px-3 py-1 rounded-full text-[8px] uppercase tracking-widest border transition-all ${
+                    className={`min-h-7 px-3 py-1 rounded-full text-[10px] uppercase tracking-[0.16em] border font-bold transition-all ${
                       selected
-                        ? 'bg-scent-accent text-black border-scent-accent'
-                        : 'bg-white/5 text-scent-muted border-scent-accent/15 hover:text-white hover:border-scent-accent/45'
+                        ? 'bg-scent-accent text-black border-scent-accent shadow-[0_0_18px_rgba(201,139,44,0.18)]'
+                        : 'bg-black/28 text-[#d6c2a8]/72 border-scent-accent/24 hover:text-white hover:border-scent-accent/52 hover:bg-white/[0.07]'
                     }`}
                     aria-pressed={selected}
                   >
@@ -288,7 +288,7 @@ export const FragranceCapture: React.FC<{ onAdd?: (item: any) => void }> = ({ on
                   setSearchQuery(tag); 
                   handleSearch(undefined, tag); 
                 }}
-                className="px-3 py-1 bg-white/5 rounded-full text-[8px] uppercase tracking-widest text-scent-muted hover:text-white hover:bg-white/10 transition-all border border-scent-accent/10"
+                className="min-h-7 px-3 py-1 bg-black/24 rounded-full text-[10px] uppercase tracking-[0.16em] text-[#d6c2a8]/70 hover:text-white hover:bg-white/[0.08] transition-all border border-scent-accent/18"
               >
                 {tag}
               </button>

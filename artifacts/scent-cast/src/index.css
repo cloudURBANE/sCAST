@@ -6,7 +6,7 @@
   --color-scent-surface: #0a0704;
   --color-scent-border: #3b250c;
   --color-scent-accent: #c98b2c;
-  --color-scent-muted: #9c8f7f;
+  --color-scent-muted: #b7a690;
 
   --font-serif: "Cormorant Garamond", Georgia, serif;
   --font-sans: "Inter", system-ui, -apple-system, sans-serif;
@@ -23,8 +23,8 @@
   color: var(--color-scent-accent);
   color-scheme: dark;
   --scent-amber-rgb: 201 139 44;
-  --scent-card-shadow: 0 24px 70px -38px rgb(var(--scent-amber-rgb) / 0.58), 0 18px 42px -24px rgba(0, 0, 0, 0.95);
-  --scent-card-glow: inset 0 1px 0 rgba(255, 222, 163, 0.09), inset 0 0 80px rgba(201, 139, 44, 0.035);
+  --scent-card-shadow: 0 26px 68px -40px rgb(var(--scent-amber-rgb) / 0.5), 0 18px 42px -22px rgba(0, 0, 0, 0.96);
+  --scent-card-glow: inset 0 1px 0 rgba(255, 226, 176, 0.1), inset 0 0 72px rgba(201, 139, 44, 0.028);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -42,24 +42,36 @@ body {
   overscroll-behavior-y: none;
 }
 
+.scent-app-shell::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 50% 13%, rgba(255, 199, 109, 0.06), transparent 32rem),
+    radial-gradient(ellipse at 50% 31rem, rgba(0, 0, 0, 0.72), transparent 46rem),
+    linear-gradient(180deg, rgba(3, 2, 1, 0.42), rgba(3, 2, 1, 0.18) 28%, rgba(3, 2, 1, 0.72));
+}
+
 /* ─── Glassmorphism System ────────────────────────────────────────────────── */
 
 .glass {
-  background: rgba(10, 7, 4, 0.52);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(201, 139, 44, 0.18);
+  background: rgba(8, 5, 3, 0.78);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid rgba(219, 162, 72, 0.28);
   box-shadow:
-    inset 0 1px 0 0 rgba(255, 230, 180, 0.08), /* Top-edge specular highlight */
-    inset 0 0 80px 0 rgba(201, 139, 44, 0.025),
-    0 20px 40px -10px rgba(0, 0, 0, 0.65);
+    inset 0 1px 0 0 rgba(255, 230, 180, 0.09),
+    inset 0 0 70px 0 rgba(201, 139, 44, 0.02),
+    0 22px 44px -16px rgba(0, 0, 0, 0.8);
 }
 
 .glass-acrylic {
-  background: rgba(10, 7, 4, 0.74);
-  backdrop-filter: blur(40px);
-  -webkit-backdrop-filter: blur(40px);
-  border: 1px solid rgba(201, 139, 44, 0.2);
+  background: rgba(9, 6, 4, 0.84);
+  backdrop-filter: blur(26px);
+  -webkit-backdrop-filter: blur(26px);
+  border: 1px solid rgba(201, 139, 44, 0.28);
   box-shadow: 
     var(--scent-card-glow),
     var(--scent-card-shadow);
@@ -67,8 +79,8 @@ body {
 
 .glass-shell {
   padding: 1px;
-  background: linear-gradient(135deg, rgba(201, 139, 44, 0.58), rgba(201, 139, 44, 0.16), rgba(201, 139, 44, 0.02));
-  box-shadow: 0 15px 35px -12px rgba(0, 0, 0, 0.9), 0 0 38px rgba(201, 139, 44, 0.08);
+  background: linear-gradient(135deg, rgba(218, 161, 75, 0.68), rgba(201, 139, 44, 0.2), rgba(201, 139, 44, 0.04));
+  box-shadow: 0 18px 48px -18px rgba(0, 0, 0, 0.95), 0 0 34px rgba(201, 139, 44, 0.08);
   overflow: hidden;
 }
 
@@ -123,58 +135,60 @@ body {
 }
 
 .scent-topbar {
-  background: rgba(3, 2, 1, 0.78);
-  border-bottom: 1px solid rgba(201, 139, 44, 0.16);
-  box-shadow: 0 1px 0 rgba(255, 224, 174, 0.035), 0 18px 50px rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
+  background: rgba(5, 3, 2, 0.76);
+  border-bottom: 1px solid rgba(255, 215, 160, 0.1);
+  box-shadow: 0 1px 0 rgba(255, 224, 174, 0.03), 0 12px 34px rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
 }
 
 .scent-account-pill {
-  border: 1px solid rgba(201, 139, 44, 0.28);
-  background: rgba(8, 6, 4, 0.64);
-  box-shadow: inset 0 0 24px rgba(201, 139, 44, 0.035);
+  border: 1px solid rgba(201, 139, 44, 0.34);
+  background: rgba(8, 6, 4, 0.74);
+  box-shadow: inset 0 1px 0 rgba(255, 226, 174, 0.06);
 }
 
 .scent-icon-button {
-  border: 1px solid rgba(201, 139, 44, 0.28);
-  background: rgba(5, 4, 3, 0.7);
-  color: rgba(255, 243, 224, 0.72);
-  box-shadow: inset 0 0 22px rgba(201, 139, 44, 0.035), 0 10px 26px rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(201, 139, 44, 0.34);
+  background: rgba(5, 4, 3, 0.76);
+  color: rgba(255, 243, 224, 0.82);
+  box-shadow: inset 0 1px 0 rgba(255, 226, 174, 0.06), 0 8px 20px rgba(0, 0, 0, 0.34);
 }
 
 .scent-icon-button:hover {
-  border-color: rgba(201, 139, 44, 0.62);
+  border-color: rgba(220, 162, 75, 0.68);
   color: #fff2dc;
-  box-shadow: inset 0 0 26px rgba(201, 139, 44, 0.07), 0 0 28px rgba(201, 139, 44, 0.12);
+  background: rgba(24, 16, 9, 0.84);
+  box-shadow: inset 0 1px 0 rgba(255, 226, 174, 0.08), 0 0 22px rgba(201, 139, 44, 0.1);
 }
 
 .scent-brandmark {
   color: #fff7ec;
-  text-shadow: 0 0 26px rgba(255, 235, 198, 0.18);
+  text-shadow: 0 0 14px rgba(201, 139, 44, 0.22);
 }
 
 .scent-lux-input {
-  background: rgba(8, 6, 4, 0.72);
-  border: 1px solid rgba(201, 139, 44, 0.58);
+  background: rgba(6, 4, 3, 0.86);
+  border: 1px solid rgba(219, 162, 72, 0.56);
   border-radius: var(--radius-scent);
-  box-shadow: inset 0 0 32px rgba(201, 139, 44, 0.035), 0 0 36px rgba(201, 139, 44, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 226, 174, 0.06), inset 0 0 28px rgba(201, 139, 44, 0.025), 0 16px 34px -22px rgba(0, 0, 0, 0.9);
 }
 
 .scent-lux-input:focus {
   border-color: rgba(239, 179, 82, 0.9);
-  box-shadow: inset 0 0 34px rgba(201, 139, 44, 0.055), 0 0 42px rgba(201, 139, 44, 0.16);
+  box-shadow: inset 0 1px 0 rgba(255, 226, 174, 0.08), inset 0 0 30px rgba(201, 139, 44, 0.04), 0 0 0 3px rgba(201, 139, 44, 0.12), 0 18px 38px -22px rgba(0, 0, 0, 0.95);
 }
 
 .scent-primary-button {
-  background: #c98b2c;
+  background: linear-gradient(180deg, #e0a44f, #c98b2c 56%, #a86d1e);
   color: #070402;
-  border: 1px solid rgba(239, 179, 82, 0.68);
-  box-shadow: 0 0 42px rgba(201, 139, 44, 0.16);
+  border: 1px solid rgba(255, 209, 136, 0.72);
+  box-shadow: inset 0 1px 0 rgba(255, 235, 198, 0.35), 0 18px 42px -22px rgba(201, 139, 44, 0.72);
 }
 
 .scent-primary-button:hover {
-  background: #e0a146;
+  background: linear-gradient(180deg, #efb863, #d9983d 56%, #b97821);
+  box-shadow: inset 0 1px 0 rgba(255, 235, 198, 0.38), 0 22px 48px -22px rgba(201, 139, 44, 0.82);
 }
 
 .scent-entry-count {
@@ -193,15 +207,16 @@ body {
 }
 
 .scent-fragrance-card {
-  background: linear-gradient(180deg, rgba(18, 12, 7, 0.84), rgba(5, 4, 3, 0.94));
-  border: 1px solid rgba(201, 139, 44, 0.34);
+  background: linear-gradient(180deg, rgba(18, 12, 7, 0.9), rgba(5, 4, 3, 0.98));
+  border: 1px solid rgba(201, 139, 44, 0.4);
   border-radius: var(--radius-scent);
   box-shadow: var(--scent-card-shadow), var(--scent-card-glow);
+  transform: translateZ(0);
 }
 
 .scent-fragrance-card:hover {
   border-color: rgba(217, 160, 67, 0.68);
-  box-shadow: 0 30px 78px -38px rgb(var(--scent-amber-rgb) / 0.72), 0 22px 48px -22px rgba(0, 0, 0, 0.98), var(--scent-card-glow);
+  box-shadow: 0 30px 78px -40px rgb(var(--scent-amber-rgb) / 0.66), 0 22px 48px -22px rgba(0, 0, 0, 0.98), var(--scent-card-glow);
 }
 
 .scent-card-brand {
@@ -221,18 +236,32 @@ body {
 }
 
 .scent-card-type {
-  color: rgba(255, 245, 231, 0.62);
+  color: rgba(255, 245, 231, 0.72);
   font-size: 0.95rem;
 }
 
 .scent-card-notes {
-  color: rgba(221, 166, 76, 0.9);
+  color: rgba(236, 184, 96, 0.92);
   font-size: 0.92rem;
   line-height: 1.65;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
 }
 
 .scent-bottle-stage {
-  background: linear-gradient(180deg, rgba(201, 139, 44, 0.08), rgba(201, 139, 44, 0.025) 44%, transparent 78%);
+  border-radius: calc(var(--radius-scent) - 8px);
+  background: linear-gradient(180deg, rgba(201, 139, 44, 0.1), rgba(201, 139, 44, 0.03) 44%, rgba(0, 0, 0, 0.18) 100%);
+}
+
+.scent-card-star {
+  border: 1px solid rgba(201, 139, 44, 0.28);
+  background: rgba(5, 4, 3, 0.56);
+  color: rgba(224, 164, 79, 0.92);
+  box-shadow: 0 0 18px rgba(201, 139, 44, 0.12);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 .scent-marquee-band {
@@ -248,6 +277,115 @@ body {
 .scent-weather-value {
   color: #fff7ec;
   text-shadow: 0 0 24px rgba(201, 139, 44, 0.24);
+}
+
+.scent-hero-zone {
+  position: relative;
+}
+
+.scent-hero-zone::before {
+  content: "";
+  position: absolute;
+  inset: -4rem -2rem -3rem;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.72), rgba(0, 0, 0, 0.36) 42%, transparent 72%);
+}
+
+.scent-atmosphere-strip {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid rgba(201, 139, 44, 0.18);
+  border-radius: var(--radius-scent);
+  background: linear-gradient(180deg, rgba(10, 7, 4, 0.84), rgba(4, 3, 2, 0.92));
+  box-shadow: inset 0 1px 0 rgba(255, 226, 174, 0.06), 0 18px 44px -28px rgba(0, 0, 0, 0.95);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.scent-atmosphere-cell {
+  min-width: 0;
+  padding: 1.1rem 1.25rem;
+  border-left: 1px solid rgba(201, 139, 44, 0.12);
+}
+
+.scent-atmosphere-cell:first-child {
+  border-left: 0;
+}
+
+.scent-atmosphere-label {
+  display: block;
+  color: rgba(224, 164, 79, 0.82);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.scent-atmosphere-value {
+  display: block;
+  min-width: 0;
+  margin-top: 0.35rem;
+  color: #fff7ec;
+  font-family: var(--font-serif);
+  font-size: clamp(1.35rem, 2.2vw, 2rem);
+  font-style: italic;
+  line-height: 1.05;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 1024px) {
+  .scent-atmosphere-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .scent-atmosphere-cell {
+    border-top: 1px solid rgba(201, 139, 44, 0.12);
+  }
+
+  .scent-atmosphere-cell:nth-child(-n + 2) {
+    border-top: 0;
+  }
+
+  .scent-atmosphere-cell:nth-child(odd) {
+    border-left: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .scent-app-shell::before {
+    background:
+      radial-gradient(ellipse at 50% 10%, rgba(255, 199, 109, 0.05), transparent 20rem),
+      radial-gradient(ellipse at 50% 25rem, rgba(0, 0, 0, 0.76), transparent 30rem),
+      linear-gradient(180deg, rgba(3, 2, 1, 0.52), rgba(3, 2, 1, 0.28) 28%, rgba(3, 2, 1, 0.78));
+  }
+
+  .scent-atmosphere-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .scent-atmosphere-cell,
+  .scent-atmosphere-cell:nth-child(-n + 2) {
+    border-left: 0;
+    border-top: 1px solid rgba(201, 139, 44, 0.12);
+    padding: 0.95rem 1rem;
+  }
+
+  .scent-atmosphere-cell:first-child {
+    border-top: 0;
+  }
+
+  .scent-entry-count {
+    grid-template-columns: minmax(32px, 1fr) auto minmax(32px, 1fr);
+    gap: 0.9rem;
+    width: 100%;
+    max-width: 22rem;
+  }
 }
 
 /* ─── Utilities ───────────────────────────────────────────────────────────── */
