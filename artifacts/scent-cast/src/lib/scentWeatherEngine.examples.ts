@@ -286,6 +286,30 @@ export const scentWeatherEngineV1Examples: ValidationScenario[] = [
   ),
 ];
 
-export const scentWeatherEngineV1ExamplesPassed = scentWeatherEngineV1Examples.every((scenario) =>
-  scenario.checks.every((scenarioCheck) => scenarioCheck.pass),
+export const scentWeatherV1Examples = scentWeatherEngineV1Examples;
+
+export type ScentWeatherV1ValidationResult = {
+  scenario: string;
+  passed: boolean;
+  recommendation: ScentWeatherRecommendation;
+  failures: string[];
+};
+
+export function validateScentWeatherV1Examples(): ScentWeatherV1ValidationResult[] {
+  return scentWeatherV1Examples.map((scenario) => {
+    const failures = scenario.checks
+      .filter((scenarioCheck) => !scenarioCheck.pass)
+      .map((scenarioCheck) => `${scenarioCheck.label}: ${scenarioCheck.detail}`);
+
+    return {
+      scenario: scenario.name,
+      passed: failures.length === 0,
+      recommendation: scenario.recommendation,
+      failures,
+    };
+  });
+}
+
+export const scentWeatherEngineV1ExamplesPassed = validateScentWeatherV1Examples().every(
+  (scenario) => scenario.passed,
 );

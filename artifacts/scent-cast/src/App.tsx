@@ -17,10 +17,14 @@ import {
 } from './lib/scentWeatherEngine';
 
 interface WeatherData {
-  temp: number;
-  humidity: number;
-  condition: string;
-  icon: string;
+  temp?: number;
+  temperature?: number;
+  temperature_f?: number;
+  humidity?: number;
+  humidity_percent?: number;
+  condition?: string;
+  description?: string;
+  icon?: string;
   windSpeed?: number;
   wind_speed_mph?: number;
   location?: string;
@@ -33,12 +37,68 @@ const STORAGE_KEYS = {
   EMAIL: 'scent_email',
 } as const;
 
+type LooseRecord = Record<string, unknown>;
+
+const isLooseRecord = (value: unknown): value is LooseRecord =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const numberFromValue = (value: unknown): number | undefined => {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value !== 'string' || value.trim() === '') return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+};
+
+const firstFiniteNumber = (fallback: number, ...values: unknown[]): number => {
+  for (const value of values) {
+    const numberValue = numberFromValue(value);
+    if (numberValue !== undefined) return numberValue;
+  }
+  return fallback;
+};
+
+const firstString = (...values: unknown[]): string | undefined => {
+  for (const value of values) {
+    if (typeof value !== 'string') continue;
+    const trimmed = value.trim();
+    if (trimmed) return trimmed;
+  }
+  return undefined;
+};
+
+const uniqueStrings = (values: string[]): string[] =>
+  Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
+
+const collectStrings = (value: unknown): string[] => {
+  if (typeof value === 'string') return [value];
+  if (Array.isArray(value)) return value.flatMap(collectStrings);
+  return [];
+};
+
+const getWeatherNumber = (
+  weather: WeatherData | null,
+  keys: (keyof WeatherData)[],
+  fallback: number,
+): number => firstFiniteNumber(fallback, ...keys.map((key) => weather?.[key]));
+
+const getWeatherString = (
+  weather: WeatherData | null,
+  keys: (keyof WeatherData)[],
+  fallback = '',
+): string => firstString(...keys.map((key) => weather?.[key])) ?? fallback;
+
+const getFragranceRecord = (item: Fragrance): LooseRecord => item as unknown as LooseRecord;
+
 /** Match Wardrobe grid visibility — legacy rows may lack flat name/brand until rebuilt */
 function wardrobeEntryName(item: Fragrance): string {
-  return item?.name || item?.product?.name || '';
+  const record = getFragranceRecord(item);
+  const product = isLooseRecord(record.product) ? record.product : null;
+  return firstString(record.name, product?.name) ?? '';
 }
 function wardrobeEntryBrand(item: Fragrance): string {
-  return item?.brand || item?.product?.brand || '';
+  const record = getFragranceRecord(item);
+  const product = isLooseRecord(record.product) ? record.product : null;
+  return firstString(record.brand, product?.brand) ?? '';
 }
 function wardrobeNeedsLegacyRebuild(items: Fragrance[]): boolean {
   return items.some((item) => !wardrobeEntryName(item) || !wardrobeEntryBrand(item));
@@ -73,11 +133,14 @@ const FAMILY_TRAIT_SIGNALS: Record<ScentFamily, string[]> = {
 };
 
 const mapDestinationToEngineType = (
-  destination: DestinationType,
+  destination: DestinationType | string,
 ): ScentWeatherEngineInput['setting']['type'] => {
-  if (destination === 'Work') return 'work';
-  if (destination === 'Night Out') return 'night';
-  if (destination === 'Going Out') return 'mixed';
+  const normalized = destination.trim().toLowerCase();
+  if (normalized === 'work') return 'work';
+  if (normalized === 'night out' || normalized === 'night') return 'night';
+  if (normalized === 'going out') return 'mixed';
+  if (normalized === 'date') return 'date';
+  if (normalized === 'gym') return 'gym';
   return 'indoor';
 };
 
@@ -92,23 +155,63 @@ const titleCaseToken = (value: string): string =>
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
 
+const getFragranceFamilies = (item: Fragrance): string[] => {
+  const record = getFragranceRecord(item);
+  return uniqueStrings([
+    ...collectStrings(record.scentFamilies),
+    ...collectStrings(record.scent_families),
+    ...collectStrings(record.families),
+    ...collectStrings(record.family),
+  ]);
+};
+
 const getFragranceAccords = (item: Fragrance): string[] => {
-  const accords: string[] = [];
-  for (const note of item.notes ?? []) accords.push(note);
-  for (const note of item.pyramid?.top ?? []) accords.push(note);
-  for (const note of item.pyramid?.heart ?? []) accords.push(note);
-  for (const note of item.pyramid?.base ?? []) accords.push(note);
-  return Array.from(new Set(accords.map((note) => note.trim()).filter(Boolean)));
+  const record = getFragranceRecord(item);
+  const pyramid = isLooseRecord(record.pyramid) ? record.pyramid : null;
+  return uniqueStrings([
+    ...collectStrings(record.accords),
+    ...collectStrings(record.notes),
+    ...collectStrings(record.topNotes),
+    ...collectStrings(record.middleNotes),
+    ...collectStrings(record.heartNotes),
+    ...collectStrings(record.baseNotes),
+    ...collectStrings(pyramid?.top),
+    ...collectStrings(pyramid?.heart),
+    ...collectStrings(pyramid?.middle),
+    ...collectStrings(pyramid?.base),
+    ...collectStrings(pyramid?.notes),
+  ]);
+};
+
+const getFragranceProfileVector = (item: Fragrance): Record<string, number> => {
+  const record = getFragranceRecord(item);
+  const vector: Record<string, number> = {};
+
+  for (const source of [record.profile_vector, record.vector, record.scent_vector]) {
+    if (!isLooseRecord(source)) continue;
+    for (const [key, value] of Object.entries(source)) {
+      const numberValue = numberFromValue(value);
+      if (numberValue !== undefined) vector[key] = numberValue;
+    }
+  }
+
+  return vector;
+};
+
+const getFragranceLongevity = (item: Fragrance): string | number | undefined => {
+  const record = getFragranceRecord(item);
+  const performance = isLooseRecord(record.performance) ? record.performance : null;
+  const value = record.longevity ?? performance?.longevity;
+  if (typeof value === 'string') return firstString(value);
+  return numberFromValue(value);
 };
 
 const getFragranceTraitTexts = (item: Fragrance): string[] => {
   const traits: string[] = [];
-  if (item.family) traits.push(item.family);
+  traits.push(...getFragranceFamilies(item));
   traits.push(...getFragranceAccords(item));
-  if (item.scent_vector) {
-    for (const [key, value] of Object.entries(item.scent_vector)) {
-      if (Number.isFinite(value) && value > 0) traits.push(key);
-    }
+  for (const [key, value] of Object.entries(getFragranceProfileVector(item))) {
+    if (Number.isFinite(value) && value > 0) traits.push(key);
   }
   return traits.map(normalizeTrait).filter(Boolean);
 };
@@ -120,11 +223,19 @@ const fragranceHasFamilySignal = (item: Fragrance, family: ScentFamily): boolean
   );
 };
 
-const mapSillageToEngineLabel = (sillage?: number): string | undefined => {
-  if (typeof sillage !== 'number' || !Number.isFinite(sillage)) return undefined;
-  if (sillage >= 8) return 'strong';
-  if (sillage <= 3) return 'light';
+const mapSillageToEngineLabel = (sillage: unknown): string | undefined => {
+  if (typeof sillage === 'string') return firstString(sillage);
+  const numericSillage = numberFromValue(sillage);
+  if (numericSillage === undefined) return undefined;
+  if (numericSillage >= 8) return 'strong';
+  if (numericSillage <= 3) return 'light';
   return 'moderate';
+};
+
+const getFragranceSillage = (item: Fragrance): string | undefined => {
+  const record = getFragranceRecord(item);
+  const performance = isLooseRecord(record.performance) ? record.performance : null;
+  return mapSillageToEngineLabel(record.sillage ?? record.projection ?? performance?.sillage);
 };
 
 const buildEngineInput = (
@@ -132,15 +243,14 @@ const buildEngineInput = (
   intent: { destination: DestinationType; energy: EnergyState },
   weather: WeatherData | null,
 ): ScentWeatherEngineInput => {
-  const condition = weather?.condition ?? '';
+  const condition = getWeatherString(weather, ['condition', 'description']);
   const normalizedCondition = condition.toLowerCase();
-  const profileVector: Record<string, number> = item.scent_vector ? { ...item.scent_vector } : {};
 
   return {
     weather: {
-      temperature_f: weather?.temp ?? Number.NaN,
-      humidity_percent: weather?.humidity ?? Number.NaN,
-      wind_speed_mph: weather?.windSpeed ?? weather?.wind_speed_mph ?? Number.NaN,
+      temperature_f: getWeatherNumber(weather, ['temperature_f', 'temperature', 'temp'], 72),
+      humidity_percent: getWeatherNumber(weather, ['humidity_percent', 'humidity'], 50),
+      wind_speed_mph: getWeatherNumber(weather, ['wind_speed_mph', 'windSpeed'], 0),
       is_raining: RAIN_CONDITION_SIGNALS.some((signal) => normalizedCondition.includes(signal)),
       condition,
     },
@@ -151,11 +261,11 @@ const buildEngineInput = (
       name: wardrobeEntryName(item),
       brand: wardrobeEntryBrand(item),
       concentration: item.concentration,
-      scent_families: item.family ? [item.family] : [],
+      scent_families: getFragranceFamilies(item),
       accords: getFragranceAccords(item),
-      profile_vector: profileVector,
-      longevity: item.performance?.longevity,
-      sillage: mapSillageToEngineLabel(item.performance?.sillage),
+      profile_vector: getFragranceProfileVector(item),
+      longevity: getFragranceLongevity(item),
+      sillage: getFragranceSillage(item),
     },
   };
 };
@@ -273,9 +383,11 @@ interface AtmosphereBarProps {
 }
 
 const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({ weather, weatherLoading }) => {
-  const temp = weatherLoading ? '—' : weather?.temp != null ? `${Math.round(weather.temp)}°F` : '—';
-  const condition = weatherLoading ? '—' : weather?.condition ?? '—';
-  const humidity = weatherLoading ? '—' : weather?.humidity != null ? `${weather.humidity}%` : '—';
+  const tempValue = getWeatherNumber(weather, ['temperature_f', 'temperature', 'temp'], Number.NaN);
+  const humidityValue = getWeatherNumber(weather, ['humidity_percent', 'humidity'], Number.NaN);
+  const temp = weatherLoading ? '—' : Number.isFinite(tempValue) ? `${Math.round(tempValue)}°F` : '—';
+  const condition = weatherLoading ? '—' : getWeatherString(weather, ['condition', 'description'], '—');
+  const humidity = weatherLoading ? '—' : Number.isFinite(humidityValue) ? `${humidityValue}%` : '—';
   const location = weather?.location ?? null;
   const metrics = [
     { label: 'Matrix', value: condition },

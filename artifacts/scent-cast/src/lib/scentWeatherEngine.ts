@@ -299,6 +299,7 @@ export function calculateAtmosphereScores(input: ScentWeatherEngineInput): Atmos
   const windSpeed = finiteNumber(input.weather.wind_speed_mph, 0);
   const settingType = input.setting.type;
   const traits = getTraitTexts(input.fragrance);
+  const rainy = isRaining(input);
 
   let heatAmplificationScore = 15;
   if (temperature >= 95) heatAmplificationScore = 95;
@@ -317,7 +318,7 @@ export function calculateAtmosphereScores(input: ScentWeatherEngineInput): Atmos
     Math.max(
       heatAmplificationScore * 0.8,
       humidityWeightScore * 0.7,
-      input.weather.is_raining ? 70 : 0,
+      rainy ? 70 : 0,
       settingType === "gym" ? 95 : 0,
       settingType === "work" ? 65 : 0,
       settingType === "close_contact" ? 70 : 0,
@@ -359,7 +360,7 @@ export function calculateAtmosphereScores(input: ScentWeatherEngineInput): Atmos
   }
   if (temperature >= 80) heavinessRiskScore += 15;
   if (humidity >= 65) heavinessRiskScore += 20;
-  if (input.weather.is_raining && hasAnyFamilySignal(traits, ["smoky", "leather", "oud"])) {
+  if (rainy && hasAnyFamilySignal(traits, ["smoky", "leather", "oud"])) {
     heavinessRiskScore += 15;
   }
   if (temperature < 55) heavinessRiskScore -= 15;
