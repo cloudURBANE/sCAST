@@ -2,6 +2,7 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { imageCacheTable } from "@workspace/db/schema";
 import {
+  isLocalImageObjectUrlPersistable,
   localImageObjectExists,
   storagePathFromLocalImageObjectUrl,
   type ImageStorageProvider,
@@ -66,6 +67,7 @@ async function rowToUsableReference(
   if (!ref) return null;
 
   if (ref.storageProvider === "local" || ref.imageUrl.startsWith("/api/image-objects/")) {
+    if (!isLocalImageObjectUrlPersistable()) return null;
     const storagePath = ref.storagePath || storagePathFromLocalImageObjectUrl(ref.imageUrl);
     if (!storagePath) return null;
     if (!(await localImageObjectExists(storagePath))) return null;

@@ -14,7 +14,18 @@ import {
 } from "./safeImageFetch.ts";
 
 const testImageRoot = path.join(tmpdir(), `scent-image-cache-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+process.env.DATABASE_URL ??= "postgresql://user:pass@localhost:5432/db";
 process.env.IMAGE_LOCAL_STORAGE_DIR = testImageRoot;
+process.env.IMAGE_ALLOW_LOCAL_OBJECT_STORAGE = "true";
+process.env.NODE_ENV = "test";
+
+function restoreEnvValue(name: string, value: string | undefined): void {
+  if (value === undefined) {
+    delete process.env[name];
+  } else {
+    process.env[name] = value;
+  }
+}
 
 test("database image guards reject and strip data image payloads", () => {
   assert.throws(
@@ -42,7 +53,6 @@ test("external image URL validation rejects private and non-http sources", () =>
 });
 
 test("source URL hashes and object keys are deterministic", async () => {
-  process.env.DATABASE_URL ??= "postgresql://user:pass@localhost:5432/db";
   const {
     buildProcessedImageStorageKey,
     hashSourceUrl,
@@ -68,6 +78,36 @@ test("source URL hashes and object keys are deterministic", async () => {
   );
 });
 
+test("image object storage refuses silent local persistence without durable storage", async () => {
+  const { getImageObjectStorage } = await import("./imageObjectStorage.ts");
+  const previous = {
+    nodeEnv: process.env.NODE_ENV,
+    allowLocal: process.env.IMAGE_ALLOW_LOCAL_OBJECT_STORAGE,
+    firebaseBucket: process.env.FIREBASE_STORAGE_BUCKET,
+    supabaseUrl: process.env.SUPABASE_URL,
+    supabaseKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
+    supabaseBucket: process.env.SUPABASE_IMAGE_BUCKET,
+  };
+
+  try {
+    process.env.NODE_ENV = "production";
+    process.env.IMAGE_ALLOW_LOCAL_OBJECT_STORAGE = "true";
+    process.env.FIREBASE_STORAGE_BUCKET = "";
+    process.env.SUPABASE_URL = "";
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "";
+    process.env.SUPABASE_IMAGE_BUCKET = "";
+
+    assert.throws(() => getImageObjectStorage(), /Image object storage is not configured/);
+  } finally {
+    restoreEnvValue("NODE_ENV", previous.nodeEnv);
+    restoreEnvValue("IMAGE_ALLOW_LOCAL_OBJECT_STORAGE", previous.allowLocal);
+    restoreEnvValue("FIREBASE_STORAGE_BUCKET", previous.firebaseBucket);
+    restoreEnvValue("SUPABASE_URL", previous.supabaseUrl);
+    restoreEnvValue("SUPABASE_SERVICE_ROLE_KEY", previous.supabaseKey);
+    restoreEnvValue("SUPABASE_IMAGE_BUCKET", previous.supabaseBucket);
+  }
+});
+
 test("local image object diagnostics do not erase saved response references", async () => {
   const {
     imageReferenceDiagnostic,
@@ -91,6 +131,29 @@ test("local image object diagnostics do not erase saved response references", as
   const readyUrl = "/api/image-objects/images/processed/ready.webp";
   assert.equal(await usableImageUrlForResponse(readyUrl), readyUrl);
   assert.equal((await imageReferenceDiagnostic(readyUrl)).kind, "local-object");
+});
+
+test("local image object refs are unusable unless local persistence is enabled", async () => {
+  const { persistableImageReference, usableImageUrlForResponse } = await import("./imageReference.ts");
+  const previous = {
+    nodeEnv: process.env.NODE_ENV,
+    allowLocal: process.env.IMAGE_ALLOW_LOCAL_OBJECT_STORAGE,
+  };
+  const disabledUrl = "/api/image-objects/images/processed/disabled-local.webp";
+
+  await mkdir(path.join(testImageRoot, "images", "processed"), { recursive: true });
+  await writeFile(path.join(testImageRoot, "images", "processed", "disabled-local.webp"), "x");
+
+  try {
+    process.env.NODE_ENV = "production";
+    process.env.IMAGE_ALLOW_LOCAL_OBJECT_STORAGE = "true";
+
+    assert.equal(await usableImageUrlForResponse(disabledUrl), null);
+    assert.equal(await persistableImageReference(disabledUrl), null);
+  } finally {
+    restoreEnvValue("NODE_ENV", previous.nodeEnv);
+    restoreEnvValue("IMAGE_ALLOW_LOCAL_OBJECT_STORAGE", previous.allowLocal);
+  }
 });
 
 test("preview save accepts only persistable image references", async () => {

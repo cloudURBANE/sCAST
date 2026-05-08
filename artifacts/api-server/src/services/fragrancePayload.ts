@@ -1,5 +1,5 @@
 import { resolveSharedImageUrl } from "./imageHydration";
-import { savedImageUrlForResponse } from "./imageReference";
+import { usableImageUrlForResponse } from "./imageReference";
 import {
   safeImageUrlForResponse,
   stripBase64ImageDataUrls,
@@ -49,7 +49,7 @@ export function normalizeFragrance(fragrance: Record<string, any>): Record<strin
 
 /** Fill in imageUrl from shared metadata/object cache if the stored record has none. */
 export async function hydrateImageUrl(fragrance: Record<string, any>): Promise<Record<string, any>> {
-  const current = savedImageUrlForResponse(fragrance.imageUrl);
+  const current = await usableImageUrlForResponse(fragrance.imageUrl);
   if (current) return { ...fragrance, imageUrl: current };
   const name = fragrance.name as string | undefined;
   const brand = fragrance.brand as string | undefined;

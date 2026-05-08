@@ -141,6 +141,9 @@ export function flattenProfile(profile: ScentProfile): Record<string, unknown> {
     context: profile.context,
     concentration: profile.concentration,
     imageUrl: safeImageUrlForResponse(profile.imageUrl),
+    storagePath: profile.storagePath,
+    imageHash: profile.imageHash,
+    storageProvider: profile.storageProvider,
     product: profile.product,
   };
 }

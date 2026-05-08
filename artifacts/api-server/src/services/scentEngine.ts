@@ -21,6 +21,9 @@ export interface ScentProfile {
   concentration: string;
   accords: string[];
   imageUrl?: string;
+  storagePath?: string;
+  imageHash?: string | null;
+  storageProvider?: string;
   description?: string;
   error?: string;
 }
@@ -157,6 +160,9 @@ export async function buildProfile(
     concentration: parsed.concentration,
     accords: parsed.accords,
     imageUrl: cleanImageUrl ?? undefined,
+    storagePath: processedImage?.storagePath,
+    imageHash: processedImage?.imageHash ?? null,
+    storageProvider: processedImage?.storageProvider,
     description: finalDescription,
   };
 

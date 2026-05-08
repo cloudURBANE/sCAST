@@ -18,6 +18,7 @@ import {
   type CachedImageReference,
 } from "./imageCacheService";
 import {
+  ImageObjectStorageConfigurationError,
   getImageObjectStorage,
   readLocalImageObject,
   storagePathFromLocalImageObjectUrl,
@@ -245,6 +246,7 @@ async function processCandidate(input: {
 
       return { ...recorded, sourceProvider: input.sourceProvider, pipelineVersion: IMAGE_PIPELINE_VERSION };
     } catch (err: any) {
+      if (err instanceof ImageObjectStorageConfigurationError) throw err;
       const reason = err?.message ?? "image processing failed";
       await recordImageFailure({
         userId: input.userId ?? null,
