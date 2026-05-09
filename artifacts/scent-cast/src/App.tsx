@@ -980,7 +980,9 @@ export default function App() {
             </button>
           </section>
 
-          <AtmosphereBar weather={weather} weatherLoading={weatherLoading} />
+          <div className="relative left-1/2 right-1/2 w-screen -translate-x-1/2">
+            <AtmosphereBar weather={weather} weatherLoading={weatherLoading} />
+          </div>
 
           <div>
             <Wardrobe
