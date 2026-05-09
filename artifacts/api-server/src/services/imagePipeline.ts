@@ -27,6 +27,7 @@ import {
 import { safeImageUrlForResponse } from "./persistenceGuards";
 import { fetchExternalImage, parseAndValidateExternalImageUrl } from "./safeImageFetch";
 import { searchSerperImageCandidates, type SerperImageCandidate } from "./serperService";
+export { acceptsImageCacheForRequest, shouldUseImageLookupCaches } from "./imagePipelineCachePolicy";
 
 const MAX_OUTPUT_DIMENSION = 768;
 const WEBP_QUALITY = 82;

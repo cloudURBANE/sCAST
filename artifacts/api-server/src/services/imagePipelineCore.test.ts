@@ -171,94 +171,35 @@ test("preview save accepts only persistable image references", async () => {
   assert.equal(await persistableImageReference("/not-an-image-object/path.webp"), null);
 });
 
-test("search-query cache with backgroundRemoved=false is not returned when removeBackground=true", async () => {
-  const { mock } = await import("node:test");
+test("acceptsImageCacheForRequest: backgroundRemoved=false rejected when removeBackground=true", async () => {
+  // Imported from the standalone policy module rather than imagePipeline.ts,
+  // because imagePipeline.ts uses extensionless relative imports throughout
+  // (resolved at bundle time by esbuild) and the bare node:test runner cannot
+  // load it without the experimental TypeScript module-resolution flags.
+  // imagePipeline.ts re-exports both helpers, so production callers are unaffected.
+  const { acceptsImageCacheForRequest } = await import("./imagePipelineCachePolicy.ts");
 
-  const fakeRef = {
-    imageUrl: "/api/image-objects/images/processed/white.webp",
-    storagePath: "images/processed/white.webp",
-    imageHash: "abc",
-    sourceUrlHash: "src123",
-    storageProvider: "local" as const,
-    cached: true,
-    width: 400,
-    height: 400,
-    mimeType: "image/webp",
-    sizeBytes: 1000,
-    backgroundRemoved: false,
-  };
-
-  mock.module("./imageCacheService.ts", {
-    namedExports: {
-      getLatestReadyCachedImageByLookupKey: async () => null,
-      getLatestReadyCachedImageBySearchQueryHash: async () => fakeRef,
-      getReadyCachedImageBySourceHash: async () => null,
-      getCachedImageStatusBySourceHash: async () => null,
-      recordImageReady: async () => fakeRef,
-      recordImageFailure: async () => {},
-      hashSearchQuery: (q: string) => `hash:${q}`,
-      hashSourceUrl: (u: string) => `hash:${u}`,
-      hashString: (s: string) => `hash:${s}`,
-      hashBuffer: () => "bufferhash",
-      IMAGE_PIPELINE_VERSION: "v1",
-      buildProcessedImageStorageKey: () => "key",
-    },
-  });
-
-  const { resolveProcessedFragranceImage } = await import("./imagePipeline.ts");
-
-  const result = await resolveProcessedFragranceImage({
-    brand: "Chanel",
-    name: "No. 5",
-    searchQuery: "Chanel No. 5 perfume bottle",
-    removeBackground: true,
-    allowLookupCache: true,
-  });
-
-  // Must not return the backgroundRemoved=false cached entry
-  assert.equal(result, null);
-
-  mock.restoreAll();
+  // BG removal requested, cache hit has white background — must reject
+  assert.equal(acceptsImageCacheForRequest({ backgroundRemoved: false }, true), false);
+  // BG removal requested, cache hit already has BG removed — must accept
+  assert.equal(acceptsImageCacheForRequest({ backgroundRemoved: true }, true), true);
+  // BG removal NOT requested — always accept regardless of backgroundRemoved
+  assert.equal(acceptsImageCacheForRequest({ backgroundRemoved: false }, false), true);
+  assert.equal(acceptsImageCacheForRequest({ backgroundRemoved: true }, false), true);
 });
 
-test("allowLookupCache=false bypasses both lookup cache and search-query cache", async () => {
-  const { mock } = await import("node:test");
+test("shouldUseImageLookupCaches: allowLookupCache=false bypasses both caches", async () => {
+  const { shouldUseImageLookupCaches } = await import("./imagePipelineCachePolicy.ts");
 
-  let lookupCallCount = 0;
-  let searchQueryCallCount = 0;
-
-  mock.module("./imageCacheService.ts", {
-    namedExports: {
-      getLatestReadyCachedImageByLookupKey: async () => { lookupCallCount++; return null; },
-      getLatestReadyCachedImageBySearchQueryHash: async () => { searchQueryCallCount++; return null; },
-      getReadyCachedImageBySourceHash: async () => null,
-      getCachedImageStatusBySourceHash: async () => null,
-      recordImageReady: async () => { throw new Error("should not reach"); },
-      recordImageFailure: async () => {},
-      hashSearchQuery: (q: string) => `hash:${q}`,
-      hashSourceUrl: (u: string) => `hash:${u}`,
-      hashString: (s: string) => `hash:${s}`,
-      hashBuffer: () => "bufferhash",
-      IMAGE_PIPELINE_VERSION: "v1",
-      buildProcessedImageStorageKey: () => "key",
-    },
-  });
-
-  const { resolveProcessedFragranceImage } = await import("./imagePipeline.ts");
-
-  // allowLookupCache=false with no sourceUrl and a searchQuery — both cache functions must not be called
-  await resolveProcessedFragranceImage({
-    brand: "Dior",
-    name: "Sauvage",
-    searchQuery: "Dior Sauvage perfume bottle",
-    removeBackground: true,
-    allowLookupCache: false,
-  }).catch(() => {}); // may throw due to no Serper mock — that's fine
-
-  assert.equal(lookupCallCount, 0, "lookup cache must not be called when allowLookupCache=false");
-  assert.equal(searchQueryCallCount, 0, "search-query cache must not be called when allowLookupCache=false");
-
-  mock.restoreAll();
+  // allowLookupCache=false always returns false regardless of sourceUrl
+  assert.equal(shouldUseImageLookupCaches(false, undefined), false);
+  assert.equal(shouldUseImageLookupCaches(false, "https://example.com/img.jpg"), false);
+  // allowLookupCache=true (or omitted) only returns true when there is no sourceUrl
+  assert.equal(shouldUseImageLookupCaches(true, undefined), true);
+  assert.equal(shouldUseImageLookupCaches(undefined, undefined), true);
+  // sourceUrl present — always bypass cache regardless of allowLookupCache
+  assert.equal(shouldUseImageLookupCaches(true, "https://example.com/img.jpg"), false);
+  assert.equal(shouldUseImageLookupCaches(undefined, "https://example.com/img.jpg"), false);
 });
 
 test("refresh-image does not upsert catalog when backgroundRemoved=false and BG removal was requested", async () => {
