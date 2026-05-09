@@ -156,14 +156,14 @@ async function processSourceToWebp(
 
   if (!processed) throw new Error("Image processing failed");
 
-  const optimized = await sharp(processed.buffer, { failOn: "truncated" })
+  let outputPipeline = sharp(processed.buffer, { failOn: "truncated" })
     .rotate()
     .resize(MAX_OUTPUT_DIMENSION, MAX_OUTPUT_DIMENSION, {
       fit: "inside",
       withoutEnlargement: true,
-    })
-    .webp({ quality: WEBP_QUALITY, effort: 4 })
-    .toBuffer();
+    });
+  if (!processed.backgroundRemoved) outputPipeline = outputPipeline.flatten({ background: { r: 255, g: 255, b: 255 } });
+  const optimized = await outputPipeline.webp({ quality: WEBP_QUALITY, effort: 4 }).toBuffer();
 
   const metadata = await sharp(optimized).metadata();
   const width = metadata.width ?? 0;

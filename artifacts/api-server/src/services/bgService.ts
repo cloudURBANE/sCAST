@@ -164,7 +164,7 @@ export async function removeBgBuffer(
 
   const result = await removeBgByFile(rawInput, apiKey, opts);
   if (result) {
-    const padded = await trimWhiteAndNormalize(result);
+    const padded = await normalizeToBottleArtwork(result);
     return { buffer: padded, contentType: "image/png", backgroundRemoved: true };
   }
 

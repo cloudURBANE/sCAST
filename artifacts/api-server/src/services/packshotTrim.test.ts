@@ -313,6 +313,50 @@ test("resize cap: very large raster still processes", async () => {
   assert.equal(r.ok, true);
 });
 
+test("resize of transparent PNG with white-transparent fill: no white halo (libvips auto-premults)", async () => {
+  // libvips 8.15.x (sharp 0.33.x) handles premultiplied alpha internally during resize.
+  // This guards against regressions where an upgrade or swap of the underlying image library
+  // could reintroduce white halo at dark-subject / transparent-background boundaries.
+  // Input: 900×300 PNG with white-transparent fill (r=255,g=255,b=255,a=0) + dark subject.
+  // Resize to ≤708 triggers interpolation at the boundary where white-transparent meets opaque.
+  const subject = await sharp({
+    create: { width: 860, height: 260, channels: 4, background: { r: 30, g: 30, b: 30, alpha: 1 } },
+  }).png().toBuffer();
+
+  const canvas = await sharp({
+    create: { width: 900, height: 300, channels: 4, background: { r: 255, g: 255, b: 255, alpha: 0 } },
+  })
+    .composite([{ input: subject, left: 20, top: 20 }])
+    .png()
+    .toBuffer();
+
+  const resized = await sharp(canvas)
+    .resize(708, 708, { fit: "inside", background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .ensureAlpha()
+    .png()
+    .toBuffer();
+
+  const { data, info } = await sharp(resized).raw().toBuffer({ resolveWithObject: true });
+  const W = info.width;
+  const H = info.height;
+  const C = info.channels;
+
+  let halosFound = 0;
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const i = (y * W + x) * C;
+      const a = data[i + 3] ?? 0;
+      if (a > 10 && a < 220) {
+        const r = data[i] ?? 0;
+        const g = data[i + 1] ?? 0;
+        const b = data[i + 2] ?? 0;
+        if (r > 120 && g > 120 && b > 120) halosFound++;
+      }
+    }
+  }
+  assert.equal(halosFound, 0, `White halo pixels at transparent boundary: ${halosFound}`);
+});
+
 /*
  * Manual visual checklist (real catalog URLs): Wardrobe / Share with BottleImage after deploy —
  * white BG, gray BG, dark bottle, ultra-wide pack shot; confirm better fill when JPEG had large margins.
