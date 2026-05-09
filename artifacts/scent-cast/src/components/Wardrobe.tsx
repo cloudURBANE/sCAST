@@ -78,6 +78,13 @@ function entryNotes(item: Fragrance): string {
   return pyramidNotes.length > 0 ? pyramidNotes.slice(0, 5).join(" • ") : "Not specified";
 }
 
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)
+  ?.trim()
+  .replace(/\/+$/, "");
+const REFRESH_IMAGE_ENDPOINT = API_BASE_URL
+  ? `${API_BASE_URL}/api/refresh-image`
+  : "/api/refresh-image";
+
 function concentrationHintFromValue(
   value?: string,
 ): "edt" | "edp" | "parfum" | "extrait" | "elixir" | undefined {
@@ -249,7 +256,7 @@ export const Wardrobe: React.FC<{
     setRefreshingId(item.id);
     setRefreshError(null);
     try {
-      const res = await fetch('/api/refresh-image', {
+      const res = await fetch(REFRESH_IMAGE_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -280,7 +287,7 @@ export const Wardrobe: React.FC<{
     setStripBgBusy(true);
     setRefreshError(null);
     try {
-      const res = await fetch('/api/refresh-image', {
+      const res = await fetch(REFRESH_IMAGE_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
