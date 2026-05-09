@@ -639,15 +639,24 @@ export default function App() {
           ...(imageUrl ? { imageUrl } : {}),
         }),
       });
-      const data = (await res.json()) as Partial<Fragrance> & { _dbId?: string; error?: string };
+      const data = (await res.json()) as Partial<Fragrance> & { _dbId?: string; error?: string; imageHash?: string };
       if (!res.ok) {
         throw new Error(data.error || `HTTP ${res.status}`);
       }
+      const resolvedImageUrl = (() => {
+        const base =
+          typeof data.imageUrl === 'string' && data.imageUrl.trim()
+            ? data.imageUrl.trim()
+            : imageUrl;
+        if (!base) return target.imageUrl;
+        const v = data.imageHash ?? Date.now();
+        return `${base}${base.includes('?') ? '&' : '?'}v=${encodeURIComponent(String(v))}`;
+      })();
       const next: Fragrance = {
         ...target,
         ...data,
         id: target.id,
-        imageUrl: typeof data.imageUrl === 'string' ? data.imageUrl : target.imageUrl,
+        imageUrl: resolvedImageUrl,
         _dbId: data._dbId ?? target._dbId,
       };
       setItems((prev) =>

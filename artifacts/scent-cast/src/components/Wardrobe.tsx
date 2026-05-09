@@ -132,6 +132,12 @@ function SuggestionTypingLabel({ text, animate }: { text: string; animate: boole
   );
 }
 
+function withImageVersion(url: string, version?: string | number | null): string {
+  const trimmed = url.trim();
+  const v = version || Date.now();
+  return `${trimmed}${trimmed.includes('?') ? '&' : '?'}v=${encodeURIComponent(String(v))}`;
+}
+
 export const Wardrobe: React.FC<{
   items: Fragrance[];
   onDelete: (item: Fragrance) => void;
@@ -271,10 +277,25 @@ export const Wardrobe: React.FC<{
       });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || 'Refresh failed');
-      const nextUrl = data.imageUrl + (data.imageUrl.includes('?') ? '&' : '?') + 'v=' + (data.imageHash || Date.now());
+      const returnedImageUrl =
+        typeof data.imageUrl === 'string' ? data.imageUrl.trim() : '';
+      if (!returnedImageUrl) {
+        throw new Error('Image processing completed without a usable image URL.');
+      }
+      const nextUrl = withImageVersion(returnedImageUrl, data.imageHash || Date.now());
       setPendingPreview({ itemId: item.id, url: nextUrl });
-      if (data.backgroundRemoved === false) {
-        setBgFallbackWarning('Image saved, but background removal used a fallback. Try again later if you need a cleaner cutout.');
+      const isFallback =
+        data.backgroundRemoved === false ||
+        data.removeBgStatus === 'fallback' ||
+        data.removeBgStatus === 'failed';
+      if (isFallback) {
+        const reason =
+          typeof data.removeBgReason === 'string' && data.removeBgReason.trim()
+            ? ` Reason: ${data.removeBgReason.trim()}.`
+            : '';
+        setBgFallbackWarning(
+          `Preview updated, but background removal used a fallback.${reason} Save to vault only if this version looks acceptable.`,
+        );
       }
     } catch (err: any) {
       setRefreshError(err.message || 'Image refresh failed');
@@ -308,10 +329,25 @@ export const Wardrobe: React.FC<{
       });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || 'Background removal failed');
-      const nextUrl = data.imageUrl + (data.imageUrl.includes('?') ? '&' : '?') + 'v=' + (data.imageHash || Date.now());
+      const returnedImageUrl =
+        typeof data.imageUrl === 'string' ? data.imageUrl.trim() : '';
+      if (!returnedImageUrl) {
+        throw new Error('Image processing completed without a usable image URL.');
+      }
+      const nextUrl = withImageVersion(returnedImageUrl, data.imageHash || Date.now());
       setPendingPreview({ itemId: item.id, url: nextUrl });
-      if (data.backgroundRemoved === false) {
-        setBgFallbackWarning('Image saved, but background removal used a fallback. Try again later if you need a cleaner cutout.');
+      const isFallback =
+        data.backgroundRemoved === false ||
+        data.removeBgStatus === 'fallback' ||
+        data.removeBgStatus === 'failed';
+      if (isFallback) {
+        const reason =
+          typeof data.removeBgReason === 'string' && data.removeBgReason.trim()
+            ? ` Reason: ${data.removeBgReason.trim()}.`
+            : '';
+        setBgFallbackWarning(
+          `Preview updated, but background removal used a fallback.${reason} Save to vault only if this version looks acceptable.`,
+        );
       }
     } catch (err: any) {
       setRefreshError(err.message || 'Background removal failed');
