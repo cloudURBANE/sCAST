@@ -904,7 +904,7 @@ export default function App() {
 
       <div className="pt-16 sm:pt-[72px]" />
 
-      <main className="scent-main-content relative z-10 pb-24 px-4 sm:px-8 max-w-[1760px] mx-auto">
+      <main className="relative z-10 pb-24 px-4 sm:px-8 max-w-[1760px] mx-auto">
         <div className="space-y-20 sm:space-y-28 pt-10 sm:pt-14">
           <div className="hidden" aria-hidden="true">
             <div className="flex flex-col items-center justify-center space-y-16 pt-32 text-center">

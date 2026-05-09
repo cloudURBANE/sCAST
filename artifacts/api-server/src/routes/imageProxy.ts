@@ -34,7 +34,7 @@ router.get("/image-proxy", async (req, res) => {
     let body = upstream.buffer;
     let outType = upstream.contentType;
 
-    if (doTrim) {
+    if (doTrim && outType !== 'image/webp') {
       const trimmed = await trimPackshotForImageProxy(body);
       if (trimmed.ok) {
         body = trimmed.buffer;

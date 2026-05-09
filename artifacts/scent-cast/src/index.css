@@ -294,18 +294,8 @@ body {
 
 .scent-full-bleed {
   width: 100vw;
-  margin-left: calc(50% - 50vw - var(--scent-main-inline-pad, 0px));
-  margin-right: calc(50% - 50vw - var(--scent-main-inline-pad, 0px));
-}
-
-.scent-main-content {
-  --scent-main-inline-pad: 1rem;
-}
-
-@media (min-width: 640px) {
-  .scent-main-content {
-    --scent-main-inline-pad: 2rem;
-  }
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
 }
 
 .scent-atmosphere-strip {
