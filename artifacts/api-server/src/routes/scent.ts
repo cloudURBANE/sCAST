@@ -317,12 +317,14 @@ router.post("/refresh-image", async (req, res) => {
       }
 
       const finalImageUrl = processed.imageUrl;
-      await upsertRefreshImageCatalog(imageBrand, imageName, {
-        imageUrl: finalImageUrl,
-        storagePath: processed.storagePath,
-        imageHash: processed.imageHash,
-        storageProvider: processed.storageProvider,
-      });
+      if (skipBgStrip || processed.backgroundRemoved) {
+        await upsertRefreshImageCatalog(imageBrand, imageName, {
+          imageUrl: finalImageUrl,
+          storagePath: processed.storagePath,
+          imageHash: processed.imageHash,
+          storageProvider: processed.storageProvider,
+        });
+      }
       res.json({
         imageUrl: finalImageUrl,
         storagePath: processed.storagePath,
@@ -407,12 +409,14 @@ router.post("/refresh-image", async (req, res) => {
     }
 
     const finalImageUrl = processed.imageUrl;
-    await upsertRefreshImageCatalog(imageBrand, imageName, {
-      imageUrl: finalImageUrl,
-      storagePath: processed.storagePath,
-      imageHash: processed.imageHash,
-      storageProvider: processed.storageProvider,
-    });
+    if (skipBg || processed.backgroundRemoved) {
+      await upsertRefreshImageCatalog(imageBrand, imageName, {
+        imageUrl: finalImageUrl,
+        storagePath: processed.storagePath,
+        imageHash: processed.imageHash,
+        storageProvider: processed.storageProvider,
+      });
+    }
 
     res.json({
       imageUrl: finalImageUrl,

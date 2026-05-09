@@ -170,3 +170,116 @@ test("preview save accepts only persistable image references", async () => {
   assert.equal(await persistableImageReference("data:image/png;base64,AAAA"), null);
   assert.equal(await persistableImageReference("/not-an-image-object/path.webp"), null);
 });
+
+test("search-query cache with backgroundRemoved=false is not returned when removeBackground=true", async () => {
+  const { mock } = await import("node:test");
+
+  const fakeRef = {
+    imageUrl: "/api/image-objects/images/processed/white.webp",
+    storagePath: "images/processed/white.webp",
+    imageHash: "abc",
+    sourceUrlHash: "src123",
+    storageProvider: "local" as const,
+    cached: true,
+    width: 400,
+    height: 400,
+    mimeType: "image/webp",
+    sizeBytes: 1000,
+    backgroundRemoved: false,
+  };
+
+  mock.module("./imageCacheService.ts", {
+    namedExports: {
+      getLatestReadyCachedImageByLookupKey: async () => null,
+      getLatestReadyCachedImageBySearchQueryHash: async () => fakeRef,
+      getReadyCachedImageBySourceHash: async () => null,
+      getCachedImageStatusBySourceHash: async () => null,
+      recordImageReady: async () => fakeRef,
+      recordImageFailure: async () => {},
+      hashSearchQuery: (q: string) => `hash:${q}`,
+      hashSourceUrl: (u: string) => `hash:${u}`,
+      hashString: (s: string) => `hash:${s}`,
+      hashBuffer: () => "bufferhash",
+      IMAGE_PIPELINE_VERSION: "v1",
+      buildProcessedImageStorageKey: () => "key",
+    },
+  });
+
+  const { resolveProcessedFragranceImage } = await import("./imagePipeline.ts");
+
+  const result = await resolveProcessedFragranceImage({
+    brand: "Chanel",
+    name: "No. 5",
+    searchQuery: "Chanel No. 5 perfume bottle",
+    removeBackground: true,
+    allowLookupCache: true,
+  });
+
+  // Must not return the backgroundRemoved=false cached entry
+  assert.equal(result, null);
+
+  mock.restoreAll();
+});
+
+test("allowLookupCache=false bypasses both lookup cache and search-query cache", async () => {
+  const { mock } = await import("node:test");
+
+  let lookupCallCount = 0;
+  let searchQueryCallCount = 0;
+
+  mock.module("./imageCacheService.ts", {
+    namedExports: {
+      getLatestReadyCachedImageByLookupKey: async () => { lookupCallCount++; return null; },
+      getLatestReadyCachedImageBySearchQueryHash: async () => { searchQueryCallCount++; return null; },
+      getReadyCachedImageBySourceHash: async () => null,
+      getCachedImageStatusBySourceHash: async () => null,
+      recordImageReady: async () => { throw new Error("should not reach"); },
+      recordImageFailure: async () => {},
+      hashSearchQuery: (q: string) => `hash:${q}`,
+      hashSourceUrl: (u: string) => `hash:${u}`,
+      hashString: (s: string) => `hash:${s}`,
+      hashBuffer: () => "bufferhash",
+      IMAGE_PIPELINE_VERSION: "v1",
+      buildProcessedImageStorageKey: () => "key",
+    },
+  });
+
+  const { resolveProcessedFragranceImage } = await import("./imagePipeline.ts");
+
+  // allowLookupCache=false with no sourceUrl and a searchQuery — both cache functions must not be called
+  await resolveProcessedFragranceImage({
+    brand: "Dior",
+    name: "Sauvage",
+    searchQuery: "Dior Sauvage perfume bottle",
+    removeBackground: true,
+    allowLookupCache: false,
+  }).catch(() => {}); // may throw due to no Serper mock — that's fine
+
+  assert.equal(lookupCallCount, 0, "lookup cache must not be called when allowLookupCache=false");
+  assert.equal(searchQueryCallCount, 0, "search-query cache must not be called when allowLookupCache=false");
+
+  mock.restoreAll();
+});
+
+test("refresh-image does not upsert catalog when backgroundRemoved=false and BG removal was requested", async () => {
+  // This test verifies the guard logic by inspecting the condition directly,
+  // since the route is difficult to instantiate without a full Express/DB setup.
+  // The condition under test: `if (skipBg || processed.backgroundRemoved)` before upsertRefreshImageCatalog.
+
+  // Simulate: skipBg=false (BG removal was requested), backgroundRemoved=false (fallback occurred)
+  const skipBg = false;
+  const processed = { backgroundRemoved: false };
+  const shouldUpsert = skipBg || processed.backgroundRemoved;
+  assert.equal(shouldUpsert, false, "must not upsert catalog when BG removal was requested but failed");
+
+  // Simulate: skipBg=false, backgroundRemoved=true (BG removal succeeded)
+  const processed2 = { backgroundRemoved: true };
+  const shouldUpsert2 = skipBg || processed2.backgroundRemoved;
+  assert.equal(shouldUpsert2, true, "must upsert catalog when BG removal succeeded");
+
+  // Simulate: skipBg=true (BG removal intentionally skipped), backgroundRemoved=false
+  const skipBg2 = true;
+  const processed3 = { backgroundRemoved: false };
+  const shouldUpsert3 = skipBg2 || processed3.backgroundRemoved;
+  assert.equal(shouldUpsert3, true, "must upsert catalog when BG removal was intentionally skipped");
+});

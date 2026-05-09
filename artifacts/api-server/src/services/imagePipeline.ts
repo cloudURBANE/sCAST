@@ -345,14 +345,14 @@ export async function resolveProcessedFragranceImage(
 
   if (input.allowLookupCache !== false && !input.sourceUrl) {
     const cachedByLookup = await getLatestReadyCachedImageByLookupKey(lookupKey);
-    if (cachedByLookup) {
+    if (cachedByLookup && (!removeBackground || cachedByLookup.backgroundRemoved)) {
       return { ...cachedByLookup, sourceProvider, pipelineVersion: IMAGE_PIPELINE_VERSION };
     }
   }
 
-  if (!input.sourceUrl && searchQueryHash) {
+  if (input.allowLookupCache !== false && !input.sourceUrl && searchQueryHash) {
     const cachedByQuery = await getLatestReadyCachedImageBySearchQueryHash(searchQueryHash);
-    if (cachedByQuery) {
+    if (cachedByQuery && (!removeBackground || cachedByQuery.backgroundRemoved)) {
       return { ...cachedByQuery, sourceProvider, pipelineVersion: IMAGE_PIPELINE_VERSION };
     }
   }
