@@ -453,7 +453,8 @@ export default function App() {
 
   const fetchWeather = useCallback(async (lat?: number, lon?: number, signal?: AbortSignal) => {
     try {
-      const url = lat && lon ? `/api/weather?lat=${lat}&lon=${lon}` : '/api/weather';
+      const hasCoords = Number.isFinite(lat) && Number.isFinite(lon);
+      const url = hasCoords ? `/api/weather?lat=${lat}&lon=${lon}` : '/api/weather';
       const response = await axios.get(url, { signal });
       setWeather(response.data);
     } catch (err) {
@@ -579,23 +580,14 @@ export default function App() {
       },
       () => {
         setLocationStatus('denied');
-        setWeatherLoading(false);
+        fetchWeather(undefined, undefined);
       },
       { timeout: 12000, enableHighAccuracy: false }
     );
   };
 
   const handleAddItem = async (item: any) => {
-    const newItem: Fragrance = {
-      ...item,
-      notes: item.notes || ['Bergamot', 'Ambroxan', 'Pink Pepper'],
-      concentration: item.concentration || 'Eau de Parfum',
-      intents: item.intents || item.context?.occasion || ['Going Out'],
-      energies: item.energies || ['Calm'],
-      performance: item.performance || { sillage: 6, longevity: 7 },
-      pyramid: item.pyramid || { top: ['Bergamot', 'Pink Pepper'], heart: ['Lavender', 'Geranium'], base: ['Ambroxan', 'Patchouli'] },
-      context: item.context || { weather: ['Universal'], time: ['Universal'], occasion: ['Daily Wear'] }
-    };
+    const newItem: Fragrance = { ...item };
 
     let nextCount = 0;
     setItems((prev) => {
@@ -605,13 +597,14 @@ export default function App() {
 
     if (authToken) {
       try {
+        const payload = { ...item };
         await fetch('/api/wardrobe', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${authToken}`,
           },
-          body: JSON.stringify(newItem),
+          body: JSON.stringify(payload),
         });
       } catch {
         // ignore - item is still in local state

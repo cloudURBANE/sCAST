@@ -77,7 +77,8 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({ weather: propWeath
     let isMounted = true;
     async function fetchWeather(lat?: number, lon?: number) {
       try {
-        const url = lat && lon ? `/api/weather?lat=${lat}&lon=${lon}` : '/api/weather';
+        const hasCoords = Number.isFinite(lat) && Number.isFinite(lon);
+        const url = hasCoords ? `/api/weather?lat=${lat}&lon=${lon}` : '/api/weather';
         const response = await axios.get(url);
         if (isMounted) setInternalWeather(response.data);
       } catch {
