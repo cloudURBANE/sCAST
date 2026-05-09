@@ -1,8 +1,11 @@
 import axios from "axios";
 import sharp from "sharp";
 import { logger } from "../lib/logger";
+import { isEffectivelyTransparent } from "./bgServiceCore";
 import { trimPackshotForBgService } from "./packshotTrim";
 import { fetchExternalImage } from "./safeImageFetch";
+
+export { isEffectivelyTransparent };
 
 const POOF_API = "https://api.poof.bg/v1/remove";
 const NORMALIZED_LONG_EDGE = 768;
@@ -100,6 +103,7 @@ export type RemoveBgReason =
   | "poof_payload_too_large"
   | "poof_non_200"
   | "poof_server_error"
+  | "poof_empty_output"
   | "local_trim_fallback";
 
 export type RemoveBgOptions = {
@@ -140,7 +144,18 @@ async function removeBgByFile(buffer: Buffer, apiKey: string, opts?: RemoveBgOpt
       });
 
       if (res.status === 200) {
-        return { ok: true, buffer: Buffer.from(res.data) };
+        const poofBuffer = Buffer.from(res.data);
+        // Hard guard: never treat a fully-transparent Poof response as a
+        // success. If we did, the pipeline would persist an invisible WebP
+        // and the user would see an empty tile in the wardrobe/share grid.
+        if (await isEffectivelyTransparent(poofBuffer)) {
+          logger.warn(
+            { reason: "poof_empty_output", poofType: o?.poofType ?? null },
+            "[bgService] Poof returned a fully transparent image; treating as failure",
+          );
+          return { ok: false, reason: "poof_empty_output", status: 200 };
+        }
+        return { ok: true, buffer: poofBuffer };
       }
 
       const reason = mapPoofStatusToReason(res.status);

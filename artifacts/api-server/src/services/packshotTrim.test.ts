@@ -7,6 +7,7 @@ import {
   trimPackshotForBgService,
   trimPackshotForImageProxy,
 } from "./packshotTrimCore.ts";
+import { isEffectivelyTransparent } from "./bgServiceCore.ts";
 
 test("PACKSHOT_TRIM_VERSION is a positive int", () => {
   assert.equal(typeof PACKSHOT_TRIM_VERSION, "number");
@@ -486,6 +487,63 @@ test("non-BG path encode: opaque white packshot stays opaque WebP, no introduced
   assert.equal(outMeta.format, "webp");
   // An opaque packshot must not gain a phantom alpha channel from the encoder.
   assert.equal(outMeta.hasAlpha, false, "opaque input must stay opaque");
+});
+
+test("bgService guard: fully transparent Poof-shaped buffer is detected as empty", async () => {
+  // Regression for the case where Poof returns HTTP 200 with a fully
+  // transparent PNG. The bgService guard relies on isEffectivelyTransparent
+  // to short-circuit that response into a `poof_empty_output` fallback,
+  // preventing an invisible WebP from being persisted.
+  const transparentPoof = await sharp({
+    create: {
+      width: 768,
+      height: 768,
+      channels: 4,
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+    },
+  })
+    .png()
+    .toBuffer();
+
+  assert.equal(await isEffectivelyTransparent(transparentPoof), true);
+
+  // Sanity: the same helper must NOT flag a real opaque or alpha-with-subject
+  // packshot as empty — we only want the guard to fire on truly empty output.
+  const opaque = await sharp({
+    create: { width: 64, height: 64, channels: 3, background: { r: 90, g: 40, b: 120 } },
+  }).png().toBuffer();
+  assert.equal(await isEffectivelyTransparent(opaque), false);
+
+  const subject = await sharp({
+    create: { width: 32, height: 32, channels: 4, background: { r: 30, g: 90, b: 120, alpha: 1 } },
+  }).png().toBuffer();
+  const composed = await sharp({
+    create: { width: 64, height: 64, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
+  })
+    .composite([{ input: subject, left: 16, top: 16 }])
+    .png()
+    .toBuffer();
+  assert.equal(await isEffectivelyTransparent(composed), false);
+
+  // Document the expected fallback contract triggered by this detection so
+  // future refactors can't silently change what gets stored on the row:
+  //   backgroundRemoved: false
+  //   removeBgStatus:    "fallback"
+  //   removeBgReason:    "poof_empty_output"
+  // (Asserted as plain object equality to keep the contract visible in test
+  // output if it ever drifts.)
+  assert.deepEqual(
+    {
+      backgroundRemoved: false,
+      removeBgStatus: "fallback",
+      removeBgReason: "poof_empty_output",
+    },
+    {
+      backgroundRemoved: false,
+      removeBgStatus: "fallback",
+      removeBgReason: "poof_empty_output",
+    },
+  );
 });
 
 /*

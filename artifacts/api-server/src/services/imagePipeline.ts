@@ -2,6 +2,7 @@ import sharp from "sharp";
 import { logger } from "../lib/logger";
 import { makeLookupKey } from "./catalogService";
 import { removeBgBuffer, removeBgToBuffer, type RemoveBgOptions, type RemoveBgReason, type RemoveBgStatus } from "./bgService";
+import { isEffectivelyTransparent } from "./bgServiceCore";
 import {
   buildProcessedImageStorageKey,
   getCachedImageStatusBySourceHash,
@@ -184,7 +185,34 @@ async function processSourceToWebp(
   if (processed.backgroundRemoved) {
     outputPipeline = outputPipeline.ensureAlpha();
   }
-  const optimized = await outputPipeline.webp({ quality: WEBP_QUALITY, effort: 4 }).toBuffer();
+  let optimized = await outputPipeline.webp({ quality: WEBP_QUALITY, effort: 4 }).toBuffer();
+
+  // Defense in depth: even though bgService now rejects fully transparent
+  // Poof output, run one final check on the encoded WebP. If we ever end up
+  // here with an invisible buffer (e.g. a future code path bypasses the
+  // Poof-side guard), fall back to a non-BG re-encode of the original source
+  // and downgrade the status so the row never lies about what was stored.
+  let backgroundRemoved = processed.backgroundRemoved;
+  let removeBgStatus = processed.removeBgStatus;
+  let removeBgReason = processed.removeBgReason;
+  if (backgroundRemoved && (await isEffectivelyTransparent(optimized))) {
+    logger.warn(
+      { removeBgReason: "poof_empty_output" },
+      "[imagePipeline] post-encode WebP was fully transparent; reverting to non-BG fallback",
+    );
+    const loaded = await loadSourceWithoutBackgroundRemoval(source);
+    optimized = await sharp(loaded.buffer, { failOn: "truncated" })
+      .rotate()
+      .resize(MAX_OUTPUT_DIMENSION, MAX_OUTPUT_DIMENSION, {
+        fit: "inside",
+        withoutEnlargement: true,
+      })
+      .webp({ quality: WEBP_QUALITY, effort: 4 })
+      .toBuffer();
+    backgroundRemoved = false;
+    removeBgStatus = "fallback";
+    removeBgReason = "poof_empty_output";
+  }
 
   const metadata = await sharp(optimized).metadata();
   const width = metadata.width ?? 0;
@@ -198,9 +226,9 @@ async function processSourceToWebp(
     mimeType: "image/webp",
     sizeBytes: optimized.length,
     contentHash: hashBuffer(optimized),
-    backgroundRemoved: processed.backgroundRemoved,
-    removeBgStatus: processed.removeBgStatus,
-    removeBgReason: processed.removeBgReason,
+    backgroundRemoved,
+    removeBgStatus,
+    removeBgReason,
   };
 }
 
