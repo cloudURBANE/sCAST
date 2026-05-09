@@ -65,6 +65,10 @@ export type ResolveProcessedFragranceImageInput = {
 
 const inFlightBySource = new Map<string, Promise<ProcessedImageResult | null>>();
 
+function inFlightKey(sourceUrlHash: string, removeBackground: boolean): string {
+  return `${sourceUrlHash}:${removeBackground ? "1" : "0"}`;
+}
+
 function decodeDataImage(input: string): Buffer | null {
   const match = input.match(/^data:image\/(?:png|jpe?g|webp);base64,([a-z0-9+/=]+)$/i);
   if (!match?.[1]) return null;
@@ -202,20 +206,27 @@ async function processCandidate(input: {
 }): Promise<ProcessedImageResult | null> {
   const cached = await getReadyCachedImageBySourceHash(input.source.sourceUrlHash);
   if (cached) {
-    return { ...cached, sourceProvider: input.sourceProvider, pipelineVersion: IMAGE_PIPELINE_VERSION };
+    // Skip cache when BG removal is requested but the cached image has a white background.
+    if (!input.removeBackground || cached.backgroundRemoved) {
+      return { ...cached, sourceProvider: input.sourceProvider, pipelineVersion: IMAGE_PIPELINE_VERSION };
+    }
   }
 
   const status = await getCachedImageStatusBySourceHash(input.source.sourceUrlHash);
   if (status === "failed") return null;
 
-  const existing = inFlightBySource.get(input.source.sourceUrlHash);
+  const flightKey = inFlightKey(input.source.sourceUrlHash, input.removeBackground);
+  const existing = inFlightBySource.get(flightKey);
   if (existing) return existing;
 
   const promise = (async (): Promise<ProcessedImageResult | null> => {
     try {
       const doubleCheck = await getReadyCachedImageBySourceHash(input.source.sourceUrlHash);
       if (doubleCheck) {
-        return { ...doubleCheck, sourceProvider: input.sourceProvider, pipelineVersion: IMAGE_PIPELINE_VERSION };
+        if (!input.removeBackground || doubleCheck.backgroundRemoved) {
+          return { ...doubleCheck, sourceProvider: input.sourceProvider, pipelineVersion: IMAGE_PIPELINE_VERSION };
+        }
+        // Cached entry lacks BG removal; fall through to reprocess.
       }
 
       const optimized = await processSourceToWebp(input.source, input.removeBackground, input.poofOptions);
@@ -270,11 +281,11 @@ async function processCandidate(input: {
       logger.warn({ err: reason }, "[imagePipeline] candidate failed");
       return null;
     } finally {
-      inFlightBySource.delete(input.source.sourceUrlHash);
+      inFlightBySource.delete(flightKey);
     }
   })();
 
-  inFlightBySource.set(input.source.sourceUrlHash, promise);
+  inFlightBySource.set(flightKey, promise);
   return promise;
 }
 

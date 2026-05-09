@@ -271,7 +271,8 @@ export const Wardrobe: React.FC<{
       });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || 'Refresh failed');
-      setPendingPreview({ itemId: item.id, url: data.imageUrl });
+      const nextUrl = data.imageUrl + (data.imageUrl.includes('?') ? '&' : '?') + 'v=' + (data.imageHash || Date.now());
+      setPendingPreview({ itemId: item.id, url: nextUrl });
       if (data.backgroundRemoved === false) {
         setBgFallbackWarning('Image saved, but background removal used a fallback. Try again later if you need a cleaner cutout.');
       }
@@ -307,7 +308,8 @@ export const Wardrobe: React.FC<{
       });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || 'Background removal failed');
-      setPendingPreview({ itemId: item.id, url: data.imageUrl });
+      const nextUrl = data.imageUrl + (data.imageUrl.includes('?') ? '&' : '?') + 'v=' + (data.imageHash || Date.now());
+      setPendingPreview({ itemId: item.id, url: nextUrl });
       if (data.backgroundRemoved === false) {
         setBgFallbackWarning('Image saved, but background removal used a fallback. Try again later if you need a cleaner cutout.');
       }
