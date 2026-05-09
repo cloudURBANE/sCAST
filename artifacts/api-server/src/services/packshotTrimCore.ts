@@ -1,15 +1,21 @@
 import sharp from "sharp";
 
 /** Bump when trim logic changes (e.g. for cache keys). */
-export const PACKSHOT_TRIM_VERSION = 3;
+export const PACKSHOT_TRIM_VERSION = 4;
 
 const DEFAULT_MAX_INPUT_BYTES = 12 * 1024 * 1024;
 const DEFAULT_MAX_LONG_EDGE = 4096;
 const DEFAULT_TRIM_THRESHOLD = 40;
-/** Allows very padded vendor packshots while still rejecting crop boxes that are basically noise. */
+/**
+ * Allow tightly-trimming heavy vendor padding (the bottle itself defines the
+ * lower bound — Sharp's color trim stops at the first contrasting pixel, so it
+ * cannot crop into the bottle even when the trim ratio is large).
+ */
 const DEFAULT_MAX_TRIM_FRACTION = 0.985;
-const DEFAULT_SAFE_CROP_PADDING_RATIO = 0.025;
-const MIN_ALPHA_CONTENT = 24;
+/** Pixels with alpha at-or-below this are treated as fully transparent. */
+const ALPHA_TRANSPARENT_CUTOFF = 8;
+/** A corner is "mostly transparent" if it averages below this alpha. */
+const CORNER_TRANSPARENT_AVG = 32;
 
 export type PackshotTrimLog = {
   debug: (obj: object, msg: string) => void;
@@ -47,20 +53,10 @@ export type TrimPackshotResult = TrimPackshotOk | { ok: false; reason: string };
 
 type Rgb = { r: number; g: number; b: number };
 
-type CropBox = {
-  left: number;
-  top: number;
-  width: number;
-  height: number;
-  rawWidth: number;
-  rawHeight: number;
-  contentPixels: number;
-};
-
-/** Median of the outer edge ring on a downscaled raster - stable vs one bad corner. */
+/** Median of the outer edge ring on a downscaled raster — stable vs one bad corner. */
 async function sampleEdgeBackground(
   buf: Buffer,
-): Promise<{ r: number; g: number; b: number }> {
+): Promise<{ rgb: Rgb; cornerAlphaAvg: number }> {
   const { data, info } = await sharp(buf)
     .resize(96, 96, { fit: "inside", withoutEnlargement: true })
     .ensureAlpha()
@@ -70,14 +66,16 @@ async function sampleEdgeBackground(
   const w = info.width;
   const h = info.height;
   const c = info.channels;
-  const points: Array<readonly [number, number, number]> = [];
+  const rgbPoints: Array<readonly [number, number, number]> = [];
+  const alphaPoints: number[] = [];
   const add = (x: number, y: number) => {
     const xi = Math.min(Math.max(0, x), w - 1);
     const yi = Math.min(Math.max(0, y), h - 1);
     const i = (yi * w + xi) * c;
     const alpha = c >= 4 ? (data[i + 3] ?? 255) : 255;
-    if (alpha <= MIN_ALPHA_CONTENT) return;
-    points.push([data[i] ?? 0, data[i + 1] ?? 0, data[i + 2] ?? 0] as const);
+    alphaPoints.push(alpha);
+    if (alpha <= ALPHA_TRANSPARENT_CUTOFF) return;
+    rgbPoints.push([data[i] ?? 0, data[i + 1] ?? 0, data[i + 2] ?? 0] as const);
   };
 
   const steps = 12;
@@ -90,164 +88,42 @@ async function sampleEdgeBackground(
     add(w - 1, y);
   }
 
-  if (points.length === 0) return { r: 255, g: 255, b: 255 };
   const median1 = (xs: number[]) => {
     const s = [...xs].sort((a, b) => a - b);
     return s[Math.floor(s.length / 2)] ?? 0;
   };
 
+  const cornerAlphaAvg =
+    alphaPoints.length === 0
+      ? 255
+      : alphaPoints.reduce((a, b) => a + b, 0) / alphaPoints.length;
+
+  if (rgbPoints.length === 0) {
+    return { rgb: { r: 255, g: 255, b: 255 }, cornerAlphaAvg };
+  }
+
   return {
-    r: median1(points.map((p) => p[0])),
-    g: median1(points.map((p) => p[1])),
-    b: median1(points.map((p) => p[2])),
+    rgb: {
+      r: median1(rgbPoints.map((p) => p[0])),
+      g: median1(rgbPoints.map((p) => p[1])),
+      b: median1(rgbPoints.map((p) => p[2])),
+    },
+    cornerAlphaAvg,
   };
 }
 
-function resolveBackground(
+async function resolveBackground(
   mode: PackshotTrimBg,
   work: Buffer,
-): Promise<{ r: number; g: number; b: number }> {
+): Promise<{ rgb: Rgb; cornerAlphaAvg: number }> {
   if (mode === "corners") return sampleEdgeBackground(work);
-  return Promise.resolve(mode);
-}
-
-function channelDistance(a: Rgb, b: Rgb): number {
-  return Math.max(
-    Math.abs(a.r - b.r),
-    Math.abs(a.g - b.g),
-    Math.abs(a.b - b.b),
-  );
-}
-
-function isLikelyContentPixel(
-  data: Buffer,
-  i: number,
-  channels: number,
-  background: Rgb,
-  trimThreshold: number,
-): boolean {
-  const alpha = channels >= 4 ? (data[i + 3] ?? 255) : 255;
-  if (alpha <= MIN_ALPHA_CONTENT) return false;
-  if (alpha < 245) return true;
-
-  return (
-    channelDistance(
-      {
-        r: data[i] ?? 0,
-        g: data[i + 1] ?? 0,
-        b: data[i + 2] ?? 0,
-      },
-      background,
-    ) > trimThreshold
-  );
-}
-
-async function detectContentCropBox(
-  work: Buffer,
-  background: Rgb,
-  trimThreshold: number,
-  maxTrimFraction: number,
-): Promise<CropBox | null> {
-  const { data, info } = await sharp(work)
-    .ensureAlpha()
-    .raw()
-    .toBuffer({ resolveWithObject: true });
-
-  const W = info.width;
-  const H = info.height;
-  const C = info.channels;
-  const colCounts = new Uint32Array(W);
-  const rowCounts = new Uint32Array(H);
-  let rawLeft = W;
-  let rawTop = H;
-  let rawRight = -1;
-  let rawBottom = -1;
-  let contentPixels = 0;
-
-  for (let y = 0; y < H; y += 1) {
-    for (let x = 0; x < W; x += 1) {
-      const i = (y * W + x) * C;
-      if (!isLikelyContentPixel(data, i, C, background, trimThreshold))
-        continue;
-
-      contentPixels += 1;
-      colCounts[x] += 1;
-      rowCounts[y] += 1;
-      if (x < rawLeft) rawLeft = x;
-      if (x > rawRight) rawRight = x;
-      if (y < rawTop) rawTop = y;
-      if (y > rawBottom) rawBottom = y;
-    }
-  }
-
-  const imageArea = W * H;
-  const minContentPixels = Math.max(32, Math.floor(imageArea * 0.00045));
-  if (
-    contentPixels < minContentPixels ||
-    rawRight < rawLeft ||
-    rawBottom < rawTop
-  ) {
-    return null;
-  }
-
-  const minColPixels = Math.max(2, Math.floor(H * 0.0035));
-  const minRowPixels = Math.max(2, Math.floor(W * 0.0035));
-  let left = rawLeft;
-  let right = rawRight;
-  let top = rawTop;
-  let bottom = rawBottom;
-
-  while (left <= right && colCounts[left] < minColPixels) left += 1;
-  while (right >= left && colCounts[right] < minColPixels) right -= 1;
-  while (top <= bottom && rowCounts[top] < minRowPixels) top += 1;
-  while (bottom >= top && rowCounts[bottom] < minRowPixels) bottom -= 1;
-
-  if (right < left || bottom < top) {
-    left = rawLeft;
-    right = rawRight;
-    top = rawTop;
-    bottom = rawBottom;
-  }
-
-  const rawWidth = right - left + 1;
-  const rawHeight = bottom - top + 1;
-  const minFrac = 1 - maxTrimFraction;
-  if (rawWidth < W * minFrac || rawHeight < H * minFrac) {
-    return null;
-  }
-
-  const paddingX = Math.max(
-    3,
-    Math.ceil(rawWidth * DEFAULT_SAFE_CROP_PADDING_RATIO),
-  );
-  const paddingY = Math.max(
-    3,
-    Math.ceil(rawHeight * DEFAULT_SAFE_CROP_PADDING_RATIO),
-  );
-  const paddedLeft = Math.max(0, left - paddingX);
-  const paddedTop = Math.max(0, top - paddingY);
-  const paddedRight = Math.min(W - 1, right + paddingX);
-  const paddedBottom = Math.min(H - 1, bottom + paddingY);
-  const width = paddedRight - paddedLeft + 1;
-  const height = paddedBottom - paddedTop + 1;
-
-  if (width < 8 || height < 8) return null;
-  if (width >= W * 0.985 && height >= H * 0.985) return null;
-
-  return {
-    left: paddedLeft,
-    top: paddedTop,
-    width,
-    height,
-    rawWidth,
-    rawHeight,
-    contentPixels,
-  };
+  // Caller pinned a background — corners alpha unknown, assume opaque.
+  return { rgb: mode, cornerAlphaAvg: 255 };
 }
 
 /**
- * Conservative packshot edge trim: detect a content box from alpha/background contrast,
- * add a small safety pad, then crop with sanity checks.
+ * Conservative packshot edge trim: Sharp native `.trim()` against either the
+ * sampled corner background or the alpha channel for transparent canvases.
  * On any doubt returns `{ ok: false }` — caller must pass through original bytes.
  */
 export async function trimPackshotBuffer(
@@ -307,38 +183,31 @@ export async function trimPackshotBuffer(
 
   const W = before.width!;
   const H = before.height!;
+  const inputHasAlpha = before.hasAlpha === true;
 
-  let bg: { r: number; g: number; b: number };
+  let bgInfo: { rgb: Rgb; cornerAlphaAvg: number };
   try {
-    bg = await resolveBackground(options.background, work);
+    bgInfo = await resolveBackground(options.background, work);
   } catch {
     return { ok: false, reason: "background_sample_failed" };
   }
 
-  let crop: CropBox | null;
-  try {
-    crop = await detectContentCropBox(work, bg, trimThreshold, maxTrimFraction);
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    log?.debug({ err: msg }, "packshot-trim: crop detection failed");
-    return { ok: false, reason: "crop_detection_failed" };
-  }
-
-  if (!crop) {
-    log?.debug(
-      { W, H },
-      "packshot-trim: no reliable content crop, passthrough original",
-    );
-    return { ok: false, reason: "no_reliable_crop" };
-  }
+  // Decide trim background. If the input has a transparent canvas (alpha at
+  // the corners is mostly zero), trim by alpha. Otherwise trim by the sampled
+  // RGB background. Sharp's color trim stops at the first contrasting pixel
+  // so it cannot crop into the bottle.
+  const trimByAlpha =
+    inputHasAlpha && bgInfo.cornerAlphaAvg <= CORNER_TRANSPARENT_AVG;
+  const trimBackground: { r: number; g: number; b: number; alpha: number } =
+    trimByAlpha
+      ? { r: 0, g: 0, b: 0, alpha: 0 }
+      : { ...bgInfo.rgb, alpha: 1 };
 
   let outBuf: Buffer;
   try {
-    let pipeline = sharp(work).extract({
-      left: crop.left,
-      top: crop.top,
-      width: crop.width,
-      height: crop.height,
+    let pipeline = sharp(work).trim({
+      background: trimBackground,
+      threshold: trimThreshold,
     });
 
     if (options.output.format === "png") {
@@ -346,7 +215,9 @@ export async function trimPackshotBuffer(
       outBuf = await pipeline.png().toBuffer();
     } else {
       const q = options.output.quality ?? 85;
-      pipeline = pipeline.flatten({ background: bg });
+      // JPEG can't represent alpha — flatten onto the sampled RGB so corners
+      // match the original canvas color.
+      pipeline = pipeline.flatten({ background: bgInfo.rgb });
       outBuf = await pipeline.jpeg({ quality: q, mozjpeg: true }).toBuffer();
     }
   } catch (err: unknown) {
@@ -392,9 +263,7 @@ export async function trimPackshotBuffer(
       inH: H,
       outW: after.width,
       outH: after.height,
-      rawCropW: crop.rawWidth,
-      rawCropH: crop.rawHeight,
-      contentPixels: crop.contentPixels,
+      trimByAlpha,
       contentType,
       background: options.background === "corners" ? "corners" : "fixed",
     },

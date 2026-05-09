@@ -166,7 +166,7 @@ async function processSourceToWebp(
         backgroundRemoved: loaded.backgroundRemoved,
         contentType: "image/png" as const,
         removeBgStatus: "skipped" as const,
-        removeBgReason: "local_trim_fallback" as const,
+        removeBgReason: "skipped" as const,
       }));
 
   if (!processed) throw new Error("Image processing failed");
@@ -177,6 +177,13 @@ async function processSourceToWebp(
       fit: "inside",
       withoutEnlargement: true,
     });
+  // Preserve transparency through WebP encode when the upstream produced an
+  // alpha-bearing image (i.e. background was actually removed). Sharp's WebP
+  // encoder honors alpha when present; ensureAlpha guarantees it is present
+  // even if an intermediate step happened to drop the channel.
+  if (processed.backgroundRemoved) {
+    outputPipeline = outputPipeline.ensureAlpha();
+  }
   const optimized = await outputPipeline.webp({ quality: WEBP_QUALITY, effort: 4 }).toBuffer();
 
   const metadata = await sharp(optimized).metadata();

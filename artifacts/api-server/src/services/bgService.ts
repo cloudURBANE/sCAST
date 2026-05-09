@@ -92,6 +92,8 @@ export type RemoveBgStatus = "removed" | "fallback" | "skipped";
 
 export type RemoveBgReason =
   | "removed"
+  | "skipped"
+  | "skipped_by_caller"
   | "missing_api_key"
   | "poof_unauthorized"
   | "poof_rate_limited"
@@ -121,7 +123,14 @@ async function removeBgByFile(buffer: Buffer, apiKey: string, opts?: RemoveBgOpt
     try {
       const FormData = (await import("form-data")).default;
       const form = new FormData();
-      form.append("image_file", buffer, { filename: "image.jpg", contentType: "image/jpeg" });
+      const { format: detectedFormat } = await sharp(buffer).metadata();
+      const uploadMime = detectedFormat === "jpeg" ? "image/jpeg"
+        : detectedFormat === "webp" ? "image/webp"
+        : "image/png";
+      const uploadFilename = detectedFormat === "jpeg" ? "image.jpg"
+        : detectedFormat === "webp" ? "image.webp"
+        : "image.png";
+      form.append("image_file", buffer, { filename: uploadFilename, contentType: uploadMime });
       Object.entries(baseParams()).forEach(([k, v]) => form.append(k, v));
       if (o?.poofType === "product") {
         form.append("type", "product");

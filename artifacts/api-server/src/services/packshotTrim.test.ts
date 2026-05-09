@@ -103,6 +103,60 @@ test("heavily padded centered object trims to the visible packshot", async () =>
   assert.ok(r.outH <= 62, `expected tight crop height, got ${r.outH}`);
 });
 
+test("white-border trim: removes border without over-cropping content", async () => {
+  const contentW = 100;
+  const contentH = 140;
+  const border = 40;
+
+  const content = await sharp({
+    create: {
+      width: contentW,
+      height: contentH,
+      channels: 3,
+      background: { r: 60, g: 80, b: 180 },
+    },
+  })
+    .png()
+    .toBuffer();
+
+  const padded = await sharp(content)
+    .extend({
+      top: border,
+      bottom: border,
+      left: border,
+      right: border,
+      background: { r: 255, g: 255, b: 255 },
+    })
+    .png()
+    .toBuffer();
+
+  const r = await trimPackshotBuffer(padded, {
+    background: "corners",
+    output: { format: "jpeg", quality: 85 },
+  });
+  assert.equal(r.ok, true);
+  if (!r.ok) return;
+
+  // Border removed: output must be smaller than padded canvas.
+  assert.ok(
+    r.outW < contentW + 2 * border,
+    `border not trimmed: width ${r.outW}`,
+  );
+  assert.ok(
+    r.outH < contentH + 2 * border,
+    `border not trimmed: height ${r.outH}`,
+  );
+  // No over-crop: output must still contain the full content object.
+  assert.ok(
+    r.outW >= contentW,
+    `content over-cropped: width ${r.outW} < ${contentW}`,
+  );
+  assert.ok(
+    r.outH >= contentH,
+    `content over-cropped: height ${r.outH} < ${contentH}`,
+  );
+});
+
 test("bg-service path trims heavily padded centered object", async () => {
   const tiny = await sharp({
     create: {
@@ -279,7 +333,13 @@ test("isolated noise speck is not promoted to a packshot crop", async () => {
   });
   assert.equal(r.ok, false);
   if (r.ok) return;
-  assert.equal(r.reason, "no_reliable_crop");
+  // Sharp's color trim leaves a uniformly-near-background image untouched and
+  // we surface that as "no_trim_benefit" — the user-visible behavior is the
+  // same: caller passes through the original bytes.
+  assert.ok(
+    r.reason === "no_trim_benefit" || r.reason === "trim_too_aggressive",
+    `unexpected reason for noise speck: ${r.reason}`,
+  );
 });
 
 test("resize cap: very large raster still processes", async () => {
@@ -355,6 +415,77 @@ test("resize of transparent PNG with white-transparent fill: no white halo (libv
     }
   }
   assert.equal(halosFound, 0, `White halo pixels at transparent boundary: ${halosFound}`);
+});
+
+test("final WebP encode preserves alpha for transparent post-removal buffers", async () => {
+  // Mirrors the imagePipeline.processSourceToWebp finalization chain when
+  // backgroundRemoved=true: rotate → resize(inside) → ensureAlpha → webp.
+  // Guards against regressions where alpha is silently dropped at encode.
+  const subject = await sharp({
+    create: { width: 200, height: 400, channels: 4, background: { r: 30, g: 40, b: 60, alpha: 1 } },
+  })
+    .png()
+    .toBuffer();
+  const transparentCanvas = await sharp({
+    create: { width: 600, height: 600, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
+  })
+    .composite([{ input: subject, left: 200, top: 100 }])
+    .png()
+    .toBuffer();
+
+  const webp = await sharp(transparentCanvas, { failOn: "truncated" })
+    .rotate()
+    .resize(768, 768, { fit: "inside", withoutEnlargement: true })
+    .ensureAlpha()
+    .webp({ quality: 82, effort: 4 })
+    .toBuffer();
+
+  const outMeta = await sharp(webp).metadata();
+  assert.equal(outMeta.format, "webp");
+  assert.ok(outMeta.hasAlpha, "WebP output must preserve alpha");
+
+  // Sample corners — they must be near-transparent.
+  const { data, info } = await sharp(webp)
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const C = info.channels;
+  const corners = [
+    [0, 0],
+    [info.width - 1, 0],
+    [0, info.height - 1],
+    [info.width - 1, info.height - 1],
+  ];
+  for (const [x, y] of corners) {
+    const i = (y * info.width + x) * C;
+    const a = data[i + 3] ?? 255;
+    assert.ok(a <= 32, `corner alpha at (${x},${y}) should be ~0, got ${a}`);
+  }
+});
+
+test("non-BG path encode: opaque white packshot stays opaque WebP, no introduced alpha rim", async () => {
+  // Mirrors the imagePipeline.processSourceToWebp finalization chain when
+  // removeBackground=false: rotate → resize(inside) → webp (no ensureAlpha).
+  const inner = await sharp({
+    create: { width: 200, height: 200, channels: 3, background: { r: 90, g: 40, b: 120 } },
+  })
+    .png()
+    .toBuffer();
+  const padded = await sharp(inner)
+    .extend({ top: 30, bottom: 30, left: 30, right: 30, background: { r: 255, g: 255, b: 255 } })
+    .png()
+    .toBuffer();
+
+  const webp = await sharp(padded, { failOn: "truncated" })
+    .rotate()
+    .resize(768, 768, { fit: "inside", withoutEnlargement: true })
+    .webp({ quality: 82, effort: 4 })
+    .toBuffer();
+
+  const outMeta = await sharp(webp).metadata();
+  assert.equal(outMeta.format, "webp");
+  // An opaque packshot must not gain a phantom alpha channel from the encoder.
+  assert.equal(outMeta.hasAlpha, false, "opaque input must stay opaque");
 });
 
 /*
