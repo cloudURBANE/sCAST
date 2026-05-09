@@ -270,10 +270,16 @@ async function processCandidate(input: {
 
       const optimized = await processSourceToWebp(input.source, input.removeBackground, input.poofOptions);
       const storage = getImageObjectStorage();
+      // Include the content hash in the storage key so different processed
+      // outputs (e.g. an old white-bg fallback vs. a fresh transparent packshot
+      // for the same source URL) live at different immutable storage paths.
+      // Without this, the browser/CDN can serve the stale object even after
+      // the DB row points to a new "backgroundRemoved: true" result.
       const storagePath = buildProcessedImageStorageKey({
         sourceProvider: input.sourceProvider,
         lookupKey: input.lookupKey,
         sourceUrlHash: input.source.sourceUrlHash,
+        contentHash: optimized.contentHash,
       });
       const uploaded = await storage.uploadProcessedImage({
         buffer: optimized.buffer,
