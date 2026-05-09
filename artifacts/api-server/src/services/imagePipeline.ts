@@ -173,7 +173,6 @@ async function processSourceToWebp(
       fit: "inside",
       withoutEnlargement: true,
     });
-  if (!processed.backgroundRemoved) outputPipeline = outputPipeline.flatten({ background: { r: 255, g: 255, b: 255 } });
   const optimized = await outputPipeline.webp({ quality: WEBP_QUALITY, effort: 4 }).toBuffer();
 
   const metadata = await sharp(optimized).metadata();

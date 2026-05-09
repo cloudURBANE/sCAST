@@ -361,6 +361,7 @@ router.post("/refresh-image", async (req, res) => {
     let poofType = solverWantsPoofProductType(solverId);
     const pt = body.poofOptions?.type;
     if (pt === "product" || pt === "auto") poofType = pt;
+    if (poofType === undefined) poofType = "product";
 
     const removeBgOpts = poofType === "product" ? ({ poofType: "product" } as const) : undefined;
 

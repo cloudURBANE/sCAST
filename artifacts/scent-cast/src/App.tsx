@@ -644,11 +644,18 @@ export default function App() {
         throw new Error(data.error || `HTTP ${res.status}`);
       }
       const resolvedImageUrl = (() => {
-        const base =
+        const raw =
           typeof data.imageUrl === 'string' && data.imageUrl.trim()
             ? data.imageUrl.trim()
             : imageUrl;
-        if (!base) return target.imageUrl;
+        if (!raw) return target.imageUrl;
+        // Strip any existing v= before appending the fresh one to avoid ?v=old&v=new.
+        let base = raw;
+        try {
+          const parsed = new URL(raw);
+          parsed.searchParams.delete('v');
+          base = parsed.toString();
+        } catch { /* relative or non-URL — leave as-is */ }
         const v = data.imageHash ?? Date.now();
         return `${base}${base.includes('?') ? '&' : '?'}v=${encodeURIComponent(String(v))}`;
       })();
