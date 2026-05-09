@@ -123,14 +123,10 @@ async function removeBgByFile(buffer: Buffer, apiKey: string, opts?: RemoveBgOpt
     try {
       const FormData = (await import("form-data")).default;
       const form = new FormData();
-      const { format: detectedFormat } = await sharp(buffer).metadata();
-      const uploadMime = detectedFormat === "jpeg" ? "image/jpeg"
-        : detectedFormat === "webp" ? "image/webp"
-        : "image/png";
-      const uploadFilename = detectedFormat === "jpeg" ? "image.jpg"
-        : detectedFormat === "webp" ? "image.webp"
-        : "image.png";
-      form.append("image_file", buffer, { filename: uploadFilename, contentType: uploadMime });
+      // Always convert to PNG before upload: Poof reliably supports PNG, and
+      // sending WebP/unknown formats can cause Poof to return transparent output.
+      const uploadBuffer = await sharp(buffer).ensureAlpha().png().toBuffer();
+      form.append("image_file", uploadBuffer, { filename: "image.png", contentType: "image/png" });
       Object.entries(baseParams()).forEach(([k, v]) => form.append(k, v));
       if (o?.poofType === "product") {
         form.append("type", "product");
