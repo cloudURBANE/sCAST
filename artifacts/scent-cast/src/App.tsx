@@ -946,21 +946,23 @@ export default function App() {
             </div>
           </div>
 
-          <div className="scent-marquee-band w-full overflow-hidden py-4 flex select-none relative">
-            <div className="flex animate-infinite-scroll gap-20 text-[11px] uppercase tracking-[0.48em] font-serif italic whitespace-nowrap scent-marquee-text">
-              {[...Array(4)].map((_, i) => (
-                <span key={i} className="flex items-center gap-20">
-                  {tickerPhrases.map((phrase, j) => (
-                    <React.Fragment key={j}>
-                      <span>{phrase}</span>
-                      <span className="text-scent-accent/35">•</span>
-                    </React.Fragment>
-                  ))}
-                </span>
-              ))}
+          <div className="relative left-1/2 right-1/2 w-screen -translate-x-1/2">
+            <div className="scent-marquee-band w-full overflow-hidden py-4 flex select-none relative">
+              <div className="flex animate-infinite-scroll gap-20 text-[11px] uppercase tracking-[0.48em] font-serif italic whitespace-nowrap scent-marquee-text">
+                {[...Array(4)].map((_, i) => (
+                  <span key={i} className="flex items-center gap-20">
+                    {tickerPhrases.map((phrase, j) => (
+                      <React.Fragment key={j}>
+                        <span>{phrase}</span>
+                        <span className="text-scent-accent/35">•</span>
+                      </React.Fragment>
+                    ))}
+                  </span>
+                ))}
+              </div>
+              <div className="absolute inset-y-0 left-0 w-28 bg-gradient-to-r from-scent-bg to-transparent z-10" />
+              <div className="absolute inset-y-0 right-0 w-28 bg-gradient-to-l from-scent-bg to-transparent z-10" />
             </div>
-            <div className="absolute inset-y-0 left-0 w-28 bg-gradient-to-r from-scent-bg to-transparent z-10" />
-            <div className="absolute inset-y-0 right-0 w-28 bg-gradient-to-l from-scent-bg to-transparent z-10" />
           </div>
 
           <section className="scent-hero-zone mx-auto w-full max-w-2xl space-y-7 text-center">
