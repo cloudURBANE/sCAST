@@ -112,7 +112,11 @@ export const FragranceCapture: React.FC<{ onAdd?: (item: any) => void }> = ({ on
       });
       
       if (!res.ok) {
-        throw new Error(await apiErrorMessage(res, `Search failed: HTTP ${res.status}`));
+        const fallback =
+          res.status === 422
+            ? "Search only supports fragrance names. Try 'Brand + Fragrance' (for example: Dior Sauvage)."
+            : `Search failed: HTTP ${res.status}`;
+        throw new Error(await apiErrorMessage(res, fallback));
       }
       
       const profileData = await res.json();

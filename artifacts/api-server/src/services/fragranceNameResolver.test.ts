@@ -63,6 +63,8 @@ test("resolves typed search query while ignoring image-search filler words", () 
 
 test("external search is fragrance-gated", () => {
   assert.equal(shouldSearchExternalFragranceSources("running shoes"), false);
+  assert.equal(shouldSearchExternalFragranceSources("blue jeans"), false);
+  assert.equal(shouldSearchExternalFragranceSources("versace blue jeans"), true);
   assert.equal(shouldSearchExternalFragranceSources("moon water perfume"), true);
   assert.equal(shouldSearchExternalFragranceSources("French Avenue Liquid Brun"), true);
   assert.equal(shouldSearchExternalFragranceSources("sauvaj dior"), true);

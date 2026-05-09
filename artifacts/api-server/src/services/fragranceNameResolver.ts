@@ -64,6 +64,13 @@ const FRAGRANCE_INTENT_WORDS = new Set([
   "extrait",
 ]);
 const DATASET = fragrancesRaw as FragranceData[];
+const KNOWN_FRAGRANCE_BRAND_TOKENS = new Set(
+  DATASET.flatMap((item) =>
+    compactRaw(item.brand)
+      .split(" ")
+      .filter((word) => word.length >= 3),
+  ),
+);
 const RETAIL_NOISE_PATTERN =
   /\b(?:\d+(?:\.\d+)?\s*(?:m\s*l|ml|millilitre|milliliter|millilitres|milliliters|fl\.?\s*oz\.?|oz\.?|ounces?)|spray|natural\s+spray|vaporisateur|tester|sample|travel\s+size|mini|bottle|boxed|sealed|new\s+in\s+box|nib|refillable|refill|eau\s+de\s+parfum|eau\s+de\s+toilette|eau\s+de\s+cologne|extrait\s+de\s+parfum|edp|edt|edc)\b/i;
 const FRAGRANCE_INTENT_PATTERN =
@@ -343,8 +350,13 @@ export function hasMeaningfulFragranceQuery(query: string): boolean {
 }
 
 function looksLikeNamedFragranceQuery(query: string): boolean {
-  if (NON_FRAGRANCE_CATEGORY_PATTERN.test(query)) return false;
+  if (NON_FRAGRANCE_CATEGORY_PATTERN.test(query) && !hasKnownFragranceBrandSignal(query)) return false;
   return meaningfulQueryTokens(query).length >= 2;
+}
+
+function hasKnownFragranceBrandSignal(query: string): boolean {
+  const queryWords = meaningfulQueryTokens(query);
+  return queryWords.some((word) => KNOWN_FRAGRANCE_BRAND_TOKENS.has(word));
 }
 
 export function scoreFragranceCandidate(
