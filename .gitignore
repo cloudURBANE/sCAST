@@ -54,3 +54,9 @@ Thumbs.db
 .env.*
 !.env.example
 ScentCast.env
+
+# Local Supabase DB dumps (large; may contain sensitive data)
+supabase-clean-backup-*/
+
+# Supabase CLI local metadata (linked project, versions)
+supabase/.temp/
