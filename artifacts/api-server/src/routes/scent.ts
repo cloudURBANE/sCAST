@@ -328,6 +328,9 @@ router.post("/refresh-image", async (req, res) => {
         storagePath: processed.storagePath,
         imageHash: processed.imageHash,
         cached: processed.cached,
+        backgroundRemoved: processed.backgroundRemoved,
+        removeBgStatus: processed.removeBgStatus ?? (processed.backgroundRemoved ? "removed" : "fallback"),
+        removeBgReason: processed.removeBgReason ?? (processed.backgroundRemoved ? "removed" : "local_trim_fallback"),
       });
       return;
     }
@@ -415,6 +418,9 @@ router.post("/refresh-image", async (req, res) => {
       storagePath: processed.storagePath,
       imageHash: processed.imageHash,
       cached: processed.cached,
+      backgroundRemoved: processed.backgroundRemoved,
+      removeBgStatus: processed.removeBgStatus ?? (processed.backgroundRemoved ? "removed" : "fallback"),
+      removeBgReason: processed.removeBgReason ?? (processed.backgroundRemoved ? "removed" : "local_trim_fallback"),
     });
   } catch (err: any) {
     logger.error({ err: err.message }, "refresh-image failed");

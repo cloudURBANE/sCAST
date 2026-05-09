@@ -159,6 +159,7 @@ export const Wardrobe: React.FC<{
   
   const [refreshingId, setRefreshingId] = React.useState<string | null>(null);
   const [refreshError, setRefreshError] = React.useState<string | null>(null);
+  const [bgFallbackWarning, setBgFallbackWarning] = React.useState<string | null>(null);
   const [refreshCounts, setRefreshCounts] = React.useState<Record<string, number>>(() => {
     if (typeof sessionStorage === 'undefined') return {};
     try {
@@ -255,6 +256,7 @@ export const Wardrobe: React.FC<{
 
     setRefreshingId(item.id);
     setRefreshError(null);
+    setBgFallbackWarning(null);
     try {
       const res = await fetch(REFRESH_IMAGE_ENDPOINT, {
         method: 'POST',
@@ -270,6 +272,9 @@ export const Wardrobe: React.FC<{
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || 'Refresh failed');
       setPendingPreview({ itemId: item.id, url: data.imageUrl });
+      if (data.backgroundRemoved === false) {
+        setBgFallbackWarning('Image saved, but background removal used a fallback. Try again later if you need a cleaner cutout.');
+      }
     } catch (err: any) {
       setRefreshError(err.message || 'Image refresh failed');
     } finally {
@@ -286,6 +291,7 @@ export const Wardrobe: React.FC<{
     }
     setStripBgBusy(true);
     setRefreshError(null);
+    setBgFallbackWarning(null);
     try {
       const res = await fetch(REFRESH_IMAGE_ENDPOINT, {
         method: 'POST',
@@ -302,6 +308,9 @@ export const Wardrobe: React.FC<{
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || 'Background removal failed');
       setPendingPreview({ itemId: item.id, url: data.imageUrl });
+      if (data.backgroundRemoved === false) {
+        setBgFallbackWarning('Image saved, but background removal used a fallback. Try again later if you need a cleaner cutout.');
+      }
     } catch (err: any) {
       setRefreshError(err.message || 'Background removal failed');
     } finally {
@@ -808,6 +817,9 @@ export const Wardrobe: React.FC<{
               >
                 {refreshError && (
                   <p className="text-[9px] text-red-400/80 text-center leading-snug px-2 py-1">{refreshError}</p>
+                )}
+                {!refreshError && bgFallbackWarning && (
+                  <p className="text-[9px] text-yellow-400/70 text-center leading-snug px-2 py-1">{bgFallbackWarning}</p>
                 )}
 
                 <div

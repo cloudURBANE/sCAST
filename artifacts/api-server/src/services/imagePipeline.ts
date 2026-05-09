@@ -1,7 +1,7 @@
 import sharp from "sharp";
 import { logger } from "../lib/logger";
 import { makeLookupKey } from "./catalogService";
-import { normalizePackshotBuffer, removeBgBuffer, removeBgToBuffer, type RemoveBgOptions } from "./bgService";
+import { normalizePackshotBuffer, removeBgBuffer, removeBgToBuffer, type RemoveBgOptions, type RemoveBgReason, type RemoveBgStatus } from "./bgService";
 import {
   buildProcessedImageStorageKey,
   getCachedImageStatusBySourceHash,
@@ -44,6 +44,8 @@ type PipelineSource = {
 export type ProcessedImageResult = CachedImageReference & {
   sourceProvider: ImageSourceProvider;
   pipelineVersion: string;
+  removeBgStatus?: RemoveBgStatus;
+  removeBgReason?: RemoveBgReason;
 };
 
 export type ResolveProcessedFragranceImageInput = {
@@ -144,6 +146,8 @@ async function processSourceToWebp(
   sizeBytes: number;
   contentHash: string;
   backgroundRemoved: boolean;
+  removeBgStatus: RemoveBgStatus;
+  removeBgReason: RemoveBgReason;
 }> {
   const processed = removeBackground
     ? source.localObjectPath
@@ -152,6 +156,9 @@ async function processSourceToWebp(
     : await loadSourceWithoutBackgroundRemoval(source).then(async (loaded) => ({
         buffer: await normalizePackshotBuffer(loaded.buffer),
         backgroundRemoved: loaded.backgroundRemoved,
+        contentType: "image/png" as const,
+        removeBgStatus: "fallback" as const,
+        removeBgReason: "local_trim_fallback" as const,
       }));
 
   if (!processed) throw new Error("Image processing failed");
@@ -178,6 +185,8 @@ async function processSourceToWebp(
     sizeBytes: optimized.length,
     contentHash: hashBuffer(optimized),
     backgroundRemoved: processed.backgroundRemoved,
+    removeBgStatus: processed.removeBgStatus,
+    removeBgReason: processed.removeBgReason,
   };
 }
 
@@ -244,7 +253,7 @@ async function processCandidate(input: {
         backgroundRemoved: optimized.backgroundRemoved,
       });
 
-      return { ...recorded, sourceProvider: input.sourceProvider, pipelineVersion: IMAGE_PIPELINE_VERSION };
+      return { ...recorded, sourceProvider: input.sourceProvider, pipelineVersion: IMAGE_PIPELINE_VERSION, removeBgStatus: optimized.removeBgStatus, removeBgReason: optimized.removeBgReason };
     } catch (err: any) {
       if (err instanceof ImageObjectStorageConfigurationError) throw err;
       const reason = err?.message ?? "image processing failed";

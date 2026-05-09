@@ -88,13 +88,36 @@ function baseParams() {
   };
 }
 
+export type RemoveBgStatus = "removed" | "fallback" | "skipped";
+
+export type RemoveBgReason =
+  | "removed"
+  | "missing_api_key"
+  | "poof_unauthorized"
+  | "poof_rate_limited"
+  | "poof_payload_too_large"
+  | "poof_non_200"
+  | "poof_server_error"
+  | "local_trim_fallback";
+
 export type RemoveBgOptions = {
   /** Poof API removal preset when supported (e.g. product vs auto). */
   poofType?: "auto" | "product";
 };
 
-async function removeBgByFile(buffer: Buffer, apiKey: string, opts?: RemoveBgOptions): Promise<Buffer | null> {
-  const post = async (o?: RemoveBgOptions): Promise<Buffer | null> => {
+type PoofAttemptResult =
+  | { ok: true; buffer: Buffer }
+  | { ok: false; reason: RemoveBgReason; status?: number };
+
+function mapPoofStatusToReason(status: number): RemoveBgReason {
+  if (status === 401 || status === 403) return "poof_unauthorized";
+  if (status === 429) return "poof_rate_limited";
+  if (status === 413) return "poof_payload_too_large";
+  return "poof_non_200";
+}
+
+async function removeBgByFile(buffer: Buffer, apiKey: string, opts?: RemoveBgOptions): Promise<PoofAttemptResult> {
+  const post = async (o?: RemoveBgOptions): Promise<PoofAttemptResult> => {
     try {
       const FormData = (await import("form-data")).default;
       const form = new FormData();
@@ -111,15 +134,22 @@ async function removeBgByFile(buffer: Buffer, apiKey: string, opts?: RemoveBgOpt
         validateStatus: (s) => s < 500,
       });
 
-      return res.status === 200 ? Buffer.from(res.data) : null;
-    } catch {
-      return null;
+      if (res.status === 200) {
+        return { ok: true, buffer: Buffer.from(res.data) };
+      }
+
+      const reason = mapPoofStatusToReason(res.status);
+      logger.warn({ status: res.status, reason, poofType: o?.poofType ?? null }, "[bgService] Poof background removal returned non-200");
+      return { ok: false, reason, status: res.status };
+    } catch (error) {
+      logger.warn({ reason: "poof_server_error", poofType: o?.poofType ?? null, message: error instanceof Error ? error.message : String(error) }, "[bgService] Poof background removal failed");
+      return { ok: false, reason: "poof_server_error" };
     }
   };
 
   if (opts?.poofType === "product") {
     const withType = await post(opts);
-    if (withType) return withType;
+    if (withType.ok) return withType;
     logger.warn("[bgService] Poof type=product failed or non-200; retrying without type");
   }
   return post(undefined);
@@ -150,6 +180,8 @@ export type RemoveBgBufferResult = {
   buffer: Buffer;
   contentType: "image/png";
   backgroundRemoved: boolean;
+  removeBgStatus: RemoveBgStatus;
+  removeBgReason: RemoveBgReason;
 };
 
 export async function removeBgBuffer(
@@ -159,17 +191,17 @@ export async function removeBgBuffer(
   const apiKey = process.env.REMOVE_BG_API_KEY;
   if (!apiKey) {
     const normalized = await trimWhiteAndNormalize(rawInput);
-    return { buffer: normalized, contentType: "image/png", backgroundRemoved: false };
+    return { buffer: normalized, contentType: "image/png", backgroundRemoved: false, removeBgStatus: "skipped", removeBgReason: "missing_api_key" };
   }
 
   const result = await removeBgByFile(rawInput, apiKey, opts);
-  if (result) {
-    const padded = await normalizeToBottleArtwork(result);
-    return { buffer: padded, contentType: "image/png", backgroundRemoved: true };
+  if (result.ok) {
+    const padded = await normalizeToBottleArtwork(result.buffer);
+    return { buffer: padded, contentType: "image/png", backgroundRemoved: true, removeBgStatus: "removed", removeBgReason: "removed" };
   }
 
   const normalized = await trimWhiteAndNormalize(rawInput);
-  return { buffer: normalized, contentType: "image/png", backgroundRemoved: false };
+  return { buffer: normalized, contentType: "image/png", backgroundRemoved: false, removeBgStatus: "fallback", removeBgReason: result.reason };
 }
 
 export async function removeBgToBuffer(
