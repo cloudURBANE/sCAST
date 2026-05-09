@@ -1,7 +1,7 @@
 import sharp from "sharp";
 import { logger } from "../lib/logger";
 import { makeLookupKey } from "./catalogService";
-import { normalizePackshotBuffer, removeBgBuffer, removeBgToBuffer, type RemoveBgOptions, type RemoveBgReason, type RemoveBgStatus } from "./bgService";
+import { removeBgBuffer, removeBgToBuffer, type RemoveBgOptions, type RemoveBgReason, type RemoveBgStatus } from "./bgService";
 import {
   buildProcessedImageStorageKey,
   getCachedImageStatusBySourceHash,
@@ -157,11 +157,15 @@ async function processSourceToWebp(
     ? source.localObjectPath
       ? await removeBgBuffer(await readLocalImageObject(source.localObjectPath), poofOptions)
       : await removeBgToBuffer(source.sourceUrlForProcessing, source.isRemote, poofOptions)
-    : await loadSourceWithoutBackgroundRemoval(source).then(async (loaded) => ({
-        buffer: await normalizePackshotBuffer(loaded.buffer),
+    : await loadSourceWithoutBackgroundRemoval(source).then((loaded) => ({
+        // Non-BG path: hand the raw fetched buffer directly to the Sharp finalization
+        // chain below. Do NOT call normalizePackshotBuffer here — it pre-resizes and
+        // bakes in transparent padding gutters, which then get re-resized by Sharp
+        // (double-resize) and waste the 768px output budget on empty space.
+        buffer: loaded.buffer,
         backgroundRemoved: loaded.backgroundRemoved,
         contentType: "image/png" as const,
-        removeBgStatus: "fallback" as const,
+        removeBgStatus: "skipped" as const,
         removeBgReason: "local_trim_fallback" as const,
       }));
 
