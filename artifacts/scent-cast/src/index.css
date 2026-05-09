@@ -292,6 +292,12 @@ body {
   background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.72), rgba(0, 0, 0, 0.36) 42%, transparent 72%);
 }
 
+.scent-full-bleed {
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+}
+
 .scent-atmosphere-strip {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));

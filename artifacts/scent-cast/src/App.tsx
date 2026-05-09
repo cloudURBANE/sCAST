@@ -946,7 +946,7 @@ export default function App() {
             </div>
           </div>
 
-          <div className="relative left-1/2 right-1/2 w-screen -translate-x-1/2">
+          <div className="scent-full-bleed">
             <div className="scent-marquee-band w-full overflow-hidden py-4 flex select-none relative">
               <div className="flex animate-infinite-scroll gap-20 text-[11px] uppercase tracking-[0.48em] font-serif italic whitespace-nowrap scent-marquee-text">
                 {[...Array(4)].map((_, i) => (
@@ -982,7 +982,7 @@ export default function App() {
             </button>
           </section>
 
-          <div className="relative left-1/2 right-1/2 w-screen -translate-x-1/2">
+          <div className="scent-full-bleed">
             <AtmosphereBar weather={weather} weatherLoading={weatherLoading} />
           </div>
 
