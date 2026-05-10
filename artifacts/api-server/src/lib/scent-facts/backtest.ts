@@ -4,25 +4,11 @@ import { getScentFacts } from "./engine";
 const CASES = [
   {
     fragranceName: "Creed Aventus",
-    mustIncludeAny: [
-      "pineapple",
-      "bergamot",
-      "black currant",
-      "birch",
-      "musk",
-      "oakmoss",
-    ],
+    mustIncludeAny: ["pineapple", "bergamot", "black currant", "birch", "musk", "oakmoss"],
   },
   {
     fragranceName: "Dior Sauvage Elixir",
-    mustIncludeAny: [
-      "cinnamon",
-      "nutmeg",
-      "cardamom",
-      "lavender",
-      "licorice",
-      "sandalwood",
-    ],
+    mustIncludeAny: ["cinnamon", "nutmeg", "cardamom", "lavender", "licorice", "sandalwood"],
   },
   {
     fragranceName: "Tom Ford Tobacco Vanille",
@@ -66,11 +52,16 @@ async function main() {
         ok: true,
         duration_ms: Date.now() - startedAt,
         readable_sources: result.proof.readable_sources,
+        source_domains: result.proof.source_summary.map((s) => s.domain),
+        source_classes: result.proof.source_summary.map((s) => s.source_class),
         confidence_score: result.profile.confidence_score,
+        confidence_reason: result.proof.confidence_reason,
         matched_expected_notes: matched,
         matched_count: matched.length,
+        note_evidence: result.proof.note_evidence,
         warnings: result.proof.warnings,
         unsupported_removed: result.proof.unsupported_notes_removed,
+        provisional: result.provisional ?? false,
       });
     } catch (error) {
       results.push({

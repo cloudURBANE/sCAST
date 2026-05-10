@@ -12,10 +12,13 @@ export async function getScentFacts(input: ScentFactInput): Promise<ScentFactRes
     throw new Error("This lightweight engine is read-only. Save must remain false.");
   }
 
-  const urls =
-    input.sourceUrl && isHttpUrl(input.sourceUrl)
-      ? [input.sourceUrl]
-      : await searchScentSources(fragranceName);
+  const callerProvidedUrl =
+    typeof input.sourceUrl === "string" && isHttpUrl(input.sourceUrl);
+
+  const urls = callerProvidedUrl
+    ? [input.sourceUrl as string]
+    : await searchScentSources(fragranceName);
+
   if (!urls.length) {
     throw new Error("No trusted scent sources found.");
   }
@@ -28,8 +31,12 @@ export async function getScentFacts(input: ScentFactInput): Promise<ScentFactRes
   const extracted = await extractScentFacts(fragranceName, sources);
   const checked = factCheckProfile(extracted, sources);
 
+  // Single-URL calls with only one readable source are provisional
+  const provisional = callerProvidedUrl && sources.length === 1;
+
   return {
     ok: true,
+    ...(provisional && { provisional: true }),
     profile: checked.profile,
     proof: checked.proof,
   };
