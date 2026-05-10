@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import axios from 'axios';
 import { FragranceCapture } from './components/FragranceCapture';
 import { Wardrobe, Fragrance, DestinationType, EnergyState } from './components/Wardrobe';
-import { Wind, Play, X, LogOut, Share2, ChevronDown } from 'lucide-react';
+import { Wind, Play, X, LogOut, Share2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ScentIntentModal } from './components/ScentIntentModal';
 import { LavaBackground } from './components/LavaBackground';
@@ -862,18 +862,7 @@ export default function App() {
       <nav className="scent-topbar fixed top-0 left-0 right-0 h-16 sm:h-[72px] z-50 px-3 sm:px-8">
         <div className="max-w-[1760px] mx-auto h-full flex items-center relative">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            {authEmail ? (
-              <div className="scent-account-pill h-10 sm:h-11 rounded-full pl-1.5 pr-3 sm:pr-4 flex items-center gap-3 min-w-0">
-                <div className="relative flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-full border border-scent-accent/45 bg-black/60 text-sm font-bold text-white">
-                  {authEmail.trim().charAt(0).toUpperCase() || 'S'}
-                  <span className={`absolute -right-0.5 bottom-0 h-2.5 w-2.5 rounded-full border border-black ${locationStatus === 'granted' ? 'bg-emerald-400' : locationStatus === 'requesting' ? 'bg-yellow-400 animate-pulse' : locationStatus === 'denied' ? 'bg-red-400' : 'bg-scent-accent/45'}`} />
-                </div>
-                <span className="hidden max-w-[180px] lg:max-w-[240px] truncate text-sm text-[#f4debd]/86 md:block">
-                  {authEmail}
-                </span>
-                <ChevronDown size={16} strokeWidth={1.5} className="hidden text-scent-accent/65 md:block" />
-              </div>
-            ) : (
+            {!authEmail ? (
               <button
                 onClick={() => setIsAuthModalOpen(true)}
                 title="Sign In"
@@ -881,15 +870,7 @@ export default function App() {
               >
                 Sign In
               </button>
-            )}
-            <button
-              onClick={requestLocation}
-              disabled={locationStatus === 'requesting' || locationStatus === 'granted'}
-              title={locationStatus === 'granted' ? 'Location Active' : locationStatus === 'denied' ? 'Location Denied' : 'Sync Location'}
-              className="scent-icon-button hidden md:flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 rounded-full transition-all disabled:cursor-default"
-            >
-              <span className={`w-2 h-2 rounded-full ${locationStatus === 'granted' ? 'bg-green-400' : locationStatus === 'requesting' ? 'bg-yellow-400 animate-pulse' : locationStatus === 'denied' ? 'bg-red-400' : 'bg-white/20'}`} />
-            </button>
+            ) : null}
           </div>
 
           <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 sm:gap-3 pointer-events-none">
