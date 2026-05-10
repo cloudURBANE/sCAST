@@ -164,8 +164,13 @@ function scoreCandidate(candidate: SerperImageResult): number {
   if (hasBottleSignal) score += 4;
   if (trustedHost) score += 5;
   score += Math.min(5, strongDetailMatches);
-  if (/\.png(\?.*)?$/i.test(imageUrl)) score += 1;
-  if (width && height) score += Math.min(4, Math.floor(Math.min(width, height) / 400));
+  if (/\.png(\?.*)?$/i.test(imageUrl)) score += 2;
+  if (width && height) {
+    score += Math.min(4, Math.floor(Math.min(width, height) / 400));
+  } else {
+    // Missing Serper dimension metadata — soft penalty rather than silent pass.
+    score -= 2;
+  }
 
   return score;
 }

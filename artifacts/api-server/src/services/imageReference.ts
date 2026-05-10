@@ -24,6 +24,14 @@ function safeImageUrlForResponse(value: unknown): string {
   return trimmed;
 }
 
+function envFlagEnabled(value: string | undefined): boolean {
+  return value?.trim().toLowerCase() === "true";
+}
+
+function isLocalImageObjectUrlPersistable(): boolean {
+  return envFlagEnabled(process.env.IMAGE_ALLOW_LOCAL_OBJECT_STORAGE) && process.env.NODE_ENV !== "production";
+}
+
 function assertSafeStorageKey(key: string): void {
   if (!key || key.startsWith("/") || key.includes("\\") || key.includes("..")) {
     throw new Error("Unsafe image storage key");
@@ -63,8 +71,9 @@ export async function usableImageUrlForResponse(value: unknown): Promise<string 
   if (!url) return null;
 
   const localStoragePath = storagePathFromLocalImageObjectUrl(url);
-  if (localStoragePath && !(await localImageObjectExists(localStoragePath))) {
-    return null;
+  if (localStoragePath) {
+    if (!isLocalImageObjectUrlPersistable()) return null;
+    if (!(await localImageObjectExists(localStoragePath))) return null;
   }
 
   return url;
@@ -78,7 +87,9 @@ export function savedImageUrlForResponse(value: unknown): string | null {
 export async function persistableImageReference(value: unknown): Promise<string | null> {
   const url = await usableImageUrlForResponse(value);
   if (!url) return null;
-  if (url.startsWith("/api/image-objects/")) return url;
+  if (url.startsWith("/api/image-objects/")) {
+    return isLocalImageObjectUrlPersistable() ? url : null;
+  }
   if (/^https?:\/\//i.test(url)) return url;
   return null;
 }

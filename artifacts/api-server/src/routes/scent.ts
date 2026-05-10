@@ -68,14 +68,31 @@ function parseIncomingImageUrl(raw: unknown): string | null {
   return null;
 }
 
-async function upsertRefreshImageCatalog(brand: string, name: string, finalImageUrl: string): Promise<void> {
+type RefreshImageCatalogMetadata = {
+  imageUrl: string;
+  storagePath?: string;
+  imageHash?: string | null;
+  storageProvider?: string;
+};
+
+async function upsertRefreshImageCatalog(
+  brand: string,
+  name: string,
+  image: RefreshImageCatalogMetadata,
+): Promise<void> {
   let baseProfile = await getCatalogEntry(brand, name);
   if (!baseProfile) {
     const built = await buildProfile(name, brand, undefined, { allowCatalogFuzzy: false });
     if ("product" in built) baseProfile = built;
   }
   if (baseProfile) {
-    await saveCatalogEntry(brand, name, { ...baseProfile, imageUrl: finalImageUrl });
+    await saveCatalogEntry(brand, name, {
+      ...baseProfile,
+      imageUrl: image.imageUrl,
+      storagePath: image.storagePath,
+      imageHash: image.imageHash ?? null,
+      storageProvider: image.storageProvider,
+    });
   }
 }
 
@@ -197,12 +214,15 @@ router.post("/search-scent", async (req, res) => {
       pyramid: first.pyramid,
       perfumer: first.perfumer,
     });
-    res.json(profile);
+    res.json("product" in profile ? flattenProfile(profile) : profile);
     return;
   }
 
   if (!shouldSearchExternalFragranceSources(queryWithHint)) {
-    res.status(422).json({ error: "Search only supports fragrance, perfume, or cologne names." });
+    res.status(422).json({
+      error:
+        "Search only supports fragrance, perfume, or cologne names. Try the brand plus fragrance name, or add 'perfume' for a newer scent.",
+    });
     return;
   }
 
@@ -214,7 +234,7 @@ router.post("/search-scent", async (req, res) => {
     pyramid: scraped.pyramid,
     perfumer: scraped.perfumer,
   });
-  res.json(profile);
+  res.json("product" in profile ? flattenProfile(profile) : profile);
 });
 
 router.post("/refresh-image", async (req, res) => {
@@ -264,10 +284,12 @@ router.post("/refresh-image", async (req, res) => {
   try {
     if (stripBgOnly && sourceForStrip) {
       const skipBgStrip = typeof body.skipBg === "boolean" ? body.skipBg : false;
+      // Default for stripBgOnly: do NOT force Poof `product` mode. Product mode
+      // tends to preserve the retail/product white rectangle behind the bottle.
+      // Only opt in when the caller passes `poofOptions.type === "product"`.
       let poofT: "auto" | "product" | undefined;
       const ptStrip = body.poofOptions?.type;
       if (ptStrip === "product" || ptStrip === "auto") poofT = ptStrip;
-      if (poofT === undefined) poofT = "product";
       const stripRemoveOpts = poofT === "product" ? ({ poofType: "product" } as const) : undefined;
 
       logger.info(
@@ -297,12 +319,22 @@ router.post("/refresh-image", async (req, res) => {
       }
 
       const finalImageUrl = processed.imageUrl;
-      await upsertRefreshImageCatalog(imageBrand, imageName, finalImageUrl);
+      if (skipBgStrip || processed.backgroundRemoved) {
+        await upsertRefreshImageCatalog(imageBrand, imageName, {
+          imageUrl: finalImageUrl,
+          storagePath: processed.storagePath,
+          imageHash: processed.imageHash,
+          storageProvider: processed.storageProvider,
+        });
+      }
       res.json({
         imageUrl: finalImageUrl,
         storagePath: processed.storagePath,
         imageHash: processed.imageHash,
         cached: processed.cached,
+        backgroundRemoved: processed.backgroundRemoved,
+        removeBgStatus: processed.removeBgStatus ?? (processed.backgroundRemoved ? "removed" : "fallback"),
+        removeBgReason: processed.removeBgReason ?? (processed.backgroundRemoved ? "removed" : "local_trim_fallback"),
       });
       return;
     }
@@ -330,7 +362,14 @@ router.post("/refresh-image", async (req, res) => {
       return;
     }
 
-    let poofType = solverWantsPoofProductType(solverId);
+    // Default for normal refresh: do NOT force Poof `product` mode. Product mode
+    // tends to preserve the retail/product white rectangle behind the bottle and
+    // return HTTP 200, which the pipeline then mistakes for a clean removal.
+    // Product mode is still applied when:
+    //   - the solver explicitly requests it (transparent_glass, hand_interference)
+    //   - the caller passes `poofOptions.type === "product"` explicitly
+    //   - the stripBgOnly branch (handled separately above)
+    let poofType: "auto" | "product" | undefined = solverWantsPoofProductType(solverId);
     const pt = body.poofOptions?.type;
     if (pt === "product" || pt === "auto") poofType = pt;
 
@@ -378,13 +417,23 @@ router.post("/refresh-image", async (req, res) => {
     }
 
     const finalImageUrl = processed.imageUrl;
-    await upsertRefreshImageCatalog(imageBrand, imageName, finalImageUrl);
+    if (skipBg || processed.backgroundRemoved) {
+      await upsertRefreshImageCatalog(imageBrand, imageName, {
+        imageUrl: finalImageUrl,
+        storagePath: processed.storagePath,
+        imageHash: processed.imageHash,
+        storageProvider: processed.storageProvider,
+      });
+    }
 
     res.json({
       imageUrl: finalImageUrl,
       storagePath: processed.storagePath,
       imageHash: processed.imageHash,
       cached: processed.cached,
+      backgroundRemoved: processed.backgroundRemoved,
+      removeBgStatus: processed.removeBgStatus ?? (processed.backgroundRemoved ? "removed" : "fallback"),
+      removeBgReason: processed.removeBgReason ?? (processed.backgroundRemoved ? "removed" : "local_trim_fallback"),
     });
   } catch (err: any) {
     logger.error({ err: err.message }, "refresh-image failed");

@@ -139,18 +139,20 @@ router.post("/wardrobe/rebuild", async (req, res) => {
       }
 
       const flat = flattenProfile(profile);
+      const rebuiltName = typeof flat.name === "string" && flat.name.trim() ? flat.name : name;
+      const rebuiltBrand = typeof flat.brand === "string" && flat.brand.trim() ? flat.brand : brand;
       const flatImageUrl = typeof flat.imageUrl === "string" ? flat.imageUrl : "";
       const merged = sanitizeFragrance({
         ...data,
         ...flat,
         // Persist the normalized identity so legacy retail-size suffixes do
         // not keep leaking back into the vault after rebuild.
-        name,
-        brand,
+        name: rebuiltName,
+        brand: rebuiltBrand,
         product: {
           ...(typeof flat.product === "object" && flat.product ? flat.product : {}),
-          name,
-          brand,
+          name: rebuiltName,
+          brand: rebuiltBrand,
         },
         // Don't overwrite a real stored URL with an empty one if the rebuild
         // didn't manage to resolve a fresh image (e.g. metadata/object cache miss).
@@ -180,10 +182,9 @@ router.post("/wardrobe/rebuild", async (req, res) => {
 
 /**
  * Resolve a wardrobe row owned by `userId`. Prefers the DB primary key
- * (the canonical, unique `_dbId` the GET response surfaces). Falls back
- * to matching `fragrance_data.id` only when the param doesn't look like
- * a UUID, so legacy clients that still send the `Math.random()`-based id
- * keep working but the DB UUID is always tried first (B9).
+ * (the canonical, unique `_dbId` the GET response surfaces). If no DB row
+ * has that UUID, falls back to `fragrance_data.id` so optimistic client rows
+ * with UUID-shaped local IDs still work before the next GET refresh.
  */
 function isUuidish(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);

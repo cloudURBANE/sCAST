@@ -3,14 +3,9 @@ import { db } from "@workspace/db";
 import { usersTable, userFragrancesTable, userSettingsTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { hydrateImageUrl, normalizeFragrance } from "../services/fragrancePayload";
+import { resolveShareUserFromList, shareIdForUser } from "../services/shareIdentity";
 
 const router = Router();
-
-function debugLog(location: string, message: string, hypothesisId: string, data: Record<string, unknown>) {
-  // #region agent log
-  fetch('http://127.0.0.1:7745/ingest/484c0150-587d-4568-9bd7-b30ce5dec585',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'db2024'},body:JSON.stringify({sessionId:'db2024',runId:'baseline-share-access',hypothesisId,location,message,data,timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
-}
 
 function getToken(req: any): string | null {
   const auth = req.headers["authorization"] as string | undefined;
@@ -18,29 +13,14 @@ function getToken(req: any): string | null {
   return null;
 }
 
-function isUuidish(value: string): boolean {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
-}
-
-function shareHandleFromEmail(email: string): string {
-  const local = email.split("@")[0] ?? "";
-  const normalized = local.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-  return normalized || "user";
-}
-
 async function resolveShareUser(userRef: string) {
-  if (isUuidish(userRef)) {
-    const rows = await db.select().from(usersTable).where(eq(usersTable.id, userRef)).limit(1);
-    if (rows[0]) return rows[0];
-  }
-
-  const cleanRef = userRef.trim().toLowerCase().replace(/^@+/, "");
-  if (!cleanRef) return null;
   const users = await db.select().from(usersTable);
-  return (
-    users.find((u) => shareHandleFromEmail(u.email) === cleanRef) ??
-    null
-  );
+  return resolveShareUserFromList(userRef, users);
+}
+
+async function getShareIdForUser(user: typeof usersTable.$inferSelect): Promise<string> {
+  const users = await db.select().from(usersTable);
+  return shareIdForUser(user, users);
 }
 
 async function getUserByToken(token: string) {
@@ -63,18 +43,25 @@ async function getOrCreateSettings(userId: string) {
   const [created] = await db
     .insert(userSettingsTable)
     .values({ userId })
+    .onConflictDoNothing({ target: userSettingsTable.userId })
     .returning();
-  return created;
+  if (created) return created;
+
+  const retry = await db
+    .select()
+    .from(userSettingsTable)
+    .where(eq(userSettingsTable.userId, userId))
+    .limit(1);
+  if (retry[0]) return retry[0];
+  throw new Error("Failed to create share settings");
 }
 
 router.get("/share/:userRef", async (req, res) => {
   const { userRef } = req.params;
-  debugLog("routes/share.ts:47", "share route entry", "H1", { userRef });
 
   const user = await resolveShareUser(userRef);
 
   if (!user) {
-    debugLog("routes/share.ts:57", "share user missing", "H1", { userRef });
     res.status(404).json({ error: "Vault not found" });
     return;
   }
@@ -87,15 +74,6 @@ router.get("/share/:userRef", async (req, res) => {
   const visibleFragranceRows = fragranceRows
     .map(r => ({ rowId: r.id, data: r.fragranceData as Record<string, any> }))
     .filter(({ data }) => !data.shareHidden);
-  const rawFragrances = visibleFragranceRows.map(({ data }) => data);
-  debugLog("routes/share.ts:71", "raw fragrances prepared", "H2", {
-    userRef,
-    userId: user.id,
-    totalRows: fragranceRows.length,
-    visibleRows: rawFragrances.length,
-    missingTopLevelName: rawFragrances.filter((f) => !f?.name).length,
-    missingTopLevelBrand: rawFragrances.filter((f) => !f?.brand).length,
-  });
 
   const fragrances: Record<string, any>[] = await Promise.all(
     visibleFragranceRows.map(async ({ rowId, data: raw }) => {
@@ -105,14 +83,6 @@ router.get("/share/:userRef", async (req, res) => {
       return { ...(frag as Record<string, any>), _dbId: rowId };
     })
   );
-  debugLog("routes/share.ts:98", "share payload finalized", "H3", {
-    userRef,
-    userId: user.id,
-    hideImages: settings.shareHideImages,
-    totalVisibleFragrances: fragrances.length,
-    withImageUrl: fragrances.filter((f) => typeof f?.imageUrl === "string" && f.imageUrl.trim().length > 0).length,
-    withoutImageUrl: fragrances.filter((f) => !(typeof f?.imageUrl === "string" && f.imageUrl.trim().length > 0)).length,
-  });
 
   res.json({ fragrances, hideImages: settings.shareHideImages, shareUserId: user.id });
 });
@@ -125,9 +95,10 @@ router.get("/share-settings", async (req, res) => {
   if (!user) { res.status(401).json({ error: "Invalid token" }); return; }
 
   const settings = await getOrCreateSettings(user.id);
+  const shareId = await getShareIdForUser(user);
   res.json({
     userId: user.id,
-    shareId: `@${shareHandleFromEmail(user.email)}`,
+    shareId,
     hideImages: settings.shareHideImages,
   });
 });
@@ -153,9 +124,10 @@ router.post("/share-settings", async (req, res) => {
       set: { shareHideImages: hideImages, updatedAt: new Date() },
     });
 
+  const shareId = await getShareIdForUser(user);
   res.json({
     userId: user.id,
-    shareId: `@${shareHandleFromEmail(user.email)}`,
+    shareId,
     hideImages,
   });
 });

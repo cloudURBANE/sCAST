@@ -27,11 +27,24 @@ export interface ImageObjectStorage {
 }
 
 const DEFAULT_CACHE_CONTROL = "public, max-age=31536000, immutable";
+const STORAGE_NOT_CONFIGURED_MESSAGE =
+  "Image object storage is not configured. Set FIREBASE_STORAGE_BUCKET or SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, and SUPABASE_IMAGE_BUCKET. For local development only, set IMAGE_ALLOW_LOCAL_OBJECT_STORAGE=true.";
 const LOCAL_STORAGE_ROOT = path.resolve(
   process.env.IMAGE_LOCAL_STORAGE_DIR || path.join(process.cwd(), ".image-cache"),
 );
 const runtimeRequire =
   typeof globalThis.require === "function" ? globalThis.require : createRequire(import.meta.url);
+
+export class ImageObjectStorageConfigurationError extends Error {
+  constructor() {
+    super(STORAGE_NOT_CONFIGURED_MESSAGE);
+    this.name = "ImageObjectStorageConfigurationError";
+  }
+}
+
+function envFlagEnabled(value: string | undefined): boolean {
+  return value?.trim().toLowerCase() === "true";
+}
 
 function encodeStoragePath(storagePath: string): string {
   return storagePath.split("/").map(encodeURIComponent).join("/");
@@ -93,8 +106,11 @@ class LocalImageObjectStorage implements ImageObjectStorage {
 
 class FirebaseImageObjectStorage implements ImageObjectStorage {
   readonly provider = "firebase" as const;
+  private readonly bucketName: string;
 
-  constructor(private readonly bucketName: string) {}
+  constructor(bucketName: string) {
+    this.bucketName = bucketName;
+  }
 
   private getBucket(): any {
     const projectId = process.env.FIREBASE_PROJECT_ID;
@@ -165,12 +181,19 @@ class FirebaseImageObjectStorage implements ImageObjectStorage {
 
 class SupabaseImageObjectStorage implements ImageObjectStorage {
   readonly provider = "supabase" as const;
+  private readonly supabaseUrl: string;
+  private readonly serviceRoleKey: string;
+  private readonly bucket: string;
 
   constructor(
-    private readonly supabaseUrl: string,
-    private readonly serviceRoleKey: string,
-    private readonly bucket: string,
-  ) {}
+    supabaseUrl: string,
+    serviceRoleKey: string,
+    bucket: string,
+  ) {
+    this.supabaseUrl = supabaseUrl;
+    this.serviceRoleKey = serviceRoleKey;
+    this.bucket = bucket;
+  }
 
   async uploadProcessedImage(input: UploadProcessedImageInput): Promise<UploadedImageObject> {
     assertSafeStorageKey(input.key);
@@ -230,7 +253,19 @@ export function getImageObjectStorage(): ImageObjectStorage {
     return new SupabaseImageObjectStorage(supabaseUrl, supabaseKey, supabaseBucket);
   }
 
-  return new LocalImageObjectStorage();
+  if (isLocalImageObjectUrlPersistable()) {
+    return new LocalImageObjectStorage();
+  }
+
+  throw new ImageObjectStorageConfigurationError();
+}
+
+export function isLocalImageObjectStorageEnabled(): boolean {
+  return envFlagEnabled(process.env.IMAGE_ALLOW_LOCAL_OBJECT_STORAGE);
+}
+
+export function isLocalImageObjectUrlPersistable(): boolean {
+  return isLocalImageObjectStorageEnabled() && process.env.NODE_ENV !== "production";
 }
 
 export function getLocalImageStorageRoot(): string {

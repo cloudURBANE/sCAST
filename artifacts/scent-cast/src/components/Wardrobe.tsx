@@ -78,6 +78,13 @@ function entryNotes(item: Fragrance): string {
   return pyramidNotes.length > 0 ? pyramidNotes.slice(0, 5).join(" • ") : "Not specified";
 }
 
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)
+  ?.trim()
+  .replace(/\/+$/, "");
+const REFRESH_IMAGE_ENDPOINT = API_BASE_URL
+  ? `${API_BASE_URL}/api/refresh-image`
+  : "/api/refresh-image";
+
 function concentrationHintFromValue(
   value?: string,
 ): "edt" | "edp" | "parfum" | "extrait" | "elixir" | undefined {
@@ -125,6 +132,12 @@ function SuggestionTypingLabel({ text, animate }: { text: string; animate: boole
   );
 }
 
+function withImageVersion(url: string, version?: string | number | null): string {
+  const trimmed = url.trim();
+  const v = version || Date.now();
+  return `${trimmed}${trimmed.includes('?') ? '&' : '?'}v=${encodeURIComponent(String(v))}`;
+}
+
 export const Wardrobe: React.FC<{
   items: Fragrance[];
   onDelete: (item: Fragrance) => void;
@@ -148,9 +161,11 @@ export const Wardrobe: React.FC<{
 }) => {
   const [selectedItem, setSelectedItem] = React.useState<Fragrance | null>(null);
   const [searchQuery, setSearchQuery] = React.useState("");
+  const deferredSearchQuery = React.useDeferredValue(searchQuery);
   
   const [refreshingId, setRefreshingId] = React.useState<string | null>(null);
   const [refreshError, setRefreshError] = React.useState<string | null>(null);
+  const [bgFallbackWarning, setBgFallbackWarning] = React.useState<string | null>(null);
   const [refreshCounts, setRefreshCounts] = React.useState<Record<string, number>>(() => {
     if (typeof sessionStorage === 'undefined') return {};
     try {
@@ -168,7 +183,7 @@ export const Wardrobe: React.FC<{
     }
   });
   const [clarifySolverId, setClarifySolverId] = React.useState<WardrobeImageSolverId | ''>('');
-  const [pendingPreview, setPendingPreview] = React.useState<{ itemId: string; url: string } | null>(null);
+  const [pendingPreview, setPendingPreview] = React.useState<{ itemId: string; url: string; isFallback: boolean } | null>(null);
   const [stripBgBusy, setStripBgBusy] = React.useState(false);
   const [persistBusy, setPersistBusy] = React.useState(false);
   const [vaultSolverBanner, setVaultSolverBanner] = React.useState<string | null>(null);
@@ -247,8 +262,9 @@ export const Wardrobe: React.FC<{
 
     setRefreshingId(item.id);
     setRefreshError(null);
+    setBgFallbackWarning(null);
     try {
-      const res = await fetch('/api/refresh-image', {
+      const res = await fetch(REFRESH_IMAGE_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -261,7 +277,26 @@ export const Wardrobe: React.FC<{
       });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || 'Refresh failed');
-      setPendingPreview({ itemId: item.id, url: data.imageUrl });
+      const returnedImageUrl =
+        typeof data.imageUrl === 'string' ? data.imageUrl.trim() : '';
+      if (!returnedImageUrl) {
+        throw new Error('Image processing completed without a usable image URL.');
+      }
+      const nextUrl = withImageVersion(returnedImageUrl, data.imageHash || Date.now());
+      const isFallback =
+        data.backgroundRemoved === false ||
+        data.removeBgStatus === 'fallback' ||
+        data.removeBgStatus === 'failed';
+      setPendingPreview({ itemId: item.id, url: nextUrl, isFallback });
+      if (isFallback) {
+        const reason =
+          typeof data.removeBgReason === 'string' && data.removeBgReason.trim()
+            ? ` Reason: ${data.removeBgReason.trim()}.`
+            : '';
+        setBgFallbackWarning(
+          `This preview still has a fallback background.${reason} Try another image fix before saving.`,
+        );
+      }
     } catch (err: any) {
       setRefreshError(err.message || 'Image refresh failed');
     } finally {
@@ -278,8 +313,9 @@ export const Wardrobe: React.FC<{
     }
     setStripBgBusy(true);
     setRefreshError(null);
+    setBgFallbackWarning(null);
     try {
-      const res = await fetch('/api/refresh-image', {
+      const res = await fetch(REFRESH_IMAGE_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -288,12 +324,30 @@ export const Wardrobe: React.FC<{
           concentrationHint: concentrationHintFromValue(item.concentration),
           stripBgOnly: true,
           imageUrl: src,
-          poofOptions: { type: 'product' },
         }),
       });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || 'Background removal failed');
-      setPendingPreview({ itemId: item.id, url: data.imageUrl });
+      const returnedImageUrl =
+        typeof data.imageUrl === 'string' ? data.imageUrl.trim() : '';
+      if (!returnedImageUrl) {
+        throw new Error('Image processing completed without a usable image URL.');
+      }
+      const nextUrl = withImageVersion(returnedImageUrl, data.imageHash || Date.now());
+      const isFallback =
+        data.backgroundRemoved === false ||
+        data.removeBgStatus === 'fallback' ||
+        data.removeBgStatus === 'failed';
+      setPendingPreview({ itemId: item.id, url: nextUrl, isFallback });
+      if (isFallback) {
+        const reason =
+          typeof data.removeBgReason === 'string' && data.removeBgReason.trim()
+            ? ` Reason: ${data.removeBgReason.trim()}.`
+            : '';
+        setBgFallbackWarning(
+          `This preview still has a fallback background.${reason} Try another image fix before saving.`,
+        );
+      }
     } catch (err: any) {
       setRefreshError(err.message || 'Background removal failed');
     } finally {
@@ -303,6 +357,12 @@ export const Wardrobe: React.FC<{
 
   const handleSavePreviewToVault = async () => {
     if (!selectedItem || !pendingPreview || pendingPreview.itemId !== selectedItem.id) return;
+    if (pendingPreview.isFallback) {
+      setRefreshError(
+        'This preview still has a fallback background. Try another image fix before saving.',
+      );
+      return;
+    }
     if (!onPersistWardrobeImage) {
       setRefreshError('Sign in to save this image to your vault.');
       return;
@@ -322,7 +382,7 @@ export const Wardrobe: React.FC<{
 
   // Performance Optimization: Memoize computationally heavy filter operations
   const filteredItems = React.useMemo(() => {
-    const q = searchQuery.trim();
+    const q = deferredSearchQuery.trim();
     if (!q) return items;
     return items.filter(item => {
       const name = entryName(item);
@@ -331,11 +391,11 @@ export const Wardrobe: React.FC<{
 
       return matchesWardrobeQuery(item, q);
     });
-  }, [items, searchQuery]);
+  }, [items, deferredSearchQuery]);
 
   const searchSuggestions = React.useMemo(
-    () => buildWardrobeSearchSuggestions(items, searchQuery),
-    [items, searchQuery],
+    () => buildWardrobeSearchSuggestions(items, deferredSearchQuery),
+    [items, deferredSearchQuery],
   );
 
   React.useEffect(() => {
@@ -412,13 +472,13 @@ export const Wardrobe: React.FC<{
 
   return (
     <div className="relative">
-      <div className="space-y-16 sm:space-y-20 relative z-10">
-        <div className="flex flex-col items-center justify-center text-center gap-8 sm:gap-10">
+      <div className="space-y-12 sm:space-y-16 relative z-10">
+        <div className="flex flex-col items-center justify-center text-center gap-7 sm:gap-8">
           <div className="space-y-3">
-            <p className="text-[10px] uppercase tracking-[0.5em] text-scent-accent/70 font-bold">Archives // Private Vault</p>
-            <h2 className="font-serif italic text-4xl sm:text-6xl md:text-7xl text-white tracking-tight">Vault of Aromas</h2>
+            <p className="text-[11px] uppercase tracking-[0.28em] text-scent-accent/82 font-bold">Archives // Private Vault</p>
+            <h2 className="font-serif italic text-[clamp(2.65rem,8vw,5.35rem)] text-[#fff7ec] tracking-normal leading-none">Vault of Aromas</h2>
           </div>
-          <div className="flex flex-col items-center gap-8 w-full">
+          <div className="flex flex-col items-center gap-6 w-full">
             {(wardrobeFixHint || revertAvailable || fixWardrobeBusy) && (
               <div className="flex flex-col items-center gap-3 w-full max-w-2xl">
                 {onRevertWardrobe ? (
@@ -447,11 +507,11 @@ export const Wardrobe: React.FC<{
                 ) : null}
               </div>
             )}
-            <div className="relative w-full max-w-[58rem] z-20">
+            <div className="relative w-full max-w-[56rem] z-20">
               <label htmlFor="wardrobe-vault-search" className="sr-only">
                 Search vault fragrances and image hints
               </label>
-              <Search size={25} strokeWidth={1.5} className="pointer-events-none absolute left-6 top-1/2 z-10 -translate-y-1/2 text-white/76" />
+              <Search size={23} strokeWidth={1.5} className="pointer-events-none absolute left-5 sm:left-6 top-1/2 z-10 -translate-y-1/2 text-scent-accent/82" />
               <input
                 id="wardrobe-vault-search"
                 type="text"
@@ -487,7 +547,7 @@ export const Wardrobe: React.FC<{
                 }}
                 placeholder="Search vault or image hint (e.g. watermark, sauvage)…"
                 autoComplete="off"
-                className="scent-lux-input w-full h-16 sm:h-20 pl-16 pr-6 text-white font-sans text-base outline-none transition-all placeholder:text-white/34"
+                className="scent-lux-input w-full h-[58px] sm:h-[68px] pl-14 sm:pl-16 pr-5 sm:pr-6 text-[#fff7ec] font-sans text-[15px] sm:text-base outline-none transition-all placeholder:text-[#d9c2a4]/58"
               />
               <AnimatePresence>
                 {searchDropdownOpen ? (
@@ -498,7 +558,7 @@ export const Wardrobe: React.FC<{
                     transition={{ duration: 0.18 }}
                     id="wardrobe-search-suggestions"
                     role="listbox"
-                    className="absolute left-0 right-0 top-full mt-2 max-h-[min(320px,50vh)] overflow-y-auto rounded-[var(--radius-scent)] border border-scent-accent/25 bg-neutral-950/98 shadow-[0_24px_48px_rgba(0,0,0,0.72)] backdrop-blur-xl scrollbar-hide z-30"
+                    className="absolute left-0 right-0 top-full mt-2 max-h-[min(320px,50vh)] overflow-y-auto rounded-[var(--radius-scent)] border border-scent-accent/32 bg-neutral-950/98 shadow-[0_24px_48px_rgba(0,0,0,0.78)] backdrop-blur-xl scrollbar-hide z-30"
                   >
                     <li className="px-3 py-2 border-b border-white/8 pointer-events-none">
                       <p className="text-[8px] uppercase tracking-[0.35em] text-white/35 font-bold font-sans">
@@ -557,7 +617,7 @@ export const Wardrobe: React.FC<{
                 </div>
               ) : null}
             </div>
-            <div className="scent-entry-count font-serif italic text-xl sm:text-3xl whitespace-nowrap">
+            <div className="scent-entry-count font-serif italic text-xl sm:text-2xl whitespace-nowrap">
               <span>{filteredItems.length} Entries</span>
             </div>
           </div>
@@ -601,10 +661,10 @@ export const Wardrobe: React.FC<{
           </section>
         )}
 
-        <div className="space-y-10 pb-28 sm:pb-36">
+        <div className="space-y-8 pb-28 sm:pb-36">
           {shelves.length > 0 ? shelves.map((shelfItems, shelfIndex) => (
             <div key={shelfIndex} className="relative group/shelf">
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5 lg:gap-7 mb-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5 lg:gap-6 mb-1">
                 {shelfItems.map((item, i) => (
                   <motion.div
                     key={item.id}
@@ -613,23 +673,25 @@ export const Wardrobe: React.FC<{
                     className="group cursor-pointer relative h-full"
                     onClick={() => openDetail(item)}
                   >
-                    <div className="scent-fragrance-card h-full min-h-[32rem] transition-all duration-500 group-hover:-translate-y-2 relative overflow-hidden p-5 flex flex-col">
-                      <Star size={24} strokeWidth={1.35} className="absolute right-5 top-5 z-20 text-scent-accent/90 drop-shadow-[0_0_12px_rgba(201,139,44,0.26)]" aria-hidden />
-                      <div className="aspect-[1.08/1] relative mb-5">
+                    <div className="scent-fragrance-card h-full min-h-[31rem] transition-transform duration-500 group-hover:-translate-y-1.5 relative overflow-hidden p-4 sm:p-5 flex flex-col">
+                      <div className="scent-card-star absolute right-4 top-4 z-20 flex h-9 w-9 items-center justify-center rounded-full" aria-hidden>
+                        <Star size={20} strokeWidth={1.45} />
+                      </div>
+                      <div className="aspect-[1.08/1] relative mb-5 overflow-hidden rounded-[calc(var(--radius-scent)-8px)]">
                         <div className="scent-bottle-stage absolute inset-0 pointer-events-none" />
                         <BottleImage
                           variant="grid"
                           src={item.imageUrl}
                           alt={entryName(item)}
                           className="absolute inset-0 z-10"
-                          imgClassName="brightness-[1.08] group-hover:scale-105 transition-transform duration-1000"
+                          imgClassName="brightness-[1.08] group-hover:scale-[1.035] transition-transform duration-700"
                         />
                       </div>
-                      <div className="space-y-2 px-1 pb-1 flex-1">
+                      <div className="space-y-2 px-1 pb-1 flex flex-1 flex-col">
                         <p className="scent-card-brand">{entryBrand(item)}</p>
                         <h3 className="scent-card-title">{entryName(item)}</h3>
                         <p className="scent-card-type">{entryType(item)}</p>
-                        <div className="h-px w-full bg-scent-accent/15 my-4" />
+                        <div className="h-px w-full bg-scent-accent/18 my-4" />
                         <p className="scent-card-notes">
                           <span className="font-semibold text-amber-200/85">Notes:</span> {entryNotes(item)}
                         </p>
@@ -638,7 +700,7 @@ export const Wardrobe: React.FC<{
                   </motion.div>
                 ))}
                 {shelfIndex === shelves.length - 1 && shelfItems.length < 4 && (
-                  <div className="scent-fragrance-card min-h-[28rem] flex flex-col items-center justify-center p-8 text-center group cursor-pointer border-dashed border-scent-accent/20 hover:bg-white/5 transition-all">
+                  <div className="scent-fragrance-card min-h-[28rem] flex flex-col items-center justify-center p-8 text-center group cursor-pointer border-dashed border-scent-accent/26 hover:bg-white/5 transition-all">
                     <div className="w-12 h-12 border border-dashed border-scent-accent/35 flex items-center justify-center group-hover:rotate-90 transition-transform mb-4 rounded-full">
                       <span className="text-scent-accent/55 text-3xl">+</span>
                     </div>
@@ -799,6 +861,9 @@ export const Wardrobe: React.FC<{
                 {refreshError && (
                   <p className="text-[9px] text-red-400/80 text-center leading-snug px-2 py-1">{refreshError}</p>
                 )}
+                {!refreshError && bgFallbackWarning && (
+                  <p className="text-[9px] text-yellow-400/70 text-center leading-snug px-2 py-1">{bgFallbackWarning}</p>
+                )}
 
                 <div
                   className={`rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3 ${bottleImageToolsOpen ? 'space-y-3' : ''}`}
@@ -935,15 +1000,26 @@ export const Wardrobe: React.FC<{
                               Sign in to save this preview to your vault.
                             </p>
                           ) : null}
+                          {pendingPreview?.isFallback ? (
+                            <p className="text-[10px] text-amber-200/85 text-center font-sans leading-snug px-1">
+                              This preview still has a fallback background. Try another image fix before saving.
+                            </p>
+                          ) : null}
                           <div className="flex gap-2">
                             <button
                               type="button"
                               onClick={() => void handleSavePreviewToVault()}
-                              disabled={persistBusy || !onPersistWardrobeImage}
+                              disabled={
+                                persistBusy ||
+                                !onPersistWardrobeImage ||
+                                !!pendingPreview?.isFallback
+                              }
                               title={
                                 !onPersistWardrobeImage
                                   ? 'Sign in to save to your vault'
-                                  : undefined
+                                  : pendingPreview?.isFallback
+                                    ? 'This preview used a fallback background — try another fix first'
+                                    : undefined
                               }
                               className="flex-1 min-h-[44px] py-3 bg-scent-accent text-black uppercase tracking-[0.2em] text-[10px] font-bold hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg"
                             >

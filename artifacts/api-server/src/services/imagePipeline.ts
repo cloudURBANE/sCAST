@@ -1,7 +1,8 @@
 import sharp from "sharp";
 import { logger } from "../lib/logger";
 import { makeLookupKey } from "./catalogService";
-import { removeBgBuffer, removeBgToBuffer, type RemoveBgOptions } from "./bgService";
+import { removeBgBuffer, removeBgToBuffer, type RemoveBgOptions, type RemoveBgReason, type RemoveBgStatus } from "./bgService";
+import { isEffectivelyTransparent } from "./bgServiceCore";
 import {
   buildProcessedImageStorageKey,
   getCachedImageStatusBySourceHash,
@@ -18,6 +19,7 @@ import {
   type CachedImageReference,
 } from "./imageCacheService";
 import {
+  ImageObjectStorageConfigurationError,
   getImageObjectStorage,
   readLocalImageObject,
   storagePathFromLocalImageObjectUrl,
@@ -25,6 +27,7 @@ import {
 import { safeImageUrlForResponse } from "./persistenceGuards";
 import { fetchExternalImage, parseAndValidateExternalImageUrl } from "./safeImageFetch";
 import { searchSerperImageCandidates, type SerperImageCandidate } from "./serperService";
+export { acceptsImageCacheForRequest, shouldUseImageLookupCaches } from "./imagePipelineCachePolicy";
 
 const MAX_OUTPUT_DIMENSION = 768;
 const WEBP_QUALITY = 82;
@@ -43,6 +46,8 @@ type PipelineSource = {
 export type ProcessedImageResult = CachedImageReference & {
   sourceProvider: ImageSourceProvider;
   pipelineVersion: string;
+  removeBgStatus?: RemoveBgStatus;
+  removeBgReason?: RemoveBgReason;
 };
 
 export type ResolveProcessedFragranceImageInput = {
@@ -61,6 +66,10 @@ export type ResolveProcessedFragranceImageInput = {
 };
 
 const inFlightBySource = new Map<string, Promise<ProcessedImageResult | null>>();
+
+function inFlightKey(sourceUrlHash: string, removeBackground: boolean): string {
+  return `${sourceUrlHash}:${removeBackground ? "1" : "0"}`;
+}
 
 function decodeDataImage(input: string): Buffer | null {
   const match = input.match(/^data:image\/(?:png|jpe?g|webp);base64,([a-z0-9+/=]+)$/i);
@@ -143,23 +152,68 @@ async function processSourceToWebp(
   sizeBytes: number;
   contentHash: string;
   backgroundRemoved: boolean;
+  removeBgStatus: RemoveBgStatus;
+  removeBgReason: RemoveBgReason;
 }> {
   const processed = removeBackground
     ? source.localObjectPath
       ? await removeBgBuffer(await readLocalImageObject(source.localObjectPath), poofOptions)
       : await removeBgToBuffer(source.sourceUrlForProcessing, source.isRemote, poofOptions)
-    : await loadSourceWithoutBackgroundRemoval(source);
+    : await loadSourceWithoutBackgroundRemoval(source).then((loaded) => ({
+        // Non-BG path: hand the raw fetched buffer directly to the Sharp finalization
+        // chain below. Do NOT call normalizePackshotBuffer here — it pre-resizes and
+        // bakes in transparent padding gutters, which then get re-resized by Sharp
+        // (double-resize) and waste the 768px output budget on empty space.
+        buffer: loaded.buffer,
+        backgroundRemoved: loaded.backgroundRemoved,
+        contentType: "image/png" as const,
+        removeBgStatus: "skipped" as const,
+        removeBgReason: "skipped" as const,
+      }));
 
   if (!processed) throw new Error("Image processing failed");
 
-  const optimized = await sharp(processed.buffer, { failOn: "truncated" })
+  let outputPipeline = sharp(processed.buffer, { failOn: "truncated" })
     .rotate()
     .resize(MAX_OUTPUT_DIMENSION, MAX_OUTPUT_DIMENSION, {
       fit: "inside",
       withoutEnlargement: true,
-    })
-    .webp({ quality: WEBP_QUALITY, effort: 4 })
-    .toBuffer();
+    });
+  // Preserve transparency through WebP encode when the upstream produced an
+  // alpha-bearing image (i.e. background was actually removed). Sharp's WebP
+  // encoder honors alpha when present; ensureAlpha guarantees it is present
+  // even if an intermediate step happened to drop the channel.
+  if (processed.backgroundRemoved) {
+    outputPipeline = outputPipeline.ensureAlpha();
+  }
+  let optimized = await outputPipeline.webp({ quality: WEBP_QUALITY, effort: 4 }).toBuffer();
+
+  // Defense in depth: even though bgService now rejects fully transparent
+  // Poof output, run one final check on the encoded WebP. If we ever end up
+  // here with an invisible buffer (e.g. a future code path bypasses the
+  // Poof-side guard), fall back to a non-BG re-encode of the original source
+  // and downgrade the status so the row never lies about what was stored.
+  let backgroundRemoved = processed.backgroundRemoved;
+  let removeBgStatus = processed.removeBgStatus;
+  let removeBgReason = processed.removeBgReason;
+  if (backgroundRemoved && (await isEffectivelyTransparent(optimized))) {
+    logger.warn(
+      { removeBgReason: "poof_empty_output" },
+      "[imagePipeline] post-encode WebP was fully transparent; reverting to non-BG fallback",
+    );
+    const loaded = await loadSourceWithoutBackgroundRemoval(source);
+    optimized = await sharp(loaded.buffer, { failOn: "truncated" })
+      .rotate()
+      .resize(MAX_OUTPUT_DIMENSION, MAX_OUTPUT_DIMENSION, {
+        fit: "inside",
+        withoutEnlargement: true,
+      })
+      .webp({ quality: WEBP_QUALITY, effort: 4 })
+      .toBuffer();
+    backgroundRemoved = false;
+    removeBgStatus = "fallback";
+    removeBgReason = "poof_empty_output";
+  }
 
   const metadata = await sharp(optimized).metadata();
   const width = metadata.width ?? 0;
@@ -173,7 +227,9 @@ async function processSourceToWebp(
     mimeType: "image/webp",
     sizeBytes: optimized.length,
     contentHash: hashBuffer(optimized),
-    backgroundRemoved: processed.backgroundRemoved,
+    backgroundRemoved,
+    removeBgStatus,
+    removeBgReason,
   };
 }
 
@@ -189,28 +245,41 @@ async function processCandidate(input: {
 }): Promise<ProcessedImageResult | null> {
   const cached = await getReadyCachedImageBySourceHash(input.source.sourceUrlHash);
   if (cached) {
-    return { ...cached, sourceProvider: input.sourceProvider, pipelineVersion: IMAGE_PIPELINE_VERSION };
+    // Skip cache when BG removal is requested but the cached image has a white background.
+    if (!input.removeBackground || cached.backgroundRemoved) {
+      return { ...cached, sourceProvider: input.sourceProvider, pipelineVersion: IMAGE_PIPELINE_VERSION };
+    }
   }
 
   const status = await getCachedImageStatusBySourceHash(input.source.sourceUrlHash);
   if (status === "failed") return null;
 
-  const existing = inFlightBySource.get(input.source.sourceUrlHash);
+  const flightKey = inFlightKey(input.source.sourceUrlHash, input.removeBackground);
+  const existing = inFlightBySource.get(flightKey);
   if (existing) return existing;
 
   const promise = (async (): Promise<ProcessedImageResult | null> => {
     try {
       const doubleCheck = await getReadyCachedImageBySourceHash(input.source.sourceUrlHash);
       if (doubleCheck) {
-        return { ...doubleCheck, sourceProvider: input.sourceProvider, pipelineVersion: IMAGE_PIPELINE_VERSION };
+        if (!input.removeBackground || doubleCheck.backgroundRemoved) {
+          return { ...doubleCheck, sourceProvider: input.sourceProvider, pipelineVersion: IMAGE_PIPELINE_VERSION };
+        }
+        // Cached entry lacks BG removal; fall through to reprocess.
       }
 
       const optimized = await processSourceToWebp(input.source, input.removeBackground, input.poofOptions);
       const storage = getImageObjectStorage();
+      // Include the content hash in the storage key so different processed
+      // outputs (e.g. an old white-bg fallback vs. a fresh transparent packshot
+      // for the same source URL) live at different immutable storage paths.
+      // Without this, the browser/CDN can serve the stale object even after
+      // the DB row points to a new "backgroundRemoved: true" result.
       const storagePath = buildProcessedImageStorageKey({
         sourceProvider: input.sourceProvider,
         lookupKey: input.lookupKey,
         sourceUrlHash: input.source.sourceUrlHash,
+        contentHash: optimized.contentHash,
       });
       const uploaded = await storage.uploadProcessedImage({
         buffer: optimized.buffer,
@@ -240,8 +309,9 @@ async function processCandidate(input: {
         backgroundRemoved: optimized.backgroundRemoved,
       });
 
-      return { ...recorded, sourceProvider: input.sourceProvider, pipelineVersion: IMAGE_PIPELINE_VERSION };
+      return { ...recorded, sourceProvider: input.sourceProvider, pipelineVersion: IMAGE_PIPELINE_VERSION, removeBgStatus: optimized.removeBgStatus, removeBgReason: optimized.removeBgReason };
     } catch (err: any) {
+      if (err instanceof ImageObjectStorageConfigurationError) throw err;
       const reason = err?.message ?? "image processing failed";
       await recordImageFailure({
         userId: input.userId ?? null,
@@ -256,11 +326,11 @@ async function processCandidate(input: {
       logger.warn({ err: reason }, "[imagePipeline] candidate failed");
       return null;
     } finally {
-      inFlightBySource.delete(input.source.sourceUrlHash);
+      inFlightBySource.delete(flightKey);
     }
   })();
 
-  inFlightBySource.set(input.source.sourceUrlHash, promise);
+  inFlightBySource.set(flightKey, promise);
   return promise;
 }
 
@@ -282,14 +352,14 @@ export async function resolveProcessedFragranceImage(
 
   if (input.allowLookupCache !== false && !input.sourceUrl) {
     const cachedByLookup = await getLatestReadyCachedImageByLookupKey(lookupKey);
-    if (cachedByLookup) {
+    if (cachedByLookup && (!removeBackground || cachedByLookup.backgroundRemoved)) {
       return { ...cachedByLookup, sourceProvider, pipelineVersion: IMAGE_PIPELINE_VERSION };
     }
   }
 
-  if (!input.sourceUrl && searchQueryHash) {
+  if (input.allowLookupCache !== false && !input.sourceUrl && searchQueryHash) {
     const cachedByQuery = await getLatestReadyCachedImageBySearchQueryHash(searchQueryHash);
-    if (cachedByQuery) {
+    if (cachedByQuery && (!removeBackground || cachedByQuery.backgroundRemoved)) {
       return { ...cachedByQuery, sourceProvider, pipelineVersion: IMAGE_PIPELINE_VERSION };
     }
   }

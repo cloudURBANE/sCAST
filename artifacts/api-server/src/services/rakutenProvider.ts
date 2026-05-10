@@ -5,6 +5,8 @@ const DEFAULT_BASE_URL = "https://api.linksynergy.com";
 const REQUEST_TIMEOUT_MS = 12000;
 const DEFAULT_PRODUCT_LIMIT = 10;
 const MAX_PRODUCT_LIMIT = 100;
+const TOKEN_REFRESH_SKEW_MS = 60_000;
+const DEFAULT_TOKEN_EXPIRES_IN_SECONDS = 3600;
 const UNSUPPORTED_SEARCH_CHARS = /[&=?{}\\()[\]\-;~|$!><*%]+/g;
 
 export type RakutenAdvertiser = {
@@ -70,12 +72,39 @@ type RakutenDeepLinkErrorResponse = {
   message?: string;
 };
 
-function getAccessToken(): string | null {
+type RakutenAccessTokenResponse = {
+  access_token?: string;
+  refresh_token?: string;
+  expires_in?: number;
+  token_type?: string;
+};
+
+type RakutenOAuthCredentials = {
+  clientId: string;
+  clientSecret: string;
+  sid: string;
+};
+
+type RakutenCachedToken = {
+  accessToken: string;
+  refreshToken: string | null;
+  expiresAtMs: number;
+};
+
+function getLegacyAccessToken(): string | null {
   return (
     process.env.RAKUTEN_ADVERTISING_ACCESS_TOKEN?.trim() ||
     process.env.RAKUTEN_API_ACCESS_TOKEN?.trim() ||
     null
   );
+}
+
+function getOAuthCredentials(): RakutenOAuthCredentials | null {
+  const clientId = process.env.RAKUTEN_ADVERTISING_CLIENT_ID?.trim();
+  const clientSecret = process.env.RAKUTEN_ADVERTISING_CLIENT_SECRET?.trim();
+  const sid = process.env.RAKUTEN_ADVERTISING_SID?.trim();
+
+  return clientId && clientSecret && sid ? { clientId, clientSecret, sid } : null;
 }
 
 function getBaseUrl(): string {
@@ -209,9 +238,13 @@ export function dedupeRakutenProducts(products: RakutenProduct[]): RakutenProduc
   return unique.sort((a, b) => b.matchScore - a.matchScore);
 }
 
+export function createRakutenTokenKey(clientId: string, clientSecret: string): string {
+  return `Bearer ${Buffer.from(`${clientId}:${clientSecret}`, "utf8").toString("base64")}`;
+}
+
 function bearerHeaders(token: string) {
   return {
-    Authorization: `Bearer ${token}`,
+    Authorization: token.toLowerCase().startsWith("bearer ") ? token : `Bearer ${token}`,
   };
 }
 
@@ -229,22 +262,99 @@ function deepLinkFailureReason(status: number, body: RakutenDeepLinkErrorRespons
 
 export class RakutenAdvertisingProvider {
   private readonly baseUrl: string;
-  private readonly accessToken: string;
+  private readonly staticAccessToken: string | null;
+  private readonly credentials: RakutenOAuthCredentials | null;
+  private cachedToken: RakutenCachedToken | null = null;
+  private pendingTokenRequest: Promise<string> | null = null;
 
-  constructor(options?: { accessToken?: string; baseUrl?: string }) {
-    const token = options?.accessToken?.trim() || getAccessToken();
-    if (!token) {
-      throw new Error("RAKUTEN_ADVERTISING_ACCESS_TOKEN is required");
+  constructor(options?: {
+    accessToken?: string;
+    baseUrl?: string;
+    clientId?: string;
+    clientSecret?: string;
+    sid?: string;
+  }) {
+    const optionCredentials =
+      options?.clientId?.trim() && options?.clientSecret?.trim() && options?.sid?.trim()
+        ? {
+            clientId: options.clientId.trim(),
+            clientSecret: options.clientSecret.trim(),
+            sid: options.sid.trim(),
+          }
+        : null;
+
+    this.credentials = optionCredentials || getOAuthCredentials();
+    this.staticAccessToken = options?.accessToken?.trim() || (!this.credentials ? getLegacyAccessToken() : null);
+    if (!this.credentials && !this.staticAccessToken) {
+      throw new Error(
+        "RAKUTEN_ADVERTISING_CLIENT_ID, RAKUTEN_ADVERTISING_CLIENT_SECRET, and RAKUTEN_ADVERTISING_SID are required",
+      );
     }
 
-    this.accessToken = token;
     this.baseUrl = (options?.baseUrl || getBaseUrl()).replace(/\/+$/, "");
   }
 
+  private async getAccessToken(): Promise<string> {
+    if (this.staticAccessToken) return this.staticAccessToken;
+
+    const now = Date.now();
+    if (this.cachedToken && this.cachedToken.expiresAtMs - TOKEN_REFRESH_SKEW_MS > now) {
+      return this.cachedToken.accessToken;
+    }
+
+    if (this.pendingTokenRequest) return this.pendingTokenRequest;
+    this.pendingTokenRequest = this.requestAccessToken().finally(() => {
+      this.pendingTokenRequest = null;
+    });
+    return this.pendingTokenRequest;
+  }
+
+  private async requestAccessToken(): Promise<string> {
+    if (!this.credentials) {
+      throw new Error("Rakuten OAuth credentials are missing");
+    }
+
+    const body = new URLSearchParams();
+    body.set("scope", this.credentials.sid);
+    if (this.cachedToken?.refreshToken) {
+      body.set("refresh_token", this.cachedToken.refreshToken);
+    }
+
+    const response = await axios.post<RakutenAccessTokenResponse>(`${this.baseUrl}/token`, body.toString(), {
+      timeout: REQUEST_TIMEOUT_MS,
+      headers: {
+        Authorization: createRakutenTokenKey(this.credentials.clientId, this.credentials.clientSecret),
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      validateStatus: (status) => status >= 200 && status < 500,
+    });
+
+    if (response.status < 200 || response.status >= 300) {
+      throw new Error(`RAKUTEN_ACCESS_TOKEN_FAILED_HTTP_${response.status}`);
+    }
+
+    const accessToken = response.data?.access_token?.trim();
+    if (!accessToken) {
+      throw new Error("RAKUTEN_ACCESS_TOKEN_MISSING");
+    }
+
+    const expiresIn = Number(response.data?.expires_in);
+    const ttlSeconds =
+      Number.isFinite(expiresIn) && expiresIn > 0 ? expiresIn : DEFAULT_TOKEN_EXPIRES_IN_SECONDS;
+    this.cachedToken = {
+      accessToken,
+      refreshToken: response.data?.refresh_token?.trim() || this.cachedToken?.refreshToken || null,
+      expiresAtMs: Date.now() + ttlSeconds * 1000,
+    };
+
+    return accessToken;
+  }
+
   async getAdvertiser(advertiserId: string): Promise<RakutenAdvertiser | null> {
+    const accessToken = await this.getAccessToken();
     const response = await axios.get(`${this.baseUrl}/v2/advertisers/${encodeURIComponent(advertiserId)}`, {
       timeout: REQUEST_TIMEOUT_MS,
-      headers: bearerHeaders(this.accessToken),
+      headers: bearerHeaders(accessToken),
       validateStatus: (status) => status >= 200 && status < 500,
     });
 
@@ -286,9 +396,10 @@ export class RakutenAdvertisingProvider {
     for (const sort of options.sort ?? []) params.append("sort", sort);
     for (const sortType of options.sortType ?? []) params.append("sorttype", sortType);
 
+    const accessToken = await this.getAccessToken();
     const response = await axios.get(`${this.baseUrl}/productsearch/1.0?${params.toString()}`, {
       timeout: REQUEST_TIMEOUT_MS,
-      headers: bearerHeaders(this.accessToken),
+      headers: bearerHeaders(accessToken),
       responseType: "text",
       validateStatus: (status) => status >= 200 && status < 500,
     });
@@ -308,13 +419,14 @@ export class RakutenAdvertisingProvider {
       ...(input.u1 ? { u1: input.u1 } : {}),
     };
 
+    const accessToken = await this.getAccessToken();
     const response = await axios.post<RakutenDeepLinkResponse | RakutenDeepLinkErrorResponse>(
       `${this.baseUrl}/v1/links/deep_links`,
       body,
       {
         timeout: REQUEST_TIMEOUT_MS,
         headers: {
-          ...bearerHeaders(this.accessToken),
+          ...bearerHeaders(accessToken),
           "content-type": "application/json",
         },
         validateStatus: (status) => status >= 200 && status < 500,
@@ -413,7 +525,7 @@ export class RakutenAdvertisingProvider {
 }
 
 export function rakutenEnvReady(): boolean {
-  return Boolean(getAccessToken());
+  return Boolean(getOAuthCredentials() || getLegacyAccessToken());
 }
 
 export function createRakutenProvider(): RakutenAdvertisingProvider {

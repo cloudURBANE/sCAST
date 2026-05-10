@@ -28,13 +28,13 @@ Selection order:
 
 1. Firebase Storage, when `FIREBASE_STORAGE_BUCKET` is set.
 2. Supabase Storage, when `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and `SUPABASE_IMAGE_BUCKET` are set.
-3. Local object storage, for dev and last-resort fallback.
+3. Explicit local object storage, only when `IMAGE_ALLOW_LOCAL_OBJECT_STORAGE=true` and `NODE_ENV` is not `production`.
 
 Local storage is served from:
 
 - `GET /api/image-objects/...`
 
-Local storage is intentionally a fallback. On Railway it may be ephemeral, so production should configure Firebase Storage or Supabase Storage.
+Local storage is intentionally development-only. On Railway and similar hosts it may be ephemeral, so production must configure Firebase Storage or Supabase Storage before the image pipeline can persist object references.
 
 ## Database Shape
 

@@ -1,33 +1,69 @@
 import axios from "axios";
 import sharp from "sharp";
 import { logger } from "../lib/logger";
+import { hasOpaqueLightBackground, isEffectivelyTransparent } from "./bgServiceCore";
 import { trimPackshotForBgService } from "./packshotTrim";
 import { fetchExternalImage } from "./safeImageFetch";
 
-const POOF_API = "https://api.poof.bg/v1/remove";
-const CANVAS_SIZE = 768;
-const EDGE_PADDING = 30;
-const CONTENT_SIZE = CANVAS_SIZE - EDGE_PADDING * 2;
+export { isEffectivelyTransparent };
 
-async function normalizeToBottleCanvas(buffer: Buffer): Promise<Buffer> {
+const POOF_API = "https://api.poof.bg/v1/remove";
+const NORMALIZED_LONG_EDGE = 768;
+const EDGE_PADDING_X = 30;
+const EDGE_PADDING_TOP = 34;
+const EDGE_PADDING_BOTTOM = 26;
+const CONTENT_LONG_EDGE =
+  NORMALIZED_LONG_EDGE -
+  Math.max(EDGE_PADDING_X * 2, EDGE_PADDING_TOP + EDGE_PADDING_BOTTOM);
+
+async function normalizeToBottleArtwork(buffer: Buffer): Promise<Buffer> {
   try {
-    const normalized = await sharp(buffer)
-      .resize(CONTENT_SIZE, CONTENT_SIZE, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
-      .extend({ top: EDGE_PADDING, bottom: EDGE_PADDING, left: EDGE_PADDING, right: EDGE_PADDING, background: { r: 0, g: 0, b: 0, alpha: 0 } })
-      .resize(CANVAS_SIZE, CANVAS_SIZE, { fit: "fill", background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    const resized = await sharp(buffer)
+      .rotate()
+      .resize(CONTENT_LONG_EDGE, CONTENT_LONG_EDGE, {
+        fit: "inside",
+        background: { r: 0, g: 0, b: 0, alpha: 0 },
+      })
+      .ensureAlpha()
       .png()
       .toBuffer();
 
-    const meta = await sharp(normalized).metadata();
-    if (meta.width !== CANVAS_SIZE || meta.height !== CANVAS_SIZE) {
-      throw new Error(`normalize canvas mismatch: ${meta.width}x${meta.height}`);
+    const meta = await sharp(resized).metadata();
+    if (!meta.width || !meta.height) {
+      throw new Error("normalize artwork metadata missing dimensions");
     }
 
-    return normalized;
+    const outW = meta.width + EDGE_PADDING_X * 2;
+    const outH = meta.height + EDGE_PADDING_TOP + EDGE_PADDING_BOTTOM;
+    if (Math.max(outW, outH) > NORMALIZED_LONG_EDGE) {
+      throw new Error(`normalize artwork too large: ${outW}x${outH}`);
+    }
+
+    return sharp(resized)
+      .extend({
+        top: EDGE_PADDING_TOP,
+        bottom: EDGE_PADDING_BOTTOM,
+        left: EDGE_PADDING_X,
+        right: EDGE_PADDING_X,
+        background: { r: 0, g: 0, b: 0, alpha: 0 },
+      })
+      .png()
+      .toBuffer();
   } catch {
     return sharp(buffer)
-      .resize(CONTENT_SIZE, CONTENT_SIZE, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
-      .extend({ top: EDGE_PADDING, bottom: EDGE_PADDING, left: EDGE_PADDING, right: EDGE_PADDING, background: { r: 0, g: 0, b: 0, alpha: 0 } })
+      .rotate()
+      .resize(CONTENT_LONG_EDGE, CONTENT_LONG_EDGE, {
+        fit: "inside",
+        background: { r: 0, g: 0, b: 0, alpha: 0 },
+      })
+      .ensureAlpha()
+      .extend({
+        top: EDGE_PADDING_TOP,
+        bottom: EDGE_PADDING_BOTTOM,
+        left: EDGE_PADDING_X,
+        right: EDGE_PADDING_X,
+        background: { r: 0, g: 0, b: 0, alpha: 0 },
+      })
       .png()
       .toBuffer();
   }
@@ -36,11 +72,15 @@ async function normalizeToBottleCanvas(buffer: Buffer): Promise<Buffer> {
 async function trimWhiteAndNormalize(buffer: Buffer): Promise<Buffer> {
   try {
     const trimmed = await trimPackshotForBgService(buffer);
-    if (trimmed) return await normalizeToBottleCanvas(trimmed);
+    if (trimmed) return await normalizeToBottleArtwork(trimmed);
   } catch {
     /* fall through */
   }
-  return normalizeToBottleCanvas(buffer);
+  return normalizeToBottleArtwork(buffer);
+}
+
+export async function normalizePackshotBuffer(buffer: Buffer): Promise<Buffer> {
+  return trimWhiteAndNormalize(buffer);
 }
 
 function baseParams() {
@@ -51,17 +91,47 @@ function baseParams() {
   };
 }
 
+export type RemoveBgStatus = "removed" | "fallback" | "skipped";
+
+export type RemoveBgReason =
+  | "removed"
+  | "skipped"
+  | "skipped_by_caller"
+  | "missing_api_key"
+  | "poof_unauthorized"
+  | "poof_rate_limited"
+  | "poof_payload_too_large"
+  | "poof_non_200"
+  | "poof_server_error"
+  | "poof_empty_output"
+  | "poof_white_background"
+  | "local_trim_fallback";
+
 export type RemoveBgOptions = {
   /** Poof API removal preset when supported (e.g. product vs auto). */
   poofType?: "auto" | "product";
 };
 
-async function removeBgByFile(buffer: Buffer, apiKey: string, opts?: RemoveBgOptions): Promise<Buffer | null> {
-  const post = async (o?: RemoveBgOptions): Promise<Buffer | null> => {
+type PoofAttemptResult =
+  | { ok: true; buffer: Buffer }
+  | { ok: false; reason: RemoveBgReason; status?: number };
+
+function mapPoofStatusToReason(status: number): RemoveBgReason {
+  if (status === 401 || status === 403) return "poof_unauthorized";
+  if (status === 429) return "poof_rate_limited";
+  if (status === 413) return "poof_payload_too_large";
+  return "poof_non_200";
+}
+
+async function removeBgByFile(buffer: Buffer, apiKey: string, opts?: RemoveBgOptions): Promise<PoofAttemptResult> {
+  const post = async (o?: RemoveBgOptions): Promise<PoofAttemptResult> => {
     try {
       const FormData = (await import("form-data")).default;
       const form = new FormData();
-      form.append("image_file", buffer, { filename: "image.jpg", contentType: "image/jpeg" });
+      // Always convert to PNG before upload: Poof reliably supports PNG, and
+      // sending WebP/unknown formats can cause Poof to return transparent output.
+      const uploadBuffer = await sharp(buffer).ensureAlpha().png().toBuffer();
+      form.append("image_file", uploadBuffer, { filename: "image.png", contentType: "image/png" });
       Object.entries(baseParams()).forEach(([k, v]) => form.append(k, v));
       if (o?.poofType === "product") {
         form.append("type", "product");
@@ -74,15 +144,45 @@ async function removeBgByFile(buffer: Buffer, apiKey: string, opts?: RemoveBgOpt
         validateStatus: (s) => s < 500,
       });
 
-      return res.status === 200 ? Buffer.from(res.data) : null;
-    } catch {
-      return null;
+      if (res.status === 200) {
+        const poofBuffer = Buffer.from(res.data);
+        // Hard guard: never treat a fully-transparent Poof response as a
+        // success. If we did, the pipeline would persist an invisible WebP
+        // and the user would see an empty tile in the wardrobe/share grid.
+        if (await isEffectivelyTransparent(poofBuffer)) {
+          logger.warn(
+            { reason: "poof_empty_output", poofType: o?.poofType ?? null },
+            "[bgService] Poof returned a fully transparent image; treating as failure",
+          );
+          return { ok: false, reason: "poof_empty_output", status: 200 };
+        }
+        // Second guard: Poof can also return HTTP 200 with the original
+        // product-shot white rectangle still in place around the bottle
+        // (especially under `type=product`). If the outer border/corners are
+        // overwhelmingly opaque + near-white, treat it as a removal failure
+        // and let the local trim fallback handle the image instead.
+        if (await hasOpaqueLightBackground(poofBuffer)) {
+          logger.warn(
+            { reason: "poof_white_background", poofType: o?.poofType ?? null },
+            "[bgService] Poof returned 200 but background is still opaque/light; treating as failure",
+          );
+          return { ok: false, reason: "poof_white_background", status: 200 };
+        }
+        return { ok: true, buffer: poofBuffer };
+      }
+
+      const reason = mapPoofStatusToReason(res.status);
+      logger.warn({ status: res.status, reason, poofType: o?.poofType ?? null }, "[bgService] Poof background removal returned non-200");
+      return { ok: false, reason, status: res.status };
+    } catch (error) {
+      logger.warn({ reason: "poof_server_error", poofType: o?.poofType ?? null, message: error instanceof Error ? error.message : String(error) }, "[bgService] Poof background removal failed");
+      return { ok: false, reason: "poof_server_error" };
     }
   };
 
   if (opts?.poofType === "product") {
     const withType = await post(opts);
-    if (withType) return withType;
+    if (withType.ok) return withType;
     logger.warn("[bgService] Poof type=product failed or non-200; retrying without type");
   }
   return post(undefined);
@@ -113,6 +213,8 @@ export type RemoveBgBufferResult = {
   buffer: Buffer;
   contentType: "image/png";
   backgroundRemoved: boolean;
+  removeBgStatus: RemoveBgStatus;
+  removeBgReason: RemoveBgReason;
 };
 
 export async function removeBgBuffer(
@@ -122,17 +224,17 @@ export async function removeBgBuffer(
   const apiKey = process.env.REMOVE_BG_API_KEY;
   if (!apiKey) {
     const normalized = await trimWhiteAndNormalize(rawInput);
-    return { buffer: normalized, contentType: "image/png", backgroundRemoved: false };
+    return { buffer: normalized, contentType: "image/png", backgroundRemoved: false, removeBgStatus: "skipped", removeBgReason: "missing_api_key" };
   }
 
   const result = await removeBgByFile(rawInput, apiKey, opts);
-  if (result) {
-    const padded = await normalizeToBottleCanvas(result);
-    return { buffer: padded, contentType: "image/png", backgroundRemoved: true };
+  if (result.ok) {
+    const padded = await normalizeToBottleArtwork(result.buffer);
+    return { buffer: padded, contentType: "image/png", backgroundRemoved: true, removeBgStatus: "removed", removeBgReason: "removed" };
   }
 
   const normalized = await trimWhiteAndNormalize(rawInput);
-  return { buffer: normalized, contentType: "image/png", backgroundRemoved: false };
+  return { buffer: normalized, contentType: "image/png", backgroundRemoved: false, removeBgStatus: "fallback", removeBgReason: result.reason };
 }
 
 export async function removeBgToBuffer(

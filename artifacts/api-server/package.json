@@ -8,7 +8,7 @@
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --experimental-strip-types --test src/services/packshotTrim.test.ts src/services/imageSolvers.test.ts src/services/imagePipelineCore.test.ts src/services/fragranceNameResolver.test.ts src/services/rakutenProvider.test.ts"
+    "test": "node --experimental-strip-types --test src/services/packshotTrim.test.ts src/services/imageSolvers.test.ts src/services/imagePipelineCore.test.ts src/services/fragranceNameResolver.test.ts src/services/shareIdentity.test.ts src/services/rakutenProvider.test.ts src/server/affiliate/providers/amazon/amazonAffiliateUrl.test.ts"
   },
   "dependencies": {
     "dotenv": "^16.6.1",
@@ -24,7 +24,8 @@
     "form-data": "^4.0.0",
     "pino": "^9",
     "pino-http": "^10",
-    "sharp": "^0.33.5"
+    "sharp": "^0.33.5",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@types/cookie-parser": "^1.4.10",

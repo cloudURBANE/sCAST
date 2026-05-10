@@ -54,14 +54,19 @@ The user's desired end state is a staging-first clone from the old dump into a c
 
 Read in this order:
 
-1. `docs/OAUTH_DB_RECOVERY_STATUS_2026-05-06.md`
-2. `docs/SUPABASE_RECOVERY_PLAN.md`
-3. `docs/DATABASE_USAGE_MAP.md`
-4. `docs/AUTH_FLOW_MAP.md`
-5. `docs/ENVIRONMENT_MAP.md`
-6. `supabase/recovery/README.md`
+1. `docs/RUNTIME_NAVIGATION_INDEX.md` (current runtime call/navigation baseline)
+2. `docs/OAUTH_DB_RECOVERY_STATUS_2026-05-06.md`
+3. `docs/SUPABASE_RECOVERY_PLAN.md`
+4. `docs/DATABASE_USAGE_MAP.md`
+5. `docs/AUTH_FLOW_MAP.md`
+6. `docs/ENVIRONMENT_MAP.md`
+7. `supabase/recovery/README.md`
 
 Then validate the staging restore with row counts and API login before changing production environment variables.
+
+## Indexing Update (2026-05-07)
+
+For future codebase passes, treat `docs/RUNTIME_NAVIGATION_INDEX.md` as the entrypoint for "where behavior lives now." It captures currently active routes, table exports, and image/affiliate runtime flows that older recovery-focused maps do not fully cover.
 
 ## Current Active Blocker (2026-05-06)
 

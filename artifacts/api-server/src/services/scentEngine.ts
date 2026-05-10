@@ -1,10 +1,14 @@
-import { loadDataset, type FragranceData } from "./datasetLoader";
+import type { FragranceData } from "./datasetLoader";
 import { parseFragrance } from "./scentParser";
 import { vectorize, calculatePerformance, calculateContext, type ScentVector, type PerformanceMetrics, type ContextProfile } from "./scentVectorizer";
 import { getCatalogEntry, saveCatalogEntry, searchCatalog } from "./catalogService";
 import { resolveProcessedFragranceImage } from "./imagePipeline";
 import { usableImageUrlForResponse } from "./imageHydration";
-import { resolveFragranceIdentity } from "./fragranceNameResolver";
+import {
+  findDatasetFragrance,
+  resolveFragranceIdentity,
+  searchFragranceDataset,
+} from "./fragranceNameResolver";
 
 export interface ScentProfile {
   product: { name: string; brand: string; perfumer?: string };
@@ -17,39 +21,19 @@ export interface ScentProfile {
   concentration: string;
   accords: string[];
   imageUrl?: string;
+  storagePath?: string;
+  imageHash?: string | null;
+  storageProvider?: string;
   description?: string;
   error?: string;
 }
 
 function findFragrance(name: string, brand: string): FragranceData | undefined {
-  const dataset = loadDataset();
-  const searchName = name.toLowerCase();
-  const searchBrand = brand.toLowerCase();
-  const combined = `${brand} ${name}`.toLowerCase().trim();
-
-  return dataset.find(item => {
-    const itemName = item.name.toLowerCase();
-    const itemBrand = item.brand.toLowerCase();
-    const full = `${itemBrand} ${itemName}`.toLowerCase();
-    return (
-      (itemBrand === searchBrand && itemName.includes(searchName)) ||
-      (brand === "" && itemName.includes(searchName)) ||
-      (brand === "" && full.includes(searchName)) ||
-      itemName === searchName ||
-      full === combined
-    );
-  });
+  return findDatasetFragrance(brand, name);
 }
 
 export function searchFragrances(query: string): FragranceData[] {
-  const dataset = loadDataset();
-  const q = query.toLowerCase();
-  return dataset.filter(item => {
-    const itemName = item.name.toLowerCase();
-    const itemBrand = item.brand.toLowerCase();
-    const full = `${itemBrand} ${itemName}`.toLowerCase();
-    return itemName.includes(q) || itemBrand.includes(q) || full.includes(q);
-  });
+  return searchFragranceDataset(query);
 }
 
 export async function buildProfile(
@@ -176,6 +160,9 @@ export async function buildProfile(
     concentration: parsed.concentration,
     accords: parsed.accords,
     imageUrl: cleanImageUrl ?? undefined,
+    storagePath: processedImage?.storagePath,
+    imageHash: processedImage?.imageHash ?? null,
+    storageProvider: processedImage?.storageProvider,
     description: finalDescription,
   };
 

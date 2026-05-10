@@ -8,33 +8,75 @@ export type ResolvedFragranceIdentity = {
   corrected: boolean;
 };
 
-const MIN_CONFIDENT_SCORE = 0.8;
+export type FragranceCandidateMatch = {
+  score: number;
+  matched: boolean;
+};
+
+const MAX_QUERY_LENGTH = 180;
+export const FRAGRANCE_CANDIDATE_MIN_SCORE = 0.82;
+export const SAME_FRAGRANCE_IDENTITY_MIN_SCORE = 0.88;
+const AMBIGUOUS_VARIANT_MAX_SCORE = FRAGRANCE_CANDIDATE_MIN_SCORE - 0.03;
 const QUERY_WORDS_TO_IGNORE = new Set([
+  "about",
+  "add",
   "bottle",
+  "details",
+  "find",
   "fragrance",
+  "give",
   "image",
+  "info",
+  "looking",
+  "me",
+  "my",
   "packshot",
   "perfume",
   "photo",
   "picture",
+  "please",
   "product",
   "search",
+  "show",
+  "the",
+  "up",
+  "vault",
 ]);
 const EXTRA_WORDS_ALLOWED = new Set([
   "edc",
   "edt",
   "edp",
-  "elixir",
   "eau",
   "de",
+  "extrait",
   "parfum",
   "toilette",
 ]);
+const FRAGRANCE_INTENT_WORDS = new Set([
+  "cologne",
+  "fragrance",
+  "perfume",
+  "parfum",
+  "edt",
+  "edp",
+  "edc",
+  "elixir",
+  "extrait",
+]);
 const DATASET = fragrancesRaw as FragranceData[];
+const KNOWN_FRAGRANCE_BRAND_TOKENS = new Set(
+  DATASET.flatMap((item) =>
+    compactRaw(item.brand)
+      .split(" ")
+      .filter((word) => word.length >= 3),
+  ),
+);
 const RETAIL_NOISE_PATTERN =
   /\b(?:\d+(?:\.\d+)?\s*(?:m\s*l|ml|millilitre|milliliter|millilitres|milliliters|fl\.?\s*oz\.?|oz\.?|ounces?)|spray|natural\s+spray|vaporisateur|tester|sample|travel\s+size|mini|bottle|boxed|sealed|new\s+in\s+box|nib|refillable|refill|eau\s+de\s+parfum|eau\s+de\s+toilette|eau\s+de\s+cologne|extrait\s+de\s+parfum|edp|edt|edc)\b/i;
 const FRAGRANCE_INTENT_PATTERN =
-  /\b(?:cologne|fragrance|perfume|parfum|edt|edp|edc|eau\s+de\s+(?:toilette|parfum|cologne)|extrait\s+de\s+parfum)\b/i;
+  /\b(?:cologne|fragrance|perfume|parfum|edt|edp|edc|elixir|eau\s+de\s+(?:toilette|parfum|cologne)|extrait\s+de\s+parfum)\b/i;
+const NON_FRAGRANCE_CATEGORY_PATTERN =
+  /\b(?:shoe|shoes|sneaker|sneakers|boot|boots|shirt|shirts|pants|jeans|dress|dresses|jacket|jackets|bag|bags|watch|watches|phone|phones|laptop|laptops|tablet|tablets|lipstick|mascara|foundation|skincare|candle|candles)\b/i;
 
 function foldAscii(value: string): string {
   return value
@@ -43,8 +85,18 @@ function foldAscii(value: string): string {
     .replace(/[^\x20-\x7E]/g, "");
 }
 
-function stripRetailNoise(value: string): string {
+export function sanitizeFragranceQueryInput(value: string): string {
   return foldAscii(value)
+    .replace(/https?:\/\/\S+/gi, " ")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/[\u0000-\u001f\u007f]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, MAX_QUERY_LENGTH);
+}
+
+function stripRetailNoise(value: string): string {
+  return sanitizeFragranceQueryInput(value)
     .replace(/\([^)]*\)/g, (part) => (RETAIL_NOISE_PATTERN.test(part) ? " " : part))
     .replace(/\[[^\]]*\]/g, (part) => (RETAIL_NOISE_PATTERN.test(part) ? " " : part))
     .replace(/\b\d+(?:\.\d+)?\s*(?:m\s*l|ml|millilitre|milliliter|millilitres|milliliters)\b/gi, " ")
@@ -63,7 +115,7 @@ function cleanDisplayName(value: string): string {
 }
 
 function compactRaw(value: string): string {
-  return foldAscii(value)
+  return sanitizeFragranceQueryInput(value)
     .toLowerCase()
     .replace(/&/g, " and ")
     .replace(/\bno\.\s*/g, "no ")
@@ -85,6 +137,22 @@ function queryCompact(value: string): string {
 
 function tokens(value: string): string[] {
   return compact(value).split(" ").filter(Boolean);
+}
+
+function wordsFromCompact(value: string): string[] {
+  return value.split(" ").filter(Boolean);
+}
+
+function meaningfulQueryTokens(value: string): string[] {
+  return compactRaw(stripRetailNoise(value))
+    .split(" ")
+    .filter((word) => {
+      if (!word || word.length <= 1) return false;
+      if (QUERY_WORDS_TO_IGNORE.has(word)) return false;
+      if (FRAGRANCE_INTENT_WORDS.has(word)) return false;
+      if (EXTRA_WORDS_ALLOWED.has(word)) return false;
+      return true;
+    });
 }
 
 function levenshtein(a: string, b: string): number {
@@ -132,13 +200,17 @@ function wordSimilarity(a: string, b: string): number {
   return score;
 }
 
+function wordsMatch(a: string, b: string): boolean {
+  return a === b || wordSimilarity(a, b) >= 0.72;
+}
+
 function tokenCoverage(needle: string, haystack: string): number {
   const wanted = tokens(needle);
   if (wanted.length === 0) return 0;
-  const hay = compact(haystack);
+  const hayWords = tokens(haystack);
   let matched = 0;
   for (const word of wanted) {
-    if (hay.split(" ").some((h) => h === word || wordSimilarity(word, h) >= 0.72)) matched++;
+    if (hayWords.some((h) => wordsMatch(word, h))) matched++;
   }
   return matched / wanted.length;
 }
@@ -147,8 +219,100 @@ function unmatchedMeaningfulTokenCount(input: string, candidate: string): number
   const candidateWords = tokens(candidate);
   return tokens(input).filter((word) => {
     if (EXTRA_WORDS_ALLOWED.has(word)) return false;
-    return !candidateWords.some((candidateWord) => candidateWord === word || wordSimilarity(word, candidateWord) >= 0.72);
+    return !candidateWords.some((candidateWord) => wordsMatch(word, candidateWord));
   }).length;
+}
+
+function unmatchedNameVariantTokenCount(inputName: string, candidateName: string): number {
+  const candidateWords = tokens(candidateName);
+  return tokens(inputName).filter((word) => {
+    if (EXTRA_WORDS_ALLOWED.has(word)) return false;
+    return !candidateWords.some((candidateWord) => wordsMatch(word, candidateWord));
+  }).length;
+}
+
+function unmatchedCandidateNameTokenCount(input: string, candidateName: string): number {
+  const inputWords = tokens(input);
+  return tokens(candidateName).filter((word) => {
+    if (EXTRA_WORDS_ALLOWED.has(word)) return false;
+    if (/^\d+$/.test(word)) return false;
+    return !inputWords.some((inputWord) => wordsMatch(word, inputWord));
+  }).length;
+}
+
+function candidateScore(
+  brand: string,
+  name: string,
+  candidateBrand: string,
+  candidateName: string,
+): number {
+  const meaningfulInputTokens = meaningfulQueryTokens(`${brand} ${name}`);
+  if (meaningfulInputTokens.length === 0) return 0;
+
+  const cleanBrand = brand.trim();
+  const cleanName = cleanDisplayName(name);
+  const rawBrand = compact(cleanBrand);
+  const rawName = compact(cleanName);
+  const rawFull = compact(`${cleanBrand} ${cleanName}`);
+  if (!rawFull) return 0;
+
+  const itemBrand = compact(candidateBrand);
+  const itemName = compact(candidateName);
+  const itemFull = `${itemBrand} ${itemName}`.trim();
+  const inputWords = wordsFromCompact(rawFull);
+  const candidateBrandWords = wordsFromCompact(itemBrand);
+  const candidateNameWords = wordsFromCompact(itemName);
+  const allInputTokensAreBrand =
+    inputWords.length > 0 &&
+    inputWords.every((word) => candidateBrandWords.some((candidateWord) => wordsMatch(word, candidateWord)));
+  const isExactName =
+    rawName.length > 0 &&
+    (rawName === itemName || (inputWords.length === candidateNameWords.length && tokenCoverage(rawName, itemName) === 1));
+
+  const brandScore = rawBrand ? Math.max(similarity(rawBrand, itemBrand), tokenCoverage(rawBrand, itemBrand)) : 0.5;
+  const nameScore = rawName ? Math.max(similarity(rawName, itemName), tokenCoverage(rawName, itemName)) : 0;
+  const fullScore = Math.max(similarity(rawFull, itemFull), tokenCoverage(rawFull, itemFull));
+  const weightedScore = rawBrand ? brandScore * 0.34 + nameScore * 0.66 : Math.max(nameScore, fullScore * 0.96);
+  const extraPenalty = unmatchedMeaningfulTokenCount(rawFull, itemFull) * 0.18;
+  let score = Math.max(fullScore, weightedScore) - extraPenalty;
+
+  if (rawBrand && brandScore < 0.72) score -= 0.18;
+  if (isExactName) score += 0.05;
+  if (rawBrand && rawBrand === itemBrand) score += 0.04;
+
+  if (allInputTokensAreBrand && !isExactName) {
+    score = Math.min(score, 0.68);
+  }
+
+  const singleMeaningfulInputWord = meaningfulInputTokens.length === 1 ? meaningfulInputTokens[0] : "";
+  const singleTokenVariantOnly =
+    singleMeaningfulInputWord &&
+    candidateNameWords.length > 1 &&
+    candidateNameWords.some((word) => wordsMatch(singleMeaningfulInputWord, word)) &&
+    !isExactName;
+  if (singleTokenVariantOnly) {
+    score = Math.min(score, AMBIGUOUS_VARIANT_MAX_SCORE);
+  }
+
+  const inputHasNumber = inputWords.some((word) => /\d/.test(word));
+  const candidateNameAddsVariant = unmatchedCandidateNameTokenCount(rawFull, itemName) > 0;
+  if (!inputHasNumber && candidateNameAddsVariant) {
+    score = Math.min(score, AMBIGUOUS_VARIANT_MAX_SCORE);
+  }
+
+  return Math.max(0, Math.min(1, score));
+}
+
+function rankDatasetMatches(brand: string, name: string): Array<{ item: FragranceData; score: number }> {
+  const rawFull = compact(`${brand.trim()} ${cleanDisplayName(name)}`);
+  if (!rawFull) return [];
+
+  return DATASET
+    .map((item) => ({ item, score: candidateScore(brand, name, item.brand, item.name) }))
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      return a.item.name.length - b.item.name.length;
+    });
 }
 
 function bestDatasetMatch(brand: string, name: string): ResolvedFragranceIdentity | null {
@@ -156,27 +320,11 @@ function bestDatasetMatch(brand: string, name: string): ResolvedFragranceIdentit
   const cleanName = cleanDisplayName(name);
   const originalBrand = compactRaw(brand);
   const originalName = compactRaw(name);
-  const rawBrand = compact(cleanBrand);
-  const rawName = compact(cleanName);
-  const rawFull = compact(`${cleanBrand} ${cleanName}`);
-  if (!rawFull) return null;
-
-  let best: { item: FragranceData; score: number } | null = null;
-  for (const item of DATASET) {
-    const itemBrand = compact(item.brand);
-    const itemName = compact(item.name);
-    const itemFull = `${itemBrand} ${itemName}`;
-
-    const brandScore = rawBrand ? Math.max(similarity(rawBrand, itemBrand), tokenCoverage(rawBrand, itemBrand)) : 0.5;
-    const nameScore = rawName ? Math.max(similarity(rawName, itemName), tokenCoverage(rawName, itemName)) : 0;
-    const fullScore = Math.max(similarity(rawFull, itemFull), tokenCoverage(rawFull, itemFull));
-    const extraPenalty = unmatchedMeaningfulTokenCount(rawFull, itemFull) * 0.2;
-    const score = Math.max(fullScore, brandScore * 0.34 + nameScore * 0.66) - extraPenalty;
-
-    if (!best || score > best.score) best = { item, score };
-  }
-
-  if (!best || best.score < MIN_CONFIDENT_SCORE) return null;
+  const ranked = rankDatasetMatches(cleanBrand, cleanName);
+  const best = ranked[0];
+  if (!best || best.score < FRAGRANCE_CANDIDATE_MIN_SCORE) return null;
+  const second = ranked[1];
+  if (second && best.score < 0.97 && best.score - second.score < 0.04) return null;
   const corrected = compact(best.item.brand) !== originalBrand || compact(best.item.name) !== originalName;
   return {
     brand: best.item.brand,
@@ -184,6 +332,77 @@ function bestDatasetMatch(brand: string, name: string): ResolvedFragranceIdentit
     confidence: Number(best.score.toFixed(3)),
     corrected,
   };
+}
+
+export function fragranceCatalogSearchTerms(query: string): string[] {
+  const seen = new Set<string>();
+  for (const word of queryCompact(query).split(" ")) {
+    if (word.length <= 1) continue;
+    if (FRAGRANCE_INTENT_WORDS.has(word)) continue;
+    if (EXTRA_WORDS_ALLOWED.has(word)) continue;
+    seen.add(word);
+  }
+  return [...seen].slice(0, 6);
+}
+
+export function hasMeaningfulFragranceQuery(query: string): boolean {
+  return meaningfulQueryTokens(query).length > 0;
+}
+
+function looksLikeNamedFragranceQuery(query: string): boolean {
+  if (NON_FRAGRANCE_CATEGORY_PATTERN.test(query) && !hasKnownFragranceBrandSignal(query)) return false;
+  return meaningfulQueryTokens(query).length >= 2;
+}
+
+function hasKnownFragranceBrandSignal(query: string): boolean {
+  const queryWords = meaningfulQueryTokens(query);
+  return queryWords.some((word) => KNOWN_FRAGRANCE_BRAND_TOKENS.has(word));
+}
+
+export function scoreFragranceCandidate(
+  input: string | { brand?: string; name?: string },
+  candidate: { brand?: string; name?: string },
+  minScore = FRAGRANCE_CANDIDATE_MIN_SCORE,
+): FragranceCandidateMatch {
+  const inputBrand = typeof input === "string" ? "" : input.brand ?? "";
+  const inputName = typeof input === "string" ? input : input.name ?? "";
+  const candidateBrand = candidate.brand ?? "";
+  const candidateName = candidate.name ?? "";
+  const score = candidateScore(inputBrand, inputName, candidateBrand, candidateName);
+  return {
+    score: Number(score.toFixed(3)),
+    matched: score >= minScore,
+  };
+}
+
+export function isLikelySameFragranceIdentity(
+  input: { brand?: string; name?: string },
+  candidate: { brand?: string; name?: string },
+  minScore = SAME_FRAGRANCE_IDENTITY_MIN_SCORE,
+): boolean {
+  const match = scoreFragranceCandidate(input, candidate, minScore);
+  if (!match.matched) return false;
+  const inputName = input.name ?? "";
+  const candidateName = candidate.name ?? "";
+  return (
+    unmatchedNameVariantTokenCount(inputName, candidateName) === 0 &&
+    unmatchedNameVariantTokenCount(candidateName, inputName) === 0
+  );
+}
+
+export function findDatasetFragrance(brand: string, name: string): FragranceData | undefined {
+  const resolved = bestDatasetMatch(brand, name);
+  if (!resolved) return undefined;
+  return DATASET.find((item) => item.brand === resolved.brand && item.name === resolved.name);
+}
+
+export function searchFragranceDataset(query: string, limit = 5): FragranceData[] {
+  const cleaned = queryCompact(query);
+  if (!cleaned) return [];
+  return rankDatasetMatches("", cleaned)
+    .filter((item) => item.score >= FRAGRANCE_CANDIDATE_MIN_SCORE)
+    .slice(0, limit)
+    .map((item) => item.item);
 }
 
 export function resolveFragranceIdentity(brand: string, name: string): ResolvedFragranceIdentity {
@@ -205,7 +424,13 @@ export function resolveFragranceQuery(query: string): ResolvedFragranceIdentity 
 }
 
 export function shouldSearchExternalFragranceSources(query: string): boolean {
-  return FRAGRANCE_INTENT_PATTERN.test(query) || resolveFragranceQuery(query) !== null;
+  const sanitized = sanitizeFragranceQueryInput(query);
+  if (!sanitized) return false;
+  return (
+    resolveFragranceQuery(sanitized) !== null ||
+    (FRAGRANCE_INTENT_PATTERN.test(sanitized) && hasMeaningfulFragranceQuery(sanitized)) ||
+    looksLikeNamedFragranceQuery(sanitized)
+  );
 }
 
 export function asciiForImageSearch(value: string): string {

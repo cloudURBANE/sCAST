@@ -1,7 +1,9 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { imageCacheTable } from "@workspace/db/schema";
+import { logger } from "../lib/logger";
 import {
+  isLocalImageObjectUrlPersistable,
   localImageObjectExists,
   storagePathFromLocalImageObjectUrl,
   type ImageStorageProvider,
@@ -32,11 +34,24 @@ export type CachedImageReference = {
   backgroundRemoved: boolean;
 };
 
+let imageCacheMissingWarned = false;
+
+function warnImageCacheMissingOnce(): void {
+  if (imageCacheMissingWarned) return;
+  imageCacheMissingWarned = true;
+  logger.warn(
+    "image_cache table is missing; processed image cache persistence is disabled. Run pnpm --filter @workspace/db push.",
+  );
+}
+
 export function isImageCacheUnavailableError(err: unknown): boolean {
   const value = err as { code?: unknown; message?: unknown } | null;
-  if (value?.code === "42P01") return true;
-  const message = typeof value?.message === "string" ? value.message : "";
-  return /relation ["']?image_cache["']? does not exist/i.test(message);
+  const isMissing =
+    value?.code === "42P01" ||
+    (typeof value?.message === "string" &&
+      /relation ["']?image_cache["']? does not exist/i.test(value.message));
+  if (isMissing) warnImageCacheMissingOnce();
+  return isMissing;
 }
 
 function rowToReference(row: typeof imageCacheTable.$inferSelect, cached: boolean): CachedImageReference | null {
@@ -66,6 +81,7 @@ async function rowToUsableReference(
   if (!ref) return null;
 
   if (ref.storageProvider === "local" || ref.imageUrl.startsWith("/api/image-objects/")) {
+    if (!isLocalImageObjectUrlPersistable()) return null;
     const storagePath = ref.storagePath || storagePathFromLocalImageObjectUrl(ref.imageUrl);
     if (!storagePath) return null;
     if (!(await localImageObjectExists(storagePath))) return null;

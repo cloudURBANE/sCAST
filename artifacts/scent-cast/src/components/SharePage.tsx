@@ -48,16 +48,9 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
 
   useEffect(() => {
     setBuyLinks({});
-    // #region agent log
-    fetch('http://127.0.0.1:7745/ingest/484c0150-587d-4568-9bd7-b30ce5dec585',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'db2024'},body:JSON.stringify({sessionId:'db2024',runId:'baseline-share-access',hypothesisId:'H4',location:'components/SharePage.tsx:49',message:'share page fetch start',data:{userId,path:`/api/share/${userId}`},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     fetch(`/api/share/${userId}`)
       .then(async (r) => {
-        const body = await r.json();
-        // #region agent log
-        fetch('http://127.0.0.1:7745/ingest/484c0150-587d-4568-9bd7-b30ce5dec585',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'db2024'},body:JSON.stringify({sessionId:'db2024',runId:'baseline-share-access',hypothesisId:'H5',location:'components/SharePage.tsx:56',message:'share page fetch response',data:{userId,status:r.status,ok:r.ok,error:body?.error ?? null,hideImages:body?.hideImages ?? null,count:Array.isArray(body?.fragrances)?body.fragrances.length:null,imageCount:Array.isArray(body?.fragrances)?body.fragrances.filter((f: any)=>typeof f?.imageUrl==='string'&&f.imageUrl.trim().length>0).length:null},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
-        return body;
+        return r.json();
       })
       .then(d => {
         if (d.error) throw new Error(d.error);
@@ -87,9 +80,6 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
         }
       })
       .catch(e => {
-        // #region agent log
-        fetch('http://127.0.0.1:7745/ingest/484c0150-587d-4568-9bd7-b30ce5dec585',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'db2024'},body:JSON.stringify({sessionId:'db2024',runId:'baseline-share-access',hypothesisId:'H5',location:'components/SharePage.tsx:69',message:'share page fetch error',data:{userId,error:e?.message ?? 'unknown'},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
         setError(e.message || 'Failed to load vault');
       })
       .finally(() => setLoading(false));
@@ -143,12 +133,13 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {data.fragrances.map((item, i) => {
                 const fragranceId = item._dbId ?? item.id;
+                const isExpanded = expanded === fragranceId;
                 const buyLink = buyLinks[fragranceId];
                 const buyUrl = buyLink?.status === 'active' ? buyLink.buyUrl : null;
 
                 return (
                   <motion.div
-                    key={item.id}
+                    key={fragranceId}
                     initial={{ opacity: 0, y: 24 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: i * 0.05 }}
@@ -156,7 +147,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                   >
                   <div
                     className="glass-acrylic rounded-scent overflow-hidden cursor-pointer transition-all duration-500 hover:-translate-y-2 hover:shadow-[0_20px_50px_rgba(255,255,255,0.08)]"
-                    onClick={() => setExpanded(expanded === item.id ? null : item.id)}
+                    onClick={() => setExpanded(isExpanded ? null : fragranceId)}
                   >
                     {!data.hideImages && (
                       <div className="relative aspect-[3/4] bg-white/[0.02]">
@@ -194,7 +185,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                         )}
                       </div>
 
-                      {expanded === item.id && (
+                      {isExpanded && (
                         <motion.div
                           initial={{ opacity: 0, height: 0 }}
                           animate={{ opacity: 1, height: 'auto' }}

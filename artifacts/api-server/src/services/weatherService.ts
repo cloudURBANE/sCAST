@@ -12,8 +12,8 @@ export async function getWeather(params?: { lat?: number | string; lon?: number 
     const apiParams: Record<string, unknown> = {
       appid: apiKey,
       units: 'imperial',
-      lat: lat || 51.5074,
-      lon: lon || -0.1278
+      lat: (lat != null && lat !== '' && Number.isFinite(Number(lat))) ? lat : 51.5074,
+      lon: (lon != null && lon !== '' && Number.isFinite(Number(lon))) ? lon : -0.1278,
     };
 
     try {

@@ -9,12 +9,24 @@ import { LavaBackground } from './components/LavaBackground';
 import { AuthModal } from './components/AuthModal';
 import { SharePage } from './components/SharePage';
 import { ShareModal } from './components/ShareModal';
+import {
+  calculateScentWeatherRecommendation,
+  type ScentFamily,
+  type ScentWeatherEngineInput,
+  type ScentWeatherRecommendation,
+} from './lib/scentWeatherEngine';
 
 interface WeatherData {
-  temp: number;
-  humidity: number;
-  condition: string;
-  icon: string;
+  temp?: number;
+  temperature?: number;
+  temperature_f?: number;
+  humidity?: number;
+  humidity_percent?: number;
+  condition?: string;
+  description?: string;
+  icon?: string;
+  windSpeed?: number;
+  wind_speed_mph?: number;
   location?: string;
   isLive?: boolean;
   error?: string;
@@ -25,152 +37,326 @@ const STORAGE_KEYS = {
   EMAIL: 'scent_email',
 } as const;
 
+type LooseRecord = Record<string, unknown>;
+
+const isLooseRecord = (value: unknown): value is LooseRecord =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const numberFromValue = (value: unknown): number | undefined => {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value !== 'string' || value.trim() === '') return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+};
+
+const firstFiniteNumber = (fallback: number, ...values: unknown[]): number => {
+  for (const value of values) {
+    const numberValue = numberFromValue(value);
+    if (numberValue !== undefined) return numberValue;
+  }
+  return fallback;
+};
+
+const firstString = (...values: unknown[]): string | undefined => {
+  for (const value of values) {
+    if (typeof value !== 'string') continue;
+    const trimmed = value.trim();
+    if (trimmed) return trimmed;
+  }
+  return undefined;
+};
+
+const uniqueStrings = (values: string[]): string[] =>
+  Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
+
+const collectStrings = (value: unknown): string[] => {
+  if (typeof value === 'string') return [value];
+  if (Array.isArray(value)) return value.flatMap(collectStrings);
+  return [];
+};
+
+const getWeatherNumber = (
+  weather: WeatherData | null,
+  keys: (keyof WeatherData)[],
+  fallback: number,
+): number => firstFiniteNumber(fallback, ...keys.map((key) => weather?.[key]));
+
+const getWeatherString = (
+  weather: WeatherData | null,
+  keys: (keyof WeatherData)[],
+  fallback = '',
+): string => firstString(...keys.map((key) => weather?.[key])) ?? fallback;
+
+const getFragranceRecord = (item: Fragrance): LooseRecord => item as unknown as LooseRecord;
+
 /** Match Wardrobe grid visibility — legacy rows may lack flat name/brand until rebuilt */
 function wardrobeEntryName(item: Fragrance): string {
-  return item?.name || item?.product?.name || '';
+  const record = getFragranceRecord(item);
+  const product = isLooseRecord(record.product) ? record.product : null;
+  return firstString(record.name, product?.name) ?? '';
 }
 function wardrobeEntryBrand(item: Fragrance): string {
-  return item?.brand || item?.product?.brand || '';
+  const record = getFragranceRecord(item);
+  const product = isLooseRecord(record.product) ? record.product : null;
+  return firstString(record.brand, product?.brand) ?? '';
 }
 function wardrobeNeedsLegacyRebuild(items: Fragrance[]): boolean {
   return items.some((item) => !wardrobeEntryName(item) || !wardrobeEntryBrand(item));
 }
+function sameWardrobeEntry(
+  item: Pick<Fragrance, 'id' | '_dbId'>,
+  target: Pick<Fragrance, 'id' | '_dbId'>,
+): boolean {
+  if (target._dbId) return item._dbId === target._dbId;
+  if (item._dbId) return false;
+  return item.id === target.id;
+}
 
-// --- Pure Functions ---
+const RAIN_CONDITION_SIGNALS = ['rain', 'drizzle', 'storm'];
 
-const calculateOlfactoryAlignment = (
-  items: Fragrance[],
+const FAMILY_TRAIT_SIGNALS: Record<ScentFamily, string[]> = {
+  fresh: ['fresh', 'freshness', 'clean', 'mint'],
+  citrus: ['citrus', 'bergamot', 'lemon', 'lime', 'orange', 'grapefruit', 'mandarin'],
+  aquatic: ['aquatic', 'marine', 'ocean', 'sea', 'water'],
+  green: ['green', 'grass', 'leaf', 'leafy', 'herbal', 'vetiver'],
+  musky: ['musk', 'musky'],
+  woody: ['wood', 'woody', 'woodiness', 'cedar', 'sandalwood', 'patchouli', 'vetiver'],
+  amber: ['amber', 'resin', 'warmth', 'warm'],
+  sweet: ['sweet', 'sweetness', 'vanilla', 'tonka', 'caramel', 'honey'],
+  gourmand: ['gourmand', 'chocolate', 'coffee', 'praline', 'caramel'],
+  oud: ['oud', 'agarwood'],
+  smoky: ['smoke', 'smoky', 'incense'],
+  leather: ['leather', 'leathery', 'suede'],
+  tobacco: ['tobacco', 'cigar'],
+  spicy: ['spicy', 'spice', 'pepper', 'cardamom', 'cinnamon', 'clove', 'saffron'],
+  powdery: ['powder', 'powdery', 'iris', 'orris', 'violet'],
+};
+
+const mapDestinationToEngineType = (
+  destination: DestinationType | string,
+): ScentWeatherEngineInput['setting']['type'] => {
+  const normalized = destination.trim().toLowerCase();
+  if (normalized === 'work') return 'work';
+  if (normalized === 'night out' || normalized === 'night') return 'night';
+  if (normalized === 'going out') return 'mixed';
+  if (normalized === 'date') return 'date';
+  if (normalized === 'gym') return 'gym';
+  return 'indoor';
+};
+
+const normalizeTrait = (value: unknown): string =>
+  typeof value === 'string' ? value.trim().toLowerCase() : '';
+
+const titleCaseToken = (value: string): string =>
+  value
+    .replace(/_/g, ' ')
+    .split(' ')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+
+const getFragranceFamilies = (item: Fragrance): string[] => {
+  const record = getFragranceRecord(item);
+  return uniqueStrings([
+    ...collectStrings(record.scentFamilies),
+    ...collectStrings(record.scent_families),
+    ...collectStrings(record.families),
+    ...collectStrings(record.family),
+  ]);
+};
+
+const getFragranceAccords = (item: Fragrance): string[] => {
+  const record = getFragranceRecord(item);
+  const pyramid = isLooseRecord(record.pyramid) ? record.pyramid : null;
+  return uniqueStrings([
+    ...collectStrings(record.accords),
+    ...collectStrings(record.notes),
+    ...collectStrings(record.topNotes),
+    ...collectStrings(record.middleNotes),
+    ...collectStrings(record.heartNotes),
+    ...collectStrings(record.baseNotes),
+    ...collectStrings(pyramid?.top),
+    ...collectStrings(pyramid?.heart),
+    ...collectStrings(pyramid?.middle),
+    ...collectStrings(pyramid?.base),
+    ...collectStrings(pyramid?.notes),
+  ]);
+};
+
+const getFragranceProfileVector = (item: Fragrance): Record<string, number> => {
+  const record = getFragranceRecord(item);
+  const vector: Record<string, number> = {};
+
+  for (const source of [record.profile_vector, record.vector, record.scent_vector]) {
+    if (!isLooseRecord(source)) continue;
+    for (const [key, value] of Object.entries(source)) {
+      const numberValue = numberFromValue(value);
+      if (numberValue !== undefined) vector[key] = numberValue;
+    }
+  }
+
+  return vector;
+};
+
+const getFragranceLongevity = (item: Fragrance): string | number | undefined => {
+  const record = getFragranceRecord(item);
+  const performance = isLooseRecord(record.performance) ? record.performance : null;
+  const value = record.longevity ?? performance?.longevity;
+  if (typeof value === 'string') return firstString(value);
+  return numberFromValue(value);
+};
+
+const getFragranceTraitTexts = (item: Fragrance): string[] => {
+  const traits: string[] = [];
+  traits.push(...getFragranceFamilies(item));
+  traits.push(...getFragranceAccords(item));
+  for (const [key, value] of Object.entries(getFragranceProfileVector(item))) {
+    if (Number.isFinite(value) && value > 0) traits.push(key);
+  }
+  return traits.map(normalizeTrait).filter(Boolean);
+};
+
+const fragranceHasFamilySignal = (item: Fragrance, family: ScentFamily): boolean => {
+  const traits = getFragranceTraitTexts(item);
+  return traits.some((trait) =>
+    FAMILY_TRAIT_SIGNALS[family].some((signal) => trait.includes(signal)),
+  );
+};
+
+const mapSillageToEngineLabel = (sillage: unknown): string | undefined => {
+  if (typeof sillage === 'string') return firstString(sillage);
+  const numericSillage = numberFromValue(sillage);
+  if (numericSillage === undefined) return undefined;
+  if (numericSillage >= 8) return 'strong';
+  if (numericSillage <= 3) return 'light';
+  return 'moderate';
+};
+
+const getFragranceSillage = (item: Fragrance): string | undefined => {
+  const record = getFragranceRecord(item);
+  const performance = isLooseRecord(record.performance) ? record.performance : null;
+  return mapSillageToEngineLabel(record.sillage ?? record.projection ?? performance?.sillage);
+};
+
+const buildEngineInput = (
+  item: Fragrance,
   intent: { destination: DestinationType; energy: EnergyState },
-  weather: WeatherData | null
-) => {
-  const hour = new Date().getHours();
-  const isMorning = hour >= 6 && hour < 10;
-  const isEvening = hour >= 17 && hour < 21;
-  const isNight = hour >= 21 || hour < 6;
+  weather: WeatherData | null,
+): ScentWeatherEngineInput => {
+  const condition = getWeatherString(weather, ['condition', 'description']);
+  const normalizedCondition = condition.toLowerCase();
 
-  const destinationOccasions: Record<DestinationType, string[]> = {
-    'Staying In': ['Intimate', 'Date Night', 'Casual'],
-    'Work': ['Professional', 'Executive', 'Daytime'],
-    'Going Out': ['Social', 'Casual', 'Outdoor', 'Sport', 'Social Dominance'],
-    'Night Out': ['Evening', 'Formal', 'Date Night', 'Social Dominance', 'Intimate'],
+  return {
+    weather: {
+      temperature_f: getWeatherNumber(weather, ['temperature_f', 'temperature', 'temp'], 72),
+      humidity_percent: getWeatherNumber(weather, ['humidity_percent', 'humidity'], 50),
+      wind_speed_mph: getWeatherNumber(weather, ['wind_speed_mph', 'windSpeed'], 0),
+      is_raining: RAIN_CONDITION_SIGNALS.some((signal) => normalizedCondition.includes(signal)),
+      condition,
+    },
+    setting: {
+      type: mapDestinationToEngineType(intent.destination),
+    },
+    fragrance: {
+      name: wardrobeEntryName(item),
+      brand: wardrobeEntryBrand(item),
+      concentration: item.concentration,
+      scent_families: getFragranceFamilies(item),
+      accords: getFragranceAccords(item),
+      profile_vector: getFragranceProfileVector(item),
+      longevity: getFragranceLongevity(item),
+      sillage: getFragranceSillage(item),
+    },
+  };
+};
+
+const calculateRecommendationDisplayScore = (
+  recommendation: ScentWeatherRecommendation,
+): number => {
+  const confidenceBaseScore: Record<ScentWeatherRecommendation['confidence'], number> = {
+    high: 92,
+    medium: 78,
+    low: 62,
+  };
+  const projectionPenalty: Record<ScentWeatherRecommendation['projection_risk'], number> = {
+    low: 0,
+    medium: 4,
+    high: 10,
+    overpowering_risk: 18,
+  };
+  const wearWindowPenalty: Record<ScentWeatherRecommendation['wear_window'], number> = {
+    best_now: 0,
+    daytime_safe: 2,
+    better_later: 8,
+    nighttime_better: 10,
+    avoid_today: 28,
   };
 
-  const scored = items.map(item => {
-    const v = item.scent_vector || { freshness: 0, sweetness: 0, woodiness: 0, spice: 0, warmth: 0, musk: 0 };
-    const { freshness, sweetness, woodiness, spice, warmth, musk } = v;
-    const sillage = item.performance?.sillage ?? 5;
-    const longevity = item.performance?.longevity ?? 5;
-    const occasions = item.context?.occasion ?? [];
+  return Math.max(
+    0,
+    Math.min(
+      100,
+      confidenceBaseScore[recommendation.confidence] -
+        projectionPenalty[recommendation.projection_risk] -
+        wearWindowPenalty[recommendation.wear_window],
+    ),
+  );
+};
 
-    let score = 0;
-    const drivers: string[] = [];
+const scoreRecommendationCandidate = (
+  item: Fragrance,
+  recommendation: ScentWeatherRecommendation,
+  intent: { destination: DestinationType; energy: EnergyState },
+): number => {
+  const bestFamilyHits = recommendation.best_scent_families.filter((family) =>
+    fragranceHasFamilySignal(item, family),
+  ).length;
+  const avoidFamilyHits = recommendation.avoid_scent_families.filter((family) =>
+    fragranceHasFamilySignal(item, family),
+  ).length;
+  const intentBonus = item.intents?.includes(intent.destination) ? 4 : 0;
+  const energyBonus = item.energies?.includes(intent.energy) ? 3 : 0;
 
-    // Destination Match
-    if (intent.destination === 'Staying In') {
-      const sub = musk * 2.0 + sweetness * 1.5 + warmth * 1.0 + (10 - sillage) * 1.2;
-      score += sub;
-      if (sub > 20) drivers.push('intimate projection suits the setting');
-    } else if (intent.destination === 'Work') {
-      const sub = woodiness * 2.0 + freshness * 1.5 + (8 - Math.abs(sillage - 5)) * 1.5;
-      score += sub;
-      if (spice > 6 || sweetness > 7) score -= 12;
-      if (sub > 20) drivers.push('clean, grounded character fits a professional space');
-    } else if (intent.destination === 'Going Out') {
-      const sub = freshness * 1.5 + woodiness * 1.2 + musk * 1.0 + sillage * 1.3;
-      score += sub;
-      if (sub > 20) drivers.push('versatile projection reads well in any setting');
-    } else if (intent.destination === 'Night Out') {
-      const sub = warmth * 2.0 + spice * 2.0 + woodiness * 1.2 + sillage * 2.5;
-      score += sub;
-      if (sub > 20) drivers.push('bold depth and projection command the room at night');
-    }
+  return (
+    calculateRecommendationDisplayScore(recommendation) +
+    bestFamilyHits * 8 -
+    avoidFamilyHits * 14 +
+    intentBonus +
+    energyBonus
+  );
+};
 
-    if (occasions.some(o => destinationOccasions[intent.destination].includes(o))) {
-      score += 15;
-      drivers.push(`its olfactory profile is calibrated for this context`);
-    }
-
-    // Energy Match
-    if (intent.energy === 'Calm') {
-      score += freshness * 1.2 + musk * 1.0 - spice * 0.6 - warmth * 0.4;
-      if (freshness >= 6) drivers.push('cool freshness supports a calm presence');
-    } else if (intent.energy === 'Focused') {
-      score += woodiness * 2.0 + freshness * 1.2 - sweetness * 0.8;
-      if (woodiness >= 6) drivers.push('grounded woodiness channels mental clarity');
-    } else if (intent.energy === 'Confident') {
-      score += spice * 2.0 + warmth * 1.5 + woodiness * 1.0 + sillage * 1.5;
-      if (spice >= 5 || sillage >= 7) drivers.push('its assertive character projects authority');
-    } else if (intent.energy === 'Social') {
-      score += musk * 1.8 + freshness * 1.2 + sweetness * 0.8 + sillage * 1.0;
-      if (musk >= 5) drivers.push('skin-close musk draws people in');
-    } else if (intent.energy === 'Relaxed') {
-      score += musk * 1.8 + warmth * 1.2 + sweetness * 0.8 + (10 - sillage) * 0.8;
-      if (warmth >= 5) drivers.push('enveloping warmth suits an unhurried mood');
-    }
-
-    // Weather Match
-    if (weather) {
-      const temp = weather.temp;
-      const cond = weather.condition.toLowerCase();
-      const humidity = weather.humidity ?? 50;
-
-      if (temp > 85) {
-        score += freshness * 2.5 - warmth * 2.0 - spice * 1.2;
-        if (freshness >= 6) drivers.push(`bright freshness suits ${Math.round(temp)}°F heat`);
-      } else if (temp > 72) {
-        score += freshness * 1.5 + musk * 0.8 - warmth * 0.6;
-        if (freshness >= 5) drivers.push(`light character aligns with ${Math.round(temp)}°F warmth`);
-      } else if (temp > 58) {
-        score += woodiness * 1.5 + freshness * 0.6;
-      } else if (temp > 44) {
-        score += warmth * 2.0 + woodiness * 1.2 + spice * 0.8 - freshness * 0.6;
-        if (warmth >= 5) drivers.push(`warmth cuts through the ${Math.round(temp)}°F chill`);
-      } else {
-        score += warmth * 2.5 + spice * 2.0 + woodiness * 1.0 - freshness * 1.5;
-        if (warmth >= 5 || spice >= 5) drivers.push(`rich density suits the cold`);
-      }
-
-      if (cond.includes('rain') || cond.includes('drizzle')) {
-        score += woodiness * 0.8 + warmth * 0.5;
-        const earthy = item.notes?.some(n =>
-          ['vetiver', 'patchouli', 'cedar', 'oakmoss'].some(k => n.toLowerCase().includes(k))
-        );
-        if (earthy) { score += 10; drivers.push('earthy base thrives in rain'); }
-      }
-      if (cond.includes('sun') || cond.includes('clear')) {
-        score += freshness * 0.5 + musk * 0.3;
-      }
-      if (humidity > 75) {
-        score += freshness * 0.8 - sweetness * 0.6 - warmth * 0.5;
-      }
-    }
-
-    // Time Match
-    if (isMorning) {
-      score += freshness * 1.2 - warmth * 0.4;
-      if (freshness >= 6) drivers.push('crisp freshness is made for mornings');
-    } else if (isEvening) {
-      score += warmth * 1.0 + spice * 0.6 + woodiness * 0.5;
-    } else if (isNight) {
-      score += warmth * 1.5 + spice * 1.0 + musk * 0.8;
-      if ((warmth >= 5 || spice >= 5) && intent.destination === 'Night Out') {
-        drivers.push('nocturnal richness reaches its peak after dark');
-      }
-    }
-
-    // Longevity Bonus
-    if (intent.destination === 'Work' || intent.destination === 'Going Out') {
-      score += longevity * 0.8;
-    }
-
-    // Tie-breaker noise
-    score += Math.random() * 4;
-
-    return { item, score, drivers, sillage, woodiness, freshness, warmth, spice, musk };
+const calculateEngineAlignment = (
+  items: Fragrance[],
+  intent: { destination: DestinationType; energy: EnergyState },
+  weather: WeatherData | null,
+) => {
+  const candidates = items.map((item, index) => {
+    const recommendation = calculateScentWeatherRecommendation(buildEngineInput(item, intent, weather));
+    return {
+      item,
+      recommendation,
+      score: scoreRecommendationCandidate(item, recommendation, intent),
+      index,
+    };
   });
 
-  scored.sort((a, b) => b.score - a.score);
-  return scored[0];
+  candidates.sort((a, b) => b.score - a.score || a.index - b.index);
+  return candidates[0];
+};
+
+const formatFamilyList = (families: ScentFamily[]): string =>
+  families.length > 0 ? families.map(titleCaseToken).join(', ') : 'Flexible';
+
+const formatAvoidList = (families: ScentFamily[]): string =>
+  families.length > 0 ? families.map(titleCaseToken).join(', ') : 'None flagged';
+
+const formatSprayCount = (sprayCount: ScentWeatherRecommendation['spray_count']): string => {
+  const plural = sprayCount.recommended === 1 ? 'spray' : 'sprays';
+  if (sprayCount.min === sprayCount.max) {
+    return `${sprayCount.recommended} ${plural} recommended`;
+  }
+  return `${sprayCount.min}-${sprayCount.max} sprays (${sprayCount.recommended} recommended)`;
 };
 
 // --- Components ---
@@ -183,7 +369,7 @@ const LiveClock: React.FC = React.memo(() => {
   }, []);
   return (
     <span
-      className="font-serif italic tracking-tighter text-3xl sm:text-5xl text-white tabular-nums"
+      className="font-serif italic tracking-normal text-2xl sm:text-3xl text-[#fff7ec] tabular-nums"
       style={{ fontVariantNumeric: 'tabular-nums' }}
     >
       {time.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}
@@ -196,60 +382,30 @@ interface AtmosphereBarProps {
   weatherLoading: boolean;
 }
 
-const ATMOSPHERE_COPIES = 6;
-
 const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({ weather, weatherLoading }) => {
-  const temp = weatherLoading ? '—' : weather?.temp != null ? `${Math.round(weather.temp)}°F` : '—';
-  const condition = weatherLoading ? '—' : weather?.condition ?? '—';
-  const humidity = weatherLoading ? '—' : weather?.humidity != null ? `${weather.humidity}%` : '—';
+  const tempValue = getWeatherNumber(weather, ['temperature_f', 'temperature', 'temp'], Number.NaN);
+  const humidityValue = getWeatherNumber(weather, ['humidity_percent', 'humidity'], Number.NaN);
+  const temp = weatherLoading ? '—' : Number.isFinite(tempValue) ? `${Math.round(tempValue)}°F` : '—';
+  const condition = weatherLoading ? '—' : getWeatherString(weather, ['condition', 'description'], '—');
+  const humidity = weatherLoading ? '—' : Number.isFinite(humidityValue) ? `${humidityValue}%` : '—';
   const location = weather?.location ?? null;
+  const metrics = [
+    { label: 'Matrix', value: condition },
+    { label: 'Saturation', value: humidity },
+    { label: 'Chronos', value: <LiveClock /> },
+    { label: 'Atmosphere', value: temp },
+    { label: 'Coordinate', value: location ?? '—' },
+  ];
 
   return (
-    <div className="scent-marquee-band py-20 overflow-hidden flex select-none relative">
-      <div className="absolute inset-y-0 left-0 w-28 bg-gradient-to-r from-scent-bg to-transparent z-20 pointer-events-none" />
-      <div className="absolute inset-y-0 right-0 w-28 bg-gradient-to-l from-scent-bg to-transparent z-20 pointer-events-none" />
-      <div className="flex animate-infinite-scroll-slow gap-40 text-[18px] uppercase tracking-tighter scent-marquee-text font-serif italic whitespace-nowrap items-center">
-        {[...Array(ATMOSPHERE_COPIES)].map((_, i) => (
-          <React.Fragment key={i}>
-            <div className="flex items-center gap-8">
-              <div className="flex flex-col items-start gap-1">
-                <span className="text-scent-accent/65 text-[9px] font-bold tracking-[0.4em] font-sans uppercase">Chronos:</span>
-                <LiveClock />
-              </div>
-            </div>
-            <span className="opacity-5 font-sans font-thin text-3xl select-none mx-4">/</span>
-            <div className="flex items-center gap-8">
-              <div className="flex flex-col items-start gap-1">
-                <span className="text-scent-accent/65 text-[9px] font-bold tracking-[0.4em] font-sans uppercase">Atmosphere:</span>
-                <span className="scent-weather-value text-3xl sm:text-5xl font-serif italic tracking-tighter">{temp}</span>
-              </div>
-            </div>
-            <span className="opacity-5 font-sans font-thin text-3xl select-none mx-4">/</span>
-            <div className="flex items-center gap-8">
-              <div className="flex flex-col items-start gap-1">
-                <span className="text-scent-accent/65 text-[9px] font-bold tracking-[0.4em] font-sans uppercase">Coordinate:</span>
-                <span className="scent-weather-value text-3xl sm:text-5xl font-serif italic tracking-tighter">{location ?? '—'}</span>
-              </div>
-            </div>
-            <span className="opacity-5 font-sans font-thin text-3xl select-none mx-4">/</span>
-            <div className="flex items-center gap-8">
-              <div className="flex flex-col items-start gap-1">
-                <span className="text-scent-accent/65 text-[9px] font-bold tracking-[0.4em] font-sans uppercase">Matrix:</span>
-                <span className="scent-weather-value text-3xl sm:text-5xl font-serif italic tracking-tighter">{condition}</span>
-              </div>
-            </div>
-            <span className="opacity-5 font-sans font-thin text-3xl select-none mx-4">/</span>
-            <div className="flex items-center gap-8">
-              <div className="flex flex-col items-start gap-1">
-                <span className="text-scent-accent/65 text-[9px] font-bold tracking-[0.4em] font-sans uppercase">Saturation:</span>
-                <span className="scent-weather-value text-3xl sm:text-5xl font-serif italic tracking-tighter">{humidity}</span>
-              </div>
-            </div>
-            <span className="opacity-5 font-sans font-thin text-3xl select-none mx-4">/</span>
-          </React.Fragment>
-        ))}
-      </div>
-    </div>
+    <section className="scent-atmosphere-strip" aria-label="Current atmosphere">
+      {metrics.map((metric) => (
+        <div key={metric.label} className="scent-atmosphere-cell">
+          <span className="scent-atmosphere-label">{metric.label}</span>
+          <span className="scent-atmosphere-value">{metric.value}</span>
+        </div>
+      ))}
+    </section>
   );
 });
 
@@ -278,6 +434,7 @@ export default function App() {
   const [isIntentModalOpen, setIsIntentModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [activeRecommendation, setActiveRecommendation] = useState<Fragrance | null>(null);
+  const [activeEngineRecommendation, setActiveEngineRecommendation] = useState<ScentWeatherRecommendation | null>(null);
   const [recommendationReason, setRecommendationReason] = useState<string>('');
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [weatherLoading, setWeatherLoading] = useState(true);
@@ -296,7 +453,8 @@ export default function App() {
 
   const fetchWeather = useCallback(async (lat?: number, lon?: number, signal?: AbortSignal) => {
     try {
-      const url = lat && lon ? `/api/weather?lat=${lat}&lon=${lon}` : '/api/weather';
+      const hasCoords = Number.isFinite(lat) && Number.isFinite(lon);
+      const url = hasCoords ? `/api/weather?lat=${lat}&lon=${lon}` : '/api/weather';
       const response = await axios.get(url, { signal });
       setWeather(response.data);
     } catch (err) {
@@ -422,23 +580,14 @@ export default function App() {
       },
       () => {
         setLocationStatus('denied');
-        setWeatherLoading(false);
+        fetchWeather(undefined, undefined);
       },
       { timeout: 12000, enableHighAccuracy: false }
     );
   };
 
   const handleAddItem = async (item: any) => {
-    const newItem: Fragrance = {
-      ...item,
-      notes: item.notes || ['Bergamot', 'Ambroxan', 'Pink Pepper'],
-      concentration: item.concentration || 'Eau de Parfum',
-      intents: item.intents || item.context?.occasion || ['Going Out'],
-      energies: item.energies || ['Calm'],
-      performance: item.performance || { sillage: 6, longevity: 7 },
-      pyramid: item.pyramid || { top: ['Bergamot', 'Pink Pepper'], heart: ['Lavender', 'Geranium'], base: ['Ambroxan', 'Patchouli'] },
-      context: item.context || { weather: ['Universal'], time: ['Universal'], occasion: ['Daily Wear'] }
-    };
+    const newItem: Fragrance = { ...item };
 
     let nextCount = 0;
     setItems((prev) => {
@@ -448,13 +597,14 @@ export default function App() {
 
     if (authToken) {
       try {
+        const payload = { ...item };
         await fetch('/api/wardrobe', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${authToken}`,
           },
-          body: JSON.stringify(newItem),
+          body: JSON.stringify(payload),
         });
       } catch {
         // ignore - item is still in local state
@@ -489,20 +639,36 @@ export default function App() {
           ...(imageUrl ? { imageUrl } : {}),
         }),
       });
-      const data = (await res.json()) as Partial<Fragrance> & { _dbId?: string; error?: string };
+      const data = (await res.json()) as Partial<Fragrance> & { _dbId?: string; error?: string; imageHash?: string };
       if (!res.ok) {
         throw new Error(data.error || `HTTP ${res.status}`);
       }
+      const resolvedImageUrl = (() => {
+        const raw =
+          typeof data.imageUrl === 'string' && data.imageUrl.trim()
+            ? data.imageUrl.trim()
+            : imageUrl;
+        if (!raw) return target.imageUrl;
+        // Strip any existing v= before appending the fresh one to avoid ?v=old&v=new.
+        let base = raw;
+        try {
+          const parsed = new URL(raw);
+          parsed.searchParams.delete('v');
+          base = parsed.toString();
+        } catch { /* relative or non-URL — leave as-is */ }
+        const v = data.imageHash ?? Date.now();
+        return `${base}${base.includes('?') ? '&' : '?'}v=${encodeURIComponent(String(v))}`;
+      })();
       const next: Fragrance = {
         ...target,
         ...data,
         id: target.id,
-        imageUrl: typeof data.imageUrl === 'string' ? data.imageUrl : target.imageUrl,
+        imageUrl: resolvedImageUrl,
         _dbId: data._dbId ?? target._dbId,
       };
       setItems((prev) =>
         prev.map((item) =>
-          target._dbId && item._dbId === target._dbId ? next : item.id === target.id ? next : item,
+          sameWardrobeEntry(item, target) ? next : item,
         ),
       );
       return next;
@@ -567,7 +733,7 @@ export default function App() {
     if (!authToken) {
       setItems((prev) =>
         prev.filter(item =>
-          target._dbId ? item._dbId !== target._dbId : item.id !== target.id,
+          !sameWardrobeEntry(item, target),
         ),
       );
       return;
@@ -591,7 +757,7 @@ export default function App() {
 
     setItems((prev) =>
       prev.filter(item =>
-        target._dbId ? item._dbId !== target._dbId : item.id !== target.id,
+        !sameWardrobeEntry(item, target),
       ),
     );
   };
@@ -600,16 +766,18 @@ export default function App() {
     setIsIntentModalOpen(false);
     if (items.length === 0) return;
 
-    const winner = calculateOlfactoryAlignment(items, intent, weather);
+    const winner = calculateEngineAlignment(items, intent, weather);
+    if (!winner) return;
 
-    const uniqueDrivers = Array.from(new Set(winner.drivers));
-    const reason = uniqueDrivers.length > 0
-      ? uniqueDrivers.slice(0, 2).join(', and ')
-      : 'its olfactory profile best matches your intent and current conditions';
-
-    setRecommendationReason(reason.charAt(0).toUpperCase() + reason.slice(1) + '.');
+    setActiveEngineRecommendation(winner.recommendation);
+    setRecommendationReason(winner.recommendation.explanation);
     setTimeout(() => setActiveRecommendation(winner.item), 800);
   };
+
+  const closeRecommendationOverlay = useCallback(() => {
+    setActiveRecommendation(null);
+    setActiveEngineRecommendation(null);
+  }, []);
 
   const tickerPhrases = useMemo(() => {
     if (!wardrobeLoaded || items.length === 0) {
@@ -680,27 +848,27 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-[100svh] bg-scent-bg selection:bg-scent-accent selection:text-black text-white relative overflow-x-hidden">
+    <div className="scent-app-shell min-h-[100svh] bg-scent-bg selection:bg-scent-accent selection:text-black text-white relative overflow-x-hidden">
       <LavaBackground />
-      <nav className="scent-topbar fixed top-0 left-0 right-0 h-20 sm:h-24 z-50 px-4 sm:px-8">
+      <nav className="scent-topbar fixed top-0 left-0 right-0 h-16 sm:h-[72px] z-50 px-3 sm:px-8">
         <div className="max-w-[1760px] mx-auto h-full flex items-center relative">
-          <div className="flex items-center gap-3 min-w-0">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             {authEmail ? (
-              <div className="scent-account-pill h-11 sm:h-12 rounded-full pl-1.5 pr-3 sm:pr-4 flex items-center gap-3 min-w-0">
+              <div className="scent-account-pill h-10 sm:h-11 rounded-full pl-1.5 pr-3 sm:pr-4 flex items-center gap-3 min-w-0">
                 <div className="relative flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-full border border-scent-accent/45 bg-black/60 text-sm font-bold text-white">
                   {authEmail.trim().charAt(0).toUpperCase() || 'S'}
                   <span className={`absolute -right-0.5 bottom-0 h-2.5 w-2.5 rounded-full border border-black ${locationStatus === 'granted' ? 'bg-emerald-400' : locationStatus === 'requesting' ? 'bg-yellow-400 animate-pulse' : locationStatus === 'denied' ? 'bg-red-400' : 'bg-scent-accent/45'}`} />
                 </div>
-                <span className="hidden max-w-[220px] truncate text-sm text-white/72 md:block">
+                <span className="hidden max-w-[180px] lg:max-w-[240px] truncate text-sm text-[#f4debd]/86 md:block">
                   {authEmail}
                 </span>
-                <ChevronDown size={16} strokeWidth={1.5} className="hidden text-white/55 md:block" />
+                <ChevronDown size={16} strokeWidth={1.5} className="hidden text-scent-accent/65 md:block" />
               </div>
             ) : (
               <button
                 onClick={() => setIsAuthModalOpen(true)}
                 title="Sign In"
-                className="scent-account-pill h-11 px-4 rounded-full transition-all text-[10px] uppercase tracking-[0.22em] text-white/70 hover:text-white font-bold"
+                className="scent-account-pill h-10 sm:h-11 px-4 rounded-full transition-all text-[10px] uppercase tracking-[0.18em] text-[#f4debd]/82 hover:text-white font-bold"
               >
                 Sign In
               </button>
@@ -709,31 +877,31 @@ export default function App() {
               onClick={requestLocation}
               disabled={locationStatus === 'requesting' || locationStatus === 'granted'}
               title={locationStatus === 'granted' ? 'Location Active' : locationStatus === 'denied' ? 'Location Denied' : 'Sync Location'}
-              className="scent-icon-button hidden md:flex items-center justify-center w-11 h-11 rounded-full transition-all disabled:cursor-default"
+              className="scent-icon-button hidden md:flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 rounded-full transition-all disabled:cursor-default"
             >
               <span className={`w-2 h-2 rounded-full ${locationStatus === 'granted' ? 'bg-green-400' : locationStatus === 'requesting' ? 'bg-yellow-400 animate-pulse' : locationStatus === 'denied' ? 'bg-red-400' : 'bg-white/20'}`} />
             </button>
           </div>
 
-          <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-3">
-            <Wind size={25} strokeWidth={1.25} className="text-scent-accent" />
-            <h1 className="scent-brandmark font-serif text-2xl sm:text-4xl tracking-[0.16em] uppercase">SCENTCAST</h1>
+          <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 sm:gap-3 pointer-events-none">
+            <Wind size={22} strokeWidth={1.25} className="text-scent-accent drop-shadow-[0_0_10px_rgba(201,139,44,0.22)]" />
+            <h1 className="scent-brandmark font-serif text-xl sm:text-3xl tracking-[0.14em] uppercase">SCENTCAST</h1>
           </div>
 
-          <div className="ml-auto flex items-center gap-3">
+          <div className="ml-auto flex items-center gap-2 sm:gap-3">
             {authToken ? (
               <>
                 <button
                   onClick={() => setIsShareModalOpen(true)}
                   title="Share Vault"
-                  className="scent-icon-button flex items-center justify-center w-11 h-11 rounded-full transition-all"
+                  className="scent-icon-button flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 rounded-full transition-all"
                 >
                   <Share2 size={17} strokeWidth={1.6} />
                 </button>
                 <button
                   onClick={handleSignOut}
                   title="Sign Out"
-                  className="scent-icon-button flex items-center justify-center w-11 h-11 rounded-full transition-all"
+                  className="scent-icon-button flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 rounded-full transition-all"
                 >
                   <LogOut size={17} strokeWidth={1.6} />
                 </button>
@@ -743,10 +911,10 @@ export default function App() {
         </div>
       </nav>
 
-      <div className="pt-20 sm:pt-24" />
+      <div className="pt-16 sm:pt-[72px]" />
 
       <main className="relative z-10 pb-24 px-4 sm:px-8 max-w-[1760px] mx-auto">
-        <div className="space-y-24 sm:space-y-32 pt-12 sm:pt-16">
+        <div className="space-y-20 sm:space-y-28 pt-10 sm:pt-14">
           <div className="hidden" aria-hidden="true">
             <div className="flex flex-col items-center justify-center space-y-16 pt-32 text-center">
               <header className="space-y-10 flex flex-col items-center">
@@ -787,7 +955,7 @@ export default function App() {
             </div>
           </div>
 
-          <div className="scent-marquee-band w-full overflow-hidden py-4 flex select-none relative">
+          <div className="scent-marquee-band scent-full-bleed w-full overflow-hidden py-4 flex select-none relative">
             <div className="flex animate-infinite-scroll gap-20 text-[11px] uppercase tracking-[0.48em] font-serif italic whitespace-nowrap scent-marquee-text">
               {[...Array(4)].map((_, i) => (
                 <span key={i} className="flex items-center gap-20">
@@ -800,12 +968,10 @@ export default function App() {
                 </span>
               ))}
             </div>
-            <div className="absolute inset-y-0 left-0 w-28 bg-gradient-to-r from-scent-bg to-transparent z-10" />
-            <div className="absolute inset-y-0 right-0 w-28 bg-gradient-to-l from-scent-bg to-transparent z-10" />
           </div>
 
-          <section className="mx-auto w-full max-w-2xl space-y-8 text-center">
-            <h2 className="font-serif italic text-3xl sm:text-5xl text-white leading-tight tracking-tight">
+          <section className="scent-hero-zone mx-auto w-full max-w-2xl space-y-7 text-center">
+            <h2 className="font-serif italic text-[clamp(2.15rem,7vw,3.8rem)] text-[#fff7ec] leading-[0.98] tracking-normal">
               Find your signature for the current atmosphere.
             </h2>
             <FragranceCapture onAdd={handleAddItem} />
@@ -814,14 +980,16 @@ export default function App() {
                 if (items.length === 0) { alert("Your vault is empty! Add at least one fragrance to discover your match."); return; }
                 setIsIntentModalOpen(true);
               }}
-              className="scent-primary-button w-full h-14 flex items-center justify-center gap-4 transition-all group rounded-[var(--radius-scent)]"
+              className="scent-primary-button w-full h-[60px] sm:h-16 flex items-center justify-center gap-4 transition-all group rounded-[var(--radius-scent)]"
             >
               <Play size={19} className="fill-current group-hover:scale-110 transition-transform" />
-              <span className="font-serif italic text-xl sm:text-2xl">Discover Your Signature Scent</span>
+              <span className="font-serif italic text-xl sm:text-2xl leading-none">Discover Your Signature Scent</span>
             </button>
           </section>
 
-          <AtmosphereBar weather={weather} weatherLoading={weatherLoading} />
+          <div className="scent-full-bleed">
+            <AtmosphereBar weather={weather} weatherLoading={weatherLoading} />
+          </div>
 
           <div>
             <Wardrobe
@@ -877,7 +1045,11 @@ export default function App() {
         authToken={authToken}
         items={items}
         onToggleVisibility={(id, hidden) => {
-          setItems(prev => prev.map(item => item.id === id ? { ...item, shareHidden: hidden } : item));
+          setItems(prev =>
+            prev.map(item =>
+              (item._dbId ?? item.id) === id ? { ...item, shareHidden: hidden } : item,
+            ),
+          );
         }}
       />
 
@@ -895,7 +1067,7 @@ export default function App() {
               style={{ paddingTop: 'max(1.25rem, env(safe-area-inset-top))' }}
             >
               <p className="text-[9px] uppercase tracking-[0.4em] text-scent-accent font-bold">Strategic Alignment Found</p>
-              <button onClick={() => setActiveRecommendation(null)} className="p-2 text-white/40 hover:text-white hover:bg-white/10 transition-all active:scale-95">
+              <button onClick={closeRecommendationOverlay} className="p-2 text-white/40 hover:text-white hover:bg-white/10 transition-all active:scale-95">
                 <X size={20} />
               </button>
             </div>
@@ -911,7 +1083,7 @@ export default function App() {
                     <h2 className="font-serif italic text-2xl sm:text-6xl mb-4">You should wear</h2>
                     <div className="h-px w-16 bg-white/20 mx-auto" />
                   </header>
-                  <div className="py-6 sm:py-16 border-y border-white/10 group cursor-pointer" onClick={() => setActiveRecommendation(null)}>
+                  <div className="py-6 sm:py-16 border-y border-white/10 group cursor-pointer" onClick={closeRecommendationOverlay}>
                     <p className="text-sm uppercase tracking-[0.2em] text-white/40 mb-2 font-serif">{activeRecommendation.brand}</p>
                     <h3 className="font-serif italic text-3xl sm:text-8xl text-white leading-tight transition-transform group-hover:scale-105">{activeRecommendation.name}</h3>
                   </div>
@@ -924,6 +1096,30 @@ export default function App() {
                       <p className="text-[8px] uppercase tracking-[0.3em] text-scent-muted mb-2 font-bold">Concentration</p>
                       <p className="text-sm italic text-scent-muted leading-relaxed">{activeRecommendation.concentration || 'Eau de Parfum'}</p>
                     </div>
+                    {activeEngineRecommendation ? (
+                      <>
+                        <div>
+                          <p className="text-[8px] uppercase tracking-[0.3em] text-scent-muted mb-2 font-bold">Best Families</p>
+                          <p className="text-sm italic text-scent-muted leading-relaxed">{formatFamilyList(activeEngineRecommendation.best_scent_families)}</p>
+                        </div>
+                        <div>
+                          <p className="text-[8px] uppercase tracking-[0.3em] text-scent-muted mb-2 font-bold">Avoid Today</p>
+                          <p className="text-sm italic text-scent-muted leading-relaxed">{formatAvoidList(activeEngineRecommendation.avoid_scent_families)}</p>
+                        </div>
+                        <div>
+                          <p className="text-[8px] uppercase tracking-[0.3em] text-scent-muted mb-2 font-bold">Sprays</p>
+                          <p className="text-sm italic text-scent-muted leading-relaxed">{formatSprayCount(activeEngineRecommendation.spray_count)}</p>
+                        </div>
+                        <div>
+                          <p className="text-[8px] uppercase tracking-[0.3em] text-scent-muted mb-2 font-bold">Projection Risk</p>
+                          <p className="text-sm italic text-scent-muted leading-relaxed">{titleCaseToken(activeEngineRecommendation.projection_risk)}</p>
+                        </div>
+                        <div>
+                          <p className="text-[8px] uppercase tracking-[0.3em] text-scent-muted mb-2 font-bold">Confidence</p>
+                          <p className="text-sm italic text-scent-muted leading-relaxed">{titleCaseToken(activeEngineRecommendation.confidence)}</p>
+                        </div>
+                      </>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -934,7 +1130,7 @@ export default function App() {
               className="px-5 pt-3 shrink-0 border-t border-white/5"
               style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))' }}
             >
-              <button onClick={() => setActiveRecommendation(null)} className="w-full py-4 bg-scent-accent text-black uppercase tracking-[0.3em] text-[10px] font-bold hover:opacity-90 transition-opacity active:scale-[0.98]">
+              <button onClick={closeRecommendationOverlay} className="w-full py-4 bg-scent-accent text-black uppercase tracking-[0.3em] text-[10px] font-bold hover:opacity-90 transition-opacity active:scale-[0.98]">
                 Confirm Alignment
               </button>
             </div>
