@@ -360,10 +360,16 @@ router.post("/refresh-image", async (req, res) => {
       return;
     }
 
-    let poofType = solverWantsPoofProductType(solverId);
+    // Default for normal refresh: do NOT force Poof `product` mode. Product mode
+    // tends to preserve the retail/product white rectangle behind the bottle and
+    // return HTTP 200, which the pipeline then mistakes for a clean removal.
+    // Product mode is still applied when:
+    //   - the solver explicitly requests it (transparent_glass, hand_interference)
+    //   - the caller passes `poofOptions.type === "product"` explicitly
+    //   - the stripBgOnly branch (handled separately above)
+    let poofType: "auto" | "product" | undefined = solverWantsPoofProductType(solverId);
     const pt = body.poofOptions?.type;
     if (pt === "product" || pt === "auto") poofType = pt;
-    if (poofType === undefined) poofType = "product";
 
     const removeBgOpts = poofType === "product" ? ({ poofType: "product" } as const) : undefined;
 
