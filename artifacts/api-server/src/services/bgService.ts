@@ -1,7 +1,7 @@
 import axios from "axios";
 import sharp from "sharp";
 import { logger } from "../lib/logger";
-import { hasOpaqueLightBackground, isEffectivelyTransparent } from "./bgServiceCore";
+import { isEffectivelyTransparent } from "./bgServiceCore";
 import { trimPackshotForBgService } from "./packshotTrim";
 import { fetchExternalImage } from "./safeImageFetch";
 
@@ -155,18 +155,6 @@ async function removeBgByFile(buffer: Buffer, apiKey: string, opts?: RemoveBgOpt
             "[bgService] Poof returned a fully transparent image; treating as failure",
           );
           return { ok: false, reason: "poof_empty_output", status: 200 };
-        }
-        // Second guard: Poof can also return HTTP 200 with the original
-        // product-shot white rectangle still in place around the bottle
-        // (especially under `type=product`). If the outer border/corners are
-        // overwhelmingly opaque + near-white, treat it as a removal failure
-        // and let the local trim fallback handle the image instead.
-        if (await hasOpaqueLightBackground(poofBuffer)) {
-          logger.warn(
-            { reason: "poof_white_background", poofType: o?.poofType ?? null },
-            "[bgService] Poof returned 200 but background is still opaque/light; treating as failure",
-          );
-          return { ok: false, reason: "poof_white_background", status: 200 };
         }
         return { ok: true, buffer: poofBuffer };
       }
