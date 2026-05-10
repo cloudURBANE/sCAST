@@ -5,10 +5,12 @@
  *   - image_cache row counts split by processing_status / background_removed
  *   - daily fallback rate over the last 7 days (regression vs healthy baseline)
  *   - rows created since the patch landed (cc0568c, 2026-05-10 15:02 UTC)
+ *   - remove_bg_status / remove_bg_reason histogram for new rows (added in
+ *     8407ca7's follow-up so we no longer need to fetch WebPs to know why
+ *     a row landed in fallback)
  *   - global_fragrances + user_fragrances imageUrl coverage
- *   - alpha-channel stats on the most recent bg=FALSE WebPs so you can tell
- *     whether the bytes look like a real packshot (Poof success that was
- *     mislabeled) vs a normalized fallback (Poof failed → trimWhiteAndNormalize)
+ *   - alpha-channel stats on the most recent bg=FALSE WebPs (still useful
+ *     for back-compat rows where remove_bg_reason is NULL)
  *
  * Run from the repo root:
  *   node node_modules/.pnpm/tsx@4.21.0/node_modules/tsx/dist/cli.mjs \
@@ -76,6 +78,19 @@ async function main(): Promise<void> {
           from image_cache
           where processing_status='failed' and created_at > now() - interval '7 days'
           group by failure_reason order by n desc limit 10`,
+    ),
+  );
+
+  dump(
+    "image_cache: remove_bg_status x remove_bg_reason histogram (ready rows, last 7d)",
+    await rows(
+      sql`select coalesce(remove_bg_status, '(null)') as status,
+            coalesce(remove_bg_reason, '(null)') as reason,
+            count(*)::int as n
+          from image_cache
+          where processing_status='ready' and created_at > now() - interval '7 days'
+          group by remove_bg_status, remove_bg_reason
+          order by n desc`,
     ),
   );
 

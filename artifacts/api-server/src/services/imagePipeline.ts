@@ -307,6 +307,8 @@ async function processCandidate(input: {
         height: optimized.height,
         sizeBytes: uploaded.sizeBytes || optimized.sizeBytes,
         backgroundRemoved: optimized.backgroundRemoved,
+        removeBgStatus: optimized.removeBgStatus,
+        removeBgReason: optimized.removeBgReason,
       });
 
       return { ...recorded, sourceProvider: input.sourceProvider, pipelineVersion: IMAGE_PIPELINE_VERSION, removeBgStatus: optimized.removeBgStatus, removeBgReason: optimized.removeBgReason };

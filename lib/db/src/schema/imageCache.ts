@@ -37,6 +37,8 @@ export const imageCacheTable = pgTable(
     sizeBytes: integer("size_bytes"),
 
     backgroundRemoved: boolean("background_removed").notNull().default(false),
+    removeBgStatus: text("remove_bg_status"),
+    removeBgReason: text("remove_bg_reason"),
     processingStatus: text("processing_status").notNull().default("ready"),
     failureReason: text("failure_reason"),
 
