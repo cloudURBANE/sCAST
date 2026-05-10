@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import axios from 'axios';
 import { FragranceCapture } from './components/FragranceCapture';
 import { Wardrobe, Fragrance, DestinationType, EnergyState } from './components/Wardrobe';
-import { Wind, Play, X, LogOut, Share2 } from 'lucide-react';
+import { Wind, Play, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ScentIntentModal } from './components/ScentIntentModal';
 import { LavaBackground } from './components/LavaBackground';
@@ -436,7 +436,7 @@ export default function App() {
     return localStorage.getItem(STORAGE_KEYS.TOKEN);
   });
   
-  const [authEmail, setAuthEmail] = useState<string | null>(() => {
+  const [_authEmail, setAuthEmail] = useState<string | null>(() => {
     const params = new URLSearchParams(window.location.search);
     const oauthEmail = params.get('oauth_email');
     return oauthEmail ?? localStorage.getItem(STORAGE_KEYS.EMAIL);
@@ -865,42 +865,40 @@ export default function App() {
       <LavaBackground />
       <nav className="scent-topbar fixed top-0 left-0 right-0 h-16 sm:h-[72px] z-50 px-3 sm:px-8">
         <div className="max-w-[1760px] mx-auto h-full flex items-center relative">
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            {!authEmail ? (
-              <button
-                onClick={() => setIsAuthModalOpen(true)}
-                title="Sign In"
-                className="scent-account-pill h-10 sm:h-11 px-4 rounded-full transition-all text-[10px] uppercase tracking-[0.18em] text-[#f4debd]/82 hover:text-white font-bold"
-              >
-                Sign In
-              </button>
-            ) : null}
-          </div>
+          <div className="min-w-0" />
 
           <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 sm:gap-3 pointer-events-none">
             <Wind size={22} strokeWidth={1.25} className="text-scent-accent drop-shadow-[0_0_10px_rgba(201,139,44,0.22)]" />
             <h1 className="scent-brandmark font-serif text-xl sm:text-3xl tracking-[0.14em] uppercase">SCENTCAST</h1>
           </div>
 
-          <div className="ml-auto flex items-center gap-2 sm:gap-3">
-            {authToken ? (
+          <div className="ml-auto flex items-center gap-3 sm:gap-4">
+            {!authToken ? (
+              <button
+                type="button"
+                onClick={() => setIsAuthModalOpen(true)}
+                className="text-[10px] sm:text-xs uppercase tracking-[0.2em] text-[#f4debd]/70 hover:text-white transition-colors"
+              >
+                Sign In
+              </button>
+            ) : (
               <>
                 <button
+                  type="button"
                   onClick={() => setIsShareModalOpen(true)}
-                  title="Share Vault"
-                  className="scent-icon-button flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 rounded-full transition-all"
+                  className="text-[10px] sm:text-xs uppercase tracking-[0.2em] text-[#f4debd]/70 hover:text-white transition-colors"
                 >
-                  <Share2 size={17} strokeWidth={1.6} />
+                  Share
                 </button>
                 <button
+                  type="button"
                   onClick={handleSignOut}
-                  title="Sign Out"
-                  className="scent-icon-button flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 rounded-full transition-all"
+                  className="text-[10px] sm:text-xs uppercase tracking-[0.2em] text-[#f4debd]/70 hover:text-white transition-colors"
                 >
-                  <LogOut size={17} strokeWidth={1.6} />
+                  Sign Out
                 </button>
               </>
-            ) : null}
+            )}
           </div>
         </div>
       </nav>
