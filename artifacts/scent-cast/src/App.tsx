@@ -382,29 +382,38 @@ interface AtmosphereBarProps {
   weatherLoading: boolean;
 }
 
+const ATMOSPHERE_COPIES = 6;
+
 const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({ weather, weatherLoading }) => {
   const tempValue = getWeatherNumber(weather, ['temperature_f', 'temperature', 'temp'], Number.NaN);
   const humidityValue = getWeatherNumber(weather, ['humidity_percent', 'humidity'], Number.NaN);
   const temp = weatherLoading ? '—' : Number.isFinite(tempValue) ? `${Math.round(tempValue)}°F` : '—';
   const condition = weatherLoading ? '—' : getWeatherString(weather, ['condition', 'description'], '—');
   const humidity = weatherLoading ? '—' : Number.isFinite(humidityValue) ? `${humidityValue}%` : '—';
-  const location = weather?.location ?? null;
+  const location = weather?.location ?? '—';
+
   const metrics = [
     { label: 'Matrix', value: condition },
     { label: 'Saturation', value: humidity },
     { label: 'Chronos', value: <LiveClock /> },
     { label: 'Atmosphere', value: temp },
-    { label: 'Coordinate', value: location ?? '—' },
+    { label: 'Coordinate', value: location },
   ];
 
   return (
-    <section className="scent-atmosphere-strip" aria-label="Current atmosphere">
-      {metrics.map((metric) => (
-        <div key={metric.label} className="scent-atmosphere-cell">
-          <span className="scent-atmosphere-label">{metric.label}</span>
-          <span className="scent-atmosphere-value">{metric.value}</span>
-        </div>
-      ))}
+    <section className="scent-atmosphere-marquee" aria-label="Current atmosphere">
+      <div className="flex animate-infinite-scroll-slow gap-16 whitespace-nowrap items-center">
+        {[...Array(ATMOSPHERE_COPIES)].map((_, copyIndex) => (
+          <React.Fragment key={copyIndex}>
+            {metrics.map((metric) => (
+              <div key={`${copyIndex}-${metric.label}`} className="scent-atmosphere-marquee-cell">
+                <span className="scent-atmosphere-label">{metric.label}</span>
+                <span className="scent-atmosphere-value">{metric.value}</span>
+              </div>
+            ))}
+          </React.Fragment>
+        ))}
+      </div>
     </section>
   );
 });
