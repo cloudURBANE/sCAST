@@ -284,10 +284,12 @@ router.post("/refresh-image", async (req, res) => {
   try {
     if (stripBgOnly && sourceForStrip) {
       const skipBgStrip = typeof body.skipBg === "boolean" ? body.skipBg : false;
+      // Default for stripBgOnly: do NOT force Poof `product` mode. Product mode
+      // tends to preserve the retail/product white rectangle behind the bottle.
+      // Only opt in when the caller passes `poofOptions.type === "product"`.
       let poofT: "auto" | "product" | undefined;
       const ptStrip = body.poofOptions?.type;
       if (ptStrip === "product" || ptStrip === "auto") poofT = ptStrip;
-      if (poofT === undefined) poofT = "product";
       const stripRemoveOpts = poofT === "product" ? ({ poofType: "product" } as const) : undefined;
 
       logger.info(

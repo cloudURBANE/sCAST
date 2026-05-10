@@ -183,7 +183,7 @@ export const Wardrobe: React.FC<{
     }
   });
   const [clarifySolverId, setClarifySolverId] = React.useState<WardrobeImageSolverId | ''>('');
-  const [pendingPreview, setPendingPreview] = React.useState<{ itemId: string; url: string } | null>(null);
+  const [pendingPreview, setPendingPreview] = React.useState<{ itemId: string; url: string; isFallback: boolean } | null>(null);
   const [stripBgBusy, setStripBgBusy] = React.useState(false);
   const [persistBusy, setPersistBusy] = React.useState(false);
   const [vaultSolverBanner, setVaultSolverBanner] = React.useState<string | null>(null);
@@ -283,18 +283,18 @@ export const Wardrobe: React.FC<{
         throw new Error('Image processing completed without a usable image URL.');
       }
       const nextUrl = withImageVersion(returnedImageUrl, data.imageHash || Date.now());
-      setPendingPreview({ itemId: item.id, url: nextUrl });
       const isFallback =
         data.backgroundRemoved === false ||
         data.removeBgStatus === 'fallback' ||
         data.removeBgStatus === 'failed';
+      setPendingPreview({ itemId: item.id, url: nextUrl, isFallback });
       if (isFallback) {
         const reason =
           typeof data.removeBgReason === 'string' && data.removeBgReason.trim()
             ? ` Reason: ${data.removeBgReason.trim()}.`
             : '';
         setBgFallbackWarning(
-          `Preview updated, but background removal used a fallback.${reason} Save to vault only if this version looks acceptable.`,
+          `This preview still has a fallback background.${reason} Try another image fix before saving.`,
         );
       }
     } catch (err: any) {
@@ -324,7 +324,6 @@ export const Wardrobe: React.FC<{
           concentrationHint: concentrationHintFromValue(item.concentration),
           stripBgOnly: true,
           imageUrl: src,
-          poofOptions: { type: 'product' },
         }),
       });
       const data = await res.json();
@@ -335,18 +334,18 @@ export const Wardrobe: React.FC<{
         throw new Error('Image processing completed without a usable image URL.');
       }
       const nextUrl = withImageVersion(returnedImageUrl, data.imageHash || Date.now());
-      setPendingPreview({ itemId: item.id, url: nextUrl });
       const isFallback =
         data.backgroundRemoved === false ||
         data.removeBgStatus === 'fallback' ||
         data.removeBgStatus === 'failed';
+      setPendingPreview({ itemId: item.id, url: nextUrl, isFallback });
       if (isFallback) {
         const reason =
           typeof data.removeBgReason === 'string' && data.removeBgReason.trim()
             ? ` Reason: ${data.removeBgReason.trim()}.`
             : '';
         setBgFallbackWarning(
-          `Preview updated, but background removal used a fallback.${reason} Save to vault only if this version looks acceptable.`,
+          `This preview still has a fallback background.${reason} Try another image fix before saving.`,
         );
       }
     } catch (err: any) {
@@ -358,6 +357,12 @@ export const Wardrobe: React.FC<{
 
   const handleSavePreviewToVault = async () => {
     if (!selectedItem || !pendingPreview || pendingPreview.itemId !== selectedItem.id) return;
+    if (pendingPreview.isFallback) {
+      setRefreshError(
+        'This preview still has a fallback background. Try another image fix before saving.',
+      );
+      return;
+    }
     if (!onPersistWardrobeImage) {
       setRefreshError('Sign in to save this image to your vault.');
       return;
@@ -995,15 +1000,26 @@ export const Wardrobe: React.FC<{
                               Sign in to save this preview to your vault.
                             </p>
                           ) : null}
+                          {pendingPreview?.isFallback ? (
+                            <p className="text-[10px] text-amber-200/85 text-center font-sans leading-snug px-1">
+                              This preview still has a fallback background. Try another image fix before saving.
+                            </p>
+                          ) : null}
                           <div className="flex gap-2">
                             <button
                               type="button"
                               onClick={() => void handleSavePreviewToVault()}
-                              disabled={persistBusy || !onPersistWardrobeImage}
+                              disabled={
+                                persistBusy ||
+                                !onPersistWardrobeImage ||
+                                !!pendingPreview?.isFallback
+                              }
                               title={
                                 !onPersistWardrobeImage
                                   ? 'Sign in to save to your vault'
-                                  : undefined
+                                  : pendingPreview?.isFallback
+                                    ? 'This preview used a fallback background — try another fix first'
+                                    : undefined
                               }
                               className="flex-1 min-h-[44px] py-3 bg-scent-accent text-black uppercase tracking-[0.2em] text-[10px] font-bold hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg"
                             >
