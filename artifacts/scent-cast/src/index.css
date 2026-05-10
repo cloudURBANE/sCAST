@@ -309,12 +309,43 @@ body {
   -webkit-backdrop-filter: blur(16px);
 }
 
+.scent-atmosphere-marquee-track {
+  display: flex;
+  width: max-content;
+  will-change: transform;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  animation: infinite-scroll 42s linear infinite;
+}
+
+.scent-atmosphere-marquee-group {
+  display: flex;
+  align-items: stretch;
+  flex: 0 0 auto;
+  gap: clamp(0.75rem, 2vw, 1.5rem);
+  padding-right: clamp(0.75rem, 2vw, 1.5rem);
+}
+
 .scent-atmosphere-marquee-cell {
   display: inline-flex;
-  align-items: baseline;
-  gap: 0.75rem;
-  padding: 1rem 1.25rem;
-  min-width: max-content;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 0.35rem;
+  min-width: clamp(9rem, 18vw, 14rem);
+  padding: clamp(0.85rem, 2vw, 1.1rem) clamp(0.95rem, 2vw, 1.35rem);
+  border-left: 1px solid rgba(201, 139, 44, 0.12);
+}
+
+.scent-atmosphere-marquee-group:first-child .scent-atmosphere-marquee-cell:first-child {
+  border-left: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scent-atmosphere-marquee-track {
+    animation-duration: 90s;
+  }
 }
 
 .scent-atmosphere-strip {
@@ -353,15 +384,16 @@ body {
 .scent-atmosphere-value {
   display: block;
   min-width: 0;
-  margin-top: 0.35rem;
+  margin-top: 0;
   color: #fff7ec;
   font-family: var(--font-serif);
-  font-size: clamp(1.35rem, 2.2vw, 2rem);
+  font-size: clamp(1.2rem, 2.1vw, 1.85rem);
   font-style: italic;
   line-height: 1.05;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  max-width: 100%;
 }
 
 @media (max-width: 1024px) {

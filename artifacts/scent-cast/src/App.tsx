@@ -382,7 +382,7 @@ interface AtmosphereBarProps {
   weatherLoading: boolean;
 }
 
-const ATMOSPHERE_COPIES = 6;
+const ATMOSPHERE_TRACK_COPIES = 2;
 
 const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({ weather, weatherLoading }) => {
   const tempValue = getWeatherNumber(weather, ['temperature_f', 'temperature', 'temp'], Number.NaN);
@@ -402,16 +402,20 @@ const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({ weather, weath
 
   return (
     <section className="scent-atmosphere-marquee" aria-label="Current atmosphere">
-      <div className="flex animate-infinite-scroll-slow gap-16 whitespace-nowrap items-center">
-        {[...Array(ATMOSPHERE_COPIES)].map((_, copyIndex) => (
-          <React.Fragment key={copyIndex}>
+      <div className="scent-atmosphere-marquee-track">
+        {[...Array(ATMOSPHERE_TRACK_COPIES)].map((_, copyIndex) => (
+          <div
+            className="scent-atmosphere-marquee-group"
+            key={copyIndex}
+            aria-hidden={copyIndex > 0}
+          >
             {metrics.map((metric) => (
-              <div key={`${copyIndex}-${metric.label}`} className="scent-atmosphere-marquee-cell">
+              <div key={metric.label} className="scent-atmosphere-marquee-cell">
                 <span className="scent-atmosphere-label">{metric.label}</span>
                 <span className="scent-atmosphere-value">{metric.value}</span>
               </div>
             ))}
-          </React.Fragment>
+          </div>
         ))}
       </div>
     </section>
