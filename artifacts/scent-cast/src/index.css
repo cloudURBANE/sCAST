@@ -265,6 +265,7 @@ body {
 }
 
 .scent-marquee-band {
+  overflow: hidden;
   border-block: 1px solid rgba(201, 139, 44, 0.14);
   background: linear-gradient(90deg, transparent, rgba(201, 139, 44, 0.045), transparent);
 }
