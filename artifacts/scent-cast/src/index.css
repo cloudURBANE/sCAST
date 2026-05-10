@@ -293,9 +293,8 @@ body {
   display: flex;
   width: max-content;
   will-change: transform;
-  transform: translateZ(0);
   backface-visibility: hidden;
-  animation: infinite-scroll 42s linear infinite;
+  animation: infinite-scroll 28s linear infinite;
 }
 
 .scent-atmosphere-marquee-group {
@@ -324,7 +323,7 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .scent-atmosphere-marquee-track {
-    animation-duration: 90s;
+    animation-duration: 55s;
   }
 }
 
