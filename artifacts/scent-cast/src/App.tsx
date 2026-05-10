@@ -915,46 +915,6 @@ export default function App() {
 
       <main className="relative z-10 pb-24 px-4 sm:px-8 max-w-[1760px] mx-auto">
         <div className="space-y-20 sm:space-y-28 pt-10 sm:pt-14">
-          <div className="hidden" aria-hidden="true">
-            <div className="flex flex-col items-center justify-center space-y-16 pt-32 text-center">
-              <header className="space-y-10 flex flex-col items-center">
-                <div className="w-full max-w-4xl overflow-hidden py-4 border-y border-white/5 flex select-none relative group">
-                  <div className="flex animate-infinite-scroll gap-20 text-[11px] uppercase tracking-[0.5em] text-white/80 font-serif italic whitespace-nowrap">
-                    {[...Array(4)].map((_, i) => (
-                      <span key={i} className="flex items-center gap-20">
-                        {tickerPhrases.map((phrase, j) => (
-                          <React.Fragment key={j}>
-                            <span>{phrase}</span>
-                            <span className="text-white/10">•</span>
-                          </React.Fragment>
-                        ))}
-                      </span>
-                    ))}
-                  </div>
-                  <div className="absolute inset-y-0 left-0 w-24 bg-gradient-to-r from-black to-transparent z-10" />
-                  <div className="absolute inset-y-0 right-0 w-24 bg-gradient-to-l from-black to-transparent z-10" />
-                </div>
-                <h2 className="font-serif italic text-2xl sm:text-4xl lg:text-7xl leading-tight text-white max-w-4xl tracking-tighter">Find your signature for the current atmosphere.</h2>
-              </header>
-
-              <div className="flex flex-col items-center gap-8 w-full max-w-6xl mx-auto">
-                <div className="w-full max-w-2xl">
-                  <FragranceCapture onAdd={handleAddItem} />
-                </div>
-                <button
-                  onClick={() => {
-                    if (items.length === 0) { alert("Your vault is empty! Add at least one fragrance to discover your match."); return; }
-                    setIsIntentModalOpen(true);
-                  }}
-                  className="w-full max-w-2xl h-14 bg-white text-black flex items-center justify-center gap-6 hover:bg-neutral-200 transition-all group rounded-[1.25rem] border border-white/10 shadow-[0_0_50px_rgba(255,255,255,0.1)]"
-                >
-                  <Play size={20} className="fill-current group-hover:scale-110 transition-transform" />
-                  <span className="font-serif italic text-xl sm:text-2xl">Discover Your Signature Scent</span>
-                </button>
-              </div>
-            </div>
-          </div>
-
           <div className="scent-marquee-band scent-full-bleed w-full overflow-hidden py-4 flex select-none relative">
             <div className="flex animate-infinite-scroll gap-20 text-[11px] uppercase tracking-[0.48em] font-serif italic whitespace-nowrap scent-marquee-text">
               {[...Array(4)].map((_, i) => (
