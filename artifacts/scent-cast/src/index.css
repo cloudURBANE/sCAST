@@ -142,26 +142,6 @@ body {
   -webkit-backdrop-filter: blur(16px);
 }
 
-.scent-account-pill {
-  border: 1px solid rgba(201, 139, 44, 0.34);
-  background: rgba(8, 6, 4, 0.74);
-  box-shadow: inset 0 1px 0 rgba(255, 226, 174, 0.06);
-}
-
-.scent-icon-button {
-  border: 1px solid rgba(201, 139, 44, 0.34);
-  background: rgba(5, 4, 3, 0.76);
-  color: rgba(255, 243, 224, 0.82);
-  box-shadow: inset 0 1px 0 rgba(255, 226, 174, 0.06), 0 8px 20px rgba(0, 0, 0, 0.34);
-}
-
-.scent-icon-button:hover {
-  border-color: rgba(220, 162, 75, 0.68);
-  color: #fff2dc;
-  background: rgba(24, 16, 9, 0.84);
-  box-shadow: inset 0 1px 0 rgba(255, 226, 174, 0.08), 0 0 22px rgba(201, 139, 44, 0.1);
-}
-
 .scent-brandmark {
   color: #fff7ec;
   text-shadow: 0 0 14px rgba(201, 139, 44, 0.22);
@@ -265,6 +245,7 @@ body {
 }
 
 .scent-marquee-band {
+  overflow: hidden;
   border-block: 1px solid rgba(201, 139, 44, 0.14);
   background: linear-gradient(90deg, transparent, rgba(201, 139, 44, 0.045), transparent);
 }
@@ -296,6 +277,54 @@ body {
   width: 100vw;
   margin-left: calc(50% - 50vw);
   margin-right: calc(50% - 50vw);
+}
+
+.scent-atmosphere-marquee {
+  overflow: hidden;
+  border: 1px solid rgba(201, 139, 44, 0.18);
+  border-radius: var(--radius-scent);
+  background: linear-gradient(180deg, rgba(10, 7, 4, 0.84), rgba(4, 3, 2, 0.92));
+  box-shadow: inset 0 1px 0 rgba(255, 226, 174, 0.06), 0 18px 44px -28px rgba(0, 0, 0, 0.95);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.scent-atmosphere-marquee-track {
+  display: flex;
+  width: max-content;
+  will-change: transform;
+  backface-visibility: hidden;
+  animation: infinite-scroll 28s linear infinite;
+}
+
+.scent-atmosphere-marquee-group {
+  display: flex;
+  align-items: stretch;
+  flex: 0 0 auto;
+  gap: clamp(0.75rem, 2vw, 1.5rem);
+  padding-right: clamp(0.75rem, 2vw, 1.5rem);
+}
+
+.scent-atmosphere-marquee-cell {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 0.35rem;
+  min-width: clamp(9rem, 18vw, 14rem);
+  padding: clamp(0.85rem, 2vw, 1.1rem) clamp(0.95rem, 2vw, 1.35rem);
+  border-left: 1px solid rgba(201, 139, 44, 0.12);
+}
+
+.scent-atmosphere-marquee-group:first-child .scent-atmosphere-marquee-cell:first-child {
+  border-left: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scent-atmosphere-marquee-track {
+    animation-duration: 55s;
+  }
 }
 
 .scent-atmosphere-strip {
@@ -334,15 +363,16 @@ body {
 .scent-atmosphere-value {
   display: block;
   min-width: 0;
-  margin-top: 0.35rem;
+  margin-top: 0;
   color: #fff7ec;
   font-family: var(--font-serif);
-  font-size: clamp(1.35rem, 2.2vw, 2rem);
+  font-size: clamp(1.2rem, 2.1vw, 1.85rem);
   font-style: italic;
   line-height: 1.05;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  max-width: 100%;
 }
 
 @media (max-width: 1024px) {

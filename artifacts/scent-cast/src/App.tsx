@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import axios from 'axios';
 import { FragranceCapture } from './components/FragranceCapture';
 import { Wardrobe, Fragrance, DestinationType, EnergyState } from './components/Wardrobe';
-import { Wind, Play, X, LogOut, Share2, ChevronDown } from 'lucide-react';
+import { Wind, Play, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ScentIntentModal } from './components/ScentIntentModal';
 import { LavaBackground } from './components/LavaBackground';
@@ -382,29 +382,42 @@ interface AtmosphereBarProps {
   weatherLoading: boolean;
 }
 
+const ATMOSPHERE_TRACK_COPIES = 2;
+
 const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({ weather, weatherLoading }) => {
   const tempValue = getWeatherNumber(weather, ['temperature_f', 'temperature', 'temp'], Number.NaN);
   const humidityValue = getWeatherNumber(weather, ['humidity_percent', 'humidity'], Number.NaN);
   const temp = weatherLoading ? '—' : Number.isFinite(tempValue) ? `${Math.round(tempValue)}°F` : '—';
   const condition = weatherLoading ? '—' : getWeatherString(weather, ['condition', 'description'], '—');
   const humidity = weatherLoading ? '—' : Number.isFinite(humidityValue) ? `${humidityValue}%` : '—';
-  const location = weather?.location ?? null;
+  const location = weather?.location ?? '—';
+
   const metrics = [
     { label: 'Matrix', value: condition },
     { label: 'Saturation', value: humidity },
     { label: 'Chronos', value: <LiveClock /> },
     { label: 'Atmosphere', value: temp },
-    { label: 'Coordinate', value: location ?? '—' },
+    { label: 'Coordinate', value: location },
   ];
 
   return (
-    <section className="scent-atmosphere-strip" aria-label="Current atmosphere">
-      {metrics.map((metric) => (
-        <div key={metric.label} className="scent-atmosphere-cell">
-          <span className="scent-atmosphere-label">{metric.label}</span>
-          <span className="scent-atmosphere-value">{metric.value}</span>
-        </div>
-      ))}
+    <section className="scent-atmosphere-marquee" aria-label="Current atmosphere">
+      <div className="scent-atmosphere-marquee-track">
+        {[...Array(ATMOSPHERE_TRACK_COPIES)].map((_, copyIndex) => (
+          <div
+            className="scent-atmosphere-marquee-group"
+            key={copyIndex}
+            aria-hidden={copyIndex > 0}
+          >
+            {metrics.map((metric) => (
+              <div key={metric.label} className="scent-atmosphere-marquee-cell">
+                <span className="scent-atmosphere-label">{metric.label}</span>
+                <span className="scent-atmosphere-value">{metric.value}</span>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
     </section>
   );
 });
@@ -423,7 +436,7 @@ export default function App() {
     return localStorage.getItem(STORAGE_KEYS.TOKEN);
   });
   
-  const [authEmail, setAuthEmail] = useState<string | null>(() => {
+  const [_authEmail, setAuthEmail] = useState<string | null>(() => {
     const params = new URLSearchParams(window.location.search);
     const oauthEmail = params.get('oauth_email');
     return oauthEmail ?? localStorage.getItem(STORAGE_KEYS.EMAIL);
@@ -852,61 +865,40 @@ export default function App() {
       <LavaBackground />
       <nav className="scent-topbar fixed top-0 left-0 right-0 h-16 sm:h-[72px] z-50 px-3 sm:px-8">
         <div className="max-w-[1760px] mx-auto h-full flex items-center relative">
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            {authEmail ? (
-              <div className="scent-account-pill h-10 sm:h-11 rounded-full pl-1.5 pr-3 sm:pr-4 flex items-center gap-3 min-w-0">
-                <div className="relative flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-full border border-scent-accent/45 bg-black/60 text-sm font-bold text-white">
-                  {authEmail.trim().charAt(0).toUpperCase() || 'S'}
-                  <span className={`absolute -right-0.5 bottom-0 h-2.5 w-2.5 rounded-full border border-black ${locationStatus === 'granted' ? 'bg-emerald-400' : locationStatus === 'requesting' ? 'bg-yellow-400 animate-pulse' : locationStatus === 'denied' ? 'bg-red-400' : 'bg-scent-accent/45'}`} />
-                </div>
-                <span className="hidden max-w-[180px] lg:max-w-[240px] truncate text-sm text-[#f4debd]/86 md:block">
-                  {authEmail}
-                </span>
-                <ChevronDown size={16} strokeWidth={1.5} className="hidden text-scent-accent/65 md:block" />
-              </div>
-            ) : (
-              <button
-                onClick={() => setIsAuthModalOpen(true)}
-                title="Sign In"
-                className="scent-account-pill h-10 sm:h-11 px-4 rounded-full transition-all text-[10px] uppercase tracking-[0.18em] text-[#f4debd]/82 hover:text-white font-bold"
-              >
-                Sign In
-              </button>
-            )}
-            <button
-              onClick={requestLocation}
-              disabled={locationStatus === 'requesting' || locationStatus === 'granted'}
-              title={locationStatus === 'granted' ? 'Location Active' : locationStatus === 'denied' ? 'Location Denied' : 'Sync Location'}
-              className="scent-icon-button hidden md:flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 rounded-full transition-all disabled:cursor-default"
-            >
-              <span className={`w-2 h-2 rounded-full ${locationStatus === 'granted' ? 'bg-green-400' : locationStatus === 'requesting' ? 'bg-yellow-400 animate-pulse' : locationStatus === 'denied' ? 'bg-red-400' : 'bg-white/20'}`} />
-            </button>
-          </div>
+          <div className="min-w-0" />
 
           <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 sm:gap-3 pointer-events-none">
             <Wind size={22} strokeWidth={1.25} className="text-scent-accent drop-shadow-[0_0_10px_rgba(201,139,44,0.22)]" />
             <h1 className="scent-brandmark font-serif text-xl sm:text-3xl tracking-[0.14em] uppercase">SCENTCAST</h1>
           </div>
 
-          <div className="ml-auto flex items-center gap-2 sm:gap-3">
-            {authToken ? (
+          <div className="ml-auto flex items-center gap-3 sm:gap-4">
+            {!authToken ? (
+              <button
+                type="button"
+                onClick={() => setIsAuthModalOpen(true)}
+                className="text-[10px] sm:text-xs uppercase tracking-[0.2em] text-[#f4debd]/70 hover:text-white transition-colors"
+              >
+                Sign In
+              </button>
+            ) : (
               <>
                 <button
+                  type="button"
                   onClick={() => setIsShareModalOpen(true)}
-                  title="Share Vault"
-                  className="scent-icon-button flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 rounded-full transition-all"
+                  className="text-[10px] sm:text-xs uppercase tracking-[0.2em] text-[#f4debd]/70 hover:text-white transition-colors"
                 >
-                  <Share2 size={17} strokeWidth={1.6} />
+                  Share
                 </button>
                 <button
+                  type="button"
                   onClick={handleSignOut}
-                  title="Sign Out"
-                  className="scent-icon-button flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 rounded-full transition-all"
+                  className="text-[10px] sm:text-xs uppercase tracking-[0.2em] text-[#f4debd]/70 hover:text-white transition-colors"
                 >
-                  <LogOut size={17} strokeWidth={1.6} />
+                  Sign Out
                 </button>
               </>
-            ) : null}
+            )}
           </div>
         </div>
       </nav>
@@ -915,46 +907,6 @@ export default function App() {
 
       <main className="relative z-10 pb-24 px-4 sm:px-8 max-w-[1760px] mx-auto">
         <div className="space-y-20 sm:space-y-28 pt-10 sm:pt-14">
-          <div className="hidden" aria-hidden="true">
-            <div className="flex flex-col items-center justify-center space-y-16 pt-32 text-center">
-              <header className="space-y-10 flex flex-col items-center">
-                <div className="w-full max-w-4xl overflow-hidden py-4 border-y border-white/5 flex select-none relative group">
-                  <div className="flex animate-infinite-scroll gap-20 text-[11px] uppercase tracking-[0.5em] text-white/80 font-serif italic whitespace-nowrap">
-                    {[...Array(4)].map((_, i) => (
-                      <span key={i} className="flex items-center gap-20">
-                        {tickerPhrases.map((phrase, j) => (
-                          <React.Fragment key={j}>
-                            <span>{phrase}</span>
-                            <span className="text-white/10">•</span>
-                          </React.Fragment>
-                        ))}
-                      </span>
-                    ))}
-                  </div>
-                  <div className="absolute inset-y-0 left-0 w-24 bg-gradient-to-r from-black to-transparent z-10" />
-                  <div className="absolute inset-y-0 right-0 w-24 bg-gradient-to-l from-black to-transparent z-10" />
-                </div>
-                <h2 className="font-serif italic text-2xl sm:text-4xl lg:text-7xl leading-tight text-white max-w-4xl tracking-tighter">Find your signature for the current atmosphere.</h2>
-              </header>
-
-              <div className="flex flex-col items-center gap-8 w-full max-w-6xl mx-auto">
-                <div className="w-full max-w-2xl">
-                  <FragranceCapture onAdd={handleAddItem} />
-                </div>
-                <button
-                  onClick={() => {
-                    if (items.length === 0) { alert("Your vault is empty! Add at least one fragrance to discover your match."); return; }
-                    setIsIntentModalOpen(true);
-                  }}
-                  className="w-full max-w-2xl h-14 bg-white text-black flex items-center justify-center gap-6 hover:bg-neutral-200 transition-all group rounded-[1.25rem] border border-white/10 shadow-[0_0_50px_rgba(255,255,255,0.1)]"
-                >
-                  <Play size={20} className="fill-current group-hover:scale-110 transition-transform" />
-                  <span className="font-serif italic text-xl sm:text-2xl">Discover Your Signature Scent</span>
-                </button>
-              </div>
-            </div>
-          </div>
-
           <div className="scent-marquee-band scent-full-bleed w-full overflow-hidden py-4 flex select-none relative">
             <div className="flex animate-infinite-scroll gap-20 text-[11px] uppercase tracking-[0.48em] font-serif italic whitespace-nowrap scent-marquee-text">
               {[...Array(4)].map((_, i) => (

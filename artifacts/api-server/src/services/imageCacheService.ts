@@ -267,6 +267,8 @@ export async function recordImageReady(input: {
   height: number;
   sizeBytes: number;
   backgroundRemoved: boolean;
+  removeBgStatus?: string | null;
+  removeBgReason?: string | null;
 }): Promise<CachedImageReference> {
   assertNoPersistedBase64Image(input.publicUrl, "image_cache.public_url");
   assertNoPersistedBase64Image(input.sourceUrl, "image_cache.source_url");
@@ -294,6 +296,8 @@ export async function recordImageReady(input: {
         height: input.height,
         sizeBytes: input.sizeBytes,
         backgroundRemoved: input.backgroundRemoved,
+        removeBgStatus: input.removeBgStatus ?? null,
+        removeBgReason: input.removeBgReason ?? null,
         processingStatus: "ready",
         failureReason: null,
         lastUsedAt: new Date(),
@@ -312,6 +316,8 @@ export async function recordImageReady(input: {
           height: input.height,
           sizeBytes: input.sizeBytes,
           backgroundRemoved: input.backgroundRemoved,
+          removeBgStatus: input.removeBgStatus ?? null,
+          removeBgReason: input.removeBgReason ?? null,
           processingStatus: "ready",
           failureReason: null,
           lastUsedAt: new Date(),

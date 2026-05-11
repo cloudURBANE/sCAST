@@ -15,6 +15,18 @@ const RETAILER_DOMAINS = [
   "neimanmarcus.com",
   "fragrancex.com",
   "fragrancenet.com",
+  "perfumania.com",
+  "fragrancebuy.ca",
+  "bergdorfgoodman.com",
+  "dillards.com",
+  "belk.com",
+  "notino.com",
+  "thefragranceshop.co.uk",
+  "lookfantastic.com",
+  "harrods.com",
+  "selfridges.com",
+  "strawberrynet.com",
+  "beautylish.com",
 ];
 
 const FRAGRANCE_DB_DOMAINS = [
@@ -24,26 +36,77 @@ const FRAGRANCE_DB_DOMAINS = [
 ];
 
 const OFFICIAL_BRAND_DOMAINS = [
+  // Luxury / heritage houses
   "dior.com",
   "chanel.com",
-  "creedfragrances.com",
-  "tomfordbeauty.com",
-  "maisonfranciskurkdjian.com",
-  "yslbeauty.com",
-  "givenchybeauty.com",
   "hermes.com",
   "guerlain.com",
-  "jomalone.com",
+  "cartier.com",
   "bvlgari.com",
+  "louisvuitton.com",
+  "loewe.com",
+  "tiffany.com",
+  "chopard.com",
+  "lalique.com",
+  // Niche / prestige
+  "creedfragrances.com",
+  "creed.com",
+  "tomfordbeauty.com",
+  "maisonfranciskurkdjian.com",
+  "fredericmalle.com",
+  "byredo.com",
+  "diptyqueparis.com",
+  "lelabofragrances.com",
+  "maisonmargiela.com",
+  "acquadiparma.com",
+  "annickgoutal.com",
+  "kilian-paris.com",
+  "sisley-paris.com",
+  // Designer
+  "yslbeauty.com",
+  "ysl.com",
+  "givenchybeauty.com",
+  "parfumsgivenchy.com",
+  "jomalone.com",
+  "jomalone.co.uk",
   "armanibeauty.com",
+  "giorgioarmani.com",
   "burberry.com",
   "versace.com",
-  "cartier.com",
   "guccibeauty.com",
   "lancome.com",
   "carolinaherrera.com",
   "valentino.com",
   "montblanc.com",
+  "prada.com",
+  "jimmychoo.com",
+  "alexandermcqueen.com",
+  "stellamccartney.com",
+  "bottegaveneta.com",
+  "ferragamo.com",
+  "miumiu.com",
+  "dsquared2.com",
+  "lanvin.com",
+  "rochas.com",
+  // Mass designer / lifestyle
+  "calvinklein.com",
+  "hugoboss.com",
+  "lacoste.com",
+  "dolcegabbana.com",
+  "isseymiyake.com",
+  "kenzoparfums.com",
+  "pacorabanne.com",
+  "rabanne.com",
+  "jeanpaulgaultier.com",
+  "muglerparfums.com",
+  "ralphlauren.com",
+  "dkny.com",
+  "michaelkors.com",
+  "coach.com",
+  "toryburch.com",
+  "marcjacobs.com",
+  "esteelauder.com",
+  "clinique.com",
 ];
 
 const BLOCKED_PAGE_HINTS = [
@@ -64,11 +127,14 @@ const NOTE_SIGNAL_HINTS = [
   "fragrance notes",
 ];
 
-// Sites used for targeted Serper queries
+// Sites used for targeted Serper queries — covers all three source classes
 const TARGETED_SERPER_SITES = [
   "sephora.com",
   "ulta.com",
   "nordstrom.com",
+  "fragrancenet.com",
+  "fragrancex.com",
+  "macys.com",
   "parfumo.com",
   "basenotes.com",
   "fragrantica.com",
@@ -249,9 +315,12 @@ async function searchWithSerper(fragranceName: string): Promise<string[]> {
       if (!res.ok) return [] as string[];
       const data: any = await res.json();
       const organic: any[] = Array.isArray(data?.organic) ? data.organic : [];
+      // Accept all Serper organic URLs — Google ranking is the quality gate.
+      // Unknown brand pages land as "other" class and factCheck weights them
+      // conservatively; note-signal check in readSource() filters noise.
       return organic
         .map((item) => (typeof item?.link === "string" ? item.link : ""))
-        .filter((u: string): boolean => Boolean(u) && isUsefulSource(u));
+        .filter((u: string): boolean => Boolean(u) && isHttpUrl(u));
     }),
   );
 
