@@ -338,13 +338,9 @@ body {
   border-left: 1px solid rgba(201, 139, 44, 0.12);
 }
 
-.scent-atmosphere-marquee-group:first-child .scent-atmosphere-marquee-cell:first-child {
-  border-left: 0;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .scent-atmosphere-marquee-track {
-    animation-duration: 55s;
+    animation-duration: 112s;
   }
 }
 
