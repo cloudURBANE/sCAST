@@ -19,6 +19,14 @@ import {
   resolveFragranceQuery,
   shouldSearchExternalFragranceSources,
 } from "../services/fragranceNameResolver";
+import {
+  BaseNotesError,
+  fetchBaseNotesDetail,
+  isAllowedBaseNotesUrl,
+  normalizeSelectedIdentity,
+  sanitizeBaseNotesQuery,
+  searchBaseNotesDirectory,
+} from "../services/baseNotesService";
 
 const router = Router();
 
@@ -134,12 +142,65 @@ router.post("/scent-profile", async (req, res) => {
 });
 
 router.post("/search-scent", async (req, res) => {
-  const { query, concentrationHint } = req.body as { query?: string; concentrationHint?: ConcentrationHint };
+  const { query, concentrationHint, selectedIdentity } = req.body as {
+    query?: string;
+    concentrationHint?: ConcentrationHint;
+    selectedIdentity?: unknown;
+  };
   if (!query) {
     res.status(400).json({ error: "Query is required" });
     return;
   }
   const normalizedHint = normalizeConcentrationHint(concentrationHint);
+
+  // BaseNotes-authoritative path: when the client supplies a selected identity
+  // (already validated server-side via /api/basenotes/detail), it becomes the
+  // source of truth — the original `query` is NEVER used as the identity, only
+  // forwarded for telemetry context. The image pipeline receives the identity's
+  // searchLabel so the typed typo never reaches Serper.
+  if (selectedIdentity) {
+    const identity = normalizeSelectedIdentity(selectedIdentity);
+    if (!identity) {
+      res.status(400).json({ error: "Invalid selectedIdentity" });
+      return;
+    }
+    const notesOverride = identity.notes.parsed
+      ? {
+          notes: identity.notes.flat,
+          pyramid: identity.notes.grouped,
+        }
+      : undefined;
+    const profile = await buildProfile(
+      identity.name,
+      identity.brand,
+      {
+        perfumer: identity.perfumer,
+      },
+      {
+        allowCatalogFuzzy: false,
+        skipCatalogLookup: true,
+        imageSearchLabel: identity.searchLabel,
+        notesOverride,
+      },
+    );
+    if ("product" in profile) {
+      const flat = flattenProfile(profile);
+      res.json({
+        ...flat,
+        selectedIdentity: {
+          brand: identity.brand,
+          name: identity.name,
+          year: identity.year,
+          url: identity.url,
+          searchLabel: identity.searchLabel,
+        },
+      });
+      return;
+    }
+    res.json(profile);
+    return;
+  }
+
   const resolvedQuery = resolveFragranceQuery(query);
   if (resolvedQuery?.corrected) {
     logger.info(
@@ -438,6 +499,53 @@ router.post("/refresh-image", async (req, res) => {
   } catch (err: any) {
     logger.error({ err: err.message }, "refresh-image failed");
     res.status(500).json({ error: err.message || "Image refresh failed" });
+  }
+});
+
+router.post("/basenotes/search", async (req, res) => {
+  const { query } = (req.body ?? {}) as { query?: unknown };
+  const cleaned = sanitizeBaseNotesQuery(query);
+  if (!cleaned) {
+    res.status(400).json({ ok: false, error: "Query is required" });
+    return;
+  }
+  try {
+    const candidates = await searchBaseNotesDirectory(cleaned);
+    res.json({ ok: true, query: cleaned, candidates });
+  } catch (err: unknown) {
+    if (err instanceof BaseNotesError) {
+      res.status(err.status).json({ ok: false, error: err.message });
+      return;
+    }
+    logger.error(
+      { err: err instanceof Error ? err.message : String(err) },
+      "basenotes search failed",
+    );
+    res.status(502).json({ ok: false, error: "BaseNotes search failed" });
+  }
+});
+
+router.post("/basenotes/detail", async (req, res) => {
+  const { url } = (req.body ?? {}) as { url?: unknown };
+  if (typeof url !== "string" || !isAllowedBaseNotesUrl(url)) {
+    res
+      .status(400)
+      .json({ ok: false, error: "URL must be an https://basenotes.com/fragrances/ page" });
+    return;
+  }
+  try {
+    const detail = await fetchBaseNotesDetail(url);
+    res.json({ ok: true, detail });
+  } catch (err: unknown) {
+    if (err instanceof BaseNotesError) {
+      res.status(err.status).json({ ok: false, error: err.message });
+      return;
+    }
+    logger.error(
+      { err: err instanceof Error ? err.message : String(err), url },
+      "basenotes detail failed",
+    );
+    res.status(502).json({ ok: false, error: "BaseNotes detail fetch failed" });
   }
 });
 
