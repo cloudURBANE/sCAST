@@ -56,58 +56,28 @@ export async function buildProfile(
      * cache resolution still run.
      */
     allowCatalogFuzzy?: boolean;
-    /**
-     * When set, replaces the brand+name prefix used for the Serper image
-     * search. The standard packshot keywords are still appended. Used by
-     * the BaseNotes candidate-selection layer so the image lookup uses the
-     * authoritative search label rather than the user's typo.
-     */
-    imageSearchLabel?: string;
-    /**
-     * When set, fully overrides the dataset/scrape notes used when building
-     * the final profile. Pyramid override wins over the legacy classifier.
-     */
-    notesOverride?: {
-      notes?: string[];
-      pyramid?: { top: string[]; heart: string[]; base: string[] };
-    };
-    /**
-     * When false, exact-lookup-key catalog lookup is also skipped (in
-     * addition to fuzzy). Used by the BaseNotes flow so a previously cached
-     * weak profile cannot pre-empt the BaseNotes-authoritative one.
-     */
-    skipCatalogLookup?: boolean;
   },
 ): Promise<ScentProfile | { error: string }> {
   const allowCatalogFuzzy = opts?.allowCatalogFuzzy ?? true;
-  const skipCatalogLookup = opts?.skipCatalogLookup === true;
   const identity = resolveFragranceIdentity(brand, name);
   const profileBrand = identity.brand;
   const profileName = identity.name;
 
-  // 1. Check global catalog — exact match first, then fuzzy to catch AI naming variations.
-  //    The BaseNotes-authoritative path skips both lookups so notes/pyramid coming
-  //    from a freshly parsed BaseNotes detail always win over a cached weak profile.
+  // 1. Check global catalog — exact match first, then fuzzy to catch AI naming variations
   let catalogBase: ScentProfile | null = null;
-  if (!skipCatalogLookup) {
-    const cached = await getCatalogEntry(profileBrand, profileName);
-    if (cached) {
-      const cachedImageUrl = await usableImageUrlForResponse(cached.imageUrl);
-      if (cachedImageUrl && !opts?.notesOverride) {
-        return { ...cached, imageUrl: cachedImageUrl };
-      }
-      catalogBase = cached;
-    }
+  const cached = await getCatalogEntry(profileBrand, profileName);
+  if (cached) {
+    const cachedImageUrl = await usableImageUrlForResponse(cached.imageUrl);
+    if (cachedImageUrl) return { ...cached, imageUrl: cachedImageUrl };
+    catalogBase = cached;
   }
 
-  if (!catalogBase && !skipCatalogLookup && allowCatalogFuzzy) {
+  if (!catalogBase && allowCatalogFuzzy) {
     // Fuzzy search handles cases like "Sauvage EDP" matching stored "Sauvage"
     const fuzzy = await searchCatalog(`${profileBrand} ${profileName}`);
     if (fuzzy) {
       const fuzzyImageUrl = await usableImageUrlForResponse(fuzzy.imageUrl);
-      if (fuzzyImageUrl && !opts?.notesOverride) {
-        return { ...fuzzy, imageUrl: fuzzyImageUrl };
-      }
+      if (fuzzyImageUrl) return { ...fuzzy, imageUrl: fuzzyImageUrl };
       catalogBase = fuzzy;
     }
   }
@@ -125,11 +95,7 @@ export async function buildProfile(
 
   // 2. Resolve image through metadata/object cache. This checks image_cache
   // before Serper and writes only object references to Postgres.
-  // When the caller supplies an authoritative searchLabel (e.g. from a
-  // BaseNotes detail), use it as the query subject so the image search
-  // is anchored to the selected identity rather than the user's typo.
-  const imageSearchSubject = opts?.imageSearchLabel?.trim() || `${profileBrand} ${profileName}`;
-  const searchQuery = `${imageSearchSubject} single fragrance bottle no box HQ product photo studio no plants`;
+  const searchQuery = `${profileBrand} ${profileName} single fragrance bottle no box HQ product photo studio no plants`;
   const processedImage =
     await resolveProcessedFragranceImage({
       brand: profileBrand,
@@ -153,25 +119,13 @@ export async function buildProfile(
   const match = findFragrance(profileName, profileBrand);
   const finalName = match?.name || catalogBase?.product.name || profileName;
   const finalBrand = match?.brand || catalogBase?.product.brand || profileBrand;
-
-  // BaseNotes overrides win over dataset/scrape values when available.
-  const overridePyramid = opts?.notesOverride?.pyramid;
-  const overrideFlatNotes = opts?.notesOverride?.notes;
-  const overridePyramidFlattened = overridePyramid
-    ? [...overridePyramid.top, ...overridePyramid.heart, ...overridePyramid.base]
-    : undefined;
-  const finalNotes =
-    overridePyramidFlattened?.length
-      ? overridePyramidFlattened
-      : overrideFlatNotes?.length
-        ? overrideFlatNotes
-        : match?.notes || effectiveFallback?.notes || [];
+  const finalNotes = match?.notes || effectiveFallback?.notes || [];
   const finalFamily = match?.family || effectiveFallback?.family || "Unknown Family";
   const finalDescription = match?.description || effectiveFallback?.description || "";
-  const finalPyramid = overridePyramid || match?.pyramid || effectiveFallback?.pyramid;
+  const finalPyramid = match?.pyramid || effectiveFallback?.pyramid;
   const finalPerfumer = match?.perfumer || effectiveFallback?.perfumer;
 
-  if (!match && (!effectiveFallback || !effectiveFallback.notes) && finalNotes.length === 0) {
+  if (!match && (!effectiveFallback || !effectiveFallback.notes)) {
     return { error: "Could not identify this fragrance. Try a more specific name." };
   }
 
