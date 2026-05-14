@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Search, RefreshCw, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { BottleImage } from '@/components/BottleImage';
 import {
   getFragranceDetails,
   searchFragrances,
@@ -40,7 +39,6 @@ interface FragranceMatch extends FragranceSearchResult {
   name: string;
   brand: string;
   house: string;
-  imageUrl?: string;
 }
 
 type ConcentrationHint = 'any' | 'edt' | 'edp' | 'parfum' | 'extrait' | 'elixir';
@@ -108,7 +106,6 @@ export const FragranceCapture: React.FC<{ onAdd?: (item: any) => void }> = ({ on
             name: firstString(result.name) ?? targetQuery.trim(),
             house,
             brand: house,
-            imageUrl: "",
           };
         })
         .filter((result) => Boolean(result.id?.trim()));
@@ -176,7 +173,50 @@ export const FragranceCapture: React.FC<{ onAdd?: (item: any) => void }> = ({ on
         firstString(detail.brand, detail.house, selected.brand, selected.house) ??
         selected.brand;
       const detailHouse = firstString(detail.house, detail.brand, selected.house, selected.brand);
-      const detailImageUrl = firstString(detail.imageUrl, detail.image_url, selected.imageUrl) ?? "";
+      const detailImageUrl = firstString(detail.imageUrl, detail.image_url) ?? "";
+      const detailFamily = firstString(
+        typeof detail.family === 'string' ? detail.family : undefined,
+      );
+      const detailPerfumer = firstString(
+        typeof detail.perfumer === 'string' ? detail.perfumer : undefined,
+      );
+      const detailDescription =
+        typeof detail.raw?.description === 'string' ? detail.raw.description : undefined;
+
+      const profileRes = await fetch('/api/scent-profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: detailName,
+          brand: detailBrand,
+          preferEngineData: flatNotes.length > 0,
+          notes: flatNotes.length > 0 ? flatNotes : undefined,
+          ...(detailFamily ? { family: detailFamily } : {}),
+          ...(detailDescription ? { description: detailDescription } : {}),
+          ...(detailPerfumer ? { perfumer: detailPerfumer } : {}),
+          ...(pyramidNotes.top.length || pyramidNotes.heart.length || pyramidNotes.base.length
+            ? { pyramid: pyramidNotes }
+            : {}),
+        }),
+        signal: controller.signal,
+      });
+      const pipelineProfile = (await profileRes.json().catch(() => ({}))) as Record<string, unknown> & {
+        error?: string;
+      };
+      if (!profileRes.ok) {
+        throw new Error(
+          typeof pipelineProfile.error === 'string' && pipelineProfile.error.trim()
+            ? pipelineProfile.error
+            : `Image pipeline failed: ${profileRes.status}`,
+        );
+      }
+      if (typeof pipelineProfile.error === 'string' && pipelineProfile.error.trim()) {
+        throw new Error(pipelineProfile.error);
+      }
+
+      const pipelineImageUrl = firstString(
+        typeof pipelineProfile.imageUrl === 'string' ? pipelineProfile.imageUrl : undefined,
+      );
 
       onAdd({
         ...detail,
@@ -185,10 +225,20 @@ export const FragranceCapture: React.FC<{ onAdd?: (item: any) => void }> = ({ on
         derived_metrics: detail.derived_metrics ?? null,
         enrichment: detail.enrichment ?? null,
         fragranceApiId: firstString(detail.id, selected.id) ?? selected.id,
-        name: detailName,
-        brand: detailBrand,
+        name: (pipelineProfile.name as string | undefined) ?? detailName,
+        brand: (pipelineProfile.brand as string | undefined) ?? detailBrand,
         house: detailHouse,
-        imageUrl: detailImageUrl,
+        product: pipelineProfile.product,
+        scent_vector: pipelineProfile.scent_vector,
+        performance: pipelineProfile.performance,
+        context: pipelineProfile.context,
+        concentration: pipelineProfile.concentration,
+        accords: pipelineProfile.accords,
+        family: (pipelineProfile.family as string | undefined) ?? detailFamily,
+        imageUrl: pipelineImageUrl || detailImageUrl,
+        storagePath: pipelineProfile.storagePath as string | undefined,
+        imageHash: pipelineProfile.imageHash as string | null | undefined,
+        storageProvider: pipelineProfile.storageProvider as string | undefined,
         id: newFragranceId(),
         season: 'Universal',
         source_url: firstString(detail.source_url, selected.source_url),
@@ -341,15 +391,6 @@ export const FragranceCapture: React.FC<{ onAdd?: (item: any) => void }> = ({ on
                     className={`flex items-center justify-between p-3 border transition-all cursor-pointer rounded-[1.25rem] ${selectedIdx === i ? 'border-white bg-white/10' : 'border-white/10 hover:bg-white/5'}`}
                   >
                     <div className="flex items-center gap-3">
-                      <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-sm border border-white/10 bg-white/5">
-                        {m.imageUrl ? (
-                          <BottleImage variant="thumb" src={m.imageUrl} alt={m.name} className="h-full w-full" />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center text-[8px] font-bold uppercase text-white/20">
-                            N/A
-                          </div>
-                        )}
-                      </div>
                       <div>
                         <p className="font-serif italic text-lg leading-tight text-white">{m.name}</p>
                         <p className="text-[8px] uppercase text-scent-muted tracking-widest font-sans font-bold">

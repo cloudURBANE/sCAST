@@ -103,7 +103,17 @@ router.get("/weather", async (req, res) => {
 });
 
 router.post("/scent-profile", async (req, res) => {
-  const { name, brand, imageUrl, notes, family, description, pyramid, perfumer } = req.body as {
+  const {
+    name,
+    brand,
+    imageUrl,
+    notes,
+    family,
+    description,
+    pyramid,
+    perfumer,
+    preferEngineData,
+  } = req.body as {
     name?: string;
     brand?: string;
     imageUrl?: string;
@@ -112,6 +122,7 @@ router.post("/scent-profile", async (req, res) => {
     description?: string;
     pyramid?: { top: string[]; heart: string[]; base: string[] };
     perfumer?: string;
+    preferEngineData?: boolean;
   };
 
   if (!name) {
@@ -119,14 +130,19 @@ router.post("/scent-profile", async (req, res) => {
     return;
   }
 
-  const result = await buildProfile(name, brand || "", {
-    notes,
-    family,
-    description,
-    imageUrl,
-    pyramid,
-    perfumer,
-  });
+  const result = await buildProfile(
+    name,
+    brand || "",
+    {
+      notes,
+      family,
+      description,
+      imageUrl,
+      pyramid,
+      perfumer,
+    },
+    { preferEngineData: preferEngineData === true },
+  );
   // Always return a flat shape ({ name, brand, ... } alongside `product`) so the
   // client can rely on top-level keys when it persists this object verbatim.
   if (!("product" in result)) { res.json(result); return; }

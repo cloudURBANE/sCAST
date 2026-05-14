@@ -56,9 +56,18 @@ export async function buildProfile(
      * cache resolution still run.
      */
     allowCatalogFuzzy?: boolean;
+    /**
+     * When true (external fragrance engine already supplied notes/metadata):
+     * do not return an early full-catalog hit; skip fuzzy catalog search;
+     * prefer `fallback` for notes/pyramid/etc.; always re-run vectorization
+     * and the image pipeline so `global_fragrances` stores engine + image
+     * together.
+     */
+    preferEngineData?: boolean;
   },
 ): Promise<ScentProfile | { error: string }> {
   const allowCatalogFuzzy = opts?.allowCatalogFuzzy ?? true;
+  const preferEngineData = opts?.preferEngineData ?? false;
   const identity = resolveFragranceIdentity(brand, name);
   const profileBrand = identity.brand;
   const profileName = identity.name;
@@ -66,13 +75,15 @@ export async function buildProfile(
   // 1. Check global catalog — exact match first, then fuzzy to catch AI naming variations
   let catalogBase: ScentProfile | null = null;
   const cached = await getCatalogEntry(profileBrand, profileName);
-  if (cached) {
+  if (cached && !preferEngineData) {
     const cachedImageUrl = await usableImageUrlForResponse(cached.imageUrl);
     if (cachedImageUrl) return { ...cached, imageUrl: cachedImageUrl };
     catalogBase = cached;
+  } else if (cached && preferEngineData) {
+    catalogBase = cached;
   }
 
-  if (!catalogBase && allowCatalogFuzzy) {
+  if (!catalogBase && allowCatalogFuzzy && !preferEngineData) {
     // Fuzzy search handles cases like "Sauvage EDP" matching stored "Sauvage"
     const fuzzy = await searchCatalog(`${profileBrand} ${profileName}`);
     if (fuzzy) {
@@ -82,16 +93,31 @@ export async function buildProfile(
     }
   }
 
-  const effectiveFallback = catalogBase
+  const engineFallbackComplete =
+    preferEngineData &&
+    fallback &&
+    Array.isArray(fallback.notes) &&
+    fallback.notes.length > 0;
+
+  const effectiveFallback = engineFallbackComplete
     ? {
-        notes: catalogBase.notes,
-        family: catalogBase.family,
-        description: catalogBase.description,
-        imageUrl: fallback?.imageUrl,
-        pyramid: catalogBase.pyramid,
-        perfumer: catalogBase.product.perfumer,
+        notes: fallback!.notes,
+        family: fallback!.family ?? catalogBase?.family,
+        description: fallback!.description ?? catalogBase?.description,
+        imageUrl: fallback!.imageUrl,
+        pyramid: fallback!.pyramid ?? catalogBase?.pyramid,
+        perfumer: fallback!.perfumer ?? catalogBase?.product.perfumer,
       }
-    : fallback;
+    : catalogBase
+      ? {
+          notes: catalogBase.notes,
+          family: catalogBase.family,
+          description: catalogBase.description,
+          imageUrl: fallback?.imageUrl,
+          pyramid: catalogBase.pyramid,
+          perfumer: catalogBase.product.perfumer,
+        }
+      : fallback;
 
   // 2. Resolve image through metadata/object cache. This checks image_cache
   // before Serper and writes only object references to Postgres.
@@ -119,13 +145,29 @@ export async function buildProfile(
   const match = findFragrance(profileName, profileBrand);
   const finalName = match?.name || catalogBase?.product.name || profileName;
   const finalBrand = match?.brand || catalogBase?.product.brand || profileBrand;
-  const finalNotes = match?.notes || effectiveFallback?.notes || [];
-  const finalFamily = match?.family || effectiveFallback?.family || "Unknown Family";
-  const finalDescription = match?.description || effectiveFallback?.description || "";
-  const finalPyramid = match?.pyramid || effectiveFallback?.pyramid;
-  const finalPerfumer = match?.perfumer || effectiveFallback?.perfumer;
+  const finalNotes: string[] =
+    engineFallbackComplete
+      ? (effectiveFallback?.notes ?? [])
+      : (match?.notes ?? effectiveFallback?.notes ?? []);
+  const finalFamily =
+    engineFallbackComplete && effectiveFallback?.family
+      ? effectiveFallback.family
+      : match?.family || effectiveFallback?.family || "Unknown Family";
+  const finalDescription =
+    engineFallbackComplete && effectiveFallback?.description != null
+      ? String(effectiveFallback.description)
+      : match?.description || effectiveFallback?.description || "";
+  const finalPyramid =
+    engineFallbackComplete && effectiveFallback?.pyramid
+      ? effectiveFallback.pyramid
+      : match?.pyramid || effectiveFallback?.pyramid;
+  const finalPerfumer =
+    engineFallbackComplete && effectiveFallback?.perfumer
+      ? effectiveFallback.perfumer
+      : match?.perfumer || effectiveFallback?.perfumer;
 
-  if (!match && (!effectiveFallback || !effectiveFallback.notes)) {
+  const hasUsableNotes = Array.isArray(finalNotes) && finalNotes.length > 0;
+  if (!match && !hasUsableNotes) {
     return { error: "Could not identify this fragrance. Try a more specific name." };
   }
 
