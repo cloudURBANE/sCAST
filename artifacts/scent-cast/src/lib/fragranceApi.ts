@@ -163,7 +163,13 @@ function getApiBase() {
   const base = FRAGRANCE_API_URL?.trim();
 
   if (!base) {
-    throw new Error("Missing VITE_FRAGRANCE_API_URL");
+    throw new Error(
+      [
+        "Missing VITE_FRAGRANCE_API_URL (fragrance catalog / search backend).",
+        "For local dev: add it to artifacts/scent-cast/.env.local, or define it in ScentCast.env at the repo root, then restart the Vite dev server.",
+        "For production: add VITE_FRAGRANCE_API_URL in the frontend host env (e.g. Vercel) and redeploy.",
+      ].join(" "),
+    );
   }
 
   return base.replace(/\/+$/, "");
