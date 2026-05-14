@@ -5,6 +5,7 @@ import { Wardrobe, Fragrance, DestinationType, EnergyState } from './components/
 import { Wind, Play, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ScentIntentModal } from './components/ScentIntentModal';
+import { ScentNotesInfographic } from './components/ScentNotesInfographic';
 import { LavaBackground } from './components/LavaBackground';
 import { AuthModal } from './components/AuthModal';
 import { SharePage } from './components/SharePage';
@@ -15,6 +16,7 @@ import {
   type ScentWeatherEngineInput,
   type ScentWeatherRecommendation,
 } from './lib/scentWeatherEngine';
+import { collectMainAccordDisplayRows } from './lib/fragranceApi';
 
 interface WeatherData {
   temp?: number;
@@ -168,7 +170,21 @@ const getFragranceFamilies = (item: Fragrance): string[] => {
 const getFragranceAccords = (item: Fragrance): string[] => {
   const record = getFragranceRecord(item);
   const pyramid = isLooseRecord(record.pyramid) ? record.pyramid : null;
+  const dm = item.derived_metrics ?? item.raw_engine_detail?.derived_metrics ?? null;
+  const accordLabels = collectMainAccordDisplayRows(dm?.main_accords).map((r) => r.label);
+  const dmNotes = dm?.notes;
+
   return uniqueStrings([
+    ...accordLabels,
+    ...(dmNotes
+      ? [
+          ...collectStrings(dmNotes.top),
+          ...collectStrings(dmNotes.heart),
+          ...collectStrings(dmNotes.base),
+          ...collectStrings(dmNotes.flat),
+        ]
+      : []),
+    ...collectStrings(dm?.main_accords?.accord_summary),
     ...collectStrings(record.accords),
     ...collectStrings(record.notes),
     ...collectStrings(record.topNotes),
@@ -1047,6 +1063,16 @@ export default function App() {
                     <div>
                       <p className="text-[8px] uppercase tracking-[0.3em] text-scent-muted mb-2 font-bold">Concentration</p>
                       <p className="text-sm italic text-scent-muted leading-relaxed">{activeRecommendation.concentration || 'Eau de Parfum'}</p>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <ScentNotesInfographic
+                        derivedMetrics={
+                          activeRecommendation.derived_metrics ??
+                          activeRecommendation.raw_engine_detail?.derived_metrics ??
+                          null
+                        }
+                        legacyPyramid={activeRecommendation.pyramid}
+                      />
                     </div>
                     {activeEngineRecommendation ? (
                       <>

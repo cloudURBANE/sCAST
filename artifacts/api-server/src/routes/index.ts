@@ -10,6 +10,7 @@ import imageProxyRouter from "./imageProxy";
 import imageObjectsRouter from "./imageObjects";
 import debugRouter from "./debug";
 import scentFactsRouter from "./scentFacts";
+import enrichmentRouter from "./enrichment";
 
 const router: IRouter = Router();
 
@@ -24,5 +25,6 @@ router.use(imageProxyRouter);
 router.use(imageObjectsRouter);
 router.use(debugRouter);
 router.use(scentFactsRouter);
+router.use(enrichmentRouter);
 
 export default router;

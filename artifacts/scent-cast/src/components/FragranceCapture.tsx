@@ -2,6 +2,12 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Search, RefreshCw, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { BottleImage } from '@/components/BottleImage';
+import {
+  getFragranceDetails,
+  searchFragrances,
+  type FragranceDetail,
+  type FragranceSearchResult,
+} from '@/lib/fragranceApi';
 
 /**
  * Generate a stable, collision-resistant id for newly added wardrobe items.
@@ -21,30 +27,20 @@ function newFragranceId(): string {
   return `${a}-${b}-${c}-${d}`;
 }
 
-async function apiErrorMessage(res: Response, fallback: string): Promise<string> {
-  try {
-    const data = await res.clone().json();
-    if (typeof data?.error === 'string' && data.error.trim()) return data.error;
-    if (typeof data?.message === 'string' && data.message.trim()) return data.message;
-  } catch {
-    try {
-      const text = await res.text();
-      if (text.trim()) return text.trim();
-    } catch {
-      /* fall through to fallback */
-    }
+function firstString(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    if (typeof value !== 'string') continue;
+    const trimmed = value.trim();
+    if (trimmed) return trimmed;
   }
-  return fallback;
+  return undefined;
 }
 
-interface FragranceMatch {
+interface FragranceMatch extends FragranceSearchResult {
   name: string;
   brand: string;
-  imageUrl: string;
-  notes?: string[];
-  family?: string;
-  description?: string;
-  pyramid?: unknown;
+  house: string;
+  imageUrl?: string;
 }
 
 type ConcentrationHint = 'any' | 'edt' | 'edp' | 'parfum' | 'extrait' | 'elixir';
@@ -92,7 +88,8 @@ export const FragranceCapture: React.FC<{ onAdd?: (item: any) => void }> = ({ on
     if (searchAbortController.current) {
       searchAbortController.current.abort();
     }
-    searchAbortController.current = new AbortController();
+    const controller = new AbortController();
+    searchAbortController.current = controller;
 
     setUploading(true);
     setLoadingStatus("Researching Fragrance...");
@@ -101,40 +98,30 @@ export const FragranceCapture: React.FC<{ onAdd?: (item: any) => void }> = ({ on
     setHasSearched(false);
 
     try {
-      const res = await fetch('/api/search-scent', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: targetQuery,
-          concentrationHint: concentrationHint === 'any' ? undefined : concentrationHint,
-        }),
-        signal: searchAbortController.current.signal,
-      });
-      
-      if (!res.ok) {
-        const fallback =
-          res.status === 422
-            ? "Search only supports fragrance names. Try 'Brand + Fragrance' (for example: Dior Sauvage)."
-            : `Search failed: HTTP ${res.status}`;
-        throw new Error(await apiErrorMessage(res, fallback));
-      }
-      
-      const profileData = await res.json();
-      if (!profileData || profileData.error) {
-        throw new Error(profileData?.error || "Search returned no fragrance match");
-      }
+      const searchData = await searchFragrances(targetQuery, { signal: controller.signal });
+      const results = Array.isArray(searchData.results) ? searchData.results : [];
+      const nextMatches = results
+        .map((result): FragranceMatch => {
+          const house = firstString(result.house, result.brand) ?? "";
+          return {
+            ...result,
+            name: firstString(result.name) ?? targetQuery.trim(),
+            house,
+            brand: house,
+            imageUrl: "",
+          };
+        })
+        .filter((result) => Boolean(result.id?.trim()));
 
       setHasSearched(true);
-      setLoadingStatus(`Found: ${profileData.brand || "Unknown"} ${profileData.name}`);
+      setLoadingStatus(
+        nextMatches.length > 0
+          ? `Found: ${nextMatches[0].brand || "House unavailable"} ${nextMatches[0].name}`
+          : "No fragrance match found.",
+      );
       setLoadingStatus("Intelligence Collation Complete.");
-      
-      setMatches([{
-        ...profileData,
-        name: profileData.product?.name || profileData.name,
-        brand: profileData.product?.brand || profileData.brand,
-        imageUrl: profileData.imageUrl || ""
-      }]);
-      setSelectedIdx(0);
+      setMatches(nextMatches);
+      setSelectedIdx(nextMatches.length > 0 ? 0 : null);
 
     } catch (err: any) {
       if (err.name === 'AbortError') return; // Ignore expected aborts
@@ -152,16 +139,9 @@ export const FragranceCapture: React.FC<{ onAdd?: (item: any) => void }> = ({ on
   const handleConfirm = async () => {
     if (selectedIdx === null || !matches[selectedIdx] || !onAdd) return;
     
-    const selected = matches[selectedIdx] as FragranceMatch & Record<string, unknown>;
-
-    if (selected.scent_vector) {
-      const familyStr = (selected.family as string) || '';
-      onAdd({
-        ...selected,
-        id: newFragranceId(),
-        season: familyStr.includes('Fresh') ? 'Summer' : familyStr.includes('Woody') ? 'Winter' : 'Universal'
-      });
-      resetState();
+    const selected = matches[selectedIdx];
+    if (!selected.id?.trim()) {
+      setErrorStatus("Selected fragrance is missing a detail identifier.");
       return;
     }
 
@@ -169,47 +149,63 @@ export const FragranceCapture: React.FC<{ onAdd?: (item: any) => void }> = ({ on
     if (syncAbortController.current) {
       syncAbortController.current.abort();
     }
-    syncAbortController.current = new AbortController();
+    const controller = new AbortController();
+    syncAbortController.current = controller;
 
     setUploading(true);
-    setLoadingStatus("Finalizing Neural Link...");
+    setLoadingStatus("Fetching Fragrance Intelligence...");
     
     try {
-      const profileRes = await fetch('/api/scent-profile', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: selected.name,
-          brand: selected.brand,
-          notes: selected.notes,
-          family: selected.family,
-          description: selected.description,
-          pyramid: selected.pyramid,
-          perfumer: selected.perfumer,
-        }),
-        signal: syncAbortController.current.signal,
-      });
+      const detail = (await getFragranceDetails(
+        { id: selected.id },
+        { signal: controller.signal },
+      )) as FragranceDetail;
+      const metricNotes = detail.derived_metrics?.notes;
+      const rawNotes = detail.raw?.notes;
+      const pyramidNotes = {
+        top: metricNotes?.top ?? rawNotes?.top ?? [],
+        heart: metricNotes?.heart ?? rawNotes?.heart ?? [],
+        base: metricNotes?.base ?? rawNotes?.base ?? [],
+      };
+      const flatNotes =
+        metricNotes?.flat ??
+        rawNotes?.flat ??
+        [...pyramidNotes.top, ...pyramidNotes.heart, ...pyramidNotes.base];
+      const detailName = firstString(detail.name, selected.name) ?? selected.name;
+      const detailBrand =
+        firstString(detail.brand, detail.house, selected.brand, selected.house) ??
+        selected.brand;
+      const detailHouse = firstString(detail.house, detail.brand, selected.house, selected.brand);
+      const detailImageUrl = firstString(detail.imageUrl, detail.image_url, selected.imageUrl) ?? "";
 
-      if (!profileRes.ok) throw new Error(`HTTP ${profileRes.status}`);
-      
-      const data = await profileRes.json();
-      
-      if (data && !data.error) {
-        onAdd({
-          ...data,
-          name: data.name || data.product?.name || selected.name,
-          brand: data.brand || data.product?.brand || selected.brand,
-          imageUrl: data.imageUrl || selected.imageUrl || '',
-          id: newFragranceId(),
-          season: 'Universal',
-        });
-        resetState();
-      } else {
-        setErrorStatus(data?.error || "Could not sync to vault. Please try again.");
-      }
+      onAdd({
+        ...detail,
+        raw_engine_detail: detail,
+        source_coverage: detail.source_coverage,
+        derived_metrics: detail.derived_metrics ?? null,
+        enrichment: detail.enrichment ?? null,
+        fragranceApiId: firstString(detail.id, selected.id) ?? selected.id,
+        name: detailName,
+        brand: detailBrand,
+        house: detailHouse,
+        imageUrl: detailImageUrl,
+        id: newFragranceId(),
+        season: 'Universal',
+        source_url: firstString(detail.source_url, selected.source_url),
+        pyramid:
+          pyramidNotes.top.length || pyramidNotes.heart.length || pyramidNotes.base.length
+            ? pyramidNotes
+            : undefined,
+        notes: flatNotes.length > 0 ? flatNotes : undefined,
+        description:
+          typeof detail.raw?.description === 'string'
+            ? detail.raw.description
+            : undefined,
+      });
+      resetState();
     } catch (err: any) {
       if (err.name === 'AbortError') return;
-      setErrorStatus("Vault sync failed. Please check your connection.");
+      setErrorStatus(err?.message || "Fragrance detail fetch failed. Please check your connection.");
     } finally {
       setUploading(false);
     }
@@ -356,7 +352,9 @@ export const FragranceCapture: React.FC<{ onAdd?: (item: any) => void }> = ({ on
                       </div>
                       <div>
                         <p className="font-serif italic text-lg leading-tight text-white">{m.name}</p>
-                        <p className="text-[8px] uppercase text-scent-muted tracking-widest font-sans font-bold">{m.brand}</p>
+                        <p className="text-[8px] uppercase text-scent-muted tracking-widest font-sans font-bold">
+                          {m.brand || "House unavailable"}
+                        </p>
                       </div>
                     </div>
                     {selectedIdx === i && <Check size={16} className="text-white" />}

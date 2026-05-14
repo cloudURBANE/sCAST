@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Trash2, ShieldCheck, Wind, RefreshCw, Undo2, HelpCircle, Eraser, Check, Maximize2, ChevronDown, Search, Star } from 'lucide-react';
 import { bottleFeaturedSlotClass } from '@/lib/bottleImageFrame';
 import { BottleImage } from '@/components/BottleImage';
+import { ScentNotesInfographic } from '@/components/ScentNotesInfographic';
 import {
   WARDROBE_CLARIFY_SOLVERS,
   WARDROBE_REFRESH_COUNT_STORAGE_KEY,
@@ -13,6 +14,12 @@ import {
   matchesWardrobeQuery,
   type WardrobeSearchSuggestion,
 } from '@/lib/wardrobeSearchSuggest';
+import {
+  collectMainAccordDisplayRows,
+  type DerivedMetrics,
+  type FragranceDetail,
+  type SourceCoverage,
+} from '@/lib/fragranceApi';
 
 export interface ScentVector {
   freshness: number;
@@ -30,6 +37,9 @@ export interface Fragrance {
   id: string;
   name: string;
   brand: string;
+  house?: string;
+  year?: number | null;
+  gender?: string | null;
   imageUrl: string;
   season: string;
   notes?: string[];
@@ -39,6 +49,13 @@ export interface Fragrance {
   energies?: EnergyState[];
   family?: string;
   performance?: { sillage: number; longevity: number };
+  source_coverage?: SourceCoverage;
+  derived_metrics?: DerivedMetrics | null;
+  enrichment?: FragranceDetail["enrichment"];
+  /** Full Railway `/api/fragrances/details` payload — preferred for nested lookups */
+  raw_engine_detail?: FragranceDetail | null;
+  fragranceApiId?: string;
+  source_url?: string | null;
   pyramid?: { top: string[]; heart: string[]; base: string[] };
   context?: { weather: string[]; time: string[]; occasion: string[] };
   synthesized?: boolean;
@@ -68,6 +85,20 @@ function entryType(item: Fragrance): string {
 }
 
 function entryNotes(item: Fragrance): string {
+  const dm = item.raw_engine_detail?.derived_metrics ?? item.derived_metrics;
+  const dmNotes = dm?.notes;
+  if (dmNotes) {
+    const engineLine = joinDisplayParts([
+      formatNoteList(dmNotes.top),
+      formatNoteList(dmNotes.heart),
+      formatNoteList(dmNotes.base),
+      formatNoteList(dmNotes.flat),
+    ]);
+    if (engineLine) return engineLine;
+    const summary = dm?.main_accords?.accord_summary?.trim();
+    if (summary) return summary;
+  }
+
   const notes = item.notes?.filter(Boolean);
   if (notes && notes.length > 0) return notes.join(" • ");
   const pyramidNotes = [
@@ -75,7 +106,345 @@ function entryNotes(item: Fragrance): string {
     ...(item.pyramid?.heart ?? []),
     ...(item.pyramid?.base ?? []),
   ].filter(Boolean);
-  return pyramidNotes.length > 0 ? pyramidNotes.slice(0, 5).join(" • ") : "Not specified";
+  if (pyramidNotes.length > 0) return pyramidNotes.slice(0, 8).join(" • ");
+
+  if (collectMainAccordDisplayRows(dm?.main_accords).length > 0) {
+    return collectMainAccordDisplayRows(dm?.main_accords)
+      .slice(0, 6)
+      .map((row) => row.label)
+      .join(" • ");
+  }
+
+  return "Notes unavailable for this fragrance.";
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function formatScore100(value: unknown): string | null {
+  return isFiniteNumber(value) ? `${Math.round(value)}/100` : null;
+}
+
+function formatLegacyTenPointScore(value: unknown): string | null {
+  return isFiniteNumber(value) ? `${value}/10` : null;
+}
+
+function formatPercent(value: unknown): string | null {
+  return isFiniteNumber(value) ? `${Math.round(value)}%` : null;
+}
+
+function stringValue(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function formatYear(value: unknown): string | null {
+  return isFiniteNumber(value) ? String(Math.round(value)) : null;
+}
+
+function joinDisplayParts(parts: Array<string | null | undefined>): string | null {
+  const cleaned = parts
+    .map((part) => part?.trim())
+    .filter((part): part is string => Boolean(part));
+  return cleaned.length > 0 ? cleaned.join(" · ") : null;
+}
+
+function formatWearProfile(wear?: DerivedMetrics["wear_profile"] | null): string | null {
+  if (!wear) return null;
+
+  const seasons = wear.primary_seasons?.filter(Boolean) ?? [];
+  const seasonOrder = ["Winter", "Spring", "Summer", "Autumn", "Autumn/Fall", "Fall"];
+  const rank = (season: string) => {
+    const index = seasonOrder.indexOf(season);
+    return index === -1 ? seasonOrder.length : index;
+  };
+  const ordered = [...seasons].sort((a, b) => rank(a) - rank(b));
+  const seasonLabel = ordered.length > 0 ? ordered.join("/") : null;
+  const time = wear.primary_time?.trim() || null;
+
+  if (seasonLabel && time) return `${seasonLabel} · ${time}`;
+  if (seasonLabel) return seasonLabel;
+  if (time) return time;
+
+  return null;
+}
+
+function formatNoteList(values?: string[]): string | null {
+  const cleaned = values?.map((value) => value.trim()).filter(Boolean) ?? [];
+  return cleaned.length > 0 ? cleaned.join(", ") : null;
+}
+
+function hasDerivedMetricNotes(metrics?: DerivedMetrics | null): boolean {
+  const notes = metrics?.notes;
+  if (!notes) return false;
+  return Boolean(
+    formatNoteList(notes.top) ||
+      formatNoteList(notes.heart) ||
+      formatNoteList(notes.base) ||
+      formatNoteList(notes.flat),
+  );
+}
+
+function hasDerivedMetricsContent(metrics?: DerivedMetrics | null): boolean {
+  if (!metrics) return false;
+  return Boolean(
+    metrics.headline?.summary?.trim() ||
+      formatScore100(metrics.headline?.crowd_consensus_score) ||
+      metrics.headline?.label?.trim() ||
+      metrics.performance_score ||
+      metrics.value_score ||
+      formatWearProfile(metrics.wear_profile) ||
+      formatScore100(metrics.community_interest_score?.score) ||
+      metrics.main_accords?.accord_summary?.trim() ||
+      (collectMainAccordDisplayRows(metrics.main_accords).length > 0) ||
+      hasDerivedMetricNotes(metrics),
+  );
+}
+
+function hasLegacyPyramidNotes(item: Fragrance): boolean {
+  return Boolean(
+    item.pyramid?.top?.some(Boolean) ||
+      item.pyramid?.heart?.some(Boolean) ||
+      item.pyramid?.base?.some(Boolean),
+  );
+}
+
+const ENRICHMENT_STATUS_COPY: Record<string, string> = {
+  not_needed: "Full fragrance intelligence available.",
+  pending: "Enhanced metrics queued.",
+  processing: "Enhanced metrics are being prepared.",
+  completed: "Enhanced metrics available.",
+  failed: "Enhanced metrics unavailable right now.",
+  ignored: "Enhancement not scheduled for this fragrance.",
+};
+
+function enrichmentCopy(enrichment?: FragranceDetail["enrichment"]): string | null {
+  const message = enrichment?.message?.trim();
+  if (message) return message;
+  const status = enrichment?.status?.trim().toLowerCase();
+  return status ? ENRICHMENT_STATUS_COPY[status] ?? null : null;
+}
+
+function SourceStatusPanel({
+  coverage,
+  enrichment,
+}: {
+  coverage?: SourceCoverage;
+  enrichment?: FragranceDetail["enrichment"];
+}) {
+  const hasCoverage = Boolean(coverage && Object.keys(coverage).length > 0);
+  const enrichmentMessage = enrichmentCopy(enrichment);
+
+  if (!hasCoverage && !enrichmentMessage) return null;
+
+  const complete = coverage?.complete === true;
+  const coverageSummary = complete
+    ? "Full fragrance intelligence available."
+    : "Baseline profile available. Enhanced metrics pending.";
+  const fragranticaStatus =
+    coverage?.fragrantica === true
+      ? coverage.fragrantica_cached
+        ? "Fragrantica cached"
+        : "Fragrantica available"
+      : coverage?.fragrantica === false
+        ? coverage.fragrantica_linked
+          ? "Fragrantica metrics pending"
+          : "Fragrantica unavailable"
+        : null;
+  const derivedStatus =
+    typeof coverage?.derived_metrics === 'string' && coverage.derived_metrics.trim()
+      ? `Metrics ${coverage.derived_metrics}`
+      : null;
+  const badges = [
+    coverage?.basenotes === true
+      ? "Basenotes available"
+      : coverage?.basenotes === false
+        ? "Basenotes unavailable"
+        : null,
+    fragranticaStatus,
+    derivedStatus,
+  ].filter((badge): badge is string => Boolean(badge));
+
+  return (
+    <div className="space-y-3 border border-white/10 bg-white/[0.025] px-4 py-3">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[9px] uppercase tracking-[0.35em] text-white/35 font-bold">
+          Source Status
+        </p>
+        {hasCoverage ? (
+          <span className={`shrink-0 text-[8px] uppercase tracking-[0.22em] font-bold px-2 py-1 border ${
+            complete
+              ? 'border-scent-accent/40 text-scent-accent/85 bg-scent-accent/10'
+              : 'border-white/12 text-white/45 bg-white/[0.04]'
+          }`}>
+            {complete ? "Complete" : "Partial"}
+          </span>
+        ) : null}
+      </div>
+      <p className="text-sm italic text-white/62 font-serif leading-relaxed">
+        {hasCoverage ? coverageSummary : enrichmentMessage}
+      </p>
+      {hasCoverage && enrichmentMessage && enrichmentMessage !== coverageSummary ? (
+        <p className="text-[10px] uppercase tracking-[0.18em] text-white/35 font-bold">
+          {enrichmentMessage}
+        </p>
+      ) : null}
+      {badges.length > 0 ? (
+        <div className="flex flex-wrap gap-2">
+          {badges.map((badge) => (
+            <span
+              key={badge}
+              className="border border-white/10 bg-black/20 px-2 py-1 text-[8px] uppercase tracking-[0.16em] text-white/38 font-bold"
+            >
+              {badge}
+            </span>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function DerivedMetricsPanel({
+  metrics,
+  coverage,
+}: {
+  metrics?: DerivedMetrics | null;
+  coverage?: SourceCoverage;
+}) {
+  const headline = metrics?.headline ?? null;
+  const performance = metrics?.performance_score ?? null;
+  const value = metrics?.value_score ?? null;
+  const mainAccords = metrics?.main_accords ?? null;
+  const notes = metrics?.notes ?? null;
+  const accordItems = collectMainAccordDisplayRows(mainAccords).slice(0, 8);
+  const rows = [
+    {
+      label: "Crowd Consensus",
+      value: joinDisplayParts([
+        formatScore100(headline?.crowd_consensus_score),
+        headline?.label,
+      ]),
+    },
+    {
+      label: "Performance",
+      value: joinDisplayParts([
+        formatScore100(performance?.score),
+        performance?.longevity_label ? `${performance.longevity_label} longevity` : null,
+        performance?.sillage_label ? `${performance.sillage_label} sillage` : null,
+      ]),
+    },
+    {
+      label: "Value",
+      value: joinDisplayParts([
+        value?.dominant_label,
+        formatScore100(value?.score),
+      ]),
+    },
+    {
+      label: "Wear",
+      value: formatWearProfile(metrics?.wear_profile),
+    },
+    {
+      label: "Community",
+      value: formatScore100(metrics?.community_interest_score?.score),
+    },
+    {
+      label: "Main Profile",
+      value: mainAccords?.accord_summary?.trim() || null,
+    },
+  ].filter((row): row is { label: string; value: string } => Boolean(row.value));
+  const noteGroups = [
+    { label: "Top", value: formatNoteList(notes?.top) },
+    { label: "Heart", value: formatNoteList(notes?.heart) },
+    { label: "Base", value: formatNoteList(notes?.base) },
+    { label: "Notes", value: formatNoteList(notes?.flat) },
+  ].filter((row): row is { label: string; value: string } => Boolean(row.value));
+  const summary = headline?.summary?.trim() || null;
+  const hasContent =
+    rows.length > 0 || noteGroups.length > 0 || accordItems.length > 0 || Boolean(summary);
+
+  if (!metrics || !hasContent) {
+    if (!coverage) return null;
+
+    return (
+      <div className="border-y border-white/5 py-5">
+        <p className="text-[9px] uppercase tracking-[0.35em] text-scent-accent font-bold mb-2">
+          Derived Intelligence
+        </p>
+        <p className="text-sm italic text-white/45 font-serif">
+          {coverage.complete === false
+            ? "Enhanced metrics pending."
+            : "Derived fragrance intelligence unavailable."}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5 border-y border-white/5 py-5">
+      <div className="flex items-center gap-3">
+        <ShieldCheck size={14} className="text-scent-accent/70 shrink-0" />
+        <p className="text-[10px] uppercase tracking-[0.4em] text-scent-accent/85 font-bold">
+          Derived Intelligence
+        </p>
+        <div className="flex-1 h-px bg-white/5" />
+      </div>
+
+      {summary ? (
+        <p className="font-serif italic text-lg sm:text-2xl leading-snug text-white/82">
+          {summary}
+        </p>
+      ) : null}
+
+      {rows.length > 0 ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {rows.map((row) => (
+            <div key={row.label} className="border-l border-scent-accent/25 pl-3">
+              <p className="text-[9px] uppercase tracking-widest text-white/25 font-bold mb-1">
+                {row.label}
+              </p>
+              <p className="font-serif italic text-lg sm:text-2xl text-white">
+                {row.value}
+              </p>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {accordItems.length > 0 ? (
+        <div className="flex flex-wrap gap-2 pt-1">
+          {accordItems.map((accord) => {
+            const label = accord.label?.trim() ?? "";
+            const value = formatPercent(accord.pct) ?? formatScore100(accord.score);
+            return (
+              <span
+                key={`${label}-${value ?? "accord"}`}
+                className="border border-scent-accent/20 bg-scent-accent/[0.06] px-3 py-1.5 text-[10px] uppercase tracking-[0.16em] text-white/65 font-bold"
+              >
+                {value ? `${label} ${value}` : label}
+              </span>
+            );
+          })}
+        </div>
+      ) : null}
+
+      {noteGroups.length > 0 ? (
+        <div className="space-y-3 pt-1">
+          {noteGroups.map((group) => (
+            <div key={group.label} className="flex gap-4 items-start">
+              <p className="w-12 text-[9px] uppercase tracking-[0.25em] text-scent-accent font-bold pt-1 shrink-0">
+                {group.label}
+              </p>
+              <p className="text-sm sm:text-base italic text-white/72 font-serif leading-relaxed">
+                {group.value}
+              </p>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)
@@ -444,6 +813,37 @@ export const Wardrobe: React.FC<{
   const hasPendingPreview =
     !!selectedItem && !!pendingPreview && pendingPreview.itemId === selectedItem.id;
 
+  const selectedMetrics =
+    selectedItem?.derived_metrics ?? selectedItem?.raw_engine_detail?.derived_metrics ?? null;
+  const selectedCoverage =
+    selectedItem?.source_coverage ?? selectedItem?.raw_engine_detail?.source_coverage;
+  const selectedEnrichment =
+    selectedItem?.enrichment ?? selectedItem?.raw_engine_detail?.enrichment ?? undefined;
+
+  const selectedHasDerivedMetrics = hasDerivedMetricsContent(selectedMetrics);
+  const selectedHasDerivedNotes = hasDerivedMetricNotes(selectedMetrics);
+  const selectedHasDerivedPerformance = Boolean(selectedMetrics?.performance_score);
+  const detailMetaRows = selectedItem
+    ? [
+        { label: 'Year', value: formatYear(selectedItem.year) },
+        { label: 'Gender', value: stringValue(selectedItem.gender) },
+        { label: 'Concentration', value: stringValue(selectedItem.concentration) },
+        { label: 'Environment', value: stringValue(selectedItem.season) },
+        ...(!selectedHasDerivedPerformance
+          ? [
+              {
+                label: 'Projection',
+                value: formatLegacyTenPointScore(selectedItem.performance?.sillage),
+              },
+              {
+                label: 'Chronos',
+                value: formatLegacyTenPointScore(selectedItem.performance?.longevity),
+              },
+            ]
+          : []),
+      ].filter((row): row is { label: string; value: string } => Boolean(row.value))
+    : [];
+
   React.useEffect(() => {
     setBottleImageToolsOpen(false);
   }, [selectedItem?.id]);
@@ -759,7 +1159,21 @@ export const Wardrobe: React.FC<{
                 style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
               >
                 <div className="space-y-6 sm:space-y-10 pt-2">
-                    <div className="border border-white/10 bg-white/[0.02] p-4 sm:p-6">
+                  <SourceStatusPanel
+                    coverage={selectedCoverage}
+                    enrichment={selectedEnrichment}
+                  />
+                  <DerivedMetricsPanel
+                    metrics={selectedMetrics}
+                    coverage={selectedCoverage}
+                  />
+
+                  <ScentNotesInfographic
+                    derivedMetrics={selectedMetrics}
+                    legacyPyramid={selectedItem.pyramid}
+                  />
+
+                  <div className="border border-white/10 bg-white/[0.02] p-4 sm:p-6">
                     <div className="flex items-center justify-between gap-2 mb-3">
                       <p className="text-[9px] uppercase tracking-[0.35em] text-white/30 font-bold">Bottle Visual</p>
                       {detailBottleUrl ? (
@@ -786,45 +1200,44 @@ export const Wardrobe: React.FC<{
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-8 py-5 border-y border-white/5">
-                    {[
-                      { label: 'Concentration', value: selectedItem.concentration || 'EDP' },
-                      { label: 'Environment', value: selectedItem.season },
-                      { label: 'Projection', value: `${selectedItem.performance?.sillage || 5}/10` },
-                      { label: 'Chronos', value: `${selectedItem.performance?.longevity || 6}/10` },
-                    ].map(({ label, value }) => (
-                      <div key={label}>
-                        <p className="text-[9px] uppercase tracking-widest text-white/20 font-bold mb-1">{label}</p>
-                        <p className="font-serif italic text-lg sm:text-2xl text-white">{value}</p>
+                  {detailMetaRows.length > 0 ? (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-8 py-5 border-y border-white/5">
+                      {detailMetaRows.map(({ label, value }) => (
+                        <div key={label}>
+                          <p className="text-[9px] uppercase tracking-widest text-white/20 font-bold mb-1">{label}</p>
+                          <p className="font-serif italic text-lg sm:text-2xl text-white">{value}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {!selectedHasDerivedNotes && hasLegacyPyramidNotes(selectedItem) ? (
+                    <div className="space-y-5">
+                      <div className="flex items-center gap-3">
+                        <Wind size={14} className="text-white/20 shrink-0" />
+                        <p className="text-[10px] uppercase tracking-[0.4em] text-white/40 font-bold">Molecular Hierarchy</p>
+                        <div className="flex-1 h-px bg-white/5" />
                       </div>
-                    ))}
-                  </div>
-
-                  <div className="space-y-5">
-                    <div className="flex items-center gap-3">
-                      <Wind size={14} className="text-white/20 shrink-0" />
-                      <p className="text-[10px] uppercase tracking-[0.4em] text-white/40 font-bold">Molecular Hierarchy</p>
-                      <div className="flex-1 h-px bg-white/5" />
-                    </div>
-                    <div className="space-y-4">
-                      {(['top', 'heart', 'base'] as const).map((level) => {
-                        const notes = selectedItem.pyramid?.[level] || [];
-                        if (notes.length === 0) return null;
-                        return (
-                          <div key={level} className="flex gap-4 items-start">
-                            <p className="w-10 text-[9px] uppercase tracking-[0.3em] text-scent-accent font-bold pt-1 shrink-0">{level}</p>
-                            <div className="flex flex-wrap gap-x-4 gap-y-2 flex-1">
-                              {notes.map(note => (
-                                <span key={note} className="text-base sm:text-2xl italic text-white/80 font-serif">{note}</span>
-                              ))}
+                      <div className="space-y-4">
+                        {(['top', 'heart', 'base'] as const).map((level) => {
+                          const notes = selectedItem.pyramid?.[level]?.filter(Boolean) || [];
+                          if (notes.length === 0) return null;
+                          return (
+                            <div key={level} className="flex gap-4 items-start">
+                              <p className="w-10 text-[9px] uppercase tracking-[0.3em] text-scent-accent font-bold pt-1 shrink-0">{level}</p>
+                              <div className="flex flex-wrap gap-x-4 gap-y-2 flex-1">
+                                {notes.map(note => (
+                                  <span key={note} className="text-base sm:text-2xl italic text-white/80 font-serif">{note}</span>
+                                ))}
+                              </div>
                             </div>
-                          </div>
-                        );
-                      })}
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
+                  ) : null}
 
-                  {selectedItem.scent_vector && (
+                  {!selectedHasDerivedMetrics && selectedItem.scent_vector && (
                     <div className="space-y-5">
                       <div className="flex items-center gap-3">
                         <ShieldCheck size={14} className="text-white/20 shrink-0" />

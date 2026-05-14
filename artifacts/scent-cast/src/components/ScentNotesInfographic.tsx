@@ -1,9 +1,16 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Wind, Droplets, Leaf } from 'lucide-react';
+import {
+  collectMainAccordDisplayRows,
+  type DerivedMetrics,
+} from '@/lib/fragranceApi';
 
 interface ScentNotesInfographicProps {
-  pyramid: {
+  /** Preferred — Railway `derived_metrics.notes` (+ main accords summary). */
+  derivedMetrics?: DerivedMetrics | null;
+  /** Legacy wardrobe pyramid when engine notes are absent. */
+  legacyPyramid?: {
     top: string[];
     heart: string[];
     base: string[];
@@ -37,13 +44,79 @@ const LAYER_INFO = {
   }
 };
 
-export const ScentNotesInfographic: React.FC<ScentNotesInfographicProps> = ({ pyramid }) => {
+function resolvePyramid(
+  derivedMetrics?: DerivedMetrics | null,
+  legacy?: ScentNotesInfographicProps["legacyPyramid"],
+): { top: string[]; heart: string[]; base: string[] } {
+  const n = derivedMetrics?.notes;
+  if (n) {
+    return {
+      top: [...(n.top ?? [])].filter(Boolean),
+      heart: [...(n.heart ?? [])].filter(Boolean),
+      base: [...(n.base ?? [])].filter(Boolean),
+    };
+  }
+  if (legacy) {
+    return {
+      top: [...(legacy.top ?? [])].filter(Boolean),
+      heart: [...(legacy.heart ?? [])].filter(Boolean),
+      base: [...(legacy.base ?? [])].filter(Boolean),
+    };
+  }
+  return { top: [], heart: [], base: [] };
+}
+
+function pyramidHasAnyNotes(p: { top: string[]; heart: string[]; base: string[] }): boolean {
+  return p.top.length > 0 || p.heart.length > 0 || p.base.length > 0;
+}
+
+export const ScentNotesInfographic: React.FC<ScentNotesInfographicProps> = ({
+  derivedMetrics,
+  legacyPyramid,
+}) => {
   const [hoveredLayer, setHoveredLayer] = React.useState<keyof typeof LAYER_INFO | null>(null);
   const levels = ['top', 'heart', 'base'] as const;
   const anchors = { top: { x: 200, y: 100 }, heart: { x: 200, y: 200 }, base: { x: 200, y: 310 } };
 
+  const pyramid = resolvePyramid(derivedMetrics, legacyPyramid);
+  const accordRows = collectMainAccordDisplayRows(derivedMetrics?.main_accords);
+  const accordSummary = derivedMetrics?.main_accords?.accord_summary?.trim() ?? '';
+  const hasAccordVisual = accordRows.length > 0 || Boolean(accordSummary);
+  const hasPyramid = pyramidHasAnyNotes(pyramid);
+
+  if (!hasPyramid && !hasAccordVisual) {
+    return (
+      <div
+        id="scent-notes-infographic"
+        className="relative w-full max-w-4xl mx-auto py-12 px-4 border border-white/10 bg-white/[0.02] rounded-[2rem] text-center"
+      >
+        <p className="text-sm italic text-white/45 font-serif">Notes unavailable for this fragrance.</p>
+      </div>
+    );
+  }
+
   return (
     <div id="scent-notes-infographic" className="relative w-full max-w-4xl mx-auto py-12 px-4 select-none outline-none">
+      {accordSummary ? (
+        <p className="text-center text-sm sm:text-base italic text-white/68 font-serif leading-relaxed mb-10 max-w-2xl mx-auto">
+          {accordSummary}
+        </p>
+      ) : null}
+      {hasAccordVisual && accordRows.length > 0 ? (
+        <div className="flex flex-wrap justify-center gap-2 mb-12">
+          {accordRows.slice(0, 12).map((row) => (
+            <span
+              key={row.label}
+              className="border border-scent-accent/22 bg-scent-accent/[0.06] px-3 py-1.5 text-[10px] uppercase tracking-[0.14em] text-white/70 font-bold rounded-full"
+            >
+              {typeof row.score === 'number' ? `${row.label} · ${Math.round(row.score)}` : row.label}
+            </span>
+          ))}
+        </div>
+      ) : null}
+
+      {hasPyramid ? (
+      <>
       <div className="flex flex-col lg:flex-row gap-16 items-start">
         <div className="relative w-full lg:w-[450px] aspect-square shrink-0">
           <svg viewBox="0 0 400 400" className="w-full h-full drop-shadow-[0_0_50px_rgba(255,255,255,0.03)] overflow-visible">
@@ -102,7 +175,7 @@ export const ScentNotesInfographic: React.FC<ScentNotesInfographicProps> = ({ py
               {hoveredLayer && (
                 <motion.div key={`notes-${hoveredLayer}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0">
                   {pyramid[hoveredLayer].map((note, i) => {
-                    const total = pyramid[hoveredLayer].length;
+                    const total = Math.max(pyramid[hoveredLayer].length, 1);
                     const angle = ((i / total) * 360 - 90) * (Math.PI / 180);
                     const radius = 170 + (i % 2 === 0 ? 10 : -10);
                     const anchor = anchors[hoveredLayer];
@@ -110,7 +183,7 @@ export const ScentNotesInfographic: React.FC<ScentNotesInfographicProps> = ({ py
                     const ty = Math.sin(angle) * (radius * 0.6);
                     return (
                       <motion.div
-                        key={note}
+                        key={`${hoveredLayer}-${note}-${i}`}
                         initial={{ opacity: 0, x: `${anchor.x}px`, y: `${anchor.y}px`, scale: 0.5 }}
                         animate={{ opacity: 1, x: `calc(${anchor.x}px + ${tx}px)`, y: `calc(${anchor.y}px + ${ty}px)`, scale: 1 }}
                         exit={{ opacity: 0, scale: 0.5 }}
@@ -157,8 +230,8 @@ export const ScentNotesInfographic: React.FC<ScentNotesInfographicProps> = ({ py
                   <div>
                     <p className="text-[10px] uppercase tracking-[0.2em] text-white/30 font-bold mb-4 font-sans">Active Notes</p>
                     <div className="flex flex-wrap gap-2">
-                      {pyramid[hoveredLayer].map(note => (
-                        <div key={note} className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-xs italic text-white font-serif hover:bg-white/10 transition-colors">
+                      {pyramid[hoveredLayer].map((note, idx) => (
+                        <div key={`${note}-${idx}`} className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-xs italic text-white font-serif hover:bg-white/10 transition-colors">
                           {note}
                         </div>
                       ))}
@@ -198,13 +271,15 @@ export const ScentNotesInfographic: React.FC<ScentNotesInfographicProps> = ({ py
               <p className="text-[11px] uppercase tracking-[0.3em] text-white/60 font-bold">{level}</p>
             </div>
             <div className="flex flex-wrap gap-x-3 gap-y-2">
-              {pyramid[level].map(note => (
-                <p key={note} className="text-sm text-white/40 font-serif italic hover:text-white/80 transition-colors cursor-default">{note}</p>
+              {pyramid[level].map((note, idx) => (
+                <p key={`${note}-${idx}`} className="text-sm text-white/40 font-serif italic hover:text-white/80 transition-colors cursor-default">{note}</p>
               ))}
             </div>
           </motion.div>
         ))}
       </div>
+      </>
+      ) : null}
     </div>
   );
 };
