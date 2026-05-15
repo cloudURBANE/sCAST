@@ -65,11 +65,31 @@ const FRAGRANCE_INTENT_WORDS = new Set([
 ]);
 const DATASET = fragrancesRaw as FragranceData[];
 const KNOWN_FRAGRANCE_BRAND_TOKENS = new Set(
-  DATASET.flatMap((item) =>
-    compactRaw(item.brand)
-      .split(" ")
-      .filter((word) => word.length >= 3),
-  ),
+  [
+    ...DATASET.flatMap((item) =>
+      compactRaw(item.brand)
+        .split(" ")
+        .filter((word) => word.length >= 3),
+    ),
+    "afnan",
+    "amouage",
+    "armaf",
+    "azzaro",
+    "byredo",
+    "cartier",
+    "diptyque",
+    "french",
+    "guerlain",
+    "hermes",
+    "initio",
+    "lattafa",
+    "montale",
+    "mugler",
+    "nishane",
+    "prada",
+    "versace",
+    "xerjoff",
+  ],
 );
 const RETAIL_NOISE_PATTERN =
   /\b(?:\d+(?:\.\d+)?\s*(?:m\s*l|ml|millilitre|milliliter|millilitres|milliliters|fl\.?\s*oz\.?|oz\.?|ounces?)|spray|natural\s+spray|vaporisateur|tester|sample|travel\s+size|mini|bottle|boxed|sealed|new\s+in\s+box|nib|refillable|refill|eau\s+de\s+parfum|eau\s+de\s+toilette|eau\s+de\s+cologne|extrait\s+de\s+parfum|edp|edt|edc)\b/i;

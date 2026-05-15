@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Search, RefreshCw, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
+  collectMainAccordDisplayRows,
   getFragranceDetails,
   searchFragrances,
   type FragranceDetail,
@@ -33,6 +34,28 @@ function firstString(...values: unknown[]): string | undefined {
     if (trimmed) return trimmed;
   }
   return undefined;
+}
+
+function normalizeNoteList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .flatMap((item) => {
+      if (typeof item !== 'string') return [];
+      return item
+        .split(/\s*,\s*/)
+        .map((note) => note.trim())
+        .filter(Boolean);
+    })
+    .filter((note, index, list) => list.findIndex((candidate) => candidate.toLowerCase() === note.toLowerCase()) === index);
+}
+
+function firstNonEmptyNoteList(...values: unknown[]): string[] {
+  for (const value of values) {
+    const notes = normalizeNoteList(value);
+    if (notes.length > 0) return notes;
+  }
+  return [];
 }
 
 function sleep(ms: number): Promise<void> {
@@ -127,6 +150,8 @@ interface FragranceMatch extends FragranceSearchResult {
   name: string;
   brand: string;
   house: string;
+  scent_vector?: unknown;
+  family?: unknown;
 }
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)
@@ -135,6 +160,9 @@ const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)
 const SCENT_PROFILE_ENDPOINT = API_BASE_URL
   ? `${API_BASE_URL}/api/scent-profile`
   : "/api/scent-profile";
+const SEARCH_SCENT_ENDPOINT = API_BASE_URL
+  ? `${API_BASE_URL}/api/search-scent`
+  : "/api/search-scent";
 
 /** Match list rows: keep one line each; overflow shows ellipsis in CSS */
 const MATCH_LINE_MAX_CHARS = 44;
@@ -143,6 +171,96 @@ function truncateMatchLine(text: string, max: number): string {
   const t = text.trim();
   if (t.length <= max) return t;
   return `${t.slice(0, Math.max(0, max - 1)).trimEnd()}…`;
+}
+
+function profileToFallbackMatch(profile: Record<string, unknown>, query: string): FragranceMatch | null {
+  const product = profile.product as Record<string, unknown> | undefined;
+  const name = firstString(
+    typeof product?.name === 'string' ? product.name : undefined,
+    typeof profile.name === 'string' ? profile.name : undefined,
+    query,
+  );
+  const brand = firstString(
+    typeof product?.brand === 'string' ? product.brand : undefined,
+    typeof profile.brand === 'string' ? profile.brand : undefined,
+  );
+
+  if (!name || !brand) return null;
+
+  return {
+    ...(profile as Record<string, unknown>),
+    id: `local:${brand}:${name}`,
+    name,
+    brand,
+    house: brand,
+  } as FragranceMatch;
+}
+
+async function searchLocalFallback(query: string, signal?: AbortSignal): Promise<FragranceMatch | null> {
+  const res = await fetch(SEARCH_SCENT_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query }),
+    signal,
+  });
+
+  const profile = (await res.json().catch(() => ({}))) as Record<string, unknown> & {
+    error?: string;
+  };
+
+  if (!res.ok || (typeof profile.error === 'string' && profile.error.trim())) {
+    return null;
+  }
+
+  return profileToFallbackMatch(profile, query);
+}
+
+async function fetchLocalProfile(query: string, signal?: AbortSignal): Promise<Record<string, unknown> | null> {
+  const res = await fetch(SEARCH_SCENT_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query }),
+    signal,
+  });
+
+  const profile = (await res.json().catch(() => ({}))) as Record<string, unknown> & {
+    error?: string;
+  };
+
+  if (!res.ok || (typeof profile.error === 'string' && profile.error.trim())) {
+    return null;
+  }
+
+  return profile;
+}
+
+function sourceHost(value: unknown): string | undefined {
+  if (typeof value !== 'string' || !value.trim()) return undefined;
+  try {
+    return new URL(value).hostname.replace(/^www\./, '');
+  } catch {
+    return undefined;
+  }
+}
+
+function formatGender(value: unknown): string | undefined {
+  const gender = firstString(value);
+  if (!gender) return undefined;
+  return gender
+    .replace(/\s*\/\s*unspecified\b/i, '')
+    .split(/\s*\/\s*/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join(' / ');
+}
+
+function matchMeta(match: FragranceMatch): string[] {
+  return [
+    typeof match.year === 'number' ? String(match.year) : undefined,
+    formatGender(match.gender),
+    sourceHost(match.source_url),
+    match.scent_vector ? 'Local profile' : undefined,
+  ].filter((value): value is string => Boolean(value));
 }
 
 export const FragranceCapture: React.FC<{
@@ -201,19 +319,30 @@ export const FragranceCapture: React.FC<{
     setHasSearched(false);
 
     try {
-      const searchData = await searchFragrances(targetQuery, { signal: controller.signal });
-      const results = Array.isArray(searchData.results) ? searchData.results : [];
-      const nextMatches = results
-        .map((result): FragranceMatch => {
-          const house = firstString(result.house, result.brand) ?? "";
-          return {
-            ...result,
-            name: firstString(result.name) ?? targetQuery.trim(),
-            house,
-            brand: house,
-          };
-        })
-        .filter((result) => Boolean(result.id?.trim()));
+      let nextMatches: FragranceMatch[] = [];
+
+      try {
+        const searchData = await searchFragrances(targetQuery, { signal: controller.signal });
+        const results = Array.isArray(searchData.results) ? searchData.results : [];
+        nextMatches = results
+          .map((result): FragranceMatch => {
+            const house = firstString(result.house, result.brand) ?? "";
+            return {
+              ...result,
+              name: firstString(result.name) ?? targetQuery.trim(),
+              house,
+              brand: house,
+            };
+          })
+          .filter((result) => Boolean(result.id?.trim()));
+      } catch (err: any) {
+        if (err.name === 'AbortError') return;
+      }
+
+      if (nextMatches.length === 0) {
+        const fallbackMatch = await searchLocalFallback(targetQuery, controller.signal);
+        if (fallbackMatch) nextMatches = [fallbackMatch];
+      }
 
       setHasSearched(true);
       setLoadingStatus(
@@ -242,6 +371,17 @@ export const FragranceCapture: React.FC<{
     if (selectedIdx === null || !matches[selectedIdx] || !onAdd) return;
     
     const selected = matches[selectedIdx];
+    if (selected.scent_vector) {
+      const familyStr = typeof selected.family === 'string' ? selected.family : '';
+      onAdd({
+        ...selected,
+        id: newFragranceId(),
+        season: familyStr.includes('Fresh') ? 'Summer' : familyStr.includes('Woody') ? 'Winter' : 'Universal',
+      });
+      resetState();
+      return;
+    }
+
     if (!selected.id?.trim()) {
       setErrorStatus("Selected fragrance is missing a detail identifier.");
       return;
@@ -265,20 +405,24 @@ export const FragranceCapture: React.FC<{
       const metricNotes = detail.derived_metrics?.notes;
       const rawNotes = detail.raw?.notes;
       const pyramidNotes = {
-        top: metricNotes?.top ?? rawNotes?.top ?? [],
-        heart: metricNotes?.heart ?? rawNotes?.heart ?? [],
-        base: metricNotes?.base ?? rawNotes?.base ?? [],
+        top: firstNonEmptyNoteList(metricNotes?.top, rawNotes?.top),
+        heart: firstNonEmptyNoteList(metricNotes?.heart, rawNotes?.heart),
+        base: firstNonEmptyNoteList(metricNotes?.base, rawNotes?.base),
       };
-      const flatNotes =
-        metricNotes?.flat ??
-        rawNotes?.flat ??
-        [...pyramidNotes.top, ...pyramidNotes.heart, ...pyramidNotes.base];
+      const displayNotes = firstNonEmptyNoteList(
+        metricNotes?.flat,
+        rawNotes?.flat,
+        [...pyramidNotes.top, ...pyramidNotes.heart, ...pyramidNotes.base],
+      );
+      const intelligenceSeedNotes = firstNonEmptyNoteList(
+        displayNotes,
+        collectMainAccordDisplayRows(detail.derived_metrics?.main_accords).map((row) => row.label),
+      );
       const detailName = firstString(detail.name, selected.name) ?? selected.name;
       const detailBrand =
         firstString(detail.brand, detail.house, selected.brand, selected.house) ??
         selected.brand;
       const detailHouse = firstString(detail.house, detail.brand, selected.house, selected.brand);
-      const detailImageUrl = firstString(detail.imageUrl, detail.image_url) ?? "";
       const detailFamily = firstString(
         typeof detail.family === 'string' ? detail.family : undefined,
       );
@@ -294,8 +438,8 @@ export const FragranceCapture: React.FC<{
         body: JSON.stringify({
           name: detailName,
           brand: detailBrand,
-          preferEngineData: flatNotes.length > 0,
-          notes: flatNotes.length > 0 ? flatNotes : undefined,
+          preferEngineData: intelligenceSeedNotes.length > 0,
+          notes: intelligenceSeedNotes.length > 0 ? intelligenceSeedNotes : undefined,
           ...(detailFamily ? { family: detailFamily } : {}),
           ...(detailDescription ? { description: detailDescription } : {}),
           ...(detailPerfumer ? { perfumer: detailPerfumer } : {}),
@@ -305,7 +449,7 @@ export const FragranceCapture: React.FC<{
         }),
         signal: controller.signal,
       });
-      const pipelineProfile = (await profileRes.json().catch(() => ({}))) as Record<string, unknown> & {
+      let pipelineProfile = (await profileRes.json().catch(() => ({}))) as Record<string, unknown> & {
         error?: string;
       };
       if (!profileRes.ok) {
@@ -316,7 +460,12 @@ export const FragranceCapture: React.FC<{
         );
       }
       if (typeof pipelineProfile.error === 'string' && pipelineProfile.error.trim()) {
-        throw new Error(pipelineProfile.error);
+        const fallbackProfile = await fetchLocalProfile(
+          [detailBrand, detailName].filter(Boolean).join(' '),
+          controller.signal,
+        );
+        if (!fallbackProfile) throw new Error(pipelineProfile.error);
+        pipelineProfile = fallbackProfile;
       }
 
       const pipelineImageUrl = firstString(
@@ -340,7 +489,7 @@ export const FragranceCapture: React.FC<{
         concentration: pipelineProfile.concentration,
         accords: pipelineProfile.accords,
         family: (pipelineProfile.family as string | undefined) ?? detailFamily,
-        imageUrl: pipelineImageUrl || detailImageUrl,
+        imageUrl: pipelineImageUrl || "",
         storagePath: pipelineProfile.storagePath as string | undefined,
         imageHash: pipelineProfile.imageHash as string | null | undefined,
         storageProvider: pipelineProfile.storageProvider as string | undefined,
@@ -351,7 +500,7 @@ export const FragranceCapture: React.FC<{
           pyramidNotes.top.length || pyramidNotes.heart.length || pyramidNotes.base.length
             ? pyramidNotes
             : undefined,
-        notes: flatNotes.length > 0 ? flatNotes : undefined,
+        notes: displayNotes.length > 0 ? displayNotes : undefined,
         description:
           typeof detail.raw?.description === 'string'
             ? detail.raw.description
@@ -484,43 +633,66 @@ export const FragranceCapture: React.FC<{
               initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
               className="mt-8 pt-6 border-t border-white/10 mx-auto max-w-lg w-full"
             >
-              <p className="text-[9px] uppercase tracking-[0.4em] text-scent-muted mb-4 font-bold text-center">Archive Matches</p>
-              <div className="grid grid-cols-1 gap-2">
-                {matches.map((m, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => setSelectedIdx(i)}
-                    className={`w-full text-left sm:text-center p-4 border transition-all cursor-pointer rounded-[var(--radius-scent)] ${selectedIdx === i ? 'border-scent-accent/52 bg-white/[0.07]' : 'border-white/10 hover:bg-white/[0.04] hover:border-white/18'}`}
-                    aria-pressed={selectedIdx === i}
-                  >
-                    <div className="flex w-full gap-3 sm:flex-col sm:items-center sm:gap-2.5">
-                      <div
-                        className="flex w-5 shrink-0 justify-center pt-0.5 sm:w-auto sm:pt-0 sm:min-h-[22px] sm:items-center"
-                        aria-hidden
+              <div className="mb-4 flex items-center justify-between gap-3 px-1">
+                <p className="text-[9px] uppercase tracking-[0.34em] text-scent-muted font-bold">Archive Matches</p>
+                <p className="text-[9px] uppercase tracking-[0.18em] text-scent-accent/70 font-bold">
+                  {matches.length} candidates
+                </p>
+              </div>
+              <div className="max-h-[min(390px,44vh)] overflow-y-auto overscroll-contain pr-1 scrollbar-hide">
+                <div className="grid grid-cols-1 gap-2">
+                  {matches.map((m, i) => {
+                    const meta = matchMeta(m);
+                    return (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => setSelectedIdx(i)}
+                        className={`w-full min-h-[92px] text-left p-4 border transition-all cursor-pointer rounded-[var(--radius-scent)] ${selectedIdx === i ? 'border-scent-accent/52 bg-white/[0.07] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]' : 'border-white/10 hover:bg-white/[0.04] hover:border-white/18'}`}
+                        aria-pressed={selectedIdx === i}
                       >
-                        {selectedIdx === i ? (
-                          <Check size={16} className="text-scent-accent shrink-0" />
-                        ) : null}
-                      </div>
-                      <div className="min-w-0 flex-1 space-y-1.5 text-left sm:text-center">
-                        <p
-                          className="text-[9px] uppercase tracking-[0.22em] text-scent-accent/80 font-sans font-bold truncate"
-                          title={m.brand || 'House unavailable'}
-                        >
-                          {truncateMatchLine(m.brand || 'House unavailable', MATCH_LINE_MAX_CHARS)}
-                        </p>
-                        <div className="h-px w-full max-w-[10rem] bg-gradient-to-r from-transparent via-white/20 to-transparent sm:mx-auto" />
-                        <p
-                          className="font-serif italic text-lg leading-snug text-[#fff7ec] truncate"
-                          title={m.name}
-                        >
-                          {truncateMatchLine(m.name, MATCH_LINE_MAX_CHARS)}
-                        </p>
-                      </div>
-                    </div>
-                  </button>
-                ))}
+                        <div className="flex w-full items-start gap-3">
+                          <div
+                            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-[10px] font-mono ${selectedIdx === i ? 'border-scent-accent/45 bg-scent-accent/12 text-scent-accent' : 'border-white/12 bg-black/18 text-white/32'}`}
+                            aria-hidden
+                          >
+                            {selectedIdx === i ? (
+                              <Check size={15} className="shrink-0" />
+                            ) : (
+                              String(i + 1).padStart(2, '0')
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1 space-y-2">
+                            <p
+                              className="font-serif italic text-[1.12rem] leading-tight text-[#fff7ec] truncate"
+                              title={m.name}
+                            >
+                              {truncateMatchLine(m.name, MATCH_LINE_MAX_CHARS)}
+                            </p>
+                            <p
+                              className="text-[11px] uppercase tracking-[0.16em] text-scent-accent/85 font-sans font-bold truncate"
+                              title={m.brand || 'House unavailable'}
+                            >
+                              {truncateMatchLine(m.brand || 'House unavailable', MATCH_LINE_MAX_CHARS)}
+                            </p>
+                            {meta.length > 0 && (
+                              <div className="flex flex-wrap gap-1.5 pt-1">
+                                {meta.slice(0, 3).map((item) => (
+                                  <span
+                                    key={item}
+                                    className="border border-white/10 bg-white/[0.035] px-2 py-1 text-[9px] uppercase tracking-[0.12em] text-white/48"
+                                  >
+                                    {item}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
               <button
                 onClick={handleConfirm}
