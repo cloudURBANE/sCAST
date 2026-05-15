@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Search, RefreshCw, Check } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import {
   collectMainAccordDisplayRows,
   getFragranceDetails,
@@ -64,7 +64,7 @@ function sleep(ms: number): Promise<void> {
   });
 }
 
-/** Rotating vault headline — house + scent pairs for the typewriter. */
+/** Rotating vault headline — example house + scent pairs. */
 const VAULT_HEADLINE_ROTATION = [
   'Chanel Coco Mademoiselle',
   'Tom Ford Oud Wood',
@@ -75,11 +75,8 @@ const VAULT_HEADLINE_ROTATION = [
   'Creed Aventus',
 ] as const;
 
-/** ~one line in the headline slot at max-w-lg; longer phrases truncate before "..." */
+/** ~one line in the headline slot at max-w-lg; longer phrases truncate */
 const HEADLINE_BASE_MAX_CHARS = 34;
-
-/** These phrase indices type slightly faster (still slower than the original animation). */
-const HEADLINE_FAST_INDICES = new Set([1, 3, 4, 6]);
 
 function vaultHeadlineBase(full: string): string {
   const t = full.trim();
@@ -87,63 +84,53 @@ function vaultHeadlineBase(full: string): string {
   return t.slice(0, HEADLINE_BASE_MAX_CHARS).trimEnd();
 }
 
-function useVaultHeadlineTypewriter(phrases: readonly string[]): string {
-  const [text, setText] = useState('');
-  const phrasesRef = useRef(phrases);
-  phrasesRef.current = phrases;
+function VaultHeadlineRotation({ phrases }: { phrases: readonly string[] }) {
+  const reduceMotion = useReducedMotion();
+  const [idx, setIdx] = useState(() => Math.floor(Math.random() * phrases.length));
 
   useEffect(() => {
-    let cancelled = false;
-    let idx = Math.floor(Math.random() * phrasesRef.current.length);
+    const id = window.setInterval(() => {
+      setIdx((i) => (i + 1) % phrases.length);
+    }, 5200);
+    return () => window.clearInterval(id);
+  }, [phrases.length]);
 
-    const slowTypeMs = 82;
-    const fastTypeMs = 58;
-    const deleteMs = 34;
-    const dotTypeMs = 52;
-    const holdMs = 3000;
-    const gapMs = 560;
+  const display = vaultHeadlineBase(phrases[idx]);
 
-    const run = async () => {
-      const list = phrasesRef.current;
-      while (!cancelled) {
-        const raw = list[idx % list.length];
-        const base = vaultHeadlineBase(raw);
-        const typeMs = HEADLINE_FAST_INDICES.has(idx % list.length) ? fastTypeMs : slowTypeMs;
+  if (reduceMotion) {
+    return (
+      <h2
+        className="flex h-[3rem] items-center justify-center font-serif italic text-[clamp(1.25rem,4vw,1.75rem)] leading-none tracking-[0.02em] text-[#fff7ec] drop-shadow-[0_0_22px_rgba(201,139,44,0.14)]"
+        aria-hidden
+      >
+        <span className="max-w-full truncate bg-gradient-to-br from-[#fffbf5] via-[#fff7ec] to-[#e6d2b8]/88 bg-clip-text text-center text-transparent px-1">
+          {display}
+        </span>
+      </h2>
+    );
+  }
 
-        for (let len = 1; len <= base.length && !cancelled; len += 1) {
-          setText(base.slice(0, len));
-          await sleep(typeMs);
-        }
-        if (cancelled) break;
-
-        const dots = '...';
-        for (let d = 1; d <= dots.length && !cancelled; d += 1) {
-          setText(`${base}${dots.slice(0, d)}`);
-          await sleep(dotTypeMs);
-        }
-        if (cancelled) break;
-
-        await sleep(holdMs);
-
-        const full = `${base}${dots}`;
-        for (let len = full.length; len >= 0 && !cancelled; len -= 1) {
-          setText(full.slice(0, len));
-          await sleep(deleteMs);
-        }
-        if (cancelled) break;
-
-        await sleep(gapMs);
-        idx += 1;
-      }
-    };
-
-    void run();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  return text;
+  return (
+    <h2
+      className="flex h-[3rem] items-center justify-center font-serif italic text-[clamp(1.25rem,4vw,1.75rem)] leading-none tracking-[0.02em] text-[#fff7ec] drop-shadow-[0_0_22px_rgba(201,139,44,0.14)]"
+      aria-hidden
+    >
+      <span className="relative flex min-h-[1.15em] w-full min-w-0 max-w-full items-center justify-center px-1">
+        <AnimatePresence mode="wait">
+          <motion.span
+            key={idx}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
+            className="max-w-full truncate bg-gradient-to-br from-[#fffbf5] via-[#fff7ec] to-[#e6d2b8]/88 bg-clip-text text-center text-transparent"
+          >
+            {display}
+          </motion.span>
+        </AnimatePresence>
+      </span>
+    </h2>
+  );
 }
 
 interface FragranceMatch extends FragranceSearchResult {
@@ -276,8 +263,6 @@ export const FragranceCapture: React.FC<{
   const [errorStatus, setErrorStatus] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
   const [syncComplete, setSyncComplete] = useState(false);
-
-  const headlineText = useVaultHeadlineTypewriter(VAULT_HEADLINE_ROTATION);
 
   const searchAbortController = useRef<AbortController | null>(null);
   const syncAbortController = useRef<AbortController | null>(null);
@@ -568,7 +553,7 @@ export const FragranceCapture: React.FC<{
       <div className="glass rounded-[var(--radius-scent-inner)] p-4 md:p-6">
         <header className="mb-6 px-2">
           <p className="sr-only">
-            Add perfumes to your vault. Examples rotate above the search field.
+            Add perfumes to your vault. Example fragrance names rotate above the search field.
           </p>
           <div className="flex flex-col items-center text-center gap-4 pt-1">
             <div className="space-y-3 w-full">
@@ -576,18 +561,7 @@ export const FragranceCapture: React.FC<{
                 Add To Vault
               </p>
               <div className="mx-auto w-full max-w-lg px-1">
-                <h2
-                  className="flex h-[3rem] items-center justify-center gap-2 font-serif italic text-[clamp(1.25rem,4vw,1.75rem)] leading-none tracking-[0.02em] text-[#fff7ec] drop-shadow-[0_0_22px_rgba(201,139,44,0.14)]"
-                  aria-hidden
-                >
-                  <span className="min-w-0 max-w-[calc(100%-0.75rem)] truncate bg-gradient-to-br from-[#fffbf5] via-[#fff7ec] to-[#e6d2b8]/88 bg-clip-text text-center text-transparent">
-                    {headlineText}
-                  </span>
-                  <span
-                    className="inline-block h-[1.05em] w-[2px] shrink-0 self-center rounded-full bg-gradient-to-b from-scent-accent/90 to-scent-accent/35 animate-pulse"
-                    aria-hidden
-                  />
-                </h2>
+                <VaultHeadlineRotation phrases={VAULT_HEADLINE_ROTATION} />
               </div>
             </div>
           </div>
@@ -618,28 +592,10 @@ export const FragranceCapture: React.FC<{
               onChange={(e) => { setSearchQuery(e.target.value); setErrorStatus(null); }}
               onFocus={() => setSearchFocused(true)}
               onBlur={() => setSearchFocused(false)}
-              placeholder=""
+              placeholder="Search by house or fragrance…"
               aria-label="Look up a brand or fragrance"
-              className="scent-lux-input relative z-0 w-full h-[58px] sm:h-[62px] pl-12 pr-14 text-center text-[#fff7ec] font-sans text-[15px] font-medium outline-none transition-colors group-focus-within:shadow-[inset_0_1px_0_rgba(255,226,174,0.08),0_0_0_1px_rgba(201,139,44,0.15)]"
+              className="scent-lux-input relative z-0 w-full h-[58px] sm:h-[62px] pl-12 pr-14 text-center text-[#fff7ec] font-sans text-[15px] font-medium outline-none transition-colors placeholder:text-[#c9a97a]/42 placeholder:font-medium group-focus-within:shadow-[inset_0_1px_0_rgba(255,226,174,0.08),0_0_0_1px_rgba(201,139,44,0.15)]"
             />
-            {searchQuery === '' && !searchFocused && (
-              <div
-                className="pointer-events-none absolute inset-y-0 left-12 right-14 z-[1] flex items-center justify-center text-[#d9c2a4]/62"
-                aria-hidden
-              >
-                <span className="scent-search-signal">
-                  <span className="scent-search-signal-bars">
-                    <span />
-                    <span />
-                    <span />
-                    <span />
-                    <span />
-                    <span />
-                  </span>
-                  <span className="scent-search-signal-rail" />
-                </span>
-              </div>
-            )}
             <button
               type="submit"
               disabled={uploading}
