@@ -678,6 +678,8 @@ export const FragranceCapture: React.FC<{
     setHasSearched(false);
     setSearchQuery("");
     setSyncComplete(false);
+    setPollingNotice(null);
+    setIsDetailsPolling(false);
   };
 
   return (
