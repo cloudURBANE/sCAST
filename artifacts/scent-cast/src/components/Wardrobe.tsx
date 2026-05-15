@@ -1220,13 +1220,13 @@ export const Wardrobe: React.FC<{
                 {shelfItems.map((item, i) => (
                   <motion.div
                     key={item.id}
-                    initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }} transition={{ delay: i * 0.1 }}
+                    initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }} transition={{ delay: i * 0.08, duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
                     className="group cursor-pointer relative h-full"
                     onClick={() => openDetail(item)}
                   >
-                    <div className="scent-fragrance-card h-full min-h-[31rem] transition-[transform,border-color,box-shadow] duration-500 motion-reduce:transition-none group-hover:-translate-y-1.5 motion-reduce:group-hover:translate-y-0 relative overflow-hidden p-4 sm:p-6 flex flex-col">
-                      <div className="aspect-[1.08/1] relative mb-5 sm:mb-6 shrink-0 overflow-hidden rounded-[calc(var(--radius-scent)-6px)] ring-1 ring-white/[0.06] shadow-[inset_0_1px_0_rgba(255,244,219,0.04)]">
+                    <div className="scent-fragrance-card h-full min-h-[31rem] transition-[transform,border-color,box-shadow] duration-500 motion-reduce:transition-none group-hover:-translate-y-1.5 motion-reduce:group-hover:translate-y-0 relative overflow-hidden p-5 sm:p-7 flex flex-col">
+                      <div className="aspect-[1.04/1] relative mb-6 sm:mb-7 shrink-0 overflow-hidden rounded-[calc(var(--radius-scent)-6px)] ring-1 ring-white/[0.05] shadow-[inset_0_1px_0_rgba(255,244,219,0.04)]">
                         <div className="scent-bottle-stage absolute inset-0 pointer-events-none" />
                         <BottleImage
                           variant="grid"
@@ -1234,22 +1234,14 @@ export const Wardrobe: React.FC<{
                           alt={entryName(item)}
                           adjustment={item.imageAdjustment}
                           className="absolute inset-0 z-10"
-                          imgClassName="brightness-[1.08] group-hover:scale-[1.035] motion-reduce:group-hover:scale-100 transition-transform duration-700 motion-reduce:transition-none"
+                          imgClassName="brightness-[1.08] group-hover:scale-[1.04] motion-reduce:group-hover:scale-100 transition-transform duration-[900ms] motion-reduce:transition-none"
                         />
                       </div>
-                      <div className="flex flex-1 flex-col items-center text-center gap-4 px-0.5 pb-1 min-h-0 min-w-0">
-                        <div className="space-y-2 w-full min-w-0">
-                          <p className="scent-card-brand">{entryBrand(item)}</p>
-                          <h3 className="scent-card-title text-balance break-words">{entryName(item)}</h3>
-                        </div>
+                      <div className="flex flex-1 flex-col items-center justify-start text-center gap-4 px-1 pb-1 min-h-0 min-w-0">
+                        <p className="scent-card-brand">{entryBrand(item)}</p>
+                        <h3 className="scent-card-title break-words">{entryName(item)}</h3>
                         <span className="scent-card-notes-rule" aria-hidden />
-                        <p className="scent-card-notes text-balance hyphens-auto" lang="en">
-                          <span className="text-amber-200/90 font-semibold tracking-wide">Notes</span>
-                          <span className="text-white/28 font-normal mx-1.5" aria-hidden>
-                            ·
-                          </span>
-                          <span className="text-amber-100/88 font-normal">{entryNotesCardLine(item)}</span>
-                        </p>
+                        <p className="scent-card-notes" lang="en">{entryNotesCardLine(item)}</p>
                       </div>
                     </div>
                   </motion.div>

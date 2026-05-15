@@ -373,58 +373,98 @@ a {
 }
 
 .scent-card-brand {
-  color: rgba(239, 191, 110, 0.92);
-  font-size: 0.6875rem;
+  color: #d7a856;
+  font-family: var(--font-sans);
+  font-size: 0.7rem;
   font-weight: 700;
-  letter-spacing: 0.24em;
+  letter-spacing: 0.46em;
+  text-indent: 0.46em;
   text-transform: uppercase;
   text-align: center;
   text-wrap: balance;
+  text-shadow: 0 0 18px rgba(201, 139, 44, 0.18);
 }
 
 .scent-card-title {
-  color: #fff7ee;
+  color: #fbf4e6;
   font-family: var(--font-serif);
-  font-size: clamp(1.5rem, 2.05vw, 2.05rem);
-  font-style: italic;
-  font-weight: 500;
-  line-height: 1.06;
+  font-size: clamp(1.75rem, 2.6vw, 2.4rem);
+  font-style: normal;
+  font-weight: 400;
+  line-height: 1.02;
   text-align: center;
-  letter-spacing: -0.015em;
+  letter-spacing: 0.18em;
+  text-indent: 0.18em;
+  text-transform: uppercase;
   text-wrap: balance;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.45), 0 0 28px rgba(255, 240, 210, 0.08);
 }
 
 .scent-card-notes-rule {
+  position: relative;
   display: block;
-  width: 2.75rem;
-  height: 1px;
+  width: min(78%, 11rem);
+  height: 0.75rem;
   margin-inline: auto;
-  background: linear-gradient(
+  background-image: linear-gradient(
     90deg,
-    transparent,
-    rgba(201, 139, 44, 0.45) 42%,
-    rgba(239, 191, 110, 0.55) 50%,
-    rgba(201, 139, 44, 0.45) 58%,
-    transparent
+    transparent 0%,
+    rgba(201, 139, 44, 0) 6%,
+    rgba(201, 139, 44, 0.55) 30%,
+    rgba(239, 191, 110, 0.78) 44%,
+    transparent 48%,
+    transparent 52%,
+    rgba(239, 191, 110, 0.78) 56%,
+    rgba(201, 139, 44, 0.55) 70%,
+    rgba(201, 139, 44, 0) 94%,
+    transparent 100%
   );
+  background-repeat: no-repeat;
+  background-size: 100% 1px;
+  background-position: 50% 50%;
+}
+
+.scent-card-notes-rule::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0.46rem;
+  height: 0.46rem;
+  transform: translate(-50%, -50%) rotate(45deg);
+  background: linear-gradient(135deg, #f0c987 0%, #d7a856 55%, #a37425 100%);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.55),
+    0 0 12px rgba(239, 191, 110, 0.55),
+    inset 0 0 0 0.5px rgba(255, 236, 196, 0.6);
 }
 
 .scent-card-notes {
-  color: rgba(255, 237, 210, 0.88);
-  font-size: 0.8125rem;
+  color: rgba(244, 222, 187, 0.78);
+  font-family: var(--font-serif);
+  font-size: 0.78rem;
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: 0.04em;
   line-height: 1.55;
   text-align: center;
   overflow-wrap: anywhere;
   hyphens: auto;
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 4;
+  -webkit-line-clamp: 2;
   overflow: hidden;
 }
 
 .scent-bottle-stage {
   border-radius: calc(var(--radius-scent) - 6px);
-  background: linear-gradient(180deg, rgba(201, 139, 44, 0.1), rgba(201, 139, 44, 0.03) 44%, rgba(0, 0, 0, 0.18) 100%);
+  background:
+    radial-gradient(120% 70% at 50% 110%, rgba(201, 139, 44, 0.08), transparent 60%),
+    radial-gradient(80% 60% at 50% 35%, rgba(255, 244, 220, 0.025), transparent 70%),
+    linear-gradient(180deg, #060504 0%, #030302 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 226, 174, 0.05),
+    inset 0 -28px 56px -28px rgba(0, 0, 0, 0.9);
 }
 
 .scent-marquee-band {
