@@ -1016,8 +1016,10 @@ export const Wardrobe: React.FC<{
                 </div>
               ) : null}
             </div>
-            <div className="scent-entry-count font-serif italic text-xl sm:text-2xl whitespace-nowrap">
-              <span>{filteredItems.length} Entries</span>
+            <div className="scent-full-bleed w-full">
+              <div className="scent-entry-count w-full font-serif italic text-xl sm:text-2xl whitespace-nowrap">
+                <span>{filteredItems.length} Entries</span>
+              </div>
             </div>
           </div>
         </div>

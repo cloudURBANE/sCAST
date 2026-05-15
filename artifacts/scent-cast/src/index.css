@@ -215,9 +215,10 @@ body {
 
 .scent-entry-count {
   display: grid;
-  grid-template-columns: minmax(54px, 150px) auto minmax(54px, 150px);
+  grid-template-columns: minmax(24px, 1fr) auto minmax(24px, 1fr);
   align-items: center;
   gap: 1.4rem;
+  width: 100%;
   color: #d7a856;
 }
 
@@ -482,10 +483,7 @@ body {
   }
 
   .scent-entry-count {
-    grid-template-columns: minmax(32px, 1fr) auto minmax(32px, 1fr);
     gap: 0.9rem;
-    width: 100%;
-    max-width: 22rem;
   }
 }
 
