@@ -202,6 +202,81 @@ test("shouldUseImageLookupCaches: allowLookupCache=false bypasses both caches", 
   assert.equal(shouldUseImageLookupCaches(undefined, "https://example.com/img.jpg"), false);
 });
 
+test("shouldRetryFailedImageStatus: stale failures can be retried", async () => {
+  const { shouldRetryFailedImageStatus } = await import("./imagePipelineCachePolicy.ts");
+  const now = Date.UTC(2026, 4, 15, 12, 0, 0);
+  const retryAfterMs = 6 * 60 * 60 * 1000;
+
+  assert.equal(
+    shouldRetryFailedImageStatus("failed", new Date(now - retryAfterMs - 5_000), retryAfterMs, now),
+    true,
+  );
+  assert.equal(
+    shouldRetryFailedImageStatus("failed", new Date(now - retryAfterMs + 5_000), retryAfterMs, now),
+    false,
+  );
+  assert.equal(
+    shouldRetryFailedImageStatus("ready", new Date(now - retryAfterMs - 5_000), retryAfterMs, now),
+    false,
+  );
+  assert.equal(shouldRetryFailedImageStatus("failed", null, retryAfterMs, now), false);
+});
+
+test("image candidate ranking prefers identity match and successful BG removal", async () => {
+  const {
+    computeFragranceIdentityCoverage,
+    shouldSkipSerperCandidateByIdentity,
+    scoreProcessedSerperCandidate,
+  } = await import("./imageCandidateRanking.ts");
+
+  const strong = {
+    imageUrl: "https://cdn.brand.com/images/dior-sauvage-edp-packshot.png",
+    title: "Dior Sauvage Eau de Parfum bottle packshot",
+    source: "Dior",
+    score: 12,
+  };
+
+  const weak = {
+    imageUrl: "https://example.com/images/random-fragrance.jpg",
+    title: "Top 10 fragrances gift set",
+    source: "Fragrance blog",
+    score: 12,
+  };
+
+  const strongCoverage = computeFragranceIdentityCoverage("Dior", "Sauvage", strong);
+  const weakCoverage = computeFragranceIdentityCoverage("Dior", "Sauvage", weak);
+  assert.ok(strongCoverage > weakCoverage);
+  assert.equal(shouldSkipSerperCandidateByIdentity("Dior", "Sauvage", weak), true);
+
+  const strongProcessedScore = scoreProcessedSerperCandidate({
+    brand: "Dior",
+    name: "Sauvage",
+    removeBackground: true,
+    serperCandidate: strong,
+    processed: {
+      width: 768,
+      height: 768,
+      backgroundRemoved: true,
+      removeBgStatus: "removed",
+    },
+  });
+
+  const weakProcessedScore = scoreProcessedSerperCandidate({
+    brand: "Dior",
+    name: "Sauvage",
+    removeBackground: true,
+    serperCandidate: weak,
+    processed: {
+      width: 400,
+      height: 400,
+      backgroundRemoved: false,
+      removeBgStatus: "fallback",
+    },
+  });
+
+  assert.ok(strongProcessedScore > weakProcessedScore);
+});
+
 test("refresh-image does not upsert catalog when backgroundRemoved=false and BG removal was requested", async () => {
   // This test verifies the guard logic by inspecting the condition directly,
   // since the route is difficult to instantiate without a full Express/DB setup.

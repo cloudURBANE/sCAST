@@ -4,6 +4,10 @@ import { makeLookupKey } from "./catalogService";
 import { removeBgBuffer, removeBgToBuffer, type RemoveBgOptions, type RemoveBgReason, type RemoveBgStatus } from "./bgService";
 import { isEffectivelyTransparent } from "./bgServiceCore";
 import {
+  scoreProcessedSerperCandidate,
+  shouldSkipSerperCandidateByIdentity,
+} from "./imageCandidateRanking";
+import {
   buildProcessedImageStorageKey,
   getCachedImageStatusBySourceHash,
   getLatestReadyCachedImageByLookupKey,
@@ -32,6 +36,7 @@ export { acceptsImageCacheForRequest, shouldUseImageLookupCaches } from "./image
 const MAX_OUTPUT_DIMENSION = 768;
 const WEBP_QUALITY = 82;
 const MAX_CANDIDATES_PER_ATTEMPT = 5;
+const EARLY_ACCEPT_PROCESSED_SCORE = 17;
 
 type ImageSourceProvider = "serper" | "manual";
 
@@ -366,9 +371,9 @@ export async function resolveProcessedFragranceImage(
     }
   }
 
-  const candidates: Array<{ imageUrl: string }> = [];
+  const candidates: SerperImageCandidate[] = [];
   if (input.sourceUrl) {
-    candidates.push({ imageUrl: input.sourceUrl });
+    candidates.push({ imageUrl: input.sourceUrl, score: 0 });
   } else if (input.searchQuery?.trim()) {
     const serperCandidates: SerperImageCandidate[] = await searchSerperImageCandidates(
       input.searchQuery,
@@ -380,8 +385,26 @@ export async function resolveProcessedFragranceImage(
   if (candidates.length === 0) return null;
 
   const maxCandidates = Math.max(1, Math.min(input.maxCandidates ?? MAX_CANDIDATES_PER_ATTEMPT, 8));
+  let best: { result: ProcessedImageResult; score: number } | null = null;
 
   for (const candidate of candidates.slice(0, maxCandidates)) {
+    if (
+      sourceProvider === "serper" &&
+      shouldSkipSerperCandidateByIdentity(input.brand, input.name, candidate)
+    ) {
+      logger.info(
+        {
+          brand: input.brand,
+          name: input.name,
+          score: candidate.score,
+          candidateTitle: (candidate.title ?? "").slice(0, 140),
+          candidateSource: (candidate.source ?? "").slice(0, 140),
+        },
+        "[imagePipeline] skipped low-identity serper candidate",
+      );
+      continue;
+    }
+
     let source: PipelineSource;
     try {
       source = sourceFromInput(candidate.imageUrl);
@@ -400,8 +423,31 @@ export async function resolveProcessedFragranceImage(
       removeBackground,
       poofOptions: input.poofOptions,
     });
-    if (result) return result;
+    if (!result) continue;
+
+    if (sourceProvider !== "serper") return result;
+
+    const candidateScore = scoreProcessedSerperCandidate({
+      brand: input.brand,
+      name: input.name,
+      removeBackground,
+      serperCandidate: candidate,
+      processed: {
+        width: result.width,
+        height: result.height,
+        backgroundRemoved: result.backgroundRemoved,
+        removeBgStatus: result.removeBgStatus,
+      },
+    });
+
+    if (!best || candidateScore > best.score) {
+      best = { result, score: candidateScore };
+    }
+
+    if (candidateScore >= EARLY_ACCEPT_PROCESSED_SCORE) {
+      return best.result;
+    }
   }
 
-  return null;
+  return best?.result ?? null;
 }

@@ -8,6 +8,7 @@ import {
   storagePathFromLocalImageObjectUrl,
   type ImageStorageProvider,
 } from "./imageObjectStorage";
+import { shouldRetryFailedImageStatus } from "./imagePipelineCachePolicy";
 import { assertNoPersistedBase64Image, safeImageUrlForResponse } from "./persistenceGuards";
 export {
   buildProcessedImageStorageKey,
@@ -19,6 +20,16 @@ export {
   normalizeSourceUrl,
 } from "./imageIdentity";
 import { IMAGE_PIPELINE_VERSION } from "./imageIdentity";
+
+const DEFAULT_FAILED_STATUS_RETRY_MS = 6 * 60 * 60 * 1000;
+
+function failedStatusRetryMs(): number {
+  const raw = process.env.IMAGE_FAILED_STATUS_RETRY_MS;
+  if (!raw) return DEFAULT_FAILED_STATUS_RETRY_MS;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_FAILED_STATUS_RETRY_MS;
+  return Math.min(parsed, 7 * 24 * 60 * 60 * 1000);
+}
 
 export type CachedImageReference = {
   imageUrl: string;
@@ -228,10 +239,10 @@ export async function getCachedImageStatusBySourceHash(
   sourceUrlHash: string,
   pipelineVersion = IMAGE_PIPELINE_VERSION,
 ): Promise<"ready" | "failed" | "processing" | null> {
-  let rows: { processingStatus: string }[];
+  let rows: { processingStatus: string; updatedAt: Date | null }[];
   try {
     rows = await db
-      .select({ processingStatus: imageCacheTable.processingStatus })
+      .select({ processingStatus: imageCacheTable.processingStatus, updatedAt: imageCacheTable.updatedAt })
       .from(imageCacheTable)
       .where(
         and(
@@ -244,7 +255,17 @@ export async function getCachedImageStatusBySourceHash(
     if (isImageCacheUnavailableError(err)) return null;
     throw err;
   }
-  const status = rows[0]?.processingStatus;
+  const row = rows[0];
+  const status = row?.processingStatus;
+  if (
+    shouldRetryFailedImageStatus(
+      status as "ready" | "failed" | "processing" | null,
+      row?.updatedAt,
+      failedStatusRetryMs(),
+    )
+  ) {
+    return null;
+  }
   if (status === "ready" || status === "failed" || status === "processing") return status;
   return null;
 }

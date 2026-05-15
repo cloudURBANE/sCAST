@@ -16,3 +16,15 @@ export function shouldUseImageLookupCaches(
 ): boolean {
   return allowLookupCache !== false && !sourceUrl;
 }
+
+export function shouldRetryFailedImageStatus(
+  status: "ready" | "failed" | "processing" | null,
+  updatedAt: Date | null | undefined,
+  retryAfterMs: number,
+  nowMs = Date.now(),
+): boolean {
+  if (status !== "failed") return false;
+  if (!Number.isFinite(retryAfterMs) || retryAfterMs <= 0) return false;
+  if (!updatedAt) return false;
+  return nowMs - updatedAt.getTime() >= retryAfterMs;
+}
