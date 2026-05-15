@@ -419,6 +419,33 @@ a {
   text-shadow: 0 0 18px rgba(201, 139, 44, 0.22);
 }
 
+.scent-marquee-track-row {
+  gap: clamp(4.25rem, 5.5vw, 6.4rem);
+  font-size: clamp(11.3px, 0.72vw, 11.4px);
+  letter-spacing: 0.5em;
+  text-transform: uppercase;
+  font-family: "Iowan Old Style", "Times New Roman", serif;
+  font-style: italic;
+}
+
+.scent-marquee-phrase-group {
+  gap: clamp(4.25rem, 5.5vw, 6.4rem);
+}
+
+.scent-marquee-phrase-item {
+  gap: clamp(1rem, 1.75vw, 1.45rem);
+  align-items: center;
+}
+
+.scent-marquee-divider {
+  display: inline-block;
+  width: clamp(1.15rem, 2.2vw, 1.85rem);
+  height: 1px;
+  transform: translateY(0.02em);
+  background: linear-gradient(90deg, rgba(201, 139, 44, 0), rgba(201, 139, 44, 0.72), rgba(201, 139, 44, 0));
+  opacity: 0.82;
+}
+
 .scent-weather-value {
   color: #fff7ec;
   text-shadow: 0 0 24px rgba(201, 139, 44, 0.24);

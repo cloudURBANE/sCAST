@@ -840,9 +840,9 @@ export default function App() {
   const tickerPhrases = useMemo(() => {
     if (!wardrobeLoaded || items.length === 0) {
       return [
-        'Add scents to your vault to unlock discovery',
-        'Analyze atmospheric nuance for the perfect wear',
-        'Your signature scent is currently syncing with the environment',
+        'Add scents to your vault and unlock deeper discovery',
+        'Atmospheric nuance is analyzed to guide each wear',
+        'Your signature profile is syncing with the current environment',
       ];
     }
 
@@ -956,15 +956,15 @@ export default function App() {
 
       <main className="relative z-10 pb-24 px-4 sm:px-8 max-w-[1760px] mx-auto">
         <div className="space-y-20 sm:space-y-28 pt-10 sm:pt-14">
-          <div className="scent-marquee-band scent-full-bleed w-full overflow-hidden py-4 flex select-none relative">
-            <div className="flex animate-infinite-scroll gap-20 text-[11px] uppercase tracking-[0.48em] font-serif italic whitespace-nowrap scent-marquee-text">
+          <div className="scent-marquee-band scent-full-bleed w-full overflow-hidden py-[17px] sm:py-[18px] flex select-none relative">
+            <div className="scent-marquee-track-row flex animate-infinite-scroll whitespace-nowrap scent-marquee-text">
               {[...Array(4)].map((_, i) => (
-                <span key={i} className="flex items-center gap-20">
+                <span key={i} className="scent-marquee-phrase-group flex items-center">
                   {tickerPhrases.map((phrase, j) => (
-                    <React.Fragment key={j}>
+                    <span key={j} className="scent-marquee-phrase-item inline-flex items-center">
                       <span>{phrase}</span>
-                      <span className="text-scent-accent/35">•</span>
-                    </React.Fragment>
+                      {j < tickerPhrases.length - 1 ? <span className="scent-marquee-divider" aria-hidden="true" /> : null}
+                    </span>
                   ))}
                 </span>
               ))}
