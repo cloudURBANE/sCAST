@@ -620,27 +620,37 @@ export const FragranceCapture: React.FC<{
               onBlur={() => setSearchFocused(false)}
               placeholder=""
               aria-label="Look up a brand or fragrance"
-              className="scent-lux-input relative z-0 w-full h-[58px] sm:h-[62px] px-12 text-center text-[#fff7ec] font-sans text-[15px] outline-none transition-colors group-focus-within:shadow-[inset_0_1px_0_rgba(255,226,174,0.08),0_0_0_1px_rgba(201,139,44,0.15)]"
+              className="scent-lux-input relative z-0 w-full h-[58px] sm:h-[62px] pl-12 pr-14 text-center text-[#fff7ec] font-sans text-[15px] font-medium outline-none transition-colors group-focus-within:shadow-[inset_0_1px_0_rgba(255,226,174,0.08),0_0_0_1px_rgba(201,139,44,0.15)]"
             />
             {searchQuery === '' && !searchFocused && (
               <div
-                className="pointer-events-none absolute inset-y-0 left-0 right-14 z-[1] flex items-center justify-center px-12 text-[#d9c2a4]/55"
+                className="pointer-events-none absolute inset-y-0 left-12 right-14 z-[1] flex items-center justify-center text-[#d9c2a4]/62"
                 aria-hidden
               >
-                <span className="scent-search-probe inline-flex w-[22px] shrink-0 translate-x-7 justify-between gap-1 opacity-95 sm:translate-x-9" aria-hidden>
-                  <span className="scent-search-probe-dot" />
-                  <span className="scent-search-probe-dot" />
-                  <span className="scent-search-probe-dot" />
+                <span className="scent-search-signal">
+                  <span className="scent-search-signal-bars">
+                    <span />
+                    <span />
+                    <span />
+                    <span />
+                    <span />
+                    <span />
+                  </span>
+                  <span className="scent-search-signal-rail" />
                 </span>
               </div>
             )}
             <button
               type="submit"
               disabled={uploading}
-              className="absolute right-3 top-1/2 z-10 -translate-y-1/2 p-2.5 text-scent-accent/78 hover:text-white transition-colors disabled:opacity-50"
+              className="absolute right-2 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/[0.11] bg-white/[0.035] text-scent-accent/[0.82] shadow-[inset_0_1px_0_rgba(255,235,198,0.07)] transition-[color,background-color,border-color,transform,opacity] hover:border-scent-accent/30 hover:bg-white/[0.055] hover:text-[#fff7ec] active:scale-[0.96] disabled:pointer-events-none disabled:opacity-45"
               aria-label="Search"
             >
-              {uploading ? <RefreshCw size={16} className="animate-spin" /> : <Search size={18} />}
+              {uploading ? (
+                <RefreshCw size={17} strokeWidth={1.75} className="animate-spin opacity-95" />
+              ) : (
+                <Search size={17} strokeWidth={1.75} className="opacity-95" />
+              )}
             </button>
           </form>
         </div>
