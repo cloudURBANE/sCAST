@@ -446,7 +446,7 @@ a {
 }
 
 .scent-card-brand {
-  --brand-size: clamp(2.4rem, 3.6vw, 3.2rem);
+  --brand-size: clamp(1.9rem, 2.85vw, 2.5rem);
   color: #f7f3ec;
   font-family: var(--font-script);
   font-size: var(--brand-size);
@@ -465,7 +465,7 @@ a {
 }
 
 .scent-card-brand[data-len="medium"] {
-  --brand-size: clamp(2rem, 2.9vw, 2.6rem);
+  --brand-size: clamp(1.75rem, 2.55vw, 2.25rem);
 }
 
 .scent-card-brand[data-len="long"] {
