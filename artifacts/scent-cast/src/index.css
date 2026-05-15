@@ -23,6 +23,10 @@
   color: var(--color-scent-accent);
   color-scheme: dark;
   --scent-amber-rgb: 201 139 44;
+  --scent-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --scent-ease-snappy: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --scent-transition-fast: 180ms;
+  --scent-transition-base: 240ms;
   --scent-card-shadow: 0 26px 68px -40px rgb(var(--scent-amber-rgb) / 0.5), 0 18px 42px -22px rgba(0, 0, 0, 0.96);
   --scent-card-glow: inset 0 1px 0 rgba(255, 226, 176, 0.1), inset 0 0 72px rgba(201, 139, 44, 0.028);
   font-synthesis: none;
@@ -40,6 +44,26 @@ html, body {
 body {
   font-family: var(--font-sans);
   overscroll-behavior-y: none;
+  overflow-x: hidden;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+::selection {
+  background: rgba(219, 162, 72, 0.3);
+  color: #fff8ee;
+}
+
+button,
+input,
+textarea,
+select,
+a {
+  -webkit-tap-highlight-color: transparent;
 }
 
 .scent-app-shell::before {
@@ -82,6 +106,7 @@ body {
   background: linear-gradient(135deg, rgba(218, 161, 75, 0.68), rgba(201, 139, 44, 0.2), rgba(201, 139, 44, 0.04));
   box-shadow: 0 18px 48px -18px rgba(0, 0, 0, 0.95), 0 0 34px rgba(201, 139, 44, 0.08);
   overflow: hidden;
+  border-radius: var(--radius-scent);
 }
 
 .glass-shelf::after {
@@ -164,6 +189,7 @@ body {
   box-shadow: 0 1px 0 rgba(255, 224, 174, 0.03), 0 12px 34px rgba(0, 0, 0, 0.42);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
+  transition: background var(--scent-transition-base) var(--scent-ease-out), box-shadow var(--scent-transition-base) var(--scent-ease-out);
 }
 
 .scent-brandmark {
@@ -176,23 +202,118 @@ body {
   border: 1px solid rgba(219, 162, 72, 0.56);
   border-radius: var(--radius-scent);
   box-shadow: inset 0 1px 0 rgba(255, 226, 174, 0.06), inset 0 0 28px rgba(201, 139, 44, 0.025), 0 16px 34px -22px rgba(0, 0, 0, 0.9);
+  transition:
+    border-color var(--scent-transition-fast) var(--scent-ease-out),
+    box-shadow var(--scent-transition-base) var(--scent-ease-out),
+    background var(--scent-transition-fast) var(--scent-ease-out);
 }
 
-.scent-lux-input:focus {
+.scent-lux-input:focus,
+.scent-lux-input:focus-visible {
   border-color: rgba(239, 179, 82, 0.9);
   box-shadow: inset 0 1px 0 rgba(255, 226, 174, 0.08), inset 0 0 30px rgba(201, 139, 44, 0.04), 0 0 0 3px rgba(201, 139, 44, 0.12), 0 18px 38px -22px rgba(0, 0, 0, 0.95);
+  outline: none;
 }
 
 .scent-primary-button {
-  background: linear-gradient(180deg, #e0a44f, #c98b2c 56%, #a86d1e);
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  font-weight: 600;
+  background:
+    radial-gradient(150% 130% at 50% 3%, rgba(255, 238, 204, 0.24), transparent 48%),
+    linear-gradient(180deg, #efb863 0%, #cf9133 54%, #9e6318 100%);
   color: #070402;
-  border: 1px solid rgba(255, 209, 136, 0.72);
-  box-shadow: inset 0 1px 0 rgba(255, 235, 198, 0.35), 0 18px 42px -22px rgba(201, 139, 44, 0.72);
+  border: 1px solid rgba(255, 206, 127, 0.84);
+  box-shadow:
+    0 0 0 1px rgba(15, 8, 2, 0.58),
+    0 3px 9px rgba(0, 0, 0, 0.72),
+    0 12px 26px -13px rgba(201, 139, 44, 0.5),
+    0 24px 42px -28px rgba(0, 0, 0, 0.95),
+    inset 0 1px 0 rgba(255, 244, 219, 0.52),
+    inset 0 -2px 5px rgba(75, 40, 8, 0.44),
+    inset 0 0 0 1px rgba(255, 223, 165, 0.2);
+  transition:
+    box-shadow var(--scent-transition-base) var(--scent-ease-out),
+    background var(--scent-transition-base) var(--scent-ease-out),
+    border-color var(--scent-transition-base) var(--scent-ease-out);
+}
+
+.scent-primary-button::before {
+  content: "";
+  position: absolute;
+  inset: 1px 1px auto;
+  height: 54%;
+  border-radius: calc(var(--radius-scent) - 2px);
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(255, 252, 241, 0.26), rgba(255, 248, 229, 0.08) 48%, rgba(255, 244, 215, 0));
+  opacity: 0.88;
+  transition: opacity var(--scent-transition-base) var(--scent-ease-out);
 }
 
 .scent-primary-button:hover {
-  background: linear-gradient(180deg, #efb863, #d9983d 56%, #b97821);
-  box-shadow: inset 0 1px 0 rgba(255, 235, 198, 0.38), 0 22px 48px -22px rgba(201, 139, 44, 0.82);
+  background:
+    radial-gradient(150% 130% at 50% 0%, rgba(255, 244, 216, 0.3), transparent 50%),
+    linear-gradient(180deg, #f5c46f 0%, #dc9d43 54%, #b17220 100%);
+  border-color: rgba(255, 223, 162, 0.95);
+  box-shadow:
+    0 0 0 1px rgba(19, 11, 3, 0.62),
+    0 4px 11px rgba(0, 0, 0, 0.76),
+    0 16px 30px -13px rgba(201, 139, 44, 0.6),
+    0 28px 46px -28px rgba(0, 0, 0, 0.98),
+    inset 0 1px 0 rgba(255, 247, 225, 0.6),
+    inset 0 -2px 6px rgba(82, 45, 10, 0.5),
+    inset 0 0 0 1px rgba(255, 226, 174, 0.24);
+}
+
+.scent-primary-button:hover::before {
+  opacity: 1;
+}
+
+.scent-primary-button:active {
+  background:
+    radial-gradient(160% 140% at 50% -6%, rgba(255, 241, 208, 0.18), transparent 48%),
+    linear-gradient(180deg, #dfaa58 0%, #bf8227 54%, #925812 100%);
+  border-color: rgba(236, 182, 93, 0.86);
+  box-shadow:
+    0 0 0 1px rgba(15, 8, 2, 0.66),
+    0 2px 6px rgba(0, 0, 0, 0.78),
+    0 10px 22px -14px rgba(201, 139, 44, 0.4),
+    0 20px 36px -28px rgba(0, 0, 0, 0.98),
+    inset 0 2px 4px rgba(86, 50, 14, 0.38),
+    inset 0 -2px 6px rgba(58, 31, 6, 0.58),
+    inset 0 0 0 1px rgba(236, 182, 93, 0.18);
+}
+
+.scent-primary-button:active::before {
+  opacity: 0.58;
+}
+
+.scent-primary-button:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 1px rgba(15, 8, 2, 0.62),
+    0 0 0 3px rgba(201, 139, 44, 0.24),
+    0 0 0 5px rgba(255, 214, 140, 0.14),
+    0 4px 11px rgba(0, 0, 0, 0.78),
+    0 18px 36px -16px rgba(201, 139, 44, 0.56),
+    inset 0 1px 0 rgba(255, 247, 225, 0.55),
+    inset 0 -2px 6px rgba(72, 39, 8, 0.46),
+    inset 0 0 0 1px rgba(255, 226, 174, 0.24);
+}
+
+.scent-primary-button[disabled] {
+  cursor: not-allowed;
+  opacity: 0.72;
+  filter: saturate(0.74);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scent-primary-button,
+  .scent-primary-button::before {
+    transition-duration: 1ms;
+  }
 }
 
 .scent-entry-count {
@@ -230,11 +351,25 @@ body {
   border-radius: var(--radius-scent);
   box-shadow: var(--scent-card-shadow), var(--scent-card-glow);
   transform: translateZ(0);
+  transition:
+    border-color var(--scent-transition-fast) var(--scent-ease-out),
+    box-shadow var(--scent-transition-base) var(--scent-ease-out),
+    background var(--scent-transition-base) var(--scent-ease-out);
 }
 
 .scent-fragrance-card:hover {
   border-color: rgba(217, 160, 67, 0.68);
   box-shadow: 0 30px 78px -40px rgb(var(--scent-amber-rgb) / 0.66), 0 22px 48px -22px rgba(0, 0, 0, 0.98), var(--scent-card-glow);
+}
+
+.scent-fragrance-card:focus-within {
+  border-color: rgba(236, 182, 93, 0.78);
+  box-shadow:
+    0 0 0 1px rgba(16, 10, 3, 0.6),
+    0 0 0 3px rgba(201, 139, 44, 0.14),
+    0 28px 70px -38px rgb(var(--scent-amber-rgb) / 0.62),
+    0 20px 42px -24px rgba(0, 0, 0, 0.98),
+    var(--scent-card-glow);
 }
 
 .scent-card-brand {
@@ -385,6 +520,9 @@ body {
   box-shadow: inset 0 1px 0 rgba(255, 226, 174, 0.06), 0 18px 44px -28px rgba(0, 0, 0, 0.95);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
+  transition:
+    border-color var(--scent-transition-fast) var(--scent-ease-out),
+    box-shadow var(--scent-transition-base) var(--scent-ease-out);
 }
 
 .scent-atmosphere-cell {
