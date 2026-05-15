@@ -114,8 +114,69 @@ function entryBrand(item: {
   return item?.brand || item?.product?.brand || "";
 }
 
-function entryType(item: Fragrance): string {
-  return item.concentration || item.family || "Fragrance";
+function dedupeNotesPreserveOrder(labels: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const label of labels) {
+    const key = label.trim().toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(label.trim());
+  }
+  return out;
+}
+
+/** Flat tokens for vault cards — first three + ellipsis when there are more. */
+function collectCardNoteTokens(item: Fragrance): string[] {
+  const dm = item.raw_engine_detail?.derived_metrics ?? item.derived_metrics;
+  const dmNotes = dm?.notes;
+  if (dmNotes) {
+    const ordered = [
+      ...(dmNotes.top ?? []),
+      ...(dmNotes.heart ?? []),
+      ...(dmNotes.base ?? []),
+      ...(dmNotes.flat ?? []),
+    ]
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (ordered.length > 0) return dedupeNotesPreserveOrder(ordered);
+    const summary = dm?.main_accords?.accord_summary?.trim();
+    if (summary) return [summary];
+  }
+
+  const raw = item.notes?.map((s) => s.trim()).filter(Boolean) ?? [];
+  if (raw.length > 0) return dedupeNotesPreserveOrder(raw);
+
+  const pyramidNotes = [
+    ...(item.pyramid?.top ?? []),
+    ...(item.pyramid?.heart ?? []),
+    ...(item.pyramid?.base ?? []),
+  ]
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (pyramidNotes.length > 0) return dedupeNotesPreserveOrder(pyramidNotes);
+
+  if (collectMainAccordDisplayRows(dm?.main_accords).length > 0) {
+    const labels = collectMainAccordDisplayRows(dm?.main_accords)
+      .map((row) => row.label.trim())
+      .filter(Boolean);
+    return dedupeNotesPreserveOrder(labels);
+  }
+
+  const fallbackSummary = dm?.main_accords?.accord_summary?.trim();
+  if (fallbackSummary) return [fallbackSummary];
+
+  return [];
+}
+
+const CARD_NOTE_JOINER = "\u2009·\u2009";
+
+function entryNotesCardLine(item: Fragrance, maxNotes = 3): string {
+  const tokens = collectCardNoteTokens(item);
+  if (tokens.length === 0) return "Notes unavailable for this fragrance.";
+  const visible = tokens.slice(0, maxNotes);
+  const joined = visible.join(CARD_NOTE_JOINER);
+  return tokens.length > maxNotes ? `${joined}\u2026` : joined;
 }
 
 function entryNotes(item: Fragrance): string {
@@ -1164,8 +1225,8 @@ export const Wardrobe: React.FC<{
                     className="group cursor-pointer relative h-full"
                     onClick={() => openDetail(item)}
                   >
-                    <div className="scent-fragrance-card h-full min-h-[31rem] transition-transform duration-500 group-hover:-translate-y-1.5 relative overflow-hidden p-4 sm:p-5 flex flex-col">
-                      <div className="aspect-[1.08/1] relative mb-5 overflow-hidden rounded-[calc(var(--radius-scent)-8px)]">
+                    <div className="scent-fragrance-card h-full min-h-[31rem] transition-[transform,border-color,box-shadow] duration-500 motion-reduce:transition-none group-hover:-translate-y-1.5 motion-reduce:group-hover:translate-y-0 relative overflow-hidden p-4 sm:p-6 flex flex-col">
+                      <div className="aspect-[1.08/1] relative mb-5 sm:mb-6 shrink-0 overflow-hidden rounded-[calc(var(--radius-scent)-6px)] ring-1 ring-white/[0.06] shadow-[inset_0_1px_0_rgba(255,244,219,0.04)]">
                         <div className="scent-bottle-stage absolute inset-0 pointer-events-none" />
                         <BottleImage
                           variant="grid"
@@ -1173,16 +1234,21 @@ export const Wardrobe: React.FC<{
                           alt={entryName(item)}
                           adjustment={item.imageAdjustment}
                           className="absolute inset-0 z-10"
-                          imgClassName="brightness-[1.08] group-hover:scale-[1.035] transition-transform duration-700"
+                          imgClassName="brightness-[1.08] group-hover:scale-[1.035] motion-reduce:group-hover:scale-100 transition-transform duration-700 motion-reduce:transition-none"
                         />
                       </div>
-                      <div className="space-y-2 px-1 pb-1 flex flex-1 flex-col">
-                        <p className="scent-card-brand">{entryBrand(item)}</p>
-                        <h3 className="scent-card-title">{entryName(item)}</h3>
-                        <p className="scent-card-type">{entryType(item)}</p>
-                        <div className="h-px w-full bg-scent-accent/18 my-4" />
-                        <p className="scent-card-notes">
-                          <span className="font-semibold text-amber-200/85">Notes:</span> {entryNotes(item)}
+                      <div className="flex flex-1 flex-col items-center text-center gap-4 px-0.5 pb-1 min-h-0 min-w-0">
+                        <div className="space-y-2 w-full min-w-0">
+                          <p className="scent-card-brand">{entryBrand(item)}</p>
+                          <h3 className="scent-card-title text-balance break-words">{entryName(item)}</h3>
+                        </div>
+                        <span className="scent-card-notes-rule" aria-hidden />
+                        <p className="scent-card-notes text-balance hyphens-auto" lang="en">
+                          <span className="text-amber-200/90 font-semibold tracking-wide">Notes</span>
+                          <span className="text-white/28 font-normal mx-1.5" aria-hidden>
+                            ·
+                          </span>
+                          <span className="text-amber-100/88 font-normal">{entryNotesCardLine(item)}</span>
                         </p>
                       </div>
                     </div>
