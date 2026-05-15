@@ -1225,7 +1225,7 @@ export const Wardrobe: React.FC<{
         <div className="space-y-8 pb-28 sm:pb-36">
           {shelves.length > 0 ? shelves.map((shelfItems, shelfIndex) => (
             <div key={shelfIndex} className="relative group/shelf">
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5 lg:gap-6 mb-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-7 sm:gap-8 lg:gap-10 mb-1">
                 {shelfItems.map((item, i) => (
                   <motion.div
                     key={item.id}
@@ -1244,8 +1244,7 @@ export const Wardrobe: React.FC<{
                         >
                           {entryBrand(item)}
                         </p>
-                        <div className="relative flex-1 w-full mt-4 sm:mt-5 mb-5 sm:mb-6 min-h-0 overflow-hidden">
-                          <div className="scent-bottle-stage absolute inset-0 pointer-events-none" />
+                        <div className="relative flex-1 w-full mt-4 sm:mt-5 mb-5 sm:mb-6 min-h-0">
                           <BottleImage
                             variant="grid"
                             src={item.imageUrl}
