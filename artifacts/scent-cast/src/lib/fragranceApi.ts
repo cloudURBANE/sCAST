@@ -159,6 +159,127 @@ export function collectMainAccordDisplayRows(
     .filter((row) => row.label);
 }
 
+function hasString(value: unknown): boolean {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function hasNumber(value: unknown): boolean {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function hasStringArrayContent(value: unknown): boolean {
+  return Array.isArray(value) && value.some((item) => hasString(item));
+}
+
+function normalizedStatus(value: unknown): string {
+  return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
+
+export function hasDerivedMetricsPayload(metrics?: DerivedMetrics | null): boolean {
+  if (!metrics) return false;
+
+  const headline = metrics.headline;
+  const performance = metrics.performance_score;
+  const value = metrics.value_score;
+  const wear = metrics.wear_profile;
+  const community = metrics.community_interest_score;
+  const mainAccords = metrics.main_accords;
+  const notes = metrics.notes;
+
+  return Boolean(
+    hasString(headline?.summary) ||
+      hasString(headline?.label) ||
+      hasNumber(headline?.crowd_consensus_score) ||
+      hasNumber(headline?.crowd_consensus_score_raw) ||
+      hasNumber(performance?.score) ||
+      hasNumber(performance?.score_raw) ||
+      hasString(performance?.longevity_label) ||
+      hasString(performance?.sillage_label) ||
+      hasNumber(value?.score) ||
+      hasNumber(value?.score_raw) ||
+      hasString(value?.dominant_label) ||
+      hasStringArrayContent(wear?.primary_seasons) ||
+      hasString(wear?.primary_time) ||
+      hasNumber(community?.score) ||
+      hasNumber(community?.score_raw) ||
+      hasString(mainAccords?.accord_summary) ||
+      collectMainAccordDisplayRows(mainAccords).length > 0 ||
+      hasStringArrayContent(notes?.top) ||
+      hasStringArrayContent(notes?.heart) ||
+      hasStringArrayContent(notes?.base) ||
+      hasStringArrayContent(notes?.flat),
+  );
+}
+
+export function isDerivedMetricsCompleteFlag(value: unknown): boolean {
+  const status = normalizedStatus(value);
+  return status === "complete" || status === "completed" || status === "full";
+}
+
+export function isTerminalEnrichmentStatus(value: unknown): boolean {
+  const status = normalizedStatus(value);
+  return (
+    status === "completed" ||
+    status === "not_needed" ||
+    status === "failed" ||
+    status === "ignored" ||
+    status === "cancelled"
+  );
+}
+
+export function isFragranceDetailEffectivelyComplete(
+  detail?: FragranceDetail | null,
+): boolean {
+  if (!detail) return false;
+
+  const coverage = detail.source_coverage;
+  const enrichmentStatus = normalizedStatus(detail.enrichment?.status);
+  const hasMetrics = hasDerivedMetricsPayload(detail.derived_metrics);
+
+  return Boolean(
+    coverage?.complete === true ||
+      isDerivedMetricsCompleteFlag(coverage?.derived_metrics) ||
+      (hasMetrics && coverage?.fragrantica === true) ||
+      (hasMetrics && (enrichmentStatus === "completed" || enrichmentStatus === "not_needed")),
+  );
+}
+
+export function normalizeSourceCoverage(
+  coverage?: SourceCoverage | null,
+  metrics?: DerivedMetrics | null,
+  enrichment?: FragranceDetail["enrichment"] | null,
+): SourceCoverage | undefined {
+  const hasCoverage = coverage && Object.keys(coverage).length > 0;
+  const hasMetrics = hasDerivedMetricsPayload(metrics);
+  if (!hasCoverage && !hasMetrics) return coverage ?? undefined;
+
+  const next: SourceCoverage = { ...(coverage ?? {}) };
+  const enrichmentStatus = normalizedStatus(enrichment?.status);
+  const effectivelyComplete =
+    next.complete === true ||
+    isDerivedMetricsCompleteFlag(next.derived_metrics) ||
+    (hasMetrics && next.fragrantica === true) ||
+    (hasMetrics && (enrichmentStatus === "completed" || enrichmentStatus === "not_needed"));
+
+  if (effectivelyComplete) {
+    next.complete = true;
+    if (!isDerivedMetricsCompleteFlag(next.derived_metrics)) {
+      next.derived_metrics = "complete";
+    }
+  }
+
+  return next;
+}
+
+export function normalizeFragranceDetail(detail: FragranceDetail): FragranceDetail {
+  const source_coverage = normalizeSourceCoverage(
+    detail.source_coverage,
+    detail.derived_metrics,
+    detail.enrichment,
+  );
+  return source_coverage ? { ...detail, source_coverage } : detail;
+}
+
 function getApiBase() {
   const base = FRAGRANCE_API_URL?.trim();
 

@@ -47,6 +47,8 @@ import {
 } from '@/lib/wardrobeSearchSuggest';
 import {
   collectMainAccordDisplayRows,
+  isDerivedMetricsCompleteFlag,
+  normalizeSourceCoverage,
   type DerivedMetrics,
   type FragranceDetail,
   type SourceCoverage,
@@ -269,7 +271,8 @@ function SourceStatusPanel({
 
   if (!hasCoverage && !enrichmentMessage) return null;
 
-  const complete = coverage?.complete === true;
+  const complete =
+    coverage?.complete === true || isDerivedMetricsCompleteFlag(coverage?.derived_metrics);
   const coverageSummary = complete
     ? "Full fragrance intelligence available."
     : "Baseline profile available. Enhanced metrics pending.";
@@ -898,7 +901,11 @@ export const Wardrobe: React.FC<{
   const selectedMetrics =
     selectedItem?.derived_metrics ?? selectedItem?.raw_engine_detail?.derived_metrics ?? null;
   const selectedCoverage =
-    selectedItem?.source_coverage ?? selectedItem?.raw_engine_detail?.source_coverage;
+    normalizeSourceCoverage(
+      selectedItem?.source_coverage ?? selectedItem?.raw_engine_detail?.source_coverage,
+      selectedMetrics,
+      selectedItem?.enrichment ?? selectedItem?.raw_engine_detail?.enrichment ?? undefined,
+    );
   const selectedEnrichment =
     selectedItem?.enrichment ?? selectedItem?.raw_engine_detail?.enrichment ?? undefined;
 

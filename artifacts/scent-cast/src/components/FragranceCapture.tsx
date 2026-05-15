@@ -4,7 +4,11 @@ import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import {
   collectMainAccordDisplayRows,
   getFragranceDetails,
+  isFragranceDetailEffectivelyComplete,
+  isTerminalEnrichmentStatus,
+  normalizeFragranceDetail,
   searchFragrances,
+  type EnrichmentStatus,
   type FragranceDetail,
   type FragranceDetailRequestPayload,
   type FragranceSearchResult,
@@ -81,7 +85,7 @@ function createAbortError(): Error {
 }
 
 function isCoverageComplete(detail: FragranceDetail | null | undefined): boolean {
-  return detail?.source_coverage?.complete === true || detail?.source_coverage?.fragrantica === true;
+  return isFragranceDetailEffectivelyComplete(detail);
 }
 
 function sleepWithAbort(ms: number, signal: AbortSignal): Promise<void> {
@@ -215,6 +219,9 @@ const SCENT_PROFILE_ENDPOINT = API_BASE_URL
 const SEARCH_SCENT_ENDPOINT = API_BASE_URL
   ? `${API_BASE_URL}/api/search-scent`
   : "/api/search-scent";
+const ENRICHMENT_STATUS_ENDPOINT = API_BASE_URL
+  ? `${API_BASE_URL}/api/enrichment/status`
+  : "/api/enrichment/status";
 
 /** Match list rows: keep one line each; overflow shows ellipsis in CSS */
 const MATCH_LINE_MAX_CHARS = 44;
@@ -308,6 +315,51 @@ function formatGender(value: unknown): string | undefined {
 
 function isFragranticaUrl(value: unknown): value is string {
   return typeof value === 'string' && /fragrantica\.com/i.test(value);
+}
+
+type EnrichmentStatusResponse = {
+  status?: EnrichmentStatus;
+  requested_count?: number;
+  last_requested_at?: string;
+  job_key?: string;
+  message?: string;
+};
+
+async function fetchEnrichmentStatus(
+  fgUrl: string | undefined,
+  signal: AbortSignal,
+): Promise<EnrichmentStatusResponse | null> {
+  if (!fgUrl) return null;
+
+  const url = `${ENRICHMENT_STATUS_ENDPOINT}?fg_url=${encodeURIComponent(fgUrl)}`;
+  const res = await fetch(url, { signal });
+  if (!res.ok) return null;
+
+  const data = (await res.json().catch(() => null)) as EnrichmentStatusResponse | null;
+  if (!data || typeof data !== 'object') return null;
+  return data;
+}
+
+function withEnrichmentStatus(
+  detail: FragranceDetail,
+  status: EnrichmentStatusResponse | null,
+): FragranceDetail {
+  if (!status?.status) return normalizeFragranceDetail(detail);
+
+  return normalizeFragranceDetail({
+    ...detail,
+    enrichment: {
+      ...(detail.enrichment ?? {}),
+      status: status.status,
+      ...(typeof status.requested_count === 'number'
+        ? { requested_count: status.requested_count }
+        : {}),
+      ...(typeof status.last_requested_at === 'string'
+        ? { last_requested_at: status.last_requested_at }
+        : {}),
+      ...(typeof status.message === 'string' ? { message: status.message } : {}),
+    },
+  });
 }
 
 function decodeSearchCandidateId(id: string): Record<string, unknown> | null {
@@ -445,14 +497,65 @@ export const FragranceCapture: React.FC<{
     detailsRequest: FragranceDetailRequestPayload,
     signal: AbortSignal,
   ): Promise<FragranceDetail> => {
-    let detail = (await getFragranceDetails(detailsRequest, { signal })) as FragranceDetail;
+    let detail = normalizeFragranceDetail(
+      (await getFragranceDetails(detailsRequest, { signal })) as FragranceDetail,
+    );
     if (isCoverageComplete(detail)) {
       return detail;
     }
 
+    const requestFgUrl = "source_url" in detailsRequest ? detailsRequest.source_url : undefined;
+    const detailFgUrl = firstString(
+      requestFgUrl,
+      detail.source_url,
+      detail.raw?.source_urls?.frag_url,
+    );
+
     setIsDetailsPolling(true);
     setLoadingStatus('Enriching fragrance details...');
     setPollingNotice('Enriching fragrance details...');
+
+    const applyLatestEnrichmentStatus = async (): Promise<boolean> => {
+      let status: EnrichmentStatusResponse | null = null;
+      try {
+        status = await fetchEnrichmentStatus(detailFgUrl, signal);
+      } catch (err: any) {
+        if (err?.name === 'AbortError') throw err;
+        return false;
+      }
+
+      if (!status || status.status === 'not_found') return false;
+
+      if (status.status === 'completed' || status.status === 'not_needed') {
+        try {
+          const refreshed = normalizeFragranceDetail(
+            (await getFragranceDetails(detailsRequest, { signal })) as FragranceDetail,
+          );
+          detail = withEnrichmentStatus(refreshed, status);
+        } catch (err: any) {
+          if (err?.name === 'AbortError') throw err;
+          detail = withEnrichmentStatus(detail, status);
+        }
+      } else {
+        detail = withEnrichmentStatus(detail, status);
+      }
+
+      if (isCoverageComplete(detail)) {
+        setPollingNotice(null);
+        return true;
+      }
+
+      if (status.status && isTerminalEnrichmentStatus(status.status)) {
+        setPollingNotice(status.message ?? null);
+        return true;
+      }
+
+      return false;
+    };
+
+    if (await applyLatestEnrichmentStatus()) {
+      return detail;
+    }
 
     let attempt = 1;
     let delayMs = DETAIL_POLL_INTERVAL_MS;
@@ -476,7 +579,9 @@ export const FragranceCapture: React.FC<{
       setPollingNotice(`Enriching fragrance details... (${attempt}/${DETAIL_POLL_MAX_ATTEMPTS})`);
 
       try {
-        detail = (await getFragranceDetails(detailsRequest, { signal })) as FragranceDetail;
+        detail = normalizeFragranceDetail(
+          (await getFragranceDetails(detailsRequest, { signal })) as FragranceDetail,
+        );
       } catch (err: any) {
         if (err?.name === 'AbortError') throw err;
         setPollingNotice("Couldn't fetch full details right now.");
@@ -485,6 +590,10 @@ export const FragranceCapture: React.FC<{
 
       if (isCoverageComplete(detail)) {
         setPollingNotice(null);
+        return detail;
+      }
+
+      if (await applyLatestEnrichmentStatus()) {
         return detail;
       }
 
