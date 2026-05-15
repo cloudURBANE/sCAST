@@ -333,7 +333,7 @@ function matchMeta(match: FragranceMatch): string[] {
 }
 
 export const FragranceCapture: React.FC<{
-  onAdd?: (item: any) => void;
+  onAdd?: (item: any) => void | Promise<{ persisted: boolean; requiresAuth?: boolean; error?: string }>;
   onVaultSearchStateChange?: (active: boolean) => void;
 }> = ({ onAdd, onVaultSearchStateChange }) => {
   const [uploading, setUploading] = useState(false);
@@ -504,14 +504,26 @@ export const FragranceCapture: React.FC<{
     const selected = matches[selectedIdx];
     if (selected.scent_vector) {
       setUploading(true);
-      setLoadingStatus("Synced to Vault.");
       setSyncComplete(true);
       const familyStr = typeof selected.family === 'string' ? selected.family : '';
-      onAdd({
+      const saveResult = await onAdd({
         ...selected,
         id: newFragranceId(),
         season: familyStr.includes('Fresh') ? 'Summer' : familyStr.includes('Woody') ? 'Winter' : 'Universal',
       });
+      setLoadingStatus(
+        saveResult?.persisted
+          ? "Synced to Vault."
+          : saveResult?.error
+            ? `Added locally. ${saveResult.error}`
+            : "Added locally. Sign in to save.",
+      );
+      if (saveResult?.error) {
+        setErrorStatus(`Added locally, but database save failed: ${saveResult.error}`);
+        setSyncComplete(false);
+        setUploading(false);
+        return;
+      }
       await sleep(420);
       resetState();
       setUploading(false);
@@ -625,7 +637,7 @@ export const FragranceCapture: React.FC<{
         typeof pipelineProfile.imageUrl === 'string' ? pipelineProfile.imageUrl : undefined,
       );
 
-      onAdd({
+      const saveResult = await onAdd({
         ...detail,
         raw_engine_detail: detail,
         source_coverage: detail.source_coverage,
@@ -659,7 +671,18 @@ export const FragranceCapture: React.FC<{
             ? detail.raw.description
             : undefined,
       });
-      setLoadingStatus("Synced to Vault.");
+      setLoadingStatus(
+        saveResult?.persisted
+          ? "Synced to Vault."
+          : saveResult?.error
+            ? `Added locally. ${saveResult.error}`
+            : "Added locally. Sign in to save.",
+      );
+      if (saveResult?.error) {
+        setErrorStatus(`Added locally, but database save failed: ${saveResult.error}`);
+        setSyncComplete(false);
+        return;
+      }
       setSyncComplete(true);
       await sleep(620);
       resetState();

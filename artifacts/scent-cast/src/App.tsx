@@ -621,7 +621,9 @@ export default function App() {
     );
   };
 
-  const handleAddItem = async (item: any) => {
+  const handleAddItem = async (
+    item: any,
+  ): Promise<{ persisted: boolean; requiresAuth?: boolean; error?: string }> => {
     const newItem: Fragrance = { ...item };
 
     let nextCount = 0;
@@ -642,6 +644,13 @@ export default function App() {
           body: JSON.stringify(payload),
         });
         const saved = (await res.json().catch(() => null)) as Partial<Fragrance> | null;
+        if (!res.ok) {
+          const message =
+            saved && typeof (saved as { error?: unknown }).error === 'string'
+              ? (saved as { error: string }).error
+              : `Wardrobe save failed: HTTP ${res.status}`;
+          throw new Error(message);
+        }
         if (res.ok && saved) {
           const savedItem: Fragrance = {
             ...newItem,
@@ -653,13 +662,20 @@ export default function App() {
               sameWardrobeEntry(existing, newItem) ? savedItem : existing,
             ),
           );
+          return { persisted: true };
         }
-      } catch {
-        // ignore - item is still in local state
+        throw new Error('Wardrobe save failed: empty API response');
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Wardrobe save failed';
+        console.error('Failed to persist wardrobe item', err);
+        return { persisted: false, error: message };
       }
     } else if (nextCount >= 2 && !guestPromptDismissed) {
       setIsAuthModalOpen(true);
+      return { persisted: false, requiresAuth: true };
     }
+
+    return { persisted: false, requiresAuth: !authToken };
   };
 
   useEffect(() => {
