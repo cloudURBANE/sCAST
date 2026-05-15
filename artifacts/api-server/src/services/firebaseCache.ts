@@ -165,3 +165,15 @@ export async function getOrCreateCachedImage(
   inFlight.set(key, promise);
   return promise;
 }
+
+export async function deleteCachedImage(brand: string, name: string): Promise<void> {
+  const db = getDb();
+  if (!db) return;
+  const key = normalizeKey(brand, name);
+  try {
+    await db.collection("bg_cache").doc(key).delete();
+    console.log(`[firebaseCache] deleted - ${brand} ${name}`);
+  } catch (err) {
+    console.error("[firebaseCache] delete error:", err);
+  }
+}

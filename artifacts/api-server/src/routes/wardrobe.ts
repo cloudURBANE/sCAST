@@ -1,10 +1,15 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { usersTable, userFragrancesTable } from "@workspace/db/schema";
-import { eq } from "drizzle-orm";
+import {
+  globalFragrancesTable,
+  imageCacheTable,
+  usersTable,
+  userFragrancesTable,
+} from "@workspace/db/schema";
+import { and, eq } from "drizzle-orm";
 import { resolveSharedImageUrl } from "../services/imageHydration";
 import { buildProfile } from "../services/scentEngine";
-import { flattenProfile } from "../services/catalogService";
+import { flattenProfile, makeLookupKey } from "../services/catalogService";
 import { logger } from "../lib/logger";
 import {
   hydrateImageUrl,
@@ -14,6 +19,8 @@ import {
 } from "../services/fragrancePayload";
 import { assertNoPersistedBase64Image } from "../services/persistenceGuards";
 import { persistableImageReference } from "../services/imageReference";
+import { deleteCachedImage } from "../services/firebaseCache";
+import { getImageObjectStorage } from "../services/imageObjectStorage";
 
 const router = Router();
 
@@ -348,9 +355,78 @@ router.delete("/wardrobe/:id", async (req, res) => {
     return;
   }
 
-  await db
-    .delete(userFragrancesTable)
-    .where(eq(userFragrancesTable.id, match.id));
+  const existing = normalizeFragrance(match.fragranceData as Record<string, any>);
+  const name = (existing.name as string | undefined)?.trim()
+    || (existing.product?.name as string | undefined)?.trim()
+    || "";
+  const brand = (existing.brand as string | undefined)?.trim()
+    || (existing.product?.brand as string | undefined)?.trim()
+    || "";
+  const lookupKey = brand && name ? makeLookupKey(brand, name) : null;
+
+  if (lookupKey) {
+    // Coordination note for nearby changes:
+    // The "delete from vault" contract is a full fragrance-set purge keyed by
+    // lookupKey (`brand::name`) across Firestore (`bg_cache`), Supabase/Postgres
+    // (`image_cache`, `global_fragrances`), and then the user's wardrobe row.
+    // Keep this keying and ordering in sync with catalog/image pipeline changes.
+    try {
+      const cacheRows = await db
+        .select({ storagePath: imageCacheTable.storagePath })
+        .from(imageCacheTable)
+        .where(eq(imageCacheTable.lookupKey, lookupKey));
+
+      if (cacheRows.length > 0) {
+        try {
+          const storage = getImageObjectStorage();
+          if (typeof storage.deleteObject === "function") {
+            await Promise.all(
+              cacheRows
+                .map((row) => row.storagePath)
+                .filter((path): path is string => typeof path === "string" && path.trim().length > 0)
+                .map(async (path) => storage.deleteObject?.(path)),
+            );
+          }
+        } catch (err: any) {
+          logger.warn(
+            { err: err?.message, lookupKey },
+            "wardrobe/delete: object-storage cleanup skipped",
+          );
+        }
+      }
+
+      await db
+        .delete(imageCacheTable)
+        .where(eq(imageCacheTable.lookupKey, lookupKey));
+
+      await db
+        .delete(globalFragrancesTable)
+        .where(eq(globalFragrancesTable.lookupKey, lookupKey));
+
+      await deleteCachedImage(brand, name);
+
+      await db
+        .delete(userFragrancesTable)
+        .where(and(
+          eq(userFragrancesTable.id, match.id),
+          eq(userFragrancesTable.userId, user.id),
+        ));
+    } catch (err: any) {
+      logger.error(
+        { err: err?.message, lookupKey, userId: user.id, rowId: match.id },
+        "wardrobe/delete: full purge failed",
+      );
+      res.status(500).json({ error: "Failed to fully delete fragrance set" });
+      return;
+    }
+  } else {
+    await db
+      .delete(userFragrancesTable)
+      .where(and(
+        eq(userFragrancesTable.id, match.id),
+        eq(userFragrancesTable.userId, user.id),
+      ));
+  }
 
   res.json({ success: true });
 });
