@@ -179,6 +179,15 @@ function entryNotesCardLine(item: Fragrance, maxNotes = 3): string {
   return tokens.length > maxNotes ? `${joined}\u2026` : joined;
 }
 
+/** Adaptive brand-text sizing bucket. Longer brand names get smaller type. */
+function brandLengthBucket(brand: string): "short" | "medium" | "long" | "xlong" {
+  const len = brand.trim().length;
+  if (len <= 10) return "short";
+  if (len <= 16) return "medium";
+  if (len <= 24) return "long";
+  return "xlong";
+}
+
 function entryNotes(item: Fragrance): string {
   const dm = item.raw_engine_detail?.derived_metrics ?? item.derived_metrics;
   const dmNotes = dm?.notes;
@@ -1225,23 +1234,30 @@ export const Wardrobe: React.FC<{
                     className="group cursor-pointer relative h-full"
                     onClick={() => openDetail(item)}
                   >
-                    <div className="scent-fragrance-card h-full min-h-[31rem] transition-[transform,border-color,box-shadow] duration-500 motion-reduce:transition-none group-hover:-translate-y-1.5 motion-reduce:group-hover:translate-y-0 relative overflow-hidden p-5 sm:p-7 flex flex-col">
-                      <div className="aspect-[1.04/1] relative mb-6 sm:mb-7 shrink-0 overflow-hidden rounded-[calc(var(--radius-scent)-6px)] ring-1 ring-white/[0.05] shadow-[inset_0_1px_0_rgba(255,244,219,0.04)]">
-                        <div className="scent-bottle-stage absolute inset-0 pointer-events-none" />
-                        <BottleImage
-                          variant="grid"
-                          src={item.imageUrl}
-                          alt={entryName(item)}
-                          adjustment={item.imageAdjustment}
-                          className="absolute inset-0 z-10"
-                          imgClassName="brightness-[1.08] group-hover:scale-[1.04] motion-reduce:group-hover:scale-100 transition-transform duration-[900ms] motion-reduce:transition-none"
-                        />
-                      </div>
-                      <div className="flex flex-1 flex-col items-center justify-start text-center gap-4 px-1 pb-1 min-h-0 min-w-0">
-                        <p className="scent-card-brand">{entryBrand(item)}</p>
-                        <h3 className="scent-card-title break-words">{entryName(item)}</h3>
-                        <span className="scent-card-notes-rule" aria-hidden />
-                        <p className="scent-card-notes" lang="en">{entryNotesCardLine(item)}</p>
+                    <div className="scent-fragrance-card h-full min-h-[32rem] transition-[transform,border-color,box-shadow] duration-500 motion-reduce:transition-none group-hover:-translate-y-1.5 motion-reduce:group-hover:translate-y-0 relative overflow-hidden flex flex-col aspect-[3/4.05]">
+                      <div className="scent-card-frame" aria-hidden />
+                      <div className="relative z-[1] flex h-full flex-col items-center px-6 sm:px-8 pt-7 sm:pt-9 pb-6 sm:pb-7">
+                        <p
+                          className="scent-card-brand w-full"
+                          data-len={brandLengthBucket(entryBrand(item))}
+                          title={entryBrand(item)}
+                        >
+                          {entryBrand(item)}
+                        </p>
+                        <div className="relative flex-1 w-full mt-4 sm:mt-5 mb-5 sm:mb-6 min-h-0 overflow-hidden">
+                          <div className="scent-bottle-stage absolute inset-0 pointer-events-none" />
+                          <BottleImage
+                            variant="grid"
+                            src={item.imageUrl}
+                            alt={entryName(item)}
+                            adjustment={item.imageAdjustment}
+                            className="absolute inset-0 z-10"
+                            imgClassName="brightness-[1.1] group-hover:scale-[1.035] motion-reduce:group-hover:scale-100 transition-transform duration-[900ms] motion-reduce:transition-none"
+                          />
+                        </div>
+                        <div className="scent-card-title-row shrink-0">
+                          <h3 className="scent-card-title" title={entryName(item)}>{entryName(item)}</h3>
+                        </div>
                       </div>
                     </div>
                   </motion.div>

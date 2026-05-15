@@ -346,10 +346,15 @@ a {
 }
 
 .scent-fragrance-card {
-  background: linear-gradient(180deg, rgba(18, 12, 7, 0.9), rgba(5, 4, 3, 0.98));
-  border: 1px solid rgba(201, 139, 44, 0.4);
+  background:
+    radial-gradient(140% 90% at 50% 0%, rgba(28, 22, 16, 0.55), transparent 60%),
+    linear-gradient(180deg, #0a0805 0%, #050403 60%, #020201 100%);
+  border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: var(--radius-scent);
-  box-shadow: var(--scent-card-shadow), var(--scent-card-glow);
+  box-shadow:
+    0 28px 64px -36px rgba(0, 0, 0, 0.95),
+    0 14px 32px -20px rgba(0, 0, 0, 0.85),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
   transform: translateZ(0);
   transition:
     border-color var(--scent-transition-fast) var(--scent-ease-out),
@@ -358,113 +363,121 @@ a {
 }
 
 .scent-fragrance-card:hover {
-  border-color: rgba(217, 160, 67, 0.68);
-  box-shadow: 0 30px 78px -40px rgb(var(--scent-amber-rgb) / 0.66), 0 22px 48px -22px rgba(0, 0, 0, 0.98), var(--scent-card-glow);
+  border-color: rgba(255, 255, 255, 0.14);
+  box-shadow:
+    0 34px 72px -36px rgba(0, 0, 0, 0.98),
+    0 18px 38px -20px rgba(0, 0, 0, 0.9),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 .scent-fragrance-card:focus-within {
-  border-color: rgba(236, 182, 93, 0.78);
+  border-color: rgba(255, 255, 255, 0.22);
   box-shadow:
-    0 0 0 1px rgba(16, 10, 3, 0.6),
-    0 0 0 3px rgba(201, 139, 44, 0.14),
-    0 28px 70px -38px rgb(var(--scent-amber-rgb) / 0.62),
-    0 20px 42px -24px rgba(0, 0, 0, 0.98),
-    var(--scent-card-glow);
+    0 0 0 1px rgba(0, 0, 0, 0.6),
+    0 0 0 3px rgba(255, 255, 255, 0.06),
+    0 30px 68px -34px rgba(0, 0, 0, 0.98),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.scent-fragrance-card:hover .scent-card-frame {
+  border-color: rgba(255, 255, 255, 0.32);
+}
+
+.scent-card-frame {
+  position: absolute;
+  inset: 0.7rem;
+  pointer-events: none;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: calc(var(--radius-scent) - 10px);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35);
 }
 
 .scent-card-brand {
-  color: #d7a856;
-  font-family: var(--font-sans);
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.46em;
-  text-indent: 0.46em;
-  text-transform: uppercase;
+  --brand-size: clamp(1.6rem, 2.35vw, 2rem);
+  color: #f7f3ec;
+  font-family: var(--font-serif);
+  font-size: var(--brand-size);
+  font-style: italic;
+  font-weight: 400;
+  line-height: 1.05;
+  letter-spacing: 0;
+  text-transform: none;
   text-align: center;
   text-wrap: balance;
-  text-shadow: 0 0 18px rgba(201, 139, 44, 0.18);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
+  word-break: break-word;
+  hyphens: auto;
+}
+
+.scent-card-brand[data-len="medium"] {
+  --brand-size: clamp(1.2rem, 1.85vw, 1.55rem);
+}
+
+.scent-card-brand[data-len="long"] {
+  --brand-size: clamp(1rem, 1.45vw, 1.25rem);
+  letter-spacing: 0.005em;
+}
+
+.scent-card-brand[data-len="xlong"] {
+  --brand-size: clamp(0.85rem, 1.2vw, 1.05rem);
+  letter-spacing: 0.01em;
+  line-height: 1.15;
+}
+
+.scent-card-title-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 0.85rem;
+  width: 100%;
+}
+
+.scent-card-title-row::before,
+.scent-card-title-row::after {
+  content: "";
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.35) 35%,
+    rgba(255, 255, 255, 0.55) 100%
+  );
+}
+
+.scent-card-title-row::after {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.55) 0%,
+    rgba(255, 255, 255, 0.35) 65%,
+    rgba(255, 255, 255, 0) 100%
+  );
 }
 
 .scent-card-title {
-  color: #fbf4e6;
+  color: #f7f3ec;
   font-family: var(--font-serif);
-  font-size: clamp(1.75rem, 2.6vw, 2.4rem);
-  font-style: normal;
-  font-weight: 400;
-  line-height: 1.02;
-  text-align: center;
-  letter-spacing: 0.18em;
-  text-indent: 0.18em;
-  text-transform: uppercase;
-  text-wrap: balance;
-  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.45), 0 0 28px rgba(255, 240, 210, 0.08);
-}
-
-.scent-card-notes-rule {
-  position: relative;
-  display: block;
-  width: min(78%, 11rem);
-  height: 0.75rem;
-  margin-inline: auto;
-  background-image: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(201, 139, 44, 0) 6%,
-    rgba(201, 139, 44, 0.55) 30%,
-    rgba(239, 191, 110, 0.78) 44%,
-    transparent 48%,
-    transparent 52%,
-    rgba(239, 191, 110, 0.78) 56%,
-    rgba(201, 139, 44, 0.55) 70%,
-    rgba(201, 139, 44, 0) 94%,
-    transparent 100%
-  );
-  background-repeat: no-repeat;
-  background-size: 100% 1px;
-  background-position: 50% 50%;
-}
-
-.scent-card-notes-rule::before {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 0.46rem;
-  height: 0.46rem;
-  transform: translate(-50%, -50%) rotate(45deg);
-  background: linear-gradient(135deg, #f0c987 0%, #d7a856 55%, #a37425 100%);
-  box-shadow:
-    0 0 0 1px rgba(0, 0, 0, 0.55),
-    0 0 12px rgba(239, 191, 110, 0.55),
-    inset 0 0 0 0.5px rgba(255, 236, 196, 0.6);
-}
-
-.scent-card-notes {
-  color: rgba(244, 222, 187, 0.78);
-  font-family: var(--font-serif);
-  font-size: 0.78rem;
+  font-size: clamp(0.98rem, 1.35vw, 1.2rem);
   font-style: italic;
   font-weight: 400;
-  letter-spacing: 0.04em;
-  line-height: 1.55;
+  line-height: 1.15;
   text-align: center;
-  overflow-wrap: anywhere;
-  hyphens: auto;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  letter-spacing: 0.012em;
+  text-transform: none;
+  text-wrap: balance;
+  white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.4);
 }
 
 .scent-bottle-stage {
-  border-radius: calc(var(--radius-scent) - 6px);
+  border-radius: calc(var(--radius-scent) - 10px);
   background:
-    radial-gradient(120% 70% at 50% 110%, rgba(201, 139, 44, 0.08), transparent 60%),
-    radial-gradient(80% 60% at 50% 35%, rgba(255, 244, 220, 0.025), transparent 70%),
-    linear-gradient(180deg, #060504 0%, #030302 100%);
+    radial-gradient(110% 55% at 50% 108%, rgba(255, 255, 255, 0.05), transparent 60%),
+    linear-gradient(180deg, #0a0907 0%, #050403 55%, #020201 100%);
   box-shadow:
-    inset 0 1px 0 rgba(255, 226, 174, 0.05),
-    inset 0 -28px 56px -28px rgba(0, 0, 0, 0.9);
+    inset 0 1px 0 rgba(255, 244, 220, 0.04),
+    inset 0 -32px 60px -28px rgba(0, 0, 0, 0.95);
 }
 
 .scent-marquee-band {
