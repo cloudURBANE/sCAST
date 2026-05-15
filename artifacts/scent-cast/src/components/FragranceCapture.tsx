@@ -100,7 +100,7 @@ function VaultHeadlineRotation({ phrases }: { phrases: readonly string[] }) {
   if (reduceMotion) {
     return (
       <h2
-        className="flex h-[3rem] items-center justify-center font-serif italic text-[clamp(1.25rem,4vw,1.75rem)] leading-none tracking-[0.02em] text-[#fff7ec] drop-shadow-[0_0_22px_rgba(201,139,44,0.14)]"
+        className="flex h-[3rem] items-center justify-center font-serif italic text-[clamp(1.25rem,4vw,1.75rem)] leading-none tracking-[0.0187em] text-[#fff7ec] drop-shadow-[0_0_22px_rgba(201,139,44,0.14)]"
         aria-hidden
       >
         <span className="max-w-full truncate bg-gradient-to-br from-[#fffbf5] via-[#fff7ec] to-[#e6d2b8]/88 bg-clip-text text-center text-transparent px-1">
@@ -112,7 +112,7 @@ function VaultHeadlineRotation({ phrases }: { phrases: readonly string[] }) {
 
   return (
     <h2
-      className="flex h-[3rem] items-center justify-center font-serif italic text-[clamp(1.25rem,4vw,1.75rem)] leading-none tracking-[0.02em] text-[#fff7ec] drop-shadow-[0_0_22px_rgba(201,139,44,0.14)]"
+      className="flex h-[3rem] items-center justify-center font-serif italic text-[clamp(1.25rem,4vw,1.75rem)] leading-none tracking-[0.0187em] text-[#fff7ec] drop-shadow-[0_0_22px_rgba(201,139,44,0.14)]"
       aria-hidden
     >
       <span className="relative flex min-h-[1.15em] w-full min-w-0 max-w-full items-center justify-center px-1">
@@ -241,6 +241,23 @@ function formatGender(value: unknown): string | undefined {
     .join(' / ');
 }
 
+function isFragranticaUrl(value: unknown): value is string {
+  return typeof value === 'string' && /fragrantica\.com/i.test(value);
+}
+
+function decodeSearchCandidateId(id: string): Record<string, unknown> | null {
+  const token = id.trim();
+  if (!token) return null;
+
+  try {
+    const base64 = token.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = `${base64}${'='.repeat((4 - (base64.length % 4)) % 4)}`;
+    return JSON.parse(atob(padded)) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
 function matchMeta(match: FragranceMatch): string[] {
   return [
     typeof match.year === 'number' ? String(match.year) : undefined,
@@ -263,6 +280,7 @@ export const FragranceCapture: React.FC<{
   const [errorStatus, setErrorStatus] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
   const [syncComplete, setSyncComplete] = useState(false);
+  const reduceMotion = useReducedMotion();
 
   const searchAbortController = useRef<AbortController | null>(null);
   const syncAbortController = useRef<AbortController | null>(null);
@@ -391,8 +409,25 @@ export const FragranceCapture: React.FC<{
     setSyncComplete(false);
     
     try {
+      const decoded = decodeSearchCandidateId(selected.id);
+      const tokenFgUrl = firstString(decoded?.fg);
+      const selectedSourceUrl = firstString(selected.source_url);
+      const fragranticaSourceUrl = [tokenFgUrl, selectedSourceUrl].find(isFragranticaUrl);
+      const detailsRequest = fragranticaSourceUrl
+        ? { source_url: fragranticaSourceUrl }
+        : { id: selected.id };
+
+      if (!fragranticaSourceUrl) {
+        // Useful in production debugging: explains why partial details may not enqueue.
+        console.info('[FragranceCapture] /details request has no Fragrantica source URL', {
+          selectedId: selected.id,
+          selectedSourceUrl,
+          tokenFgUrl,
+        });
+      }
+
       const detail = (await getFragranceDetails(
-        { id: selected.id },
+        detailsRequest,
         { signal: controller.signal },
       )) as FragranceDetail;
       const metricNotes = detail.derived_metrics?.notes;
@@ -551,12 +586,12 @@ export const FragranceCapture: React.FC<{
         )}
       </AnimatePresence>
       <div className="glass rounded-[var(--radius-scent-inner)] p-4 md:p-6">
-        <header className="mb-6 px-2">
+        <header className="mb-[1.41rem] px-2 -translate-y-px">
           <p className="sr-only">
             Add perfumes to your vault. Example fragrance names rotate above the search field.
           </p>
-          <div className="flex flex-col items-center text-center gap-4 pt-1">
-            <div className="space-y-3 w-full">
+          <div className="flex flex-col items-center text-center gap-[0.94rem] pt-px">
+            <div className="space-y-[0.7rem] w-full -translate-y-px">
               <p className="text-[11px] uppercase tracking-[0.26em] text-scent-accent/85 font-bold">
                 Add To Vault
               </p>
@@ -584,7 +619,7 @@ export const FragranceCapture: React.FC<{
           )}
         </AnimatePresence>
 
-        <div className="mx-auto max-w-lg text-center mt-1">
+        <div className="mx-auto max-w-lg text-center -mt-0.5">
           <form onSubmit={handleSearch} className="relative group">
             <input
               type="text"
@@ -594,20 +629,38 @@ export const FragranceCapture: React.FC<{
               onBlur={() => setSearchFocused(false)}
               placeholder="Search by house or fragrance…"
               aria-label="Look up a brand or fragrance"
-              className="scent-lux-input relative z-0 w-full h-[58px] sm:h-[62px] pl-12 pr-14 text-center text-[#fff7ec] font-sans text-[15px] font-medium outline-none transition-colors placeholder:text-[#c9a97a]/42 placeholder:font-medium group-focus-within:shadow-[inset_0_1px_0_rgba(255,226,174,0.08),0_0_0_1px_rgba(201,139,44,0.15)]"
+              className="scent-lux-input relative z-0 w-full h-[58px] sm:h-[62px] pl-12 pr-12 text-center text-[#fff7ec] font-sans text-[15px] font-medium outline-none transition-colors placeholder:text-[#c9a97a]/42 placeholder:font-medium group-focus-within:shadow-[inset_0_1px_0_rgba(255,226,174,0.08),0_0_0_1px_rgba(201,139,44,0.15)]"
             />
-            <button
+            <motion.button
               type="submit"
               disabled={uploading}
-              className="absolute right-2 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/[0.11] bg-white/[0.035] text-scent-accent/[0.82] shadow-[inset_0_1px_0_rgba(255,235,198,0.07)] transition-[color,background-color,border-color,transform,opacity] hover:border-scent-accent/30 hover:bg-white/[0.055] hover:text-[#fff7ec] active:scale-[0.96] disabled:pointer-events-none disabled:opacity-45"
+              whileHover={uploading ? undefined : { scale: 1.06 }}
+              whileTap={uploading ? undefined : { scale: 0.9 }}
+              transition={{ type: "spring", stiffness: 520, damping: 22 }}
+              className="absolute right-2.5 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent p-0 text-scent-accent/78 shadow-none outline-none transition-colors hover:text-[#fff7ec] focus-visible:ring-2 focus-visible:ring-scent-accent/35 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent disabled:pointer-events-none disabled:opacity-45 group-focus-within:text-scent-accent/92"
               aria-label="Search"
             >
               {uploading ? (
-                <RefreshCw size={17} strokeWidth={1.75} className="animate-spin opacity-95" />
+                <RefreshCw size={18} strokeWidth={1.65} className="text-scent-accent/88 animate-spin" aria-hidden />
               ) : (
-                <Search size={17} strokeWidth={1.75} className="opacity-95" />
+                <motion.span
+                  className="relative inline-flex"
+                  aria-hidden
+                  animate={
+                    reduceMotion
+                      ? undefined
+                      : { opacity: [0.74, 1, 0.74] }
+                  }
+                  transition={
+                    reduceMotion
+                      ? undefined
+                      : { duration: 3.4, repeat: Infinity, ease: "easeInOut" }
+                  }
+                >
+                  <Search size={18} strokeWidth={1.65} className="drop-shadow-[0_0_12px_rgba(201,139,44,0.22)]" />
+                </motion.span>
               )}
-            </button>
+            </motion.button>
           </form>
         </div>
 

@@ -218,17 +218,26 @@ export async function searchFragrances(
   };
 }
 
+export type FragranceDetailRequestPayload =
+  | { id: string; source_url?: never }
+  | { source_url: string; id?: never };
+
 export async function getFragranceDetails(
-  payload: { id: string },
+  payload: FragranceDetailRequestPayload,
   options?: { signal?: AbortSignal },
 ): Promise<FragranceDetailResponse> {
   const base = getApiBase();
+  const requestBody =
+    "source_url" in payload
+      ? { source_url: payload.source_url }
+      : { id: payload.id };
+
   const res = await fetch(`${base}/api/fragrances/details`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ id: payload.id }),
+    body: JSON.stringify(requestBody),
     signal: options?.signal,
   });
 
