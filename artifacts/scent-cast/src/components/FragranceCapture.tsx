@@ -452,14 +452,16 @@ export const FragranceCapture: React.FC<{
         nextMatches = results
           .map((result): FragranceMatch => {
             const house = firstString(result.house, result.brand) ?? "";
+            const id = firstString(result.id) ?? "";
             return {
               ...result,
+              id,
               name: firstString(result.name) ?? targetQuery.trim(),
               house,
               brand: house,
             };
           })
-          .filter((result) => Boolean(result.id?.trim()));
+          .filter((result) => Boolean(result.id || firstString(result.source_url)));
       } catch (err: any) {
         if (err.name === 'AbortError') return;
       }
@@ -639,7 +641,9 @@ export const FragranceCapture: React.FC<{
       return;
     }
 
-    if (!selected.id?.trim()) {
+    const selectedId = firstString(selected.id);
+    const selectedSourceUrl = firstString(selected.source_url);
+    if (!selectedId && !selectedSourceUrl) {
       setErrorStatus("Selected fragrance is missing a detail identifier.");
       return;
     }
@@ -660,11 +664,16 @@ export const FragranceCapture: React.FC<{
     try {
       const decoded = decodeSearchCandidateId(selected.id);
       const tokenFgUrl = firstString(decoded?.fg);
-      const selectedSourceUrl = firstString(selected.source_url);
+      const syntheticSourceUrl = selectedId?.startsWith('source:')
+        ? firstString(selectedId.slice('source:'.length))
+        : undefined;
+      const detailSourceUrl = firstString(selectedSourceUrl, syntheticSourceUrl);
       const fragranticaSourceUrl = [tokenFgUrl, selectedSourceUrl].find(isFragranticaUrl);
       const detailsRequest = fragranticaSourceUrl
         ? { source_url: fragranticaSourceUrl }
-        : { id: selected.id };
+        : selectedId && !syntheticSourceUrl
+          ? { id: selectedId }
+          : { source_url: detailSourceUrl as string };
 
       if (!fragranticaSourceUrl) {
         // Useful in production debugging: explains why partial details may not enqueue.

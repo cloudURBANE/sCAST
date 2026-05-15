@@ -1,4 +1,5 @@
-const FRAGRANCE_API_URL = import.meta.env.VITE_FRAGRANCE_API_URL as string | undefined;
+const FRAGRANCE_API_URL = (import.meta as { env?: Record<string, string | undefined> }).env
+  ?.VITE_FRAGRANCE_API_URL;
 
 export type SourceCoverage = {
   basenotes?: boolean;
@@ -124,6 +125,63 @@ export type FragranceDetail = {
 } & Record<string, unknown>;
 
 export type FragranceDetailResponse = FragranceDetail;
+
+function firstNonEmptyString(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    if (typeof value !== "string" && typeof value !== "number") continue;
+    const trimmed = String(value).trim();
+    if (trimmed) return trimmed;
+  }
+  return undefined;
+}
+
+export function normalizeFragranceSearchResult(
+  value: unknown,
+  fallbackQuery: string,
+): FragranceSearchResult | null {
+  if (!value || typeof value !== "object") return null;
+
+  const result = value as Record<string, unknown>;
+  const sourceUrl = firstNonEmptyString(
+    result.source_url,
+    result.sourceUrl,
+    result.url,
+    result.fg_url,
+  );
+  const id = firstNonEmptyString(
+    result.id,
+    result.fragrance_id,
+    result.source_id,
+    result.slug,
+    sourceUrl ? `source:${sourceUrl}` : undefined,
+  );
+  if (!id) return null;
+
+  const name = firstNonEmptyString(
+    result.name,
+    result.fragrance_name,
+    result.title,
+    result.product_name,
+    fallbackQuery,
+  );
+  const house = firstNonEmptyString(
+    result.house,
+    result.brand,
+    result.brand_name,
+    result.designer,
+  );
+
+  return {
+    ...(result as FragranceSearchResult),
+    id,
+    name: name ?? fallbackQuery.trim(),
+    house,
+    brand: firstNonEmptyString(result.brand, house),
+    year: typeof result.year === "number" ? result.year : null,
+    gender: typeof result.gender === "string" ? result.gender : null,
+    source_url: sourceUrl ?? null,
+  };
+}
 
 /** Normalize engine main_accords whether the API used `items` or `scent_vector` / `top_accords`. */
 export type MainAccordDisplayRow = { label: string; score?: number; pct?: number };
@@ -329,13 +387,17 @@ export async function searchFragrances(
   }
 
   const data = await res.json();
-  if (Array.isArray(data)) {
-    return { query, results: data as FragranceSearchResult[] };
-  }
+  const rawResults: unknown[] = Array.isArray(data)
+    ? data
+    : Array.isArray(data?.results)
+      ? data.results
+      : [];
 
   return {
     query: typeof data?.query === "string" ? data.query : query,
-    results: Array.isArray(data?.results) ? data.results : [],
+    results: rawResults
+      .map((result) => normalizeFragranceSearchResult(result, query))
+      .filter((result): result is FragranceSearchResult => result !== null),
   };
 }
 
