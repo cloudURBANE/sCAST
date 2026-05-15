@@ -1,7 +1,34 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Trash2, ShieldCheck, Wind, RefreshCw, Undo2, HelpCircle, Eraser, Check, Maximize2, ChevronDown, Search } from 'lucide-react';
+import {
+  X,
+  Trash2,
+  ShieldCheck,
+  Wind,
+  RefreshCw,
+  Undo2,
+  HelpCircle,
+  Eraser,
+  Check,
+  Maximize2,
+  ChevronDown,
+  Search,
+  Crop,
+  MoveHorizontal,
+  MoveVertical,
+  RotateCcw,
+  Save,
+  ZoomIn,
+  ZoomOut,
+} from 'lucide-react';
 import { bottleFeaturedSlotClass } from '@/lib/bottleImageFrame';
+import {
+  DEFAULT_BOTTLE_IMAGE_ADJUSTMENT,
+  bottleImageAdjustmentsEqual,
+  normalizeBottleImageAdjustment,
+  type BottleImageAdjustment,
+  type NormalizedBottleImageAdjustment,
+} from '@/lib/bottleImageAdjustment';
 import { BottleImage } from '@/components/BottleImage';
 import { ScentNotesInfographic } from '@/components/ScentNotesInfographic';
 import {
@@ -60,6 +87,7 @@ export interface Fragrance {
   context?: { weather: string[]; time: string[]; occasion: string[] };
   synthesized?: boolean;
   shareHidden?: boolean;
+  imageAdjustment?: BottleImageAdjustment | null;
   /** Legacy ScentProfile shape — some old vault rows only have product.name/brand */
   product?: { name?: string; brand?: string; perfumer?: string };
   /** Postgres row UUID — surfaced by GET /wardrobe; preferred for delete/patch (B9). */
@@ -507,11 +535,29 @@ function withImageVersion(url: string, version?: string | number | null): string
   return `${trimmed}${trimmed.includes('?') ? '&' : '?'}v=${encodeURIComponent(String(v))}`;
 }
 
+function imageProcessingNeedsRepair(data: Record<string, any>): boolean {
+  const status = typeof data.removeBgStatus === 'string' ? data.removeBgStatus : '';
+  if (status === 'skipped') return false;
+  return (
+    status === 'fallback' ||
+    status === 'failed' ||
+    data.backgroundRemoved === false
+  );
+}
+
+function framePercent(value: number): string {
+  return `${Math.round(value * 100)}%`;
+}
+
 export const Wardrobe: React.FC<{
   items: Fragrance[];
   onDelete: (item: Fragrance) => void;
   /** Persist the preview image to the vault row (authenticated). */
-  onPersistWardrobeImage?: (item: Fragrance, imageUrl?: string) => Promise<Fragrance | null>;
+  onPersistWardrobeImage?: (
+    item: Fragrance,
+    imageUrl?: string,
+    imageAdjustment?: BottleImageAdjustment,
+  ) => Promise<Fragrance | null>;
   featuredItem?: Fragrance | null;
   /** Restore in-memory snapshot after an automatic legacy wardrobe rebuild (this tab only). */
   onRevertWardrobe?: () => void;
@@ -560,12 +606,16 @@ export const Wardrobe: React.FC<{
   const [searchHighlightIndex, setSearchHighlightIndex] = React.useState(0);
   const [enlargeOpen, setEnlargeOpen] = React.useState(false);
   const [bottleImageToolsOpen, setBottleImageToolsOpen] = React.useState(false);
+  const [frameDraft, setFrameDraft] = React.useState<NormalizedBottleImageAdjustment>(
+    DEFAULT_BOTTLE_IMAGE_ADJUSTMENT,
+  );
   const solverPrefillRef = React.useRef<WardrobeImageSolverId | null>(null);
   const searchBlurTimerRef = React.useRef<number | null>(null);
 
   const openDetail = React.useCallback((item: Fragrance) => {
     setRefreshError(null);
     setPendingPreview(null);
+    setFrameDraft(normalizeBottleImageAdjustment(item.imageAdjustment));
     setSelectedItem(item);
   }, []);
 
@@ -575,6 +625,7 @@ export const Wardrobe: React.FC<{
     setSelectedItem(null);
     setEnlargeOpen(false);
     setBottleImageToolsOpen(false);
+    setFrameDraft(DEFAULT_BOTTLE_IMAGE_ADJUSTMENT);
   }, []);
 
   // Modal scroll lock + Escape (enlarge closes first)
@@ -602,6 +653,7 @@ export const Wardrobe: React.FC<{
 
   React.useEffect(() => {
     if (!selectedItem?.id) return;
+    setFrameDraft(normalizeBottleImageAdjustment(selectedItem.imageAdjustment));
     const pre = solverPrefillRef.current;
     if (pre) {
       setClarifySolverId(pre);
@@ -652,10 +704,7 @@ export const Wardrobe: React.FC<{
         throw new Error('Image processing completed without a usable image URL.');
       }
       const nextUrl = withImageVersion(returnedImageUrl, data.imageHash || Date.now());
-      const isFallback =
-        data.backgroundRemoved === false ||
-        data.removeBgStatus === 'fallback' ||
-        data.removeBgStatus === 'failed';
+      const isFallback = imageProcessingNeedsRepair(data);
       setPendingPreview({ itemId: item.id, url: nextUrl, isFallback });
       if (isFallback) {
         const reason =
@@ -703,10 +752,7 @@ export const Wardrobe: React.FC<{
         throw new Error('Image processing completed without a usable image URL.');
       }
       const nextUrl = withImageVersion(returnedImageUrl, data.imageHash || Date.now());
-      const isFallback =
-        data.backgroundRemoved === false ||
-        data.removeBgStatus === 'fallback' ||
-        data.removeBgStatus === 'failed';
+      const isFallback = imageProcessingNeedsRepair(data);
       setPendingPreview({ itemId: item.id, url: nextUrl, isFallback });
       if (isFallback) {
         const reason =
@@ -739,11 +785,35 @@ export const Wardrobe: React.FC<{
     setPersistBusy(true);
     setRefreshError(null);
     try {
-      const merged = await onPersistWardrobeImage(selectedItem, pendingPreview.url);
+      const merged = await onPersistWardrobeImage(selectedItem, pendingPreview.url, frameDraft);
       if (!merged) throw new Error('Could not save — try again or check your connection.');
       closeDetail();
     } catch (err: any) {
       setRefreshError(err.message || 'Save failed');
+    } finally {
+      setPersistBusy(false);
+    }
+  };
+
+  const handleSaveImageFrame = async () => {
+    if (!selectedItem) return;
+    if (!onPersistWardrobeImage) {
+      setRefreshError('Sign in to save this bottle framing.');
+      return;
+    }
+    setPersistBusy(true);
+    setRefreshError(null);
+    try {
+      const previewUrl =
+        pendingPreview?.itemId === selectedItem.id ? pendingPreview.url : undefined;
+      const merged = await onPersistWardrobeImage(selectedItem, previewUrl, frameDraft);
+      if (!merged) throw new Error('Could not save framing.');
+      setSelectedItem(merged);
+      setPendingPreview(null);
+      setBgFallbackWarning(null);
+      setBottleImageToolsOpen(false);
+    } catch (err: any) {
+      setRefreshError(err.message || 'Frame save failed');
     } finally {
       setPersistBusy(false);
     }
@@ -779,6 +849,7 @@ export const Wardrobe: React.FC<{
       setSearchFocused(false);
       setRefreshError(null);
       setPendingPreview(null);
+      setFrameDraft(normalizeBottleImageAdjustment((s.item as Fragrance).imageAdjustment));
       setSelectedItem(s.item as Fragrance);
     } else {
       solverPrefillRef.current = s.id;
@@ -812,6 +883,13 @@ export const Wardrobe: React.FC<{
 
   const hasPendingPreview =
     !!selectedItem && !!pendingPreview && pendingPreview.itemId === selectedItem.id;
+
+  const frameDirty =
+    !!selectedItem && !bottleImageAdjustmentsEqual(frameDraft, selectedItem.imageAdjustment);
+
+  const updateFrameDraft = React.useCallback((patch: BottleImageAdjustment) => {
+    setFrameDraft((current) => normalizeBottleImageAdjustment({ ...current, ...patch }));
+  }, []);
 
   const selectedMetrics =
     selectedItem?.derived_metrics ?? selectedItem?.raw_engine_detail?.derived_metrics ?? null;
@@ -1038,7 +1116,7 @@ export const Wardrobe: React.FC<{
                   <motion.div
                     initial={{ scale: 0.98, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
                     className="glass-acrylic glass-acrylic-animate rounded-scent p-20 aspect-[3/4] flex flex-col items-center relative overflow-hidden cursor-pointer"
-                    onClick={() => setSelectedItem(featuredItem)}
+                    onClick={() => openDetail(featuredItem)}
                   >
                     <div className="absolute top-10 left-10 text-[9px] uppercase tracking-[0.6em] text-white/30 font-bold z-20 pointer-events-none">Recommended Manifest</div>
                     <div className={bottleFeaturedSlotClass()}>
@@ -1046,6 +1124,7 @@ export const Wardrobe: React.FC<{
                         variant="featured"
                         src={featuredItem.imageUrl}
                         alt={entryName(featuredItem)}
+                        adjustment={featuredItem.imageAdjustment}
                         className="min-h-0 w-full flex-1"
                         imgClassName="group-hover:scale-105 transition-transform duration-1000 brightness-[1.15]"
                         loading="eager"
@@ -1081,6 +1160,7 @@ export const Wardrobe: React.FC<{
                           variant="grid"
                           src={item.imageUrl}
                           alt={entryName(item)}
+                          adjustment={item.imageAdjustment}
                           className="absolute inset-0 z-10"
                           imgClassName="brightness-[1.08] group-hover:scale-[1.035] transition-transform duration-700"
                         />
@@ -1192,6 +1272,7 @@ export const Wardrobe: React.FC<{
                         variant="detail"
                         src={detailBottleUrl}
                         alt={entryName(selectedItem)}
+                        adjustment={frameDraft}
                         className="absolute inset-0"
                         imgClassName="transition-all duration-300"
                       />
@@ -1404,6 +1485,153 @@ export const Wardrobe: React.FC<{
                         </button>
                       </div>
 
+                      <div className="rounded-lg border border-white/10 bg-black/22 p-3 space-y-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-[9px] uppercase tracking-[0.25em] text-white/45 font-bold">
+                            Frame
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => setFrameDraft(DEFAULT_BOTTLE_IMAGE_ADJUSTMENT)}
+                            disabled={imageToolbarBusy}
+                            title="Reset frame"
+                            aria-label="Reset bottle frame"
+                            className="p-1.5 rounded-md border border-white/10 bg-white/[0.04] text-white/45 hover:text-white hover:bg-white/[0.08] disabled:opacity-30"
+                          >
+                            <RotateCcw size={13} />
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-[5.75rem_1fr_3.1rem] items-center gap-2">
+                          <label className="flex items-center gap-1.5 text-[9px] uppercase tracking-[0.14em] text-white/42 font-bold">
+                            <ZoomIn size={12} /> Size
+                          </label>
+                          <input
+                            type="range"
+                            min="0.7"
+                            max="1.45"
+                            step="0.01"
+                            value={frameDraft.scale}
+                            onChange={(e) => updateFrameDraft({ scale: Number(e.target.value) })}
+                            disabled={imageToolbarBusy || !detailBottleUrl?.trim()}
+                            aria-label="Bottle image size"
+                          />
+                          <span className="text-right text-[10px] tabular-nums text-white/42">
+                            {framePercent(frameDraft.scale)}
+                          </span>
+
+                          <label className="flex items-center gap-1.5 text-[9px] uppercase tracking-[0.14em] text-white/42 font-bold">
+                            <MoveHorizontal size={12} /> X
+                          </label>
+                          <input
+                            type="range"
+                            min="-18"
+                            max="18"
+                            step="0.5"
+                            value={frameDraft.x}
+                            onChange={(e) => updateFrameDraft({ x: Number(e.target.value) })}
+                            disabled={imageToolbarBusy || !detailBottleUrl?.trim()}
+                            aria-label="Bottle horizontal position"
+                          />
+                          <span className="text-right text-[10px] tabular-nums text-white/42">
+                            {Math.round(frameDraft.x)}
+                          </span>
+
+                          <label className="flex items-center gap-1.5 text-[9px] uppercase tracking-[0.14em] text-white/42 font-bold">
+                            <MoveVertical size={12} /> Y
+                          </label>
+                          <input
+                            type="range"
+                            min="-18"
+                            max="18"
+                            step="0.5"
+                            value={frameDraft.y}
+                            onChange={(e) => updateFrameDraft({ y: Number(e.target.value) })}
+                            disabled={imageToolbarBusy || !detailBottleUrl?.trim()}
+                            aria-label="Bottle vertical position"
+                          />
+                          <span className="text-right text-[10px] tabular-nums text-white/42">
+                            {Math.round(frameDraft.y)}
+                          </span>
+
+                          <label className="flex items-center gap-1.5 text-[9px] uppercase tracking-[0.14em] text-white/42 font-bold">
+                            <Crop size={12} /> Crop
+                          </label>
+                          <input
+                            type="range"
+                            min="0"
+                            max="20"
+                            step="0.5"
+                            value={frameDraft.crop}
+                            onChange={(e) => updateFrameDraft({ crop: Number(e.target.value) })}
+                            disabled={imageToolbarBusy || !detailBottleUrl?.trim()}
+                            aria-label="Bottle edge crop"
+                          />
+                          <span className="text-right text-[10px] tabular-nums text-white/42">
+                            {Math.round(frameDraft.crop)}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => updateFrameDraft({ scale: frameDraft.scale - 0.1 })}
+                            disabled={imageToolbarBusy || !detailBottleUrl?.trim()}
+                            className="min-h-[34px] rounded-md border border-white/10 bg-white/[0.035] text-[9px] uppercase tracking-[0.13em] text-white/52 font-bold flex items-center justify-center gap-1.5 disabled:opacity-30"
+                          >
+                            <ZoomOut size={12} /> 10%
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => updateFrameDraft({ scale: frameDraft.scale + 0.1 })}
+                            disabled={imageToolbarBusy || !detailBottleUrl?.trim()}
+                            className="min-h-[34px] rounded-md border border-white/10 bg-white/[0.035] text-[9px] uppercase tracking-[0.13em] text-white/52 font-bold flex items-center justify-center gap-1.5 disabled:opacity-30"
+                          >
+                            <ZoomIn size={12} /> 10%
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => updateFrameDraft({ x: 0, y: 0 })}
+                            disabled={imageToolbarBusy || !detailBottleUrl?.trim()}
+                            className="min-h-[34px] rounded-md border border-white/10 bg-white/[0.035] text-[9px] uppercase tracking-[0.13em] text-white/52 font-bold flex items-center justify-center gap-1.5 disabled:opacity-30"
+                          >
+                            <MoveHorizontal size={12} /> Center
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              updateFrameDraft({
+                                crop: Math.max(frameDraft.crop, 6),
+                                scale: Math.max(frameDraft.scale, 1.08),
+                              })
+                            }
+                            disabled={imageToolbarBusy || !detailBottleUrl?.trim()}
+                            className="min-h-[34px] rounded-md border border-white/10 bg-white/[0.035] text-[9px] uppercase tracking-[0.13em] text-white/52 font-bold flex items-center justify-center gap-1.5 disabled:opacity-30"
+                          >
+                            <Crop size={12} /> Tight
+                          </button>
+                        </div>
+
+                        {frameDirty && !hasPendingPreview ? (
+                          <button
+                            type="button"
+                            onClick={() => void handleSaveImageFrame()}
+                            disabled={imageToolbarBusy || !onPersistWardrobeImage}
+                            className="w-full min-h-[40px] rounded-lg bg-scent-accent text-black uppercase tracking-[0.2em] text-[10px] font-bold hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            {persistBusy ? (
+                              <>
+                                <RefreshCw size={12} className="animate-spin" /> Saving...
+                              </>
+                            ) : (
+                              <>
+                                <Save size={12} /> Save framing
+                              </>
+                            )}
+                          </button>
+                        ) : null}
+                      </div>
+
                       {hasPendingPreview && (
                         <div className="flex flex-col gap-2 pt-1 border-t border-white/8">
                           {!onPersistWardrobeImage ? (
@@ -1504,6 +1732,7 @@ export const Wardrobe: React.FC<{
                       variant="grid"
                       src={detailBottleUrl}
                       alt={entryName(selectedItem)}
+                      adjustment={frameDraft}
                       className="absolute inset-0"
                       imgClassName="brightness-[1.08] scale-[1.02]"
                       loading="eager"

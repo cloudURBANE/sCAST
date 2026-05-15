@@ -10,6 +10,7 @@ import { LavaBackground } from './components/LavaBackground';
 import { AuthModal } from './components/AuthModal';
 import { SharePage } from './components/SharePage';
 import { ShareModal } from './components/ShareModal';
+import type { BottleImageAdjustment } from './lib/bottleImageAdjustment';
 import {
   calculateScentWeatherRecommendation,
   type ScentFamily,
@@ -632,7 +633,7 @@ export default function App() {
     if (authToken) {
       try {
         const payload = { ...item };
-        await fetch('/api/wardrobe', {
+        const res = await fetch('/api/wardrobe', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -640,6 +641,19 @@ export default function App() {
           },
           body: JSON.stringify(payload),
         });
+        const saved = (await res.json().catch(() => null)) as Partial<Fragrance> | null;
+        if (res.ok && saved) {
+          const savedItem: Fragrance = {
+            ...newItem,
+            ...saved,
+            id: typeof saved.id === 'string' && saved.id ? saved.id : newItem.id,
+          };
+          setItems((prev) =>
+            prev.map((existing) =>
+              sameWardrobeEntry(existing, newItem) ? savedItem : existing,
+            ),
+          );
+        }
       } catch {
         // ignore - item is still in local state
       }
@@ -658,20 +672,30 @@ export default function App() {
   const handlePersistWardrobeImage = useCallback(async (
     target: Fragrance,
     imageUrl?: string,
+    imageAdjustment?: BottleImageAdjustment,
   ): Promise<Fragrance | null> => {
     if (!authToken) return null;
     const apiId = target._dbId ?? target.id;
     try {
+      const body: Record<string, unknown> = {};
+      if (imageUrl) {
+        body.syncImageFromCatalog = true;
+        body.imageUrl = imageUrl;
+      }
+      if (imageAdjustment) {
+        body.imageAdjustment = imageAdjustment;
+      }
+      if (!body.syncImageFromCatalog && !body.imageUrl && !body.imageAdjustment) {
+        body.syncImageFromCatalog = true;
+      }
+
       const res = await fetch(`/api/wardrobe/${apiId}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${authToken}`,
         },
-        body: JSON.stringify({
-          syncImageFromCatalog: true,
-          ...(imageUrl ? { imageUrl } : {}),
-        }),
+        body: JSON.stringify(body),
       });
       const data = (await res.json()) as Partial<Fragrance> & { _dbId?: string; error?: string; imageHash?: string };
       if (!res.ok) {
@@ -980,7 +1004,7 @@ export default function App() {
             <Wardrobe
               items={items}
               onDelete={handleDeleteItem}
-              onPersistWardrobeImage={handlePersistWardrobeImage}
+              onPersistWardrobeImage={authToken ? handlePersistWardrobeImage : undefined}
               featuredItem={activeRecommendation}
               onRevertWardrobe={handleRevertWardrobe}
               fixWardrobeBusy={wardrobeFixBusy}

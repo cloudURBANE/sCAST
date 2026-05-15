@@ -2,12 +2,14 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Link, Check, Eye, EyeOff, ExternalLink, Search } from 'lucide-react';
 import { BottleImage } from '@/components/BottleImage';
+import type { BottleImageAdjustment } from '@/lib/bottleImageAdjustment';
 
 interface FragranceItem {
   id: string;
   name: string;
   brand: string;
   imageUrl?: string;
+  imageAdjustment?: BottleImageAdjustment | null;
   shareHidden?: boolean;
   /** DB row UUID, preferred for visibility PATCH (B9). */
   _dbId?: string;
@@ -288,6 +290,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                             variant="thumb"
                             src={item.imageUrl}
                             alt={item.name}
+                            adjustment={item.imageAdjustment}
                             className="h-full w-full"
                           />
                         ) : (

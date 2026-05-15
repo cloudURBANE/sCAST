@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { Wind, ShoppingBag, ShieldCheck, Wind as WindIcon } from 'lucide-react';
 import { LavaBackground } from './LavaBackground';
 import { BottleImage } from '@/components/BottleImage';
+import type { BottleImageAdjustment } from '@/lib/bottleImageAdjustment';
 
 interface ScentVector {
   freshness: number;
@@ -19,6 +20,7 @@ interface Fragrance {
   name: string;
   brand: string;
   imageUrl: string;
+  imageAdjustment?: BottleImageAdjustment | null;
   season?: string;
   notes?: string[];
   concentration?: string;
@@ -156,6 +158,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                             variant="share"
                             src={item.imageUrl}
                             alt={item.name}
+                            adjustment={item.imageAdjustment}
                             className="absolute inset-0"
                             imgClassName="brightness-[1.05] group-hover:scale-105 transition-transform duration-700"
                           />

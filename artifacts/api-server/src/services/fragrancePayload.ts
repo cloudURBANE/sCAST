@@ -6,6 +6,46 @@ import {
 } from "./persistenceGuards";
 import { resolveFragranceIdentity } from "./fragranceNameResolver";
 
+export type BottleImageAdjustment = {
+  scale: number;
+  x: number;
+  y: number;
+  crop: number;
+};
+
+const DEFAULT_IMAGE_ADJUSTMENT: BottleImageAdjustment = {
+  scale: 1,
+  x: 0,
+  y: 0,
+  crop: 0,
+};
+
+function finiteNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function clampNumber(value: unknown, min: number, max: number, fallback: number): number {
+  const n = finiteNumber(value);
+  if (n === null) return fallback;
+  return Math.min(max, Math.max(min, n));
+}
+
+function round(value: number, precision: number): number {
+  const factor = 10 ** precision;
+  return Math.round(value * factor) / factor;
+}
+
+export function normalizeImageAdjustment(value: unknown): BottleImageAdjustment | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const input = value as Record<string, unknown>;
+  return {
+    scale: round(clampNumber(input.scale, 0.7, 1.45, DEFAULT_IMAGE_ADJUSTMENT.scale), 2),
+    x: round(clampNumber(input.x, -18, 18, DEFAULT_IMAGE_ADJUSTMENT.x), 1),
+    y: round(clampNumber(input.y, -18, 18, DEFAULT_IMAGE_ADJUSTMENT.y), 1),
+    crop: round(clampNumber(input.crop, 0, 20, DEFAULT_IMAGE_ADJUSTMENT.crop), 1),
+  };
+}
+
 /** Strip base64 data URLs. Postgres must never be used as the image CDN. */
 export function sanitizeFragrance(fragrance: Record<string, any>): Record<string, any> {
   return stripBase64ImageDataUrls(fragrance);
@@ -21,6 +61,7 @@ export function normalizeFragrance(fragrance: Record<string, any>): Record<strin
   const brand = fragrance.brand || product?.brand;
   const perfumer = fragrance.perfumer || product?.perfumer;
   const imageUrl = safeImageUrlForResponse(fragrance.imageUrl);
+  const imageAdjustment = normalizeImageAdjustment(fragrance.imageAdjustment);
   const identity =
     typeof name === "string" && typeof brand === "string"
       ? resolveFragranceIdentity(brand, name)
@@ -40,6 +81,7 @@ export function normalizeFragrance(fragrance: Record<string, any>): Record<strin
   return {
     ...fragrance,
     imageUrl,
+    ...(imageAdjustment ? { imageAdjustment } : {}),
     ...(normalizedProduct ? { product: normalizedProduct } : {}),
     ...(normalizedName ? { name: normalizedName } : {}),
     ...(normalizedBrand ? { brand: normalizedBrand } : {}),

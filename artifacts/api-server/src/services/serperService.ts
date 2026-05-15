@@ -46,9 +46,26 @@ const TRUSTED_HOST_HINTS = [
 const REQUIRED_TEXT_HINTS = ["perfume", "fragrance", "bottle", "eau de parfum", "eau de toilette"];
 const BLOCKED_TEXT_HINTS = [
   "gift set",
+  "box set",
   "discovery set",
   "sample",
+  "sample 2",
+  "sample vial",
+  "spray sample",
+  "carded sample",
   "decant",
+  "tester",
+  "tester 2",
+  "tester bottle",
+  "mini",
+  "miniature",
+  "travel spray",
+  "travel size",
+  "vial",
+  "2ml",
+  "2 ml",
+  "1.5ml",
+  "1.5 ml",
   "dupe",
   "inspired by",
   "box only",
@@ -56,6 +73,8 @@ const BLOCKED_TEXT_HINTS = [
   "boxed",
   "in box",
   "box packaging",
+  "carton",
+  "packaging only",
   "set of",
   "bundle",
   "lot of",
@@ -177,10 +196,10 @@ function scoreCandidate(candidate: SerperImageResult): number {
 
 /** Full packshot refinement appended for normal refresh paths. */
 const SERPER_SUFFIX_DEFAULT =
-  "single fragrance bottle bottle only no box centered product packshot front view plain background no plants no lifestyle studio shot";
+  "single fragrance bottle bottle only no box no tester no sample no vial no decant centered product packshot front view plain background no plants no lifestyle no text overlay studio shot";
 
 /** Shorter suffix on clarify/solver paths so negative keywords stay meaningful. */
-const SERPER_SUFFIX_SOLVER = "fragrance bottle packshot isolated product photo";
+const SERPER_SUFFIX_SOLVER = "single fragrance bottle packshot isolated product photo no sample no tester";
 
 function applySerperRefinement(rawQuery: string, refine: SerperRefineMode): string {
   const q = rawQuery.trim();

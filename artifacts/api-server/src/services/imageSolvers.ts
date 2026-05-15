@@ -41,7 +41,7 @@ export function isImageSolverId(value: unknown): value is ImageSolverId {
 
 /** Middle segment for normal refresh (matches legacy scent route wording; Serper layer still adds its refine suffix when mode is default). */
 export const DEFAULT_REFRESH_QUERY_SUFFIX =
-  "single fragrance bottle bottle only no box centered product photo studio packshot no plants";
+  "single fragrance bottle bottle only no box no tester no sample no vial no decant centered product photo studio packshot no plants no text overlay";
 
 export function buildBaseFragranceLine(asciiBrand: string, asciiName: string, concentrationText: string): string {
   return [asciiBrand, asciiName, concentrationText].filter(Boolean).join(" ").trim();
@@ -89,15 +89,15 @@ export function resolveRefreshSerperInput(params: {
         refine: "none",
       };
     case "low_contrast":
-      return { query: `${baseLine} bottle dark background OR black background`.trim(), refine: "solver" };
+      return { query: `${baseLine} bottle "dark background" OR "black background" -white -sample -tester`.trim(), refine: "solver" };
     case "box_interference":
-      return { query: `${baseLine} -box -packaging -sealed glass bottle`.trim(), refine: "solver" };
+      return { query: `${baseLine} -box -boxed -carton -packaging -sealed -gift -set glass bottle`.trim(), refine: "solver" };
     case "group_shot":
       return { query: `${baseLine} single bottle isolated`.trim(), refine: "solver" };
     case "watermark":
       return { query: `${baseLine} -stock -watermark -alamy -getty`.trim(), refine: "solver" };
     case "tester_bottle":
-      return { query: `${baseLine} -tester "with cap"`.trim(), refine: "solver" };
+      return { query: `${baseLine} -tester -"tester 2" -sample -vial -decant "with cap"`.trim(), refine: "solver" };
     case "hand_interference":
       return { query: `${baseLine} -hand -holding`.trim(), refine: "solver" };
     case "studio_reflection":
@@ -111,9 +111,9 @@ export function resolveRefreshSerperInput(params: {
     case "refill_format":
       return { query: `${baseLine} -refill -travel -vial -canister -pouch`.trim(), refine: "solver" };
     case "text_overlay":
-      return { query: `${baseLine} -ad -poster -text -promotional`.trim(), refine: "solver" };
+      return { query: `${baseLine} -ad -poster -text -promotional -banner -watermark -sample -tester`.trim(), refine: "solver" };
     case "decant":
-      return { query: `${baseLine} -decant -sample -ml -split`.trim(), refine: "solver" };
+      return { query: `${baseLine} -decant -sample -vial -travel -mini -ml -split`.trim(), refine: "solver" };
     case "cropped_image":
       return { query: `${baseLine} "full bottle" -macro -closeup`.trim(), refine: "solver" };
     default: {

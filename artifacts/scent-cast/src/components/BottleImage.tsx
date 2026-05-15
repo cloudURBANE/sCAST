@@ -1,6 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { bottleArtboardClass, bottleImageFillClass, type BottleImageVariant } from '@/lib/bottleImageFrame';
+import {
+  bottleImageAdjustmentStyle,
+  type BottleImageAdjustment,
+} from '@/lib/bottleImageAdjustment';
 import { proxiedImageUrl } from '@/lib/imageProxy';
 
 /**
@@ -25,6 +29,8 @@ type BottleImageProps = {
   className?: string;
   /** Extra classes on the `<img>` (hover, filters). */
   imgClassName?: string;
+  /** Persistent visual rescue controls: zoom, nudge, and edge crop. */
+  adjustment?: BottleImageAdjustment | null;
   loading?: 'lazy' | 'eager';
 };
 
@@ -35,6 +41,7 @@ export const BottleImage: React.FC<BottleImageProps> = ({
   proxy = true,
   className,
   imgClassName,
+  adjustment,
   loading = 'lazy',
 }) => {
   const [broken, setBroken] = useState(false);
@@ -56,16 +63,18 @@ export const BottleImage: React.FC<BottleImageProps> = ({
             </span>
           </div>
         ) : (
-          <img
-            key={url}
-            src={url}
-            alt={alt}
-            className={bottleImageFillClass(imgClassName)}
-            referrerPolicy="no-referrer"
-            loading={loading}
-            decoding="async"
-            onError={() => setBroken(true)}
-          />
+          <div className="bottle-packshot-frame" style={bottleImageAdjustmentStyle(adjustment)}>
+            <img
+              key={url}
+              src={url}
+              alt={alt}
+              className={bottleImageFillClass(imgClassName)}
+              referrerPolicy="no-referrer"
+              loading={loading}
+              decoding="async"
+              onError={() => setBroken(true)}
+            />
+          </div>
         )}
       </div>
     </div>

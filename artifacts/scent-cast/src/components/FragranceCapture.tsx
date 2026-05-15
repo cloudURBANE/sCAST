@@ -275,6 +275,7 @@ export const FragranceCapture: React.FC<{
   const [searchFocused, setSearchFocused] = useState(false);
   const [errorStatus, setErrorStatus] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
+  const [syncComplete, setSyncComplete] = useState(false);
 
   const headlineText = useVaultHeadlineTypewriter(VAULT_HEADLINE_ROTATION);
 
@@ -317,6 +318,7 @@ export const FragranceCapture: React.FC<{
     setMatches([]);
     setErrorStatus(null);
     setHasSearched(false);
+    setSyncComplete(false);
 
     try {
       let nextMatches: FragranceMatch[] = [];
@@ -372,13 +374,18 @@ export const FragranceCapture: React.FC<{
     
     const selected = matches[selectedIdx];
     if (selected.scent_vector) {
+      setUploading(true);
+      setLoadingStatus("Synced to Vault.");
+      setSyncComplete(true);
       const familyStr = typeof selected.family === 'string' ? selected.family : '';
       onAdd({
         ...selected,
         id: newFragranceId(),
         season: familyStr.includes('Fresh') ? 'Summer' : familyStr.includes('Woody') ? 'Winter' : 'Universal',
       });
+      await sleep(420);
       resetState();
+      setUploading(false);
       return;
     }
 
@@ -396,6 +403,7 @@ export const FragranceCapture: React.FC<{
 
     setUploading(true);
     setLoadingStatus("Fetching Fragrance Intelligence...");
+    setSyncComplete(false);
     
     try {
       const detail = (await getFragranceDetails(
@@ -506,6 +514,9 @@ export const FragranceCapture: React.FC<{
             ? detail.raw.description
             : undefined,
       });
+      setLoadingStatus("Synced to Vault.");
+      setSyncComplete(true);
+      await sleep(620);
       resetState();
     } catch (err: any) {
       if (err.name === 'AbortError') return;
@@ -520,21 +531,40 @@ export const FragranceCapture: React.FC<{
     setSelectedIdx(null);
     setHasSearched(false);
     setSearchQuery("");
+    setSyncComplete(false);
   };
 
   return (
     <div className="glass-shell rounded-[var(--radius-scent)] relative overflow-hidden">
-      {uploading && (
-        <div className="absolute inset-0 bg-black/90 backdrop-blur-xl z-50 flex flex-col items-center justify-center p-8 text-center">
+      <AnimatePresence>
+        {uploading && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.28 }}
+          className="absolute inset-0 bg-black/90 backdrop-blur-xl z-50 flex flex-col items-center justify-center p-8 text-center"
+        >
           <motion.div
-            animate={{ rotate: [0, 360], scale: [1, 1.1, 1] }}
-            transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
-            className="w-20 h-20 border-t-2 border-white/40 rounded-full mb-6"
+            animate={
+              syncComplete
+                ? { rotate: 0, scale: [1, 1.08, 1] }
+                : { rotate: [0, 360], scale: [1, 1.1, 1] }
+            }
+            transition={
+              syncComplete
+                ? { duration: 0.46, ease: "easeOut" }
+                : { duration: 3, repeat: Infinity, ease: "linear" }
+            }
+            className={`w-20 h-20 border-t-2 rounded-full mb-6 ${
+              syncComplete ? 'border-scent-accent/75' : 'border-white/40'
+            }`}
           />
           <h3 className="font-serif italic text-xl text-white mb-2">{loadingStatus}</h3>
           <p className="text-white/30 text-[10px] uppercase tracking-[0.3em] font-sans font-bold italic animate-pulse">Processing Olfactory Data</p>
-        </div>
-      )}
+        </motion.div>
+        )}
+      </AnimatePresence>
       <div className="glass rounded-[var(--radius-scent-inner)] p-4 md:p-6">
         <header className="mb-6 px-2">
           <p className="sr-only">
@@ -630,7 +660,10 @@ export const FragranceCapture: React.FC<{
 
           {matches.length > 0 && (
             <motion.div
-              initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0, y: -8 }}
+              transition={{ duration: 0.34, ease: [0.22, 1, 0.36, 1] }}
               className="mt-8 pt-6 border-t border-white/10 mx-auto max-w-lg w-full"
             >
               <div className="mb-4 flex items-center justify-between gap-3 px-1">
@@ -694,6 +727,18 @@ export const FragranceCapture: React.FC<{
                   })}
                 </div>
               </div>
+              <AnimatePresence>
+                {selectedIdx !== null ? (
+                  <motion.p
+                    initial={{ opacity: 0, y: 5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -4 }}
+                    className="mt-4 text-center text-[10px] uppercase tracking-[0.24em] text-scent-accent/72 font-bold"
+                  >
+                    Ready for Vault Sync
+                  </motion.p>
+                ) : null}
+              </AnimatePresence>
               <button
                 onClick={handleConfirm}
                 className="scent-primary-button w-full mt-6 h-14 font-serif italic text-lg hover:scale-[1.02] active:scale-95 transition-all rounded-[var(--radius-scent)]"

@@ -6,7 +6,12 @@ import { resolveSharedImageUrl } from "../services/imageHydration";
 import { buildProfile } from "../services/scentEngine";
 import { flattenProfile } from "../services/catalogService";
 import { logger } from "../lib/logger";
-import { hydrateImageUrl, normalizeFragrance, sanitizeFragrance } from "../services/fragrancePayload";
+import {
+  hydrateImageUrl,
+  normalizeFragrance,
+  normalizeImageAdjustment,
+  sanitizeFragrance,
+} from "../services/fragrancePayload";
 import { assertNoPersistedBase64Image } from "../services/persistenceGuards";
 import { persistableImageReference } from "../services/imageReference";
 
@@ -252,17 +257,24 @@ router.patch("/wardrobe/:id", async (req, res) => {
     return;
   }
 
-  const { syncImageFromCatalog, imageUrl } = req.body as {
+  const { syncImageFromCatalog, imageUrl, imageAdjustment } = req.body as {
     syncImageFromCatalog?: boolean;
     imageUrl?: unknown;
+    imageAdjustment?: unknown;
   };
   const explicitImageUrl = await persistableImageReference(imageUrl);
-  if (syncImageFromCatalog !== true && !explicitImageUrl) {
-    res.status(400).json({ error: "syncImageFromCatalog: true or a valid imageUrl is required" });
+  const hasImageAdjustment = imageAdjustment !== undefined;
+  const normalizedImageAdjustment = normalizeImageAdjustment(imageAdjustment);
+  if (syncImageFromCatalog !== true && !explicitImageUrl && !hasImageAdjustment) {
+    res.status(400).json({ error: "syncImageFromCatalog: true, a valid imageUrl, or imageAdjustment is required" });
     return;
   }
   if (typeof imageUrl === "string" && imageUrl.trim() && !explicitImageUrl) {
     res.status(400).json({ error: "imageUrl must be an http(s) URL or an existing /api/image-objects/... URL" });
+    return;
+  }
+  if (hasImageAdjustment && !normalizedImageAdjustment) {
+    res.status(400).json({ error: "imageAdjustment must be an object with numeric scale/x/y/crop values" });
     return;
   }
 
@@ -275,28 +287,37 @@ router.patch("/wardrobe/:id", async (req, res) => {
   const existing = normalizeFragrance(match.fragranceData as Record<string, any>);
   const name = existing.name as string | undefined;
   const brand = existing.brand as string | undefined;
-  if (!name || !brand) {
+  const shouldUpdateImage = syncImageFromCatalog === true || !!explicitImageUrl;
+  if (shouldUpdateImage && (!name || !brand)) {
     res.status(400).json({ error: "Fragrance must have name and brand to sync image" });
     return;
   }
 
   let url: string | null = null;
-  if (explicitImageUrl) {
-    url = explicitImageUrl;
-  } else {
-    try {
-      url = await resolveSharedImageUrl(brand, name);
-    } catch {
-      url = null;
+  if (shouldUpdateImage) {
+    if (explicitImageUrl) {
+      url = explicitImageUrl;
+    } else if (brand && name) {
+      try {
+        url = await resolveSharedImageUrl(brand, name);
+      } catch {
+        url = null;
+      }
+    }
+
+    if (!url || typeof url !== "string" || !url.trim()) {
+      res.status(409).json({ error: "No catalog image available yet for this fragrance; try refresh again." });
+      return;
     }
   }
 
-  if (!url || typeof url !== "string" || !url.trim()) {
-    res.status(409).json({ error: "No catalog image available yet for this fragrance; try refresh again." });
-    return;
-  }
-
-  const merged = sanitizeFragrance(normalizeFragrance({ ...existing, imageUrl: url }));
+  const merged = sanitizeFragrance(
+    normalizeFragrance({
+      ...existing,
+      ...(shouldUpdateImage && url ? { imageUrl: url } : {}),
+      ...(hasImageAdjustment ? { imageAdjustment: normalizedImageAdjustment } : {}),
+    }),
+  );
   assertNoPersistedBase64Image(merged, "user_fragrances.fragrance_data");
 
   await db
