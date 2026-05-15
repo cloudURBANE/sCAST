@@ -1231,10 +1231,10 @@ export const Wardrobe: React.FC<{
                     key={item.id}
                     initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }} transition={{ delay: i * 0.08, duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
-                    className="group cursor-pointer relative h-full"
+                    className="group cursor-pointer relative h-full min-w-0"
                     onClick={() => openDetail(item)}
                   >
-                    <div className="scent-fragrance-card h-full min-h-[32rem] transition-[transform,border-color,box-shadow] duration-500 motion-reduce:transition-none group-hover:-translate-y-1.5 motion-reduce:group-hover:translate-y-0 relative overflow-hidden flex flex-col aspect-[3/4.05]">
+                    <div className="scent-fragrance-card w-full h-full min-h-[32rem] transition-[transform,border-color,box-shadow] duration-500 motion-reduce:transition-none group-hover:-translate-y-1.5 motion-reduce:group-hover:translate-y-0 relative overflow-hidden flex flex-col">
                       <div className="scent-card-frame" aria-hidden />
                       <div className="relative z-[1] flex h-full flex-col items-center px-6 sm:px-8 pt-7 sm:pt-9 pb-6 sm:pb-7">
                         <p
