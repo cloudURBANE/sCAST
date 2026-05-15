@@ -129,6 +129,13 @@ interface FragranceMatch extends FragranceSearchResult {
   house: string;
 }
 
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)
+  ?.trim()
+  .replace(/\/+$/, "");
+const SCENT_PROFILE_ENDPOINT = API_BASE_URL
+  ? `${API_BASE_URL}/api/scent-profile`
+  : "/api/scent-profile";
+
 /** Match list rows: keep one line each; overflow shows ellipsis in CSS */
 const MATCH_LINE_MAX_CHARS = 44;
 
@@ -281,7 +288,7 @@ export const FragranceCapture: React.FC<{
       const detailDescription =
         typeof detail.raw?.description === 'string' ? detail.raw.description : undefined;
 
-      const profileRes = await fetch('/api/scent-profile', {
+      const profileRes = await fetch(SCENT_PROFILE_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -10,32 +10,39 @@ const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..");
 
 /**
  * Repo uses `ScentCast.env` for local secrets; Vite only reads `.env*` under this package by default.
- * If `VITE_FRAGRANCE_API_URL` is not already set (shell / scent-cast `.env`), pick it up from the root file.
+ * Pick up public Vite API origins from the root file when they are not already set.
  */
-function applyFragranceCatalogUrlFromScentCastEnv() {
-  if (process.env.VITE_FRAGRANCE_API_URL?.trim()) return;
-
+function applyViteApiUrlsFromScentCastEnv() {
   const file = path.join(REPO_ROOT, "ScentCast.env");
   if (!fs.existsSync(file)) return;
 
-  const prefix = "VITE_FRAGRANCE_API_URL=";
+  const keys = ["VITE_FRAGRANCE_API_URL", "VITE_API_BASE_URL"] as const;
+  const missing = new Set(keys.filter((key) => !process.env[key]?.trim()));
+  if (missing.size === 0) return;
+
   for (const rawLine of fs.readFileSync(file, "utf8").split("\n")) {
     const line = rawLine.trim();
     if (!line || line.startsWith("#")) continue;
-    if (!line.startsWith(prefix)) continue;
-    let value = line.slice(prefix.length).trim();
+    const equals = line.indexOf("=");
+    if (equals <= 0) continue;
+    const key = line.slice(0, equals).trim();
+    if (!missing.has(key as (typeof keys)[number])) continue;
+    let value = line.slice(equals + 1).trim();
     if (
       (value.startsWith('"') && value.endsWith('"')) ||
       (value.startsWith("'") && value.endsWith("'"))
     ) {
       value = value.slice(1, -1);
     }
-    if (value) process.env.VITE_FRAGRANCE_API_URL = value;
-    return;
+    if (value) {
+      process.env[key] = value;
+      missing.delete(key as (typeof keys)[number]);
+    }
+    if (missing.size === 0) return;
   }
 }
 
-applyFragranceCatalogUrlFromScentCastEnv();
+applyViteApiUrlsFromScentCastEnv();
 
 export default defineConfig(async ({ command }) => {
   const basePath = process.env.BASE_PATH ?? "/";
