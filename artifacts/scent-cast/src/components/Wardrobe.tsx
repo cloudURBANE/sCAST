@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Trash2, ShieldCheck, Wind, RefreshCw, Undo2, HelpCircle, Eraser, Check, Maximize2, ChevronDown, Search, Star } from 'lucide-react';
+import { X, Trash2, ShieldCheck, Wind, RefreshCw, Undo2, HelpCircle, Eraser, Check, Maximize2, ChevronDown, Search } from 'lucide-react';
 import { bottleFeaturedSlotClass } from '@/lib/bottleImageFrame';
 import { BottleImage } from '@/components/BottleImage';
 import { ScentNotesInfographic } from '@/components/ScentNotesInfographic';
@@ -875,7 +875,6 @@ export const Wardrobe: React.FC<{
       <div className="space-y-12 sm:space-y-16 relative z-10">
         <div className="flex flex-col items-center justify-center text-center gap-7 sm:gap-8">
           <div className="space-y-3">
-            <p className="text-[11px] uppercase tracking-[0.28em] text-scent-accent/82 font-bold">Archives // Private Vault</p>
             <h2 className="font-serif italic text-[clamp(2.65rem,8vw,5.35rem)] text-[#fff7ec] tracking-normal leading-none">Vault of Aromas</h2>
           </div>
           <div className="flex flex-col items-center gap-6 w-full">
@@ -947,7 +946,7 @@ export const Wardrobe: React.FC<{
                 }}
                 placeholder="Search vault or image hint (e.g. watermark, sauvage)…"
                 autoComplete="off"
-                className="scent-lux-input w-full h-[58px] sm:h-[68px] pl-14 sm:pl-16 pr-5 sm:pr-6 text-[#fff7ec] font-sans text-[15px] sm:text-base outline-none transition-all placeholder:text-[#d9c2a4]/58"
+                className="scent-lux-input w-full h-[58px] sm:h-[68px] pl-14 sm:pl-16 pr-14 sm:pr-16 text-center text-[#fff7ec] font-sans text-[15px] sm:text-base outline-none transition-all placeholder:text-[#d9c2a4]/58"
               />
               <AnimatePresence>
                 {searchDropdownOpen ? (
@@ -1074,9 +1073,6 @@ export const Wardrobe: React.FC<{
                     onClick={() => openDetail(item)}
                   >
                     <div className="scent-fragrance-card h-full min-h-[31rem] transition-transform duration-500 group-hover:-translate-y-1.5 relative overflow-hidden p-4 sm:p-5 flex flex-col">
-                      <div className="scent-card-star absolute right-4 top-4 z-20 flex h-9 w-9 items-center justify-center rounded-full" aria-hidden>
-                        <Star size={20} strokeWidth={1.45} />
-                      </div>
                       <div className="aspect-[1.08/1] relative mb-5 overflow-hidden rounded-[calc(var(--radius-scent)-8px)]">
                         <div className="scent-bottle-stage absolute inset-0 pointer-events-none" />
                         <BottleImage

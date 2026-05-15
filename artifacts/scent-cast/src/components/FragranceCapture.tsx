@@ -35,46 +35,144 @@ function firstString(...values: unknown[]): string | undefined {
   return undefined;
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+/** Rotating vault headline — house + scent pairs for the typewriter. */
+const VAULT_HEADLINE_ROTATION = [
+  'Chanel Coco Mademoiselle',
+  'Tom Ford Oud Wood',
+  'Maison Francis Kurkdjian Baccarat Rouge 540',
+  'Le Labo Santal 33',
+  'Dior Sauvage',
+  'Yves Saint Laurent Libre',
+  'Creed Aventus',
+] as const;
+
+/** ~one line in the headline slot at max-w-lg; longer phrases truncate before "..." */
+const HEADLINE_BASE_MAX_CHARS = 34;
+
+/** These phrase indices type slightly faster (still slower than the original animation). */
+const HEADLINE_FAST_INDICES = new Set([1, 3, 4, 6]);
+
+function vaultHeadlineBase(full: string): string {
+  const t = full.trim();
+  if (t.length <= HEADLINE_BASE_MAX_CHARS) return t;
+  return t.slice(0, HEADLINE_BASE_MAX_CHARS).trimEnd();
+}
+
+function useVaultHeadlineTypewriter(phrases: readonly string[]): string {
+  const [text, setText] = useState('');
+  const phrasesRef = useRef(phrases);
+  phrasesRef.current = phrases;
+
+  useEffect(() => {
+    let cancelled = false;
+    let idx = Math.floor(Math.random() * phrasesRef.current.length);
+
+    const slowTypeMs = 82;
+    const fastTypeMs = 58;
+    const deleteMs = 34;
+    const dotTypeMs = 52;
+    const holdMs = 3000;
+    const gapMs = 560;
+
+    const run = async () => {
+      const list = phrasesRef.current;
+      while (!cancelled) {
+        const raw = list[idx % list.length];
+        const base = vaultHeadlineBase(raw);
+        const typeMs = HEADLINE_FAST_INDICES.has(idx % list.length) ? fastTypeMs : slowTypeMs;
+
+        for (let len = 1; len <= base.length && !cancelled; len += 1) {
+          setText(base.slice(0, len));
+          await sleep(typeMs);
+        }
+        if (cancelled) break;
+
+        const dots = '...';
+        for (let d = 1; d <= dots.length && !cancelled; d += 1) {
+          setText(`${base}${dots.slice(0, d)}`);
+          await sleep(dotTypeMs);
+        }
+        if (cancelled) break;
+
+        await sleep(holdMs);
+
+        const full = `${base}${dots}`;
+        for (let len = full.length; len >= 0 && !cancelled; len -= 1) {
+          setText(full.slice(0, len));
+          await sleep(deleteMs);
+        }
+        if (cancelled) break;
+
+        await sleep(gapMs);
+        idx += 1;
+      }
+    };
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return text;
+}
+
 interface FragranceMatch extends FragranceSearchResult {
   name: string;
   brand: string;
   house: string;
 }
 
-type ConcentrationHint = 'any' | 'edt' | 'edp' | 'parfum' | 'extrait' | 'elixir';
+/** Match list rows: keep one line each; overflow shows ellipsis in CSS */
+const MATCH_LINE_MAX_CHARS = 44;
 
-// Static Hoisting: Prevent memory reallocation on every render cycle
-const QUICK_SEARCH_TAGS = ['Aventus', 'Rouge 540', 'Santal 33'];
-const CONCENTRATION_OPTIONS: { id: ConcentrationHint; label: string }[] = [
-  { id: 'any', label: 'Any' },
-  { id: 'edt', label: 'EDT' },
-  { id: 'edp', label: 'EDP' },
-  { id: 'parfum', label: 'Parfum' },
-  { id: 'extrait', label: 'Extrait' },
-  { id: 'elixir', label: 'Elixir' },
-];
+function truncateMatchLine(text: string, max: number): string {
+  const t = text.trim();
+  if (t.length <= max) return t;
+  return `${t.slice(0, Math.max(0, max - 1)).trimEnd()}…`;
+}
 
-export const FragranceCapture: React.FC<{ onAdd?: (item: any) => void }> = ({ onAdd }) => {
+export const FragranceCapture: React.FC<{
+  onAdd?: (item: any) => void;
+  onVaultSearchStateChange?: (active: boolean) => void;
+}> = ({ onAdd, onVaultSearchStateChange }) => {
   const [uploading, setUploading] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState("");
   const [matches, setMatches] = useState<FragranceMatch[]>([]);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [concentrationHint, setConcentrationHint] = useState<ConcentrationHint>('any');
+  const [searchFocused, setSearchFocused] = useState(false);
   const [errorStatus, setErrorStatus] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
 
-  // Network lifecycle management
+  const headlineText = useVaultHeadlineTypewriter(VAULT_HEADLINE_ROTATION);
+
   const searchAbortController = useRef<AbortController | null>(null);
   const syncAbortController = useRef<AbortController | null>(null);
 
-  // Cleanup pending requests on component unmount
   useEffect(() => {
     return () => {
       searchAbortController.current?.abort();
       syncAbortController.current?.abort();
     };
   }, []);
+
+  const vaultSearchActive = searchFocused || searchQuery.trim().length > 0;
+  useEffect(() => {
+    onVaultSearchStateChange?.(vaultSearchActive);
+  }, [vaultSearchActive, onVaultSearchStateChange]);
+
+  useEffect(() => {
+    return () => {
+      onVaultSearchStateChange?.(false);
+    };
+  }, [onVaultSearchStateChange]);
 
   const handleSearch = async (e?: React.FormEvent, overrideQuery?: string) => {
     if (e) e.preventDefault();
@@ -282,86 +380,83 @@ export const FragranceCapture: React.FC<{ onAdd?: (item: any) => void }> = ({ on
         </div>
       )}
       <div className="glass rounded-[var(--radius-scent-inner)] p-4 md:p-6">
-        <div className="flex flex-col items-center text-center mb-7 px-2 gap-5">
-          <div>
-            <p className="text-[11px] uppercase tracking-[0.24em] text-scent-accent/82 font-bold mb-1">Add To Vault</p>
-            <h2 className="font-serif italic text-2xl text-[#fff7ec] tracking-normal">Capture Essence</h2>
+        <header className="mb-6 px-2">
+          <p className="sr-only">
+            Add perfumes to your vault. Examples rotate above the search field.
+          </p>
+          <div className="flex flex-col items-center text-center gap-4 pt-1">
+            <div className="space-y-3 w-full">
+              <p className="text-[11px] uppercase tracking-[0.26em] text-scent-accent/85 font-bold">
+                Add To Vault
+              </p>
+              <div className="mx-auto w-full max-w-lg px-1">
+                <h2
+                  className="flex h-[3rem] items-center justify-center gap-2 font-serif italic text-[clamp(1.25rem,4vw,1.75rem)] leading-none tracking-[0.02em] text-[#fff7ec] drop-shadow-[0_0_22px_rgba(201,139,44,0.14)]"
+                  aria-hidden
+                >
+                  <span className="min-w-0 max-w-[calc(100%-0.75rem)] truncate bg-gradient-to-br from-[#fffbf5] via-[#fff7ec] to-[#e6d2b8]/88 bg-clip-text text-center text-transparent">
+                    {headlineText}
+                  </span>
+                  <span
+                    className="inline-block h-[1.05em] w-[2px] shrink-0 self-center rounded-full bg-gradient-to-b from-scent-accent/90 to-scent-accent/35 animate-pulse"
+                    aria-hidden
+                  />
+                </h2>
+              </div>
+            </div>
           </div>
-          <p className="text-[11px] uppercase tracking-[0.2em] text-[#d6c2a8]/78 font-bold">Search Mode</p>
-        </div>
+        </header>
 
         <AnimatePresence>
           {errorStatus && (
             <motion.div
               initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
-              className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-scent"
+              className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-scent text-center"
             >
-              <div className="flex items-start gap-3 mb-2">
-                <div className="mt-0.5 w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shrink-0" />
-                <p className="text-[10px] text-red-500/90 font-medium leading-relaxed">{errorStatus}</p>
+              <div className="flex flex-col items-center gap-2 mb-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shrink-0" />
+                <p className="text-[10px] text-red-500/90 font-medium leading-relaxed max-w-md">{errorStatus}</p>
               </div>
-              <button onClick={handleRetry} className="text-[9px] uppercase tracking-widest text-red-500 font-bold hover:underline ml-4">
+              <button onClick={handleRetry} className="text-[9px] uppercase tracking-widest text-red-500 font-bold hover:underline">
                 Try Again
               </button>
             </motion.div>
           )}
         </AnimatePresence>
 
-        <div className="space-y-5">
-          <form onSubmit={handleSearch} className="relative">
+        <div className="mx-auto max-w-lg text-center mt-1">
+          <form onSubmit={handleSearch} className="relative group">
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => { setSearchQuery(e.target.value); setErrorStatus(null); }}
-              placeholder="Enter Fragrance Name..."
-              className="scent-lux-input w-full h-[58px] sm:h-[62px] px-12 text-center text-[#fff7ec] font-sans text-[15px] outline-none transition-colors placeholder:text-[#d9c2a4]/56"
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => setSearchFocused(false)}
+              placeholder=""
+              aria-label="Look up a brand or fragrance"
+              className="scent-lux-input relative z-0 w-full h-[58px] sm:h-[62px] px-12 text-center text-[#fff7ec] font-sans text-[15px] outline-none transition-colors group-focus-within:shadow-[inset_0_1px_0_rgba(255,226,174,0.08),0_0_0_1px_rgba(201,139,44,0.15)]"
             />
+            {searchQuery === '' && !searchFocused && (
+              <div
+                className="pointer-events-none absolute inset-y-0 left-0 right-14 z-[1] flex items-center justify-center px-12 text-[#d9c2a4]/55"
+                aria-hidden
+              >
+                <span className="scent-search-probe inline-flex w-[22px] shrink-0 translate-x-7 justify-between gap-1 opacity-95 sm:translate-x-9" aria-hidden>
+                  <span className="scent-search-probe-dot" />
+                  <span className="scent-search-probe-dot" />
+                  <span className="scent-search-probe-dot" />
+                </span>
+              </div>
+            )}
             <button
               type="submit"
               disabled={uploading}
-              className="absolute right-3 top-1/2 -translate-y-1/2 p-2.5 text-scent-accent/78 hover:text-white transition-colors disabled:opacity-50"
+              className="absolute right-3 top-1/2 z-10 -translate-y-1/2 p-2.5 text-scent-accent/78 hover:text-white transition-colors disabled:opacity-50"
+              aria-label="Search"
             >
               {uploading ? <RefreshCw size={16} className="animate-spin" /> : <Search size={18} />}
             </button>
           </form>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-            <span className="text-[10px] uppercase tracking-[0.24em] text-[#d6c2a8]/68 font-bold">Concentration</span>
-            <div className="flex flex-wrap items-center justify-center gap-1.5">
-              {CONCENTRATION_OPTIONS.map((option) => {
-                const selected = concentrationHint === option.id;
-                return (
-                  <button
-                    key={option.id}
-                    type="button"
-                    onClick={() => setConcentrationHint(option.id)}
-                    className={`min-h-7 px-3 py-1 rounded-full text-[10px] uppercase tracking-[0.16em] border font-bold transition-all ${
-                      selected
-                        ? 'bg-scent-accent text-black border-scent-accent shadow-[0_0_18px_rgba(201,139,44,0.18)]'
-                        : 'bg-black/28 text-[#d6c2a8]/72 border-scent-accent/24 hover:text-white hover:border-scent-accent/52 hover:bg-white/[0.07]'
-                    }`}
-                    aria-pressed={selected}
-                  >
-                    {option.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2 justify-center">
-            {QUICK_SEARCH_TAGS.map(tag => (
-              <button
-                key={tag}
-                type="button"
-                onClick={() => { 
-                  setSearchQuery(tag); 
-                  handleSearch(undefined, tag); 
-                }}
-                className="min-h-7 px-3 py-1 bg-black/24 rounded-full text-[10px] uppercase tracking-[0.16em] text-[#d6c2a8]/70 hover:text-white hover:bg-white/[0.08] transition-all border border-scent-accent/18"
-              >
-                {tag}
-              </button>
-            ))}
-          </div>
         </div>
 
         <AnimatePresence>
@@ -380,26 +475,44 @@ export const FragranceCapture: React.FC<{ onAdd?: (item: any) => void }> = ({ on
           {matches.length > 0 && (
             <motion.div
               initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
-              className="mt-8 pt-6 border-t border-white/10"
+              className="mt-8 pt-6 border-t border-white/10 mx-auto max-w-lg w-full"
             >
               <p className="text-[9px] uppercase tracking-[0.4em] text-scent-muted mb-4 font-bold text-center">Archive Matches</p>
               <div className="grid grid-cols-1 gap-2">
                 {matches.map((m, i) => (
-                  <div
+                  <button
                     key={i}
+                    type="button"
                     onClick={() => setSelectedIdx(i)}
-                    className={`flex items-center justify-between p-3 border transition-all cursor-pointer rounded-[1.25rem] ${selectedIdx === i ? 'border-white bg-white/10' : 'border-white/10 hover:bg-white/5'}`}
+                    className={`w-full text-left sm:text-center p-4 border transition-all cursor-pointer rounded-[var(--radius-scent)] ${selectedIdx === i ? 'border-scent-accent/52 bg-white/[0.07]' : 'border-white/10 hover:bg-white/[0.04] hover:border-white/18'}`}
+                    aria-pressed={selectedIdx === i}
                   >
-                    <div className="flex items-center gap-3">
-                      <div>
-                        <p className="font-serif italic text-lg leading-tight text-white">{m.name}</p>
-                        <p className="text-[8px] uppercase text-scent-muted tracking-widest font-sans font-bold">
-                          {m.brand || "House unavailable"}
+                    <div className="flex w-full gap-3 sm:flex-col sm:items-center sm:gap-2.5">
+                      <div
+                        className="flex w-5 shrink-0 justify-center pt-0.5 sm:w-auto sm:pt-0 sm:min-h-[22px] sm:items-center"
+                        aria-hidden
+                      >
+                        {selectedIdx === i ? (
+                          <Check size={16} className="text-scent-accent shrink-0" />
+                        ) : null}
+                      </div>
+                      <div className="min-w-0 flex-1 space-y-1.5 text-left sm:text-center">
+                        <p
+                          className="text-[9px] uppercase tracking-[0.22em] text-scent-accent/80 font-sans font-bold truncate"
+                          title={m.brand || 'House unavailable'}
+                        >
+                          {truncateMatchLine(m.brand || 'House unavailable', MATCH_LINE_MAX_CHARS)}
+                        </p>
+                        <div className="h-px w-full max-w-[10rem] bg-gradient-to-r from-transparent via-white/20 to-transparent sm:mx-auto" />
+                        <p
+                          className="font-serif italic text-lg leading-snug text-[#fff7ec] truncate"
+                          title={m.name}
+                        >
+                          {truncateMatchLine(m.name, MATCH_LINE_MAX_CHARS)}
                         </p>
                       </div>
                     </div>
-                    {selectedIdx === i && <Check size={16} className="text-white" />}
-                  </div>
+                  </button>
                 ))}
               </div>
               <button

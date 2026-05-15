@@ -19,6 +19,7 @@ import {
   resolveFragranceQuery,
   shouldSearchExternalFragranceSources,
 } from "../services/fragranceNameResolver";
+import type { Concentration } from "../services/scentParser";
 
 const router = Router();
 
@@ -47,6 +48,23 @@ function normalizeConcentrationHint(raw: unknown): ConcentrationHint | undefined
   return CONCENTRATION_HINT_SET.has(lower as ConcentrationHint)
     ? (lower as ConcentrationHint)
     : undefined;
+}
+
+function concentrationHintToOverride(hint: ConcentrationHint): Concentration {
+  switch (hint) {
+    case "edt":
+      return "Eau de Toilette";
+    case "edp":
+      return "Eau de Parfum";
+    case "parfum":
+      return "Parfum";
+    case "extrait":
+      return "Extrait";
+    case "elixir":
+      return "Parfum";
+    default:
+      return "Unknown";
+  }
 }
 
 function parseIncomingImageUrl(raw: unknown): string | null {
@@ -113,6 +131,7 @@ router.post("/scent-profile", async (req, res) => {
     pyramid,
     perfumer,
     preferEngineData,
+    concentrationHint,
   } = req.body as {
     name?: string;
     brand?: string;
@@ -123,12 +142,16 @@ router.post("/scent-profile", async (req, res) => {
     pyramid?: { top: string[]; heart: string[]; base: string[] };
     perfumer?: string;
     preferEngineData?: boolean;
+    concentrationHint?: string;
   };
 
   if (!name) {
     res.status(400).json({ error: "Fragrance name is required" });
     return;
   }
+
+  const normalizedHint = normalizeConcentrationHint(concentrationHint);
+  const concentrationOverride = normalizedHint ? concentrationHintToOverride(normalizedHint) : undefined;
 
   const result = await buildProfile(
     name,
@@ -141,7 +164,10 @@ router.post("/scent-profile", async (req, res) => {
       pyramid,
       perfumer,
     },
-    { preferEngineData: preferEngineData === true },
+    {
+      preferEngineData: preferEngineData === true,
+      ...(concentrationOverride ? { concentrationOverride } : {}),
+    },
   );
   // Always return a flat shape ({ name, brand, ... } alongside `product`) so the
   // client can rely on top-level keys when it persists this object verbatim.

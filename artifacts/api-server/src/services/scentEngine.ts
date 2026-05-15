@@ -1,5 +1,5 @@
 import type { FragranceData } from "./datasetLoader";
-import { parseFragrance } from "./scentParser";
+import { parseFragrance, type Concentration } from "./scentParser";
 import { vectorize, calculatePerformance, calculateContext, type ScentVector, type PerformanceMetrics, type ContextProfile } from "./scentVectorizer";
 import { getCatalogEntry, saveCatalogEntry, searchCatalog } from "./catalogService";
 import { resolveProcessedFragranceImage } from "./imagePipeline";
@@ -64,10 +64,13 @@ export async function buildProfile(
      * together.
      */
     preferEngineData?: boolean;
+    /** Overrides parsed concentration (performance metrics + stored profile). */
+    concentrationOverride?: Concentration;
   },
 ): Promise<ScentProfile | { error: string }> {
   const allowCatalogFuzzy = opts?.allowCatalogFuzzy ?? true;
   const preferEngineData = opts?.preferEngineData ?? false;
+  const concentrationOverride = opts?.concentrationOverride;
   const identity = resolveFragranceIdentity(brand, name);
   const profileBrand = identity.brand;
   const profileName = identity.name;
@@ -171,7 +174,7 @@ export async function buildProfile(
     return { error: "Could not identify this fragrance. Try a more specific name." };
   }
 
-  const parsed = parseFragrance({
+  let parsed = parseFragrance({
     name: finalName,
     brand: finalBrand,
     notes: finalNotes,
@@ -182,6 +185,10 @@ export async function buildProfile(
   } as FragranceData);
 
   if (!parsed) return { error: "Failed to parse fragrance data." };
+
+  if (concentrationOverride) {
+    parsed = { ...parsed, concentration: concentrationOverride };
+  }
 
   const vector = vectorize(parsed);
   const performance = calculatePerformance(vector, finalFamily, parsed.concentration);

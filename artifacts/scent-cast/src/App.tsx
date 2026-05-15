@@ -385,7 +385,7 @@ const LiveClock: React.FC = React.memo(() => {
   }, []);
   return (
     <span
-      className="font-serif italic tracking-normal text-2xl sm:text-3xl text-[#fff7ec] tabular-nums"
+      className="font-serif italic tracking-normal text-inherit leading-[1.05] text-[#fff7ec] tabular-nums"
       style={{ fontVariantNumeric: 'tabular-nums' }}
     >
       {time.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}
@@ -475,6 +475,11 @@ export default function App() {
   const [wardrobeRevertSnapshot, setWardrobeRevertSnapshot] = useState<Fragrance[] | null>(null);
   const [wardrobeFixBusy, setWardrobeFixBusy] = useState(false);
   const [wardrobeFixHint, setWardrobeFixHint] = useState<string | null>(null);
+  const [vaultSearchUiActive, setVaultSearchUiActive] = useState(false);
+
+  const handleVaultSearchStateChange = useCallback((active: boolean) => {
+    setVaultSearchUiActive(active);
+  }, []);
 
   useEffect(() => {
     autoWardrobeRebuildAttemptedRef.current = false;
@@ -880,41 +885,45 @@ export default function App() {
     <div className="scent-app-shell min-h-[100svh] bg-scent-bg selection:bg-scent-accent selection:text-black text-white relative overflow-x-hidden">
       <LavaBackground />
       <nav className="scent-topbar fixed top-0 left-0 right-0 h-16 sm:h-[72px] z-50 px-3 sm:px-8">
-        <div className="max-w-[1760px] mx-auto h-full flex items-center relative">
-          <div className="min-w-0" />
-
-          <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 sm:gap-3 pointer-events-none">
-            <Wind size={22} strokeWidth={1.25} className="text-scent-accent drop-shadow-[0_0_10px_rgba(201,139,44,0.22)]" />
-            <h1 className="scent-brandmark font-serif text-xl sm:text-3xl tracking-[0.14em] uppercase">SCENTCAST</h1>
-          </div>
-
-          <div className="ml-auto flex items-center gap-3 sm:gap-4">
+        <div className="max-w-[1760px] mx-auto h-full relative flex items-center justify-center">
+          <div className="absolute left-0 top-1/2 -translate-y-1/2 flex items-center gap-3 sm:gap-4">
             {!authToken ? (
               <button
                 type="button"
                 onClick={() => setIsAuthModalOpen(true)}
-                className="text-[10px] sm:text-xs uppercase tracking-[0.2em] text-[#f4debd]/70 hover:text-white transition-colors"
+                className="text-[9px] sm:text-xs uppercase tracking-[0.2em] text-[#f4debd]/70 hover:text-white transition-colors whitespace-nowrap"
               >
                 Sign In
               </button>
             ) : (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setIsShareModalOpen(true)}
-                  className="text-[10px] sm:text-xs uppercase tracking-[0.2em] text-[#f4debd]/70 hover:text-white transition-colors"
-                >
-                  Share
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSignOut}
-                  className="text-[10px] sm:text-xs uppercase tracking-[0.2em] text-[#f4debd]/70 hover:text-white transition-colors"
-                >
-                  Sign Out
-                </button>
-              </>
+              <button
+                type="button"
+                onClick={() => setIsShareModalOpen(true)}
+                className="text-[9px] sm:text-xs uppercase tracking-[0.2em] text-[#f4debd]/70 hover:text-white transition-colors whitespace-nowrap"
+              >
+                Share
+              </button>
             )}
+          </div>
+
+          <div className="flex items-center gap-2 sm:gap-3 pointer-events-none">
+            <Wind
+              strokeWidth={1.25}
+              className="w-[19.8px] h-[19.8px] sm:w-[22px] sm:h-[22px] text-scent-accent drop-shadow-[0_0_10px_rgba(201,139,44,0.22)]"
+            />
+            <h1 className="scent-brandmark font-serif text-[1.125rem] sm:text-3xl tracking-[0.14em] uppercase">SCENTCAST</h1>
+          </div>
+
+          <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-3 sm:gap-4 justify-end">
+            {authToken ? (
+              <button
+                type="button"
+                onClick={handleSignOut}
+                className="text-[10px] sm:text-xs uppercase tracking-[0.2em] text-[#f4debd]/70 hover:text-white transition-colors whitespace-nowrap"
+              >
+                Sign Out
+              </button>
+            ) : null}
           </div>
         </div>
       </nav>
@@ -942,8 +951,16 @@ export default function App() {
             <h2 className="font-serif italic text-[clamp(2.15rem,7vw,3.8rem)] text-[#fff7ec] leading-[0.98] tracking-normal">
               Find your signature for the current atmosphere.
             </h2>
-            <FragranceCapture onAdd={handleAddItem} />
-            <button
+            <FragranceCapture onAdd={handleAddItem} onVaultSearchStateChange={handleVaultSearchStateChange} />
+            <motion.button
+              type="button"
+              animate={{
+                opacity: vaultSearchUiActive ? 0 : 1,
+                y: vaultSearchUiActive ? 8 : 0,
+              }}
+              transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
+              style={{ pointerEvents: vaultSearchUiActive ? 'none' : 'auto' }}
+              tabIndex={vaultSearchUiActive ? -1 : undefined}
               onClick={() => {
                 if (items.length === 0) { alert("Your vault is empty! Add at least one fragrance to discover your match."); return; }
                 setIsIntentModalOpen(true);
@@ -952,7 +969,7 @@ export default function App() {
             >
               <Play size={19} className="fill-current group-hover:scale-110 transition-transform" />
               <span className="font-serif italic text-xl sm:text-2xl leading-none">Discover Your Signature Scent</span>
-            </button>
+            </motion.button>
           </section>
 
           <div className="scent-full-bleed">
