@@ -10,14 +10,20 @@ export type BottleImageAdjustment = {
   scale: number;
   x: number;
   y: number;
-  crop: number;
+  cropTop: number;
+  cropRight: number;
+  cropBottom: number;
+  cropLeft: number;
 };
 
 const DEFAULT_IMAGE_ADJUSTMENT: BottleImageAdjustment = {
   scale: 1,
   x: 0,
   y: 0,
-  crop: 0,
+  cropTop: 0,
+  cropRight: 0,
+  cropBottom: 0,
+  cropLeft: 0,
 };
 
 function finiteNumber(value: unknown): number | null {
@@ -38,11 +44,15 @@ function round(value: number, precision: number): number {
 export function normalizeImageAdjustment(value: unknown): BottleImageAdjustment | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
   const input = value as Record<string, unknown>;
+  const legacyCrop = round(clampNumber(input.crop, 0, 20, 0), 1);
   return {
     scale: round(clampNumber(input.scale, 0.7, 1.45, DEFAULT_IMAGE_ADJUSTMENT.scale), 2),
     x: round(clampNumber(input.x, -18, 18, DEFAULT_IMAGE_ADJUSTMENT.x), 1),
     y: round(clampNumber(input.y, -18, 18, DEFAULT_IMAGE_ADJUSTMENT.y), 1),
-    crop: round(clampNumber(input.crop, 0, 20, DEFAULT_IMAGE_ADJUSTMENT.crop), 1),
+    cropTop: round(clampNumber(input.cropTop, 0, 20, legacyCrop), 1),
+    cropRight: round(clampNumber(input.cropRight, 0, 20, legacyCrop), 1),
+    cropBottom: round(clampNumber(input.cropBottom, 0, 20, legacyCrop), 1),
+    cropLeft: round(clampNumber(input.cropLeft, 0, 20, legacyCrop), 1),
   };
 }
 

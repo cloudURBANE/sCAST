@@ -20,6 +20,10 @@ import {
   Save,
   ZoomIn,
   ZoomOut,
+  ArrowUp,
+  ArrowRight,
+  ArrowDown,
+  ArrowLeft,
 } from 'lucide-react';
 import { bottleFeaturedSlotClass } from '@/lib/bottleImageFrame';
 import {
@@ -1555,20 +1559,71 @@ export const Wardrobe: React.FC<{
                           </span>
 
                           <label className="flex items-center gap-1.5 text-[9px] uppercase tracking-[0.14em] text-white/42 font-bold">
-                            <Crop size={12} /> Crop
+                            <ArrowUp size={12} /> Top
                           </label>
                           <input
                             type="range"
                             min="0"
                             max="20"
                             step="0.5"
-                            value={frameDraft.crop}
-                            onChange={(e) => updateFrameDraft({ crop: Number(e.target.value) })}
+                            value={frameDraft.cropTop}
+                            onChange={(e) => updateFrameDraft({ cropTop: Number(e.target.value) })}
                             disabled={imageToolbarBusy || !detailBottleUrl?.trim()}
-                            aria-label="Bottle edge crop"
+                            aria-label="Crop from top of bottle image"
                           />
                           <span className="text-right text-[10px] tabular-nums text-white/42">
-                            {Math.round(frameDraft.crop)}
+                            {Math.round(frameDraft.cropTop)}
+                          </span>
+
+                          <label className="flex items-center gap-1.5 text-[9px] uppercase tracking-[0.14em] text-white/42 font-bold">
+                            <ArrowRight size={12} /> Right
+                          </label>
+                          <input
+                            type="range"
+                            min="0"
+                            max="20"
+                            step="0.5"
+                            value={frameDraft.cropRight}
+                            onChange={(e) => updateFrameDraft({ cropRight: Number(e.target.value) })}
+                            disabled={imageToolbarBusy || !detailBottleUrl?.trim()}
+                            aria-label="Crop from right of bottle image"
+                          />
+                          <span className="text-right text-[10px] tabular-nums text-white/42">
+                            {Math.round(frameDraft.cropRight)}
+                          </span>
+
+                          <label className="flex items-center gap-1.5 text-[9px] uppercase tracking-[0.14em] text-white/42 font-bold">
+                            <ArrowDown size={12} /> Bottom
+                          </label>
+                          <input
+                            type="range"
+                            min="0"
+                            max="20"
+                            step="0.5"
+                            value={frameDraft.cropBottom}
+                            onChange={(e) => updateFrameDraft({ cropBottom: Number(e.target.value) })}
+                            disabled={imageToolbarBusy || !detailBottleUrl?.trim()}
+                            aria-label="Crop from bottom of bottle image"
+                          />
+                          <span className="text-right text-[10px] tabular-nums text-white/42">
+                            {Math.round(frameDraft.cropBottom)}
+                          </span>
+
+                          <label className="flex items-center gap-1.5 text-[9px] uppercase tracking-[0.14em] text-white/42 font-bold">
+                            <ArrowLeft size={12} /> Left
+                          </label>
+                          <input
+                            type="range"
+                            min="0"
+                            max="20"
+                            step="0.5"
+                            value={frameDraft.cropLeft}
+                            onChange={(e) => updateFrameDraft({ cropLeft: Number(e.target.value) })}
+                            disabled={imageToolbarBusy || !detailBottleUrl?.trim()}
+                            aria-label="Crop from left of bottle image"
+                          />
+                          <span className="text-right text-[10px] tabular-nums text-white/42">
+                            {Math.round(frameDraft.cropLeft)}
                           </span>
                         </div>
 
@@ -1601,7 +1656,10 @@ export const Wardrobe: React.FC<{
                             type="button"
                             onClick={() =>
                               updateFrameDraft({
-                                crop: Math.max(frameDraft.crop, 6),
+                                cropTop: Math.max(frameDraft.cropTop, 6),
+                                cropRight: Math.max(frameDraft.cropRight, 6),
+                                cropBottom: Math.max(frameDraft.cropBottom, 6),
+                                cropLeft: Math.max(frameDraft.cropLeft, 6),
                                 scale: Math.max(frameDraft.scale, 1.08),
                               })
                             }

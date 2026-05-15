@@ -108,7 +108,10 @@ body {
   --bottle-frame-scale: 1;
   --bottle-frame-x: 0%;
   --bottle-frame-y: 0%;
-  --bottle-frame-crop: 0%;
+  --bottle-frame-crop-top: 0%;
+  --bottle-frame-crop-right: 0%;
+  --bottle-frame-crop-bottom: 0%;
+  --bottle-frame-crop-left: 0%;
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -118,7 +121,10 @@ body {
   min-width: 0;
   transform: translate(var(--bottle-frame-x), var(--bottle-frame-y)) scale(var(--bottle-frame-scale));
   transform-origin: center bottom;
-  clip-path: inset(var(--bottle-frame-crop));
+  clip-path: inset(
+    var(--bottle-frame-crop-top) var(--bottle-frame-crop-right) var(--bottle-frame-crop-bottom)
+      var(--bottle-frame-crop-left)
+  );
   will-change: transform, clip-path;
 }
 
