@@ -13,6 +13,7 @@ import {
 import { logger } from "../lib/logger";
 import { resolveProcessedFragranceImage } from "../services/imagePipeline";
 import { imageReferenceDiagnostic, usableImageUrlForResponse } from "../services/imageReference";
+import { parseIncomingImageUrl } from "../services/incomingImageUrl";
 import {
   asciiForImageSearch,
   resolveFragranceIdentity,
@@ -65,25 +66,6 @@ function concentrationHintToOverride(hint: ConcentrationHint): Concentration {
     default:
       return "Unknown";
   }
-}
-
-function parseIncomingImageUrl(raw: unknown): string | null {
-  if (typeof raw !== "string" || !raw.trim()) return null;
-  const s = raw.trim();
-  if (s.startsWith("data:image/")) {
-    if (s.length > 4_000_000) return null;
-    return s;
-  }
-  if (s.startsWith("/api/image-objects/images/processed/")) {
-    return s;
-  }
-  try {
-    const u = new URL(s);
-    if (u.protocol === "http:" || u.protocol === "https:") return u.toString();
-  } catch {
-    return null;
-  }
-  return null;
 }
 
 type RefreshImageCatalogMetadata = {
