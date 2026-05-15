@@ -274,7 +274,10 @@ router.patch("/wardrobe/:id", async (req, res) => {
     return;
   }
   if (hasImageAdjustment && !normalizedImageAdjustment) {
-    res.status(400).json({ error: "imageAdjustment must be an object with numeric scale/x/y/crop values" });
+    res.status(400).json({
+      error:
+        "imageAdjustment must be an object with numeric scale, x, y, and crop edges (cropTop, cropRight, cropBottom, cropLeft), or legacy uniform crop",
+    });
     return;
   }
 

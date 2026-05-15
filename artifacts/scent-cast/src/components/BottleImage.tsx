@@ -29,7 +29,7 @@ type BottleImageProps = {
   className?: string;
   /** Extra classes on the `<img>` (hover, filters). */
   imgClassName?: string;
-  /** Persistent visual rescue controls: zoom, nudge, and edge crop. */
+  /** Persistent visual rescue controls: zoom, nudge, and per-edge clip (top/right/bottom/left). */
   adjustment?: BottleImageAdjustment | null;
   loading?: 'lazy' | 'eager';
 };
