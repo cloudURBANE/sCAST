@@ -1225,7 +1225,7 @@ export const Wardrobe: React.FC<{
         <div className="space-y-8 pb-28 sm:pb-36">
           {shelves.length > 0 ? shelves.map((shelfItems, shelfIndex) => (
             <div key={shelfIndex} className="relative group/shelf">
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-7 sm:gap-8 lg:gap-10 mb-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-5 mb-1">
                 {shelfItems.map((item, i) => (
                   <motion.div
                     key={item.id}

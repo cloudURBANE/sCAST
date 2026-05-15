@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400;1,600&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400;1,600&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;700&family=Pinyon+Script&display=swap');
 @import "tailwindcss";
 
 @theme {
@@ -11,6 +11,7 @@
   --font-serif: "Cormorant Garamond", Georgia, serif;
   --font-sans: "Inter", system-ui, -apple-system, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --font-script: "Pinyon Script", "Cormorant Garamond", cursive;
 
   --radius-scent: 22px;
   --radius-scent-inner: 21px;
@@ -387,41 +388,93 @@ a {
   position: absolute;
   inset: 0.7rem;
   pointer-events: none;
-  border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: calc(var(--radius-scent) - 10px);
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow:
+    /* outer crystal hairline */
+    0 0 0 1px rgba(0, 0, 0, 0.5),
+    /* top-edge light catch */
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    /* bottom-edge soft fade */
+    inset 0 -1px 0 rgba(255, 255, 255, 0.06),
+    /* side bevels */
+    inset 1px 0 0 rgba(255, 255, 255, 0.05),
+    inset -1px 0 0 rgba(255, 255, 255, 0.05),
+    /* inner depth shadow */
+    inset 0 2px 6px rgba(0, 0, 0, 0.55),
+    inset 0 -2px 8px rgba(0, 0, 0, 0.45);
+  transition: border-color var(--scent-transition-base) var(--scent-ease-out);
+}
+
+/* Corner sparkles — light catching the bevel like polished crystal */
+.scent-card-frame::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.7), transparent 16px),
+    radial-gradient(circle at 100% 0%, rgba(255, 255, 255, 0.7), transparent 16px),
+    radial-gradient(circle at 0% 100%, rgba(255, 255, 255, 0.45), transparent 14px),
+    radial-gradient(circle at 100% 100%, rgba(255, 255, 255, 0.45), transparent 14px);
+  mix-blend-mode: screen;
+  opacity: 0.85;
+}
+
+/* Glossy diagonal light sweep across the frame, restricted to the edge ring */
+.scent-card-frame::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  border: 1px solid transparent;
+  background:
+    linear-gradient(135deg,
+      rgba(255, 255, 255, 0.45) 0%,
+      rgba(255, 255, 255, 0) 22%,
+      rgba(255, 255, 255, 0) 78%,
+      rgba(255, 255, 255, 0.28) 100%
+    ) border-box;
+  -webkit-mask:
+    linear-gradient(#000 0 0) padding-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  mix-blend-mode: screen;
 }
 
 .scent-card-brand {
-  --brand-size: clamp(1.6rem, 2.35vw, 2rem);
+  --brand-size: clamp(2.4rem, 3.6vw, 3.2rem);
   color: #f7f3ec;
-  font-family: var(--font-serif);
+  font-family: var(--font-script);
   font-size: var(--brand-size);
-  font-style: italic;
+  font-style: normal;
   font-weight: 400;
-  line-height: 1.05;
+  line-height: 1;
   letter-spacing: 0;
   text-transform: none;
   text-align: center;
   text-wrap: balance;
-  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
+  text-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.55),
+    0 0 22px rgba(255, 244, 220, 0.08);
   word-break: break-word;
   hyphens: auto;
 }
 
 .scent-card-brand[data-len="medium"] {
-  --brand-size: clamp(1.2rem, 1.85vw, 1.55rem);
+  --brand-size: clamp(2rem, 2.9vw, 2.6rem);
 }
 
 .scent-card-brand[data-len="long"] {
-  --brand-size: clamp(1rem, 1.45vw, 1.25rem);
-  letter-spacing: 0.005em;
+  --brand-size: clamp(1.6rem, 2.3vw, 2.1rem);
 }
 
 .scent-card-brand[data-len="xlong"] {
-  --brand-size: clamp(0.85rem, 1.2vw, 1.05rem);
-  letter-spacing: 0.01em;
-  line-height: 1.15;
+  --brand-size: clamp(1.25rem, 1.75vw, 1.65rem);
+  line-height: 1.05;
 }
 
 .scent-card-title-row {
