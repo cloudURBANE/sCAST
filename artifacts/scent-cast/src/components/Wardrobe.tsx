@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { bottleFeaturedSlotClass } from '@/lib/bottleImageFrame';
 import {
+  BOTTLE_CROP_STORED_MAX,
   DEFAULT_BOTTLE_IMAGE_ADJUSTMENT,
   bottleImageAdjustmentsEqual,
   normalizeBottleImageAdjustment,
@@ -1564,7 +1565,7 @@ export const Wardrobe: React.FC<{
                           <input
                             type="range"
                             min="0"
-                            max="20"
+                            max={BOTTLE_CROP_STORED_MAX}
                             step="0.5"
                             value={frameDraft.cropTop}
                             onChange={(e) => updateFrameDraft({ cropTop: Number(e.target.value) })}
@@ -1581,7 +1582,7 @@ export const Wardrobe: React.FC<{
                           <input
                             type="range"
                             min="0"
-                            max="20"
+                            max={BOTTLE_CROP_STORED_MAX}
                             step="0.5"
                             value={frameDraft.cropRight}
                             onChange={(e) => updateFrameDraft({ cropRight: Number(e.target.value) })}
@@ -1598,7 +1599,7 @@ export const Wardrobe: React.FC<{
                           <input
                             type="range"
                             min="0"
-                            max="20"
+                            max={BOTTLE_CROP_STORED_MAX}
                             step="0.5"
                             value={frameDraft.cropBottom}
                             onChange={(e) => updateFrameDraft({ cropBottom: Number(e.target.value) })}
@@ -1615,7 +1616,7 @@ export const Wardrobe: React.FC<{
                           <input
                             type="range"
                             min="0"
-                            max="20"
+                            max={BOTTLE_CROP_STORED_MAX}
                             step="0.5"
                             value={frameDraft.cropLeft}
                             onChange={(e) => updateFrameDraft({ cropLeft: Number(e.target.value) })}
@@ -1656,10 +1657,22 @@ export const Wardrobe: React.FC<{
                             type="button"
                             onClick={() =>
                               updateFrameDraft({
-                                cropTop: Math.max(frameDraft.cropTop, 6),
-                                cropRight: Math.max(frameDraft.cropRight, 6),
-                                cropBottom: Math.max(frameDraft.cropBottom, 6),
-                                cropLeft: Math.max(frameDraft.cropLeft, 6),
+                                cropTop: Math.max(
+                                  frameDraft.cropTop,
+                                  Math.round(BOTTLE_CROP_STORED_MAX * 0.3),
+                                ),
+                                cropRight: Math.max(
+                                  frameDraft.cropRight,
+                                  Math.round(BOTTLE_CROP_STORED_MAX * 0.3),
+                                ),
+                                cropBottom: Math.max(
+                                  frameDraft.cropBottom,
+                                  Math.round(BOTTLE_CROP_STORED_MAX * 0.3),
+                                ),
+                                cropLeft: Math.max(
+                                  frameDraft.cropLeft,
+                                  Math.round(BOTTLE_CROP_STORED_MAX * 0.3),
+                                ),
                                 scale: Math.max(frameDraft.scale, 1.08),
                               })
                             }
