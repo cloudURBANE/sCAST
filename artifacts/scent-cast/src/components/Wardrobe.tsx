@@ -1429,19 +1429,21 @@ export const Wardrobe: React.FC<{
                 }
               >
                 <div className="mx-auto max-w-[92rem] space-y-4 sm:space-y-5 py-5 sm:py-7">
-                  <header className="mx-auto max-w-3xl text-center">
-                    <p className="text-[10px] uppercase tracking-[0.36em] text-scent-accent font-bold">
+                  <header className="mx-auto max-w-3xl grid text-center gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-x-10">
+                    <p className="text-[10px] uppercase tracking-[0.36em] text-scent-accent font-bold order-1 sm:order-2 sm:col-start-2 sm:row-start-1 sm:self-center sm:text-right sm:max-w-[14rem] sm:pl-2">
                       Intelligence Profile
                     </p>
-                    <h2
-                      id="fragrance-detail-title"
-                      className="mt-2 font-serif italic text-5xl sm:text-7xl lg:text-8xl leading-[0.92] text-[#fff7ec] tracking-normal uppercase"
-                    >
-                      {entryName(selectedItem)}
-                    </h2>
-                    <p className="mt-2 font-serif text-lg sm:text-2xl uppercase tracking-[0.28em] text-white/84">
-                      {entryBrand(selectedItem)}
-                    </p>
+                    <div className="order-2 sm:order-1 sm:col-start-1 sm:row-start-1 space-y-2">
+                      <h2
+                        id="fragrance-detail-title"
+                        className="font-serif italic text-5xl sm:text-7xl lg:text-8xl leading-[0.92] text-[#fff7ec] tracking-normal uppercase"
+                      >
+                        {entryName(selectedItem)}
+                      </h2>
+                      <p className="font-serif text-lg sm:text-2xl uppercase tracking-[0.28em] text-white/84">
+                        {entryBrand(selectedItem)}
+                      </p>
+                    </div>
                   </header>
 
                   <ProfileScorePanel
@@ -1456,11 +1458,14 @@ export const Wardrobe: React.FC<{
                     >
                       <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4 lg:grid-cols-6">
                         {detailMetaRows.map(({ label, value }) => (
-                          <div key={label} className="min-w-0 text-center sm:text-left">
-                            <p className="text-[9px] uppercase tracking-[0.22em] text-white/38">
+                          <div
+                            key={label}
+                            className="min-w-0 flex items-center justify-between gap-3"
+                          >
+                            <p className="text-[9px] uppercase tracking-[0.22em] text-white/38 shrink-0">
                               {label}
                             </p>
-                            <p className="mt-0.5 truncate text-xs text-white/82 sm:text-sm">
+                            <p className="truncate text-xs text-white/82 sm:text-sm text-right">
                               {value}
                             </p>
                           </div>

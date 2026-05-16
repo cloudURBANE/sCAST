@@ -711,19 +711,21 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                 style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
               >
                 <div className="mx-auto max-w-[92rem] space-y-4 sm:space-y-5 py-5 sm:py-7">
-                  <header className="mx-auto max-w-3xl text-center">
-                    <p className="text-[10px] uppercase tracking-[0.36em] text-scent-accent font-bold">
+                  <header className="mx-auto max-w-3xl grid text-center gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-x-10">
+                    <p className="text-[10px] uppercase tracking-[0.36em] text-scent-accent font-bold order-1 sm:order-2 sm:col-start-2 sm:row-start-1 sm:self-center sm:text-right sm:max-w-[14rem] sm:pl-2">
                       Intelligence Profile
                     </p>
-                    <h2
-                      id="share-fragrance-detail-title"
-                      className="mt-2 font-serif italic text-5xl sm:text-7xl lg:text-8xl leading-[0.92] text-[#fff7ec] tracking-normal uppercase"
-                    >
-                      {entryName(selectedItem)}
-                    </h2>
-                    <p className="mt-2 font-serif text-lg sm:text-2xl uppercase tracking-[0.28em] text-white/84">
-                      {entryBrand(selectedItem)}
-                    </p>
+                    <div className="order-2 sm:order-1 sm:col-start-1 sm:row-start-1 space-y-2">
+                      <h2
+                        id="share-fragrance-detail-title"
+                        className="font-serif italic text-5xl sm:text-7xl lg:text-8xl leading-[0.92] text-[#fff7ec] tracking-normal uppercase"
+                      >
+                        {entryName(selectedItem)}
+                      </h2>
+                      <p className="font-serif text-lg sm:text-2xl uppercase tracking-[0.28em] text-white/84">
+                        {entryBrand(selectedItem)}
+                      </p>
+                    </div>
                   </header>
 
                   <ProfileScorePanel metrics={selectedMetrics} coverage={selectedCoverage} />
@@ -788,9 +790,14 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                         <FragrancePanel title="Details">
                           <div className="space-y-3 px-4 py-4">
                             {selectedDetailMetaRows.map(({ label, value }) => (
-                              <div key={label} className="flex items-center justify-between gap-4 border-b border-white/[0.06] pb-2 last:border-b-0 last:pb-0">
-                                <p className="text-[10px] text-white/48">{label}</p>
-                                <p className="text-sm text-white/86">{value}</p>
+                              <div
+                                key={label}
+                                className="flex items-center justify-between gap-4 border-b border-white/[0.06] pb-2 last:border-b-0 last:pb-0"
+                              >
+                                <p className="text-[9px] uppercase tracking-[0.22em] text-white/38 shrink-0">
+                                  {label}
+                                </p>
+                                <p className="text-sm text-white/86 text-right">{value}</p>
                               </div>
                             ))}
                           </div>
