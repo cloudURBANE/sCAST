@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Wind } from 'lucide-react';
+import { APP_BRAND_MARK } from '@/lib/appBrand';
 
 interface AuthModalProps {
   onAuth: (token: string, email: string) => void;
@@ -30,7 +31,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         <div className="flex flex-col items-center gap-10">
           <div className="flex items-center gap-2 opacity-60">
             <Wind size={20} strokeWidth={1} />
-            <span className="font-serif italic text-xl tracking-tighter uppercase text-white">Scent Cast</span>
+            <span className="font-serif italic text-xl tracking-tighter uppercase text-white">{APP_BRAND_MARK}</span>
           </div>
 
           <div className="text-center space-y-3">

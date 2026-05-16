@@ -18,6 +18,7 @@ import {
   type ScentWeatherRecommendation,
 } from './lib/scentWeatherEngine';
 import { collectMainAccordDisplayRows } from './lib/fragranceApi';
+import { APP_BRAND_MARK } from './lib/appBrand';
 
 interface WeatherData {
   temp?: number;
@@ -951,7 +952,7 @@ export default function App() {
               strokeWidth={1.25}
               className="w-[19.8px] h-[19.8px] sm:w-[22px] sm:h-[22px] text-scent-accent drop-shadow-[0_0_10px_rgba(201,139,44,0.22)]"
             />
-            <h1 className="scent-brandmark font-serif text-[1.125rem] sm:text-3xl tracking-[0.14em] uppercase">SCENTCAST</h1>
+            <h1 className="scent-brandmark font-serif text-[1.125rem] sm:text-3xl tracking-[0.14em] uppercase">{APP_BRAND_MARK}</h1>
           </div>
 
           <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-3 sm:gap-4 justify-end">
@@ -1177,7 +1178,7 @@ export default function App() {
         <div className="max-w-[1400px] mx-auto text-center space-y-4">
           <div className="flex items-center justify-center gap-2 opacity-30">
             <Wind size={18} />
-            <p className="font-serif font-bold italic tracking-tighter uppercase">Scent Cast</p>
+            <p className="font-serif font-bold italic tracking-tighter uppercase">{APP_BRAND_MARK}</p>
           </div>
           <p className="text-[10px] uppercase tracking-[0.2em] text-scent-muted">© 2026 Olfactory Intelligence Systems</p>
         </div>

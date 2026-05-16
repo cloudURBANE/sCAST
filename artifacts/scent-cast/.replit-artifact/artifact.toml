@@ -1,6 +1,6 @@
 kind = "web"
 previewPath = "/"
-title = "Scent Cast"
+title = "ScentBeam"
 version = "1.0.0"
 id = "artifacts/scent-cast"
 router = "path"

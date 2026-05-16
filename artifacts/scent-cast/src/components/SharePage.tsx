@@ -4,6 +4,7 @@ import { Wind, ShoppingBag, ShieldCheck, Wind as WindIcon } from 'lucide-react';
 import { LavaBackground } from './LavaBackground';
 import { BottleImage } from '@/components/BottleImage';
 import type { BottleImageAdjustment } from '@/lib/bottleImageAdjustment';
+import { APP_BRAND_MARK } from '@/lib/appBrand';
 
 interface ScentVector {
   freshness: number;
@@ -99,7 +100,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
             className="flex items-center gap-2 text-white hover:opacity-85 transition-opacity outline-none focus-visible:ring-2 focus-visible:ring-white/30 rounded-sm"
           >
             <Wind size={24} strokeWidth={1} className="text-white shrink-0" aria-hidden />
-            <span className="font-serif text-2xl italic tracking-tighter uppercase">Scent Cast</span>
+            <span className="font-serif text-2xl italic tracking-tighter uppercase">{APP_BRAND_MARK}</span>
           </a>
         </div>
       </nav>
@@ -284,7 +285,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                           </button>
                         )}
                         <p className="text-[9px] leading-relaxed text-white/25 font-sans">
-                          Scent Cast may earn a commission from purchases made through this link.
+                          {APP_BRAND_MARK} may earn a commission from purchases made through this link.
                         </p>
                       </div>
                     </div>
@@ -298,7 +299,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
               <p className="text-[9px] uppercase tracking-[0.4em] text-white/20 font-bold mb-3">Powered by</p>
               <div className="flex items-center justify-center gap-2 text-white/30">
                 <Wind size={16} strokeWidth={1} />
-                <span className="font-serif italic text-lg tracking-tighter uppercase">Scent Cast</span>
+                <span className="font-serif italic text-lg tracking-tighter uppercase">{APP_BRAND_MARK}</span>
               </div>
             </div>
           </div>
