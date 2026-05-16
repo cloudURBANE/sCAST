@@ -1,5 +1,7 @@
 const FRAGRANCE_API_URL = (import.meta as { env?: Record<string, string | undefined> }).env
   ?.VITE_FRAGRANCE_API_URL;
+const APP_API_URL = (import.meta as { env?: Record<string, string | undefined> }).env
+  ?.VITE_API_BASE_URL;
 const FRAGRANCE_SEARCH_CACHE_STORAGE_KEY = "scentcast.fragranceSearchCache.v1";
 const FRAGRANCE_SEARCH_CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const FRAGRANCE_SEARCH_CACHE_MAX_ENTRIES = 100;
@@ -418,14 +420,14 @@ export function normalizeFragranceDetail(detail: FragranceDetail): FragranceDeta
 }
 
 function getApiBase() {
-  const base = FRAGRANCE_API_URL?.trim();
+  const base = APP_API_URL?.trim() || FRAGRANCE_API_URL?.trim();
 
   if (!base) {
     throw new Error(
       [
-        "Missing VITE_FRAGRANCE_API_URL (fragrance catalog / search backend).",
-        "For local dev: add it to artifacts/scent-cast/.env.local, or define it in ScentCast.env at the repo root, then restart the Vite dev server.",
-        "For production: add VITE_FRAGRANCE_API_URL in the frontend host env (e.g. Vercel) and redeploy.",
+        "Missing VITE_API_BASE_URL or VITE_FRAGRANCE_API_URL (fragrance catalog / search backend).",
+        "For local dev: add VITE_API_BASE_URL to artifacts/scent-cast/.env.local, or define it in ScentCast.env at the repo root, then restart the Vite dev server.",
+        "For production: add VITE_API_BASE_URL in the frontend host env (e.g. Vercel) and redeploy.",
       ].join(" "),
     );
   }
