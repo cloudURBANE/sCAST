@@ -94,10 +94,6 @@ function scoreNumber(value: unknown): number | null {
   return isFiniteNumber(value) ? Math.max(0, Math.min(100, Math.round(value))) : null;
 }
 
-function scoreWidth(value: unknown): string {
-  return `${scoreNumber(value) ?? 0}%`;
-}
-
 function stringValue(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
@@ -328,6 +324,44 @@ function SourceStatusPanel({
   );
 }
 
+function PerformanceStatSubtitle({
+  performance,
+}: {
+  performance?: DerivedMetrics["performance_score"] | null;
+}) {
+  const longevity = performance?.longevity_label?.trim() || null;
+  const sillage = performance?.sillage_label?.trim() || null;
+  const longevityLine = longevity ? `${longevity} longevity` : null;
+  const sillageLine = sillage ? `${sillage} sillage` : null;
+  const both = Boolean(longevityLine && sillageLine);
+  const [phase, setPhase] = useState(0);
+  useEffect(() => {
+    if (!both) return;
+    const id = window.setInterval(() => setPhase((p) => (p + 1) % 2), 4500);
+    return () => window.clearInterval(id);
+  }, [both]);
+  const text =
+    longevityLine && sillageLine
+      ? phase === 0
+        ? sillageLine
+        : longevityLine
+      : joinDisplayParts([longevityLine, sillageLine]) ?? "Signal";
+
+  return (
+    <p className="text-[10px] text-white/42 min-h-[2.5em] flex items-center justify-center px-1">
+      <motion.span
+        key={text}
+        initial={{ opacity: 0, y: 3 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+        className="block leading-snug"
+      >
+        {text}
+      </motion.span>
+    </p>
+  );
+}
+
 function ProfileScorePanel({
   metrics,
   coverage,
@@ -338,25 +372,11 @@ function ProfileScorePanel({
   const headline = metrics?.headline ?? null;
   const performance = metrics?.performance_score ?? null;
   const value = metrics?.value_score ?? null;
-  const mainAccords = metrics?.main_accords ?? null;
-  const accordItems = collectMainAccordDisplayRows(mainAccords).slice(0, 5);
   const consensusScore = scoreNumber(headline?.crowd_consensus_score);
   const performanceScore = scoreNumber(performance?.score);
-  const valueScore = scoreNumber(value?.score);
   const communityScore = scoreNumber(metrics?.community_interest_score?.score);
-  const summary = headline?.summary?.trim() || null;
-  const rows = [
-    { label: "Performance", score: performanceScore, value: joinDisplayParts([
-      formatScore100(performance?.score),
-      performance?.longevity_label ? `${performance.longevity_label} longevity` : null,
-      performance?.sillage_label ? `${performance.sillage_label} sillage` : null,
-    ]) },
-    { label: "Value", score: valueScore, value: joinDisplayParts([value?.dominant_label, formatScore100(value?.score)]) },
-    { label: "Wear", score: null, value: formatWearProfile(metrics?.wear_profile) },
-    { label: "Community", score: communityScore, value: formatScore100(metrics?.community_interest_score?.score) },
-  ].filter((row): row is { label: string; score: number | null; value: string } => Boolean(row.value));
 
-  if (!metrics || (!summary && rows.length === 0 && accordItems.length === 0)) {
+  if (!metrics || !hasDerivedMetricsContent(metrics)) {
     if (!coverage) return null;
     return (
       <FragrancePanel title="Derived Intelligence">
@@ -382,7 +402,6 @@ function ProfileScorePanel({
       icon: Activity,
       label: "Performance",
       value: performanceScore !== null ? `${performanceScore}%` : "Pending",
-      sub: performance?.longevity_label ? `${performance.longevity_label} longevity` : "Signal",
     },
     {
       icon: ThumbsUp,
@@ -393,8 +412,8 @@ function ProfileScorePanel({
     {
       icon: CircleDollarSign,
       label: "Value",
-      value: valueScore !== null ? `${valueScore}/100` : value?.dominant_label ?? "Pending",
-      sub: value?.dominant_label ?? "Assessment",
+      value: value?.dominant_label ?? "Pending",
+      sub: "Assessment",
     },
   ];
 
@@ -414,35 +433,22 @@ function ProfileScorePanel({
         {statCards.map((stat) => {
           const Icon = stat.icon;
           return (
-            <div key={stat.label} className="flex flex-col items-center justify-center gap-1 border-r border-b lg:border-b-0 border-white/8 px-4 py-5 text-center last:border-r-0">
+            <div
+              key={stat.label}
+              className="flex flex-col items-center justify-center gap-1 border-r border-b lg:border-b-0 border-white/8 px-4 py-5 text-center last:border-r-0"
+            >
               <Icon size={18} strokeWidth={1.6} className="text-scent-accent" />
               <p className="font-serif italic text-2xl text-white leading-tight">{stat.value}</p>
-              <p className="text-[10px] text-white/42">{stat.sub}</p>
+              {stat.label === "Performance" ? (
+                <PerformanceStatSubtitle performance={performance} />
+              ) : (
+                <p className="text-[10px] text-white/42">{stat.sub}</p>
+              )}
               <p className="text-[9px] uppercase tracking-[0.2em] text-white/40 font-bold">{stat.label}</p>
             </div>
           );
         })}
       </div>
-
-      {rows.length > 0 ? (
-        <FragrancePanel title="Profile Signals">
-          <div className="space-y-3 px-4 py-4">
-            {rows.map((row) => (
-              <div key={row.label} className="grid grid-cols-[6rem_1fr] items-center gap-4">
-                <p className="text-[10px] text-white/52">{row.label}</p>
-                <div className="min-w-0">
-                  <p className="truncate text-sm text-white/78">{row.value}</p>
-                  {row.score !== null ? (
-                    <div className="mt-2 h-px bg-white/10">
-                      <div className="h-px bg-scent-accent" style={{ width: scoreWidth(row.score) }} />
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-            ))}
-          </div>
-        </FragrancePanel>
-      ) : null}
     </div>
   );
 }
@@ -811,7 +817,9 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                     <div className="flex items-center gap-4 px-4 py-4">
                       <Info size={18} className="shrink-0 text-white/55" />
                       <p className="text-sm leading-relaxed text-white/56">
-                        {profileSummary(selectedMetrics) ?? entryNotes(selectedItem)}
+                        {selectedMetrics?.main_accords?.accord_summary?.trim() ??
+                          profileSummary(selectedMetrics) ??
+                          entryNotes(selectedItem)}
                       </p>
                     </div>
                   </FragrancePanel>

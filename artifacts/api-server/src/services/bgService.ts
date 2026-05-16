@@ -105,7 +105,8 @@ export type RemoveBgReason =
   | "poof_server_error"
   | "poof_empty_output"
   | "poof_white_background"
-  | "local_trim_fallback";
+  | "local_trim_fallback"
+  | "openai_reimagine";
 
 export type RemoveBgOptions = {
   /** Poof API removal preset when supported (e.g. product vs auto). */

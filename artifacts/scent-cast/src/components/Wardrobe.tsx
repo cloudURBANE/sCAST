@@ -13,7 +13,7 @@ import {
   RefreshCw,
   Undo2,
   HelpCircle,
-  Eraser,
+  Sparkles,
   Check,
   Maximize2,
   ChevronDown,
@@ -331,12 +331,6 @@ function hasLegacyPyramidNotes(item: Fragrance): boolean {
   );
 }
 
-function formatAccordStrength(row: { score?: number; pct?: number }): string | null {
-  if (isFiniteNumber(row.pct)) return `${Math.round(row.pct)}%`;
-  if (isFiniteNumber(row.score)) return String(Math.round(row.score));
-  return null;
-}
-
 function FragrancePanel({
   title,
   children,
@@ -454,6 +448,45 @@ function SourceStatusPanel({
   );
 }
 
+/** Alternates sillage vs longevity under the Performance stat (both shown in Snapshot above). */
+function PerformanceStatSubtitle({
+  performance,
+}: {
+  performance?: DerivedMetrics["performance_score"] | null;
+}) {
+  const longevity = performance?.longevity_label?.trim() || null;
+  const sillage = performance?.sillage_label?.trim() || null;
+  const longevityLine = longevity ? `${longevity} longevity` : null;
+  const sillageLine = sillage ? `${sillage} sillage` : null;
+  const both = Boolean(longevityLine && sillageLine);
+  const [phase, setPhase] = React.useState(0);
+  React.useEffect(() => {
+    if (!both) return;
+    const id = window.setInterval(() => setPhase((p) => (p + 1) % 2), 4500);
+    return () => window.clearInterval(id);
+  }, [both]);
+  const text =
+    longevityLine && sillageLine
+      ? phase === 0
+        ? sillageLine
+        : longevityLine
+      : joinDisplayParts([longevityLine, sillageLine]) ?? "Signal";
+
+  return (
+    <p className="text-[10px] text-white/42 min-h-[2.5em] flex items-center justify-center px-1">
+      <motion.span
+        key={text}
+        initial={{ opacity: 0, y: 3 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+        className="block leading-snug"
+      >
+        {text}
+      </motion.span>
+    </p>
+  );
+}
+
 function ProfileScorePanel({
   metrics,
   coverage,
@@ -464,47 +497,12 @@ function ProfileScorePanel({
   const headline = metrics?.headline ?? null;
   const performance = metrics?.performance_score ?? null;
   const value = metrics?.value_score ?? null;
-  const mainAccords = metrics?.main_accords ?? null;
-  const notes = metrics?.notes ?? null;
-  const accordItems = collectMainAccordDisplayRows(mainAccords).slice(0, 5);
   const consensusScore = scoreNumber(headline?.crowd_consensus_score);
   const performanceScore = scoreNumber(performance?.score);
-  const valueScore = scoreNumber(value?.score);
   const communityScore = scoreNumber(metrics?.community_interest_score?.score);
-  const rows = [
-    {
-      label: "Performance",
-      value: joinDisplayParts([
-        formatScore100(performance?.score),
-        performance?.longevity_label ? `${performance.longevity_label} longevity` : null,
-        performance?.sillage_label ? `${performance.sillage_label} sillage` : null,
-      ]),
-    },
-    {
-      label: "Value",
-      value: joinDisplayParts([
-        value?.dominant_label,
-        formatScore100(value?.score),
-      ]),
-    },
-    {
-      label: "Wear",
-      value: formatWearProfile(metrics?.wear_profile),
-    },
-    {
-      label: "Community",
-      value: formatScore100(metrics?.community_interest_score?.score),
-    },
-    {
-      label: "Main Profile",
-      value: mainAccords?.accord_summary?.trim() || null,
-    },
-  ].filter((row): row is { label: string; value: string } => Boolean(row.value));
   const summary = headline?.summary?.trim() || null;
-  const hasContent =
-    rows.length > 0 || accordItems.length > 0 || Boolean(summary);
 
-  if (!metrics || !hasContent) {
+  if (!metrics || !hasDerivedMetricsContent(metrics)) {
     if (!coverage) return null;
 
     return (
@@ -531,10 +529,6 @@ function ProfileScorePanel({
       icon: Activity,
       label: "Performance",
       value: performanceScore !== null ? `${performanceScore}%` : "Pending",
-      sub: joinDisplayParts([
-        performance?.longevity_label ? `${performance.longevity_label} longevity` : null,
-        performance?.sillage_label ? `${performance.sillage_label} sillage` : null,
-      ]) ?? "Signal",
     },
     {
       icon: ThumbsUp,
@@ -545,8 +539,8 @@ function ProfileScorePanel({
     {
       icon: CircleDollarSign,
       label: "Value",
-      value: valueScore !== null ? `${valueScore}/100` : value?.dominant_label ?? "Pending",
-      sub: value?.dominant_label ?? "Assessment",
+      value: value?.dominant_label ?? "Pending",
+      sub: "Assessment",
     },
   ];
 
@@ -567,10 +561,17 @@ function ProfileScorePanel({
         {statCards.map((stat) => {
           const Icon = stat.icon;
           return (
-            <div key={stat.label} className="flex flex-col items-center justify-center gap-1 border border-white/15 bg-white/[0.035] px-4 py-5 text-center">
+            <div
+              key={stat.label}
+              className="flex flex-col items-center justify-center gap-1 border border-white/15 bg-white/[0.035] px-4 py-5 text-center"
+            >
               <Icon size={18} strokeWidth={1.6} className="text-scent-accent" />
               <p className="font-serif italic text-2xl text-white leading-tight">{stat.value}</p>
-              <p className="text-[10px] text-white/42">{stat.sub}</p>
+              {stat.label === "Performance" ? (
+                <PerformanceStatSubtitle performance={performance} />
+              ) : (
+                <p className="text-[10px] text-white/42">{stat.sub}</p>
+              )}
               <p className="text-[9px] uppercase tracking-[0.2em] text-white/55 font-bold">{stat.label}</p>
             </div>
           );
@@ -590,7 +591,10 @@ function ProfileScorePanel({
             {statCards.map((stat) => {
               const Icon = stat.icon;
               return (
-                <div key={stat.label} className="flex flex-col items-center justify-center gap-1 border border-white/15 bg-white/[0.035] px-2 py-3 text-center">
+                <div
+                  key={stat.label}
+                  className="flex flex-col items-center justify-center gap-1 border border-white/15 bg-white/[0.035] px-2 py-3 text-center"
+                >
                   <Icon size={14} className="text-scent-accent" />
                   <p className="text-[12px] text-white/85 font-serif italic">{stat.value}</p>
                   <p className="text-[8px] uppercase tracking-[0.16em] text-white/55 font-bold">{stat.label}</p>
@@ -639,9 +643,6 @@ function ProfileScorePanel({
             <div className="space-y-4 px-4 py-5 text-center">
               <div className="flex flex-col items-center justify-center gap-1">
                 <p className="font-serif italic text-2xl text-scent-accent">{value?.dominant_label ?? "Pending"}</p>
-                {formatScore100(value?.score) ? (
-                  <p className="text-sm text-white/84">{formatScore100(value?.score)}</p>
-                ) : null}
               </div>
               <div className="h-1 bg-white/10">
                 <div className="h-full bg-gradient-to-r from-white/35 via-scent-accent to-scent-accent/60" style={{ width: scoreWidth(value?.score) }} />
@@ -650,34 +651,6 @@ function ProfileScorePanel({
           </FragrancePanel>
         </div>
       </div>
-
-      {rows.length > 0 ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
-          {rows.map((row) => (
-            <div key={row.label} className="border border-white/15 bg-white/[0.035] px-3 py-2.5 text-center sm:text-left">
-              <p className="text-[8px] uppercase tracking-[0.2em] text-white/55 font-bold">{row.label}</p>
-              <p className="mt-1 text-sm text-white/82 font-serif italic leading-snug">{row.value}</p>
-            </div>
-          ))}
-        </div>
-      ) : null}
-
-      {accordItems.length > 0 ? (
-        <div className="hidden sm:flex flex-wrap justify-center gap-2">
-          {accordItems.map((accord) => {
-            const label = accord.label?.trim() ?? "";
-            const value = formatAccordStrength(accord);
-            return (
-              <span
-                key={`${label}-${value ?? "accord"}`}
-                className="border border-scent-accent/20 bg-scent-accent/[0.06] px-3 py-1.5 text-[9px] uppercase tracking-[0.16em] text-white/62 font-bold"
-              >
-                {value ? `${label} ${value}` : label}
-              </span>
-            );
-          })}
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -688,6 +661,9 @@ const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)
 const REFRESH_IMAGE_ENDPOINT = API_BASE_URL
   ? `${API_BASE_URL}/api/refresh-image`
   : "/api/refresh-image";
+const REIMAGINE_IMAGE_ENDPOINT = API_BASE_URL
+  ? `${API_BASE_URL}/api/reimagine-bottle-image`
+  : "/api/reimagine-bottle-image";
 
 function concentrationHintFromValue(
   value?: string,
@@ -809,7 +785,7 @@ export const Wardrobe: React.FC<{
   });
   const [clarifySolverId, setClarifySolverId] = React.useState<WardrobeImageSolverId | ''>('');
   const [pendingPreview, setPendingPreview] = React.useState<{ itemId: string; url: string; isFallback: boolean } | null>(null);
-  const [stripBgBusy, setStripBgBusy] = React.useState(false);
+  const [reimagineBusy, setReimagineBusy] = React.useState(false);
   const [persistBusy, setPersistBusy] = React.useState(false);
   const [vaultSolverBanner, setVaultSolverBanner] = React.useState<string | null>(null);
   const [searchFocused, setSearchFocused] = React.useState(false);
@@ -875,11 +851,11 @@ export const Wardrobe: React.FC<{
   }, [selectedItem?.id]);
 
   const handleRefreshImage = async (item: Fragrance, solverId?: WardrobeImageSolverId) => {
-    const prev = refreshCounts[item.id] ?? 0;
-    if (!solverId && prev > 2) {
-      setRefreshError('Too many automatic tries. Choose what looks wrong, then search with a fix.');
+    if (!solverId) {
+      setRefreshError('Pick what looks wrong before searching for a new image.');
       return;
     }
+    const prev = refreshCounts[item.id] ?? 0;
     const nextCount = prev + 1;
     setRefreshCounts((p) => {
       const next = { ...p, [item.id]: nextCount };
@@ -932,51 +908,40 @@ export const Wardrobe: React.FC<{
     }
   };
 
-  const handleStripBackground = async (item: Fragrance) => {
+  const handleReimagine = async (item: Fragrance) => {
     const src =
       pendingPreview?.itemId === item.id ? pendingPreview.url : item.imageUrl;
     if (!src?.trim()) {
-      setRefreshError('No image to process.');
+      setRefreshError('No image to reimagine — find one first.');
       return;
     }
-    setStripBgBusy(true);
+    setReimagineBusy(true);
     setRefreshError(null);
     setBgFallbackWarning(null);
     try {
-      const res = await fetch(REFRESH_IMAGE_ENDPOINT, {
+      const res = await fetch(REIMAGINE_IMAGE_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: entryName(item),
           brand: entryBrand(item),
-          concentrationHint: concentrationHintFromValue(item.concentration),
-          stripBgOnly: true,
           imageUrl: src,
         }),
       });
       const data = await res.json();
-      if (!res.ok || data.error) throw new Error(data.error || 'Background removal failed');
+      if (!res.ok || data.error) throw new Error(data.error || 'Reimagine failed');
       const returnedImageUrl =
         typeof data.imageUrl === 'string' ? data.imageUrl.trim() : '';
       if (!returnedImageUrl) {
-        throw new Error('Image processing completed without a usable image URL.');
+        throw new Error('Reimagine completed without a usable image URL.');
       }
       const nextUrl = withImageVersion(returnedImageUrl, data.imageHash || Date.now());
       const isFallback = imageProcessingNeedsRepair(data);
       setPendingPreview({ itemId: item.id, url: nextUrl, isFallback });
-      if (isFallback) {
-        const reason =
-          typeof data.removeBgReason === 'string' && data.removeBgReason.trim()
-            ? ` Reason: ${data.removeBgReason.trim()}.`
-            : '';
-        setBgFallbackWarning(
-          `This preview still has a fallback background.${reason} Try another image fix before saving.`,
-        );
-      }
     } catch (err: any) {
-      setRefreshError(err.message || 'Background removal failed');
+      setRefreshError(err.message || 'Reimagine failed');
     } finally {
-      setStripBgBusy(false);
+      setReimagineBusy(false);
     }
   };
 
@@ -1089,7 +1054,7 @@ export const Wardrobe: React.FC<{
 
   const imageToolbarBusy =
     !!selectedItem &&
-    (refreshingId === selectedItem.id || stripBgBusy || persistBusy);
+    (refreshingId === selectedItem.id || reimagineBusy || persistBusy);
 
   const hasPendingPreview =
     !!selectedItem && !!pendingPreview && pendingPreview.itemId === selectedItem.id;
@@ -1544,7 +1509,9 @@ export const Wardrobe: React.FC<{
                     <div className="flex flex-col items-center justify-center gap-3 px-4 py-4 text-center">
                       <Info size={18} className="shrink-0 text-white/55" />
                       <p className="mx-auto max-w-3xl text-sm leading-relaxed text-white/56">
-                        {profileSummary(selectedMetrics) ?? entryNotes(selectedItem)}
+                        {selectedMetrics?.main_accords?.accord_summary?.trim() ??
+                          profileSummary(selectedMetrics) ??
+                          entryNotes(selectedItem)}
                       </p>
                     </div>
                   </FragrancePanel>
@@ -1637,8 +1604,8 @@ export const Wardrobe: React.FC<{
                           }`}
                         >
                           {detailNeedsClarify
-                            ? 'Automatic search paused — expand to pick a hint or strip the background.'
-                            : 'Expand to find a new image, remove background, or save a preview.'}
+                            ? 'Pick a hint and search again, or reimagine the bottle.'
+                            : 'Expand to find a new image, reimagine the bottle, or save a preview.'}
                         </p>
                       ) : null}
                     </div>
@@ -1658,15 +1625,9 @@ export const Wardrobe: React.FC<{
                       aria-labelledby="wardrobe-bottle-tools-trigger"
                       className="space-y-3"
                     >
-                      {detailNeedsClarify ? (
-                        <p className="text-center text-[10px] text-amber-200/75 leading-snug font-sans">
-                          Automatic search paused after several tries — pick what looks wrong, then search again or strip the background.
-                        </p>
-                      ) : (
-                        <p className="text-center text-[10px] text-white/40 leading-snug font-sans">
-                          Search with an optional issue hint; remove background on the preview; save when it looks right.
-                        </p>
-                      )}
+                      <p className="text-center text-[10px] text-white/40 leading-snug font-sans">
+                        Pick what looks wrong, then search — or reimagine the current bottle. Save when it looks right.
+                      </p>
 
                       <label htmlFor="wardrobe-clarify-solver" className="sr-only">
                         Search tuning for bottle image
@@ -1680,11 +1641,7 @@ export const Wardrobe: React.FC<{
                         disabled={imageToolbarBusy}
                         className="w-full bg-black/45 border border-white/12 text-white text-[11px] py-2.5 px-2 rounded-lg font-sans outline-none focus:border-scent-accent/50 disabled:opacity-40"
                       >
-                        {!detailNeedsClarify ? (
-                          <option value="">Automatic search</option>
-                        ) : (
-                          <option value="">Choose what looks wrong…</option>
-                        )}
+                        <option value="">Choose what looks wrong…</option>
                         {WARDROBE_CLARIFY_SOLVERS.map((s) => (
                           <option key={s.id} value={s.id}>
                             {s.label}
@@ -1698,14 +1655,9 @@ export const Wardrobe: React.FC<{
                           onClick={() =>
                             void handleRefreshImage(selectedItem, clarifySolverId || undefined)
                           }
-                          disabled={
-                            imageToolbarBusy ||
-                            (detailNeedsClarify && !clarifySolverId)
-                          }
+                          disabled={imageToolbarBusy || !clarifySolverId}
                           title={
-                            detailNeedsClarify && !clarifySolverId
-                              ? 'Select an issue first'
-                              : undefined
+                            !clarifySolverId ? 'Select an issue first' : undefined
                           }
                           className="flex-1 min-h-[44px] py-3 bg-white text-black uppercase tracking-[0.22em] text-[10px] font-bold hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-45 disabled:cursor-not-allowed rounded-lg"
                         >
@@ -1721,24 +1673,24 @@ export const Wardrobe: React.FC<{
                         </button>
                         <button
                           type="button"
-                          onClick={() => void handleStripBackground(selectedItem)}
+                          onClick={() => void handleReimagine(selectedItem)}
                           disabled={
                             imageToolbarBusy || !detailBottleUrl?.trim()
                           }
                           title={
                             !detailBottleUrl?.trim()
                               ? 'Need an image first'
-                              : 'Run AI background removal on the preview'
+                              : 'Reimagine this bottle as a clean studio packshot'
                           }
                           className="flex-1 min-h-[44px] py-3 bg-white/[0.06] text-white uppercase tracking-[0.18em] text-[10px] font-bold border border-white/15 hover:bg-white/[0.1] active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-35 disabled:cursor-not-allowed rounded-lg"
                         >
-                          {stripBgBusy ? (
+                          {reimagineBusy ? (
                             <>
-                              <RefreshCw size={12} className="animate-spin" /> Stripping…
+                              <RefreshCw size={12} className="animate-spin" /> Reimagining…
                             </>
                           ) : (
                             <>
-                              <Eraser size={12} /> Remove BG
+                              <Sparkles size={12} /> Reimagine
                             </>
                           )}
                         </button>

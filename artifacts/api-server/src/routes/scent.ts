@@ -12,6 +12,7 @@ import {
 } from "../services/imageSolvers";
 import { logger } from "../lib/logger";
 import { resolveProcessedFragranceImage } from "../services/imagePipeline";
+import { reimagineBottleImage, isSupportedReimagineModel } from "../services/reimagineService";
 import { imageReferenceDiagnostic, usableImageUrlForResponse } from "../services/imageReference";
 import { parseIncomingImageUrl } from "../services/incomingImageUrl";
 import {
@@ -482,6 +483,83 @@ router.post("/refresh-image", async (req, res) => {
   } catch (err: any) {
     logger.error({ err: err.message }, "refresh-image failed");
     res.status(500).json({ error: err.message || "Image refresh failed" });
+  }
+});
+
+router.post("/reimagine-bottle-image", async (req, res) => {
+  if (process.env.ENABLE_REIMAGINE && process.env.ENABLE_REIMAGINE.trim().toLowerCase() !== "true") {
+    res.status(403).json({ error: "Reimagine is disabled in this environment." });
+    return;
+  }
+
+  const body = req.body as {
+    name?: string;
+    brand?: string;
+    imageUrl?: unknown;
+    model?: unknown;
+  };
+  const { name, brand } = body;
+  if (!name || !brand) {
+    res.status(400).json({ error: "name and brand are required" });
+    return;
+  }
+
+  const sourceUrl = parseIncomingImageUrl(body.imageUrl);
+  if (!sourceUrl) {
+    res.status(400).json({ error: "imageUrl is required (https URL, /api/image-objects/..., or data:image preview)" });
+    return;
+  }
+
+  const requestedModel = typeof body.model === "string" ? body.model.trim() : undefined;
+  if (requestedModel && !isSupportedReimagineModel(requestedModel)) {
+    res.status(400).json({ error: "Unsupported reimagine model" });
+    return;
+  }
+
+  const resolvedIdentity = resolveFragranceIdentity(brand, name);
+  const imageBrand = resolvedIdentity.brand;
+  const imageName = resolvedIdentity.name;
+
+  logger.info(
+    {
+      brand: imageBrand,
+      name: imageName,
+      model: requestedModel ?? null,
+      sourceKind: sourceUrl.startsWith("data:") ? "data" : sourceUrl.startsWith("/api/image-objects/") ? "local-object" : "remote",
+    },
+    "reimagine-bottle-image",
+  );
+
+  try {
+    const result = await reimagineBottleImage({
+      brand: imageBrand,
+      name: imageName,
+      sourceUrl,
+      model: requestedModel ?? null,
+    });
+
+    await upsertRefreshImageCatalog(imageBrand, imageName, {
+      imageUrl: result.imageUrl,
+      storagePath: result.storagePath,
+      imageHash: result.imageHash,
+      storageProvider: result.storageProvider,
+    });
+
+    res.json({
+      imageUrl: result.imageUrl,
+      storagePath: result.storagePath,
+      imageHash: result.imageHash,
+      cached: result.cached,
+      backgroundRemoved: false,
+      removeBgStatus: "skipped",
+      removeBgReason: "openai_reimagine",
+      model: result.model,
+    });
+  } catch (err: any) {
+    const message = err?.message || "Reimagine failed";
+    const isConfigError = /OPENAI_API_KEY/i.test(message);
+    logger.error({ err: message }, "reimagine-bottle-image failed");
+    res.status(isConfigError ? 503 : 502).json({ error: message });
   }
 });
 
