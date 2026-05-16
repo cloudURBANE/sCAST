@@ -473,13 +473,6 @@ function ProfileScorePanel({
   const communityScore = scoreNumber(metrics?.community_interest_score?.score);
   const rows = [
     {
-      label: "Crowd Consensus",
-      value: joinDisplayParts([
-        formatScore100(headline?.crowd_consensus_score),
-        headline?.label,
-      ]),
-    },
-    {
       label: "Performance",
       value: joinDisplayParts([
         formatScore100(performance?.score),
@@ -560,9 +553,9 @@ function ProfileScorePanel({
   return (
     <div className="space-y-3 sm:space-y-5">
       <div className="hidden sm:grid grid-cols-[1.15fr_repeat(4,1fr)] border-y border-white/8">
-        <div className="px-4 py-5 border-r border-white/8">
+        <div className="flex flex-col items-center justify-center px-4 py-5 border-r border-white/8 text-center">
           <p className="text-[10px] uppercase tracking-[0.28em] text-white/64 font-bold">Scentcast Score</p>
-          <div className="mt-1 flex items-end gap-2">
+          <div className="mt-1 flex items-end justify-center gap-2">
             <span className="font-serif italic text-6xl leading-none text-scent-accent">
               {consensusScore ?? "--"}
             </span>
@@ -642,10 +635,12 @@ function ProfileScorePanel({
             </div>
           </FragrancePanel>
           <FragrancePanel title="Value Assessment">
-            <div className="space-y-4 px-4 py-5">
-              <div className="flex items-center justify-between gap-4">
+            <div className="space-y-4 px-4 py-5 text-center">
+              <div className="flex flex-col items-center justify-center gap-1">
                 <p className="font-serif italic text-2xl text-scent-accent">{value?.dominant_label ?? "Pending"}</p>
-                <p className="text-sm text-white/84">{formatScore100(value?.score) ?? ""}</p>
+                {formatScore100(value?.score) ? (
+                  <p className="text-sm text-white/84">{formatScore100(value?.score)}</p>
+                ) : null}
               </div>
               <div className="h-1 bg-white/10">
                 <div className="h-full bg-gradient-to-r from-white/35 via-scent-accent to-scent-accent/60" style={{ width: scoreWidth(value?.score) }} />
@@ -1434,26 +1429,26 @@ export const Wardrobe: React.FC<{
               className="relative w-full h-full sm:h-[94dvh] sm:max-w-[100rem] sm:mx-4 bg-[#030303] shadow-2xl overflow-hidden flex flex-col border-0 sm:border border-white/8"
             >
               <div
-                className="flex items-center justify-between px-5 sm:px-8 pb-3 shrink-0 border-b border-white/[0.06] bg-black/35"
+                className="grid grid-cols-[2.75rem_minmax(0,1fr)_2.75rem] items-center gap-2 px-4 sm:px-8 pb-3 shrink-0 border-b border-white/[0.06] bg-black/35"
                 style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))' }}
               >
                 <button
                   type="button"
                   onClick={closeDetail}
-                  className="text-[10px] uppercase tracking-[0.22em] text-white/58 hover:text-white transition-colors"
+                  className="hidden sm:block justify-self-start text-[10px] uppercase tracking-[0.22em] text-white/58 hover:text-white transition-colors"
                 >
                   Close
                 </button>
-                <div className="flex items-center gap-3 text-white/92">
+                <div className="flex min-w-0 items-center justify-center gap-3 text-white/92">
                   <div className="h-3 w-5 border-y border-scent-accent relative before:absolute before:left-1 before:right-1 before:top-1/2 before:h-px before:-translate-y-1/2 before:bg-scent-accent" />
-                  <p className="font-serif text-sm sm:text-xl uppercase tracking-[0.42em]">Scentcast</p>
+                  <p className="truncate font-serif text-sm sm:text-xl uppercase tracking-[0.28em] sm:tracking-[0.42em]">Scentcast</p>
                 </div>
                 <button 
                   onClick={closeDetail} 
                   aria-label="Close profile"
-                  className="shrink-0 p-2 bg-white/5 hover:bg-white/10 transition-all rounded-full border border-white/10 text-white group"
+                  className="relative z-20 grid h-10 w-10 place-items-center justify-self-end rounded-full border border-white/20 bg-black/70 text-white shadow-[0_0_18px_rgba(0,0,0,0.65)] transition-all hover:bg-white/12 hover:border-white/35 group"
                 >
-                  <X size={18} className="group-hover:rotate-90 transition-transform duration-300" />
+                  <X size={20} strokeWidth={2.2} className="group-hover:rotate-90 transition-transform duration-300" />
                 </button>
               </div>
 
@@ -1553,9 +1548,9 @@ export const Wardrobe: React.FC<{
                   />
 
                   <FragrancePanel title="About This Fragrance">
-                    <div className="flex items-center gap-4 px-4 py-4">
+                    <div className="flex flex-col items-center justify-center gap-3 px-4 py-4 text-center">
                       <Info size={18} className="shrink-0 text-white/55" />
-                      <p className="text-sm leading-relaxed text-white/56">
+                      <p className="mx-auto max-w-3xl text-sm leading-relaxed text-white/56">
                         {profileSummary(selectedMetrics) ?? entryNotes(selectedItem)}
                       </p>
                     </div>
@@ -1637,14 +1632,14 @@ export const Wardrobe: React.FC<{
                     aria-expanded={bottleImageToolsOpen}
                     aria-controls="wardrobe-bottle-tools-panel"
                     onClick={() => setBottleImageToolsOpen((o) => !o)}
-                    className="w-full flex items-start gap-2 text-left rounded-lg -mx-1 px-1 py-0.5 hover:bg-white/[0.04] transition-colors"
+                    className="w-full flex items-start justify-center gap-2 text-center rounded-lg -mx-1 px-1 py-0.5 hover:bg-white/[0.04] transition-colors"
                   >
                     <HelpCircle size={14} className="text-white/35 shrink-0 mt-0.5" aria-hidden />
                     <div className="min-w-0 flex-1 space-y-1">
                       <p className="text-[9px] uppercase tracking-[0.28em] text-white/45 font-bold">Bottle image</p>
                       {!bottleImageToolsOpen ? (
                         <p
-                          className={`text-[10px] leading-snug font-sans ${
+                          className={`mx-auto max-w-md text-center text-[10px] leading-snug font-sans ${
                             detailNeedsClarify ? 'text-amber-200/75' : 'text-white/40'
                           }`}
                         >
@@ -1671,11 +1666,11 @@ export const Wardrobe: React.FC<{
                       className="space-y-3"
                     >
                       {detailNeedsClarify ? (
-                        <p className="text-[10px] text-amber-200/75 leading-snug font-sans">
+                        <p className="text-center text-[10px] text-amber-200/75 leading-snug font-sans">
                           Automatic search paused after several tries — pick what looks wrong, then search again or strip the background.
                         </p>
                       ) : (
-                        <p className="text-[10px] text-white/40 leading-snug font-sans">
+                        <p className="text-center text-[10px] text-white/40 leading-snug font-sans">
                           Search with an optional issue hint; remove background on the preview; save when it looks right.
                         </p>
                       )}

@@ -17,10 +17,13 @@ interface ScentNotesInfographicProps {
   variant?: "all" | "accords" | "notes";
 }
 
+type DisplayPyramid = { top: string[]; heart: string[]; base: string[]; flat: string[] };
+type PyramidLayer = "top" | "heart" | "base";
+
 function resolvePyramid(
   derivedMetrics?: DerivedMetrics | null,
   legacy?: ScentNotesInfographicProps["legacyPyramid"],
-): { top: string[]; heart: string[]; base: string[]; flat: string[] } {
+): DisplayPyramid {
   const n = derivedMetrics?.notes;
   if (n) {
     return {
@@ -41,8 +44,66 @@ function resolvePyramid(
   return { top: [], heart: [], base: [], flat: [] };
 }
 
-function hasAnyNotes(p: { top: string[]; heart: string[]; base: string[]; flat: string[] }): boolean {
+function hasAnyNotes(p: DisplayPyramid): boolean {
   return p.top.length > 0 || p.heart.length > 0 || p.base.length > 0 || p.flat.length > 0;
+}
+
+function dedupeNotes(notes: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const note of notes) {
+    const clean = note.trim();
+    const key = clean.toLowerCase();
+    if (!clean || seen.has(key)) continue;
+    seen.add(key);
+    out.push(clean);
+  }
+  return out;
+}
+
+function stableHash(value: string): number {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function pickDisplayNote(pool: string[], seed: string, layer: PyramidLayer, pass: number): string | null {
+  if (pool.length === 0) return null;
+  const index = stableHash(`${seed}:${layer}:${pass}`) % pool.length;
+  return pool[index] ?? null;
+}
+
+function addDisplayNote(target: string[], note: string | null) {
+  if (!note) return;
+  const key = note.toLowerCase();
+  if (target.some((current) => current.toLowerCase() === key)) return;
+  target.push(note);
+}
+
+function normalizeDisplayPyramid(pyramid: DisplayPyramid): DisplayPyramid {
+  const next: DisplayPyramid = {
+    top: dedupeNotes(pyramid.top),
+    heart: dedupeNotes(pyramid.heart),
+    base: dedupeNotes(pyramid.base),
+    flat: dedupeNotes(pyramid.flat),
+  };
+  const pool = dedupeNotes([...next.top, ...next.heart, ...next.base, ...next.flat]);
+  if (pool.length === 0) return next;
+
+  const seed = pool.join("|");
+  const layers: PyramidLayer[] = ["top", "heart", "base"];
+  const minimumPerLayer = pool.length >= 6 ? 2 : 1;
+
+  layers.forEach((layer, layerIndex) => {
+    for (let pass = 0; next[layer].length < minimumPerLayer && pass < pool.length * 2; pass += 1) {
+      addDisplayNote(next[layer], pickDisplayNote(pool, seed, layer, layerIndex + pass));
+    }
+  });
+
+  return next;
 }
 
 function strengthValue(row: { score?: number; pct?: number }): number | null {
@@ -122,7 +183,7 @@ function AccordPanel({
 function NotesPanel({
   pyramid,
 }: {
-  pyramid: { top: string[]; heart: string[]; base: string[]; flat: string[] };
+  pyramid: DisplayPyramid;
 }) {
   const groups = [
     { key: "top", label: "Top", color: "bg-amber-300", notes: pyramid.top },
@@ -183,7 +244,7 @@ export const ScentNotesInfographic: React.FC<ScentNotesInfographicProps> = ({
   legacyPyramid,
   variant = "all",
 }) => {
-  const pyramid = resolvePyramid(derivedMetrics, legacyPyramid);
+  const pyramid = normalizeDisplayPyramid(resolvePyramid(derivedMetrics, legacyPyramid));
   const accordRows = collectMainAccordDisplayRows(derivedMetrics?.main_accords);
   const accordSummary = derivedMetrics?.main_accords?.accord_summary?.trim() ?? '';
   const hasAccordVisual = accordRows.length > 0 || Boolean(accordSummary);
