@@ -3,6 +3,7 @@ import {
   collectMainAccordDisplayRows,
   type DerivedMetrics,
 } from '@/lib/fragranceApi';
+import { NotePyramid } from './NotePyramid';
 
 interface ScentNotesInfographicProps {
   /** Preferred: Railway `derived_metrics.notes` (+ main accords summary). */
@@ -19,7 +20,6 @@ interface ScentNotesInfographicProps {
 }
 
 type DisplayPyramid = { top: string[]; heart: string[]; base: string[]; flat: string[] };
-type PyramidLayer = "top" | "heart" | "base";
 
 function resolvePyramid(
   derivedMetrics?: DerivedMetrics | null,
@@ -62,49 +62,13 @@ function dedupeNotes(notes: string[]): string[] {
   return out;
 }
 
-function stableHash(value: string): number {
-  let hash = 2166136261;
-  for (let i = 0; i < value.length; i += 1) {
-    hash ^= value.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  return hash >>> 0;
-}
-
-function pickDisplayNote(pool: string[], seed: string, layer: PyramidLayer, pass: number): string | null {
-  if (pool.length === 0) return null;
-  const index = stableHash(`${seed}:${layer}:${pass}`) % pool.length;
-  return pool[index] ?? null;
-}
-
-function addDisplayNote(target: string[], note: string | null) {
-  if (!note) return;
-  const key = note.toLowerCase();
-  if (target.some((current) => current.toLowerCase() === key)) return;
-  target.push(note);
-}
-
 function normalizeDisplayPyramid(pyramid: DisplayPyramid): DisplayPyramid {
-  const next: DisplayPyramid = {
+  return {
     top: dedupeNotes(pyramid.top),
     heart: dedupeNotes(pyramid.heart),
     base: dedupeNotes(pyramid.base),
     flat: dedupeNotes(pyramid.flat),
   };
-  const pool = dedupeNotes([...next.top, ...next.heart, ...next.base, ...next.flat]);
-  if (pool.length === 0) return next;
-
-  const seed = pool.join("|");
-  const layers: PyramidLayer[] = ["top", "heart", "base"];
-  const minimumPerLayer = pool.length >= 6 ? 2 : 1;
-
-  layers.forEach((layer, layerIndex) => {
-    for (let pass = 0; next[layer].length < minimumPerLayer && pass < pool.length * 2; pass += 1) {
-      addDisplayNote(next[layer], pickDisplayNote(pool, seed, layer, layerIndex + pass));
-    }
-  });
-
-  return next;
 }
 
 function strengthValue(row: { score?: number; pct?: number }): number | null {
@@ -190,56 +154,13 @@ function NotesPanel({
   pyramid: DisplayPyramid;
   className?: string;
 }) {
-  const groups = [
-    { key: "top", label: "Top", color: "bg-amber-300", notes: pyramid.top },
-    { key: "heart", label: "Heart", color: "bg-emerald-400", notes: pyramid.heart },
-    { key: "base", label: "Base", color: "bg-orange-400", notes: pyramid.base },
-    { key: "notes", label: "Notes", color: "bg-scent-accent", notes: pyramid.flat },
-  ].filter((group) => group.notes.length > 0);
-
-  if (groups.length === 0) {
-    return (
-      <Panel title="Notes" className={className}>
-        <div className="flex flex-1 items-center justify-center px-4 py-6 text-center">
-          <p className="text-sm italic text-white/45 font-serif">Notes unavailable for this fragrance.</p>
-        </div>
-      </Panel>
-    );
-  }
-
   return (
-    <Panel title="Notes" className={`overflow-hidden ${className}`}>
-      <div className="grid flex-1 gap-4 px-4 py-5 sm:grid-cols-[9.5rem_1fr] sm:items-center">
-        <div className="hidden sm:block">
-          <svg viewBox="0 0 160 144" className="h-44 w-full overflow-visible lg:h-52">
-            <path d="M80 10 L116 55 H44 Z" fill="rgba(201,139,44,0.10)" stroke="rgba(201,139,44,0.45)" />
-            <path d="M43 61 H117 L143 103 H17 Z" fill="rgba(255,255,255,0.035)" stroke="rgba(255,255,255,0.14)" />
-            <path d="M16 110 H144 L158 137 H2 Z" fill="rgba(255,255,255,0.025)" stroke="rgba(255,255,255,0.12)" />
-          </svg>
-        </div>
-        <div className="space-y-3">
-          {groups.map((group) => {
-            const visible = group.notes.slice(0, 5);
-            const remaining = Math.max(0, group.notes.length - visible.length);
-            return (
-              <div key={group.key} className="grid grid-cols-[4.25rem_1fr_auto] items-start gap-3 border-b border-white/[0.06] pb-3 last:border-b-0 last:pb-0">
-                <div className="flex items-center gap-2">
-                  <span className={`h-1.5 w-1.5 rounded-full ${group.color}`} />
-                  <p className="text-[10px] uppercase tracking-[0.24em] text-scent-accent font-bold">
-                    {group.label}
-                  </p>
-                </div>
-                <p className="font-serif italic text-sm leading-relaxed text-white/76">
-                  {visible.join(" · ")}
-                </p>
-                {remaining > 0 ? (
-                  <p className="text-[10px] text-scent-accent/80 whitespace-nowrap">+{remaining} more</p>
-                ) : null}
-              </div>
-            );
-          })}
-        </div>
-      </div>
+    <Panel title="Note Pyramid" className={`overflow-hidden ${className}`}>
+      <NotePyramid
+        topNotes={pyramid.top}
+        heartNotes={pyramid.heart}
+        baseNotes={pyramid.base}
+      />
     </Panel>
   );
 }
@@ -256,7 +177,7 @@ export const ScentNotesInfographic: React.FC<ScentNotesInfographicProps> = ({
   const hasAccordVisual = accordRows.length > 0 || Boolean(accordSummary);
   const hasPyramid = hasAnyNotes(pyramid);
 
-  if (!hasPyramid && !hasAccordVisual) {
+  if (!hasPyramid && !hasAccordVisual && variant !== "notes") {
     return (
       <Panel title={variant === "accords" ? "Main Accords" : "Notes"} className={className}>
         <div className="flex flex-1 items-center justify-center px-4 py-6 text-center">
