@@ -1431,7 +1431,7 @@ export const Wardrobe: React.FC<{
                 <div className="mx-auto max-w-[92rem] space-y-4 sm:space-y-5 py-5 sm:py-7">
                   <header className="mx-auto max-w-3xl grid text-center gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-x-10">
                     <p className="text-[10px] uppercase tracking-[0.36em] text-scent-accent font-bold order-1 sm:order-2 sm:col-start-2 sm:row-start-1 sm:self-center sm:text-right sm:max-w-[14rem] sm:pl-2">
-                      Intelligence Profile
+                      Scent Dossier
                     </p>
                     <div className="order-2 sm:order-1 sm:col-start-1 sm:row-start-1 space-y-2">
                       <h2
@@ -1456,16 +1456,16 @@ export const Wardrobe: React.FC<{
                       aria-label="Details"
                       className="border-y border-white/[0.08] bg-white/[0.018] px-3 py-2 sm:px-4"
                     >
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4 lg:grid-cols-6">
+                      <div className="flex flex-wrap items-start justify-center gap-x-6 gap-y-2 sm:gap-x-8">
                         {detailMetaRows.map(({ label, value }) => (
                           <div
                             key={label}
-                            className="min-w-0 flex items-center justify-between gap-3"
+                            className="min-w-0 text-center"
                           >
-                            <p className="text-[9px] uppercase tracking-[0.22em] text-white/38 shrink-0">
+                            <p className="text-[9px] uppercase tracking-[0.22em] text-white/38">
                               {label}
                             </p>
-                            <p className="truncate text-xs text-white/82 sm:text-sm text-right">
+                            <p className="mt-0.5 truncate text-xs text-white/82 sm:text-sm">
                               {value}
                             </p>
                           </div>
