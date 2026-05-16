@@ -41,6 +41,12 @@ function cleanQueryParam(value: unknown): string {
   return typeof value === "string" ? value.trim().slice(0, 180) : "";
 }
 
+function searchQueryWithFragranceIntent(query: string): string {
+  return /\b(?:cologne|fragrance|perfume|parfum|edt|edp|edc|eau\s+de|extrait)\b/i.test(query)
+    ? query
+    : `${query} perfume`;
+}
+
 function dedupeCandidates(candidates: FragranceSearchCandidate[]): FragranceSearchCandidate[] {
   const seen = new Set<string>();
   const deduped: FragranceSearchCandidate[] = [];
@@ -204,7 +210,7 @@ router.get("/fragrances/search", async (req, res) => {
 
   if (shouldSearchExternalFragranceSources(query)) {
     try {
-      const urls = await searchScentSources(query);
+      const urls = await searchScentSources(query, { maxCandidates: 16 });
       for (const url of urls) {
         const candidate = candidateFromSourceUrl(url, query);
         if (candidate) candidates.push(candidate);
@@ -214,9 +220,22 @@ router.get("/fragrances/search", async (req, res) => {
     }
   }
 
+  if (candidates.length === 0) {
+    try {
+      const fallbackQuery = searchQueryWithFragranceIntent(query);
+      const urls = await searchScentSources(fallbackQuery, { maxCandidates: 16 });
+      for (const url of urls) {
+        const candidate = candidateFromSourceUrl(url, query);
+        if (candidate) candidates.push(candidate);
+      }
+    } catch (err) {
+      logger.warn({ err }, "fragrance search broad source fallback failed");
+    }
+  }
+
   res.json({
     query,
-    results: dedupeCandidates(candidates).slice(0, 10),
+    results: dedupeCandidates(candidates).slice(0, 16),
   });
 });
 

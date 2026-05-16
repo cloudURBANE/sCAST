@@ -415,12 +415,15 @@ export function normalizeFragranceDetail(detail: FragranceDetail): FragranceDeta
   return source_coverage ? { ...detail, source_coverage } : detail;
 }
 
-function getApiBase() {
-  const base = (
-    (import.meta as { env?: Record<string, string | undefined> }).env
-      ?.VITE_FRAGRANCE_API_URL ??
-    (typeof process !== "undefined" ? process.env?.VITE_FRAGRANCE_API_URL : undefined)
-  )?.trim();
+function viteEnv(key: string): string | undefined {
+  return (
+    (import.meta as { env?: Record<string, string | undefined> }).env?.[key] ??
+    (typeof process !== "undefined" ? process.env?.[key] : undefined)
+  );
+}
+
+function getFragranceEngineApiBase() {
+  const base = viteEnv("VITE_FRAGRANCE_API_URL")?.trim();
 
   if (!base) {
     throw new Error(
@@ -433,6 +436,10 @@ function getApiBase() {
   }
 
   return base.replace(/\/+$/, "");
+}
+
+function getSearchApiBase() {
+  return (viteEnv("VITE_API_BASE_URL")?.trim() || getFragranceEngineApiBase()).replace(/\/+$/, "");
 }
 
 async function apiErrorMessage(res: Response, fallback: string): Promise<string> {
@@ -460,7 +467,7 @@ export async function searchFragrances(
   const cached = getCachedFragranceSearch(query);
   if (cached) return cached;
 
-  const base = getApiBase();
+  const base = getSearchApiBase();
   const res = await fetch(
     `${base}/api/fragrances/search?q=${encodeURIComponent(query)}`,
     { signal: options?.signal },
@@ -495,7 +502,11 @@ export async function getFragranceDetails(
   payload: FragranceDetailRequestPayload,
   options?: { signal?: AbortSignal },
 ): Promise<FragranceDetailResponse> {
-  const base = getApiBase();
+  const id = "id" in payload && typeof payload.id === "string" ? payload.id : "";
+  const base =
+    id.startsWith("catalog:") || id.startsWith("dataset:")
+      ? getSearchApiBase()
+      : getFragranceEngineApiBase();
   const requestBody = {
     ...("id" in payload ? { id: payload.id } : {}),
     ...("source_url" in payload ? { source_url: payload.source_url } : {}),

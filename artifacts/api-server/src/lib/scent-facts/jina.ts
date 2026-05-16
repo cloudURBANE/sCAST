@@ -3,6 +3,7 @@ import type { ScentSource, SourceClass } from "./types";
 const TIMEOUT_MS = 12_000;
 const MAX_SOURCE_CHARS = 35_000;
 const MAX_CANDIDATE_URLS = 6;
+const MAX_SEARCH_CANDIDATE_URLS = 16;
 const MAX_READABLE_SOURCES = 4;
 
 const RETAILER_DOMAINS = [
@@ -310,7 +311,7 @@ async function searchWithSerper(fragranceName: string): Promise<string[]> {
           "Content-Type": "application/json",
         },
         signal: AbortSignal.timeout(TIMEOUT_MS),
-        body: JSON.stringify({ q, num: 5, gl: "us", hl: "en" }),
+        body: JSON.stringify({ q, num: 10, gl: "us", hl: "en" }),
       });
       if (!res.ok) return [] as string[];
       const data: any = await res.json();
@@ -329,9 +330,16 @@ async function searchWithSerper(fragranceName: string): Promise<string[]> {
     .flatMap((r) => r.value);
 }
 
-export async function searchScentSources(fragranceName: string): Promise<string[]> {
+export async function searchScentSources(
+  fragranceName: string,
+  options: { maxCandidates?: number } = {},
+): Promise<string[]> {
   const clean = cleanQuery(fragranceName);
   if (!clean) return [];
+  const maxCandidates = Math.max(
+    1,
+    Math.min(options.maxCandidates ?? MAX_CANDIDATE_URLS, MAX_SEARCH_CANDIDATE_URLS),
+  );
 
   const query = `"${clean}" fragrance notes top middle base`;
   const allUrls: string[] = [];
@@ -359,7 +367,7 @@ export async function searchScentSources(fragranceName: string): Promise<string[
     }
   }
 
-  return diversifyCandidates(allUrls, MAX_CANDIDATE_URLS);
+  return diversifyCandidates(allUrls, maxCandidates);
 }
 
 export async function readSource(url: string): Promise<ScentSource | null> {
