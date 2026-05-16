@@ -439,7 +439,16 @@ function getFragranceEngineApiBase() {
 }
 
 function getSearchApiBase() {
-  return (viteEnv("VITE_API_BASE_URL")?.trim() || getFragranceEngineApiBase()).replace(/\/+$/, "");
+  return getFragranceEngineApiBase();
+}
+
+function getAppApiBase() {
+  return (viteEnv("VITE_API_BASE_URL")?.trim() || "").replace(/\/+$/, "");
+}
+
+function appApiUrl(path: string) {
+  const base = getAppApiBase();
+  return base ? `${base}${path}` : path;
 }
 
 async function apiErrorMessage(res: Response, fallback: string): Promise<string> {
@@ -503,16 +512,17 @@ export async function getFragranceDetails(
   options?: { signal?: AbortSignal },
 ): Promise<FragranceDetailResponse> {
   const id = "id" in payload && typeof payload.id === "string" ? payload.id : "";
-  const base =
-    id.startsWith("catalog:") || id.startsWith("dataset:")
-      ? getSearchApiBase()
-      : getFragranceEngineApiBase();
+  const useAppApi = id.startsWith("catalog:") || id.startsWith("dataset:");
+  const url =
+    useAppApi
+      ? appApiUrl("/api/fragrances/details")
+      : `${getFragranceEngineApiBase()}/api/fragrances/details`;
   const requestBody = {
     ...("id" in payload ? { id: payload.id } : {}),
     ...("source_url" in payload ? { source_url: payload.source_url } : {}),
   };
 
-  const res = await fetch(`${base}/api/fragrances/details`, {
+  const res = await fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

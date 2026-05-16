@@ -6,6 +6,7 @@ import {
   isFragranceDetailEffectivelyComplete,
   normalizeFragranceDetail,
   normalizeFragranceSearchResult,
+  searchFragrances,
 } from "./fragranceApi.ts";
 
 test("normalizeFragranceSearchResult preserves source-url-only candidates", () => {
@@ -90,9 +91,11 @@ test("terminal enrichment status is not treated as queued even with worker flag"
 test("getFragranceDetails posts opaque id with source_url when both are available", async (t) => {
   const previousFetch = globalThis.fetch;
   const previousApiUrl = process.env.VITE_FRAGRANCE_API_URL;
+  const previousAppApiUrl = process.env.VITE_API_BASE_URL;
   const requests: Array<{ url: string; init?: RequestInit }> = [];
 
   process.env.VITE_FRAGRANCE_API_URL = "https://example.test";
+  process.env.VITE_API_BASE_URL = "https://app-api.example.test";
   Object.defineProperty(globalThis, "fetch", {
     configurable: true,
     value: async (url: string, init?: RequestInit) => {
@@ -114,6 +117,11 @@ test("getFragranceDetails posts opaque id with source_url when both are availabl
     } else {
       process.env.VITE_FRAGRANCE_API_URL = previousApiUrl;
     }
+    if (previousAppApiUrl === undefined) {
+      delete process.env.VITE_API_BASE_URL;
+    } else {
+      process.env.VITE_API_BASE_URL = previousAppApiUrl;
+    }
   });
 
   await getFragranceDetails({
@@ -128,4 +136,104 @@ test("getFragranceDetails posts opaque id with source_url when both are availabl
     id: "opaque-token",
     source_url: "https://www.fragrantica.com/perfume/Creed/Silver-Mountain-Water-472.html",
   });
+});
+
+test("searchFragrances uses the fragrance engine API instead of the app API", async (t) => {
+  const previousFetch = globalThis.fetch;
+  const previousApiUrl = process.env.VITE_FRAGRANCE_API_URL;
+  const previousAppApiUrl = process.env.VITE_API_BASE_URL;
+  const requests: Array<{ url: string; init?: RequestInit }> = [];
+
+  process.env.VITE_FRAGRANCE_API_URL = "https://engine.example.test";
+  process.env.VITE_API_BASE_URL = "https://app-api.example.test";
+  Object.defineProperty(globalThis, "fetch", {
+    configurable: true,
+    value: async (url: string, init?: RequestInit) => {
+      requests.push({ url, init });
+      return new Response(
+        JSON.stringify({
+          query: "Dior Sauvage",
+          results: [
+            {
+              id: "opaque-token",
+              name: "Sauvage Eau de Parfum",
+              house: "Christian Dior",
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    },
+  });
+
+  t.after(() => {
+    Object.defineProperty(globalThis, "fetch", {
+      configurable: true,
+      value: previousFetch,
+    });
+    if (previousApiUrl === undefined) {
+      delete process.env.VITE_FRAGRANCE_API_URL;
+    } else {
+      process.env.VITE_FRAGRANCE_API_URL = previousApiUrl;
+    }
+    if (previousAppApiUrl === undefined) {
+      delete process.env.VITE_API_BASE_URL;
+    } else {
+      process.env.VITE_API_BASE_URL = previousAppApiUrl;
+    }
+  });
+
+  const response = await searchFragrances("Dior Sauvage");
+
+  assert.equal(requests.length, 1);
+  assert.equal(
+    requests[0].url,
+    "https://engine.example.test/api/fragrances/search?q=Dior%20Sauvage",
+  );
+  assert.equal(response.results[0]?.id, "opaque-token");
+});
+
+test("getFragranceDetails keeps catalog ids on the app API", async (t) => {
+  const previousFetch = globalThis.fetch;
+  const previousApiUrl = process.env.VITE_FRAGRANCE_API_URL;
+  const previousAppApiUrl = process.env.VITE_API_BASE_URL;
+  const requests: Array<{ url: string; init?: RequestInit }> = [];
+
+  process.env.VITE_FRAGRANCE_API_URL = "https://engine.example.test";
+  process.env.VITE_API_BASE_URL = "https://app-api.example.test";
+  Object.defineProperty(globalThis, "fetch", {
+    configurable: true,
+    value: async (url: string, init?: RequestInit) => {
+      requests.push({ url, init });
+      return new Response(JSON.stringify({ name: "Sauvage", house: "Dior" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    },
+  });
+
+  t.after(() => {
+    Object.defineProperty(globalThis, "fetch", {
+      configurable: true,
+      value: previousFetch,
+    });
+    if (previousApiUrl === undefined) {
+      delete process.env.VITE_FRAGRANCE_API_URL;
+    } else {
+      process.env.VITE_FRAGRANCE_API_URL = previousApiUrl;
+    }
+    if (previousAppApiUrl === undefined) {
+      delete process.env.VITE_API_BASE_URL;
+    } else {
+      process.env.VITE_API_BASE_URL = previousAppApiUrl;
+    }
+  });
+
+  await getFragranceDetails({ id: "catalog:Dior::Sauvage" });
+
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].url, "https://app-api.example.test/api/fragrances/details");
 });
