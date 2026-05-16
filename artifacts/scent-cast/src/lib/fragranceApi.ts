@@ -1,5 +1,8 @@
 const FRAGRANCE_API_URL = (import.meta as { env?: Record<string, string | undefined> }).env
   ?.VITE_FRAGRANCE_API_URL;
+const FRAGRANCE_SEARCH_CACHE_STORAGE_KEY = "scentcast.fragranceSearchCache.v1";
+const FRAGRANCE_SEARCH_CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const FRAGRANCE_SEARCH_CACHE_MAX_ENTRIES = 100;
 
 export type SourceCoverage = {
   basenotes?: boolean;
@@ -81,6 +84,13 @@ export type FragranceSearchResponse = {
   results: FragranceSearchResult[];
 };
 
+type FragranceSearchCacheEntry = {
+  cachedAt: number;
+  response: FragranceSearchResponse;
+};
+
+type FragranceSearchCache = Record<string, FragranceSearchCacheEntry>;
+
 export type EnrichmentStatus =
   | "not_needed"
   | "pending"
@@ -133,6 +143,66 @@ function firstNonEmptyString(...values: unknown[]): string | undefined {
     if (trimmed) return trimmed;
   }
   return undefined;
+}
+
+function fragranceSearchCacheKey(query: string): string {
+  return query.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function canUseSearchCache(): boolean {
+  try {
+    return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
+  } catch {
+    return false;
+  }
+}
+
+function readSearchCache(): FragranceSearchCache {
+  if (!canUseSearchCache()) return {};
+  try {
+    const raw = window.localStorage.getItem(FRAGRANCE_SEARCH_CACHE_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as FragranceSearchCache)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeSearchCache(cache: FragranceSearchCache): void {
+  if (!canUseSearchCache()) return;
+  try {
+    window.localStorage.setItem(FRAGRANCE_SEARCH_CACHE_STORAGE_KEY, JSON.stringify(cache));
+  } catch {
+    /* Search cache is an optimization only. */
+  }
+}
+
+function getCachedFragranceSearch(query: string): FragranceSearchResponse | null {
+  const key = fragranceSearchCacheKey(query);
+  if (!key) return null;
+  const cache = readSearchCache();
+  const entry = cache[key];
+  if (!entry || !Array.isArray(entry.response?.results)) return null;
+  if (Date.now() - entry.cachedAt > FRAGRANCE_SEARCH_CACHE_MAX_AGE_MS) {
+    delete cache[key];
+    writeSearchCache(cache);
+    return null;
+  }
+  return entry.response.results.length > 0 ? entry.response : null;
+}
+
+function cacheFragranceSearch(query: string, response: FragranceSearchResponse): void {
+  const key = fragranceSearchCacheKey(query);
+  if (!key || response.results.length === 0) return;
+
+  const cache = readSearchCache();
+  cache[key] = { cachedAt: Date.now(), response };
+
+  const entries = Object.entries(cache).sort(([, a], [, b]) => b.cachedAt - a.cachedAt);
+  writeSearchCache(Object.fromEntries(entries.slice(0, FRAGRANCE_SEARCH_CACHE_MAX_ENTRIES)));
 }
 
 export function normalizeFragranceSearchResult(
@@ -376,6 +446,9 @@ export async function searchFragrances(
   query: string,
   options?: { signal?: AbortSignal },
 ): Promise<FragranceSearchResponse> {
+  const cached = getCachedFragranceSearch(query);
+  if (cached) return cached;
+
   const base = getApiBase();
   const res = await fetch(
     `${base}/api/fragrances/search?q=${encodeURIComponent(query)}`,
@@ -393,12 +466,14 @@ export async function searchFragrances(
       ? data.results
       : [];
 
-  return {
+  const response = {
     query: typeof data?.query === "string" ? data.query : query,
     results: rawResults
       .map((result) => normalizeFragranceSearchResult(result, query))
       .filter((result): result is FragranceSearchResult => result !== null),
   };
+  cacheFragranceSearch(query, response);
+  return response;
 }
 
 export type FragranceDetailRequestPayload =

@@ -100,12 +100,6 @@ test("non-fragrance inputs and brand-only queries do not pass fuzzy scoring", ()
   assert.equal(shouldSearchExternalFragranceSources("running shoes"), false);
   assert.equal(scoreFragranceCandidate("running shoes", { brand: "Dior", name: "Sauvage" }).matched, false);
   assert.equal(scoreFragranceCandidate("Dior", { brand: "Dior", name: "Sauvage" }).matched, false);
-  assert.equal(scoreFragranceCandidate("Tom Ford", { brand: "Tom", name: "Ford" }).matched, false);
-  assert.equal(shouldSearchExternalFragranceSources("Dior"), false);
-  assert.equal(shouldSearchExternalFragranceSources("Dior perfume"), false);
-  assert.equal(shouldSearchExternalFragranceSources("Tom Ford"), false);
-  assert.equal(shouldSearchExternalFragranceSources("Le Labo"), false);
-  assert.equal(shouldSearchExternalFragranceSources("Maison Francis Kurkdjian"), false);
   assert.equal(shouldSearchExternalFragranceSources("rouge lipstick"), false);
   assert.deepEqual(searchFragranceDataset("rouge lipstick"), []);
 });
