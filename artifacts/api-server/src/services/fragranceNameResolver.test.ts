@@ -69,6 +69,7 @@ test("external search is fragrance-gated", () => {
   assert.equal(shouldSearchExternalFragranceSources("French Avenue Liquid Brun"), true);
   assert.equal(shouldSearchExternalFragranceSources("sauvaj dior"), true);
   assert.equal(shouldSearchExternalFragranceSources("sauvage elixir"), true);
+  assert.equal(shouldSearchExternalFragranceSources("Tom Ford Oud Wood"), true);
 });
 
 test("formats non-ascii names for image search", () => {
@@ -99,8 +100,24 @@ test("non-fragrance inputs and brand-only queries do not pass fuzzy scoring", ()
   assert.equal(shouldSearchExternalFragranceSources("running shoes"), false);
   assert.equal(scoreFragranceCandidate("running shoes", { brand: "Dior", name: "Sauvage" }).matched, false);
   assert.equal(scoreFragranceCandidate("Dior", { brand: "Dior", name: "Sauvage" }).matched, false);
+  assert.equal(scoreFragranceCandidate("Tom Ford", { brand: "Tom", name: "Ford" }).matched, false);
+  assert.equal(shouldSearchExternalFragranceSources("Dior"), false);
+  assert.equal(shouldSearchExternalFragranceSources("Dior perfume"), false);
+  assert.equal(shouldSearchExternalFragranceSources("Tom Ford"), false);
+  assert.equal(shouldSearchExternalFragranceSources("Le Labo"), false);
+  assert.equal(shouldSearchExternalFragranceSources("Maison Francis Kurkdjian"), false);
   assert.equal(shouldSearchExternalFragranceSources("rouge lipstick"), false);
   assert.deepEqual(searchFragranceDataset("rouge lipstick"), []);
+});
+
+test("popular fragrance aliases resolve locally when the external engine is empty", () => {
+  const oudWood = resolveFragranceQuery("Oud Wood");
+  assert.equal(oudWood?.brand, "Tom Ford");
+  assert.equal(oudWood?.name, "Oud Wood");
+
+  const coco = resolveFragranceQuery("Coco Mademoiselle");
+  assert.equal(coco?.brand, "Chanel");
+  assert.equal(coco?.name, "Coco Mademoiselle");
 });
 
 test("scorer rejects omitted flanker tokens while allowing concentration aliases", () => {

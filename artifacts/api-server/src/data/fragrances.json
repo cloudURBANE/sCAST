@@ -63,5 +63,31 @@
       "base": ["Leather", "Amber", "Musk"]
     },
     "description": "An open fire. The soft drift of smoke. Where sensuality rises after the light has gone. Santal 33 is a perfume that touches the sensual universality of this symbol, that would intoxicate men as much as women."
+  },
+  {
+    "name": "Oud Wood",
+    "brand": "Tom Ford",
+    "family": "Woody Oriental",
+    "notes": ["Oud", "Rosewood", "Cardamom", "Sandalwood", "Vetiver", "Tonka Bean", "Amber", "Vanilla"],
+    "imageUrl": "https://images.unsplash.com/photo-1594035910387-fea47794261f?auto=format&fit=crop&q=100&w=1200",
+    "pyramid": {
+      "top": ["Rosewood", "Cardamom", "Pepper"],
+      "heart": ["Oud", "Sandalwood", "Vetiver"],
+      "base": ["Tonka Bean", "Amber", "Vanilla"]
+    },
+    "description": "A smoky, polished woods composition built around oud, rosewood, sandalwood and amber. Oud Wood is dry, smooth and resinous, with spice and vanilla softening the darker woods."
+  },
+  {
+    "name": "Coco Mademoiselle",
+    "brand": "Chanel",
+    "family": "Amber Floral",
+    "notes": ["Orange", "Mandarin Orange", "Bergamot", "Rose", "Jasmine", "Patchouli", "Vetiver", "Vanilla", "White Musk"],
+    "imageUrl": "https://images.unsplash.com/photo-1583445013765-48c2204f9f2c?auto=format&fit=crop&q=100&w=1200",
+    "pyramid": {
+      "top": ["Orange", "Mandarin Orange", "Bergamot", "Orange Blossom"],
+      "heart": ["Rose", "Jasmine", "Ylang-Ylang", "Mimosa"],
+      "base": ["Patchouli", "Vetiver", "Vanilla", "White Musk"]
+    },
+    "description": "A bright amber floral fragrance with sparkling citrus, rose and jasmine over a polished patchouli, vetiver, vanilla and musk base."
   }
 ]

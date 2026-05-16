@@ -63,7 +63,11 @@ const FRAGRANCE_INTENT_WORDS = new Set([
   "elixir",
   "extrait",
 ]);
-const DATASET = fragrancesRaw as FragranceData[];
+function stripBundledImageFallbacks(items: FragranceData[]): FragranceData[] {
+  return items.map(({ imageUrl: _imageUrl, ...item }) => item);
+}
+
+const DATASET = stripBundledImageFallbacks(fragrancesRaw as FragranceData[]);
 const KNOWN_FRAGRANCE_BRAND_TOKENS = new Set(
   [
     ...DATASET.flatMap((item) =>
@@ -90,6 +94,34 @@ const KNOWN_FRAGRANCE_BRAND_TOKENS = new Set(
     "versace",
     "xerjoff",
   ],
+);
+const KNOWN_FRAGRANCE_BRANDS = new Set(
+  [
+    ...DATASET.map((item) => item.brand),
+    "Afnan",
+    "Amouage",
+    "Armaf",
+    "Azzaro",
+    "Byredo",
+    "Cartier",
+    "Diptyque",
+    "Dolce & Gabbana",
+    "French Avenue",
+    "Guerlain",
+    "Hermes",
+    "Initio",
+    "Jo Malone",
+    "Lattafa",
+    "Maison Margiela",
+    "Montale",
+    "Mugler",
+    "Nishane",
+    "Prada",
+    "Tom Ford",
+    "Versace",
+    "Xerjoff",
+    "Yves Saint Laurent",
+  ].map(compactRaw),
 );
 const RETAIL_NOISE_PATTERN =
   /\b(?:\d+(?:\.\d+)?\s*(?:m\s*l|ml|millilitre|milliliter|millilitres|milliliters|fl\.?\s*oz\.?|oz\.?|ounces?)|spray|natural\s+spray|vaporisateur|tester|sample|travel\s+size|mini|bottle|boxed|sealed|new\s+in\s+box|nib|refillable|refill|eau\s+de\s+parfum|eau\s+de\s+toilette|eau\s+de\s+cologne|extrait\s+de\s+parfum|edp|edt|edc)\b/i;
@@ -379,11 +411,20 @@ function hasKnownFragranceBrandSignal(query: string): boolean {
   return queryWords.some((word) => KNOWN_FRAGRANCE_BRAND_TOKENS.has(word));
 }
 
+function isKnownBrandOnlyQuery(query: string): boolean {
+  const meaningful = meaningfulQueryTokens(query).join(" ");
+  return meaningful.length > 0 && KNOWN_FRAGRANCE_BRANDS.has(meaningful);
+}
+
 export function scoreFragranceCandidate(
   input: string | { brand?: string; name?: string },
   candidate: { brand?: string; name?: string },
   minScore = FRAGRANCE_CANDIDATE_MIN_SCORE,
 ): FragranceCandidateMatch {
+  if (typeof input === "string" && isKnownBrandOnlyQuery(input)) {
+    return { score: 0, matched: false };
+  }
+
   const inputBrand = typeof input === "string" ? "" : input.brand ?? "";
   const inputName = typeof input === "string" ? input : input.name ?? "";
   const candidateBrand = candidate.brand ?? "";
@@ -446,6 +487,7 @@ export function resolveFragranceQuery(query: string): ResolvedFragranceIdentity 
 export function shouldSearchExternalFragranceSources(query: string): boolean {
   const sanitized = sanitizeFragranceQueryInput(query);
   if (!sanitized) return false;
+  if (isKnownBrandOnlyQuery(sanitized)) return false;
   return (
     resolveFragranceQuery(sanitized) !== null ||
     (FRAGRANCE_INTENT_PATTERN.test(sanitized) && hasMeaningfulFragranceQuery(sanitized)) ||

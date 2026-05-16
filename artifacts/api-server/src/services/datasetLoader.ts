@@ -15,7 +15,11 @@ export interface FragranceData {
   perfumer?: string;
 }
 
-const dataset: FragranceData[] = fragrancesRaw as FragranceData[];
+function stripBundledImageFallbacks(items: FragranceData[]): FragranceData[] {
+  return items.map(({ imageUrl: _imageUrl, ...item }) => item);
+}
+
+const dataset: FragranceData[] = stripBundledImageFallbacks(fragrancesRaw as FragranceData[]);
 
 export function loadDataset(): FragranceData[] {
   return dataset;
