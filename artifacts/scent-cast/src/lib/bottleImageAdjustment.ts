@@ -39,8 +39,17 @@ const LIMITS = {
   scale: { min: 0.7, max: 1.45 },
   x: { min: -18, max: 18 },
   y: { min: -18, max: 18 },
-  cropEdge: { min: 0, max: 20 },
+  /** Stored per-edge crop strength (slider/API), 0-40. */
+  cropEdge: { min: 0, max: 40 },
 } as const;
+
+/** Max value for crop sliders and PATCH payloads (not equal to CSS inset %). */
+export const BOTTLE_CROP_STORED_MAX = LIMITS.cropEdge.max;
+
+/** Max clip-path inset % at full slider (frame-relative; object-contain letterboxing eats linear % first). */
+const BOTTLE_CROP_CLIP_CAP_PCT = 54;
+/** Below 1: more clip early in the slider so small moves visibly trim the packshot sooner. */
+const BOTTLE_CROP_CLIP_CURVE_GAMMA = 0.58;
 
 function finiteNumber(value: unknown): number | null {
   if (typeof value !== 'number' || !Number.isFinite(value)) return null;
@@ -66,6 +75,14 @@ function normalizeCropEdge(
     clamp(value, LIMITS.cropEdge.min, LIMITS.cropEdge.max, fallback),
     1,
   );
+}
+
+/** Maps stored crop strength to real `inset()` percentages on the packshot frame. */
+function clipInsetPercentFromStored(stored: number): string {
+  if (stored <= 0) return '0%';
+  const t = Math.min(stored, LIMITS.cropEdge.max) / LIMITS.cropEdge.max;
+  const pct = BOTTLE_CROP_CLIP_CAP_PCT * t ** BOTTLE_CROP_CLIP_CURVE_GAMMA;
+  return `${round(pct, 2)}%`;
 }
 
 export function normalizeBottleImageAdjustment(
@@ -103,10 +120,10 @@ export function bottleImageAdjustmentStyle(
     '--bottle-frame-scale': String(n.scale),
     '--bottle-frame-x': `${n.x}%`,
     '--bottle-frame-y': `${n.y}%`,
-    '--bottle-frame-crop-top': `${n.cropTop}%`,
-    '--bottle-frame-crop-right': `${n.cropRight}%`,
-    '--bottle-frame-crop-bottom': `${n.cropBottom}%`,
-    '--bottle-frame-crop-left': `${n.cropLeft}%`,
+    '--bottle-frame-crop-top': clipInsetPercentFromStored(n.cropTop),
+    '--bottle-frame-crop-right': clipInsetPercentFromStored(n.cropRight),
+    '--bottle-frame-crop-bottom': clipInsetPercentFromStored(n.cropBottom),
+    '--bottle-frame-crop-left': clipInsetPercentFromStored(n.cropLeft),
   } as CSSProperties;
 }
 
