@@ -684,10 +684,17 @@ a {
   display: flex;
   width: max-content;
   --atmosphere-marquee-distance: 0px;
+  --atmosphere-marquee-duration: 96s;
   will-change: transform;
   transform: translateZ(0);
   backface-visibility: hidden;
-  animation: atmosphere-marquee-scroll 28s linear infinite;
+  animation: atmosphere-marquee-scroll var(--atmosphere-marquee-duration) linear infinite;
+  animation-play-state: running;
+}
+
+.scent-atmosphere-marquee-track:not([data-marquee-ready="true"]) {
+  animation: none;
+  transform: translate3d(0, 0, 0);
 }
 
 .scent-atmosphere-marquee-group {
@@ -715,7 +722,7 @@ a {
 
 @media (prefers-reduced-motion: reduce) {
   .scent-atmosphere-marquee-track {
-    animation-duration: 240s;
+    --atmosphere-marquee-duration: 240s;
   }
 }
 

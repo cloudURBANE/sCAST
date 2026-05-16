@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect } from 'react';
 import axios from 'axios';
 import { FragranceCapture } from './components/FragranceCapture';
 import { Wardrobe, Fragrance, DestinationType, EnergyState } from './components/Wardrobe';
@@ -413,7 +413,10 @@ interface AtmosphereBarProps {
   weatherLoading: boolean;
 }
 
-const ATMOSPHERE_TRACK_COPIES = 2;
+const ATMOSPHERE_TRACK_COPIES = 4;
+const ATMOSPHERE_SCROLL_PIXELS_PER_SECOND = 14;
+const ATMOSPHERE_SCROLL_MIN_SECONDS = 72;
+const ATMOSPHERE_SCROLL_MAX_SECONDS = 160;
 
 const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({ weather, weatherLoading }) => {
   const trackRef = useRef<HTMLDivElement>(null);
@@ -424,6 +427,7 @@ const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({ weather, weath
   const condition = weatherLoading ? '—' : getWeatherString(weather, ['condition', 'description'], '—');
   const humidity = weatherLoading ? '—' : Number.isFinite(humidityValue) ? `${humidityValue}%` : '—';
   const location = weather?.location ?? '—';
+  const atmosphereTrackKey = [condition, humidity, temp, location].join('|');
 
   const metrics = [
     { label: 'Matrix', value: condition },
@@ -433,30 +437,61 @@ const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({ weather, weath
     { label: 'Coordinate', value: location },
   ];
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const track = trackRef.current;
     const group = groupRef.current;
     if (!track || !group) return;
+    let cancelled = false;
+    let animationFrame = 0;
 
-    const updateDistance = () => {
-      track.style.setProperty('--atmosphere-marquee-distance', `${group.getBoundingClientRect().width}px`);
+    const updateDistance = (ready = true) => {
+      if (cancelled) return;
+      const distance = group.getBoundingClientRect().width;
+      if (distance <= 0) return;
+
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const duration = prefersReducedMotion
+        ? 240
+        : Math.min(
+            ATMOSPHERE_SCROLL_MAX_SECONDS,
+            Math.max(ATMOSPHERE_SCROLL_MIN_SECONDS, distance / ATMOSPHERE_SCROLL_PIXELS_PER_SECOND),
+          );
+
+      track.style.setProperty('--atmosphere-marquee-distance', `${distance}px`);
+      track.style.setProperty('--atmosphere-marquee-duration', `${duration}s`);
+      if (ready) {
+        track.dataset.marqueeReady = 'true';
+      }
     };
 
-    updateDistance();
+    track.dataset.marqueeReady = 'false';
 
-    const resizeObserver = new ResizeObserver(updateDistance);
+    const startWhenFontsSettle = () => {
+      animationFrame = window.requestAnimationFrame(() => updateDistance(true));
+    };
+
+    if (document.fonts?.ready) {
+      document.fonts.ready.then(startWhenFontsSettle);
+    } else {
+      startWhenFontsSettle();
+    }
+
+    const handleResize = () => updateDistance(track.dataset.marqueeReady === 'true');
+    const resizeObserver = new ResizeObserver(handleResize);
     resizeObserver.observe(group);
-    window.addEventListener('resize', updateDistance);
+    window.addEventListener('resize', handleResize);
 
     return () => {
+      cancelled = true;
+      if (animationFrame) window.cancelAnimationFrame(animationFrame);
       resizeObserver.disconnect();
-      window.removeEventListener('resize', updateDistance);
+      window.removeEventListener('resize', handleResize);
     };
   }, [condition, humidity, temp, location]);
 
   return (
     <section className="scent-atmosphere-marquee" aria-label="Current atmosphere">
-      <div className="scent-atmosphere-marquee-track" ref={trackRef}>
+      <div className="scent-atmosphere-marquee-track" key={atmosphereTrackKey} ref={trackRef}>
         {[...Array(ATMOSPHERE_TRACK_COPIES)].map((_, copyIndex) => (
           <div
             className="scent-atmosphere-marquee-group"
