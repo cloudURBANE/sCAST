@@ -9,13 +9,16 @@ This document maps **visual failure modes** to **solver functions** and **API pa
 | Concern | Location | Notes |
 |--------|------------|--------|
 | Serper image search | `artifacts/api-server/src/services/serperService.ts` | Posts to `SERPER_IMAGE_API_URL` or `https://google.serper.dev/images`. Every query is **suffix-refined** with bottle/packshot hints before the HTTP call. |
-| Search entry point | `artifacts/api-server/src/services/imageService.ts` | Thin wrapper around `searchSerperImageUrl`. |
-| Poof background removal | `artifacts/api-server/src/services/bgService.ts` | Posts multipart `image_file` + `size`, `format`, `channels` to `https://api.poof.bg/v1/remove`. **No `type` field is sent today** — see Edge Case 6 / 8. |
-| Profile build + cache | `artifacts/api-server/src/services/scentEngine.ts` | Default search query: `` `${brand} ${name} single fragrance bottle no box HQ` `` → `searchImageUrl` → `removeBg`. |
-| Candidate scoring | `serperService.ts` | Host/text blocklists and trusted-host boosts overlap several edge cases below (e.g. stock hosts, gift set / sample text). |
+| Search entry point | `artifacts/api-server/src/routes/scent.ts` + `artifacts/api-server/src/services/imageSolvers.ts` | `/api/refresh-image` resolves solver IDs into query text and Serper refine mode. |
+| Poof background removal | `artifacts/api-server/src/services/bgService.ts` | Posts multipart `image_file` + `size`, `format`, `channels`, and conditionally `type=product` when a solver or explicit caller option asks for it. Product-mode opaque light cards are retried without product mode. |
+| Profile build + cache | `artifacts/api-server/src/services/scentEngine.ts` | Default profile query: `` `${brand} ${name} single fragrance bottle no box HQ product photo studio no plants` `` -> `resolveProcessedFragranceImage`. |
+| Candidate scoring | `imageCandidateRanking.ts` + `serperService.ts` | Ranking combines Serper score, identity coverage, geometry, and BG-removal outcome. `scoreProcessedSerperCandidateBreakdown` is logged and returned in `imagePipelineTrace`. |
 | Bottle rendering | `artifacts/scent-cast/src/components/BottleImage.tsx` | Placeholder for broken/missing images; `imgClassName` can host Edge Case 15 styles. |
 
-**Implementation gap:** The **Refresh > 2** rule, **Clarify** UI, named **solver functions**, and **dynamic query routing** are specified here but are **not yet wired** end-to-end. Existing behavior is a single search strategy plus Poof + local trim fallback.
+**Current status:** The clarify UI and named solver IDs are wired through
+`Wardrobe.tsx` -> `/api/refresh-image` -> `imageSolvers.ts`. The remaining
+gap is product tuning, not route plumbing: use `imagePipelineTrace` telemetry
+before changing thresholds or query defaults.
 
 ---
 
@@ -43,9 +46,9 @@ Base token **`[Fragrance]`** means the resolved search phrase (typically `brand 
 | 3 | Verbatim / conversational query | `solveAbstractQuery()` | Pre-parse with a small LLM: extract `[Brand] [Fragrance]`, map complaint → solver, then run that solver’s mutators | — |
 | 4 | Group shots / flanker lineups | `solveGroupShot()` | `"[Fragrance] single bottle isolated"` | — |
 | 5 | Heavy watermarks / stock | `solveWatermark()` | `"[Fragrance] -stock -watermark -alamy -getty"` | Aligns with `BLOCKED_HOST_HINTS` in `serperService.ts` for several aggregators |
-| 6 | Transparent glass erased by removal | `solveTransparentGlass()` | — | Set Poof JSON field **`type`: `"product"`** (spec; not sent by current `bgService`) — today code uses only file + `size` / `format` / `channels` |
+| 6 | Transparent glass erased by removal | `solveTransparentGlass()` | Uses the default refresh query | Sends Poof multipart field `type=product`; if Poof preserves an opaque light card, retry without product mode |
 | 7 | Tester / missing cap | `solveTesterBottle()` | `"[Fragrance] -tester \"with cap\""` | — |
-| 8 | Hand / grip in frame | `solveHandInterference()` | `"[Fragrance] -hand -holding"` | Poof: **`type`: `"product"`** (same caveat as 6) |
+| 8 | Hand / grip in frame | `solveHandInterference()` | `"[Fragrance] -hand -holding"` | Sends Poof multipart field `type=product`; same opaque-card retry as 6 |
 | 9 | Extreme reflections / mirror | `solveStudioReflection()` | `"[Fragrance] matte lighting OR white studio background -mirror"` | — |
 | 10 | Splash / liquid props | `solveLiquidSplash()` | `"[Fragrance] -splash -water -drops -floating"` | — |
 | 11 | Gift sets & bundles | `solveGiftSet()` | `"[Fragrance] -set -lotion -wash -bundle -gift"` | Overlaps `BLOCKED_TEXT_HINTS` (`gift set`, `bundle`, …) |
@@ -64,8 +67,8 @@ Base token **`[Fragrance]`** means the resolved search phrase (typically `brand 
 ## Design notes for implementers
 
 1. **Serper `q` vs current suffix:** Today `searchSerperImageUrl` always appends a long fixed suffix (`single fragrance bottle bottle only no box …`). Solvers should either **replace** that default with an alternate refinement strategy on the clarify path or **merge** mutators so negative keywords are not overridden by conflicting positives — decide one policy and keep it consistent.
-2. **Poof `type`:** Confirm Poof’s documented `type` values (`auto` vs `product`) before sending; extend `removeBgByFile` / `FormData` to include `type` when the solver requires it.
-3. **Telemetry:** Logging `solverId`, `refreshCount`, and final `q` (redacted if needed) will make Edge Cases 3 and 20 debuggable in production.
+2. **Poof `type`:** `product` remains opt-in. Do not make it the default without reviewing `poof_white_background` and `poof_empty_output` telemetry.
+3. **Telemetry:** Logging includes `solverId`, `refreshCount`, final query preview, lookup key, optional `fixtureId` / `traceId`, Serper ordinal, candidate scoring breakdown, and final remove-BG fields. The API response includes the same compact `imagePipelineTrace` for refresh debugging.
 4. **Safety:** User-authored text for Edge Case 3 must be sanitized before becoming a search query (length limits, no raw URLs if undesired).
 
 ---

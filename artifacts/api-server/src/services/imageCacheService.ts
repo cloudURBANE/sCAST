@@ -2,6 +2,7 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { imageCacheTable } from "@workspace/db/schema";
 import { logger } from "../lib/logger";
+import type { RemoveBgReason, RemoveBgStatus } from "./bgService";
 import {
   isLocalImageObjectUrlPersistable,
   localImageObjectExists,
@@ -43,6 +44,8 @@ export type CachedImageReference = {
   mimeType: string | null;
   sizeBytes: number | null;
   backgroundRemoved: boolean;
+  removeBgStatus?: RemoveBgStatus | null;
+  removeBgReason?: RemoveBgReason | null;
 };
 
 let imageCacheMissingWarned = false;
@@ -81,6 +84,8 @@ function rowToReference(row: typeof imageCacheTable.$inferSelect, cached: boolea
     mimeType: row.mimeType,
     sizeBytes: row.sizeBytes,
     backgroundRemoved: row.backgroundRemoved,
+    removeBgStatus: row.removeBgStatus as RemoveBgStatus | null,
+    removeBgReason: row.removeBgReason as RemoveBgReason | null,
   };
 }
 
@@ -112,6 +117,8 @@ function readyInputToReference(input: {
   height: number;
   sizeBytes: number;
   backgroundRemoved: boolean;
+  removeBgStatus?: RemoveBgStatus | null;
+  removeBgReason?: RemoveBgReason | null;
 }): CachedImageReference {
   return {
     imageUrl: safeImageUrlForResponse(input.publicUrl),
@@ -125,6 +132,8 @@ function readyInputToReference(input: {
     mimeType: input.mimeType,
     sizeBytes: input.sizeBytes,
     backgroundRemoved: input.backgroundRemoved,
+    removeBgStatus: input.removeBgStatus ?? null,
+    removeBgReason: input.removeBgReason ?? null,
   };
 }
 
@@ -288,8 +297,8 @@ export async function recordImageReady(input: {
   height: number;
   sizeBytes: number;
   backgroundRemoved: boolean;
-  removeBgStatus?: string | null;
-  removeBgReason?: string | null;
+  removeBgStatus?: RemoveBgStatus | null;
+  removeBgReason?: RemoveBgReason | null;
 }): Promise<CachedImageReference> {
   assertNoPersistedBase64Image(input.publicUrl, "image_cache.public_url");
   assertNoPersistedBase64Image(input.sourceUrl, "image_cache.source_url");

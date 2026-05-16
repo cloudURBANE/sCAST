@@ -272,6 +272,8 @@ router.post("/refresh-image", async (req, res) => {
     poofOptions?: { type?: unknown };
     stripBgOnly?: unknown;
     imageUrl?: unknown;
+    fixtureId?: unknown;
+    traceId?: unknown;
   };
   const { name, brand, concentrationHint } = body;
   if (!name || !brand) {
@@ -304,6 +306,14 @@ router.post("/refresh-image", async (req, res) => {
   const rc = body.refreshCount;
   const refreshCount =
     typeof rc === "number" && Number.isFinite(rc) && rc >= 0 && rc <= 10_000 ? Math.floor(rc) : undefined;
+  const fixtureId =
+    typeof body.fixtureId === "string" && body.fixtureId.trim().length > 0
+      ? body.fixtureId.trim().slice(0, 80)
+      : undefined;
+  const traceId =
+    typeof body.traceId === "string" && body.traceId.trim().length > 0
+      ? body.traceId.trim().slice(0, 80)
+      : undefined;
 
   try {
     if (stripBgOnly && sourceForStrip) {
@@ -323,6 +333,8 @@ router.post("/refresh-image", async (req, res) => {
           skipBg: skipBgStrip,
           poofType: poofT ?? null,
           sourceKind: sourceForStrip.startsWith("data:") ? "data" : "url",
+          fixtureId: fixtureId ?? null,
+          traceId: traceId ?? null,
         },
         "refresh-image",
       );
@@ -335,6 +347,8 @@ router.post("/refresh-image", async (req, res) => {
         allowLookupCache: false,
         removeBackground: !skipBgStrip,
         poofOptions: stripRemoveOpts,
+        fixtureId,
+        traceId,
       });
 
       if (!processed) {
@@ -359,6 +373,7 @@ router.post("/refresh-image", async (req, res) => {
         backgroundRemoved: processed.backgroundRemoved,
         removeBgStatus: processed.removeBgStatus ?? (processed.backgroundRemoved ? "removed" : "fallback"),
         removeBgReason: processed.removeBgReason ?? (processed.backgroundRemoved ? "removed" : "local_trim_fallback"),
+        imagePipelineTrace: processed.imagePipelineTrace,
       });
       return;
     }
@@ -419,6 +434,8 @@ router.post("/refresh-image", async (req, res) => {
         refine,
         skipBg,
         poofType: poofType ?? null,
+        fixtureId: fixtureId ?? null,
+        traceId: traceId ?? null,
         qPreview: serperQuery.slice(0, 220),
       },
       "refresh-image",
@@ -433,6 +450,8 @@ router.post("/refresh-image", async (req, res) => {
       poofOptions: removeBgOpts,
       serperRefine: { refine },
       maxCandidates: solverId ? 6 : 4,
+      fixtureId,
+      traceId,
     });
 
     if (!processed) {
@@ -458,6 +477,7 @@ router.post("/refresh-image", async (req, res) => {
       backgroundRemoved: processed.backgroundRemoved,
       removeBgStatus: processed.removeBgStatus ?? (processed.backgroundRemoved ? "removed" : "fallback"),
       removeBgReason: processed.removeBgReason ?? (processed.backgroundRemoved ? "removed" : "local_trim_fallback"),
+      imagePipelineTrace: processed.imagePipelineTrace,
     });
   } catch (err: any) {
     logger.error({ err: err.message }, "refresh-image failed");

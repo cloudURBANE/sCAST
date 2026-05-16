@@ -7,7 +7,7 @@ import {
   trimPackshotForBgService,
   trimPackshotForImageProxy,
 } from "./packshotTrimCore.ts";
-import { isEffectivelyTransparent } from "./bgServiceCore.ts";
+import { hasOpaqueLightBackground, isEffectivelyTransparent } from "./bgServiceCore.ts";
 
 test("PACKSHOT_TRIM_VERSION is a positive int", () => {
   assert.equal(typeof PACKSHOT_TRIM_VERSION, "number");
@@ -544,6 +544,30 @@ test("bgService guard: fully transparent Poof-shaped buffer is detected as empty
       removeBgReason: "poof_empty_output",
     },
   );
+});
+
+test("bgService guard: product-mode opaque light card is detected without flagging transparent output", async () => {
+  const bottle = await sharp({
+    create: { width: 120, height: 300, channels: 4, background: { r: 30, g: 45, b: 80, alpha: 1 } },
+  })
+    .png()
+    .toBuffer();
+
+  const whiteCard = await sharp({
+    create: { width: 768, height: 768, channels: 4, background: { r: 248, g: 248, b: 248, alpha: 1 } },
+  })
+    .composite([{ input: bottle, left: 324, top: 230 }])
+    .png()
+    .toBuffer();
+  assert.equal(await hasOpaqueLightBackground(whiteCard), true);
+
+  const transparentPackshot = await sharp({
+    create: { width: 768, height: 768, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
+  })
+    .composite([{ input: bottle, left: 324, top: 230 }])
+    .png()
+    .toBuffer();
+  assert.equal(await hasOpaqueLightBackground(transparentPackshot), false);
 });
 
 /*

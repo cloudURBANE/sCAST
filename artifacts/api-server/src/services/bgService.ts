@@ -1,7 +1,7 @@
 import axios from "axios";
 import sharp from "sharp";
 import { logger } from "../lib/logger";
-import { isEffectivelyTransparent } from "./bgServiceCore";
+import { hasOpaqueLightBackground, isEffectivelyTransparent } from "./bgServiceCore";
 import { trimPackshotForBgService } from "./packshotTrim";
 import { fetchExternalImage } from "./safeImageFetch";
 
@@ -155,6 +155,13 @@ async function removeBgByFile(buffer: Buffer, apiKey: string, opts?: RemoveBgOpt
             "[bgService] Poof returned a fully transparent image; treating as failure",
           );
           return { ok: false, reason: "poof_empty_output", status: 200 };
+        }
+        if (o?.poofType === "product" && (await hasOpaqueLightBackground(poofBuffer))) {
+          logger.warn(
+            { reason: "poof_white_background", poofType: o.poofType },
+            "[bgService] Poof type=product preserved an opaque light background; retrying fallback path",
+          );
+          return { ok: false, reason: "poof_white_background", status: 200 };
         }
         return { ok: true, buffer: poofBuffer };
       }

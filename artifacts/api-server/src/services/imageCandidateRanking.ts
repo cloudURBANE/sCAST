@@ -40,6 +40,27 @@ type ProcessedCandidateSnapshot = {
   removeBgStatus?: RemoveBgStatus;
 };
 
+type ScoreProcessedSerperCandidateInput = {
+  brand: string;
+  name: string;
+  removeBackground: boolean;
+  serperCandidate: Pick<SerperImageCandidate, "imageUrl" | "title" | "source" | "score">;
+  processed: ProcessedCandidateSnapshot;
+};
+
+export type ImageCandidateScoreBreakdown = {
+  serperScore: number;
+  identityCoverage: number;
+  identityBonus: number;
+  minEdge: number;
+  minEdgeBonus: number;
+  aspectRatio: number;
+  aspectBonus: number;
+  backgroundRemovalBonus: number;
+  fallbackPenalty: number;
+  total: number;
+};
+
 function tokenize(value: string): string[] {
   return value
     .normalize("NFD")
@@ -101,34 +122,52 @@ export function shouldSkipSerperCandidateByIdentity(
   return coverage < 0.34;
 }
 
-export function scoreProcessedSerperCandidate(input: {
-  brand: string;
-  name: string;
-  removeBackground: boolean;
-  serperCandidate: Pick<SerperImageCandidate, "imageUrl" | "title" | "source" | "score">;
-  processed: ProcessedCandidateSnapshot;
-}): number {
+export function scoreProcessedSerperCandidateBreakdown(
+  input: ScoreProcessedSerperCandidateInput,
+): ImageCandidateScoreBreakdown {
   const identityCoverage = computeFragranceIdentityCoverage(input.brand, input.name, input.serperCandidate);
   const width = input.processed.width ?? 0;
   const height = input.processed.height ?? 0;
   const minEdge = Math.min(width || 0, height || 0);
   const aspect = width > 0 && height > 0 ? width / height : 1;
 
-  let score = Number.isFinite(input.serperCandidate.score) ? input.serperCandidate.score : 0;
-  score += identityCoverage * 12;
+  const serperScore = Number.isFinite(input.serperCandidate.score) ? input.serperCandidate.score : 0;
+  const identityBonus = identityCoverage * 12;
 
-  if (minEdge >= 640) score += 2;
-  else if (minEdge >= 520) score += 1;
-  else if (minEdge > 0 && minEdge < 360) score -= 2;
+  let minEdgeBonus = 0;
+  if (minEdge >= 640) minEdgeBonus = 2;
+  else if (minEdge >= 520) minEdgeBonus = 1;
+  else if (minEdge > 0 && minEdge < 360) minEdgeBonus = -2;
 
-  if (aspect >= 0.55 && aspect <= 1.85) score += 0.6;
-  else score -= 0.8;
+  const aspectBonus = aspect >= 0.55 && aspect <= 1.85 ? 0.6 : -0.8;
 
+  let backgroundRemovalBonus = 0;
+  let fallbackPenalty = 0;
   if (input.removeBackground) {
-    if (input.processed.backgroundRemoved) score += 3;
-    else score -= 3;
-    if (input.processed.removeBgStatus === "fallback") score -= 2;
+    backgroundRemovalBonus = input.processed.backgroundRemoved ? 3 : -3;
+    fallbackPenalty = input.processed.removeBgStatus === "fallback" ? -2 : 0;
   }
 
-  return score;
+  return {
+    serperScore,
+    identityCoverage,
+    identityBonus,
+    minEdge,
+    minEdgeBonus,
+    aspectRatio: aspect,
+    aspectBonus,
+    backgroundRemovalBonus,
+    fallbackPenalty,
+    total:
+      serperScore +
+      identityBonus +
+      minEdgeBonus +
+      aspectBonus +
+      backgroundRemovalBonus +
+      fallbackPenalty,
+  };
+}
+
+export function scoreProcessedSerperCandidate(input: ScoreProcessedSerperCandidateInput): number {
+  return scoreProcessedSerperCandidateBreakdown(input).total;
 }

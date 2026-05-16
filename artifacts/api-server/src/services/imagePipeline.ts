@@ -4,8 +4,10 @@ import { makeLookupKey } from "./catalogService";
 import { removeBgBuffer, removeBgToBuffer, type RemoveBgOptions, type RemoveBgReason, type RemoveBgStatus } from "./bgService";
 import { isEffectivelyTransparent } from "./bgServiceCore";
 import {
-  scoreProcessedSerperCandidate,
+  computeFragranceIdentityCoverage,
+  scoreProcessedSerperCandidateBreakdown,
   shouldSkipSerperCandidateByIdentity,
+  type ImageCandidateScoreBreakdown,
 } from "./imageCandidateRanking";
 import {
   buildProcessedImageStorageKey,
@@ -51,8 +53,9 @@ type PipelineSource = {
 export type ProcessedImageResult = CachedImageReference & {
   sourceProvider: ImageSourceProvider;
   pipelineVersion: string;
-  removeBgStatus?: RemoveBgStatus;
-  removeBgReason?: RemoveBgReason;
+  removeBgStatus?: RemoveBgStatus | null;
+  removeBgReason?: RemoveBgReason | null;
+  imagePipelineTrace?: ImagePipelineTrace;
 };
 
 export type ResolveProcessedFragranceImageInput = {
@@ -68,12 +71,103 @@ export type ResolveProcessedFragranceImageInput = {
   poofOptions?: RemoveBgOptions;
   serperRefine?: Parameters<typeof searchSerperImageCandidates>[1];
   maxCandidates?: number;
+  fixtureId?: string | null;
+  traceId?: string | null;
+};
+
+export type ImagePipelineCandidateTrace = {
+  ordinal: number;
+  sourceProvider: ImageSourceProvider;
+  sourceUrlHash?: string;
+  serperScore?: number;
+  identityCoverage?: number;
+  titlePreview?: string;
+  sourcePreview?: string;
+  skipped?: boolean;
+  skipReason?: "low_identity" | "source_rejected" | "processing_failed";
+  rejectionReason?: string;
+  score?: ImageCandidateScoreBreakdown;
+  backgroundRemoved?: boolean;
+  removeBgStatus?: RemoveBgStatus | null;
+  removeBgReason?: RemoveBgReason | null;
+  width?: number | null;
+  height?: number | null;
+  cached?: boolean;
+};
+
+export type ImagePipelineTrace = {
+  lookupKey: string;
+  sourceProvider: ImageSourceProvider;
+  searchQueryHash: string | null;
+  fixtureId?: string;
+  traceId?: string;
+  selectedOrdinal: number | null;
+  selectedScore: number | null;
+  finalSourceUrlHash: string | null;
+  finalRemoveBgStatus: RemoveBgStatus | null;
+  finalRemoveBgReason: RemoveBgReason | null;
+  finalBackgroundRemoved: boolean | null;
+  candidates: ImagePipelineCandidateTrace[];
 };
 
 const inFlightBySource = new Map<string, Promise<ProcessedImageResult | null>>();
 
 function inFlightKey(sourceUrlHash: string, removeBackground: boolean): string {
   return `${sourceUrlHash}:${removeBackground ? "1" : "0"}`;
+}
+
+function preview(value: string | undefined, max = 140): string | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed) return undefined;
+  return trimmed.slice(0, max);
+}
+
+function makeTrace(params: {
+  lookupKey: string;
+  sourceProvider: ImageSourceProvider;
+  searchQueryHash: string | null;
+  fixtureId?: string | null;
+  traceId?: string | null;
+  candidates?: ImagePipelineCandidateTrace[];
+  selectedOrdinal?: number | null;
+  selectedScore?: number | null;
+  final?: ProcessedImageResult | null;
+}): ImagePipelineTrace {
+  return {
+    lookupKey: params.lookupKey,
+    sourceProvider: params.sourceProvider,
+    searchQueryHash: params.searchQueryHash,
+    ...(params.fixtureId ? { fixtureId: params.fixtureId } : {}),
+    ...(params.traceId ? { traceId: params.traceId } : {}),
+    selectedOrdinal: params.selectedOrdinal ?? null,
+    selectedScore: params.selectedScore ?? null,
+    finalSourceUrlHash: params.final?.sourceUrlHash ?? null,
+    finalRemoveBgStatus: params.final?.removeBgStatus ?? null,
+    finalRemoveBgReason: params.final?.removeBgReason ?? null,
+    finalBackgroundRemoved: params.final?.backgroundRemoved ?? null,
+    candidates: params.candidates ?? [],
+  };
+}
+
+function attachTrace(result: ProcessedImageResult, trace: ImagePipelineTrace): ProcessedImageResult {
+  logger.info(
+    {
+      lookupKey: trace.lookupKey,
+      sourceProvider: trace.sourceProvider,
+      searchQueryHash: trace.searchQueryHash,
+      fixtureId: trace.fixtureId ?? null,
+      traceId: trace.traceId ?? null,
+      selectedOrdinal: trace.selectedOrdinal,
+      selectedScore: trace.selectedScore,
+      finalSourceUrlHash: trace.finalSourceUrlHash,
+      finalRemoveBgStatus: trace.finalRemoveBgStatus,
+      finalRemoveBgReason: trace.finalRemoveBgReason,
+      finalBackgroundRemoved: trace.finalBackgroundRemoved,
+      candidateCount: trace.candidates.length,
+    },
+    "[imagePipeline] selected processed image",
+  );
+  return { ...result, imagePipelineTrace: trace };
 }
 
 function decodeDataImage(input: string): Buffer | null {
@@ -356,18 +450,27 @@ export async function resolveProcessedFragranceImage(
   const sourceProvider = input.sourceProvider ?? (input.sourceUrl ? "manual" : "serper");
   const removeBackground = input.removeBackground ?? true;
   const searchQueryHash = input.searchQuery ? hashSearchQuery(input.searchQuery) : null;
+  const traceBase = {
+    lookupKey,
+    sourceProvider,
+    searchQueryHash,
+    fixtureId: input.fixtureId,
+    traceId: input.traceId,
+  };
 
   if (input.allowLookupCache !== false && !input.sourceUrl) {
     const cachedByLookup = await getLatestReadyCachedImageByLookupKey(lookupKey);
     if (cachedByLookup && (!removeBackground || cachedByLookup.backgroundRemoved)) {
-      return { ...cachedByLookup, sourceProvider, pipelineVersion: IMAGE_PIPELINE_VERSION };
+      const result = { ...cachedByLookup, sourceProvider, pipelineVersion: IMAGE_PIPELINE_VERSION };
+      return attachTrace(result, makeTrace({ ...traceBase, final: result }));
     }
   }
 
   if (input.allowLookupCache !== false && !input.sourceUrl && searchQueryHash) {
     const cachedByQuery = await getLatestReadyCachedImageBySearchQueryHash(searchQueryHash);
     if (cachedByQuery && (!removeBackground || cachedByQuery.backgroundRemoved)) {
-      return { ...cachedByQuery, sourceProvider, pipelineVersion: IMAGE_PIPELINE_VERSION };
+      const result = { ...cachedByQuery, sourceProvider, pipelineVersion: IMAGE_PIPELINE_VERSION };
+      return attachTrace(result, makeTrace({ ...traceBase, final: result }));
     }
   }
 
@@ -385,18 +488,40 @@ export async function resolveProcessedFragranceImage(
   if (candidates.length === 0) return null;
 
   const maxCandidates = Math.max(1, Math.min(input.maxCandidates ?? MAX_CANDIDATES_PER_ATTEMPT, 8));
-  let best: { result: ProcessedImageResult; score: number } | null = null;
+  const candidateTraces: ImagePipelineCandidateTrace[] = [];
+  let best: { result: ProcessedImageResult; score: number; ordinal: number } | null = null;
 
-  for (const candidate of candidates.slice(0, maxCandidates)) {
+  for (const [index, candidate] of candidates.slice(0, maxCandidates).entries()) {
+    const ordinal = index + 1;
+    const candidateTrace: ImagePipelineCandidateTrace = {
+      ordinal,
+      sourceProvider,
+      serperScore: Number.isFinite(candidate.score) ? candidate.score : undefined,
+      identityCoverage:
+        sourceProvider === "serper"
+          ? computeFragranceIdentityCoverage(input.brand, input.name, candidate)
+          : undefined,
+      titlePreview: preview(candidate.title),
+      sourcePreview: preview(candidate.source),
+    };
+    candidateTraces.push(candidateTrace);
+
     if (
       sourceProvider === "serper" &&
       shouldSkipSerperCandidateByIdentity(input.brand, input.name, candidate)
     ) {
+      candidateTrace.skipped = true;
+      candidateTrace.skipReason = "low_identity";
       logger.info(
         {
+          lookupKey,
+          fixtureId: input.fixtureId ?? null,
+          traceId: input.traceId ?? null,
+          ordinal,
           brand: input.brand,
           name: input.name,
           score: candidate.score,
+          identityCoverage: candidateTrace.identityCoverage,
           candidateTitle: (candidate.title ?? "").slice(0, 140),
           candidateSource: (candidate.source ?? "").slice(0, 140),
         },
@@ -408,8 +533,21 @@ export async function resolveProcessedFragranceImage(
     let source: PipelineSource;
     try {
       source = sourceFromInput(candidate.imageUrl);
+      candidateTrace.sourceUrlHash = source.sourceUrlHash;
     } catch (err: any) {
-      logger.warn({ err: err?.message }, "[imagePipeline] source rejected");
+      candidateTrace.skipped = true;
+      candidateTrace.skipReason = "source_rejected";
+      candidateTrace.rejectionReason = err?.message ?? "source rejected";
+      logger.warn(
+        {
+          lookupKey,
+          fixtureId: input.fixtureId ?? null,
+          traceId: input.traceId ?? null,
+          ordinal,
+          err: err?.message,
+        },
+        "[imagePipeline] source rejected",
+      );
       continue;
     }
 
@@ -423,11 +561,43 @@ export async function resolveProcessedFragranceImage(
       removeBackground,
       poofOptions: input.poofOptions,
     });
-    if (!result) continue;
+    if (!result) {
+      candidateTrace.skipped = true;
+      candidateTrace.skipReason = "processing_failed";
+      logger.info(
+        {
+          lookupKey,
+          fixtureId: input.fixtureId ?? null,
+          traceId: input.traceId ?? null,
+          ordinal,
+          sourceProvider,
+          sourceUrlHash: source.sourceUrlHash,
+        },
+        "[imagePipeline] candidate processing returned no result",
+      );
+      continue;
+    }
 
-    if (sourceProvider !== "serper") return result;
+    candidateTrace.backgroundRemoved = result.backgroundRemoved;
+    candidateTrace.removeBgStatus = result.removeBgStatus;
+    candidateTrace.removeBgReason = result.removeBgReason;
+    candidateTrace.width = result.width;
+    candidateTrace.height = result.height;
+    candidateTrace.cached = result.cached;
 
-    const candidateScore = scoreProcessedSerperCandidate({
+    if (sourceProvider !== "serper") {
+      return attachTrace(
+        result,
+        makeTrace({
+          ...traceBase,
+          candidates: candidateTraces,
+          selectedOrdinal: ordinal,
+          final: result,
+        }),
+      );
+    }
+
+    const scoreBreakdown = scoreProcessedSerperCandidateBreakdown({
       brand: input.brand,
       name: input.name,
       removeBackground,
@@ -436,18 +606,72 @@ export async function resolveProcessedFragranceImage(
         width: result.width,
         height: result.height,
         backgroundRemoved: result.backgroundRemoved,
-        removeBgStatus: result.removeBgStatus,
+        removeBgStatus: result.removeBgStatus ?? undefined,
       },
     });
+    candidateTrace.score = scoreBreakdown;
+    const candidateScore = scoreBreakdown.total;
+
+    logger.info(
+      {
+        lookupKey,
+        fixtureId: input.fixtureId ?? null,
+        traceId: input.traceId ?? null,
+        ordinal,
+        sourceProvider,
+        sourceUrlHash: source.sourceUrlHash,
+        candidateScore: scoreBreakdown,
+        finalRemoveBgStatus: result.removeBgStatus ?? null,
+        finalRemoveBgReason: result.removeBgReason ?? null,
+        finalBackgroundRemoved: result.backgroundRemoved,
+        width: result.width,
+        height: result.height,
+        cached: result.cached,
+      },
+      "[imagePipeline] scored serper candidate",
+    );
 
     if (!best || candidateScore > best.score) {
-      best = { result, score: candidateScore };
+      best = { result, score: candidateScore, ordinal };
     }
 
     if (candidateScore >= EARLY_ACCEPT_PROCESSED_SCORE) {
-      return best.result;
+      return attachTrace(
+        best.result,
+        makeTrace({
+          ...traceBase,
+          candidates: candidateTraces,
+          selectedOrdinal: best.ordinal,
+          selectedScore: best.score,
+          final: best.result,
+        }),
+      );
     }
   }
 
-  return best?.result ?? null;
+  if (!best) {
+    logger.info(
+      {
+        lookupKey,
+        fixtureId: input.fixtureId ?? null,
+        traceId: input.traceId ?? null,
+        sourceProvider,
+        searchQueryHash,
+        candidateCount: candidateTraces.length,
+      },
+      "[imagePipeline] no usable image candidate selected",
+    );
+    return null;
+  }
+
+  return attachTrace(
+    best.result,
+    makeTrace({
+      ...traceBase,
+      candidates: candidateTraces,
+      selectedOrdinal: best.ordinal,
+      selectedScore: best.score,
+      final: best.result,
+    }),
+  );
 }

@@ -10,17 +10,18 @@ Diagnostic:
 
 ## Verified by the patch
 
-- `hasOpaqueLightBackground(poofBuffer)` no longer rejects valid Poof 200
-  responses. `verifyPoofPaths.ts` Case 3 (opaque-white 200 → `removed`) is
-  green.
+- `hasOpaqueLightBackground(poofBuffer)` is no longer a blanket rejection for
+  valid Poof 200 responses. It is now scoped to `type=product` attempts, where
+  an opaque light card means Poof preserved the retail/product rectangle and
+  should retry without product mode.
 - The patch **is** running on production. Two `image_cache` rows from after
   `15:02 UTC 2026-05-10` (`hermes::cologne`, `maison francis kurkdjian::baccarat
   rouge 540`) have `background_removed=TRUE` and were written *with the new
   bgService in place*. Their `global_fragrances.profile_data.imageUrl` was
   overwritten through the catalog upsert at `routes/scent.ts:420`.
-- Frontend is clean: `imageProxy.ts:42` skips `?trim=1` for any
-  `/images/processed/` URL (commit `b32aeec`), so processed WebPs pass through
-  unchanged. No SPA-side white card paints over the bottle.
+- Frontend is clean: `imageProxy.ts` skips proxying and `?trim=1` for
+  `/api/image-objects/...` URLs, so processed WebPs pass through unchanged. No
+  SPA-side white card paints over the bottle.
 
 ## What the patch alone does not heal
 
@@ -28,9 +29,12 @@ Diagnostic:
 
 `user_fragrances.fragrance_data.imageUrl` is a JSONB string baked in at the
 time the row is inserted or `PATCH /wardrobe/:id` runs. `hydrateImageUrl`
-(`fragrancePayload.ts:51`) only fills in **missing** values — it never replaces
-a stale URL. So existing wardrobe rows continue to render whatever processed
-storage path they had when the regression was active.
+(`fragrancePayload.ts`) first calls `usableImageUrlForResponse`; if the stored
+URL is usable, it returns the row unchanged. Shared resolution through
+`imageHydration.resolveSharedImageUrl` is used only when the row URL is missing
+or unusable. So existing wardrobe rows continue to render whatever processed
+storage path they had when the regression was active unless the object itself is
+unusable.
 
 Recovery options:
 
@@ -104,10 +108,9 @@ to declare healed (2/6 ≈ 33%); revisit when there are more reads.
 - Watch the post-patch bg=true/bg=false ratio over the next 24h. If it does
   not climb back toward 90%, the dominant driver is genuine Poof
   failure/rate-limit, not the removed guard.
-- Add structured logging on the `removeBgBuffer` fallback path — currently
-  the `removeBgReason` is in the API response and logger but is not
-  persisted into `image_cache`. A column for it would make this diagnostic
-  reduce to a single SQL query instead of fetching WebPs and counting alpha.
+- Use the structured refresh trace and persisted `image_cache.remove_bg_status`
+  / `remove_bg_reason` fields to watch whether `poof_white_background`,
+  `poof_empty_output`, or source selection is the dominant remaining failure.
 - Decide on user-row recovery: a one-shot "rebuild every wardrobe row" job
   vs. waiting for users to click refresh per fragrance.
 - Audit the local-trim white-RGB path in

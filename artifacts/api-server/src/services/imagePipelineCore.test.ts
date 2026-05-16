@@ -227,6 +227,7 @@ test("image candidate ranking prefers identity match and successful BG removal",
     computeFragranceIdentityCoverage,
     shouldSkipSerperCandidateByIdentity,
     scoreProcessedSerperCandidate,
+    scoreProcessedSerperCandidateBreakdown,
   } = await import("./imageCandidateRanking.ts");
 
   const strong = {
@@ -275,6 +276,26 @@ test("image candidate ranking prefers identity match and successful BG removal",
   });
 
   assert.ok(strongProcessedScore > weakProcessedScore);
+
+  const breakdown = scoreProcessedSerperCandidateBreakdown({
+    brand: "Dior",
+    name: "Sauvage",
+    removeBackground: true,
+    serperCandidate: strong,
+    processed: {
+      width: 768,
+      height: 768,
+      backgroundRemoved: true,
+      removeBgStatus: "removed",
+    },
+  });
+  assert.equal(breakdown.serperScore, 12);
+  assert.equal(breakdown.minEdge, 768);
+  assert.equal(breakdown.minEdgeBonus, 2);
+  assert.equal(breakdown.aspectBonus, 0.6);
+  assert.equal(breakdown.backgroundRemovalBonus, 3);
+  assert.equal(breakdown.fallbackPenalty, 0);
+  assert.equal(breakdown.total, strongProcessedScore);
 });
 
 test("refresh-image does not upsert catalog when backgroundRemoved=false and BG removal was requested", async () => {
