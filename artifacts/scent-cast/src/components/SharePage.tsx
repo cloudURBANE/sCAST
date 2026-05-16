@@ -401,9 +401,9 @@ function ProfileScorePanel({
   return (
     <div className="space-y-3 sm:space-y-5">
       <div className="grid grid-cols-2 lg:grid-cols-[1.15fr_repeat(4,1fr)] border-y border-white/8">
-        <div className="col-span-2 lg:col-span-1 px-4 py-5 border-b lg:border-b-0 lg:border-r border-white/8">
-          <p className="text-[10px] uppercase tracking-[0.28em] text-white/64 font-bold">Scentcast Score</p>
-          <div className="mt-1 flex items-end gap-2">
+        <div className="col-span-2 lg:col-span-1 flex flex-col items-center justify-center px-4 py-5 border-b lg:border-b-0 lg:border-r border-white/8 text-center">
+          <p className="text-[10px] uppercase tracking-[0.28em] text-white/64 font-bold">Scentbeam Score</p>
+          <div className="mt-1 flex items-end justify-center gap-2">
             <span className="font-serif italic text-6xl leading-none text-scent-accent">
               {consensusScore ?? "--"}
             </span>
@@ -710,7 +710,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                 </button>
                 <div className="flex items-center gap-3 text-white/92">
                   <div className="h-3 w-5 border-y border-scent-accent relative before:absolute before:left-1 before:right-1 before:top-1/2 before:h-px before:-translate-y-1/2 before:bg-scent-accent" />
-                  <p className="font-serif text-sm sm:text-xl uppercase tracking-[0.42em]">Scentcast</p>
+                  <p className="font-serif text-sm sm:text-xl uppercase tracking-[0.42em]">Scentbeam</p>
                 </div>
                 <button
                   onClick={() => {
@@ -741,9 +741,6 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                     </h2>
                     <p className="mt-2 font-serif text-lg sm:text-2xl uppercase tracking-[0.28em] text-white/84">
                       {entryBrand(selectedItem)}
-                    </p>
-                    <p className="mx-auto mt-3 max-w-[43rem] text-sm sm:text-base leading-relaxed text-white/56">
-                      {profileSummary(selectedMetrics) ?? entryNotes(selectedItem)}
                     </p>
                   </header>
 

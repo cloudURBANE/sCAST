@@ -554,7 +554,7 @@ function ProfileScorePanel({
     <div className="space-y-3 sm:space-y-5">
       <div className="hidden sm:grid grid-cols-[1.15fr_repeat(4,1fr)] border-y border-white/8">
         <div className="flex flex-col items-center justify-center px-4 py-5 border-r border-white/8 text-center">
-          <p className="text-[10px] uppercase tracking-[0.28em] text-white/64 font-bold">Scentcast Score</p>
+          <p className="text-[10px] uppercase tracking-[0.28em] text-white/64 font-bold">Scentbeam Score</p>
           <div className="mt-1 flex items-end justify-center gap-2">
             <span className="font-serif italic text-6xl leading-none text-scent-accent">
               {consensusScore ?? "--"}
@@ -576,7 +576,7 @@ function ProfileScorePanel({
         })}
       </div>
 
-      <FragrancePanel title="Scentcast Score" className="sm:hidden">
+      <FragrancePanel title="Scentbeam Score" className="sm:hidden">
         <div className="px-4 py-4 text-center">
           <div className="flex items-end justify-center gap-2">
             <span className="font-serif italic text-5xl leading-none text-scent-accent">
@@ -651,11 +651,11 @@ function ProfileScorePanel({
       </div>
 
       {rows.length > 0 ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
           {rows.map((row) => (
-            <div key={row.label} className="border border-white/[0.07] bg-black/18 px-3 py-2">
-              <p className="text-[8px] uppercase tracking-[0.2em] text-white/30 font-bold">{row.label}</p>
-              <p className="mt-1 text-sm text-white/68 font-serif italic leading-snug">{row.value}</p>
+            <div key={row.label} className="border border-white/15 bg-white/[0.035] px-3 py-2.5 text-center sm:text-left">
+              <p className="text-[8px] uppercase tracking-[0.2em] text-white/55 font-bold">{row.label}</p>
+              <p className="mt-1 text-sm text-white/82 font-serif italic leading-snug">{row.value}</p>
             </div>
           ))}
         </div>
@@ -1441,7 +1441,7 @@ export const Wardrobe: React.FC<{
                 </button>
                 <div className="flex min-w-0 items-center justify-center gap-3 text-white/92">
                   <div className="h-3 w-5 border-y border-scent-accent relative before:absolute before:left-1 before:right-1 before:top-1/2 before:h-px before:-translate-y-1/2 before:bg-scent-accent" />
-                  <p className="truncate font-serif text-sm sm:text-xl uppercase tracking-[0.28em] sm:tracking-[0.42em]">Scentcast</p>
+                  <p className="truncate font-serif text-sm sm:text-xl uppercase tracking-[0.28em] sm:tracking-[0.42em]">Scentbeam</p>
                 </div>
                 <button 
                   onClick={closeDetail} 
@@ -1469,9 +1469,6 @@ export const Wardrobe: React.FC<{
                     </h2>
                     <p className="mt-2 font-serif text-lg sm:text-2xl uppercase tracking-[0.28em] text-white/84">
                       {entryBrand(selectedItem)}
-                    </p>
-                    <p className="mx-auto mt-3 max-w-[43rem] text-sm sm:text-base leading-relaxed text-white/56">
-                      {profileSummary(selectedMetrics) ?? entryNotes(selectedItem)}
                     </p>
                   </header>
 
