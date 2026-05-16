@@ -1,6 +1,7 @@
 import sharp from "sharp";
 import { logger } from "../lib/logger";
 import { recordApiUsage } from "./apiUsageLedger";
+import { removeBgBuffer, type RemoveBgReason, type RemoveBgStatus } from "./bgService";
 import { makeLookupKey } from "./catalogService";
 import {
   buildProcessedImageStorageKey,
@@ -22,10 +23,10 @@ import { fetchExternalImage } from "./safeImageFetch";
 // Last reviewed against OpenAI image pricing: 2026-05-15. Update this comment
 // whenever the model list or default changes so a future reader can decide
 // quickly whether to refresh the pricing in the cost ledger phase.
-const SUPPORTED_REIMAGINE_MODELS = ["gpt-image-1", "gpt-image-1-mini", "gpt-image-2"] as const;
+const SUPPORTED_REIMAGINE_MODELS = ["gpt-image-2"] as const;
 type ReimagineModel = (typeof SUPPORTED_REIMAGINE_MODELS)[number];
 
-const DEFAULT_REIMAGINE_MODEL: ReimagineModel = "gpt-image-1";
+const DEFAULT_REIMAGINE_MODEL: ReimagineModel = "gpt-image-2";
 const DEFAULT_REIMAGINE_SIZE = "1024x1024";
 const DEFAULT_REIMAGINE_QUALITY = "high";
 const OPENAI_IMAGE_EDITS_ENDPOINT = "https://api.openai.com/v1/images/edits";
@@ -151,11 +152,10 @@ async function callOpenAIImageEdits(input: {
   form.append("n", "1");
   form.append("size", DEFAULT_REIMAGINE_SIZE);
   form.append("quality", DEFAULT_REIMAGINE_QUALITY);
-  // Force a transparent-background PNG so the bottle lands on alpha, matching
-  // the rest of the wardrobe image pipeline (which expects bg-removed packshots).
-  // `output_format` must be png or webp when `background=transparent`.
-  form.append("background", "transparent");
-  form.append("output_format", "png");
+  // No `background=transparent` here: gpt-image-2 may not honor it, and even
+  // when it does the alpha edges are inconsistent. Transparency is delivered
+  // by piping the raw model output through removeBgBuffer (Poof) afterwards,
+  // which is the same path the rest of the wardrobe image pipeline uses.
   // response_format defaults to b64_json for gpt-image-* models.
 
   const axiosMod = await import("axios");
@@ -181,15 +181,23 @@ async function callOpenAIImageEdits(input: {
   return out;
 }
 
-async function encodeToWebp(buffer: Buffer): Promise<{
+async function bgRemoveAndEncode(rawModelBuffer: Buffer): Promise<{
   buffer: Buffer;
   width: number;
   height: number;
   sizeBytes: number;
+  backgroundRemoved: boolean;
+  removeBgStatus: RemoveBgStatus;
+  removeBgReason: RemoveBgReason;
 }> {
-  // ensureAlpha so the WebP encoder always carries an alpha channel through —
-  // critical now that the OpenAI request asks for a transparent background.
-  const encoded = await sharp(buffer, { failOn: "truncated" })
+  // Always pipe the raw model output through the same bg-removal service the
+  // rest of the wardrobe pipeline uses. Even if gpt-image-2 returns a clean
+  // packshot, Poof gives us a reliable alpha edge and the standard 768px
+  // packshot framing. If Poof is unavailable, removeBgBuffer falls back to
+  // local trim so we still get a usable image.
+  const removed = await removeBgBuffer(rawModelBuffer);
+
+  const encoded = await sharp(removed.buffer, { failOn: "truncated" })
     .rotate()
     .resize(MAX_OUTPUT_DIMENSION, MAX_OUTPUT_DIMENSION, { fit: "inside", withoutEnlargement: true })
     .ensureAlpha()
@@ -206,6 +214,9 @@ async function encodeToWebp(buffer: Buffer): Promise<{
     width: meta.width,
     height: meta.height,
     sizeBytes: encoded.length,
+    backgroundRemoved: removed.backgroundRemoved,
+    removeBgStatus: removed.removeBgStatus,
+    removeBgReason: removed.removeBgReason,
   };
 }
 
@@ -280,8 +291,21 @@ export async function reimagineBottleImage(
     status: "success",
   });
 
-  const optimized = await encodeToWebp(generated);
+  const optimized = await bgRemoveAndEncode(generated);
   const contentHash = hashBuffer(optimized.buffer);
+
+  logger.info(
+    {
+      lookupKey,
+      model,
+      backgroundRemoved: optimized.backgroundRemoved,
+      removeBgStatus: optimized.removeBgStatus,
+      removeBgReason: optimized.removeBgReason,
+      width: optimized.width,
+      height: optimized.height,
+    },
+    "[reimagine] bg removal complete",
+  );
 
   // Synthesize a sourceUrl unique per generated output so the (sourceUrlHash,
   // pipelineVersion) unique index in image_cache does not overwrite earlier
@@ -323,9 +347,9 @@ export async function reimagineBottleImage(
       width: optimized.width,
       height: optimized.height,
       sizeBytes: uploaded.sizeBytes || optimized.sizeBytes,
-      backgroundRemoved: true,
-      removeBgStatus: "removed",
-      removeBgReason: "openai_reimagine",
+      backgroundRemoved: optimized.backgroundRemoved,
+      removeBgStatus: optimized.removeBgStatus,
+      removeBgReason: optimized.removeBgReason,
     });
 
     return { ...recorded, model };

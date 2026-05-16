@@ -550,9 +550,9 @@ router.post("/reimagine-bottle-image", async (req, res) => {
       storagePath: result.storagePath,
       imageHash: result.imageHash,
       cached: result.cached,
-      backgroundRemoved: true,
-      removeBgStatus: "removed",
-      removeBgReason: "openai_reimagine",
+      backgroundRemoved: result.backgroundRemoved,
+      removeBgStatus: result.removeBgStatus ?? (result.backgroundRemoved ? "removed" : "fallback"),
+      removeBgReason: result.removeBgReason ?? "openai_reimagine",
       model: result.model,
     });
   } catch (err: any) {
