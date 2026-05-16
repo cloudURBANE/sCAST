@@ -642,6 +642,8 @@ export const Wardrobe: React.FC<{
   fixWardrobeBusy?: boolean;
   revertAvailable?: boolean;
   wardrobeFixHint?: string | null;
+  /** Scroll to / focus the hero "Add to vault" search (used by Expand Archive). */
+  onExpandArchive?: () => void;
 }> = ({
   items,
   onDelete,
@@ -651,6 +653,7 @@ export const Wardrobe: React.FC<{
   fixWardrobeBusy,
   revertAvailable,
   wardrobeFixHint,
+  onExpandArchive,
 }) => {
   const [selectedItem, setSelectedItem] = React.useState<Fragrance | null>(null);
   const [searchQuery, setSearchQuery] = React.useState("");
@@ -1263,12 +1266,17 @@ export const Wardrobe: React.FC<{
                   </motion.div>
                 ))}
                 {shelfIndex === shelves.length - 1 && shelfItems.length < 4 && (
-                  <div className="scent-fragrance-card min-h-[28rem] flex flex-col items-center justify-center p-8 text-center group cursor-pointer border-dashed border-scent-accent/26 hover:bg-white/5 transition-all">
+                  <button
+                    type="button"
+                    onClick={() => onExpandArchive?.()}
+                    aria-label="Expand archive — go to add fragrance search"
+                    className="scent-fragrance-card min-h-[28rem] flex flex-col items-center justify-center p-8 text-center group cursor-pointer border-dashed border-scent-accent/26 hover:bg-white/5 transition-all w-full"
+                  >
                     <div className="w-12 h-12 border border-dashed border-scent-accent/35 flex items-center justify-center group-hover:rotate-90 transition-transform mb-4 rounded-full">
                       <span className="text-scent-accent/55 text-3xl">+</span>
                     </div>
                     <p className="font-serif italic text-scent-accent/45 text-2xl tracking-tighter uppercase">Expand Archive</p>
-                  </div>
+                  </button>
                 )}
               </div>
             </div>

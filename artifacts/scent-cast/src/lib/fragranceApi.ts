@@ -114,6 +114,7 @@ export type FragranceDetail = {
   derived_metrics?: DerivedMetrics | null;
   enrichment?: {
     status?: EnrichmentStatus;
+    requires_worker?: boolean;
     requested_count?: number;
     last_requested_at?: string;
     message?: string;
@@ -353,6 +354,14 @@ export function isTerminalEnrichmentStatus(value: unknown): boolean {
     status === "ignored" ||
     status === "cancelled"
   );
+}
+
+export function isBackgroundEnrichmentQueued(
+  enrichment?: FragranceDetail["enrichment"] | null,
+): boolean {
+  const status = normalizedStatus(enrichment?.status);
+  if (status && isTerminalEnrichmentStatus(status)) return false;
+  return status === "pending" || status === "processing" || (status === "" && enrichment?.requires_worker === true);
 }
 
 export function isFragranceDetailEffectivelyComplete(

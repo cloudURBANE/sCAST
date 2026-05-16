@@ -483,6 +483,15 @@ export default function App() {
     setVaultSearchUiActive(active);
   }, []);
 
+  const handleExpandArchive = useCallback(() => {
+    const el = document.getElementById('scent-add-to-vault-search');
+    if (!(el instanceof HTMLInputElement)) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    window.setTimeout(() => {
+      el.focus({ preventScroll: true });
+    }, 360);
+  }, []);
+
   useEffect(() => {
     autoWardrobeRebuildAttemptedRef.current = false;
   }, [authToken]);
@@ -1027,6 +1036,7 @@ export default function App() {
               fixWardrobeBusy={wardrobeFixBusy}
               revertAvailable={!!wardrobeRevertSnapshot}
               wardrobeFixHint={wardrobeFixHint}
+              onExpandArchive={handleExpandArchive}
             />
           </div>
           <section className="hidden">

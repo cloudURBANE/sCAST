@@ -44,17 +44,12 @@ function applyViteApiUrlsFromScentCastEnv() {
 
 applyViteApiUrlsFromScentCastEnv();
 
-export default defineConfig(async ({ command }) => {
+export default defineConfig(async () => {
   const basePath = process.env.BASE_PATH ?? "/";
 
-  const rawPort = process.env.PORT;
+  const rawPort = process.env.PORT?.trim();
   let port = 5173;
-  if (command === "serve") {
-    if (!rawPort) {
-      throw new Error(
-        "PORT environment variable is required for dev/preview but was not provided.",
-      );
-    }
+  if (rawPort) {
     port = Number(rawPort);
     if (Number.isNaN(port) || port <= 0) {
       throw new Error(`Invalid PORT value: "${rawPort}"`);

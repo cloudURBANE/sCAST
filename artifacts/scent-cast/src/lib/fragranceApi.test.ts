@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  isBackgroundEnrichmentQueued,
   isFragranceDetailEffectivelyComplete,
   normalizeFragranceDetail,
   normalizeFragranceSearchResult,
@@ -55,4 +56,32 @@ test("normalizeFragranceDetail marks derived metrics as complete without losing 
   assert.equal(detail.source_coverage?.fragrantica, true);
   assert.equal(detail.source_coverage?.derived_metrics, "complete");
   assert.equal(isFragranceDetailEffectivelyComplete(detail), true);
+});
+
+test("pending worker enrichment is queued background work, not completed coverage", () => {
+  const detail = normalizeFragranceDetail({
+    name: "Sauvage",
+    house: "Dior",
+    source_coverage: {
+      complete: false,
+    },
+    enrichment: {
+      status: "pending",
+      requires_worker: true,
+    },
+  });
+
+  assert.equal(detail.source_coverage?.complete, false);
+  assert.equal(isFragranceDetailEffectivelyComplete(detail), false);
+  assert.equal(isBackgroundEnrichmentQueued(detail.enrichment), true);
+});
+
+test("terminal enrichment status is not treated as queued even with worker flag", () => {
+  assert.equal(
+    isBackgroundEnrichmentQueued({
+      status: "failed",
+      requires_worker: true,
+    }),
+    false,
+  );
 });

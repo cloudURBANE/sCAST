@@ -4,6 +4,7 @@ import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import {
   collectMainAccordDisplayRows,
   getFragranceDetails,
+  isBackgroundEnrichmentQueued,
   isFragranceDetailEffectivelyComplete,
   isTerminalEnrichmentStatus,
   normalizeFragranceDetail,
@@ -74,6 +75,7 @@ const DETAIL_POLL_MAX_ATTEMPTS = 15;
 const DETAIL_POLL_MAX_DURATION_MS = 5 * 60 * 1000;
 const DETAIL_POLL_BACKOFF_MULTIPLIER = 1.18;
 const DETAIL_POLL_MAX_INTERVAL_MS = 30_000;
+const PARTIAL_ENRICHMENT_NOTICE = "More Fragrantica details are still being enriched.";
 
 function createAbortError(): Error {
   if (typeof DOMException !== 'undefined') {
@@ -86,6 +88,10 @@ function createAbortError(): Error {
 
 function isCoverageComplete(detail: FragranceDetail | null | undefined): boolean {
   return isFragranceDetailEffectivelyComplete(detail);
+}
+
+function shouldContinueWithPartialDetail(detail: FragranceDetail | null | undefined): boolean {
+  return !isCoverageComplete(detail) && isBackgroundEnrichmentQueued(detail?.enrichment);
 }
 
 function sleepWithAbort(ms: number, signal: AbortSignal): Promise<void> {
@@ -505,6 +511,10 @@ export const FragranceCapture: React.FC<{
     if (isCoverageComplete(detail)) {
       return detail;
     }
+    if (shouldContinueWithPartialDetail(detail)) {
+      setPollingNotice(PARTIAL_ENRICHMENT_NOTICE);
+      return detail;
+    }
 
     const requestFgUrl = "source_url" in detailsRequest ? detailsRequest.source_url : undefined;
     const detailFgUrl = firstString(
@@ -512,10 +522,6 @@ export const FragranceCapture: React.FC<{
       detail.source_url,
       detail.raw?.source_urls?.frag_url,
     );
-
-    setIsDetailsPolling(true);
-    setLoadingStatus('Enriching fragrance details...');
-    setPollingNotice('Enriching fragrance details...');
 
     const applyLatestEnrichmentStatus = async (): Promise<boolean> => {
       let status: EnrichmentStatusResponse | null = null;
@@ -552,12 +558,21 @@ export const FragranceCapture: React.FC<{
         return true;
       }
 
+      if (shouldContinueWithPartialDetail(detail)) {
+        setPollingNotice(PARTIAL_ENRICHMENT_NOTICE);
+        return true;
+      }
+
       return false;
     };
 
     if (await applyLatestEnrichmentStatus()) {
       return detail;
     }
+
+    setIsDetailsPolling(true);
+    setLoadingStatus('Enriching fragrance details...');
+    setPollingNotice('Enriching fragrance details...');
 
     let attempt = 1;
     let delayMs = DETAIL_POLL_INTERVAL_MS;
@@ -617,27 +632,32 @@ export const FragranceCapture: React.FC<{
       setUploading(true);
       setSyncComplete(true);
       const familyStr = typeof selected.family === 'string' ? selected.family : '';
-      const saveResult = await onAdd({
-        ...selected,
-        id: newFragranceId(),
-        season: familyStr.includes('Fresh') ? 'Summer' : familyStr.includes('Woody') ? 'Winter' : 'Universal',
-      });
-      setLoadingStatus(
-        saveResult?.persisted
-          ? "Synced to Vault."
-          : saveResult?.error
-            ? `Added locally. ${saveResult.error}`
-            : "Added locally. Sign in to save.",
-      );
-      if (saveResult?.error) {
-        setErrorStatus(`Added locally, but database save failed: ${saveResult.error}`);
+      try {
+        const saveResult = await onAdd({
+          ...selected,
+          id: newFragranceId(),
+          season: familyStr.includes('Fresh') ? 'Summer' : familyStr.includes('Woody') ? 'Winter' : 'Universal',
+        });
+        setLoadingStatus(
+          saveResult?.persisted
+            ? "Synced to Vault."
+            : saveResult?.error
+              ? `Added locally. ${saveResult.error}`
+              : "Added locally. Sign in to save.",
+        );
+        if (saveResult?.error) {
+          setErrorStatus(`Added locally, but database save failed: ${saveResult.error}`);
+          setSyncComplete(false);
+          return;
+        }
+        await sleep(420);
+        resetState();
+      } catch (err: any) {
+        setErrorStatus(err?.message || "Vault sync failed. Please try again.");
         setSyncComplete(false);
+      } finally {
         setUploading(false);
-        return;
       }
-      await sleep(420);
-      resetState();
-      setUploading(false);
       return;
     }
 
@@ -804,6 +824,9 @@ export const FragranceCapture: React.FC<{
       setSyncComplete(true);
       await sleep(620);
       resetState();
+      if (shouldContinueWithPartialDetail(detail)) {
+        setPollingNotice(PARTIAL_ENRICHMENT_NOTICE);
+      }
     } catch (err: any) {
       if (err.name === 'AbortError') return;
       setErrorStatus(err?.message || "Fragrance detail fetch failed. Please check your connection.");
@@ -908,6 +931,7 @@ export const FragranceCapture: React.FC<{
         <div className="mx-auto max-w-lg text-center -mt-0.5">
           <form onSubmit={handleSearch} className="relative group">
             <input
+              id="scent-add-to-vault-search"
               type="text"
               value={searchQuery}
               onChange={(e) => { setSearchQuery(e.target.value); setErrorStatus(null); }}
@@ -915,7 +939,7 @@ export const FragranceCapture: React.FC<{
               onBlur={() => setSearchFocused(false)}
               placeholder="Search by house or fragrance…"
               aria-label="Look up a brand or fragrance"
-              className="scent-lux-input relative z-0 w-full h-[58px] sm:h-[62px] pl-12 pr-12 text-center text-[#fff7ec] font-sans text-[15px] font-medium outline-none transition-colors placeholder:text-[#c9a97a]/42 placeholder:font-medium group-focus-within:shadow-[inset_0_1px_0_rgba(255,226,174,0.08),0_0_0_1px_rgba(201,139,44,0.15)]"
+              className="scent-lux-input relative z-0 w-full h-[58px] sm:h-[62px] pl-12 pr-12 text-center text-[#fff7ec] font-sans text-[15px] font-medium outline-none transition-colors placeholder:text-[#c9a97a]/42 placeholder:font-medium group-focus-within:shadow-[inset_0_1px_0_rgba(255,226,174,0.08),0_0_0_1px_rgba(201,139,44,0.15)] scroll-mt-28"
             />
             <motion.button
               type="submit"
