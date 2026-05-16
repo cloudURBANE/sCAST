@@ -380,38 +380,48 @@ a {
     inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
+/* Outer bezel — the "deep" of the museum mat. Layered shadows describe a
+   carved cavity: AO halo outside, sharp lip on top, warm bounce on the
+   bottom edge, micro-chamfers on the sides, deep inner shade, gold rim
+   atmosphere. Light source: upper-left. */
 .scent-card-frame {
   position: absolute;
   inset: 0.7rem;
   pointer-events: none;
   border-radius: calc(var(--radius-scent) - 10px);
-  border: 1px solid rgba(255, 255, 255, 0.26);
+  border: 1px solid rgba(255, 255, 255, 0.22);
   box-shadow:
-    /* outer crystal hairline — defines the bezel against the card */
-    0 0 0 1px rgba(0, 0, 0, 0.55),
-    0 0 0 2px rgba(255, 224, 174, 0.04),
-    /* top-edge bright light catch (specular) */
-    inset 0 1.5px 0 rgba(255, 255, 255, 0.34),
-    inset 0 2px 1px -1px rgba(255, 248, 230, 0.18),
-    /* bottom-edge warm reflected fill — gives crystal that gold-bounce look */
-    inset 0 -1px 0 rgba(255, 210, 150, 0.12),
-    inset 0 -2px 1px -1px rgba(255, 200, 130, 0.05),
-    /* side bevels (subtle micro-chamfer) */
-    inset 1px 0 0 rgba(255, 255, 255, 0.08),
-    inset -1px 0 0 rgba(255, 255, 255, 0.08),
-    /* deep inner shadow at top — bezel cavity */
-    inset 0 3px 9px rgba(0, 0, 0, 0.58),
-    /* counter-shadow at bottom — completes the concavity */
-    inset 0 -3px 11px rgba(0, 0, 0, 0.48),
-    /* faint amber rim-light — atmosphere from the gold accent */
-    inset 0 0 22px rgba(201, 139, 44, 0.05);
+    /* outer hairline cut */
+    0 0 0 1px rgba(0, 0, 0, 0.6),
+    /* outer warm halo (atmosphere bleeding off the bezel) */
+    0 0 0 2px rgba(255, 224, 174, 0.05),
+    /* ambient occlusion outside the bezel — anchors the frame in space */
+    0 8px 22px -8px rgba(0, 0, 0, 0.7),
+    /* anisotropic top specular: bright lip → softer falloff (Fresnel cheat) */
+    inset 0 1px 0 rgba(255, 255, 255, 0.42),
+    inset 0 2px 1px -1px rgba(244, 248, 255, 0.22),
+    inset 0 4px 3px -3px rgba(255, 255, 255, 0.14),
+    /* warm reflected bounce on the bottom edge — gold light returning */
+    inset 0 -1px 0 rgba(255, 208, 148, 0.14),
+    inset 0 -2px 1px -1px rgba(255, 196, 130, 0.07),
+    /* side micro-chamfers, cool on left (sky bounce), warm on right (gold) */
+    inset 1px 0 0 rgba(220, 232, 255, 0.07),
+    inset -1px 0 0 rgba(255, 218, 168, 0.07),
+    /* deep cavity shade, biased to upper-left to match light direction */
+    inset 4px 5px 10px -4px rgba(0, 0, 0, 0.55),
+    inset 0 3px 9px rgba(0, 0, 0, 0.5),
+    inset 0 -3px 11px rgba(0, 0, 0, 0.4),
+    /* faint amber rim atmosphere */
+    inset 0 0 26px rgba(201, 139, 44, 0.06);
   transition:
     border-color var(--scent-transition-base) var(--scent-ease-out),
     box-shadow var(--scent-transition-base) var(--scent-ease-out);
 }
 
-/* Prismatic corner sparkles — cool-white core with warm dispersion halo,
-   simulating chromatic refraction at the bevel apex of polished crystal. */
+/* Outer caustics — committed prismatic dispersion. The top-left corner is
+   the primary specular: a tight cool core with an elongated diagonal bloom
+   like real light catching a chamfered apex. Opposite corner dims. Vertical
+   pair carries chromatic shift: cool top, warm bottom. */
 .scent-card-frame::before {
   content: "";
   position: absolute;
@@ -419,52 +429,85 @@ a {
   border-radius: inherit;
   pointer-events: none;
   background:
-    /* top-left: brightest specular (primary light source from above) */
-    radial-gradient(circle at 0% 0%, rgba(255, 252, 244, 0.85), rgba(255, 232, 196, 0.32) 6px, transparent 22px),
-    /* top-right: cooler secondary catch */
-    radial-gradient(circle at 100% 0%, rgba(244, 248, 255, 0.78), rgba(220, 232, 255, 0.22) 6px, transparent 20px),
-    /* bottom-left: warm amber reflection from card interior */
-    radial-gradient(circle at 0% 100%, rgba(255, 220, 168, 0.55), rgba(201, 139, 44, 0.14) 8px, transparent 18px),
+    /* top-left: primary specular — tight core */
+    radial-gradient(circle 5px at 1px 1px, rgba(255, 253, 248, 0.95), rgba(255, 244, 220, 0.4) 60%, transparent 100%),
+    /* top-left: elongated NW bloom along the diagonal apex */
+    radial-gradient(ellipse 28px 10px at 0% 0%, rgba(244, 248, 255, 0.55), transparent 75%),
+    /* top-right: cool secondary, smaller — chromatic cool shift */
+    radial-gradient(circle 4px at calc(100% - 1px) 1px, rgba(232, 240, 255, 0.78), transparent 100%),
+    radial-gradient(ellipse 18px 8px at 100% 0%, rgba(210, 226, 255, 0.28), transparent 75%),
+    /* bottom-left: warm amber dispersion */
+    radial-gradient(circle 4px at 1px calc(100% - 1px), rgba(255, 226, 180, 0.58), transparent 100%),
+    radial-gradient(ellipse 16px 7px at 0% 100%, rgba(255, 200, 140, 0.22), transparent 75%),
     /* bottom-right: dim warm spark */
-    radial-gradient(circle at 100% 100%, rgba(255, 226, 180, 0.5), rgba(201, 139, 44, 0.1) 8px, transparent 18px);
+    radial-gradient(circle 3px at calc(100% - 1px) calc(100% - 1px), rgba(255, 222, 174, 0.42), transparent 100%),
+    radial-gradient(ellipse 14px 6px at 100% 100%, rgba(255, 196, 134, 0.16), transparent 75%);
   mix-blend-mode: screen;
-  opacity: 0.92;
+  opacity: 0.95;
 }
 
-/* Specular gloss arc — a single elliptical highlight sliding along the top-left
-   bevel, the way light grazes a beveled glass edge. No mask trickery; the
-   gradient itself is constrained to the rim. */
+/* Inner mat — the second concentric frame. This is the move that lifts the
+   whole thing from "card with a border" to "museum-cased object": a thin
+   hairline trim inset from the bezel, with its own subtle top specular
+   and warm bottom bounce. */
 .scent-card-frame::after {
   content: "";
   position: absolute;
-  inset: 0;
-  border-radius: inherit;
+  inset: 5px;
+  border-radius: calc(var(--radius-scent) - 15px);
   pointer-events: none;
-  background:
-    /* top rim grazing light */
-    radial-gradient(ellipse 70% 8px at 35% 0%, rgba(255, 255, 255, 0.42), transparent 70%),
-    /* left rim secondary catch */
-    radial-gradient(ellipse 8px 50% at 0% 30%, rgba(255, 255, 255, 0.22), transparent 70%),
-    /* bottom-right faint counter-gloss */
-    radial-gradient(ellipse 55% 6px at 70% 100%, rgba(255, 220, 168, 0.18), transparent 70%);
-  mix-blend-mode: screen;
-  opacity: 0.9;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    /* hairline cut between the two frames */
+    0 0 0 1px rgba(0, 0, 0, 0.32),
+    /* inner mat top specular */
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 2px 2px -2px rgba(255, 248, 232, 0.12),
+    /* inner mat warm bottom bounce */
+    inset 0 -1px 0 rgba(255, 210, 158, 0.07),
+    /* a soft inward shade to make the inner well feel recessed */
+    inset 0 2px 6px rgba(0, 0, 0, 0.22);
 }
 
 .scent-fragrance-card:hover .scent-card-frame {
-  border-color: rgba(255, 255, 255, 0.36);
+  border-color: rgba(255, 255, 255, 0.34);
   box-shadow:
-    0 0 0 1px rgba(0, 0, 0, 0.55),
-    0 0 0 2px rgba(255, 224, 174, 0.07),
-    inset 0 1.5px 0 rgba(255, 255, 255, 0.42),
-    inset 0 2px 1px -1px rgba(255, 248, 230, 0.24),
-    inset 0 -1px 0 rgba(255, 215, 158, 0.16),
-    inset 0 -2px 1px -1px rgba(255, 205, 138, 0.07),
-    inset 1px 0 0 rgba(255, 255, 255, 0.1),
-    inset -1px 0 0 rgba(255, 255, 255, 0.1),
-    inset 0 3px 9px rgba(0, 0, 0, 0.58),
-    inset 0 -3px 11px rgba(0, 0, 0, 0.48),
-    inset 0 0 28px rgba(201, 139, 44, 0.08);
+    0 0 0 1px rgba(0, 0, 0, 0.6),
+    0 0 0 2px rgba(255, 224, 174, 0.09),
+    0 12px 28px -10px rgba(0, 0, 0, 0.75),
+    inset 0 1px 0 rgba(255, 255, 255, 0.52),
+    inset 0 2px 1px -1px rgba(244, 248, 255, 0.3),
+    inset 0 4px 3px -3px rgba(255, 255, 255, 0.2),
+    inset 0 -1px 0 rgba(255, 212, 154, 0.2),
+    inset 0 -2px 1px -1px rgba(255, 200, 138, 0.1),
+    inset 1px 0 0 rgba(220, 232, 255, 0.1),
+    inset -1px 0 0 rgba(255, 218, 168, 0.1),
+    inset 4px 5px 10px -4px rgba(0, 0, 0, 0.55),
+    inset 0 3px 9px rgba(0, 0, 0, 0.5),
+    inset 0 -3px 11px rgba(0, 0, 0, 0.4),
+    inset 0 0 32px rgba(201, 139, 44, 0.1);
+}
+
+.scent-fragrance-card:hover .scent-card-frame::before {
+  opacity: 1;
+}
+
+.scent-fragrance-card:hover .scent-card-frame::after {
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 2px 2px -2px rgba(255, 248, 232, 0.18),
+    inset 0 -1px 0 rgba(255, 210, 158, 0.1),
+    inset 0 2px 6px rgba(0, 0, 0, 0.22);
+}
+
+.scent-card-frame::before,
+.scent-card-frame::after {
+  transition:
+    opacity var(--scent-transition-base) var(--scent-ease-out),
+    border-color var(--scent-transition-base) var(--scent-ease-out),
+    box-shadow var(--scent-transition-base) var(--scent-ease-out);
 }
 
 .scent-card-brand {
