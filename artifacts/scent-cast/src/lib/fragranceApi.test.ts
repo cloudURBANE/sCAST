@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  getFragranceDetails,
   isBackgroundEnrichmentQueued,
   isFragranceDetailEffectivelyComplete,
   normalizeFragranceDetail,
@@ -84,4 +85,47 @@ test("terminal enrichment status is not treated as queued even with worker flag"
     }),
     false,
   );
+});
+
+test("getFragranceDetails posts opaque id with source_url when both are available", async (t) => {
+  const previousFetch = globalThis.fetch;
+  const previousApiUrl = process.env.VITE_FRAGRANCE_API_URL;
+  const requests: Array<{ url: string; init?: RequestInit }> = [];
+
+  process.env.VITE_FRAGRANCE_API_URL = "https://example.test";
+  Object.defineProperty(globalThis, "fetch", {
+    configurable: true,
+    value: async (url: string, init?: RequestInit) => {
+      requests.push({ url, init });
+      return new Response(JSON.stringify({ name: "Silver Mountain Water" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    },
+  });
+
+  t.after(() => {
+    Object.defineProperty(globalThis, "fetch", {
+      configurable: true,
+      value: previousFetch,
+    });
+    if (previousApiUrl === undefined) {
+      delete process.env.VITE_FRAGRANCE_API_URL;
+    } else {
+      process.env.VITE_FRAGRANCE_API_URL = previousApiUrl;
+    }
+  });
+
+  await getFragranceDetails({
+    id: "opaque-token",
+    source_url: "https://www.fragrantica.com/perfume/Creed/Silver-Mountain-Water-472.html",
+  });
+
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].url, "https://example.test/api/fragrances/details");
+  assert.equal(requests[0].init?.method, "POST");
+  assert.deepEqual(JSON.parse(String(requests[0].init?.body)), {
+    id: "opaque-token",
+    source_url: "https://www.fragrantica.com/perfume/Creed/Silver-Mountain-Water-472.html",
+  });
 });

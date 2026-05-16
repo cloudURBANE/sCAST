@@ -94,6 +94,12 @@ function shouldContinueWithPartialDetail(detail: FragranceDetail | null | undefi
   return !isCoverageComplete(detail) && isBackgroundEnrichmentQueued(detail?.enrichment);
 }
 
+function shouldUsePartialDetailImmediately(detail: FragranceDetail | null | undefined): boolean {
+  const coverage = detail?.source_coverage;
+  if (!coverage || coverage.complete !== false) return false;
+  return coverage.fragrantica_linked === true && coverage.fragrantica !== true;
+}
+
 function sleepWithAbort(ms: number, signal: AbortSignal): Promise<void> {
   if (ms <= 0) return Promise.resolve();
   if (signal.aborted) return Promise.reject(createAbortError());
@@ -368,19 +374,6 @@ function withEnrichmentStatus(
   });
 }
 
-function decodeSearchCandidateId(id: string): Record<string, unknown> | null {
-  const token = id.trim();
-  if (!token) return null;
-
-  try {
-    const base64 = token.replace(/-/g, '+').replace(/_/g, '/');
-    const padded = `${base64}${'='.repeat((4 - (base64.length % 4)) % 4)}`;
-    return JSON.parse(atob(padded)) as Record<string, unknown>;
-  } catch {
-    return null;
-  }
-}
-
 function matchMeta(match: FragranceMatch): string[] {
   return [
     typeof match.year === 'number' ? String(match.year) : undefined,
@@ -512,6 +505,10 @@ export const FragranceCapture: React.FC<{
       return detail;
     }
     if (shouldContinueWithPartialDetail(detail)) {
+      setPollingNotice(PARTIAL_ENRICHMENT_NOTICE);
+      return detail;
+    }
+    if (shouldUsePartialDetailImmediately(detail)) {
       setPollingNotice(PARTIAL_ENRICHMENT_NOTICE);
       return detail;
     }
@@ -682,25 +679,23 @@ export const FragranceCapture: React.FC<{
     setIsDetailsPolling(false);
     
     try {
-      const decoded = decodeSearchCandidateId(selected.id);
-      const tokenFgUrl = firstString(decoded?.fg);
       const syntheticSourceUrl = selectedId?.startsWith('source:')
         ? firstString(selectedId.slice('source:'.length))
         : undefined;
       const detailSourceUrl = firstString(selectedSourceUrl, syntheticSourceUrl);
-      const fragranticaSourceUrl = [tokenFgUrl, selectedSourceUrl].find(isFragranticaUrl);
-      const detailsRequest = fragranticaSourceUrl
-        ? { source_url: fragranticaSourceUrl }
-        : selectedId && !syntheticSourceUrl
-          ? { id: selectedId }
+      const detailsRequest: FragranceDetailRequestPayload =
+        selectedId && !syntheticSourceUrl
+          ? {
+              id: selectedId,
+              ...(selectedSourceUrl ? { source_url: selectedSourceUrl } : {}),
+            }
           : { source_url: detailSourceUrl as string };
 
-      if (!fragranticaSourceUrl) {
+      if (!detailSourceUrl || !isFragranticaUrl(detailSourceUrl)) {
         // Useful in production debugging: explains why partial details may not enqueue.
         console.info('[FragranceCapture] /details request has no Fragrantica source URL', {
           selectedId: selected.id,
           selectedSourceUrl,
-          tokenFgUrl,
         });
       }
 

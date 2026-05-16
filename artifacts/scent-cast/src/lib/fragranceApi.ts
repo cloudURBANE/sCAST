@@ -1,5 +1,3 @@
-const FRAGRANCE_API_URL = (import.meta as { env?: Record<string, string | undefined> }).env
-  ?.VITE_FRAGRANCE_API_URL;
 const FRAGRANCE_SEARCH_CACHE_STORAGE_KEY = "scentcast.fragranceSearchCache.v1";
 const FRAGRANCE_SEARCH_CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const FRAGRANCE_SEARCH_CACHE_MAX_ENTRIES = 100;
@@ -418,7 +416,11 @@ export function normalizeFragranceDetail(detail: FragranceDetail): FragranceDeta
 }
 
 function getApiBase() {
-  const base = FRAGRANCE_API_URL?.trim();
+  const base = (
+    (import.meta as { env?: Record<string, string | undefined> }).env
+      ?.VITE_FRAGRANCE_API_URL ??
+    (typeof process !== "undefined" ? process.env?.VITE_FRAGRANCE_API_URL : undefined)
+  )?.trim();
 
   if (!base) {
     throw new Error(
@@ -486,7 +488,7 @@ export async function searchFragrances(
 }
 
 export type FragranceDetailRequestPayload =
-  | { id: string; source_url?: never }
+  | { id: string; source_url?: string }
   | { source_url: string; id?: never };
 
 export async function getFragranceDetails(
@@ -494,10 +496,10 @@ export async function getFragranceDetails(
   options?: { signal?: AbortSignal },
 ): Promise<FragranceDetailResponse> {
   const base = getApiBase();
-  const requestBody =
-    "source_url" in payload
-      ? { source_url: payload.source_url }
-      : { id: payload.id };
+  const requestBody = {
+    ...("id" in payload ? { id: payload.id } : {}),
+    ...("source_url" in payload ? { source_url: payload.source_url } : {}),
+  };
 
   const res = await fetch(`${base}/api/fragrances/details`, {
     method: "POST",
