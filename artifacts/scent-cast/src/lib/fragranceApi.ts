@@ -1,6 +1,17 @@
-const FRAGRANCE_SEARCH_CACHE_STORAGE_KEY = "scentcast.fragranceSearchCache.v1";
+const FRAGRANCE_SEARCH_CACHE_STORAGE_KEY = "scentcast.fragranceSearchCache.v2";
 const FRAGRANCE_SEARCH_CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const FRAGRANCE_SEARCH_CACHE_MAX_ENTRIES = 100;
+const SUPPLEMENTAL_SEARCH_MIN_RESULTS = 8;
+
+export type FragranceSearchOrigin = "srt" | "app";
+
+export type FragranceSearchDiagnostics = {
+  result_count?: number;
+  fragrantica_linked_count?: number;
+  fragrantica_unreachable?: boolean;
+  fallback_source?: string | null;
+  warning?: string;
+} & Record<string, unknown>;
 
 export type SourceCoverage = {
   basenotes?: boolean;
@@ -75,11 +86,13 @@ export type FragranceSearchResult = {
   year?: number | null;
   gender?: string | null;
   source_url?: string | null;
+  origin?: FragranceSearchOrigin;
 };
 
 export type FragranceSearchResponse = {
   query: string;
   results: FragranceSearchResult[];
+  diagnostics?: FragranceSearchDiagnostics;
 };
 
 type FragranceSearchCacheEntry = {
@@ -207,6 +220,7 @@ function cacheFragranceSearch(query: string, response: FragranceSearchResponse):
 export function normalizeFragranceSearchResult(
   value: unknown,
   fallbackQuery: string,
+  fallbackOrigin: FragranceSearchOrigin = "srt",
 ): FragranceSearchResult | null {
   if (!value || typeof value !== "object") return null;
 
@@ -239,6 +253,7 @@ export function normalizeFragranceSearchResult(
     result.brand_name,
     result.designer,
   );
+  const origin = result.origin === "app" || result.origin === "srt" ? result.origin : fallbackOrigin;
 
   return {
     ...(result as FragranceSearchResult),
@@ -249,6 +264,7 @@ export function normalizeFragranceSearchResult(
     year: typeof result.year === "number" ? result.year : null,
     gender: typeof result.gender === "string" ? result.gender : null,
     source_url: sourceUrl ?? null,
+    origin,
   };
 }
 
@@ -451,6 +467,72 @@ function appApiUrl(path: string) {
   return base ? `${base}${path}` : path;
 }
 
+function normalizeSearchDiagnostics(value: unknown): FragranceSearchDiagnostics | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  return value as FragranceSearchDiagnostics;
+}
+
+function normalizeForDedupe(value: unknown): string {
+  return firstNonEmptyString(value)
+    ?.toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ") ?? "";
+}
+
+function fragranceIdentityKey(result: FragranceSearchResult): string {
+  const house = normalizeForDedupe(result.house ?? result.brand);
+  const name = normalizeForDedupe(result.name);
+  if (house || name) return `${house}::${name}`;
+  return normalizeForDedupe(result.source_url ?? result.id);
+}
+
+function mergeSearchResults(
+  primary: FragranceSearchResult[],
+  supplemental: FragranceSearchResult[],
+): FragranceSearchResult[] {
+  const seen = new Set<string>();
+  const merged: FragranceSearchResult[] = [];
+
+  for (const result of [...primary, ...supplemental]) {
+    const key = fragranceIdentityKey(result);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    merged.push(result);
+  }
+
+  return merged;
+}
+
+function hasDegradedBreadth(diagnostics: FragranceSearchDiagnostics | undefined): boolean {
+  if (!diagnostics || !("fallback_source" in diagnostics)) return false;
+  return diagnostics.fallback_source !== null && diagnostics.fallback_source !== undefined;
+}
+
+function queryMatchesResultHouse(query: string, results: FragranceSearchResult[]): boolean {
+  const normalizedQuery = normalizeForDedupe(query);
+  if (!normalizedQuery || results.length === 0) return false;
+
+  return results.some((result) => {
+    const house = normalizeForDedupe(result.house ?? result.brand);
+    return house === normalizedQuery;
+  });
+}
+
+function shouldSupplementWithAppSearch(
+  query: string,
+  response: FragranceSearchResponse,
+): boolean {
+  if (hasDegradedBreadth(response.diagnostics)) return true;
+  if (response.results.length === 0) return true;
+  return (
+    response.results.length < SUPPLEMENTAL_SEARCH_MIN_RESULTS &&
+    queryMatchesResultHouse(query, response.results)
+  );
+}
+
 async function apiErrorMessage(res: Response, fallback: string): Promise<string> {
   try {
     const data = await res.clone().json();
@@ -493,33 +575,84 @@ export async function searchFragrances(
       ? data.results
       : [];
 
-  const response = {
+  const response: FragranceSearchResponse = {
     query: typeof data?.query === "string" ? data.query : query,
     results: rawResults
-      .map((result) => normalizeFragranceSearchResult(result, query))
+      .map((result) => normalizeFragranceSearchResult(result, query, "srt"))
       .filter((result): result is FragranceSearchResult => result !== null),
+    diagnostics: normalizeSearchDiagnostics(data?.diagnostics),
   };
-  cacheFragranceSearch(query, response);
+
+  let usedSupplementalSearch = false;
+  if (shouldSupplementWithAppSearch(query, response)) {
+    try {
+      const supplemental = await searchAppFragrances(query, { signal: options?.signal });
+      usedSupplementalSearch = true;
+      response.results = mergeSearchResults(response.results, supplemental.results);
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") throw err;
+      if (response.results.length === 0) {
+        throw err;
+      }
+    }
+  }
+
+  if (!usedSupplementalSearch) {
+    cacheFragranceSearch(query, response);
+  }
   return response;
 }
 
+async function searchAppFragrances(
+  query: string,
+  options?: { signal?: AbortSignal },
+): Promise<FragranceSearchResponse> {
+  const res = await fetch(
+    appApiUrl(`/api/fragrances/search?q=${encodeURIComponent(query)}`),
+    { signal: options?.signal },
+  );
+
+  if (!res.ok) {
+    throw new Error(await apiErrorMessage(res, `App fragrance search failed: ${res.status}`));
+  }
+
+  const data = await res.json();
+  const rawResults: unknown[] = Array.isArray(data)
+    ? data
+    : Array.isArray(data?.results)
+      ? data.results
+      : [];
+
+  return {
+    query: typeof data?.query === "string" ? data.query : query,
+    results: rawResults
+      .map((result) => normalizeFragranceSearchResult(result, query, "app"))
+      .filter((result): result is FragranceSearchResult => result !== null),
+    diagnostics: normalizeSearchDiagnostics(data?.diagnostics),
+  };
+}
+
 export type FragranceDetailRequestPayload =
-  | { id: string; source_url?: string }
-  | { source_url: string; id?: never };
+  | { id: string; source_url?: string; origin?: FragranceSearchOrigin }
+  | { source_url: string; id?: never; origin?: FragranceSearchOrigin };
 
 export async function getFragranceDetails(
   payload: FragranceDetailRequestPayload,
   options?: { signal?: AbortSignal },
 ): Promise<FragranceDetailResponse> {
   const id = "id" in payload && typeof payload.id === "string" ? payload.id : "";
-  const useAppApi = id.startsWith("catalog:") || id.startsWith("dataset:");
+  const useAppApi =
+    payload.origin === "app" ||
+    id.startsWith("catalog:") ||
+    id.startsWith("dataset:") ||
+    id.startsWith("local:");
   const url =
     useAppApi
       ? appApiUrl("/api/fragrances/details")
       : `${getFragranceEngineApiBase()}/api/fragrances/details`;
   const requestBody = {
     ...("id" in payload ? { id: payload.id } : {}),
-    ...("source_url" in payload ? { source_url: payload.source_url } : {}),
+    ...("source_url" in payload && (useAppApi || !id) ? { source_url: payload.source_url } : {}),
   };
 
   const res = await fetch(url, {

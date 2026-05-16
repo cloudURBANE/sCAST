@@ -264,6 +264,7 @@ function profileToFallbackMatch(profile: Record<string, unknown>, query: string)
     name,
     brand,
     house: brand,
+    origin: 'app',
   } as FragranceMatch;
 }
 
@@ -377,7 +378,7 @@ function withEnrichmentStatus(
 function matchMeta(match: FragranceMatch): string[] {
   return [
     typeof match.year === 'number' ? String(match.year) : undefined,
-    formatGender(match.gender),
+    match.origin === 'app' ? 'App catalog' : match.origin === 'srt' ? 'SRT' : undefined,
     sourceHost(match.source_url),
     match.scent_vector ? 'Local profile' : undefined,
   ].filter((value): value is string => Boolean(value));
@@ -458,6 +459,7 @@ export const FragranceCapture: React.FC<{
               name: firstString(result.name) ?? targetQuery.trim(),
               house,
               brand: house,
+              origin: result.origin ?? 'srt',
             };
           })
           .filter((result) => Boolean(result.id || firstString(result.source_url)));
@@ -473,10 +475,9 @@ export const FragranceCapture: React.FC<{
       setHasSearched(true);
       setLoadingStatus(
         nextMatches.length > 0
-          ? `Found: ${nextMatches[0].brand || "House unavailable"} ${nextMatches[0].name}`
+          ? "Intelligence Collation Complete."
           : "No fragrance match found.",
       );
-      setLoadingStatus("Intelligence Collation Complete.");
       setMatches(nextMatches);
       setSelectedIdx(nextMatches.length > 0 ? 0 : null);
 
@@ -683,13 +684,26 @@ export const FragranceCapture: React.FC<{
         ? firstString(selectedId.slice('source:'.length))
         : undefined;
       const detailSourceUrl = firstString(selectedSourceUrl, syntheticSourceUrl);
+      const selectedOrigin = selected.origin ?? (
+        selectedId?.startsWith('catalog:') || selectedId?.startsWith('dataset:') || selectedId?.startsWith('local:')
+          ? 'app'
+          : 'srt'
+      );
+      if (selectedOrigin === 'srt' && (!selectedId || syntheticSourceUrl)) {
+        setErrorStatus("Selected SRT fragrance is missing its opaque detail identifier.");
+        return;
+      }
       const detailsRequest: FragranceDetailRequestPayload =
-        selectedId && !syntheticSourceUrl
+        selectedOrigin === 'app' && detailSourceUrl
+          ? { source_url: detailSourceUrl, origin: 'app' }
+          : selectedOrigin === 'app' && selectedId
+            ? { id: selectedId, origin: 'app' }
+            : selectedId
           ? {
               id: selectedId,
-              ...(selectedSourceUrl ? { source_url: selectedSourceUrl } : {}),
+              origin: 'srt',
             }
-          : { source_url: detailSourceUrl as string };
+          : { source_url: detailSourceUrl as string, origin: 'app' };
 
       if (!detailSourceUrl || !isFragranticaUrl(detailSourceUrl)) {
         // Useful in production debugging: explains why partial details may not enqueue.

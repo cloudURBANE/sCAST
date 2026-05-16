@@ -23,6 +23,7 @@ test("normalizeFragranceSearchResult preserves source-url-only candidates", () =
   assert.equal(result?.name, "Sauvage");
   assert.equal(result?.brand, "Dior");
   assert.equal(result?.house, "Dior");
+  assert.equal(result?.origin, "srt");
 });
 
 test("normalizeFragranceSearchResult coerces non-string ids", () => {
@@ -38,6 +39,7 @@ test("normalizeFragranceSearchResult coerces non-string ids", () => {
   assert.equal(result?.id, "31861");
   assert.equal(result?.name, "Sauvage");
   assert.equal(result?.house, "Dior");
+  assert.equal(result?.origin, "srt");
 });
 
 test("normalizeFragranceDetail marks derived metrics as complete without losing partial coverage", () => {
@@ -88,7 +90,7 @@ test("terminal enrichment status is not treated as queued even with worker flag"
   );
 });
 
-test("getFragranceDetails posts opaque id with source_url when both are available", async (t) => {
+test("getFragranceDetails posts only opaque id to SRT details", async (t) => {
   const previousFetch = globalThis.fetch;
   const previousApiUrl = process.env.VITE_FRAGRANCE_API_URL;
   const previousAppApiUrl = process.env.VITE_API_BASE_URL;
@@ -134,7 +136,6 @@ test("getFragranceDetails posts opaque id with source_url when both are availabl
   assert.equal(requests[0].init?.method, "POST");
   assert.deepEqual(JSON.parse(String(requests[0].init?.body)), {
     id: "opaque-token",
-    source_url: "https://www.fragrantica.com/perfume/Creed/Silver-Mountain-Water-472.html",
   });
 });
 
@@ -194,6 +195,89 @@ test("searchFragrances uses the fragrance engine API instead of the app API", as
     "https://engine.example.test/api/fragrances/search?q=Dior%20Sauvage",
   );
   assert.equal(response.results[0]?.id, "opaque-token");
+  assert.equal(response.results[0]?.origin, "srt");
+});
+
+test("searchFragrances supplements degraded SRT breadth with app API results", async (t) => {
+  const previousFetch = globalThis.fetch;
+  const previousApiUrl = process.env.VITE_FRAGRANCE_API_URL;
+  const previousAppApiUrl = process.env.VITE_API_BASE_URL;
+  const requests: Array<{ url: string; init?: RequestInit }> = [];
+
+  process.env.VITE_FRAGRANCE_API_URL = "https://engine.example.test";
+  process.env.VITE_API_BASE_URL = "https://app-api.example.test";
+  Object.defineProperty(globalThis, "fetch", {
+    configurable: true,
+    value: async (url: string, init?: RequestInit) => {
+      requests.push({ url, init });
+      if (String(url).startsWith("https://engine.example.test")) {
+        return new Response(
+          JSON.stringify({
+            query: "creed",
+            results: [
+              { id: "srt-aventus", name: "Aventus", house: "Creed" },
+              { id: "srt-smw", name: "Silver Mountain Water", house: "Creed" },
+            ],
+            diagnostics: {
+              result_count: 2,
+              fallback_source: "db",
+            },
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      return new Response(
+        JSON.stringify({
+          query: "creed",
+          results: [
+            { id: "catalog:Creed::Aventus", name: "Aventus", brand: "Creed" },
+            { id: "catalog:Creed::Green Irish Tweed", name: "Green Irish Tweed", brand: "Creed" },
+          ],
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    },
+  });
+
+  t.after(() => {
+    Object.defineProperty(globalThis, "fetch", {
+      configurable: true,
+      value: previousFetch,
+    });
+    if (previousApiUrl === undefined) {
+      delete process.env.VITE_FRAGRANCE_API_URL;
+    } else {
+      process.env.VITE_FRAGRANCE_API_URL = previousApiUrl;
+    }
+    if (previousAppApiUrl === undefined) {
+      delete process.env.VITE_API_BASE_URL;
+    } else {
+      process.env.VITE_API_BASE_URL = previousAppApiUrl;
+    }
+  });
+
+  const response = await searchFragrances("creed");
+
+  assert.deepEqual(
+    requests.map((request) => request.url),
+    [
+      "https://engine.example.test/api/fragrances/search?q=creed",
+      "https://app-api.example.test/api/fragrances/search?q=creed",
+    ],
+  );
+  assert.equal(response.results.length, 3);
+  assert.equal(response.results[0]?.id, "srt-aventus");
+  assert.equal(response.results[0]?.origin, "srt");
+  assert.equal(response.results[2]?.id, "catalog:Creed::Green Irish Tweed");
+  assert.equal(response.results[2]?.origin, "app");
+  assert.equal(response.diagnostics?.fallback_source, "db");
 });
 
 test("getFragranceDetails keeps catalog ids on the app API", async (t) => {
@@ -236,4 +320,52 @@ test("getFragranceDetails keeps catalog ids on the app API", async (t) => {
 
   assert.equal(requests.length, 1);
   assert.equal(requests[0].url, "https://app-api.example.test/api/fragrances/details");
+});
+
+test("getFragranceDetails routes app-origin source URLs to the app API", async (t) => {
+  const previousFetch = globalThis.fetch;
+  const previousApiUrl = process.env.VITE_FRAGRANCE_API_URL;
+  const previousAppApiUrl = process.env.VITE_API_BASE_URL;
+  const requests: Array<{ url: string; init?: RequestInit }> = [];
+
+  process.env.VITE_FRAGRANCE_API_URL = "https://engine.example.test";
+  process.env.VITE_API_BASE_URL = "https://app-api.example.test";
+  Object.defineProperty(globalThis, "fetch", {
+    configurable: true,
+    value: async (url: string, init?: RequestInit) => {
+      requests.push({ url, init });
+      return new Response(JSON.stringify({ name: "Aventus", house: "Creed" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    },
+  });
+
+  t.after(() => {
+    Object.defineProperty(globalThis, "fetch", {
+      configurable: true,
+      value: previousFetch,
+    });
+    if (previousApiUrl === undefined) {
+      delete process.env.VITE_FRAGRANCE_API_URL;
+    } else {
+      process.env.VITE_FRAGRANCE_API_URL = previousApiUrl;
+    }
+    if (previousAppApiUrl === undefined) {
+      delete process.env.VITE_API_BASE_URL;
+    } else {
+      process.env.VITE_API_BASE_URL = previousAppApiUrl;
+    }
+  });
+
+  await getFragranceDetails({
+    source_url: "https://www.fragrantica.com/perfume/Creed/Aventus-9828.html",
+    origin: "app",
+  });
+
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].url, "https://app-api.example.test/api/fragrances/details");
+  assert.deepEqual(JSON.parse(String(requests[0].init?.body)), {
+    source_url: "https://www.fragrantica.com/perfume/Creed/Aventus-9828.html",
+  });
 });
