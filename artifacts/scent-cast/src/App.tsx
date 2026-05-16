@@ -416,13 +416,14 @@ interface AtmosphereBarProps {
 const ATMOSPHERE_TRACK_COPIES = 2;
 
 const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({ weather, weatherLoading }) => {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const groupRef = useRef<HTMLDivElement>(null);
   const tempValue = getWeatherNumber(weather, ['temperature_f', 'temperature', 'temp'], Number.NaN);
   const humidityValue = getWeatherNumber(weather, ['humidity_percent', 'humidity'], Number.NaN);
   const temp = weatherLoading ? '—' : Number.isFinite(tempValue) ? `${Math.round(tempValue)}°F` : '—';
   const condition = weatherLoading ? '—' : getWeatherString(weather, ['condition', 'description'], '—');
   const humidity = weatherLoading ? '—' : Number.isFinite(humidityValue) ? `${humidityValue}%` : '—';
   const location = weather?.location ?? '—';
-  const atmosphereTrackKey = [condition, humidity, temp, location].join('|');
 
   const metrics = [
     { label: 'Matrix', value: condition },
@@ -432,13 +433,35 @@ const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({ weather, weath
     { label: 'Coordinate', value: location },
   ];
 
+  useEffect(() => {
+    const track = trackRef.current;
+    const group = groupRef.current;
+    if (!track || !group) return;
+
+    const updateDistance = () => {
+      track.style.setProperty('--atmosphere-marquee-distance', `${group.getBoundingClientRect().width}px`);
+    };
+
+    updateDistance();
+
+    const resizeObserver = new ResizeObserver(updateDistance);
+    resizeObserver.observe(group);
+    window.addEventListener('resize', updateDistance);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', updateDistance);
+    };
+  }, [condition, humidity, temp, location]);
+
   return (
     <section className="scent-atmosphere-marquee" aria-label="Current atmosphere">
-      <div className="scent-atmosphere-marquee-track" key={atmosphereTrackKey}>
+      <div className="scent-atmosphere-marquee-track" ref={trackRef}>
         {[...Array(ATMOSPHERE_TRACK_COPIES)].map((_, copyIndex) => (
           <div
             className="scent-atmosphere-marquee-group"
             key={copyIndex}
+            ref={copyIndex === 0 ? groupRef : undefined}
             aria-hidden={copyIndex > 0}
           >
             {metrics.map((metric) => (
