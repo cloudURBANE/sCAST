@@ -1,10 +1,30 @@
-import React, { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
-import { Wind, ShoppingBag, ShieldCheck, Wind as WindIcon } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import {
+  Activity,
+  CircleDollarSign,
+  Info,
+  Maximize2,
+  ShieldCheck,
+  ShoppingBag,
+  Star,
+  ThumbsUp,
+  Wind,
+  X,
+} from 'lucide-react';
 import { LavaBackground } from './LavaBackground';
 import { BottleImage } from '@/components/BottleImage';
 import type { BottleImageAdjustment } from '@/lib/bottleImageAdjustment';
 import { APP_BRAND_MARK } from '@/lib/appBrand';
+import { ScentNotesInfographic } from '@/components/ScentNotesInfographic';
+import {
+  collectMainAccordDisplayRows,
+  isDerivedMetricsCompleteFlag,
+  normalizeSourceCoverage,
+  type DerivedMetrics,
+  type FragranceDetail,
+  type SourceCoverage,
+} from '@/lib/fragranceApi';
 
 interface ScentVector {
   freshness: number;
@@ -20,6 +40,10 @@ interface Fragrance {
   _dbId?: string;
   name: string;
   brand: string;
+  product?: { name?: string; brand?: string; perfumer?: string };
+  house?: string;
+  year?: number | null;
+  gender?: string | null;
   imageUrl: string;
   imageAdjustment?: BottleImageAdjustment | null;
   season?: string;
@@ -29,6 +53,10 @@ interface Fragrance {
   family?: string;
   performance?: { sillage: number; longevity: number };
   pyramid?: { top: string[]; heart: string[]; base: string[] };
+  source_coverage?: SourceCoverage;
+  derived_metrics?: DerivedMetrics | null;
+  enrichment?: FragranceDetail["enrichment"];
+  raw_engine_detail?: FragranceDetail | null;
 }
 
 interface ShareData {
@@ -42,14 +70,445 @@ interface BuyLink {
   status: string;
 }
 
+function entryName(item: Fragrance): string {
+  return item.name || item.product?.name || "";
+}
+
+function entryBrand(item: Fragrance): string {
+  return item.brand || item.product?.brand || "";
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function formatScore100(value: unknown): string | null {
+  return isFiniteNumber(value) ? `${Math.round(value)}/100` : null;
+}
+
+function formatLegacyTenPointScore(value: unknown): string | null {
+  return isFiniteNumber(value) ? `${value}/10` : null;
+}
+
+function scoreNumber(value: unknown): number | null {
+  return isFiniteNumber(value) ? Math.max(0, Math.min(100, Math.round(value))) : null;
+}
+
+function scoreWidth(value: unknown): string {
+  return `${scoreNumber(value) ?? 0}%`;
+}
+
+function stringValue(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function formatYear(value: unknown): string | null {
+  return isFiniteNumber(value) ? String(Math.round(value)) : null;
+}
+
+function joinDisplayParts(parts: Array<string | null | undefined>): string | null {
+  const cleaned = parts
+    .map((part) => part?.trim())
+    .filter((part): part is string => Boolean(part));
+  return cleaned.length > 0 ? cleaned.join(" · ") : null;
+}
+
+function formatNoteList(values?: string[]): string | null {
+  const cleaned = values?.map((value) => value.trim()).filter(Boolean) ?? [];
+  return cleaned.length > 0 ? cleaned.join(", ") : null;
+}
+
+function formatWearProfile(wear?: DerivedMetrics["wear_profile"] | null): string | null {
+  if (!wear) return null;
+  const seasons = wear.primary_seasons?.filter(Boolean) ?? [];
+  const seasonOrder = ["Winter", "Spring", "Summer", "Autumn", "Autumn/Fall", "Fall"];
+  const rank = (season: string) => {
+    const index = seasonOrder.indexOf(season);
+    return index === -1 ? seasonOrder.length : index;
+  };
+  const seasonLabel = [...seasons].sort((a, b) => rank(a) - rank(b)).join("/");
+  const time = wear.primary_time?.trim() || null;
+  if (seasonLabel && time) return `${seasonLabel} · ${time}`;
+  return seasonLabel || time;
+}
+
+function profileSummary(metrics?: DerivedMetrics | null): string | null {
+  return metrics?.headline?.summary?.trim() || null;
+}
+
+function entryNotes(item: Fragrance): string {
+  const dm = item.raw_engine_detail?.derived_metrics ?? item.derived_metrics;
+  const dmNotes = dm?.notes;
+  if (dmNotes) {
+    const engineLine = joinDisplayParts([
+      formatNoteList(dmNotes.top),
+      formatNoteList(dmNotes.heart),
+      formatNoteList(dmNotes.base),
+      formatNoteList(dmNotes.flat),
+    ]);
+    if (engineLine) return engineLine;
+    const summary = dm?.main_accords?.accord_summary?.trim();
+    if (summary) return summary;
+  }
+
+  const notes = item.notes?.filter(Boolean);
+  if (notes && notes.length > 0) return notes.join(" · ");
+  const pyramidNotes = [
+    ...(item.pyramid?.top ?? []),
+    ...(item.pyramid?.heart ?? []),
+    ...(item.pyramid?.base ?? []),
+  ].filter(Boolean);
+  if (pyramidNotes.length > 0) return pyramidNotes.slice(0, 8).join(" · ");
+
+  const accordLabels = collectMainAccordDisplayRows(dm?.main_accords)
+    .slice(0, 6)
+    .map((row) => row.label);
+  if (accordLabels.length > 0) return accordLabels.join(" · ");
+
+  return "Notes unavailable for this fragrance.";
+}
+
+function hasDerivedMetricNotes(metrics?: DerivedMetrics | null): boolean {
+  const notes = metrics?.notes;
+  if (!notes) return false;
+  return Boolean(
+    formatNoteList(notes.top) ||
+      formatNoteList(notes.heart) ||
+      formatNoteList(notes.base) ||
+      formatNoteList(notes.flat),
+  );
+}
+
+function hasDerivedMetricsContent(metrics?: DerivedMetrics | null): boolean {
+  if (!metrics) return false;
+  return Boolean(
+    metrics.headline?.summary?.trim() ||
+      formatScore100(metrics.headline?.crowd_consensus_score) ||
+      metrics.headline?.label?.trim() ||
+      metrics.performance_score ||
+      metrics.value_score ||
+      formatWearProfile(metrics.wear_profile) ||
+      formatScore100(metrics.community_interest_score?.score) ||
+      metrics.main_accords?.accord_summary?.trim() ||
+      collectMainAccordDisplayRows(metrics.main_accords).length > 0 ||
+      hasDerivedMetricNotes(metrics),
+  );
+}
+
+function hasLegacyPyramidNotes(item: Fragrance): boolean {
+  return Boolean(
+    item.pyramid?.top?.some(Boolean) ||
+      item.pyramid?.heart?.some(Boolean) ||
+      item.pyramid?.base?.some(Boolean),
+  );
+}
+
+function brandLengthBucket(brand: string): "short" | "medium" | "long" | "xlong" {
+  const len = brand.trim().length;
+  if (len <= 10) return "short";
+  if (len <= 16) return "medium";
+  if (len <= 24) return "long";
+  return "xlong";
+}
+
+function FragrancePanel({
+  title,
+  children,
+  className = "",
+}: {
+  title: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <section className={`border border-white/10 bg-white/[0.025] shadow-[inset_0_1px_0_rgba(255,255,255,0.035)] ${className}`}>
+      <div className="border-b border-white/[0.07] px-4 py-3 text-center">
+        <p className="text-[10px] uppercase tracking-[0.34em] text-white/70 font-bold">
+          {title}
+        </p>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+const ENRICHMENT_STATUS_COPY: Record<string, string> = {
+  not_needed: "Full fragrance intelligence available.",
+  pending: "Enhanced metrics queued.",
+  processing: "Enhanced metrics are being prepared.",
+  completed: "Enhanced metrics available.",
+  failed: "Enhanced metrics unavailable right now.",
+  ignored: "Enhancement not scheduled for this fragrance.",
+};
+
+function enrichmentCopy(enrichment?: FragranceDetail["enrichment"]): string | null {
+  const message = enrichment?.message?.trim();
+  if (message) return message;
+  const status = enrichment?.status?.trim().toLowerCase();
+  return status ? ENRICHMENT_STATUS_COPY[status] ?? null : null;
+}
+
+function SourceStatusPanel({
+  coverage,
+  enrichment,
+}: {
+  coverage?: SourceCoverage;
+  enrichment?: FragranceDetail["enrichment"];
+}) {
+  const hasCoverage = Boolean(coverage && Object.keys(coverage).length > 0);
+  const enrichmentMessage = enrichmentCopy(enrichment);
+
+  if (!hasCoverage && !enrichmentMessage) return null;
+
+  const complete =
+    coverage?.complete === true || isDerivedMetricsCompleteFlag(coverage?.derived_metrics);
+  const coverageSummary = complete
+    ? "Full fragrance intelligence available."
+    : "Baseline profile available. Enhanced metrics pending.";
+  const fragranticaStatus =
+    coverage?.fragrantica === true
+      ? coverage.fragrantica_cached
+        ? "Fragrantica cached"
+        : "Fragrantica available"
+      : coverage?.fragrantica === false
+        ? coverage.fragrantica_linked
+          ? "Fragrantica metrics pending"
+          : "Fragrantica unavailable"
+        : null;
+  const derivedStatus =
+    typeof coverage?.derived_metrics === 'string' && coverage.derived_metrics.trim()
+      ? `Metrics ${coverage.derived_metrics}`
+      : null;
+  const badges = [
+    coverage?.basenotes === true
+      ? "Basenotes available"
+      : coverage?.basenotes === false
+        ? "Basenotes unavailable"
+        : null,
+    fragranticaStatus,
+    derivedStatus,
+  ].filter((badge): badge is string => Boolean(badge));
+
+  return (
+    <FragrancePanel title="Source Status" className="overflow-hidden">
+      <div className="space-y-3 px-4 py-4">
+        <div className="flex items-center justify-center gap-3">
+          {hasCoverage ? (
+            <span className={`shrink-0 text-[8px] uppercase tracking-[0.24em] font-bold px-2.5 py-1 border ${
+              complete
+                ? 'border-scent-accent/45 text-scent-accent bg-scent-accent/10'
+                : 'border-white/12 text-white/50 bg-white/[0.04]'
+            }`}>
+              {complete ? "Complete" : "Partial"}
+            </span>
+          ) : null}
+          <p className="text-center text-sm italic text-white/62 font-serif leading-relaxed">
+            {hasCoverage ? coverageSummary : enrichmentMessage}
+          </p>
+        </div>
+        {hasCoverage && enrichmentMessage && enrichmentMessage !== coverageSummary ? (
+          <p className="text-center text-[10px] uppercase tracking-[0.18em] text-white/38 font-bold leading-relaxed">
+            {enrichmentMessage}
+          </p>
+        ) : null}
+        {badges.length > 0 ? (
+          <div className="flex flex-wrap justify-center gap-2">
+            {badges.map((badge) => (
+              <span
+                key={badge}
+                className="border border-white/10 bg-black/22 px-2.5 py-1 text-[8px] uppercase tracking-[0.16em] text-white/45 font-bold"
+              >
+                {badge}
+              </span>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </FragrancePanel>
+  );
+}
+
+function ProfileScorePanel({
+  metrics,
+  coverage,
+}: {
+  metrics?: DerivedMetrics | null;
+  coverage?: SourceCoverage;
+}) {
+  const headline = metrics?.headline ?? null;
+  const performance = metrics?.performance_score ?? null;
+  const value = metrics?.value_score ?? null;
+  const mainAccords = metrics?.main_accords ?? null;
+  const accordItems = collectMainAccordDisplayRows(mainAccords).slice(0, 5);
+  const consensusScore = scoreNumber(headline?.crowd_consensus_score);
+  const performanceScore = scoreNumber(performance?.score);
+  const valueScore = scoreNumber(value?.score);
+  const communityScore = scoreNumber(metrics?.community_interest_score?.score);
+  const summary = headline?.summary?.trim() || null;
+  const rows = [
+    { label: "Performance", score: performanceScore, value: joinDisplayParts([
+      formatScore100(performance?.score),
+      performance?.longevity_label ? `${performance.longevity_label} longevity` : null,
+      performance?.sillage_label ? `${performance.sillage_label} sillage` : null,
+    ]) },
+    { label: "Value", score: valueScore, value: joinDisplayParts([value?.dominant_label, formatScore100(value?.score)]) },
+    { label: "Wear", score: null, value: formatWearProfile(metrics?.wear_profile) },
+    { label: "Community", score: communityScore, value: formatScore100(metrics?.community_interest_score?.score) },
+  ].filter((row): row is { label: string; score: number | null; value: string } => Boolean(row.value));
+
+  if (!metrics || (!summary && rows.length === 0 && accordItems.length === 0)) {
+    if (!coverage) return null;
+    return (
+      <FragrancePanel title="Derived Intelligence">
+        <div className="px-4 py-5 text-center">
+          <p className="text-sm italic text-white/45 font-serif">
+            {coverage.complete === false
+              ? "Enhanced metrics pending."
+              : "Derived fragrance intelligence unavailable."}
+          </p>
+        </div>
+      </FragrancePanel>
+    );
+  }
+
+  const statCards = [
+    {
+      icon: Star,
+      label: "Crowd",
+      value: consensusScore !== null ? `${consensusScore}/100` : headline?.label ?? "Pending",
+      sub: headline?.label ?? "Consensus",
+    },
+    {
+      icon: Activity,
+      label: "Performance",
+      value: performanceScore !== null ? `${performanceScore}%` : "Pending",
+      sub: performance?.longevity_label ? `${performance.longevity_label} longevity` : "Signal",
+    },
+    {
+      icon: ThumbsUp,
+      label: "Community",
+      value: communityScore !== null ? `${communityScore}/100` : "Pending",
+      sub: "Interest",
+    },
+    {
+      icon: CircleDollarSign,
+      label: "Value",
+      value: valueScore !== null ? `${valueScore}/100` : value?.dominant_label ?? "Pending",
+      sub: value?.dominant_label ?? "Assessment",
+    },
+  ];
+
+  return (
+    <div className="space-y-3 sm:space-y-5">
+      <div className="grid grid-cols-2 lg:grid-cols-[1.15fr_repeat(4,1fr)] border-y border-white/8">
+        <div className="col-span-2 lg:col-span-1 px-4 py-5 border-b lg:border-b-0 lg:border-r border-white/8">
+          <p className="text-[10px] uppercase tracking-[0.28em] text-white/64 font-bold">Scentcast Score</p>
+          <div className="mt-1 flex items-end gap-2">
+            <span className="font-serif italic text-6xl leading-none text-scent-accent">
+              {consensusScore ?? "--"}
+            </span>
+            <span className="pb-2 text-xl text-white/76">/100</span>
+          </div>
+          <p className="mt-1 text-sm text-scent-accent/90">{headline?.label ?? "Intelligence profile"}</p>
+        </div>
+        {statCards.map((stat) => {
+          const Icon = stat.icon;
+          return (
+            <div key={stat.label} className="flex flex-col items-center justify-center gap-1 border-r border-b lg:border-b-0 border-white/8 px-4 py-5 text-center last:border-r-0">
+              <Icon size={18} strokeWidth={1.6} className="text-scent-accent" />
+              <p className="font-serif italic text-2xl text-white leading-tight">{stat.value}</p>
+              <p className="text-[10px] text-white/42">{stat.sub}</p>
+              <p className="text-[9px] uppercase tracking-[0.2em] text-white/40 font-bold">{stat.label}</p>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.9fr] gap-3 sm:gap-4">
+        {summary ? (
+          <FragrancePanel title="Consensus">
+            <div className="px-4 py-4">
+              <p className="font-serif italic text-lg leading-relaxed text-white/72">{summary}</p>
+            </div>
+          </FragrancePanel>
+        ) : null}
+
+        {rows.length > 0 ? (
+          <FragrancePanel title="Profile Signals" className={!summary ? "lg:col-span-2" : ""}>
+            <div className="space-y-3 px-4 py-4">
+              {rows.map((row) => (
+                <div key={row.label} className="grid grid-cols-[6rem_1fr] items-center gap-4">
+                  <p className="text-[10px] text-white/52">{row.label}</p>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm text-white/78">{row.value}</p>
+                    {row.score !== null ? (
+                      <div className="mt-2 h-px bg-white/10">
+                        <div className="h-px bg-scent-accent" style={{ width: scoreWidth(row.score) }} />
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </FragrancePanel>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
   const [data, setData] = useState<ShareData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  const [enlargeOpen, setEnlargeOpen] = useState(false);
   const [buyLinks, setBuyLinks] = useState<Record<string, BuyLink>>({});
 
+  const selectedItem = useMemo(() => {
+    if (!data || !selectedItemId) return null;
+    return data.fragrances.find((item) => (item._dbId ?? item.id) === selectedItemId) ?? null;
+  }, [data, selectedItemId]);
+
+  const selectedMetrics = selectedItem?.derived_metrics ?? selectedItem?.raw_engine_detail?.derived_metrics ?? null;
+  const selectedCoverage = normalizeSourceCoverage(
+    selectedItem?.source_coverage ?? selectedItem?.raw_engine_detail?.source_coverage,
+    selectedMetrics,
+    selectedItem?.enrichment ?? selectedItem?.raw_engine_detail?.enrichment ?? undefined,
+  );
+  const selectedEnrichment =
+    selectedItem?.enrichment ?? selectedItem?.raw_engine_detail?.enrichment ?? undefined;
+  const selectedHasDerivedMetrics = hasDerivedMetricsContent(selectedMetrics);
+  const selectedHasDerivedNotes = hasDerivedMetricNotes(selectedMetrics);
+  const selectedBuyLink = selectedItem ? buyLinks[selectedItem._dbId ?? selectedItem.id] : undefined;
+  const selectedBuyUrl = selectedBuyLink?.status === 'active' ? selectedBuyLink.buyUrl : null;
+  const selectedDetailMetaRows = selectedItem
+    ? [
+        { label: 'Year', value: formatYear(selectedItem.year) },
+        { label: 'Gender', value: stringValue(selectedItem.gender) },
+        { label: 'Concentration', value: stringValue(selectedItem.concentration) },
+        { label: 'Environment', value: stringValue(selectedItem.season) },
+        ...(!selectedMetrics?.performance_score
+          ? [
+              {
+                label: 'Projection',
+                value: formatLegacyTenPointScore(selectedItem.performance?.sillage),
+              },
+              {
+                label: 'Chronos',
+                value: formatLegacyTenPointScore(selectedItem.performance?.longevity),
+              },
+            ]
+          : []),
+      ].filter((row): row is { label: string; value: string } => Boolean(row.value))
+    : [];
+
   useEffect(() => {
+    setLoading(true);
+    setError(null);
+    setData(null);
+    setSelectedItemId(null);
+    setEnlargeOpen(false);
     setBuyLinks({});
     fetch(`/api/share/${userId}`)
       .then(async (r) => {
@@ -92,22 +551,22 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
     <div className="min-h-[100svh] bg-black text-white relative overflow-x-hidden">
       <LavaBackground />
 
-      <nav className="fixed top-0 left-0 right-0 h-24 border-b border-white/5 bg-black/40 backdrop-blur-2xl z-50 px-8">
+      <nav className="fixed top-0 left-0 right-0 h-16 sm:h-[72px] border-b border-white/5 bg-black/40 backdrop-blur-2xl z-50 px-4 sm:px-8">
         <div className="max-w-[1400px] mx-auto h-full flex items-center justify-center">
           <a
             href="/"
             aria-label="Back to dashboard"
             className="flex items-center gap-2 text-white hover:opacity-85 transition-opacity outline-none focus-visible:ring-2 focus-visible:ring-white/30 rounded-sm"
           >
-            <Wind size={24} strokeWidth={1} className="text-white shrink-0" aria-hidden />
-            <span className="font-serif text-2xl italic tracking-tighter uppercase">{APP_BRAND_MARK}</span>
+            <Wind size={22} strokeWidth={1.25} className="text-scent-accent shrink-0" aria-hidden />
+            <span className="font-serif text-xl sm:text-2xl tracking-[0.14em] uppercase">{APP_BRAND_MARK}</span>
           </a>
         </div>
       </nav>
 
-      <div className="pt-24" />
+      <div className="pt-16 sm:pt-[72px]" />
 
-      <main className="px-8 max-w-[1400px] mx-auto py-24">
+      <main className="relative z-10 px-4 sm:px-8 max-w-[1760px] mx-auto py-16 sm:py-20">
         {loading && (
           <div className="flex items-center justify-center py-40">
             <p className="font-serif italic text-white/30 text-3xl animate-pulse">Loading vault...</p>
@@ -121,11 +580,17 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
         )}
 
         {data && (
-          <div className="space-y-24">
-            <div className="text-center space-y-4 border-b border-white/5 pb-16">
-              <p className="text-[10px] uppercase tracking-[0.6em] text-white/40 font-bold">Shared Vault</p>
-              <h2 className="font-serif italic text-5xl sm:text-7xl text-white tracking-tighter">Vault of Aromas</h2>
-              <p className="text-white/30 font-sans text-sm">{data.fragrances.length} fragrance{data.fragrances.length !== 1 ? 's' : ''} archived</p>
+          <div className="space-y-14 sm:space-y-16">
+            <div className="text-center space-y-7 sm:space-y-8">
+              <div className="space-y-3">
+                <p className="text-[10px] uppercase tracking-[0.6em] text-white/40 font-bold">Shared Vault</p>
+                <h2 className="font-serif italic text-[clamp(2.65rem,8vw,5.35rem)] text-[#fff7ec] tracking-normal leading-none">Vault of Aromas</h2>
+              </div>
+              <div className="scent-full-bleed w-full">
+                <div className="scent-entry-count w-full font-serif italic text-xl sm:text-2xl whitespace-nowrap">
+                  <span>{data.fragrances.length} Entries</span>
+                </div>
+              </div>
               {data.hideImages ? (
                 <p className="text-[10px] uppercase tracking-[0.3em] text-amber-200/65 font-bold">
                   Owner currently hides bottle images on public view
@@ -133,12 +598,12 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
               ) : null}
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {data.fragrances.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-5 pb-24">
               {data.fragrances.map((item, i) => {
                 const fragranceId = item._dbId ?? item.id;
-                const isExpanded = expanded === fragranceId;
-                const buyLink = buyLinks[fragranceId];
-                const buyUrl = buyLink?.status === 'active' ? buyLink.buyUrl : null;
+                const name = entryName(item);
+                const brand = entryBrand(item);
 
                 return (
                   <motion.div
@@ -146,154 +611,52 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                     initial={{ opacity: 0, y: 24 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: i * 0.05 }}
-                    className="group"
+                    className="group cursor-pointer relative h-full min-w-0"
+                    onClick={() => setSelectedItemId(fragranceId)}
                   >
-                  <div
-                    className="glass-acrylic rounded-scent overflow-hidden cursor-pointer transition-all duration-500 hover:-translate-y-2 hover:shadow-[0_20px_50px_rgba(255,255,255,0.08)]"
-                    onClick={() => setExpanded(isExpanded ? null : fragranceId)}
-                  >
-                    {!data.hideImages && (
-                      <div className="relative aspect-[3/4] bg-white/[0.02]">
-                        {item.imageUrl ? (
+                    <div className="scent-fragrance-card w-full h-full min-h-[32rem] transition-[transform,border-color,box-shadow] duration-500 motion-reduce:transition-none group-hover:-translate-y-1.5 motion-reduce:group-hover:translate-y-0 relative overflow-hidden flex flex-col">
+                      <div className="scent-card-frame" aria-hidden />
+                      <div className="relative z-[1] flex h-full flex-col items-center px-6 sm:px-8 pt-7 sm:pt-9 pb-6 sm:pb-7">
+                        <p
+                          className="scent-card-brand w-full"
+                          data-len={brandLengthBucket(brand)}
+                          title={brand}
+                        >
+                          {brand}
+                        </p>
+                        <div className="relative flex-1 w-full mt-4 sm:mt-5 mb-5 sm:mb-6 min-h-0">
+                          {!data.hideImages ? (
                           <BottleImage
-                            variant="share"
+                            variant="grid"
                             src={item.imageUrl}
-                            alt={item.name}
+                            alt={name}
                             adjustment={item.imageAdjustment}
-                            className="absolute inset-0"
-                            imgClassName="brightness-[1.05] group-hover:scale-105 transition-transform duration-700"
+                            className="absolute inset-0 z-10"
+                            imgClassName="brightness-[1.1] group-hover:scale-[1.035] motion-reduce:group-hover:scale-100 transition-transform duration-[900ms] motion-reduce:transition-none"
                           />
                         ) : (
-                          <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
-                            <p className="text-[9px] uppercase tracking-[0.5em] text-white/20 font-bold">{item.brand}</p>
-                            <p className="font-serif italic text-2xl text-white leading-tight">{item.name}</p>
+                          <div className="absolute inset-0 flex items-center justify-center px-6 text-center">
+                            <div>
+                              <p className="text-[9px] uppercase tracking-[0.5em] text-white/20 font-bold">{brand}</p>
+                              <p className="font-serif italic text-2xl text-white leading-tight">{name}</p>
+                            </div>
                           </div>
                         )}
-                      </div>
-                    )}
-                    {data.hideImages && (
-                      <div className="aspect-[3/4] flex items-center justify-center bg-white/[0.02]">
-                        <div className="text-center space-y-2 px-6">
-                          <p className="text-[9px] uppercase tracking-[0.5em] text-white/20 font-bold">{item.brand}</p>
-                          <p className="font-serif italic text-2xl text-white leading-tight">{item.name}</p>
+                        </div>
+                        <div className="scent-card-title-row shrink-0">
+                          <h3 className="scent-card-title" title={name}>{name}</h3>
                         </div>
                       </div>
-                    )}
-
-                    <div className="px-5 pb-5 space-y-3">
-                      <div>
-                        <p className="text-[9px] uppercase tracking-[0.4em] text-white/30 font-bold">{item.brand}</p>
-                        <h3 className="font-serif italic text-xl text-white leading-tight">{item.name}</h3>
-                        {item.family && (
-                          <p className="text-[9px] uppercase tracking-widest text-white/20 mt-1">{item.family}</p>
-                        )}
-                      </div>
-
-                      {isExpanded && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          exit={{ opacity: 0, height: 0 }}
-                          className="space-y-4 pt-2 border-t border-white/5"
-                        >
-                          {item.concentration && (
-                            <p className="text-[9px] uppercase tracking-widest text-scent-accent/70">{item.concentration}</p>
-                          )}
-
-                          {item.scent_vector && (
-                            <div className="space-y-2">
-                              <div className="flex items-center gap-2">
-                                <ShieldCheck size={10} className="text-white/20" />
-                                <p className="text-[8px] uppercase tracking-[0.4em] text-white/30 font-bold">Vector Signature</p>
-                              </div>
-                              <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-                                {Object.entries(item.scent_vector).map(([key, value]) => (
-                                  <div key={key}>
-                                    <div className="flex justify-between text-[8px] uppercase tracking-widest text-white/20 mb-1 font-bold">
-                                      <span>{key}</span>
-                                      <span className="text-scent-accent font-mono">{value}/10</span>
-                                    </div>
-                                    <div className="h-px bg-white/5 w-full relative overflow-hidden">
-                                      <motion.div
-                                        initial={{ x: '-100%' }}
-                                        animate={{ x: `${-100 + (value as number) * 10}%` }}
-                                        transition={{ duration: 0.8, ease: 'circOut' }}
-                                        className="h-full bg-scent-accent absolute inset-0"
-                                      />
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
-                          {item.pyramid && (
-                            <div className="space-y-2">
-                              <div className="flex items-center gap-2">
-                                <WindIcon size={10} className="text-white/20" />
-                                <p className="text-[8px] uppercase tracking-[0.4em] text-white/30 font-bold">Notes</p>
-                              </div>
-                              {(['top', 'heart', 'base'] as const).map(level => {
-                                const notes = item.pyramid?.[level] || [];
-                                if (!notes.length) return null;
-                                return (
-                                  <div key={level} className="flex gap-3 items-start">
-                                    <p className="w-8 text-[8px] uppercase tracking-[0.3em] text-scent-accent font-bold pt-0.5 shrink-0">{level}</p>
-                                    <p className="text-sm italic text-white/60 font-serif">{notes.join(', ')}</p>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-
-                          {item.performance && (
-                            <div className="grid grid-cols-2 gap-3 text-center border-t border-white/5 pt-3">
-                              <div>
-                                <p className="text-[8px] uppercase tracking-widest text-white/20 font-bold mb-0.5">Projection</p>
-                                <p className="font-serif italic text-white text-lg">{item.performance.sillage}/10</p>
-                              </div>
-                              <div>
-                                <p className="text-[8px] uppercase tracking-widest text-white/20 font-bold mb-0.5">Longevity</p>
-                                <p className="font-serif italic text-white text-lg">{item.performance.longevity}/10</p>
-                              </div>
-                            </div>
-                          )}
-                        </motion.div>
-                      )}
-
-                      <div className="space-y-2" onClick={e => e.stopPropagation()}>
-                        {buyUrl ? (
-                          <a
-                            href={buyUrl}
-                            target="_blank"
-                            rel="nofollow sponsored noopener"
-                            onClick={e => e.stopPropagation()}
-                            className="flex items-center justify-center gap-2 w-full py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition-all text-[9px] uppercase tracking-[0.35em] text-white/50 hover:text-white font-bold"
-                          >
-                            <ShoppingBag size={10} />
-                            Buy Now
-                          </a>
-                        ) : (
-                          <button
-                            type="button"
-                            disabled
-                            onClick={e => e.stopPropagation()}
-                            className="flex items-center justify-center gap-2 w-full py-2.5 bg-white/[0.02] border border-white/5 text-[9px] uppercase tracking-[0.28em] text-white/25 font-bold cursor-not-allowed"
-                          >
-                            <ShoppingBag size={10} />
-                            Buying options unavailable
-                          </button>
-                        )}
-                        <p className="text-[9px] leading-relaxed text-white/25 font-sans">
-                          {APP_BRAND_MARK} may earn a commission from purchases made through this link.
-                        </p>
-                      </div>
                     </div>
-                  </div>
                   </motion.div>
                 );
               })}
             </div>
+            ) : (
+              <div className="py-40 text-center border border-dashed border-white/5 rounded-scent">
+                <p className="font-serif italic text-4xl text-white/10">The vault is currently vacant</p>
+              </div>
+            )}
 
             <div className="text-center pt-16 border-t border-white/5">
               <p className="text-[9px] uppercase tracking-[0.4em] text-white/20 font-bold mb-3">Powered by</p>
@@ -305,6 +668,300 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
           </div>
         )}
       </main>
+
+      <AnimatePresence>
+        {selectedItem ? (
+          <div
+            className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="share-fragrance-detail-title"
+          >
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => {
+                setSelectedItemId(null);
+                setEnlargeOpen(false);
+              }}
+              className="absolute inset-0 bg-black/95 backdrop-blur-3xl"
+            />
+            <motion.div
+              initial={{ opacity: 0, y: 18, scale: 0.985 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.99 }}
+              transition={{ duration: 0.24 }}
+              className="relative w-full h-full sm:h-[94dvh] sm:max-w-[100rem] sm:mx-4 bg-[#030303] shadow-2xl overflow-hidden flex flex-col border-0 sm:border border-white/8"
+            >
+              <div
+                className="flex items-center justify-between px-5 sm:px-8 pb-3 shrink-0 border-b border-white/[0.06] bg-black/35"
+                style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))' }}
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedItemId(null);
+                    setEnlargeOpen(false);
+                  }}
+                  className="text-[10px] uppercase tracking-[0.22em] text-white/58 hover:text-white transition-colors"
+                >
+                  Close
+                </button>
+                <div className="flex items-center gap-3 text-white/92">
+                  <div className="h-3 w-5 border-y border-scent-accent relative before:absolute before:left-1 before:right-1 before:top-1/2 before:h-px before:-translate-y-1/2 before:bg-scent-accent" />
+                  <p className="font-serif text-sm sm:text-xl uppercase tracking-[0.42em]">Scentcast</p>
+                </div>
+                <button
+                  onClick={() => {
+                    setSelectedItemId(null);
+                    setEnlargeOpen(false);
+                  }}
+                  aria-label="Close profile"
+                  className="shrink-0 p-2 bg-white/5 hover:bg-white/10 transition-all rounded-full border border-white/10 text-white group"
+                >
+                  <X size={18} className="group-hover:rotate-90 transition-transform duration-300" />
+                </button>
+              </div>
+
+              <div
+                className="flex-1 overflow-y-auto scrollbar-hide px-4 sm:px-7 lg:px-10 pb-4"
+                style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
+              >
+                <div className="mx-auto max-w-[92rem] space-y-4 sm:space-y-5 py-5 sm:py-7">
+                  <header className="mx-auto max-w-3xl text-center">
+                    <p className="text-[10px] uppercase tracking-[0.36em] text-scent-accent font-bold">
+                      Intelligence Profile
+                    </p>
+                    <h2
+                      id="share-fragrance-detail-title"
+                      className="mt-2 font-serif italic text-5xl sm:text-7xl lg:text-8xl leading-[0.92] text-[#fff7ec] tracking-normal uppercase"
+                    >
+                      {entryName(selectedItem)}
+                    </h2>
+                    <p className="mt-2 font-serif text-lg sm:text-2xl uppercase tracking-[0.28em] text-white/84">
+                      {entryBrand(selectedItem)}
+                    </p>
+                    <p className="mx-auto mt-3 max-w-[43rem] text-sm sm:text-base leading-relaxed text-white/56">
+                      {profileSummary(selectedMetrics) ?? entryNotes(selectedItem)}
+                    </p>
+                  </header>
+
+                  <ProfileScorePanel metrics={selectedMetrics} coverage={selectedCoverage} />
+
+                  <div className="grid grid-cols-1 lg:grid-cols-[1.12fr_1.95fr_1fr] gap-3 sm:gap-4">
+                    <div className="space-y-3 sm:space-y-4">
+                      <ScentNotesInfographic
+                        derivedMetrics={selectedMetrics}
+                        legacyPyramid={selectedItem.pyramid}
+                        variant="accords"
+                      />
+                    </div>
+
+                    <div className="space-y-3 sm:space-y-4">
+                      <ScentNotesInfographic
+                        derivedMetrics={selectedMetrics}
+                        legacyPyramid={selectedItem.pyramid}
+                        variant="notes"
+                      />
+                    </div>
+
+                    <div className="space-y-3 sm:space-y-4">
+                      <FragrancePanel title="Bottle Visual">
+                        <div className="p-4">
+                          <div className="mb-3 flex justify-end">
+                            {!data?.hideImages && selectedItem.imageUrl ? (
+                              <button
+                                type="button"
+                                onClick={() => setEnlargeOpen(true)}
+                                className="inline-flex items-center gap-1.5 border border-white/12 bg-white/[0.05] px-2.5 py-1 text-[9px] uppercase tracking-[0.18em] font-bold text-white/62 hover:bg-white/[0.1] hover:text-white transition-colors"
+                                aria-label="Enlarge bottle image"
+                              >
+                                <Maximize2 size={13} strokeWidth={2} />
+                                Enlarge
+                              </button>
+                            ) : null}
+                          </div>
+                          <div className="relative h-56 sm:h-72 lg:h-64 overflow-hidden">
+                            {!data?.hideImages ? (
+                              <BottleImage
+                                key={selectedItem.imageUrl || 'missing-image'}
+                                variant="detail"
+                                src={selectedItem.imageUrl}
+                                alt={entryName(selectedItem)}
+                                adjustment={selectedItem.imageAdjustment}
+                                className="absolute inset-0"
+                                imgClassName="transition-all duration-300"
+                                loading="eager"
+                              />
+                            ) : (
+                              <div className="absolute inset-0 flex items-center justify-center border border-dashed border-white/10 bg-white/[0.025] px-5 text-center">
+                                <p className="font-serif italic text-2xl leading-tight text-white/72">
+                                  Bottle image hidden by owner.
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </FragrancePanel>
+
+                      {selectedDetailMetaRows.length > 0 ? (
+                        <FragrancePanel title="Details">
+                          <div className="space-y-3 px-4 py-4">
+                            {selectedDetailMetaRows.map(({ label, value }) => (
+                              <div key={label} className="flex items-center justify-between gap-4 border-b border-white/[0.06] pb-2 last:border-b-0 last:pb-0">
+                                <p className="text-[10px] text-white/48">{label}</p>
+                                <p className="text-sm text-white/86">{value}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </FragrancePanel>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <SourceStatusPanel coverage={selectedCoverage} enrichment={selectedEnrichment} />
+
+                  <FragrancePanel title="About This Fragrance">
+                    <div className="flex items-center gap-4 px-4 py-4">
+                      <Info size={18} className="shrink-0 text-white/55" />
+                      <p className="text-sm leading-relaxed text-white/56">
+                        {profileSummary(selectedMetrics) ?? entryNotes(selectedItem)}
+                      </p>
+                    </div>
+                  </FragrancePanel>
+
+                  {!selectedHasDerivedNotes && hasLegacyPyramidNotes(selectedItem) ? (
+                    <div className="space-y-5">
+                      <div className="flex items-center gap-3">
+                        <Wind size={14} className="text-white/20 shrink-0" />
+                        <p className="text-[10px] uppercase tracking-[0.4em] text-white/40 font-bold">Molecular Hierarchy</p>
+                        <div className="flex-1 h-px bg-white/5" />
+                      </div>
+                      <div className="space-y-4">
+                        {(['top', 'heart', 'base'] as const).map((level) => {
+                          const notes = selectedItem.pyramid?.[level]?.filter(Boolean) || [];
+                          if (notes.length === 0) return null;
+                          return (
+                            <div key={level} className="flex gap-4 items-start">
+                              <p className="w-10 text-[9px] uppercase tracking-[0.3em] text-scent-accent font-bold pt-1 shrink-0">{level}</p>
+                              <div className="flex flex-wrap gap-x-4 gap-y-2 flex-1">
+                                {notes.map(note => (
+                                  <span key={note} className="text-base sm:text-2xl italic text-white/80 font-serif">{note}</span>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {!selectedHasDerivedMetrics && selectedItem.scent_vector ? (
+                    <div className="space-y-5">
+                      <div className="flex items-center gap-3">
+                        <ShieldCheck size={14} className="text-white/20 shrink-0" />
+                        <p className="text-[10px] uppercase tracking-[0.4em] text-white/40 font-bold">Vector Signature</p>
+                        <div className="flex-1 h-px bg-white/5" />
+                      </div>
+                      <div className="grid grid-cols-2 gap-x-8 gap-y-4">
+                        {Object.entries(selectedItem.scent_vector).map(([key, value]) => (
+                          <div key={key}>
+                            <div className="flex justify-between text-[9px] uppercase tracking-widest text-white/20 mb-1.5 font-bold">
+                              <span>{key}</span>
+                              <span className="text-scent-accent font-mono">{value}/10</span>
+                            </div>
+                            <div className="h-0.5 bg-white/5 w-full relative overflow-hidden">
+                              <motion.div
+                                initial={{ x: '-100%' }}
+                                animate={{ x: `${-100 + (value as number) * 10}%` }}
+                                transition={{ duration: 1, ease: "circOut" }}
+                                className="h-full bg-scent-accent absolute inset-0"
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+
+              <div
+                className="px-5 pt-3 shrink-0 border-t border-white/5"
+                style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))' }}
+              >
+                {selectedBuyUrl ? (
+                  <a
+                    href={selectedBuyUrl}
+                    target="_blank"
+                    rel="nofollow sponsored noopener"
+                    className="flex items-center justify-center gap-2 w-full py-3.5 bg-scent-accent text-black uppercase tracking-[0.28em] text-[10px] font-bold hover:opacity-90 transition-opacity active:scale-[0.98]"
+                  >
+                    <ShoppingBag size={13} />
+                    Buy Now
+                  </a>
+                ) : (
+                  <button
+                    type="button"
+                    disabled
+                    className="flex items-center justify-center gap-2 w-full py-3.5 bg-white/[0.02] border border-white/8 text-[10px] uppercase tracking-[0.22em] text-white/28 font-bold cursor-not-allowed"
+                  >
+                    <ShoppingBag size={13} />
+                    Buying options unavailable
+                  </button>
+                )}
+                <p className="mt-2 text-center text-[9px] leading-relaxed text-white/25 font-sans">
+                  {APP_BRAND_MARK} may earn a commission from purchases made through this link.
+                </p>
+              </div>
+            </motion.div>
+
+            <AnimatePresence>
+              {enlargeOpen && selectedItem.imageUrl && !data?.hideImages ? (
+                <motion.div
+                  key="share-bottle-enlarge"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label="Enlarged bottle image"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="fixed inset-0 z-[130] flex flex-col items-center justify-center bg-black/93 px-4 py-12"
+                  onClick={() => setEnlargeOpen(false)}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setEnlargeOpen(false)}
+                    className="absolute top-4 right-4 z-10 p-2 rounded-full border border-white/15 bg-white/10 text-white hover:bg-white/20 transition-colors"
+                    aria-label="Close enlarged view"
+                  >
+                    <X size={22} />
+                  </button>
+                  <div
+                    className="relative w-full max-w-[min(100%,28rem)] aspect-[3/4] max-h-[78dvh] min-h-0"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <BottleImage
+                      variant="grid"
+                      src={selectedItem.imageUrl}
+                      alt={entryName(selectedItem)}
+                      adjustment={selectedItem.imageAdjustment}
+                      className="absolute inset-0"
+                      imgClassName="brightness-[1.08] scale-[1.02]"
+                      loading="eager"
+                    />
+                  </div>
+                  <p className="mt-5 text-[10px] uppercase tracking-[0.35em] text-white/35 font-bold font-sans">
+                    Tap outside or Esc to close
+                  </p>
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
+          </div>
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 };
