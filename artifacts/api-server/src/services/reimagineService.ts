@@ -29,7 +29,7 @@ const DEFAULT_REIMAGINE_MODEL: ReimagineModel = "gpt-image-1";
 const DEFAULT_REIMAGINE_SIZE = "1024x1024";
 const DEFAULT_REIMAGINE_QUALITY = "high";
 const OPENAI_IMAGE_EDITS_ENDPOINT = "https://api.openai.com/v1/images/edits";
-const OPENAI_TIMEOUT_MS = 90_000;
+const OPENAI_TIMEOUT_MS = 240_000;
 const MAX_OUTPUT_DIMENSION = 768;
 const WEBP_QUALITY = 82;
 
