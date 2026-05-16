@@ -413,8 +413,6 @@ interface AtmosphereBarProps {
   weatherLoading: boolean;
 }
 
-const ATMOSPHERE_TRACK_COPIES = 2;
-
 const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({ weather, weatherLoading }) => {
   const tempValue = getWeatherNumber(weather, ['temperature_f', 'temperature', 'temp'], Number.NaN);
   const humidityValue = getWeatherNumber(weather, ['humidity_percent', 'humidity'], Number.NaN);
@@ -422,7 +420,6 @@ const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({ weather, weath
   const condition = weatherLoading ? '—' : getWeatherString(weather, ['condition', 'description'], '—');
   const humidity = weatherLoading ? '—' : Number.isFinite(humidityValue) ? `${humidityValue}%` : '—';
   const location = weather?.location ?? '—';
-  const atmosphereTrackKey = [condition, humidity, temp, location].join('|');
 
   const metrics = [
     { label: 'Matrix', value: condition },
@@ -433,23 +430,13 @@ const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({ weather, weath
   ];
 
   return (
-    <section className="scent-atmosphere-marquee" aria-label="Current atmosphere">
-      <div className="scent-atmosphere-marquee-track" key={atmosphereTrackKey}>
-        {[...Array(ATMOSPHERE_TRACK_COPIES)].map((_, copyIndex) => (
-          <div
-            className="scent-atmosphere-marquee-group"
-            key={copyIndex}
-            aria-hidden={copyIndex > 0}
-          >
-            {metrics.map((metric) => (
-              <div key={metric.label} className="scent-atmosphere-marquee-cell">
-                <span className="scent-atmosphere-label">{metric.label}</span>
-                <span className="scent-atmosphere-value">{metric.value}</span>
-              </div>
-            ))}
-          </div>
-        ))}
-      </div>
+    <section className="scent-atmosphere-strip" aria-label="Current atmosphere">
+      {metrics.map((metric) => (
+        <div key={metric.label} className="scent-atmosphere-cell">
+          <span className="scent-atmosphere-label">{metric.label}</span>
+          <span className="scent-atmosphere-value">{metric.value}</span>
+        </div>
+      ))}
     </section>
   );
 });
