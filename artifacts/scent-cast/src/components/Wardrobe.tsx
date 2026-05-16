@@ -600,6 +600,14 @@ const REFRESH_IMAGE_ENDPOINT = API_BASE_URL
 const REIMAGINE_IMAGE_ENDPOINT = API_BASE_URL
   ? `${API_BASE_URL}/api/reimagine-bottle-image`
   : "/api/reimagine-bottle-image";
+const USAGE_TOTAL_ENDPOINT = API_BASE_URL
+  ? `${API_BASE_URL}/api/usage/total`
+  : "/api/usage/total";
+
+type UsageTotalsSnapshot = {
+  totalUsd: number;
+  count: number;
+};
 
 function concentrationHintFromValue(
   value?: string,
@@ -721,7 +729,23 @@ export const Wardrobe: React.FC<{
   });
   const [clarifySolverId, setClarifySolverId] = React.useState<WardrobeImageSolverId | ''>('');
   const [pendingPreview, setPendingPreview] = React.useState<{ itemId: string; url: string; isFallback: boolean } | null>(null);
-  const [reimagineBusy, setReimagineBusy] = React.useState(false);
+  const [reimaginingIds, setReimaginingIds] = React.useState<Set<string>>(() => new Set());
+  const [usageTotals, setUsageTotals] = React.useState<UsageTotalsSnapshot | null>(null);
+
+  const refreshUsageTotals = React.useCallback(async () => {
+    try {
+      const res = await fetch(USAGE_TOTAL_ENDPOINT, { headers: { Accept: 'application/json' } });
+      if (!res.ok) return;
+      const data = (await res.json()) as { totalUsd?: unknown; count?: unknown };
+      const totalUsd =
+        typeof data.totalUsd === 'number' && Number.isFinite(data.totalUsd) ? data.totalUsd : 0;
+      const count =
+        typeof data.count === 'number' && Number.isFinite(data.count) ? data.count : 0;
+      setUsageTotals({ totalUsd, count });
+    } catch {
+      /* network noise — keep prior snapshot */
+    }
+  }, []);
   const [persistBusy, setPersistBusy] = React.useState(false);
   const [vaultSolverBanner, setVaultSolverBanner] = React.useState<string | null>(null);
   const [searchFocused, setSearchFocused] = React.useState(false);
@@ -734,6 +758,11 @@ export const Wardrobe: React.FC<{
   );
   const solverPrefillRef = React.useRef<WardrobeImageSolverId | null>(null);
   const searchBlurTimerRef = React.useRef<number | null>(null);
+
+  React.useEffect(() => {
+    if (!bottleImageToolsOpen) return;
+    void refreshUsageTotals();
+  }, [bottleImageToolsOpen, refreshUsageTotals]);
 
   const openDetail = React.useCallback((item: Fragrance) => {
     setRefreshError(null);
@@ -847,41 +876,96 @@ export const Wardrobe: React.FC<{
     }
   };
 
-  const handleReimagine = async (item: Fragrance) => {
+  const handleReimagine = (item: Fragrance) => {
+    if (reimaginingIds.has(item.id)) return;
     const src =
       pendingPreview?.itemId === item.id ? pendingPreview.url : item.imageUrl;
     if (!src?.trim()) {
       setRefreshError('No image to reimagine — find one first.');
       return;
     }
-    setReimagineBusy(true);
+
+    setReimaginingIds((prev) => {
+      const next = new Set(prev);
+      next.add(item.id);
+      return next;
+    });
     setRefreshError(null);
     setBgFallbackWarning(null);
-    try {
-      const res = await fetch(REIMAGINE_IMAGE_ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: entryName(item),
-          brand: entryBrand(item),
-          imageUrl: src,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok || data.error) throw new Error(data.error || 'Reimagine failed');
-      const returnedImageUrl =
-        typeof data.imageUrl === 'string' ? data.imageUrl.trim() : '';
-      if (!returnedImageUrl) {
-        throw new Error('Reimagine completed without a usable image URL.');
+
+    // Fire-and-forget: the fetch lives at the Wardrobe level so the user can
+    // close the detail modal and keep browsing. On success we auto-persist the
+    // image to the vault so the new bottle simply "shows up" later — exactly
+    // matching the 1–3 min latency story for gpt-image-* models.
+    void (async () => {
+      try {
+        const res = await fetch(REIMAGINE_IMAGE_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: entryName(item),
+            brand: entryBrand(item),
+            imageUrl: src,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) throw new Error(data.error || 'Reimagine failed');
+        const returnedImageUrl =
+          typeof data.imageUrl === 'string' ? data.imageUrl.trim() : '';
+        if (!returnedImageUrl) {
+          throw new Error('Reimagine completed without a usable image URL.');
+        }
+        const nextUrl = withImageVersion(returnedImageUrl, data.imageHash || Date.now());
+
+        if (onPersistWardrobeImage) {
+          let merged: Fragrance | null = null;
+          try {
+            merged = await onPersistWardrobeImage(
+              item,
+              nextUrl,
+              normalizeBottleImageAdjustment(item.imageAdjustment),
+            );
+          } catch {
+            merged = null;
+          }
+          if (merged) {
+            // If the user is still focused on this item, swap the modal in place
+            // and clear any leftover preview. If they've navigated elsewhere,
+            // leave their current selection alone — the items prop refresh from
+            // upstream already shows the new bottle on the grid tile.
+            setSelectedItem((prev) => (prev?.id === merged!.id ? merged! : prev));
+            setPendingPreview((prev) => (prev?.itemId === item.id ? null : prev));
+          } else {
+            // Auto-save fell through — keep the reimagined image visible as a
+            // pending preview so the user can save it manually next time they
+            // open this bottle. Nothing is lost.
+            setPendingPreview({
+              itemId: item.id,
+              url: nextUrl,
+              isFallback: imageProcessingNeedsRepair(data),
+            });
+          }
+        } else {
+          // Unauthenticated: keep the preview-then-save flow.
+          setPendingPreview({
+            itemId: item.id,
+            url: nextUrl,
+            isFallback: imageProcessingNeedsRepair(data),
+          });
+        }
+        void refreshUsageTotals();
+      } catch (err: any) {
+        setRefreshError(err?.message || 'Reimagine failed');
+        void refreshUsageTotals();
+      } finally {
+        setReimaginingIds((prev) => {
+          if (!prev.has(item.id)) return prev;
+          const next = new Set(prev);
+          next.delete(item.id);
+          return next;
+        });
       }
-      const nextUrl = withImageVersion(returnedImageUrl, data.imageHash || Date.now());
-      const isFallback = imageProcessingNeedsRepair(data);
-      setPendingPreview({ itemId: item.id, url: nextUrl, isFallback });
-    } catch (err: any) {
-      setRefreshError(err.message || 'Reimagine failed');
-    } finally {
-      setReimagineBusy(false);
-    }
+    })();
   };
 
   const handleSavePreviewToVault = async () => {
@@ -991,9 +1075,12 @@ export const Wardrobe: React.FC<{
       ? pendingPreview.url
       : selectedItem?.imageUrl ?? '';
 
+  const selectedReimagining =
+    !!selectedItem && reimaginingIds.has(selectedItem.id);
+
   const imageToolbarBusy =
     !!selectedItem &&
-    (refreshingId === selectedItem.id || reimagineBusy || persistBusy);
+    (refreshingId === selectedItem.id || selectedReimagining || persistBusy);
 
   const hasPendingPreview =
     !!selectedItem && !!pendingPreview && pendingPreview.itemId === selectedItem.id;
@@ -1555,11 +1642,11 @@ export const Wardrobe: React.FC<{
                           title={
                             !detailBottleUrl?.trim()
                               ? 'Need an image first'
-                              : 'Reimagine this bottle as a clean studio packshot'
+                              : 'Reimagine this bottle on a transparent background (1–3 min)'
                           }
                           className="flex-1 min-h-[44px] py-3 bg-white/[0.06] text-white uppercase tracking-[0.18em] text-[10px] font-bold border border-white/15 hover:bg-white/[0.1] active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-35 disabled:cursor-not-allowed rounded-lg"
                         >
-                          {reimagineBusy ? (
+                          {selectedReimagining ? (
                             <>
                               <RefreshCw size={12} className="animate-spin" /> Reimagining…
                             </>
@@ -1570,6 +1657,29 @@ export const Wardrobe: React.FC<{
                           )}
                         </button>
                       </div>
+
+                      {selectedReimagining ? (
+                        <div className="rounded-lg border border-white/15 bg-white/[0.04] px-3 py-3 text-center space-y-1">
+                          <p className="text-[9px] uppercase tracking-[0.28em] text-white/70 font-bold">
+                            Reimagining your bottle
+                          </p>
+                          <p className="text-[10px] leading-snug text-white/55 font-sans">
+                            This usually takes 1–3 minutes. You can close this panel and
+                            keep browsing — the new bottle will save to your vault
+                            automatically when it&apos;s ready.
+                          </p>
+                        </div>
+                      ) : null}
+
+                      {usageTotals ? (
+                        <p className="text-center text-[9px] uppercase tracking-[0.22em] text-white/35 font-sans">
+                          Reimagine spend so far ·{' '}
+                          <span className="tabular-nums text-white/55">
+                            ${usageTotals.totalUsd.toFixed(3)}
+                          </span>{' '}
+                          across {usageTotals.count} call{usageTotals.count === 1 ? '' : 's'}
+                        </p>
+                      ) : null}
 
                       <div className="rounded-lg border border-white/10 bg-black/22 p-3 space-y-3">
                         <div className="flex items-center justify-between gap-3">

@@ -34,19 +34,28 @@ const MAX_OUTPUT_DIMENSION = 768;
 const WEBP_QUALITY = 82;
 
 const REIMAGINE_PROMPT = [
-  "High-fidelity commercial product photograph of the exact fragrance bottle in the source image.",
-  "Head-on hero packshot, single bottle centered, eye-level camera, square 1:1 crop with even margins.",
-  "Identity preservation is the highest priority: reproduce the bottle silhouette, proportions, glass color and tint,",
-  "cap material and shape, collar, base, label artwork, every typographic detail, and any engraving exactly as shown in the source —",
+  "High-fidelity commercial product photograph of the exact fragrance bottle in the source image,",
+  "isolated on a FULLY TRANSPARENT background with a clean alpha matte —",
+  "no backdrop, no gradient, no surface, no contact shadow, no drop shadow, no ground reflection,",
+  "no horizon line, no color fill, nothing behind or beneath the bottle.",
+  "The bottle floats on pure transparency, ready to be composited onto any background.",
+  "Identity preservation is the single highest priority: reproduce the bottle silhouette,",
+  "proportions, glass color and tint, cap material and shape, collar, base, label artwork,",
+  "every typographic detail, and any engraving exactly as shown in the source —",
   "do not redesign, restyle, recolor, retype, or invent any element of the bottle or label.",
-  "Studio lighting: large soft key from upper-left, subtle fill, gentle rim highlight on the glass edges,",
-  "natural specular reflections, accurate refraction through liquid, true-to-source liquid color and fill level,",
+  "Lighting on the bottle itself: large soft studio key from upper-left, subtle fill,",
+  "gentle rim highlight on the glass edges, natural specular highlights,",
+  "accurate refraction through the liquid, true-to-source liquid color and fill level,",
   "crisp focus across the whole bottle, no motion blur, no depth-of-field smear on the label.",
-  "Background: clean neutral seamless backdrop with a soft vertical gradient (light gray to slightly darker gray),",
-  "no horizon line, no shadows on the backdrop other than a soft contact shadow directly beneath the bottle.",
-  "Strictly forbidden: extra bottles, boxes, props, hands, people, water droplets, petals, fabric, added text,",
-  "added logos, watermarks, borders, frames, or any element not present in the source.",
-  "Output should look like a catalog/e-commerce hero image: photoreal, ultra-sharp, color-accurate, retouched-clean.",
+  "Composition: head-on hero packshot, single bottle centered, eye-level camera,",
+  "square 1:1 framing with even transparent margins on all four sides.",
+  "Strictly forbidden: any background fill (white, gray, black, color, gradient, blurred, or otherwise),",
+  "any drop shadow or contact shadow, ground reflections, vignettes, frames, borders,",
+  "extra bottles, boxes, props, hands, people, water droplets, petals, fabric,",
+  "added text, added logos, watermarks, or any element other than the bottle itself.",
+  "Output must be an alpha-clean, edge-perfect cutout of the bottle on a transparent background —",
+  "no halo, no haze, no fringe, no semi-transparent backdrop tint around the silhouette —",
+  "exactly like a retouched e-commerce packshot whose background has been removed cleanly.",
 ].join(" ");
 
 function resolveModel(requested?: string | null): ReimagineModel {
@@ -142,6 +151,11 @@ async function callOpenAIImageEdits(input: {
   form.append("n", "1");
   form.append("size", DEFAULT_REIMAGINE_SIZE);
   form.append("quality", DEFAULT_REIMAGINE_QUALITY);
+  // Force a transparent-background PNG so the bottle lands on alpha, matching
+  // the rest of the wardrobe image pipeline (which expects bg-removed packshots).
+  // `output_format` must be png or webp when `background=transparent`.
+  form.append("background", "transparent");
+  form.append("output_format", "png");
   // response_format defaults to b64_json for gpt-image-* models.
 
   const axiosMod = await import("axios");
@@ -173,10 +187,13 @@ async function encodeToWebp(buffer: Buffer): Promise<{
   height: number;
   sizeBytes: number;
 }> {
+  // ensureAlpha so the WebP encoder always carries an alpha channel through —
+  // critical now that the OpenAI request asks for a transparent background.
   const encoded = await sharp(buffer, { failOn: "truncated" })
     .rotate()
     .resize(MAX_OUTPUT_DIMENSION, MAX_OUTPUT_DIMENSION, { fit: "inside", withoutEnlargement: true })
-    .webp({ quality: WEBP_QUALITY, effort: 4 })
+    .ensureAlpha()
+    .webp({ quality: WEBP_QUALITY, effort: 4, alphaQuality: 95 })
     .toBuffer();
 
   const meta = await sharp(encoded).metadata();
@@ -306,8 +323,8 @@ export async function reimagineBottleImage(
       width: optimized.width,
       height: optimized.height,
       sizeBytes: uploaded.sizeBytes || optimized.sizeBytes,
-      backgroundRemoved: false,
-      removeBgStatus: "skipped",
+      backgroundRemoved: true,
+      removeBgStatus: "removed",
       removeBgReason: "openai_reimagine",
     });
 
