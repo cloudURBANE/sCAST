@@ -2,11 +2,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Activity,
+  CalendarDays,
   CircleDollarSign,
   Info,
   Maximize2,
   ShoppingBag,
-  Star,
   ThumbsUp,
   Wind,
   X,
@@ -125,10 +125,6 @@ function formatWearProfile(wear?: DerivedMetrics["wear_profile"] | null): string
   const time = wear.primary_time?.trim() || null;
   if (seasonLabel && time) return `${seasonLabel} · ${time}`;
   return seasonLabel || time;
-}
-
-function profileSummary(metrics?: DerivedMetrics | null): string | null {
-  return metrics?.headline?.summary?.trim() || null;
 }
 
 function entryNotes(item: Fragrance): string {
@@ -366,6 +362,7 @@ function ProfileScorePanel({
   const consensusScore = scoreNumber(headline?.crowd_consensus_score);
   const performanceScore = scoreNumber(performance?.score);
   const communityScore = scoreNumber(metrics?.community_interest_score?.score);
+  const wearProfile = formatWearProfile(metrics?.wear_profile);
 
   if (!metrics || !hasDerivedMetricsContent(metrics)) {
     if (!coverage) return null;
@@ -384,10 +381,10 @@ function ProfileScorePanel({
 
   const statCards = [
     {
-      icon: Star,
-      label: "Crowd",
-      value: consensusScore !== null ? `${consensusScore}/100` : headline?.label ?? "Pending",
-      sub: headline?.label ?? "Consensus",
+      icon: CalendarDays,
+      label: "Wear Profile",
+      value: wearProfile ?? "Universal",
+      sub: "Season / time",
     },
     {
       icon: Activity,
@@ -807,7 +804,6 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                       <Info size={18} className="shrink-0 text-white/55" />
                       <p className="text-sm leading-relaxed text-white/56">
                         {selectedMetrics?.main_accords?.accord_summary?.trim() ??
-                          profileSummary(selectedMetrics) ??
                           entryNotes(selectedItem)}
                       </p>
                     </div>

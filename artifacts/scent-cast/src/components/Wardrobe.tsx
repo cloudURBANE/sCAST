@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   X,
   Trash2,
-  Star,
+  CalendarDays,
   ThumbsUp,
   Activity,
   CircleDollarSign,
@@ -246,14 +246,6 @@ function scoreNumber(value: unknown): number | null {
   return isFiniteNumber(value) ? Math.max(0, Math.min(100, Math.round(value))) : null;
 }
 
-function scoreWidth(value: unknown): string {
-  return `${scoreNumber(value) ?? 0}%`;
-}
-
-function profileSummary(metrics?: DerivedMetrics | null): string | null {
-  return metrics?.headline?.summary?.trim() || null;
-}
-
 function stringValue(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
@@ -490,7 +482,7 @@ function ProfileScorePanel({
   const consensusScore = scoreNumber(headline?.crowd_consensus_score);
   const performanceScore = scoreNumber(performance?.score);
   const communityScore = scoreNumber(metrics?.community_interest_score?.score);
-  const summary = headline?.summary?.trim() || null;
+  const wearProfile = formatWearProfile(metrics?.wear_profile);
 
   if (!metrics || !hasDerivedMetricsContent(metrics)) {
     if (!coverage) return null;
@@ -510,10 +502,10 @@ function ProfileScorePanel({
 
   const statCards = [
     {
-      icon: Star,
-      label: "Crowd",
-      value: consensusScore !== null ? `${consensusScore}/100` : headline?.label ?? "Pending",
-      sub: headline?.label ?? "Consensus",
+      icon: CalendarDays,
+      label: "Wear Profile",
+      value: wearProfile ?? "Universal",
+      sub: "Season / time",
     },
     {
       icon: Activity,
@@ -595,52 +587,6 @@ function ProfileScorePanel({
         </div>
       </FragrancePanel>
 
-      {summary ? (
-        <p className="mx-auto hidden max-w-2xl text-center font-serif italic text-base sm:block sm:text-lg leading-relaxed text-white/66">
-          {summary}
-        </p>
-      ) : null}
-
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.9fr] gap-3 sm:gap-4">
-        <FragrancePanel title="Performance Snapshot">
-          <div className="space-y-5 px-4 py-5">
-            <div className="grid grid-cols-2 divide-x divide-white/8 text-center">
-              <div>
-                <p className="text-[9px] uppercase tracking-[0.28em] text-white/42 font-bold">Longevity</p>
-                <p className="font-serif italic text-2xl text-scent-accent">{performance?.longevity_label ?? "Pending"}</p>
-                <p className="text-xs text-white/56">{formatScore100(performance?.score) ?? "Metrics pending"}</p>
-              </div>
-              <div>
-                <p className="text-[9px] uppercase tracking-[0.28em] text-white/42 font-bold">Sillage</p>
-                <p className="font-serif italic text-2xl text-scent-accent">{performance?.sillage_label ?? "Pending"}</p>
-                <p className="text-xs text-white/56">{formatScore100(performance?.score) ?? "Metrics pending"}</p>
-              </div>
-            </div>
-            <div className="h-1 bg-white/10">
-              <div className="h-full bg-gradient-to-r from-white/35 via-scent-accent to-scent-accent/55" style={{ width: scoreWidth(performance?.score) }} />
-            </div>
-          </div>
-        </FragrancePanel>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-          <FragrancePanel title="Wear Profile">
-            <div className="px-4 py-5 text-center">
-              <p className="font-serif italic text-2xl text-white">{formatWearProfile(metrics?.wear_profile) ?? "Universal"}</p>
-              <p className="mt-2 text-[10px] uppercase tracking-[0.22em] text-white/36 font-bold">Season / time</p>
-            </div>
-          </FragrancePanel>
-          <FragrancePanel title="Value Assessment">
-            <div className="space-y-4 px-4 py-5 text-center">
-              <div className="flex flex-col items-center justify-center gap-1">
-                <p className="font-serif italic text-2xl text-scent-accent">{value?.dominant_label ?? "Pending"}</p>
-              </div>
-              <div className="h-1 bg-white/10">
-                <div className="h-full bg-gradient-to-r from-white/35 via-scent-accent to-scent-accent/60" style={{ width: scoreWidth(value?.score) }} />
-              </div>
-            </div>
-          </FragrancePanel>
-        </div>
-      </div>
     </div>
   );
 }
@@ -1492,7 +1438,6 @@ export const Wardrobe: React.FC<{
                       <Info size={18} className="shrink-0 text-white/55" />
                       <p className="mx-auto max-w-3xl text-sm leading-relaxed text-white/56">
                         {selectedMetrics?.main_accords?.accord_summary?.trim() ??
-                          profileSummary(selectedMetrics) ??
                           entryNotes(selectedItem)}
                       </p>
                     </div>
