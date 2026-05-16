@@ -382,15 +382,28 @@ const formatSprayCount = (sprayCount: ScentWeatherRecommendation['spray_count'])
 const LiveClock: React.FC = React.memo(() => {
   const [time, setTime] = useState(new Date());
   useEffect(() => {
-    const timer = setInterval(() => setTime(new Date()), 1000);
-    return () => clearInterval(timer);
+    let interval: ReturnType<typeof setInterval> | null = null;
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+
+    const syncMinute = () => {
+      setTime(new Date());
+      interval = setInterval(() => setTime(new Date()), 60_000);
+    };
+
+    const msUntilNextMinute = 60_000 - (Date.now() % 60_000);
+    timeout = setTimeout(syncMinute, msUntilNextMinute);
+
+    return () => {
+      if (timeout) clearTimeout(timeout);
+      if (interval) clearInterval(interval);
+    };
   }, []);
   return (
     <span
       className="font-serif italic tracking-normal text-inherit leading-[1.05] text-[#fff7ec] tabular-nums"
       style={{ fontVariantNumeric: 'tabular-nums' }}
     >
-      {time.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+      {time.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' })}
     </span>
   );
 });
@@ -409,6 +422,7 @@ const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({ weather, weath
   const condition = weatherLoading ? '—' : getWeatherString(weather, ['condition', 'description'], '—');
   const humidity = weatherLoading ? '—' : Number.isFinite(humidityValue) ? `${humidityValue}%` : '—';
   const location = weather?.location ?? '—';
+  const atmosphereTrackKey = [condition, humidity, temp, location].join('|');
 
   const metrics = [
     { label: 'Matrix', value: condition },
@@ -420,7 +434,7 @@ const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({ weather, weath
 
   return (
     <section className="scent-atmosphere-marquee" aria-label="Current atmosphere">
-      <div className="scent-atmosphere-marquee-track">
+      <div className="scent-atmosphere-marquee-track" key={atmosphereTrackKey}>
         {[...Array(ATMOSPHERE_TRACK_COPIES)].map((_, copyIndex) => (
           <div
             className="scent-atmosphere-marquee-group"
@@ -919,6 +933,7 @@ export default function App() {
 
     return phrases;
   }, [items, wardrobeLoaded]);
+  const tickerTrackKey = tickerPhrases.join('|');
 
   const sharePathMatch = window.location.pathname.match(/^\/share\/([^/?#]+)$/);
   if (sharePathMatch) {
@@ -983,9 +998,9 @@ export default function App() {
       <main className="relative z-10 pb-24 px-4 sm:px-8 max-w-[1760px] mx-auto">
         <div className="space-y-20 sm:space-y-28 pt-10 sm:pt-14">
           <div className="scent-marquee-band scent-full-bleed w-full overflow-hidden py-[17px] sm:py-[18px] flex select-none relative">
-            <div className="scent-marquee-track-row flex animate-infinite-scroll whitespace-nowrap scent-marquee-text">
+            <div key={tickerTrackKey} className="scent-marquee-track-row flex animate-infinite-scroll whitespace-nowrap scent-marquee-text">
               {[...Array(4)].map((_, i) => (
-                <span key={i} className="scent-marquee-phrase-group flex items-center">
+                <span key={i} className="scent-marquee-phrase-group flex items-center" aria-hidden={i > 0}>
                   {tickerPhrases.map((phrase, j) => (
                     <span key={j} className="scent-marquee-phrase-item inline-flex items-center">
                       <span>{phrase}</span>

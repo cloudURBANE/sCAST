@@ -601,7 +601,7 @@ a {
 }
 
 .scent-marquee-track-row {
-  gap: clamp(4.25rem, 5.5vw, 6.4rem);
+  gap: 0;
   font-size: clamp(11.3px, 0.72vw, 11.4px);
   letter-spacing: 0.5em;
   text-transform: uppercase;
@@ -610,7 +610,9 @@ a {
 }
 
 .scent-marquee-phrase-group {
+  flex: 0 0 auto;
   gap: clamp(4.25rem, 5.5vw, 6.4rem);
+  padding-right: clamp(4.25rem, 5.5vw, 6.4rem);
 }
 
 .scent-marquee-phrase-item {
@@ -655,10 +657,9 @@ a {
   position: relative;
   overflow: hidden;
   border-block: 1px solid rgba(201, 139, 44, 0.18);
-  background: linear-gradient(180deg, rgba(10, 7, 4, 0.84), rgba(4, 3, 2, 0.92));
+  background: linear-gradient(180deg, rgba(10, 7, 4, 0.94), rgba(4, 3, 2, 0.98));
   box-shadow: inset 0 1px 0 rgba(255, 226, 174, 0.06), 0 18px 44px -28px rgba(0, 0, 0, 0.95);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  contain: paint;
 }
 
 .scent-atmosphere-marquee::before,
@@ -686,6 +687,7 @@ a {
   display: flex;
   width: max-content;
   will-change: transform;
+  transform: translateZ(0);
   backface-visibility: hidden;
   animation: infinite-scroll 28s linear infinite;
 }
@@ -700,19 +702,22 @@ a {
 
 .scent-atmosphere-marquee-cell {
   display: inline-flex;
+  flex: 0 0 clamp(9rem, 18vw, 14rem);
   flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
+  box-sizing: border-box;
   gap: 0.35rem;
-  min-width: clamp(9rem, 18vw, 14rem);
+  width: clamp(9rem, 18vw, 14rem);
+  max-width: clamp(9rem, 18vw, 14rem);
   padding: clamp(0.85rem, 2vw, 1.1rem) clamp(0.95rem, 2vw, 1.35rem);
   border-left: 1px solid rgba(201, 139, 44, 0.12);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .scent-atmosphere-marquee-track {
-    animation-duration: 112s;
+    animation-duration: 240s;
   }
 }
 
