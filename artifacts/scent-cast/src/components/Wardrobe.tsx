@@ -3,8 +3,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   X,
   Trash2,
-  ShieldCheck,
-  Wind,
   Star,
   ThumbsUp,
   Activity,
@@ -320,14 +318,6 @@ function hasDerivedMetricsContent(metrics?: DerivedMetrics | null): boolean {
       metrics.main_accords?.accord_summary?.trim() ||
       (collectMainAccordDisplayRows(metrics.main_accords).length > 0) ||
       hasDerivedMetricNotes(metrics),
-  );
-}
-
-function hasLegacyPyramidNotes(item: Fragrance): boolean {
-  return Boolean(
-    item.pyramid?.top?.some(Boolean) ||
-      item.pyramid?.heart?.some(Boolean) ||
-      item.pyramid?.base?.some(Boolean),
   );
 }
 
@@ -1077,8 +1067,6 @@ export const Wardrobe: React.FC<{
   const selectedEnrichment =
     selectedItem?.enrichment ?? selectedItem?.raw_engine_detail?.enrichment ?? undefined;
 
-  const selectedHasDerivedMetrics = hasDerivedMetricsContent(selectedMetrics);
-  const selectedHasDerivedNotes = hasDerivedMetricNotes(selectedMetrics);
   const selectedHasDerivedPerformance = Boolean(selectedMetrics?.performance_score);
   const detailMetaRows = selectedItem
     ? [
@@ -1516,58 +1504,6 @@ export const Wardrobe: React.FC<{
                     </div>
                   </FragrancePanel>
 
-                  {!selectedHasDerivedNotes && hasLegacyPyramidNotes(selectedItem) ? (
-                    <div className="space-y-5">
-                      <div className="flex items-center gap-3">
-                        <Wind size={14} className="text-white/20 shrink-0" />
-                        <p className="text-[10px] uppercase tracking-[0.4em] text-white/40 font-bold">Molecular Hierarchy</p>
-                        <div className="flex-1 h-px bg-white/5" />
-                      </div>
-                      <div className="space-y-4">
-                        {(['top', 'heart', 'base'] as const).map((level) => {
-                          const notes = selectedItem.pyramid?.[level]?.filter(Boolean) || [];
-                          if (notes.length === 0) return null;
-                          return (
-                            <div key={level} className="flex gap-4 items-start">
-                              <p className="w-10 text-[9px] uppercase tracking-[0.3em] text-scent-accent font-bold pt-1 shrink-0">{level}</p>
-                              <div className="flex flex-wrap gap-x-4 gap-y-2 flex-1">
-                                {notes.map(note => (
-                                  <span key={note} className="text-base sm:text-2xl italic text-white/80 font-serif">{note}</span>
-                                ))}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ) : null}
-
-                  {!selectedHasDerivedMetrics && selectedItem.scent_vector && (
-                    <div className="space-y-5">
-                      <div className="flex items-center gap-3">
-                        <ShieldCheck size={14} className="text-white/20 shrink-0" />
-                        <p className="text-[10px] uppercase tracking-[0.4em] text-white/40 font-bold">Vector Signature</p>
-                        <div className="flex-1 h-px bg-white/5" />
-                      </div>
-                      <div className="grid grid-cols-2 gap-x-8 gap-y-4">
-                        {Object.entries(selectedItem.scent_vector).map(([key, value]) => (
-                          <div key={key}>
-                            <div className="flex justify-between text-[9px] uppercase tracking-widest text-white/20 mb-1.5 font-bold">
-                              <span>{key}</span>
-                              <span className="text-scent-accent font-mono">{value}/10</span>
-                            </div>
-                            <div className="h-0.5 bg-white/5 w-full relative overflow-hidden">
-                              <motion.div
-                                initial={{ x: '-100%' }} animate={{ x: `${-100 + (value as number) * 10}%` }}
-                                transition={{ duration: 1, ease: "circOut" }}
-                                className="h-full bg-scent-accent absolute inset-0"
-                              />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
                 </div>
               </div>
 
