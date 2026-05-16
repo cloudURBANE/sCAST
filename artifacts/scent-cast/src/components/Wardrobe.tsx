@@ -552,47 +552,48 @@ function ProfileScorePanel({
 
   return (
     <div className="space-y-3 sm:space-y-5">
-      <div className="hidden sm:grid grid-cols-[1.15fr_repeat(4,1fr)] border-y border-white/8">
-        <div className="flex flex-col items-center justify-center px-4 py-5 border-r border-white/8 text-center">
-          <p className="text-[10px] uppercase tracking-[0.28em] text-white/64 font-bold">Scentbeam Score</p>
-          <div className="mt-1 flex items-end justify-center gap-2">
-            <span className="font-serif italic text-6xl leading-none text-scent-accent">
-              {consensusScore ?? "--"}
-            </span>
-            <span className="pb-2 text-xl text-white/76">/100</span>
-          </div>
-          <p className="mt-1 text-sm text-scent-accent/90">{headline?.label ?? "Intelligence profile"}</p>
+      <div className="hidden sm:flex flex-col items-center justify-center border-y border-white/8 px-4 py-6 text-center">
+        <p className="text-[10px] uppercase tracking-[0.28em] text-white/64 font-bold">Scentbeam Score</p>
+        <div className="mt-1 flex items-end justify-center gap-2">
+          <span className="font-serif italic text-6xl leading-none text-scent-accent">
+            {consensusScore ?? "--"}
+          </span>
+          <span className="pb-2 text-xl text-white/76">/100</span>
         </div>
+        <p className="mt-1 text-sm text-scent-accent/90">{headline?.label ?? "Intelligence profile"}</p>
+      </div>
+
+      <div className="hidden sm:grid grid-cols-4 gap-3">
         {statCards.map((stat) => {
           const Icon = stat.icon;
           return (
-            <div key={stat.label} className="flex flex-col items-center justify-center gap-1 border-r border-white/8 px-4 py-5 text-center last:border-r-0">
+            <div key={stat.label} className="flex flex-col items-center justify-center gap-1 border border-white/15 bg-white/[0.035] px-4 py-5 text-center">
               <Icon size={18} strokeWidth={1.6} className="text-scent-accent" />
               <p className="font-serif italic text-2xl text-white leading-tight">{stat.value}</p>
               <p className="text-[10px] text-white/42">{stat.sub}</p>
-              <p className="text-[9px] uppercase tracking-[0.2em] text-white/40 font-bold">{stat.label}</p>
+              <p className="text-[9px] uppercase tracking-[0.2em] text-white/55 font-bold">{stat.label}</p>
             </div>
           );
         })}
       </div>
 
       <FragrancePanel title="Scentbeam Score" className="sm:hidden">
-        <div className="px-4 py-4 text-center">
-          <div className="flex items-end justify-center gap-2">
+        <div className="px-4 py-4">
+          <div className="mx-auto flex w-fit items-end justify-center gap-2">
             <span className="font-serif italic text-5xl leading-none text-scent-accent">
               {consensusScore ?? "--"}
             </span>
             <span className="pb-2 text-lg text-white/72">/100</span>
           </div>
-          <p className="mt-1 text-sm text-scent-accent/90">{headline?.label ?? "Intelligence profile"}</p>
-          <div className="mt-4 grid grid-cols-4 divide-x divide-white/8 border-t border-white/8 pt-3">
+          <p className="mt-1 text-center text-sm text-scent-accent/90">{headline?.label ?? "Intelligence profile"}</p>
+          <div className="mt-4 grid grid-cols-2 gap-2">
             {statCards.map((stat) => {
               const Icon = stat.icon;
               return (
-                <div key={stat.label} className="min-w-0 px-1 text-center">
-                  <Icon size={14} className="mx-auto mb-1 text-scent-accent" />
-                  <p className="truncate text-[11px] text-white/80">{stat.value}</p>
-                  <p className="text-[8px] uppercase tracking-[0.12em] text-white/35 font-bold">{stat.label}</p>
+                <div key={stat.label} className="flex flex-col items-center justify-center gap-1 border border-white/15 bg-white/[0.035] px-2 py-3 text-center">
+                  <Icon size={14} className="text-scent-accent" />
+                  <p className="text-[12px] text-white/85 font-serif italic">{stat.value}</p>
+                  <p className="text-[8px] uppercase tracking-[0.16em] text-white/55 font-bold">{stat.label}</p>
                 </div>
               );
             })}
@@ -1538,11 +1539,6 @@ export const Wardrobe: React.FC<{
                       ) : null}
                     </div>
                   </div>
-
-                  <SourceStatusPanel
-                    coverage={selectedCoverage}
-                    enrichment={selectedEnrichment}
-                  />
 
                   <FragrancePanel title="About This Fragrance">
                     <div className="flex flex-col items-center justify-center gap-3 px-4 py-4 text-center">

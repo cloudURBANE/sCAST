@@ -424,35 +424,25 @@ function ProfileScorePanel({
         })}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.9fr] gap-3 sm:gap-4">
-        {summary ? (
-          <FragrancePanel title="Consensus">
-            <div className="px-4 py-4">
-              <p className="font-serif italic text-lg leading-relaxed text-white/72">{summary}</p>
-            </div>
-          </FragrancePanel>
-        ) : null}
-
-        {rows.length > 0 ? (
-          <FragrancePanel title="Profile Signals" className={!summary ? "lg:col-span-2" : ""}>
-            <div className="space-y-3 px-4 py-4">
-              {rows.map((row) => (
-                <div key={row.label} className="grid grid-cols-[6rem_1fr] items-center gap-4">
-                  <p className="text-[10px] text-white/52">{row.label}</p>
-                  <div className="min-w-0">
-                    <p className="truncate text-sm text-white/78">{row.value}</p>
-                    {row.score !== null ? (
-                      <div className="mt-2 h-px bg-white/10">
-                        <div className="h-px bg-scent-accent" style={{ width: scoreWidth(row.score) }} />
-                      </div>
-                    ) : null}
-                  </div>
+      {rows.length > 0 ? (
+        <FragrancePanel title="Profile Signals">
+          <div className="space-y-3 px-4 py-4">
+            {rows.map((row) => (
+              <div key={row.label} className="grid grid-cols-[6rem_1fr] items-center gap-4">
+                <p className="text-[10px] text-white/52">{row.label}</p>
+                <div className="min-w-0">
+                  <p className="truncate text-sm text-white/78">{row.value}</p>
+                  {row.score !== null ? (
+                    <div className="mt-2 h-px bg-white/10">
+                      <div className="h-px bg-scent-accent" style={{ width: scoreWidth(row.score) }} />
+                    </div>
+                  ) : null}
                 </div>
-              ))}
-            </div>
-          </FragrancePanel>
-        ) : null}
-      </div>
+              </div>
+            ))}
+          </div>
+        </FragrancePanel>
+      ) : null}
     </div>
   );
 }
@@ -816,8 +806,6 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                       ) : null}
                     </div>
                   </div>
-
-                  <SourceStatusPanel coverage={selectedCoverage} enrichment={selectedEnrichment} />
 
                   <FragrancePanel title="About This Fragrance">
                     <div className="flex items-center gap-4 px-4 py-4">
