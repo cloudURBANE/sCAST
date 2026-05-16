@@ -1511,6 +1511,7 @@ export const Wardrobe: React.FC<{
                               src={detailBottleUrl}
                               alt={entryName(selectedItem)}
                               adjustment={frameDraft}
+                              showFrameGuide={bottleImageToolsOpen}
                               className="absolute inset-0"
                               imgClassName="transition-all duration-300"
                             />
@@ -1585,12 +1586,30 @@ export const Wardrobe: React.FC<{
                       id="wardrobe-bottle-tools-panel"
                       role="region"
                       aria-labelledby="wardrobe-bottle-tools-trigger"
-                      className="space-y-3"
+                      className="max-h-[min(70dvh,44rem)] space-y-3 overflow-y-auto overscroll-contain pr-1 sm:max-h-[min(68dvh,46rem)] lg:max-h-[min(58dvh,36rem)]"
                     >
                       <p className="text-center text-[10px] text-white/40 leading-snug font-sans">
                         Pick what looks wrong, then search — or reimagine the current bottle. Save when it looks right.
                       </p>
 
+                      <div className="grid gap-3 lg:grid-cols-[minmax(14rem,0.82fr)_minmax(0,1.35fr)] lg:items-start">
+                        <div className="sticky top-0 z-10 rounded-lg border border-white/10 bg-[#050403]/95 p-2.5 shadow-[0_18px_34px_-22px_rgba(0,0,0,0.95)] backdrop-blur md:p-3">
+                          <div className="relative mx-auto h-[clamp(8.5rem,24dvh,13rem)] w-full max-w-[12.5rem] sm:h-56 sm:max-w-[14rem] lg:h-[min(32dvh,18rem)] lg:max-w-[16rem]">
+                            <BottleImage
+                              key={`editor-${detailBottleUrl || 'missing-image'}`}
+                              variant="detail"
+                              src={detailBottleUrl}
+                              alt={entryName(selectedItem)}
+                              adjustment={frameDraft}
+                              showFrameGuide
+                              className="absolute inset-0"
+                              imgClassName="brightness-[1.08]"
+                              loading="eager"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="min-w-0 space-y-3">
                       <label htmlFor="wardrobe-clarify-solver" className="sr-only">
                         Search tuning for bottle image
                       </label>
@@ -1945,6 +1964,8 @@ export const Wardrobe: React.FC<{
                           </div>
                         </div>
                       )}
+                        </div>
+                      </div>
                     </div>
                   ) : null}
                 </div>

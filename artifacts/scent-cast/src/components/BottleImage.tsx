@@ -31,8 +31,27 @@ type BottleImageProps = {
   imgClassName?: string;
   /** Persistent visual rescue controls: zoom, nudge, and per-edge clip (top/right/bottom/left). */
   adjustment?: BottleImageAdjustment | null;
+  /** Blueprint overlay for the manual frame editor. Shares the real artboard and shelf line. */
+  showFrameGuide?: boolean;
   loading?: 'lazy' | 'eager';
 };
+
+function BottleFrameGuide() {
+  return (
+    <div className="bottle-frame-guide" aria-hidden="true">
+      <div className="bottle-frame-guide__grid" />
+      <div className="bottle-frame-guide__center" />
+      <div className="bottle-frame-guide__width bottle-frame-guide__width--left" />
+      <div className="bottle-frame-guide__width bottle-frame-guide__width--right" />
+      <div className="bottle-frame-guide__height">
+        <span>target height</span>
+      </div>
+      <div className="bottle-frame-guide__baseline">
+        <span>base line</span>
+      </div>
+    </div>
+  );
+}
 
 export const BottleImage: React.FC<BottleImageProps> = ({
   src,
@@ -42,6 +61,7 @@ export const BottleImage: React.FC<BottleImageProps> = ({
   className,
   imgClassName,
   adjustment,
+  showFrameGuide = false,
   loading = 'lazy',
 }) => {
   const [broken, setBroken] = useState(false);
@@ -76,6 +96,7 @@ export const BottleImage: React.FC<BottleImageProps> = ({
             />
           </div>
         )}
+        {showFrameGuide ? <BottleFrameGuide /> : null}
       </div>
     </div>
   );

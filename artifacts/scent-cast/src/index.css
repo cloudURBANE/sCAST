@@ -167,6 +167,86 @@ a {
   will-change: clip-path;
 }
 
+.bottle-frame-guide {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  background:
+    linear-gradient(to right, transparent calc(50% - 0.5px), rgba(255, 255, 255, 0.16) calc(50% - 0.5px), rgba(255, 255, 255, 0.16) calc(50% + 0.5px), transparent calc(50% + 0.5px)),
+    linear-gradient(to bottom, transparent calc(50% - 0.5px), rgba(255, 255, 255, 0.1) calc(50% - 0.5px), rgba(255, 255, 255, 0.1) calc(50% + 0.5px), transparent calc(50% + 0.5px));
+}
+
+.bottle-frame-guide__grid {
+  position: absolute;
+  inset: 0;
+  opacity: 0.52;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.085) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.085) 1px, transparent 1px);
+  background-size: 20% 20%;
+}
+
+.bottle-frame-guide__center {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 1px dashed rgba(201, 139, 44, 0.56);
+}
+
+.bottle-frame-guide__width {
+  position: absolute;
+  top: 12%;
+  bottom: 0;
+  width: 0;
+  border-left: 1px dashed rgba(255, 255, 255, 0.42);
+}
+
+.bottle-frame-guide__width--left {
+  left: 22%;
+}
+
+.bottle-frame-guide__width--right {
+  right: 22%;
+}
+
+.bottle-frame-guide__height,
+.bottle-frame-guide__baseline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  display: flex;
+  justify-content: flex-end;
+  font: 700 8px/1 var(--font-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.bottle-frame-guide__height {
+  top: 12%;
+  border-top: 1px dashed rgba(255, 255, 255, 0.44);
+  color: rgba(255, 255, 255, 0.52);
+}
+
+.bottle-frame-guide__baseline {
+  bottom: 0;
+  border-top: 2px solid rgba(201, 139, 44, 0.84);
+  color: rgba(255, 214, 154, 0.88);
+}
+
+.bottle-frame-guide__height span,
+.bottle-frame-guide__baseline span {
+  margin-top: -0.5rem;
+  margin-right: 0.25rem;
+  padding: 0.125rem 0.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(3, 2, 1, 0.72);
+}
+
 /* ─── Depth & Lighting Effects ────────────────────────────────────────────── */
 
 .pedestal {
