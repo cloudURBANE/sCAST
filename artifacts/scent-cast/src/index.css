@@ -147,11 +147,9 @@ a {
   min-width: 0;
   transform: translate(var(--bottle-frame-x), var(--bottle-frame-y)) scale(var(--bottle-frame-scale));
   transform-origin: center bottom;
-  clip-path: inset(
-    var(--bottle-frame-crop-top) var(--bottle-frame-crop-right) var(--bottle-frame-crop-bottom)
-      var(--bottle-frame-crop-left)
-  );
-  will-change: transform, clip-path;
+  /* clip-path is on .bottle-packshot-img so % insets use the fitted bitmap box, not the full slot
+     (otherwise left/right mostly trim empty letterboxing while top/bottom hit the image). */
+  will-change: transform;
 }
 
 .bottle-packshot-img {
@@ -162,6 +160,11 @@ a {
   max-height: 100%;
   object-fit: contain;
   object-position: center bottom;
+  clip-path: inset(
+    var(--bottle-frame-crop-top) var(--bottle-frame-crop-right) var(--bottle-frame-crop-bottom)
+      var(--bottle-frame-crop-left)
+  );
+  will-change: clip-path;
 }
 
 /* ─── Depth & Lighting Effects ────────────────────────────────────────────── */
