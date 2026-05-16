@@ -412,7 +412,7 @@ function ProfileScorePanel({
     <div className="space-y-3 sm:space-y-5">
       <div className="grid grid-cols-2 lg:grid-cols-[1.15fr_repeat(4,1fr)] border-y border-white/8">
         <div className="col-span-2 lg:col-span-1 flex flex-col items-center justify-center px-4 py-5 border-b lg:border-b-0 lg:border-r border-white/8 text-center">
-          <p className="text-[10px] uppercase tracking-[0.28em] text-white/64 font-bold">Scentbeam Score</p>
+          <p className="text-[10px] uppercase tracking-[0.28em] text-white/64 font-bold">Profile Score</p>
           <div className="mt-1 flex items-end justify-center gap-2">
             <span className="font-serif italic text-6xl leading-none text-scent-accent">
               {consensusScore ?? "--"}

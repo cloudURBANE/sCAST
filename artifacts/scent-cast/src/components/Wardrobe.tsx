@@ -537,7 +537,7 @@ function ProfileScorePanel({
   return (
     <div className="space-y-3 sm:space-y-5">
       <div className="hidden sm:flex flex-col items-center justify-center border-y border-white/8 px-4 py-6 text-center">
-        <p className="text-[10px] uppercase tracking-[0.28em] text-white/64 font-bold">Scentbeam Score</p>
+        <p className="text-[10px] uppercase tracking-[0.28em] text-white/64 font-bold">Profile Score</p>
         <div className="mt-1 flex items-end justify-center gap-2">
           <span className="font-serif italic text-6xl leading-none text-scent-accent">
             {consensusScore ?? "--"}
@@ -568,7 +568,7 @@ function ProfileScorePanel({
         })}
       </div>
 
-      <FragrancePanel title="Scentbeam Score" className="sm:hidden">
+      <FragrancePanel title="Profile Score" className="sm:hidden">
         <div className="px-4 py-4">
           <div className="mx-auto flex w-fit items-end justify-center gap-2">
             <span className="font-serif italic text-5xl leading-none text-scent-accent">
@@ -782,6 +782,7 @@ export const Wardrobe: React.FC<{
   const [searchHighlightIndex, setSearchHighlightIndex] = React.useState(0);
   const [enlargeOpen, setEnlargeOpen] = React.useState(false);
   const [bottleImageToolsOpen, setBottleImageToolsOpen] = React.useState(false);
+  const [deleteConfirming, setDeleteConfirming] = React.useState(false);
   const [frameDraft, setFrameDraft] = React.useState<NormalizedBottleImageAdjustment>(
     DEFAULT_BOTTLE_IMAGE_ADJUSTMENT,
   );
@@ -791,6 +792,7 @@ export const Wardrobe: React.FC<{
   const openDetail = React.useCallback((item: Fragrance) => {
     setRefreshError(null);
     setPendingPreview(null);
+    setDeleteConfirming(false);
     setFrameDraft(normalizeBottleImageAdjustment(item.imageAdjustment));
     setSelectedItem(item);
   }, []);
@@ -801,6 +803,7 @@ export const Wardrobe: React.FC<{
     setSelectedItem(null);
     setEnlargeOpen(false);
     setBottleImageToolsOpen(false);
+    setDeleteConfirming(false);
     setFrameDraft(DEFAULT_BOTTLE_IMAGE_ADJUSTMENT);
   }, []);
 
@@ -1091,6 +1094,7 @@ export const Wardrobe: React.FC<{
 
   React.useEffect(() => {
     setBottleImageToolsOpen(false);
+    setDeleteConfirming(false);
   }, [selectedItem?.id]);
 
   React.useEffect(() => {
@@ -1383,32 +1387,13 @@ export const Wardrobe: React.FC<{
               className="relative w-full h-full sm:h-[94dvh] sm:max-w-[100rem] sm:mx-4 bg-[#030303] shadow-2xl overflow-hidden flex flex-col border-0 sm:border border-white/8"
             >
               <div
-                className="grid grid-cols-[2.75rem_minmax(0,1fr)_2.75rem] items-center gap-2 px-4 sm:px-8 pb-3 shrink-0 border-b border-white/[0.06] bg-black/35"
-                style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))' }}
-              >
-                <button
-                  type="button"
-                  onClick={closeDetail}
-                  className="hidden sm:block justify-self-start text-[10px] uppercase tracking-[0.22em] text-white/58 hover:text-white transition-colors"
-                >
-                  Close
-                </button>
-                <div className="flex min-w-0 items-center justify-center gap-3 text-white/92">
-                  <div className="h-3 w-5 border-y border-scent-accent relative before:absolute before:left-1 before:right-1 before:top-1/2 before:h-px before:-translate-y-1/2 before:bg-scent-accent" />
-                  <p className="truncate font-serif text-sm sm:text-xl uppercase tracking-[0.28em] sm:tracking-[0.42em]">Scentbeam</p>
-                </div>
-                <button 
-                  onClick={closeDetail} 
-                  aria-label="Close profile"
-                  className="relative z-20 grid h-10 w-10 place-items-center justify-self-end rounded-full border border-white/20 bg-black/70 text-white shadow-[0_0_18px_rgba(0,0,0,0.65)] transition-all hover:bg-white/12 hover:border-white/35 group"
-                >
-                  <X size={20} strokeWidth={2.2} className="group-hover:rotate-90 transition-transform duration-300" />
-                </button>
-              </div>
-
-              <div
                 className="flex-1 overflow-y-auto scrollbar-hide px-4 sm:px-7 lg:px-10 pb-4"
-                style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
+                style={
+                  {
+                    WebkitOverflowScrolling: 'touch',
+                    paddingTop: 'max(1.25rem, env(safe-area-inset-top))',
+                  } as React.CSSProperties
+                }
               >
                 <div className="mx-auto max-w-[92rem] space-y-4 sm:space-y-5 py-5 sm:py-7">
                   <header className="mx-auto max-w-3xl text-center">
@@ -1431,25 +1416,47 @@ export const Wardrobe: React.FC<{
                     coverage={selectedCoverage}
                   />
 
-                  <div className="grid grid-cols-1 lg:grid-cols-[1.12fr_1.95fr_1fr] gap-3 sm:gap-4">
-                    <div className="space-y-3 sm:space-y-4">
+                  {detailMetaRows.length > 0 ? (
+                    <section
+                      aria-label="Details"
+                      className="border-y border-white/[0.08] bg-white/[0.018] px-3 py-2 sm:px-4"
+                    >
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4 lg:grid-cols-6">
+                        {detailMetaRows.map(({ label, value }) => (
+                          <div key={label} className="min-w-0 text-center sm:text-left">
+                            <p className="text-[9px] uppercase tracking-[0.22em] text-white/38">
+                              {label}
+                            </p>
+                            <p className="mt-0.5 truncate text-xs text-white/82 sm:text-sm">
+                              {value}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  ) : null}
+
+                  <div className="grid grid-cols-1 items-stretch gap-3 sm:gap-4 lg:grid-cols-[1.12fr_1.95fr_1fr]">
+                    <div className="space-y-3 sm:space-y-4 lg:h-full">
                       <ScentNotesInfographic
                         derivedMetrics={selectedMetrics}
                         legacyPyramid={selectedItem.pyramid}
                         variant="accords"
+                        className="lg:h-full lg:min-h-[21.25rem]"
                       />
                     </div>
 
-                    <div className="space-y-3 sm:space-y-4">
+                    <div className="space-y-3 sm:space-y-4 lg:h-full">
                       <ScentNotesInfographic
                         derivedMetrics={selectedMetrics}
                         legacyPyramid={selectedItem.pyramid}
                         variant="notes"
+                        className="lg:h-full lg:min-h-[21.25rem]"
                       />
                     </div>
 
-                    <div className="space-y-3 sm:space-y-4">
-                      <FragrancePanel title="Bottle Visual">
+                    <div className="space-y-3 sm:space-y-4 lg:h-full">
+                      <FragrancePanel title="Bottle Visual" className="lg:h-full lg:min-h-[21.25rem]">
                         <div className="p-4">
                           <div className="mb-3 flex justify-end">
                             {detailBottleUrl ? (
@@ -1477,19 +1484,6 @@ export const Wardrobe: React.FC<{
                           </div>
                         </div>
                       </FragrancePanel>
-
-                      {detailMetaRows.length > 0 ? (
-                        <FragrancePanel title="Details">
-                          <div className="space-y-3 px-4 py-4">
-                            {detailMetaRows.map(({ label, value }) => (
-                              <div key={label} className="flex items-center justify-between gap-4 border-b border-white/[0.06] pb-2 last:border-b-0 last:pb-0">
-                                <p className="text-[10px] text-white/48">{label}</p>
-                                <p className="text-sm text-white/86">{value}</p>
-                              </div>
-                            ))}
-                          </div>
-                        </FragrancePanel>
-                      ) : null}
                     </div>
                   </div>
 
@@ -1900,19 +1894,45 @@ export const Wardrobe: React.FC<{
                   ) : null}
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    onDelete(selectedItem);
-                    closeDetail();
-                  }}
-                  disabled={imageToolbarBusy}
-                  aria-label="Delete from vault"
-                  className="w-full py-3.5 bg-transparent border border-white/10 text-white/35 uppercase tracking-[0.28em] text-[10px] font-bold hover:border-red-500/45 hover:text-red-400 transition-all flex items-center justify-center gap-2 group disabled:opacity-25 disabled:cursor-not-allowed rounded-lg"
-                >
-                  <Trash2 size={14} className="group-hover:animate-bounce" />
-                  Delete from vault
-                </button>
+                <div className="grid grid-cols-2 overflow-hidden rounded-lg border border-white/10 bg-white/[0.02]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (deleteConfirming) {
+                        setDeleteConfirming(false);
+                        return;
+                      }
+                      closeDetail();
+                    }}
+                    className="min-h-[46px] border-r border-white/10 px-3 py-3 text-[10px] font-bold uppercase tracking-[0.26em] text-white/52 transition-colors hover:bg-white/[0.05] hover:text-white"
+                  >
+                    {deleteConfirming ? 'Go back' : 'Close'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!deleteConfirming) {
+                        setDeleteConfirming(true);
+                        return;
+                      }
+                      onDelete(selectedItem);
+                      closeDetail();
+                    }}
+                    disabled={imageToolbarBusy}
+                    aria-label={deleteConfirming ? "Confirm delete from vault" : "Delete from vault"}
+                    className={`group flex min-h-[46px] items-center justify-center gap-2 px-3 py-3 text-[10px] font-bold uppercase tracking-[0.24em] transition-all disabled:cursor-not-allowed disabled:opacity-25 ${
+                      deleteConfirming
+                        ? 'bg-red-500/12 text-red-300 hover:bg-red-500/18 hover:text-red-200'
+                        : 'text-white/35 hover:bg-red-500/[0.06] hover:text-red-400'
+                    }`}
+                  >
+                    <Trash2 size={14} className={deleteConfirming ? '' : 'group-hover:animate-bounce'} />
+                    <span className="hidden sm:inline">
+                      {deleteConfirming ? 'Confirm delete' : 'Delete from vault'}
+                    </span>
+                    <span className="sm:hidden">{deleteConfirming ? 'Confirm' : 'Delete'}</span>
+                  </button>
+                </div>
               </div>
             </motion.div>
             <AnimatePresence>

@@ -15,6 +15,7 @@ interface ScentNotesInfographicProps {
   };
   /** Desktop modal renders accord and note panels in different columns. */
   variant?: "all" | "accords" | "notes";
+  className?: string;
 }
 
 type DisplayPyramid = { top: string[]; heart: string[]; base: string[]; flat: string[] };
@@ -122,7 +123,7 @@ function Panel({
   className?: string;
 }) {
   return (
-    <section className={`border border-white/10 bg-white/[0.025] shadow-[inset_0_1px_0_rgba(255,255,255,0.035)] ${className}`}>
+    <section className={`flex flex-col border border-white/10 bg-white/[0.025] shadow-[inset_0_1px_0_rgba(255,255,255,0.035)] ${className}`}>
       <div className="border-b border-white/[0.07] px-4 py-3 text-center">
         <p className="text-[10px] uppercase tracking-[0.34em] text-white/70 font-bold">
           {title}
@@ -136,14 +137,16 @@ function Panel({
 function AccordPanel({
   rows,
   summary,
+  className = "",
 }: {
   rows: ReturnType<typeof collectMainAccordDisplayRows>;
   summary: string;
+  className?: string;
 }) {
   if (rows.length === 0 && !summary) {
     return (
-      <Panel title="Main Accords">
-        <div className="px-4 py-6 text-center">
+      <Panel title="Main Accords" className={className}>
+        <div className="flex flex-1 items-center justify-center px-4 py-6 text-center">
           <p className="text-sm italic text-white/45 font-serif">Accords unavailable.</p>
         </div>
       </Panel>
@@ -151,8 +154,8 @@ function AccordPanel({
   }
 
   return (
-    <Panel title="Main Accords">
-      <div className="space-y-3 px-4 py-4">
+    <Panel title="Main Accords" className={className}>
+      <div className="flex flex-1 flex-col justify-center space-y-4 px-4 py-5">
         {summary ? (
           <p className="text-center text-sm italic text-white/58 font-serif leading-relaxed">
             {summary}
@@ -182,8 +185,10 @@ function AccordPanel({
 
 function NotesPanel({
   pyramid,
+  className = "",
 }: {
   pyramid: DisplayPyramid;
+  className?: string;
 }) {
   const groups = [
     { key: "top", label: "Top", color: "bg-amber-300", notes: pyramid.top },
@@ -194,8 +199,8 @@ function NotesPanel({
 
   if (groups.length === 0) {
     return (
-      <Panel title="Notes">
-        <div className="px-4 py-6 text-center">
+      <Panel title="Notes" className={className}>
+        <div className="flex flex-1 items-center justify-center px-4 py-6 text-center">
           <p className="text-sm italic text-white/45 font-serif">Notes unavailable for this fragrance.</p>
         </div>
       </Panel>
@@ -203,10 +208,10 @@ function NotesPanel({
   }
 
   return (
-    <Panel title="Notes" className="overflow-hidden">
-      <div className="grid gap-4 px-4 py-4 sm:grid-cols-[8.5rem_1fr] sm:items-center">
+    <Panel title="Notes" className={`overflow-hidden ${className}`}>
+      <div className="grid flex-1 gap-4 px-4 py-5 sm:grid-cols-[9.5rem_1fr] sm:items-center">
         <div className="hidden sm:block">
-          <svg viewBox="0 0 160 144" className="h-32 w-full overflow-visible">
+          <svg viewBox="0 0 160 144" className="h-44 w-full overflow-visible lg:h-52">
             <path d="M80 10 L116 55 H44 Z" fill="rgba(201,139,44,0.10)" stroke="rgba(201,139,44,0.45)" />
             <path d="M43 61 H117 L143 103 H17 Z" fill="rgba(255,255,255,0.035)" stroke="rgba(255,255,255,0.14)" />
             <path d="M16 110 H144 L158 137 H2 Z" fill="rgba(255,255,255,0.025)" stroke="rgba(255,255,255,0.12)" />
@@ -243,6 +248,7 @@ export const ScentNotesInfographic: React.FC<ScentNotesInfographicProps> = ({
   derivedMetrics,
   legacyPyramid,
   variant = "all",
+  className = "",
 }) => {
   const pyramid = normalizeDisplayPyramid(resolvePyramid(derivedMetrics, legacyPyramid));
   const accordRows = collectMainAccordDisplayRows(derivedMetrics?.main_accords);
@@ -252,8 +258,8 @@ export const ScentNotesInfographic: React.FC<ScentNotesInfographicProps> = ({
 
   if (!hasPyramid && !hasAccordVisual) {
     return (
-      <Panel title={variant === "accords" ? "Main Accords" : "Notes"}>
-        <div className="px-4 py-6 text-center">
+      <Panel title={variant === "accords" ? "Main Accords" : "Notes"} className={className}>
+        <div className="flex flex-1 items-center justify-center px-4 py-6 text-center">
           <p className="text-sm italic text-white/45 font-serif">Notes unavailable for this fragrance.</p>
         </div>
       </Panel>
@@ -261,11 +267,11 @@ export const ScentNotesInfographic: React.FC<ScentNotesInfographicProps> = ({
   }
 
   if (variant === "accords") {
-    return <AccordPanel rows={accordRows} summary={accordSummary} />;
+    return <AccordPanel rows={accordRows} summary={accordSummary} className={className} />;
   }
 
   if (variant === "notes") {
-    return <NotesPanel pyramid={pyramid} />;
+    return <NotesPanel pyramid={pyramid} className={className} />;
   }
 
   return (
