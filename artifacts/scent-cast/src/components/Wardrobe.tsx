@@ -5,6 +5,11 @@ import {
   Trash2,
   ShieldCheck,
   Wind,
+  Star,
+  ThumbsUp,
+  Activity,
+  CircleDollarSign,
+  Info,
   RefreshCw,
   Undo2,
   HelpCircle,
@@ -239,6 +244,18 @@ function formatPercent(value: unknown): string | null {
   return isFiniteNumber(value) ? `${Math.round(value)}%` : null;
 }
 
+function scoreNumber(value: unknown): number | null {
+  return isFiniteNumber(value) ? Math.max(0, Math.min(100, Math.round(value))) : null;
+}
+
+function scoreWidth(value: unknown): string {
+  return `${scoreNumber(value) ?? 0}%`;
+}
+
+function profileSummary(metrics?: DerivedMetrics | null): string | null {
+  return metrics?.headline?.summary?.trim() || null;
+}
+
 function stringValue(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
@@ -314,6 +331,33 @@ function hasLegacyPyramidNotes(item: Fragrance): boolean {
   );
 }
 
+function formatAccordStrength(row: { score?: number; pct?: number }): string | null {
+  if (isFiniteNumber(row.pct)) return `${Math.round(row.pct)}%`;
+  if (isFiniteNumber(row.score)) return String(Math.round(row.score));
+  return null;
+}
+
+function FragrancePanel({
+  title,
+  children,
+  className = "",
+}: {
+  title: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <section className={`border border-white/10 bg-white/[0.025] shadow-[inset_0_1px_0_rgba(255,255,255,0.035)] ${className}`}>
+      <div className="border-b border-white/[0.07] px-4 py-3 text-center">
+        <p className="text-[10px] uppercase tracking-[0.34em] text-white/70 font-bold">
+          {title}
+        </p>
+      </div>
+      {children}
+    </section>
+  );
+}
+
 const ENRICHMENT_STATUS_COPY: Record<string, string> = {
   not_needed: "Full fragrance intelligence available.",
   pending: "Enhanced metrics queued.",
@@ -372,46 +416,45 @@ function SourceStatusPanel({
   ].filter((badge): badge is string => Boolean(badge));
 
   return (
-    <div className="space-y-3 border border-white/10 bg-white/[0.025] px-4 py-3">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-[9px] uppercase tracking-[0.35em] text-white/35 font-bold">
-          Source Status
-        </p>
-        {hasCoverage ? (
-          <span className={`shrink-0 text-[8px] uppercase tracking-[0.22em] font-bold px-2 py-1 border ${
-            complete
-              ? 'border-scent-accent/40 text-scent-accent/85 bg-scent-accent/10'
-              : 'border-white/12 text-white/45 bg-white/[0.04]'
-          }`}>
-            {complete ? "Complete" : "Partial"}
-          </span>
+    <FragrancePanel title="Source Status" className="overflow-hidden">
+      <div className="space-y-3 px-4 py-4">
+        <div className="flex items-center justify-center gap-3">
+          {hasCoverage ? (
+            <span className={`shrink-0 text-[8px] uppercase tracking-[0.24em] font-bold px-2.5 py-1 border ${
+              complete
+                ? 'border-scent-accent/45 text-scent-accent bg-scent-accent/10'
+                : 'border-white/12 text-white/50 bg-white/[0.04]'
+            }`}>
+              {complete ? "Complete" : "Partial"}
+            </span>
+          ) : null}
+          <p className="text-center text-sm italic text-white/62 font-serif leading-relaxed">
+            {hasCoverage ? coverageSummary : enrichmentMessage}
+          </p>
+        </div>
+        {hasCoverage && enrichmentMessage && enrichmentMessage !== coverageSummary ? (
+          <p className="text-center text-[10px] uppercase tracking-[0.18em] text-white/38 font-bold leading-relaxed">
+            {enrichmentMessage}
+          </p>
+        ) : null}
+        {badges.length > 0 ? (
+          <div className="flex flex-wrap justify-center gap-2">
+            {badges.map((badge) => (
+              <span
+                key={badge}
+                className="border border-white/10 bg-black/22 px-2.5 py-1 text-[8px] uppercase tracking-[0.16em] text-white/45 font-bold"
+              >
+                {badge}
+              </span>
+            ))}
+          </div>
         ) : null}
       </div>
-      <p className="text-sm italic text-white/62 font-serif leading-relaxed">
-        {hasCoverage ? coverageSummary : enrichmentMessage}
-      </p>
-      {hasCoverage && enrichmentMessage && enrichmentMessage !== coverageSummary ? (
-        <p className="text-[10px] uppercase tracking-[0.18em] text-white/35 font-bold">
-          {enrichmentMessage}
-        </p>
-      ) : null}
-      {badges.length > 0 ? (
-        <div className="flex flex-wrap gap-2">
-          {badges.map((badge) => (
-            <span
-              key={badge}
-              className="border border-white/10 bg-black/20 px-2 py-1 text-[8px] uppercase tracking-[0.16em] text-white/38 font-bold"
-            >
-              {badge}
-            </span>
-          ))}
-        </div>
-      ) : null}
-    </div>
+    </FragrancePanel>
   );
 }
 
-function DerivedMetricsPanel({
+function ProfileScorePanel({
   metrics,
   coverage,
 }: {
@@ -423,7 +466,11 @@ function DerivedMetricsPanel({
   const value = metrics?.value_score ?? null;
   const mainAccords = metrics?.main_accords ?? null;
   const notes = metrics?.notes ?? null;
-  const accordItems = collectMainAccordDisplayRows(mainAccords).slice(0, 8);
+  const accordItems = collectMainAccordDisplayRows(mainAccords).slice(0, 5);
+  const consensusScore = scoreNumber(headline?.crowd_consensus_score);
+  const performanceScore = scoreNumber(performance?.score);
+  const valueScore = scoreNumber(value?.score);
+  const communityScore = scoreNumber(metrics?.community_interest_score?.score);
   const rows = [
     {
       label: "Crowd Consensus",
@@ -460,93 +507,179 @@ function DerivedMetricsPanel({
       value: mainAccords?.accord_summary?.trim() || null,
     },
   ].filter((row): row is { label: string; value: string } => Boolean(row.value));
-  const noteGroups = [
-    { label: "Top", value: formatNoteList(notes?.top) },
-    { label: "Heart", value: formatNoteList(notes?.heart) },
-    { label: "Base", value: formatNoteList(notes?.base) },
-    { label: "Notes", value: formatNoteList(notes?.flat) },
-  ].filter((row): row is { label: string; value: string } => Boolean(row.value));
   const summary = headline?.summary?.trim() || null;
   const hasContent =
-    rows.length > 0 || noteGroups.length > 0 || accordItems.length > 0 || Boolean(summary);
+    rows.length > 0 || accordItems.length > 0 || Boolean(summary);
 
   if (!metrics || !hasContent) {
     if (!coverage) return null;
 
     return (
-      <div className="border-y border-white/5 py-5">
-        <p className="text-[9px] uppercase tracking-[0.35em] text-scent-accent font-bold mb-2">
-          Derived Intelligence
-        </p>
-        <p className="text-sm italic text-white/45 font-serif">
+      <FragrancePanel title="Derived Intelligence">
+        <div className="px-4 py-5 text-center">
+          <p className="text-sm italic text-white/45 font-serif">
           {coverage.complete === false
             ? "Enhanced metrics pending."
             : "Derived fragrance intelligence unavailable."}
-        </p>
-      </div>
+          </p>
+        </div>
+      </FragrancePanel>
     );
   }
 
+  const statCards = [
+    {
+      icon: Star,
+      label: "Crowd",
+      value: consensusScore !== null ? `${consensusScore}/100` : headline?.label ?? "Pending",
+      sub: headline?.label ?? "Consensus",
+    },
+    {
+      icon: Activity,
+      label: "Performance",
+      value: performanceScore !== null ? `${performanceScore}%` : "Pending",
+      sub: joinDisplayParts([
+        performance?.longevity_label ? `${performance.longevity_label} longevity` : null,
+        performance?.sillage_label ? `${performance.sillage_label} sillage` : null,
+      ]) ?? "Signal",
+    },
+    {
+      icon: ThumbsUp,
+      label: "Community",
+      value: communityScore !== null ? `${communityScore}/100` : "Pending",
+      sub: "Interest",
+    },
+    {
+      icon: CircleDollarSign,
+      label: "Value",
+      value: valueScore !== null ? `${valueScore}/100` : value?.dominant_label ?? "Pending",
+      sub: value?.dominant_label ?? "Assessment",
+    },
+  ];
+
   return (
-    <div className="space-y-5 border-y border-white/5 py-5">
-      <div className="flex items-center gap-3">
-        <ShieldCheck size={14} className="text-scent-accent/70 shrink-0" />
-        <p className="text-[10px] uppercase tracking-[0.4em] text-scent-accent/85 font-bold">
-          Derived Intelligence
-        </p>
-        <div className="flex-1 h-px bg-white/5" />
+    <div className="space-y-3 sm:space-y-5">
+      <div className="hidden sm:grid grid-cols-[1.15fr_repeat(4,1fr)] border-y border-white/8">
+        <div className="px-4 py-5 border-r border-white/8">
+          <p className="text-[10px] uppercase tracking-[0.28em] text-white/64 font-bold">Scentcast Score</p>
+          <div className="mt-1 flex items-end gap-2">
+            <span className="font-serif italic text-6xl leading-none text-scent-accent">
+              {consensusScore ?? "--"}
+            </span>
+            <span className="pb-2 text-xl text-white/76">/100</span>
+          </div>
+          <p className="mt-1 text-sm text-scent-accent/90">{headline?.label ?? "Intelligence profile"}</p>
+        </div>
+        {statCards.map((stat) => {
+          const Icon = stat.icon;
+          return (
+            <div key={stat.label} className="flex flex-col items-center justify-center gap-1 border-r border-white/8 px-4 py-5 text-center last:border-r-0">
+              <Icon size={18} strokeWidth={1.6} className="text-scent-accent" />
+              <p className="font-serif italic text-2xl text-white leading-tight">{stat.value}</p>
+              <p className="text-[10px] text-white/42">{stat.sub}</p>
+              <p className="text-[9px] uppercase tracking-[0.2em] text-white/40 font-bold">{stat.label}</p>
+            </div>
+          );
+        })}
       </div>
 
+      <FragrancePanel title="Scentcast Score" className="sm:hidden">
+        <div className="px-4 py-4 text-center">
+          <div className="flex items-end justify-center gap-2">
+            <span className="font-serif italic text-5xl leading-none text-scent-accent">
+              {consensusScore ?? "--"}
+            </span>
+            <span className="pb-2 text-lg text-white/72">/100</span>
+          </div>
+          <p className="mt-1 text-sm text-scent-accent/90">{headline?.label ?? "Intelligence profile"}</p>
+          <div className="mt-4 grid grid-cols-4 divide-x divide-white/8 border-t border-white/8 pt-3">
+            {statCards.map((stat) => {
+              const Icon = stat.icon;
+              return (
+                <div key={stat.label} className="min-w-0 px-1 text-center">
+                  <Icon size={14} className="mx-auto mb-1 text-scent-accent" />
+                  <p className="truncate text-[11px] text-white/80">{stat.value}</p>
+                  <p className="text-[8px] uppercase tracking-[0.12em] text-white/35 font-bold">{stat.label}</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </FragrancePanel>
+
       {summary ? (
-        <p className="font-serif italic text-lg sm:text-2xl leading-snug text-white/82">
+        <p className="mx-auto hidden max-w-2xl text-center font-serif italic text-base sm:block sm:text-lg leading-relaxed text-white/66">
           {summary}
         </p>
       ) : null}
 
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.9fr] gap-3 sm:gap-4">
+        <FragrancePanel title="Performance Snapshot">
+          <div className="space-y-5 px-4 py-5">
+            <div className="grid grid-cols-2 divide-x divide-white/8 text-center">
+              <div>
+                <p className="text-[9px] uppercase tracking-[0.28em] text-white/42 font-bold">Longevity</p>
+                <p className="font-serif italic text-2xl text-scent-accent">{performance?.longevity_label ?? "Pending"}</p>
+                <p className="text-xs text-white/56">{formatScore100(performance?.score) ?? "Metrics pending"}</p>
+              </div>
+              <div>
+                <p className="text-[9px] uppercase tracking-[0.28em] text-white/42 font-bold">Sillage</p>
+                <p className="font-serif italic text-2xl text-scent-accent">{performance?.sillage_label ?? "Pending"}</p>
+                <p className="text-xs text-white/56">{formatScore100(performance?.score) ?? "Metrics pending"}</p>
+              </div>
+            </div>
+            <div className="h-1 bg-white/10">
+              <div className="h-full bg-gradient-to-r from-white/35 via-scent-accent to-scent-accent/55" style={{ width: scoreWidth(performance?.score) }} />
+            </div>
+          </div>
+        </FragrancePanel>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+          <FragrancePanel title="Wear Profile">
+            <div className="px-4 py-5 text-center">
+              <p className="font-serif italic text-2xl text-white">{formatWearProfile(metrics?.wear_profile) ?? "Universal"}</p>
+              <p className="mt-2 text-[10px] uppercase tracking-[0.22em] text-white/36 font-bold">Season / time</p>
+            </div>
+          </FragrancePanel>
+          <FragrancePanel title="Value Assessment">
+            <div className="space-y-4 px-4 py-5">
+              <div className="flex items-center justify-between gap-4">
+                <p className="font-serif italic text-2xl text-scent-accent">{value?.dominant_label ?? "Pending"}</p>
+                <p className="text-sm text-white/84">{formatScore100(value?.score) ?? ""}</p>
+              </div>
+              <div className="h-1 bg-white/10">
+                <div className="h-full bg-gradient-to-r from-white/35 via-scent-accent to-scent-accent/60" style={{ width: scoreWidth(value?.score) }} />
+              </div>
+            </div>
+          </FragrancePanel>
+        </div>
+      </div>
+
       {rows.length > 0 ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
           {rows.map((row) => (
-            <div key={row.label} className="border-l border-scent-accent/25 pl-3">
-              <p className="text-[9px] uppercase tracking-widest text-white/25 font-bold mb-1">
-                {row.label}
-              </p>
-              <p className="font-serif italic text-lg sm:text-2xl text-white">
-                {row.value}
-              </p>
+            <div key={row.label} className="border border-white/[0.07] bg-black/18 px-3 py-2">
+              <p className="text-[8px] uppercase tracking-[0.2em] text-white/30 font-bold">{row.label}</p>
+              <p className="mt-1 text-sm text-white/68 font-serif italic leading-snug">{row.value}</p>
             </div>
           ))}
         </div>
       ) : null}
 
       {accordItems.length > 0 ? (
-        <div className="flex flex-wrap gap-2 pt-1">
+        <div className="hidden sm:flex flex-wrap justify-center gap-2">
           {accordItems.map((accord) => {
             const label = accord.label?.trim() ?? "";
-            const value = formatPercent(accord.pct) ?? formatScore100(accord.score);
+            const value = formatAccordStrength(accord);
             return (
               <span
                 key={`${label}-${value ?? "accord"}`}
-                className="border border-scent-accent/20 bg-scent-accent/[0.06] px-3 py-1.5 text-[10px] uppercase tracking-[0.16em] text-white/65 font-bold"
+                className="border border-scent-accent/20 bg-scent-accent/[0.06] px-3 py-1.5 text-[9px] uppercase tracking-[0.16em] text-white/62 font-bold"
               >
                 {value ? `${label} ${value}` : label}
               </span>
             );
           })}
-        </div>
-      ) : null}
-
-      {noteGroups.length > 0 ? (
-        <div className="space-y-3 pt-1">
-          {noteGroups.map((group) => (
-            <div key={group.label} className="flex gap-4 items-start">
-              <p className="w-12 text-[9px] uppercase tracking-[0.25em] text-scent-accent font-bold pt-1 shrink-0">
-                {group.label}
-              </p>
-              <p className="text-sm sm:text-base italic text-white/72 font-serif leading-relaxed">
-                {group.value}
-              </p>
-            </div>
-          ))}
         </div>
       ) : null}
     </div>
@@ -1298,90 +1431,135 @@ export const Wardrobe: React.FC<{
           >
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={closeDetail} className="absolute inset-0 bg-black/95 backdrop-blur-3xl" />
             <motion.div
-              className="relative w-full h-full sm:h-auto sm:max-h-[88dvh] sm:max-w-4xl sm:mx-6 bg-neutral-900 shadow-2xl sm:rounded-[2rem] overflow-hidden flex flex-col border-0 sm:border border-white/5"
+              className="relative w-full h-full sm:h-[94dvh] sm:max-w-[100rem] sm:mx-4 bg-[#030303] shadow-2xl overflow-hidden flex flex-col border-0 sm:border border-white/8"
             >
-              {/* Pinned header — always visible */}
               <div
-                className="flex items-center justify-between px-5 pb-3 shrink-0 border-b border-white/5"
-                style={{ paddingTop: 'max(1.25rem, env(safe-area-inset-top))' }}
+                className="flex items-center justify-between px-5 sm:px-8 pb-3 shrink-0 border-b border-white/[0.06] bg-black/35"
+                style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))' }}
               >
-                <div className="flex items-center gap-2 min-w-0">
-                  <div className="w-1.5 h-1.5 rounded-full bg-scent-accent animate-pulse shrink-0" />
-                  <p className="text-[9px] uppercase tracking-[0.4em] text-scent-accent font-bold truncate">Intelligence Profile</p>
+                <button
+                  type="button"
+                  onClick={closeDetail}
+                  className="text-[10px] uppercase tracking-[0.22em] text-white/58 hover:text-white transition-colors"
+                >
+                  Close
+                </button>
+                <div className="flex items-center gap-3 text-white/92">
+                  <div className="h-3 w-5 border-y border-scent-accent relative before:absolute before:left-1 before:right-1 before:top-1/2 before:h-px before:-translate-y-1/2 before:bg-scent-accent" />
+                  <p className="font-serif text-sm sm:text-xl uppercase tracking-[0.42em]">Scentcast</p>
                 </div>
                 <button 
                   onClick={closeDetail} 
                   aria-label="Close profile"
-                  className="ml-3 shrink-0 p-2 bg-white/5 hover:bg-white/10 transition-all rounded-full border border-white/10 text-white group"
+                  className="shrink-0 p-2 bg-white/5 hover:bg-white/10 transition-all rounded-full border border-white/10 text-white group"
                 >
                   <X size={18} className="group-hover:rotate-90 transition-transform duration-300" />
                 </button>
               </div>
 
-              {/* Fragrance name — pinned, always readable */}
-              <div className="px-5 pt-4 pb-3 shrink-0">
-                <h2 id="fragrance-detail-title" className="font-serif italic text-3xl sm:text-6xl leading-tight text-white tracking-tighter uppercase">{entryName(selectedItem)}</h2>
-                <p className="text-base text-white/40 font-serif italic mt-1">{entryBrand(selectedItem)}</p>
-              </div>
-
-              {/* Scrollable detail body */}
               <div
-                className="flex-1 overflow-y-auto scrollbar-hide px-5 pb-4"
+                className="flex-1 overflow-y-auto scrollbar-hide px-4 sm:px-7 lg:px-10 pb-4"
                 style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
               >
-                <div className="space-y-6 sm:space-y-10 pt-2">
-                  <SourceStatusPanel
-                    coverage={selectedCoverage}
-                    enrichment={selectedEnrichment}
-                  />
-                  <DerivedMetricsPanel
+                <div className="mx-auto max-w-[92rem] space-y-4 sm:space-y-5 py-5 sm:py-7">
+                  <header className="mx-auto max-w-3xl text-center">
+                    <p className="text-[10px] uppercase tracking-[0.36em] text-scent-accent font-bold">
+                      Intelligence Profile
+                    </p>
+                    <h2
+                      id="fragrance-detail-title"
+                      className="mt-2 font-serif italic text-5xl sm:text-7xl lg:text-8xl leading-[0.92] text-[#fff7ec] tracking-normal uppercase"
+                    >
+                      {entryName(selectedItem)}
+                    </h2>
+                    <p className="mt-2 font-serif text-lg sm:text-2xl uppercase tracking-[0.28em] text-white/84">
+                      {entryBrand(selectedItem)}
+                    </p>
+                    <p className="mx-auto mt-3 max-w-[43rem] text-sm sm:text-base leading-relaxed text-white/56">
+                      {profileSummary(selectedMetrics) ?? entryNotes(selectedItem)}
+                    </p>
+                  </header>
+
+                  <ProfileScorePanel
                     metrics={selectedMetrics}
                     coverage={selectedCoverage}
                   />
 
-                  <ScentNotesInfographic
-                    derivedMetrics={selectedMetrics}
-                    legacyPyramid={selectedItem.pyramid}
-                  />
-
-                  <div className="border border-white/10 bg-white/[0.02] p-4 sm:p-6">
-                    <div className="flex items-center justify-between gap-2 mb-3">
-                      <p className="text-[9px] uppercase tracking-[0.35em] text-white/30 font-bold">Bottle Visual</p>
-                      {detailBottleUrl ? (
-                        <button
-                          type="button"
-                          onClick={() => setEnlargeOpen(true)}
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-white/12 bg-white/[0.06] text-[9px] uppercase tracking-[0.2em] font-bold text-white/65 hover:bg-white/[0.1] hover:text-white transition-colors"
-                          aria-label="Enlarge bottle image"
-                        >
-                          <Maximize2 size={13} strokeWidth={2} />
-                          Enlarge
-                        </button>
-                      ) : null}
-                    </div>
-                    <div className="relative h-48 sm:h-64 overflow-hidden rounded-sm">
-                      <BottleImage
-                        key={detailBottleUrl || 'missing-image'}
-                        variant="detail"
-                        src={detailBottleUrl}
-                        alt={entryName(selectedItem)}
-                        adjustment={frameDraft}
-                        className="absolute inset-0"
-                        imgClassName="transition-all duration-300"
+                  <div className="grid grid-cols-1 lg:grid-cols-[1.12fr_1.95fr_1fr] gap-3 sm:gap-4">
+                    <div className="space-y-3 sm:space-y-4">
+                      <ScentNotesInfographic
+                        derivedMetrics={selectedMetrics}
+                        legacyPyramid={selectedItem.pyramid}
+                        variant="accords"
                       />
+                    </div>
+
+                    <div className="space-y-3 sm:space-y-4">
+                      <ScentNotesInfographic
+                        derivedMetrics={selectedMetrics}
+                        legacyPyramid={selectedItem.pyramid}
+                        variant="notes"
+                      />
+                    </div>
+
+                    <div className="space-y-3 sm:space-y-4">
+                      <FragrancePanel title="Bottle Visual">
+                        <div className="p-4">
+                          <div className="mb-3 flex justify-end">
+                            {detailBottleUrl ? (
+                              <button
+                                type="button"
+                                onClick={() => setEnlargeOpen(true)}
+                                className="inline-flex items-center gap-1.5 border border-white/12 bg-white/[0.05] px-2.5 py-1 text-[9px] uppercase tracking-[0.18em] font-bold text-white/62 hover:bg-white/[0.1] hover:text-white transition-colors"
+                                aria-label="Enlarge bottle image"
+                              >
+                                <Maximize2 size={13} strokeWidth={2} />
+                                Enlarge
+                              </button>
+                            ) : null}
+                          </div>
+                          <div className="relative h-56 sm:h-72 lg:h-64 overflow-hidden">
+                            <BottleImage
+                              key={detailBottleUrl || 'missing-image'}
+                              variant="detail"
+                              src={detailBottleUrl}
+                              alt={entryName(selectedItem)}
+                              adjustment={frameDraft}
+                              className="absolute inset-0"
+                              imgClassName="transition-all duration-300"
+                            />
+                          </div>
+                        </div>
+                      </FragrancePanel>
+
+                      {detailMetaRows.length > 0 ? (
+                        <FragrancePanel title="Details">
+                          <div className="space-y-3 px-4 py-4">
+                            {detailMetaRows.map(({ label, value }) => (
+                              <div key={label} className="flex items-center justify-between gap-4 border-b border-white/[0.06] pb-2 last:border-b-0 last:pb-0">
+                                <p className="text-[10px] text-white/48">{label}</p>
+                                <p className="text-sm text-white/86">{value}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </FragrancePanel>
+                      ) : null}
                     </div>
                   </div>
 
-                  {detailMetaRows.length > 0 ? (
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-8 py-5 border-y border-white/5">
-                      {detailMetaRows.map(({ label, value }) => (
-                        <div key={label}>
-                          <p className="text-[9px] uppercase tracking-widest text-white/20 font-bold mb-1">{label}</p>
-                          <p className="font-serif italic text-lg sm:text-2xl text-white">{value}</p>
-                        </div>
-                      ))}
+                  <SourceStatusPanel
+                    coverage={selectedCoverage}
+                    enrichment={selectedEnrichment}
+                  />
+
+                  <FragrancePanel title="About This Fragrance">
+                    <div className="flex items-center gap-4 px-4 py-4">
+                      <Info size={18} className="shrink-0 text-white/55" />
+                      <p className="text-sm leading-relaxed text-white/56">
+                        {profileSummary(selectedMetrics) ?? entryNotes(selectedItem)}
+                      </p>
                     </div>
-                  ) : null}
+                  </FragrancePanel>
 
                   {!selectedHasDerivedNotes && hasLegacyPyramidNotes(selectedItem) ? (
                     <div className="space-y-5">
