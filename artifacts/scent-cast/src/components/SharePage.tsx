@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Activity,
@@ -502,7 +503,7 @@ function ProfileScorePanel({
 
   return (
     <div className="space-y-3 sm:space-y-5">
-      <div className="grid grid-cols-[1.3fr_0.9fr_0.9fr_0.9fr] lg:grid-cols-[1.15fr_1.3fr_0.9fr_0.9fr_0.9fr] border-y border-white/8">
+      <div className="grid grid-cols-4 lg:grid-cols-[1.15fr_1.3fr_0.9fr_0.9fr_0.9fr] border-y border-white/8">
         <div className="col-span-4 lg:col-span-1 flex flex-col items-center justify-center px-4 py-5 border-b lg:border-b-0 lg:border-r border-white/8 text-center">
           <p className="text-[10px] uppercase tracking-[0.28em] text-white/64 font-bold">Profile Score</p>
           <div className="mt-1 flex items-end justify-center gap-2">
@@ -518,28 +519,28 @@ function ProfileScorePanel({
           return (
             <div
               key={stat.label}
-              className="min-w-0 h-full flex flex-col items-center justify-center gap-1 border-r border-white/8 px-2 py-5 sm:px-4 text-center last:border-r-0"
+              className="min-w-0 h-full min-h-[6.15rem] sm:min-h-0 flex flex-col items-center justify-center gap-1 border-r border-white/8 px-1 py-2.5 sm:px-4 sm:py-5 text-center last:border-r-0"
             >
               <Icon size={18} strokeWidth={1.6} className="text-scent-accent" />
               {stat.cycle.length > 0 ? (
                 <CyclingTilePair
                   parts={stat.cycle}
-                  primaryClass="font-serif italic text-2xl text-white leading-tight truncate max-w-full"
-                  secondaryClass="min-h-[2.5em] flex items-center justify-center px-1 text-[10px] leading-snug text-white/42"
+                  primaryClass="font-serif italic text-[11px] sm:text-2xl text-white leading-tight truncate max-w-full"
+                  secondaryClass="min-h-[2.35em] sm:min-h-[2.5em] flex items-center justify-center px-0 sm:px-1 text-[9px] sm:text-[10px] leading-tight sm:leading-snug text-white/42"
                 />
               ) : (
                 <>
                   {stat.value !== null ? (
-                    <p className="font-serif italic text-2xl text-white leading-tight truncate max-w-full">{stat.value}</p>
+                    <p className="font-serif italic text-[11px] sm:text-2xl text-white leading-tight truncate max-w-full">{stat.value}</p>
                   ) : (
-                    <p className="font-serif italic text-2xl text-white/55 leading-tight" aria-hidden>—</p>
+                    <p className="font-serif italic text-[11px] sm:text-2xl text-white/55 leading-tight" aria-hidden>—</p>
                   )}
-                  <p className="min-h-[2.5em] flex items-center justify-center px-1 text-[10px] leading-snug text-white/42">
+                  <p className="min-h-[2.35em] sm:min-h-[2.5em] flex items-center justify-center px-0 sm:px-1 text-[9px] sm:text-[10px] leading-tight sm:leading-snug text-white/42">
                     {stat.sub ?? ""}
                   </p>
                 </>
               )}
-              <p className="mt-auto text-[9px] uppercase tracking-[0.2em] text-white/40 font-bold">{stat.label}</p>
+              <p className="mt-auto max-w-full text-[7px] sm:text-[9px] leading-tight uppercase tracking-[0.04em] sm:tracking-[0.2em] text-white/40 font-bold [overflow-wrap:anywhere]">{stat.label}</p>
             </div>
           );
         })}
@@ -746,6 +747,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
         )}
       </main>
 
+      {typeof document !== 'undefined' ? createPortal(
       <AnimatePresence>
         {selectedItem ? (
           <div
@@ -976,7 +978,9 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
             </AnimatePresence>
           </div>
         ) : null}
-      </AnimatePresence>
+      </AnimatePresence>,
+      document.body,
+      ) : null}
     </div>
   );
 };

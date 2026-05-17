@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X,
@@ -686,34 +687,34 @@ function ProfileScorePanel({
             <span className="pb-2 text-lg text-white/72">/100</span>
           </div>
           <p className="mt-1 text-center text-sm text-scent-accent/90">{headline?.label ?? "Intelligence profile"}</p>
-          <div className="mt-4 grid grid-cols-[1.3fr_0.9fr_0.9fr_0.9fr] gap-1.5">
+          <div className="mt-4 grid grid-cols-4 gap-1.5">
             {statCards.map((stat) => {
               const Icon = stat.icon;
               return (
                 <div
                   key={stat.label}
-                  className="min-w-0 h-full flex flex-col items-center justify-center gap-1 border border-white/15 bg-white/[0.035] px-1.5 py-3 text-center"
+                  className="min-w-0 h-full min-h-[6.15rem] flex flex-col items-center justify-center gap-1 border border-white/15 bg-white/[0.035] px-1 py-2.5 text-center"
                 >
                   <Icon size={14} strokeWidth={1.6} className="text-scent-accent" />
                   {stat.cycle.length > 0 ? (
                     <CyclingTilePair
                       parts={stat.cycle}
-                      primaryClass="text-[12px] text-white/85 font-serif italic truncate max-w-full"
-                      secondaryClass="min-h-[2.5em] flex items-center justify-center px-0.5 text-[10px] leading-snug text-white/42"
+                      primaryClass="text-[11px] text-white/85 font-serif italic truncate max-w-full"
+                      secondaryClass="min-h-[2.35em] flex items-center justify-center px-0 text-[9px] leading-tight text-white/42"
                     />
                   ) : (
                     <>
                       {stat.value !== null ? (
-                        <p className="text-[12px] text-white/85 font-serif italic truncate max-w-full">{stat.value}</p>
+                        <p className="text-[11px] text-white/85 font-serif italic truncate max-w-full">{stat.value}</p>
                       ) : (
-                        <p className="text-[12px] text-white/55 font-serif italic" aria-hidden>—</p>
+                        <p className="text-[11px] text-white/55 font-serif italic" aria-hidden>—</p>
                       )}
-                      <p className="min-h-[2.5em] flex items-center justify-center px-0.5 text-[10px] leading-snug text-white/42">
+                      <p className="min-h-[2.35em] flex items-center justify-center px-0 text-[9px] leading-tight text-white/42">
                         {stat.sub ?? ""}
                       </p>
                     </>
                   )}
-                  <p className="mt-auto text-[8px] uppercase tracking-[0.16em] text-white/55 font-bold">{stat.label}</p>
+                  <p className="mt-auto max-w-full text-[7px] leading-tight uppercase tracking-[0.04em] text-white/55 font-bold [overflow-wrap:anywhere]">{stat.label}</p>
                 </div>
               );
             })}
@@ -1528,6 +1529,7 @@ export const Wardrobe: React.FC<{
         </div>
       </div>
 
+      {typeof document !== 'undefined' ? createPortal(
       <AnimatePresence>
         {selectedItem && (
           <div 
@@ -2158,7 +2160,9 @@ export const Wardrobe: React.FC<{
             </AnimatePresence>
           </div>
         )}
-      </AnimatePresence>
+      </AnimatePresence>,
+      document.body,
+      ) : null}
     </div>
   );
 };
