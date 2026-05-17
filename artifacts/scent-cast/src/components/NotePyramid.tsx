@@ -33,7 +33,6 @@ type LayerConfig = {
 
 const CALM_EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
 const SOFT_EASE: [number, number, number, number] = [0.42, 0, 0.58, 1];
-const WEIGHTED_EASE: [number, number, number, number] = [0.16, 1, 0.3, 1];
 
 type LayerMotionState = ActiveLayer | 'idle';
 type LayerOffset = { y: number; scale: number; opacity: number };
@@ -62,8 +61,8 @@ const LAYER_MOTION: Record<LayerMotionState, Record<ActiveLayer, LayerOffset>> =
 };
 
 const layerTransition: Transition = {
-  duration: 0.72,
-  ease: WEIGHTED_EASE,
+  duration: 1.05,
+  ease: CALM_EASE,
 };
 
 const reducedTransition: Transition = {
@@ -185,14 +184,14 @@ function offsetPoint([x, y]: Point, dx: number): Point {
 }
 
 // Particle System Generation
-const DUST_MOTES = Array.from({ length: 15 }).map((_, i) => ({
+const DUST_MOTES = Array.from({ length: 14 }).map((_, i) => ({
   id: `mote-${i}`,
   cx: 30 + Math.random() * 300,
   cy: 50 + Math.random() * 320,
-  r: 0.4 + Math.random() * 1.4,
-  delay: Math.random() * 5,
-  duration: 7 + Math.random() * 8,
-  sway: (Math.random() - 0.5) * 16,
+  r: 0.35 + Math.random() * 1.1,
+  delay: Math.random() * 7,
+  duration: 12 + Math.random() * 10,
+  sway: (Math.random() - 0.5) * 12,
 }));
 
 // Static constellation pinpricks — fixed deep-field starlight for parallax depth
@@ -209,14 +208,6 @@ const CONSTELLATION_DOTS = [
   { cx: 338, cy: 258, r: 0.6, opacity: 0.42 },
   { cx: 156, cy: 18, r: 0.4, opacity: 0.28 },
   { cx: 210, cy: 14, r: 0.5, opacity: 0.34 },
-];
-
-// HUD-style corner reticles framing the canvas
-const CORNER_RETICLES: { x: number; y: number; scaleX: 1 | -1; scaleY: 1 | -1 }[] = [
-  { x: 14, y: 14, scaleX: 1, scaleY: 1 },
-  { x: 346, y: 14, scaleX: -1, scaleY: 1 },
-  { x: 14, y: 406, scaleX: 1, scaleY: -1 },
-  { x: 346, y: 406, scaleX: -1, scaleY: -1 },
 ];
 
 export const NotePyramid: React.FC<NotePyramidProps> = ({
@@ -340,24 +331,20 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
     },
   ];
 
-  const { pulseTransition, floatTransition, shimmerTransition, atmosphericTransition, rotationTransition, counterRotationTransition } = React.useMemo(() => {
+  const { pulseTransition, floatTransition, shimmerTransition, atmosphericTransition } = React.useMemo(() => {
     if (prefersReducedMotion) {
       return {
         pulseTransition: reducedTransition,
         floatTransition: reducedTransition,
         shimmerTransition: reducedTransition,
         atmosphericTransition: reducedTransition,
-        rotationTransition: reducedTransition,
-        counterRotationTransition: reducedTransition,
       };
     }
     return {
-      pulseTransition: { duration: 3.2, ease: SOFT_EASE, repeat: Infinity, repeatType: 'mirror' } as Transition,
-      floatTransition: { duration: 4, ease: 'easeInOut', repeat: Infinity, repeatType: 'mirror' } as Transition,
-      shimmerTransition: { duration: 3.8, ease: SOFT_EASE, repeat: Infinity, repeatType: 'mirror' } as Transition,
-      atmosphericTransition: { duration: 6.5, ease: SOFT_EASE, repeat: Infinity, repeatType: 'mirror' } as Transition,
-      rotationTransition: { duration: 45, ease: 'linear', repeat: Infinity } as Transition,
-      counterRotationTransition: { duration: 60, ease: 'linear', repeat: Infinity } as Transition,
+      pulseTransition: { duration: 5.4, ease: SOFT_EASE, repeat: Infinity, repeatType: 'mirror' } as Transition,
+      floatTransition: { duration: 6, ease: 'easeInOut', repeat: Infinity, repeatType: 'mirror' } as Transition,
+      shimmerTransition: { duration: 6.4, ease: SOFT_EASE, repeat: Infinity, repeatType: 'mirror' } as Transition,
+      atmosphericTransition: { duration: 10, ease: SOFT_EASE, repeat: Infinity, repeatType: 'mirror' } as Transition,
     };
   }, [prefersReducedMotion]);
 
@@ -367,15 +354,12 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
       className={`relative flex h-full min-h-0 flex-col items-center justify-center overflow-hidden px-3 py-5 sm:px-5 ${className}`}
       onClick={() => setActiveLayer(null)}
     >
-      {/* Immersive ambient vignette overlay */}
-      <div className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(ellipse_at_center,transparent_40%,rgba(0,0,0,0.6)_100%)] mix-blend-multiply" />
-
       <motion.div
         className="relative z-10 w-full max-w-[24rem] aspect-[1/1.08] shrink-0 overflow-visible sm:max-w-[26rem]"
         onClick={(event) => event.stopPropagation()}
-        initial={prefersReducedMotion ? false : { opacity: 0, y: 18, scale: 0.96 }}
+        initial={prefersReducedMotion ? false : { opacity: 0, y: 12, scale: 0.97 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={prefersReducedMotion ? reducedTransition : { duration: 0.85, ease: WEIGHTED_EASE }}
+        transition={prefersReducedMotion ? reducedTransition : { duration: 1.1, ease: CALM_EASE }}
       >
         <svg
           viewBox="0 0 360 420"
@@ -384,27 +368,17 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
           aria-label="Interactive fragrance note pyramid"
         >
           <defs>
-            <radialGradient id={id('background-luminance')} cx="50%" cy="49%" r="58%">
-              <stop offset="0" stopColor="#3a3025" stopOpacity="0.25" />
-              <stop offset="0.34" stopColor="#1a1816" stopOpacity="0.25" />
-              <stop offset="1" stopColor="#020203" stopOpacity="0" />
-            </radialGradient>
-
-            <radialGradient id={id('background-amber-air')} cx="50%" cy="48%" r="56%">
-              <stop offset="0" stopColor="#ffb84d" stopOpacity="0.18" />
-              <stop offset="0.4" stopColor="#ffb84d" stopOpacity="0.08" />
+            <radialGradient id={id('background-amber-air')} cx="50%" cy="48%" r="58%">
+              <stop offset="0" stopColor="#ffb84d" stopOpacity="0.14" />
+              <stop offset="0.45" stopColor="#ffb84d" stopOpacity="0.06" />
               <stop offset="1" stopColor="#ffb84d" stopOpacity="0" />
             </radialGradient>
 
             <radialGradient id={id('pyramid-cast-reflection')} cx="50%" cy="92%" r="40%">
-              <stop offset="0" stopColor="#ffb84d" stopOpacity="0.12" />
+              <stop offset="0" stopColor="#ffb84d" stopOpacity="0.1" />
               <stop offset="0.5" stopColor="#ffffff" stopOpacity="0.03" />
               <stop offset="1" stopColor="#000000" stopOpacity="0" />
             </radialGradient>
-
-            <pattern id={id('background-grain')} width="8" height="8" patternUnits="userSpaceOnUse">
-              <path d="M0 1 H8 M1 5 H8" stroke="#ffffff" strokeOpacity="0.055" strokeWidth="0.65" />
-            </pattern>
 
             <linearGradient id={id('top-left')} x1="129" y1="83" x2="181" y2="83" gradientUnits="userSpaceOnUse">
               <stop offset="0" stopColor="#a3a6a5" />
@@ -505,13 +479,6 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
               <stop offset="1" stopColor="#ffffff" stopOpacity="0.88" />
             </linearGradient>
 
-            <linearGradient id={id('hairline-rim')} x1="21" y1="372" x2="339" y2="25" gradientUnits="userSpaceOnUse">
-              <stop offset="0" stopColor="#adb0b0" stopOpacity="0.42" />
-              <stop offset="0.44" stopColor="#ffffff" stopOpacity="0.95" />
-              <stop offset="0.56" stopColor="#ffffff" stopOpacity="0.6" />
-              <stop offset="1" stopColor="#caced1" stopOpacity="0.55" />
-            </linearGradient>
-
             <linearGradient id={id('groove-core')} x1="180" y1="25" x2="180" y2="372" gradientUnits="userSpaceOnUse">
               <stop offset="0" stopColor="#08090a" />
               <stop offset="0.45" stopColor="#262a2c" />
@@ -581,19 +548,17 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
             </pattern>
 
             <filter id={id('piece-shadow')} x="-20%" y="-20%" width="140%" height="150%" colorInterpolationFilters="sRGB">
-              <feDropShadow dx="0" dy="12" stdDeviation="7.5" floodColor="#000000" floodOpacity="0.7" />
-              <feDropShadow dx="0" dy="0" stdDeviation="2.2" floodColor="#ffffff" floodOpacity="0.18" />
+              <feDropShadow dx="0" dy="14" stdDeviation="9" floodColor="#000000" floodOpacity="0.55" />
             </filter>
 
             <filter id={id('piece-active-shadow')} x="-24%" y="-24%" width="148%" height="158%" colorInterpolationFilters="sRGB">
-              <feDropShadow dx="0" dy="18" stdDeviation="11" floodColor="#000000" floodOpacity="0.82" />
-              <feDropShadow dx="0" dy="0" stdDeviation="5.5" floodColor="#e7ecec" floodOpacity="0.32" />
-              <feDropShadow dx="0" dy="0" stdDeviation="8" floodColor="#ffb84d" floodOpacity="0.22" />
+              <feDropShadow dx="0" dy="18" stdDeviation="13" floodColor="#000000" floodOpacity="0.6" />
+              <feDropShadow dx="0" dy="0" stdDeviation="7" floodColor="#ffb84d" floodOpacity="0.16" />
             </filter>
 
             <filter id={id('piece-engaged-shadow')} x="-24%" y="-24%" width="148%" height="158%" colorInterpolationFilters="sRGB">
-              <feDropShadow dx="0" dy="14" stdDeviation="8.5" floodColor="#000000" floodOpacity="0.75" />
-              <feDropShadow dx="0" dy="0" stdDeviation="4.5" floodColor="#ffb84d" floodOpacity="0.28" />
+              <feDropShadow dx="0" dy="15" stdDeviation="10" floodColor="#000000" floodOpacity="0.58" />
+              <feDropShadow dx="0" dy="0" stdDeviation="5" floodColor="#ffb84d" floodOpacity="0.18" />
             </filter>
 
             <filter id={id('edge-glow')} x="-12%" y="-12%" width="124%" height="124%" colorInterpolationFilters="sRGB">
@@ -613,11 +578,9 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
             </filter>
 
             <filter id={id('groove-shadow')} x="-250%" y="-12%" width="600%" height="124%" colorInterpolationFilters="sRGB">
-              <feDropShadow dx="-1.2" dy="0" stdDeviation="1" floodColor="#ffffff" floodOpacity="0.3" />
-              <feDropShadow dx="1.6" dy="0" stdDeviation="1.2" floodColor="#000000" floodOpacity="0.95" />
-              <feDropShadow dx="0" dy="2.5" stdDeviation="1.5" floodColor="#000000" floodOpacity="0.65" />
-              {/* Inner glowing core for the groove */}
-              <feDropShadow dx="0" dy="0" stdDeviation="2" floodColor="#ffb84d" floodOpacity="0.15" />
+              <feDropShadow dx="-1" dy="0" stdDeviation="0.9" floodColor="#ffffff" floodOpacity="0.22" />
+              <feDropShadow dx="1.4" dy="0" stdDeviation="1.1" floodColor="#000000" floodOpacity="0.78" />
+              <feDropShadow dx="0" dy="2" stdDeviation="1.4" floodColor="#000000" floodOpacity="0.5" />
             </filter>
 
             <filter id={id('glyph-soft')} x="-80%" y="-800%" width="260%" height="1700%" colorInterpolationFilters="sRGB">
@@ -628,18 +591,6 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
               </feMerge>
             </filter>
 
-            <filter id={id('sparkle-blur')} x="-40%" y="-40%" width="180%" height="180%" colorInterpolationFilters="sRGB">
-              <feGaussianBlur in="SourceGraphic" stdDeviation="0.85" />
-            </filter>
-
-            <linearGradient id={id('vertical-shaft')} x1="180" y1="0" x2="180" y2="420" gradientUnits="userSpaceOnUse">
-              <stop offset="0" stopColor="#ffeaad" stopOpacity="0" />
-              <stop offset="0.18" stopColor="#ffc766" stopOpacity="0.18" />
-              <stop offset="0.5" stopColor="#ffb84d" stopOpacity="0.32" />
-              <stop offset="0.82" stopColor="#ffc766" stopOpacity="0.14" />
-              <stop offset="1" stopColor="#ffeaad" stopOpacity="0" />
-            </linearGradient>
-
             <linearGradient id={id('ground-line')} x1="20" y1="380" x2="340" y2="380" gradientUnits="userSpaceOnUse">
               <stop offset="0" stopColor="#ffffff" stopOpacity="0" />
               <stop offset="0.35" stopColor="#ffc766" stopOpacity="0.35" />
@@ -649,55 +600,18 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
             </linearGradient>
           </defs>
 
-          {/* Background Technical Grid / Reticle Layers */}
+          {/* Ambient depth field — soft amber air + slow-drifting starfield. No grid, no reticles. */}
           <g aria-hidden pointerEvents="none" className="mix-blend-screen">
             <motion.circle
               cx="180"
               cy="210"
-              r="205"
-              fill="none"
-              stroke="#ffffff"
-              strokeWidth="0.5"
-              strokeDasharray="2 18"
-              opacity="0.04"
-              animate={prefersReducedMotion ? {} : { rotate: 360 }}
-              transition={rotationTransition}
-              style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
-            />
-            <motion.circle
-              cx="180"
-              cy="210"
-              r="196"
-              fill={fill('background-luminance')}
-              animate={prefersReducedMotion ? { opacity: 0.9 } : { opacity: [0.75, 1, 0.75], scale: [0.98, 1.02, 0.98] }}
-              transition={atmosphericTransition}
-              style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
-            />
-            <motion.circle
-              cx="180"
-              cy="210"
-              r="184"
+              r="190"
               fill={fill('background-amber-air')}
-              animate={prefersReducedMotion ? { opacity: 0.72 } : { opacity: [0.42, 0.82, 0.42], scale: [0.97, 1.03, 0.97] }}
+              animate={prefersReducedMotion ? { opacity: 0.55 } : { opacity: [0.4, 0.62, 0.4], scale: [0.985, 1.015, 0.985] }}
               transition={atmosphericTransition}
-              style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
-            />
-            <circle cx="180" cy="210" r="176" fill={fill('background-grain')} opacity="0.18" />
-            <motion.circle
-              cx="180"
-              cy="210"
-              r="165"
-              fill="none"
-              stroke="#ffb84d"
-              strokeWidth="0.5"
-              strokeDasharray="1 8"
-              opacity="0.05"
-              animate={prefersReducedMotion ? {} : { rotate: -360 }}
-              transition={counterRotationTransition}
               style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
             />
 
-            {/* Deep-field constellation pinpricks for parallax depth */}
             {CONSTELLATION_DOTS.map((star, idx) => (
               <motion.circle
                 key={`star-${idx}`}
@@ -707,36 +621,17 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                 fill="#fff8e6"
                 animate={
                   prefersReducedMotion
-                    ? { opacity: star.opacity }
-                    : { opacity: [star.opacity * 0.45, star.opacity, star.opacity * 0.45] }
+                    ? { opacity: star.opacity * 0.85 }
+                    : { opacity: [star.opacity * 0.55, star.opacity * 0.95, star.opacity * 0.55] }
                 }
                 transition={{
-                  duration: 4 + (idx % 4),
-                  delay: idx * 0.27,
+                  duration: 7 + (idx % 5) * 1.4,
+                  delay: idx * 0.42,
                   ease: SOFT_EASE,
                   repeat: Infinity,
                   repeatType: 'mirror',
                 }}
               />
-            ))}
-
-            {/* HUD-style corner reticle marks */}
-            {CORNER_RETICLES.map((mark, idx) => (
-              <g
-                key={`reticle-${idx}`}
-                transform={`translate(${mark.x} ${mark.y}) scale(${mark.scaleX} ${mark.scaleY})`}
-              >
-                <path
-                  d="M0 14 L0 0 L14 0"
-                  fill="none"
-                  stroke="#ffc766"
-                  strokeOpacity="0.32"
-                  strokeWidth="0.8"
-                  strokeLinecap="round"
-                  vectorEffect="non-scaling-stroke"
-                />
-                <circle cx="0" cy="0" r="0.9" fill="#ffc766" fillOpacity="0.45" />
-              </g>
             ))}
           </g>
 
@@ -752,14 +647,14 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                 initial={{ opacity: 0, y: 0, x: 0 }}
                 animate={
                   prefersReducedMotion
-                    ? { opacity: 0.1 }
-                    : { opacity: [0, 0.34, 0], y: [-2, -46], x: [0, mote.sway, 0] }
+                    ? { opacity: 0.08 }
+                    : { opacity: [0, 0.22, 0], y: [0, -42], x: [0, mote.sway, 0] }
                 }
                 transition={{
                   duration: mote.duration,
                   delay: mote.delay,
                   repeat: Infinity,
-                  ease: 'easeOut',
+                  ease: 'easeInOut',
                 }}
               />
             ))}
@@ -772,62 +667,42 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
           <motion.path
             d={`M22 ${PYRAMID_Y.baseBottom + 9} L338 ${PYRAMID_Y.baseBottom + 9}`}
             stroke={fill('ground-line')}
-            strokeWidth="0.75"
+            strokeWidth="0.7"
             strokeLinecap="round"
             fill="none"
             vectorEffect="non-scaling-stroke"
             pointerEvents="none"
             animate={
               prefersReducedMotion
-                ? { opacity: activeLayer ? 0.85 : 0.5 }
-                : { opacity: activeLayer ? [0.55, 0.95, 0.55] : [0.32, 0.58, 0.32] }
+                ? { opacity: activeLayer ? 0.6 : 0.42 }
+                : { opacity: activeLayer ? [0.45, 0.65, 0.45] : [0.3, 0.45, 0.3] }
             }
             transition={atmosphericTransition}
           />
 
-          {/* Vertical luminance shaft revealed when a layer is engaged — anchors the active focus */}
-          <motion.rect
-            x="172"
-            y="0"
-            width="16"
-            height="420"
-            fill={fill('vertical-shaft')}
-            pointerEvents="none"
-            initial={false}
-            animate={{ opacity: activeLayer ? 0.55 : 0 }}
-            transition={layerTransition}
-            style={{ mixBlendMode: 'screen' }}
-          />
-
-          {/* Dynamic Glow Ray behind pyramid based on active state */}
+          {/* Soft cone of focus emanating from apex when a layer is engaged */}
           <motion.path
             d={`M${PYRAMID_CENTER_X} 25 L345 400 L15 400 Z`}
-            fill="url(#active-sheen)"
+            fill={fill('active-sheen')}
             pointerEvents="none"
             initial={false}
-            animate={{ opacity: activeLayer ? 0.4 : 0 }}
-            transition={layerTransition}
+            animate={{ opacity: activeLayer ? 0.28 : 0 }}
+            transition={{ duration: 1.1, ease: CALM_EASE }}
           />
 
           {layers.map((layer) => {
             const isActive = activeLayer === layer.key;
             const isEngaged = engagedLayer === layer.key;
-            
-            // Greyscale/Dim effect for inactive layers when something is active
             const isMuted = activeLayer !== null && !isActive;
 
             const layerMotion = LAYER_MOTION[state][layer.key];
             const targetY = layerMotion.y;
-            const targetScale = layerMotion.scale + (isEngaged && !isActive ? 0.006 : 0);
-            const targetOpacity = isEngaged && !isActive ? Math.min(layerMotion.opacity + 0.12, 1) : layerMotion.opacity;
+            const targetScale = layerMotion.scale + (isEngaged && !isActive ? 0.004 : 0);
+            const targetOpacity = isEngaged && !isActive ? Math.min(layerMotion.opacity + 0.08, 1) : layerMotion.opacity;
             const channelPath = linePath(layer.channel.start, layer.channel.end);
             const channelHighlightPath = linePath(
-              offsetPoint(layer.channel.start, -2.05),
-              offsetPoint(layer.channel.end, -2.05),
-            );
-            const channelShadowPath = linePath(
-              offsetPoint(layer.channel.start, 2.05),
-              offsetPoint(layer.channel.end, 2.05),
+              offsetPoint(layer.channel.start, -2),
+              offsetPoint(layer.channel.end, -2),
             );
 
             return (
@@ -843,28 +718,21 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                   y: targetY,
                   opacity: targetOpacity,
                   scale: targetScale,
-                  filter: isMuted ? 'saturate(0.55) brightness(0.78)' : 'saturate(1) brightness(1)'
+                  filter: isMuted ? 'saturate(0.85) brightness(0.92)' : 'saturate(1) brightness(1)',
                 }}
                 whileHover={
                   prefersReducedMotion
                     ? undefined
                     : {
-                        y: targetY - 2.8,
-                        scale: targetScale + 0.005,
-                      }
-                }
-                whileTap={
-                  prefersReducedMotion
-                    ? undefined
-                    : {
-                        y: targetY + 1.8,
-                        scale: Math.max(targetScale - 0.01, 0.975),
+                        y: targetY - 1.2,
+                        scale: targetScale + 0.003,
+                        transition: { duration: 0.55, ease: CALM_EASE },
                       }
                 }
                 transition={
                   prefersReducedMotion
                     ? reducedTransition
-                    : { ...layerTransition, filter: { duration: 0.55, ease: CALM_EASE } }
+                    : { ...layerTransition, filter: { duration: 0.9, ease: CALM_EASE }, opacity: { duration: 0.95, ease: CALM_EASE } }
                 }
                 style={{
                   transformBox: 'fill-box',
@@ -919,13 +787,13 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                     initial={false}
                     animate={
                       prefersReducedMotion
-                        ? { opacity: isActive ? 0.25 : isEngaged ? 0.14 : 0.05 }
+                        ? { opacity: isActive ? 0.2 : isEngaged ? 0.12 : 0.05 }
                         : {
                             opacity: isActive
-                              ? [0.15, 0.32, 0.15]
+                              ? [0.14, 0.22, 0.14]
                               : isEngaged
-                                ? [0.08, 0.18, 0.08]
-                                : [0.03, 0.065, 0.03],
+                                ? [0.08, 0.13, 0.08]
+                                : [0.04, 0.06, 0.04],
                           }
                     }
                     transition={shimmerTransition}
@@ -937,8 +805,8 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                   d={channelPath}
                   fill="none"
                   stroke="#010202"
-                  strokeOpacity="0.88"
-                  strokeWidth="8"
+                  strokeOpacity="0.85"
+                  strokeWidth="7.5"
                   strokeLinecap="round"
                   filter={fill('groove-shadow')}
                   pointerEvents="none"
@@ -949,7 +817,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                   d={channelPath}
                   fill="none"
                   stroke={fill('groove-core')}
-                  strokeWidth="4.6"
+                  strokeWidth="4.4"
                   strokeLinecap="round"
                   pointerEvents="none"
                   vectorEffect="non-scaling-stroke"
@@ -959,15 +827,15 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                   d={channelPath}
                   fill="none"
                   stroke={fill('groove-amber')}
-                  strokeWidth="1.25"
+                  strokeWidth="1.1"
                   strokeLinecap="round"
                   pointerEvents="none"
                   vectorEffect="non-scaling-stroke"
                   initial={false}
                   animate={
                     prefersReducedMotion
-                      ? { opacity: isActive ? 0.45 : 0 }
-                      : { opacity: isActive ? [0.25, 0.55, 0.25] : isEngaged ? [0.12, 0.3, 0.12] : 0 }
+                      ? { opacity: isActive ? 0.4 : 0 }
+                      : { opacity: isActive ? [0.28, 0.42, 0.28] : isEngaged ? [0.12, 0.22, 0.12] : 0 }
                   }
                   transition={pulseTransition}
                 />
@@ -976,20 +844,9 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                   d={channelHighlightPath}
                   fill="none"
                   stroke={fill('groove-highlight')}
-                  strokeWidth="0.9"
+                  strokeWidth="0.85"
                   strokeLinecap="round"
-                  opacity={isActive ? 0.82 : isEngaged ? 0.7 : 0.6}
-                  pointerEvents="none"
-                  vectorEffect="non-scaling-stroke"
-                />
-
-                <path
-                  d={channelShadowPath}
-                  fill="none"
-                  stroke="#000000"
-                  strokeOpacity="0.8"
-                  strokeWidth="1.05"
-                  strokeLinecap="round"
+                  opacity={isActive ? 0.7 : isEngaged ? 0.6 : 0.5}
                   pointerEvents="none"
                   vectorEffect="non-scaling-stroke"
                 />
@@ -999,7 +856,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                   fill="none"
                   stroke="#010202"
                   strokeOpacity="0.95"
-                  strokeWidth="4.6"
+                  strokeWidth="4.4"
                   strokeLinejoin="miter"
                   pointerEvents="none"
                   vectorEffect="non-scaling-stroke"
@@ -1011,10 +868,10 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                   stroke={fill('outer-rim')}
                   initial={false}
                   animate={{
-                    strokeOpacity: isActive ? layer.rimOpacity + 0.18 : isEngaged ? layer.rimOpacity + 0.15 : layer.rimOpacity,
-                    strokeWidth: isEngaged ? 1.6 : 1.35
+                    strokeOpacity: isActive ? layer.rimOpacity + 0.1 : isEngaged ? layer.rimOpacity + 0.06 : layer.rimOpacity,
+                    strokeWidth: isEngaged || isActive ? 1.5 : 1.3,
                   }}
-                  transition={{ duration: 0.2 }}
+                  transition={{ duration: 0.85, ease: CALM_EASE }}
                   strokeLinejoin="miter"
                   filter={fill('edge-glow')}
                   pointerEvents="none"
@@ -1025,34 +882,23 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                   d={layer.hitPath}
                   fill="none"
                   stroke={fill('active-edge-amber')}
-                  strokeWidth="0.9"
+                  strokeWidth="0.85"
                   strokeLinejoin="miter"
                   pointerEvents="none"
                   vectorEffect="non-scaling-stroke"
                   initial={false}
                   animate={
                     prefersReducedMotion
-                      ? { opacity: isActive ? 0.48 : isEngaged ? 0.28 : 0 }
+                      ? { opacity: isActive ? 0.4 : isEngaged ? 0.22 : 0 }
                       : {
                           opacity: isActive
-                            ? [0.3, 0.6, 0.3]
+                            ? [0.28, 0.42, 0.28]
                             : isEngaged
-                              ? [0.12, 0.3, 0.12]
+                              ? [0.12, 0.22, 0.12]
                               : 0,
                         }
                   }
                   transition={pulseTransition}
-                />
-
-                <path
-                  d={layer.hitPath}
-                  fill="none"
-                  stroke={fill('hairline-rim')}
-                  strokeOpacity={isActive ? 0.9 : isEngaged ? 0.78 : 0.62}
-                  strokeWidth="0.45"
-                  strokeLinejoin="miter"
-                  pointerEvents="none"
-                  vectorEffect="non-scaling-stroke"
                 />
 
                 {/* Keyboard focus ring — visible only on :focus-visible via parent class */}
@@ -1068,77 +914,19 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                   vectorEffect="non-scaling-stroke"
                 />
 
-                {/* Active-only corner micro-glints — subtle white sparks at the layer extents */}
-                {isActive && layer.key !== 'top' && (
-                  <g pointerEvents="none">
-                    {[
-                      pointOnEdge(PYRAMID_OUTER.leftBase, layer.key === 'heart' ? PYRAMID_Y.heartTop : PYRAMID_Y.baseTop),
-                      pointOnEdge(PYRAMID_OUTER.rightBase, layer.key === 'heart' ? PYRAMID_Y.heartTop : PYRAMID_Y.baseTop),
-                    ].map((pt, idx) => (
-                      <motion.circle
-                        key={`glint-${layer.key}-${idx}`}
-                        cx={pt[0]}
-                        cy={pt[1]}
-                        r="1.4"
-                        fill="#fff8e6"
-                        initial={{ opacity: 0, scale: 0.4 }}
-                        animate={
-                          prefersReducedMotion
-                            ? { opacity: 0.8, scale: 1 }
-                            : { opacity: [0.3, 0.95, 0.3], scale: [0.6, 1.1, 0.6] }
-                        }
-                        transition={{ ...pulseTransition, delay: idx * 0.4 }}
-                        style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
-                      />
-                    ))}
-                  </g>
-                )}
-
-                {/* Ambient Apex Sparkle (Top layer only) */}
+                {/* Apex pinpoint — single soft glow, no dashed ring, no sparkle path */}
                 {layer.key === 'top' && (
-                  <g pointerEvents="none">
-                    <motion.path
-                      d={`M${PYRAMID_CENTER_X} 14 L${PYRAMID_CENTER_X+3} 24 L${PYRAMID_CENTER_X+13} 27 L${PYRAMID_CENTER_X+3} 30 L${PYRAMID_CENTER_X} 40 L${PYRAMID_CENTER_X-3} 30 L${PYRAMID_CENTER_X-13} 27 L${PYRAMID_CENTER_X-3} 24 Z`}
-                      fill="#ffffff"
-                      filter={fill('sparkle-blur')}
-                      initial={false}
-                      animate={prefersReducedMotion ? { opacity: 0.5, scale: 0.6 } : { opacity: [0.2, 0.8, 0.2], scale: [0.4, 0.85, 0.4] }}
-                      transition={pulseTransition}
-                      style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
-                    />
-                    {/* Crisp pinpoint core layered on top of the diffused sparkle */}
-                    <motion.circle
-                      cx={PYRAMID_CENTER_X}
-                      cy="27"
-                      r="1.2"
-                      fill="#fff8e6"
-                      initial={false}
-                      animate={prefersReducedMotion ? { opacity: 0.9 } : { opacity: [0.55, 1, 0.55] }}
-                      transition={pulseTransition}
-                    />
-                    {/* Slowly rotating accent ring — only visible when the top layer is active */}
-                    <motion.circle
-                      cx={PYRAMID_CENTER_X}
-                      cy="27"
-                      r="9"
-                      fill="none"
-                      stroke="#ffc766"
-                      strokeWidth="0.5"
-                      strokeDasharray="1.6 3.2"
-                      vectorEffect="non-scaling-stroke"
-                      initial={false}
-                      animate={
-                        prefersReducedMotion
-                          ? { opacity: isActive ? 0.55 : 0, rotate: 0 }
-                          : { opacity: isActive ? 0.6 : 0, rotate: 360 }
-                      }
-                      transition={{
-                        opacity: { duration: 0.45, ease: CALM_EASE },
-                        rotate: prefersReducedMotion ? reducedTransition : { duration: 18, ease: 'linear', repeat: Infinity },
-                      }}
-                      style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
-                    />
-                  </g>
+                  <motion.circle
+                    cx={PYRAMID_CENTER_X}
+                    cy="27"
+                    r="1.4"
+                    fill="#fff8e6"
+                    pointerEvents="none"
+                    filter={fill('amber-soft')}
+                    initial={false}
+                    animate={prefersReducedMotion ? { opacity: 0.78 } : { opacity: [0.6, 0.95, 0.6] }}
+                    transition={pulseTransition}
+                  />
                 )}
               </motion.g>
             );
@@ -1151,72 +939,25 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                   key={dot.key}
                   aria-hidden
                   pointerEvents="none"
-                  initial={{ opacity: 0, scale: 0.38, y: dot.key === 'upper-gap-dot' ? 3 : -3 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.38, y: dot.key === 'upper-gap-dot' ? -2 : 2 }}
-                  transition={prefersReducedMotion ? reducedTransition : { duration: 0.42, ease: CALM_EASE }}
+                  initial={{ opacity: 0, scale: 0.5 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.6 }}
+                  transition={prefersReducedMotion ? reducedTransition : { duration: 0.85, ease: CALM_EASE }}
                   style={{
                     transformBox: 'view-box',
                     transformOrigin: `${PYRAMID_CENTER_X}px ${dot.y}px`,
                   }}
                 >
-                  {/* Cross-hair guides — fine technical sighting lines extending horizontally */}
-                  <motion.line
-                    x1={PYRAMID_CENTER_X - 22}
-                    y1={dot.y}
-                    x2={PYRAMID_CENTER_X - 7}
-                    y2={dot.y}
-                    stroke="#ffc766"
-                    strokeOpacity="0.55"
-                    strokeWidth="0.5"
-                    strokeLinecap="round"
-                    vectorEffect="non-scaling-stroke"
-                    initial={{ opacity: 0, x: 4 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: 4 }}
-                    transition={prefersReducedMotion ? reducedTransition : { duration: 0.5, ease: CALM_EASE }}
-                  />
-                  <motion.line
-                    x1={PYRAMID_CENTER_X + 7}
-                    y1={dot.y}
-                    x2={PYRAMID_CENTER_X + 22}
-                    y2={dot.y}
-                    stroke="#ffc766"
-                    strokeOpacity="0.55"
-                    strokeWidth="0.5"
-                    strokeLinecap="round"
-                    vectorEffect="non-scaling-stroke"
-                    initial={{ opacity: 0, x: -4 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -4 }}
-                    transition={prefersReducedMotion ? reducedTransition : { duration: 0.5, ease: CALM_EASE }}
-                  />
-
-                  {/* Expanding Ring Pulse */}
-                  <motion.circle
-                    cx={PYRAMID_CENTER_X}
-                    cy={dot.y}
-                    r="3.5"
-                    fill="none"
-                    stroke="#fc9d19"
-                    strokeWidth="1"
-                    initial={{ scale: 1, opacity: 0.8 }}
-                    animate={prefersReducedMotion ? {} : { scale: 3.5, opacity: 0 }}
-                    transition={{ duration: 1.5, repeat: Infinity, ease: 'easeOut' }}
-                  />
-
                   <motion.circle
                     cx={PYRAMID_CENTER_X}
                     cy={dot.y}
                     r="11.5"
                     fill={fill('amber-glow')}
-                    initial={{ opacity: 0 }}
                     animate={
                       prefersReducedMotion
-                        ? { opacity: 0.45, r: 10.5 }
-                        : { opacity: [0.28, 0.62, 0.28], r: [9.5, 14.5, 9.5] }
+                        ? { opacity: 0.42, r: 11 }
+                        : { opacity: [0.3, 0.5, 0.3], r: [10.5, 12.5, 10.5] }
                     }
-                    exit={{ opacity: 0 }}
                     transition={pulseTransition}
                   />
 
@@ -1229,26 +970,20 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                     animate={
                       prefersReducedMotion
                         ? { opacity: 1, r: 2.85 }
-                        : { opacity: [0.85, 1, 0.85], r: [2.75, 3.45, 2.75] }
+                        : { opacity: [0.9, 1, 0.9], r: [2.85, 3.15, 2.85] }
                     }
                     transition={pulseTransition}
                   />
 
-                  <motion.circle
+                  <circle
                     cx={PYRAMID_CENTER_X}
                     cy={dot.y}
-                    r="3.35"
+                    r="3.6"
                     fill="none"
                     stroke="#ffc766"
-                    strokeOpacity="0.68"
-                    strokeWidth="0.45"
+                    strokeOpacity="0.5"
+                    strokeWidth="0.4"
                     vectorEffect="non-scaling-stroke"
-                    animate={
-                      prefersReducedMotion
-                        ? { opacity: 0.68, r: 3.35 }
-                        : { opacity: [0.42, 0.82, 0.42], r: [3.3, 4.5, 3.3] }
-                    }
-                    transition={pulseTransition}
                   />
                 </motion.g>
               ) : null,
@@ -1262,10 +997,10 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
               x2="164"
               y2="397"
               stroke={fill('glyph-line-left')}
-              strokeWidth="0.85"
+              strokeWidth="0.75"
               strokeLinecap="round"
               vectorEffect="non-scaling-stroke"
-              animate={prefersReducedMotion ? { opacity: 0.9 } : { opacity: [0.5, 1, 0.5] }}
+              animate={prefersReducedMotion ? { opacity: 0.75 } : { opacity: [0.55, 0.85, 0.55] }}
               transition={pulseTransition}
             />
 
@@ -1275,49 +1010,44 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
               x2="255"
               y2="397"
               stroke={fill('glyph-line-right')}
-              strokeWidth="0.85"
+              strokeWidth="0.75"
               strokeLinecap="round"
               vectorEffect="non-scaling-stroke"
-              animate={prefersReducedMotion ? { opacity: 0.9 } : { opacity: [0.5, 1, 0.5] }}
+              animate={prefersReducedMotion ? { opacity: 0.75 } : { opacity: [0.55, 0.85, 0.55] }}
               transition={pulseTransition}
             />
 
             <motion.circle
               cx="180"
               cy="397"
-              r="9.5"
+              r="9"
               fill={fill('amber-glow')}
-              animate={prefersReducedMotion ? { opacity: 0.4, r: 9.5 } : { opacity: [0.22, 0.62, 0.22], r: [8.8, 12.8, 8.8] }}
+              animate={prefersReducedMotion ? { opacity: 0.38, r: 9 } : { opacity: [0.26, 0.46, 0.26], r: [9, 10.5, 9] }}
               transition={pulseTransition}
             />
 
             <motion.circle
               cx="180"
               cy="397"
-              r="6.5"
+              r="6.3"
               fill={fill('glyph-sphere')}
               animate={
                 prefersReducedMotion
-                  ? { opacity: 1, r: 6.5 }
-                  : { opacity: [0.78, 1, 0.78], r: [6.3, 7.25, 6.3] }
+                  ? { opacity: 0.95, r: 6.3 }
+                  : { opacity: [0.82, 0.98, 0.82], r: [6.3, 6.8, 6.3] }
               }
               transition={pulseTransition}
             />
 
-            <motion.circle
+            <circle
               cx="180"
               cy="397"
               r="6.7"
               fill="none"
               stroke="#ffc766"
-              strokeOpacity="0.52"
-              strokeWidth="0.45"
-              animate={
-                prefersReducedMotion
-                  ? { opacity: 0.52, r: 6.7 }
-                  : { opacity: [0.28, 0.74, 0.28], r: [6.9, 8.9, 6.9] }
-              }
-              transition={pulseTransition}
+              strokeOpacity="0.45"
+              strokeWidth="0.4"
+              vectorEffect="non-scaling-stroke"
             />
           </g>
         </svg>
@@ -1327,36 +1057,23 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
           {selectedLayer ? (
             <motion.div
               key={selectedLayer.key}
-              initial={{ opacity: 0, y: 16, scale: 0.96, filter: 'blur(6px)' }}
+              initial={{ opacity: 0, y: 10, scale: 0.98, filter: 'blur(4px)' }}
               animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
-              exit={{ opacity: 0, y: -12, scale: 0.97, filter: 'blur(4px)' }}
-              transition={prefersReducedMotion ? reducedTransition : { duration: 0.45, ease: CALM_EASE }}
+              exit={{ opacity: 0, y: -6, scale: 0.985, filter: 'blur(3px)' }}
+              transition={prefersReducedMotion ? reducedTransition : { duration: 0.72, ease: CALM_EASE }}
               className={`pointer-events-none absolute left-1/2 z-50 w-[90%] max-w-[22.5rem] -translate-x-1/2 overflow-hidden rounded-xl border border-white/10 bg-[#060608]/70 p-5 shadow-[0_12px_40px_-5px_rgba(0,0,0,0.8),inset_0_1px_1px_rgba(255,255,255,0.15),0_0_0_1px_rgba(252,157,25,0.08)] backdrop-blur-xl ${selectedLayer.revealClass}`}
             >
-              {/* Inner hairline ring — second border for a true double-ring frame */}
               <span
                 aria-hidden
                 className="pointer-events-none absolute inset-[3px] rounded-lg border border-white/[0.05]"
               />
 
-              {/* One-shot diagonal shimmer sweep across the card on reveal */}
-              {!prefersReducedMotion && (
-                <motion.span
-                  aria-hidden
-                  initial={{ x: '-130%', opacity: 0 }}
-                  animate={{ x: '130%', opacity: [0, 0.7, 0] }}
-                  transition={{ duration: 1.6, delay: 0.18, ease: CALM_EASE }}
-                  className="pointer-events-none absolute inset-y-0 left-0 w-1/2 -skew-x-[18deg] bg-gradient-to-r from-transparent via-white/[0.09] to-transparent"
-                />
-              )}
-
-              {/* Chevron pointer — directs the eye from the card toward the active layer */}
               <motion.span
                 aria-hidden
-                initial={{ opacity: 0, scale: 0.6 }}
+                initial={{ opacity: 0, scale: 0.75 }}
                 animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.6 }}
-                transition={prefersReducedMotion ? reducedTransition : { duration: 0.35, ease: CALM_EASE, delay: 0.08 }}
+                exit={{ opacity: 0, scale: 0.75 }}
+                transition={prefersReducedMotion ? reducedTransition : { duration: 0.55, ease: CALM_EASE, delay: 0.1 }}
                 className={`pointer-events-none absolute left-1/2 h-2.5 w-2.5 -translate-x-1/2 rotate-45 border-[#fc9d19]/40 bg-[#060608]/80 backdrop-blur-xl ${
                   selectedLayer.key === 'top'
                     ? '-bottom-[5px] border-b border-r'
@@ -1365,25 +1082,24 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
               />
 
               <motion.div
-                animate={prefersReducedMotion ? {} : { y: [0, -4, 0] }}
+                animate={prefersReducedMotion ? {} : { y: [0, -3, 0] }}
                 transition={floatTransition}
                 className="relative flex flex-col items-center justify-center space-y-3.5 text-center"
               >
-                {/* Backlight / Drop Shadow with subtle amber wash for warmth */}
                 <motion.span
                   aria-hidden
-                  initial={{ opacity: 0, scale: 0.85 }}
+                  initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
-                  transition={prefersReducedMotion ? reducedTransition : { duration: 0.4, ease: CALM_EASE }}
-                  className="absolute left-1/2 top-1/2 -z-10 h-36 w-[130%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(ellipse_at_center,rgba(0,0,0,0.95),rgba(20,12,2,0.55)_38%,rgba(252,157,25,0.05)_62%,transparent_75%)] blur-[5px]"
+                  exit={{ opacity: 0, scale: 0.94 }}
+                  transition={prefersReducedMotion ? reducedTransition : { duration: 0.65, ease: CALM_EASE }}
+                  className="absolute left-1/2 top-1/2 -z-10 h-36 w-[130%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(ellipse_at_center,rgba(0,0,0,0.9),rgba(20,12,2,0.5)_38%,rgba(252,157,25,0.05)_62%,transparent_78%)] blur-[6px]"
                 />
 
                 <motion.div
-                  initial={{ opacity: 0, y: 3 }}
+                  initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -3 }}
-                  transition={prefersReducedMotion ? reducedTransition : { duration: 0.4, delay: 0.05, ease: CALM_EASE }}
+                  transition={prefersReducedMotion ? reducedTransition : { duration: 0.6, delay: 0.08, ease: CALM_EASE }}
                   className="flex w-full flex-col items-center justify-center space-y-2"
                 >
                   <span className="text-[9px] font-bold uppercase tracking-[0.4em] text-white/40">
@@ -1392,12 +1108,10 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
 
                   <span className="block h-px w-40 origin-center bg-gradient-to-r from-transparent via-[#fc9d19]/60 to-transparent" />
 
-                  {/* Luxury Gold Gradient Text */}
                   <h3 className="bg-gradient-to-br from-[#fff3d4] via-[#fc9d19] to-[#8c5a1a] bg-clip-text text-[12px] font-bold uppercase tracking-[0.5em] text-transparent drop-shadow-[0_2px_12px_rgba(252,157,25,0.45)]">
                     {selectedLayer.title}
                   </h3>
 
-                  {/* Animated title underline accent — draws in beneath the heading */}
                   <motion.span
                     aria-hidden
                     initial={{ scaleX: 0, opacity: 0 }}
@@ -1406,17 +1120,17 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                     transition={
                       prefersReducedMotion
                         ? reducedTransition
-                        : { duration: 0.55, delay: 0.18, ease: WEIGHTED_EASE }
+                        : { duration: 0.85, delay: 0.22, ease: CALM_EASE }
                     }
                     className="block h-[1.5px] w-16 origin-center rounded-full bg-gradient-to-r from-transparent via-[#ffc766] to-transparent shadow-[0_0_8px_rgba(252,157,25,0.55)]"
                   />
                 </motion.div>
 
                 <motion.p
-                  initial={{ opacity: 0, y: 8 }}
+                  initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -6 }}
-                  transition={prefersReducedMotion ? reducedTransition : { duration: 0.48, delay: 0.12, ease: CALM_EASE }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={prefersReducedMotion ? reducedTransition : { duration: 0.75, delay: 0.18, ease: CALM_EASE }}
                   className="font-serif text-[1.1rem] italic tracking-wide text-white/95 leading-relaxed [text-shadow:0_3px_20px_rgba(0,0,0,1),0_0_30px_rgba(252,157,25,0.2)] sm:text-[1.15rem]"
                 >
                   {formatNotes(selectedLayer.notes)}
