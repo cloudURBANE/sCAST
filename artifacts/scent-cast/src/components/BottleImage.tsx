@@ -15,7 +15,7 @@ import { proxiedImageUrl } from '@/lib/imageProxy';
  * - You must give the root `className` so this component has a real size (e.g.
  *   `absolute inset-0` in a card, `h-full w-full` in a thumb, `min-h-0 w-full flex-1`
  *   in the featured hero). Framing does nothing if the slot has no dimensions.
- * - Inside: (1) symmetric **artboard** inset + clip + flex **items-end**, (2) packshot
+ * - Inside: (1) symmetric **artboard** inset + clip + column flex **justify-end**, (2) packshot
  *   CSS `object-fit/object-position` + **`origin-bottom`** so bottles share one shelf line.
  */
 

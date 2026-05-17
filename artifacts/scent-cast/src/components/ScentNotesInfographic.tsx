@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
 import {
   collectMainAccordDisplayRows,
   type DerivedMetrics,
@@ -98,6 +99,44 @@ function Panel({
   );
 }
 
+const ACCORD_ROW_EASE = [0.22, 1, 0.36, 1] as const;
+const ACCORD_STAGGER_S = 0.048;
+const ACCORD_ROW_DELAY_START = 0.08;
+
+function useAccordPanelReveal(contentKey: string) {
+  const reduced = useReducedMotion();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [revealed, setRevealed] = useState(Boolean(reduced));
+
+  useEffect(() => {
+    if (reduced) {
+      setRevealed(true);
+      return;
+    }
+    setRevealed(false);
+  }, [contentKey, reduced]);
+
+  useEffect(() => {
+    if (reduced) return;
+    const el = containerRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((e) => {
+          if (!e.isIntersecting) return;
+          setRevealed(true);
+          obs.disconnect();
+        });
+      },
+      { threshold: 0.08, rootMargin: "40px 0px 14% 0px" },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [contentKey, reduced]);
+
+  return { containerRef, revealed: Boolean(revealed || reduced), reduced: Boolean(reduced) };
+}
+
 function AccordPanel({
   rows,
   summary,
@@ -107,6 +146,17 @@ function AccordPanel({
   summary: string;
   className?: string;
 }) {
+  const accordContentKey =
+    `${summary}|` +
+    rows
+      .slice(0, 10)
+      .map((r) => `${r.label}:${strengthValue(r) ?? "_"}`)
+      .join("·");
+
+  const { containerRef, revealed, reduced } = useAccordPanelReveal(accordContentKey);
+
+  const displayRows = rows.slice(0, 10);
+
   if (rows.length === 0 && !summary) {
     return (
       <Panel title="Main Accords" className={className}>
@@ -117,31 +167,82 @@ function AccordPanel({
     );
   }
 
+  const summaryAnimate = reduced
+    ? { opacity: 1, filter: "blur(0px)", y: 0 }
+    : revealed
+      ? { opacity: 1, filter: "blur(0px)", y: 0 }
+      : { opacity: 0.62, filter: "blur(4px)", y: 6 };
+
   return (
     <Panel title="Main Accords" className={className}>
-      <div className="flex flex-1 flex-col justify-center space-y-4 px-4 py-5">
+      <div ref={containerRef} className="flex flex-1 flex-col justify-center space-y-4 px-4 py-5">
         {summary ? (
-          <p className="text-center text-sm italic text-white/58 font-serif leading-relaxed">
+          <motion.p
+            className="text-center text-sm italic text-white/58 font-serif leading-relaxed px-1"
+            initial={false}
+            animate={summaryAnimate}
+            transition={{
+              duration: reduced ? 0 : 0.42,
+              ease: ACCORD_ROW_EASE,
+              delay: reduced ? 0 : ACCORD_ROW_DELAY_START,
+            }}
+          >
             {summary}
-          </p>
+          </motion.p>
         ) : null}
-        <div className="space-y-2.5">
-          {rows.slice(0, 10).map((row) => {
+        <motion.div className="space-y-2.5" layout={false}>
+          {displayRows.map((row, index) => {
             const value = strengthValue(row);
+            const pct = value ?? 20;
+            const rowDelay =
+              ACCORD_ROW_DELAY_START + index * ACCORD_STAGGER_S;
+
             return (
-              <div key={row.label} className="grid grid-cols-[4.8rem_1fr_2.4rem] items-center gap-3">
+              <motion.div
+                key={row.label}
+                className="grid grid-cols-[4.8rem_1fr_2.4rem] items-center gap-3"
+                initial={false}
+                animate={
+                  reduced || revealed
+                    ? { opacity: 1, y: 0, filter: "blur(0px)" }
+                    : { opacity: 0, y: 10, filter: "blur(4px)" }
+                }
+                transition={{
+                  duration: reduced ? 0 : 0.44,
+                  ease: ACCORD_ROW_EASE,
+                  delay: reduced ? 0 : rowDelay,
+                }}
+              >
                 <p className="truncate text-xs text-white/68">{row.label}</p>
-                <div className="h-px bg-white/10">
-                  <div
-                    className="h-px bg-scent-accent shadow-[0_0_10px_rgba(201,139,44,0.32)]"
-                    style={{ width: `${value ?? 20}%` }}
+                <div className="h-px bg-white/10 overflow-hidden rounded-full">
+                  <motion.div
+                    className="h-px rounded-full bg-scent-accent shadow-[0_0_10px_rgba(201,139,44,0.32)]"
+                    initial={false}
+                    animate={{ width: reduced || revealed ? `${pct}%` : "0%" }}
+                    transition={{
+                      duration: reduced ? 0 : 0.58,
+                      ease: ACCORD_ROW_EASE,
+                      delay: reduced ? 0 : rowDelay + 0.06,
+                    }}
                   />
                 </div>
-                <p className="text-right text-xs text-white/78 tabular-nums">{value ?? "--"}</p>
-              </div>
+                <motion.p
+                  className="text-right text-xs text-white/78 tabular-nums"
+                  initial={false}
+                  animate={{
+                    opacity: reduced || revealed ? 1 : 0,
+                  }}
+                  transition={{
+                    duration: reduced ? 0 : 0.22,
+                    delay: reduced ? 0 : rowDelay + 0.18,
+                  }}
+                >
+                  {value ?? "--"}
+                </motion.p>
+              </motion.div>
             );
           })}
-        </div>
+        </motion.div>
       </div>
     </Panel>
   );

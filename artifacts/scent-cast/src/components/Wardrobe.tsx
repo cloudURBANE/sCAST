@@ -571,7 +571,6 @@ function ProfileScorePanel({
   const performance = metrics?.performance_score ?? null;
   const value = metrics?.value_score ?? null;
   const consensusScore = scoreNumber(headline?.crowd_consensus_score);
-  const performanceScore = scoreNumber(performance?.score);
   const communityScore = scoreNumber(metrics?.community_interest_score?.score);
   const wearProfile = formatWearProfile(metrics?.wear_profile);
 
@@ -601,7 +600,7 @@ function ProfileScorePanel({
     {
       icon: Activity,
       label: "Performance",
-      value: performanceScore !== null ? `${performanceScore}%` : "Pending",
+      value: null,
     },
     {
       icon: ThumbsUp,
@@ -639,7 +638,11 @@ function ProfileScorePanel({
               className="flex flex-col items-center justify-center gap-1 border border-white/15 bg-white/[0.035] px-4 py-5 text-center"
             >
               <Icon size={18} strokeWidth={1.6} className="text-scent-accent" />
-              <p className="font-serif italic text-2xl text-white leading-tight">{stat.value}</p>
+              {stat.value !== null ? (
+                <p className="font-serif italic text-2xl text-white leading-tight">{stat.value}</p>
+              ) : (
+                <div className="min-h-[1.75rem] sm:min-h-8 shrink-0" aria-hidden />
+              )}
               {stat.label === "Performance" ? (
                 <PerformanceStatSubtitle
                   performance={performance}
@@ -674,7 +677,11 @@ function ProfileScorePanel({
                   className="flex flex-col items-center justify-center gap-1 border border-white/15 bg-white/[0.035] px-2 py-3 text-center"
                 >
                   <Icon size={14} className="text-scent-accent" />
-                  <p className="text-[12px] text-white/85 font-serif italic">{stat.value}</p>
+                  {stat.value !== null ? (
+                    <p className="text-[12px] text-white/85 font-serif italic">{stat.value}</p>
+                  ) : (
+                    <div className="min-h-[1.125rem]" aria-hidden />
+                  )}
                   {stat.label === "Performance" ? (
                     <PerformanceStatSubtitle
                       performance={performance}
@@ -1518,11 +1525,8 @@ export const Wardrobe: React.FC<{
                 }
               >
                 <div className="mx-auto max-w-[92rem] space-y-4 sm:space-y-5 py-5 sm:py-7">
-                  <header className="mx-auto max-w-3xl grid text-center gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-x-10">
-                    <p className="text-[10px] uppercase tracking-[0.36em] text-scent-accent font-bold order-1 sm:order-2 sm:col-start-2 sm:row-start-1 sm:self-center sm:text-right sm:max-w-[14rem] sm:pl-2">
-                      Scent Dossier
-                    </p>
-                    <div className="order-2 sm:order-1 sm:col-start-1 sm:row-start-1 space-y-2">
+                  <header className="mx-auto max-w-3xl text-center">
+                    <div className="space-y-2">
                       <h2
                         id="fragrance-detail-title"
                         className="font-serif italic text-5xl sm:text-7xl lg:text-8xl leading-[0.92] text-[#fff7ec] tracking-normal uppercase"

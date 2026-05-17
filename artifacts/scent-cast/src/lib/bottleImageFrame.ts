@@ -19,8 +19,9 @@ export type BottleImageVariant = "featured" | "grid" | "detail" | "thumb" | "sha
  *
  * 3. **Bitmap scaling** (`.bottle-packshot-img`) — `max-width/max-height: 100%` with
  *    `object-fit: contain` and **`object-position: center bottom`**. The artboard uses
- *    **`align-items: flex-end`** so the image box sits on a shared **shelf** regardless of
- *    intrinsic aspect ratio (magazine-rack baseline).
+ *    **column flex** with **`justify-content: flex-end`** + **`align-items: center`** so
+ *    the bitmap box pins to the bottom shelf **and stays centered horizontally** even for
+ *    replaced `<img>` flex items (narrow column + `max-height` quirks in some browsers).
  *
  * 4. **One shared axis (uniform alignment)** — After scaling, we pin `object-position`
  *    to **center bottom** (not vertical center). Every bottle sits on the **same baseline**
@@ -64,7 +65,7 @@ export function bottleArtboardClass(variant: BottleImageVariant, ...extra: Class
 
 /**
  * Fill the artboard: `.bottle-packshot-img` (see index.css) sets object-fit/position;
- * parent `.bottle-artboard` uses flex-end so the bitmap box sits on a shared shelf.
+ * `.bottle-artboard` uses column flex (bottom shelf + centered cross-axis).
  * `origin-bottom` keeps hover `scale-*` anchored at the baseline.
  */
 export function bottleImageFillClass(...extra: ClassValue[]): string {

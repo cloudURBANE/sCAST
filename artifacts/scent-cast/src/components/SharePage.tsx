@@ -451,7 +451,6 @@ function ProfileScorePanel({
   const performance = metrics?.performance_score ?? null;
   const value = metrics?.value_score ?? null;
   const consensusScore = scoreNumber(headline?.crowd_consensus_score);
-  const performanceScore = scoreNumber(performance?.score);
   const communityScore = scoreNumber(metrics?.community_interest_score?.score);
   const wearProfile = formatWearProfile(metrics?.wear_profile);
 
@@ -480,7 +479,7 @@ function ProfileScorePanel({
     {
       icon: Activity,
       label: "Performance",
-      value: performanceScore !== null ? `${performanceScore}%` : "Pending",
+      value: null,
     },
     {
       icon: ThumbsUp,
@@ -517,7 +516,11 @@ function ProfileScorePanel({
               className="flex flex-col items-center justify-center gap-1 border-r border-b lg:border-b-0 border-white/8 px-4 py-5 text-center last:border-r-0"
             >
               <Icon size={18} strokeWidth={1.6} className="text-scent-accent" />
-              <p className="font-serif italic text-2xl text-white leading-tight">{stat.value}</p>
+              {stat.value !== null ? (
+                <p className="font-serif italic text-2xl text-white leading-tight">{stat.value}</p>
+              ) : (
+                <div className="min-h-[1.75rem] sm:min-h-8 shrink-0" aria-hidden />
+              )}
               {stat.label === "Performance" ? (
                 <PerformanceStatSubtitle
                   performance={performance}
