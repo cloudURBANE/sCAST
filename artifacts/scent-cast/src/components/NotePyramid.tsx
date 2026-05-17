@@ -58,6 +58,11 @@ const PYRAMID_Y = {
   baseBottom: 372,
 };
 
+const GAP_DOT_Y = {
+  upper: (PYRAMID_Y.topBottom + PYRAMID_Y.heartTop) / 2,
+  lower: (PYRAMID_Y.heartBottom + PYRAMID_Y.baseTop) / 2,
+};
+
 function svgNumber(value: number) {
   return Number.isInteger(value) ? `${value}` : value.toFixed(2).replace(/\.?0+$/, '');
 }
@@ -251,6 +256,28 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
     [handleLayerActivate],
   );
 
+  const gapDots = [
+    {
+      key: 'upper-gap-dot',
+      y: GAP_DOT_Y.upper,
+      isVisible: activeLayer === 'top' || activeLayer === 'heart',
+    },
+    {
+      key: 'lower-gap-dot',
+      y: GAP_DOT_Y.lower,
+      isVisible: activeLayer === 'base' || activeLayer === 'heart',
+    },
+  ];
+
+  const pulseTransition = prefersReducedMotion
+  ? ({ duration: 0.01 } as const)
+  : ({
+      duration: 2.6,
+      ease: [0.42, 0, 0.58, 1],
+      repeat: Infinity,
+      repeatType: 'mirror',
+    } as const);
+
   return (
     <section
       ref={rootRef}
@@ -369,22 +396,36 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
               <stop offset="0.42" stopColor="#ffffff" stopOpacity="0.34" />
               <stop offset="1" stopColor="#ffffff" stopOpacity="0.15" />
             </linearGradient>
+
+            <radialGradient id={id('amber-dot')} cx="36%" cy="30%" r="74%">
+              <stop offset="0" stopColor="#fff0c8" />
+              <stop offset="0.24" stopColor="#f0c36f" />
+              <stop offset="0.55" stopColor="#d1953e" />
+              <stop offset="0.8" stopColor="#7c4f18" />
+              <stop offset="1" stopColor="#251306" />
+            </radialGradient>
+            <radialGradient id={id('amber-glow')} cx="50%" cy="50%" r="50%">
+              <stop offset="0" stopColor="#e4ad55" stopOpacity="0.52" />
+              <stop offset="0.44" stopColor="#d1953e" stopOpacity="0.18" />
+              <stop offset="1" stopColor="#d1953e" stopOpacity="0" />
+            </radialGradient>
+
             <linearGradient id={id('glyph-line-left')} x1="106" y1="397" x2="164" y2="397" gradientUnits="userSpaceOnUse">
-              <stop offset="0" stopColor="#ffffff" stopOpacity="0" />
-              <stop offset="0.62" stopColor="#d9dddc" stopOpacity="0.54" />
-              <stop offset="1" stopColor="#ffffff" stopOpacity="0.88" />
+              <stop offset="0" stopColor="#d1953e" stopOpacity="0" />
+              <stop offset="0.62" stopColor="#d1953e" stopOpacity="0.46" />
+              <stop offset="1" stopColor="#f0c36f" stopOpacity="0.82" />
             </linearGradient>
             <linearGradient id={id('glyph-line-right')} x1="196" y1="397" x2="254" y2="397" gradientUnits="userSpaceOnUse">
-              <stop offset="0" stopColor="#ffffff" stopOpacity="0.88" />
-              <stop offset="0.38" stopColor="#d9dddc" stopOpacity="0.54" />
-              <stop offset="1" stopColor="#ffffff" stopOpacity="0" />
+              <stop offset="0" stopColor="#f0c36f" stopOpacity="0.82" />
+              <stop offset="0.38" stopColor="#d1953e" stopOpacity="0.46" />
+              <stop offset="1" stopColor="#d1953e" stopOpacity="0" />
             </linearGradient>
             <radialGradient id={id('glyph-sphere')} cx="36%" cy="30%" r="72%">
-              <stop offset="0" stopColor="#ffffff" />
-              <stop offset="0.22" stopColor="#f4f5f3" />
-              <stop offset="0.5" stopColor="#9fa3a3" />
-              <stop offset="0.74" stopColor="#373b3d" />
-              <stop offset="1" stopColor="#f8f8f4" />
+              <stop offset="0" stopColor="#fff0c8" />
+              <stop offset="0.22" stopColor="#f0c36f" />
+              <stop offset="0.5" stopColor="#d1953e" />
+              <stop offset="0.74" stopColor="#7c4f18" />
+              <stop offset="1" stopColor="#fff0c8" />
             </radialGradient>
 
             <pattern id={id('grain-platinum')} width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(-13)">
@@ -415,6 +456,13 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                 <feMergeNode in="SourceGraphic" />
               </feMerge>
             </filter>
+            <filter id={id('amber-soft')} x="-180%" y="-180%" width="460%" height="460%" colorInterpolationFilters="sRGB">
+              <feGaussianBlur in="SourceGraphic" stdDeviation="1.25" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
             <filter id={id('groove-shadow')} x="-250%" y="-12%" width="600%" height="124%" colorInterpolationFilters="sRGB">
               <feDropShadow dx="-1" dy="0" stdDeviation="0.8" floodColor="#ffffff" floodOpacity="0.22" />
               <feDropShadow dx="1.4" dy="0" stdDeviation="0.9" floodColor="#000000" floodOpacity="0.82" />
@@ -432,11 +480,6 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
           <rect x="-12" y="-8" width="384" height="438" fill="#050607" />
           <rect x="-12" y="-8" width="384" height="438" fill={fill('background-luminance')} />
           <rect x="-12" y="-8" width="384" height="438" fill={fill('background-grain')} opacity="0.38" />
-
-          <g aria-hidden pointerEvents="none">
-            <ellipse cx="180" cy="210" rx="114" ry="182" fill="#ffffff" opacity="0.025" />
-            <ellipse cx="180" cy="379" rx="135" ry="13" fill="#000000" opacity="0.72" />
-          </g>
 
           {layers.map((layer) => {
             const isActive = activeLayer === layer.key;
@@ -501,7 +544,11 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                     <path key={`${layer.key}-${faceIndex}`} d={facePath} fill={layer.faceFills[faceIndex]} />
                   ))}
                   <path d={layer.hitPath} fill={fill('vertical-falloff')} opacity="0.56" />
-                  <path d={layer.hitPath} fill={layer.polishFill} opacity={isActive ? layer.polishOpacity + 0.08 : layer.polishOpacity} />
+                  <path
+                    d={layer.hitPath}
+                    fill={layer.polishFill}
+                    opacity={isActive ? layer.polishOpacity + 0.08 : layer.polishOpacity}
+                  />
                   <path d={layer.hitPath} fill={layer.grainFill} opacity={layer.grainOpacity} />
                 </g>
 
@@ -574,10 +621,44 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
             );
           })}
 
-          <g aria-hidden pointerEvents="none">
-            <circle cx="180" cy="136" r="2.7" fill="#ffffff" opacity="0.74" filter={fill('edge-glow')} />
-            <circle cx="180" cy="255" r="2.5" fill="#ffffff" opacity="0.58" filter={fill('edge-glow')} />
-          </g>
+          <AnimatePresence>
+            {gapDots.map((dot) =>
+              dot.isVisible ? (
+                <motion.g
+                  key={dot.key}
+                  aria-hidden
+                  pointerEvents="none"
+                  initial={{ opacity: 0, scale: 0.58 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.58 }}
+                  transition={prefersReducedMotion ? { duration: 0.01 } : { duration: 0.22, ease: 'easeOut' }}
+                  style={{
+                    transformBox: 'view-box',
+                    transformOrigin: `${PYRAMID_CENTER_X}px ${dot.y}px`,
+                  }}
+                >
+                  <circle cx={PYRAMID_CENTER_X} cy={dot.y} r="8.5" fill={fill('amber-glow')} opacity="0.52" />
+                  <circle
+                    cx={PYRAMID_CENTER_X}
+                    cy={dot.y}
+                    r="2.75"
+                    fill={fill('amber-dot')}
+                    filter={fill('amber-soft')}
+                  />
+                  <circle
+                    cx={PYRAMID_CENTER_X}
+                    cy={dot.y}
+                    r="3.15"
+                    fill="none"
+                    stroke="#f0c36f"
+                    strokeOpacity="0.52"
+                    strokeWidth="0.45"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                </motion.g>
+              ) : null,
+            )}
+          </AnimatePresence>
 
           <g aria-hidden pointerEvents="none" filter={fill('glyph-soft')}>
             <line
@@ -600,8 +681,41 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
               strokeLinecap="round"
               vectorEffect="non-scaling-stroke"
             />
-            <circle cx="180" cy="397" r="6.5" fill={fill('glyph-sphere')} />
-            <circle cx="180" cy="397" r="6.7" fill="none" stroke="#ffffff" strokeOpacity="0.42" strokeWidth="0.45" />
+            <motion.circle
+              cx="180"
+              cy="397"
+              r="9.5"
+              fill={fill('amber-glow')}
+              animate={prefersReducedMotion ? { opacity: 0.32 } : { opacity: [0.18, 0.48, 0.18] }}
+              transition={pulseTransition}
+            />
+            <motion.circle
+              cx="180"
+              cy="397"
+              r="6.5"
+              fill={fill('glyph-sphere')}
+              animate={
+                prefersReducedMotion
+                  ? { opacity: 0.92, r: 6.5 }
+                  : { opacity: [0.68, 1, 0.68], r: [5.9, 6.85, 5.9] }
+              }
+              transition={pulseTransition}
+            />
+            <motion.circle
+              cx="180"
+              cy="397"
+              r="6.7"
+              fill="none"
+              stroke="#f0c36f"
+              strokeOpacity="0.42"
+              strokeWidth="0.45"
+              animate={
+                prefersReducedMotion
+                  ? { opacity: 0.42, r: 6.7 }
+                  : { opacity: [0.22, 0.58, 0.22], r: [6.7, 8.2, 6.7] }
+              }
+              transition={pulseTransition}
+            />
           </g>
         </svg>
 
@@ -616,15 +730,15 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
               className={`absolute left-1/2 z-50 w-[76%] max-w-[19rem] -translate-x-1/2 ${selectedLayer.revealClass}`}
               onClick={(event) => event.stopPropagation()}
             >
-              <div className="relative overflow-hidden border border-white/[0.11] bg-[#050607]/85 px-3.5 py-2.5 text-center shadow-[0_18px_34px_rgba(0,0,0,0.62),inset_0_1px_0_rgba(255,255,255,0.1),inset_0_-1px_0_rgba(255,255,255,0.035)] backdrop-blur-[10px]">
+              <div className="relative px-3.5 py-2.5 text-center">
                 <span
-                  className="pointer-events-none absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-white/45 to-transparent"
+                  className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-[#d1953e]/55 to-transparent"
                   aria-hidden
                 />
-                <p className="text-[8px] font-bold uppercase tracking-[0.32em] text-white/58">
+                <p className="text-[8px] font-bold uppercase tracking-[0.32em] text-[#d1953e]/72">
                   {selectedLayer.title}
                 </p>
-                <p className="mx-auto mt-1.5 max-w-[17rem] font-serif text-sm italic leading-snug text-white/84 sm:text-[0.93rem]">
+                <p className="mx-auto mt-1.5 max-w-[17rem] font-serif text-sm italic leading-snug text-white/84 [text-shadow:0_2px_10px_rgba(0,0,0,0.75)] sm:text-[0.93rem]">
                   {formatNotes(selectedLayer.notes)}
                 </p>
               </div>
