@@ -849,21 +849,8 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
 
                     <div className="space-y-3 sm:space-y-4">
                       <FragrancePanel title="Bottle Visual">
-                        <div className="p-4">
-                          <div className="mb-3 flex justify-end">
-                            {!data?.hideImages && selectedItem.imageUrl ? (
-                              <button
-                                type="button"
-                                onClick={() => setEnlargeOpen(true)}
-                                className="inline-flex items-center gap-1.5 border border-white/12 bg-white/[0.05] px-2.5 py-1 text-[9px] uppercase tracking-[0.18em] font-bold text-white/62 hover:bg-white/[0.1] hover:text-white transition-colors"
-                                aria-label="Enlarge bottle image"
-                              >
-                                <Maximize2 size={13} strokeWidth={2} />
-                                Enlarge
-                              </button>
-                            ) : null}
-                          </div>
-                          <div className="relative h-56 sm:h-72 lg:h-64 overflow-hidden">
+                        <div className="flex flex-col p-4">
+                          <div className="relative h-56 sm:h-72 lg:h-64 min-h-0 w-full shrink-0 overflow-hidden">
                             {!data?.hideImages ? (
                               <BottleImage
                                 key={selectedItem.imageUrl || 'missing-image'}
@@ -883,6 +870,19 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                               </div>
                             )}
                           </div>
+                          {!data?.hideImages && selectedItem.imageUrl ? (
+                            <div className="mt-3 flex w-full shrink-0 justify-center">
+                              <button
+                                type="button"
+                                onClick={() => setEnlargeOpen(true)}
+                                className="inline-flex items-center gap-1.5 rounded-sm border border-white/12 bg-white/[0.05] px-3 py-1.5 text-[9px] uppercase tracking-[0.18em] font-bold text-white/62 hover:bg-white/[0.1] hover:text-white transition-colors"
+                                aria-label="Enlarge bottle image"
+                              >
+                                <Maximize2 size={13} strokeWidth={2} />
+                                Enlarge
+                              </button>
+                            </div>
+                          ) : null}
                         </div>
                       </FragrancePanel>
                     </div>
