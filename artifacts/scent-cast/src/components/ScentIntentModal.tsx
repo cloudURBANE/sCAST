@@ -201,7 +201,7 @@ export const ScentIntentModal: React.FC<ScentIntentModalProps> = ({ isOpen, onCl
 
         {/* Pinned footer — Back + Proceed always visible */}
         <div
-          className={`px-5 pt-3 shrink-0 border-t border-white/5 flex items-center ${step > 1 ? 'justify-between' : 'justify-center'}`}
+          className="px-5 pt-3 shrink-0 border-t border-white/5 flex items-center justify-between"
           style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))' }}
         >
           {step > 1 ? (
@@ -212,7 +212,9 @@ export const ScentIntentModal: React.FC<ScentIntentModalProps> = ({ isOpen, onCl
             >
               Back
             </button>
-          ) : null}
+          ) : (
+            <div />
+          )}
 
           <button
             type="button"
