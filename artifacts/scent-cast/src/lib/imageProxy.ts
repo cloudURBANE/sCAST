@@ -17,15 +17,6 @@ function apiUrl(path: string, apiBaseUrl = API_BASE_URL): string {
   return apiBaseUrl ? `${apiBaseUrl}${path}` : path;
 }
 
-function versionFromUrl(url: string): string | null {
-  try {
-    const parsed = new URL(url, "http://scentcast.local");
-    return parsed.searchParams.get("v");
-  } catch {
-    return null;
-  }
-}
-
 export function proxiedImageUrl(url: string | undefined | null, options?: ProxiedImageOptions): string {
   if (!url) return "";
   let u = url.trim();

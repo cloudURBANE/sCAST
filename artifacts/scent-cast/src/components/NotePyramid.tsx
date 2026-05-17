@@ -336,21 +336,83 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
               <feDropShadow dx="0" dy="12" stdDeviation="8" floodColor="#000000" floodOpacity="0.5" />
               <feDropShadow dx="0" dy="0" stdDeviation="7" floodColor="#d69a3b" floodOpacity="0.32" />
             </filter>
+            <linearGradient id="pyramid-ground-line" x1="42" y1="379.5" x2="318" y2="379.5" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stopColor="#c98b2c" stopOpacity="0" />
+              <stop offset="0.14" stopColor="#c98b2c" stopOpacity="0.42" />
+              <stop offset="0.5" stopColor="#f2d089" stopOpacity="0.95" />
+              <stop offset="0.86" stopColor="#c98b2c" stopOpacity="0.42" />
+              <stop offset="1" stopColor="#c98b2c" stopOpacity="0" />
+            </linearGradient>
+            <filter id="pyramid-ground-line-soft" x="-12%" y="-800%" width="124%" height="1600%" colorInterpolationFilters="sRGB">
+              <feGaussianBlur in="SourceGraphic" stdDeviation="1.35" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
           </defs>
 
-          <ellipse cx="180" cy="386" rx="150" ry="28" fill="#d89731" opacity="0.1" />
-          <ellipse
-            cx="180"
-            cy="383"
-            rx="112"
-            ry="15"
-            fill="#000000"
-            opacity="0.36"
-            stroke="#c98b2c"
-            strokeOpacity="0.16"
-            strokeWidth="1"
-            vectorEffect="non-scaling-stroke"
-          />
+          <g aria-hidden pointerEvents="none">
+            <line
+              x1="34"
+              y1="379.5"
+              x2="326"
+              y2="379.5"
+              stroke="#030303"
+              strokeOpacity="0.62"
+              strokeWidth="5"
+              strokeLinecap="round"
+            />
+            <g filter="url(#pyramid-ground-line-soft)">
+              <line
+                x1="42"
+                y1="379.5"
+                x2="318"
+                y2="379.5"
+                stroke="url(#pyramid-ground-line)"
+                strokeWidth={1.1}
+                strokeLinecap="round"
+                opacity={prefersReducedMotion ? 0.78 : 0.55}
+              >
+                {!prefersReducedMotion ? (
+                  <animate
+                    attributeName="opacity"
+                    values="0.34;0.95;0.34"
+                    dur="2.4s"
+                    repeatCount="indefinite"
+                    calcMode="spline"
+                    keySplines="0.42 0 0.58 1;0.42 0 0.58 1"
+                    keyTimes="0;0.5;1"
+                  />
+                ) : null}
+              </line>
+            </g>
+            {!prefersReducedMotion ? (
+              <line
+                x1="42"
+                y1="379.5"
+                x2="318"
+                y2="379.5"
+                stroke="#fff4d4"
+                strokeOpacity="0.28"
+                strokeWidth={2.5}
+                strokeLinecap="round"
+                strokeDasharray="42 274"
+                fill="none"
+              >
+                <animate attributeName="stroke-dashoffset" from="0" to="-316" dur="5.8s" repeatCount="indefinite" />
+                <animate
+                  attributeName="opacity"
+                  values="0.06;0.28;0.06"
+                  dur="2.4s"
+                  repeatCount="indefinite"
+                  calcMode="spline"
+                  keySplines="0.42 0 0.58 1;0.42 0 0.58 1"
+                  keyTimes="0;0.5;1"
+                />
+              </line>
+            ) : null}
+          </g>
           <line
             x1="180"
             y1="18"

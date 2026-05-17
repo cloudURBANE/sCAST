@@ -445,14 +445,18 @@ function DetailMetaStrip({ rows }: { rows: Array<{ label: string; value: string 
   if (rows.length === 0) return null;
 
   return (
-    <div className="w-full max-w-4xl border border-white/[0.08] bg-black/22 px-3 py-2">
-      <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 sm:gap-x-7">
+    <div className="w-full max-w-4xl border border-white/[0.08] bg-black/22 px-3 py-2 sm:px-4 sm:py-2.5">
+      <div className="flex min-w-0 flex-col divide-y divide-white/[0.08] sm:flex-row sm:divide-x sm:divide-y-0">
         {rows.map(({ label, value }) => (
-          <div key={label} className="min-w-[5.75rem] max-w-[10rem] text-center">
-            <p className="text-[8px] uppercase tracking-[0.2em] text-white/36">
-              {label}
-            </p>
-            <p className="mt-0.5 truncate text-[12px] leading-tight text-white/82" title={value}>
+          <div
+            key={label}
+            className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center gap-1 px-2 py-3 text-center sm:min-h-[3.125rem] sm:px-2.5"
+          >
+            <p className="text-[8px] font-semibold uppercase tracking-[0.2em] text-white/40">{label}</p>
+            <p
+              className="max-w-full text-balance break-words text-[11px] font-medium leading-snug text-white/[0.82] sm:text-[12px]"
+              title={value}
+            >
               {value}
             </p>
           </div>
