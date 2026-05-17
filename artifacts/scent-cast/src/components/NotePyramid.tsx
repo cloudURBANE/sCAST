@@ -2,6 +2,7 @@ import React from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 
 type ActiveLayer = 'top' | 'heart' | 'base';
+type Point = readonly [number, number];
 
 type NotePyramidProps = {
   topNotes: string[];
@@ -14,18 +15,20 @@ type LayerConfig = {
   key: ActiveLayer;
   title: string;
   ariaLabel: string;
-  notes: string[];
-  positionClass: string;
+  hitPath: string;
+  faces: readonly [string, string];
+  faceFills: readonly [string, string];
+  channelPath: string;
   seamClass: string;
-  zIndex: number;
-  style: React.CSSProperties;
+  grainOpacity: number;
+  notes: string[];
 };
 
 const layerMotion: Record<ActiveLayer | 'idle', Record<ActiveLayer, number>> = {
   idle: { top: 0, heart: 0, base: 0 },
-  top: { top: -18, heart: 0, base: 0 },
-  heart: { top: -8, heart: -2, base: 16 },
-  base: { top: -6, heart: -13, base: 8 },
+  top: { top: -14, heart: 0, base: 0 },
+  heart: { top: -7, heart: -2, base: 12 },
+  base: { top: -5, heart: -10, base: 6 },
 };
 
 const transition = {
@@ -33,52 +36,147 @@ const transition = {
   ease: [0.22, 1, 0.36, 1],
 } as const;
 
-const topLayerStyle: React.CSSProperties = {
-  clipPath: 'polygon(50% 0%, 92% 78%, 50% 98%, 8% 78%)',
-  background:
-    'radial-gradient(circle at 58% 23%, rgba(255,238,174,0.38), transparent 22%), linear-gradient(90deg, rgba(59,37,16,0.98) 0%, rgba(129,86,32,0.97) 43%, rgba(232,191,105,0.98) 50%, rgba(150,98,36,0.98) 57%, rgba(54,34,15,0.99) 100%), repeating-linear-gradient(106deg, rgba(255,255,255,0.075) 0 1px, transparent 1px 11px)',
-  boxShadow:
-    'inset 0 0 0 1px rgba(255,222,143,0.68), inset 0 -14px 26px rgba(45,24,7,0.48), inset 0 10px 24px rgba(255,236,188,0.1), 0 0 24px rgba(224,154,52,0.2)',
+const PYRAMID_CENTER_X = 180;
+const PYRAMID_OUTER = {
+  apex: [PYRAMID_CENTER_X, 26] as Point,
+  leftBase: [20, 376] as Point,
+  rightBase: [340, 376] as Point,
 };
 
-const heartLayerStyle: React.CSSProperties = {
-  clipPath: 'polygon(20% 6%, 80% 6%, 96% 72%, 50% 96%, 4% 72%)',
-  background:
-    'radial-gradient(circle at 61% 29%, rgba(255,247,222,0.14), transparent 22%), linear-gradient(90deg, rgba(13,17,18,0.99), rgba(29,42,39,0.99) 43%, rgba(86,91,82,0.98) 50%, rgba(35,49,45,0.99) 57%, rgba(12,16,17,1)), repeating-linear-gradient(126deg, transparent 0 13px, rgba(255,255,255,0.06) 14px 15px, transparent 16px 30px)',
-  boxShadow:
-    'inset 0 0 0 1px rgba(219,171,82,0.48), inset 0 14px 22px rgba(255,232,162,0.055), inset 0 -18px 26px rgba(0,0,0,0.56), 0 0 18px rgba(214,148,47,0.12)',
+const PYRAMID_Y = {
+  topBottom: 137,
+  heartTop: 142,
+  heartBottom: 255,
+  baseTop: 260,
+  baseBottom: 376,
 };
 
-const baseLayerStyle: React.CSSProperties = {
-  clipPath: 'polygon(15% 8%, 85% 8%, 99% 72%, 50% 98%, 1% 72%)',
-  background:
-    'radial-gradient(circle at 60% 28%, rgba(255,241,204,0.09), transparent 24%), linear-gradient(90deg, rgba(4,5,6,1), rgba(15,17,18,1) 41%, rgba(50,50,47,0.98) 50%, rgba(20,21,21,1) 59%, rgba(4,4,5,1)), repeating-linear-gradient(118deg, transparent 0 15px, rgba(255,255,255,0.05) 16px 17px, transparent 18px 35px)',
-  boxShadow:
-    'inset 0 0 0 1px rgba(214,146,53,0.52), inset 0 12px 18px rgba(255,231,175,0.035), inset 0 -24px 32px rgba(0,0,0,0.68), 0 20px 38px rgba(0,0,0,0.58), 0 0 24px rgba(214,148,47,0.12)',
-};
+function svgNumber(value: number) {
+  return Number.isInteger(value) ? `${value}` : value.toFixed(2).replace(/\.?0+$/, '');
+}
+
+function pointToken([x, y]: Point) {
+  return `${svgNumber(x)} ${svgNumber(y)}`;
+}
+
+function polygonPath(points: readonly Point[]) {
+  return `M${points.map(pointToken).join(' L')} Z`;
+}
+
+function linePath(from: Point, to: Point) {
+  return `M${pointToken(from)} L${pointToken(to)}`;
+}
+
+function pointOnEdge(edgeEnd: Point, y: number): Point {
+  const [apexX, apexY] = PYRAMID_OUTER.apex;
+  const [endX, endY] = edgeEnd;
+  const progress = (y - apexY) / (endY - apexY);
+  return [apexX + (endX - apexX) * progress, y];
+}
+
+function tierHitPath(topY: number, bottomY: number) {
+  return polygonPath([
+    pointOnEdge(PYRAMID_OUTER.leftBase, topY),
+    pointOnEdge(PYRAMID_OUTER.rightBase, topY),
+    pointOnEdge(PYRAMID_OUTER.rightBase, bottomY),
+    pointOnEdge(PYRAMID_OUTER.leftBase, bottomY),
+  ]);
+}
+
+function tierFaces(topY: number, bottomY: number): readonly [string, string] {
+  return [
+    polygonPath([
+      pointOnEdge(PYRAMID_OUTER.leftBase, topY),
+      [PYRAMID_CENTER_X, topY],
+      [PYRAMID_CENTER_X, bottomY],
+      pointOnEdge(PYRAMID_OUTER.leftBase, bottomY),
+    ]),
+    polygonPath([
+      [PYRAMID_CENTER_X, topY],
+      pointOnEdge(PYRAMID_OUTER.rightBase, topY),
+      pointOnEdge(PYRAMID_OUTER.rightBase, bottomY),
+      [PYRAMID_CENTER_X, bottomY],
+    ]),
+  ];
+}
+
+function apexFaces(bottomY: number): readonly [string, string] {
+  const apex = PYRAMID_OUTER.apex;
+  return [
+    polygonPath([apex, [PYRAMID_CENTER_X, bottomY], pointOnEdge(PYRAMID_OUTER.leftBase, bottomY)]),
+    polygonPath([apex, pointOnEdge(PYRAMID_OUTER.rightBase, bottomY), [PYRAMID_CENTER_X, bottomY]]),
+  ];
+}
+
+const layerGeometry = {
+  base: {
+    hitPath: tierHitPath(PYRAMID_Y.baseTop, PYRAMID_Y.baseBottom),
+    faces: tierFaces(PYRAMID_Y.baseTop, PYRAMID_Y.baseBottom),
+    channelPath: linePath([PYRAMID_CENTER_X, PYRAMID_Y.baseTop + 4], [PYRAMID_CENTER_X, PYRAMID_Y.baseBottom - 4]),
+  },
+  heart: {
+    hitPath: tierHitPath(PYRAMID_Y.heartTop, PYRAMID_Y.heartBottom),
+    faces: tierFaces(PYRAMID_Y.heartTop, PYRAMID_Y.heartBottom),
+    channelPath: linePath([PYRAMID_CENTER_X, PYRAMID_Y.heartTop + 4], [PYRAMID_CENTER_X, PYRAMID_Y.heartBottom - 4]),
+  },
+  top: {
+    hitPath: polygonPath([
+      PYRAMID_OUTER.apex,
+      pointOnEdge(PYRAMID_OUTER.rightBase, PYRAMID_Y.topBottom),
+      pointOnEdge(PYRAMID_OUTER.leftBase, PYRAMID_Y.topBottom),
+    ]),
+    faces: apexFaces(PYRAMID_Y.topBottom),
+    channelPath: linePath([PYRAMID_CENTER_X, PYRAMID_OUTER.apex[1] + 7], [PYRAMID_CENTER_X, PYRAMID_Y.topBottom - 4]),
+  },
+} satisfies Record<ActiveLayer, Pick<LayerConfig, 'hitPath' | 'faces' | 'channelPath'>>;
 
 function formatNotes(notes: string[]) {
   return notes.length > 0 ? notes.join(', ') : 'No notes detected.';
 }
 
 function MagneticTether({
-  className,
+  y,
   active,
 }: {
-  className: string;
+  y: number;
   active: boolean;
 }) {
   return (
-    <motion.div
+    <motion.g
       aria-hidden
-      className={`pointer-events-none absolute left-1/2 z-40 h-8 w-14 -translate-x-1/2 ${className}`}
-      animate={{ opacity: active ? 0.95 : 0.3, scaleY: active ? 1 : 0.78 }}
+      initial={false}
+      animate={{ opacity: active ? 0.85 : 0.24, scaleY: active ? 1 : 0.68 }}
       transition={transition}
+      style={{ transformOrigin: `180px ${y}px` }}
     >
-      <span className="absolute left-[49%] top-1 h-7 w-px origin-top -rotate-[24deg] bg-gradient-to-b from-scent-accent/80 via-white/42 to-transparent shadow-[0_0_10px_rgba(201,139,44,0.45)]" />
-      <span className="absolute right-[49%] top-1 h-7 w-px origin-top rotate-[24deg] bg-gradient-to-b from-scent-accent/80 via-white/42 to-transparent shadow-[0_0_10px_rgba(201,139,44,0.45)]" />
-      <span className="absolute left-1/2 top-[44%] h-1.5 w-1.5 -translate-x-1/2 rounded-full border border-scent-accent/55 bg-black shadow-[0_0_12px_rgba(201,139,44,0.55)]" />
-    </motion.div>
+      <line
+        x1="159"
+        y1={y - 2}
+        x2="180"
+        y2={y + 18}
+        stroke="url(#pyramid-tether)"
+        strokeWidth="1"
+        vectorEffect="non-scaling-stroke"
+      />
+      <line
+        x1="201"
+        y1={y - 2}
+        x2="180"
+        y2={y + 18}
+        stroke="url(#pyramid-tether)"
+        strokeWidth="1"
+        vectorEffect="non-scaling-stroke"
+      />
+      <circle
+        cx="180"
+        cy={y + 11}
+        r="2.8"
+        fill="#050403"
+        stroke="rgba(201,139,44,0.65)"
+        strokeWidth="1"
+        vectorEffect="non-scaling-stroke"
+      />
+    </motion.g>
   );
 }
 
@@ -118,34 +216,34 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
 
   const layers: LayerConfig[] = [
     {
-      key: 'top',
-      title: 'Top Notes',
-      ariaLabel: 'Reveal top notes',
-      notes: topNotes,
-      positionClass: 'left-[30%] top-[5%] h-[26%] w-[40%]',
-      seamClass: 'top-[28%]',
-      zIndex: 30,
-      style: topLayerStyle,
+      key: 'base',
+      title: 'Base Notes',
+      ariaLabel: 'Reveal base notes',
+      ...layerGeometry.base,
+      faceFills: ['url(#pyramid-base-left)', 'url(#pyramid-base-right)'],
+      seamClass: 'top-[77%]',
+      grainOpacity: 0.18,
+      notes: baseNotes,
     },
     {
       key: 'heart',
       title: 'Heart Notes',
       ariaLabel: 'Reveal heart notes',
-      notes: heartNotes,
-      positionClass: 'left-[20%] top-[30%] h-[27%] w-[60%]',
+      ...layerGeometry.heart,
+      faceFills: ['url(#pyramid-heart-left)', 'url(#pyramid-heart-right)'],
       seamClass: 'top-[53%]',
-      zIndex: 20,
-      style: heartLayerStyle,
+      grainOpacity: 0.15,
+      notes: heartNotes,
     },
     {
-      key: 'base',
-      title: 'Base Notes',
-      ariaLabel: 'Reveal base notes',
-      notes: baseNotes,
-      positionClass: 'left-[7%] top-[55%] h-[32%] w-[86%]',
-      seamClass: 'top-[78%]',
-      zIndex: 10,
-      style: baseLayerStyle,
+      key: 'top',
+      title: 'Top Notes',
+      ariaLabel: 'Reveal top notes',
+      ...layerGeometry.top,
+      faceFills: ['url(#pyramid-top-left)', 'url(#pyramid-top-right)'],
+      seamClass: 'top-[28%]',
+      grainOpacity: 0.2,
+      notes: topNotes,
     },
   ];
 
@@ -154,6 +252,16 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
     setActiveLayer((current) => (current === layer ? null : layer));
   }, []);
 
+  const handleLayerKeyDown = React.useCallback(
+    (event: React.KeyboardEvent<SVGGElement>, layer: ActiveLayer) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      event.stopPropagation();
+      handleLayerActivate(layer);
+    },
+    [handleLayerActivate],
+  );
+
   return (
     <section
       ref={rootRef}
@@ -161,63 +269,195 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
       onClick={() => setActiveLayer(null)}
     >
       <div
-        className="relative w-full max-w-[23rem] aspect-[1/1.05] shrink-0 sm:max-w-[25rem]"
+        className="relative w-full max-w-[23rem] aspect-[1/1.08] shrink-0 sm:max-w-[25rem]"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="absolute left-1/2 top-[2%] h-[92%] w-px -translate-x-1/2 bg-gradient-to-b from-transparent via-scent-accent/28 to-transparent" />
-        <div className="absolute inset-x-[5%] bottom-[1%] h-[22%] rounded-[50%] bg-[radial-gradient(ellipse_at_center,rgba(216,151,49,0.24),rgba(216,151,49,0.06)_42%,transparent_72%)] blur-sm" />
-        <div className="absolute inset-x-[12%] bottom-[8%] h-[9%] rounded-[50%] border border-scent-accent/16 bg-black/20 shadow-[0_18px_44px_rgba(0,0,0,0.7)]" />
+        <svg
+          viewBox="0 0 360 420"
+          className="h-full w-full overflow-visible"
+          role="img"
+          aria-label="Interactive fragrance note pyramid"
+        >
+          <defs>
+            <linearGradient id="pyramid-top-left" x1="130" y1="82" x2="181" y2="82" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stopColor="#3b2510" />
+              <stop offset="0.62" stopColor="#946024" />
+              <stop offset="1" stopColor="#d79c43" />
+            </linearGradient>
+            <linearGradient id="pyramid-top-right" x1="180" y1="82" x2="231" y2="82" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stopColor="#f0c46d" />
+              <stop offset="0.36" stopColor="#a96f29" />
+              <stop offset="1" stopColor="#2b1b0d" />
+            </linearGradient>
+            <linearGradient id="pyramid-heart-left" x1="75" y1="198" x2="180" y2="198" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stopColor="#0d1112" />
+              <stop offset="0.58" stopColor="#20342f" />
+              <stop offset="1" stopColor="#58645c" />
+            </linearGradient>
+            <linearGradient id="pyramid-heart-right" x1="180" y1="198" x2="285" y2="198" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stopColor="#6f756b" />
+              <stop offset="0.32" stopColor="#263a35" />
+              <stop offset="1" stopColor="#0b0f10" />
+            </linearGradient>
+            <linearGradient id="pyramid-base-left" x1="20" y1="318" x2="180" y2="318" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stopColor="#030405" />
+              <stop offset="0.62" stopColor="#131617" />
+              <stop offset="1" stopColor="#44443f" />
+            </linearGradient>
+            <linearGradient id="pyramid-base-right" x1="180" y1="318" x2="340" y2="318" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stopColor="#54534e" />
+              <stop offset="0.34" stopColor="#171819" />
+              <stop offset="1" stopColor="#030303" />
+            </linearGradient>
+            <linearGradient id="pyramid-face-polish" x1="88" y1="196" x2="272" y2="196" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stopColor="#ffffff" stopOpacity="0.02" />
+              <stop offset="0.48" stopColor="#fff0bc" stopOpacity="0.13" />
+              <stop offset="0.54" stopColor="#ffffff" stopOpacity="0.04" />
+              <stop offset="1" stopColor="#000000" stopOpacity="0.2" />
+            </linearGradient>
+            <linearGradient id="pyramid-ridge" x1="180" y1="26" x2="180" y2="376" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stopColor="#fff6da" stopOpacity="0.88" />
+              <stop offset="0.42" stopColor="#ebb34e" stopOpacity="0.52" />
+              <stop offset="1" stopColor="#fff6da" stopOpacity="0.16" />
+            </linearGradient>
+            <linearGradient id="pyramid-tether" x1="180" y1="0" x2="180" y2="32" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stopColor="#c98b2c" stopOpacity="0.78" />
+              <stop offset="0.56" stopColor="#fff4da" stopOpacity="0.48" />
+              <stop offset="1" stopColor="#c98b2c" stopOpacity="0" />
+            </linearGradient>
+            <pattern id="pyramid-grain" width="11" height="11" patternUnits="userSpaceOnUse" patternTransform="rotate(22)">
+              <path d="M0 0 H11" stroke="#ffffff" strokeOpacity="0.12" strokeWidth="0.7" />
+            </pattern>
+            <filter id="pyramid-shadow" x="-20%" y="-20%" width="140%" height="150%" colorInterpolationFilters="sRGB">
+              <feDropShadow dx="0" dy="12" stdDeviation="8" floodColor="#000000" floodOpacity="0.48" />
+              <feDropShadow dx="0" dy="0" stdDeviation="5" floodColor="#c98b2c" floodOpacity="0.1" />
+            </filter>
+            <filter id="pyramid-active-glow" x="-20%" y="-20%" width="140%" height="150%" colorInterpolationFilters="sRGB">
+              <feDropShadow dx="0" dy="12" stdDeviation="8" floodColor="#000000" floodOpacity="0.5" />
+              <feDropShadow dx="0" dy="0" stdDeviation="7" floodColor="#d69a3b" floodOpacity="0.32" />
+            </filter>
+          </defs>
 
-        <MagneticTether className="top-[25%]" active={activeLayer === 'top' || activeLayer === 'heart'} />
-        <MagneticTether className="top-[50%]" active={activeLayer === 'heart' || activeLayer === 'base'} />
+          <ellipse cx="180" cy="386" rx="150" ry="28" fill="#d89731" opacity="0.1" />
+          <ellipse
+            cx="180"
+            cy="383"
+            rx="112"
+            ry="15"
+            fill="#000000"
+            opacity="0.36"
+            stroke="#c98b2c"
+            strokeOpacity="0.16"
+            strokeWidth="1"
+            vectorEffect="non-scaling-stroke"
+          />
+          <line
+            x1="180"
+            y1="18"
+            x2="180"
+            y2="386"
+            stroke="#c98b2c"
+            strokeOpacity="0.14"
+            strokeWidth="1"
+            vectorEffect="non-scaling-stroke"
+          />
 
-        {layers.map((layer) => {
-          const isActive = activeLayer === layer.key;
-          const isMuted = Boolean(activeLayer && !isActive);
-          return (
-            <motion.button
-              key={layer.key}
-              type="button"
-              aria-label={layer.ariaLabel}
-              aria-pressed={isActive}
-              className={`group/layer absolute cursor-pointer touch-manipulation select-none border-0 p-0 outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80 focus-visible:ring-offset-2 focus-visible:ring-offset-black ${layer.positionClass}`}
-              style={{
-                ...layer.style,
-                zIndex: layer.zIndex,
-                filter: `drop-shadow(0 8px 16px rgba(0,0,0,0.48)) ${
-                  isActive ? 'brightness(1.14) saturate(1.08)' : isMuted ? 'brightness(0.72) saturate(0.72)' : 'brightness(0.98)'
-                }`,
-                WebkitTapHighlightColor: 'transparent',
-                touchAction: 'manipulation',
-              }}
-              animate={{
-                y: layerMotion[state][layer.key],
-                scale: isActive ? 1.012 : 1,
-              }}
-              transition={prefersReducedMotion ? { duration: 0.01 } : transition}
-              onClick={(event) => {
-                event.stopPropagation();
-                if (ignoreNextClickRef.current) {
-                  ignoreNextClickRef.current = false;
-                  return;
-                }
-                handleLayerActivate(layer.key);
-              }}
-              onPointerUp={(event) => {
-                if (event.pointerType === 'mouse') return;
-                event.stopPropagation();
-                ignoreNextClickRef.current = true;
-                handleLayerActivate(layer.key);
-              }}
-            >
-              <span className="absolute left-1/2 top-[7%] h-[86%] w-px -translate-x-1/2 bg-gradient-to-b from-white/72 via-[#fff0c8]/62 to-transparent opacity-70" />
-              <span className="absolute inset-x-[9%] top-[8%] h-px bg-gradient-to-r from-transparent via-[#f1bd63]/80 to-transparent opacity-80" />
-              <span className="absolute inset-x-[10%] bottom-[16%] h-px bg-gradient-to-r from-transparent via-black/70 to-transparent opacity-80" />
-              <span className="absolute inset-0 bg-[linear-gradient(90deg,rgba(255,255,255,0.04)_0%,transparent_34%,rgba(255,247,222,0.09)_50%,transparent_66%,rgba(0,0,0,0.22)_100%)]" />
-              <span className={`absolute inset-0 transition-opacity duration-300 ${isActive ? 'opacity-100' : 'opacity-0 group-hover/layer:opacity-70'} bg-[radial-gradient(circle_at_50%_70%,rgba(244,180,72,0.22),transparent_44%)]`} />
-            </motion.button>
-          );
-        })}
+          <MagneticTether y={139.5} active={activeLayer === 'top' || activeLayer === 'heart'} />
+          <MagneticTether y={257.5} active={activeLayer === 'heart' || activeLayer === 'base'} />
+
+          {layers.map((layer) => {
+            const isActive = activeLayer === layer.key;
+            const isMuted = Boolean(activeLayer && !isActive);
+
+            return (
+              <motion.g
+                key={layer.key}
+                role="button"
+                tabIndex={0}
+                aria-label={layer.ariaLabel}
+                aria-pressed={isActive}
+                className="cursor-pointer outline-none"
+                initial={false}
+                animate={{
+                  y: layerMotion[state][layer.key],
+                  opacity: isMuted ? 0.54 : 1,
+                  scale: 1,
+                }}
+                transition={prefersReducedMotion ? { duration: 0.01 } : transition}
+                style={{
+                  transformBox: 'fill-box',
+                  transformOrigin: 'center',
+                  WebkitTapHighlightColor: 'transparent',
+                  touchAction: 'manipulation',
+                }}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  if (ignoreNextClickRef.current) {
+                    ignoreNextClickRef.current = false;
+                    return;
+                  }
+                  handleLayerActivate(layer.key);
+                }}
+                onPointerUp={(event) => {
+                  if (event.pointerType === 'mouse') return;
+                  event.stopPropagation();
+                  ignoreNextClickRef.current = true;
+                  handleLayerActivate(layer.key);
+                }}
+                onKeyDown={(event) => handleLayerKeyDown(event, layer.key)}
+              >
+                <path d={layer.hitPath} fill="transparent" />
+                <g filter={isActive ? 'url(#pyramid-active-glow)' : 'url(#pyramid-shadow)'}>
+                  {layer.faces.map((facePath, faceIndex) => (
+                    <path
+                      key={`${layer.key}-${faceIndex}`}
+                      d={facePath}
+                      fill={layer.faceFills[faceIndex]}
+                    />
+                  ))}
+                  <path d={layer.hitPath} fill="url(#pyramid-grain)" opacity={layer.grainOpacity} />
+                  <path d={layer.hitPath} fill="url(#pyramid-face-polish)" opacity={isActive ? 0.82 : 0.62} />
+                </g>
+                <path
+                  d={layer.channelPath}
+                  fill="none"
+                  stroke="#050403"
+                  strokeOpacity="0.92"
+                  strokeWidth="3.4"
+                  strokeLinecap="round"
+                  vectorEffect="non-scaling-stroke"
+                />
+                <path
+                  d={layer.channelPath}
+                  fill="none"
+                  stroke="url(#pyramid-ridge)"
+                  strokeWidth="0.75"
+                  strokeLinecap="round"
+                  opacity={isActive ? 0.9 : 0.64}
+                  vectorEffect="non-scaling-stroke"
+                />
+                <path
+                  d={layer.hitPath}
+                  fill="none"
+                  stroke="#050403"
+                  strokeOpacity="0.82"
+                  strokeWidth="3.4"
+                  strokeLinejoin="miter"
+                  vectorEffect="non-scaling-stroke"
+                />
+                <path
+                  d={layer.hitPath}
+                  fill="none"
+                  stroke={isActive ? '#ffdd92' : '#d99d3e'}
+                  strokeOpacity={isActive ? 0.78 : 0.44}
+                  strokeWidth="0.82"
+                  strokeLinejoin="miter"
+                  vectorEffect="non-scaling-stroke"
+                />
+              </motion.g>
+            );
+          })}
+        </svg>
 
         <AnimatePresence mode="wait">
           {selectedLayer ? (
@@ -230,7 +470,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
               className={`absolute left-1/2 z-50 w-[84%] max-w-[20rem] -translate-x-1/2 ${selectedLayer.seamClass}`}
               onClick={(event) => event.stopPropagation()}
             >
-              <div className="border border-scent-accent/28 bg-black/70 px-3.5 py-3 text-center shadow-[0_14px_34px_rgba(0,0,0,0.58),0_0_26px_rgba(201,139,44,0.2),inset_0_1px_0_rgba(255,231,179,0.12)] backdrop-blur-md">
+              <div className="border border-scent-accent/28 bg-black/72 px-3.5 py-3 text-center shadow-[0_14px_34px_rgba(0,0,0,0.58),0_0_26px_rgba(201,139,44,0.2),inset_0_1px_0_rgba(255,231,179,0.12)] backdrop-blur-md">
                 <p className="text-[9px] font-bold uppercase tracking-[0.24em] text-scent-accent/88">
                   {selectedLayer.title}
                 </p>
