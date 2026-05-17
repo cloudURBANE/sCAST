@@ -684,15 +684,16 @@ export const FragranceCapture: React.FC<{
         ? firstString(selectedId.slice('source:'.length))
         : undefined;
       const detailSourceUrl = firstString(selectedSourceUrl, syntheticSourceUrl);
-      const selectedOrigin = selected.origin ?? (
-        selectedId?.startsWith('catalog:') || selectedId?.startsWith('dataset:') || selectedId?.startsWith('local:')
-          ? 'app'
-          : 'srt'
-      );
-      if (selectedOrigin === 'srt' && (!selectedId || syntheticSourceUrl)) {
-        setErrorStatus("Selected SRT fragrance is missing its opaque detail identifier.");
-        return;
-      }
+      const selectedOrigin = syntheticSourceUrl
+        ? 'app'
+        : selected.origin ??
+          (
+            selectedId?.startsWith('catalog:') ||
+            selectedId?.startsWith('dataset:') ||
+            selectedId?.startsWith('local:')
+              ? 'app'
+              : 'srt'
+          );
       const detailsRequest: FragranceDetailRequestPayload =
         selectedOrigin === 'app' && detailSourceUrl
           ? { source_url: detailSourceUrl, origin: 'app' }
