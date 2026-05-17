@@ -35,28 +35,30 @@ const CALM_EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
 const SOFT_EASE: [number, number, number, number] = [0.42, 0, 0.58, 1];
 const WEIGHTED_EASE: [number, number, number, number] = [0.16, 1, 0.3, 1];
 
-// Visually improved for perfect symmetry.
-const layerMotion: Record<ActiveLayer | 'idle', Record<ActiveLayer, number>> = {
-  idle: { top: 0, heart: 0, base: 0 },
-  top: { top: -18, heart: 14, base: 14 },
-  heart: { top: -16, heart: 0, base: 16 },
-  base: { top: -14, heart: -14, base: 18 },
-};
+type LayerMotionState = ActiveLayer | 'idle';
+type LayerOffset = { y: number; scale: number; opacity: number };
 
-// Subtle depth scaling enhancements
-const layerScaleMotion: Record<ActiveLayer | 'idle', Record<ActiveLayer, number>> = {
-  idle: { top: 1, heart: 1, base: 1 },
-  top: { top: 1.035, heart: 0.98, base: 0.975 },
-  heart: { top: 0.985, heart: 1.035, base: 0.985 },
-  base: { top: 0.975, heart: 0.98, base: 1.035 },
-};
-
-// Improved contrast for non-active states to emphasize focus
-const layerOpacityMotion: Record<ActiveLayer | 'idle', Record<ActiveLayer, number>> = {
-  idle: { top: 1, heart: 1, base: 1 },
-  top: { top: 1, heart: 0.35, base: 0.25 },
-  heart: { top: 0.45, heart: 1, base: 0.45 },
-  base: { top: 0.25, heart: 0.35, base: 1 },
+const LAYER_MOTION: Record<LayerMotionState, Record<ActiveLayer, LayerOffset>> = {
+  idle: {
+    top: { y: 0, scale: 1, opacity: 1 },
+    heart: { y: 0, scale: 1, opacity: 1 },
+    base: { y: 0, scale: 1, opacity: 1 },
+  },
+  top: {
+    top: { y: -18, scale: 1.035, opacity: 1 },
+    heart: { y: 14, scale: 0.98, opacity: 0.35 },
+    base: { y: 14, scale: 0.975, opacity: 0.25 },
+  },
+  heart: {
+    top: { y: -16, scale: 0.985, opacity: 0.45 },
+    heart: { y: 0, scale: 1.035, opacity: 1 },
+    base: { y: 16, scale: 0.985, opacity: 0.45 },
+  },
+  base: {
+    top: { y: -14, scale: 0.975, opacity: 0.25 },
+    heart: { y: -14, scale: 0.98, opacity: 0.35 },
+    base: { y: 18, scale: 1.035, opacity: 1 },
+  },
 };
 
 const layerTransition: Transition = {
@@ -227,7 +229,6 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
   const [hoveredLayer, setHoveredLayer] = React.useState<ActiveLayer | null>(null);
   const [focusedLayer, setFocusedLayer] = React.useState<ActiveLayer | null>(null);
   const rootRef = React.useRef<HTMLElement | null>(null);
-  const ignoreNextClickRef = React.useRef(false);
   const prefersReducedMotion = useReducedMotion();
   const idPrefix = React.useId().replace(/:/g, '');
   const state = activeLayer ?? 'idle';
@@ -260,11 +261,11 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
     };
   }, [activeLayer]);
 
-  const layers: LayerConfig[] = [
+  const layers = React.useMemo<LayerConfig[]>(() => [
     {
       key: 'base',
       title: 'Base Notes',
-      ariaLabel: 'Reveal base notes',
+      ariaLabel: 'Base notes',
       ...layerGeometry.base,
       faceFills: [fill('base-left'), fill('base-right')],
       polishFill: fill('base-polish'),
@@ -278,7 +279,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
     {
       key: 'heart',
       title: 'Heart Notes',
-      ariaLabel: 'Reveal heart notes',
+      ariaLabel: 'Heart notes',
       ...layerGeometry.heart,
       faceFills: [fill('heart-left'), fill('heart-right')],
       polishFill: fill('heart-polish'),
@@ -292,7 +293,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
     {
       key: 'top',
       title: 'Top Notes',
-      ariaLabel: 'Reveal top notes',
+      ariaLabel: 'Top notes',
       ...layerGeometry.top,
       faceFills: [fill('top-left'), fill('top-right')],
       polishFill: fill('top-polish'),
@@ -303,7 +304,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
       rimOpacity: 0.98,
       notes: topNotes,
     },
-  ];
+  ], [fill, baseNotes, heartNotes, topNotes]);
 
   const selectedLayer = layers.find((layer) => layer.key === activeLayer);
 
@@ -321,11 +322,10 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
     [handleLayerActivate],
   );
 
-  const layerOffsets = layerMotion[state];
+  const layerOffsets = LAYER_MOTION[state];
 
-  // Calculated precisely to rest perfectly between identically repelled layers.
-  const upperGapY = (PYRAMID_Y.topBottom + layerOffsets.top + PYRAMID_Y.heartTop + layerOffsets.heart) / 2;
-  const lowerGapY = (PYRAMID_Y.heartBottom + layerOffsets.heart + PYRAMID_Y.baseTop + layerOffsets.base) / 2;
+  const upperGapY = (PYRAMID_Y.topBottom + layerOffsets.top.y + PYRAMID_Y.heartTop + layerOffsets.heart.y) / 2;
+  const lowerGapY = (PYRAMID_Y.heartBottom + layerOffsets.heart.y + PYRAMID_Y.baseTop + layerOffsets.base.y) / 2;
 
   const gapDots = [
     {
@@ -340,25 +340,26 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
     },
   ];
 
-  const pulseTransition: Transition = prefersReducedMotion
-    ? reducedTransition
-    : { duration: 3.2, ease: SOFT_EASE, repeat: Infinity, repeatType: 'mirror' };
-
-  const floatTransition: Transition = prefersReducedMotion
-    ? reducedTransition
-    : { duration: 4, ease: 'easeInOut', repeat: Infinity, repeatType: 'mirror' };
-
-  const shimmerTransition: Transition = prefersReducedMotion
-    ? reducedTransition
-    : { duration: 3.8, ease: SOFT_EASE, repeat: Infinity, repeatType: 'mirror' };
-
-  const atmosphericTransition: Transition = prefersReducedMotion
-    ? reducedTransition
-    : { duration: 6.5, ease: SOFT_EASE, repeat: Infinity, repeatType: 'mirror' };
-
-  const rotationTransition: Transition = prefersReducedMotion
-    ? reducedTransition
-    : { duration: 45, ease: 'linear', repeat: Infinity };
+  const { pulseTransition, floatTransition, shimmerTransition, atmosphericTransition, rotationTransition, counterRotationTransition } = React.useMemo(() => {
+    if (prefersReducedMotion) {
+      return {
+        pulseTransition: reducedTransition,
+        floatTransition: reducedTransition,
+        shimmerTransition: reducedTransition,
+        atmosphericTransition: reducedTransition,
+        rotationTransition: reducedTransition,
+        counterRotationTransition: reducedTransition,
+      };
+    }
+    return {
+      pulseTransition: { duration: 3.2, ease: SOFT_EASE, repeat: Infinity, repeatType: 'mirror' } as Transition,
+      floatTransition: { duration: 4, ease: 'easeInOut', repeat: Infinity, repeatType: 'mirror' } as Transition,
+      shimmerTransition: { duration: 3.8, ease: SOFT_EASE, repeat: Infinity, repeatType: 'mirror' } as Transition,
+      atmosphericTransition: { duration: 6.5, ease: SOFT_EASE, repeat: Infinity, repeatType: 'mirror' } as Transition,
+      rotationTransition: { duration: 45, ease: 'linear', repeat: Infinity } as Transition,
+      counterRotationTransition: { duration: 60, ease: 'linear', repeat: Infinity } as Transition,
+    };
+  }, [prefersReducedMotion]);
 
   return (
     <section
@@ -692,7 +693,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
               strokeDasharray="1 8"
               opacity="0.05"
               animate={prefersReducedMotion ? {} : { rotate: -360 }}
-              transition={{ ...rotationTransition, duration: 60 }}
+              transition={counterRotationTransition}
               style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
             />
 
@@ -815,9 +816,10 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
             // Greyscale/Dim effect for inactive layers when something is active
             const isMuted = activeLayer !== null && !isActive;
 
-            const targetY = layerMotion[state][layer.key];
-            const targetScale = layerScaleMotion[state][layer.key] + (isEngaged && !isActive ? 0.006 : 0);
-            const targetOpacity = isEngaged && !isActive ? Math.min(layerOpacityMotion[state][layer.key] + 0.12, 1) : layerOpacityMotion[state][layer.key];
+            const layerMotion = LAYER_MOTION[state][layer.key];
+            const targetY = layerMotion.y;
+            const targetScale = layerMotion.scale + (isEngaged && !isActive ? 0.006 : 0);
+            const targetOpacity = isEngaged && !isActive ? Math.min(layerMotion.opacity + 0.12, 1) : layerMotion.opacity;
             const channelPath = linePath(layer.channel.start, layer.channel.end);
             const channelHighlightPath = linePath(
               offsetPoint(layer.channel.start, -2.05),
@@ -869,24 +871,20 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                   transformOrigin: 'center',
                   WebkitTapHighlightColor: 'transparent',
                   touchAction: 'manipulation',
-                  willChange: 'transform, opacity, filter',
+                  willChange: activeLayer !== null || isEngaged ? 'transform, opacity, filter' : 'auto',
                 }}
-                onPointerEnter={() => setHoveredLayer(layer.key)}
-                onPointerLeave={() => setHoveredLayer((current) => (current === layer.key ? null : current))}
+                onPointerEnter={(event) => {
+                  if (event.pointerType !== 'mouse') return;
+                  setHoveredLayer(layer.key);
+                }}
+                onPointerLeave={(event) => {
+                  if (event.pointerType !== 'mouse') return;
+                  setHoveredLayer((current) => (current === layer.key ? null : current));
+                }}
                 onFocus={() => setFocusedLayer(layer.key)}
                 onBlur={() => setFocusedLayer((current) => (current === layer.key ? null : current))}
                 onClick={(event) => {
                   event.stopPropagation();
-                  if (ignoreNextClickRef.current) {
-                    ignoreNextClickRef.current = false;
-                    return;
-                  }
-                  handleLayerActivate(layer.key);
-                }}
-                onPointerUp={(event) => {
-                  if (event.pointerType === 'mouse') return;
-                  event.stopPropagation();
-                  ignoreNextClickRef.current = true;
                   handleLayerActivate(layer.key);
                 }}
                 onKeyDown={(event) => handleLayerKeyDown(event, layer.key)}
