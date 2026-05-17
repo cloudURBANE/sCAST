@@ -697,20 +697,16 @@ a {
 
 .scent-marquee-phrase-group {
   flex: 0 0 auto;
-  gap: clamp(4.25rem, 5.5vw, 6.4rem);
-  padding-right: clamp(4.25rem, 5.5vw, 6.4rem);
-}
-
-.scent-marquee-phrase-item {
-  gap: clamp(1rem, 1.75vw, 1.45rem);
-  align-items: center;
+  gap: clamp(2rem, 4.25vw, 5.25rem);
+  padding-right: clamp(2rem, 4.25vw, 5.25rem);
 }
 
 .scent-marquee-divider {
-  display: inline-block;
+  flex-shrink: 0;
+  align-self: center;
   width: clamp(1.15rem, 2.2vw, 1.85rem);
   height: 1px;
-  transform: translateY(0.02em);
+  transform: translateY(0.06em);
   background: linear-gradient(90deg, rgba(201, 139, 44, 0), rgba(201, 139, 44, 0.72), rgba(201, 139, 44, 0));
   opacity: 0.82;
 }

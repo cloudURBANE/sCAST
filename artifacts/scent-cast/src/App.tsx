@@ -1060,10 +1060,12 @@ export default function App() {
               {[...Array(4)].map((_, i) => (
                 <span key={i} className="scent-marquee-phrase-group flex items-center" aria-hidden={i > 0}>
                   {tickerPhrases.map((phrase, j) => (
-                    <span key={j} className="scent-marquee-phrase-item inline-flex items-center">
-                      <span>{phrase}</span>
-                      {j < tickerPhrases.length - 1 ? <span className="scent-marquee-divider" aria-hidden="true" /> : null}
-                    </span>
+                    <React.Fragment key={j}>
+                      <span className="scent-marquee-phrase whitespace-nowrap">{phrase}</span>
+                      {j < tickerPhrases.length - 1 ? (
+                        <span className="scent-marquee-divider shrink-0" aria-hidden="true" />
+                      ) : null}
+                    </React.Fragment>
                   ))}
                 </span>
               ))}
