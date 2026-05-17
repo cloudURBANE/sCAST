@@ -38,6 +38,14 @@ export type DerivedMetrics = {
   performance_score?: {
     score?: number;
     score_raw?: number;
+    sillage_score?: number;
+    sillage_score_raw?: number;
+    sillage_percent?: number;
+    sillage_pct?: number;
+    longevity_score?: number;
+    longevity_score_raw?: number;
+    longevity_percent?: number;
+    longevity_pct?: number;
     longevity_label?: string;
     sillage_label?: string;
   } | null;

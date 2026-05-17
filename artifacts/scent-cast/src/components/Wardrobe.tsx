@@ -246,6 +246,17 @@ function scoreNumber(value: unknown): number | null {
   return isFiniteNumber(value) ? Math.max(0, Math.min(100, Math.round(value))) : null;
 }
 
+function percentFromMetricValue(value: unknown): number | null {
+  if (!isFiniteNumber(value)) return null;
+  if (value >= 0 && value <= 1) return Math.max(0, Math.min(100, Math.round(value * 100)));
+  if (value >= 0 && value <= 10) return Math.max(0, Math.min(100, Math.round(value * 10)));
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function percentFromTenPoint(value: unknown): number | null {
+  return isFiniteNumber(value) ? Math.max(0, Math.min(100, Math.round(value * 10))) : null;
+}
+
 function stringValue(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
@@ -430,16 +441,90 @@ function SourceStatusPanel({
   );
 }
 
+function DetailMetaStrip({ rows }: { rows: Array<{ label: string; value: string }> }) {
+  if (rows.length === 0) return null;
+
+  return (
+    <div className="w-full max-w-4xl border border-white/[0.08] bg-black/22 px-3 py-2">
+      <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 sm:gap-x-7">
+        {rows.map(({ label, value }) => (
+          <div key={label} className="min-w-[5.75rem] max-w-[10rem] text-center">
+            <p className="text-[8px] uppercase tracking-[0.2em] text-white/36">
+              {label}
+            </p>
+            <p className="mt-0.5 truncate text-[12px] leading-tight text-white/82" title={value}>
+              {value}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function performanceMetricPercent(
+  performance: DerivedMetrics["performance_score"] | null | undefined,
+  metric: "sillage" | "longevity",
+): number | null {
+  if (!performance) return null;
+
+  const keys =
+    metric === "sillage"
+      ? ["sillage_percent", "sillage_pct", "sillage_score", "sillage_score_raw"]
+      : ["longevity_percent", "longevity_pct", "longevity_score", "longevity_score_raw"];
+  const record = performance as Record<string, unknown>;
+
+  for (const key of keys) {
+    const percent = percentFromMetricValue(record[key]);
+    if (percent !== null) return percent;
+  }
+
+  return null;
+}
+
+function performanceSignalLine({
+  label,
+  metric,
+  percent,
+}: {
+  label: string | null;
+  metric: "sillage" | "longevity";
+  percent: number | null;
+}): string | null {
+  if (percent === null && !label) return null;
+  const cleanLabel = label?.trim().toLowerCase() ?? null;
+  if (percent !== null && cleanLabel) return `${percent}% ${cleanLabel} ${metric}`;
+  if (percent !== null) return `${percent}% ${metric}`;
+  return cleanLabel ? `${cleanLabel} ${metric}` : null;
+}
+
 /** Alternates sillage vs longevity under the Performance stat (both shown in Snapshot above). */
 function PerformanceStatSubtitle({
   performance,
+  legacyPerformance,
 }: {
   performance?: DerivedMetrics["performance_score"] | null;
+  legacyPerformance?: Fragrance["performance"];
 }) {
   const longevity = performance?.longevity_label?.trim() || null;
   const sillage = performance?.sillage_label?.trim() || null;
-  const longevityLine = longevity ? `${longevity} longevity` : null;
-  const sillageLine = sillage ? `${sillage} sillage` : null;
+  const overallPerformancePercent = scoreNumber(performance?.score);
+  const longevityLine = performanceSignalLine({
+    label: longevity,
+    metric: "longevity",
+    percent:
+      performanceMetricPercent(performance, "longevity") ??
+      percentFromTenPoint(legacyPerformance?.longevity) ??
+      overallPerformancePercent,
+  });
+  const sillageLine = performanceSignalLine({
+    label: sillage,
+    metric: "sillage",
+    percent:
+      performanceMetricPercent(performance, "sillage") ??
+      percentFromTenPoint(legacyPerformance?.sillage) ??
+      overallPerformancePercent,
+  });
   const both = Boolean(longevityLine && sillageLine);
   const [phase, setPhase] = React.useState(0);
   React.useEffect(() => {
@@ -455,7 +540,7 @@ function PerformanceStatSubtitle({
       : joinDisplayParts([longevityLine, sillageLine]) ?? "Signal";
 
   return (
-    <p className="text-[10px] text-white/42 min-h-[2.5em] flex items-center justify-center px-1">
+    <p className="text-[10px] text-white/42 min-h-[2.5em] flex items-center justify-center px-1 leading-snug">
       <motion.span
         key={text}
         initial={{ opacity: 0, y: 3 }}
@@ -472,9 +557,11 @@ function PerformanceStatSubtitle({
 function ProfileScorePanel({
   metrics,
   coverage,
+  legacyPerformance,
 }: {
   metrics?: DerivedMetrics | null;
   coverage?: SourceCoverage;
+  legacyPerformance?: Fragrance["performance"];
 }) {
   const headline = metrics?.headline ?? null;
   const performance = metrics?.performance_score ?? null;
@@ -550,9 +637,14 @@ function ProfileScorePanel({
               <Icon size={18} strokeWidth={1.6} className="text-scent-accent" />
               <p className="font-serif italic text-2xl text-white leading-tight">{stat.value}</p>
               {stat.label === "Performance" ? (
-                <PerformanceStatSubtitle performance={performance} />
+                <PerformanceStatSubtitle
+                  performance={performance}
+                  legacyPerformance={legacyPerformance}
+                />
               ) : (
-                <p className="text-[10px] text-white/42">{stat.sub}</p>
+                <p className="min-h-[2.5em] flex items-center justify-center px-1 text-[10px] leading-snug text-white/42">
+                  {stat.sub}
+                </p>
               )}
               <p className="text-[9px] uppercase tracking-[0.2em] text-white/55 font-bold">{stat.label}</p>
             </div>
@@ -579,6 +671,12 @@ function ProfileScorePanel({
                 >
                   <Icon size={14} className="text-scent-accent" />
                   <p className="text-[12px] text-white/85 font-serif italic">{stat.value}</p>
+                  {stat.label === "Performance" ? (
+                    <PerformanceStatSubtitle
+                      performance={performance}
+                      legacyPerformance={legacyPerformance}
+                    />
+                  ) : null}
                   <p className="text-[8px] uppercase tracking-[0.16em] text-white/55 font-bold">{stat.label}</p>
                 </div>
               );
@@ -1103,25 +1201,12 @@ export const Wardrobe: React.FC<{
   const selectedEnrichment =
     selectedItem?.enrichment ?? selectedItem?.raw_engine_detail?.enrichment ?? undefined;
 
-  const selectedHasDerivedPerformance = Boolean(selectedMetrics?.performance_score);
   const detailMetaRows = selectedItem
     ? [
         { label: 'Year', value: formatYear(selectedItem.year) },
         { label: 'Gender', value: stringValue(selectedItem.gender) },
         { label: 'Concentration', value: stringValue(selectedItem.concentration) },
         { label: 'Environment', value: stringValue(selectedItem.season) },
-        ...(!selectedHasDerivedPerformance
-          ? [
-              {
-                label: 'Projection',
-                value: formatLegacyTenPointScore(selectedItem.performance?.sillage),
-              },
-              {
-                label: 'Chronos',
-                value: formatLegacyTenPointScore(selectedItem.performance?.longevity),
-              },
-            ]
-          : []),
       ].filter((row): row is { label: string; value: string } => Boolean(row.value))
     : [];
 
@@ -1449,30 +1534,8 @@ export const Wardrobe: React.FC<{
                   <ProfileScorePanel
                     metrics={selectedMetrics}
                     coverage={selectedCoverage}
+                    legacyPerformance={selectedItem.performance}
                   />
-
-                  {detailMetaRows.length > 0 ? (
-                    <section
-                      aria-label="Details"
-                      className="border-y border-white/[0.08] bg-white/[0.018] px-3 py-2 sm:px-4"
-                    >
-                      <div className="flex flex-wrap items-start justify-center gap-x-6 gap-y-2 sm:gap-x-8">
-                        {detailMetaRows.map(({ label, value }) => (
-                          <div
-                            key={label}
-                            className="min-w-0 text-center"
-                          >
-                            <p className="text-[9px] uppercase tracking-[0.22em] text-white/38">
-                              {label}
-                            </p>
-                            <p className="mt-0.5 truncate text-xs text-white/82 sm:text-sm">
-                              {value}
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-                    </section>
-                  ) : null}
 
                   <div className="grid grid-cols-1 items-stretch gap-3 sm:gap-4 lg:grid-cols-[1.12fr_1.95fr_1fr]">
                     <div className="space-y-3 sm:space-y-4 lg:h-full">
@@ -1533,6 +1596,7 @@ export const Wardrobe: React.FC<{
                         {selectedMetrics?.main_accords?.accord_summary?.trim() ??
                           entryNotes(selectedItem)}
                       </p>
+                      <DetailMetaStrip rows={detailMetaRows} />
                     </div>
                   </FragrancePanel>
 
