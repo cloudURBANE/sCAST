@@ -497,8 +497,8 @@ function ProfileScorePanel({
 
   return (
     <div className="space-y-3 sm:space-y-5">
-      <div className="grid grid-cols-2 lg:grid-cols-[1.15fr_repeat(4,1fr)] border-y border-white/8">
-        <div className="col-span-2 lg:col-span-1 flex flex-col items-center justify-center px-4 py-5 border-b lg:border-b-0 lg:border-r border-white/8 text-center">
+      <div className="grid grid-cols-4 lg:grid-cols-[1.15fr_repeat(4,1fr)] border-y border-white/8">
+        <div className="col-span-4 lg:col-span-1 flex flex-col items-center justify-center px-4 py-5 border-b lg:border-b-0 lg:border-r border-white/8 text-center">
           <p className="text-[10px] uppercase tracking-[0.28em] text-white/64 font-bold">Profile Score</p>
           <div className="mt-1 flex items-end justify-center gap-2">
             <span className="font-serif italic text-6xl leading-none text-scent-accent">
@@ -513,13 +513,13 @@ function ProfileScorePanel({
           return (
             <div
               key={stat.label}
-              className="flex flex-col items-center justify-center gap-1 border-r border-b lg:border-b-0 border-white/8 px-4 py-5 text-center last:border-r-0"
+              className="min-w-0 h-full flex flex-col items-center justify-center gap-1 border-r border-white/8 px-2 py-5 sm:px-4 text-center last:border-r-0"
             >
               <Icon size={18} strokeWidth={1.6} className="text-scent-accent" />
               {stat.value !== null ? (
-                <p className="font-serif italic text-2xl text-white leading-tight">{stat.value}</p>
+                <p className="font-serif italic text-2xl text-white leading-tight truncate max-w-full">{stat.value}</p>
               ) : (
-                <div className="min-h-[1.75rem] sm:min-h-8 shrink-0" aria-hidden />
+                <p className="font-serif italic text-2xl text-white/55 leading-tight" aria-hidden>—</p>
               )}
               {stat.label === "Performance" ? (
                 <PerformanceStatSubtitle
@@ -531,7 +531,7 @@ function ProfileScorePanel({
                   {stat.sub}
                 </p>
               )}
-              <p className="text-[9px] uppercase tracking-[0.2em] text-white/40 font-bold">{stat.label}</p>
+              <p className="mt-auto text-[9px] uppercase tracking-[0.2em] text-white/40 font-bold">{stat.label}</p>
             </div>
           );
         })}

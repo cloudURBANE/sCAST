@@ -635,13 +635,13 @@ function ProfileScorePanel({
           return (
             <div
               key={stat.label}
-              className="flex flex-col items-center justify-center gap-1 border border-white/15 bg-white/[0.035] px-4 py-5 text-center"
+              className="min-w-0 h-full flex flex-col items-center justify-center gap-1 border border-white/15 bg-white/[0.035] px-4 py-5 text-center"
             >
               <Icon size={18} strokeWidth={1.6} className="text-scent-accent" />
               {stat.value !== null ? (
-                <p className="font-serif italic text-2xl text-white leading-tight">{stat.value}</p>
+                <p className="font-serif italic text-2xl text-white leading-tight truncate max-w-full">{stat.value}</p>
               ) : (
-                <div className="min-h-[1.75rem] sm:min-h-8 shrink-0" aria-hidden />
+                <p className="font-serif italic text-2xl text-white/55 leading-tight" aria-hidden>—</p>
               )}
               {stat.label === "Performance" ? (
                 <PerformanceStatSubtitle
@@ -653,7 +653,7 @@ function ProfileScorePanel({
                   {stat.sub}
                 </p>
               )}
-              <p className="text-[9px] uppercase tracking-[0.2em] text-white/55 font-bold">{stat.label}</p>
+              <p className="mt-auto text-[9px] uppercase tracking-[0.2em] text-white/55 font-bold">{stat.label}</p>
             </div>
           );
         })}
@@ -668,27 +668,31 @@ function ProfileScorePanel({
             <span className="pb-2 text-lg text-white/72">/100</span>
           </div>
           <p className="mt-1 text-center text-sm text-scent-accent/90">{headline?.label ?? "Intelligence profile"}</p>
-          <div className="mt-4 grid grid-cols-2 gap-2">
+          <div className="mt-4 grid grid-cols-4 gap-1.5">
             {statCards.map((stat) => {
               const Icon = stat.icon;
               return (
                 <div
                   key={stat.label}
-                  className="flex flex-col items-center justify-center gap-1 border border-white/15 bg-white/[0.035] px-2 py-3 text-center"
+                  className="min-w-0 h-full flex flex-col items-center justify-center gap-1 border border-white/15 bg-white/[0.035] px-1.5 py-3 text-center"
                 >
-                  <Icon size={14} className="text-scent-accent" />
+                  <Icon size={14} strokeWidth={1.6} className="text-scent-accent" />
                   {stat.value !== null ? (
-                    <p className="text-[12px] text-white/85 font-serif italic">{stat.value}</p>
+                    <p className="text-[12px] text-white/85 font-serif italic truncate max-w-full">{stat.value}</p>
                   ) : (
-                    <div className="min-h-[1.125rem]" aria-hidden />
+                    <p className="text-[12px] text-white/55 font-serif italic" aria-hidden>—</p>
                   )}
                   {stat.label === "Performance" ? (
                     <PerformanceStatSubtitle
                       performance={performance}
                       legacyPerformance={legacyPerformance}
                     />
-                  ) : null}
-                  <p className="text-[8px] uppercase tracking-[0.16em] text-white/55 font-bold">{stat.label}</p>
+                  ) : (
+                    <p className="min-h-[2.5em] flex items-center justify-center px-0.5 text-[10px] leading-snug text-white/42">
+                      {stat.sub}
+                    </p>
+                  )}
+                  <p className="mt-auto text-[8px] uppercase tracking-[0.16em] text-white/55 font-bold">{stat.label}</p>
                 </div>
               );
             })}
