@@ -70,7 +70,7 @@ export const BottleImage: React.FC<BottleImageProps> = ({
 
   useEffect(() => {
     setBroken(false);
-  }, [src, proxy]);
+  }, [url]);
 
   // ① Root: sized by parent. ② Artboard: inset + flex-end + .bottle-packshot-img shelf CSS.
   return (

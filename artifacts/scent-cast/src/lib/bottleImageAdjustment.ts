@@ -46,10 +46,15 @@ const LIMITS = {
 /** Max value for crop sliders and PATCH payloads (not equal to CSS inset %). */
 export const BOTTLE_CROP_STORED_MAX = LIMITS.cropEdge.max;
 
-/** Max clip-path inset % at full slider (frame-relative; object-contain letterboxing eats linear % first). */
-const BOTTLE_CROP_CLIP_CAP_PCT = 54;
-/** Below 1: more clip early in the slider so small moves visibly trim the packshot sooner. */
-const BOTTLE_CROP_CLIP_CURVE_GAMMA = 0.58;
+/** Max clip-path inset % at full slider. Bottom stays gentler because bottles are baseline-aligned. */
+const BOTTLE_CROP_CLIP_CAP_PCT = {
+  top: 38,
+  right: 38,
+  bottom: 24,
+  left: 38,
+} as const;
+/** Keep early slider moves subtle so tight crops survive responsive frame changes. */
+const BOTTLE_CROP_CLIP_CURVE_GAMMA = 0.85;
 
 function finiteNumber(value: unknown): number | null {
   if (typeof value !== 'number' || !Number.isFinite(value)) return null;
@@ -77,11 +82,13 @@ function normalizeCropEdge(
   );
 }
 
-/** Maps stored crop strength to real `inset()` percentages on the packshot frame. */
-function clipInsetPercentFromStored(stored: number): string {
+type CropEdge = keyof typeof BOTTLE_CROP_CLIP_CAP_PCT;
+
+/** Maps stored crop strength to real `inset()` percentages on the fitted packshot. */
+function clipInsetPercentFromStored(stored: number, edge: CropEdge): string {
   if (stored <= 0) return '0%';
   const t = Math.min(stored, LIMITS.cropEdge.max) / LIMITS.cropEdge.max;
-  const pct = BOTTLE_CROP_CLIP_CAP_PCT * t ** BOTTLE_CROP_CLIP_CURVE_GAMMA;
+  const pct = BOTTLE_CROP_CLIP_CAP_PCT[edge] * t ** BOTTLE_CROP_CLIP_CURVE_GAMMA;
   return `${round(pct, 2)}%`;
 }
 
@@ -120,10 +127,10 @@ export function bottleImageAdjustmentStyle(
     '--bottle-frame-scale': String(n.scale),
     '--bottle-frame-x': `${n.x}%`,
     '--bottle-frame-y': `${n.y}%`,
-    '--bottle-frame-crop-top': clipInsetPercentFromStored(n.cropTop),
-    '--bottle-frame-crop-right': clipInsetPercentFromStored(n.cropRight),
-    '--bottle-frame-crop-bottom': clipInsetPercentFromStored(n.cropBottom),
-    '--bottle-frame-crop-left': clipInsetPercentFromStored(n.cropLeft),
+    '--bottle-frame-crop-top': clipInsetPercentFromStored(n.cropTop, 'top'),
+    '--bottle-frame-crop-right': clipInsetPercentFromStored(n.cropRight, 'right'),
+    '--bottle-frame-crop-bottom': clipInsetPercentFromStored(n.cropBottom, 'bottom'),
+    '--bottle-frame-crop-left': clipInsetPercentFromStored(n.cropLeft, 'left'),
   } as CSSProperties;
 }
 

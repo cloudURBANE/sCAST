@@ -1697,7 +1697,7 @@ export const Wardrobe: React.FC<{
 
                       <div className="grid gap-3 lg:grid-cols-[minmax(14rem,0.82fr)_minmax(0,1.35fr)] lg:items-start">
                         <div className="sticky top-0 z-10 rounded-lg border border-white/10 bg-[#050403]/95 p-2.5 shadow-[0_18px_34px_-22px_rgba(0,0,0,0.95)] backdrop-blur md:p-3">
-                          <div className="relative mx-auto h-[clamp(8.5rem,24dvh,13rem)] w-full max-w-[12.5rem] sm:h-56 sm:max-w-[14rem] lg:h-[min(32dvh,18rem)] lg:max-w-[16rem]">
+                          <div className="relative mx-auto aspect-[3/4] h-auto w-full max-w-[12.5rem] sm:max-w-[14rem] lg:max-w-[16rem]">
                             <BottleImage
                               key={`editor-${detailBottleUrl || 'missing-image'}`}
                               variant="detail"
@@ -1980,7 +1980,7 @@ export const Wardrobe: React.FC<{
                                 ),
                                 cropBottom: Math.max(
                                   frameDraft.cropBottom,
-                                  Math.round(BOTTLE_CROP_STORED_MAX * 0.3),
+                                  Math.round(BOTTLE_CROP_STORED_MAX * 0.12),
                                 ),
                                 cropLeft: Math.max(
                                   frameDraft.cropLeft,
@@ -2141,7 +2141,7 @@ export const Wardrobe: React.FC<{
                     onClick={(e) => e.stopPropagation()}
                   >
                     <BottleImage
-                      variant="grid"
+                      variant="detail"
                       src={detailBottleUrl}
                       alt={entryName(selectedItem)}
                       adjustment={frameDraft}
