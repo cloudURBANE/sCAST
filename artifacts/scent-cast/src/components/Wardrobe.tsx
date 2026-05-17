@@ -54,6 +54,7 @@ import {
   collectMainAccordDisplayRows,
   isDerivedMetricsCompleteFlag,
   normalizeSourceCoverage,
+  requeueFragranceDetails,
   type DerivedMetrics,
   type FragranceDetail,
   type SourceCoverage,
@@ -262,6 +263,14 @@ function stringValue(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
+function firstStringValue(...values: unknown[]): string | null {
+  for (const value of values) {
+    const next = stringValue(value);
+    if (next) return next;
+  }
+  return null;
+}
+
 function formatYear(value: unknown): string | null {
   return isFiniteNumber(value) ? String(Math.round(value)) : null;
 }
@@ -365,20 +374,31 @@ function enrichmentCopy(enrichment?: FragranceDetail["enrichment"]): string | nu
 function SourceStatusPanel({
   coverage,
   enrichment,
+  onRequeue,
+  requeueing = false,
+  requeueDisabled = false,
+  requeueMessage,
 }: {
   coverage?: SourceCoverage;
   enrichment?: FragranceDetail["enrichment"];
+  onRequeue?: () => void;
+  requeueing?: boolean;
+  requeueDisabled?: boolean;
+  requeueMessage?: string | null;
 }) {
   const hasCoverage = Boolean(coverage && Object.keys(coverage).length > 0);
   const enrichmentMessage = enrichmentCopy(enrichment);
 
-  if (!hasCoverage && !enrichmentMessage) return null;
+  if (!hasCoverage && !enrichmentMessage && !onRequeue && !requeueMessage) return null;
 
   const complete =
     coverage?.complete === true || isDerivedMetricsCompleteFlag(coverage?.derived_metrics);
   const coverageSummary = complete
     ? "Full fragrance intelligence available."
     : "Baseline profile available. Enhanced metrics pending.";
+  const sourceStatusText = hasCoverage
+    ? coverageSummary
+    : enrichmentMessage ?? "SRT enrichment can be refreshed when engine identity is available.";
   const fragranticaStatus =
     coverage?.fragrantica === true
       ? coverage.fragrantica_cached
@@ -417,7 +437,7 @@ function SourceStatusPanel({
             </span>
           ) : null}
           <p className="text-center text-sm italic text-white/62 font-serif leading-relaxed">
-            {hasCoverage ? coverageSummary : enrichmentMessage}
+            {sourceStatusText}
           </p>
         </div>
         {hasCoverage && enrichmentMessage && enrichmentMessage !== coverageSummary ? (
@@ -436,6 +456,29 @@ function SourceStatusPanel({
               </span>
             ))}
           </div>
+        ) : null}
+        {onRequeue ? (
+          <div className="flex justify-center pt-1">
+            <button
+              type="button"
+              onClick={onRequeue}
+              disabled={requeueDisabled || requeueing}
+              title={
+                requeueDisabled
+                  ? "This vault entry does not have an SRT engine id or Fragrantica source URL."
+                  : "Force-refresh the SRT engine enrichment cache"
+              }
+              className="inline-flex min-h-[38px] items-center justify-center gap-2 rounded-lg border border-scent-accent/30 bg-scent-accent/10 px-4 py-2 text-[9px] font-bold uppercase tracking-[0.2em] text-scent-accent transition-colors hover:bg-scent-accent/16 hover:text-[#fff7ec] disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.03] disabled:text-white/28"
+            >
+              <RefreshCw size={12} className={requeueing ? 'animate-spin' : ''} />
+              {requeueing ? "Refreshing..." : "Refresh SRT data"}
+            </button>
+          </div>
+        ) : null}
+        {requeueMessage ? (
+          <p className="text-center text-[10px] leading-snug text-white/46 font-sans">
+            {requeueMessage}
+          </p>
         ) : null}
       </div>
     </FragrancePanel>
@@ -797,6 +840,43 @@ function withImageVersion(url: string, version?: string | number | null): string
   return `${trimmed}${trimmed.includes('?') ? '&' : '?'}v=${encodeURIComponent(String(v))}`;
 }
 
+function isFragranticaUrl(value: string | null | undefined): value is string {
+  return typeof value === 'string' && /fragrantica\.com/i.test(value);
+}
+
+function srtEngineIdFromItem(item: Fragrance): string | undefined {
+  const id = firstStringValue(item.fragranceApiId, item.raw_engine_detail?.id);
+  if (!id) return undefined;
+  if (/^(catalog|dataset|local|source):/i.test(id)) return undefined;
+  return id;
+}
+
+function fragranticaSourceUrlFromItem(item: Fragrance): string | undefined {
+  const apiId = firstStringValue(item.fragranceApiId, item.raw_engine_detail?.id);
+  const sourceIdUrl = apiId?.startsWith('source:') ? apiId.slice('source:'.length).trim() : null;
+  const sourceUrl = firstStringValue(
+    item.source_url,
+    item.raw_engine_detail?.source_url,
+    item.raw_engine_detail?.raw?.source_urls?.frag_url,
+    sourceIdUrl,
+  );
+
+  return isFragranticaUrl(sourceUrl) ? sourceUrl : undefined;
+}
+
+function srtRequeuePayloadFromItem(
+  item: Fragrance,
+): { id?: string; source_url?: string; priority: number } | null {
+  const id = srtEngineIdFromItem(item);
+  const source_url = fragranticaSourceUrlFromItem(item);
+  if (!id && !source_url) return null;
+  return {
+    ...(id ? { id } : {}),
+    ...(source_url ? { source_url } : {}),
+    priority: 10,
+  };
+}
+
 function imageProcessingNeedsRepair(data: Record<string, any>): boolean {
   const status = typeof data.removeBgStatus === 'string' ? data.removeBgStatus : '';
   if (status === 'skipped') return false;
@@ -846,6 +926,8 @@ export const Wardrobe: React.FC<{
   const [refreshingId, setRefreshingId] = React.useState<string | null>(null);
   const [refreshError, setRefreshError] = React.useState<string | null>(null);
   const [bgFallbackWarning, setBgFallbackWarning] = React.useState<string | null>(null);
+  const [detailRequeueingId, setDetailRequeueingId] = React.useState<string | null>(null);
+  const [detailRequeueMessage, setDetailRequeueMessage] = React.useState<string | null>(null);
   const [refreshCounts, setRefreshCounts] = React.useState<Record<string, number>>(() => {
     if (typeof sessionStorage === 'undefined') return {};
     try {
@@ -902,6 +984,7 @@ export const Wardrobe: React.FC<{
   const openDetail = React.useCallback((item: Fragrance) => {
     setRefreshError(null);
     setPendingPreview(null);
+    setDetailRequeueMessage(null);
     setDeleteConfirming(false);
     setFrameDraft(normalizeBottleImageAdjustment(item.imageAdjustment));
     setSelectedItem(item);
@@ -910,6 +993,7 @@ export const Wardrobe: React.FC<{
   const closeDetail = React.useCallback(() => {
     setRefreshError(null);
     setPendingPreview(null);
+    setDetailRequeueMessage(null);
     setSelectedItem(null);
     setEnlargeOpen(false);
     setBottleImageToolsOpen(false);
@@ -1008,6 +1092,47 @@ export const Wardrobe: React.FC<{
       setRefreshError(err.message || 'Image refresh failed');
     } finally {
       setRefreshingId(null);
+    }
+  };
+
+  const handleRequeueSrtDetail = async (item: Fragrance) => {
+    const payload = srtRequeuePayloadFromItem(item);
+    if (!payload) {
+      setRefreshError('This entry is missing the SRT engine id and Fragrantica source URL needed to refresh data.');
+      return;
+    }
+
+    setDetailRequeueingId(item.id);
+    setDetailRequeueMessage(null);
+    setRefreshError(null);
+
+    try {
+      const response = await requeueFragranceDetails(payload);
+      const status = response.job?.status?.trim() || 'pending';
+      const message =
+        response.queued === true
+          ? 'SRT refresh queued. Current data stays readable until the worker finishes.'
+          : 'SRT refresh request sent.';
+      setDetailRequeueMessage(message);
+      setSelectedItem((prev) => {
+        if (!prev || prev.id !== item.id) return prev;
+        const enrichment = {
+          ...(prev.enrichment ?? prev.raw_engine_detail?.enrichment ?? {}),
+          status,
+          message,
+        };
+        return {
+          ...prev,
+          enrichment,
+          raw_engine_detail: prev.raw_engine_detail
+            ? { ...prev.raw_engine_detail, enrichment }
+            : prev.raw_engine_detail,
+        };
+      });
+    } catch (err: any) {
+      setRefreshError(err?.message || 'SRT data refresh failed');
+    } finally {
+      setDetailRequeueingId(null);
     }
   };
 
@@ -1237,6 +1362,9 @@ export const Wardrobe: React.FC<{
     );
   const selectedEnrichment =
     selectedItem?.enrichment ?? selectedItem?.raw_engine_detail?.enrichment ?? undefined;
+  const selectedSrtRequeuePayload = selectedItem ? srtRequeuePayloadFromItem(selectedItem) : null;
+  const selectedSrtRequeueing =
+    !!selectedItem && detailRequeueingId === selectedItem.id;
 
   const detailMetaRows = selectedItem
     ? [
@@ -1570,6 +1698,15 @@ export const Wardrobe: React.FC<{
                     metrics={selectedMetrics}
                     coverage={selectedCoverage}
                     legacyPerformance={selectedItem.performance}
+                  />
+
+                  <SourceStatusPanel
+                    coverage={selectedCoverage}
+                    enrichment={selectedEnrichment}
+                    onRequeue={() => void handleRequeueSrtDetail(selectedItem)}
+                    requeueing={selectedSrtRequeueing}
+                    requeueDisabled={!selectedSrtRequeuePayload}
+                    requeueMessage={detailRequeueMessage}
                   />
 
                   <div className="grid grid-cols-1 items-stretch gap-3 sm:gap-4 lg:grid-cols-[1.12fr_1.95fr_1fr]">

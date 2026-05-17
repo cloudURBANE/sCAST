@@ -156,6 +156,20 @@ export type FragranceDetail = {
 
 export type FragranceDetailResponse = FragranceDetail;
 
+export type FragranceDetailRequeuePayload = {
+  id?: string;
+  source_url?: string;
+  priority?: number;
+};
+
+export type FragranceDetailRequeueResponse = {
+  queued?: boolean;
+  job?: {
+    id?: string;
+    status?: string;
+  } | null;
+} & Record<string, unknown>;
+
 function firstNonEmptyString(...values: unknown[]): string | undefined {
   for (const value of values) {
     if (typeof value !== "string" && typeof value !== "number") continue;
@@ -772,7 +786,7 @@ export async function getFragranceDetails(
       : `${getFragranceEngineApiBase()}/api/fragrances/details`;
   const requestBody = {
     ...("id" in payload ? { id: payload.id } : {}),
-    ...("source_url" in payload && (useAppApi || !id) ? { source_url: payload.source_url } : {}),
+    ...("source_url" in payload && payload.source_url ? { source_url: payload.source_url } : {}),
   };
 
   const res = await fetch(url, {
@@ -786,6 +800,36 @@ export async function getFragranceDetails(
 
   if (!res.ok) {
     throw new Error(await apiErrorMessage(res, `Fragrance detail fetch failed: ${res.status}`));
+  }
+
+  return res.json();
+}
+
+export async function requeueFragranceDetails(
+  payload: FragranceDetailRequeuePayload,
+  options?: { signal?: AbortSignal },
+): Promise<FragranceDetailRequeueResponse> {
+  const id = firstNonEmptyString(payload.id);
+  const sourceUrl = firstNonEmptyString(payload.source_url);
+  if (!id && !sourceUrl) {
+    throw new Error("Fragrance refresh needs an engine id or Fragrantica source URL.");
+  }
+
+  const res = await fetch(`${getFragranceEngineApiBase()}/api/fragrances/details/requeue`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      ...(id ? { id } : {}),
+      ...(sourceUrl ? { source_url: sourceUrl } : {}),
+      priority: typeof payload.priority === "number" ? payload.priority : 10,
+    }),
+    signal: options?.signal,
+  });
+
+  if (!res.ok) {
+    throw new Error(await apiErrorMessage(res, `Fragrance refresh requeue failed: ${res.status}`));
   }
 
   return res.json();

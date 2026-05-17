@@ -9,6 +9,7 @@ import {
   normalizeFragranceDetail,
   normalizeFragranceSearchResult,
   normalizedAccordBarPct,
+  requeueFragranceDetails,
   resolveMainAccordChartRows,
   searchFragrances,
 } from "./fragranceApi.ts";
@@ -94,7 +95,7 @@ test("terminal enrichment status is not treated as queued even with worker flag"
   );
 });
 
-test("getFragranceDetails posts only opaque id to SRT details", async (t) => {
+test("getFragranceDetails posts opaque id and source URL to SRT details", async (t) => {
   const previousFetch = globalThis.fetch;
   const previousApiUrl = process.env.VITE_FRAGRANCE_API_URL;
   const previousAppApiUrl = process.env.VITE_API_BASE_URL;
@@ -140,6 +141,59 @@ test("getFragranceDetails posts only opaque id to SRT details", async (t) => {
   assert.equal(requests[0].init?.method, "POST");
   assert.deepEqual(JSON.parse(String(requests[0].init?.body)), {
     id: "opaque-token",
+    source_url: "https://www.fragrantica.com/perfume/Creed/Silver-Mountain-Water-472.html",
+  });
+});
+
+test("requeueFragranceDetails posts force refresh to SRT engine", async (t) => {
+  const previousFetch = globalThis.fetch;
+  const previousApiUrl = process.env.VITE_FRAGRANCE_API_URL;
+  const requests: Array<{ url: string; init?: RequestInit }> = [];
+
+  process.env.VITE_FRAGRANCE_API_URL = "https://engine.example.test/";
+  Object.defineProperty(globalThis, "fetch", {
+    configurable: true,
+    value: async (url: string, init?: RequestInit) => {
+      requests.push({ url, init });
+      return new Response(
+        JSON.stringify({ queued: true, job: { id: "job-1", status: "pending" } }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    },
+  });
+
+  t.after(() => {
+    Object.defineProperty(globalThis, "fetch", {
+      configurable: true,
+      value: previousFetch,
+    });
+    if (previousApiUrl === undefined) {
+      delete process.env.VITE_FRAGRANCE_API_URL;
+    } else {
+      process.env.VITE_FRAGRANCE_API_URL = previousApiUrl;
+    }
+  });
+
+  const response = await requeueFragranceDetails({
+    id: "opaque-token",
+    source_url: "https://www.fragrantica.com/perfume/Dior/Sauvage-31861.html",
+    priority: 10,
+  });
+
+  assert.equal(response.queued, true);
+  assert.equal(requests.length, 1);
+  assert.equal(
+    requests[0].url,
+    "https://engine.example.test/api/fragrances/details/requeue",
+  );
+  assert.equal(requests[0].init?.method, "POST");
+  assert.deepEqual(JSON.parse(String(requests[0].init?.body)), {
+    id: "opaque-token",
+    source_url: "https://www.fragrantica.com/perfume/Dior/Sauvage-31861.html",
+    priority: 10,
   });
 });
 
