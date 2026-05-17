@@ -592,7 +592,7 @@ export const FragranceCapture: React.FC<{
               origin: result.origin ?? 'srt',
             };
           })
-          .filter((result) => Boolean((result.id || firstString(result.source_url)) && result.brand));
+          .filter((result) => Boolean(result.id || firstString(result.source_url)));
       } catch (err: any) {
         if (err.name === 'AbortError') return;
       }
@@ -1071,10 +1071,7 @@ export const FragranceCapture: React.FC<{
         </AnimatePresence>
 
         <div className="mx-auto max-w-lg text-center -mt-0.5">
-          <form
-            onSubmit={handleSearch}
-            className="relative group rounded-[var(--radius-scent)] transition-[filter] duration-300 ease-out group-focus-within:drop-shadow-[0_0_28px_rgba(201,139,44,0.14)]"
-          >
+          <form onSubmit={handleSearch} className="relative group">
             <input
               id="scent-add-to-vault-search"
               type="text"
@@ -1082,9 +1079,9 @@ export const FragranceCapture: React.FC<{
               onChange={(e) => { setSearchQuery(e.target.value); setErrorStatus(null); }}
               onFocus={() => setSearchFocused(true)}
               onBlur={() => setSearchFocused(false)}
-              placeholder="Search by house or fragrance..."
+              placeholder="Search by house or fragrance…"
               aria-label="Look up a brand or fragrance"
-              className="scent-lux-input relative z-0 w-full h-[58px] sm:h-[62px] min-h-[48px] pl-12 pr-[3.4rem] sm:pr-14 text-center text-[#fff7ec] font-sans text-[15px] font-medium leading-snug tracking-[0.02em] outline-none transition-[border-color,box-shadow,background-color,color] duration-200 ease-out caret-[#e8b456] selection:bg-scent-accent/90 selection:text-[#0a0705] placeholder:text-[#d9c2a4]/52 placeholder:font-normal placeholder:tracking-[0.04em] hover:border-[rgba(235,188,108,0.52)] scroll-mt-28"
+              className="scent-lux-input relative z-0 w-full h-[58px] sm:h-[62px] pl-12 pr-12 text-center text-[#fff7ec] font-sans text-[15px] font-medium outline-none transition-colors placeholder:text-[#c9a97a]/42 placeholder:font-medium group-focus-within:shadow-[inset_0_1px_0_rgba(255,226,174,0.08),0_0_0_1px_rgba(201,139,44,0.15)] scroll-mt-28"
             />
             <motion.button
               type="submit"
@@ -1092,7 +1089,7 @@ export const FragranceCapture: React.FC<{
               whileHover={uploading ? undefined : { scale: 1.06 }}
               whileTap={uploading ? undefined : { scale: 0.9 }}
               transition={{ type: "spring", stiffness: 520, damping: 22 }}
-              className="absolute right-2 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border border-white/[0.09] bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.02))] p-0 text-scent-accent/82 shadow-[inset_0_1px_0_rgba(255,235,198,0.08),0_10px_18px_-14px_rgba(0,0,0,0.92)] outline-none transition-[border-color,background-color,transform,opacity] duration-200 ease-out hover:border-scent-accent/32 hover:bg-white/[0.05] focus-visible:ring-2 focus-visible:ring-scent-accent/35 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent disabled:pointer-events-none disabled:opacity-45 group-focus-within:border-scent-accent/22"
+              className="absolute right-2.5 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border border-white/[0.09] bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.02))] p-0 text-scent-accent/82 shadow-[inset_0_1px_0_rgba(255,235,198,0.08),0_10px_18px_-14px_rgba(0,0,0,0.92)] outline-none transition-[border-color,background-color,transform,opacity] duration-200 ease-out hover:border-scent-accent/32 hover:bg-white/[0.05] focus-visible:ring-2 focus-visible:ring-scent-accent/35 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent disabled:pointer-events-none disabled:opacity-45 group-focus-within:border-scent-accent/22"
               aria-label="Search"
             >
               <ScentSearchGlyph active={uploading} reduceMotion={reduceMotion} />
