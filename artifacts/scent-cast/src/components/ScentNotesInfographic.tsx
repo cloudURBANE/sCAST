@@ -208,21 +208,33 @@ function AccordPanel({
 
   return (
     <Panel title="Main Accords" className={className}>
-      <div ref={containerRef} className="flex flex-1 flex-col justify-center space-y-4 px-4 py-5">
-        <motion.div className="space-y-3" layout={false}>
+      <div
+        ref={containerRef}
+        className="flex flex-1 flex-col justify-center px-4 py-5 sm:px-5 sm:py-6"
+        style={{ contain: "layout paint" }}
+      >
+        <motion.ul
+          className="flex flex-col gap-y-2.5 sm:gap-y-3"
+          layout={false}
+          role="list"
+        >
           {displayRows.map((row, index) => {
             const fillPct = normalizedAccordBarPct(row, index, displayRows.length);
             const rowDelay = ACCORD_ROW_DELAY_START + index * ACCORD_STAGGER_S;
 
             return (
-              <motion.div
+              <motion.li
                 key={`${row.label}:${index}`}
-                className="grid grid-cols-[5.25rem_1fr_2.5rem] items-center gap-3 sm:gap-3.5"
+                className="grid items-center gap-x-3 sm:gap-x-4"
+                style={{
+                  gridTemplateColumns:
+                    "clamp(4.5rem, 30%, 6.75rem) minmax(0, 1fr) 2.25rem",
+                }}
                 initial={false}
                 animate={
                   reduced || revealed
                     ? { opacity: 1, y: 0 }
-                    : { opacity: 0.22, y: 10 }
+                    : { opacity: 0.22, y: 8 }
                 }
                 transition={{
                   duration: reduced ? 0 : 0.78,
@@ -230,14 +242,19 @@ function AccordPanel({
                   delay: reduced ? 0 : rowDelay,
                 }}
               >
-                <p className="truncate text-[11px] sm:text-xs text-white/72 tracking-tight">{row.label}</p>
-                <div className="h-2 sm:h-[7px] rounded-full bg-white/[0.07] shadow-[inset_0_1px_2px_rgba(0,0,0,0.45)] ring-1 ring-white/[0.05] overflow-hidden">
+                <p
+                  className="min-w-0 truncate text-[10px] sm:text-[11px] uppercase tracking-[0.14em] leading-tight text-white/75"
+                  title={row.label}
+                >
+                  {row.label}
+                </p>
+                <div className="relative h-2 sm:h-[9px] overflow-hidden rounded-full bg-white/[0.05] ring-1 ring-inset ring-white/[0.06] shadow-[inset_0_1px_2px_rgba(0,0,0,0.55)]">
                   <motion.div
-                    className="relative h-full min-w-[2px] rounded-full bg-gradient-to-r from-[#c3892c]/95 via-scent-accent to-[#ebd198]/92 shadow-[0_0_16px_rgba(201,139,44,0.32)]"
+                    className="relative h-full min-w-[3px] rounded-full bg-gradient-to-r from-[#b07a24] via-scent-accent to-[#ecd49d] shadow-[0_0_18px_rgba(201,139,44,0.32)]"
                     initial={false}
                     animate={{
                       width: reduced || revealed ? `${fillPct}%` : "2%",
-                      opacity: reduced || revealed ? 1 : 0.35,
+                      opacity: reduced || revealed ? 1 : 0.32,
                     }}
                     transition={{
                       width: {
@@ -252,11 +269,18 @@ function AccordPanel({
                       },
                     }}
                   >
-                    <span className="pointer-events-none absolute inset-y-0 right-0 w-7 bg-gradient-to-l from-transparent to-white/22" aria-hidden />
+                    <span
+                      className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/30"
+                      aria-hidden
+                    />
+                    <span
+                      className="pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-white/25 to-transparent"
+                      aria-hidden
+                    />
                   </motion.div>
                 </div>
                 <motion.p
-                  className="text-right text-[11px] sm:text-xs text-white/82 tabular-nums tracking-tight"
+                  className="text-right text-[11px] sm:text-[12px] leading-none text-white/85 tabular-nums tracking-tight"
                   initial={false}
                   animate={{
                     opacity: reduced || revealed ? 1 : 0,
@@ -265,13 +289,14 @@ function AccordPanel({
                     duration: reduced ? 0 : 0.45,
                     delay: reduced ? 0 : rowDelay + 0.28,
                   }}
+                  aria-label={`${fillPct} percent`}
                 >
                   {fillPct}
                 </motion.p>
-              </motion.div>
+              </motion.li>
             );
           })}
-        </motion.div>
+        </motion.ul>
       </div>
     </Panel>
   );
