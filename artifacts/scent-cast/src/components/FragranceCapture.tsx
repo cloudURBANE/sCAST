@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Search, RefreshCw, Check } from 'lucide-react';
+import { Search, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import {
   collectMainAccordDisplayRows,
@@ -306,15 +306,6 @@ async function fetchLocalProfile(query: string, signal?: AbortSignal): Promise<R
   return profile;
 }
 
-function sourceHost(value: unknown): string | undefined {
-  if (typeof value !== 'string' || !value.trim()) return undefined;
-  try {
-    return new URL(value).hostname.replace(/^www\./, '');
-  } catch {
-    return undefined;
-  }
-}
-
 function formatGender(value: unknown): string | undefined {
   const gender = firstString(value);
   if (!gender) return undefined;
@@ -373,15 +364,6 @@ function withEnrichmentStatus(
       ...(typeof status.message === 'string' ? { message: status.message } : {}),
     },
   });
-}
-
-function matchMeta(match: FragranceMatch): string[] {
-  return [
-    typeof match.year === 'number' ? String(match.year) : undefined,
-    match.origin === 'app' ? 'App catalog' : match.origin === 'srt' ? 'SRT' : undefined,
-    sourceHost(match.source_url),
-    match.scent_vector ? 'Local profile' : undefined,
-  ].filter((value): value is string => Boolean(value));
 }
 
 export const FragranceCapture: React.FC<{
@@ -1005,65 +987,44 @@ export const FragranceCapture: React.FC<{
               transition={{ duration: 0.34, ease: [0.22, 1, 0.36, 1] }}
               className="mt-8 pt-6 border-t border-white/10 mx-auto max-w-lg w-full"
             >
-              <div className="mb-4 flex items-center justify-between gap-3 px-1">
-                <p className="text-[9px] uppercase tracking-[0.34em] text-scent-muted font-bold">Archive Matches</p>
-                <p className="text-[9px] uppercase tracking-[0.18em] text-scent-accent/70 font-bold">
-                  {matches.length} candidates
+              <div className="mb-5 flex justify-center px-1">
+                <p className="text-[9px] uppercase tracking-[0.34em] text-scent-muted font-bold">
+                  Archive Matches{' '}
+                  <span className="tabular-nums text-scent-accent/75 tracking-[0.12em]">
+                    ({matches.length})
+                  </span>
                 </p>
               </div>
-              <div className="max-h-[min(390px,44vh)] overflow-y-auto overscroll-contain pr-1 scrollbar-hide">
-                <div className="grid grid-cols-1 gap-2">
-                  {matches.map((m, i) => {
-                    const meta = matchMeta(m);
-                    return (
+              <div className="max-h-[min(390px,44vh)] overflow-y-auto overscroll-contain scrollbar-hide">
+                <div className="grid grid-cols-1 gap-2.5">
+                  {matches.map((m, i) => (
                       <button
                         key={i}
                         type="button"
                         onClick={() => setSelectedIdx(i)}
-                        className={`w-full min-h-[92px] text-left p-4 border transition-all cursor-pointer rounded-[var(--radius-scent)] ${selectedIdx === i ? 'border-scent-accent/52 bg-white/[0.07] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]' : 'border-white/10 hover:bg-white/[0.04] hover:border-white/18'}`}
+                        className={`group w-full min-h-[76px] px-5 py-4 text-center border transition-all duration-200 cursor-pointer rounded-[var(--radius-scent)] ${
+                          selectedIdx === i
+                            ? 'border-scent-accent/45 bg-white/[0.06] shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_0_0_1px_rgba(201,139,44,0.12)]'
+                            : 'border-white/10 hover:bg-white/[0.035] hover:border-white/16'
+                        }`}
                         aria-pressed={selectedIdx === i}
                       >
-                        <div className="flex w-full items-start gap-3">
-                          <div
-                            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-[10px] font-mono ${selectedIdx === i ? 'border-scent-accent/45 bg-scent-accent/12 text-scent-accent' : 'border-white/12 bg-black/18 text-white/32'}`}
-                            aria-hidden
+                        <div className="mx-auto flex min-w-0 max-w-full flex-col items-center gap-1">
+                          <p
+                            className="font-serif italic text-[1.12rem] leading-snug text-[#fff7ec] max-w-full truncate px-1"
+                            title={m.name}
                           >
-                            {selectedIdx === i ? (
-                              <Check size={15} className="shrink-0" />
-                            ) : (
-                              String(i + 1).padStart(2, '0')
-                            )}
-                          </div>
-                          <div className="min-w-0 flex-1 space-y-2">
-                            <p
-                              className="font-serif italic text-[1.12rem] leading-tight text-[#fff7ec] truncate"
-                              title={m.name}
-                            >
-                              {truncateMatchLine(m.name, MATCH_LINE_MAX_CHARS)}
-                            </p>
-                            <p
-                              className="text-[11px] uppercase tracking-[0.16em] text-scent-accent/85 font-sans font-bold truncate"
-                              title={m.brand || 'House unavailable'}
-                            >
-                              {truncateMatchLine(m.brand || 'House unavailable', MATCH_LINE_MAX_CHARS)}
-                            </p>
-                            {meta.length > 0 && (
-                              <div className="flex flex-wrap gap-1.5 pt-1">
-                                {meta.slice(0, 3).map((item) => (
-                                  <span
-                                    key={item}
-                                    className="border border-white/10 bg-white/[0.035] px-2 py-1 text-[9px] uppercase tracking-[0.12em] text-white/48"
-                                  >
-                                    {item}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                          </div>
+                            {truncateMatchLine(m.name, MATCH_LINE_MAX_CHARS)}
+                          </p>
+                          <p
+                            className="text-[11px] uppercase tracking-[0.16em] text-scent-accent/80 font-sans font-bold max-w-full truncate px-1"
+                            title={m.brand || 'House unavailable'}
+                          >
+                            {truncateMatchLine(m.brand || 'House unavailable', MATCH_LINE_MAX_CHARS)}
+                          </p>
                         </div>
                       </button>
-                    );
-                  })}
+                    ))}
                 </div>
               </div>
               <AnimatePresence>
