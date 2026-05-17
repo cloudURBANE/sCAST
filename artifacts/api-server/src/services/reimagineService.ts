@@ -32,31 +32,38 @@ const DEFAULT_REIMAGINE_QUALITY = "high";
 const OPENAI_IMAGE_EDITS_ENDPOINT = "https://api.openai.com/v1/images/edits";
 const OPENAI_TIMEOUT_MS = 240_000;
 const MAX_OUTPUT_DIMENSION = 768;
-const WEBP_QUALITY = 82;
+const WEBP_QUALITY = 90;
+// Maximum dimension of the PNG we send to OpenAI as the reference image.
+// gpt-image-2 accepts up to 25MB per image; a 2048-square PNG with full
+// compression typically lands well under that and gives the model far more
+// pixels of label artwork, cap detail, and glass refraction to reproduce
+// faithfully than a 1024-square thumbnail would.
+const OPENAI_INPUT_MAX_DIMENSION = 2048;
 
 const REIMAGINE_PROMPT = [
-  "High-fidelity commercial product photograph of the exact fragrance bottle in the source image,",
-  "isolated on a FULLY TRANSPARENT background with a clean alpha matte —",
-  "no backdrop, no gradient, no surface, no contact shadow, no drop shadow, no ground reflection,",
-  "no horizon line, no color fill, nothing behind or beneath the bottle.",
-  "The bottle floats on pure transparency, ready to be composited onto any background.",
-  "Identity preservation is the single highest priority: reproduce the bottle silhouette,",
-  "proportions, glass color and tint, cap material and shape, collar, base, label artwork,",
-  "every typographic detail, and any engraving exactly as shown in the source —",
-  "do not redesign, restyle, recolor, retype, or invent any element of the bottle or label.",
-  "Lighting on the bottle itself: large soft studio key from upper-left, subtle fill,",
-  "gentle rim highlight on the glass edges, natural specular highlights,",
-  "accurate refraction through the liquid, true-to-source liquid color and fill level,",
-  "crisp focus across the whole bottle, no motion blur, no depth-of-field smear on the label.",
-  "Composition: head-on hero packshot, single bottle centered, eye-level camera,",
-  "square 1:1 framing with even transparent margins on all four sides.",
-  "Strictly forbidden: any background fill (white, gray, black, color, gradient, blurred, or otherwise),",
-  "any drop shadow or contact shadow, ground reflections, vignettes, frames, borders,",
-  "extra bottles, boxes, props, hands, people, water droplets, petals, fabric,",
-  "added text, added logos, watermarks, or any element other than the bottle itself.",
-  "Output must be an alpha-clean, edge-perfect cutout of the bottle on a transparent background —",
-  "no halo, no haze, no fringe, no semi-transparent backdrop tint around the silhouette —",
-  "exactly like a retouched e-commerce packshot whose background has been removed cleanly.",
+  "Print-grade commercial product photograph of the exact fragrance bottle shown in the reference image.",
+  "Identity preservation is the single highest priority and must be enforced before any creative decision:",
+  "match the bottle silhouette, proportions, shoulder, neck, collar, base, and footprint exactly;",
+  "match the glass color, tint, opacity, and edge thickness exactly;",
+  "match the cap material, shape, knurl, polish, and seating exactly;",
+  "reproduce the label artwork pixel-faithfully — every glyph, kerning detail, brand mark, certification stamp,",
+  "concentration line, batch code, and small-print typography must remain legible at print resolution;",
+  "reproduce any engraving, embossing, etching, or relief in the glass exactly as shown;",
+  "preserve the true-to-source liquid color, transparency, and fill level — do not lighten or darken the juice.",
+  "Do not redesign, restyle, recolor, rename, reposition, simplify, or invent any element of the bottle or label.",
+  "Lighting and material rendering: large soft studio key from upper-left with a subtle fill from the opposite side,",
+  "gentle rim highlight tracing the glass edges, controlled specular highlights without blown-out hotspots,",
+  "physically accurate refraction and caustic light play through the liquid and at the base of the glass,",
+  "true Fresnel falloff on the glass surface, micro-detail on the cap (machined edges, polish reflection, metal grain if applicable),",
+  "and crisp focus across the entire bottle — no motion blur, no depth-of-field smear on the label, no chromatic aberration.",
+  "Composition: head-on hero packshot, single bottle perfectly centered, eye-level camera,",
+  "square 1:1 framing with even margins, the bottle filling most of the frame for maximum pixel density.",
+  "Background: the bottle must be isolated on a clean studio backdrop suitable for instant background removal —",
+  "no props, no surface, no horizon line, no second bottle, no boxes, no hands, no people, no fabric,",
+  "no water droplets, no petals, no added text, no added logos, no watermarks, no frames, no borders,",
+  "no drop shadow, no contact shadow, no ground reflection, no vignette, no color grading on the backdrop.",
+  "Treat this as a Sephora-grade hero packshot: photoreal, ultra-sharp, color-accurate, retouched-clean,",
+  "edge-perfect bottle silhouette ready to be cut out and composited onto any background.",
 ].join(" ");
 
 function resolveModel(requested?: string | null): ReimagineModel {
@@ -128,9 +135,12 @@ async function loadSourceBytes(sourceUrl: string): Promise<SourceBytes> {
 async function toPngForOpenAI(buffer: Buffer): Promise<Buffer> {
   return sharp(buffer)
     .rotate()
-    .resize(1024, 1024, { fit: "inside", withoutEnlargement: true })
+    .resize(OPENAI_INPUT_MAX_DIMENSION, OPENAI_INPUT_MAX_DIMENSION, {
+      fit: "inside",
+      withoutEnlargement: true,
+    })
     .ensureAlpha()
-    .png()
+    .png({ compressionLevel: 9, adaptiveFiltering: true })
     .toBuffer();
 }
 
