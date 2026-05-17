@@ -47,6 +47,85 @@ test("normalizeFragranceSearchResult coerces non-string ids", () => {
   assert.equal(result?.origin, "srt");
 });
 
+test("normalizeFragranceSearchResult recovers house from source URL", () => {
+  const result = normalizeFragranceSearchResult(
+    {
+      id: "opaque-token",
+      name: "Liquid Brun",
+      source_url: "https://www.fragrantica.com/perfume/French-Avenue/Liquid-Brun-94713.html",
+    },
+    "Liquid Brun",
+  );
+
+  assert.equal(result?.name, "Liquid Brun");
+  assert.equal(result?.house, "French Avenue");
+  assert.equal(result?.brand, "French Avenue");
+  assert.equal(
+    result?.source_url,
+    "https://www.fragrantica.com/perfume/French-Avenue/Liquid-Brun-94713.html",
+  );
+});
+
+test("normalizeFragranceSearchResult recovers house from source id", () => {
+  const result = normalizeFragranceSearchResult(
+    {
+      id: "source:https://www.fragrantica.com/perfume/Tom-Ford/Oud-Wood-1826.html",
+      name: "Oud Wood",
+    },
+    "Oud Wood",
+  );
+
+  assert.equal(result?.house, "Tom Ford");
+  assert.equal(result?.brand, "Tom Ford");
+  assert.equal(result?.source_url, "https://www.fragrantica.com/perfume/Tom-Ford/Oud-Wood-1826.html");
+});
+
+test("normalizeFragranceSearchResult recovers house from catalog id", () => {
+  const result = normalizeFragranceSearchResult(
+    {
+      id: "catalog:Maison%20Francis%20Kurkdjian::Baccarat%20Rouge%20540",
+    },
+    "Baccarat",
+    "app",
+  );
+
+  assert.equal(result?.name, "Baccarat Rouge 540");
+  assert.equal(result?.house, "Maison Francis Kurkdjian");
+  assert.equal(result?.brand, "Maison Francis Kurkdjian");
+  assert.equal(result?.origin, "app");
+});
+
+test("normalizeFragranceSearchResult recovers house from SRT opaque id", () => {
+  const result = normalizeFragranceSearchResult(
+    {
+      id: "eyJuIjoiTGlxdWlkIEJydW4iLCJiIjoiRnJlbmNoIEF2ZW51ZSIsInkiOiIyMDI0IiwiYm4iOiIiLCJmZyI6Imh0dHBzOi8vd3d3LmZyYWdyYW50aWNhLmNvbS9wZXJmdW1lL0ZyZW5jaC1BdmVudWUvTGlxdWlkLUJydW4tOTQ3MTMuaHRtbCJ9",
+    },
+    "Liquid Brun",
+  );
+
+  assert.equal(result?.name, "Liquid Brun");
+  assert.equal(result?.house, "French Avenue");
+  assert.equal(result?.brand, "French Avenue");
+});
+
+test("normalizeFragranceSearchResult reads nested product identity", () => {
+  const result = normalizeFragranceSearchResult(
+    {
+      id: "nested-product",
+      product: {
+        name: "Another 13",
+        brand: "Le Labo",
+      },
+    },
+    "Another 13",
+    "app",
+  );
+
+  assert.equal(result?.name, "Another 13");
+  assert.equal(result?.house, "Le Labo");
+  assert.equal(result?.brand, "Le Labo");
+});
+
 test("normalizeFragranceDetail marks derived metrics as complete without losing partial coverage", () => {
   const detail = normalizeFragranceDetail({
     name: "Sauvage",
@@ -294,6 +373,11 @@ test("searchFragrances supplements degraded SRT breadth with app API results", a
           results: [
             { id: "catalog:Creed::Aventus", name: "Aventus", brand: "Creed" },
             { id: "catalog:Creed::Green Irish Tweed", name: "Green Irish Tweed", brand: "Creed" },
+            {
+              id: "weak-source",
+              name: "Aventus Product Page",
+              source_url: "https://example.test/products/aventus-product-page",
+            },
           ],
         }),
         {

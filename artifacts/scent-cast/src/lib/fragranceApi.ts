@@ -1,4 +1,4 @@
-const FRAGRANCE_SEARCH_CACHE_STORAGE_KEY = "scentcast.fragranceSearchCache.v2";
+const FRAGRANCE_SEARCH_CACHE_STORAGE_KEY = "scentcast.fragranceSearchCache.v3";
 const FRAGRANCE_SEARCH_CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const FRAGRANCE_SEARCH_CACHE_MAX_ENTRIES = 100;
 const SUPPLEMENTAL_SEARCH_MIN_RESULTS = 8;
@@ -179,6 +179,160 @@ function firstNonEmptyString(...values: unknown[]): string | undefined {
   return undefined;
 }
 
+function objectRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function sourceUrlFromCollection(value: unknown): string | undefined {
+  if (Array.isArray(value)) return firstNonEmptyString(...value);
+  const record = objectRecord(value);
+  return firstNonEmptyString(record.frag_url, record.fragrantica, record.fragrantica_url, record.url);
+}
+
+function cleanFragranceUrlSegment(value: string): string {
+  return value
+    .replace(/\.html?$/i, "")
+    .replace(/-\d+$/i, "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function titleCaseFragranceSegment(value: string): string {
+  return value
+    .split(" ")
+    .filter(Boolean)
+    .map((word) =>
+      /^(?:edp|edt|edc|dna|oud|ysl)$/i.test(word)
+        ? word.toUpperCase()
+        : word.charAt(0).toUpperCase() + word.slice(1),
+    )
+    .join(" ");
+}
+
+function decodeFragranceUrlSegment(value: string | undefined): string {
+  if (!value) return "";
+  try {
+    return decodeURIComponent(value.replace(/\+/g, " "));
+  } catch {
+    return value;
+  }
+}
+
+function fragranceIdentityFromSourceUrl(
+  value: string | undefined,
+): { house?: string; name?: string } {
+  if (!value) return {};
+
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return {};
+  }
+
+  const parts = parsed.pathname
+    .split("/")
+    .map(decodeFragranceUrlSegment)
+    .filter(Boolean);
+  const perfumeIndex = parts.findIndex((part) => /^perfumes?$/i.test(part));
+  const housePart = perfumeIndex >= 0 ? parts[perfumeIndex + 1] : undefined;
+  const namePart = perfumeIndex >= 0 ? parts[perfumeIndex + 2] : parts.at(-1);
+  const house = titleCaseFragranceSegment(cleanFragranceUrlSegment(housePart ?? ""));
+  const name = titleCaseFragranceSegment(cleanFragranceUrlSegment(namePart ?? ""));
+
+  return {
+    ...(house ? { house } : {}),
+    ...(name ? { name } : {}),
+  };
+}
+
+function decodeSearchIdPart(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  try {
+    const decoded = decodeURIComponent(value).trim();
+    return decoded || undefined;
+  } catch {
+    const trimmed = value.trim();
+    return trimmed || undefined;
+  }
+}
+
+function fragranceIdentityFromStructuredId(
+  value: string | undefined,
+): { house?: string; name?: string; sourceUrl?: string } {
+  if (!value) return {};
+
+  if (value.startsWith("source:")) {
+    const sourceUrl = value.slice("source:".length).trim();
+    return {
+      ...fragranceIdentityFromSourceUrl(sourceUrl),
+      ...(sourceUrl ? { sourceUrl } : {}),
+    };
+  }
+
+  const identityMatch = /^(?:catalog|dataset):([^:]+)::(.+)$/.exec(value);
+  if (identityMatch) {
+    return {
+      house: decodeSearchIdPart(identityMatch[1]),
+      name: decodeSearchIdPart(identityMatch[2]),
+    };
+  }
+
+  return {};
+}
+
+function base64UrlToBase64(value: string): string {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const padding = normalized.length % 4;
+  return padding ? normalized + "=".repeat(4 - padding) : normalized;
+}
+
+function decodeBase64Json(value: string): unknown {
+  if (!/^[A-Za-z0-9_-]+={0,2}$/.test(value) || value.length < 12) return null;
+
+  try {
+    const binary = globalThis.atob(base64UrlToBase64(value));
+    const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+    return JSON.parse(new TextDecoder().decode(bytes));
+  } catch {
+    return null;
+  }
+}
+
+function fragranceIdentityFromOpaqueId(
+  value: string | undefined,
+): { house?: string; name?: string; sourceUrl?: string } {
+  if (!value) return {};
+  const decoded = decodeBase64Json(value);
+  if (!decoded || typeof decoded !== "object" || Array.isArray(decoded)) return {};
+
+  const data = decoded as Record<string, unknown>;
+  const house = firstNonEmptyString(
+    data.b,
+    data.brand,
+    data.house,
+    data.brand_name,
+    data.designer,
+  );
+  const name = firstNonEmptyString(
+    data.n,
+    data.name,
+    data.fragrance_name,
+    data.title,
+    data.product_name,
+  );
+  const sourceUrl = firstNonEmptyString(data.fg, data.bn);
+
+  return {
+    ...(house ? { house } : {}),
+    ...(name ? { name } : {}),
+    ...(sourceUrl ? { sourceUrl } : {}),
+  };
+}
+
 function fragranceSearchCacheKey(query: string): string {
   return query.trim().toLowerCase().replace(/\s+/g, " ");
 }
@@ -225,7 +379,23 @@ function getCachedFragranceSearch(query: string): FragranceSearchResponse | null
     writeSearchCache(cache);
     return null;
   }
-  return entry.response.results.length > 0 ? entry.response : null;
+
+  const cachedQuery = typeof entry.response.query === "string" ? entry.response.query : query;
+  const normalizedResults = entry.response.results
+    .map((result) => {
+      const cachedOrigin =
+        result?.origin === "app" || result?.origin === "srt" ? result.origin : "srt";
+      return normalizeFragranceSearchResult(result, cachedQuery, cachedOrigin);
+    })
+    .filter((result): result is FragranceSearchResult => result !== null);
+
+  return normalizedResults.length > 0
+    ? {
+        ...entry.response,
+        query: cachedQuery,
+        results: normalizedResults,
+      }
+    : null;
 }
 
 function cacheFragranceSearch(query: string, response: FragranceSearchResponse): void {
@@ -247,17 +417,30 @@ export function normalizeFragranceSearchResult(
   if (!value || typeof value !== "object") return null;
 
   const result = value as Record<string, unknown>;
+  const product = objectRecord(result.product);
+  const raw = objectRecord(result.raw);
+  const rawSourceUrls = objectRecord(raw.source_urls);
+  const rawId = firstNonEmptyString(
+    result.id,
+    result.fragrance_id,
+    result.source_id,
+    result.slug,
+  );
+  const structuredIdIdentity = fragranceIdentityFromStructuredId(rawId);
+  const opaqueIdIdentity = fragranceIdentityFromOpaqueId(rawId);
   const sourceUrl = firstNonEmptyString(
     result.source_url,
     result.sourceUrl,
     result.url,
     result.fg_url,
+    sourceUrlFromCollection(result.source_urls),
+    sourceUrlFromCollection(rawSourceUrls),
+    structuredIdIdentity.sourceUrl,
+    opaqueIdIdentity.sourceUrl,
   );
+  const sourceIdentity = fragranceIdentityFromSourceUrl(sourceUrl);
   const id = firstNonEmptyString(
-    result.id,
-    result.fragrance_id,
-    result.source_id,
-    result.slug,
+    rawId,
     sourceUrl ? `source:${sourceUrl}` : undefined,
   );
   if (!id) return null;
@@ -267,6 +450,13 @@ export function normalizeFragranceSearchResult(
     result.fragrance_name,
     result.title,
     result.product_name,
+    product.name,
+    product.fragrance_name,
+    product.title,
+    product.product_name,
+    sourceIdentity.name,
+    structuredIdIdentity.name,
+    opaqueIdIdentity.name,
     fallbackQuery,
   );
   const house = firstNonEmptyString(
@@ -274,6 +464,20 @@ export function normalizeFragranceSearchResult(
     result.brand,
     result.brand_name,
     result.designer,
+    result.house_name,
+    result.designer_name,
+    result.manufacturer,
+    result.maker,
+    result.company,
+    result.perfume_house,
+    result.fragrance_house,
+    product.brand,
+    product.house,
+    product.brand_name,
+    product.designer,
+    sourceIdentity.house,
+    structuredIdIdentity.house,
+    opaqueIdIdentity.house,
   );
   const origin = result.origin === "app" || result.origin === "srt" ? result.origin : fallbackOrigin;
 
@@ -623,6 +827,10 @@ function fragranceIdentityKey(result: FragranceSearchResult): string {
   return normalizeForDedupe(result.source_url ?? result.id);
 }
 
+function hasResolvedSearchHouse(result: FragranceSearchResult): boolean {
+  return Boolean(firstNonEmptyString(result.house, result.brand));
+}
+
 function mergeSearchResults(
   primary: FragranceSearchResult[],
   supplemental: FragranceSearchResult[],
@@ -722,7 +930,10 @@ export async function searchFragrances(
     try {
       const supplemental = await searchAppFragrances(query, { signal: options?.signal });
       usedSupplementalSearch = true;
-      response.results = mergeSearchResults(response.results, supplemental.results);
+      response.results = mergeSearchResults(
+        response.results,
+        supplemental.results.filter(hasResolvedSearchHouse),
+      );
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") throw err;
       if (response.results.length === 0) {
