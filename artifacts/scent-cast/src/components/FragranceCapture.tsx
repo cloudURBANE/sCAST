@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Search } from 'lucide-react';
+import { Search, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import {
   collectMainAccordDisplayRows,
@@ -1089,10 +1089,29 @@ export const FragranceCapture: React.FC<{
               whileHover={uploading ? undefined : { scale: 1.06 }}
               whileTap={uploading ? undefined : { scale: 0.9 }}
               transition={{ type: "spring", stiffness: 520, damping: 22 }}
-              className="absolute right-2.5 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border border-white/[0.09] bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.02))] p-0 text-scent-accent/82 shadow-[inset_0_1px_0_rgba(255,235,198,0.08),0_10px_18px_-14px_rgba(0,0,0,0.92)] outline-none transition-[border-color,background-color,transform,opacity] duration-200 ease-out hover:border-scent-accent/32 hover:bg-white/[0.05] focus-visible:ring-2 focus-visible:ring-scent-accent/35 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent disabled:pointer-events-none disabled:opacity-45 group-focus-within:border-scent-accent/22"
+              className="absolute right-2.5 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent p-0 text-scent-accent/78 shadow-none outline-none transition-colors hover:text-[#fff7ec] focus-visible:ring-2 focus-visible:ring-scent-accent/35 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent disabled:pointer-events-none disabled:opacity-45 group-focus-within:text-scent-accent/92"
               aria-label="Search"
             >
-              <ScentSearchGlyph active={uploading} reduceMotion={reduceMotion} />
+              {uploading ? (
+                <RefreshCw size={18} strokeWidth={1.65} className="text-scent-accent/88 animate-spin" aria-hidden />
+              ) : (
+                <motion.span
+                  className="relative inline-flex"
+                  aria-hidden
+                  animate={
+                    reduceMotion
+                      ? undefined
+                      : { opacity: [0.74, 1, 0.74] }
+                  }
+                  transition={
+                    reduceMotion
+                      ? undefined
+                      : { duration: 3.4, repeat: Infinity, ease: "easeInOut" }
+                  }
+                >
+                  <Search size={18} strokeWidth={1.65} className="drop-shadow-[0_0_12px_rgba(201,139,44,0.22)]" />
+                </motion.span>
+              )}
             </motion.button>
           </form>
         </div>
