@@ -347,94 +347,84 @@ function DetailMetaStrip({ rows }: { rows: Array<{ label: string; value: string 
   );
 }
 
-function performanceMetricPercent(
+function toTitleCase(value: string): string {
+  return value.replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+type CyclingPart = { primary: string; secondary: string };
+
+function buildWearProfileParts(
+  wear: DerivedMetrics["wear_profile"] | null | undefined,
+): CyclingPart[] {
+  if (!wear) return [];
+  const seasonOrder = ["Winter", "Spring", "Summer", "Autumn", "Autumn/Fall", "Fall"];
+  const rank = (season: string) => {
+    const index = seasonOrder.indexOf(season);
+    return index === -1 ? seasonOrder.length : index;
+  };
+  const seasons = (wear.primary_seasons?.filter(Boolean) ?? [])
+    .slice()
+    .sort((a, b) => rank(a) - rank(b));
+  const time = wear.primary_time?.trim() || null;
+  const parts: CyclingPart[] = [];
+  for (const season of seasons) parts.push({ primary: season, secondary: "Season" });
+  if (time) parts.push({ primary: time, secondary: "Time" });
+  return parts;
+}
+
+function buildPerformanceParts(
   performance: DerivedMetrics["performance_score"] | null | undefined,
-  metric: "sillage" | "longevity",
-): number | null {
-  if (!performance) return null;
-
-  const keys =
-    metric === "sillage"
-      ? ["sillage_percent", "sillage_pct", "sillage_score", "sillage_score_raw"]
-      : ["longevity_percent", "longevity_pct", "longevity_score", "longevity_score_raw"];
-  const record = performance as Record<string, unknown>;
-
-  for (const key of keys) {
-    const percent = percentFromMetricValue(record[key]);
-    if (percent !== null) return percent;
-  }
-
-  return null;
+): CyclingPart[] {
+  const parts: CyclingPart[] = [];
+  const sillage = performance?.sillage_label?.trim();
+  const longevity = performance?.longevity_label?.trim();
+  if (sillage) parts.push({ primary: toTitleCase(sillage), secondary: "Sillage" });
+  if (longevity) parts.push({ primary: toTitleCase(longevity), secondary: "Longevity" });
+  return parts;
 }
 
-function performanceSignalLine({
-  label,
-  metric,
-  percent,
+function CyclingTilePair({
+  parts,
+  primaryClass,
+  secondaryClass,
 }: {
-  label: string | null;
-  metric: "sillage" | "longevity";
-  percent: number | null;
-}): string | null {
-  if (percent === null && !label) return null;
-  const cleanLabel = label?.trim().toLowerCase() ?? null;
-  if (percent !== null && cleanLabel) return `${percent}% ${cleanLabel} ${metric}`;
-  if (percent !== null) return `${percent}% ${metric}`;
-  return cleanLabel ? `${cleanLabel} ${metric}` : null;
-}
-
-function PerformanceStatSubtitle({
-  performance,
-  legacyPerformance,
-}: {
-  performance?: DerivedMetrics["performance_score"] | null;
-  legacyPerformance?: Fragrance["performance"];
+  parts: CyclingPart[];
+  primaryClass: string;
+  secondaryClass: string;
 }) {
-  const longevity = performance?.longevity_label?.trim() || null;
-  const sillage = performance?.sillage_label?.trim() || null;
-  const overallPerformancePercent = scoreNumber(performance?.score);
-  const longevityLine = performanceSignalLine({
-    label: longevity,
-    metric: "longevity",
-    percent:
-      performanceMetricPercent(performance, "longevity") ??
-      percentFromTenPoint(legacyPerformance?.longevity) ??
-      overallPerformancePercent,
-  });
-  const sillageLine = performanceSignalLine({
-    label: sillage,
-    metric: "sillage",
-    percent:
-      performanceMetricPercent(performance, "sillage") ??
-      percentFromTenPoint(legacyPerformance?.sillage) ??
-      overallPerformancePercent,
-  });
-  const both = Boolean(longevityLine && sillageLine);
   const [phase, setPhase] = useState(0);
   useEffect(() => {
-    if (!both) return;
-    const id = window.setInterval(() => setPhase((p) => (p + 1) % 2), 4500);
+    if (parts.length <= 1) return;
+    const id = window.setInterval(() => setPhase((p) => (p + 1) % parts.length), 4500);
     return () => window.clearInterval(id);
-  }, [both]);
-  const text =
-    longevityLine && sillageLine
-      ? phase === 0
-        ? sillageLine
-        : longevityLine
-      : joinDisplayParts([longevityLine, sillageLine]) ?? "Signal";
-
+  }, [parts.length]);
+  if (parts.length === 0) return null;
+  const current = parts[phase % parts.length];
   return (
-    <p className="text-[10px] text-white/42 min-h-[2.5em] flex items-center justify-center px-1 leading-snug">
-      <motion.span
-        key={text}
-        initial={{ opacity: 0, y: 3 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-        className="block leading-snug"
-      >
-        {text}
-      </motion.span>
-    </p>
+    <>
+      <p className={primaryClass}>
+        <motion.span
+          key={`p-${current.primary}`}
+          initial={{ opacity: 0, y: 3 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+          className="block leading-tight"
+        >
+          {current.primary}
+        </motion.span>
+      </p>
+      <p className={secondaryClass}>
+        <motion.span
+          key={`s-${current.secondary}`}
+          initial={{ opacity: 0, y: 3 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+          className="block leading-snug"
+        >
+          {current.secondary}
+        </motion.span>
+      </p>
+    </>
   );
 }
 
@@ -469,27 +459,42 @@ function ProfileScorePanel({
     );
   }
 
-  const statCards = [
+  const wearParts = buildWearProfileParts(metrics?.wear_profile);
+  const perfParts = buildPerformanceParts(performance);
+
+  type StatCard = {
+    icon: typeof CalendarDays;
+    label: string;
+    cycle: CyclingPart[];
+    value: string | null;
+    sub: string | null;
+  };
+  const statCards: StatCard[] = [
     {
       icon: CalendarDays,
       label: "Wear Profile",
+      cycle: wearParts,
       value: wearProfile ?? "Universal",
-      sub: "Season / time",
+      sub: "Season / Time",
     },
     {
       icon: Activity,
       label: "Performance",
+      cycle: perfParts,
       value: null,
+      sub: null,
     },
     {
       icon: ThumbsUp,
       label: "Community",
+      cycle: [],
       value: communityScore !== null ? `${communityScore}/100` : "Pending",
       sub: "Interest",
     },
     {
       icon: CircleDollarSign,
       label: "Value",
+      cycle: [],
       value: value?.dominant_label ?? "Pending",
       sub: "Assessment",
     },
@@ -497,7 +502,7 @@ function ProfileScorePanel({
 
   return (
     <div className="space-y-3 sm:space-y-5">
-      <div className="grid grid-cols-4 lg:grid-cols-[1.15fr_repeat(4,1fr)] border-y border-white/8">
+      <div className="grid grid-cols-[1.3fr_0.9fr_0.9fr_0.9fr] lg:grid-cols-[1.15fr_1.3fr_0.9fr_0.9fr_0.9fr] border-y border-white/8">
         <div className="col-span-4 lg:col-span-1 flex flex-col items-center justify-center px-4 py-5 border-b lg:border-b-0 lg:border-r border-white/8 text-center">
           <p className="text-[10px] uppercase tracking-[0.28em] text-white/64 font-bold">Profile Score</p>
           <div className="mt-1 flex items-end justify-center gap-2">
@@ -516,20 +521,23 @@ function ProfileScorePanel({
               className="min-w-0 h-full flex flex-col items-center justify-center gap-1 border-r border-white/8 px-2 py-5 sm:px-4 text-center last:border-r-0"
             >
               <Icon size={18} strokeWidth={1.6} className="text-scent-accent" />
-              {stat.value !== null ? (
-                <p className="font-serif italic text-2xl text-white leading-tight truncate max-w-full">{stat.value}</p>
-              ) : (
-                <p className="font-serif italic text-2xl text-white/55 leading-tight" aria-hidden>—</p>
-              )}
-              {stat.label === "Performance" ? (
-                <PerformanceStatSubtitle
-                  performance={performance}
-                  legacyPerformance={legacyPerformance}
+              {stat.cycle.length > 0 ? (
+                <CyclingTilePair
+                  parts={stat.cycle}
+                  primaryClass="font-serif italic text-2xl text-white leading-tight truncate max-w-full"
+                  secondaryClass="min-h-[2.5em] flex items-center justify-center px-1 text-[10px] leading-snug text-white/42"
                 />
               ) : (
-                <p className="min-h-[2.5em] flex items-center justify-center px-1 text-[10px] leading-snug text-white/42">
-                  {stat.sub}
-                </p>
+                <>
+                  {stat.value !== null ? (
+                    <p className="font-serif italic text-2xl text-white leading-tight truncate max-w-full">{stat.value}</p>
+                  ) : (
+                    <p className="font-serif italic text-2xl text-white/55 leading-tight" aria-hidden>—</p>
+                  )}
+                  <p className="min-h-[2.5em] flex items-center justify-center px-1 text-[10px] leading-snug text-white/42">
+                    {stat.sub ?? ""}
+                  </p>
+                </>
               )}
               <p className="mt-auto text-[9px] uppercase tracking-[0.2em] text-white/40 font-bold">{stat.label}</p>
             </div>
