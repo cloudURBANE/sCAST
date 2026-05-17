@@ -634,8 +634,8 @@ function ProfileScorePanel({
         <p className="mt-1 text-sm text-scent-accent/90">{headline?.label ?? "Intelligence profile"}</p>
       </div>
 
-      <div className="hidden sm:grid grid-cols-[1.3fr_0.9fr_0.9fr_0.9fr] gap-3">
-        {statCards.map((stat) => {
+      {(() => {
+        const renderDesktopTile = (stat: StatCard) => {
           const Icon = stat.icon;
           return (
             <div
@@ -664,8 +664,18 @@ function ProfileScorePanel({
               <p className="mt-auto text-[9px] uppercase tracking-[0.2em] text-white/55 font-bold">{stat.label}</p>
             </div>
           );
-        })}
-      </div>
+        };
+        return (
+          <div className="hidden sm:grid sm:grid-cols-[1.12fr_1.95fr_1fr] gap-3 sm:gap-4 items-stretch">
+            {renderDesktopTile(statCards[0])}
+            <div className="grid grid-cols-2 gap-3 sm:gap-4 items-stretch">
+              {renderDesktopTile(statCards[1])}
+              {renderDesktopTile(statCards[2])}
+            </div>
+            {renderDesktopTile(statCards[3])}
+          </div>
+        );
+      })()}
 
       <FragrancePanel title="Profile Score" className="sm:hidden">
         <div className="px-4 py-4">
