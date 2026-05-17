@@ -1550,6 +1550,7 @@ export const Wardrobe: React.FC<{
                       <ScentNotesInfographic
                         derivedMetrics={selectedMetrics}
                         legacyPyramid={selectedItem.pyramid}
+                        scentAxesFallback={selectedItem.scent_vector ?? null}
                         variant="accords"
                         className="lg:h-full lg:min-h-[21.25rem]"
                       />

@@ -1213,6 +1213,7 @@ export default function App() {
                           null
                         }
                         legacyPyramid={activeRecommendation.pyramid}
+                        scentAxesFallback={activeRecommendation.scent_vector ?? null}
                       />
                     </div>
                     {activeEngineRecommendation ? (

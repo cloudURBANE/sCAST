@@ -1,11 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { DerivedMetrics } from "./fragranceApi.ts";
 import {
+  collectMainAccordDisplayRows,
   getFragranceDetails,
   isBackgroundEnrichmentQueued,
   isFragranceDetailEffectivelyComplete,
   normalizeFragranceDetail,
   normalizeFragranceSearchResult,
+  normalizedAccordBarPct,
+  resolveMainAccordChartRows,
   searchFragrances,
 } from "./fragranceApi.ts";
 
@@ -368,4 +372,39 @@ test("getFragranceDetails routes app-origin source URLs to the app API", async (
   assert.deepEqual(JSON.parse(String(requests[0].init?.body)), {
     source_url: "https://www.fragrantica.com/perfume/Creed/Aventus-9828.html",
   });
+});
+
+test("normalizedAccordBarPct maps 0–10 axis scores onto bar widths", () => {
+  assert.equal(normalizedAccordBarPct({ label: "Warmth", score: 10 }), 100);
+  assert.equal(normalizedAccordBarPct({ label: "Warmth", score: 5 }), 50);
+});
+
+test("normalizedAccordBarPct bumps tiny pct values upward for readability", () => {
+  assert.equal(normalizedAccordBarPct({ label: "X", pct: 3 }), 14);
+});
+
+test("collectMainAccordDisplayRows reads object-shaped scent_vector (catalog axes)", () => {
+  const rows = collectMainAccordDisplayRows({
+    scent_vector: {
+      freshness: 8,
+      sweetness: 2,
+      woodiness: 3,
+      spice: 5,
+      warmth: 7,
+      musk: 4,
+    },
+  } as DerivedMetrics["main_accords"]);
+
+  assert.equal(rows.length, 6);
+  assert.equal(rows[0]?.label, "Freshness");
+});
+
+test("resolveMainAccordChartRows falls back to profile axes when metrics lack rows", () => {
+  assert.equal(resolveMainAccordChartRows(undefined, undefined).length, 0);
+
+  const rows = resolveMainAccordChartRows({} as DerivedMetrics["main_accords"], {
+    woodiness: 9,
+    musk: 2,
+  });
+  assert.equal(rows[0]?.label, "Woodiness");
 });

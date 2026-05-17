@@ -69,7 +69,7 @@ export type DerivedMetrics = {
       score?: number;
       pct?: number;
     }>;
-    /** Railway engine shape — accords + model scores */
+    /** Railway engine shape — accords + model scores, or catalog 0–10 axes object */
     scent_vector?: Array<{
       accord?: string;
       score?: number;
@@ -279,6 +279,86 @@ export function normalizeFragranceSearchResult(
 /** Normalize engine main_accords whether the API used `items` or `scent_vector` / `top_accords`. */
 export type MainAccordDisplayRow = { label: string; score?: number; pct?: number };
 
+export const NUMERIC_SCENT_AXIS_KEYS = [
+  "freshness",
+  "sweetness",
+  "woodiness",
+  "spice",
+  "warmth",
+  "musk",
+] as const;
+
+export type NumericScentAxes = Partial<Record<(typeof NUMERIC_SCENT_AXIS_KEYS)[number], number>>;
+
+const SCENT_AXIS_LABELS: Record<(typeof NUMERIC_SCENT_AXIS_KEYS)[number], string> = {
+  freshness: "Freshness",
+  sweetness: "Sweetness",
+  woodiness: "Woodiness",
+  spice: "Spice",
+  warmth: "Warmth",
+  musk: "Musk",
+};
+
+function mainAccordsScentVectorRaw(main: DerivedMetrics["main_accords"]): unknown {
+  return (main as { scent_vector?: unknown }).scent_vector;
+}
+
+function isPlainObjectRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+/** Map a normalized row onto 0–100 bar width for the accord chart. */
+export function normalizedAccordBarPct(
+  row: MainAccordDisplayRow,
+  rankIndex = 0,
+  rankTotal = 1,
+): number {
+  if (typeof row.pct === "number" && Number.isFinite(row.pct)) {
+    return Math.round(Math.max(14, Math.min(100, row.pct)));
+  }
+  if (typeof row.score === "number" && Number.isFinite(row.score)) {
+    const s = row.score;
+    if (s <= 10.75) return Math.round(Math.max(14, Math.min(100, (s / 10) * 100)));
+    return Math.round(Math.max(14, Math.min(100, s)));
+  }
+  const n = Math.max(1, rankTotal);
+  if (n <= 1) return 90;
+  return Math.round(
+    Math.max(38, Math.min(96, 96 - rankIndex * ((96 - 38) / (n - 1)))),
+  );
+}
+
+/** Catalog / wardrobe 0–10 axes when derived_metrics lacks explicit accord bars. */
+export function axesVectorToMainAccordRows(axes?: NumericScentAxes | null): MainAccordDisplayRow[] {
+  if (!axes) return [];
+
+  const rows: MainAccordDisplayRow[] = [];
+  for (const key of NUMERIC_SCENT_AXIS_KEYS) {
+    const raw = axes[key];
+    if (typeof raw !== "number" || !Number.isFinite(raw)) continue;
+    const bounded = Math.max(0, Math.min(10, raw));
+    rows.push({
+      label: SCENT_AXIS_LABELS[key],
+      score: bounded,
+      pct: Math.round((bounded / 10) * 100),
+    });
+  }
+
+  rows.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+  return rows;
+}
+
+function scentAxisObjectRows(vector: Record<string, unknown>): MainAccordDisplayRow[] {
+  const axes: NumericScentAxes = {};
+  for (const key of NUMERIC_SCENT_AXIS_KEYS) {
+    const raw = vector[key];
+    if (typeof raw === "number" && Number.isFinite(raw)) {
+      axes[key] = raw;
+    }
+  }
+  return axesVectorToMainAccordRows(axes);
+}
+
 export function collectMainAccordDisplayRows(
   main: DerivedMetrics["main_accords"] | null | undefined,
 ): MainAccordDisplayRow[] {
@@ -295,19 +375,51 @@ export function collectMainAccordDisplayRows(
 
   if (fromItems.length > 0) return fromItems;
 
-  const fromVector =
-    main.scent_vector
-      ?.map((row) => ({
-        label: typeof row.accord === "string" ? row.accord.trim() : "",
-        score: typeof row.score === "number" ? row.score : undefined,
-      }))
-      .filter((row) => row.label) ?? [];
+  const svRaw = mainAccordsScentVectorRaw(main);
 
-  if (fromVector.length > 0) return fromVector;
+  if (Array.isArray(svRaw)) {
+    const fromVector = svRaw
+      .map((row) => {
+        if (!row || typeof row !== "object") return { label: "" };
+        const item = row as { accord?: unknown; score?: unknown };
+        return {
+          label: typeof item.accord === "string" ? item.accord.trim() : "",
+          score: typeof item.score === "number" ? item.score : undefined,
+        };
+      })
+      .filter((row) => row.label);
 
-  return (main.top_accords ?? [])
-    .map((a) => ({ label: typeof a === "string" ? a.trim() : "", score: undefined as number | undefined }))
-    .filter((row) => row.label);
+    if (fromVector.length > 0) return fromVector;
+  }
+
+  if (isPlainObjectRecord(svRaw)) {
+    const fromAxes = scentAxisObjectRows(svRaw);
+    if (fromAxes.length > 0) return fromAxes;
+  }
+
+  const top = (main.top_accords ?? [])
+    .map((a) => (typeof a === "string" ? a.trim() : ""))
+    .filter(Boolean);
+
+  if (top.length === 0) return [];
+
+  return top.map((label, i, arr) => ({
+    label,
+    pct:
+      arr.length <= 1
+        ? 90
+        : Math.round(Math.max(42, Math.min(96, 96 - i * ((96 - 42) / (arr.length - 1))))),
+  }));
+}
+
+/** Prefer engine main_accords; fall back to profile-level 0–10 scent axes (wardrobe / catalog). */
+export function resolveMainAccordChartRows(
+  mainAccords: DerivedMetrics["main_accords"] | null | undefined,
+  scentAxesFallback?: NumericScentAxes | null,
+): MainAccordDisplayRow[] {
+  const direct = collectMainAccordDisplayRows(mainAccords);
+  if (direct.length > 0) return direct;
+  return axesVectorToMainAccordRows(scentAxesFallback);
 }
 
 function hasString(value: unknown): boolean {

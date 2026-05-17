@@ -826,6 +826,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                       <ScentNotesInfographic
                         derivedMetrics={selectedMetrics}
                         legacyPyramid={selectedItem.pyramid}
+                        scentAxesFallback={selectedItem.scent_vector ?? null}
                         variant="accords"
                       />
                     </div>

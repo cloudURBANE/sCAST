@@ -1,14 +1,18 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import {
-  collectMainAccordDisplayRows,
   type DerivedMetrics,
+  type NumericScentAxes,
+  normalizedAccordBarPct,
+  resolveMainAccordChartRows,
 } from '@/lib/fragranceApi';
 import { NotePyramid } from './NotePyramid';
 
 interface ScentNotesInfographicProps {
   /** Preferred: Railway `derived_metrics.notes` (+ main accords summary). */
   derivedMetrics?: DerivedMetrics | null;
+  /** Top-level wardrobe/catalog 0–10 axes — used only when chart rows can't be inferred from metrics. */
+  scentAxesFallback?: NumericScentAxes | null;
   /** Legacy wardrobe pyramid when engine notes are absent. */
   legacyPyramid?: {
     top: string[];
@@ -72,12 +76,6 @@ function normalizeDisplayPyramid(pyramid: DisplayPyramid): DisplayPyramid {
   };
 }
 
-function strengthValue(row: { score?: number; pct?: number }): number | null {
-  const raw = typeof row.pct === "number" ? row.pct : typeof row.score === "number" ? row.score : null;
-  if (raw === null || !Number.isFinite(raw)) return null;
-  return Math.max(0, Math.min(100, Math.round(raw)));
-}
-
 function Panel({
   title,
   children,
@@ -99,65 +97,106 @@ function Panel({
   );
 }
 
-const ACCORD_ROW_EASE = [0.22, 1, 0.36, 1] as const;
-const ACCORD_STAGGER_S = 0.048;
-const ACCORD_ROW_DELAY_START = 0.08;
+const ACCORD_ROW_EASE = [0.2, 0.92, 0.18, 1] as const;
+const ACCORD_STAGGER_S = 0.12;
+const ACCORD_ROW_DELAY_START = 0.2;
+const ACCORD_REVEAL_FALLBACK_MS = 1100;
+
+function nearestOverflowScrollAncestor(start: HTMLElement | null): HTMLElement | null {
+  if (typeof window === "undefined") return null;
+  let cur: HTMLElement | null = start?.parentElement ?? null;
+  while (cur && cur !== document.body) {
+    const st = window.getComputedStyle(cur);
+    const oy = st.overflowY;
+    const ox = st.overflowX;
+    const eligibleY = oy === "auto" || oy === "scroll" || oy === "overlay";
+    const eligibleX = ox === "auto" || ox === "scroll" || ox === "overlay";
+    const scrollish = (eligibleY || eligibleX) && (cur.scrollHeight > cur.clientHeight + 2 || cur.scrollWidth > cur.clientWidth + 2);
+    if (scrollish) return cur;
+    cur = cur.parentElement;
+  }
+  return null;
+}
 
 function useAccordPanelReveal(contentKey: string) {
   const reduced = useReducedMotion();
   const containerRef = useRef<HTMLDivElement>(null);
-  const [revealed, setRevealed] = useState(Boolean(reduced));
+  const [revealed, setRevealed] = useState(reduced);
+
+  useEffect(() => {
+    setRevealed(reduced);
+  }, [contentKey, reduced]);
 
   useEffect(() => {
     if (reduced) {
       setRevealed(true);
       return;
     }
-    setRevealed(false);
+
+    let obs: IntersectionObserver | undefined;
+    let fallbackTimer = 0;
+    let cancelRaf = 0;
+
+    const arm = () => {
+      const el = containerRef.current;
+      if (!el) return;
+      const root = nearestOverflowScrollAncestor(el);
+
+      obs = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            const visible = entry.isIntersecting && entry.intersectionRatio > 0;
+            if (!visible) return;
+            setRevealed(true);
+            obs?.disconnect();
+            window.clearTimeout(fallbackTimer);
+          });
+        },
+        {
+          root,
+          threshold: [0, 0.01, 0.08],
+          rootMargin: "100px 0px 260px 0px",
+        },
+      );
+
+      obs.observe(el);
+
+      fallbackTimer = window.setTimeout(() => {
+        setRevealed(true);
+        obs?.disconnect();
+      }, ACCORD_REVEAL_FALLBACK_MS);
+    };
+
+    cancelRaf = window.requestAnimationFrame(() => arm());
+
+    return () => {
+      window.cancelAnimationFrame(cancelRaf);
+      window.clearTimeout(fallbackTimer);
+      obs?.disconnect();
+    };
   }, [contentKey, reduced]);
 
-  useEffect(() => {
-    if (reduced) return;
-    const el = containerRef.current;
-    if (!el) return;
-    const obs = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((e) => {
-          if (!e.isIntersecting) return;
-          setRevealed(true);
-          obs.disconnect();
-        });
-      },
-      { threshold: 0.08, rootMargin: "40px 0px 14% 0px" },
-    );
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, [contentKey, reduced]);
-
-  return { containerRef, revealed: Boolean(revealed || reduced), reduced: Boolean(reduced) };
+  return { containerRef, revealed: revealed || reduced, reduced };
 }
 
 function AccordPanel({
   rows,
-  summary,
   className = "",
 }: {
-  rows: ReturnType<typeof collectMainAccordDisplayRows>;
-  summary: string;
+  rows: ReturnType<typeof resolveMainAccordChartRows>;
   className?: string;
 }) {
   const accordContentKey =
-    `${summary}|` +
     rows
       .slice(0, 10)
-      .map((r) => `${r.label}:${strengthValue(r) ?? "_"}`)
+      .map((r, i) => `${r.label}:${normalizedAccordBarPct(r, i, Math.max(1, rows.length))}`)
       .join("·");
 
   const { containerRef, revealed, reduced } = useAccordPanelReveal(accordContentKey);
 
   const displayRows = rows.slice(0, 10);
 
-  if (rows.length === 0 && !summary) {
+  if (rows.length === 0) {
     return (
       <Panel title="Main Accords" className={className}>
         <div className="flex flex-1 items-center justify-center px-4 py-6 text-center">
@@ -167,77 +206,67 @@ function AccordPanel({
     );
   }
 
-  const summaryAnimate = reduced
-    ? { opacity: 1, filter: "blur(0px)", y: 0 }
-    : revealed
-      ? { opacity: 1, filter: "blur(0px)", y: 0 }
-      : { opacity: 0.62, filter: "blur(4px)", y: 6 };
-
   return (
     <Panel title="Main Accords" className={className}>
       <div ref={containerRef} className="flex flex-1 flex-col justify-center space-y-4 px-4 py-5">
-        {summary ? (
-          <motion.p
-            className="text-center text-sm italic text-white/58 font-serif leading-relaxed px-1"
-            initial={false}
-            animate={summaryAnimate}
-            transition={{
-              duration: reduced ? 0 : 0.42,
-              ease: ACCORD_ROW_EASE,
-              delay: reduced ? 0 : ACCORD_ROW_DELAY_START,
-            }}
-          >
-            {summary}
-          </motion.p>
-        ) : null}
-        <motion.div className="space-y-2.5" layout={false}>
+        <motion.div className="space-y-3" layout={false}>
           {displayRows.map((row, index) => {
-            const value = strengthValue(row);
-            const pct = value ?? 20;
-            const rowDelay =
-              ACCORD_ROW_DELAY_START + index * ACCORD_STAGGER_S;
+            const fillPct = normalizedAccordBarPct(row, index, displayRows.length);
+            const rowDelay = ACCORD_ROW_DELAY_START + index * ACCORD_STAGGER_S;
 
             return (
               <motion.div
-                key={row.label}
-                className="grid grid-cols-[4.8rem_1fr_2.4rem] items-center gap-3"
+                key={`${row.label}:${index}`}
+                className="grid grid-cols-[5.25rem_1fr_2.5rem] items-center gap-3 sm:gap-3.5"
                 initial={false}
                 animate={
                   reduced || revealed
-                    ? { opacity: 1, y: 0, filter: "blur(0px)" }
-                    : { opacity: 0, y: 10, filter: "blur(4px)" }
+                    ? { opacity: 1, y: 0 }
+                    : { opacity: 0.22, y: 10 }
                 }
                 transition={{
-                  duration: reduced ? 0 : 0.44,
+                  duration: reduced ? 0 : 0.78,
                   ease: ACCORD_ROW_EASE,
                   delay: reduced ? 0 : rowDelay,
                 }}
               >
-                <p className="truncate text-xs text-white/68">{row.label}</p>
-                <div className="h-px bg-white/10 overflow-hidden rounded-full">
+                <p className="truncate text-[11px] sm:text-xs text-white/72 tracking-tight">{row.label}</p>
+                <div className="h-2 sm:h-[7px] rounded-full bg-white/[0.07] shadow-[inset_0_1px_2px_rgba(0,0,0,0.45)] ring-1 ring-white/[0.05] overflow-hidden">
                   <motion.div
-                    className="h-px rounded-full bg-scent-accent shadow-[0_0_10px_rgba(201,139,44,0.32)]"
+                    className="relative h-full min-w-[2px] rounded-full bg-gradient-to-r from-[#c3892c]/95 via-scent-accent to-[#ebd198]/92 shadow-[0_0_16px_rgba(201,139,44,0.32)]"
                     initial={false}
-                    animate={{ width: reduced || revealed ? `${pct}%` : "0%" }}
-                    transition={{
-                      duration: reduced ? 0 : 0.58,
-                      ease: ACCORD_ROW_EASE,
-                      delay: reduced ? 0 : rowDelay + 0.06,
+                    animate={{
+                      width: reduced || revealed ? `${fillPct}%` : "2%",
+                      opacity: reduced || revealed ? 1 : 0.35,
                     }}
-                  />
+                    transition={{
+                      width: {
+                        duration: reduced ? 0 : 1.08,
+                        ease: ACCORD_ROW_EASE,
+                        delay: reduced ? 0 : rowDelay + 0.14,
+                      },
+                      opacity: {
+                        duration: reduced ? 0 : 0.55,
+                        ease: ACCORD_ROW_EASE,
+                        delay: reduced ? 0 : rowDelay + 0.08,
+                      },
+                    }}
+                  >
+                    <span className="pointer-events-none absolute inset-y-0 right-0 w-7 bg-gradient-to-l from-transparent to-white/22" aria-hidden />
+                  </motion.div>
                 </div>
                 <motion.p
-                  className="text-right text-xs text-white/78 tabular-nums"
+                  className="text-right text-[11px] sm:text-xs text-white/82 tabular-nums tracking-tight"
                   initial={false}
                   animate={{
                     opacity: reduced || revealed ? 1 : 0,
                   }}
                   transition={{
-                    duration: reduced ? 0 : 0.22,
-                    delay: reduced ? 0 : rowDelay + 0.18,
+                    duration: reduced ? 0 : 0.45,
+                    delay: reduced ? 0 : rowDelay + 0.28,
                   }}
                 >
-                  {value ?? "--"}
+                  {fillPct}
                 </motion.p>
               </motion.div>
             );
@@ -268,14 +297,17 @@ function NotesPanel({
 
 export const ScentNotesInfographic: React.FC<ScentNotesInfographicProps> = ({
   derivedMetrics,
+  scentAxesFallback,
   legacyPyramid,
   variant = "all",
   className = "",
 }) => {
   const pyramid = normalizeDisplayPyramid(resolvePyramid(derivedMetrics, legacyPyramid));
-  const accordRows = collectMainAccordDisplayRows(derivedMetrics?.main_accords);
-  const accordSummary = derivedMetrics?.main_accords?.accord_summary?.trim() ?? '';
-  const hasAccordVisual = accordRows.length > 0 || Boolean(accordSummary);
+  const accordRows = resolveMainAccordChartRows(
+    derivedMetrics?.main_accords,
+    scentAxesFallback,
+  );
+  const hasAccordVisual = accordRows.length > 0;
   const hasPyramid = hasAnyNotes(pyramid);
 
   if (!hasPyramid && !hasAccordVisual && variant !== "notes") {
@@ -289,7 +321,7 @@ export const ScentNotesInfographic: React.FC<ScentNotesInfographicProps> = ({
   }
 
   if (variant === "accords") {
-    return <AccordPanel rows={accordRows} summary={accordSummary} className={className} />;
+    return <AccordPanel rows={accordRows} className={className} />;
   }
 
   if (variant === "notes") {
@@ -298,7 +330,7 @@ export const ScentNotesInfographic: React.FC<ScentNotesInfographicProps> = ({
 
   return (
     <div id="scent-notes-infographic" className="space-y-3 sm:space-y-4">
-      <AccordPanel rows={accordRows} summary={accordSummary} />
+      {accordRows.length > 0 ? <AccordPanel rows={accordRows} /> : null}
       <NotesPanel pyramid={pyramid} />
     </div>
   );
