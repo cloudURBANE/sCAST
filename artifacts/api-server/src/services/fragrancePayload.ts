@@ -6,6 +6,17 @@ import {
 } from "./persistenceGuards";
 import { resolveFragranceIdentity } from "./fragranceNameResolver";
 
+import {
+  CURRENT_VAULT_SCHEMA_VERSION,
+  stampVaultSchemaVersion,
+} from "./fragrancePayloadCore";
+
+export {
+  CURRENT_VAULT_SCHEMA_VERSION,
+  isLegacyVaultRow,
+  stampVaultSchemaVersion,
+} from "./fragrancePayloadCore";
+
 export type BottleImageAdjustment = {
   scale: number;
   x: number;
@@ -56,9 +67,16 @@ export function normalizeImageAdjustment(value: unknown): BottleImageAdjustment 
   };
 }
 
-/** Strip base64 data URLs. Postgres must never be used as the image CDN. */
+/**
+ * Strip base64 data URLs and stamp the current vault schema version.
+ *
+ * Postgres must never be used as the image CDN, hence the base64 strip.
+ * The schema-version stamp is the universal write gate: every code path that
+ * persists to user_fragrances funnels through here, so downstream readers can
+ * trust `schemaVersion` to reflect the shape the row was last written in.
+ */
 export function sanitizeFragrance(fragrance: Record<string, any>): Record<string, any> {
-  return stripBase64ImageDataUrls(fragrance);
+  return stampVaultSchemaVersion(stripBase64ImageDataUrls(fragrance) as Record<string, any>);
 }
 
 /**
