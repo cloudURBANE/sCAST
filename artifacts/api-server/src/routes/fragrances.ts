@@ -112,7 +112,7 @@ async function buildDetailFromIdentity(input: {
     ...flattenProfile(profile),
     id: input.id,
     source_url: input.sourceUrl ?? null,
-    source_coverage: { complete: true, derived_metrics: "complete" },
+    source_coverage: { complete: false, derived_metrics: "partial" },
     enrichment: {
       status: "not_needed",
       requested_count: 0,

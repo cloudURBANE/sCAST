@@ -75,7 +75,7 @@ const DETAIL_POLL_MAX_ATTEMPTS = 15;
 const DETAIL_POLL_MAX_DURATION_MS = 5 * 60 * 1000;
 const DETAIL_POLL_BACKOFF_MULTIPLIER = 1.18;
 const DETAIL_POLL_MAX_INTERVAL_MS = 30_000;
-const PARTIAL_ENRICHMENT_NOTICE = "More Fragrantica details are still being enriched.";
+const PARTIAL_ENRICHMENT_NOTICE = "More source details are still being enriched.";
 
 function createAbortError(): Error {
   if (typeof DOMException !== 'undefined') {

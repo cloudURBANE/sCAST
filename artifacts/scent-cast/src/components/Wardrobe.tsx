@@ -52,7 +52,7 @@ import {
 } from '@/lib/wardrobeSearchSuggest';
 import {
   collectMainAccordDisplayRows,
-  isDerivedMetricsCompleteFlag,
+  isSourceCoverageComplete,
   normalizeSourceCoverage,
   requeueFragranceDetails,
   type DerivedMetrics,
@@ -391,35 +391,23 @@ function SourceStatusPanel({
 
   if (!hasCoverage && !enrichmentMessage && !onRequeue && !requeueMessage) return null;
 
-  const complete =
-    coverage?.complete === true || isDerivedMetricsCompleteFlag(coverage?.derived_metrics);
+  const complete = isSourceCoverageComplete(coverage);
   const coverageSummary = complete
     ? "Full fragrance intelligence available."
     : "Baseline profile available. Enhanced metrics pending.";
   const sourceStatusText = hasCoverage
     ? coverageSummary
     : enrichmentMessage ?? "SRT enrichment can be refreshed when engine identity is available.";
-  const fragranticaStatus =
-    coverage?.fragrantica === true
-      ? coverage.fragrantica_cached
-        ? "Fragrantica cached"
-        : "Fragrantica available"
-      : coverage?.fragrantica === false
-        ? coverage.fragrantica_linked
-          ? "Fragrantica metrics pending"
-          : "Fragrantica unavailable"
-        : null;
-  const derivedStatus =
-    typeof coverage?.derived_metrics === 'string' && coverage.derived_metrics.trim()
-      ? `Metrics ${coverage.derived_metrics}`
-      : null;
+  const sourceCount =
+    (coverage?.basenotes === true ? 1 : 0) + (coverage?.fragrantica === true ? 1 : 0);
+  const sourceStatus = hasCoverage ? `Sources ${sourceCount} of 2` : null;
+  const derivedStatus = hasCoverage
+    ? complete
+      ? "Metrics ready"
+      : "Metrics pending"
+    : null;
   const badges = [
-    coverage?.basenotes === true
-      ? "Basenotes available"
-      : coverage?.basenotes === false
-        ? "Basenotes unavailable"
-        : null,
-    fragranticaStatus,
+    sourceStatus,
     derivedStatus,
   ].filter((badge): badge is string => Boolean(badge));
 
@@ -465,7 +453,7 @@ function SourceStatusPanel({
               disabled={requeueDisabled || requeueing}
               title={
                 requeueDisabled
-                  ? "This vault entry does not have an SRT engine id or Fragrantica source URL."
+                  ? "This vault entry does not have an SRT engine id or source URL."
                   : "Force-refresh the SRT engine enrichment cache"
               }
               className="inline-flex min-h-[38px] items-center justify-center gap-2 rounded-lg border border-scent-accent/30 bg-scent-accent/10 px-4 py-2 text-[9px] font-bold uppercase tracking-[0.2em] text-scent-accent transition-colors hover:bg-scent-accent/16 hover:text-[#fff7ec] disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.03] disabled:text-white/28"
@@ -1098,7 +1086,7 @@ export const Wardrobe: React.FC<{
   const handleRequeueSrtDetail = async (item: Fragrance) => {
     const payload = srtRequeuePayloadFromItem(item);
     if (!payload) {
-      setRefreshError('This entry is missing the SRT engine id and Fragrantica source URL needed to refresh data.');
+      setRefreshError('This entry is missing the SRT engine id and source URL needed to refresh data.');
       return;
     }
 

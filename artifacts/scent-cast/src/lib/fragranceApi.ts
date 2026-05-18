@@ -697,6 +697,15 @@ export function isDerivedMetricsCompleteFlag(value: unknown): boolean {
   return status === "complete" || status === "completed" || status === "full";
 }
 
+export function isSourceCoverageComplete(coverage?: SourceCoverage | null): boolean {
+  if (!coverage) return false;
+  return (
+    coverage.basenotes === true &&
+    coverage.fragrantica === true &&
+    (coverage.complete === true || isDerivedMetricsCompleteFlag(coverage.derived_metrics))
+  );
+}
+
 export function isTerminalEnrichmentStatus(value: unknown): boolean {
   const status = normalizedStatus(value);
   return (
@@ -720,41 +729,23 @@ export function isFragranceDetailEffectivelyComplete(
   detail?: FragranceDetail | null,
 ): boolean {
   if (!detail) return false;
-
-  const coverage = detail.source_coverage;
-  const enrichmentStatus = normalizedStatus(detail.enrichment?.status);
-  const hasMetrics = hasDerivedMetricsPayload(detail.derived_metrics);
-
-  return Boolean(
-    coverage?.complete === true ||
-      isDerivedMetricsCompleteFlag(coverage?.derived_metrics) ||
-      (hasMetrics && coverage?.fragrantica === true) ||
-      (hasMetrics && (enrichmentStatus === "completed" || enrichmentStatus === "not_needed")),
-  );
+  return isSourceCoverageComplete(detail.source_coverage);
 }
 
 export function normalizeSourceCoverage(
   coverage?: SourceCoverage | null,
   metrics?: DerivedMetrics | null,
-  enrichment?: FragranceDetail["enrichment"] | null,
+  _enrichment?: FragranceDetail["enrichment"] | null,
 ): SourceCoverage | undefined {
   const hasCoverage = coverage && Object.keys(coverage).length > 0;
   const hasMetrics = hasDerivedMetricsPayload(metrics);
   if (!hasCoverage && !hasMetrics) return coverage ?? undefined;
 
   const next: SourceCoverage = { ...(coverage ?? {}) };
-  const enrichmentStatus = normalizedStatus(enrichment?.status);
-  const effectivelyComplete =
-    next.complete === true ||
-    isDerivedMetricsCompleteFlag(next.derived_metrics) ||
-    (hasMetrics && next.fragrantica === true) ||
-    (hasMetrics && (enrichmentStatus === "completed" || enrichmentStatus === "not_needed"));
+  next.complete = isSourceCoverageComplete(next);
 
-  if (effectivelyComplete) {
-    next.complete = true;
-    if (!isDerivedMetricsCompleteFlag(next.derived_metrics)) {
-      next.derived_metrics = "complete";
-    }
+  if (!next.derived_metrics && hasMetrics) {
+    next.derived_metrics = next.complete ? "complete" : "partial";
   }
 
   return next;
@@ -1070,7 +1061,7 @@ export async function requeueFragranceDetails(
   const id = firstNonEmptyString(payload.id);
   const sourceUrl = firstNonEmptyString(payload.source_url);
   if (!id && !sourceUrl) {
-    throw new Error("Fragrance refresh needs an engine id or Fragrantica source URL.");
+    throw new Error("Fragrance refresh needs an engine id or source URL.");
   }
 
   const res = await fetch(`${getFragranceEngineApiBase()}/api/fragrances/details/requeue`, {

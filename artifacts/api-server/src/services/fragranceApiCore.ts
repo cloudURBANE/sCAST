@@ -147,11 +147,14 @@ export function scentFactProfileToDetail(input: {
   ];
   const sourceUrls = input.profile.source_urls;
   const sourceUrl = input.sourceUrl ?? sourceUrls[0] ?? null;
+  const hasFragranticaSource = sourceUrls.some((url) => /fragrantica\.com/i.test(url));
+  const hasBasenotesSource = sourceUrls.some((url) => /basenotes\.com/i.test(url));
+  const hasDualSourceNotes = flatNotes.length > 0 && hasFragranticaSource && hasBasenotesSource;
   const sourceCoverage = {
-    fragrantica: sourceUrls.some((url) => /fragrantica\.com/i.test(url)),
-    basenotes: sourceUrls.some((url) => /basenotes\.com/i.test(url)),
-    derived_metrics: flatNotes.length > 0 ? "complete" : "partial",
-    complete: flatNotes.length > 0,
+    fragrantica: hasFragranticaSource,
+    basenotes: hasBasenotesSource,
+    derived_metrics: hasDualSourceNotes ? "complete" : flatNotes.length > 0 ? "partial" : "none",
+    complete: hasDualSourceNotes,
   };
 
   return {
@@ -189,7 +192,9 @@ export function scentFactProfileToDetail(input: {
       requested_count: 0,
       message: input.provisional
         ? "Single-source detail is provisional."
-        : "Detail is complete from readable scent sources.",
+        : sourceCoverage.complete
+          ? "Detail is complete from readable scent sources."
+          : "Detail is available from readable scent sources.",
     },
     raw: {
       notes: {

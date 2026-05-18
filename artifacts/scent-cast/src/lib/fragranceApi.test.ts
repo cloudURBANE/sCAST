@@ -126,7 +126,7 @@ test("normalizeFragranceSearchResult reads nested product identity", () => {
   assert.equal(result?.brand, "Le Labo");
 });
 
-test("normalizeFragranceDetail marks derived metrics as complete without losing partial coverage", () => {
+test("normalizeFragranceDetail does not complete without both source signals", () => {
   const detail = normalizeFragranceDetail({
     name: "Sauvage",
     house: "Dior",
@@ -140,9 +140,31 @@ test("normalizeFragranceDetail marks derived metrics as complete without losing 
     },
   });
 
-  assert.equal(detail.source_coverage?.complete, true);
+  assert.equal(detail.source_coverage?.complete, false);
   assert.equal(detail.source_coverage?.fragrantica, true);
-  assert.equal(detail.source_coverage?.derived_metrics, "complete");
+  assert.equal(detail.source_coverage?.derived_metrics, "partial");
+  assert.equal(isFragranceDetailEffectivelyComplete(detail), false);
+});
+
+test("normalizeFragranceDetail completes with both source signals and complete metrics", () => {
+  const detail = normalizeFragranceDetail({
+    name: "Sauvage",
+    house: "Dior",
+    source_coverage: {
+      complete: true,
+      basenotes: true,
+      fragrantica: true,
+      derived_metrics: "full",
+    },
+    derived_metrics: {
+      headline: { summary: "Fresh spicy amber woods." },
+    },
+  });
+
+  assert.equal(detail.source_coverage?.complete, true);
+  assert.equal(detail.source_coverage?.basenotes, true);
+  assert.equal(detail.source_coverage?.fragrantica, true);
+  assert.equal(detail.source_coverage?.derived_metrics, "full");
   assert.equal(isFragranceDetailEffectivelyComplete(detail), true);
 });
 

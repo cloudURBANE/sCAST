@@ -56,6 +56,29 @@ test("scent fact details carry source coverage and raw source URLs", () => {
 
   assert.equal(detail.name, "Sauvage");
   assert.equal(detail.brand, "Dior");
-  assert.equal((detail.source_coverage as { complete?: boolean }).complete, true);
+  assert.equal((detail.source_coverage as { complete?: boolean }).complete, false);
+  assert.equal((detail.source_coverage as { derived_metrics?: string }).derived_metrics, "partial");
   assert.equal((detail.raw as { source_urls?: { frag_url?: string } }).source_urls?.frag_url, "https://www.fragrantica.com/perfume/Dior/Sauvage-31861.html");
+});
+
+test("scent fact details complete only when both known source URLs have notes", () => {
+  const detail = scentFactProfileToDetail({
+    id: "source:https://www.fragrantica.com/perfume/Dior/Sauvage-31861.html",
+    profile: {
+      brand: "Dior",
+      name: "Sauvage",
+      top_notes: ["bergamot"],
+      heart_notes: ["pepper"],
+      base_notes: ["ambroxan"],
+      accords: ["fresh spicy"],
+      confidence_score: 0.83,
+      source_urls: [
+        "https://www.fragrantica.com/perfume/Dior/Sauvage-31861.html",
+        "https://basenotes.com/fragrances/sauvage-by-dior.26147250",
+      ],
+    },
+  });
+
+  assert.equal((detail.source_coverage as { complete?: boolean }).complete, true);
+  assert.equal((detail.source_coverage as { derived_metrics?: string }).derived_metrics, "complete");
 });

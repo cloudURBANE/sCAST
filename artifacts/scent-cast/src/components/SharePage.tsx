@@ -19,7 +19,7 @@ import { APP_BRAND_MARK } from '@/lib/appBrand';
 import { ScentNotesInfographic } from '@/components/ScentNotesInfographic';
 import {
   collectMainAccordDisplayRows,
-  isDerivedMetricsCompleteFlag,
+  isSourceCoverageComplete,
   normalizeSourceCoverage,
   type DerivedMetrics,
   type FragranceDetail,
@@ -255,32 +255,20 @@ function SourceStatusPanel({
 
   if (!hasCoverage && !enrichmentMessage) return null;
 
-  const complete =
-    coverage?.complete === true || isDerivedMetricsCompleteFlag(coverage?.derived_metrics);
+  const complete = isSourceCoverageComplete(coverage);
   const coverageSummary = complete
     ? "Full fragrance intelligence available."
     : "Baseline profile available. Enhanced metrics pending.";
-  const fragranticaStatus =
-    coverage?.fragrantica === true
-      ? coverage.fragrantica_cached
-        ? "Fragrantica cached"
-        : "Fragrantica available"
-      : coverage?.fragrantica === false
-        ? coverage.fragrantica_linked
-          ? "Fragrantica metrics pending"
-          : "Fragrantica unavailable"
-        : null;
-  const derivedStatus =
-    typeof coverage?.derived_metrics === 'string' && coverage.derived_metrics.trim()
-      ? `Metrics ${coverage.derived_metrics}`
-      : null;
+  const sourceCount =
+    (coverage?.basenotes === true ? 1 : 0) + (coverage?.fragrantica === true ? 1 : 0);
+  const sourceStatus = hasCoverage ? `Sources ${sourceCount} of 2` : null;
+  const derivedStatus = hasCoverage
+    ? complete
+      ? "Metrics ready"
+      : "Metrics pending"
+    : null;
   const badges = [
-    coverage?.basenotes === true
-      ? "Basenotes available"
-      : coverage?.basenotes === false
-        ? "Basenotes unavailable"
-        : null,
-    fragranticaStatus,
+    sourceStatus,
     derivedStatus,
   ].filter((badge): badge is string => Boolean(badge));
 
