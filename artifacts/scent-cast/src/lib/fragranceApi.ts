@@ -822,6 +822,16 @@ function hasResolvedSearchHouse(result: FragranceSearchResult): boolean {
   return Boolean(firstNonEmptyString(result.house, result.brand));
 }
 
+function isBrandOnlyArchiveResult(result: FragranceSearchResult): boolean {
+  const id = firstNonEmptyString(result.id) ?? "";
+  if (!id.startsWith("catalog:") && !id.startsWith("dataset:")) return false;
+  if (firstNonEmptyString(result.source_url)) return false;
+
+  const name = normalizeForDedupe(result.name);
+  const house = normalizeForDedupe(result.house ?? result.brand);
+  return Boolean(name && house && name === house);
+}
+
 function normalizedInitials(value: unknown): string {
   return normalizeForDedupe(value)
     .split(" ")
@@ -862,6 +872,7 @@ function hasDisplayableSearchIdentity(query: string, result: FragranceSearchResu
   const house = firstNonEmptyString(result.house, result.brand);
   if (!name || !house) return false;
   if (looksLikeGeneratedToken(name) || looksLikeGeneratedToken(house)) return false;
+  if (isBrandOnlyArchiveResult(result)) return false;
   return searchResultMatchesQueryIntent(query, result);
 }
 

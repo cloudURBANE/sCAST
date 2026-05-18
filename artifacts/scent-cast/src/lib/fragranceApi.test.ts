@@ -496,6 +496,73 @@ test("searchFragrances drops non-fragrance archive rows with generated display n
   );
 });
 
+test("searchFragrances drops brand-only catalog archive rows", async (t) => {
+  const previousFetch = globalThis.fetch;
+  const previousApiUrl = process.env.VITE_FRAGRANCE_API_URL;
+  const previousAppApiUrl = process.env.VITE_API_BASE_URL;
+
+  process.env.VITE_FRAGRANCE_API_URL = "https://engine.example.test";
+  process.env.VITE_API_BASE_URL = "https://app-api.example.test";
+  Object.defineProperty(globalThis, "fetch", {
+    configurable: true,
+    value: async (url: string) => {
+      if (String(url).startsWith("https://engine.example.test")) {
+        return new Response(
+          JSON.stringify({
+            query: "xerjof",
+            results: [],
+            diagnostics: { result_count: 0 },
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      return new Response(
+        JSON.stringify({
+          query: "xerjof",
+          results: [
+            {
+              id: "catalog:Xerjoff::Xerjoff",
+              name: "Xerjoff",
+              house: "Xerjoff",
+              brand: "Xerjoff",
+              source_url: null,
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    },
+  });
+
+  t.after(() => {
+    Object.defineProperty(globalThis, "fetch", {
+      configurable: true,
+      value: previousFetch,
+    });
+    if (previousApiUrl === undefined) {
+      delete process.env.VITE_FRAGRANCE_API_URL;
+    } else {
+      process.env.VITE_FRAGRANCE_API_URL = previousApiUrl;
+    }
+    if (previousAppApiUrl === undefined) {
+      delete process.env.VITE_API_BASE_URL;
+    } else {
+      process.env.VITE_API_BASE_URL = previousAppApiUrl;
+    }
+  });
+
+  const response = await searchFragrances("xerjof");
+
+  assert.deepEqual(response.results, []);
+});
+
 test("getFragranceDetails keeps catalog ids on the app API", async (t) => {
   const previousFetch = globalThis.fetch;
   const previousApiUrl = process.env.VITE_FRAGRANCE_API_URL;
