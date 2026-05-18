@@ -1571,9 +1571,9 @@ export const Wardrobe: React.FC<{
                     className="group cursor-pointer relative h-full min-w-0"
                     onClick={() => openDetail(item)}
                   >
-                    <div className="scent-fragrance-card w-full h-full min-h-[32rem] transition-[transform,border-color,box-shadow] duration-500 motion-reduce:transition-none group-hover:-translate-y-1.5 motion-reduce:group-hover:translate-y-0 relative overflow-hidden flex flex-col">
+                    <div className="scent-fragrance-card w-full h-full min-h-[30rem] sm:min-h-[32rem] transition-[transform,border-color,box-shadow] duration-500 motion-reduce:transition-none group-hover:-translate-y-1.5 motion-reduce:group-hover:translate-y-0 relative overflow-hidden flex flex-col">
                       <div className="scent-card-frame" aria-hidden />
-                      <div className="relative z-[1] flex h-full flex-col items-center px-6 sm:px-8 pt-7 sm:pt-9 pb-6 sm:pb-7">
+                      <div className="relative z-[1] flex h-full flex-col items-center px-6 sm:px-8 pt-6 sm:pt-9 pb-5 sm:pb-7">
                         <p
                           className="scent-card-brand w-full"
                           data-len={brandLengthBucket(entryBrand(item))}
@@ -1581,7 +1581,7 @@ export const Wardrobe: React.FC<{
                         >
                           {entryBrand(item)}
                         </p>
-                        <div className="relative flex-1 w-full mt-4 sm:mt-5 mb-5 sm:mb-6 min-h-0">
+                        <div className="relative h-52 w-full mt-4 sm:mt-5 mb-4 sm:mb-6 min-h-0 sm:flex-1">
                           <BottleImage
                             variant="grid"
                             src={item.imageUrl}
@@ -1696,7 +1696,7 @@ export const Wardrobe: React.FC<{
                     <div className="space-y-3 sm:space-y-4 lg:h-full">
                       <FragrancePanel title="Bottle Visual" className="lg:h-full lg:min-h-[21.25rem]">
                         <div className="flex flex-col p-4">
-                          <div className="relative h-56 sm:h-72 lg:h-64 min-h-0 w-full shrink-0 overflow-hidden">
+                          <div className="relative h-52 sm:h-72 lg:h-64 min-h-0 w-full shrink-0 overflow-hidden">
                             <BottleImage
                               key={detailBottleUrl || 'missing-image'}
                               variant="detail"
