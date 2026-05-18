@@ -98,6 +98,22 @@ In-flight deduplication is handled by a `Map<string, Promise>` keyed on `` `${so
 4. Parse + vectorize into a 6-axis scent vector (`freshness`, `sweetness`, `woodiness`, `spice`, `warmth`, `musk`) via `scentVectorizer.ts`
 5. Compute performance metrics and context profile, then save the assembled profile back to `global_fragrances` (best-effort; failures are non-fatal)
 
+### External fragrance engine (third tier, outside this monorepo)
+
+The SPA does **not** get Fragrantica / Basenotes data from the Express API in this repo. Search and detail lookups go to a separate Python service at `VITE_FRAGRANCE_API_URL` (source lives under `search_engine/fragrance_parser_full_rewrite_fixed.py` in the parent workspace, not in this monorepo). Three endpoints are consumed by `artifacts/scent-cast/src/lib/fragranceApi.ts`:
+
+- `GET  /api/fragrances/search?q=…` — primary search; results carry `origin: "srt"`
+- `POST /api/fragrances/details` — detail body; the SPA reads `source_coverage`, `derived_metrics`, and `enrichment` off this response
+- `POST /api/fragrances/details/requeue` — manual re-scrape trigger
+
+When `payload.origin === "app"` or the id starts with `catalog:` / `dataset:` / `local:`, `getFragranceDetails` routes to the local Express API instead (`/api/fragrances/details`, mounted by `routes/fragrances.ts`). All other detail fetches go to the external Python engine.
+
+**`source_coverage` contract** (set by the Python engine, enforced by the SPA in `lib/fragranceApi.ts:isSourceCoverageComplete`): a detail is considered "complete" only when `basenotes === true && fragrantica === true && (complete === true || derived_metrics === "complete"|"completed"|"full")`. The SPA gates spinners and "partial details" notices on this predicate — keep the engine's response shape stable.
+
+### Enrichment queue (Pass 1 scaffolding only)
+
+`artifacts/api-server/src/services/enrichmentQueue*.ts` and `routes/enrichment.ts` implement a job-queue foundation (DB-backed `enrichment_jobs` table, idempotent upsert by canonicalized `fg_url`, status lookup endpoint at `GET /api/enrichment/status`). **No production route currently enqueues jobs, and no worker consumes them** — the modules' own headers state this explicitly ("Pass 1 scope: foundation only. No worker, no automatic enqueue hook."). Treat this code as scaffolding for a future pass, not a live system. The `GET /api/enrichment/status` endpoint is wired and always returns `{ status: "not_found" }` until a producer is added.
+
 ### Frontend scoring (`artifacts/scent-cast/src/lib/scentWeatherEngine.ts`)
 
 Pure client-side; no API call. `calculateScentWeatherRecommendation(input)` takes weather + setting + fragrance profile and returns a recommendation with `confidence`, `projection_risk`, `wear_window`, `spray_count`, and family lists. `App.tsx` scores every wardrobe item and surfaces the highest-scoring one.
@@ -119,7 +135,7 @@ There is also a legacy email-only login at `POST /api/auth/login` (`routes/auth.
 
 ## Environment variables
 
-Copy `.env.example` to `.env`. Minimum for local dev:
+Copy `.env.example` to `.env`. Minimum for local dev (backend):
 
 ```
 DATABASE_URL=postgresql://...
@@ -128,7 +144,14 @@ PORT=3000
 IMAGE_ALLOW_LOCAL_OBJECT_STORAGE=true   # enables .image-cache/ as storage backend
 ```
 
-Optional integrations (all degrade gracefully when absent): `WEATHER_API_KEY`, `SERPER_API_KEY`, `REMOVE_BG_API_KEY`, `GEMINI_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_CLIENT_ID`/`SECRET`, Firebase Storage vars, Supabase Storage vars, Rakuten/Amazon affiliate vars.
+Required frontend env (defined in `artifacts/scent-cast/.env.local` or root `ScentCast.env`; consumed by Vite — without `VITE_FRAGRANCE_API_URL` the SPA throws on every search/detail call from `lib/fragranceApi.ts:getFragranceEngineApiBase`):
+
+```
+VITE_FRAGRANCE_API_URL=<external Python fragrance engine base URL>
+VITE_API_BASE_URL=<optional override for the Express API base; defaults to same-origin>
+```
+
+Optional backend integrations (all degrade gracefully when absent): `WEATHER_API_KEY`, `SERPER_API_KEY`, `REMOVE_BG_API_KEY`, `GEMINI_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_CLIENT_ID`/`SECRET`, Firebase Storage vars, Supabase Storage vars, Rakuten/Amazon affiliate vars.
 
 ## TypeScript project setup
 
