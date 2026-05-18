@@ -214,154 +214,6 @@ function VaultHeadlineRotation({ phrases }: { phrases: readonly string[] }) {
   );
 }
 
-function ScentSearchGlyph({
-  active,
-  reduceMotion,
-  size = 'button',
-}: {
-  active: boolean;
-  reduceMotion: boolean | null | undefined;
-  size?: 'button' | 'overlay';
-}) {
-  const isButton = size === 'button';
-  const iconSize = isButton ? 17 : 30;
-  const footprint = isButton ? 'h-[1.2rem] w-[1.2rem]' : 'h-[5.25rem] w-[5.25rem]';
-  const plumeOffsets = isButton ? [-0.34, 0, 0.34] : [-0.62, 0, 0.62];
-  const plumeHeights = isButton ? ['0.52rem', '0.78rem', '0.6rem'] : ['1.18rem', '1.74rem', '1.34rem'];
-
-  return (
-    <span className={`relative inline-flex items-center justify-center ${footprint}`} aria-hidden>
-      <motion.span
-        className="absolute inset-0 rounded-full bg-[radial-gradient(circle_at_50%_44%,rgba(239,184,99,0.28),rgba(239,184,99,0.06)_48%,transparent_76%)]"
-        animate={
-          reduceMotion
-            ? undefined
-            : active
-              ? { scale: [0.96, 1.08, 0.96], opacity: [0.52, 0.95, 0.52] }
-              : { opacity: [0.38, 0.72, 0.38] }
-        }
-        transition={
-          reduceMotion
-            ? undefined
-            : active
-              ? { duration: 1.6, repeat: Infinity, ease: 'easeInOut' }
-              : { duration: 3.2, repeat: Infinity, ease: 'easeInOut' }
-        }
-      />
-      <motion.span
-        className="absolute inset-[10%] rounded-full border border-scent-accent/18"
-        animate={
-          reduceMotion
-            ? undefined
-            : active
-              ? { scale: [0.92, 1.05, 0.92], opacity: [0.24, 0.62, 0.24] }
-              : { scale: [0.98, 1.02, 0.98], opacity: [0.2, 0.38, 0.2] }
-        }
-        transition={
-          reduceMotion
-            ? undefined
-            : active
-              ? { duration: 1.85, repeat: Infinity, ease: 'easeInOut' }
-              : { duration: 3.6, repeat: Infinity, ease: 'easeInOut' }
-        }
-      />
-      <motion.span
-        className="absolute inset-[24%] rounded-full border border-white/8"
-        animate={
-          reduceMotion || !active
-            ? undefined
-            : { rotate: [0, 24, 0], opacity: [0.26, 0.46, 0.26] }
-        }
-        transition={
-          reduceMotion || !active
-            ? undefined
-            : { duration: 1.4, repeat: Infinity, ease: 'easeInOut' }
-        }
-      />
-      {plumeOffsets.map((offset, index) => (
-        <motion.span
-          key={`${size}-plume-${offset}`}
-          className="absolute bottom-[56%] rounded-full bg-gradient-to-t from-scent-accent/0 via-[#f1c981]/88 to-white/92 blur-[0.6px]"
-          style={{
-            left: `calc(50% + ${offset}rem)`,
-            height: plumeHeights[index],
-            width: isButton ? '0.17rem' : '0.29rem',
-            marginLeft: isButton ? '-0.085rem' : '-0.145rem',
-          }}
-          animate={
-            reduceMotion
-              ? undefined
-              : active
-                ? {
-                    y: [0, -(isButton ? 4 + index : 8 + index * 2), 0],
-                    opacity: [0.24, 0.96, 0.18],
-                    scaleY: [0.78, 1.15, 0.84],
-                  }
-                : {
-                    y: [0, -(isButton ? 2 : 4), 0],
-                    opacity: [0.18, 0.5, 0.18],
-                    scaleY: [0.9, 1.04, 0.9],
-                  }
-          }
-          transition={
-            reduceMotion
-              ? undefined
-              : active
-                ? {
-                    duration: isButton ? 1.16 : 1.34,
-                    repeat: Infinity,
-                    ease: 'easeInOut',
-                    delay: index * 0.12,
-                  }
-                : {
-                    duration: isButton ? 2.8 : 3.2,
-                    repeat: Infinity,
-                    ease: 'easeInOut',
-                    delay: index * 0.16,
-                  }
-          }
-        />
-      ))}
-      <motion.span
-        className="absolute inset-[20%] rounded-full bg-[radial-gradient(circle_at_38%_34%,rgba(255,247,236,0.16),rgba(255,247,236,0)_58%)]"
-        animate={
-          reduceMotion || !active
-            ? undefined
-            : { opacity: [0.4, 0.8, 0.4] }
-        }
-        transition={
-          reduceMotion || !active
-            ? undefined
-            : { duration: 1.8, repeat: Infinity, ease: 'easeInOut' }
-        }
-      />
-      <motion.span
-        className="relative z-10 inline-flex"
-        animate={
-          reduceMotion
-            ? undefined
-            : active
-              ? { opacity: [0.82, 1, 0.82], scale: [0.98, 1.03, 0.98] }
-              : { opacity: [0.72, 1, 0.72] }
-        }
-        transition={
-          reduceMotion
-            ? undefined
-            : active
-              ? { duration: 1.45, repeat: Infinity, ease: 'easeInOut' }
-              : { duration: 3.4, repeat: Infinity, ease: 'easeInOut' }
-        }
-      >
-        <Search
-          size={iconSize}
-          strokeWidth={isButton ? 1.75 : 1.6}
-          className="text-[#fff7ec] drop-shadow-[0_0_14px_rgba(201,139,44,0.24)]"
-        />
-      </motion.span>
-    </span>
-  );
-}
-
 interface FragranceMatch extends FragranceSearchResult {
   name: string;
   brand: string;
@@ -990,38 +842,36 @@ export const FragranceCapture: React.FC<{
     <div className="glass-shell rounded-[var(--radius-scent)] relative overflow-hidden">
       <AnimatePresence>
         {uploading && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.28 }}
+          className="absolute inset-0 bg-black/90 backdrop-blur-xl z-50 flex flex-col items-center justify-center p-8 text-center"
+        >
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.28 }}
-            className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/90 p-8 text-center backdrop-blur-xl"
-          >
-            <motion.div
-              animate={
-                syncComplete
-                  ? { scale: [1, 1.06, 1] }
-                  : { y: [0, -3, 0], scale: [1, 1.03, 1] }
-              }
-              transition={
-                syncComplete
-                  ? { duration: 0.46, ease: 'easeOut' }
-                  : { duration: 2.1, repeat: Infinity, ease: 'easeInOut' }
-              }
-              className="mb-6"
-            >
-              <ScentSearchGlyph active={!syncComplete} reduceMotion={reduceMotion} size="overlay" />
-            </motion.div>
-            <h3 className="mb-2 font-serif text-xl italic text-white">{loadingStatus}</h3>
-            <p className="animate-pulse text-[10px] font-bold italic uppercase tracking-[0.3em] text-white/30 font-sans">
-              Processing Olfactory Data
+            animate={
+              syncComplete
+                ? { rotate: 0, scale: [1, 1.08, 1] }
+                : { rotate: [0, 360], scale: [1, 1.1, 1] }
+            }
+            transition={
+              syncComplete
+                ? { duration: 0.46, ease: "easeOut" }
+                : { duration: 3, repeat: Infinity, ease: "linear" }
+            }
+            className={`w-20 h-20 border-t-2 rounded-full mb-6 ${
+              syncComplete ? 'border-scent-accent/75' : 'border-white/40'
+            }`}
+          />
+          <h3 className="font-serif italic text-xl text-white mb-2">{loadingStatus}</h3>
+          <p className="text-white/30 text-[10px] uppercase tracking-[0.3em] font-sans font-bold italic animate-pulse">Processing Olfactory Data</p>
+          {isDetailsPolling ? (
+            <p className="mt-3 text-[10px] uppercase tracking-[0.22em] text-scent-accent/80 font-bold animate-pulse">
+              Enriching...
             </p>
-            {isDetailsPolling ? (
-              <p className="mt-3 animate-pulse text-[10px] font-bold uppercase tracking-[0.22em] text-scent-accent/80">
-                Enriching...
-              </p>
-            ) : null}
-          </motion.div>
+          ) : null}
+        </motion.div>
         )}
       </AnimatePresence>
       <div className="glass rounded-[var(--radius-scent-inner)] p-4 md:p-6">
