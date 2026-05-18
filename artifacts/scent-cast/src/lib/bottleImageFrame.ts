@@ -1,7 +1,7 @@
 import { type ClassValue } from "clsx";
 import { cn } from "./utils";
 
-export type BottleImageVariant = "featured" | "grid" | "detail" | "thumb" | "share";
+export type BottleImageVariant = "featured" | "grid" | "detail" | "thumb" | "share" | "card" | "display";
 
 /**
  * Bottle display sizing is entirely client-side CSS. `POST /api/wardrobe/rebuild`
@@ -48,6 +48,10 @@ const ARTBOARD_INSET: Record<BottleImageVariant, string> = {
   grid:
     "absolute inset-[6%] sm:inset-[7%] overflow-hidden min-h-0 min-w-0 rounded-[0.125rem]",
   share:
+    "absolute inset-[6%] sm:inset-[7%] overflow-hidden min-h-0 min-w-0 rounded-[0.125rem]",
+  card:
+    "absolute inset-[6%] sm:inset-[7%] overflow-hidden min-h-0 min-w-0 rounded-[0.125rem]",
+  display:
     "absolute inset-[6%] sm:inset-[7%] overflow-hidden min-h-0 min-w-0 rounded-[0.125rem]",
   detail: "absolute inset-3 sm:inset-4 overflow-hidden min-h-0 min-w-0 rounded-sm",
   /** Slightly looser than 0.5px so round / non-rectangular pack shots don’t hug the border. */

@@ -993,6 +993,16 @@ export default function App() {
   }, [items, wardrobeLoaded]);
   const tickerTrackKey = tickerPhrases.join('|');
 
+  if (window.location.pathname === '/community') {
+    // Lazy import keeps the home bundle smaller.
+    const CommunityPage = React.lazy(() => import('@/pages/community'));
+    return (
+      <React.Suspense fallback={<div className="min-h-[100svh] bg-scent-bg" />}>
+        <CommunityPage authToken={authToken} />
+      </React.Suspense>
+    );
+  }
+
   const sharePathMatch = window.location.pathname.match(/^\/share\/([^/?#]+)$/);
   if (sharePathMatch) {
     let shareRef = sharePathMatch[1];
@@ -1038,6 +1048,12 @@ export default function App() {
           </div>
 
           <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-3 sm:gap-4 justify-end">
+            <a
+              href="/community"
+              className="text-[9px] sm:text-xs uppercase tracking-[0.2em] text-[#f4debd]/70 hover:text-white transition-colors whitespace-nowrap"
+            >
+              Community
+            </a>
             {authToken ? (
               <button
                 type="button"
