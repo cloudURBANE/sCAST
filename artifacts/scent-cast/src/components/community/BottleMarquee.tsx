@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { X } from 'lucide-react';
 import { BottleImage } from '@/components/BottleImage';
@@ -36,6 +36,10 @@ function formatNotes(notes: string[] | undefined): string {
 export const BottleMarquee: React.FC<BottleMarqueeProps> = ({ items, loading }) => {
   const trackRef = useRef<HTMLDivElement>(null);
   const groupRef = useRef<HTMLDivElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const triggerRefs = useRef(new Map<string, HTMLButtonElement>());
+  const activeTriggerIdRef = useRef<string | null>(null);
   const [activeItem, setActiveItem] = useState<CommunityFragranceEntry | null>(null);
   const renderedItems = loading || items.length === 0 ? placeholderItems : items;
   const trackKey = useMemo(
@@ -95,6 +99,56 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = ({ items, loading }) 
     };
   }, [trackKey]);
 
+  const closeOverlay = useCallback(() => {
+    const triggerId = activeTriggerIdRef.current;
+    setActiveItem(null);
+    window.requestAnimationFrame(() => {
+      if (triggerId) {
+        triggerRefs.current.get(triggerId)?.focus();
+      }
+      activeTriggerIdRef.current = null;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!activeItem) return;
+    closeButtonRef.current?.focus();
+  }, [activeItem]);
+
+  useEffect(() => {
+    if (!activeItem) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeOverlay();
+        return;
+      }
+
+      if (event.key !== 'Tab') return;
+      const focusable = Array.from(
+        overlayRef.current?.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+        ) ?? [],
+      ).filter((element) => !element.hasAttribute('disabled') && element.getAttribute('aria-hidden') !== 'true');
+
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [activeItem, closeOverlay]);
+
   return (
     <>
       <section className="scent-community-marquee" aria-label="Community fragrance marquee">
@@ -111,11 +165,23 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = ({ items, loading }) 
                   <motion.button
                     type="button"
                     aria-label={`${item.name} by ${item.brand}, curated by ${item.curator}`}
+                    tabIndex={copyIndex > 0 ? -1 : 0}
+                    ref={(node) => {
+                      if (copyIndex > 0) return;
+                      if (node) {
+                        triggerRefs.current.set(item.id, node);
+                      } else {
+                        triggerRefs.current.delete(item.id);
+                      }
+                    }}
                     className="pedestal relative h-full w-full cursor-pointer rounded-[var(--radius-scent)] border border-white/8 bg-black/25 p-3 text-left shadow-[0_24px_60px_-36px_rgba(0,0,0,0.95)] outline-none transition-colors hover:border-white/16 focus-visible:border-white/24 focus-visible:ring-2 focus-visible:ring-scent-accent/40"
                     whileHover={{ y: -8, scale: 1.04 }}
                     transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
                     onClick={() => {
-                      if (!loading && item.imageUrl) setActiveItem(item);
+                      if (!loading && item.imageUrl) {
+                        activeTriggerIdRef.current = item.id;
+                        setActiveItem(item);
+                      }
                     }}
                   >
                     <div className="absolute inset-x-5 bottom-4 h-px bg-gradient-to-r from-transparent via-scent-accent/35 to-transparent" aria-hidden="true" />
@@ -146,6 +212,10 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = ({ items, loading }) 
             exit={{ opacity: 0 }}
             transition={{ duration: 0.35, ease: 'easeInOut' }}
             className="fixed inset-0 z-[110] bg-black/95 backdrop-blur-3xl flex flex-col"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="community-fragrance-overlay-title"
+            ref={overlayRef}
           >
             <div
               className="flex items-center justify-between px-5 pb-4 shrink-0"
@@ -154,9 +224,10 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = ({ items, loading }) 
               <p className="text-[9px] uppercase tracking-[0.4em] text-scent-accent font-bold">Community Wardrobe</p>
               <button
                 type="button"
-                onClick={() => setActiveItem(null)}
+                onClick={closeOverlay}
                 className="p-2 text-white/40 hover:text-white hover:bg-white/10 transition-all active:scale-95"
                 aria-label="Close fragrance details"
+                ref={closeButtonRef}
               >
                 <X size={20} />
               </button>
@@ -167,7 +238,7 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = ({ items, loading }) 
                 <div className="max-w-2xl w-full text-center space-y-6 sm:space-y-12">
                   <header>
                     <p className="text-[9px] uppercase tracking-[0.3em] text-scent-accent/75 mb-3">{activeItem.curator}</p>
-                    <h2 className="font-serif italic text-2xl sm:text-6xl mb-4">Inside the case</h2>
+                    <h2 id="community-fragrance-overlay-title" className="font-serif italic text-2xl sm:text-6xl mb-4">Inside the case</h2>
                     <div className="h-px w-16 bg-white/20 mx-auto" />
                   </header>
                   <div className="py-6 sm:py-16 border-y border-white/10">
@@ -195,7 +266,7 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = ({ items, loading }) 
             >
               <button
                 type="button"
-                onClick={() => setActiveItem(null)}
+                onClick={closeOverlay}
                 className="scent-primary-button w-full py-4 rounded-[var(--radius-scent)]"
               >
                 Close

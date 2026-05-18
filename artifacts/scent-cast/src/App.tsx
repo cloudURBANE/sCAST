@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ScentIntentModal } from './components/ScentIntentModal';
 import { ScentNotesInfographic } from './components/ScentNotesInfographic';
 import { LavaBackground } from './components/LavaBackground';
+import { AppTopNav } from './components/AppTopNav';
 import { AuthModal } from './components/AuthModal';
 import { SharePage } from './components/SharePage';
 import { ShareModal } from './components/ShareModal';
@@ -993,13 +994,56 @@ export default function App() {
   }, [items, wardrobeLoaded]);
   const tickerTrackKey = tickerPhrases.join('|');
 
+  const authModal = isAuthModalOpen ? (
+    <AuthModal
+      onAuth={handleAuth}
+      onClose={() => {
+        setIsAuthModalOpen(false);
+        setGuestPromptDismissed(true);
+      }}
+      allowDismiss
+      title={items.length >= 2 ? 'Save your wardrobe before you lose it' : undefined}
+      subtitle={
+        items.length >= 2
+          ? 'You can keep exploring as a guest, but signing in will persist your fragrances to your account.'
+          : undefined
+      }
+    />
+  ) : null;
+
+  const shareModal = (
+    <ShareModal
+      isOpen={isShareModalOpen}
+      onClose={() => setIsShareModalOpen(false)}
+      userId={userId}
+      authToken={authToken}
+      items={items}
+      onToggleVisibility={(id, hidden) => {
+        setItems(prev =>
+          prev.map(item =>
+            (item._dbId ?? item.id) === id ? { ...item, shareHidden: hidden } : item,
+          ),
+        );
+      }}
+    />
+  );
+
   if (window.location.pathname === '/community') {
     // Lazy import keeps the home bundle smaller.
     const CommunityPage = React.lazy(() => import('@/pages/community'));
     return (
-      <React.Suspense fallback={<div className="min-h-[100svh] bg-scent-bg" />}>
-        <CommunityPage authToken={authToken} />
-      </React.Suspense>
+      <>
+        <React.Suspense fallback={<div className="min-h-[100svh] bg-scent-bg" />}>
+          <CommunityPage
+            authToken={authToken}
+            onSignIn={() => setIsAuthModalOpen(true)}
+            onShare={() => setIsShareModalOpen(true)}
+            onSignOut={handleSignOut}
+          />
+        </React.Suspense>
+        {authModal}
+        {shareModal}
+      </>
     );
   }
 
@@ -1011,61 +1055,25 @@ export default function App() {
     } catch {
       // Keep raw segment if decode fails.
     }
-    return <SharePage userId={shareRef} />;
+    return (
+      <>
+        <SharePage userId={shareRef} />
+        {authModal}
+        {shareModal}
+      </>
+    );
   }
 
   return (
     <div className="scent-app-shell min-h-[100svh] bg-scent-bg selection:bg-scent-accent selection:text-black text-white relative overflow-x-hidden">
       <LavaBackground />
-      <nav className="scent-topbar fixed top-0 left-0 right-0 h-16 sm:h-[72px] z-50 px-3 sm:px-8">
-        <div className="max-w-[1760px] mx-auto h-full relative flex items-center justify-center">
-          <div className="absolute left-0 top-1/2 -translate-y-1/2 flex items-center gap-3 sm:gap-4">
-            {!authToken ? (
-              <button
-                type="button"
-                onClick={() => setIsAuthModalOpen(true)}
-                className="text-[9px] sm:text-xs uppercase tracking-[0.2em] text-[#f4debd]/70 hover:text-white transition-colors whitespace-nowrap"
-              >
-                Sign In
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setIsShareModalOpen(true)}
-                className="text-[9px] sm:text-xs uppercase tracking-[0.2em] text-[#f4debd]/70 hover:text-white transition-colors whitespace-nowrap"
-              >
-                Share
-              </button>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2 sm:gap-3 pointer-events-none">
-            <Wind
-              strokeWidth={1.25}
-              className="w-[19.8px] h-[19.8px] sm:w-[22px] sm:h-[22px] text-scent-accent drop-shadow-[0_0_10px_rgba(201,139,44,0.22)]"
-            />
-            <h1 className="scent-brandmark font-serif text-[1.125rem] sm:text-3xl tracking-[0.14em] uppercase">{APP_BRAND_MARK}</h1>
-          </div>
-
-          <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-3 sm:gap-4 justify-end">
-            <a
-              href="/community"
-              className="text-[9px] sm:text-xs uppercase tracking-[0.2em] text-[#f4debd]/70 hover:text-white transition-colors whitespace-nowrap"
-            >
-              Community
-            </a>
-            {authToken ? (
-              <button
-                type="button"
-                onClick={handleSignOut}
-                className="text-[10px] sm:text-xs uppercase tracking-[0.2em] text-[#f4debd]/70 hover:text-white transition-colors whitespace-nowrap"
-              >
-                Sign Out
-              </button>
-            ) : null}
-          </div>
-        </div>
-      </nav>
+      <AppTopNav
+        authToken={authToken}
+        onSignIn={() => setIsAuthModalOpen(true)}
+        onShare={() => setIsShareModalOpen(true)}
+        onSignOut={handleSignOut}
+        currentRoute="home"
+      />
 
       <div className="pt-16 sm:pt-[72px]" />
 
@@ -1148,37 +1156,8 @@ export default function App() {
 
       <ScentIntentModal isOpen={isIntentModalOpen} onClose={() => setIsIntentModalOpen(false)} onComplete={handleIntentComplete} />
 
-      {isAuthModalOpen ? (
-        <AuthModal
-          onAuth={handleAuth}
-          onClose={() => {
-            setIsAuthModalOpen(false);
-            setGuestPromptDismissed(true);
-          }}
-          allowDismiss
-          title={items.length >= 2 ? 'Save your wardrobe before you lose it' : undefined}
-          subtitle={
-            items.length >= 2
-              ? 'You can keep exploring as a guest, but signing in will persist your fragrances to your account.'
-              : undefined
-          }
-        />
-      ) : null}
-
-      <ShareModal
-        isOpen={isShareModalOpen}
-        onClose={() => setIsShareModalOpen(false)}
-        userId={userId}
-        authToken={authToken}
-        items={items}
-        onToggleVisibility={(id, hidden) => {
-          setItems(prev =>
-            prev.map(item =>
-              (item._dbId ?? item.id) === id ? { ...item, shareHidden: hidden } : item,
-            ),
-          );
-        }}
-      />
+      {authModal}
+      {shareModal}
 
       <AnimatePresence mode="wait">
         {activeRecommendation && (

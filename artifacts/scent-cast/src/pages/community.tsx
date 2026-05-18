@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Wind } from 'lucide-react';
+import { AppTopNav } from '@/components/AppTopNav';
 import { LavaBackground } from '@/components/LavaBackground';
 import { APP_BRAND_MARK } from '@/lib/appBrand';
 import { CommunityHero } from '@/components/community/CommunityHero';
@@ -9,39 +10,45 @@ import { useCommunityFragrances } from '@/components/community/communityData';
 
 interface CommunityPageProps {
   authToken: string | null;
+  onSignIn: () => void;
+  onShare: () => void;
+  onSignOut: () => void;
 }
 
-export const CommunityPage: React.FC<CommunityPageProps> = ({ authToken: _authToken }) => {
+export const CommunityPage: React.FC<CommunityPageProps> = ({ authToken, onSignIn, onShare, onSignOut }) => {
   const { data, isLoading } = useCommunityFragrances();
+
+  useEffect(() => {
+    const previous = document.title;
+    document.title = 'Community — SCENTBEAM';
+    return () => {
+      document.title = previous;
+    };
+  }, []);
 
   return (
     <div className="scent-app-shell min-h-[100svh] bg-scent-bg selection:bg-scent-accent selection:text-black text-white relative overflow-x-hidden">
       <LavaBackground />
-      <nav className="scent-topbar fixed top-0 left-0 right-0 h-16 sm:h-[72px] z-50 px-3 sm:px-8">
-        <div className="max-w-[1760px] mx-auto h-full relative flex items-center justify-center">
-          <div className="absolute left-0 top-1/2 -translate-y-1/2 flex items-center gap-3 sm:gap-4">
-            <a href="/" className="text-[9px] sm:text-xs uppercase tracking-[0.2em] text-[#f4debd]/70 hover:text-white transition-colors whitespace-nowrap">
-              Home
-            </a>
-          </div>
-          <div className="flex items-center gap-2 sm:gap-3 pointer-events-none">
-            <Wind
-              strokeWidth={1.25}
-              className="w-[19.8px] h-[19.8px] sm:w-[22px] sm:h-[22px] text-scent-accent drop-shadow-[0_0_10px_rgba(201,139,44,0.22)]"
-            />
-            <h1 className="scent-brandmark font-serif text-[1.125rem] sm:text-3xl tracking-[0.14em] uppercase">{APP_BRAND_MARK}</h1>
-          </div>
-          <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-3 sm:gap-4 justify-end">
-            <span className="text-[10px] sm:text-xs uppercase tracking-[0.2em] text-scent-accent whitespace-nowrap">Community</span>
-          </div>
-        </div>
-      </nav>
+      <AppTopNav
+        authToken={authToken}
+        onSignIn={onSignIn}
+        onShare={onShare}
+        onSignOut={onSignOut}
+        currentRoute="community"
+      />
 
       <div className="pt-16 sm:pt-[72px]" />
 
       <main className="relative z-10 pb-24 px-4 sm:px-8 max-w-[1760px] mx-auto">
         <div className="space-y-20 sm:space-y-28 pt-10 sm:pt-14">
           <CommunityHero />
+          <div className="flex items-center gap-4 text-center">
+            <span className="h-px flex-1 bg-gradient-to-r from-transparent via-scent-accent/30 to-scent-accent/10" aria-hidden="true" />
+            <p className="text-[11px] uppercase tracking-[0.32em] text-scent-muted/80">
+              Drifting through the community vault
+            </p>
+            <span className="h-px flex-1 bg-gradient-to-r from-scent-accent/10 via-scent-accent/30 to-transparent" aria-hidden="true" />
+          </div>
           <div className="scent-full-bleed">
             <BottleMarquee items={data ?? []} loading={isLoading} />
           </div>
