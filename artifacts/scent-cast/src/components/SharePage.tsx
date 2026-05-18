@@ -216,8 +216,8 @@ function FragrancePanel({
   className?: string;
 }) {
   return (
-    <section className={`border border-white/10 bg-white/[0.025] shadow-[inset_0_1px_0_rgba(255,255,255,0.035)] ${className}`}>
-      <div className="border-b border-white/[0.07] px-4 py-3 text-center">
+    <section className={`border border-white/[0.04] bg-gradient-to-b from-white/[0.018] to-transparent shadow-[inset_0_1px_0_rgba(255,255,255,0.025)] ${className}`}>
+      <div className="border-b border-white/[0.05] px-4 py-3 text-center">
         <p className="text-[10px] uppercase tracking-[0.34em] text-white/70 font-bold">
           {title}
         </p>
@@ -503,8 +503,8 @@ function ProfileScorePanel({
 
   return (
     <div className="space-y-3 sm:space-y-5">
-      <div className="grid grid-cols-4 lg:grid-cols-[1.15fr_1.3fr_0.9fr_0.9fr_0.9fr] border-y border-white/8">
-        <div className="col-span-4 lg:col-span-1 flex flex-col items-center justify-center px-4 py-5 border-b lg:border-b-0 lg:border-r border-white/8 text-center">
+      <div className="grid grid-cols-4 lg:grid-cols-[1.15fr_1.3fr_0.9fr_0.9fr_0.9fr] border-y border-white/[0.04]">
+        <div className="col-span-4 lg:col-span-1 flex flex-col items-center justify-center px-4 py-5 border-b lg:border-b-0 lg:border-r border-white/[0.04] text-center">
           <p className="text-[10px] uppercase tracking-[0.28em] text-white/64 font-bold">Profile Score</p>
           <div className="mt-1 flex items-end justify-center gap-2">
             <span className="font-serif italic text-6xl leading-none text-scent-accent">
@@ -519,7 +519,7 @@ function ProfileScorePanel({
           return (
             <div
               key={stat.label}
-              className="min-w-0 h-full min-h-[6.15rem] sm:min-h-0 flex flex-col items-center justify-center gap-1 border-r border-white/8 px-1 py-2.5 sm:px-4 sm:py-5 text-center last:border-r-0"
+              className="min-w-0 h-full min-h-[6.15rem] sm:min-h-0 flex flex-col items-center justify-center gap-1 border-r border-white/[0.04] px-1 py-2.5 sm:px-4 sm:py-5 text-center last:border-r-0"
             >
               <Icon size={18} strokeWidth={1.6} className="text-scent-accent" />
               {stat.cycle.length > 0 ? (
@@ -807,7 +807,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                 className="flex-1 overflow-y-auto scrollbar-hide px-4 sm:px-7 lg:px-10 pb-4"
                 style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
               >
-                <div className="mx-auto max-w-[92rem] space-y-4 sm:space-y-5 py-5 sm:py-7">
+                <div className="mx-auto max-w-[92rem] space-y-6 sm:space-y-8 py-5 sm:py-7">
                   <header className="mx-auto max-w-3xl grid text-center gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-x-10">
                     <p className="text-[10px] uppercase tracking-[0.36em] text-scent-accent font-bold order-1 sm:order-2 sm:col-start-2 sm:row-start-1 sm:self-center sm:text-right sm:max-w-[14rem] sm:pl-2">
                       Intelligence Profile
