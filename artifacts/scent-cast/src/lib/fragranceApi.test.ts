@@ -422,6 +422,58 @@ test("searchFragrances supplements degraded SRT breadth with app API results", a
   assert.equal(response.diagnostics?.fallback_source, "db");
 });
 
+test("searchFragrances drops non-fragrance archive rows with generated display names", async (t) => {
+  const previousFetch = globalThis.fetch;
+  const previousApiUrl = process.env.VITE_FRAGRANCE_API_URL;
+  const previousAppApiUrl = process.env.VITE_API_BASE_URL;
+
+  process.env.VITE_FRAGRANCE_API_URL = "https://engine.example.test";
+  process.env.VITE_API_BASE_URL = "https://app-api.example.test";
+  Object.defineProperty(globalThis, "fetch", {
+    configurable: true,
+    value: async () => {
+      return new Response(
+        JSON.stringify({
+          query: "Yves Saint Laurent Libre",
+          results: [
+            { id: "libre", name: "Libre", house: "Yves Saint Laurent" },
+            { id: "archive-comment", name: "1avmxj5", brand: "Comments" },
+            { id: "dior-stale", name: "J'adore Eau de Toilette 2002", house: "Dior" },
+          ],
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    },
+  });
+
+  t.after(() => {
+    Object.defineProperty(globalThis, "fetch", {
+      configurable: true,
+      value: previousFetch,
+    });
+    if (previousApiUrl === undefined) {
+      delete process.env.VITE_FRAGRANCE_API_URL;
+    } else {
+      process.env.VITE_FRAGRANCE_API_URL = previousApiUrl;
+    }
+    if (previousAppApiUrl === undefined) {
+      delete process.env.VITE_API_BASE_URL;
+    } else {
+      process.env.VITE_API_BASE_URL = previousAppApiUrl;
+    }
+  });
+
+  const response = await searchFragrances("Yves Saint Laurent Libre");
+
+  assert.deepEqual(
+    response.results.map((result) => `${result.house}:${result.name}`),
+    ["Yves Saint Laurent:Libre"],
+  );
+});
+
 test("getFragranceDetails keeps catalog ids on the app API", async (t) => {
   const previousFetch = globalThis.fetch;
   const previousApiUrl = process.env.VITE_FRAGRANCE_API_URL;

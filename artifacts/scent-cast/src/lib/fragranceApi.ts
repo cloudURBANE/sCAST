@@ -831,6 +831,49 @@ function hasResolvedSearchHouse(result: FragranceSearchResult): boolean {
   return Boolean(firstNonEmptyString(result.house, result.brand));
 }
 
+function normalizedInitials(value: unknown): string {
+  return normalizeForDedupe(value)
+    .split(" ")
+    .filter(Boolean)
+    .map((word) => word[0])
+    .join("");
+}
+
+function looksLikeGeneratedToken(value: unknown): boolean {
+  const normalized = normalizeForDedupe(value);
+  return /^[a-z0-9]{6,12}$/.test(normalized) && /[a-z]/.test(normalized) && /\d/.test(normalized);
+}
+
+function searchResultMatchesQueryIntent(query: string, result: FragranceSearchResult): boolean {
+  const normalizedQuery = normalizeForDedupe(query);
+  if (!normalizedQuery) return true;
+
+  const name = normalizeForDedupe(result.name);
+  const house = normalizeForDedupe(result.house ?? result.brand);
+  const combined = [house, name, normalizedInitials(result.house ?? result.brand)].filter(Boolean).join(" ");
+  if (!combined) return false;
+
+  const queryTokens = normalizedQuery
+    .split(" ")
+    .filter((token) => token.length > 1);
+  if (queryTokens.length === 0) return true;
+
+  if (house === normalizedQuery || name === normalizedQuery || combined.includes(normalizedQuery)) {
+    return true;
+  }
+
+  const matched = queryTokens.filter((token) => combined.includes(token)).length;
+  return matched / queryTokens.length >= 0.5;
+}
+
+function hasDisplayableSearchIdentity(query: string, result: FragranceSearchResult): boolean {
+  const name = firstNonEmptyString(result.name);
+  const house = firstNonEmptyString(result.house, result.brand);
+  if (!name || !house) return false;
+  if (looksLikeGeneratedToken(name) || looksLikeGeneratedToken(house)) return false;
+  return searchResultMatchesQueryIntent(query, result);
+}
+
 function mergeSearchResults(
   primary: FragranceSearchResult[],
   supplemental: FragranceSearchResult[],
@@ -921,7 +964,9 @@ export async function searchFragrances(
     query: typeof data?.query === "string" ? data.query : query,
     results: rawResults
       .map((result) => normalizeFragranceSearchResult(result, query, "srt"))
-      .filter((result): result is FragranceSearchResult => result !== null),
+      .filter((result): result is FragranceSearchResult => {
+        return result !== null && hasDisplayableSearchIdentity(query, result);
+      }),
     diagnostics: normalizeSearchDiagnostics(data?.diagnostics),
   };
 
@@ -972,7 +1017,9 @@ async function searchAppFragrances(
     query: typeof data?.query === "string" ? data.query : query,
     results: rawResults
       .map((result) => normalizeFragranceSearchResult(result, query, "app"))
-      .filter((result): result is FragranceSearchResult => result !== null),
+      .filter((result): result is FragranceSearchResult => {
+        return result !== null && hasDisplayableSearchIdentity(query, result);
+      }),
     diagnostics: normalizeSearchDiagnostics(data?.diagnostics),
   };
 }
