@@ -398,18 +398,6 @@ function SourceStatusPanel({
   const sourceStatusText = hasCoverage
     ? coverageSummary
     : enrichmentMessage ?? "SRT enrichment can be refreshed when engine identity is available.";
-  const sourceCount =
-    (coverage?.basenotes === true ? 1 : 0) + (coverage?.fragrantica === true ? 1 : 0);
-  const sourceStatus = hasCoverage ? `Sources ${sourceCount} of 2` : null;
-  const derivedStatus = hasCoverage
-    ? complete
-      ? "Metrics ready"
-      : "Metrics pending"
-    : null;
-  const badges = [
-    sourceStatus,
-    derivedStatus,
-  ].filter((badge): badge is string => Boolean(badge));
 
   return (
     <FragrancePanel title="Source Status" className="overflow-hidden">
@@ -432,18 +420,6 @@ function SourceStatusPanel({
           <p className="text-center text-[10px] uppercase tracking-[0.18em] text-white/38 font-bold leading-relaxed">
             {enrichmentMessage}
           </p>
-        ) : null}
-        {badges.length > 0 ? (
-          <div className="flex flex-wrap justify-center gap-2">
-            {badges.map((badge) => (
-              <span
-                key={badge}
-                className="border border-white/10 bg-black/22 px-2.5 py-1 text-[8px] uppercase tracking-[0.16em] text-white/45 font-bold"
-              >
-                {badge}
-              </span>
-            ))}
-          </div>
         ) : null}
         {onRequeue ? (
           <div className="flex justify-center pt-1">

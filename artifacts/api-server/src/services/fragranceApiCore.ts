@@ -149,10 +149,15 @@ export function scentFactProfileToDetail(input: {
   const sourceUrl = input.sourceUrl ?? sourceUrls[0] ?? null;
   const hasFragranticaSource = sourceUrls.some((url) => /fragrantica\.com/i.test(url));
   const hasBasenotesSource = sourceUrls.some((url) => /basenotes\.com/i.test(url));
-  const hasDualSourceNotes = flatNotes.length > 0 && hasFragranticaSource && hasBasenotesSource;
+  // Per-source flags reflect data presence, not URL match alone: a probed
+  // source that returned nothing parseable would otherwise flip the row to
+  // Complete on the frontend.
+  const hasFragranticaData = hasFragranticaSource && flatNotes.length > 0;
+  const hasBasenotesData = hasBasenotesSource && flatNotes.length > 0;
+  const hasDualSourceNotes = hasFragranticaData && hasBasenotesData;
   const sourceCoverage = {
-    fragrantica: hasFragranticaSource,
-    basenotes: hasBasenotesSource,
+    fragrantica: hasFragranticaData,
+    basenotes: hasBasenotesData,
     derived_metrics: hasDualSourceNotes ? "complete" : flatNotes.length > 0 ? "partial" : "none",
     complete: hasDualSourceNotes,
   };
