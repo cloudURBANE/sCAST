@@ -1007,7 +1007,7 @@ export default function App() {
   return (
     <div className="scent-app-shell min-h-[100svh] bg-scent-bg selection:bg-scent-accent selection:text-black text-white relative overflow-x-hidden">
       <LavaBackground />
-      <nav className="scent-topbar fixed top-0 left-0 right-0 h-14 sm:h-[72px] z-50 px-3 sm:px-8">
+      <nav className="scent-topbar fixed top-0 left-0 right-0 h-16 sm:h-[72px] z-50 px-3 sm:px-8">
         <div className="max-w-[1760px] mx-auto h-full relative flex items-center justify-center">
           <div className="absolute left-0 top-1/2 -translate-y-1/2 flex items-center gap-3 sm:gap-4">
             {!authToken ? (
@@ -1032,9 +1032,9 @@ export default function App() {
           <div className="flex items-center gap-2 sm:gap-3 pointer-events-none">
             <Wind
               strokeWidth={1.25}
-              className="h-[18px] w-[18px] sm:w-[22px] sm:h-[22px] text-scent-accent drop-shadow-[0_0_10px_rgba(201,139,44,0.22)]"
+              className="w-[19.8px] h-[19.8px] sm:w-[22px] sm:h-[22px] text-scent-accent drop-shadow-[0_0_10px_rgba(201,139,44,0.22)]"
             />
-            <h1 className="scent-brandmark font-serif text-[1rem] sm:text-3xl tracking-[0.14em] uppercase">{APP_BRAND_MARK}</h1>
+            <h1 className="scent-brandmark font-serif text-[1.125rem] sm:text-3xl tracking-[0.14em] uppercase">{APP_BRAND_MARK}</h1>
           </div>
 
           <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-3 sm:gap-4 justify-end">
@@ -1051,10 +1051,10 @@ export default function App() {
         </div>
       </nav>
 
-      <div className="pt-14 sm:pt-[72px]" />
+      <div className="pt-16 sm:pt-[72px]" />
 
       <main className="relative z-10 pb-24 px-4 sm:px-8 max-w-[1760px] mx-auto">
-        <div className="space-y-14 sm:space-y-28 pt-6 sm:pt-14">
+        <div className="space-y-20 sm:space-y-28 pt-10 sm:pt-14">
           <div className="scent-marquee-band scent-full-bleed w-full overflow-hidden py-[17px] sm:py-[18px] flex select-none relative">
             <div key={tickerTrackKey} className="scent-marquee-track-row flex animate-infinite-scroll whitespace-nowrap scent-marquee-text">
               {[...Array(4)].map((_, i) => (
@@ -1072,7 +1072,7 @@ export default function App() {
             </div>
           </div>
 
-          <section className="scent-hero-zone mx-auto w-full max-w-2xl space-y-7 scroll-mt-20 text-center">
+          <section className="scent-hero-zone mx-auto w-full max-w-2xl space-y-7 text-center">
             <h2 className="font-serif italic text-[clamp(2.15rem,7vw,3.8rem)] text-[#fff7ec] leading-[0.98] tracking-normal">
               Find your signature for the current atmosphere.
             </h2>

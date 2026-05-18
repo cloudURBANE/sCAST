@@ -589,7 +589,7 @@ export const FragranceCapture: React.FC<{
   };
 
   return (
-    <div className="glass-shell mx-auto w-full max-w-[28rem] sm:max-w-none min-h-[17rem] sm:min-h-0 rounded-[var(--radius-scent)] relative overflow-hidden">
+    <div className="glass-shell rounded-[var(--radius-scent)] relative overflow-hidden">
       <AnimatePresence>
         {uploading && (
         <motion.div
@@ -597,7 +597,7 @@ export const FragranceCapture: React.FC<{
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.28 }}
-          className="absolute inset-0 min-h-[17rem] max-h-[min(60svh,28rem)] overflow-y-auto bg-black/90 backdrop-blur-xl z-50 flex flex-col items-center justify-center p-8 text-center sm:max-h-none"
+          className="absolute inset-0 bg-black/90 backdrop-blur-xl z-50 flex flex-col items-center justify-center p-8 text-center"
         >
           <motion.div
             animate={
@@ -732,7 +732,7 @@ export const FragranceCapture: React.FC<{
               transition={{ duration: 0.34, ease: [0.22, 1, 0.36, 1] }}
               className="mt-8 pt-6 border-t border-white/10 mx-auto max-w-lg w-full"
             >
-              <div className="flex max-h-[min(42dvh,23rem)] min-h-0 flex-col sm:max-h-[min(48dvh,28rem)] md:max-h-[min(44dvh,29rem)]">
+              <div className="flex max-h-[min(47dvh,26rem)] min-h-0 flex-col sm:max-h-[min(48dvh,28rem)] md:max-h-[min(44dvh,29rem)]">
                 <div className="mb-5 flex shrink-0 justify-center px-1">
                   <p className="text-[9px] uppercase tracking-[0.34em] text-scent-muted font-bold">
                     Archive Matches{' '}
@@ -773,7 +773,7 @@ export const FragranceCapture: React.FC<{
                     ))}
                   </div>
                 </div>
-                <div className="sticky bottom-0 shrink-0 bg-[linear-gradient(180deg,rgba(5,4,3,0)_0%,rgba(5,4,3,0.76)_20%,rgba(5,4,3,0.96)_100%)] pt-4 pb-[max(0.15rem,env(safe-area-inset-bottom))]">
+                <div className="shrink-0 bg-[linear-gradient(180deg,rgba(5,4,3,0)_0%,rgba(5,4,3,0.76)_20%,rgba(5,4,3,0.96)_100%)] pt-4 pb-[max(0.15rem,env(safe-area-inset-bottom))]">
                   <AnimatePresence>
                     {selectedIdx !== null ? (
                       <motion.p
