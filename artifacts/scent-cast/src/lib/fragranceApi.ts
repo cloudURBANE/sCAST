@@ -706,6 +706,79 @@ export function isSourceCoverageComplete(coverage?: SourceCoverage | null): bool
   );
 }
 
+const VERIFIED_SOURCE_PROFILE_COPY = "Verified community-source profile available.";
+const PARTIAL_SOURCE_PROFILE_COPY = "Community-source profile available. Some source data is still pending.";
+
+const ENRICHMENT_STATUS_COPY: Record<string, string> = {
+  not_needed: VERIFIED_SOURCE_PROFILE_COPY,
+  pending: "Enhanced metrics queued.",
+  processing: "Enhanced metrics are being prepared.",
+  completed: "Enhanced metrics available.",
+  failed: "Enhanced metrics unavailable right now.",
+  ignored: "Enhancement not scheduled for this fragrance.",
+};
+
+export type SourceStatusResolution = {
+  hasCoverage: boolean;
+  complete: boolean;
+  badgeLabel: "Complete" | "Partial" | null;
+  summary: string | null;
+  sourceCount: number;
+  sourceCountLabel: string | null;
+  metricsLabel: string | null;
+  enrichmentMessage: string | null;
+  statusText: string | null;
+  shouldShowEnrichmentMessage: boolean;
+};
+
+function enrichmentStatusCopy(enrichment?: FragranceDetail["enrichment"] | null): string | null {
+  const message = enrichment?.message?.trim();
+  if (message) return message;
+  const status = normalizedStatus(enrichment?.status);
+  return status ? ENRICHMENT_STATUS_COPY[status] ?? null : null;
+}
+
+export function resolveSourceStatus(
+  coverage?: SourceCoverage | null,
+  enrichment?: FragranceDetail["enrichment"] | null,
+  emptyFallback: string | null = null,
+): SourceStatusResolution {
+  const hasCoverage = Boolean(coverage && Object.keys(coverage).length > 0);
+  const complete = isSourceCoverageComplete(coverage);
+  const sourceCount =
+    (coverage?.basenotes === true ? 1 : 0) + (coverage?.fragrantica === true ? 1 : 0);
+  const summary = hasCoverage
+    ? complete
+      ? VERIFIED_SOURCE_PROFILE_COPY
+      : PARTIAL_SOURCE_PROFILE_COPY
+    : null;
+  const hasCustomEnrichmentMessage = Boolean(enrichment?.message?.trim());
+  const enrichmentStatus = normalizedStatus(enrichment?.status);
+  const rawEnrichmentMessage = enrichmentStatusCopy(enrichment);
+  const enrichmentMessage =
+    !complete &&
+    !hasCustomEnrichmentMessage &&
+    (enrichmentStatus === "not_needed" || enrichmentStatus === "completed")
+      ? null
+      : rawEnrichmentMessage;
+  const statusText = hasCoverage ? summary : enrichmentMessage ?? emptyFallback;
+
+  return {
+    hasCoverage,
+    complete,
+    badgeLabel: hasCoverage ? (complete ? "Complete" : "Partial") : null,
+    summary,
+    sourceCount,
+    sourceCountLabel: hasCoverage ? `Sources ${sourceCount} of 2` : null,
+    metricsLabel: hasCoverage ? (complete ? "Metrics ready" : "Metrics pending") : null,
+    enrichmentMessage,
+    statusText,
+    shouldShowEnrichmentMessage: Boolean(
+      hasCoverage && enrichmentMessage && enrichmentMessage !== summary,
+    ),
+  };
+}
+
 export function isTerminalEnrichmentStatus(value: unknown): boolean {
   const status = normalizedStatus(value);
   return (

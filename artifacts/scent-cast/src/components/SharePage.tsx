@@ -19,8 +19,8 @@ import { APP_BRAND_MARK } from '@/lib/appBrand';
 import { ScentNotesInfographic } from '@/components/ScentNotesInfographic';
 import {
   collectMainAccordDisplayRows,
-  isSourceCoverageComplete,
   normalizeSourceCoverage,
+  resolveSourceStatus,
   type DerivedMetrics,
   type FragranceDetail,
   type SourceCoverage,
@@ -227,22 +227,6 @@ function FragrancePanel({
   );
 }
 
-const ENRICHMENT_STATUS_COPY: Record<string, string> = {
-  not_needed: "Full fragrance intelligence available.",
-  pending: "Enhanced metrics queued.",
-  processing: "Enhanced metrics are being prepared.",
-  completed: "Enhanced metrics available.",
-  failed: "Enhanced metrics unavailable right now.",
-  ignored: "Enhancement not scheduled for this fragrance.",
-};
-
-function enrichmentCopy(enrichment?: FragranceDetail["enrichment"]): string | null {
-  const message = enrichment?.message?.trim();
-  if (message) return message;
-  const status = enrichment?.status?.trim().toLowerCase();
-  return status ? ENRICHMENT_STATUS_COPY[status] ?? null : null;
-}
-
 function SourceStatusPanel({
   coverage,
   enrichment,
@@ -250,48 +234,35 @@ function SourceStatusPanel({
   coverage?: SourceCoverage;
   enrichment?: FragranceDetail["enrichment"];
 }) {
-  const hasCoverage = Boolean(coverage && Object.keys(coverage).length > 0);
-  const enrichmentMessage = enrichmentCopy(enrichment);
+  const sourceStatus = resolveSourceStatus(coverage, enrichment);
 
-  if (!hasCoverage && !enrichmentMessage) return null;
-
-  const complete = isSourceCoverageComplete(coverage);
-  const coverageSummary = complete
-    ? "Full fragrance intelligence available."
-    : "Baseline profile available. Enhanced metrics pending.";
-  const sourceCount =
-    (coverage?.basenotes === true ? 1 : 0) + (coverage?.fragrantica === true ? 1 : 0);
-  const sourceStatus = hasCoverage ? `Sources ${sourceCount} of 2` : null;
-  const derivedStatus = hasCoverage
-    ? complete
-      ? "Metrics ready"
-      : "Metrics pending"
-    : null;
   const badges = [
-    sourceStatus,
-    derivedStatus,
+    sourceStatus.sourceCountLabel,
+    sourceStatus.metricsLabel,
   ].filter((badge): badge is string => Boolean(badge));
+
+  if (!sourceStatus.hasCoverage && !sourceStatus.statusText) return null;
 
   return (
     <FragrancePanel title="Source Status" className="overflow-hidden">
       <div className="space-y-3 px-4 py-4">
         <div className="flex items-center justify-center gap-3">
-          {hasCoverage ? (
+          {sourceStatus.badgeLabel ? (
             <span className={`shrink-0 text-[8px] uppercase tracking-[0.24em] font-bold px-2.5 py-1 border ${
-              complete
+              sourceStatus.complete
                 ? 'border-scent-accent/45 text-scent-accent bg-scent-accent/10'
                 : 'border-white/12 text-white/50 bg-white/[0.04]'
             }`}>
-              {complete ? "Complete" : "Partial"}
+              {sourceStatus.badgeLabel}
             </span>
           ) : null}
           <p className="text-center text-sm italic text-white/62 font-serif leading-relaxed">
-            {hasCoverage ? coverageSummary : enrichmentMessage}
+            {sourceStatus.statusText}
           </p>
         </div>
-        {hasCoverage && enrichmentMessage && enrichmentMessage !== coverageSummary ? (
+        {sourceStatus.shouldShowEnrichmentMessage ? (
           <p className="text-center text-[10px] uppercase tracking-[0.18em] text-white/38 font-bold leading-relaxed">
-            {enrichmentMessage}
+            {sourceStatus.enrichmentMessage}
           </p>
         ) : null}
         {badges.length > 0 ? (

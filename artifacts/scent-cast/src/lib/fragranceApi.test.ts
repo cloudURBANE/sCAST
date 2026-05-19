@@ -11,6 +11,7 @@ import {
   normalizedAccordBarPct,
   requeueFragranceDetails,
   resolveMainAccordChartRows,
+  resolveSourceStatus,
   searchFragrances,
 } from "./fragranceApi.ts";
 
@@ -144,6 +145,41 @@ test("normalizeFragranceDetail does not complete without both source signals", (
   assert.equal(detail.source_coverage?.fragrantica, true);
   assert.equal(detail.source_coverage?.derived_metrics, "partial");
   assert.equal(isFragranceDetailEffectivelyComplete(detail), false);
+});
+
+test("resolveSourceStatus keeps stale complete flags partial without both sources", () => {
+  const detail = normalizeFragranceDetail({
+    name: "Sauvage",
+    house: "Dior",
+    source_coverage: {
+      basenotes: false,
+      fragrantica: false,
+      complete: true,
+      derived_metrics: "complete",
+    },
+    enrichment: {
+      status: "not_needed",
+      message: "Provisional fragrance profile available.",
+    },
+    derived_metrics: {
+      headline: { summary: "Fresh spicy amber woods." },
+    },
+  });
+  const status = resolveSourceStatus(detail.source_coverage, detail.enrichment);
+
+  assert.equal(detail.source_coverage?.complete, false);
+  assert.equal(status.complete, false);
+  assert.equal(status.badgeLabel, "Partial");
+  assert.equal(status.statusText, "Community-source profile available. Some source data is still pending.");
+  assert.equal(status.sourceCountLabel, "Sources 0 of 2");
+  assert.equal(status.metricsLabel, "Metrics pending");
+
+  const staleTerminalStatus = resolveSourceStatus(detail.source_coverage, {
+    status: "not_needed",
+  });
+
+  assert.equal(staleTerminalStatus.enrichmentMessage, null);
+  assert.equal(staleTerminalStatus.shouldShowEnrichmentMessage, false);
 });
 
 test("normalizeFragranceDetail completes with both source signals and complete metrics", () => {
