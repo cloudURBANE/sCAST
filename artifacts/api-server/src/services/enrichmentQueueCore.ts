@@ -6,6 +6,8 @@
  * live in enrichmentQueue.ts and delegate all decision logic to this file.
  *
  * Pass 1 scope: foundation only. No worker, no automatic enqueue hook.
+ * Failed jobs reopen to pending on a fresh enqueue request, on status lookup
+ * once backoff has elapsed, or via the background sweeper in enrichmentQueue.ts.
  */
 
 export const ENRICHMENT_JOB_STATUSES = [
@@ -109,6 +111,8 @@ export type UpdateJobValues = {
   status?: EnrichmentJobStatus;
   failedAt?: Date | null;
   lastError?: string | null;
+  claimedAt?: Date | null;
+  claimExpiresAt?: Date | null;
   metadataJson: Record<string, unknown> | null;
 };
 
@@ -235,6 +239,42 @@ export function resolveJobType(input: EnrichmentJobInput): EnrichmentJobType {
   return cleanString(input.fgUrl) ? "detail_only" : "identity_and_detail";
 }
 
+// --- failed-job reopen -------------------------------------------------------
+
+/** True when a stale `failed` row is eligible for automatic reopen to pending. */
+export function shouldReopenFailedEnrichmentJob(
+  status: string,
+  failedAt: Date | null | undefined,
+  updatedAt: Date | null | undefined,
+  retryAfterMs: number,
+  nowMs = Date.now(),
+): boolean {
+  if (status !== "failed") return false;
+  if (!Number.isFinite(retryAfterMs) || retryAfterMs <= 0) return false;
+  const anchor = failedAt ?? updatedAt;
+  if (!anchor) return false;
+  return nowMs - anchor.getTime() >= retryAfterMs;
+}
+
+/** Single source of truth for reopening a failed job (enqueue, sweeper, status poll). */
+export function failedJobReopenPatch(now: Date): {
+  status: "pending";
+  failedAt: null;
+  lastError: null;
+  claimedAt: null;
+  claimExpiresAt: null;
+  updatedAt: Date;
+} {
+  return {
+    status: "pending",
+    failedAt: null,
+    lastError: null,
+    claimedAt: null,
+    claimExpiresAt: null,
+    updatedAt: now,
+  };
+}
+
 // --- upsert decision ---------------------------------------------------------
 
 /** Fill from the new value only when the existing value is missing — never
@@ -330,9 +370,7 @@ export function computeEnrichmentUpsert(
       requestedCount: existing.requestedCount + 1,
       updatedAt: now,
       lastRequestedAt: now,
-      ...(shouldReopenFailed
-        ? { status: "pending" as const, failedAt: null, lastError: null }
-        : {}),
+      ...(shouldReopenFailed ? failedJobReopenPatch(now) : {}),
       metadataJson: mergedMetadata,
     },
   };

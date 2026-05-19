@@ -8,16 +8,21 @@
  * Pass 1 scope: foundation only. `enqueueEnrichmentJob` is the integration seam
  * a later pass will call once the repo exposes a real "incomplete result /
  * source coverage" signal. No production endpoint calls it automatically yet.
+ *
+ * Stale `failed` jobs are proactively reopened to `pending` via a background
+ * sweeper and lazily on `getEnrichmentStatus` once backoff has elapsed.
  */
 import { db } from "@workspace/db";
 import { enrichmentJobsTable, type EnrichmentJob } from "@workspace/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import {
   buildJobKey,
   canonicalizeFgUrl,
   computeEnrichmentUpsert,
   EnrichmentQueueError,
+  failedJobReopenPatch,
+  shouldReopenFailedEnrichmentJob,
   statusMessage,
   TERMINAL_SKIP_STATUSES,
   type EnrichmentJobInput,
@@ -30,6 +35,26 @@ export type { EnrichmentJobInput } from "./enrichmentQueueCore";
 
 /** Postgres unique-constraint violation. */
 const PG_UNIQUE_VIOLATION = "23505";
+
+const DEFAULT_FAILED_RETRY_MS = 6 * 60 * 60 * 1000;
+const DEFAULT_FAILED_RETRY_SWEEP_MS = 15 * 60 * 1000;
+
+/** Backoff before a `failed` job is automatically reopened; `<= 0` disables retry. */
+export function failedEnrichmentRetryMs(): number {
+  const raw = process.env.ENRICHMENT_FAILED_RETRY_MS;
+  if (!raw) return DEFAULT_FAILED_RETRY_MS;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) return DEFAULT_FAILED_RETRY_MS;
+  return parsed;
+}
+
+function failedEnrichmentRetrySweepMs(): number {
+  const raw = process.env.ENRICHMENT_FAILED_RETRY_SWEEP_MS;
+  if (!raw) return DEFAULT_FAILED_RETRY_SWEEP_MS;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_FAILED_RETRY_SWEEP_MS;
+  return parsed;
+}
 
 function toExistingJobRow(row: EnrichmentJob): ExistingJobRow {
   return {
@@ -57,6 +82,88 @@ async function findJobByKey(jobKey: string): Promise<EnrichmentJob | null> {
     .where(eq(enrichmentJobsTable.jobKey, jobKey))
     .limit(1);
   return rows[0] ?? null;
+}
+
+/**
+ * Reopen eligible stale `failed` rows to `pending`. Returns the number reopened.
+ */
+export async function reopenStaleFailedEnrichmentJobs(opts?: {
+  now?: Date;
+  limit?: number;
+}): Promise<number> {
+  const retryAfterMs = failedEnrichmentRetryMs();
+  if (retryAfterMs <= 0) return 0;
+
+  const now = opts?.now ?? new Date();
+  const limit = opts?.limit ?? 50;
+
+  const rows = await db
+    .select()
+    .from(enrichmentJobsTable)
+    .where(eq(enrichmentJobsTable.status, "failed"))
+    .limit(limit);
+
+  const eligibleIds = rows
+    .filter((row) =>
+      shouldReopenFailedEnrichmentJob(
+        row.status,
+        row.failedAt,
+        row.updatedAt,
+        retryAfterMs,
+        now.getTime(),
+      ),
+    )
+    .map((row) => row.id);
+
+  if (eligibleIds.length === 0) return 0;
+
+  await db
+    .update(enrichmentJobsTable)
+    .set(failedJobReopenPatch(now))
+    .where(inArray(enrichmentJobsTable.id, eligibleIds));
+
+  logger.info({ count: eligibleIds.length }, "reopened stale failed enrichment jobs");
+  return eligibleIds.length;
+}
+
+/** Reopen a single `failed` row when backoff has elapsed; otherwise return as-is. */
+export async function maybeReopenFailedEnrichmentJob(
+  job: EnrichmentJob,
+): Promise<EnrichmentJob> {
+  const retryAfterMs = failedEnrichmentRetryMs();
+  if (
+    !shouldReopenFailedEnrichmentJob(
+      job.status,
+      job.failedAt,
+      job.updatedAt,
+      retryAfterMs,
+    )
+  ) {
+    return job;
+  }
+
+  const now = new Date();
+  const [updated] = await db
+    .update(enrichmentJobsTable)
+    .set(failedJobReopenPatch(now))
+    .where(eq(enrichmentJobsTable.jobKey, job.jobKey))
+    .returning();
+
+  return updated ?? job;
+}
+
+/** Background sweeper; no-op when automatic retry is disabled. */
+export function startEnrichmentFailedJobRetrySweeper(): void {
+  const retryAfterMs = failedEnrichmentRetryMs();
+  if (retryAfterMs <= 0) return;
+
+  const sweepMs = failedEnrichmentRetrySweepMs();
+  const timer = setInterval(() => {
+    reopenStaleFailedEnrichmentJobs().catch((err) => {
+      logger.error({ err }, "enrichment failed job retry sweeper error");
+    });
+  }, sweepMs);
+  timer.unref();
 }
 
 export type UpsertEnrichmentJobResult = {
@@ -194,11 +301,13 @@ export async function getEnrichmentStatus(
     };
   }
 
+  const resolved = await maybeReopenFailedEnrichmentJob(job);
+
   return {
-    status: job.status,
-    requested_count: job.requestedCount,
-    last_requested_at: job.lastRequestedAt.toISOString(),
-    job_key: job.jobKey,
-    message: statusMessage(job.status),
+    status: resolved.status,
+    requested_count: resolved.requestedCount,
+    last_requested_at: resolved.lastRequestedAt.toISOString(),
+    job_key: resolved.jobKey,
+    message: statusMessage(resolved.status),
   };
 }

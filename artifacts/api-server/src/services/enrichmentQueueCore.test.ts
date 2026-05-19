@@ -5,9 +5,11 @@ import {
   canonicalizeFgUrl,
   computeEnrichmentUpsert,
   EnrichmentQueueError,
+  failedJobReopenPatch,
   normalizeText,
   resolveJobType,
   resolveQueryText,
+  shouldReopenFailedEnrichmentJob,
   statusMessage,
   type EnrichmentJobInput,
   type ExistingJobRow,
@@ -199,10 +201,92 @@ test("duplicate request reopens a failed job for a future worker retry", () => {
   };
   const plan = computeEnrichmentUpsert(failed, { query: "Dior Sauvage" }, NOW_2);
   if (plan.action !== "update") throw new Error("expected update");
-  assert.equal(plan.values.status, "pending");
-  assert.equal(plan.values.failedAt, null);
-  assert.equal(plan.values.lastError, null);
+  assert.deepEqual(failedJobReopenPatch(NOW_2), {
+    status: plan.values.status,
+    failedAt: plan.values.failedAt,
+    lastError: plan.values.lastError,
+    claimedAt: plan.values.claimedAt,
+    claimExpiresAt: plan.values.claimExpiresAt,
+    updatedAt: plan.values.updatedAt,
+  });
   assert.equal(plan.values.requestedCount, 5);
+});
+
+test("shouldReopenFailedEnrichmentJob: stale failures are eligible", () => {
+  const retryAfterMs = 60 * 60 * 1000;
+  const now = Date.parse("2026-05-14T20:00:00.000Z");
+  assert.equal(
+    shouldReopenFailedEnrichmentJob(
+      "failed",
+      new Date(now - retryAfterMs - 5_000),
+      new Date(now - retryAfterMs - 5_000),
+      retryAfterMs,
+      now,
+    ),
+    true,
+  );
+  assert.equal(
+    shouldReopenFailedEnrichmentJob(
+      "failed",
+      new Date(now - retryAfterMs + 5_000),
+      new Date(now - retryAfterMs + 5_000),
+      retryAfterMs,
+      now,
+    ),
+    false,
+  );
+  assert.equal(
+    shouldReopenFailedEnrichmentJob(
+      "pending",
+      new Date(now - retryAfterMs - 5_000),
+      new Date(now - retryAfterMs - 5_000),
+      retryAfterMs,
+      now,
+    ),
+    false,
+  );
+  assert.equal(shouldReopenFailedEnrichmentJob("failed", null, null, retryAfterMs, now), false);
+});
+
+test("shouldReopenFailedEnrichmentJob: falls back to updatedAt when failedAt is null", () => {
+  const retryAfterMs = 60 * 60 * 1000;
+  const now = Date.parse("2026-05-14T20:00:00.000Z");
+  assert.equal(
+    shouldReopenFailedEnrichmentJob(
+      "failed",
+      null,
+      new Date(now - retryAfterMs - 5_000),
+      retryAfterMs,
+      now,
+    ),
+    true,
+  );
+});
+
+test("failedJobReopenPatch clears failure and claim fields", () => {
+  const now = new Date("2026-05-14T20:00:00.000Z");
+  assert.deepEqual(failedJobReopenPatch(now), {
+    status: "pending",
+    failedAt: null,
+    lastError: null,
+    claimedAt: null,
+    claimExpiresAt: null,
+    updatedAt: now,
+  });
+});
+
+test("shouldReopenFailedEnrichmentJob: disabled when retryAfterMs <= 0", () => {
+  const now = Date.parse("2026-05-14T20:00:00.000Z");
+  assert.equal(
+    shouldReopenFailedEnrichmentJob(
+      "failed",
+      new Date(now - 999_999_999),
+      new Date(now - 999_999_999),
+      0,
+      now,
+    ),
+    false,
+  );
 });
 
 test("metadata is shallow-merged across requests", () => {
