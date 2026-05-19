@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import healthRouter from "./health";
 import scentRouter from "./scent";
-import authRouter from "./auth";
+import adminRouter from "./admin";
 import oauthRouter from "./oauth";
 import wardrobeRouter from "./wardrobe";
 import shareRouter from "./share";
@@ -16,7 +16,7 @@ const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use(scentRouter);
-router.use(authRouter);
+router.use(adminRouter);
 router.use(oauthRouter);
 router.use(wardrobeRouter);
 router.use(shareRouter);

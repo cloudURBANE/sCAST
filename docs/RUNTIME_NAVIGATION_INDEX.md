@@ -30,7 +30,8 @@ If you need to understand request flow quickly, read in this order:
 
 Mounted under `/api` unless noted:
 
-- Auth: `POST /auth/login`, `GET /auth/google`, `GET /auth/google/callback`
+- Auth: `GET /auth/google`, `GET /auth/google/callback`
+- Admin ops: `POST /admin/wardrobe/rebuild` (`x-admin-secret`)
 - Wardrobe: `GET/POST /wardrobe`, `POST /wardrobe/rebuild`, `PATCH /wardrobe/:fragranceId/visibility`, `PATCH /wardrobe/:id`, `DELETE /wardrobe/:id`
 - Share: `GET /share/:userRef`, `GET/POST /share-settings`
 - Scent/weather/images: `GET /weather`, `POST /search-scent`, `POST /scent-profile`, `POST /refresh-image`
@@ -72,7 +73,7 @@ Main chain:
 ## 6) Fast Triage By Symptom
 
 - OAuth/login issues:
-  - `routes/oauth.ts`, `routes/auth.ts`, `App.tsx` token parse/restore logic
+  - `routes/oauth.ts`, `App.tsx` token parse/restore logic
 - Wardrobe item missing or wrong:
   - `routes/wardrobe.ts` (UUID-vs-payload-id fallback), `services/fragrancePayload.ts`
 - Wrong image on card/share:
