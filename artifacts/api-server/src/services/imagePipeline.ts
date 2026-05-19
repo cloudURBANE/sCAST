@@ -410,6 +410,18 @@ async function processCandidate(input: {
         removeBgReason: optimized.removeBgReason,
       });
 
+      if (!recorded.isPersisted) {
+        logger.warn(
+          {
+            lookupKey: input.lookupKey,
+            sourceUrlHash: input.source.sourceUrlHash,
+            sourceProvider: input.sourceProvider,
+            storagePath: recorded.storagePath,
+          },
+          "[imagePipeline] image_cache row not persisted (DB unavailable); next request for this source will re-run Serper + Poof + sharp + upload",
+        );
+      }
+
       return { ...recorded, sourceProvider: input.sourceProvider, pipelineVersion: IMAGE_PIPELINE_VERSION, removeBgStatus: optimized.removeBgStatus, removeBgReason: optimized.removeBgReason };
     } catch (err: any) {
       if (err instanceof ImageObjectStorageConfigurationError) throw err;

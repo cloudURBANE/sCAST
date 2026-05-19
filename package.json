@@ -12,7 +12,8 @@
     "build:web": "corepack pnpm --filter @workspace/scent-cast run build",
     "start": "corepack pnpm --filter @workspace/api-server run start",
     "typecheck:libs": "tsc --build",
-    "typecheck": "corepack pnpm run typecheck:libs && corepack pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck"
+    "typecheck": "corepack pnpm run typecheck:libs && corepack pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
+    "test": "corepack pnpm -r --if-present run test"
   },
   "private": true,
   "devDependencies": {

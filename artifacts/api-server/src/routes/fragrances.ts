@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { AuthRequest, requireAuth } from "../middlewares/auth";
 import { db } from "@workspace/db";
 import { affiliateLinksTable, userFragrancesTable } from "@workspace/db/schema";
 import { eq, sql } from "drizzle-orm";
@@ -145,12 +146,12 @@ function buyLinkResponse(
   };
 }
 
-async function findFragranceRow(id: string) {
+async function findFragranceRow(userId: string, id: string) {
   if (isUuidish(id)) {
     const byDbId = await db
       .select()
       .from(userFragrancesTable)
-      .where(eq(userFragrancesTable.id, id))
+      .where(sql`${userFragrancesTable.id} = ${id} AND ${userFragrancesTable.userId} = ${userId}`)
       .limit(1);
 
     if (byDbId[0]) return byDbId[0];
@@ -159,7 +160,7 @@ async function findFragranceRow(id: string) {
   const byPayloadId = await db
     .select()
     .from(userFragrancesTable)
-    .where(sql`${userFragrancesTable.fragranceData}->>'id' = ${id}`)
+    .where(sql`${userFragrancesTable.userId} = ${userId} AND ${userFragrancesTable.fragranceData}->>'id' = ${id}`)
     .limit(1);
 
   return byPayloadId[0] ?? null;
@@ -362,9 +363,13 @@ function findAmazonProductUrl(value: unknown): string | null {
   return null;
 }
 
-router.get("/fragrances/:id/buy-link", async (req, res) => {
+router.get("/fragrances/:id/buy-link", requireAuth, async (req: AuthRequest, res) => {
   try {
-    const fragrance = await findFragranceRow(req.params.id);
+    if (!req.user) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+    const fragrance = await findFragranceRow(req.user.id, req.params.id as string);
     if (!fragrance) {
       res.status(404).json(buyLinkResponse("rakuten", "unavailable", undefined, "FRAGRANCE_NOT_FOUND"));
       return;

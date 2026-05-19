@@ -6,6 +6,14 @@ import { eq } from "drizzle-orm";
 const router = Router();
 
 router.post("/auth/login", async (req, res) => {
+  const adminSecret = process.env.ADMIN_SECRET;
+  const providedSecret = req.headers["x-admin-secret"];
+
+  if (!adminSecret || providedSecret !== adminSecret) {
+    res.status(401).json({ error: "Unauthorized: Admin secret required for legacy login" });
+    return;
+  }
+
   const { email } = req.body as { email?: string };
   if (!email || !email.trim()) {
     res.status(400).json({ error: "Email is required" });

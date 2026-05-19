@@ -18,6 +18,15 @@ import sharp from "sharp";
  *   - If decoding fails for any reason, conservatively report "not empty" so
  *     this guard never causes a false-positive fallback on healthy output.
  *
+ * Threshold note: `alpha.mean` is the 0–255 average over the decoded alpha
+ * channel (sharp's `stats()` reports raw 8-bit values, not normalized 0–1).
+ * Real packshots — even ones with generous transparent padding — measure
+ * `alpha.mean` ≈ 60–100. "Ghost" Poof outputs (a barely-visible silhouette of
+ * the bottle that escapes the old `<= 0.5` guard) measure `alpha.mean` ≈ 1–4.
+ * `<= 5.0` rejects ghosts while leaving a wide safety margin over real
+ * subjects. Keep this number in lockstep with `packshotTrim.test.ts`'s
+ * subject/opaque fixtures so the guard contract stays test-visible.
+ *
  * Kept in a pure, dependency-light module so the test runner can load it
  * without pulling axios / form-data / pino transitively.
  */
@@ -28,7 +37,7 @@ export async function isEffectivelyTransparent(buffer: Buffer): Promise<boolean>
     const stats = await sharp(buffer).stats();
     const alpha = stats.channels[stats.channels.length - 1];
     if (!alpha) return false;
-    return alpha.max <= 4 || alpha.mean <= 0.5;
+    return alpha.max <= 4 || alpha.mean <= 5.0;
   } catch {
     return false;
   }

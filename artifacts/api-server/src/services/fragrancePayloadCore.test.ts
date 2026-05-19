@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  chooseHydratedImageUrl,
   CURRENT_VAULT_SCHEMA_VERSION,
   isLegacyVaultRow,
   stampVaultSchemaVersion,
@@ -60,4 +61,25 @@ test("stampVaultSchemaVersion preserves every other field, including falsy ones"
   for (const key of Object.keys(input) as (keyof typeof input)[]) {
     assert.deepEqual(stamped[key], input[key]);
   }
+});
+
+test("chooseHydratedImageUrl prefers a fresh shared image over a usable stored row image", () => {
+  assert.equal(
+    chooseHydratedImageUrl(
+      "https://cdn.example.com/fresh.webp",
+      "https://cdn.example.com/stale.webp",
+    ),
+    "https://cdn.example.com/fresh.webp",
+  );
+});
+
+test("chooseHydratedImageUrl falls back to the stored row image when shared lookup misses", () => {
+  assert.equal(
+    chooseHydratedImageUrl(null, "https://cdn.example.com/current.webp"),
+    "https://cdn.example.com/current.webp",
+  );
+});
+
+test("chooseHydratedImageUrl returns empty when neither source has an image", () => {
+  assert.equal(chooseHydratedImageUrl("", "   "), "");
 });

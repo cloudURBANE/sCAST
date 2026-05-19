@@ -1,9 +1,9 @@
 import { Router } from "express";
+import { AuthRequest, requireAuth } from "../middlewares/auth";
 import { db } from "@workspace/db";
 import {
   globalFragrancesTable,
   imageCacheTable,
-  usersTable,
   userFragrancesTable,
 } from "@workspace/db/schema";
 import { and, eq, sql } from "drizzle-orm";
@@ -18,26 +18,11 @@ import {
   sanitizeFragrance,
 } from "../services/fragrancePayload";
 import { assertNoPersistedBase64Image } from "../services/persistenceGuards";
-import { persistableImageReference } from "../services/imageReference";
+import { persistableImageReference, usableImageUrlForResponse } from "../services/imageReference";
 import { deleteCachedImage } from "../services/firebaseCache";
 import { getImageObjectStorage } from "../services/imageObjectStorage";
 
 const router = Router();
-
-async function getUserByToken(token: string) {
-  const users = await db
-    .select()
-    .from(usersTable)
-    .where(eq(usersTable.token, token as any))
-    .limit(1);
-  return users[0] ?? null;
-}
-
-function getToken(req: any): string | null {
-  const auth = req.headers["authorization"] as string | undefined;
-  if (auth?.startsWith("Bearer ")) return auth.slice(7);
-  return null;
-}
 
 async function findUserRowByClientId(userId: string, clientId: string) {
   const rows = await db
@@ -51,12 +36,8 @@ async function findUserRowByClientId(userId: string, clientId: string) {
   return rows[0] ?? null;
 }
 
-router.get("/wardrobe", async (req, res) => {
-  const token = getToken(req);
-  if (!token) { res.status(401).json({ error: "Unauthorized" }); return; }
-
-  const user = await getUserByToken(token);
-  if (!user) { res.status(401).json({ error: "Invalid token" }); return; }
+router.get("/wardrobe", requireAuth, async (req: AuthRequest, res) => {
+  const user = req.user!;
 
   const rows = await db
     .select()
@@ -74,12 +55,8 @@ router.get("/wardrobe", async (req, res) => {
   res.json(fragrances);
 });
 
-router.post("/wardrobe", async (req, res) => {
-  const token = getToken(req);
-  if (!token) { res.status(401).json({ error: "Unauthorized" }); return; }
-
-  const user = await getUserByToken(token);
-  if (!user) { res.status(401).json({ error: "Invalid token" }); return; }
+router.post("/wardrobe", requireAuth, async (req: AuthRequest, res) => {
+  const user = req.user!;
 
   const fragrance = req.body;
   if (!fragrance || !fragrance.id) {
@@ -133,12 +110,8 @@ router.post("/wardrobe", async (req, res) => {
  * Display sizing of bottle images is purely client-side CSS; rebuild updates stored
  * URLs and profile fields, not bitmap dimensions in the browser.
  */
-router.post("/wardrobe/rebuild", async (req, res) => {
-  const token = getToken(req);
-  if (!token) { res.status(401).json({ error: "Unauthorized" }); return; }
-
-  const user = await getUserByToken(token);
-  if (!user) { res.status(401).json({ error: "Invalid token" }); return; }
+router.post("/wardrobe/rebuild", requireAuth, async (req: AuthRequest, res) => {
+  const user = req.user!;
 
   const rows = await db
     .select()
@@ -172,7 +145,6 @@ router.post("/wardrobe/rebuild", async (req, res) => {
           perfumer:
             (typeof data.perfumer === "string" && data.perfumer) ||
             (typeof data.product?.perfumer === "string" ? data.product.perfumer : undefined),
-          imageUrl: typeof data.imageUrl === "string" ? data.imageUrl : undefined,
         },
         // B2: never let a substring catalog match swap the user's fragrance
         // for a different product during rebuild.
@@ -188,7 +160,7 @@ router.post("/wardrobe/rebuild", async (req, res) => {
       const flat = flattenProfile(profile);
       const rebuiltName = typeof flat.name === "string" && flat.name.trim() ? flat.name : name;
       const rebuiltBrand = typeof flat.brand === "string" && flat.brand.trim() ? flat.brand : brand;
-      const flatImageUrl = typeof flat.imageUrl === "string" ? flat.imageUrl : "";
+      const flatImageUrl = await usableImageUrlForResponse(flat.imageUrl);
       const merged = sanitizeFragrance({
         ...data,
         ...flat,
@@ -201,9 +173,9 @@ router.post("/wardrobe/rebuild", async (req, res) => {
           name: rebuiltName,
           brand: rebuiltBrand,
         },
-        // Don't overwrite a real stored URL with an empty one if the rebuild
-        // didn't manage to resolve a fresh image (e.g. metadata/object cache miss).
-        imageUrl: flatImageUrl || (typeof data.imageUrl === "string" ? data.imageUrl : ""),
+        // Rebuild must not preserve a wrong-but-usable row URL. If the fresh
+        // catalog/cache/profile pass cannot resolve an image, clear it.
+        imageUrl: flatImageUrl ?? "",
         id: typeof data.id === "string" ? data.id : r.id,
         season: typeof data.season === "string" && data.season ? data.season : "Universal",
         intents: data.intents,
@@ -238,29 +210,33 @@ function isUuidish(value: string): boolean {
 }
 
 async function findUserRow(userId: string, idParam: string) {
+  if (isUuidish(idParam)) {
+    const rows = await db
+      .select()
+      .from(userFragrancesTable)
+      .where(and(
+        eq(userFragrancesTable.id, idParam as any),
+        eq(userFragrancesTable.userId, userId),
+      ))
+      .limit(1);
+    if (rows[0]) return rows[0];
+  }
+
   const rows = await db
     .select()
     .from(userFragrancesTable)
-    .where(eq(userFragrancesTable.userId, userId));
-
-  if (isUuidish(idParam)) {
-    const byDbId = rows.find(r => r.id === idParam);
-    if (byDbId) return byDbId;
-  }
-  return rows.find(r => {
-    const data = r.fragranceData as any;
-    return data?.id === idParam;
-  });
+    .where(and(
+      eq(userFragrancesTable.userId, userId),
+      sql`${userFragrancesTable.fragranceData}->>'id' = ${idParam}`,
+    ))
+    .limit(1);
+  return rows[0] ?? null;
 }
 
-router.patch("/wardrobe/:fragranceId/visibility", async (req, res) => {
-  const token = getToken(req);
-  if (!token) { res.status(401).json({ error: "Unauthorized" }); return; }
+router.patch("/wardrobe/:fragranceId/visibility", requireAuth, async (req: AuthRequest, res) => {
+  const user = req.user!;
 
-  const user = await getUserByToken(token);
-  if (!user) { res.status(401).json({ error: "Invalid token" }); return; }
-
-  const { fragranceId } = req.params;
+  const fragranceId = req.params.fragranceId as string;
   const { shareHidden } = req.body as { shareHidden?: boolean };
   if (typeof shareHidden !== "boolean") {
     res.status(400).json({ error: "shareHidden (boolean) is required" });
@@ -277,7 +253,10 @@ router.patch("/wardrobe/:fragranceId/visibility", async (req, res) => {
   await db
     .update(userFragrancesTable)
     .set({ fragranceData: updated as any })
-    .where(eq(userFragrancesTable.id, match.id));
+    .where(and(
+      eq(userFragrancesTable.id, match.id),
+      eq(userFragrancesTable.userId, user.id),
+    ));
 
   res.json({ id: fragranceId, shareHidden });
 });
@@ -286,18 +265,8 @@ router.patch("/wardrobe/:fragranceId/visibility", async (req, res) => {
  * Merge the latest bottle image from the global catalog / cache into this vault row.
  * Use after `/api/refresh-image` so the client does not rely on ephemeral local state.
  */
-router.patch("/wardrobe/:id", async (req, res) => {
-  const token = getToken(req);
-  if (!token) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
-
-  const user = await getUserByToken(token);
-  if (!user) {
-    res.status(401).json({ error: "Invalid token" });
-    return;
-  }
+router.patch("/wardrobe/:id", requireAuth, async (req: AuthRequest, res) => {
+  const user = req.user!;
 
   const { syncImageFromCatalog, imageUrl, imageAdjustment } = req.body as {
     syncImageFromCatalog?: boolean;
@@ -323,7 +292,7 @@ router.patch("/wardrobe/:id", async (req, res) => {
     return;
   }
 
-  const match = await findUserRow(user.id, req.params.id);
+  const match = await findUserRow(user.id, req.params.id as string);
   if (!match) {
     res.status(404).json({ error: "Fragrance not found" });
     return;
@@ -368,20 +337,19 @@ router.patch("/wardrobe/:id", async (req, res) => {
   await db
     .update(userFragrancesTable)
     .set({ fragranceData: merged as any })
-    .where(eq(userFragrancesTable.id, match.id));
+    .where(and(
+      eq(userFragrancesTable.id, match.id),
+      eq(userFragrancesTable.userId, user.id),
+    ));
 
   const hydrated = normalizeFragrance(await hydrateImageUrl(merged));
   res.json({ ...hydrated, _dbId: match.id });
 });
 
-router.delete("/wardrobe/:id", async (req, res) => {
-  const token = getToken(req);
-  if (!token) { res.status(401).json({ error: "Unauthorized" }); return; }
+router.delete("/wardrobe/:id", requireAuth, async (req: AuthRequest, res) => {
+  const user = req.user!;
 
-  const user = await getUserByToken(token);
-  if (!user) { res.status(401).json({ error: "Invalid token" }); return; }
-
-  const { id } = req.params;
+  const id = req.params.id as string;
 
   const match = await findUserRow(user.id, id);
 

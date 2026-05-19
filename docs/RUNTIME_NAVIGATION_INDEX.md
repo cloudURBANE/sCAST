@@ -36,7 +36,7 @@ Mounted under `/api` unless noted:
 - Scent/weather/images: `GET /weather`, `POST /search-scent`, `POST /scent-profile`, `POST /refresh-image`
 - Image serving/proxy: `GET /image-proxy`, `GET /image-objects/<storagePath>`
 - Monetization: `GET /fragrances/:id/buy-link`
-- Diagnostics: `GET /_debug/wardrobe-audit`, `GET /healthz`
+- Diagnostics: `GET /healthz`; `GET /_debug/wardrobe-audit` is mounted only outside production when `ENABLE_WARDROBE_AUDIT_DEBUG=true`
 - Non-`/api` redirects: `GET /go/cj/:id`, `GET /go/affiliate/:id`
 
 ## 4) Runtime Data Model (Current)

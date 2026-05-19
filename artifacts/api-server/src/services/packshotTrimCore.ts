@@ -5,7 +5,10 @@ export const PACKSHOT_TRIM_VERSION = 4;
 
 const DEFAULT_MAX_INPUT_BYTES = 12 * 1024 * 1024;
 const DEFAULT_MAX_LONG_EDGE = 4096;
-const DEFAULT_TRIM_THRESHOLD = 40;
+// 60 (up from 40) tolerates JPEG edge compression noise around high-contrast
+// packshot borders — the lower value was sampling chroma artefacts inside the
+// "background" ring and leaving a 1–2px white halo around the trimmed bottle.
+const DEFAULT_TRIM_THRESHOLD = 60;
 /**
  * Allow tightly-trimming heavy vendor padding (the bottle itself defines the
  * lower bound — Sharp's color trim stops at the first contrasting pixel, so it

@@ -46,6 +46,13 @@ export type CachedImageReference = {
   backgroundRemoved: boolean;
   removeBgStatus?: RemoveBgStatus | null;
   removeBgReason?: RemoveBgReason | null;
+  /**
+   * True when the reference is backed by a persisted `image_cache` row. False
+   * when the DB was unavailable at write-time and the reference was synthesized
+   * from the input — callers must treat such references as one-shot and expect
+   * the next request for the same source to re-run the full pipeline.
+   */
+  isPersisted: boolean;
 };
 
 let imageCacheMissingWarned = false;
@@ -86,6 +93,7 @@ function rowToReference(row: typeof imageCacheTable.$inferSelect, cached: boolea
     backgroundRemoved: row.backgroundRemoved,
     removeBgStatus: row.removeBgStatus as RemoveBgStatus | null,
     removeBgReason: row.removeBgReason as RemoveBgReason | null,
+    isPersisted: true,
   };
 }
 
@@ -134,6 +142,7 @@ function readyInputToReference(input: {
     backgroundRemoved: input.backgroundRemoved,
     removeBgStatus: input.removeBgStatus ?? null,
     removeBgReason: input.removeBgReason ?? null,
+    isPersisted: false,
   };
 }
 

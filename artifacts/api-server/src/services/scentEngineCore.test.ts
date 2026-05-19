@@ -15,6 +15,7 @@ type CallLog = {
   resolveProcessedFragranceImage: Array<Record<string, unknown>>;
   usableImageUrlForResponse: Array<string | undefined>;
   findDatasetFragrance: Array<[string, string]>;
+  reportNonFatalError: Array<{ area: string; error: unknown; context?: Record<string, unknown> }>;
   parseFragrance: number;
   vectorize: number;
   calculatePerformance: number;
@@ -48,6 +49,7 @@ function makeDeps(over: Partial<ScentEngineDeps> = {}): { deps: ScentEngineDeps;
     resolveProcessedFragranceImage: [],
     usableImageUrlForResponse: [],
     findDatasetFragrance: [],
+    reportNonFatalError: [],
     parseFragrance: 0,
     vectorize: 0,
     calculatePerformance: 0,
@@ -128,6 +130,10 @@ function makeDeps(over: Partial<ScentEngineDeps> = {}): { deps: ScentEngineDeps;
       calls.usableImageUrlForResponse.push(url);
       if (over.usableImageUrlForResponse) return over.usableImageUrlForResponse(url);
       return url ?? null;
+    },
+    reportNonFatalError: (area, error, context) => {
+      calls.reportNonFatalError.push({ area, error, context });
+      over.reportNonFatalError?.(area, error, context);
     },
   };
 
@@ -310,7 +316,7 @@ test("concentrationOverride is applied to the final profile after parse", async 
   assert.equal(result.concentration, "Extrait");
 });
 
-test("saveCatalogEntry rejection is swallowed (non-fatal)", async () => {
+test("saveCatalogEntry rejection is reported and remains non-fatal", async () => {
   const { deps, calls } = makeDeps({
     findDatasetFragrance: () => ({
       name: "Sauvage",
@@ -327,7 +333,13 @@ test("saveCatalogEntry rejection is swallowed (non-fatal)", async () => {
   // Must not throw despite saveCatalogEntry rejecting.
   const result = await buildProfileWithDeps(deps, "Sauvage", "Dior");
   ok(result);
-  assert.equal(calls.saveCatalogEntry.length, 0, "rejection is swallowed before logging"); // never reached the push
+  assert.equal(calls.saveCatalogEntry.length, 0, "rejection happens before success recording");
+  assert.equal(calls.reportNonFatalError.length, 1);
+  assert.equal(calls.reportNonFatalError[0].area, "scentEngine.catalogSave");
+  assert.deepEqual(calls.reportNonFatalError[0].context, {
+    brand: "Dior",
+    name: "Sauvage",
+  });
 });
 
 test("image pipeline: search-query call returns null AND fallback.imageUrl present → second attempt with manual sourceUrl", async () => {
@@ -366,7 +378,7 @@ test("image pipeline: search-query call returns null AND fallback.imageUrl prese
   assert.equal(result.imageUrl, "https://cdn.example.com/fallback.webp");
 });
 
-test("image pipeline: search-query rejection (catch) does not abort buildProfile", async () => {
+test("image pipeline: search-query rejection is reported and does not abort buildProfile", async () => {
   const { deps, calls } = makeDeps({
     findDatasetFragrance: () => ({
       name: "Sauvage",
@@ -386,6 +398,13 @@ test("image pipeline: search-query rejection (catch) does not abort buildProfile
   // Pipeline error swallowed: result has no imageUrl but build still succeeds
   assert.equal(result.imageUrl, undefined);
   assert.equal(calls.vectorize, 1);
+  assert.equal(calls.reportNonFatalError.length, 1);
+  assert.equal(calls.reportNonFatalError[0].area, "scentEngine.imageResolution");
+  assert.deepEqual(calls.reportNonFatalError[0].context, {
+    brand: "Dior",
+    name: "Sauvage",
+    mode: "search",
+  });
 });
 
 test("identity normalization: uses resolveFragranceIdentity output for catalog lookup and search query", async () => {
