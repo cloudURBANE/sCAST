@@ -9,7 +9,7 @@
 | `lib/db` | Current runtime database package | Drizzle schema and Postgres client | Source of truth for schema shape expected by API. No migrations checked in here. |
 | `lib/api-client-react`, `lib/api-zod`, `lib/api-spec` | Generated/supporting code | OpenAPI generated health client/types | Supporting only. Current frontend mostly calls `fetch`/`axios` directly. |
 | `lib/integrations-gemini-ai`, `lib/integrations/gemini_ai_integrations` | Integration libraries | Gemini AI wrappers from scaffold | Not used by current app routes inspected for login/wardrobe/image search. |
-| `scripts` | Utility scripts | `rebuild-user-wardrobe.ts`, hello script, db-ping package | Supporting diagnostics. `rebuild-user-wardrobe.ts` calls live API and can create login rows via `/api/auth/login`. |
+| `scripts` | Utility scripts | `rebuild-user-wardrobe.ts`, hello script, db-ping package | Supporting diagnostics. `rebuild-user-wardrobe.ts` calls `POST /api/admin/wardrobe/rebuild` with `ADMIN_SECRET` (no token minting). |
 | `supabase` | Temp Supabase metadata | `.temp` project/version files | Not schema truth. Do not use `.temp` as recovery input. |
 | `supabase/recovery` | Recovery artifacts | Safe SQL helpers and README created for this task | Helpers only. Primary 1:1 restore is from the old backup dump. |
 | `supabase-clean-backup-20260506-115506` | Old database backup | `full_database_clean.custom.dump`, `full_database_clean.readable.sql` | Best evidence for old data state. Use this for staging clone. Do not commit secrets or expose row values. |

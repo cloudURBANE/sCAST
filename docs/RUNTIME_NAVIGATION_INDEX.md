@@ -30,13 +30,14 @@ If you need to understand request flow quickly, read in this order:
 
 Mounted under `/api` unless noted:
 
-- Auth: `POST /auth/login`, `GET /auth/google`, `GET /auth/google/callback`
+- Auth: `GET /auth/google`, `GET /auth/google/callback`
+- Admin ops: `POST /admin/wardrobe/rebuild` (`x-admin-secret`)
 - Wardrobe: `GET/POST /wardrobe`, `POST /wardrobe/rebuild`, `PATCH /wardrobe/:fragranceId/visibility`, `PATCH /wardrobe/:id`, `DELETE /wardrobe/:id`
 - Share: `GET /share/:userRef`, `GET/POST /share-settings`
 - Scent/weather/images: `GET /weather`, `POST /search-scent`, `POST /scent-profile`, `POST /refresh-image`
 - Image serving/proxy: `GET /image-proxy`, `GET /image-objects/<storagePath>`
 - Monetization: `GET /fragrances/:id/buy-link`
-- Diagnostics: `GET /healthz`; `GET /_debug/wardrobe-audit` is mounted only outside production when `ENABLE_WARDROBE_AUDIT_DEBUG=true`
+- Diagnostics: `GET /healthz`
 - Non-`/api` redirects: `GET /go/cj/:id`, `GET /go/affiliate/:id`
 
 ## 4) Runtime Data Model (Current)
@@ -72,7 +73,7 @@ Main chain:
 ## 6) Fast Triage By Symptom
 
 - OAuth/login issues:
-  - `routes/oauth.ts`, `routes/auth.ts`, `App.tsx` token parse/restore logic
+  - `routes/oauth.ts`, `App.tsx` token parse/restore logic
 - Wardrobe item missing or wrong:
   - `routes/wardrobe.ts` (UUID-vs-payload-id fallback), `services/fragrancePayload.ts`
 - Wrong image on card/share:

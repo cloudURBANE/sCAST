@@ -33,6 +33,7 @@ Secret values are intentionally omitted. This table lists names, purpose, and fa
 | `AI_INTEGRATIONS_GEMINI_BASE_URL` | Gemini integration libs | Backend library | URL | No | No | Only matters if Gemini libs are imported. |
 | `REPL_ID` | Vite config optional Replit plugins | Frontend build/dev | Replit ID | No | No | Replit plugin activation only. |
 | `API_BASE_URL` | `scripts/src/rebuild-user-wardrobe.ts` | Script | API base URL | No secret | No | Script calls wrong API. |
+| `ADMIN_SECRET` | `middlewares/adminSecret.ts`, `routes/admin.ts`, `scripts/src/rebuild-user-wardrobe.ts` | Backend + script | Shared secret string | No | Yes for `rebuild-user` script | 401 on admin rebuild; script exits at startup if unset. |
 
 ## Env Source Priority
 

@@ -319,6 +319,7 @@ export const FragranceCapture: React.FC<{
 
     try {
       let nextMatches: FragranceMatch[] = [];
+      let primarySearchError: Error | null = null;
 
       try {
         const searchData = await searchFragrances(targetQuery, { signal: controller.signal });
@@ -337,8 +338,14 @@ export const FragranceCapture: React.FC<{
             };
           })
           .filter((result) => Boolean(result.id || firstString(result.source_url)));
-      } catch (err: any) {
-        if (err.name === 'AbortError') return;
+      } catch (err: unknown) {
+        if (err instanceof Error && err.name === 'AbortError') return;
+        primarySearchError =
+          err instanceof Error ? err : new Error(String(err));
+        console.warn('[FragranceCapture] external fragrance search failed', {
+          query: targetQuery,
+          error: primarySearchError.message,
+        });
       }
 
       if (nextMatches.length === 0) {
@@ -347,17 +354,20 @@ export const FragranceCapture: React.FC<{
       }
 
       setHasSearched(true);
-      setLoadingStatus(
-        nextMatches.length > 0
-          ? "Intelligence Collation Complete."
-          : "No fragrance match found.",
-      );
+      if (nextMatches.length > 0) {
+        setLoadingStatus("Intelligence Collation Complete.");
+      } else if (primarySearchError) {
+        setErrorStatus(primarySearchError.message || 'Search failed.');
+        setLoadingStatus('Search failed.');
+      } else {
+        setLoadingStatus("No fragrance match found.");
+      }
       setMatches(nextMatches);
       setSelectedIdx(nextMatches.length > 0 ? 0 : null);
 
-    } catch (err: any) {
-      if (err.name === 'AbortError') return; // Ignore expected aborts
-      setErrorStatus(err?.message || "Search failed.");
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === 'AbortError') return; // Ignore expected aborts
+      setErrorStatus(err instanceof Error ? err.message : "Search failed.");
     } finally {
       setUploading(false);
     }

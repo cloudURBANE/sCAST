@@ -8,8 +8,8 @@ import {
 } from "@workspace/db/schema";
 import { and, eq, sql } from "drizzle-orm";
 import { resolveSharedImageUrl } from "../services/imageHydration";
-import { buildProfile } from "../services/scentEngine";
-import { flattenProfile, makeLookupKey } from "../services/catalogService";
+import { makeLookupKey } from "../services/catalogService";
+import { rebuildWardrobeForUser } from "../services/wardrobeRebuild";
 import { logger } from "../lib/logger";
 import {
   hydrateImageUrl,
@@ -18,7 +18,7 @@ import {
   sanitizeFragrance,
 } from "../services/fragrancePayload";
 import { assertNoPersistedBase64Image } from "../services/persistenceGuards";
-import { persistableImageReference, usableImageUrlForResponse } from "../services/imageReference";
+import { persistableImageReference } from "../services/imageReference";
 import { deleteCachedImage } from "../services/firebaseCache";
 import { getImageObjectStorage } from "../services/imageObjectStorage";
 
@@ -111,92 +111,8 @@ router.post("/wardrobe", requireAuth, async (req: AuthRequest, res) => {
  * URLs and profile fields, not bitmap dimensions in the browser.
  */
 router.post("/wardrobe/rebuild", requireAuth, async (req: AuthRequest, res) => {
-  const user = req.user!;
-
-  const rows = await db
-    .select()
-    .from(userFragrancesTable)
-    .where(eq(userFragrancesTable.userId, user.id));
-
-  const failures: { id: string; reason: string }[] = [];
-  let rebuilt = 0;
-  let skipped = 0;
-
-  for (const r of rows) {
-    const data = normalizeFragrance(r.fragranceData as Record<string, any>);
-    const name = (data.name as string | undefined) || (data.product?.name as string | undefined);
-    const brand = (data.brand as string | undefined) || (data.product?.brand as string | undefined);
-
-    if (!name || !brand) {
-      skipped++;
-      failures.push({ id: r.id, reason: "missing name/brand" });
-      continue;
-    }
-
-    try {
-      const profile = await buildProfile(
-        name,
-        brand,
-        {
-          notes: Array.isArray(data.notes) ? data.notes : undefined,
-          family: typeof data.family === "string" ? data.family : undefined,
-          description: typeof data.description === "string" ? data.description : undefined,
-          pyramid: data.pyramid,
-          perfumer:
-            (typeof data.perfumer === "string" && data.perfumer) ||
-            (typeof data.product?.perfumer === "string" ? data.product.perfumer : undefined),
-        },
-        // B2: never let a substring catalog match swap the user's fragrance
-        // for a different product during rebuild.
-        { allowCatalogFuzzy: false },
-      );
-
-      if (!("product" in profile)) {
-        skipped++;
-        failures.push({ id: r.id, reason: profile.error });
-        continue;
-      }
-
-      const flat = flattenProfile(profile);
-      const rebuiltName = typeof flat.name === "string" && flat.name.trim() ? flat.name : name;
-      const rebuiltBrand = typeof flat.brand === "string" && flat.brand.trim() ? flat.brand : brand;
-      const flatImageUrl = await usableImageUrlForResponse(flat.imageUrl);
-      const merged = sanitizeFragrance({
-        ...data,
-        ...flat,
-        // Persist the normalized identity so legacy retail-size suffixes do
-        // not keep leaking back into the vault after rebuild.
-        name: rebuiltName,
-        brand: rebuiltBrand,
-        product: {
-          ...(typeof flat.product === "object" && flat.product ? flat.product : {}),
-          name: rebuiltName,
-          brand: rebuiltBrand,
-        },
-        // Rebuild must not preserve a wrong-but-usable row URL. If the fresh
-        // catalog/cache/profile pass cannot resolve an image, clear it.
-        imageUrl: flatImageUrl ?? "",
-        id: typeof data.id === "string" ? data.id : r.id,
-        season: typeof data.season === "string" && data.season ? data.season : "Universal",
-        intents: data.intents,
-        energies: data.energies,
-        shareHidden: data.shareHidden,
-      });
-      assertNoPersistedBase64Image(merged, "user_fragrances.fragrance_data");
-
-      await db
-        .update(userFragrancesTable)
-        .set({ fragranceData: merged as any })
-        .where(eq(userFragrancesTable.id, r.id));
-      rebuilt++;
-    } catch (err: any) {
-      logger.warn({ err: err?.message, id: r.id }, "wardrobe/rebuild: row failed");
-      skipped++;
-      failures.push({ id: r.id, reason: err?.message ?? "rebuild error" });
-    }
-  }
-
-  res.json({ total: rows.length, rebuilt, skipped, failures });
+  const summary = await rebuildWardrobeForUser(req.user!.id);
+  res.json(summary);
 });
 
 /**

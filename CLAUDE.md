@@ -131,7 +131,7 @@ The root `middleware.js` is a Vercel Edge middleware (matcher `/api/:path*`) tha
 
 Google OAuth flow: `GET /api/auth/google` → Google consent → `GET /api/auth/google/callback`. The callback exchanges the code, looks up or creates a `users` row (matched by `oauth_subject` then `email`), and redirects back to the SPA with `?oauth_token=<users.token>&oauth_email=<email>`. The token is **not** a JWT — it's an opaque per-user `uuid` stored in `users.token` (auto-generated via `defaultRandom()`). The SPA reads it from the redirect query and persists it in `localStorage` under `scent_token` (key defined in `App.tsx` as `STORAGE_KEYS.TOKEN`). Protected API routes expect `Authorization: Bearer <users.token>` and look the user up directly by token.
 
-There is also a legacy email-only login at `POST /api/auth/login` (`routes/auth.ts`) that returns the same `users.token` for an email; it is kept for backward compatibility alongside OAuth.
+Ops-only wardrobe rebuild: `POST /api/admin/wardrobe/rebuild` (`routes/admin.ts`) accepts `{ email }` and `x-admin-secret` matching `ADMIN_SECRET`; it never returns bearer tokens or creates users. The `rebuild-user` script uses this route.
 
 ## Environment variables
 

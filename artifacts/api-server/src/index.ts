@@ -3,6 +3,7 @@
 import "./env-bootstrap";
 import app from "./app";
 import { logger } from "./lib/logger";
+import { startEnrichmentFailedJobRetrySweeper } from "./services/enrichmentQueue";
 
 const rawPort = process.env["PORT"];
 
@@ -25,4 +26,5 @@ app.listen(port, "0.0.0.0", (err) => {
   }
 
   logger.info({ port }, "Server listening");
+  startEnrichmentFailedJobRetrySweeper();
 });
