@@ -4,6 +4,7 @@ import { vectorize, calculatePerformance, calculateContext } from "./scentVector
 import { getCatalogEntry, saveCatalogEntry, searchCatalog } from "./catalogService";
 import { resolveProcessedFragranceImage } from "./imagePipeline";
 import { usableImageUrlForResponse } from "./imageHydration";
+import { logger } from "../lib/logger";
 import {
   findDatasetFragrance,
   resolveFragranceIdentity,
@@ -31,6 +32,16 @@ const DEPS: ScentEngineDeps = {
   saveCatalogEntry,
   resolveProcessedFragranceImage,
   usableImageUrlForResponse,
+  reportNonFatalError: (area, error, context) => {
+    logger.warn(
+      {
+        area,
+        err: error,
+        ...context,
+      },
+      "Non-fatal scent engine operation failed",
+    );
+  },
 };
 
 export function searchFragrances(query: string): FragranceData[] {

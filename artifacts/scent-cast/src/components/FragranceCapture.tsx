@@ -197,9 +197,11 @@ async function searchLocalFallback(query: string, signal?: AbortSignal): Promise
     signal,
   });
 
-  const profile = (await res.json().catch(() => ({}))) as Record<string, unknown> & {
-    error?: string;
-  };
+  const profile = await readJsonOrWarn<Record<string, unknown> & { error?: string }>(
+    res,
+    'local fallback search',
+    {},
+  );
 
   if (!res.ok || (typeof profile.error === 'string' && profile.error.trim())) {
     return null;
@@ -216,15 +218,30 @@ async function fetchLocalProfile(query: string, signal?: AbortSignal): Promise<R
     signal,
   });
 
-  const profile = (await res.json().catch(() => ({}))) as Record<string, unknown> & {
-    error?: string;
-  };
+  const profile = await readJsonOrWarn<Record<string, unknown> & { error?: string }>(
+    res,
+    'local profile fetch',
+    {},
+  );
 
   if (!res.ok || (typeof profile.error === 'string' && profile.error.trim())) {
     return null;
   }
 
   return profile;
+}
+
+async function readJsonOrWarn<T>(res: Response, context: string, fallback: T): Promise<T> {
+  try {
+    return (await res.json()) as T;
+  } catch (err) {
+    console.warn(`[FragranceCapture] ${context} returned unreadable JSON`, {
+      status: res.status,
+      statusText: res.statusText,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return fallback;
+  }
 }
 
 function formatGender(value: unknown): string | undefined {
@@ -496,9 +513,11 @@ export const FragranceCapture: React.FC<{
         }),
         signal: controller.signal,
       });
-      let pipelineProfile = (await profileRes.json().catch(() => ({}))) as Record<string, unknown> & {
-        error?: string;
-      };
+      let pipelineProfile = await readJsonOrWarn<Record<string, unknown> & { error?: string }>(
+        profileRes,
+        'image pipeline profile',
+        {},
+      );
       if (!profileRes.ok) {
         throw new Error(
           typeof pipelineProfile.error === 'string' && pipelineProfile.error.trim()

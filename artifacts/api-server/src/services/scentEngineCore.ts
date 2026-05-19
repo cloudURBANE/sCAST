@@ -88,6 +88,11 @@ export interface ScentEngineDeps {
     opts: ResolveImageOpts,
   ) => Promise<ProcessedImageRef | null>;
   usableImageUrlForResponse: (url?: string) => Promise<string | null>;
+  reportNonFatalError?: (
+    area: string,
+    error: unknown,
+    context?: Record<string, unknown>,
+  ) => void;
 }
 
 export interface BuildProfileFallback {
@@ -184,6 +189,11 @@ export async function buildProfileWithDeps(
   // 2. Resolve image through metadata/object cache. This checks image_cache
   // before Serper and writes only object references to Postgres.
   const searchQuery = `${profileBrand} ${profileName} single fragrance bottle no box HQ product photo studio no plants`;
+  const imageSearchContext = {
+    brand: profileBrand,
+    name: profileName,
+    mode: "search",
+  };
   const processedImage =
     (await deps
       .resolveProcessedFragranceImage({
@@ -192,7 +202,10 @@ export async function buildProfileWithDeps(
         searchQuery,
         removeBackground: true,
       })
-      .catch(() => null)) ??
+      .catch((err) => {
+        deps.reportNonFatalError?.("scentEngine.imageResolution", err, imageSearchContext);
+        return null;
+      })) ??
     (effectiveFallback?.imageUrl
       ? await deps
           .resolveProcessedFragranceImage({
@@ -203,7 +216,15 @@ export async function buildProfileWithDeps(
             allowLookupCache: false,
             removeBackground: true,
           })
-          .catch(() => null)
+          .catch((err) => {
+            deps.reportNonFatalError?.("scentEngine.imageResolution", err, {
+              brand: profileBrand,
+              name: profileName,
+              mode: "manual",
+              sourceUrl: effectiveFallback.imageUrl,
+            });
+            return null;
+          })
       : null);
 
   const cleanImageUrl = processedImage?.imageUrl ?? null;
@@ -278,8 +299,11 @@ export async function buildProfileWithDeps(
   };
 
   // 3. Save to global catalog so future users skip all the above work
-  await deps.saveCatalogEntry(finalBrand, finalName, profile).catch(() => {
-    /* non-fatal */
+  await deps.saveCatalogEntry(finalBrand, finalName, profile).catch((err) => {
+    deps.reportNonFatalError?.("scentEngine.catalogSave", err, {
+      brand: finalBrand,
+      name: finalName,
+    });
   });
 
   return profile;
