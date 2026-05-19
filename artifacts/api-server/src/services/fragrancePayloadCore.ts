@@ -28,3 +28,16 @@ export function stampVaultSchemaVersion(
 ): Record<string, any> {
   return { ...fragrance, schemaVersion: CURRENT_VAULT_SCHEMA_VERSION };
 }
+
+function nonEmptyString(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
+export function chooseHydratedImageUrl(
+  sharedImageUrl: unknown,
+  currentImageUrl: unknown,
+): string {
+  return nonEmptyString(sharedImageUrl) ?? nonEmptyString(currentImageUrl) ?? "";
+}

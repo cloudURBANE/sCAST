@@ -7,11 +7,13 @@ import {
 import { resolveFragranceIdentity } from "./fragranceNameResolver";
 
 import {
+  chooseHydratedImageUrl,
   CURRENT_VAULT_SCHEMA_VERSION,
   stampVaultSchemaVersion,
 } from "./fragrancePayloadCore";
 
 export {
+  chooseHydratedImageUrl,
   CURRENT_VAULT_SCHEMA_VERSION,
   isLegacyVaultRow,
   stampVaultSchemaVersion,
@@ -117,18 +119,17 @@ export function normalizeFragrance(fragrance: Record<string, any>): Record<strin
   };
 }
 
-/** Fill in imageUrl from shared metadata/object cache if the stored record has none. */
+/** Prefer the shared catalog/cache image; fall back to the stored row URL only if needed. */
 export async function hydrateImageUrl(fragrance: Record<string, any>): Promise<Record<string, any>> {
   const current = await usableImageUrlForResponse(fragrance.imageUrl);
-  if (current) return { ...fragrance, imageUrl: current };
   const name = fragrance.name as string | undefined;
   const brand = fragrance.brand as string | undefined;
-  if (!name || !brand) return { ...fragrance, imageUrl: "" };
+  if (!name || !brand) return { ...fragrance, imageUrl: chooseHydratedImageUrl(null, current) };
   try {
-    const imageUrl = await resolveSharedImageUrl(brand, name);
-    if (imageUrl) return { ...fragrance, imageUrl };
+    const sharedImageUrl = await resolveSharedImageUrl(brand, name);
+    return { ...fragrance, imageUrl: chooseHydratedImageUrl(sharedImageUrl, current) };
   } catch {
     /* non-fatal */
   }
-  return { ...fragrance, imageUrl: "" };
+  return { ...fragrance, imageUrl: chooseHydratedImageUrl(null, current) };
 }
