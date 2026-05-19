@@ -278,7 +278,18 @@ router.post("/fragrances/details", async (req, res) => {
           },
         },
         { preferEngineData: true, allowCatalogFuzzy: false },
-      ).catch(() => null);
+      ).catch((err) => {
+        logger.warn(
+          {
+            err,
+            area: "fragrances.sourceDetail.buildProfile",
+            sourceUrl: identity.sourceUrl,
+            fragranceName,
+          },
+          "Non-fatal buildProfile failed during source detail enrichment",
+        );
+        return null;
+      });
 
       res.json(
         scentFactProfileToDetail({
