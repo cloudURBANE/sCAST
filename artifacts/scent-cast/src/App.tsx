@@ -551,6 +551,8 @@ export default function App() {
   const [wardrobeFixBusy, setWardrobeFixBusy] = useState(false);
   const [wardrobeFixHint, setWardrobeFixHint] = useState<string | null>(null);
   const [vaultSearchUiActive, setVaultSearchUiActive] = useState(false);
+  const isMutatingRef = useRef(false);
+  const lastMutationRef = useRef(0);
 
   const handleVaultSearchStateChange = useCallback((active: boolean) => {
     setVaultSearchUiActive(active);
@@ -609,6 +611,10 @@ export default function App() {
   }, [fetchWeather]);
 
   const loadWardrobe = useCallback(async (token: string, signal?: AbortSignal) => {
+    if (isMutatingRef.current) return;
+    const now = Date.now();
+    if (now - lastMutationRef.current < 5000) return;
+
     try {
       const res = await fetch('/api/wardrobe', {
         headers: { Authorization: `Bearer ${token}` },
@@ -616,6 +622,7 @@ export default function App() {
       });
       if (!res.ok) return;
       const data: Fragrance[] = await res.json();
+      if (isMutatingRef.current) return;
       setItems(data);
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
@@ -716,6 +723,7 @@ export default function App() {
     });
 
     if (authToken) {
+      isMutatingRef.current = true;
       try {
         const payload = { ...item };
         const res = await fetch('/api/wardrobe', {
@@ -751,7 +759,11 @@ export default function App() {
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Wardrobe save failed';
         console.error('Failed to persist wardrobe item', err);
+        setItems((prev) => prev.filter((i) => !sameWardrobeEntry(i, newItem)));
         return { persisted: false, error: message };
+      } finally {
+        isMutatingRef.current = false;
+        lastMutationRef.current = Date.now();
       }
     } else if (nextCount >= 2 && !guestPromptDismissed) {
       setIsAuthModalOpen(true);
@@ -775,6 +787,7 @@ export default function App() {
   ): Promise<Fragrance | null> => {
     if (!authToken) return null;
     const apiId = target._dbId ?? target.id;
+    isMutatingRef.current = true;
     try {
       const body: Record<string, unknown> = {};
       if (imageUrl) {
@@ -832,6 +845,9 @@ export default function App() {
     } catch (e) {
       console.error(e);
       return null;
+    } finally {
+      isMutatingRef.current = false;
+      lastMutationRef.current = Date.now();
     }
   }, [authToken]);
 
@@ -839,6 +855,7 @@ export default function App() {
     if (!wardrobeRevertSnapshot) return;
     const snap = JSON.parse(JSON.stringify(wardrobeRevertSnapshot)) as Fragrance[];
     setItems(snap);
+    lastMutationRef.current = Date.now();
     setWardrobeFixHint('Reverted to the in-memory snapshot from before the last automatic rebuild. Server data may differ; refresh loads the API again.');
     setActiveRecommendation((prev) => {
       if (!prev) return null;
@@ -896,6 +913,7 @@ export default function App() {
       return;
     }
 
+    isMutatingRef.current = true;
     try {
       const res = await fetch(`/api/wardrobe/${apiId}`, {
         method: 'DELETE',
@@ -906,17 +924,19 @@ export default function App() {
         await loadWardrobe(authToken);
         return;
       }
+      setItems((prev) =>
+        prev.filter(item =>
+          !sameWardrobeEntry(item, target),
+        ),
+      );
     } catch (err) {
       console.error(err);
       await loadWardrobe(authToken);
       return;
+    } finally {
+      isMutatingRef.current = false;
+      lastMutationRef.current = Date.now();
     }
-
-    setItems((prev) =>
-      prev.filter(item =>
-        !sameWardrobeEntry(item, target),
-      ),
-    );
   };
 
   const handleIntentComplete = (intent: { destination: DestinationType; energy: EnergyState }) => {

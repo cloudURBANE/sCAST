@@ -81,11 +81,39 @@ function extractPerfumer(snippet: string): string {
   return "";
 }
 
+const KNOWN_MULTI_WORD_BRANDS = [
+  "tom ford", "jo malone", "yves saint laurent", "jean paul gaultier",
+  "maison francis kurkdjian", "maison margiela", "parfums de marly",
+  "comme des garcons", "dolce & gabbana", "viktor & rolf", "acqua di parma",
+  "bath & body works", "victoria's secret", "estee lauder", "elizabeth arden",
+  "giorgio armani", "christian dior", "donna karan", "narciso rodriguez",
+  "issey miyake", "kenzo paris", "van cleef & arpels", "l'artisan parfumeur",
+  "penhaligon's london", "miller harris", "byredo parfums", "le labo"
+];
+
+function parseQuery(query: string): { brand: string; name: string } {
+  const parts = query.split(" ");
+  if (parts.length <= 1) {
+    return { brand: parts[0] || "Unknown", name: parts[0] || "Unknown" };
+  }
+
+  const lowerQuery = query.toLowerCase();
+  for (const b of KNOWN_MULTI_WORD_BRANDS) {
+    if (lowerQuery.startsWith(b)) {
+      const brand = query.substring(0, b.length);
+      const name = query.substring(b.length).trim() || brand;
+      return { brand, name };
+    }
+  }
+
+  const brand = parts[0] || "Unknown";
+  const name = parts.slice(1).join(" ") || parts[0];
+  return { brand, name };
+}
+
 export async function deepScrapeFragrance(query: string): Promise<ScrapedFragrance> {
   const defaultResult = (): ScrapedFragrance => {
-    const parts = query.split(" ");
-    const brand = parts[0] || "Unknown";
-    const name = parts.slice(1).join(" ") || parts[0];
+    const { brand, name } = parseQuery(query);
     const notes = ["Citrus", "Musk", "Wood"];
     return {
       name,
@@ -120,9 +148,7 @@ export async function deepScrapeFragrance(query: string): Promise<ScrapedFragran
     const family = detectFamily(notes, snippet);
     const perfumer = extractPerfumer(snippet);
 
-    const parts = query.split(" ");
-    const brand = parts[0] || "Unknown";
-    const name = parts.slice(1).join(" ") || parts[0];
+    const { brand, name } = parseQuery(query);
 
     return {
       name,

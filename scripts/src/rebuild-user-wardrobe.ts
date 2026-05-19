@@ -40,9 +40,13 @@ async function main(): Promise<void> {
   // new account here, so we bail if the lookup creates one (we'd see a brand
   // new uuid + zero rows on rebuild, which is harmless but flagged as a
   // diagnostic).
+  const adminSecret = process.env.ADMIN_SECRET;
   const loginRes = await fetch(`${base}/api/auth/login`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { 
+      "Content-Type": "application/json",
+      ...(adminSecret ? { "x-admin-secret": adminSecret } : {})
+    },
     body: JSON.stringify({ email }),
   });
   if (!loginRes.ok) {

@@ -1,10 +1,11 @@
 import { Router } from "express";
+import { requireAuth } from "../middlewares/auth";
 import { getUsageTotals } from "../services/apiUsageLedger";
 import { logger } from "../lib/logger";
 
 const router = Router();
 
-router.get("/usage/total", async (_req, res) => {
+router.get("/usage/total", requireAuth, async (_req, res) => {
   try {
     const totals = await getUsageTotals();
     res.json(totals);

@@ -362,6 +362,19 @@ export async function reimagineBottleImage(
       removeBgReason: optimized.removeBgReason,
     });
 
+    if (!recorded.isPersisted) {
+      logger.warn(
+        {
+          lookupKey,
+          sourceUrlHash,
+          sourceProvider,
+          storagePath: recorded.storagePath,
+          model,
+        },
+        "[reimagine] image_cache row not persisted (DB unavailable); next request will re-run OpenAI reimagine + storage upload",
+      );
+    }
+
     return { ...recorded, model };
   } catch (err) {
     if (err instanceof ImageObjectStorageConfigurationError) throw err;
