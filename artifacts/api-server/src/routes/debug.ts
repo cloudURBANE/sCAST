@@ -8,34 +8,22 @@
  *   Returns: per-row DB snapshot + catalog/image-resolution audit. Performs
  *   NO writes and NO image-generation calls.
  *
- * Remove this file once the discrepancy is diagnosed.
+ * This router is only mounted outside production when
+ * ENABLE_WARDROBE_AUDIT_DEBUG=true. Remove this file once the discrepancy is
+ * diagnosed.
  */
 import { Router } from "express";
+import { AuthRequest, requireAuth } from "../middlewares/auth";
 import { db } from "@workspace/db";
-import { usersTable, userFragrancesTable, globalFragrancesTable } from "@workspace/db/schema";
+import { userFragrancesTable, globalFragrancesTable } from "@workspace/db/schema";
 import { eq, or, sql } from "drizzle-orm";
 import { makeLookupKey } from "../services/catalogService";
 import { imageReferenceDiagnostic, type ImageReferenceDiagnostic } from "../services/imageReference";
 
 const router = Router();
 
-function getToken(req: any): string | null {
-  const auth = req.headers["authorization"] as string | undefined;
-  if (auth?.startsWith("Bearer ")) return auth.slice(7);
-  return null;
-}
-
-router.get("/_debug/wardrobe-audit", async (req, res) => {
-  const token = getToken(req);
-  if (!token) { res.status(401).json({ error: "Unauthorized" }); return; }
-
-  const users = await db
-    .select()
-    .from(usersTable)
-    .where(eq(usersTable.token, token as any))
-    .limit(1);
-  const user = users[0];
-  if (!user) { res.status(401).json({ error: "Invalid token" }); return; }
+router.get("/_debug/wardrobe-audit", requireAuth, async (req: AuthRequest, res) => {
+  const user = req.user!;
 
   const rows = await db
     .select()
@@ -145,7 +133,7 @@ router.get("/_debug/wardrobe-audit", async (req, res) => {
     .from(globalFragrancesTable);
 
   res.json({
-    user: { id: user.id, email: user.email },
+    user: { id: user.id },
     rowCount: rows.length,
     visibleOnDashboard: audit.filter(a => !!a.effectiveName && !!a.effectiveBrand).length,
     visibleOnShare: audit.filter(a => !a.shareHidden).length,

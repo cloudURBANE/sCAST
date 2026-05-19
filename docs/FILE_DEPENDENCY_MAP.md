@@ -32,7 +32,7 @@
 | `artifacts/api-server/src/routes/share.ts` | Public share page and share settings | imports `usersTable`, `userFragrancesTable`, `userSettingsTable` | `/share/:userRef`, `/share-settings` | Drizzle Postgres; hydration may call Firebase | `DATABASE_URL`, image/Firebase vars through services | `users`, `user_settings`, `user_fragrances` | Mixed | Yes | High |
 | `artifacts/api-server/src/routes/scent.ts` | Weather/search/profile/refresh-image endpoints | imports weather, scent, catalog, image, bg services | `/weather`, `/search-scent`, `/scent-profile`, `/refresh-image` | Catalog Drizzle; Firebase cache through services | `WEATHER_API_KEY`, `SERPER_API_KEY`, `SERPER_IMAGE_API_URL`, `REMOVE_BG_API_KEY`, Firebase vars | `global_fragrances`; optionally `user_fragrances` through wardrobe save | No for search, yes for save | Yes | High |
 | `artifacts/api-server/src/routes/imageProxy.ts` | Remote image fetch/trim proxy | imports axios, packshot trim | `/image-proxy` | None | None | None | No | Yes | Medium |
-| `artifacts/api-server/src/routes/debug.ts` | Read-only wardrobe audit | imports db and catalog key helper | `/_debug/wardrobe-audit` | Drizzle Postgres | `DATABASE_URL` | `users`, `user_fragrances`, `global_fragrances` | Yes | Yes | Medium |
+| `artifacts/api-server/src/routes/debug.ts` | Read-only wardrobe audit, mounted only outside production when `ENABLE_WARDROBE_AUDIT_DEBUG=true` | imports db and catalog key helper | `/_debug/wardrobe-audit` | Drizzle Postgres | `DATABASE_URL`, `ENABLE_WARDROBE_AUDIT_DEBUG` | `user_fragrances`, `global_fragrances` | Yes | Yes | Medium |
 | `artifacts/api-server/src/services/catalogService.ts` | Global fragrance cache lookups/upserts | imports `db`, `globalFragrancesTable` | Used by scent/rebuild/hydration | Drizzle Postgres | `DATABASE_URL` | `global_fragrances` | No | Yes | High |
 | `artifacts/api-server/src/services/firebaseCache.ts` | Firestore clean image cache | imports Firebase Admin dynamically | `bg_cache` collection | Firebase Admin only | `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY` | None | No | Yes | High |
 | `artifacts/api-server/src/services/imageHydration.ts` | Resolve images from catalog/Firestore | imports catalog/cache | Used by wardrobe/share | Drizzle plus Firestore | `DATABASE_URL`, Firebase vars | `global_fragrances` | No | Yes | High |
@@ -63,4 +63,3 @@
 - `supabase/.temp/**`: linked Supabase metadata only.
 - `initial setup ref files for recovery/**`: historical schema package, not imported.
 - `supabase-clean-backup-20260506-115351/**`: failed zero-byte backup attempt.
-

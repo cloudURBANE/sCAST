@@ -15,6 +15,13 @@ import usageRouter from "./usage";
 
 const router: IRouter = Router();
 
+function isWardrobeAuditDebugEnabled(): boolean {
+  return (
+    process.env.NODE_ENV !== "production" &&
+    process.env.ENABLE_WARDROBE_AUDIT_DEBUG?.trim().toLowerCase() === "true"
+  );
+}
+
 router.use(healthRouter);
 router.use(scentRouter);
 router.use(authRouter);
@@ -24,7 +31,9 @@ router.use(shareRouter);
 router.use(fragrancesRouter);
 router.use(imageProxyRouter);
 router.use(imageObjectsRouter);
-router.use(debugRouter);
+if (isWardrobeAuditDebugEnabled()) {
+  router.use(debugRouter);
+}
 router.use(scentFactsRouter);
 router.use(enrichmentRouter);
 router.use(usageRouter);

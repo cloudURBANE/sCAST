@@ -1,35 +1,54 @@
 import { Router } from "express";
+import { AuthRequest, requireAuth } from "../middlewares/auth";
 import { db } from "@workspace/db";
 import { usersTable, userFragrancesTable, userSettingsTable } from "@workspace/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { hydrateImageUrl, normalizeFragrance } from "../services/fragrancePayload";
-import { resolveShareUserFromList, shareIdForUser } from "../services/shareIdentity";
+import { shareHandleFromEmail } from "../services/shareIdentity";
 
 const router = Router();
 
-function getToken(req: any): string | null {
-  const auth = req.headers["authorization"] as string | undefined;
-  if (auth?.startsWith("Bearer ")) return auth.slice(7);
-  return null;
+function cleanShareRef(userRef: string): string {
+  return userRef.trim().toLowerCase().replace(/^@+/, "");
+}
+
+function isUuidish(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
+function shareHandleSql() {
+  return sql<string>`coalesce(nullif(regexp_replace(regexp_replace(lower(split_part(${usersTable.email}, '@', 1)), '[^a-z0-9]+', '-', 'g'), '(^-+|-+$)', '', 'g'), ''), 'user')`;
 }
 
 async function resolveShareUser(userRef: string) {
-  const users = await db.select().from(usersTable);
-  return resolveShareUserFromList(userRef, users);
+  if (isUuidish(userRef)) {
+    const rows = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.id, userRef.toLowerCase() as any))
+      .limit(1);
+    return rows[0] ?? null;
+  }
+
+  const cleanRef = cleanShareRef(userRef);
+  if (!cleanRef) return null;
+
+  const rows = await db
+    .select()
+    .from(usersTable)
+    .where(sql`${shareHandleSql()} = ${cleanRef}`)
+    .limit(2);
+  return rows.length === 1 ? rows[0] : null;
 }
 
 async function getShareIdForUser(user: typeof usersTable.$inferSelect): Promise<string> {
-  const users = await db.select().from(usersTable);
-  return shareIdForUser(user, users);
-}
-
-async function getUserByToken(token: string) {
-  const users = await db
-    .select()
+  const handle = shareHandleFromEmail(user.email);
+  const duplicates = await db
+    .select({ id: usersTable.id })
     .from(usersTable)
-    .where(eq(usersTable.token, token as any))
+    .where(and(sql`${usersTable.id} <> ${user.id}`, sql`${shareHandleSql()} = ${handle}`))
     .limit(1);
-  return users[0] ?? null;
+  return duplicates.length > 0 ? user.id : `@${handle}`;
 }
 
 async function getOrCreateSettings(userId: string) {
@@ -87,13 +106,8 @@ router.get("/share/:userRef", async (req, res) => {
   res.json({ fragrances, hideImages: settings.shareHideImages, shareUserId: user.id });
 });
 
-router.get("/share-settings", async (req, res) => {
-  const token = getToken(req);
-  if (!token) { res.status(401).json({ error: "Unauthorized" }); return; }
-
-  const user = await getUserByToken(token);
-  if (!user) { res.status(401).json({ error: "Invalid token" }); return; }
-
+router.get("/share-settings", requireAuth, async (req: AuthRequest, res) => {
+  const user = req.user!;
   const settings = await getOrCreateSettings(user.id);
   const shareId = await getShareIdForUser(user);
   res.json({
@@ -103,12 +117,8 @@ router.get("/share-settings", async (req, res) => {
   });
 });
 
-router.post("/share-settings", async (req, res) => {
-  const token = getToken(req);
-  if (!token) { res.status(401).json({ error: "Unauthorized" }); return; }
-
-  const user = await getUserByToken(token);
-  if (!user) { res.status(401).json({ error: "Invalid token" }); return; }
+router.post("/share-settings", requireAuth, async (req: AuthRequest, res) => {
+  const user = req.user!;
 
   const { hideImages } = req.body as { hideImages?: boolean };
   if (typeof hideImages !== "boolean") {
