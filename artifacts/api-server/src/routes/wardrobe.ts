@@ -6,7 +6,7 @@ import {
   usersTable,
   userFragrancesTable,
 } from "@workspace/db/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { resolveSharedImageUrl } from "../services/imageHydration";
 import { buildProfile } from "../services/scentEngine";
 import { flattenProfile, makeLookupKey } from "../services/catalogService";
@@ -37,6 +37,18 @@ function getToken(req: any): string | null {
   const auth = req.headers["authorization"] as string | undefined;
   if (auth?.startsWith("Bearer ")) return auth.slice(7);
   return null;
+}
+
+async function findUserRowByClientId(userId: string, clientId: string) {
+  const rows = await db
+    .select()
+    .from(userFragrancesTable)
+    .where(and(
+      eq(userFragrancesTable.userId, userId),
+      sql`${userFragrancesTable.fragranceData}->>'id' = ${clientId}`,
+    ))
+    .limit(1);
+  return rows[0] ?? null;
 }
 
 router.get("/wardrobe", async (req, res) => {
@@ -77,6 +89,29 @@ router.post("/wardrobe", async (req, res) => {
 
   const clean = sanitizeFragrance(normalizeFragrance(fragrance));
   assertNoPersistedBase64Image(clean, "user_fragrances.fragrance_data");
+  const clientId = typeof clean.id === "string" ? clean.id.trim() : "";
+  if (!clientId) {
+    res.status(400).json({ error: "Fragrance data with id is required" });
+    return;
+  }
+
+  const existing = await findUserRowByClientId(user.id, clientId);
+  if (existing) {
+    const existingData = normalizeFragrance(existing.fragranceData as Record<string, any>);
+    const merged = sanitizeFragrance({ ...existingData, ...clean, id: clientId });
+    assertNoPersistedBase64Image(merged, "user_fragrances.fragrance_data");
+    await db
+      .update(userFragrancesTable)
+      .set({ fragranceData: merged as any })
+      .where(and(
+        eq(userFragrancesTable.id, existing.id),
+        eq(userFragrancesTable.userId, user.id),
+      ));
+
+    const hydrated = await hydrateImageUrl(merged);
+    res.json({ ...hydrated, _dbId: existing.id });
+    return;
+  }
 
   const [row] = await db
     .insert(userFragrancesTable)

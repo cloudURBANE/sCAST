@@ -181,7 +181,7 @@ test("update fills missing identity fields but never clobbers existing data", ()
   assert.equal(plan.values.name, "Sauvage"); // already set -> NOT clobbered
 });
 
-test("update plan never carries a status field — terminal jobs stay terminal", () => {
+test("update plan does not reopen completed jobs when called directly", () => {
   const completed: ExistingJobRow = {
     ...rowFromInsert({ query: "Dior Sauvage" }, NOW_1),
     status: "completed",
@@ -189,6 +189,20 @@ test("update plan never carries a status field — terminal jobs stay terminal",
   const plan = computeEnrichmentUpsert(completed, { query: "Dior Sauvage" }, NOW_2);
   if (plan.action !== "update") throw new Error("expected update");
   assert.equal("status" in plan.values, false);
+});
+
+test("duplicate request reopens a failed job for a future worker retry", () => {
+  const failed: ExistingJobRow = {
+    ...rowFromInsert({ query: "Dior Sauvage" }, NOW_1),
+    status: "failed",
+    requestedCount: 4,
+  };
+  const plan = computeEnrichmentUpsert(failed, { query: "Dior Sauvage" }, NOW_2);
+  if (plan.action !== "update") throw new Error("expected update");
+  assert.equal(plan.values.status, "pending");
+  assert.equal(plan.values.failedAt, null);
+  assert.equal(plan.values.lastError, null);
+  assert.equal(plan.values.requestedCount, 5);
 });
 
 test("metadata is shallow-merged across requests", () => {

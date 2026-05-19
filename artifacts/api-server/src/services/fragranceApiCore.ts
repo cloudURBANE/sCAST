@@ -87,11 +87,13 @@ export function encodeIdentityId(prefix: "catalog" | "dataset", brand: string, n
 }
 
 export function decodeIdentityId(value: string): { brand: string; name: string } | null {
-  const match = /^(?:catalog|dataset):([^:]+)::(.+)$/.exec(value);
+  const match = /^(?:catalog|dataset):(.+)$/.exec(value);
   if (!match) return null;
+  const delimiter = match[1].indexOf("::");
+  if (delimiter < 0) return null;
   try {
-    const brand = decodeURIComponent(match[1]).trim();
-    const name = decodeURIComponent(match[2]).trim();
+    const brand = decodeURIComponent(match[1].slice(0, delimiter)).trim();
+    const name = decodeURIComponent(match[1].slice(delimiter + 2)).trim();
     return brand && name ? { brand, name } : null;
   } catch {
     return null;

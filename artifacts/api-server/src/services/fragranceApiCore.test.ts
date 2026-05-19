@@ -38,6 +38,14 @@ test("identity ids round-trip without relying on blank detail fallbacks", () => 
   });
 });
 
+test("identity id decoding allows colons inside the decoded brand", () => {
+  const id = encodeIdentityId("catalog", "Brand: Edition", "Nocturne");
+  assert.deepEqual(decodeIdentityId(id), {
+    brand: "Brand: Edition",
+    name: "Nocturne",
+  });
+});
+
 test("scent fact details carry source coverage and raw source URLs", () => {
   const detail = scentFactProfileToDetail({
     id: "source:https://www.fragrantica.com/perfume/Dior/Sauvage-31861.html",

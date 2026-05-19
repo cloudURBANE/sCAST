@@ -106,6 +106,9 @@ export type UpdateJobValues = {
   requestedCount: number;
   updatedAt: Date;
   lastRequestedAt: Date;
+  status?: EnrichmentJobStatus;
+  failedAt?: Date | null;
+  lastError?: string | null;
   metadataJson: Record<string, unknown> | null;
 };
 
@@ -251,10 +254,9 @@ function coalesce<T>(existing: T | null | undefined, incoming: T | null): T | nu
  *   - last_requested_at / updated_at = now
  *   - priority = max(existing + 1, computed priority)
  *   - missing identity fields are filled in; existing values are preserved
- *   - status is NEVER changed here — terminal statuses (completed/ignored/
- *     cancelled) stay terminal, and pending/processing/failed are left as-is.
- *     Pass 1 deliberately implements no retry/backoff; reopening a job is a
- *     Pass 2 concern.
+ *   - failed rows reopen to pending on a fresh request so the next worker pass
+ *     can pick them up again; completed/ignored/cancelled are skipped by
+ *     enqueueEnrichmentJob before this planner is applied.
  */
 export function computeEnrichmentUpsert(
   existing: ExistingJobRow | null,
@@ -310,6 +312,7 @@ export function computeEnrichmentUpsert(
     existing.metadataJson || metadata
       ? { ...(existing.metadataJson ?? {}), ...(metadata ?? {}) }
       : null;
+  const shouldReopenFailed = existing.status === "failed";
 
   return {
     action: "update",
@@ -327,6 +330,9 @@ export function computeEnrichmentUpsert(
       requestedCount: existing.requestedCount + 1,
       updatedAt: now,
       lastRequestedAt: now,
+      ...(shouldReopenFailed
+        ? { status: "pending" as const, failedAt: null, lastError: null }
+        : {}),
       metadataJson: mergedMetadata,
     },
   };
