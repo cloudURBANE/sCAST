@@ -36,6 +36,7 @@ const SOFT_EASE: [number, number, number, number] = [0.42, 0, 0.58, 1];
 
 type LayerMotionState = ActiveLayer | 'idle';
 type LayerOffset = { y: number; scale: number; opacity: number };
+type PointerActivation = { layer: ActiveLayer; pointerId: number; x: number; y: number };
 
 const LAYER_MOTION: Record<LayerMotionState, Record<ActiveLayer, LayerOffset>> = {
   idle: {
@@ -61,7 +62,7 @@ const LAYER_MOTION: Record<LayerMotionState, Record<ActiveLayer, LayerOffset>> =
 };
 
 const layerTransition: Transition = {
-  duration: 1.05,
+  duration: 0.48,
   ease: CALM_EASE,
 };
 
@@ -70,6 +71,10 @@ const reducedTransition: Transition = {
 };
 
 const PYRAMID_CENTER_X = 180;
+const TAP_MOVE_TOLERANCE_PX = 10;
+const TYPEWRITER_FRAME_MS = 24;
+const NOTE_MARQUEE_MIN_CHARS = 58;
+const NOTE_MARQUEE_MIN_COUNT = 5;
 
 const PYRAMID_OUTER = {
   apex: [PYRAMID_CENTER_X, 25] as Point,
@@ -179,8 +184,134 @@ function formatNotes(notes: string[]) {
   return notes.length > 0 ? notes.join(', ') : 'Uncharted territory.';
 }
 
+function shouldMarqueeNotes(notes: string[], text: string) {
+  return notes.length >= NOTE_MARQUEE_MIN_COUNT || text.length >= NOTE_MARQUEE_MIN_CHARS;
+}
+
+function typewriterChunkSize(textLength: number) {
+  const targetMs = Math.min(880, Math.max(360, textLength * 16));
+  const frames = Math.max(1, Math.ceil(targetMs / TYPEWRITER_FRAME_MS));
+  return Math.max(1, Math.ceil(textLength / frames));
+}
+
 function offsetPoint([x, y]: Point, dx: number): Point {
   return [x + dx, y];
+}
+
+function useTypedNoteText(text: string, instant: boolean) {
+  const [typedText, setTypedText] = React.useState(instant ? text : '');
+  const [isComplete, setIsComplete] = React.useState(instant);
+
+  React.useEffect(() => {
+    if (instant) {
+      setTypedText(text);
+      setIsComplete(true);
+      return;
+    }
+
+    let index = 0;
+    const chunkSize = typewriterChunkSize(text.length);
+    let completeTimer: number | undefined;
+
+    setTypedText('');
+    setIsComplete(false);
+
+    const interval = window.setInterval(() => {
+      index = Math.min(text.length, index + chunkSize);
+      setTypedText(text.slice(0, index));
+
+      if (index >= text.length) {
+        window.clearInterval(interval);
+        completeTimer = window.setTimeout(() => setIsComplete(true), 220);
+      }
+    }, TYPEWRITER_FRAME_MS);
+
+    return () => {
+      window.clearInterval(interval);
+      if (completeTimer) window.clearTimeout(completeTimer);
+    };
+  }, [instant, text]);
+
+  return { typedText, isComplete };
+}
+
+function LayerNotesText({
+  notes,
+  prefersReducedMotion,
+  transition,
+}: {
+  notes: string[];
+  prefersReducedMotion: boolean;
+  transition: Transition;
+}) {
+  const fullText = React.useMemo(() => formatNotes(notes), [notes]);
+  const shouldMarquee = shouldMarqueeNotes(notes, fullText) && !prefersReducedMotion;
+  const { typedText, isComplete } = useTypedNoteText(fullText, prefersReducedMotion);
+  const marqueeGroupRef = React.useRef<HTMLSpanElement | null>(null);
+  const [marqueeDistance, setMarqueeDistance] = React.useState(0);
+
+  React.useEffect(() => {
+    setMarqueeDistance(0);
+  }, [fullText]);
+
+  React.useEffect(() => {
+    if (!shouldMarquee || !isComplete) return;
+
+    const group = marqueeGroupRef.current;
+    if (!group) return;
+
+    const updateDistance = () => {
+      setMarqueeDistance(Math.ceil(group.getBoundingClientRect().width));
+    };
+
+    updateDistance();
+
+    if (typeof ResizeObserver === 'undefined') return;
+
+    const observer = new ResizeObserver(updateDistance);
+    observer.observe(group);
+
+    return () => observer.disconnect();
+  }, [fullText, isComplete, shouldMarquee]);
+
+  const marqueeDuration = Math.max(8, Math.min(18, fullText.length * 0.13));
+  const marqueeStyle = {
+    '--note-marquee-distance': `${marqueeDistance}px`,
+    '--note-marquee-duration': `${marqueeDuration}s`,
+  } as React.CSSProperties;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 5 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -3 }}
+      transition={transition}
+      className={`scent-note-text-shell ${shouldMarquee ? 'scent-note-text-shell--marquee' : ''}`}
+    >
+      {shouldMarquee && isComplete ? (
+        <>
+          <span className="sr-only">{fullText}</span>
+          <div className="scent-note-marquee" aria-hidden="true">
+            <div
+              className="scent-note-marquee-track"
+              data-marquee-ready={marqueeDistance > 0 ? 'true' : 'false'}
+              style={marqueeStyle}
+            >
+              <span ref={marqueeGroupRef} className="scent-note-marquee-group">
+                {fullText}
+              </span>
+              <span className="scent-note-marquee-group">{fullText}</span>
+            </div>
+          </div>
+        </>
+      ) : (
+        <p className={`scent-note-copy ${shouldMarquee ? 'scent-note-copy--single-line' : ''}`} aria-label={fullText}>
+          {typedText}
+          {!isComplete ? <span className="scent-note-type-caret" aria-hidden="true" /> : null}
+        </p>
+      )}
+    </motion.div>
+  );
 }
 
 // Particle System Generation
@@ -220,6 +351,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
   const [hoveredLayer, setHoveredLayer] = React.useState<ActiveLayer | null>(null);
   const [focusedLayer, setFocusedLayer] = React.useState<ActiveLayer | null>(null);
   const rootRef = React.useRef<HTMLElement | null>(null);
+  const pointerActivationRef = React.useRef<PointerActivation | null>(null);
   const prefersReducedMotion = useReducedMotion();
   const idPrefix = React.useId().replace(/:/g, '');
   const state = activeLayer ?? 'idle';
@@ -303,6 +435,46 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
     setActiveLayer((current) => (current === layer ? null : layer));
   }, []);
 
+  const handleLayerPointerDown = React.useCallback((event: React.PointerEvent<SVGGElement>, layer: ActiveLayer) => {
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+
+    event.stopPropagation();
+    pointerActivationRef.current = {
+      layer,
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+    };
+
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }, []);
+
+  const handleLayerPointerUp = React.useCallback((event: React.PointerEvent<SVGGElement>, layer: ActiveLayer) => {
+    event.stopPropagation();
+
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+
+    const activation = pointerActivationRef.current;
+    pointerActivationRef.current = null;
+    if (!activation || activation.layer !== layer || activation.pointerId !== event.pointerId) return;
+
+    const moved = Math.hypot(event.clientX - activation.x, event.clientY - activation.y);
+    if (moved > TAP_MOVE_TOLERANCE_PX) return;
+
+    handleLayerActivate(layer);
+  }, [handleLayerActivate]);
+
+  const handleLayerPointerCancel = React.useCallback((event: React.PointerEvent<SVGGElement>) => {
+    event.stopPropagation();
+    pointerActivationRef.current = null;
+
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  }, []);
+
   const handleLayerKeyDown = React.useCallback(
     (event: React.KeyboardEvent<SVGGElement>, layer: ActiveLayer) => {
       if (event.key !== 'Enter' && event.key !== ' ') return;
@@ -342,7 +514,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
     }
     return {
       pulseTransition: { duration: 5.4, ease: SOFT_EASE, repeat: Infinity, repeatType: 'mirror' } as Transition,
-      floatTransition: { duration: 6, ease: 'easeInOut', repeat: Infinity, repeatType: 'mirror' } as Transition,
+      floatTransition: { duration: 8.5, ease: 'easeInOut', repeat: Infinity, repeatType: 'mirror' } as Transition,
       shimmerTransition: { duration: 6.4, ease: SOFT_EASE, repeat: Infinity, repeatType: 'mirror' } as Transition,
       atmosphericTransition: { duration: 10, ease: SOFT_EASE, repeat: Infinity, repeatType: 'mirror' } as Transition,
     };
@@ -680,24 +852,14 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
             transition={atmosphericTransition}
           />
 
-          {/* Soft cone of focus emanating from apex when a layer is engaged */}
-          <motion.path
-            d={`M${PYRAMID_CENTER_X} 25 L345 400 L15 400 Z`}
-            fill={fill('active-sheen')}
-            pointerEvents="none"
-            initial={false}
-            animate={{ opacity: activeLayer ? 0.28 : 0 }}
-            transition={{ duration: 1.1, ease: CALM_EASE }}
-          />
-
           {layers.map((layer) => {
             const isActive = activeLayer === layer.key;
             const isEngaged = engagedLayer === layer.key;
             const isMuted = activeLayer !== null && !isActive;
 
             const layerMotion = LAYER_MOTION[state][layer.key];
-            const targetY = layerMotion.y;
-            const targetScale = layerMotion.scale + (isEngaged && !isActive ? 0.004 : 0);
+            const targetY = layerMotion.y + (isEngaged && !isActive ? -0.8 : 0);
+            const targetScale = layerMotion.scale + (isEngaged && !isActive ? 0.003 : 0);
             const targetOpacity = isEngaged && !isActive ? Math.min(layerMotion.opacity + 0.08, 1) : layerMotion.opacity;
             const channelPath = linePath(layer.channel.start, layer.channel.end);
             const channelHighlightPath = linePath(
@@ -720,19 +882,10 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                   scale: targetScale,
                   filter: isMuted ? 'saturate(0.85) brightness(0.92)' : 'saturate(1) brightness(1)',
                 }}
-                whileHover={
-                  prefersReducedMotion
-                    ? undefined
-                    : {
-                        y: targetY - 1.2,
-                        scale: targetScale + 0.003,
-                        transition: { duration: 0.55, ease: CALM_EASE },
-                      }
-                }
                 transition={
                   prefersReducedMotion
                     ? reducedTransition
-                    : { ...layerTransition, filter: { duration: 0.9, ease: CALM_EASE }, opacity: { duration: 0.95, ease: CALM_EASE } }
+                    : { ...layerTransition, filter: { duration: 0.44, ease: CALM_EASE }, opacity: { duration: 0.46, ease: CALM_EASE } }
                 }
                 style={{
                   transformBox: 'fill-box',
@@ -751,10 +904,11 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                 }}
                 onFocus={() => setFocusedLayer(layer.key)}
                 onBlur={() => setFocusedLayer((current) => (current === layer.key ? null : current))}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  handleLayerActivate(layer.key);
-                }}
+                onPointerDown={(event) => handleLayerPointerDown(event, layer.key)}
+                onPointerUp={(event) => handleLayerPointerUp(event, layer.key)}
+                onPointerCancel={handleLayerPointerCancel}
+                onLostPointerCapture={handleLayerPointerCancel}
+                onClick={(event) => event.stopPropagation()}
                 onKeyDown={(event) => handleLayerKeyDown(event, layer.key)}
               >
                 <path
@@ -1057,58 +1211,36 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
           {selectedLayer ? (
             <motion.div
               key={selectedLayer.key}
-              initial={{ opacity: 0, y: 10, scale: 0.98, filter: 'blur(4px)' }}
+              initial={{ opacity: 0, y: 8, scale: 0.985, filter: 'blur(3px)' }}
               animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
-              exit={{ opacity: 0, y: -6, scale: 0.985, filter: 'blur(3px)' }}
-              transition={prefersReducedMotion ? reducedTransition : { duration: 0.72, ease: CALM_EASE }}
-              className={`pointer-events-none absolute left-1/2 z-50 w-[90%] max-w-[22.5rem] -translate-x-1/2 overflow-hidden rounded-xl border border-white/10 bg-[#060608]/70 p-5 shadow-[0_12px_40px_-5px_rgba(0,0,0,0.8),inset_0_1px_1px_rgba(255,255,255,0.15),0_0_0_1px_rgba(252,157,25,0.08)] backdrop-blur-xl ${selectedLayer.revealClass}`}
+              exit={{ opacity: 0, y: -5, scale: 0.99, filter: 'blur(2px)' }}
+              transition={prefersReducedMotion ? reducedTransition : { duration: 0.32, ease: CALM_EASE }}
+              className={`pointer-events-none absolute left-1/2 z-50 w-[84%] max-w-[17.5rem] -translate-x-1/2 overflow-hidden rounded-lg border border-white/10 bg-[#060608]/76 px-3 py-3 shadow-[0_10px_30px_-8px_rgba(0,0,0,0.78),inset_0_1px_1px_rgba(255,255,255,0.13),0_0_0_1px_rgba(252,157,25,0.07)] backdrop-blur-xl sm:max-w-[18.5rem] sm:px-3.5 ${selectedLayer.revealClass}`}
             >
               <span
                 aria-hidden
-                className="pointer-events-none absolute inset-[3px] rounded-lg border border-white/[0.05]"
-              />
-
-              <motion.span
-                aria-hidden
-                initial={{ opacity: 0, scale: 0.75 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.75 }}
-                transition={prefersReducedMotion ? reducedTransition : { duration: 0.55, ease: CALM_EASE, delay: 0.1 }}
-                className={`pointer-events-none absolute left-1/2 h-2.5 w-2.5 -translate-x-1/2 rotate-45 border-[#fc9d19]/40 bg-[#060608]/80 backdrop-blur-xl ${
-                  selectedLayer.key === 'top'
-                    ? '-bottom-[5px] border-b border-r'
-                    : '-top-[5px] border-l border-t'
-                }`}
+                className="pointer-events-none absolute inset-[3px] rounded-md border border-white/[0.045]"
               />
 
               <motion.div
-                animate={prefersReducedMotion ? {} : { y: [0, -3, 0] }}
+                animate={prefersReducedMotion ? {} : { y: [0, -1, 0] }}
                 transition={floatTransition}
-                className="relative flex flex-col items-center justify-center space-y-3.5 text-center"
+                className="relative flex flex-col items-center justify-center space-y-2 text-center"
               >
-                <motion.span
-                  aria-hidden
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.94 }}
-                  transition={prefersReducedMotion ? reducedTransition : { duration: 0.65, ease: CALM_EASE }}
-                  className="absolute left-1/2 top-1/2 -z-10 h-36 w-[130%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(ellipse_at_center,rgba(0,0,0,0.9),rgba(20,12,2,0.5)_38%,rgba(252,157,25,0.05)_62%,transparent_78%)] blur-[6px]"
-                />
-
                 <motion.div
                   initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -3 }}
                   transition={prefersReducedMotion ? reducedTransition : { duration: 0.6, delay: 0.08, ease: CALM_EASE }}
-                  className="flex w-full flex-col items-center justify-center space-y-2"
+                  className="flex w-full flex-col items-center justify-center space-y-1"
                 >
-                  <span className="text-[9px] font-bold uppercase tracking-[0.4em] text-white/40">
+                  <span className="text-[8px] font-bold uppercase tracking-[0.34em] text-white/38">
                     Scent Profile Analysis
                   </span>
 
-                  <span className="block h-px w-40 origin-center bg-gradient-to-r from-transparent via-[#fc9d19]/60 to-transparent" />
+                  <span className="block h-px w-32 origin-center bg-gradient-to-r from-transparent via-[#fc9d19]/56 to-transparent" />
 
-                  <h3 className="bg-gradient-to-br from-[#fff3d4] via-[#fc9d19] to-[#8c5a1a] bg-clip-text text-[12px] font-bold uppercase tracking-[0.5em] text-transparent drop-shadow-[0_2px_12px_rgba(252,157,25,0.45)]">
+                  <h3 className="bg-gradient-to-br from-[#fff3d4] via-[#fc9d19] to-[#8c5a1a] bg-clip-text text-[10.5px] font-bold uppercase tracking-[0.38em] text-transparent drop-shadow-[0_2px_10px_rgba(252,157,25,0.4)]">
                     {selectedLayer.title}
                   </h3>
 
@@ -1122,19 +1254,15 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                         ? reducedTransition
                         : { duration: 0.85, delay: 0.22, ease: CALM_EASE }
                     }
-                    className="block h-[1.5px] w-16 origin-center rounded-full bg-gradient-to-r from-transparent via-[#ffc766] to-transparent shadow-[0_0_8px_rgba(252,157,25,0.55)]"
+                    className="block h-px w-12 origin-center rounded-full bg-gradient-to-r from-transparent via-[#ffc766] to-transparent shadow-[0_0_7px_rgba(252,157,25,0.48)]"
                   />
                 </motion.div>
 
-                <motion.p
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -4 }}
-                  transition={prefersReducedMotion ? reducedTransition : { duration: 0.75, delay: 0.18, ease: CALM_EASE }}
-                  className="font-serif text-[1.1rem] italic tracking-wide text-white/95 leading-relaxed [text-shadow:0_3px_20px_rgba(0,0,0,1),0_0_30px_rgba(252,157,25,0.2)] sm:text-[1.15rem]"
-                >
-                  {formatNotes(selectedLayer.notes)}
-                </motion.p>
+                <LayerNotesText
+                  notes={selectedLayer.notes}
+                  prefersReducedMotion={Boolean(prefersReducedMotion)}
+                  transition={prefersReducedMotion ? reducedTransition : { duration: 0.34, delay: 0.12, ease: CALM_EASE }}
+                />
               </motion.div>
             </motion.div>
           ) : null}
