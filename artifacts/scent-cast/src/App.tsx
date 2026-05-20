@@ -1134,10 +1134,10 @@ export default function App() {
                 if (items.length === 0) { alert("Your vault is empty! Add at least one fragrance to discover your match."); return; }
                 setIsIntentModalOpen(true);
               }}
-              className="scent-primary-button w-full h-[60px] sm:h-16 flex items-center justify-center gap-4 transition-all group rounded-[var(--radius-scent)]"
+              className="scent-primary-button w-full min-h-[60px] sm:h-16 flex items-center justify-center gap-2.5 sm:gap-4 px-4 transition-all group rounded-[var(--radius-scent)]"
             >
-              <Play size={19} className="fill-current group-hover:scale-110 transition-transform" />
-              <span className="font-serif italic text-xl sm:text-2xl leading-none">Discover Your Signature Scent</span>
+              <Play size={19} className="fill-current shrink-0 group-hover:scale-110 transition-transform" />
+              <span className="font-serif italic text-lg sm:text-2xl leading-tight text-center">Discover Your Signature Scent</span>
             </motion.button>
           </section>
 

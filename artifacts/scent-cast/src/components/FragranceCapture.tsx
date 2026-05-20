@@ -761,8 +761,8 @@ export const FragranceCapture: React.FC<{
               transition={{ duration: 0.34, ease: [0.22, 1, 0.36, 1] }}
               className="mt-8 pt-6 border-t border-white/10 mx-auto max-w-lg w-full"
             >
-              <div className="flex max-h-[min(47dvh,26rem)] min-h-0 flex-col sm:max-h-[min(48dvh,28rem)] md:max-h-[min(44dvh,29rem)]">
-                <div className="mb-5 flex shrink-0 justify-center px-1">
+              <div className="flex max-h-[min(72dvh,26rem)] min-h-0 flex-col sm:max-h-[min(72dvh,28rem)] md:max-h-[min(64dvh,29rem)]">
+                <div className="mb-3 sm:mb-5 flex shrink-0 justify-center px-1">
                   <p className="text-[9px] uppercase tracking-[0.34em] text-scent-muted font-bold">
                     Archive Matches{' '}
                     <span className="tabular-nums text-scent-accent/75 tracking-[0.12em]">

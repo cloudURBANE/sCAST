@@ -41,12 +41,12 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
 
   return (
     <nav className="scent-topbar fixed top-0 left-0 right-0 h-16 sm:h-[72px] z-50 px-3 sm:px-8">
-      <div className="max-w-[1760px] mx-auto h-full relative flex items-center justify-center">
-        <div className="absolute left-0 top-1/2 -translate-y-1/2 flex items-center gap-2 sm:gap-4">
+      <div className="max-w-[1760px] mx-auto h-full flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2 sm:gap-4">
           {authControl}
           {currentRoute !== 'home' ? (
             <>
-              <span className="w-px h-3 bg-scent-accent/20 mx-0.5 sm:mx-1" aria-hidden="true" />
+              <span className="w-px h-3 bg-scent-accent/20 mx-0.5 sm:mx-1 shrink-0" aria-hidden="true" />
               <a href="/" className={inactiveNavClassName}>
                 Home
               </a>
@@ -54,15 +54,15 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
           ) : null}
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-3 pointer-events-none">
+        <div className="flex flex-1 min-w-0 items-center justify-center gap-2 sm:gap-3 pointer-events-none">
           <Wind
             strokeWidth={1.25}
-            className="w-[19.8px] h-[19.8px] sm:w-[22px] sm:h-[22px] text-scent-accent drop-shadow-[0_0_10px_rgba(201,139,44,0.22)]"
+            className="w-[19.8px] h-[19.8px] sm:w-[22px] sm:h-[22px] shrink-0 text-scent-accent drop-shadow-[0_0_10px_rgba(201,139,44,0.22)]"
           />
-          <h1 className="scent-brandmark font-serif text-[1.125rem] sm:text-3xl tracking-[0.14em] uppercase">{APP_BRAND_MARK}</h1>
+          <h1 className="scent-brandmark font-serif text-[1.125rem] sm:text-3xl tracking-[0.14em] uppercase truncate">{APP_BRAND_MARK}</h1>
         </div>
 
-        <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-2 sm:gap-4 justify-end">
+        <div className="flex shrink-0 items-center gap-2 sm:gap-4 justify-end">
           {currentRoute === 'community' ? (
             <span className={activeNavClassName}>
               <ActiveDot />
