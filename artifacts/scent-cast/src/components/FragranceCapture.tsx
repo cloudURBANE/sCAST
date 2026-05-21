@@ -4,7 +4,6 @@ import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import {
   collectMainAccordDisplayRows,
   getFragranceDetails,
-  isFragranceDetailEffectivelyComplete,
   normalizeFragranceDetail,
   searchFragrances,
   type FragranceDetail,
@@ -66,8 +65,6 @@ function sleep(ms: number): Promise<void> {
     setTimeout(resolve, ms);
   });
 }
-
-const PARTIAL_ENRICHMENT_NOTICE = "More source details are still being enriched.";
 
 /** Rotating vault headline — example house + scent pairs. */
 const VAULT_HEADLINE_ROTATION = [
@@ -272,7 +269,6 @@ export const FragranceCapture: React.FC<{
   const [errorStatus, setErrorStatus] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
   const [syncComplete, setSyncComplete] = useState(false);
-  const [pollingNotice, setPollingNotice] = useState<string | null>(null);
   const reduceMotion = useReducedMotion();
 
   const searchAbortController = useRef<AbortController | null>(null);
@@ -313,7 +309,6 @@ export const FragranceCapture: React.FC<{
     setLoadingStatus("Researching Fragrance...");
     setMatches([]);
     setErrorStatus(null);
-    setPollingNotice(null);
     setHasSearched(false);
     setSyncComplete(false);
 
@@ -375,7 +370,6 @@ export const FragranceCapture: React.FC<{
 
   const handleRetry = () => {
     setErrorStatus(null);
-    setPollingNotice(null);
     handleSearch();
   };
 
@@ -433,8 +427,7 @@ export const FragranceCapture: React.FC<{
     setUploading(true);
     setLoadingStatus("Fetching Fragrance Intelligence...");
     setSyncComplete(false);
-    setPollingNotice(null);
-    
+
     try {
       const syntheticSourceUrl = selectedId?.startsWith('source:')
         ? firstString(selectedId.slice('source:'.length))
@@ -473,9 +466,6 @@ export const FragranceCapture: React.FC<{
       const detail = normalizeFragranceDetail(
         (await getFragranceDetails(detailsRequest, { signal: controller.signal })) as FragranceDetail,
       );
-      if (!isFragranceDetailEffectivelyComplete(detail)) {
-        setPollingNotice(PARTIAL_ENRICHMENT_NOTICE);
-      }
       const metricNotes = detail.derived_metrics?.notes;
       const rawNotes = detail.raw?.notes;
       const pyramidNotes = {
@@ -597,9 +587,6 @@ export const FragranceCapture: React.FC<{
       setSyncComplete(true);
       await sleep(620);
       resetState();
-      if (!isFragranceDetailEffectivelyComplete(detail)) {
-        setPollingNotice(PARTIAL_ENRICHMENT_NOTICE);
-      }
     } catch (err: any) {
       if (err.name === 'AbortError') return;
       setErrorStatus(err?.message || "Fragrance detail fetch failed. Please check your connection.");
@@ -614,7 +601,6 @@ export const FragranceCapture: React.FC<{
     setHasSearched(false);
     setSearchQuery("");
     setSyncComplete(false);
-    setPollingNotice(null);
   };
 
   return (
@@ -678,18 +664,6 @@ export const FragranceCapture: React.FC<{
               <button onClick={handleRetry} className="text-[9px] uppercase tracking-widest text-red-500 font-bold hover:underline">
                 Try Again
               </button>
-            </motion.div>
-          )}
-        </AnimatePresence>
-        <AnimatePresence>
-          {pollingNotice && (
-            <motion.div
-              initial={{ opacity: 0, y: -8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              className="mb-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-scent text-center"
-            >
-              <p className="text-[10px] text-amber-300/90 font-medium leading-relaxed">{pollingNotice}</p>
             </motion.div>
           )}
         </AnimatePresence>
