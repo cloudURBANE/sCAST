@@ -41,13 +41,16 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
 
   return (
     <nav className="scent-topbar fixed top-0 left-0 right-0 h-16 sm:h-[72px] z-50 px-3 sm:px-8">
-      <div className="relative max-w-[1760px] mx-auto h-full flex items-center">
-        {/* Left controls — flow from the left edge. */}
-        <div className="flex shrink-0 items-center gap-2 sm:gap-4">
+      {/* Symmetric 3-column grid: equal 1fr side columns keep the brandmark
+          column mathematically centered; each control group is centered
+          within its own third so the bar reads as three evenly spaced zones. */}
+      <div className="max-w-[1760px] mx-auto h-full grid grid-cols-[1fr_auto_1fr] items-center">
+        {/* Left controls — centered within the left third. */}
+        <div className="flex min-w-0 items-center gap-3 sm:gap-6 justify-self-center">
           {authControl}
           {currentRoute !== 'home' ? (
             <>
-              <span className="w-px h-3 bg-scent-accent/20 mx-0.5 sm:mx-1 shrink-0" aria-hidden="true" />
+              <span className="w-px h-3 bg-scent-accent/20 shrink-0" aria-hidden="true" />
               <a href="/" className={inactiveNavClassName}>
                 Home
               </a>
@@ -55,9 +58,9 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
           ) : null}
         </div>
 
-        {/* Brandmark — absolutely pinned to the true center of the bar so it
-            stays dead-center regardless of how wide the side controls are. */}
-        <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-2 sm:gap-3">
+        {/* Brandmark — its own center column, so side controls can never
+            crowd it. Horizontal padding guarantees clear space on both sides. */}
+        <div className="flex items-center justify-center gap-2 sm:gap-3 px-4 sm:px-10">
           <Wind
             strokeWidth={1.25}
             className="w-[26px] h-[26px] sm:w-9 sm:h-9 shrink-0 text-scent-accent drop-shadow-[0_0_12px_rgba(201,139,44,0.26)]"
@@ -68,8 +71,8 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
           </h1>
         </div>
 
-        {/* Right controls — pushed to the right edge. */}
-        <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-4 justify-end">
+        {/* Right controls — centered within the right third, same gap as left. */}
+        <div className="flex min-w-0 items-center gap-3 sm:gap-6 justify-self-center">
           {currentRoute === 'community' ? (
             <span className={activeNavClassName}>
               <ActiveDot />
