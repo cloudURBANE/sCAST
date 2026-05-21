@@ -8,7 +8,7 @@ test("incoming absolute API object URLs are normalized back to local object path
     "/api/image-objects/images/processed/brand/bottle.webp?v=abc",
   );
   assert.equal(
-    parseIncomingImageUrl("https://scast-production.up.railway.app/api/image-objects/images/processed/brand/bottle.webp"),
+    parseIncomingImageUrl("https://api.scentbeam.com/api/image-objects/images/processed/brand/bottle.webp"),
     "/api/image-objects/images/processed/brand/bottle.webp",
   );
 });

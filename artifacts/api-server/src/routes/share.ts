@@ -1,55 +1,12 @@
 import { Router } from "express";
 import { AuthRequest, requireAuth } from "../middlewares/auth";
 import { db } from "@workspace/db";
-import { usersTable, userFragrancesTable, userSettingsTable } from "@workspace/db/schema";
-import { and, eq, sql } from "drizzle-orm";
+import { userFragrancesTable, userSettingsTable } from "@workspace/db/schema";
+import { eq } from "drizzle-orm";
 import { hydrateImageUrl, normalizeFragrance } from "../services/fragrancePayload";
-import { shareHandleFromEmail } from "../services/shareIdentity";
+import { getShareIdForUser, resolveShareUser } from "../services/shareUsers";
 
 const router = Router();
-
-function cleanShareRef(userRef: string): string {
-  return userRef.trim().toLowerCase().replace(/^@+/, "");
-}
-
-function isUuidish(value: string): boolean {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
-}
-
-function shareHandleSql() {
-  return sql<string>`coalesce(nullif(regexp_replace(regexp_replace(lower(split_part(${usersTable.email}, '@', 1)), '[^a-z0-9]+', '-', 'g'), '(^-+|-+$)', '', 'g'), ''), 'user')`;
-}
-
-async function resolveShareUser(userRef: string) {
-  if (isUuidish(userRef)) {
-    const rows = await db
-      .select()
-      .from(usersTable)
-      .where(eq(usersTable.id, userRef.toLowerCase() as any))
-      .limit(1);
-    return rows[0] ?? null;
-  }
-
-  const cleanRef = cleanShareRef(userRef);
-  if (!cleanRef) return null;
-
-  const rows = await db
-    .select()
-    .from(usersTable)
-    .where(sql`${shareHandleSql()} = ${cleanRef}`)
-    .limit(2);
-  return rows.length === 1 ? rows[0] : null;
-}
-
-async function getShareIdForUser(user: typeof usersTable.$inferSelect): Promise<string> {
-  const handle = shareHandleFromEmail(user.email);
-  const duplicates = await db
-    .select({ id: usersTable.id })
-    .from(usersTable)
-    .where(and(sql`${usersTable.id} <> ${user.id}`, sql`${shareHandleSql()} = ${handle}`))
-    .limit(1);
-  return duplicates.length > 0 ? user.id : `@${handle}`;
-}
 
 async function getOrCreateSettings(userId: string) {
   const rows = await db

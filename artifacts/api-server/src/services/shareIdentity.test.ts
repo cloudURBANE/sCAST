@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  isUuidish,
   resolveShareUserFromList,
   shareHandleFromEmail,
   shareIdForUser,
@@ -16,6 +17,12 @@ const USERS: ShareIdentityUser[] = [
 test("email local-parts are normalized into share handles", () => {
   assert.equal(shareHandleFromEmail("The.User+tag@example.com"), "the-user-tag");
   assert.equal(shareHandleFromEmail("@example.com"), "user");
+});
+
+test("uuid detection requires a full five-segment UUID shape", () => {
+  assert.equal(isUuidish("11111111-1111-4111-8111-111111111111"), true);
+  assert.equal(isUuidish("11111111-1111-4111-111111111111"), false);
+  assert.equal(isUuidish("@alex"), false);
 });
 
 test("ambiguous handle refs do not resolve to an arbitrary user", () => {

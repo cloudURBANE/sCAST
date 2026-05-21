@@ -9,11 +9,11 @@ export function shareHandleFromEmail(email: string): string {
   return normalized || "user";
 }
 
-function cleanShareRef(userRef: string): string {
+export function cleanShareRef(userRef: string): string {
   return userRef.trim().toLowerCase().replace(/^@+/, "");
 }
 
-function isUuidish(value: string): boolean {
+export function isUuidish(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 }
 

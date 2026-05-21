@@ -338,17 +338,20 @@ function FragrancePanel({
   title,
   children,
   className = "",
+  titleSuffix,
 }: {
   title: string;
   children: React.ReactNode;
   className?: string;
+  titleSuffix?: React.ReactNode;
 }) {
   return (
     <section className={`border border-white/10 bg-white/[0.025] shadow-[inset_0_1px_0_rgba(255,255,255,0.035)] ${className}`}>
-      <div className="border-b border-white/[0.07] px-4 py-3 text-center">
-        <p className="text-[10px] uppercase tracking-[0.34em] text-white/70 font-bold">
+      <div className="border-b border-white/[0.07] px-4 py-3 text-center flex items-center justify-center gap-1.5 relative">
+        <p className="text-[10px] uppercase tracking-[0.34em] text-white/70 font-bold pl-3">
           {title}
         </p>
+        {titleSuffix}
       </div>
       {children}
     </section>
@@ -1673,9 +1676,29 @@ export const Wardrobe: React.FC<{
                     </div>
 
                     <div className="space-y-3 sm:space-y-4 lg:h-full">
-                      <FragrancePanel title="Bottle Visual" className="lg:h-full lg:min-h-[21.25rem]">
-                        <div className="flex flex-col p-4">
-                          <div className="relative h-56 sm:h-72 lg:h-64 min-h-0 w-full shrink-0 overflow-hidden">
+                      <FragrancePanel 
+                        title="Bottle Visual" 
+                        className="lg:h-full lg:min-h-[21.25rem]"
+                        titleSuffix={
+                          <button
+                            type="button"
+                            onClick={() => setBottleImageToolsOpen((o) => !o)}
+                            className={`p-1.5 rounded-md border border-white/10 bg-white/[0.04] text-white/45 hover:text-white hover:bg-white/[0.08] transition-all flex items-center justify-center ${
+                              bottleImageToolsOpen ? 'text-scent-accent border-scent-accent/30 bg-scent-accent/5' : ''
+                            }`}
+                            title="Adjust bottle image and settings"
+                            aria-label="Toggle bottle image controls"
+                            aria-expanded={bottleImageToolsOpen}
+                          >
+                            <HelpCircle size={13} />
+                          </button>
+                        }
+                      >
+                        <div className="flex flex-col p-4 space-y-3">
+                          <div 
+                            className="relative h-56 sm:h-72 lg:h-64 min-h-0 w-full shrink-0 overflow-hidden cursor-pointer rounded-lg border border-white/5 bg-white/[0.01]"
+                            onClick={() => detailBottleUrl && setEnlargeOpen(true)}
+                          >
                             <BottleImage
                               key={detailBottleUrl || 'missing-image'}
                               variant="detail"
@@ -1687,8 +1710,9 @@ export const Wardrobe: React.FC<{
                               imgClassName="transition-all duration-300"
                             />
                           </div>
-                          {detailBottleUrl ? (
-                            <div className="mt-3 flex w-full shrink-0 justify-center">
+
+                          {detailBottleUrl && !bottleImageToolsOpen ? (
+                            <div className="flex w-full shrink-0 justify-center">
                               <button
                                 type="button"
                                 onClick={() => setEnlargeOpen(true)}
@@ -1698,6 +1722,382 @@ export const Wardrobe: React.FC<{
                                 <Maximize2 size={13} strokeWidth={2} />
                                 Enlarge
                               </button>
+                            </div>
+                          ) : null}
+
+                          {bottleImageToolsOpen ? (
+                            <div
+                              id="wardrobe-bottle-tools-panel"
+                              role="region"
+                              className="space-y-3 pt-2 border-t border-white/5"
+                            >
+                              <p className="text-center text-[10px] text-white/40 leading-snug font-sans">
+                                Pick what looks wrong, then search — or reimagine the current bottle. Save when it looks right.
+                              </p>
+
+                              <div className="space-y-3">
+                                <label htmlFor="wardrobe-clarify-solver" className="sr-only">
+                                  Search tuning for bottle image
+                                </label>
+                                <select
+                                  id="wardrobe-clarify-solver"
+                                  value={clarifySolverId}
+                                  onChange={(e) =>
+                                    setClarifySolverId((e.target.value || '') as WardrobeImageSolverId | '')
+                                  }
+                                  disabled={imageToolbarBusy}
+                                  className="w-full bg-black/45 border border-white/12 text-white text-[11px] py-2 px-2 rounded-lg font-sans outline-none focus:border-scent-accent/50 disabled:opacity-40"
+                                >
+                                  <option value="">Choose what looks wrong…</option>
+                                  {WARDROBE_CLARIFY_SOLVERS.map((s) => (
+                                    <option key={s.id} value={s.id}>
+                                      {s.label}
+                                    </option>
+                                  ))}
+                                </select>
+
+                                <div className="flex gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      void handleRefreshImage(selectedItem, clarifySolverId || undefined)
+                                    }
+                                    disabled={imageToolbarBusy || !clarifySolverId}
+                                    title={
+                                      !clarifySolverId ? 'Select an issue first' : undefined
+                                    }
+                                    className="flex-1 min-h-[38px] py-2 bg-white text-black uppercase tracking-[0.22em] text-[9px] font-bold hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 disabled:opacity-45 disabled:cursor-not-allowed rounded-lg"
+                                  >
+                                    {refreshingId === selectedItem.id ? (
+                                      <>
+                                        <RefreshCw size={11} className="animate-spin" /> Searching…
+                                      </>
+                                    ) : (
+                                      <>
+                                        <RefreshCw size={11} /> Find image
+                                      </>
+                                    )}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => void handleReimagine(selectedItem)}
+                                    disabled={
+                                      imageToolbarBusy || !detailBottleUrl?.trim()
+                                    }
+                                    title={
+                                      !detailBottleUrl?.trim()
+                                        ? 'Need an image first'
+                                        : 'Reimagine this bottle on a transparent background (1–3 min)'
+                                    }
+                                    className="flex-1 min-h-[38px] py-2 bg-white/[0.06] text-white uppercase tracking-[0.18em] text-[9px] font-bold border border-white/15 hover:bg-white/[0.1] active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 disabled:opacity-35 disabled:cursor-not-allowed rounded-lg"
+                                  >
+                                    {selectedReimagining ? (
+                                      <>
+                                        <RefreshCw size={11} className="animate-spin" /> Reimagining…
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Sparkles size={11} /> Reimagine
+                                      </>
+                                    )}
+                                  </button>
+                                </div>
+
+                                {selectedReimagining ? (
+                                  <div className="rounded-lg border border-white/15 bg-white/[0.04] px-2.5 py-2.5 text-center space-y-1">
+                                    <p className="text-[8px] uppercase tracking-[0.28em] text-white/70 font-bold">
+                                      Reimagining your bottle
+                                    </p>
+                                    <p className="text-[9px] leading-snug text-white/55 font-sans">
+                                      This usually takes 1–3 minutes. You can close this panel and
+                                      keep browsing — the new bottle will save to your vault
+                                      automatically when it&apos;s ready.
+                                    </p>
+                                  </div>
+                                ) : null}
+
+                                {usageTotals ? (
+                                  <p className="text-center text-[8px] uppercase tracking-[0.22em] text-white/35 font-sans">
+                                    Reimagine spend so far ·{' '}
+                                    <span className="tabular-nums text-white/55">
+                                      ${usageTotals.totalUsd.toFixed(3)}
+                                    </span>{' '}
+                                    across {usageTotals.count} call{usageTotals.count === 1 ? '' : 's'}
+                                  </p>
+                                ) : null}
+
+                                <div className="rounded-lg border border-white/10 bg-black/22 p-2.5 space-y-2.5">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <p className="text-[8px] uppercase tracking-[0.25em] text-white/45 font-bold">
+                                      Frame
+                                    </p>
+                                    <button
+                                      type="button"
+                                      onClick={() => setFrameDraft(DEFAULT_BOTTLE_IMAGE_ADJUSTMENT)}
+                                      disabled={imageToolbarBusy}
+                                      title="Reset frame"
+                                      aria-label="Reset bottle frame"
+                                      className="p-1 rounded-md border border-white/10 bg-white/[0.04] text-white/45 hover:text-white hover:bg-white/[0.08] disabled:opacity-30"
+                                    >
+                                      <RotateCcw size={11} />
+                                    </button>
+                                  </div>
+
+                                  <div className="grid grid-cols-[4.5rem_1fr_2.5rem] items-center gap-1.5">
+                                    <label className="flex items-center gap-1 text-[8px] uppercase tracking-[0.14em] text-white/42 font-bold">
+                                      <ZoomIn size={10} /> Size
+                                    </label>
+                                    <input
+                                      type="range"
+                                      min="0.7"
+                                      max="1.45"
+                                      step="0.01"
+                                      value={frameDraft.scale}
+                                      onChange={(e) => updateFrameDraft({ scale: Number(e.target.value) })}
+                                      disabled={imageToolbarBusy || !detailBottleUrl?.trim()}
+                                      aria-label="Bottle image size"
+                                      className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-white"
+                                    />
+                                    <span className="text-right text-[9px] tabular-nums text-white/42">
+                                      {framePercent(frameDraft.scale)}
+                                    </span>
+
+                                    <label className="flex items-center gap-1 text-[8px] uppercase tracking-[0.14em] text-white/42 font-bold">
+                                      <MoveHorizontal size={10} /> X
+                                    </label>
+                                    <input
+                                      type="range"
+                                      min="-18"
+                                      max="18"
+                                      step="0.5"
+                                      value={frameDraft.x}
+                                      onChange={(e) => updateFrameDraft({ x: Number(e.target.value) })}
+                                      disabled={imageToolbarBusy || !detailBottleUrl?.trim()}
+                                      aria-label="Bottle horizontal position"
+                                      className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-white"
+                                    />
+                                    <span className="text-right text-[9px] tabular-nums text-white/42">
+                                      {Math.round(frameDraft.x)}
+                                    </span>
+
+                                    <label className="flex items-center gap-1 text-[8px] uppercase tracking-[0.14em] text-white/42 font-bold">
+                                      <MoveVertical size={10} /> Y
+                                    </label>
+                                    <input
+                                      type="range"
+                                      min="-18"
+                                      max="18"
+                                      step="0.5"
+                                      value={frameDraft.y}
+                                      onChange={(e) => updateFrameDraft({ y: Number(e.target.value) })}
+                                      disabled={imageToolbarBusy || !detailBottleUrl?.trim()}
+                                      aria-label="Bottle vertical position"
+                                      className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-white"
+                                    />
+                                    <span className="text-right text-[9px] tabular-nums text-white/42">
+                                      {Math.round(frameDraft.y)}
+                                    </span>
+
+                                    <label className="flex items-center gap-1 text-[8px] uppercase tracking-[0.14em] text-white/42 font-bold">
+                                      <ArrowUp size={10} /> Top
+                                    </label>
+                                    <input
+                                      type="range"
+                                      min="0"
+                                      max={BOTTLE_CROP_STORED_MAX}
+                                      step="0.5"
+                                      value={frameDraft.cropTop}
+                                      onChange={(e) => updateFrameDraft({ cropTop: Number(e.target.value) })}
+                                      disabled={imageToolbarBusy || !detailBottleUrl?.trim()}
+                                      aria-label="Crop from top of bottle image"
+                                      className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-white"
+                                    />
+                                    <span className="text-right text-[9px] tabular-nums text-white/42">
+                                      {Math.round(frameDraft.cropTop)}
+                                    </span>
+
+                                    <label className="flex items-center gap-1 text-[8px] uppercase tracking-[0.14em] text-white/42 font-bold">
+                                      <ArrowRight size={10} /> Right
+                                    </label>
+                                    <input
+                                      type="range"
+                                      min="0"
+                                      max={BOTTLE_CROP_STORED_MAX}
+                                      step="0.5"
+                                      value={frameDraft.cropRight}
+                                      onChange={(e) => updateFrameDraft({ cropRight: Number(e.target.value) })}
+                                      disabled={imageToolbarBusy || !detailBottleUrl?.trim()}
+                                      aria-label="Crop from right of bottle image"
+                                      className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-white"
+                                    />
+                                    <span className="text-right text-[9px] tabular-nums text-white/42">
+                                      {Math.round(frameDraft.cropRight)}
+                                    </span>
+
+                                    <label className="flex items-center gap-1 text-[8px] uppercase tracking-[0.14em] text-white/42 font-bold">
+                                      <ArrowDown size={10} /> Bottom
+                                    </label>
+                                    <input
+                                      type="range"
+                                      min="0"
+                                      max={BOTTLE_CROP_STORED_MAX}
+                                      step="0.5"
+                                      value={frameDraft.cropBottom}
+                                      onChange={(e) => updateFrameDraft({ cropBottom: Number(e.target.value) })}
+                                      disabled={imageToolbarBusy || !detailBottleUrl?.trim()}
+                                      aria-label="Crop from bottom of bottle image"
+                                      className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-white"
+                                    />
+                                    <span className="text-right text-[9px] tabular-nums text-white/42">
+                                      {Math.round(frameDraft.cropBottom)}
+                                    </span>
+
+                                    <label className="flex items-center gap-1 text-[8px] uppercase tracking-[0.14em] text-white/42 font-bold">
+                                      <ArrowLeft size={10} /> Left
+                                    </label>
+                                    <input
+                                      type="range"
+                                      min="0"
+                                      max={BOTTLE_CROP_STORED_MAX}
+                                      step="0.5"
+                                      value={frameDraft.cropLeft}
+                                      onChange={(e) => updateFrameDraft({ cropLeft: Number(e.target.value) })}
+                                      disabled={imageToolbarBusy || !detailBottleUrl?.trim()}
+                                      aria-label="Crop from left of bottle image"
+                                      className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-white"
+                                    />
+                                    <span className="text-right text-[9px] tabular-nums text-white/42">
+                                      {Math.round(frameDraft.cropLeft)}
+                                    </span>
+                                  </div>
+
+                                  <div className="grid grid-cols-2 gap-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => updateFrameDraft({ scale: frameDraft.scale - 0.1 })}
+                                      disabled={imageToolbarBusy || !detailBottleUrl?.trim()}
+                                      className="min-h-[30px] rounded-md border border-white/10 bg-white/[0.035] text-[8px] uppercase tracking-[0.13em] text-white/52 font-bold flex items-center justify-center gap-1.5 disabled:opacity-30 hover:bg-white/[0.06] hover:text-white"
+                                    >
+                                      <ZoomOut size={10} /> 10%
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => updateFrameDraft({ scale: frameDraft.scale + 0.1 })}
+                                      disabled={imageToolbarBusy || !detailBottleUrl?.trim()}
+                                      className="min-h-[30px] rounded-md border border-white/10 bg-white/[0.035] text-[8px] uppercase tracking-[0.13em] text-white/52 font-bold flex items-center justify-center gap-1.5 disabled:opacity-30 hover:bg-white/[0.06] hover:text-white"
+                                    >
+                                      <ZoomIn size={10} /> 10%
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => updateFrameDraft({ x: 0, y: 0 })}
+                                      disabled={imageToolbarBusy || !detailBottleUrl?.trim()}
+                                      className="min-h-[30px] rounded-md border border-white/10 bg-white/[0.035] text-[8px] uppercase tracking-[0.13em] text-white/52 font-bold flex items-center justify-center gap-1.5 disabled:opacity-30 hover:bg-white/[0.06] hover:text-white"
+                                    >
+                                      <MoveHorizontal size={10} /> Center
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        updateFrameDraft({
+                                          cropTop: Math.max(
+                                            frameDraft.cropTop,
+                                            Math.round(BOTTLE_CROP_STORED_MAX * 0.3),
+                                          ),
+                                          cropRight: Math.max(
+                                            frameDraft.cropRight,
+                                            Math.round(BOTTLE_CROP_STORED_MAX * 0.3),
+                                          ),
+                                          cropBottom: Math.max(
+                                            frameDraft.cropBottom,
+                                            Math.round(BOTTLE_CROP_STORED_MAX * 0.12),
+                                          ),
+                                          cropLeft: Math.max(
+                                            frameDraft.cropLeft,
+                                            Math.round(BOTTLE_CROP_STORED_MAX * 0.3),
+                                          ),
+                                          scale: Math.max(frameDraft.scale, 1.08),
+                                        })
+                                      }
+                                      disabled={imageToolbarBusy || !detailBottleUrl?.trim()}
+                                      className="min-h-[30px] rounded-md border border-white/10 bg-white/[0.035] text-[8px] uppercase tracking-[0.13em] text-white/52 font-bold flex items-center justify-center gap-1.5 disabled:opacity-30 hover:bg-white/[0.06] hover:text-white"
+                                    >
+                                      <Crop size={10} /> Tight
+                                    </button>
+                                  </div>
+
+                                  {frameDirty && !hasPendingPreview ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => void handleSaveImageFrame()}
+                                      disabled={imageToolbarBusy || !onPersistWardrobeImage}
+                                      className="w-full min-h-[36px] rounded-lg bg-scent-accent text-black uppercase tracking-[0.2em] text-[9px] font-bold hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+                                    >
+                                      {persistBusy ? (
+                                        <>
+                                          <RefreshCw size={11} className="animate-spin" /> Saving...
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Save size={11} /> Save framing
+                                        </>
+                                      )}
+                                    </button>
+                                  ) : null}
+                                </div>
+
+                                {hasPendingPreview && (
+                                  <div className="flex flex-col gap-2 pt-2 border-t border-white/8">
+                                    {!onPersistWardrobeImage ? (
+                                      <p className="text-[9px] text-amber-200/75 text-center font-sans leading-snug px-1">
+                                        Sign in to save this preview to your vault.
+                                      </p>
+                                    ) : null}
+                                    {pendingPreview?.isFallback ? (
+                                      <p className="text-[9px] text-amber-200/85 text-center font-sans leading-snug px-1">
+                                        This preview still has a fallback background. Try another image fix before saving.
+                                      </p>
+                                    ) : null}
+                                    <div className="flex gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => void handleSavePreviewToVault()}
+                                        disabled={
+                                          persistBusy ||
+                                          !onPersistWardrobeImage ||
+                                          !!pendingPreview?.isFallback
+                                        }
+                                        title={
+                                          !onPersistWardrobeImage
+                                            ? 'Sign in to save to your vault'
+                                            : pendingPreview?.isFallback
+                                              ? 'This preview used a fallback background — try another fix first'
+                                              : undefined
+                                        }
+                                        className="flex-1 min-h-[38px] py-2 bg-scent-accent text-black uppercase tracking-[0.2em] text-[9px] font-bold hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg"
+                                      >
+                                        {persistBusy ? (
+                                          <>
+                                            <RefreshCw size={11} className="animate-spin" /> Saving…
+                                          </>
+                                        ) : (
+                                          <>
+                                            <Check size={11} /> Save to vault
+                                          </>
+                                        )}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setPendingPreview(null)}
+                                        disabled={persistBusy}
+                                        className="flex-1 min-h-[38px] py-2 bg-transparent text-white/50 uppercase tracking-[0.18em] text-[9px] font-bold border border-white/12 hover:bg-white/[0.05] hover:text-white/80 rounded-lg disabled:opacity-30"
+                                      >
+                                        Discard preview
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           ) : null}
                         </div>
@@ -1731,429 +2131,7 @@ export const Wardrobe: React.FC<{
                   <p className="text-[9px] text-yellow-400/70 text-center leading-snug px-2 py-1">{bgFallbackWarning}</p>
                 )}
 
-                <div
-                  className={`rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3 ${bottleImageToolsOpen ? 'space-y-3' : ''}`}
-                >
-                  <button
-                    type="button"
-                    id="wardrobe-bottle-tools-trigger"
-                    aria-expanded={bottleImageToolsOpen}
-                    aria-controls="wardrobe-bottle-tools-panel"
-                    onClick={() => setBottleImageToolsOpen((o) => !o)}
-                    className="w-full flex items-start justify-center gap-2 text-center rounded-lg -mx-1 px-1 py-0.5 hover:bg-white/[0.04] transition-colors"
-                  >
-                    <HelpCircle size={14} className="text-white/35 shrink-0 mt-0.5" aria-hidden />
-                    <div className="min-w-0 flex-1 space-y-1">
-                      <p className="text-[9px] uppercase tracking-[0.28em] text-white/45 font-bold">Bottle image</p>
-                      {!bottleImageToolsOpen ? (
-                        <p
-                          className={`mx-auto max-w-md text-center text-[10px] leading-snug font-sans ${
-                            detailNeedsClarify ? 'text-amber-200/75' : 'text-white/40'
-                          }`}
-                        >
-                          {detailNeedsClarify
-                            ? 'Pick a hint and search again, or reimagine the bottle.'
-                            : 'Expand to find a new image, reimagine the bottle, or save a preview.'}
-                        </p>
-                      ) : null}
-                    </div>
-                    <ChevronDown
-                      size={16}
-                      className={`text-white/35 shrink-0 mt-0.5 transition-transform duration-200 ${
-                        bottleImageToolsOpen ? 'rotate-180' : ''
-                      }`}
-                      aria-hidden
-                    />
-                  </button>
 
-                  {bottleImageToolsOpen ? (
-                    <div
-                      id="wardrobe-bottle-tools-panel"
-                      role="region"
-                      aria-labelledby="wardrobe-bottle-tools-trigger"
-                      className="max-h-[min(70dvh,44rem)] space-y-3 overflow-y-auto overscroll-contain pr-1 sm:max-h-[min(68dvh,46rem)] lg:max-h-[min(58dvh,36rem)]"
-                    >
-                      <p className="text-center text-[10px] text-white/40 leading-snug font-sans">
-                        Pick what looks wrong, then search — or reimagine the current bottle. Save when it looks right.
-                      </p>
-
-                      <div className="grid gap-3 lg:grid-cols-[minmax(14rem,0.82fr)_minmax(0,1.35fr)] lg:items-start">
-                        <div className="sticky top-0 z-10 rounded-lg border border-white/10 bg-[#050403]/95 p-2.5 shadow-[0_18px_34px_-22px_rgba(0,0,0,0.95)] backdrop-blur md:p-3">
-                          <div className="relative mx-auto aspect-[3/4] h-auto w-full max-w-[12.5rem] sm:max-w-[14rem] lg:max-w-[16rem]">
-                            <BottleImage
-                              key={`editor-${detailBottleUrl || 'missing-image'}`}
-                              variant="detail"
-                              src={detailBottleUrl}
-                              alt={entryName(selectedItem)}
-                              adjustment={frameDraft}
-                              showFrameGuide
-                              className="absolute inset-0"
-                              imgClassName="brightness-[1.08]"
-                              loading="eager"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="min-w-0 space-y-3">
-                      <label htmlFor="wardrobe-clarify-solver" className="sr-only">
-                        Search tuning for bottle image
-                      </label>
-                      <select
-                        id="wardrobe-clarify-solver"
-                        value={clarifySolverId}
-                        onChange={(e) =>
-                          setClarifySolverId((e.target.value || '') as WardrobeImageSolverId | '')
-                        }
-                        disabled={imageToolbarBusy}
-                        className="w-full bg-black/45 border border-white/12 text-white text-[11px] py-2.5 px-2 rounded-lg font-sans outline-none focus:border-scent-accent/50 disabled:opacity-40"
-                      >
-                        <option value="">Choose what looks wrong…</option>
-                        {WARDROBE_CLARIFY_SOLVERS.map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.label}
-                          </option>
-                        ))}
-                      </select>
-
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            void handleRefreshImage(selectedItem, clarifySolverId || undefined)
-                          }
-                          disabled={imageToolbarBusy || !clarifySolverId}
-                          title={
-                            !clarifySolverId ? 'Select an issue first' : undefined
-                          }
-                          className="flex-1 min-h-[44px] py-3 bg-white text-black uppercase tracking-[0.22em] text-[10px] font-bold hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-45 disabled:cursor-not-allowed rounded-lg"
-                        >
-                          {refreshingId === selectedItem.id ? (
-                            <>
-                              <RefreshCw size={12} className="animate-spin" /> Searching…
-                            </>
-                          ) : (
-                            <>
-                              <RefreshCw size={12} /> Find image
-                            </>
-                          )}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void handleReimagine(selectedItem)}
-                          disabled={
-                            imageToolbarBusy || !detailBottleUrl?.trim()
-                          }
-                          title={
-                            !detailBottleUrl?.trim()
-                              ? 'Need an image first'
-                              : 'Reimagine this bottle on a transparent background (1–3 min)'
-                          }
-                          className="flex-1 min-h-[44px] py-3 bg-white/[0.06] text-white uppercase tracking-[0.18em] text-[10px] font-bold border border-white/15 hover:bg-white/[0.1] active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-35 disabled:cursor-not-allowed rounded-lg"
-                        >
-                          {selectedReimagining ? (
-                            <>
-                              <RefreshCw size={12} className="animate-spin" /> Reimagining…
-                            </>
-                          ) : (
-                            <>
-                              <Sparkles size={12} /> Reimagine
-                            </>
-                          )}
-                        </button>
-                      </div>
-
-                      {selectedReimagining ? (
-                        <div className="rounded-lg border border-white/15 bg-white/[0.04] px-3 py-3 text-center space-y-1">
-                          <p className="text-[9px] uppercase tracking-[0.28em] text-white/70 font-bold">
-                            Reimagining your bottle
-                          </p>
-                          <p className="text-[10px] leading-snug text-white/55 font-sans">
-                            This usually takes 1–3 minutes. You can close this panel and
-                            keep browsing — the new bottle will save to your vault
-                            automatically when it&apos;s ready.
-                          </p>
-                        </div>
-                      ) : null}
-
-                      {usageTotals ? (
-                        <p className="text-center text-[9px] uppercase tracking-[0.22em] text-white/35 font-sans">
-                          Reimagine spend so far ·{' '}
-                          <span className="tabular-nums text-white/55">
-                            ${usageTotals.totalUsd.toFixed(3)}
-                          </span>{' '}
-                          across {usageTotals.count} call{usageTotals.count === 1 ? '' : 's'}
-                        </p>
-                      ) : null}
-
-                      <div className="rounded-lg border border-white/10 bg-black/22 p-3 space-y-3">
-                        <div className="flex items-center justify-between gap-3">
-                          <p className="text-[9px] uppercase tracking-[0.25em] text-white/45 font-bold">
-                            Frame
-                          </p>
-                          <button
-                            type="button"
-                            onClick={() => setFrameDraft(DEFAULT_BOTTLE_IMAGE_ADJUSTMENT)}
-                            disabled={imageToolbarBusy}
-                            title="Reset frame"
-                            aria-label="Reset bottle frame"
-                            className="p-1.5 rounded-md border border-white/10 bg-white/[0.04] text-white/45 hover:text-white hover:bg-white/[0.08] disabled:opacity-30"
-                          >
-                            <RotateCcw size={13} />
-                          </button>
-                        </div>
-
-                        <div className="grid grid-cols-[5.75rem_1fr_3.1rem] items-center gap-2">
-                          <label className="flex items-center gap-1.5 text-[9px] uppercase tracking-[0.14em] text-white/42 font-bold">
-                            <ZoomIn size={12} /> Size
-                          </label>
-                          <input
-                            type="range"
-                            min="0.7"
-                            max="1.45"
-                            step="0.01"
-                            value={frameDraft.scale}
-                            onChange={(e) => updateFrameDraft({ scale: Number(e.target.value) })}
-                            disabled={imageToolbarBusy || !detailBottleUrl?.trim()}
-                            aria-label="Bottle image size"
-                          />
-                          <span className="text-right text-[10px] tabular-nums text-white/42">
-                            {framePercent(frameDraft.scale)}
-                          </span>
-
-                          <label className="flex items-center gap-1.5 text-[9px] uppercase tracking-[0.14em] text-white/42 font-bold">
-                            <MoveHorizontal size={12} /> X
-                          </label>
-                          <input
-                            type="range"
-                            min="-18"
-                            max="18"
-                            step="0.5"
-                            value={frameDraft.x}
-                            onChange={(e) => updateFrameDraft({ x: Number(e.target.value) })}
-                            disabled={imageToolbarBusy || !detailBottleUrl?.trim()}
-                            aria-label="Bottle horizontal position"
-                          />
-                          <span className="text-right text-[10px] tabular-nums text-white/42">
-                            {Math.round(frameDraft.x)}
-                          </span>
-
-                          <label className="flex items-center gap-1.5 text-[9px] uppercase tracking-[0.14em] text-white/42 font-bold">
-                            <MoveVertical size={12} /> Y
-                          </label>
-                          <input
-                            type="range"
-                            min="-18"
-                            max="18"
-                            step="0.5"
-                            value={frameDraft.y}
-                            onChange={(e) => updateFrameDraft({ y: Number(e.target.value) })}
-                            disabled={imageToolbarBusy || !detailBottleUrl?.trim()}
-                            aria-label="Bottle vertical position"
-                          />
-                          <span className="text-right text-[10px] tabular-nums text-white/42">
-                            {Math.round(frameDraft.y)}
-                          </span>
-
-                          <label className="flex items-center gap-1.5 text-[9px] uppercase tracking-[0.14em] text-white/42 font-bold">
-                            <ArrowUp size={12} /> Top
-                          </label>
-                          <input
-                            type="range"
-                            min="0"
-                            max={BOTTLE_CROP_STORED_MAX}
-                            step="0.5"
-                            value={frameDraft.cropTop}
-                            onChange={(e) => updateFrameDraft({ cropTop: Number(e.target.value) })}
-                            disabled={imageToolbarBusy || !detailBottleUrl?.trim()}
-                            aria-label="Crop from top of bottle image"
-                          />
-                          <span className="text-right text-[10px] tabular-nums text-white/42">
-                            {Math.round(frameDraft.cropTop)}
-                          </span>
-
-                          <label className="flex items-center gap-1.5 text-[9px] uppercase tracking-[0.14em] text-white/42 font-bold">
-                            <ArrowRight size={12} /> Right
-                          </label>
-                          <input
-                            type="range"
-                            min="0"
-                            max={BOTTLE_CROP_STORED_MAX}
-                            step="0.5"
-                            value={frameDraft.cropRight}
-                            onChange={(e) => updateFrameDraft({ cropRight: Number(e.target.value) })}
-                            disabled={imageToolbarBusy || !detailBottleUrl?.trim()}
-                            aria-label="Crop from right of bottle image"
-                          />
-                          <span className="text-right text-[10px] tabular-nums text-white/42">
-                            {Math.round(frameDraft.cropRight)}
-                          </span>
-
-                          <label className="flex items-center gap-1.5 text-[9px] uppercase tracking-[0.14em] text-white/42 font-bold">
-                            <ArrowDown size={12} /> Bottom
-                          </label>
-                          <input
-                            type="range"
-                            min="0"
-                            max={BOTTLE_CROP_STORED_MAX}
-                            step="0.5"
-                            value={frameDraft.cropBottom}
-                            onChange={(e) => updateFrameDraft({ cropBottom: Number(e.target.value) })}
-                            disabled={imageToolbarBusy || !detailBottleUrl?.trim()}
-                            aria-label="Crop from bottom of bottle image"
-                          />
-                          <span className="text-right text-[10px] tabular-nums text-white/42">
-                            {Math.round(frameDraft.cropBottom)}
-                          </span>
-
-                          <label className="flex items-center gap-1.5 text-[9px] uppercase tracking-[0.14em] text-white/42 font-bold">
-                            <ArrowLeft size={12} /> Left
-                          </label>
-                          <input
-                            type="range"
-                            min="0"
-                            max={BOTTLE_CROP_STORED_MAX}
-                            step="0.5"
-                            value={frameDraft.cropLeft}
-                            onChange={(e) => updateFrameDraft({ cropLeft: Number(e.target.value) })}
-                            disabled={imageToolbarBusy || !detailBottleUrl?.trim()}
-                            aria-label="Crop from left of bottle image"
-                          />
-                          <span className="text-right text-[10px] tabular-nums text-white/42">
-                            {Math.round(frameDraft.cropLeft)}
-                          </span>
-                        </div>
-
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                          <button
-                            type="button"
-                            onClick={() => updateFrameDraft({ scale: frameDraft.scale - 0.1 })}
-                            disabled={imageToolbarBusy || !detailBottleUrl?.trim()}
-                            className="min-h-[34px] rounded-md border border-white/10 bg-white/[0.035] text-[9px] uppercase tracking-[0.13em] text-white/52 font-bold flex items-center justify-center gap-1.5 disabled:opacity-30"
-                          >
-                            <ZoomOut size={12} /> 10%
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => updateFrameDraft({ scale: frameDraft.scale + 0.1 })}
-                            disabled={imageToolbarBusy || !detailBottleUrl?.trim()}
-                            className="min-h-[34px] rounded-md border border-white/10 bg-white/[0.035] text-[9px] uppercase tracking-[0.13em] text-white/52 font-bold flex items-center justify-center gap-1.5 disabled:opacity-30"
-                          >
-                            <ZoomIn size={12} /> 10%
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => updateFrameDraft({ x: 0, y: 0 })}
-                            disabled={imageToolbarBusy || !detailBottleUrl?.trim()}
-                            className="min-h-[34px] rounded-md border border-white/10 bg-white/[0.035] text-[9px] uppercase tracking-[0.13em] text-white/52 font-bold flex items-center justify-center gap-1.5 disabled:opacity-30"
-                          >
-                            <MoveHorizontal size={12} /> Center
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              updateFrameDraft({
-                                cropTop: Math.max(
-                                  frameDraft.cropTop,
-                                  Math.round(BOTTLE_CROP_STORED_MAX * 0.3),
-                                ),
-                                cropRight: Math.max(
-                                  frameDraft.cropRight,
-                                  Math.round(BOTTLE_CROP_STORED_MAX * 0.3),
-                                ),
-                                cropBottom: Math.max(
-                                  frameDraft.cropBottom,
-                                  Math.round(BOTTLE_CROP_STORED_MAX * 0.12),
-                                ),
-                                cropLeft: Math.max(
-                                  frameDraft.cropLeft,
-                                  Math.round(BOTTLE_CROP_STORED_MAX * 0.3),
-                                ),
-                                scale: Math.max(frameDraft.scale, 1.08),
-                              })
-                            }
-                            disabled={imageToolbarBusy || !detailBottleUrl?.trim()}
-                            className="min-h-[34px] rounded-md border border-white/10 bg-white/[0.035] text-[9px] uppercase tracking-[0.13em] text-white/52 font-bold flex items-center justify-center gap-1.5 disabled:opacity-30"
-                          >
-                            <Crop size={12} /> Tight
-                          </button>
-                        </div>
-
-                        {frameDirty && !hasPendingPreview ? (
-                          <button
-                            type="button"
-                            onClick={() => void handleSaveImageFrame()}
-                            disabled={imageToolbarBusy || !onPersistWardrobeImage}
-                            className="w-full min-h-[40px] rounded-lg bg-scent-accent text-black uppercase tracking-[0.2em] text-[10px] font-bold hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
-                          >
-                            {persistBusy ? (
-                              <>
-                                <RefreshCw size={12} className="animate-spin" /> Saving...
-                              </>
-                            ) : (
-                              <>
-                                <Save size={12} /> Save framing
-                              </>
-                            )}
-                          </button>
-                        ) : null}
-                      </div>
-
-                      {hasPendingPreview && (
-                        <div className="flex flex-col gap-2 pt-1 border-t border-white/8">
-                          {!onPersistWardrobeImage ? (
-                            <p className="text-[10px] text-amber-200/75 text-center font-sans leading-snug px-1">
-                              Sign in to save this preview to your vault.
-                            </p>
-                          ) : null}
-                          {pendingPreview?.isFallback ? (
-                            <p className="text-[10px] text-amber-200/85 text-center font-sans leading-snug px-1">
-                              This preview still has a fallback background. Try another image fix before saving.
-                            </p>
-                          ) : null}
-                          <div className="flex gap-2">
-                            <button
-                              type="button"
-                              onClick={() => void handleSavePreviewToVault()}
-                              disabled={
-                                persistBusy ||
-                                !onPersistWardrobeImage ||
-                                !!pendingPreview?.isFallback
-                              }
-                              title={
-                                !onPersistWardrobeImage
-                                  ? 'Sign in to save to your vault'
-                                  : pendingPreview?.isFallback
-                                    ? 'This preview used a fallback background — try another fix first'
-                                    : undefined
-                              }
-                              className="flex-1 min-h-[44px] py-3 bg-scent-accent text-black uppercase tracking-[0.2em] text-[10px] font-bold hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg"
-                            >
-                              {persistBusy ? (
-                                <>
-                                  <RefreshCw size={12} className="animate-spin" /> Saving…
-                                </>
-                              ) : (
-                                <>
-                                  <Check size={12} /> Save to vault
-                                </>
-                              )}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setPendingPreview(null)}
-                              disabled={persistBusy}
-                              className="flex-1 min-h-[44px] py-3 bg-transparent text-white/50 uppercase tracking-[0.18em] text-[10px] font-bold border border-white/12 hover:bg-white/[0.05] hover:text-white/80 rounded-lg disabled:opacity-30"
-                            >
-                              Discard preview
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                        </div>
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
 
                 <div className="grid grid-cols-2 overflow-hidden rounded-lg border border-white/10 bg-white/[0.02]">
                   <button
