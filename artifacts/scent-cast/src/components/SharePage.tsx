@@ -16,6 +16,7 @@ import { LavaBackground } from './LavaBackground';
 import { BottleImage } from '@/components/BottleImage';
 import type { BottleImageAdjustment } from '@/lib/bottleImageAdjustment';
 import { APP_BRAND_MARK } from '@/lib/appBrand';
+import { publicShareBuyLinkEndpoint } from '@/lib/shareLinks';
 import { ScentNotesInfographic } from '@/components/ScentNotesInfographic';
 import {
   collectMainAccordDisplayRows,
@@ -563,7 +564,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
           Promise.all(
             fragranceIds.map(async (fragranceId: string) => {
               try {
-                const response = await fetch(`/api/fragrances/${encodeURIComponent(fragranceId)}/buy-link`);
+                const response = await fetch(publicShareBuyLinkEndpoint(userId, fragranceId));
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 const buyLink = await response.json();
                 return [fragranceId, buyLink] as const;
