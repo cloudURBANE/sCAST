@@ -95,6 +95,8 @@ export type FragranceSearchResult = {
   gender?: string | null;
   source_url?: string | null;
   origin?: FragranceSearchOrigin;
+  bn_positive_pct?: number;
+  bn_vote_count?: number;
 };
 
 export type FragranceSearchResponse = {
