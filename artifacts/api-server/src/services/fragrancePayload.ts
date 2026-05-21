@@ -122,9 +122,6 @@ export function normalizeFragrance(fragrance: Record<string, any>): Record<strin
 /** Prefer the shared catalog/cache image; fall back to the stored row URL only if needed. */
 export async function hydrateImageUrl(fragrance: Record<string, any>): Promise<Record<string, any>> {
   const current = await usableImageUrlForResponse(fragrance.imageUrl);
-  if (current) {
-    return fragrance;
-  }
   const name = fragrance.name as string | undefined;
   const brand = fragrance.brand as string | undefined;
   if (!name || !brand) return { ...fragrance, imageUrl: chooseHydratedImageUrl(null, current) };

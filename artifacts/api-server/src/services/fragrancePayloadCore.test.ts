@@ -63,13 +63,13 @@ test("stampVaultSchemaVersion preserves every other field, including falsy ones"
   }
 });
 
-test("chooseHydratedImageUrl prefers a usable stored row image over a fresh shared image", () => {
+test("chooseHydratedImageUrl prefers a fresh shared image over a usable stored row image", () => {
   assert.equal(
     chooseHydratedImageUrl(
       "https://cdn.example.com/fresh.webp",
       "https://cdn.example.com/stale.webp",
     ),
-    "https://cdn.example.com/stale.webp",
+    "https://cdn.example.com/fresh.webp",
   );
 });
 
