@@ -28,6 +28,7 @@ import {
   ArrowRight,
   ArrowDown,
   ArrowLeft,
+  Quote,
 } from 'lucide-react';
 import { bottleFeaturedSlotClass } from '@/lib/bottleImageFrame';
 import {
@@ -52,11 +53,12 @@ import {
 } from '@/lib/wardrobeSearchSuggest';
 import {
   collectMainAccordDisplayRows,
+  extractDetailReviews,
   normalizeSourceCoverage,
-  requeueFragranceDetails,
-  resolveSourceStatus,
+  summarizeReviews,
   type DerivedMetrics,
   type FragranceDetail,
+  type FragranceRawReview,
   type SourceCoverage,
 } from '@/lib/fragranceApi';
 
@@ -358,76 +360,102 @@ function FragrancePanel({
   );
 }
 
-function SourceStatusPanel({
-  coverage,
-  enrichment,
-  onRequeue,
-  requeueing = false,
-  requeueDisabled = false,
-  requeueMessage,
+/**
+ * Reviews panel — distils the engine's scraped reviews into short, original
+ * comments (via the `/api/reviews/summarize` Gemini endpoint) and presents them
+ * in a slow auto-scrolling "teleprompter" that pauses on hover.
+ *
+ * Replaces the former Source Status panel. The panel renders nothing until
+ * there are comments to show, so a fragrance with no reviews shows no panel.
+ */
+function ReviewsPanel({
+  name,
+  brand,
+  reviews,
 }: {
-  coverage?: SourceCoverage;
-  enrichment?: FragranceDetail["enrichment"];
-  onRequeue?: () => void;
-  requeueing?: boolean;
-  requeueDisabled?: boolean;
-  requeueMessage?: string | null;
+  name?: string;
+  brand?: string;
+  reviews: FragranceRawReview[];
 }) {
-  const sourceStatus = resolveSourceStatus(
-    coverage,
-    enrichment,
-    "SRT enrichment can be refreshed when engine identity is available.",
+  const [comments, setComments] = React.useState<string[]>([]);
+  const [loading, setLoading] = React.useState(false);
+
+  // Stable identity for the review set so the effect only refetches when the
+  // underlying reviews actually change (not on every parent re-render).
+  const reviewsKey = React.useMemo(
+    () => reviews.map((r) => r.text).join('|').slice(0, 6000),
+    [reviews],
   );
 
-  if (!sourceStatus.hasCoverage && !sourceStatus.statusText && !onRequeue && !requeueMessage) return null;
+  React.useEffect(() => {
+    if (reviews.length === 0) {
+      setComments([]);
+      setLoading(false);
+      return;
+    }
+    const controller = new AbortController();
+    setLoading(true);
+    setComments([]);
+    summarizeReviews({ name, brand, reviews }, { signal: controller.signal })
+      .then((result) => {
+        if (!controller.signal.aborted) setComments(result);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+    // `reviewsKey` captures the relevant content of `reviews`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reviewsKey, name, brand]);
+
+  // Nothing to show and nothing in flight — hide the panel entirely.
+  if (reviews.length === 0) return null;
+  if (!loading && comments.length === 0) return null;
+
+  const scroll = comments.length >= 3;
+  // Duplicate the list so the -50% keyframe loops seamlessly.
+  const rendered = scroll ? [...comments, ...comments] : comments;
+  const trackStyle = scroll
+    ? ({ ['--reviews-scroll-duration' as string]: `${Math.max(28, comments.length * 7)}s` } as React.CSSProperties)
+    : undefined;
 
   return (
-    <FragrancePanel title="Source Status" className="overflow-hidden">
-      <div className="space-y-2.5 px-4 py-3">
-        <div className="flex items-center justify-center gap-2.5">
-          {sourceStatus.badgeLabel ? (
-            <span className={`shrink-0 text-[8px] uppercase tracking-[0.22em] font-bold px-2 py-0.5 border ${
-              sourceStatus.complete
-                ? 'border-scent-accent/35 text-scent-accent/85 bg-scent-accent/[0.07]'
-                : 'border-white/10 text-white/45 bg-white/[0.03]'
-            }`}>
-              {sourceStatus.badgeLabel}
-            </span>
-          ) : null}
-          <p className="text-center text-[13px] italic text-white/52 font-serif leading-relaxed">
-            {sourceStatus.statusText}
+    <FragrancePanel title="Reviews">
+      {loading ? (
+        <div className="flex items-center justify-center gap-2 px-4 py-10 text-center">
+          <RefreshCw size={13} className="animate-spin text-white/45" />
+          <p className="text-[11px] uppercase tracking-[0.2em] text-white/45 font-bold">
+            Distilling reviews…
           </p>
         </div>
-        {sourceStatus.shouldShowEnrichmentMessage ? (
-          <p className="text-center text-[10px] uppercase tracking-[0.18em] text-white/38 font-bold leading-relaxed">
-            {sourceStatus.enrichmentMessage}
-          </p>
-        ) : null}
-        {onRequeue ? (
-          <div className="flex justify-center pt-1">
-            <button
-              type="button"
-              onClick={onRequeue}
-              disabled={requeueDisabled || requeueing}
-              title={
-                requeueDisabled
-                  ? "This vault entry does not have an SRT engine id or source URL."
-                  : "Force-refresh the SRT engine enrichment cache"
-              }
-              className="inline-flex min-h-[38px] items-center justify-center gap-2 rounded-lg border border-scent-accent/30 bg-scent-accent/10 px-4 py-2 text-[9px] font-bold uppercase tracking-[0.2em] text-scent-accent transition-colors hover:bg-scent-accent/16 hover:text-[#fff7ec] disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.03] disabled:text-white/28"
-            >
-              <RefreshCw size={12} className={requeueing ? 'animate-spin' : ''} />
-              {requeueing ? "Refreshing..." : "Refresh SRT data"}
-            </button>
+      ) : scroll ? (
+        <div className="scent-reviews-teleprompter h-[14rem] px-5 py-4">
+          <div className="scent-reviews-teleprompter-track gap-3.5" style={trackStyle}>
+            {rendered.map((comment, index) => (
+              <ReviewComment key={`${index}-${comment.slice(0, 24)}`} text={comment} />
+            ))}
           </div>
-        ) : null}
-        {requeueMessage ? (
-          <p className="text-center text-[10px] leading-snug text-white/46 font-sans">
-            {requeueMessage}
-          </p>
-        ) : null}
-      </div>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3.5 px-5 py-5">
+          {rendered.map((comment, index) => (
+            <ReviewComment key={`${index}-${comment.slice(0, 24)}`} text={comment} />
+          ))}
+        </div>
+      )}
     </FragrancePanel>
+  );
+}
+
+/** A single rewritten review comment, styled as an editorial quote line. */
+function ReviewComment({ text }: { text: string }) {
+  return (
+    <div className="flex items-start justify-center gap-2.5">
+      <Quote size={13} className="mt-0.5 shrink-0 text-scent-accent/55" />
+      <p className="max-w-md text-center text-[13px] italic leading-relaxed text-white/64 font-serif">
+        {text}
+      </p>
+    </div>
   );
 }
 
@@ -549,14 +577,25 @@ function CyclingTilePair({
   );
 }
 
+/**
+ * Profile Score panel, rendered in two independently-placed sections:
+ *  - `section="tiles"`  — the 4 stat tiles (Wear / Performance / Community / Value)
+ *  - `section="score"`  — the large consensus "/100" headline
+ *
+ * The detail view keeps the tiles up top but moves the score headline down
+ * below the bottle visual. The unavailable-state notice renders only in the
+ * `tiles` section so it never appears twice.
+ */
 function ProfileScorePanel({
   metrics,
   coverage,
   legacyPerformance,
+  section,
 }: {
   metrics?: DerivedMetrics | null;
   coverage?: SourceCoverage;
   legacyPerformance?: Fragrance["performance"];
+  section: "tiles" | "score";
 }) {
   const headline = metrics?.headline ?? null;
   const performance = metrics?.performance_score ?? null;
@@ -566,7 +605,7 @@ function ProfileScorePanel({
   const wearProfile = formatWearProfile(metrics?.wear_profile);
 
   if (!metrics || !hasDerivedMetricsContent(metrics)) {
-    if (!coverage) return null;
+    if (section === "score" || !coverage) return null;
 
     return (
       <FragrancePanel title="Derived Intelligence">
@@ -586,6 +625,39 @@ function ProfileScorePanel({
     );
   }
 
+  // --- Score headline section (placed below the bottle visual) -------------
+  if (section === "score") {
+    return (
+      <>
+        <div className="hidden sm:flex flex-col items-center justify-center border border-white/10 bg-white/[0.025] px-4 py-6 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]">
+          <p className="text-[10px] uppercase tracking-[0.28em] text-white/64 font-bold">Profile Score</p>
+          <div className="mt-1 flex items-end justify-center gap-2">
+            <span className="font-serif italic text-6xl leading-none text-scent-accent">
+              {consensusScore ?? "--"}
+            </span>
+            <span className="pb-2 text-xl text-white/76">/100</span>
+          </div>
+          <p className="mt-1 text-sm text-scent-accent/90">{headline?.label ?? "Intelligence profile"}</p>
+        </div>
+
+        <FragrancePanel title="Profile Score" className="sm:hidden">
+          <div className="px-4 py-4">
+            <div className="mx-auto flex w-fit items-end justify-center gap-2">
+              <span className="font-serif italic text-5xl leading-none text-scent-accent">
+                {consensusScore ?? "--"}
+              </span>
+              <span className="pb-2 text-lg text-white/72">/100</span>
+            </div>
+            <p className="mt-1 text-center text-sm text-scent-accent/90">
+              {headline?.label ?? "Intelligence profile"}
+            </p>
+          </div>
+        </FragrancePanel>
+      </>
+    );
+  }
+
+  // --- Stat tiles section --------------------------------------------------
   const wearParts = buildWearProfileParts(metrics?.wear_profile);
   const derivedPerfParts = buildPerformanceParts(performance);
   const perfParts =
@@ -631,18 +703,7 @@ function ProfileScorePanel({
   ];
 
   return (
-    <div className="space-y-3 sm:space-y-5">
-      <div className="hidden sm:flex flex-col items-center justify-center border-y border-white/8 px-4 py-6 text-center">
-        <p className="text-[10px] uppercase tracking-[0.28em] text-white/64 font-bold">Profile Score</p>
-        <div className="mt-1 flex items-end justify-center gap-2">
-          <span className="font-serif italic text-6xl leading-none text-scent-accent">
-            {consensusScore ?? "--"}
-          </span>
-          <span className="pb-2 text-xl text-white/76">/100</span>
-        </div>
-        <p className="mt-1 text-sm text-scent-accent/90">{headline?.label ?? "Intelligence profile"}</p>
-      </div>
-
+    <>
       {(() => {
         const renderDesktopTile = (stat: StatCard) => {
           const Icon = stat.icon;
@@ -686,16 +747,9 @@ function ProfileScorePanel({
         );
       })()}
 
-      <FragrancePanel title="Profile Score" className="sm:hidden">
+      <FragrancePanel title="Profile Breakdown" className="sm:hidden">
         <div className="px-4 py-4">
-          <div className="mx-auto flex w-fit items-end justify-center gap-2">
-            <span className="font-serif italic text-5xl leading-none text-scent-accent">
-              {consensusScore ?? "--"}
-            </span>
-            <span className="pb-2 text-lg text-white/72">/100</span>
-          </div>
-          <p className="mt-1 text-center text-sm text-scent-accent/90">{headline?.label ?? "Intelligence profile"}</p>
-          <div className="mt-4 grid grid-cols-4 gap-1.5">
+          <div className="grid grid-cols-4 gap-1.5">
             {statCards.map((stat) => {
               const Icon = stat.icon;
               return (
@@ -729,8 +783,7 @@ function ProfileScorePanel({
           </div>
         </div>
       </FragrancePanel>
-
-    </div>
+    </>
   );
 }
 
@@ -805,43 +858,6 @@ function withImageVersion(url: string, version?: string | number | null): string
   return `${trimmed}${trimmed.includes('?') ? '&' : '?'}v=${encodeURIComponent(String(v))}`;
 }
 
-function isFragranticaUrl(value: string | null | undefined): value is string {
-  return typeof value === 'string' && /fragrantica\.com/i.test(value);
-}
-
-function srtEngineIdFromItem(item: Fragrance): string | undefined {
-  const id = firstStringValue(item.fragranceApiId, item.raw_engine_detail?.id);
-  if (!id) return undefined;
-  if (/^(catalog|dataset|local|source):/i.test(id)) return undefined;
-  return id;
-}
-
-function fragranticaSourceUrlFromItem(item: Fragrance): string | undefined {
-  const apiId = firstStringValue(item.fragranceApiId, item.raw_engine_detail?.id);
-  const sourceIdUrl = apiId?.startsWith('source:') ? apiId.slice('source:'.length).trim() : null;
-  const sourceUrl = firstStringValue(
-    item.source_url,
-    item.raw_engine_detail?.source_url,
-    item.raw_engine_detail?.raw?.source_urls?.frag_url,
-    sourceIdUrl,
-  );
-
-  return isFragranticaUrl(sourceUrl) ? sourceUrl : undefined;
-}
-
-function srtRequeuePayloadFromItem(
-  item: Fragrance,
-): { id?: string; source_url?: string; priority: number } | null {
-  const id = srtEngineIdFromItem(item);
-  const source_url = fragranticaSourceUrlFromItem(item);
-  if (!id && !source_url) return null;
-  return {
-    ...(id ? { id } : {}),
-    ...(source_url ? { source_url } : {}),
-    priority: 10,
-  };
-}
-
 function imageProcessingNeedsRepair(data: Record<string, any>): boolean {
   const status = typeof data.removeBgStatus === 'string' ? data.removeBgStatus : '';
   if (status === 'skipped') return false;
@@ -891,8 +907,6 @@ export const Wardrobe: React.FC<{
   const [refreshingId, setRefreshingId] = React.useState<string | null>(null);
   const [refreshError, setRefreshError] = React.useState<string | null>(null);
   const [bgFallbackWarning, setBgFallbackWarning] = React.useState<string | null>(null);
-  const [detailRequeueingId, setDetailRequeueingId] = React.useState<string | null>(null);
-  const [detailRequeueMessage, setDetailRequeueMessage] = React.useState<string | null>(null);
   const [refreshCounts, setRefreshCounts] = React.useState<Record<string, number>>(() => {
     if (typeof sessionStorage === 'undefined') return {};
     try {
@@ -949,7 +963,6 @@ export const Wardrobe: React.FC<{
   const openDetail = React.useCallback((item: Fragrance) => {
     setRefreshError(null);
     setPendingPreview(null);
-    setDetailRequeueMessage(null);
     setDeleteConfirming(false);
     setFrameDraft(normalizeBottleImageAdjustment(item.imageAdjustment));
     setSelectedItem(item);
@@ -958,7 +971,6 @@ export const Wardrobe: React.FC<{
   const closeDetail = React.useCallback(() => {
     setRefreshError(null);
     setPendingPreview(null);
-    setDetailRequeueMessage(null);
     setSelectedItem(null);
     setEnlargeOpen(false);
     setBottleImageToolsOpen(false);
@@ -1057,47 +1069,6 @@ export const Wardrobe: React.FC<{
       setRefreshError(err.message || 'Image refresh failed');
     } finally {
       setRefreshingId(null);
-    }
-  };
-
-  const handleRequeueSrtDetail = async (item: Fragrance) => {
-    const payload = srtRequeuePayloadFromItem(item);
-    if (!payload) {
-      setRefreshError('This entry is missing the SRT engine id and source URL needed to refresh data.');
-      return;
-    }
-
-    setDetailRequeueingId(item.id);
-    setDetailRequeueMessage(null);
-    setRefreshError(null);
-
-    try {
-      const response = await requeueFragranceDetails(payload);
-      const status = response.job?.status?.trim() || 'pending';
-      const message =
-        response.queued === true
-          ? 'SRT refresh queued. Current data stays readable until the worker finishes.'
-          : 'SRT refresh request sent.';
-      setDetailRequeueMessage(message);
-      setSelectedItem((prev) => {
-        if (!prev || prev.id !== item.id) return prev;
-        const enrichment = {
-          ...(prev.enrichment ?? prev.raw_engine_detail?.enrichment ?? {}),
-          status,
-          message,
-        };
-        return {
-          ...prev,
-          enrichment,
-          raw_engine_detail: prev.raw_engine_detail
-            ? { ...prev.raw_engine_detail, enrichment }
-            : prev.raw_engine_detail,
-        };
-      });
-    } catch (err: any) {
-      setRefreshError(err?.message || 'SRT data refresh failed');
-    } finally {
-      setDetailRequeueingId(null);
     }
   };
 
@@ -1325,12 +1296,6 @@ export const Wardrobe: React.FC<{
       selectedMetrics,
       selectedItem?.enrichment ?? selectedItem?.raw_engine_detail?.enrichment ?? undefined,
     );
-  const selectedEnrichment =
-    selectedItem?.enrichment ?? selectedItem?.raw_engine_detail?.enrichment ?? undefined;
-  const selectedSrtRequeuePayload = selectedItem ? srtRequeuePayloadFromItem(selectedItem) : null;
-  const selectedSrtRequeueing =
-    !!selectedItem && detailRequeueingId === selectedItem.id;
-
   const detailMetaRows = selectedItem
     ? [
         { label: 'Year', value: formatYear(selectedItem.year) },
@@ -1663,6 +1628,7 @@ export const Wardrobe: React.FC<{
                   </header>
 
                   <ProfileScorePanel
+                    section="tiles"
                     metrics={selectedMetrics}
                     coverage={selectedCoverage}
                     legacyPerformance={selectedItem.performance}
@@ -2118,25 +2084,32 @@ export const Wardrobe: React.FC<{
                     </div>
                   </div>
 
-                  <SourceStatusPanel
+                  <ProfileScorePanel
+                    section="score"
+                    metrics={selectedMetrics}
                     coverage={selectedCoverage}
-                    enrichment={selectedEnrichment}
-                    onRequeue={() => void handleRequeueSrtDetail(selectedItem)}
-                    requeueing={selectedSrtRequeueing}
-                    requeueDisabled={!selectedSrtRequeuePayload}
-                    requeueMessage={detailRequeueMessage}
+                    legacyPerformance={selectedItem.performance}
                   />
 
                   <FragrancePanel title="About This Fragrance">
                     <div className="flex flex-col items-center justify-center gap-3 px-4 py-4 text-center">
-                      <Info size={18} className="shrink-0 text-white/55" />
-                      <p className="mx-auto max-w-3xl text-sm leading-relaxed text-white/56">
-                        {selectedMetrics?.main_accords?.accord_summary?.trim() ??
-                          entryNotes(selectedItem)}
-                      </p>
+                      {selectedMetrics?.main_accords?.accord_summary?.trim() ? (
+                        <>
+                          <Info size={18} className="shrink-0 text-white/55" />
+                          <p className="mx-auto max-w-3xl text-sm leading-relaxed text-white/56">
+                            {selectedMetrics.main_accords.accord_summary.trim()}
+                          </p>
+                        </>
+                      ) : null}
                       <DetailMetaStrip rows={detailMetaRows} />
                     </div>
                   </FragrancePanel>
+
+                  <ReviewsPanel
+                    name={entryName(selectedItem)}
+                    brand={entryBrand(selectedItem)}
+                    reviews={extractDetailReviews(selectedItem.raw_engine_detail)}
+                  />
 
                 </div>
               </div>
