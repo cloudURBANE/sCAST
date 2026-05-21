@@ -344,6 +344,17 @@ function buildPerformanceParts(
   return parts;
 }
 
+function buildLegacyPerformanceParts(
+  performance: Fragrance["performance"] | null | undefined,
+): CyclingPart[] {
+  const parts: CyclingPart[] = [];
+  const sillage = formatLegacyTenPointScore(performance?.sillage);
+  const longevity = formatLegacyTenPointScore(performance?.longevity);
+  if (sillage) parts.push({ primary: sillage, secondary: "Sillage" });
+  if (longevity) parts.push({ primary: longevity, secondary: "Longevity" });
+  return parts;
+}
+
 function CyclingTilePair({
   parts,
   primaryClass,
@@ -421,7 +432,10 @@ function ProfileScorePanel({
   }
 
   const wearParts = buildWearProfileParts(metrics?.wear_profile);
-  const perfParts = buildPerformanceParts(performance);
+  const derivedPerfParts = buildPerformanceParts(performance);
+  const perfParts =
+    derivedPerfParts.length > 0 ? derivedPerfParts : buildLegacyPerformanceParts(legacyPerformance);
+  const valueLabel = value?.dominant_label?.trim() || null;
 
   type StatCard = {
     icon: typeof CalendarDays;
@@ -443,21 +457,21 @@ function ProfileScorePanel({
       label: "Performance",
       cycle: perfParts,
       value: null,
-      sub: null,
+      sub: perfParts.length > 0 ? "Longevity / Sillage" : null,
     },
     {
       icon: ThumbsUp,
       label: "Community",
       cycle: [],
-      value: communityScore !== null ? `${communityScore}/100` : "Pending",
-      sub: "Interest",
+      value: communityScore !== null ? `${communityScore}/100` : null,
+      sub: communityScore !== null ? "Interest" : null,
     },
     {
       icon: CircleDollarSign,
       label: "Value",
       cycle: [],
-      value: value?.dominant_label ?? "Pending",
-      sub: "Assessment",
+      value: valueLabel,
+      sub: valueLabel ? "Assessment" : null,
     },
   ];
 

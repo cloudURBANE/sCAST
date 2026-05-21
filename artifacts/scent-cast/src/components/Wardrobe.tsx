@@ -492,6 +492,17 @@ function buildPerformanceParts(
   return parts;
 }
 
+function buildLegacyPerformanceParts(
+  performance: Fragrance["performance"] | null | undefined,
+): CyclingPart[] {
+  const parts: CyclingPart[] = [];
+  const sillage = formatLegacyTenPointScore(performance?.sillage);
+  const longevity = formatLegacyTenPointScore(performance?.longevity);
+  if (sillage) parts.push({ primary: sillage, secondary: "Sillage" });
+  if (longevity) parts.push({ primary: longevity, secondary: "Longevity" });
+  return parts;
+}
+
 /** Renders a synced primary+secondary pair that cycles through `parts` (e.g. Spring → Summer → Day). */
 function CyclingTilePair({
   parts,
@@ -576,7 +587,10 @@ function ProfileScorePanel({
   }
 
   const wearParts = buildWearProfileParts(metrics?.wear_profile);
-  const perfParts = buildPerformanceParts(performance);
+  const derivedPerfParts = buildPerformanceParts(performance);
+  const perfParts =
+    derivedPerfParts.length > 0 ? derivedPerfParts : buildLegacyPerformanceParts(legacyPerformance);
+  const valueLabel = value?.dominant_label?.trim() || null;
 
   type StatCard = {
     icon: typeof CalendarDays;
@@ -595,26 +609,24 @@ function ProfileScorePanel({
     },
     {
       icon: Activity,
-      // When performance parts are absent the tile falls back to an honest
-      // pending state instead of a bare em-dash.
       label: "Performance",
       cycle: perfParts,
-      value: "Data Pending",
-      sub: "Longevity / Sillage",
+      value: null,
+      sub: perfParts.length > 0 ? "Longevity / Sillage" : null,
     },
     {
       icon: ThumbsUp,
       label: "Community",
       cycle: [],
-      value: communityScore !== null ? `${communityScore}/100` : "Data Pending",
-      sub: communityScore !== null ? "Interest" : "Not enough source votes yet",
+      value: communityScore !== null ? `${communityScore}/100` : null,
+      sub: communityScore !== null ? "Interest" : null,
     },
     {
       icon: CircleDollarSign,
       label: "Value",
       cycle: [],
-      value: value?.dominant_label ?? "Data Pending",
-      sub: value?.dominant_label ? "Assessment" : "Assessment unavailable",
+      value: valueLabel,
+      sub: valueLabel ? "Assessment" : null,
     },
   ];
 
