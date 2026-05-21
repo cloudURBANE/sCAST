@@ -383,18 +383,18 @@ function SourceStatusPanel({
 
   return (
     <FragrancePanel title="Source Status" className="overflow-hidden">
-      <div className="space-y-3 px-4 py-4">
-        <div className="flex items-center justify-center gap-3">
+      <div className="space-y-2.5 px-4 py-3">
+        <div className="flex items-center justify-center gap-2.5">
           {sourceStatus.badgeLabel ? (
-            <span className={`shrink-0 text-[8px] uppercase tracking-[0.24em] font-bold px-2.5 py-1 border ${
+            <span className={`shrink-0 text-[8px] uppercase tracking-[0.22em] font-bold px-2 py-0.5 border ${
               sourceStatus.complete
-                ? 'border-scent-accent/45 text-scent-accent bg-scent-accent/10'
-                : 'border-white/12 text-white/50 bg-white/[0.04]'
+                ? 'border-scent-accent/35 text-scent-accent/85 bg-scent-accent/[0.07]'
+                : 'border-white/10 text-white/45 bg-white/[0.03]'
             }`}>
               {sourceStatus.badgeLabel}
             </span>
           ) : null}
-          <p className="text-center text-sm italic text-white/62 font-serif leading-relaxed">
+          <p className="text-center text-[13px] italic text-white/52 font-serif leading-relaxed">
             {sourceStatus.statusText}
           </p>
         </div>
@@ -560,11 +560,16 @@ function ProfileScorePanel({
     return (
       <FragrancePanel title="Derived Intelligence">
         <div className="px-4 py-5 text-center">
-          <p className="text-sm italic text-white/45 font-serif">
-          {coverage.complete === false
-            ? "Enhanced metrics pending."
-            : "Derived fragrance intelligence unavailable."}
+          <p className="text-sm italic text-white/55 font-serif">
+            {coverage.complete === false
+              ? "Awaiting Source Data"
+              : "Derived fragrance intelligence unavailable."}
           </p>
+          {coverage.complete === false ? (
+            <p className="mt-1.5 text-[10px] uppercase tracking-[0.18em] text-white/38 font-bold">
+              Derived intelligence not available yet
+            </p>
+          ) : null}
         </div>
       </FragrancePanel>
     );
@@ -590,24 +595,26 @@ function ProfileScorePanel({
     },
     {
       icon: Activity,
+      // When performance parts are absent the tile falls back to an honest
+      // pending state instead of a bare em-dash.
       label: "Performance",
       cycle: perfParts,
-      value: null,
-      sub: null,
+      value: "Data Pending",
+      sub: "Longevity / Sillage",
     },
     {
       icon: ThumbsUp,
       label: "Community",
       cycle: [],
-      value: communityScore !== null ? `${communityScore}/100` : "Pending",
-      sub: "Interest",
+      value: communityScore !== null ? `${communityScore}/100` : "Data Pending",
+      sub: communityScore !== null ? "Interest" : "Not enough source votes yet",
     },
     {
       icon: CircleDollarSign,
       label: "Value",
       cycle: [],
-      value: value?.dominant_label ?? "Pending",
-      sub: "Assessment",
+      value: value?.dominant_label ?? "Data Pending",
+      sub: value?.dominant_label ? "Assessment" : "Assessment unavailable",
     },
   ];
 
@@ -1649,15 +1656,6 @@ export const Wardrobe: React.FC<{
                     legacyPerformance={selectedItem.performance}
                   />
 
-                  <SourceStatusPanel
-                    coverage={selectedCoverage}
-                    enrichment={selectedEnrichment}
-                    onRequeue={() => void handleRequeueSrtDetail(selectedItem)}
-                    requeueing={selectedSrtRequeueing}
-                    requeueDisabled={!selectedSrtRequeuePayload}
-                    requeueMessage={detailRequeueMessage}
-                  />
-
                   <div className="grid grid-cols-1 items-stretch gap-3 sm:gap-4 lg:grid-cols-[1.12fr_1.95fr_1fr]">
                     <div className="space-y-3 sm:space-y-4 lg:h-full">
                       <ScentNotesInfographic
@@ -1719,7 +1717,7 @@ export const Wardrobe: React.FC<{
                               <button
                                 type="button"
                                 onClick={() => setEnlargeOpen(true)}
-                                className="inline-flex items-center gap-1.5 rounded-sm border border-white/12 bg-white/[0.05] px-3 py-1.5 text-[9px] uppercase tracking-[0.18em] font-bold text-white/62 hover:bg-white/[0.1] hover:text-white transition-colors"
+                                className="inline-flex items-center gap-1.5 rounded-md border border-white/15 bg-white/[0.04] px-3.5 py-1.5 text-[9px] uppercase tracking-[0.2em] font-bold text-white/62 transition-colors hover:border-scent-accent/35 hover:bg-scent-accent/[0.08] hover:text-scent-accent"
                                 aria-label="Enlarge bottle image"
                               >
                                 <Maximize2 size={13} strokeWidth={2} />
@@ -2107,6 +2105,15 @@ export const Wardrobe: React.FC<{
                       </FragrancePanel>
                     </div>
                   </div>
+
+                  <SourceStatusPanel
+                    coverage={selectedCoverage}
+                    enrichment={selectedEnrichment}
+                    onRequeue={() => void handleRequeueSrtDetail(selectedItem)}
+                    requeueing={selectedSrtRequeueing}
+                    requeueDisabled={!selectedSrtRequeuePayload}
+                    requeueMessage={detailRequeueMessage}
+                  />
 
                   <FragrancePanel title="About This Fragrance">
                     <div className="flex flex-col items-center justify-center gap-3 px-4 py-4 text-center">
