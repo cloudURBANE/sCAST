@@ -36,6 +36,7 @@ function formatNotes(notes: string[] | undefined): string {
 export const BottleMarquee: React.FC<BottleMarqueeProps> = ({ items, loading }) => {
   const trackRef = useRef<HTMLDivElement>(null);
   const groupRef = useRef<HTMLDivElement>(null);
+  const measureMarqueeRef = useRef<(() => void) | null>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const triggerRefs = useRef(new Map<string, HTMLButtonElement>());
@@ -73,6 +74,7 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = ({ items, loading }) 
         track.dataset.marqueeReady = 'true';
       }
     };
+    measureMarqueeRef.current = () => updateDistance(track.dataset.marqueeReady === 'true');
 
     track.dataset.marqueeReady = 'false';
 
@@ -93,11 +95,18 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = ({ items, loading }) 
 
     return () => {
       cancelled = true;
+      measureMarqueeRef.current = null;
       if (animationFrame) window.cancelAnimationFrame(animationFrame);
       resizeObserver.disconnect();
       window.removeEventListener('resize', handleResize);
     };
   }, [trackKey]);
+
+  const requestMarqueeMeasure = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      measureMarqueeRef.current?.();
+    });
+  }, []);
 
   const closeOverlay = useCallback(() => {
     const triggerId = activeTriggerIdRef.current;
@@ -190,7 +199,10 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = ({ items, loading }) 
                       alt={`${item.name} by ${item.brand}`}
                       variant="display"
                       className="absolute inset-3"
+                      adjustment={item.imageAdjustment}
                       showFrameGuide={false}
+                      onLoad={copyIndex === 0 ? requestMarqueeMeasure : undefined}
+                      onError={copyIndex === 0 ? requestMarqueeMeasure : undefined}
                     />
                     <span className="absolute left-4 top-4 font-mono text-[8px] uppercase tracking-[0.24em] text-scent-accent/75">
                       {item.curator}

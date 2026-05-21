@@ -10,6 +10,7 @@ const ALLOWED_IMAGE_MIME_TYPES = new Set([
   "image/png",
   "image/webp",
   "image/avif",
+  "image/gif",
 ]);
 
 const BLOCKED_HOSTS = new Set(["localhost", "localhost.localdomain"]);
@@ -154,7 +155,7 @@ export async function fetchExternalImage(
       signal: AbortSignal.timeout(timeoutMs),
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Accept": "image/avif,image/webp,image/png,image/jpeg;q=0.95,*/*;q=0.1",
+        "Accept": "image/avif,image/webp,image/png,image/jpeg,image/gif;q=0.95,*/*;q=0.1",
         "Referer": `${current.origin}/`,
       },
     });

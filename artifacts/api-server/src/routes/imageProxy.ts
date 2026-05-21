@@ -38,8 +38,9 @@ router.get("/image-proxy", async (req, res) => {
     // WebPs from our own pipeline. Trim re-encodes to JPEG, which would flatten
     // alpha onto white and undo background removal in the UI.
     const isWebp = outType === "image/webp";
+    const isGif = outType === "image/gif";
     const isProcessedObject = target.toString().includes("/images/processed/");
-    if (doTrim && !isWebp && !isProcessedObject) {
+    if (doTrim && !isWebp && !isGif && !isProcessedObject) {
       const trimmed = await trimPackshotForImageProxy(body);
       if (trimmed.ok) {
         body = trimmed.buffer;

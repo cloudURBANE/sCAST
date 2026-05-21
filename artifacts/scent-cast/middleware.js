@@ -32,9 +32,35 @@ const HOP_BY_HOP = [
   "content-length",
 ];
 
+function normalizeBackendOrigin(raw) {
+  const value = raw?.trim();
+  if (!value) return "";
+
+  const candidates = value.split(",").map((candidate) => candidate.trim()).filter(Boolean);
+  if (candidates.length > 1) {
+    console.warn(
+      `[middleware] BACKEND_ORIGIN expected one origin, got ${candidates.length}; using the first valid origin.`,
+    );
+  }
+
+  for (const candidate of candidates) {
+    try {
+      const parsed = new URL(candidate);
+      if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+        return parsed.origin;
+      }
+    } catch {
+      // Try the next candidate.
+    }
+  }
+
+  console.warn("[middleware] BACKEND_ORIGIN does not contain a valid http(s) origin.");
+  return "";
+}
+
 /** @param {Request} request @returns {Promise<Response>} */
 export default async function middleware(request) {
-  const backend = process.env.BACKEND_ORIGIN?.trim().replace(/\/+$/, "");
+  const backend = normalizeBackendOrigin(process.env.BACKEND_ORIGIN);
   if (!backend) {
     return new Response(
       JSON.stringify({

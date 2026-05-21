@@ -50,6 +50,8 @@ type BottleImageProps = {
   showFrameGuide?: boolean;
   loading?: 'lazy' | 'eager';
   fetchPriority?: 'high' | 'low' | 'auto';
+  onLoad?: () => void;
+  onError?: () => void;
 };
 
 function BottleFrameGuide() {
@@ -80,6 +82,8 @@ export const BottleImage: React.FC<BottleImageProps> = ({
   showFrameGuide = false,
   loading = 'lazy',
   fetchPriority,
+  onLoad,
+  onError,
 }) => {
   const url = proxy ? proxiedImageUrl(src, { packshot: true }) : (src ?? '');
 
@@ -99,6 +103,7 @@ export const BottleImage: React.FC<BottleImageProps> = ({
   const handleLoad = () => {
     setIsLoading(false);
     setBroken(false);
+    onLoad?.();
   };
 
   const handleError = () => {
@@ -110,6 +115,7 @@ export const BottleImage: React.FC<BottleImageProps> = ({
     } else {
       setBroken(true);
       setIsLoading(false);
+      onError?.();
     }
   };
 

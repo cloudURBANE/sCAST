@@ -1,4 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
+import type { BottleImageAdjustment } from '@/lib/bottleImageAdjustment';
+import { normalizeApiBaseUrl } from '@/lib/imageProxy';
 
 export interface CommunityFragranceEntry {
   id: string;
@@ -6,11 +8,16 @@ export interface CommunityFragranceEntry {
   brand: string;
   imageUrl: string;
   curator: string;
+  imageAdjustment?: BottleImageAdjustment | null;
   family?: string;
   topNotes?: string[];
   heartNotes?: string[];
   baseNotes?: string[];
 }
+
+type CommunityApiPayload = {
+  fragrances?: unknown[];
+};
 
 const SEED: CommunityFragranceEntry[] = [
   { id: 'seed:1', name: 'Bleu de Chanel', brand: 'Chanel', imageUrl: 'https://fimgs.net/mdimg/perfume/375x500.10421.jpg', curator: '@maison', family: 'Woody Aromatic', topNotes: ['Grapefruit', 'Lemon', 'Mint'], heartNotes: ['Ginger', 'Nutmeg', 'Jasmine'], baseNotes: ['Cedar', 'Sandalwood', 'Labdanum'] },
@@ -29,10 +36,96 @@ const SEED: CommunityFragranceEntry[] = [
 
 export const COMMUNITY_FEATURED_USER_IDS: string[] = [];
 
+const API_BASE_URL = normalizeApiBaseUrl(import.meta.env?.VITE_API_BASE_URL as string | undefined);
+
+function appApiUrl(path: string): string {
+  return API_BASE_URL ? `${API_BASE_URL}${path}` : path;
+}
+
+function firstString(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (trimmed) return trimmed;
+    }
+  }
+  return undefined;
+}
+
+function stringList(value: unknown): string[] | undefined {
+  const values = Array.isArray(value)
+    ? value
+    : typeof value === 'string'
+      ? value.split(',')
+      : [];
+  const strings = values
+    .map((item) => (typeof item === 'string' ? item.trim() : ''))
+    .filter(Boolean)
+    .slice(0, 8);
+  return strings.length > 0 ? strings : undefined;
+}
+
+function normalizeCommunityEntry(value: unknown, index: number): CommunityFragranceEntry | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  const name = firstString(record.name);
+  const brand = firstString(record.brand, record.house);
+  const imageUrl = firstString(record.imageUrl, record.image_url);
+  const family = firstString(record.family);
+  const topNotes = stringList(record.topNotes);
+  const heartNotes = stringList(record.heartNotes);
+  const baseNotes = stringList(record.baseNotes);
+  if (!name || !brand || !imageUrl) return null;
+
+  return {
+    id: firstString(record.id) ?? `community:${index}`,
+    name,
+    brand,
+    imageUrl,
+    curator: firstString(record.curator) ?? '@community',
+    ...(record.imageAdjustment && typeof record.imageAdjustment === 'object' && !Array.isArray(record.imageAdjustment)
+      ? { imageAdjustment: record.imageAdjustment as BottleImageAdjustment }
+      : {}),
+    ...(family ? { family } : {}),
+    ...(topNotes ? { topNotes } : {}),
+    ...(heartNotes ? { heartNotes } : {}),
+    ...(baseNotes ? { baseNotes } : {}),
+  };
+}
+
+async function fetchCommunityFragrances(): Promise<CommunityFragranceEntry[]> {
+  try {
+    const response = await fetch(appApiUrl('/api/community/fragrances'), {
+      headers: { Accept: 'application/json' },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Community API failed with HTTP ${response.status}`);
+    }
+
+    const payload = (await response.json()) as CommunityApiPayload | unknown[];
+    const rows = Array.isArray(payload)
+      ? payload
+      : Array.isArray(payload.fragrances)
+        ? payload.fragrances
+        : [];
+    const entries = rows
+      .map((entry, index) => normalizeCommunityEntry(entry, index))
+      .filter((entry): entry is CommunityFragranceEntry => entry !== null);
+
+    if (entries.length > 0 || !import.meta.env.DEV) return entries;
+  } catch (err) {
+    if (!import.meta.env.DEV) throw err;
+    console.warn('[community] Falling back to seed fragrances because the community API is unavailable.', err);
+  }
+
+  return SEED;
+}
+
 export function useCommunityFragrances() {
   return useQuery({
-    queryKey: ['community', 'featured', 'v1'],
-    queryFn: async (): Promise<CommunityFragranceEntry[]> => SEED,
+    queryKey: ['community', 'featured', 'v2'],
+    queryFn: fetchCommunityFragrances,
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false,
   });
