@@ -11,6 +11,7 @@ import imageObjectsRouter from "./imageObjects";
 import scentFactsRouter from "./scentFacts";
 import enrichmentRouter from "./enrichment";
 import usageRouter from "./usage";
+import reviewsRouter from "./reviews";
 
 const router: IRouter = Router();
 
@@ -26,5 +27,6 @@ router.use(imageObjectsRouter);
 router.use(scentFactsRouter);
 router.use(enrichmentRouter);
 router.use(usageRouter);
+router.use(reviewsRouter);
 
 export default router;

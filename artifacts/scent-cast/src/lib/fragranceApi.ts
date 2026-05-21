@@ -1167,3 +1167,49 @@ export async function requeueFragranceDetails(
 
   return res.json();
 }
+
+export type FragranceRawReview = { text: string; source?: string };
+
+/** Pulls the raw scraped reviews off a fragrance detail payload (engine puts them on `raw.reviews`). */
+export function extractDetailReviews(detail: FragranceDetail | null | undefined): FragranceRawReview[] {
+  const raw = detail?.raw?.reviews;
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((entry) => {
+      const obj = objectRecord(entry);
+      const text = typeof obj.text === "string" ? obj.text.trim() : "";
+      const source = typeof obj.source === "string" ? obj.source.trim() : undefined;
+      return { text, source };
+    })
+    .filter((r) => r.text.length > 0);
+}
+
+/**
+ * Asks the Express API to distill scraped reviews into short, original display
+ * comments. Always resolves (never throws) — on any failure it returns an empty
+ * list so the detail view degrades quietly.
+ */
+export async function summarizeReviews(
+  input: { name?: string; brand?: string; reviews: FragranceRawReview[] },
+  options?: { signal?: AbortSignal },
+): Promise<string[]> {
+  if (!input.reviews.length) return [];
+  try {
+    const res = await fetch(appApiUrl("/api/reviews/summarize"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: input.name ?? "",
+        brand: input.brand ?? "",
+        reviews: input.reviews,
+      }),
+      signal: options?.signal,
+    });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { comments?: unknown };
+    if (!Array.isArray(data.comments)) return [];
+    return data.comments.filter((c): c is string => typeof c === "string" && c.trim().length > 0);
+  } catch {
+    return [];
+  }
+}
