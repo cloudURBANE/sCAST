@@ -579,12 +579,12 @@ function CyclingTilePair({
 
 /**
  * Profile Score panel, rendered in two independently-placed sections:
- *  - `section="tiles"`  — the 4 stat tiles (Wear / Performance / Community / Value)
- *  - `section="score"`  — the large consensus "/100" headline
+ *  - `section="tiles"`  — stat tiles (+ mobile score hero in one panel)
+ *  - `section="score"`  — desktop score headline below the bottle visual
  *
- * The detail view keeps the tiles up top but moves the score headline down
- * below the bottle visual. The unavailable-state notice renders only in the
- * `tiles` section so it never appears twice.
+ * Mobile merges the score hero and stat tiles into a single panel at the top.
+ * Desktop keeps tiles in the top grid and the score below the bottle column.
+ * The unavailable-state notice renders only in the `tiles` section.
  */
 function ProfileScorePanel({
   metrics,
@@ -625,35 +625,19 @@ function ProfileScorePanel({
     );
   }
 
-  // --- Score headline section (placed below the bottle visual) -------------
+  // --- Score headline section (desktop: below the bottle visual) -----------
   if (section === "score") {
     return (
-      <>
-        <div className="hidden sm:flex flex-col items-center justify-center border border-white/10 bg-white/[0.025] px-4 py-6 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]">
-          <p className="text-[10px] uppercase tracking-[0.28em] text-white/64 font-bold">Profile Score</p>
-          <div className="mt-1 flex items-end justify-center gap-2">
-            <span className="font-serif italic text-6xl leading-none text-scent-accent">
-              {consensusScore ?? "--"}
-            </span>
-            <span className="pb-2 text-xl text-white/76">/100</span>
-          </div>
-          <p className="mt-1 text-sm text-scent-accent/90">{headline?.label ?? "Intelligence profile"}</p>
+      <div className="hidden sm:flex flex-col items-center justify-center border border-white/10 bg-white/[0.025] px-4 py-6 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]">
+        <p className="text-[10px] uppercase tracking-[0.28em] text-white/64 font-bold">Profile Score</p>
+        <div className="mt-1 flex items-end justify-center gap-2">
+          <span className="font-serif italic text-6xl leading-none text-scent-accent">
+            {consensusScore ?? "--"}
+          </span>
+          <span className="pb-2 text-xl text-white/76">/100</span>
         </div>
-
-        <FragrancePanel title="Profile Score" className="sm:hidden">
-          <div className="px-4 py-4">
-            <div className="mx-auto flex w-fit items-end justify-center gap-2">
-              <span className="font-serif italic text-5xl leading-none text-scent-accent">
-                {consensusScore ?? "--"}
-              </span>
-              <span className="pb-2 text-lg text-white/72">/100</span>
-            </div>
-            <p className="mt-1 text-center text-sm text-scent-accent/90">
-              {headline?.label ?? "Intelligence profile"}
-            </p>
-          </div>
-        </FragrancePanel>
-      </>
+        <p className="mt-1 text-sm text-scent-accent/90">{headline?.label ?? "Intelligence profile"}</p>
+      </div>
     );
   }
 
@@ -747,8 +731,26 @@ function ProfileScorePanel({
         );
       })()}
 
-      <FragrancePanel title="Profile Breakdown" className="sm:hidden">
-        <div className="px-4 py-4">
+      <FragrancePanel title="Profile Score" className="sm:hidden">
+        <div className="relative px-4 pt-4 pb-3 text-center">
+          <div
+            className="pointer-events-none absolute inset-x-8 top-2 h-16 rounded-full bg-scent-accent/[0.07] blur-2xl"
+            aria-hidden
+          />
+          <div className="relative mx-auto flex w-fit items-end justify-center gap-2">
+            <span className="font-serif italic text-5xl leading-none text-scent-accent">
+              {consensusScore ?? "--"}
+            </span>
+            <span className="pb-2 text-lg text-white/72">/100</span>
+          </div>
+          <p className="relative mt-1 text-sm text-scent-accent/90">
+            {headline?.label ?? "Intelligence profile"}
+          </p>
+        </div>
+
+        <div className="mx-4 border-t border-white/[0.07]" aria-hidden />
+
+        <div className="px-4 py-3.5">
           <div className="grid grid-cols-4 gap-1.5">
             {statCards.map((stat) => {
               const Icon = stat.icon;
