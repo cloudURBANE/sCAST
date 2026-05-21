@@ -9,9 +9,37 @@ export type ProxiedImageOptions = {
   apiBaseUrl?: string;
 };
 
-const API_BASE_URL = (import.meta.env?.VITE_API_BASE_URL as string | undefined)
-  ?.trim()
-  .replace(/\/+$/, "");
+function warnInvalidApiBase(envName: string, message: string) {
+  if (typeof console !== "undefined") {
+    console.warn(`[imageProxy] ${envName}: ${message}`);
+  }
+}
+
+export function normalizeApiBaseUrl(raw: string | undefined, envName = "VITE_API_BASE_URL"): string {
+  const value = raw?.trim();
+  if (!value) return "";
+
+  const candidates = value.split(",").map((candidate) => candidate.trim()).filter(Boolean);
+  if (candidates.length > 1) {
+    warnInvalidApiBase(envName, `expected one origin, got ${candidates.length}; using the first valid origin.`);
+  }
+
+  for (const candidate of candidates) {
+    try {
+      const parsed = new URL(candidate);
+      if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+        return parsed.origin;
+      }
+    } catch {
+      // Try the next candidate below.
+    }
+  }
+
+  warnInvalidApiBase(envName, "does not contain a valid http(s) origin; falling back to same-origin /api.");
+  return "";
+}
+
+const API_BASE_URL = normalizeApiBaseUrl(import.meta.env?.VITE_API_BASE_URL as string | undefined);
 
 function apiUrl(path: string, apiBaseUrl = API_BASE_URL): string {
   return apiBaseUrl ? `${apiBaseUrl}${path}` : path;
@@ -24,7 +52,10 @@ export function proxiedImageUrl(url: string | undefined | null, options?: Proxie
   // Protocol-relative CDN URLs: normalize so we route through image-proxy.
   if (u.startsWith("//")) u = `https:${u}`;
 
-  const apiBaseUrl = options?.apiBaseUrl ?? API_BASE_URL;
+  const apiBaseUrl =
+    options?.apiBaseUrl !== undefined
+      ? normalizeApiBaseUrl(options.apiBaseUrl, "apiBaseUrl")
+      : API_BASE_URL;
   if (u.startsWith("/api/image-objects/")) {
     // Processed image objects are already normalized WebPs from our backend.
     // Sending them back through image-proxy is unnecessary, and in local dev it

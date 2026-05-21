@@ -1025,6 +1025,48 @@ a {
   100% { transform: translate3d(0, 0px, 0); }
 }
 
+@keyframes scent-lava-fallback-drift {
+  0%, 100% {
+    background-position: 50% 45%, 50% 55%, 0% 50%;
+    filter: saturate(0.95) brightness(0.92);
+  }
+  45% {
+    background-position: 46% 50%, 54% 49%, 100% 50%;
+    filter: saturate(1.08) brightness(1);
+  }
+  72% {
+    background-position: 55% 43%, 48% 58%, 42% 50%;
+    filter: saturate(1) brightness(0.96);
+  }
+}
+
+.scent-lava-fallback {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0;
+  mix-blend-mode: screen;
+  background:
+    radial-gradient(ellipse at 46% 40%, rgba(209, 128, 40, 0.18), transparent 42rem),
+    radial-gradient(ellipse at 54% 64%, rgba(129, 53, 18, 0.2), transparent 36rem),
+    linear-gradient(120deg, rgba(12, 8, 5, 0.9), rgba(79, 34, 12, 0.3) 44%, rgba(8, 5, 3, 0.92));
+  background-size: 140% 140%, 130% 130%, 220% 220%;
+  transition: opacity 320ms var(--scent-ease-out);
+}
+
+.scent-lava-fallback--visible {
+  opacity: 0.46;
+}
+
+.scent-lava-fallback--animated {
+  animation: scent-lava-fallback-drift 26s ease-in-out infinite;
+}
+
+.scent-lava-fallback--static {
+  background-position: 50% 45%, 50% 55%, 45% 50%;
+}
+
 /* Each side: closed path (0% = 100%) so no snap; uneven keyframe times + per-stop
    easing read less “metronome” than a single out-and-back. */
 @keyframes scent-entry-count-line-shimmer-a {
@@ -1149,6 +1191,10 @@ a {
   }
 
   .scent-note-type-caret {
+    animation: none;
+  }
+
+  .scent-lava-fallback--animated {
     animation: none;
   }
 }

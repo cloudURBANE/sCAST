@@ -26,3 +26,18 @@ test("remote images still go through API image proxy with cache version preserve
     "https://api.example.com/api/image-proxy?url=https%3A%2F%2Fcdn.example.com%2Fbottle.jpg%3Fv%3Dfresh&v=fresh&trim=1",
   );
 });
+
+test("api base URL guard ignores comma-separated fallback origins", () => {
+  const url = proxiedImageUrl(
+    "https://cdn.example.com/bottle.jpg",
+    {
+      apiBaseUrl: "https://api.example.com,https://www.example.com,https://example.com",
+      packshot: true,
+    },
+  );
+
+  assert.equal(
+    url,
+    "https://api.example.com/api/image-proxy?url=https%3A%2F%2Fcdn.example.com%2Fbottle.jpg&trim=1",
+  );
+});

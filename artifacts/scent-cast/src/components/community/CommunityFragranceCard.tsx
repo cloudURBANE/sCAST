@@ -29,6 +29,7 @@ export const CommunityFragranceCard: React.FC<CommunityFragranceCardProps> = ({ 
         variant="card"
         className="absolute inset-0"
         imgClassName="brightness-[1.1] group-hover:scale-[1.035] motion-reduce:group-hover:scale-100 transition-transform duration-[900ms] motion-reduce:transition-none"
+        adjustment={item.imageAdjustment}
       />
     </div>
     <div className="relative z-10 mt-2">

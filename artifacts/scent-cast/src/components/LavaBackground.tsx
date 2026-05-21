@@ -1,14 +1,36 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 export const LavaBackground: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [webglFailed, setWebglFailed] = useState(false);
+  const [reducedMotion, setReducedMotion] = useState(false);
 
   useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const updateReducedMotion = () => setReducedMotion(media.matches);
+    updateReducedMotion();
+
+    media.addEventListener('change', updateReducedMotion);
+    return () => media.removeEventListener('change', updateReducedMotion);
+  }, []);
+
+  useEffect(() => {
+    if (reducedMotion) {
+      setWebglFailed(false);
+      return;
+    }
+
     const canvas = canvasRef.current;
     if (!canvas) return;
 
+    const failToFallback = () => setWebglFailed(true);
     const gl = canvas.getContext('webgl');
-    if (!gl) return;
+    if (!gl) {
+      failToFallback();
+      return;
+    }
 
     const vertexShaderSource = `
       attribute vec2 position;
@@ -100,31 +122,51 @@ export const LavaBackground: React.FC = () => {
     };
 
     const program = gl.createProgram();
-    if (!program) return;
+    if (!program) {
+      failToFallback();
+      return;
+    }
     const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
     const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
-    if (!vertexShader || !fragmentShader) return;
+    if (!vertexShader || !fragmentShader) {
+      failToFallback();
+      return;
+    }
 
     gl.attachShader(program, vertexShader);
     gl.attachShader(program, fragmentShader);
     gl.linkProgram(program);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+      failToFallback();
+      return;
+    }
     gl.useProgram(program);
 
     const positionBuffer = gl.createBuffer();
+    if (!positionBuffer) {
+      failToFallback();
+      return;
+    }
     gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]), gl.STATIC_DRAW);
 
     const positionLocation = gl.getAttribLocation(program, 'position');
+    if (positionLocation < 0) {
+      failToFallback();
+      return;
+    }
     gl.enableVertexAttribArray(positionLocation);
     gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
 
     const timeLocation = gl.getUniformLocation(program, 'u_time');
     const resolutionLocation = gl.getUniformLocation(program, 'u_resolution');
+    if (!timeLocation || !resolutionLocation) {
+      failToFallback();
+      return;
+    }
 
-    const prefersReducedMotion =
-      typeof window !== 'undefined' &&
-      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     let animId: number | null = null;
+    setWebglFailed(false);
 
     const render = (time: number) => {
       if (canvas.width !== canvas.clientWidth || canvas.height !== canvas.clientHeight) {
@@ -148,7 +190,7 @@ export const LavaBackground: React.FC = () => {
     };
 
     const start = () => {
-      if (prefersReducedMotion || animId !== null) return;
+      if (animId !== null) return;
       animId = requestAnimationFrame(render);
     };
 
@@ -160,20 +202,38 @@ export const LavaBackground: React.FC = () => {
       }
     };
 
+    const handleContextLost = (event: Event) => {
+      event.preventDefault();
+      stop();
+      failToFallback();
+    };
+
     document.addEventListener('visibilitychange', handleVisibilityChange);
+    canvas.addEventListener('webglcontextlost', handleContextLost);
     start();
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      canvas.removeEventListener('webglcontextlost', handleContextLost);
       stop();
     };
-  }, []);
+  }, [reducedMotion]);
 
   return (
-    <canvas
-      ref={canvasRef}
-      className="fixed inset-0 w-full h-full pointer-events-none opacity-40"
-      style={{ zIndex: 0, mixBlendMode: 'screen' }}
-    />
+    <>
+      <div
+        className={`scent-lava-fallback ${reducedMotion ? 'scent-lava-fallback--static' : 'scent-lava-fallback--animated'} ${
+          webglFailed || reducedMotion ? 'scent-lava-fallback--visible' : ''
+        }`}
+        aria-hidden="true"
+      />
+      {!reducedMotion && !webglFailed ? (
+        <canvas
+          ref={canvasRef}
+          className="fixed inset-0 w-full h-full pointer-events-none opacity-40"
+          style={{ zIndex: 0, mixBlendMode: 'screen' }}
+        />
+      ) : null}
+    </>
   );
 };
