@@ -190,6 +190,8 @@ interface AccordDensityStyle {
   trackHeight: string;
   /** Right-column width reserved for the numeric value. */
   valueColWidth: string;
+  /** Left-column width reserved for the accord label (allows a 2-line wrap). */
+  labelColWidth: string;
   /** Label / value typography. */
   labelFont: string;
   valueFont: string;
@@ -202,25 +204,28 @@ const DENSITY: Record<AccordDensity, AccordDensityStyle> = {
     bodyPadding: "px-4 py-4 sm:px-5 sm:py-5",
     trackHeight: "h-[9px] sm:h-[10px]",
     valueColWidth: "2.5rem",
+    labelColWidth: "clamp(5.25rem, 34%, 8.75rem)",
     labelFont: "text-[10.5px] sm:text-[11.5px] tracking-[0.16em]",
     valueFont: "text-[11.5px] sm:text-[12.5px]",
-    maxGap: "max-h-[2.75rem]",
+    maxGap: "max-h-[3.35rem]",
   },
   balanced: {
     bodyPadding: "px-4 py-3.5 sm:px-5 sm:py-4",
     trackHeight: "h-[7px] sm:h-[8px]",
     valueColWidth: "2.5rem",
+    labelColWidth: "clamp(5rem, 35%, 8.25rem)",
     labelFont: "text-[10px] sm:text-[11px] tracking-[0.14em]",
     valueFont: "text-[11px] sm:text-[12px]",
-    maxGap: "max-h-[2.25rem]",
+    maxGap: "max-h-[2.85rem]",
   },
   compact: {
     bodyPadding: "px-4 py-3 sm:px-5 sm:py-3.5",
     trackHeight: "h-[6px] sm:h-[7px]",
     valueColWidth: "2.25rem",
+    labelColWidth: "clamp(4.75rem, 36%, 7.75rem)",
     labelFont: "text-[9.5px] sm:text-[10.5px] tracking-[0.12em]",
     valueFont: "text-[10.5px] sm:text-[11.5px]",
-    maxGap: "max-h-[1.85rem]",
+    maxGap: "max-h-[2.45rem]",
   },
 };
 
@@ -299,7 +304,7 @@ function AccordPanel({
                 key={`${row.label}:${index}`}
                 className={`grid items-center gap-x-3 sm:gap-x-4 ${densityStyle.maxGap}`}
                 style={{
-                  gridTemplateColumns: `clamp(4.75rem, 31%, 7rem) minmax(0, 1fr) ${densityStyle.valueColWidth}`,
+                  gridTemplateColumns: `${densityStyle.labelColWidth} minmax(0, 1fr) ${densityStyle.valueColWidth}`,
                 }}
                 initial={false}
                 animate={
@@ -314,7 +319,7 @@ function AccordPanel({
                 }}
               >
                 <p
-                  className={`min-w-0 truncate uppercase leading-tight text-white ${densityStyle.labelFont}`}
+                  className={`min-w-0 uppercase leading-tight text-white line-clamp-2 [overflow-wrap:anywhere] ${densityStyle.labelFont}`}
                   style={{
                     opacity: intensity.labelOpacity,
                     fontWeight: intensity.labelWeight,

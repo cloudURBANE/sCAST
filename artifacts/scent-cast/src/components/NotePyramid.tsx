@@ -856,6 +856,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
             const isActive = activeLayer === layer.key;
             const isEngaged = engagedLayer === layer.key;
             const isMuted = activeLayer !== null && !isActive;
+            const isEmpty = layer.notes.length === 0;
 
             const layerMotion = LAYER_MOTION[state][layer.key];
             const targetY = layerMotion.y + (isEngaged && !isActive ? -0.8 : 0);
@@ -870,17 +871,22 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
             return (
               <motion.g
                 key={layer.key}
-                role="button"
-                tabIndex={0}
+                role={isEmpty ? undefined : 'button'}
+                tabIndex={isEmpty ? -1 : 0}
                 aria-label={layer.ariaLabel}
-                aria-pressed={isActive}
-                className="cursor-pointer outline-none [&:focus-visible_.focus-ring]:opacity-100"
+                aria-pressed={isEmpty ? undefined : isActive}
+                aria-disabled={isEmpty || undefined}
+                className={`outline-none [&:focus-visible_.focus-ring]:opacity-100 ${isEmpty ? 'cursor-default' : 'cursor-pointer'}`}
                 initial={false}
                 animate={{
                   y: targetY,
                   opacity: targetOpacity,
                   scale: targetScale,
-                  filter: isMuted ? 'saturate(0.85) brightness(0.92)' : 'saturate(1) brightness(1)',
+                  filter: isEmpty
+                    ? 'saturate(0.5) brightness(0.62)'
+                    : isMuted
+                      ? 'saturate(0.85) brightness(0.92)'
+                      : 'saturate(1) brightness(1)',
                 }}
                 transition={
                   prefersReducedMotion
@@ -894,22 +900,22 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                   touchAction: 'manipulation',
                   willChange: activeLayer !== null || isEngaged ? 'transform, opacity, filter' : 'auto',
                 }}
-                onPointerEnter={(event) => {
+                onPointerEnter={isEmpty ? undefined : (event) => {
                   if (event.pointerType !== 'mouse') return;
                   setHoveredLayer(layer.key);
                 }}
-                onPointerLeave={(event) => {
+                onPointerLeave={isEmpty ? undefined : (event) => {
                   if (event.pointerType !== 'mouse') return;
                   setHoveredLayer((current) => (current === layer.key ? null : current));
                 }}
-                onFocus={() => setFocusedLayer(layer.key)}
-                onBlur={() => setFocusedLayer((current) => (current === layer.key ? null : current))}
-                onPointerDown={(event) => handleLayerPointerDown(event, layer.key)}
-                onPointerUp={(event) => handleLayerPointerUp(event, layer.key)}
-                onPointerCancel={handleLayerPointerCancel}
-                onLostPointerCapture={handleLayerPointerCancel}
+                onFocus={isEmpty ? undefined : () => setFocusedLayer(layer.key)}
+                onBlur={isEmpty ? undefined : () => setFocusedLayer((current) => (current === layer.key ? null : current))}
+                onPointerDown={isEmpty ? undefined : (event) => handleLayerPointerDown(event, layer.key)}
+                onPointerUp={isEmpty ? undefined : (event) => handleLayerPointerUp(event, layer.key)}
+                onPointerCancel={isEmpty ? undefined : handleLayerPointerCancel}
+                onLostPointerCapture={isEmpty ? undefined : handleLayerPointerCancel}
                 onClick={(event) => event.stopPropagation()}
-                onKeyDown={(event) => handleLayerKeyDown(event, layer.key)}
+                onKeyDown={isEmpty ? undefined : (event) => handleLayerKeyDown(event, layer.key)}
               >
                 <path
                   d={layer.hitPath}
