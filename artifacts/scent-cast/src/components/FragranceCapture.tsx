@@ -4,7 +4,6 @@ import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import {
   collectMainAccordDisplayRows,
   getFragranceDetails,
-  isFragranceDetailEffectivelyComplete,
   normalizeFragranceDetail,
   searchFragrances,
   type FragranceDetail,
@@ -66,8 +65,6 @@ function sleep(ms: number): Promise<void> {
     setTimeout(resolve, ms);
   });
 }
-
-const PARTIAL_ENRICHMENT_NOTICE = "More source details are still being enriched.";
 
 /** Rotating vault headline — example house + scent pairs. */
 const VAULT_HEADLINE_ROTATION = [
@@ -259,6 +256,29 @@ function isFragranticaUrl(value: unknown): value is string {
   return typeof value === 'string' && /fragrantica\.com/i.test(value);
 }
 
+const HERITAGE_HOUSES = new Set([
+  'Chanel', 'Dior', 'Guerlain', 'Hermès', 'Creed', 'Tom Ford', 'Diptyque', 
+  'Byredo', 'Le Labo', 'Frederic Malle', 'Serge Lutens', 'Parfums de Marly',
+  'Amouage', 'Roja Dove', 'Maison Francis Kurkdjian', 'By Kilian'
+]);
+
+function isVetted(m: FragranceMatch): boolean {
+  // 1. Heritage House Check
+  if (m.brand && HERITAGE_HOUSES.has(m.brand)) return true;
+  if (m.house && HERITAGE_HOUSES.has(m.house)) return true;
+
+  // 2. Community Consensus Check (if metrics are available)
+  const votes = m.bn_vote_count ?? 0;
+  const rating = m.bn_positive_pct ?? -1;
+  
+  // High volume (vetted by many) + High sentiment
+  if (votes > 400 && rating >= 70) return true;
+  // Massive volume (legendary status)
+  if (votes > 1000) return true;
+  
+  return false;
+}
+
 export const FragranceCapture: React.FC<{
   onAdd?: (item: any) => void | Promise<{ persisted: boolean; requiresAuth?: boolean; error?: string }>;
   onVaultSearchStateChange?: (active: boolean) => void;
@@ -272,7 +292,6 @@ export const FragranceCapture: React.FC<{
   const [errorStatus, setErrorStatus] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
   const [syncComplete, setSyncComplete] = useState(false);
-  const [pollingNotice, setPollingNotice] = useState<string | null>(null);
   const reduceMotion = useReducedMotion();
 
   const searchAbortController = useRef<AbortController | null>(null);
@@ -313,7 +332,6 @@ export const FragranceCapture: React.FC<{
     setLoadingStatus("Researching Fragrance...");
     setMatches([]);
     setErrorStatus(null);
-    setPollingNotice(null);
     setHasSearched(false);
     setSyncComplete(false);
 
@@ -375,7 +393,6 @@ export const FragranceCapture: React.FC<{
 
   const handleRetry = () => {
     setErrorStatus(null);
-    setPollingNotice(null);
     handleSearch();
   };
 
@@ -433,8 +450,7 @@ export const FragranceCapture: React.FC<{
     setUploading(true);
     setLoadingStatus("Fetching Fragrance Intelligence...");
     setSyncComplete(false);
-    setPollingNotice(null);
-    
+
     try {
       const syntheticSourceUrl = selectedId?.startsWith('source:')
         ? firstString(selectedId.slice('source:'.length))
@@ -473,9 +489,6 @@ export const FragranceCapture: React.FC<{
       const detail = normalizeFragranceDetail(
         (await getFragranceDetails(detailsRequest, { signal: controller.signal })) as FragranceDetail,
       );
-      if (!isFragranceDetailEffectivelyComplete(detail)) {
-        setPollingNotice(PARTIAL_ENRICHMENT_NOTICE);
-      }
       const metricNotes = detail.derived_metrics?.notes;
       const rawNotes = detail.raw?.notes;
       const pyramidNotes = {
@@ -597,9 +610,6 @@ export const FragranceCapture: React.FC<{
       setSyncComplete(true);
       await sleep(620);
       resetState();
-      if (!isFragranceDetailEffectivelyComplete(detail)) {
-        setPollingNotice(PARTIAL_ENRICHMENT_NOTICE);
-      }
     } catch (err: any) {
       if (err.name === 'AbortError') return;
       setErrorStatus(err?.message || "Fragrance detail fetch failed. Please check your connection.");
@@ -614,7 +624,6 @@ export const FragranceCapture: React.FC<{
     setHasSearched(false);
     setSearchQuery("");
     setSyncComplete(false);
-    setPollingNotice(null);
   };
 
   return (
@@ -678,18 +687,6 @@ export const FragranceCapture: React.FC<{
               <button onClick={handleRetry} className="text-[9px] uppercase tracking-widest text-red-500 font-bold hover:underline">
                 Try Again
               </button>
-            </motion.div>
-          )}
-        </AnimatePresence>
-        <AnimatePresence>
-          {pollingNotice && (
-            <motion.div
-              initial={{ opacity: 0, y: -8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              className="mb-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-scent text-center"
-            >
-              <p className="text-[10px] text-amber-300/90 font-medium leading-relaxed">{pollingNotice}</p>
             </motion.div>
           )}
         </AnimatePresence>
@@ -784,7 +781,14 @@ export const FragranceCapture: React.FC<{
                         }`}
                         aria-pressed={selectedIdx === i}
                       >
-                        <div className="mx-auto flex min-w-0 max-w-full flex-col items-center gap-1">
+                        <div className="mx-auto flex min-w-0 max-w-full flex-col items-center gap-1 relative">
+                          {isVetted(m) && (
+                            <div className="absolute -top-1 -right-2 flex items-center gap-1">
+                              <span className="text-[7px] uppercase tracking-[0.2em] text-scent-accent/90 font-bold bg-scent-accent/5 px-1.5 py-0.5 rounded-full border border-scent-accent/20 backdrop-blur-sm shadow-[0_0_10px_rgba(201,139,44,0.1)]">
+                                Vetted
+                              </span>
+                            </div>
+                          )}
                           <p
                             className="font-serif italic text-[1.12rem] leading-snug text-[#fff7ec] max-w-full truncate px-1"
                             title={m.name}

@@ -127,6 +127,22 @@ test("normalizeFragranceSearchResult reads nested product identity", () => {
   assert.equal(result?.brand, "Le Labo");
 });
 
+test("normalizeFragranceSearchResult preserves quality metrics", () => {
+  const result = normalizeFragranceSearchResult(
+    {
+      id: "vetted-scent",
+      name: "Aventus",
+      brand: "Creed",
+      bn_positive_pct: 85,
+      bn_vote_count: 1200,
+    },
+    "Creed Aventus",
+  );
+
+  assert.equal(result?.bn_positive_pct, 85);
+  assert.equal(result?.bn_vote_count, 1200);
+});
+
 test("normalizeFragranceDetail does not complete without both source signals", () => {
   const detail = normalizeFragranceDetail({
     name: "Sauvage",
