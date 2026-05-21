@@ -205,7 +205,7 @@ export async function getLatestReadyCachedImageByLookupKey(
           eq(imageCacheTable.processingStatus, "ready"),
         ),
       )
-      .orderBy(desc(imageCacheTable.lastUsedAt), desc(imageCacheTable.createdAt))
+      .orderBy(desc(imageCacheTable.backgroundRemoved), desc(imageCacheTable.lastUsedAt), desc(imageCacheTable.createdAt))
       .limit(10);
   } catch (err) {
     if (isImageCacheUnavailableError(err)) return null;

@@ -11,13 +11,23 @@ function hasImageUrl(value: unknown): value is string {
 
 /**
  * Resolve the most reliable image for a fragrance across shared stores:
- * 1) exact catalog key (Postgres), 2) fuzzy catalog lookup gated by the
- * resolver scorer, 3) Firestore cache.
+ * 1) verified processed image cache, 2) exact catalog key (Postgres),
+ * 3) fuzzy catalog lookup gated by the resolver scorer.
  */
 export async function resolveSharedImageUrl(
   brand: string,
   name: string,
 ): Promise<string | null> {
+  try {
+    // Metadata-only read-through from image_cache. Prefer this over saved
+    // catalog URLs so older persisted refs cannot pin production to stale
+    // processed objects after the pipeline has produced a newer clean image.
+    const cached = await resolveCachedFragranceImage(brand, name);
+    if (cached?.backgroundRemoved && hasImageUrl(cached.imageUrl)) return cached.imageUrl;
+  } catch {
+    /* non-fatal */
+  }
+
   try {
     const exact = await getCatalogEntry(brand, name);
     const exactImageUrl = await usableImageUrlForResponse(exact?.imageUrl);
@@ -41,15 +51,6 @@ export async function resolveSharedImageUrl(
         if (fuzzyImageUrl) return fuzzyImageUrl;
       }
     }
-  } catch {
-    /* non-fatal */
-  }
-
-  try {
-    // Metadata-only read-through from image_cache. This does not trigger Serper,
-    // downloads, or background removal.
-    const cached = await resolveCachedFragranceImage(brand, name);
-    if (hasImageUrl(cached?.imageUrl)) return cached.imageUrl;
   } catch {
     /* non-fatal */
   }
