@@ -55,6 +55,8 @@ import {
   collectMainAccordDisplayRows,
   extractDetailReviews,
   normalizeSourceCoverage,
+  getCachedReviewSummary,
+  reviewSummaryCacheKey,
   summarizeReviews,
   type DerivedMetrics,
   type FragranceDetail,
@@ -377,8 +379,18 @@ function ReviewsPanel({
   brand?: string;
   reviews: FragranceRawReview[];
 }) {
-  const [comments, setComments] = React.useState<string[]>([]);
-  const [loading, setLoading] = React.useState(false);
+  const cacheKey = React.useMemo(
+    () => reviewSummaryCacheKey(name, brand, reviews),
+    [name, brand, reviews],
+  );
+  const initialCached = React.useMemo(
+    () => getCachedReviewSummary(cacheKey),
+    [cacheKey],
+  );
+  const [comments, setComments] = React.useState<string[]>(() => initialCached ?? []);
+  const [loading, setLoading] = React.useState(
+    () => reviews.length > 0 && !(initialCached?.length),
+  );
 
   // Stable identity for the review set so the effect only refetches when the
   // underlying reviews actually change (not on every parent re-render).
@@ -390,6 +402,12 @@ function ReviewsPanel({
   React.useEffect(() => {
     if (reviews.length === 0) {
       setComments([]);
+      setLoading(false);
+      return;
+    }
+    const cached = getCachedReviewSummary(cacheKey);
+    if (cached?.length) {
+      setComments(cached);
       setLoading(false);
       return;
     }
@@ -406,7 +424,7 @@ function ReviewsPanel({
     return () => controller.abort();
     // `reviewsKey` captures the relevant content of `reviews`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reviewsKey, name, brand]);
+  }, [reviewsKey, name, brand, cacheKey]);
 
   // Nothing to show and nothing in flight — hide the panel entirely.
   if (reviews.length === 0) return null;
@@ -416,7 +434,7 @@ function ReviewsPanel({
   // Duplicate the list so the -50% keyframe loops seamlessly.
   const rendered = scroll ? [...comments, ...comments] : comments;
   const trackStyle = scroll
-    ? ({ ['--reviews-scroll-duration' as string]: `${Math.max(28, comments.length * 7)}s` } as React.CSSProperties)
+    ? ({ ['--reviews-scroll-duration' as string]: `${Math.max(34, comments.length * 9)}s` } as React.CSSProperties)
     : undefined;
 
   return (
@@ -429,15 +447,15 @@ function ReviewsPanel({
           </p>
         </div>
       ) : scroll ? (
-        <div className="scent-reviews-teleprompter h-[14rem] px-5 py-4">
-          <div className="scent-reviews-teleprompter-track gap-3.5" style={trackStyle}>
+        <div className="scent-reviews-teleprompter h-[16rem] px-6 py-5">
+          <div className="scent-reviews-teleprompter-track gap-5" style={trackStyle}>
             {rendered.map((comment, index) => (
               <ReviewComment key={`${index}-${comment.slice(0, 24)}`} text={comment} />
             ))}
           </div>
         </div>
       ) : (
-        <div className="flex flex-col gap-3.5 px-5 py-5">
+        <div className="flex flex-col gap-5 px-6 py-6">
           {rendered.map((comment, index) => (
             <ReviewComment key={`${index}-${comment.slice(0, 24)}`} text={comment} />
           ))}
@@ -450,9 +468,9 @@ function ReviewsPanel({
 /** A single rewritten review comment, styled as an editorial quote line. */
 function ReviewComment({ text }: { text: string }) {
   return (
-    <div className="flex items-start justify-center gap-2.5">
-      <Quote size={13} className="mt-0.5 shrink-0 text-scent-accent/55" />
-      <p className="max-w-md text-center text-[13px] italic leading-relaxed text-white/64 font-serif">
+    <div className="flex items-start justify-center gap-3">
+      <Quote size={16} className="mt-1 shrink-0 text-scent-accent/70" />
+      <p className="max-w-lg text-center text-[16px] italic leading-[1.75] text-white/85 font-serif">
         {text}
       </p>
     </div>

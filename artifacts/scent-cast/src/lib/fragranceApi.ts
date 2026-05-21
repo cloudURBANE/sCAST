@@ -1172,6 +1172,25 @@ export async function requeueFragranceDetails(
 
 export type FragranceRawReview = { text: string; source?: string };
 
+const reviewSummaryMemoryCache = new Map<string, string[]>();
+
+/** Stable key for in-session review summary cache (matches server `makeLookupKey` + review text). */
+export function reviewSummaryCacheKey(
+  name: string | undefined,
+  brand: string | undefined,
+  reviews: FragranceRawReview[],
+): string {
+  const b = (brand ?? "").trim().toLowerCase();
+  const n = (name ?? "").trim().toLowerCase();
+  const body = reviews.map((r) => r.text).join("\0").slice(0, 6000);
+  return `${b}::${n}::${body}`;
+}
+
+export function getCachedReviewSummary(cacheKey: string): string[] | undefined {
+  const hit = reviewSummaryMemoryCache.get(cacheKey);
+  return hit?.length ? hit : undefined;
+}
+
 /** Pulls the raw scraped reviews off a fragrance detail payload (engine puts them on `raw.reviews`). */
 export function extractDetailReviews(detail: FragranceDetail | null | undefined): FragranceRawReview[] {
   const raw = detail?.raw?.reviews;
@@ -1196,6 +1215,9 @@ export async function summarizeReviews(
   options?: { signal?: AbortSignal },
 ): Promise<string[]> {
   if (!input.reviews.length) return [];
+  const cacheKey = reviewSummaryCacheKey(input.name, input.brand, input.reviews);
+  const memoryHit = getCachedReviewSummary(cacheKey);
+  if (memoryHit) return memoryHit;
   try {
     const res = await fetch(appApiUrl("/api/reviews/summarize"), {
       method: "POST",
@@ -1210,7 +1232,13 @@ export async function summarizeReviews(
     if (!res.ok) return [];
     const data = (await res.json()) as { comments?: unknown };
     if (!Array.isArray(data.comments)) return [];
-    return data.comments.filter((c): c is string => typeof c === "string" && c.trim().length > 0);
+    const comments = data.comments.filter(
+      (c): c is string => typeof c === "string" && c.trim().length > 0,
+    );
+    if (comments.length > 0) {
+      reviewSummaryMemoryCache.set(cacheKey, comments);
+    }
+    return comments;
   } catch {
     return [];
   }
