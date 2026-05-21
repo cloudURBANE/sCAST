@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { X } from 'lucide-react';
 import { BottleImage } from '@/components/BottleImage';
@@ -11,6 +11,10 @@ interface BottleMarqueeProps {
 }
 
 const COMMUNITY_TRACK_COPIES = 3;
+const COMMUNITY_SCROLL_PIXELS_PER_SECOND = 6;
+const COMMUNITY_SCROLL_MIN_SECONDS = 140;
+const COMMUNITY_SCROLL_MAX_SECONDS = 320;
+const COMMUNITY_SCROLL_REDUCED_MOTION_SECONDS = 640;
 
 const placeholderItems: CommunityFragranceEntry[] = [...Array(8)].map((_, index) => ({
   id: `placeholder:${index}`,
@@ -31,13 +35,79 @@ function formatNotes(notes: string[] | undefined): string {
 }
 
 export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, loading, isError = false }) => {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const groupRef = useRef<HTMLDivElement>(null);
+  const measureMarqueeRef = useRef<(() => void) | null>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const triggerRefs = useRef(new Map<string, HTMLButtonElement>());
   const activeTriggerIdRef = useRef<string | null>(null);
   const [activeItem, setActiveItem] = useState<CommunityFragranceEntry | null>(null);
   const renderedItems = loading ? placeholderItems : items;
-  const renderedItemKey = renderedItems.map((item) => item.id).join('|');
+  const trackKey = useMemo(
+    () => renderedItems.map((item) => `${item.id}:${item.imageUrl}`).join('|'),
+    [renderedItems],
+  );
+
+  useLayoutEffect(() => {
+    const track = trackRef.current;
+    const group = groupRef.current;
+    if (!track || !group) return;
+    let cancelled = false;
+    let animationFrame = 0;
+
+    const updateDistance = (ready = true) => {
+      if (cancelled) return;
+      const distance = group.getBoundingClientRect().width;
+      if (distance <= 0) return;
+
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const duration = prefersReducedMotion
+        ? COMMUNITY_SCROLL_REDUCED_MOTION_SECONDS
+        : Math.min(
+            COMMUNITY_SCROLL_MAX_SECONDS,
+            Math.max(COMMUNITY_SCROLL_MIN_SECONDS, distance / COMMUNITY_SCROLL_PIXELS_PER_SECOND),
+          );
+
+      track.style.setProperty('--community-marquee-distance', `${distance}px`);
+      track.style.setProperty('--community-marquee-duration', `${duration}s`);
+      if (ready) {
+        track.dataset.marqueeReady = 'true';
+      }
+    };
+    measureMarqueeRef.current = () => updateDistance(track.dataset.marqueeReady === 'true');
+
+    track.dataset.marqueeReady = 'false';
+
+    const startWhenFontsSettle = () => {
+      animationFrame = window.requestAnimationFrame(() => updateDistance(true));
+    };
+
+    if (document.fonts?.ready) {
+      document.fonts.ready.then(startWhenFontsSettle);
+    } else {
+      startWhenFontsSettle();
+    }
+
+    const handleResize = () => updateDistance(track.dataset.marqueeReady === 'true');
+    const resizeObserver = new ResizeObserver(handleResize);
+    resizeObserver.observe(group);
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      cancelled = true;
+      measureMarqueeRef.current = null;
+      if (animationFrame) window.cancelAnimationFrame(animationFrame);
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [trackKey]);
+
+  const requestMarqueeMeasure = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      measureMarqueeRef.current?.();
+    });
+  }, []);
 
   const closeOverlay = useCallback(() => {
     const triggerId = activeTriggerIdRef.current;
@@ -104,11 +174,12 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
   return (
     <>
       <section className="scent-community-marquee" aria-label="Community fragrance marquee">
-        <div className="scent-community-marquee-track" key={renderedItemKey}>
+        <div className="scent-community-marquee-track" key={trackKey} ref={trackRef}>
           {[...Array(COMMUNITY_TRACK_COPIES)].map((_, copyIndex) => (
             <div
               className="scent-community-marquee-group"
               key={copyIndex}
+              ref={copyIndex === 0 ? groupRef : undefined}
               aria-hidden={copyIndex > 0}
             >
               {renderedItems.map((item) => (
@@ -143,6 +214,8 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
                       className="absolute inset-3"
                       adjustment={item.imageAdjustment}
                       showFrameGuide={false}
+                      onLoad={copyIndex === 0 ? requestMarqueeMeasure : undefined}
+                      onError={copyIndex === 0 ? requestMarqueeMeasure : undefined}
                     />
                     <span className="absolute left-4 top-4 font-mono text-[8px] uppercase tracking-[0.24em] text-scent-accent/75">
                       {item.curator}
