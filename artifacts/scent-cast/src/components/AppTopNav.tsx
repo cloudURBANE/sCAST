@@ -41,7 +41,8 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
 
   return (
     <nav className="scent-topbar fixed top-0 left-0 right-0 h-16 sm:h-[72px] z-50 px-3 sm:px-8">
-      <div className="max-w-[1760px] mx-auto h-full flex items-center gap-2">
+      <div className="relative max-w-[1760px] mx-auto h-full flex items-center">
+        {/* Left controls — flow from the left edge. */}
         <div className="flex shrink-0 items-center gap-2 sm:gap-4">
           {authControl}
           {currentRoute !== 'home' ? (
@@ -54,18 +55,21 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
           ) : null}
         </div>
 
-        <div className="flex flex-1 min-w-0 items-center justify-center gap-2 sm:gap-3 pointer-events-none">
+        {/* Brandmark — absolutely pinned to the true center of the bar so it
+            stays dead-center regardless of how wide the side controls are. */}
+        <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-2 sm:gap-3">
           <Wind
             strokeWidth={1.25}
-            className="w-[19.8px] h-[19.8px] sm:w-[22px] sm:h-[22px] shrink-0 text-scent-accent drop-shadow-[0_0_10px_rgba(201,139,44,0.22)]"
+            className="w-[26px] h-[26px] sm:w-9 sm:h-9 shrink-0 text-scent-accent drop-shadow-[0_0_12px_rgba(201,139,44,0.26)]"
           />
-          <h1 className="scent-brandmark font-serif text-[1.125rem] sm:text-3xl tracking-[0.14em] uppercase truncate">
+          <h1 className="scent-brandmark font-serif text-[1.3rem] sm:text-[2rem] leading-none tracking-[0.14em] uppercase whitespace-nowrap">
             <span className="sm:hidden">{APP_BRAND_MARK_SHORT}</span>
             <span className="hidden sm:inline">{APP_BRAND_MARK}</span>
           </h1>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2 sm:gap-4 justify-end">
+        {/* Right controls — pushed to the right edge. */}
+        <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-4 justify-end">
           {currentRoute === 'community' ? (
             <span className={activeNavClassName}>
               <ActiveDot />
