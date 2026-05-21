@@ -28,9 +28,10 @@ import {
   ArrowRight,
   ArrowDown,
   ArrowLeft,
-  Quote,
 } from 'lucide-react';
+import { ReviewsPanel } from './ReviewsPanel';
 import { bottleFeaturedSlotClass } from '@/lib/bottleImageFrame';
+
 import {
   BOTTLE_CROP_STORED_MAX,
   DEFAULT_BOTTLE_IMAGE_ADJUSTMENT,
@@ -60,7 +61,6 @@ import {
   summarizeReviews,
   type DerivedMetrics,
   type FragranceDetail,
-  type FragranceRawReview,
   type SourceCoverage,
 } from '@/lib/fragranceApi';
 
@@ -362,120 +362,7 @@ function FragrancePanel({
   );
 }
 
-/**
- * Reviews panel — distils the engine's scraped reviews into short, original
- * comments (via the `/api/reviews/summarize` Gemini endpoint) and presents them
- * in a slow auto-scrolling "teleprompter" that pauses on hover.
- *
- * Replaces the former Source Status panel. The panel renders nothing until
- * there are comments to show, so a fragrance with no reviews shows no panel.
- */
-function ReviewsPanel({
-  name,
-  brand,
-  reviews,
-}: {
-  name?: string;
-  brand?: string;
-  reviews: FragranceRawReview[];
-}) {
-  const cacheKey = React.useMemo(
-    () => reviewSummaryCacheKey(name, brand, reviews),
-    [name, brand, reviews],
-  );
-  const initialCached = React.useMemo(
-    () => getCachedReviewSummary(cacheKey),
-    [cacheKey],
-  );
-  const [comments, setComments] = React.useState<string[]>(() => initialCached ?? []);
-  const [loading, setLoading] = React.useState(
-    () => reviews.length > 0 && !(initialCached?.length),
-  );
 
-  // Stable identity for the review set so the effect only refetches when the
-  // underlying reviews actually change (not on every parent re-render).
-  const reviewsKey = React.useMemo(
-    () => reviews.map((r) => r.text).join('|').slice(0, 6000),
-    [reviews],
-  );
-
-  React.useEffect(() => {
-    if (reviews.length === 0) {
-      setComments([]);
-      setLoading(false);
-      return;
-    }
-    const cached = getCachedReviewSummary(cacheKey);
-    if (cached?.length) {
-      setComments(cached);
-      setLoading(false);
-      return;
-    }
-    const controller = new AbortController();
-    setLoading(true);
-    setComments([]);
-    summarizeReviews({ name, brand, reviews }, { signal: controller.signal })
-      .then((result) => {
-        if (!controller.signal.aborted) setComments(result);
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
-      });
-    return () => controller.abort();
-    // `reviewsKey` captures the relevant content of `reviews`.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reviewsKey, name, brand, cacheKey]);
-
-  // Nothing to show and nothing in flight — hide the panel entirely.
-  if (reviews.length === 0) return null;
-  if (!loading && comments.length === 0) return null;
-
-  const scroll = comments.length >= 3;
-  // Duplicate the list so the -50% keyframe loops seamlessly.
-  const rendered = scroll ? [...comments, ...comments] : comments;
-  const trackStyle = scroll
-    ? ({ ['--reviews-scroll-duration' as string]: `${Math.max(34, comments.length * 9)}s` } as React.CSSProperties)
-    : undefined;
-
-  return (
-    <FragrancePanel title="Reviews">
-      {loading ? (
-        <div className="flex items-center justify-center gap-2 px-4 py-10 text-center">
-          <RefreshCw size={13} className="animate-spin text-white/45" />
-          <p className="text-[11px] uppercase tracking-[0.2em] text-white/45 font-bold">
-            Distilling reviews…
-          </p>
-        </div>
-      ) : scroll ? (
-        <div className="scent-reviews-teleprompter h-[16rem] px-6 py-5">
-          <div className="scent-reviews-teleprompter-track gap-5" style={trackStyle}>
-            {rendered.map((comment, index) => (
-              <ReviewComment key={`${index}-${comment.slice(0, 24)}`} text={comment} />
-            ))}
-          </div>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-5 px-6 py-6">
-          {rendered.map((comment, index) => (
-            <ReviewComment key={`${index}-${comment.slice(0, 24)}`} text={comment} />
-          ))}
-        </div>
-      )}
-    </FragrancePanel>
-  );
-}
-
-/** A single rewritten review comment, styled as an editorial quote line. */
-function ReviewComment({ text }: { text: string }) {
-  return (
-    <div className="flex items-start justify-center gap-3">
-      <Quote size={16} className="mt-1 shrink-0 text-scent-accent/70" />
-      <p className="max-w-lg text-center text-[16px] italic leading-[1.75] text-white/85 font-serif">
-        {text}
-      </p>
-    </div>
-  );
-}
 
 function DetailMetaStrip({ rows }: { rows: Array<{ label: string; value: string }> }) {
   if (rows.length === 0) return null;
@@ -921,6 +808,17 @@ export const Wardrobe: React.FC<{
   onExpandArchive,
 }) => {
   const [selectedItem, setSelectedItem] = React.useState<Fragrance | null>(null);
+
+  const prefetchReviews = React.useCallback((item: Fragrance) => {
+    const rawReviews = extractDetailReviews(item.raw_engine_detail);
+    if (rawReviews.length === 0) return;
+    const name = entryName(item);
+    const brand = entryBrand(item);
+    const cacheKey = reviewSummaryCacheKey(name, brand, rawReviews);
+    if (getCachedReviewSummary(cacheKey)) return;
+    void summarizeReviews({ name, brand, reviews: rawReviews });
+  }, []);
+
   const [searchQuery, setSearchQuery] = React.useState("");
   const deferredSearchQuery = React.useDeferredValue(searchQuery);
   
@@ -1521,6 +1419,7 @@ export const Wardrobe: React.FC<{
                     initial={{ scale: 0.98, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
                     className="glass-acrylic glass-acrylic-animate rounded-scent p-20 aspect-[3/4] flex flex-col items-center relative overflow-hidden cursor-pointer"
                     onClick={() => openDetail(featuredItem)}
+                    onMouseEnter={() => prefetchReviews(featuredItem)}
                   >
                     <div className="absolute top-10 left-10 text-[9px] uppercase tracking-[0.6em] text-white/30 font-bold z-20 pointer-events-none">Recommended Manifest</div>
                     <div className={bottleFeaturedSlotClass()}>
@@ -1557,6 +1456,7 @@ export const Wardrobe: React.FC<{
                     viewport={{ once: true }} transition={{ delay: i * 0.08, duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
                     className="group cursor-pointer relative h-full min-w-0"
                     onClick={() => openDetail(item)}
+                    onMouseEnter={() => prefetchReviews(item)}
                   >
                     <div className="scent-fragrance-card w-full h-full min-h-[32rem] transition-[transform,border-color,box-shadow] duration-500 motion-reduce:transition-none group-hover:-translate-y-1.5 motion-reduce:group-hover:translate-y-0 relative overflow-hidden flex flex-col">
                       <div className="scent-card-frame" aria-hidden />

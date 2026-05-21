@@ -1172,7 +1172,12 @@ export async function requeueFragranceDetails(
 
 export type FragranceRawReview = { text: string; source?: string };
 
-const reviewSummaryMemoryCache = new Map<string, string[]>();
+export type SummarizedComment = {
+  text: string;
+  theme: "performance" | "season" | "vibe" | "general";
+};
+
+const reviewSummaryMemoryCache = new Map<string, SummarizedComment[]>();
 
 /** Stable key for in-session review summary cache (matches server `makeLookupKey` + review text). */
 export function reviewSummaryCacheKey(
@@ -1186,7 +1191,7 @@ export function reviewSummaryCacheKey(
   return `${b}::${n}::${body}`;
 }
 
-export function getCachedReviewSummary(cacheKey: string): string[] | undefined {
+export function getCachedReviewSummary(cacheKey: string): SummarizedComment[] | undefined {
   const hit = reviewSummaryMemoryCache.get(cacheKey);
   return hit?.length ? hit : undefined;
 }
@@ -1213,7 +1218,7 @@ export function extractDetailReviews(detail: FragranceDetail | null | undefined)
 export async function summarizeReviews(
   input: { name?: string; brand?: string; reviews: FragranceRawReview[] },
   options?: { signal?: AbortSignal },
-): Promise<string[]> {
+): Promise<SummarizedComment[]> {
   if (!input.reviews.length) return [];
   const cacheKey = reviewSummaryCacheKey(input.name, input.brand, input.reviews);
   const memoryHit = getCachedReviewSummary(cacheKey);
@@ -1232,9 +1237,24 @@ export async function summarizeReviews(
     if (!res.ok) return [];
     const data = (await res.json()) as { comments?: unknown };
     if (!Array.isArray(data.comments)) return [];
-    const comments = data.comments.filter(
-      (c): c is string => typeof c === "string" && c.trim().length > 0,
-    );
+    const validThemes = ["performance", "season", "vibe", "general"];
+    const comments = data.comments
+      .map((c): SummarizedComment | null => {
+        if (typeof c === "string") {
+          return { text: c.trim(), theme: "general" };
+        }
+        if (c && typeof c === "object" && "text" in c && typeof (c as any).text === "string") {
+          const textVal = (c as any).text.trim();
+          const rawTheme = (c as any).theme;
+          const themeVal = typeof rawTheme === "string" && validThemes.includes(rawTheme.toLowerCase())
+            ? (rawTheme.toLowerCase() as SummarizedComment["theme"])
+            : "general";
+          return { text: textVal, theme: themeVal };
+        }
+        return null;
+      })
+      .filter((c): c is SummarizedComment => c !== null && c.text.length > 0);
+
     if (comments.length > 0) {
       reviewSummaryMemoryCache.set(cacheKey, comments);
     }

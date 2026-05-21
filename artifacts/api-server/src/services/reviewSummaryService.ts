@@ -1,4 +1,4 @@
-﻿import { createHash } from "node:crypto";
+import { createHash } from "node:crypto";
 import { db } from "@workspace/db";
 import { fragranceReviewSummariesTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
@@ -10,8 +10,13 @@ const MAX_OUTPUT_COMMENTS = 8;
 
 export type RawReview = { text: string; source?: string };
 
+export type SummarizedComment = {
+  text: string;
+  theme: "performance" | "season" | "vibe" | "general";
+};
+
 export type ReviewSummaryResult = {
-  comments: string[];
+  comments: SummarizedComment[];
   cached: boolean;
 };
 
@@ -56,10 +61,16 @@ Rules:
 - Capture genuine consensus (performance, vibe, seasons, drydown).
 - ORIGINAL phrasing only; never quote verbatim.
 - No emojis, hashtags, usernames, ratings, or markdown.
-- Return raw JSON only.
+- Categorize each comment with a theme: "performance", "season", "vibe", or "general".
+- Return raw JSON only matching the schema exactly.
 
 JSON shape:
-{ "comments": ["string", "string"] }
+{
+  "comments": [
+    { "text": "Comment text here", "theme": "performance" },
+    { "text": "Another comment text", "theme": "vibe" }
+  ]
+}
 
 Reviews:
 ${reviewBlock}
@@ -74,7 +85,7 @@ function geminiApiKey(): string {
   );
 }
 
-async function generateWithGemini(fragranceName: string, reviews: string[]): Promise<string[]> {
+async function generateWithGemini(fragranceName: string, reviews: string[]): Promise<SummarizedComment[]> {
   const apiKey = geminiApiKey();
   if (!apiKey) throw new Error("Missing GEMINI_API_KEY (or GOOGLE_API_KEY)");
 
@@ -111,10 +122,24 @@ async function generateWithGemini(fragranceName: string, reviews: string[]): Pro
     : (parsed as { comments?: unknown })?.comments;
   if (!Array.isArray(rawComments)) return [];
 
+  const validThemes = ["performance", "season", "vibe", "general"];
+
   return rawComments
-    .filter((c): c is string => typeof c === "string")
-    .map((c) => c.replace(/\s+/g, " ").trim())
-    .filter((c) => c.length >= 8)
+    .map((c): SummarizedComment | null => {
+      if (typeof c === "string") {
+        return { text: c.replace(/\s+/g, " ").trim(), theme: "general" };
+      }
+      if (c && typeof c === "object" && "text" in c && typeof (c as any).text === "string") {
+        const textVal = (c as any).text.replace(/\s+/g, " ").trim();
+        const rawTheme = (c as any).theme;
+        const themeVal = typeof rawTheme === "string" && validThemes.includes(rawTheme.toLowerCase())
+          ? (rawTheme.toLowerCase() as SummarizedComment["theme"])
+          : "general";
+        return { text: textVal, theme: themeVal };
+      }
+      return null;
+    })
+    .filter((c): c is SummarizedComment => c !== null && c.text.length >= 8)
     .slice(0, MAX_OUTPUT_COMMENTS);
 }
 
@@ -140,9 +165,22 @@ export async function summarizeFragranceReviews(input: {
       .limit(1);
     const row = rows[0];
     if (row && row.sourceHash === sourceHash && Array.isArray(row.comments)) {
-      const comments = (row.comments as unknown[]).filter(
-        (c): c is string => typeof c === "string",
-      );
+      const validThemes = ["performance", "season", "vibe", "general"];
+      const comments = (row.comments as unknown[])
+        .map((c): SummarizedComment | null => {
+          if (typeof c === "string") {
+            return { text: c, theme: "general" };
+          }
+          if (c && typeof c === "object" && "text" in c && typeof (c as any).text === "string") {
+            const rawTheme = (c as any).theme;
+            const themeVal = typeof rawTheme === "string" && validThemes.includes(rawTheme.toLowerCase())
+              ? (rawTheme.toLowerCase() as SummarizedComment["theme"])
+              : "general";
+            return { text: (c as any).text, theme: themeVal };
+          }
+          return null;
+        })
+        .filter((c): c is SummarizedComment => c !== null);
       if (comments.length > 0) return { comments, cached: true };
     }
   } catch {

@@ -20,12 +20,14 @@ import { publicShareBuyLinkEndpoint } from '@/lib/shareLinks';
 import { ScentNotesInfographic } from '@/components/ScentNotesInfographic';
 import {
   collectMainAccordDisplayRows,
+  extractDetailReviews,
   normalizeSourceCoverage,
   resolveSourceStatus,
   type DerivedMetrics,
   type FragranceDetail,
   type SourceCoverage,
 } from '@/lib/fragranceApi';
+import { ReviewsPanel } from '@/components/ReviewsPanel';
 
 interface ScentVector {
   freshness: number;
@@ -874,6 +876,12 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                       <DetailMetaStrip rows={selectedDetailMetaRows} />
                     </div>
                   </FragrancePanel>
+
+                  <ReviewsPanel
+                    name={entryName(selectedItem)}
+                    brand={entryBrand(selectedItem)}
+                    reviews={extractDetailReviews(selectedItem.raw_engine_detail)}
+                  />
 
                 </div>
               </div>
