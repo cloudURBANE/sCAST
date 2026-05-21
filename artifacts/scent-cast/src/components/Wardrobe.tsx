@@ -1528,6 +1528,7 @@ export const Wardrobe: React.FC<{
                         className="min-h-0 w-full flex-1"
                         imgClassName="group-hover:scale-105 transition-transform duration-1000 brightness-[1.15]"
                         loading="eager"
+                        fetchPriority="high"
                       />
                     </div>
                     <div className="text-center mt-4 mb-2 space-y-3 shrink-0 px-2">
@@ -1571,6 +1572,8 @@ export const Wardrobe: React.FC<{
                             adjustment={item.imageAdjustment}
                             className="absolute inset-0 z-10"
                             imgClassName="brightness-[1.1] group-hover:scale-[1.035] motion-reduce:group-hover:scale-100 transition-transform duration-[900ms] motion-reduce:transition-none"
+                            loading={shelfIndex === 0 ? 'eager' : 'lazy'}
+                            fetchPriority={shelfIndex === 0 ? 'high' : undefined}
                           />
                         </div>
                         <div className="scent-card-title-row shrink-0">
