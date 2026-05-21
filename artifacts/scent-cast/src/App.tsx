@@ -1121,24 +1121,36 @@ export default function App() {
               Find your signature for the current atmosphere.
             </h2>
             <FragranceCapture onAdd={handleAddItem} onVaultSearchStateChange={handleVaultSearchStateChange} />
-            <motion.button
-              type="button"
-              animate={{
-                opacity: vaultSearchUiActive ? 0 : 1,
-                y: vaultSearchUiActive ? 8 : 0,
-              }}
-              transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
-              style={{ pointerEvents: vaultSearchUiActive ? 'none' : 'auto' }}
-              tabIndex={vaultSearchUiActive ? -1 : undefined}
-              onClick={() => {
-                if (items.length === 0) { alert("Your vault is empty! Add at least one fragrance to discover your match."); return; }
-                setIsIntentModalOpen(true);
-              }}
-              className="scent-primary-button w-full min-h-[60px] sm:h-16 flex items-center justify-center gap-2.5 sm:gap-4 px-4 transition-all group rounded-[var(--radius-scent)]"
-            >
-              <Play size={19} className="fill-current shrink-0 group-hover:scale-110 transition-transform" />
-              <span className="font-serif italic text-lg sm:text-2xl leading-tight text-center">Discover Your Signature Scent</span>
-            </motion.button>
+            <AnimatePresence initial={false}>
+              {items.length >= 3 ? (
+                <motion.div
+                  key="discover-button"
+                  initial={{ opacity: 0, height: 0, marginTop: 0 }}
+                  animate={{ opacity: 1, height: 'auto', marginTop: '1.75rem' }}
+                  exit={{ opacity: 0, height: 0, marginTop: 0 }}
+                  transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
+                  style={{ overflow: 'hidden' }}
+                >
+                  <motion.button
+                    type="button"
+                    animate={{
+                      opacity: vaultSearchUiActive ? 0 : 1,
+                      y: vaultSearchUiActive ? 8 : 0,
+                    }}
+                    transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
+                    style={{ pointerEvents: vaultSearchUiActive ? 'none' : 'auto' }}
+                    tabIndex={vaultSearchUiActive ? -1 : undefined}
+                    onClick={() => {
+                      setIsIntentModalOpen(true);
+                    }}
+                    className="scent-primary-button w-full min-h-[60px] sm:h-16 flex items-center justify-center gap-2.5 sm:gap-4 px-4 transition-all group rounded-[var(--radius-scent)]"
+                  >
+                    <Play size={19} className="fill-current shrink-0 group-hover:scale-110 transition-transform" />
+                    <span className="font-serif italic text-lg sm:text-2xl leading-tight text-center">Discover Your Signature Scent</span>
+                  </motion.button>
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
           </section>
 
           <div className="scent-full-bleed">
