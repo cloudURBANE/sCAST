@@ -39,5 +39,5 @@ export function chooseHydratedImageUrl(
   sharedImageUrl: unknown,
   currentImageUrl: unknown,
 ): string {
-  return nonEmptyString(currentImageUrl) ?? nonEmptyString(sharedImageUrl) ?? "";
+  return nonEmptyString(sharedImageUrl) ?? nonEmptyString(currentImageUrl) ?? "";
 }
