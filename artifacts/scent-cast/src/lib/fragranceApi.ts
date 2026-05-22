@@ -785,6 +785,7 @@ export function isTerminalEnrichmentStatus(value: unknown): boolean {
   const status = normalizedStatus(value);
   return (
     status === "completed" ||
+    status === "complete" ||
     status === "not_needed" ||
     status === "failed" ||
     status === "ignored" ||

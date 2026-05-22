@@ -18,7 +18,14 @@ import {
   type ScentWeatherEngineInput,
   type ScentWeatherRecommendation,
 } from './lib/scentWeatherEngine';
-import { collectMainAccordDisplayRows } from './lib/fragranceApi';
+import {
+  collectMainAccordDisplayRows,
+  getFragranceDetails,
+  isBackgroundEnrichmentQueued,
+  normalizeFragranceDetail,
+  type FragranceDetail,
+  type FragranceDetailRequestPayload,
+} from './lib/fragranceApi';
 import { APP_BRAND_MARK } from './lib/appBrand';
 import { subscribeToNavigation } from './lib/navigation';
 
@@ -121,6 +128,54 @@ function sameWardrobeEntry(
   if (target._dbId) return item._dbId === target._dbId;
   if (item._dbId) return false;
   return item.id === target.id;
+}
+
+function normalizedEnrichmentStatus(item: Fragrance): string {
+  return firstString(item.enrichment?.status, item.raw_engine_detail?.enrichment?.status)
+    ?.toLowerCase() ?? '';
+}
+
+function hasFragranticaRefreshTarget(item: Fragrance): boolean {
+  const detail = item.raw_engine_detail;
+  return Boolean(
+    item.source_coverage?.fragrantica_linked ||
+      detail?.source_coverage?.fragrantica_linked ||
+      firstString(
+        detail?.raw?.source_urls?.frag_url,
+        item.source_url,
+        detail?.source_url,
+      )?.toLowerCase().includes('fragrantica.com'),
+  );
+}
+
+function wardrobeNeedsEnrichmentRefresh(item: Fragrance): boolean {
+  const enrichment = item.enrichment ?? item.raw_engine_detail?.enrichment;
+  if (isBackgroundEnrichmentQueued(enrichment)) return true;
+  return (
+    normalizedEnrichmentStatus(item) === 'complete' &&
+    item.source_coverage?.complete !== true &&
+    hasFragranticaRefreshTarget(item)
+  );
+}
+
+function detailRefreshPayloadFor(item: Fragrance): FragranceDetailRequestPayload | null {
+  const detail = item.raw_engine_detail;
+  const sourceUrl = firstString(
+    detail?.raw?.source_urls?.frag_url,
+    item.source_url,
+    detail?.source_url,
+    detail?.raw?.source_urls?.bn_url,
+  );
+  const engineId = firstString(item.fragranceApiId, detail?.id);
+  if (engineId) {
+    const origin = engineId.startsWith('catalog:') ||
+      engineId.startsWith('dataset:') ||
+      engineId.startsWith('local:')
+      ? 'app'
+      : 'srt';
+    return { id: engineId, ...(sourceUrl ? { source_url: sourceUrl } : {}), origin };
+  }
+  return sourceUrl ? { source_url: sourceUrl, origin: 'srt' } : null;
 }
 
 const RAIN_CONDITION_SIGNALS = ['rain', 'drizzle', 'storm'];
@@ -554,6 +609,7 @@ export default function App() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [guestPromptDismissed, setGuestPromptDismissed] = useState(false);
   const autoWardrobeRebuildAttemptedRef = useRef(false);
+  const enrichmentRefreshInFlightRef = useRef(false);
   const [wardrobeRevertSnapshot, setWardrobeRevertSnapshot] = useState<Fragrance[] | null>(null);
   const [wardrobeFixBusy, setWardrobeFixBusy] = useState(false);
   const [wardrobeFixHint, setWardrobeFixHint] = useState<string | null>(null);
@@ -863,6 +919,100 @@ export default function App() {
       lastMutationRef.current = Date.now();
     }
   }, [authToken]);
+
+  const handlePersistWardrobeDetailRefresh = useCallback(async (
+    target: Fragrance,
+    detail: FragranceDetail,
+  ): Promise<Fragrance | null> => {
+    if (!authToken) return null;
+    const apiId = target._dbId ?? target.id;
+    isMutatingRef.current = true;
+    try {
+      const res = await fetch(`/api/wardrobe/${apiId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({
+          derived_metrics: detail.derived_metrics ?? null,
+          source_coverage: detail.source_coverage,
+          enrichment: detail.enrichment ?? null,
+          raw_engine_detail: detail,
+        }),
+      });
+      const data = (await res.json().catch(() => null)) as Partial<Fragrance> & { _dbId?: string; error?: string } | null;
+      if (!res.ok) {
+        throw new Error(data?.error || `HTTP ${res.status}`);
+      }
+      const next: Fragrance = {
+        ...target,
+        ...data,
+        id: target.id,
+        derived_metrics: detail.derived_metrics ?? null,
+        source_coverage: detail.source_coverage,
+        enrichment: detail.enrichment ?? null,
+        raw_engine_detail: detail,
+        _dbId: data?._dbId ?? target._dbId,
+      };
+      setItems((prev) =>
+        prev.map((item) =>
+          sameWardrobeEntry(item, target) ? next : item,
+        ),
+      );
+      return next;
+    } catch (e) {
+      console.error('Failed to persist enriched wardrobe detail', e);
+      return null;
+    } finally {
+      isMutatingRef.current = false;
+      lastMutationRef.current = Date.now();
+    }
+  }, [authToken]);
+
+  useEffect(() => {
+    if (!authToken || !wardrobeLoaded || items.length === 0) return;
+    const abortController = new AbortController();
+    let cancelled = false;
+    const REFRESH_MS = 15_000;
+
+    const refreshPendingDetails = async () => {
+      if (cancelled || enrichmentRefreshInFlightRef.current || isMutatingRef.current) return;
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      const targets = items
+        .filter(wardrobeNeedsEnrichmentRefresh)
+        .slice(0, 3);
+      if (targets.length === 0) return;
+
+      enrichmentRefreshInFlightRef.current = true;
+      try {
+        for (const item of targets) {
+          if (cancelled) break;
+          const payload = detailRefreshPayloadFor(item);
+          if (!payload) continue;
+          const detail = normalizeFragranceDetail(
+            (await getFragranceDetails(payload, { signal: abortController.signal })) as FragranceDetail,
+          );
+          if (isBackgroundEnrichmentQueued(detail.enrichment)) continue;
+          await handlePersistWardrobeDetailRefresh(item, detail);
+        }
+      } catch (err) {
+        if ((err as Error).name !== 'AbortError') {
+          console.error('Background fragrance detail refresh failed', err);
+        }
+      } finally {
+        enrichmentRefreshInFlightRef.current = false;
+      }
+    };
+
+    void refreshPendingDetails();
+    const id = window.setInterval(refreshPendingDetails, REFRESH_MS);
+    return () => {
+      cancelled = true;
+      abortController.abort();
+      window.clearInterval(id);
+    };
+  }, [authToken, wardrobeLoaded, items, handlePersistWardrobeDetailRefresh]);
 
   const handleRevertWardrobe = useCallback(() => {
     if (!wardrobeRevertSnapshot) return;

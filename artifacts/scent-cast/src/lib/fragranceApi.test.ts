@@ -246,6 +246,13 @@ test("terminal enrichment status is not treated as queued even with worker flag"
     }),
     false,
   );
+  assert.equal(
+    isBackgroundEnrichmentQueued({
+      status: "complete",
+      requires_worker: true,
+    }),
+    false,
+  );
 });
 
 test("getFragranceDetails posts opaque id and source URL to SRT details", async (t) => {

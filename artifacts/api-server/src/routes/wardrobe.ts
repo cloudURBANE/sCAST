@@ -188,12 +188,20 @@ router.patch("/wardrobe/:id", requireAuth, async (req: AuthRequest, res) => {
     syncImageFromCatalog?: boolean;
     imageUrl?: unknown;
     imageAdjustment?: unknown;
-  };
+  } & Record<string, unknown>;
   const explicitImageUrl = await persistableImageReference(imageUrl);
   const hasImageAdjustment = imageAdjustment !== undefined;
+  const hasDetailRefresh =
+    Object.prototype.hasOwnProperty.call(req.body, "derived_metrics") ||
+    Object.prototype.hasOwnProperty.call(req.body, "source_coverage") ||
+    Object.prototype.hasOwnProperty.call(req.body, "enrichment") ||
+    Object.prototype.hasOwnProperty.call(req.body, "raw_engine_detail");
   const normalizedImageAdjustment = normalizeImageAdjustment(imageAdjustment);
-  if (syncImageFromCatalog !== true && !explicitImageUrl && !hasImageAdjustment) {
-    res.status(400).json({ error: "syncImageFromCatalog: true, a valid imageUrl, or imageAdjustment is required" });
+  if (syncImageFromCatalog !== true && !explicitImageUrl && !hasImageAdjustment && !hasDetailRefresh) {
+    res.status(400).json({
+      error:
+        "syncImageFromCatalog: true, a valid imageUrl, imageAdjustment, or detail refresh payload is required",
+    });
     return;
   }
   if (typeof imageUrl === "string" && imageUrl.trim() && !explicitImageUrl) {
@@ -241,9 +249,24 @@ router.patch("/wardrobe/:id", requireAuth, async (req: AuthRequest, res) => {
     }
   }
 
+  const detailPatch: Record<string, unknown> = {};
+  if (Object.prototype.hasOwnProperty.call(req.body, "derived_metrics")) {
+    detailPatch.derived_metrics = req.body.derived_metrics ?? null;
+  }
+  if (Object.prototype.hasOwnProperty.call(req.body, "source_coverage")) {
+    detailPatch.source_coverage = req.body.source_coverage ?? undefined;
+  }
+  if (Object.prototype.hasOwnProperty.call(req.body, "enrichment")) {
+    detailPatch.enrichment = req.body.enrichment ?? null;
+  }
+  if (Object.prototype.hasOwnProperty.call(req.body, "raw_engine_detail")) {
+    detailPatch.raw_engine_detail = req.body.raw_engine_detail ?? null;
+  }
+
   const merged = sanitizeFragrance(
     normalizeFragrance({
       ...existing,
+      ...detailPatch,
       ...(shouldUpdateImage && url ? { imageUrl: url } : {}),
       ...(hasImageAdjustment ? { imageAdjustment: normalizedImageAdjustment } : {}),
     }),
