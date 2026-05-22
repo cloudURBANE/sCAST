@@ -298,7 +298,6 @@ function DashboardView() {
         onSignIn={() => setIsAuthModalOpen(true)}
         onShare={() => setIsShareModalOpen(true)}
         onSignOut={handleSignOut}
-        currentRoute="home"
       />
 
       <div className="pt-16 sm:pt-[72px]" />

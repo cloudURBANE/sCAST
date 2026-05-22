@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
 import { useToast } from '@/hooks/use-toast';
 
@@ -78,7 +78,7 @@ export const WeatherProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return () => abortController.abort();
   }, [fetchWeather]);
 
-  const requestLocation = () => {
+  const requestLocation = useCallback(() => {
     if (!navigator.geolocation) return;
     setLocationStatus('requesting');
     setWeatherLoading(true);
@@ -93,18 +93,18 @@ export const WeatherProvider: React.FC<{ children: React.ReactNode }> = ({ child
       },
       { timeout: 12000, enableHighAccuracy: false }
     );
-  };
+  }, [fetchWeather]);
+
+  const contextValue = useMemo<WeatherContextType>(() => ({
+    weather,
+    weatherLoading,
+    locationStatus,
+    fetchWeather,
+    requestLocation,
+  }), [weather, weatherLoading, locationStatus, fetchWeather, requestLocation]);
 
   return (
-    <WeatherContext.Provider
-      value={{
-        weather,
-        weatherLoading,
-        locationStatus,
-        fetchWeather,
-        requestLocation,
-      }}
-    >
+    <WeatherContext.Provider value={contextValue}>
       {children}
     </WeatherContext.Provider>
   );

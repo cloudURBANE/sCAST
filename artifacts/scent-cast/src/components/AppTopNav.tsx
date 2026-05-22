@@ -1,16 +1,13 @@
 import React from 'react';
 import { Wind } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, NavLink, useLocation } from 'react-router-dom';
 import { APP_BRAND_MARK, APP_BRAND_MARK_SHORT } from '@/lib/appBrand';
-
-type AppRoute = 'home' | 'community';
 
 interface AppTopNavProps {
   authToken: string | null;
   onSignIn: () => void;
   onShare: () => void;
   onSignOut: () => void;
-  currentRoute: AppRoute;
 }
 
 const inactiveNavClassName =
@@ -28,8 +25,10 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
   onSignIn,
   onShare,
   onSignOut,
-  currentRoute,
 }) => {
+  const { pathname } = useLocation();
+  const isHomeRoute = pathname === '/';
+
   const authControl = authToken ? (
     <button type="button" onClick={onShare} className={inactiveNavClassName}>
       Share
@@ -49,7 +48,7 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
         {/* Left controls — centered within the left third. */}
         <div className="flex min-w-0 items-center gap-3 sm:gap-6 justify-self-center">
           {authControl}
-          {currentRoute !== 'home' ? (
+          {!isHomeRoute ? (
             <>
               <span className="w-px h-3 bg-scent-accent/20 shrink-0" aria-hidden="true" />
               <Link to="/" className={inactiveNavClassName}>
@@ -74,16 +73,17 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
 
         {/* Right controls — centered within the right third, same gap as left. */}
         <div className="flex min-w-0 items-center gap-3 sm:gap-6 justify-self-center">
-          {currentRoute === 'community' ? (
-            <span className={activeNavClassName}>
-              <ActiveDot />
-              Community
-            </span>
-          ) : (
-            <Link to="/community" className={inactiveNavClassName}>
-              Community
-            </Link>
-          )}
+          <NavLink
+            to="/community"
+            className={({ isActive }) => (isActive ? activeNavClassName : inactiveNavClassName)}
+          >
+            {({ isActive }) => (
+              <>
+                {isActive ? <ActiveDot /> : null}
+                Community
+              </>
+            )}
+          </NavLink>
           {authToken ? (
             <button type="button" onClick={onSignOut} className={inactiveNavClassName}>
               Sign Out

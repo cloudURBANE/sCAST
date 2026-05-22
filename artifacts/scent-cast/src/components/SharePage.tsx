@@ -599,7 +599,14 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
             })
           ).then(entries => {
             setBuyLinks(Object.fromEntries(entries));
-          }).catch(() => {});
+          }).catch((e) => {
+            console.error('Failed to load public share buy links', e);
+            toast({
+              title: "Buying options unavailable",
+              description: "We could not load current purchase links for this shared vault.",
+              variant: "destructive"
+            });
+          });
         } else {
           setBuyLinks({});
         }

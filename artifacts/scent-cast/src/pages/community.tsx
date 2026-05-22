@@ -34,7 +34,6 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({ authToken, onSignI
         onSignIn={onSignIn}
         onShare={onShare}
         onSignOut={onSignOut}
-        currentRoute="community"
       />
 
       <div className="pt-16 sm:pt-[72px]" />

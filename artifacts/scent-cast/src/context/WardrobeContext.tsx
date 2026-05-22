@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from './AuthContext';
 import { useWeather } from './WeatherContext';
 import { useToast } from '@/hooks/use-toast';
@@ -542,7 +542,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     };
   }, [authToken, loadWardrobe]);
 
-  const handleAddItem = async (
+  const handleAddItem = useCallback(async (
     item: any,
   ): Promise<{ persisted: boolean; requiresAuth?: boolean; error?: string }> => {
     const newItem: Fragrance = { ...item };
@@ -611,7 +611,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
 
     return { persisted: false, requiresAuth: !authToken };
-  };
+  }, [authToken, guestPromptDismissed, setIsAuthModalOpen, toast]);
 
   const handlePersistWardrobeImage = useCallback(async (
     target: Fragrance,
@@ -857,7 +857,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     })();
   }, [authToken, wardrobeLoaded, items, loadWardrobe, toast]);
 
-  const handleDeleteItem = async (target: Fragrance) => {
+  const handleDeleteItem = useCallback(async (target: Fragrance) => {
     const apiId = target._dbId ?? target.id;
 
     if (!authToken) {
@@ -903,9 +903,9 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       isMutatingRef.current = false;
       lastMutationRef.current = Date.now();
     }
-  };
+  }, [authToken, loadWardrobe, toast]);
 
-  const handleIntentComplete = (intent: { destination: DestinationType; energy: EnergyState }) => {
+  const handleIntentComplete = useCallback((intent: { destination: DestinationType; energy: EnergyState }) => {
     setIsIntentModalOpen(false);
     if (items.length === 0) return;
 
@@ -915,7 +915,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setActiveEngineRecommendation(winner.recommendation);
     setRecommendationReason(winner.recommendation.explanation);
     setTimeout(() => setActiveRecommendation(winner.item), 800);
-  };
+  }, [items, weather]);
 
   const closeRecommendationOverlay = useCallback(() => {
     setActiveRecommendation(null);
@@ -932,41 +932,64 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   }, [authToken]);
 
+  const contextValue = useMemo<WardrobeContextType>(() => ({
+    items,
+    wardrobeLoaded,
+    isIntentModalOpen,
+    isShareModalOpen,
+    activeRecommendation,
+    activeEngineRecommendation,
+    recommendationReason,
+    userId,
+    wardrobeRevertSnapshot,
+    wardrobeFixBusy,
+    wardrobeFixHint,
+    vaultSearchUiActive,
+    setItems,
+    setIsIntentModalOpen,
+    setIsShareModalOpen,
+    setActiveRecommendation,
+    setActiveEngineRecommendation,
+    setRecommendationReason,
+    setUserId,
+    setVaultSearchUiActive,
+    loadWardrobe,
+    handleAddItem,
+    handlePersistWardrobeImage,
+    handlePersistWardrobeDetailRefresh,
+    handleRevertWardrobe,
+    handleDeleteItem,
+    handleIntentComplete,
+    closeRecommendationOverlay,
+    handleVaultSearchStateChange,
+    handleExpandArchive,
+  }), [
+    items,
+    wardrobeLoaded,
+    isIntentModalOpen,
+    isShareModalOpen,
+    activeRecommendation,
+    activeEngineRecommendation,
+    recommendationReason,
+    userId,
+    wardrobeRevertSnapshot,
+    wardrobeFixBusy,
+    wardrobeFixHint,
+    vaultSearchUiActive,
+    loadWardrobe,
+    handleAddItem,
+    handlePersistWardrobeImage,
+    handlePersistWardrobeDetailRefresh,
+    handleRevertWardrobe,
+    handleDeleteItem,
+    handleIntentComplete,
+    closeRecommendationOverlay,
+    handleVaultSearchStateChange,
+    handleExpandArchive,
+  ]);
+
   return (
-    <WardrobeContext.Provider
-      value={{
-        items,
-        wardrobeLoaded,
-        isIntentModalOpen,
-        isShareModalOpen,
-        activeRecommendation,
-        activeEngineRecommendation,
-        recommendationReason,
-        userId,
-        wardrobeRevertSnapshot,
-        wardrobeFixBusy,
-        wardrobeFixHint,
-        vaultSearchUiActive,
-        setItems,
-        setIsIntentModalOpen,
-        setIsShareModalOpen,
-        setActiveRecommendation,
-        setActiveEngineRecommendation,
-        setRecommendationReason,
-        setUserId,
-        setVaultSearchUiActive,
-        loadWardrobe,
-        handleAddItem,
-        handlePersistWardrobeImage,
-        handlePersistWardrobeDetailRefresh,
-        handleRevertWardrobe,
-        handleDeleteItem,
-        handleIntentComplete,
-        closeRecommendationOverlay,
-        handleVaultSearchStateChange,
-        handleExpandArchive,
-      }}
-    >
+    <WardrobeContext.Provider value={contextValue}>
       {children}
     </WardrobeContext.Provider>
   );

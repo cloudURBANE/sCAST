@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
 
 const STORAGE_KEYS = {
   TOKEN: 'scent_token',
@@ -44,35 +44,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [guestPromptDismissed, setGuestPromptDismissed] = useState(false);
 
-  const handleAuth = (token: string, email: string) => {
+  const handleAuth = useCallback((token: string, email: string) => {
     localStorage.setItem(STORAGE_KEYS.TOKEN, token);
     localStorage.setItem(STORAGE_KEYS.EMAIL, email);
     setAuthToken(token);
     setAuthEmail(email);
     setIsAuthModalOpen(false);
     setGuestPromptDismissed(false);
-  };
+  }, []);
 
-  const handleSignOut = () => {
+  const handleSignOut = useCallback(() => {
     localStorage.removeItem(STORAGE_KEYS.TOKEN);
     localStorage.removeItem(STORAGE_KEYS.EMAIL);
     setAuthToken(null);
     setAuthEmail(null);
-  };
+  }, []);
+
+  const contextValue = useMemo<AuthContextType>(() => ({
+    authToken,
+    authEmail,
+    isAuthModalOpen,
+    guestPromptDismissed,
+    setIsAuthModalOpen,
+    setGuestPromptDismissed,
+    handleAuth,
+    handleSignOut,
+  }), [
+    authToken,
+    authEmail,
+    isAuthModalOpen,
+    guestPromptDismissed,
+    handleAuth,
+    handleSignOut,
+  ]);
 
   return (
-    <AuthContext.Provider
-      value={{
-        authToken,
-        authEmail,
-        isAuthModalOpen,
-        guestPromptDismissed,
-        setIsAuthModalOpen,
-        setGuestPromptDismissed,
-        handleAuth,
-        handleSignOut,
-      }}
-    >
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );
