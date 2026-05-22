@@ -22,6 +22,11 @@ import {
 // Helper types and algorithms relocated from App.tsx
 type LooseRecord = Record<string, unknown>;
 
+// Bounded retry: stop polling /details for a fragrance whose Fragrantica
+// status payload never fully decodes, so a permanently-partial item does not
+// poll forever. Counted off enrichment.requested_count.
+const MAX_ENRICHMENT_ATTEMPTS = 8;
+
 const isLooseRecord = (value: unknown): value is LooseRecord =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
@@ -112,14 +117,20 @@ function hasFragranticaRefreshTarget(item: Fragrance): boolean {
   );
 }
 
+function fgMetricsComplete(item: Fragrance): boolean {
+  return Boolean(
+    item.source_coverage?.fragrantica_metrics_complete ??
+      item.raw_engine_detail?.source_coverage?.fragrantica_metrics_complete,
+  );
+}
+
 function wardrobeNeedsEnrichmentRefresh(item: Fragrance): boolean {
   const enrichment = item.enrichment ?? item.raw_engine_detail?.enrichment;
   if (isBackgroundEnrichmentQueued(enrichment)) return true;
-  return (
-    normalizedEnrichmentStatus(item) === 'complete' &&
-    item.source_coverage?.complete !== true &&
-    hasFragranticaRefreshTarget(item)
-  );
+  const status = normalizedEnrichmentStatus(item);
+  if (status === 'failed' || status === 'ignored') return false;
+  if ((enrichment?.requested_count ?? 0) >= MAX_ENRICHMENT_ATTEMPTS) return false;
+  return hasFragranticaRefreshTarget(item) && !fgMetricsComplete(item);
 }
 
 function detailRefreshPayloadFor(item: Fragrance): FragranceDetailRequestPayload | null {
