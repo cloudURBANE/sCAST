@@ -1048,11 +1048,9 @@ export async function searchFragrances(
     diagnostics: normalizeSearchDiagnostics(data?.diagnostics),
   };
 
-  let usedSupplementalSearch = false;
   if (shouldSupplementWithAppSearch(query, response)) {
     try {
       const supplemental = await searchAppFragrances(query, { signal: options?.signal });
-      usedSupplementalSearch = true;
       response.results = mergeSearchResults(
         response.results,
         supplemental.results.filter(hasResolvedSearchHouse),
@@ -1065,9 +1063,7 @@ export async function searchFragrances(
     }
   }
 
-  if (!usedSupplementalSearch) {
-    cacheFragranceSearch(query, response);
-  }
+  cacheFragranceSearch(query, response);
   return response;
 }
 

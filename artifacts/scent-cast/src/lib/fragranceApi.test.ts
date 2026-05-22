@@ -503,6 +503,104 @@ test("searchFragrances supplements degraded SRT breadth with app API results", a
   assert.equal(response.diagnostics?.fallback_source, "db");
 });
 
+test("searchFragrances caches non-empty supplemented responses", async (t) => {
+  const previousFetch = globalThis.fetch;
+  const previousApiUrl = process.env.VITE_FRAGRANCE_API_URL;
+  const previousAppApiUrl = process.env.VITE_API_BASE_URL;
+  const previousWindow = (globalThis as typeof globalThis & { window?: unknown }).window;
+  const requests: string[] = [];
+  const localStorageData = new Map<string, string>();
+  const localStorage = {
+    getItem: (key: string) => localStorageData.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      localStorageData.set(key, value);
+    },
+    removeItem: (key: string) => {
+      localStorageData.delete(key);
+    },
+    clear: () => {
+      localStorageData.clear();
+    },
+  };
+
+  process.env.VITE_FRAGRANCE_API_URL = "https://engine.example.test";
+  process.env.VITE_API_BASE_URL = "https://app-api.example.test";
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: { localStorage },
+  });
+  Object.defineProperty(globalThis, "fetch", {
+    configurable: true,
+    value: async (url: string) => {
+      requests.push(url);
+      if (String(url).startsWith("https://engine.example.test")) {
+        return new Response(
+          JSON.stringify({
+            query: "creed",
+            results: [{ id: "srt-aventus", name: "Aventus", house: "Creed" }],
+            diagnostics: { result_count: 1, fallback_source: "identity" },
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      return new Response(
+        JSON.stringify({
+          query: "creed",
+          results: [
+            { id: "catalog:Creed::Green Irish Tweed", name: "Green Irish Tweed", brand: "Creed" },
+          ],
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    },
+  });
+
+  t.after(() => {
+    Object.defineProperty(globalThis, "fetch", {
+      configurable: true,
+      value: previousFetch,
+    });
+    if (previousWindow === undefined) {
+      delete (globalThis as typeof globalThis & { window?: unknown }).window;
+    } else {
+      Object.defineProperty(globalThis, "window", {
+        configurable: true,
+        value: previousWindow,
+      });
+    }
+    if (previousApiUrl === undefined) {
+      delete process.env.VITE_FRAGRANCE_API_URL;
+    } else {
+      process.env.VITE_FRAGRANCE_API_URL = previousApiUrl;
+    }
+    if (previousAppApiUrl === undefined) {
+      delete process.env.VITE_API_BASE_URL;
+    } else {
+      process.env.VITE_API_BASE_URL = previousAppApiUrl;
+    }
+  });
+
+  const first = await searchFragrances("creed");
+  const second = await searchFragrances("creed");
+
+  assert.deepEqual(requests, [
+    "https://engine.example.test/api/fragrances/search?q=creed",
+    "https://app-api.example.test/api/fragrances/search?q=creed",
+  ]);
+  assert.deepEqual(
+    second.results.map((result) => result.id),
+    first.results.map((result) => result.id),
+  );
+  assert.equal(second.results.length, 2);
+});
+
 test("searchFragrances drops non-fragrance archive rows with generated display names", async (t) => {
   const previousFetch = globalThis.fetch;
   const previousApiUrl = process.env.VITE_FRAGRANCE_API_URL;
