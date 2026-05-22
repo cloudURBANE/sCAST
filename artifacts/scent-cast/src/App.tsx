@@ -21,6 +21,11 @@ import {
 import { collectMainAccordDisplayRows } from './lib/fragranceApi';
 import { APP_BRAND_MARK } from './lib/appBrand';
 
+// Lazy import keeps the home bundle smaller. Declared at module scope so the
+// component reference is stable across renders — declaring it inside App would
+// produce a new lazy type every render, remounting the whole community page.
+const CommunityPage = React.lazy(() => import('@/pages/community'));
+
 interface WeatherData {
   temp?: number;
   temperature?: number;
@@ -1049,8 +1054,6 @@ export default function App() {
   );
 
   if (window.location.pathname === '/community') {
-    // Lazy import keeps the home bundle smaller.
-    const CommunityPage = React.lazy(() => import('@/pages/community'));
     return (
       <>
         <React.Suspense fallback={<div className="min-h-[100svh] bg-scent-bg" />}>
