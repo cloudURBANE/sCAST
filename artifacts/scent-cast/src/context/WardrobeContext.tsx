@@ -782,7 +782,15 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           const detail = normalizeFragranceDetail(
             (await getFragranceDetails(payload, { signal: abortController.signal })) as FragranceDetail,
           );
-          if (isBackgroundEnrichmentQueued(detail.enrichment)) continue;
+          // Persist as soon as Fragrantica's 4 metric groups are all in, even
+          // if enrichment.status is still "pending" upstream. The engine can
+          // leave the job marked pending after a partial-but-usable completion;
+          // gating purely on enrichment.status meant we'd never write the
+          // enriched payload to the vault row.
+          const metricsComplete = Boolean(
+            detail.source_coverage?.fragrantica_metrics_complete,
+          );
+          if (!metricsComplete && isBackgroundEnrichmentQueued(detail.enrichment)) continue;
           await handlePersistWardrobeDetailRefresh(item, detail);
         }
       } catch (err) {

@@ -811,6 +811,22 @@ export const Wardrobe: React.FC<{
 }) => {
   const [selectedItem, setSelectedItem] = React.useState<Fragrance | null>(null);
 
+  // Re-bind the open detail modal to the latest row from `items` whenever the
+  // parent state updates (e.g. background enrichment landed). Without this, the
+  // modal renders a stale snapshot captured at open-time and metrics appear
+  // "frozen" even after the vault row gains derived_metrics/enrichment.
+  React.useEffect(() => {
+    setSelectedItem((current) => {
+      if (!current) return current;
+      const match = items.find((candidate) =>
+        current._dbId
+          ? candidate._dbId === current._dbId
+          : !candidate._dbId && candidate.id === current.id,
+      );
+      return match && match !== current ? match : current;
+    });
+  }, [items]);
+
   const prefetchReviews = React.useCallback((item: Fragrance) => {
     const rawReviews = extractDetailReviews(item.raw_engine_detail);
     if (rawReviews.length === 0) return;
