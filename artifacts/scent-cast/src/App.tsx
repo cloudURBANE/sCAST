@@ -1171,6 +1171,7 @@ export default function App() {
               revertAvailable={!!wardrobeRevertSnapshot}
               wardrobeFixHint={wardrobeFixHint}
               onExpandArchive={handleExpandArchive}
+              authToken={authToken}
             />
           </div>
           <section className="hidden">

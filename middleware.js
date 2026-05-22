@@ -56,74 +56,10 @@ function normalizeBackendOrigin(raw) {
   return "";
 }
 
-function shouldLogLocalDev(request) {
-  if (process.env.NODE_ENV !== "development") return false;
-  try {
-    const hostname = new URL(request.url).hostname;
-    return hostname === "localhost" || hostname === "127.0.0.1";
-  } catch {
-    return false;
-  }
-}
-
-function debugLog(request, location, message, data, hypothesisId = "H1") {
-  if (!shouldLogLocalDev(request)) return;
-  fetch(
-    "http://127.0.0.1:7745/ingest/484c0150-587d-4568-9bd7-b30ce5dec585",
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Debug-Session-Id": "82096a",
-      },
-      body: JSON.stringify({
-        sessionId: "82096a",
-        runId: "pre-fix",
-        hypothesisId,
-        location,
-        message,
-        data,
-        timestamp: Date.now(),
-      }),
-    },
-  ).catch(() => {});
-}
-
 /** @param {Request} request @returns {Promise<Response>} */
 export async function middleware(request) {
-  debugLog(
-    request,
-    "middleware.js:30",
-    "Middleware entry",
-    {
-      method: request.method,
-      url: request.url,
-      hostHeader: request.headers.get("host"),
-    },
-    "H1",
-  );
   const backend = normalizeBackendOrigin(process.env.BACKEND_ORIGIN);
-  debugLog(
-    request,
-    "middleware.js:32",
-    "BACKEND_ORIGIN resolution",
-    {
-      hasBackendOrigin: Boolean(process.env.BACKEND_ORIGIN),
-      resolvedBackend: backend || null,
-    },
-    "H1",
-  );
   if (!backend) {
-    debugLog(
-      request,
-      "middleware.js:35",
-      "Early return missing backend origin",
-      {
-        path: new URL(request.url).pathname,
-        search: new URL(request.url).search,
-      },
-      "H2",
-    );
     return new Response(
       JSON.stringify({
         error:
@@ -135,17 +71,6 @@ export async function middleware(request) {
 
   const url = new URL(request.url);
   const targetUrl = `${backend}${url.pathname}${url.search}`;
-  debugLog(
-    request,
-    "middleware.js:47",
-    "Proxy target computed",
-    {
-      pathname: url.pathname,
-      search: url.search,
-      targetUrl,
-    },
-    "H3",
-  );
 
   const headers = new Headers();
   for (const [key, value] of request.headers.entries()) {
@@ -178,17 +103,6 @@ export async function middleware(request) {
 
   try {
     const upstream = await fetch(targetUrl, init);
-    debugLog(
-      request,
-      "middleware.js:79",
-      "Upstream fetch success",
-      {
-        status: upstream.status,
-        statusText: upstream.statusText,
-        targetUrl,
-      },
-      "H4",
-    );
     const passthrough = new Headers(upstream.headers);
     HOP_BY_HOP.forEach((h) => passthrough.delete(h));
     return new Response(upstream.body, {
@@ -198,13 +112,6 @@ export async function middleware(request) {
     });
   } catch (err) {
     const message = err && err.message ? err.message : String(err);
-    debugLog(
-      request,
-      "middleware.js:89",
-      "Upstream fetch failed",
-      { targetUrl, error: message },
-      "H4",
-    );
     return new Response(
       JSON.stringify({
         error: "Could not reach API backend. Check BACKEND_ORIGIN on Vercel.",

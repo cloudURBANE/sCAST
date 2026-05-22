@@ -1,19 +1,4 @@
-import React, { useEffect, useState } from 'react';
-import { cn } from '@/lib/utils';
-import { bottleArtboardClass, bottleImageFillClass, type BottleImageVariant } from '@/lib/bottleImageFrame';
-import {
-  bottleImageAdjustmentStyle,
-  type BottleImageAdjustment,
-} from '@/lib/bottleImageAdjustment';
-import { proxiedImageUrl } from '@/lib/imageProxy';
-
-/**
- * Primary UI for vault bottle artwork: handles proxy URL, **resize-up** framing (see
- * `bottleImageFrame.ts`), broken/missing image placeholders, and async decode.
- *
- * **Layout contract**
- * - You must give the root `className` so this component has a real size (e.g.
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { bottleArtboardClass, bottleImageFillClass, type BottleImageVariant } from '@/lib/bottleImageFrame';
 import {

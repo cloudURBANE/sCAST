@@ -154,7 +154,7 @@ const SEARCH_SCENT_ENDPOINT = API_BASE_URL
   : "/api/search-scent";
 
 /** Match list rows: keep one line each; overflow shows ellipsis in CSS */
-const MATCH_LINE_MAX_CHARS = 44;
+const MATCH_LINE_MAX_CHARS = 30;
 
 function truncateMatchLine(text: string, max: number): string {
   const t = text.trim();

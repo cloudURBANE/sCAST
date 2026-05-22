@@ -656,7 +656,7 @@ function ProfileScorePanel({
         <div className="mx-4 border-t border-white/[0.07]" aria-hidden />
 
         <div className="px-4 py-3.5">
-          <div className="grid grid-cols-4 gap-1.5">
+          <div className="grid grid-cols-2 gap-1.5">
             {statCards.map((stat) => {
               const Icon = stat.icon;
               return (
@@ -796,6 +796,7 @@ export const Wardrobe: React.FC<{
   wardrobeFixHint?: string | null;
   /** Scroll to / focus the hero "Add to vault" search (used by Expand Archive). */
   onExpandArchive?: () => void;
+  authToken?: string | null;
 }> = ({
   items,
   onDelete,
@@ -806,6 +807,7 @@ export const Wardrobe: React.FC<{
   revertAvailable,
   wardrobeFixHint,
   onExpandArchive,
+  authToken,
 }) => {
   const [selectedItem, setSelectedItem] = React.useState<Fragrance | null>(null);
 
@@ -848,7 +850,11 @@ export const Wardrobe: React.FC<{
 
   const refreshUsageTotals = React.useCallback(async () => {
     try {
-      const res = await fetch(USAGE_TOTAL_ENDPOINT, { headers: { Accept: 'application/json' } });
+      const headers: Record<string, string> = { Accept: 'application/json' };
+      if (authToken) {
+        headers['Authorization'] = `Bearer ${authToken}`;
+      }
+      const res = await fetch(USAGE_TOTAL_ENDPOINT, { headers });
       if (!res.ok) return;
       const data = (await res.json()) as { totalUsd?: unknown; count?: unknown };
       const totalUsd =
@@ -859,7 +865,7 @@ export const Wardrobe: React.FC<{
     } catch {
       /* network noise — keep prior snapshot */
     }
-  }, []);
+  }, [authToken]);
   const [persistBusy, setPersistBusy] = React.useState(false);
   const [vaultSolverBanner, setVaultSolverBanner] = React.useState<string | null>(null);
   const [searchFocused, setSearchFocused] = React.useState(false);
