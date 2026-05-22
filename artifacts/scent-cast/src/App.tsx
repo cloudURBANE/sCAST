@@ -20,6 +20,7 @@ import {
 } from './lib/scentWeatherEngine';
 import { collectMainAccordDisplayRows } from './lib/fragranceApi';
 import { APP_BRAND_MARK } from './lib/appBrand';
+import { subscribeToNavigation } from './lib/navigation';
 
 // Lazy import keeps the home bundle smaller. Declared at module scope so the
 // component reference is stable across renders — declaring it inside App would
@@ -537,6 +538,7 @@ export default function App() {
     const oauthEmail = params.get('oauth_email');
     return oauthEmail ?? localStorage.getItem(STORAGE_KEYS.EMAIL);
   });
+  const [currentPath, setCurrentPath] = useState(() => window.location.pathname);
 
   const [items, setItems] = useState<Fragrance[]>([]);
   const [wardrobeLoaded, setWardrobeLoaded] = useState(false);
@@ -575,6 +577,12 @@ export default function App() {
   useEffect(() => {
     autoWardrobeRebuildAttemptedRef.current = false;
   }, [authToken]);
+
+  useEffect(() => {
+    return subscribeToNavigation(() => {
+      setCurrentPath(window.location.pathname);
+    });
+  }, []);
 
   const fetchWeather = useCallback(async (lat?: number, lon?: number, signal?: AbortSignal) => {
     try {
@@ -1053,7 +1061,7 @@ export default function App() {
     />
   );
 
-  if (window.location.pathname === '/community') {
+  if (currentPath === '/community') {
     return (
       <>
         <React.Suspense fallback={<div className="min-h-[100svh] bg-scent-bg" />}>
@@ -1070,7 +1078,7 @@ export default function App() {
     );
   }
 
-  const sharePathMatch = window.location.pathname.match(/^\/share\/([^/?#]+)$/);
+  const sharePathMatch = currentPath.match(/^\/share\/([^/?#]+)$/);
   if (sharePathMatch) {
     let shareRef = sharePathMatch[1];
     try {

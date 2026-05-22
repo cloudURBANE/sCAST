@@ -1,6 +1,7 @@
 import React from 'react';
 import { Wind } from 'lucide-react';
 import { APP_BRAND_MARK, APP_BRAND_MARK_SHORT } from '@/lib/appBrand';
+import { navigateTo } from '@/lib/navigation';
 
 type AppRoute = 'home' | 'community';
 
@@ -51,9 +52,9 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
           {currentRoute !== 'home' ? (
             <>
               <span className="w-px h-3 bg-scent-accent/20 shrink-0" aria-hidden="true" />
-              <a href="/" className={inactiveNavClassName}>
+              <button type="button" onClick={() => navigateTo('/')} className={inactiveNavClassName}>
                 Home
-              </a>
+              </button>
             </>
           ) : null}
         </div>
@@ -79,9 +80,9 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
               Community
             </span>
           ) : (
-            <a href="/community" className={inactiveNavClassName}>
+            <button type="button" onClick={() => navigateTo('/community')} className={inactiveNavClassName}>
               Community
-            </a>
+            </button>
           )}
           {authToken ? (
             <button type="button" onClick={onSignOut} className={inactiveNavClassName}>

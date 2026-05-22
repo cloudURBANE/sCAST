@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { X } from 'lucide-react';
 import { BottleImage } from '@/components/BottleImage';
@@ -43,10 +43,6 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = ({ items, loading }) 
   const activeTriggerIdRef = useRef<string | null>(null);
   const [activeItem, setActiveItem] = useState<CommunityFragranceEntry | null>(null);
   const renderedItems = loading || items.length === 0 ? placeholderItems : items;
-  const trackKey = useMemo(
-    () => renderedItems.map((item) => `${item.id}:${item.imageUrl}`).join('|'),
-    [renderedItems],
-  );
 
   useLayoutEffect(() => {
     const track = trackRef.current;
@@ -100,13 +96,17 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = ({ items, loading }) 
       resizeObserver.disconnect();
       window.removeEventListener('resize', handleResize);
     };
-  }, [trackKey]);
+  }, []);
 
   const requestMarqueeMeasure = useCallback(() => {
     window.requestAnimationFrame(() => {
       measureMarqueeRef.current?.();
     });
   }, []);
+
+  useLayoutEffect(() => {
+    requestMarqueeMeasure();
+  }, [renderedItems, requestMarqueeMeasure]);
 
   const closeOverlay = useCallback(() => {
     const triggerId = activeTriggerIdRef.current;
@@ -161,7 +161,7 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = ({ items, loading }) 
   return (
     <>
       <section className="scent-community-marquee" aria-label="Community fragrance marquee">
-        <div className="scent-community-marquee-track" key={trackKey} ref={trackRef}>
+        <div className="scent-community-marquee-track" ref={trackRef}>
           {[...Array(COMMUNITY_TRACK_COPIES)].map((_, copyIndex) => (
             <div
               className="scent-community-marquee-group"
