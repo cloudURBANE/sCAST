@@ -22,6 +22,10 @@ export type SourceCoverage = {
   fragrantica_linked?: boolean;
   derived_metrics?: "none" | "partial" | "complete" | "full" | string;
   complete?: boolean;
+  // True only when all 4 Fragrantica status-derived metric groups
+  // (performance/value/community/wear) made it through. The wardrobe
+  // auto-refresh keys off this to decide whether to keep polling a partial tile.
+  fragrantica_metrics_complete?: boolean;
 };
 
 export type DerivedMetrics = {
