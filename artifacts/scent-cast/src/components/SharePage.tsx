@@ -16,6 +16,7 @@ import { LavaBackground } from './LavaBackground';
 import { BottleImage } from '@/components/BottleImage';
 import type { BottleImageAdjustment } from '@/lib/bottleImageAdjustment';
 import { APP_BRAND_MARK } from '@/lib/appBrand';
+import { navigateTo } from '@/lib/navigation';
 import { publicShareBuyLinkEndpoint } from '@/lib/shareLinks';
 import { ScentNotesInfographic } from '@/components/ScentNotesInfographic';
 import {
@@ -612,14 +613,15 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
 
       <nav className="fixed top-0 left-0 right-0 h-16 sm:h-[72px] border-b border-white/5 bg-black/40 backdrop-blur-2xl z-50 px-4 sm:px-8">
         <div className="max-w-[1400px] mx-auto h-full flex items-center justify-center">
-          <a
-            href="/"
+          <button
+            type="button"
+            onClick={() => navigateTo('/')}
             aria-label="Back to dashboard"
             className="flex items-center gap-2 text-white hover:opacity-85 transition-opacity outline-none focus-visible:ring-2 focus-visible:ring-white/30 rounded-sm"
           >
             <Wind size={22} strokeWidth={1.25} className="text-scent-accent shrink-0" aria-hidden />
             <span className="font-serif text-xl sm:text-2xl tracking-[0.14em] uppercase">{APP_BRAND_MARK}</span>
-          </a>
+          </button>
         </div>
       </nav>
 
