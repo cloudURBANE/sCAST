@@ -771,7 +771,7 @@ export const FragranceCapture: React.FC<{
                   <div className="grid grid-cols-1 gap-2.5">
                     {matches.map((m, i) => (
                       <button
-                        key={i}
+                        key={m.id || m.source_url || `match-${i}`}
                         type="button"
                         onClick={() => setSelectedIdx(i)}
                         className={`group w-full min-h-[76px] px-5 py-4 text-center border transition-all duration-200 cursor-pointer rounded-[var(--radius-scent)] ${

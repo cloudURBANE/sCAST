@@ -16,7 +16,8 @@ import { LavaBackground } from './LavaBackground';
 import { BottleImage } from '@/components/BottleImage';
 import type { BottleImageAdjustment } from '@/lib/bottleImageAdjustment';
 import { APP_BRAND_MARK } from '@/lib/appBrand';
-import { navigateTo } from '@/lib/navigation';
+import { useNavigate } from 'react-router-dom';
+import { useToast } from '@/hooks/use-toast';
 import { publicShareBuyLinkEndpoint } from '@/lib/shareLinks';
 import { ScentNotesInfographic } from '@/components/ScentNotesInfographic';
 import {
@@ -532,6 +533,8 @@ function ProfileScorePanel({
 }
 
 export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
+  const navigate = useNavigate();
+  const { toast } = useToast();
   const [data, setData] = useState<ShareData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -603,9 +606,14 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
       })
       .catch(e => {
         setError(e.message || 'Failed to load vault');
+        toast({
+          title: "Failed to load share vault",
+          description: e.message || "We encountered an issue downloading this collection.",
+          variant: "destructive"
+        });
       })
       .finally(() => setLoading(false));
-  }, [userId]);
+  }, [userId, toast]);
 
   return (
     <div className="min-h-[100svh] bg-black text-white relative overflow-x-hidden">
@@ -615,7 +623,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
         <div className="max-w-[1400px] mx-auto h-full flex items-center justify-center">
           <button
             type="button"
-            onClick={() => navigateTo('/')}
+            onClick={() => navigate('/')}
             aria-label="Back to dashboard"
             className="flex items-center gap-2 text-white hover:opacity-85 transition-opacity outline-none focus-visible:ring-2 focus-visible:ring-white/30 rounded-sm"
           >

@@ -301,7 +301,7 @@ function AccordPanel({
 
             return (
               <motion.li
-                key={`${row.label}:${index}`}
+                key={row.label}
                 className={`grid items-center gap-x-3 sm:gap-x-4 ${densityStyle.maxGap}`}
                 style={{
                   gridTemplateColumns: `${densityStyle.labelColWidth} minmax(0, 1fr) ${densityStyle.valueColWidth}`,

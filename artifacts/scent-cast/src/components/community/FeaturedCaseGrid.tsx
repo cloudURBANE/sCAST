@@ -40,7 +40,7 @@ export const FeaturedCaseGrid: React.FC<FeaturedCaseGridProps> = ({ items, loadi
       >
         {showSkeletons
           ? [...Array(8)].map((_, index) => (
-              <div key={index} className="scent-fragrance-card animate-pulse relative aspect-[3/4.6] p-5 sm:p-6">
+              <div key={`skeleton-${index}`} className="scent-fragrance-card animate-pulse relative aspect-[3/4.6] p-5 sm:p-6">
                 <div className="scent-card-frame" aria-hidden="true" />
                 <div className="relative z-10 flex h-full flex-col">
                   <div className="ml-auto h-3 w-24 bg-white/10" />

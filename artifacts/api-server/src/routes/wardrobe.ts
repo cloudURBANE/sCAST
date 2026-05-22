@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { randomUUID } from "node:crypto";
 import { AuthRequest, requireAuth } from "../middlewares/auth";
 import { db } from "@workspace/db";
 import {
@@ -75,7 +76,7 @@ router.post("/wardrobe", requireAuth, async (req: AuthRequest, res) => {
   const existing = await findUserRowByClientId(user.id, clientId);
   if (existing) {
     const existingData = normalizeFragrance(existing.fragranceData as Record<string, any>);
-    const merged = sanitizeFragrance({ ...existingData, ...clean, id: clientId });
+    const merged = sanitizeFragrance({ ...existingData, ...clean, id: existing.id });
     assertNoPersistedBase64Image(merged, "user_fragrances.fragrance_data");
     await db
       .update(userFragrancesTable)
@@ -90,9 +91,17 @@ router.post("/wardrobe", requireAuth, async (req: AuthRequest, res) => {
     return;
   }
 
+  let rowId: string;
+  if (isUuidish(clientId)) {
+    rowId = clientId;
+  } else {
+    rowId = randomUUID();
+  }
+  const cleanWithUuid = { ...clean, id: rowId };
+
   const [row] = await db
     .insert(userFragrancesTable)
-    .values({ userId: user.id, fragranceData: clean })
+    .values({ id: rowId as any, userId: user.id, fragranceData: cleanWithUuid })
     .returning();
 
   const inserted = sanitizeFragrance(normalizeFragrance(row.fragranceData as Record<string, any>));
@@ -163,7 +172,7 @@ router.patch("/wardrobe/:fragranceId/visibility", requireAuth, async (req: AuthR
   if (!match) { res.status(404).json({ error: "Fragrance not found" }); return; }
 
   const existing = match.fragranceData as Record<string, any>;
-  const updated = sanitizeFragrance({ ...existing, shareHidden });
+  const updated = sanitizeFragrance({ ...existing, id: match.id, shareHidden });
   assertNoPersistedBase64Image(updated, "user_fragrances.fragrance_data");
 
   await db
@@ -267,6 +276,7 @@ router.patch("/wardrobe/:id", requireAuth, async (req: AuthRequest, res) => {
     normalizeFragrance({
       ...existing,
       ...detailPatch,
+      id: match.id,
       ...(shouldUpdateImage && url ? { imageUrl: url } : {}),
       ...(hasImageAdjustment ? { imageAdjustment: normalizedImageAdjustment } : {}),
     }),

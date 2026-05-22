@@ -3,6 +3,7 @@ import { Sparkles, ArrowUp, Command } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface Message {
+  id: string;
   role: 'user' | 'model';
   parts: { text: string }[];
 }
@@ -33,12 +34,23 @@ export const ChatInterface: React.FC = () => {
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
-    const userMessage: Message = { role: 'user', parts: [{ text: input }] };
+    const userMessage: Message = {
+      id: typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(),
+      role: 'user',
+      parts: [{ text: input }]
+    };
     setMessages(prev => [...prev, userMessage]);
     setInput('');
     setIsLoading(true);
     setTimeout(() => {
-      setMessages(prev => [...prev, { role: 'model', parts: [{ text: "CRITICAL SYSTEM ALERT: Chat interface is currently offline while the nexus is recalibrating." }] }]);
+      setMessages(prev => [
+        ...prev,
+        {
+          id: typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(),
+          role: 'model',
+          parts: [{ text: "CRITICAL SYSTEM ALERT: Chat interface is currently offline while the nexus is recalibrating." }]
+        }
+      ]);
       setIsLoading(false);
     }, 500);
   };
@@ -49,7 +61,7 @@ export const ChatInterface: React.FC = () => {
         <AnimatePresence mode="popLayout">
           {messages.map((m, i) => (
             <motion.div
-              key={i}
+              key={m.id}
               initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
               className={`flex gap-8 ${m.role === 'user' ? 'flex-row-reverse' : ''}`}

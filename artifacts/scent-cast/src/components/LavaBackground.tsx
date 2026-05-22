@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 
-export const LavaBackground: React.FC = () => {
+export const LavaBackground: React.FC = React.memo(() => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [webglFailed, setWebglFailed] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
@@ -236,4 +236,4 @@ export const LavaBackground: React.FC = () => {
       ) : null}
     </>
   );
-};
+});

@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Link, Check, Eye, EyeOff, ExternalLink, Search } from 'lucide-react';
 import { BottleImage } from '@/components/BottleImage';
 import type { BottleImageAdjustment } from '@/lib/bottleImageAdjustment';
+import { useToast } from '@/hooks/use-toast';
 
 interface FragranceItem {
   id: string;
@@ -32,6 +33,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
   items = [],
   onToggleVisibility,
 }) => {
+  const { toast } = useToast();
   const [copied, setCopied] = useState(false);
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
@@ -66,13 +68,18 @@ export const ShareModal: React.FC<ShareModalProps> = ({
         setHideImages(Boolean(d?.hideImages));
         setShareId(typeof d?.shareId === 'string' && d.shareId.trim() ? d.shareId : null);
       })
-      .catch(() => {
+      .catch((err) => {
         if (cancelled) return;
+        toast({
+          title: "Failed to load share settings",
+          description: "Unable to retrieve your current sharing configuration.",
+          variant: "destructive"
+        });
       });
     return () => {
       cancelled = true;
     };
-  }, [isOpen, authToken]);
+  }, [isOpen, authToken, toast]);
 
   const filtered = items.filter(item => {
     if (!item?.name || !item?.brand) return false;
@@ -98,8 +105,13 @@ export const ShareModal: React.FC<ShareModalProps> = ({
         body: JSON.stringify({ shareHidden: newHidden }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    } catch {
+    } catch (err) {
       onToggleVisibility(apiId, !newHidden);
+      toast({
+        title: "Visibility Update Failed",
+        description: "Could not sync fragrance visibility. Please try again.",
+        variant: "destructive"
+      });
     } finally {
       setPendingIds(prev => {
         const next = new Set(prev);
@@ -131,8 +143,13 @@ export const ShareModal: React.FC<ShareModalProps> = ({
         body: JSON.stringify({ hideImages: next }),
       });
       if (!res.ok) throw new Error('Failed to update image visibility');
-    } catch {
+    } catch (err) {
       setHideImages(!next);
+      toast({
+        title: "Settings Update Failed",
+        description: "Could not update portrait display configuration.",
+        variant: "destructive"
+      });
     } finally {
       setHideImagesBusy(false);
     }

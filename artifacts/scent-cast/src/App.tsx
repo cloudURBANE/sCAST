@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect } from 'react';
-import axios from 'axios';
+import React, { useState, useEffect, useRef, useLayoutEffect, useMemo } from 'react';
+import { Routes, Route, useParams } from 'react-router-dom';
 import { FragranceCapture } from './components/FragranceCapture';
 import { Wardrobe, Fragrance, DestinationType, EnergyState } from './components/Wardrobe';
 import { Wind, Play, X } from 'lucide-react';
@@ -11,207 +11,14 @@ import { AppTopNav } from './components/AppTopNav';
 import { AuthModal } from './components/AuthModal';
 import { SharePage } from './components/SharePage';
 import { ShareModal } from './components/ShareModal';
-import type { BottleImageAdjustment } from './lib/bottleImageAdjustment';
-import {
-  calculateScentWeatherRecommendation,
-  type ScentFamily,
-  type ScentWeatherEngineInput,
-  type ScentWeatherRecommendation,
-} from './lib/scentWeatherEngine';
-import {
-  collectMainAccordDisplayRows,
-  getFragranceDetails,
-  isBackgroundEnrichmentQueued,
-  normalizeFragranceDetail,
-  type FragranceDetail,
-  type FragranceDetailRequestPayload,
-} from './lib/fragranceApi';
 import { APP_BRAND_MARK } from './lib/appBrand';
-import { subscribeToNavigation } from './lib/navigation';
+import type { ScentFamily, ScentWeatherRecommendation } from './lib/scentWeatherEngine';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { WeatherProvider, useWeather } from './context/WeatherContext';
+import { WardrobeProvider, useWardrobe } from './context/WardrobeContext';
+import { Toaster } from './components/ui/toaster';
 
-// Lazy import keeps the home bundle smaller. Declared at module scope so the
-// component reference is stable across renders — declaring it inside App would
-// produce a new lazy type every render, remounting the whole community page.
 const CommunityPage = React.lazy(() => import('@/pages/community'));
-
-interface WeatherData {
-  temp?: number;
-  temperature?: number;
-  temperature_f?: number;
-  humidity?: number;
-  humidity_percent?: number;
-  condition?: string;
-  description?: string;
-  icon?: string;
-  windSpeed?: number;
-  wind_speed_mph?: number;
-  location?: string;
-  isLive?: boolean;
-  error?: string;
-}
-
-const STORAGE_KEYS = {
-  TOKEN: 'scent_token',
-  EMAIL: 'scent_email',
-} as const;
-
-type LooseRecord = Record<string, unknown>;
-
-const isLooseRecord = (value: unknown): value is LooseRecord =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
-
-const numberFromValue = (value: unknown): number | undefined => {
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  if (typeof value !== 'string' || value.trim() === '') return undefined;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : undefined;
-};
-
-const firstFiniteNumber = (fallback: number, ...values: unknown[]): number => {
-  for (const value of values) {
-    const numberValue = numberFromValue(value);
-    if (numberValue !== undefined) return numberValue;
-  }
-  return fallback;
-};
-
-const firstString = (...values: unknown[]): string | undefined => {
-  for (const value of values) {
-    if (typeof value !== 'string') continue;
-    const trimmed = value.trim();
-    if (trimmed) return trimmed;
-  }
-  return undefined;
-};
-
-const uniqueStrings = (values: string[]): string[] =>
-  Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
-
-const collectStrings = (value: unknown): string[] => {
-  if (typeof value === 'string') return [value];
-  if (Array.isArray(value)) return value.flatMap(collectStrings);
-  return [];
-};
-
-const getWeatherNumber = (
-  weather: WeatherData | null,
-  keys: (keyof WeatherData)[],
-  fallback: number,
-): number => firstFiniteNumber(fallback, ...keys.map((key) => weather?.[key]));
-
-const getWeatherString = (
-  weather: WeatherData | null,
-  keys: (keyof WeatherData)[],
-  fallback = '',
-): string => firstString(...keys.map((key) => weather?.[key])) ?? fallback;
-
-const getFragranceRecord = (item: Fragrance): LooseRecord => item as unknown as LooseRecord;
-
-/** Match Wardrobe grid visibility — legacy rows may lack flat name/brand until rebuilt */
-function wardrobeEntryName(item: Fragrance): string {
-  const record = getFragranceRecord(item);
-  const product = isLooseRecord(record.product) ? record.product : null;
-  return firstString(record.name, product?.name) ?? '';
-}
-function wardrobeEntryBrand(item: Fragrance): string {
-  const record = getFragranceRecord(item);
-  const product = isLooseRecord(record.product) ? record.product : null;
-  return firstString(record.brand, product?.brand) ?? '';
-}
-function wardrobeNeedsLegacyRebuild(items: Fragrance[]): boolean {
-  return items.some((item) => !wardrobeEntryName(item) || !wardrobeEntryBrand(item));
-}
-function sameWardrobeEntry(
-  item: Pick<Fragrance, 'id' | '_dbId'>,
-  target: Pick<Fragrance, 'id' | '_dbId'>,
-): boolean {
-  if (target._dbId) return item._dbId === target._dbId;
-  if (item._dbId) return false;
-  return item.id === target.id;
-}
-
-function normalizedEnrichmentStatus(item: Fragrance): string {
-  return firstString(item.enrichment?.status, item.raw_engine_detail?.enrichment?.status)
-    ?.toLowerCase() ?? '';
-}
-
-function hasFragranticaRefreshTarget(item: Fragrance): boolean {
-  const detail = item.raw_engine_detail;
-  return Boolean(
-    item.source_coverage?.fragrantica_linked ||
-      detail?.source_coverage?.fragrantica_linked ||
-      firstString(
-        detail?.raw?.source_urls?.frag_url,
-        item.source_url,
-        detail?.source_url,
-      )?.toLowerCase().includes('fragrantica.com'),
-  );
-}
-
-function wardrobeNeedsEnrichmentRefresh(item: Fragrance): boolean {
-  const enrichment = item.enrichment ?? item.raw_engine_detail?.enrichment;
-  if (isBackgroundEnrichmentQueued(enrichment)) return true;
-  return (
-    normalizedEnrichmentStatus(item) === 'complete' &&
-    item.source_coverage?.complete !== true &&
-    hasFragranticaRefreshTarget(item)
-  );
-}
-
-function detailRefreshPayloadFor(item: Fragrance): FragranceDetailRequestPayload | null {
-  const detail = item.raw_engine_detail;
-  const sourceUrl = firstString(
-    detail?.raw?.source_urls?.frag_url,
-    item.source_url,
-    detail?.source_url,
-    detail?.raw?.source_urls?.bn_url,
-  );
-  const engineId = firstString(item.fragranceApiId, detail?.id);
-  if (engineId) {
-    const origin = engineId.startsWith('catalog:') ||
-      engineId.startsWith('dataset:') ||
-      engineId.startsWith('local:')
-      ? 'app'
-      : 'srt';
-    return { id: engineId, ...(sourceUrl ? { source_url: sourceUrl } : {}), origin };
-  }
-  return sourceUrl ? { source_url: sourceUrl, origin: 'srt' } : null;
-}
-
-const RAIN_CONDITION_SIGNALS = ['rain', 'drizzle', 'storm'];
-
-const FAMILY_TRAIT_SIGNALS: Record<ScentFamily, string[]> = {
-  fresh: ['fresh', 'freshness', 'clean', 'mint'],
-  citrus: ['citrus', 'bergamot', 'lemon', 'lime', 'orange', 'grapefruit', 'mandarin'],
-  aquatic: ['aquatic', 'marine', 'ocean', 'sea', 'water'],
-  green: ['green', 'grass', 'leaf', 'leafy', 'herbal', 'vetiver'],
-  musky: ['musk', 'musky'],
-  woody: ['wood', 'woody', 'woodiness', 'cedar', 'sandalwood', 'patchouli', 'vetiver'],
-  amber: ['amber', 'resin', 'warmth', 'warm'],
-  sweet: ['sweet', 'sweetness', 'vanilla', 'tonka', 'caramel', 'honey'],
-  gourmand: ['gourmand', 'chocolate', 'coffee', 'praline', 'caramel'],
-  oud: ['oud', 'agarwood'],
-  smoky: ['smoke', 'smoky', 'incense'],
-  leather: ['leather', 'leathery', 'suede'],
-  tobacco: ['tobacco', 'cigar'],
-  spicy: ['spicy', 'spice', 'pepper', 'cardamom', 'cinnamon', 'clove', 'saffron'],
-  powdery: ['powder', 'powdery', 'iris', 'orris', 'violet'],
-};
-
-const mapDestinationToEngineType = (
-  destination: DestinationType | string,
-): ScentWeatherEngineInput['setting']['type'] => {
-  const normalized = destination.trim().toLowerCase();
-  if (normalized === 'work') return 'work';
-  if (normalized === 'night out' || normalized === 'night') return 'night';
-  if (normalized === 'going out') return 'mixed';
-  if (normalized === 'date') return 'date';
-  if (normalized === 'gym') return 'gym';
-  return 'indoor';
-};
-
-const normalizeTrait = (value: unknown): string =>
-  typeof value === 'string' ? value.trim().toLowerCase() : '';
 
 const titleCaseToken = (value: string): string =>
   value
@@ -220,210 +27,6 @@ const titleCaseToken = (value: string): string =>
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
-
-const getFragranceFamilies = (item: Fragrance): string[] => {
-  const record = getFragranceRecord(item);
-  return uniqueStrings([
-    ...collectStrings(record.scentFamilies),
-    ...collectStrings(record.scent_families),
-    ...collectStrings(record.families),
-    ...collectStrings(record.family),
-  ]);
-};
-
-const getFragranceAccords = (item: Fragrance): string[] => {
-  const record = getFragranceRecord(item);
-  const pyramid = isLooseRecord(record.pyramid) ? record.pyramid : null;
-  const dm = item.derived_metrics ?? item.raw_engine_detail?.derived_metrics ?? null;
-  const accordLabels = collectMainAccordDisplayRows(dm?.main_accords).map((r) => r.label);
-  const dmNotes = dm?.notes;
-
-  return uniqueStrings([
-    ...accordLabels,
-    ...(dmNotes
-      ? [
-          ...collectStrings(dmNotes.top),
-          ...collectStrings(dmNotes.heart),
-          ...collectStrings(dmNotes.base),
-          ...collectStrings(dmNotes.flat),
-        ]
-      : []),
-    ...collectStrings(dm?.main_accords?.accord_summary),
-    ...collectStrings(record.accords),
-    ...collectStrings(record.notes),
-    ...collectStrings(record.topNotes),
-    ...collectStrings(record.middleNotes),
-    ...collectStrings(record.heartNotes),
-    ...collectStrings(record.baseNotes),
-    ...collectStrings(pyramid?.top),
-    ...collectStrings(pyramid?.heart),
-    ...collectStrings(pyramid?.middle),
-    ...collectStrings(pyramid?.base),
-    ...collectStrings(pyramid?.notes),
-  ]);
-};
-
-const getFragranceProfileVector = (item: Fragrance): Record<string, number> => {
-  const record = getFragranceRecord(item);
-  const vector: Record<string, number> = {};
-
-  for (const source of [record.profile_vector, record.vector, record.scent_vector]) {
-    if (!isLooseRecord(source)) continue;
-    for (const [key, value] of Object.entries(source)) {
-      const numberValue = numberFromValue(value);
-      if (numberValue !== undefined) vector[key] = numberValue;
-    }
-  }
-
-  return vector;
-};
-
-const getFragranceLongevity = (item: Fragrance): string | number | undefined => {
-  const record = getFragranceRecord(item);
-  const performance = isLooseRecord(record.performance) ? record.performance : null;
-  const value = record.longevity ?? performance?.longevity;
-  if (typeof value === 'string') return firstString(value);
-  return numberFromValue(value);
-};
-
-const getFragranceTraitTexts = (item: Fragrance): string[] => {
-  const traits: string[] = [];
-  traits.push(...getFragranceFamilies(item));
-  traits.push(...getFragranceAccords(item));
-  for (const [key, value] of Object.entries(getFragranceProfileVector(item))) {
-    if (Number.isFinite(value) && value > 0) traits.push(key);
-  }
-  return traits.map(normalizeTrait).filter(Boolean);
-};
-
-const fragranceHasFamilySignal = (item: Fragrance, family: ScentFamily): boolean => {
-  const traits = getFragranceTraitTexts(item);
-  return traits.some((trait) =>
-    FAMILY_TRAIT_SIGNALS[family].some((signal) => trait.includes(signal)),
-  );
-};
-
-const mapSillageToEngineLabel = (sillage: unknown): string | undefined => {
-  if (typeof sillage === 'string') return firstString(sillage);
-  const numericSillage = numberFromValue(sillage);
-  if (numericSillage === undefined) return undefined;
-  if (numericSillage >= 8) return 'strong';
-  if (numericSillage <= 3) return 'light';
-  return 'moderate';
-};
-
-const getFragranceSillage = (item: Fragrance): string | undefined => {
-  const record = getFragranceRecord(item);
-  const performance = isLooseRecord(record.performance) ? record.performance : null;
-  return mapSillageToEngineLabel(record.sillage ?? record.projection ?? performance?.sillage);
-};
-
-const buildEngineInput = (
-  item: Fragrance,
-  intent: { destination: DestinationType; energy: EnergyState },
-  weather: WeatherData | null,
-): ScentWeatherEngineInput => {
-  const condition = getWeatherString(weather, ['condition', 'description']);
-  const normalizedCondition = condition.toLowerCase();
-
-  return {
-    weather: {
-      temperature_f: getWeatherNumber(weather, ['temperature_f', 'temperature', 'temp'], 72),
-      humidity_percent: getWeatherNumber(weather, ['humidity_percent', 'humidity'], 50),
-      wind_speed_mph: getWeatherNumber(weather, ['wind_speed_mph', 'windSpeed'], 0),
-      is_raining: RAIN_CONDITION_SIGNALS.some((signal) => normalizedCondition.includes(signal)),
-      condition,
-    },
-    setting: {
-      type: mapDestinationToEngineType(intent.destination),
-    },
-    fragrance: {
-      name: wardrobeEntryName(item),
-      brand: wardrobeEntryBrand(item),
-      concentration: item.concentration,
-      scent_families: getFragranceFamilies(item),
-      accords: getFragranceAccords(item),
-      profile_vector: getFragranceProfileVector(item),
-      longevity: getFragranceLongevity(item),
-      sillage: getFragranceSillage(item),
-    },
-  };
-};
-
-const calculateRecommendationDisplayScore = (
-  recommendation: ScentWeatherRecommendation,
-): number => {
-  const confidenceBaseScore: Record<ScentWeatherRecommendation['confidence'], number> = {
-    high: 92,
-    medium: 78,
-    low: 62,
-  };
-  const projectionPenalty: Record<ScentWeatherRecommendation['projection_risk'], number> = {
-    low: 0,
-    medium: 4,
-    high: 10,
-    overpowering_risk: 18,
-  };
-  const wearWindowPenalty: Record<ScentWeatherRecommendation['wear_window'], number> = {
-    best_now: 0,
-    daytime_safe: 2,
-    better_later: 8,
-    nighttime_better: 10,
-    avoid_today: 28,
-  };
-
-  return Math.max(
-    0,
-    Math.min(
-      100,
-      confidenceBaseScore[recommendation.confidence] -
-        projectionPenalty[recommendation.projection_risk] -
-        wearWindowPenalty[recommendation.wear_window],
-    ),
-  );
-};
-
-const scoreRecommendationCandidate = (
-  item: Fragrance,
-  recommendation: ScentWeatherRecommendation,
-  intent: { destination: DestinationType; energy: EnergyState },
-): number => {
-  const bestFamilyHits = recommendation.best_scent_families.filter((family) =>
-    fragranceHasFamilySignal(item, family),
-  ).length;
-  const avoidFamilyHits = recommendation.avoid_scent_families.filter((family) =>
-    fragranceHasFamilySignal(item, family),
-  ).length;
-  const intentBonus = item.intents?.includes(intent.destination) ? 4 : 0;
-  const energyBonus = item.energies?.includes(intent.energy) ? 3 : 0;
-
-  return (
-    calculateRecommendationDisplayScore(recommendation) +
-    bestFamilyHits * 8 -
-    avoidFamilyHits * 14 +
-    intentBonus +
-    energyBonus
-  );
-};
-
-const calculateEngineAlignment = (
-  items: Fragrance[],
-  intent: { destination: DestinationType; energy: EnergyState },
-  weather: WeatherData | null,
-) => {
-  const candidates = items.map((item, index) => {
-    const recommendation = calculateScentWeatherRecommendation(buildEngineInput(item, intent, weather));
-    return {
-      item,
-      recommendation,
-      score: scoreRecommendationCandidate(item, recommendation, intent),
-      index,
-    };
-  });
-
-  candidates.sort((a, b) => b.score - a.score || a.index - b.index);
-  return candidates[0];
-};
 
 const formatFamilyList = (families: ScentFamily[]): string =>
   families.length > 0 ? families.map(titleCaseToken).join(', ') : 'Flexible';
@@ -438,8 +41,6 @@ const formatSprayCount = (sprayCount: ScentWeatherRecommendation['spray_count'])
   }
   return `${sprayCount.min}-${sprayCount.max} sprays (${sprayCount.recommended} recommended)`;
 };
-
-// --- Components ---
 
 const LiveClock: React.FC = React.memo(() => {
   const [time, setTime] = useState(new Date());
@@ -471,7 +72,7 @@ const LiveClock: React.FC = React.memo(() => {
 });
 
 interface AtmosphereBarProps {
-  weather: WeatherData | null;
+  weather: any;
   weatherLoading: boolean;
 }
 
@@ -483,6 +84,37 @@ const ATMOSPHERE_SCROLL_MAX_SECONDS = 160;
 const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({ weather, weatherLoading }) => {
   const trackRef = useRef<HTMLDivElement>(null);
   const groupRef = useRef<HTMLDivElement>(null);
+
+  const firstFiniteNumber = (fallback: number, ...values: unknown[]): number => {
+    for (const value of values) {
+      if (typeof value === 'number' && Number.isFinite(value)) return value;
+      if (typeof value === 'string' && value.trim() !== '') {
+        const parsed = Number(value);
+        if (Number.isFinite(parsed)) return parsed;
+      }
+    }
+    return fallback;
+  };
+
+  const firstString = (...values: unknown[]): string | undefined => {
+    for (const value of values) {
+      if (typeof value === 'string' && value.trim()) return value.trim();
+    }
+    return undefined;
+  };
+
+  const getWeatherNumber = (
+    w: any,
+    keys: string[],
+    fallback: number,
+  ): number => firstFiniteNumber(fallback, ...keys.map((key) => w?.[key]));
+
+  const getWeatherString = (
+    w: any,
+    keys: string[],
+    fallback = '',
+  ): string => firstString(...keys.map((key) => w?.[key])) ?? fallback;
+
   const tempValue = getWeatherNumber(weather, ['temperature_f', 'temperature', 'temp'], Number.NaN);
   const humidityValue = getWeatherNumber(weather, ['humidity_percent', 'humidity'], Number.NaN);
   const temp = weatherLoading ? '—' : Number.isFinite(tempValue) ? `${Math.round(tempValue)}°F` : '—';
@@ -574,553 +206,33 @@ const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({ weather, weath
   );
 });
 
-export default function App() {
-  const [authToken, setAuthToken] = useState<string | null>(() => {
-    const params = new URLSearchParams(window.location.search);
-    const oauthToken = params.get('oauth_token');
-    const oauthEmail = params.get('oauth_email');
-    if (oauthToken && oauthEmail) {
-      localStorage.setItem(STORAGE_KEYS.TOKEN, oauthToken);
-      localStorage.setItem(STORAGE_KEYS.EMAIL, oauthEmail);
-      window.history.replaceState({}, '', window.location.pathname);
-      return oauthToken;
-    }
-    return localStorage.getItem(STORAGE_KEYS.TOKEN);
-  });
-  
-  const [_authEmail, setAuthEmail] = useState<string | null>(() => {
-    const params = new URLSearchParams(window.location.search);
-    const oauthEmail = params.get('oauth_email');
-    return oauthEmail ?? localStorage.getItem(STORAGE_KEYS.EMAIL);
-  });
-  const [currentPath, setCurrentPath] = useState(() => window.location.pathname);
-
-  const [items, setItems] = useState<Fragrance[]>([]);
-  const [wardrobeLoaded, setWardrobeLoaded] = useState(false);
-  const [isIntentModalOpen, setIsIntentModalOpen] = useState(false);
-  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
-  const [activeRecommendation, setActiveRecommendation] = useState<Fragrance | null>(null);
-  const [activeEngineRecommendation, setActiveEngineRecommendation] = useState<ScentWeatherRecommendation | null>(null);
-  const [recommendationReason, setRecommendationReason] = useState<string>('');
-  const [weather, setWeather] = useState<WeatherData | null>(null);
-  const [weatherLoading, setWeatherLoading] = useState(true);
-  const [locationStatus, setLocationStatus] = useState<'idle' | 'requesting' | 'granted' | 'denied'>('idle');
-  const [userId, setUserId] = useState<string | null>(null);
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [guestPromptDismissed, setGuestPromptDismissed] = useState(false);
-  const autoWardrobeRebuildAttemptedRef = useRef(false);
-  const enrichmentRefreshInFlightRef = useRef(false);
-  const [wardrobeRevertSnapshot, setWardrobeRevertSnapshot] = useState<Fragrance[] | null>(null);
-  const [wardrobeFixBusy, setWardrobeFixBusy] = useState(false);
-  const [wardrobeFixHint, setWardrobeFixHint] = useState<string | null>(null);
-  const [vaultSearchUiActive, setVaultSearchUiActive] = useState(false);
-  const isMutatingRef = useRef(false);
-  const lastMutationRef = useRef(0);
-
-  const handleVaultSearchStateChange = useCallback((active: boolean) => {
-    setVaultSearchUiActive(active);
-  }, []);
-
-  const handleExpandArchive = useCallback(() => {
-    const el = document.getElementById('scent-add-to-vault-search');
-    if (!(el instanceof HTMLInputElement)) return;
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    window.setTimeout(() => {
-      el.focus({ preventScroll: true });
-    }, 360);
-  }, []);
-
-  useEffect(() => {
-    autoWardrobeRebuildAttemptedRef.current = false;
-  }, [authToken]);
-
-  useEffect(() => {
-    return subscribeToNavigation(() => {
-      setCurrentPath(window.location.pathname);
-    });
-  }, []);
-
-  const fetchWeather = useCallback(async (lat?: number, lon?: number, signal?: AbortSignal) => {
-    try {
-      const hasCoords = Number.isFinite(lat) && Number.isFinite(lon);
-      const url = hasCoords ? `/api/weather?lat=${lat}&lon=${lon}` : '/api/weather';
-      const response = await axios.get(url, { signal });
-      setWeather(response.data);
-    } catch (err) {
-      if (!axios.isCancel(err)) {
-        console.error("Failed to fetch weather", err);
-      }
-    } finally {
-      setWeatherLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    const abortController = new AbortController();
-
-    if (!navigator.geolocation) {
-      fetchWeather(undefined, undefined, abortController.signal);
-      return () => abortController.abort();
-    }
-    
-    setLocationStatus('requesting');
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setLocationStatus('granted');
-        fetchWeather(pos.coords.latitude, pos.coords.longitude, abortController.signal);
-      },
-      () => {
-        setLocationStatus('denied');
-        fetchWeather(undefined, undefined, abortController.signal);
-      },
-      { timeout: 10000, enableHighAccuracy: false }
-    );
-
-    return () => abortController.abort();
-  }, [fetchWeather]);
-
-  const loadWardrobe = useCallback(async (token: string, signal?: AbortSignal) => {
-    if (isMutatingRef.current) return;
-    const now = Date.now();
-    if (now - lastMutationRef.current < 5000) return;
-
-    try {
-      const res = await fetch('/api/wardrobe', {
-        headers: { Authorization: `Bearer ${token}` },
-        signal
-      });
-      if (!res.ok) return;
-      const data: Fragrance[] = await res.json();
-      if (isMutatingRef.current) return;
-      setItems(data);
-    } catch (err) {
-      if ((err as Error).name !== 'AbortError') {
-        console.error("Failed to load wardrobe", err);
-      }
-    } finally {
-      setWardrobeLoaded(true);
-    }
-  }, []);
-
-  useEffect(() => {
-    const abortController = new AbortController();
-
-    if (authToken) {
-      loadWardrobe(authToken, abortController.signal);
-      fetch('/api/share-settings', { 
-        headers: { Authorization: `Bearer ${authToken}` },
-        signal: abortController.signal 
-      })
-        .then(r => r.json())
-        .then(d => { if (d.userId) setUserId(d.userId); })
-        .catch(() => {});
-    } else {
-      setWardrobeLoaded(true);
-    }
-
-    return () => abortController.abort();
-  }, [authToken, loadWardrobe]);
-
-  useEffect(() => {
-    if (!authToken) return;
-    const REFRESH_MS = 60_000;
-    
-    const tick = () => {
-      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
-      loadWardrobe(authToken);
-    };
-    
-    const id = window.setInterval(tick, REFRESH_MS);
-    
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') tick();
-    };
-    
-    document.addEventListener('visibilitychange', onVisible);
-    return () => {
-      window.clearInterval(id);
-      document.removeEventListener('visibilitychange', onVisible);
-    };
-  }, [authToken, loadWardrobe]);
-
-  const handleAuth = (token: string, email: string) => {
-    localStorage.setItem(STORAGE_KEYS.TOKEN, token);
-    localStorage.setItem(STORAGE_KEYS.EMAIL, email);
-    setAuthToken(token);
-    setAuthEmail(email);
-    setIsAuthModalOpen(false);
-    setGuestPromptDismissed(false);
-  };
-
-  const handleSignOut = () => {
-    localStorage.removeItem(STORAGE_KEYS.TOKEN);
-    localStorage.removeItem(STORAGE_KEYS.EMAIL);
-    setAuthToken(null);
-    setAuthEmail(null);
-    setItems([]);
-    setWardrobeLoaded(false);
-    setWardrobeRevertSnapshot(null);
-    setWardrobeFixHint(null);
-  };
-
-  const requestLocation = () => {
-    if (!navigator.geolocation) return;
-    setLocationStatus('requesting');
-    setWeatherLoading(true);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setLocationStatus('granted');
-        fetchWeather(pos.coords.latitude, pos.coords.longitude);
-      },
-      () => {
-        setLocationStatus('denied');
-        fetchWeather(undefined, undefined);
-      },
-      { timeout: 12000, enableHighAccuracy: false }
-    );
-  };
-
-  const handleAddItem = async (
-    item: any,
-  ): Promise<{ persisted: boolean; requiresAuth?: boolean; error?: string }> => {
-    const newItem: Fragrance = { ...item };
-
-    let nextCount = 0;
-    setItems((prev) => {
-      nextCount = prev.length + 1;
-      return [newItem, ...prev];
-    });
-
-    if (authToken) {
-      isMutatingRef.current = true;
-      try {
-        const payload = { ...item };
-        const res = await fetch('/api/wardrobe', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${authToken}`,
-          },
-          body: JSON.stringify(payload),
-        });
-        const saved = (await res.json().catch(() => null)) as Partial<Fragrance> | null;
-        if (!res.ok) {
-          const message =
-            saved && typeof (saved as { error?: unknown }).error === 'string'
-              ? (saved as { error: string }).error
-              : `Wardrobe save failed: HTTP ${res.status}`;
-          throw new Error(message);
-        }
-        if (res.ok && saved) {
-          const savedItem: Fragrance = {
-            ...newItem,
-            ...saved,
-            id: typeof saved.id === 'string' && saved.id ? saved.id : newItem.id,
-          };
-          setItems((prev) =>
-            prev.map((existing) =>
-              sameWardrobeEntry(existing, newItem) ? savedItem : existing,
-            ),
-          );
-          return { persisted: true };
-        }
-        throw new Error('Wardrobe save failed: empty API response');
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Wardrobe save failed';
-        console.error('Failed to persist wardrobe item', err);
-        setItems((prev) => prev.filter((i) => !sameWardrobeEntry(i, newItem)));
-        return { persisted: false, error: message };
-      } finally {
-        isMutatingRef.current = false;
-        lastMutationRef.current = Date.now();
-      }
-    } else if (nextCount >= 2 && !guestPromptDismissed) {
-      setIsAuthModalOpen(true);
-      return { persisted: false, requiresAuth: true };
-    }
-
-    return { persisted: false, requiresAuth: !authToken };
-  };
-
-  useEffect(() => {
-    if (authToken) return;
-    if (items.length >= 2 && !guestPromptDismissed) {
-      setIsAuthModalOpen(true);
-    }
-  }, [authToken, items.length, guestPromptDismissed]);
-
-  const handlePersistWardrobeImage = useCallback(async (
-    target: Fragrance,
-    imageUrl?: string,
-    imageAdjustment?: BottleImageAdjustment,
-  ): Promise<Fragrance | null> => {
-    if (!authToken) return null;
-    const apiId = target._dbId ?? target.id;
-    isMutatingRef.current = true;
-    try {
-      const body: Record<string, unknown> = {};
-      if (imageUrl) {
-        body.syncImageFromCatalog = true;
-        body.imageUrl = imageUrl;
-      }
-      if (imageAdjustment) {
-        body.imageAdjustment = imageAdjustment;
-      }
-      if (!body.syncImageFromCatalog && !body.imageUrl && !body.imageAdjustment) {
-        body.syncImageFromCatalog = true;
-      }
-
-      const res = await fetch(`/api/wardrobe/${apiId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${authToken}`,
-        },
-        body: JSON.stringify(body),
-      });
-      const data = (await res.json()) as Partial<Fragrance> & { _dbId?: string; error?: string; imageHash?: string };
-      if (!res.ok) {
-        throw new Error(data.error || `HTTP ${res.status}`);
-      }
-      const resolvedImageUrl = (() => {
-        const raw =
-          typeof data.imageUrl === 'string' && data.imageUrl.trim()
-            ? data.imageUrl.trim()
-            : imageUrl;
-        if (!raw) return target.imageUrl;
-        // Strip any existing v= before appending the fresh one to avoid ?v=old&v=new.
-        let base = raw;
-        try {
-          const parsed = new URL(raw);
-          parsed.searchParams.delete('v');
-          base = parsed.toString();
-        } catch { /* relative or non-URL — leave as-is */ }
-        const v = data.imageHash ?? Date.now();
-        return `${base}${base.includes('?') ? '&' : '?'}v=${encodeURIComponent(String(v))}`;
-      })();
-      const next: Fragrance = {
-        ...target,
-        ...data,
-        id: target.id,
-        imageUrl: resolvedImageUrl,
-        _dbId: data._dbId ?? target._dbId,
-      };
-      setItems((prev) =>
-        prev.map((item) =>
-          sameWardrobeEntry(item, target) ? next : item,
-        ),
-      );
-      return next;
-    } catch (e) {
-      console.error(e);
-      return null;
-    } finally {
-      isMutatingRef.current = false;
-      lastMutationRef.current = Date.now();
-    }
-  }, [authToken]);
-
-  const handlePersistWardrobeDetailRefresh = useCallback(async (
-    target: Fragrance,
-    detail: FragranceDetail,
-  ): Promise<Fragrance | null> => {
-    if (!authToken) return null;
-    const apiId = target._dbId ?? target.id;
-    isMutatingRef.current = true;
-    try {
-      const res = await fetch(`/api/wardrobe/${apiId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${authToken}`,
-        },
-        body: JSON.stringify({
-          derived_metrics: detail.derived_metrics ?? null,
-          source_coverage: detail.source_coverage,
-          enrichment: detail.enrichment ?? null,
-          raw_engine_detail: detail,
-        }),
-      });
-      const data = (await res.json().catch(() => null)) as Partial<Fragrance> & { _dbId?: string; error?: string } | null;
-      if (!res.ok) {
-        throw new Error(data?.error || `HTTP ${res.status}`);
-      }
-      const next: Fragrance = {
-        ...target,
-        ...data,
-        id: target.id,
-        derived_metrics: detail.derived_metrics ?? null,
-        source_coverage: detail.source_coverage,
-        enrichment: detail.enrichment ?? null,
-        raw_engine_detail: detail,
-        _dbId: data?._dbId ?? target._dbId,
-      };
-      setItems((prev) =>
-        prev.map((item) =>
-          sameWardrobeEntry(item, target) ? next : item,
-        ),
-      );
-      return next;
-    } catch (e) {
-      console.error('Failed to persist enriched wardrobe detail', e);
-      return null;
-    } finally {
-      isMutatingRef.current = false;
-      lastMutationRef.current = Date.now();
-    }
-  }, [authToken]);
-
-  useEffect(() => {
-    if (!authToken || !wardrobeLoaded || items.length === 0) return;
-    const abortController = new AbortController();
-    let cancelled = false;
-    const REFRESH_MS = 15_000;
-
-    const refreshPendingDetails = async () => {
-      if (cancelled || enrichmentRefreshInFlightRef.current || isMutatingRef.current) return;
-      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
-      const targets = items
-        .filter(wardrobeNeedsEnrichmentRefresh)
-        .slice(0, 3);
-      if (targets.length === 0) return;
-
-      enrichmentRefreshInFlightRef.current = true;
-      try {
-        for (const item of targets) {
-          if (cancelled) break;
-          const payload = detailRefreshPayloadFor(item);
-          if (!payload) continue;
-          const detail = normalizeFragranceDetail(
-            (await getFragranceDetails(payload, { signal: abortController.signal })) as FragranceDetail,
-          );
-          if (isBackgroundEnrichmentQueued(detail.enrichment)) continue;
-          await handlePersistWardrobeDetailRefresh(item, detail);
-        }
-      } catch (err) {
-        if ((err as Error).name !== 'AbortError') {
-          console.error('Background fragrance detail refresh failed', err);
-        }
-      } finally {
-        enrichmentRefreshInFlightRef.current = false;
-      }
-    };
-
-    void refreshPendingDetails();
-    const id = window.setInterval(refreshPendingDetails, REFRESH_MS);
-    return () => {
-      cancelled = true;
-      abortController.abort();
-      window.clearInterval(id);
-    };
-  }, [authToken, wardrobeLoaded, items, handlePersistWardrobeDetailRefresh]);
-
-  const handleRevertWardrobe = useCallback(() => {
-    if (!wardrobeRevertSnapshot) return;
-    const snap = JSON.parse(JSON.stringify(wardrobeRevertSnapshot)) as Fragrance[];
-    setItems(snap);
-    lastMutationRef.current = Date.now();
-    setWardrobeFixHint('Reverted to the in-memory snapshot from before the last automatic rebuild. Server data may differ; refresh loads the API again.');
-    setActiveRecommendation((prev) => {
-      if (!prev) return null;
-      const ok = snap.some(
-        (i) => i.id === prev.id || (i._dbId && prev._dbId && i._dbId === prev._dbId),
-      );
-      return ok ? prev : null;
-    });
-  }, [wardrobeRevertSnapshot]);
-
-  useEffect(() => {
-    if (!authToken || !wardrobeLoaded) return;
-    if (autoWardrobeRebuildAttemptedRef.current) return;
-    if (!wardrobeNeedsLegacyRebuild(items)) return;
-
-    autoWardrobeRebuildAttemptedRef.current = true;
-    const snapshot = JSON.parse(JSON.stringify(items)) as Fragrance[];
-
-    void (async () => {
-      setWardrobeFixBusy(true);
-      setWardrobeFixHint(null);
-      setWardrobeRevertSnapshot(snapshot);
-      try {
-        const res = await fetch('/api/wardrobe/rebuild', {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${authToken}` },
-        });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          throw new Error((err as { error?: string }).error || `HTTP ${res.status}`);
-        }
-        const data = (await res.json()) as { total: number; rebuilt: number; skipped: number };
-        await loadWardrobe(authToken);
-        setWardrobeFixHint(
-          `Rebuild done: ${data.rebuilt} updated, ${data.skipped} skipped (${data.total} rows).`,
-        );
-      } catch (e) {
-        console.error('Wardrobe rebuild failed', e);
-        setWardrobeFixHint((e as Error).message || 'Rebuild failed');
-      } finally {
-        setWardrobeFixBusy(false);
-      }
-    })();
-  }, [authToken, wardrobeLoaded, items, loadWardrobe]);
-
-  const handleDeleteItem = async (target: Fragrance) => {
-    const apiId = target._dbId ?? target.id;
-
-    if (!authToken) {
-      setItems((prev) =>
-        prev.filter(item =>
-          !sameWardrobeEntry(item, target),
-        ),
-      );
-      return;
-    }
-
-    isMutatingRef.current = true;
-    try {
-      const res = await fetch(`/api/wardrobe/${apiId}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
-      if (!res.ok) {
-        console.error('Failed to delete wardrobe item', res.status);
-        await loadWardrobe(authToken);
-        return;
-      }
-      setItems((prev) =>
-        prev.filter(item =>
-          !sameWardrobeEntry(item, target),
-        ),
-      );
-    } catch (err) {
-      console.error(err);
-      await loadWardrobe(authToken);
-      return;
-    } finally {
-      isMutatingRef.current = false;
-      lastMutationRef.current = Date.now();
-    }
-  };
-
-  const handleIntentComplete = (intent: { destination: DestinationType; energy: EnergyState }) => {
-    setIsIntentModalOpen(false);
-    if (items.length === 0) return;
-
-    const winner = calculateEngineAlignment(items, intent, weather);
-    if (!winner) return;
-
-    setActiveEngineRecommendation(winner.recommendation);
-    setRecommendationReason(winner.recommendation.explanation);
-    setTimeout(() => setActiveRecommendation(winner.item), 800);
-  };
-
-  const closeRecommendationOverlay = useCallback(() => {
-    setActiveRecommendation(null);
-    setActiveEngineRecommendation(null);
-  }, []);
+function DashboardView() {
+  const { authToken, handleSignOut, setIsAuthModalOpen } = useAuth();
+  const { weather, weatherLoading } = useWeather();
+  const {
+    items,
+    isIntentModalOpen,
+    activeRecommendation,
+    activeEngineRecommendation,
+    recommendationReason,
+    wardrobeRevertSnapshot,
+    wardrobeFixBusy,
+    wardrobeFixHint,
+    vaultSearchUiActive,
+    setIsIntentModalOpen,
+    setIsShareModalOpen,
+    handleAddItem,
+    handlePersistWardrobeImage,
+    handleRevertWardrobe,
+    handleDeleteItem,
+    handleIntentComplete,
+    closeRecommendationOverlay,
+    handleVaultSearchStateChange,
+    handleExpandArchive,
+  } = useWardrobe();
 
   const tickerPhrases = useMemo(() => {
-    if (!wardrobeLoaded || items.length === 0) {
+    if (!items.length) {
       return [
         'Add scents to your vault and unlock deeper discovery',
         'Atmospheric nuance is analyzed to guide each wear',
@@ -1174,76 +286,9 @@ export default function App() {
     if (phrases.length < 3) phrases.push('Olfactory intelligence active', 'Atmospheric pairing in progress');
 
     return phrases;
-  }, [items, wardrobeLoaded]);
+  }, [items]);
+
   const tickerTrackKey = tickerPhrases.join('|');
-
-  const authModal = isAuthModalOpen ? (
-    <AuthModal
-      onAuth={handleAuth}
-      onClose={() => {
-        setIsAuthModalOpen(false);
-        setGuestPromptDismissed(true);
-      }}
-      allowDismiss
-      title={items.length >= 2 ? 'Save your wardrobe before you lose it' : undefined}
-      subtitle={
-        items.length >= 2
-          ? 'You can keep exploring as a guest, but signing in will persist your fragrances to your account.'
-          : undefined
-      }
-    />
-  ) : null;
-
-  const shareModal = (
-    <ShareModal
-      isOpen={isShareModalOpen}
-      onClose={() => setIsShareModalOpen(false)}
-      userId={userId}
-      authToken={authToken}
-      items={items}
-      onToggleVisibility={(id, hidden) => {
-        setItems(prev =>
-          prev.map(item =>
-            (item._dbId ?? item.id) === id ? { ...item, shareHidden: hidden } : item,
-          ),
-        );
-      }}
-    />
-  );
-
-  if (currentPath === '/community') {
-    return (
-      <>
-        <React.Suspense fallback={<div className="min-h-[100svh] bg-scent-bg" />}>
-          <CommunityPage
-            authToken={authToken}
-            onSignIn={() => setIsAuthModalOpen(true)}
-            onShare={() => setIsShareModalOpen(true)}
-            onSignOut={handleSignOut}
-          />
-        </React.Suspense>
-        {authModal}
-        {shareModal}
-      </>
-    );
-  }
-
-  const sharePathMatch = currentPath.match(/^\/share\/([^/?#]+)$/);
-  if (sharePathMatch) {
-    let shareRef = sharePathMatch[1];
-    try {
-      shareRef = decodeURIComponent(shareRef);
-    } catch {
-      // Keep raw segment if decode fails.
-    }
-    return (
-      <>
-        <SharePage userId={shareRef} />
-        {authModal}
-        {shareModal}
-      </>
-    );
-  }
 
   return (
     <div className="scent-app-shell min-h-[100svh] bg-scent-bg selection:bg-scent-accent selection:text-black text-white relative overflow-x-hidden">
@@ -1265,7 +310,7 @@ export default function App() {
               {[...Array(4)].map((_, i) => (
                 <span key={i} className="scent-marquee-phrase-group flex items-center" aria-hidden={i > 0}>
                   {tickerPhrases.map((phrase, j) => (
-                    <React.Fragment key={j}>
+                    <React.Fragment key={phrase}>
                       <span className="scent-marquee-phrase whitespace-nowrap">{phrase}</span>
                       {j < tickerPhrases.length - 1 ? (
                         <span className="scent-marquee-divider shrink-0" aria-hidden="true" />
@@ -1349,9 +394,6 @@ export default function App() {
       </main>
 
       <ScentIntentModal isOpen={isIntentModalOpen} onClose={() => setIsIntentModalOpen(false)} onComplete={handleIntentComplete} />
-
-      {authModal}
-      {shareModal}
 
       <AnimatePresence mode="wait">
         {activeRecommendation && (
@@ -1439,7 +481,7 @@ export default function App() {
             {/* Pinned bottom — Confirm always visible */}
             <div
               className="px-5 pt-3 shrink-0 border-t border-white/5"
-              style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))' }}
+              style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-top))' }}
             >
               <button onClick={closeRecommendationOverlay} className="w-full py-4 bg-scent-accent text-black uppercase tracking-[0.3em] text-[10px] font-bold hover:opacity-90 transition-opacity active:scale-[0.98]">
                 Confirm Alignment
@@ -1459,5 +501,97 @@ export default function App() {
         </div>
       </footer>
     </div>
+  );
+}
+
+function CommunityPageView() {
+  const { authToken, handleSignOut, setIsAuthModalOpen } = useAuth();
+  const { setIsShareModalOpen } = useWardrobe();
+  return (
+    <React.Suspense fallback={<div className="min-h-[100svh] bg-scent-bg" />}>
+      <CommunityPage
+        authToken={authToken}
+        onSignIn={() => setIsAuthModalOpen(true)}
+        onShare={() => setIsShareModalOpen(true)}
+        onSignOut={handleSignOut}
+      />
+    </React.Suspense>
+  );
+}
+
+function SharePageView() {
+  const { userId } = useParams<{ userId: string }>();
+  return <SharePage userId={userId || ''} />;
+}
+
+function AppContent() {
+  const {
+    authToken,
+    isAuthModalOpen,
+    setIsAuthModalOpen,
+    guestPromptDismissed,
+    setGuestPromptDismissed,
+    handleAuth,
+  } = useAuth();
+
+  const { items, setItems, isShareModalOpen, setIsShareModalOpen, userId } = useWardrobe();
+
+  const authModal = isAuthModalOpen ? (
+    <AuthModal
+      onAuth={handleAuth}
+      onClose={() => {
+        setIsAuthModalOpen(false);
+        setGuestPromptDismissed(true);
+      }}
+      allowDismiss
+      title={items.length >= 2 ? 'Save your wardrobe before you lose it' : undefined}
+      subtitle={
+        items.length >= 2
+          ? 'You can keep exploring as a guest, but signing in will persist your fragrances to your account.'
+          : undefined
+      }
+    />
+  ) : null;
+
+  const shareModal = (
+    <ShareModal
+      isOpen={isShareModalOpen}
+      onClose={() => setIsShareModalOpen(false)}
+      userId={userId}
+      authToken={authToken}
+      items={items}
+      onToggleVisibility={(id, hidden) => {
+        setItems(prev =>
+          prev.map(item =>
+            (item._dbId ?? item.id) === id ? { ...item, shareHidden: hidden } : item,
+          ),
+        );
+      }}
+    />
+  );
+
+  return (
+    <>
+      <Routes>
+        <Route path="/" element={<DashboardView />} />
+        <Route path="/community" element={<CommunityPageView />} />
+        <Route path="/share/:userId" element={<SharePageView />} />
+      </Routes>
+      {authModal}
+      {shareModal}
+    </>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <WeatherProvider>
+        <WardrobeProvider>
+          <AppContent />
+          <Toaster />
+        </WardrobeProvider>
+      </WeatherProvider>
+    </AuthProvider>
   );
 }

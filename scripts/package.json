@@ -6,9 +6,15 @@
   "scripts": {
     "hello": "tsx ./src/hello.ts",
     "rebuild-user": "tsx ./src/rebuild-user-wardrobe.ts",
+    "cleanup-images": "tsx ./src/cleanup-orphaned-images.ts",
     "verify:image-pipeline": "tsx ./src/verify-image-pipeline.ts",
     "verify:poof-paths": "tsx ../artifacts/api-server/src/services/verifyPoofPaths.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@workspace/db": "workspace:*",
+    "dotenv": "^16.6.1",
+    "drizzle-orm": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:",

@@ -76,7 +76,7 @@ export async function rebuildWardrobeForUser(userId: string): Promise<WardrobeRe
           brand: rebuiltBrand,
         },
         imageUrl: flatImageUrl ?? "",
-        id: typeof data.id === "string" ? data.id : r.id,
+        id: r.id,
         season: typeof data.season === "string" && data.season ? data.season : "Universal",
         intents: data.intents,
         energies: data.energies,

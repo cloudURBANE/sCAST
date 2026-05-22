@@ -33,7 +33,7 @@ function formatNotes(notes: string[] | undefined): string {
   return notes && notes.length > 0 ? notes.join(', ') : 'Notes pending curation';
 }
 
-export const BottleMarquee: React.FC<BottleMarqueeProps> = ({ items, loading }) => {
+export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, loading }) => {
   const trackRef = useRef<HTMLDivElement>(null);
   const groupRef = useRef<HTMLDivElement>(null);
   const measureMarqueeRef = useRef<(() => void) | null>(null);
@@ -289,4 +289,4 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = ({ items, loading }) 
       </AnimatePresence>
     </>
   );
-};
+});

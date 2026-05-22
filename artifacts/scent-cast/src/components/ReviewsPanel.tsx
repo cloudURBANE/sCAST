@@ -196,7 +196,7 @@ export function ReviewsPanel({ name, brand, reviews }: ReviewsPanelProps) {
 
               return (
                 <motion.div
-                  key={index}
+                  key={comment.text}
                   initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: -12 }}
