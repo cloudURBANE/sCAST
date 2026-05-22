@@ -62,7 +62,10 @@ export const ShareModal: React.FC<ShareModalProps> = ({
     fetch('/api/share-settings', {
       headers: { Authorization: `Bearer ${authToken}` },
     })
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
       .then((d) => {
         if (cancelled) return;
         setHideImages(Boolean(d?.hideImages));

@@ -8,17 +8,17 @@ import { getShareIdForUser, resolveShareUser } from "../services/shareUsers";
 
 const router = Router();
 
-async function getOrCreateSettings(userId: string) {
+async function getOrCreateSettings(user: { id: string; tenantId?: string | null }) {
   const rows = await db
     .select()
     .from(userSettingsTable)
-    .where(eq(userSettingsTable.userId, userId))
+    .where(eq(userSettingsTable.userId, user.id))
     .limit(1);
   if (rows[0]) return rows[0];
 
   const [created] = await db
     .insert(userSettingsTable)
-    .values({ userId })
+    .values({ userId: user.id, tenantId: user.tenantId ?? null })
     .onConflictDoNothing({ target: userSettingsTable.userId })
     .returning();
   if (created) return created;
@@ -26,7 +26,7 @@ async function getOrCreateSettings(userId: string) {
   const retry = await db
     .select()
     .from(userSettingsTable)
-    .where(eq(userSettingsTable.userId, userId))
+    .where(eq(userSettingsTable.userId, user.id))
     .limit(1);
   if (retry[0]) return retry[0];
   throw new Error("Failed to create share settings");
@@ -43,7 +43,7 @@ router.get("/share/:userRef", async (req, res) => {
   }
 
   const [settings, fragranceRows] = await Promise.all([
-    getOrCreateSettings(user.id),
+    getOrCreateSettings(user),
     db.select().from(userFragrancesTable).where(eq(userFragrancesTable.userId, user.id)),
   ]);
 
@@ -65,7 +65,7 @@ router.get("/share/:userRef", async (req, res) => {
 
 router.get("/share-settings", requireAuth, async (req: AuthRequest, res) => {
   const user = req.user!;
-  const settings = await getOrCreateSettings(user.id);
+  const settings = await getOrCreateSettings(user);
   const shareId = await getShareIdForUser(user);
   res.json({
     userId: user.id,
@@ -85,10 +85,10 @@ router.post("/share-settings", requireAuth, async (req: AuthRequest, res) => {
 
   await db
     .insert(userSettingsTable)
-    .values({ userId: user.id, shareHideImages: hideImages })
+    .values({ userId: user.id, tenantId: user.tenantId ?? null, shareHideImages: hideImages })
     .onConflictDoUpdate({
       target: userSettingsTable.userId,
-      set: { shareHideImages: hideImages, updatedAt: new Date() },
+      set: { tenantId: user.tenantId ?? null, shareHideImages: hideImages, updatedAt: new Date() },
     });
 
   const shareId = await getShareIdForUser(user);
