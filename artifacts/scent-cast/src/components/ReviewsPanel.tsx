@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
-import { Quote, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import {
   summarizeReviews,
   getCachedReviewSummary,
@@ -15,53 +15,80 @@ interface ReviewsPanelProps {
   reviews: FragranceRawReview[];
 }
 
-function FragrancePanel({
-  title,
-  children,
-  className = "",
-}: {
-  title: string;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <section className={`border border-white/10 bg-white/[0.025] shadow-[inset_0_1px_0_rgba(255,255,255,0.035),inset_0_0_12px_rgba(251,191,36,0.02)] ${className}`}>
-      <div className="border-b border-white/[0.07] px-4 py-3 text-center flex flex-col items-center justify-center gap-1 relative">
-        <p className="text-[10px] uppercase tracking-[0.34em] text-white/70 font-bold pl-3">
-          {title}
-        </p>
-        <p className="text-[14px] text-scent-accent/60 font-serif italic select-none" style={{ fontFamily: "var(--font-script)" }}>
-          what people say
-        </p>
-      </div>
-      {children}
-    </section>
-  );
-}
-
 function getThemeBadge(theme: string) {
   switch (theme) {
     case "performance":
       return (
-        <span className="text-[9px] uppercase tracking-[0.15em] font-medium px-2 py-0.5 rounded border border-amber-500/30 bg-amber-500/5 text-amber-300/80">
+        <span className="inline-flex items-center text-[9px] uppercase tracking-[0.18em] font-semibold px-2.5 py-1 rounded-sm border border-amber-500/25 bg-amber-500/[0.06] text-amber-300/65">
           performance
         </span>
       );
     case "season":
       return (
-        <span className="text-[9px] uppercase tracking-[0.15em] font-medium px-2 py-0.5 rounded border border-sky-500/30 bg-sky-500/5 text-sky-300/80">
+        <span className="inline-flex items-center text-[9px] uppercase tracking-[0.18em] font-semibold px-2.5 py-1 rounded-sm border border-sky-500/25 bg-sky-500/[0.06] text-sky-300/65">
           season
         </span>
       );
     case "vibe":
       return (
-        <span className="text-[9px] uppercase tracking-[0.15em] font-medium px-2 py-0.5 rounded border border-emerald-500/30 bg-emerald-500/5 text-emerald-300/80">
+        <span className="inline-flex items-center text-[9px] uppercase tracking-[0.18em] font-semibold px-2.5 py-1 rounded-sm border border-emerald-500/25 bg-emerald-500/[0.06] text-emerald-300/65">
           vibe
         </span>
       );
     default:
       return null;
   }
+}
+
+const CARD_STAGGER = 0.08;
+const CARD_DELAY_START = 0.05;
+
+function QuoteCard({
+  comment,
+  index,
+  reduced,
+}: {
+  comment: SummarizedComment;
+  index: number;
+  reduced: boolean | null;
+}) {
+  return (
+    <motion.div
+      key={comment.text}
+      initial={reduced ? { opacity: 1 } : { opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={reduced ? { opacity: 0 } : { opacity: 0, y: -10, scale: 0.98 }}
+      transition={{
+        duration: reduced ? 0 : 0.38,
+        ease: [0.22, 1, 0.36, 1],
+        delay: reduced ? 0 : CARD_DELAY_START + index * CARD_STAGGER,
+      }}
+      className="relative flex flex-col justify-between gap-5 overflow-hidden rounded-lg border border-white/[0.065] bg-gradient-to-b from-white/[0.03] to-white/[0.01] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.045),0_4px_18px_rgba(0,0,0,0.45),inset_0_0_40px_rgba(201,139,44,0.015)]"
+    >
+      {/* Decorative background quotation mark */}
+      <span
+        className="pointer-events-none absolute -top-2 left-2 select-none font-serif leading-none text-scent-accent/[0.08]"
+        style={{ fontSize: "7rem", fontFamily: "var(--font-serif)" }}
+        aria-hidden
+      >
+        "
+      </span>
+
+      {/* Ambient corner glow */}
+      <span className="pointer-events-none absolute inset-0 rounded-lg bg-[radial-gradient(ellipse_80%_60%_at_50%_-10%,rgba(201,139,44,0.04),transparent)]" aria-hidden />
+
+      {/* Quote text */}
+      <p className="relative z-10 pt-3 font-serif italic leading-[1.8] text-white/88"
+        style={{ fontSize: "clamp(14px, 1.1vw, 16px)", fontFamily: "var(--font-serif)" }}>
+        "{comment.text}"
+      </p>
+
+      {/* Footer row: theme badge */}
+      <div className="relative z-10 flex items-center justify-end">
+        {getThemeBadge(comment.theme)}
+      </div>
+    </motion.div>
+  );
 }
 
 export function ReviewsPanel({ name, brand, reviews }: ReviewsPanelProps) {
@@ -81,15 +108,13 @@ export function ReviewsPanel({ name, brand, reviews }: ReviewsPanelProps) {
 
   const prefersReducedMotion = useReducedMotion();
 
-  // Resize listener to detect mobile viewport
   useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
-    checkMobile();
-    window.addEventListener("resize", checkMobile);
-    return () => window.removeEventListener("resize", checkMobile);
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
   }, []);
 
-  // Fetch reviews if not cached
   const reviewsKey = useMemo(
     () => reviews.map((r) => r.text).join("|").slice(0, 6000),
     [reviews]
@@ -120,114 +145,96 @@ export function ReviewsPanel({ name, brand, reviews }: ReviewsPanelProps) {
     return () => controller.abort();
   }, [reviewsKey, name, brand, cacheKey]);
 
-  // Hide the entire panel if there's no reviews data and it's not loading
   if (reviews.length === 0) return null;
   if (!loading && comments.length === 0) return null;
 
-  // Render Skeleton state with reserved height
+  // Loading skeleton
   if (loading) {
     return (
-      <FragrancePanel title="Reviews">
-        <div className="flex flex-col justify-center items-center gap-6 px-6 py-8 h-[16rem] animate-pulse">
+      <section className="border border-white/[0.04] bg-gradient-to-b from-white/[0.018] to-transparent shadow-[inset_0_1px_0_rgba(255,255,255,0.025),inset_0_0_60px_rgba(201,139,44,0.018)]">
+        <ReviewsHeader />
+        <div className="flex h-[16rem] flex-col items-center justify-center gap-6 px-6 py-8 animate-pulse">
           <div className="flex items-center gap-2">
-            <RefreshCw size={13} className="animate-spin text-white/45" />
-            <p className="text-[11px] uppercase tracking-[0.2em] text-white/45 font-bold">
-              Distilling reviews...
+            <RefreshCw size={13} className="animate-spin text-white/40" />
+            <p className="text-[11px] uppercase tracking-[0.22em] text-white/40 font-bold">
+              Distilling reviews…
             </p>
           </div>
-          <div className="h-4 bg-white/5 rounded-md w-3/4 max-w-md"></div>
-          <div className="h-4 bg-white/5 rounded-md w-1/2 max-w-sm"></div>
-          <div className="h-4 bg-white/5 rounded-md w-2/3 max-w-md"></div>
+          <div className="h-3 w-3/4 max-w-md rounded bg-white/[0.04]" />
+          <div className="h-3 w-1/2 max-w-sm rounded bg-white/[0.04]" />
+          <div className="h-3 w-2/3 max-w-md rounded bg-white/[0.04]" />
         </div>
-      </FragrancePanel>
+      </section>
     );
   }
 
   const maxInitial = isMobile ? 2 : 3;
   const displayedComments = expanded ? comments : comments.slice(0, maxInitial);
   const hasMore = comments.length > maxInitial;
-  
-  // Decide columns count based on comments length (cap at 3)
   const cols = Math.min(3, comments.length);
 
-  // Trust footer
-  const trustFooter = (
-    <div className="border-t border-white/[0.05] px-4 py-2.5 flex items-center justify-between text-[10px] text-white/40">
-      <span>Summarized from community reviews</span>
-      {reviews.length > 0 && (
-        <span>Based on {reviews.length} reviews</span>
-      )}
-    </div>
-  );
+  const gridClass =
+    cols === 1
+      ? "grid-cols-1 max-w-xl mx-auto"
+      : cols === 2
+        ? "grid-cols-1 md:grid-cols-2"
+        : "grid-cols-1 md:grid-cols-3";
 
   return (
-    <FragrancePanel title="Reviews">
-      <div className="flex flex-col">
-        <motion.div
-          layout="position"
-          className={`grid gap-y-6 gap-x-8 py-8 px-6 ${
-            cols === 1
-              ? "grid-cols-1 max-w-2xl mx-auto"
-              : cols === 2
-                ? "grid-cols-1 md:grid-cols-2"
-                : "grid-cols-1 md:grid-cols-3"
-          }`}
-        >
-          <AnimatePresence initial={false}>
-            {displayedComments.map((comment, index) => {
-              const isFirstMobile = index === 0;
-              const isFirstInRowDesktop = index % cols === 0;
-              
-              let borderClasses = "";
-              if (cols === 2) {
-                borderClasses = `
-                  ${isFirstMobile ? "" : "border-t border-white/[0.05] pt-6 md:border-t-0 md:pt-0"}
-                  ${isFirstInRowDesktop ? "" : "md:border-l md:border-white/[0.05] md:pl-8"}
-                `;
-              } else if (cols === 3) {
-                borderClasses = `
-                  ${isFirstMobile ? "" : "border-t border-white/[0.05] pt-6"}
-                  ${isFirstInRowDesktop ? "md:border-l-0 md:pl-0" : "md:border-l md:border-white/[0.05] md:pl-8"}
-                  ${index >= 3 ? "md:border-t md:border-white/[0.05] md:pt-6" : "md:border-t-0 md:pt-0"}
-                `;
-              } else {
-                borderClasses = isFirstMobile ? "" : "border-t border-white/[0.05] pt-6";
-              }
+    <section className="border border-white/[0.04] bg-gradient-to-b from-white/[0.018] to-transparent shadow-[inset_0_1px_0_rgba(255,255,255,0.025),inset_0_0_60px_rgba(201,139,44,0.018)]">
+      <ReviewsHeader />
 
-              return (
-                <motion.div
-                  key={comment.text}
-                  initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: -12 }}
-                  transition={{ duration: 0.2, ease: "easeOut" }}
-                  className={`flex flex-col items-center justify-center text-center gap-3 px-4 ${borderClasses}`}
-                >
-                  <Quote size={18} className="text-scent-accent/40 shrink-0" />
-                  <p className={`italic leading-[1.75] text-white/90 font-serif ${
-                    cols === 1 ? "text-[18px] max-w-2xl" : "text-[16px] max-w-md"
-                  }`}>
-                    "{comment.text}"
-                  </p>
-                  {getThemeBadge(comment.theme)}
-                </motion.div>
-              );
-            })}
-          </AnimatePresence>
-        </motion.div>
+      {/* Quote grid */}
+      <motion.div layout="position" className={`grid gap-4 p-5 sm:p-6 ${gridClass}`}>
+        <AnimatePresence initial={false}>
+          {displayedComments.map((comment, index) => (
+            <QuoteCard
+              key={comment.text}
+              comment={comment}
+              index={index}
+              reduced={prefersReducedMotion}
+            />
+          ))}
+        </AnimatePresence>
+      </motion.div>
 
-        {hasMore && (
-          <div className="flex justify-center pb-6">
+      {/* Footer */}
+      <div className="border-t border-white/[0.05] px-5 py-2.5 flex items-center justify-between gap-4 text-[10px] text-white/35">
+        <span>Summarized from community reviews</span>
+        <div className="flex items-center gap-4">
+          {hasMore && (
             <button
               onClick={() => setExpanded(!expanded)}
-              className="inline-flex items-center gap-1.5 rounded-md border border-white/15 bg-white/[0.04] px-4 py-2 text-[10px] uppercase tracking-[0.2em] font-bold text-white/70 transition-all hover:border-scent-accent/35 hover:bg-scent-accent/[0.08] hover:text-scent-accent"
+              className="inline-flex items-center gap-1.5 rounded border border-white/12 bg-white/[0.03] px-3 py-1.5 text-[9px] uppercase tracking-[0.22em] font-bold text-white/55 transition-all duration-200 hover:border-scent-accent/30 hover:bg-scent-accent/[0.07] hover:text-scent-accent/80"
             >
-              {expanded ? "Show Less" : `Show All Reviews (${comments.length})`}
+              {expanded ? "Show Less" : `Show All (${comments.length})`}
             </button>
-          </div>
-        )}
+          )}
+          {reviews.length > 0 && <span>Based on {reviews.length} reviews</span>}
+        </div>
       </div>
-      {trustFooter}
-    </FragrancePanel>
+    </section>
+  );
+}
+
+function ReviewsHeader() {
+  return (
+    <div className="border-b border-white/[0.05] px-6 py-4">
+      <div className="flex items-center gap-4">
+        <div className="h-px flex-1 bg-gradient-to-r from-transparent to-white/[0.18]" />
+        <div className="text-center">
+          <p className="text-[9px] uppercase tracking-[0.38em] text-white/55 font-bold">
+            Reviews
+          </p>
+          <p
+            className="mt-0.5 text-[13px] italic text-scent-accent/50"
+            style={{ fontFamily: "var(--font-script)" }}
+          >
+            what people say
+          </p>
+        </div>
+        <div className="h-px flex-1 bg-gradient-to-l from-transparent to-white/[0.18]" />
+      </div>
+    </div>
   );
 }
