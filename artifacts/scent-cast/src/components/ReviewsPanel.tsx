@@ -19,19 +19,19 @@ function getThemeBadge(theme: string) {
   switch (theme) {
     case "performance":
       return (
-        <span className="inline-flex items-center text-[9px] uppercase tracking-[0.18em] font-semibold px-2.5 py-1 rounded-sm border border-amber-500/25 bg-amber-500/[0.06] text-amber-300/65">
+        <span className="text-[9px] font-semibold uppercase tracking-[0.34em] text-scent-accent/70">
           performance
         </span>
       );
     case "season":
       return (
-        <span className="inline-flex items-center text-[9px] uppercase tracking-[0.18em] font-semibold px-2.5 py-1 rounded-sm border border-sky-500/25 bg-sky-500/[0.06] text-sky-300/65">
+        <span className="text-[9px] font-semibold uppercase tracking-[0.34em] text-scent-accent/70">
           season
         </span>
       );
     case "vibe":
       return (
-        <span className="inline-flex items-center text-[9px] uppercase tracking-[0.18em] font-semibold px-2.5 py-1 rounded-sm border border-emerald-500/25 bg-emerald-500/[0.06] text-emerald-300/65">
+        <span className="text-[9px] font-semibold uppercase tracking-[0.34em] text-scent-accent/70">
           vibe
         </span>
       );
@@ -63,28 +63,21 @@ function QuoteCard({
         ease: [0.22, 1, 0.36, 1],
         delay: reduced ? 0 : CARD_DELAY_START + index * CARD_STAGGER,
       }}
-      className="relative flex flex-col justify-between gap-5 overflow-hidden rounded-lg border border-white/[0.065] bg-gradient-to-b from-white/[0.03] to-white/[0.01] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.045),0_4px_18px_rgba(0,0,0,0.45),inset_0_0_40px_rgba(201,139,44,0.015)]"
+      className="relative flex min-h-[13.5rem] flex-col items-center justify-center overflow-hidden rounded-lg border border-white/[0.055] bg-[linear-gradient(180deg,#090705_0%,#050403_58%,#030202_100%)] px-6 py-8 text-center shadow-[inset_0_1px_0_rgba(255,236,200,0.035),0_18px_36px_-30px_rgba(0,0,0,0.98)] sm:px-7"
     >
-      {/* Decorative background quotation mark */}
-      <span
-        className="pointer-events-none absolute -top-2 left-2 select-none font-serif leading-none text-scent-accent/[0.08]"
-        style={{ fontSize: "7rem", fontFamily: "var(--font-serif)" }}
-        aria-hidden
+      <p
+        className="relative z-10 mx-auto max-w-[24rem] font-serif text-[18px] italic leading-[1.62] text-white/90 sm:text-[19px]"
+        style={{ fontFamily: "var(--font-serif)" }}
       >
-        "
-      </span>
-
-      {/* Ambient corner glow */}
-      <span className="pointer-events-none absolute inset-0 rounded-lg bg-[radial-gradient(ellipse_80%_60%_at_50%_-10%,rgba(201,139,44,0.04),transparent)]" aria-hidden />
-
-      {/* Quote text */}
-      <p className="relative z-10 pt-3 font-serif italic leading-[1.8] text-white/88"
-        style={{ fontSize: "clamp(14px, 1.1vw, 16px)", fontFamily: "var(--font-serif)" }}>
         "{comment.text}"
       </p>
 
-      {/* Footer row: theme badge */}
-      <div className="relative z-10 flex items-center justify-end">
+      <span
+        className="relative z-10 mt-5 h-px w-14 bg-gradient-to-r from-transparent via-scent-accent/55 to-transparent"
+        aria-hidden
+      />
+
+      <div className="relative z-10 mt-4 flex items-center justify-center">
         {getThemeBadge(comment.theme)}
       </div>
     </motion.div>
