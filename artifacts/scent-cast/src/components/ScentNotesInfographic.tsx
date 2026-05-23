@@ -89,8 +89,8 @@ function Panel({
 }) {
   return (
     <section className={`flex flex-col border border-white/[0.04] bg-gradient-to-b from-white/[0.018] to-transparent shadow-[inset_0_1px_0_rgba(255,255,255,0.025)] ${className}`}>
-      <div className={`border-b border-white/[0.05] px-4 py-2 text-center ${headerClassName}`}>
-        <p className="text-[10px] uppercase tracking-[0.34em] text-white/70 font-bold">
+      <div className={`border-b border-white/[0.05] px-4 py-3 text-center ${headerClassName}`}>
+        <p className="text-[11px] uppercase tracking-[0.34em] text-white/70 font-bold">
           {title}
         </p>
       </div>

@@ -16,6 +16,7 @@ interface ReviewsPanelProps {
 }
 
 const REVIEW_EASE = [0.22, 1, 0.36, 1] as const;
+const REVIEW_CENTER_OFFSET = "lg:translate-x-5";
 
 function formatReviewPosition(index: number, total: number) {
   const width = Math.max(2, String(total).length);
@@ -33,7 +34,7 @@ function ReviewsShell({ children }: { children: React.ReactNode }) {
 function ReviewsHeader() {
   return (
     <div className="border-b border-white/[0.05] px-4 py-3 text-center">
-      <p className="text-[10px] font-bold uppercase tracking-[0.34em] text-white/70">
+      <p className={`inline-block text-[10px] font-bold uppercase tracking-[0.34em] text-white/70 ${REVIEW_CENTER_OFFSET}`}>
         Reviews
       </p>
     </div>
@@ -169,7 +170,7 @@ export function ReviewsPanel({ name, brand, reviews }: ReviewsPanelProps) {
     return (
       <ReviewsShell>
         <ReviewsHeader />
-        <div className="flex w-full flex-col items-center justify-center gap-4 px-5 py-8 animate-pulse sm:px-8">
+        <div className={`flex w-full flex-col items-center justify-center gap-4 px-5 py-8 animate-pulse sm:px-8 ${REVIEW_CENTER_OFFSET}`}>
           <div className="flex items-center gap-2">
             <RefreshCw size={13} className="animate-spin text-white/40" />
             <p className="text-[11px] uppercase tracking-[0.22em] text-white/40 font-bold">
@@ -210,7 +211,7 @@ export function ReviewsPanel({ name, brand, reviews }: ReviewsPanelProps) {
           className="pointer-events-none absolute inset-x-[14%] bottom-0 h-px bg-gradient-to-r from-transparent via-white/[0.045] to-transparent"
         />
 
-        <div className="grid min-h-[8.5rem] w-full place-items-center sm:min-h-[9rem]" aria-live="polite">
+        <div className={`grid min-h-[8.5rem] w-full place-items-center sm:min-h-[9rem] ${REVIEW_CENTER_OFFSET}`} aria-live="polite">
           <AnimatePresence mode="wait" initial={false}>
             <FeaturedQuote
               key={`${currentIndex}-${currentComment.text}`}
@@ -221,7 +222,7 @@ export function ReviewsPanel({ name, brand, reviews }: ReviewsPanelProps) {
         </div>
 
         {hasMultiple ? (
-          <div className="mt-5 flex w-full flex-col items-center gap-3">
+          <div className={`mt-5 flex w-full flex-col items-center gap-3 ${REVIEW_CENTER_OFFSET}`}>
             <div className="grid grid-cols-[2rem_5.75rem_2rem] items-center justify-center gap-3 text-[10px] font-semibold uppercase tracking-[0.24em] text-[#f5f0e6]/[0.5]">
               <ReviewArrowButton
                 direction="previous"
@@ -262,7 +263,7 @@ export function ReviewsPanel({ name, brand, reviews }: ReviewsPanelProps) {
                   <button
                     type="button"
                     onClick={() => selectReview(index)}
-                    className="group grid w-full grid-cols-[2.5rem_minmax(0,1fr)] items-start gap-3 px-1 py-4 text-left transition-colors hover:bg-white/[0.018] sm:grid-cols-[3.5rem_minmax(0,1fr)] sm:px-3 lg:px-5"
+                    className="group grid w-full grid-cols-[2.5rem_minmax(0,1fr)] items-start gap-3 px-1 py-4 text-left transition-colors hover:bg-white/[0.018] sm:grid-cols-[3.5rem_minmax(0,1fr)] sm:px-3 lg:px-10"
                     aria-current={index === currentIndex ? "true" : undefined}
                   >
                     <span
