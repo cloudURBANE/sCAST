@@ -1,5 +1,7 @@
 import React from 'react';
 import { AnimatePresence, motion, useReducedMotion, type Transition } from 'framer-motion';
+import { type MainAccordDisplayRow } from '@/lib/fragranceApi';
+import { resolveNoteAccordLinks, type NoteAccordLink } from '@/lib/noteAccordLinks';
 
 type ActiveLayer = 'top' | 'heart' | 'base';
 type Point = readonly [number, number];
@@ -8,6 +10,7 @@ type NotePyramidProps = {
   topNotes: string[];
   heartNotes: string[];
   baseNotes: string[];
+  accordRows?: MainAccordDisplayRow[];
   className?: string;
 };
 
@@ -314,6 +317,99 @@ function LayerNotesText({
   );
 }
 
+function MatchedNoteChip({
+  note,
+  link,
+  prefersReducedMotion,
+}: {
+  note: string;
+  link: NoteAccordLink;
+  prefersReducedMotion: boolean;
+}) {
+  const pct = link.displayPct;
+  const glowRadius = Math.round(4 + pct * 0.06);
+  const glowAlpha = ((pct / 100) * 0.52).toFixed(2);
+  const pulseDuration = 2.4 + (1 - pct / 100) * 0.8;
+
+  return (
+    <motion.span
+      title={`${link.row.label} · ${pct}%`}
+      style={
+        prefersReducedMotion
+          ? {
+              background: `linear-gradient(90deg, rgba(252,157,25,0.18) ${pct}%, rgba(252,157,25,0.06) ${pct}%)`,
+            }
+          : undefined
+      }
+      animate={
+        prefersReducedMotion
+          ? undefined
+          : {
+              boxShadow: [
+                `0 0 0px rgba(252,157,25,0)`,
+                `0 0 ${glowRadius}px rgba(252,157,25,${glowAlpha})`,
+                `0 0 0px rgba(252,157,25,0)`,
+              ],
+            }
+      }
+      transition={
+        prefersReducedMotion
+          ? undefined
+          : { duration: pulseDuration, repeat: Infinity, ease: 'easeInOut' }
+      }
+      className="inline-flex items-center gap-1 rounded-full border border-[#fc9d19]/30 bg-[#fc9d19]/10 px-2 py-0.5 text-[10px] font-medium text-[#ffd98a]"
+    >
+      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#fc9d19]" aria-hidden />
+      {note}
+      <span className="tabular-nums text-[9px] text-[#fc9d19]/80">{pct}%</span>
+    </motion.span>
+  );
+}
+
+function LayerNotesList({
+  notes,
+  links,
+  prefersReducedMotion,
+  transition,
+}: {
+  notes: string[];
+  links: Map<string, NoteAccordLink>;
+  prefersReducedMotion: boolean;
+  transition: Transition;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 5 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -3 }}
+      transition={transition}
+      className="flex flex-wrap justify-center gap-1.5 px-2 py-1"
+    >
+      {notes.map((note) => {
+        const link = links.get(note);
+        if (link) {
+          return (
+            <MatchedNoteChip
+              key={note}
+              note={note}
+              link={link}
+              prefersReducedMotion={prefersReducedMotion}
+            />
+          );
+        }
+        return (
+          <span
+            key={note}
+            className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-medium text-white/55"
+          >
+            {note}
+          </span>
+        );
+      })}
+    </motion.div>
+  );
+}
+
 // Particle System Generation
 const DUST_MOTES = Array.from({ length: 14 }).map((_, i) => ({
   id: `mote-${i}`,
@@ -345,6 +441,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
   topNotes,
   heartNotes,
   baseNotes,
+  accordRows,
   className = '',
 }) => {
   const [activeLayer, setActiveLayer] = React.useState<ActiveLayer | null>(null);
@@ -356,6 +453,11 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
   const idPrefix = React.useId().replace(/:/g, '');
   const state = activeLayer ?? 'idle';
   const engagedLayer = hoveredLayer ?? focusedLayer;
+
+  const allLinks = React.useMemo(
+    () => resolveNoteAccordLinks([...topNotes, ...heartNotes, ...baseNotes], accordRows ?? []),
+    [topNotes, heartNotes, baseNotes, accordRows],
+  );
 
   const id = React.useCallback((name: string) => `${idPrefix}-${name}`, [idPrefix]);
   const fill = React.useCallback((name: string) => `url(#${id(name)})`, [id]);
@@ -1264,11 +1366,28 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                   />
                 </motion.div>
 
-                <LayerNotesText
-                  notes={selectedLayer.notes}
-                  prefersReducedMotion={Boolean(prefersReducedMotion)}
-                  transition={prefersReducedMotion ? reducedTransition : { duration: 0.34, delay: 0.12, ease: CALM_EASE }}
-                />
+                {(() => {
+                  const tierNotes = selectedLayer.notes;
+                  const hasLink = tierNotes.some((n) => allLinks.has(n));
+                  const useChips = hasLink || tierNotes.length <= 7;
+                  const noteTransition = prefersReducedMotion
+                    ? reducedTransition
+                    : { duration: 0.34, delay: 0.12, ease: CALM_EASE };
+                  return useChips ? (
+                    <LayerNotesList
+                      notes={tierNotes}
+                      links={allLinks}
+                      prefersReducedMotion={Boolean(prefersReducedMotion)}
+                      transition={noteTransition}
+                    />
+                  ) : (
+                    <LayerNotesText
+                      notes={tierNotes}
+                      prefersReducedMotion={Boolean(prefersReducedMotion)}
+                      transition={noteTransition}
+                    />
+                  );
+                })()}
               </motion.div>
             </motion.div>
           ) : null}

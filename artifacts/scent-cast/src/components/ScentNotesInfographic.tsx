@@ -2,10 +2,12 @@ import React, { useEffect, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import {
   type DerivedMetrics,
+  type MainAccordDisplayRow,
   type NumericScentAxes,
   normalizedAccordBarPct,
   resolveMainAccordChartRows,
 } from '@/lib/fragranceApi';
+import { collectLinkableMainAccordRows } from '@/lib/noteAccordLinks';
 import { NotePyramid } from './NotePyramid';
 
 interface ScentNotesInfographicProps {
@@ -387,9 +389,11 @@ function AccordPanel({
 
 function NotesPanel({
   pyramid,
+  accordRows,
   className = "",
 }: {
   pyramid: DisplayPyramid;
+  accordRows?: MainAccordDisplayRow[];
   className?: string;
 }) {
   return (
@@ -398,6 +402,7 @@ function NotesPanel({
         topNotes={pyramid.top}
         heartNotes={pyramid.heart}
         baseNotes={pyramid.base}
+        accordRows={accordRows}
       />
     </Panel>
   );
@@ -415,6 +420,7 @@ export const ScentNotesInfographic: React.FC<ScentNotesInfographicProps> = ({
     derivedMetrics?.main_accords,
     scentAxesFallback,
   );
+  const noteAccordRows = collectLinkableMainAccordRows(derivedMetrics?.main_accords);
   const hasAccordVisual = accordRows.length > 0;
   const hasPyramid = hasAnyNotes(pyramid);
 
@@ -433,13 +439,13 @@ export const ScentNotesInfographic: React.FC<ScentNotesInfographicProps> = ({
   }
 
   if (variant === "notes") {
-    return <NotesPanel pyramid={pyramid} className={className} />;
+    return <NotesPanel pyramid={pyramid} accordRows={noteAccordRows} className={className} />;
   }
 
   return (
     <div id="scent-notes-infographic" className="space-y-3 sm:space-y-4">
       {accordRows.length > 0 ? <AccordPanel rows={accordRows} /> : null}
-      <NotesPanel pyramid={pyramid} />
+      <NotesPanel pyramid={pyramid} accordRows={noteAccordRows} />
     </div>
   );
 };
