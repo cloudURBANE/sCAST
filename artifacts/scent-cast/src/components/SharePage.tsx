@@ -445,7 +445,7 @@ function ProfileScorePanel({
     icon: typeof CalendarDays;
     label: string;
     cycle: CyclingPart[];
-    value: string | null;
+    value: React.ReactNode;
     sub: string | null;
   };
   const statCards: StatCard[] = [
@@ -472,10 +472,10 @@ function ProfileScorePanel({
     },
     {
       icon: CircleDollarSign,
-      label: "Value",
+      label: "PRICE VALUE",
       cycle: [],
-      value: valueLabel,
-      sub: valueLabel ? "Assessment" : null,
+      value: renderValueSignal(valueLabel),
+      sub: null,
     },
   ];
 
