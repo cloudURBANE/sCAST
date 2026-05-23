@@ -7,6 +7,7 @@ import {
   CalendarDays,
   Activity,
   CircleDollarSign,
+  Info,
   RefreshCw,
   Undo2,
   HelpCircle,
@@ -364,51 +365,30 @@ function FragrancePanel({
 
 type DetailMetaRow = { label: string; value: string };
 
-const AboutFragranceMarquee = React.memo(function AboutFragranceMarquee({
-  summary,
-  rows,
-}: {
-  summary?: string | null;
-  rows: DetailMetaRow[];
-}) {
-  const phrases = React.useMemo(() => {
-    const next: string[] = [];
-    const cleanSummary = summary?.trim();
-    if (cleanSummary) {
-      next.push(cleanSummary.length > 100 ? `${cleanSummary.slice(0, 97)}...` : cleanSummary);
-    }
-    rows.forEach(({ label, value }) => next.push(`${label}  ${value}`));
-    return next;
-  }, [rows, summary]);
-
-  if (phrases.length === 0) return null;
+function DetailMetaStrip({ rows }: { rows: DetailMetaRow[] }) {
+  if (rows.length === 0) return null;
 
   return (
-    <div
-      className="scent-marquee-band -mx-4 -mb-4 flex overflow-hidden py-[10px] select-none"
-      aria-label="About this fragrance"
-    >
-      <div className="scent-marquee-track-row flex animate-infinite-scroll whitespace-nowrap scent-marquee-text">
-        {[0, 1, 2, 3].map((repeatIndex) => (
-          <span
-            key={repeatIndex}
-            className="scent-marquee-phrase-group flex items-center"
-            aria-hidden={repeatIndex > 0}
+    <div className="w-full max-w-4xl border border-white/[0.08] bg-black/22 px-3 py-2 sm:px-4 sm:py-2.5">
+      <div className="flex min-w-0 flex-col divide-y divide-white/[0.08] sm:flex-row sm:divide-x sm:divide-y-0">
+        {rows.map(({ label, value }) => (
+          <div
+            key={label}
+            className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center gap-1 px-2 py-3 text-center sm:min-h-[3.125rem] sm:px-2.5"
           >
-            {phrases.map((phrase, phraseIndex) => (
-              <React.Fragment key={`${phrase}-${phraseIndex}`}>
-                <span className="whitespace-nowrap">{phrase}</span>
-                {phraseIndex < phrases.length - 1 ? (
-                  <span className="scent-marquee-divider shrink-0" aria-hidden="true" />
-                ) : null}
-              </React.Fragment>
-            ))}
-          </span>
+            <p className="text-[8px] font-semibold uppercase tracking-[0.2em] text-white/40">{label}</p>
+            <p
+              className="max-w-full text-balance break-words text-[11px] font-medium leading-snug text-white/[0.82] sm:text-[12px]"
+              title={value}
+            >
+              {value}
+            </p>
+          </div>
         ))}
       </div>
     </div>
   );
-});
+}
 
 function toTitleCase(value: string): string {
   return value.replace(/\b\w/g, (c) => c.toUpperCase());
@@ -1666,13 +1646,6 @@ export const Wardrobe: React.FC<{
                             </div>
                           ) : null}
 
-                          {!bottleImageToolsOpen ? (
-                            <AboutFragranceMarquee
-                              summary={selectedMetrics?.main_accords?.accord_summary}
-                              rows={detailMetaRows}
-                            />
-                          ) : null}
-
                           {bottleImageToolsOpen ? (
                             <div
                               id="wardrobe-bottle-tools-panel"
@@ -2052,6 +2025,20 @@ export const Wardrobe: React.FC<{
                       </FragrancePanel>
                     </div>
                   </div>
+
+                  <FragrancePanel title="About This Fragrance">
+                    <div className="flex flex-col items-center justify-center gap-3 px-4 py-4 text-center">
+                      {selectedMetrics?.main_accords?.accord_summary?.trim() ? (
+                        <>
+                          <Info size={18} className="shrink-0 text-white/55" />
+                          <p className="mx-auto max-w-3xl text-sm leading-relaxed text-white/56">
+                            {selectedMetrics.main_accords.accord_summary.trim()}
+                          </p>
+                        </>
+                      ) : null}
+                      <DetailMetaStrip rows={detailMetaRows} />
+                    </div>
+                  </FragrancePanel>
 
                   <ReviewsPanel
                     name={entryName(selectedItem)}
