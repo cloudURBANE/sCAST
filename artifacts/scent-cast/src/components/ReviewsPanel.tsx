@@ -66,7 +66,7 @@ function QuoteCard({
       className="relative flex min-h-[13.5rem] flex-col items-center justify-center overflow-hidden rounded-lg border border-white/[0.055] bg-[linear-gradient(180deg,#090705_0%,#050403_58%,#030202_100%)] px-6 py-8 text-center shadow-[inset_0_1px_0_rgba(255,236,200,0.035),0_18px_36px_-30px_rgba(0,0,0,0.98)] sm:px-7"
     >
       <p
-        className="relative z-10 mx-auto max-w-[26rem] font-serif text-[20px] italic leading-[1.62] text-white/90 sm:text-[23px]"
+        className="relative z-10 mx-auto w-full max-w-[26rem] text-center font-serif text-[20px] italic leading-[1.62] text-white/90 sm:text-[23px]"
         style={{ fontFamily: "var(--font-serif)" }}
       >
         "{comment.text}"
