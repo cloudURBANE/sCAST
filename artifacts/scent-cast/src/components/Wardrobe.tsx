@@ -457,39 +457,80 @@ function CyclingTilePair({
   );
 }
 
+type PriceSignalTone = "standard" | "accent";
+
+function PriceValueSignal({
+  symbols,
+  label,
+  tone = "standard",
+}: {
+  symbols: string;
+  label: string;
+  tone?: PriceSignalTone;
+}) {
+  const intensity = symbols.length;
+  const baseClass =
+    tone === "accent"
+      ? "inline-flex font-serif italic text-scent-accent font-bold drop-shadow-[0_0_10px_rgba(201,139,44,0.7)] whitespace-nowrap"
+      : "inline-flex font-serif italic text-white/90 whitespace-nowrap";
+  const animate =
+    intensity >= 4
+      ? { y: [0, -2, 1, 0], opacity: [0.82, 1, 0.9, 0.82] }
+      : intensity === 3
+        ? { y: [0, -2, 0], rotate: [0, -4, 0], opacity: [0.88, 1, 0.88] }
+        : intensity === 2
+          ? { y: [0, -1.5, 0], scale: [1, 1.05, 1] }
+          : { y: [0, -2, 0], opacity: [0.9, 1, 0.9] };
+  const duration = intensity >= 4 ? 1.35 : intensity === 3 ? 1.55 : 1.8;
+
+  return (
+    <span className={baseClass} aria-label={label}>
+      {symbols.split("").map((symbol, index) => (
+        <motion.span
+          key={`${symbol}-${index}`}
+          aria-hidden="true"
+          className="inline-block"
+          animate={animate}
+          transition={{
+            duration,
+            delay: index * 0.11,
+            repeat: Infinity,
+            repeatType: "mirror",
+            ease: "easeInOut",
+          }}
+        >
+          {symbol}
+        </motion.span>
+      ))}
+    </span>
+  );
+}
+
 function renderValueSignal(label: string | null | undefined): React.ReactNode {
   if (!label) return null;
   const normalized = label.trim().toLowerCase();
   if (normalized === "way overpriced") {
-    return <span className="font-serif italic text-white/90">$$$$</span>;
+    return <PriceValueSignal symbols="$$$$" label={label} />;
   }
   if (normalized === "overpriced") {
-    return <span className="font-serif italic text-white/90">$$$</span>;
+    return <PriceValueSignal symbols="$$$" label={label} />;
   }
   if (normalized === "okay" || normalized === "ok") {
-    return <span className="font-serif italic text-white/90">$$</span>;
+    return <PriceValueSignal symbols="$$" label={label} />;
   }
   if (normalized === "good value") {
-    return <span className="font-serif italic text-white/90">$</span>;
+    return <PriceValueSignal symbols="$" label={label} />;
   }
   if (normalized === "great value") {
-    return (
-      <span className="font-serif italic text-scent-accent font-bold drop-shadow-[0_0_10px_rgba(201,139,44,0.7)]">
-        $
-      </span>
-    );
+    return <PriceValueSignal symbols="$" label={label} tone="accent" />;
   }
-  if (normalized.includes("way overpriced")) return <span className="font-serif italic text-white/90">$$$$</span>;
-  if (normalized.includes("overpriced")) return <span className="font-serif italic text-white/90">$$$</span>;
-  if (normalized.includes("ok")) return <span className="font-serif italic text-white/90">$$</span>;
+  if (normalized.includes("way overpriced")) return <PriceValueSignal symbols="$$$$" label={label} />;
+  if (normalized.includes("overpriced")) return <PriceValueSignal symbols="$$$" label={label} />;
+  if (normalized.includes("ok")) return <PriceValueSignal symbols="$$" label={label} />;
   if (normalized.includes("great")) {
-    return (
-      <span className="font-serif italic text-scent-accent font-bold drop-shadow-[0_0_10px_rgba(201,139,44,0.7)]">
-        $
-      </span>
-    );
+    return <PriceValueSignal symbols="$" label={label} tone="accent" />;
   }
-  if (normalized.includes("value") || normalized.includes("good")) return <span className="font-serif italic text-white/90">$</span>;
+  if (normalized.includes("value") || normalized.includes("good")) return <PriceValueSignal symbols="$" label={label} />;
 
   return <span className="font-serif italic text-white/90">{label}</span>;
 }
@@ -601,6 +642,7 @@ function ProfileScorePanel({
       sub: null,
     },
   ];
+  const mobileStatCards = statCards.filter((stat) => stat.label !== "Profile Score");
 
   return (
     <>
@@ -668,7 +710,7 @@ function ProfileScorePanel({
 
         <div className="px-4 py-3.5">
           <div className="grid grid-cols-2 gap-1.5">
-            {statCards.map((stat) => {
+            {mobileStatCards.map((stat) => {
               const Icon = stat.icon;
               return (
                 <div
