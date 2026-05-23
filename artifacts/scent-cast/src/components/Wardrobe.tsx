@@ -348,12 +348,12 @@ function FragrancePanel({
   titleSuffix?: React.ReactNode;
 }) {
   return (
-    <section className={`border border-white/10 bg-white/[0.025] shadow-[inset_0_1px_0_rgba(255,255,255,0.035)] ${className}`}>
-      <div className="border-b border-white/[0.07] px-4 py-3 text-center flex items-center justify-center gap-1.5 relative">
-        <p className="text-[10px] uppercase tracking-[0.34em] text-white/70 font-bold pl-3">
+    <section className={`border border-white/[0.04] bg-gradient-to-b from-white/[0.018] to-transparent shadow-[inset_0_1px_0_rgba(255,255,255,0.025)] ${className}`}>
+      <div className="relative flex items-center justify-center border-b border-white/[0.05] px-4 py-3 text-center">
+        <p className="text-[11px] font-bold uppercase tracking-[0.34em] text-white/70">
           {title}
         </p>
-        {titleSuffix}
+        {titleSuffix ? <div className="absolute right-3 top-1/2 -translate-y-1/2">{titleSuffix}</div> : null}
       </div>
       {children}
     </section>
