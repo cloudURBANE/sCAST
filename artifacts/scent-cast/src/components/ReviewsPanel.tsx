@@ -66,7 +66,7 @@ function QuoteCard({
       className="relative flex min-h-[13.5rem] flex-col items-center justify-center overflow-hidden rounded-lg border border-white/[0.055] bg-[linear-gradient(180deg,#090705_0%,#050403_58%,#030202_100%)] px-6 py-8 text-center shadow-[inset_0_1px_0_rgba(255,236,200,0.035),0_18px_36px_-30px_rgba(0,0,0,0.98)] sm:px-7"
     >
       <p
-        className="relative z-10 mx-auto max-w-[24rem] font-serif text-[18px] italic leading-[1.62] text-white/90 sm:text-[19px]"
+        className="relative z-10 mx-auto max-w-[26rem] font-serif text-[20px] italic leading-[1.62] text-white/90 sm:text-[23px]"
         style={{ fontFamily: "var(--font-serif)" }}
       >
         "{comment.text}"
@@ -192,20 +192,16 @@ export function ReviewsPanel({ name, brand, reviews }: ReviewsPanelProps) {
       </motion.div>
 
       {/* Footer */}
-      <div className="border-t border-white/[0.05] px-5 py-2.5 flex items-center justify-between gap-4 text-[10px] text-white/35">
-        <span>Summarized from community reviews</span>
-        <div className="flex items-center gap-4">
-          {hasMore && (
-            <button
-              onClick={() => setExpanded(!expanded)}
-              className="inline-flex items-center gap-1.5 rounded border border-white/12 bg-white/[0.03] px-3 py-1.5 text-[9px] uppercase tracking-[0.22em] font-bold text-white/55 transition-all duration-200 hover:border-scent-accent/30 hover:bg-scent-accent/[0.07] hover:text-scent-accent/80"
-            >
-              {expanded ? "Show Less" : `Show All (${comments.length})`}
-            </button>
-          )}
-          {reviews.length > 0 && <span>Based on {reviews.length} reviews</span>}
+      {hasMore && (
+        <div className="border-t border-white/[0.05] px-5 py-2.5 flex items-center justify-end text-[10px] text-white/35">
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="inline-flex items-center gap-1.5 rounded border border-white/12 bg-white/[0.03] px-3 py-1.5 text-[9px] uppercase tracking-[0.22em] font-bold text-white/55 transition-all duration-200 hover:border-scent-accent/30 hover:bg-scent-accent/[0.07] hover:text-scent-accent/80"
+          >
+            {expanded ? "Show Less" : `Show All (${comments.length})`}
+          </button>
         </div>
-      </div>
+      )}
     </section>
   );
 }
@@ -216,14 +212,8 @@ function ReviewsHeader() {
       <div className="flex items-center gap-4">
         <div className="h-px flex-1 bg-gradient-to-r from-transparent to-white/[0.18]" />
         <div className="text-center">
-          <p className="text-[9px] uppercase tracking-[0.38em] text-white/55 font-bold">
+          <p className="text-[10px] uppercase tracking-[0.34em] text-white/70 font-bold">
             Reviews
-          </p>
-          <p
-            className="mt-0.5 text-[13px] italic text-scent-accent/50"
-            style={{ fontFamily: "var(--font-script)" }}
-          >
-            what people say
           </p>
         </div>
         <div className="h-px flex-1 bg-gradient-to-l from-transparent to-white/[0.18]" />
