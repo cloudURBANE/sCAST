@@ -642,8 +642,6 @@ function ProfileScorePanel({
       sub: null,
     },
   ];
-  const mobileStatCards = statCards.filter((stat) => stat.label !== "Profile Score");
-
   return (
     <>
       {(() => {
@@ -689,28 +687,10 @@ function ProfileScorePanel({
         );
       })()}
 
-      <FragrancePanel title="Profile Score" className="sm:hidden">
-        <div className="relative px-4 pt-4 pb-3 text-center">
-          <div
-            className="pointer-events-none absolute inset-x-8 top-2 h-16 rounded-full bg-scent-accent/[0.07] blur-2xl"
-            aria-hidden
-          />
-          <div className="relative mx-auto flex w-fit items-end justify-center gap-2">
-            <span className="font-serif italic text-5xl leading-none text-scent-accent">
-              {consensusScore ?? "--"}
-            </span>
-            <span className="pb-2 text-lg text-white/72">/100</span>
-          </div>
-          <p className="relative mt-1 text-sm text-scent-accent/90">
-            {headline?.label ?? "Intelligence profile"}
-          </p>
-        </div>
-
-        <div className="mx-4 border-t border-white/[0.07]" aria-hidden />
-
+      <FragrancePanel title="Derived Intelligence" className="sm:hidden">
         <div className="px-4 py-3.5">
           <div className="grid grid-cols-2 gap-1.5">
-            {mobileStatCards.map((stat) => {
+            {statCards.map((stat) => {
               const Icon = stat.icon;
               return (
                 <div
