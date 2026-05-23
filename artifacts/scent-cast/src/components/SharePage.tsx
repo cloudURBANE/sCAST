@@ -359,6 +359,43 @@ function buildLegacyPerformanceParts(
   return parts;
 }
 
+function renderValueSignal(label: string | null | undefined): React.ReactNode {
+  if (!label) return null;
+  const normalized = label.trim().toLowerCase();
+  if (normalized === "way overpriced") {
+    return <span className="font-serif italic text-white/90">$$$$</span>;
+  }
+  if (normalized === "overpriced") {
+    return <span className="font-serif italic text-white/90">$$$</span>;
+  }
+  if (normalized === "okay" || normalized === "ok") {
+    return <span className="font-serif italic text-white/90">$$</span>;
+  }
+  if (normalized === "good value") {
+    return <span className="font-serif italic text-white/90">$</span>;
+  }
+  if (normalized === "great value") {
+    return (
+      <span className="font-serif italic text-scent-accent font-bold drop-shadow-[0_0_10px_rgba(201,139,44,0.7)]">
+        $
+      </span>
+    );
+  }
+  if (normalized.includes("way overpriced")) return <span className="font-serif italic text-white/90">$$$$</span>;
+  if (normalized.includes("overpriced")) return <span className="font-serif italic text-white/90">$$$</span>;
+  if (normalized.includes("ok")) return <span className="font-serif italic text-white/90">$$</span>;
+  if (normalized.includes("great")) {
+    return (
+      <span className="font-serif italic text-scent-accent font-bold drop-shadow-[0_0_10px_rgba(201,139,44,0.7)]">
+        $
+      </span>
+    );
+  }
+  if (normalized.includes("value") || normalized.includes("good")) return <span className="font-serif italic text-white/90">$</span>;
+
+  return <span className="font-serif italic text-white/90">{label}</span>;
+}
+
 function CyclingTilePair({
   parts,
   primaryClass,
