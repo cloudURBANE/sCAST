@@ -60,7 +60,7 @@ function FeaturedQuote({
       className="mx-auto flex w-full max-w-[62rem] flex-col items-center text-center"
     >
       <blockquote
-        className="mx-auto max-w-[58rem] text-center font-serif text-[21px] italic leading-[1.52] tracking-normal text-[#f5f0e6]/[0.88] sm:text-[24px] lg:text-[27px]"
+        className="mx-auto max-w-[54rem] break-words text-center font-serif text-[20px] italic leading-[1.5] tracking-normal text-[#f5f0e6]/[0.88] [overflow-wrap:anywhere] sm:text-[22px] lg:text-[24px]"
         style={{ fontFamily: "var(--font-serif)" }}
       >
         &ldquo;{comment.text}&rdquo;
@@ -94,7 +94,7 @@ function ReviewArrowButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="flex h-9 w-9 items-center justify-center border border-white/[0.075] bg-black/10 text-white/38 transition-colors hover:border-white/15 hover:bg-white/[0.035] hover:text-white/68 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/22 disabled:cursor-default disabled:opacity-25 disabled:hover:border-white/[0.075] disabled:hover:bg-black/10 disabled:hover:text-white/38"
+      className="flex h-8 w-8 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.025] text-white/42 transition-colors hover:border-scent-accent/32 hover:bg-scent-accent/[0.06] hover:text-scent-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/22 disabled:cursor-default disabled:opacity-25 disabled:hover:border-white/[0.08] disabled:hover:bg-white/[0.025] disabled:hover:text-white/42"
       aria-label={label}
       title={label}
     >
@@ -210,7 +210,7 @@ export function ReviewsPanel({ name, brand, reviews }: ReviewsPanelProps) {
           className="pointer-events-none absolute inset-x-[14%] bottom-0 h-px bg-gradient-to-r from-transparent via-white/[0.045] to-transparent"
         />
 
-        <div className="grid min-h-[9rem] w-full place-items-center" aria-live="polite">
+        <div className="grid min-h-[8.5rem] w-full place-items-center sm:min-h-[9rem]" aria-live="polite">
           <AnimatePresence mode="wait" initial={false}>
             <FeaturedQuote
               key={`${currentIndex}-${currentComment.text}`}
@@ -220,32 +220,32 @@ export function ReviewsPanel({ name, brand, reviews }: ReviewsPanelProps) {
           </AnimatePresence>
         </div>
 
-        <div className="mt-5 flex w-full flex-col items-center gap-3">
-          <div className="grid grid-cols-[2.25rem_5.75rem_2.25rem] items-center justify-center gap-3 text-[10px] font-semibold uppercase tracking-[0.24em] text-[#f5f0e6]/[0.5]">
-            <ReviewArrowButton
-              direction="previous"
-              onClick={() => stepReview(-1)}
-              disabled={!hasMultiple}
-            />
-            <span className="text-center tabular-nums">{positionLabel}</span>
-            <ReviewArrowButton
-              direction="next"
-              onClick={() => stepReview(1)}
-              disabled={!hasMultiple}
-            />
-          </div>
+        {hasMultiple ? (
+          <div className="mt-5 flex w-full flex-col items-center gap-3">
+            <div className="grid grid-cols-[2rem_5.75rem_2rem] items-center justify-center gap-3 text-[10px] font-semibold uppercase tracking-[0.24em] text-[#f5f0e6]/[0.5]">
+              <ReviewArrowButton
+                direction="previous"
+                onClick={() => stepReview(-1)}
+                disabled={false}
+              />
+              <span className="text-center tabular-nums">{positionLabel}</span>
+              <ReviewArrowButton
+                direction="next"
+                onClick={() => stepReview(1)}
+                disabled={false}
+              />
+            </div>
 
-          {hasMultiple ? (
             <button
               type="button"
               onClick={() => setExpanded((open) => !open)}
-              className="border border-white/[0.075] bg-black/10 px-3.5 py-2 text-[9px] font-bold uppercase tracking-[0.24em] text-white/42 transition-colors hover:border-white/15 hover:bg-white/[0.035] hover:text-white/68 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/22"
+              className="rounded-full border border-white/[0.08] bg-white/[0.025] px-4 py-2 text-[9px] font-bold uppercase tracking-[0.24em] text-white/44 transition-colors hover:border-scent-accent/32 hover:bg-scent-accent/[0.06] hover:text-scent-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/22"
               aria-expanded={expanded}
             >
               {expanded ? "Close List" : "View All"}
             </button>
-          ) : null}
-        </div>
+          </div>
+        ) : null}
 
         <AnimatePresence initial={false}>
           {expanded ? (
@@ -262,7 +262,7 @@ export function ReviewsPanel({ name, brand, reviews }: ReviewsPanelProps) {
                   <button
                     type="button"
                     onClick={() => selectReview(index)}
-                    className="group grid w-full grid-cols-[2.75rem_minmax(0,1fr)] items-start gap-3 px-1 py-4 text-left transition-colors hover:bg-white/[0.018] sm:grid-cols-[3.5rem_minmax(0,1fr)] sm:px-3"
+                    className="group grid w-full grid-cols-[2.5rem_minmax(0,1fr)] items-start gap-3 px-1 py-4 text-left transition-colors hover:bg-white/[0.018] sm:grid-cols-[3.5rem_minmax(0,1fr)] sm:px-3 lg:px-5"
                     aria-current={index === currentIndex ? "true" : undefined}
                   >
                     <span
@@ -273,7 +273,7 @@ export function ReviewsPanel({ name, brand, reviews }: ReviewsPanelProps) {
                       {String(index + 1).padStart(2, "0")}
                     </span>
                     <span
-                      className={`max-w-[68rem] font-serif text-[17px] italic leading-[1.6] transition-colors ${
+                      className={`block min-w-0 max-w-[68rem] break-words font-serif text-[16px] italic leading-[1.58] transition-colors [overflow-wrap:anywhere] sm:text-[17px] ${
                         index === currentIndex
                           ? "text-[#f5f0e6]/80"
                           : "text-white/52 group-hover:text-white/70"
