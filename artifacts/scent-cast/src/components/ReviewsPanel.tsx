@@ -24,11 +24,7 @@ function formatReviewPosition(index: number, total: number) {
 
 function ReviewsShell({ children }: { children: React.ReactNode }) {
   return (
-    <section className="relative mx-auto mt-4 flex w-full max-w-[700px] flex-col items-center overflow-hidden border border-white/[0.06] bg-[linear-gradient(180deg,rgba(10,8,6,0.76)_0%,rgba(5,4,3,0.92)_62%,rgba(3,2,2,0.98)_100%)] px-4 py-5 text-center shadow-[inset_0_1px_0_rgba(255,236,200,0.04),0_18px_48px_-42px_rgba(0,0,0,0.98)] sm:px-6 sm:py-6">
-      <span
-        className="pointer-events-none absolute inset-x-12 top-0 h-px bg-gradient-to-r from-transparent via-scent-accent/24 to-transparent"
-        aria-hidden
-      />
+    <section className="w-full overflow-hidden border border-white/[0.04] bg-gradient-to-b from-white/[0.018] to-transparent shadow-[inset_0_1px_0_rgba(255,255,255,0.025)]">
       {children}
     </section>
   );
@@ -36,16 +32,10 @@ function ReviewsShell({ children }: { children: React.ReactNode }) {
 
 function ReviewsHeader() {
   return (
-    <div className="mb-4 w-full max-w-[500px]">
-      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4">
-        <div className="h-px bg-gradient-to-r from-transparent to-white/[0.16]" />
-        <div className="text-center">
-          <p className="text-[10px] uppercase tracking-[0.34em] text-white/70 font-bold">
-            Reviews
-          </p>
-        </div>
-        <div className="h-px bg-gradient-to-l from-transparent to-white/[0.16]" />
-      </div>
+    <div className="border-b border-white/[0.05] px-4 py-3 text-center">
+      <p className="text-[10px] font-bold uppercase tracking-[0.34em] text-white/70">
+        Reviews
+      </p>
     </div>
   );
 }
@@ -67,23 +57,49 @@ function FeaturedQuote({
         duration: reduced ? 0 : 0.38,
         ease: REVIEW_EASE,
       }}
-      className="mx-auto flex w-full max-w-[520px] flex-col items-center text-center"
+      className="mx-auto flex w-full max-w-[62rem] flex-col items-center text-center"
     >
       <blockquote
-        className="mx-auto max-w-[31rem] text-center font-serif text-[20px] italic leading-[1.52] tracking-normal text-[#f5f0e6]/[0.88] sm:text-[21px]"
+        className="mx-auto max-w-[58rem] text-center font-serif text-[21px] italic leading-[1.52] tracking-normal text-[#f5f0e6]/[0.88] sm:text-[24px] lg:text-[27px]"
         style={{ fontFamily: "var(--font-serif)" }}
       >
         &ldquo;{comment.text}&rdquo;
       </blockquote>
 
       <span
-        className="mx-auto mt-4 block h-px w-14 bg-gradient-to-r from-transparent via-scent-accent/50 to-transparent"
+        className="mx-auto mt-5 block h-px w-14 bg-gradient-to-r from-transparent via-scent-accent/38 to-transparent"
         aria-hidden
       />
-      <figcaption className="mt-3 text-[9px] font-semibold uppercase tracking-[0.3em] text-[#b47a34]">
+      <figcaption className="mt-3 text-[9px] font-semibold uppercase tracking-[0.3em] text-white/36">
         Featured Impression
       </figcaption>
     </motion.figure>
+  );
+}
+
+function ReviewArrowButton({
+  direction,
+  disabled,
+  onClick,
+}: {
+  direction: "previous" | "next";
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  const Icon = direction === "previous" ? ChevronLeft : ChevronRight;
+  const label = direction === "previous" ? "Previous review" : "Next review";
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="flex h-9 w-9 items-center justify-center border border-white/[0.075] bg-black/10 text-white/38 transition-colors hover:border-white/15 hover:bg-white/[0.035] hover:text-white/68 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/22 disabled:cursor-default disabled:opacity-25 disabled:hover:border-white/[0.075] disabled:hover:bg-black/10 disabled:hover:text-white/38"
+      aria-label={label}
+      title={label}
+    >
+      <Icon size={15} strokeWidth={1.8} />
+    </button>
   );
 }
 
@@ -153,7 +169,7 @@ export function ReviewsPanel({ name, brand, reviews }: ReviewsPanelProps) {
     return (
       <ReviewsShell>
         <ReviewsHeader />
-        <div className="flex w-full max-w-[500px] flex-col items-center justify-center gap-4 px-2 py-4 animate-pulse">
+        <div className="flex w-full flex-col items-center justify-center gap-4 px-5 py-8 animate-pulse sm:px-8">
           <div className="flex items-center gap-2">
             <RefreshCw size={13} className="animate-spin text-white/40" />
             <p className="text-[11px] uppercase tracking-[0.22em] text-white/40 font-bold">
@@ -184,8 +200,17 @@ export function ReviewsPanel({ name, brand, reviews }: ReviewsPanelProps) {
     <ReviewsShell>
       <ReviewsHeader />
 
-      <div className="flex w-full flex-col items-center">
-        <div className="grid min-h-[8rem] w-full place-items-center" aria-live="polite">
+      <div className="relative flex w-full flex-col items-center overflow-hidden px-4 py-6 sm:px-7 sm:py-7 lg:px-10">
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-scent-accent/18 to-transparent"
+        />
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-x-[14%] bottom-0 h-px bg-gradient-to-r from-transparent via-white/[0.045] to-transparent"
+        />
+
+        <div className="grid min-h-[9rem] w-full place-items-center" aria-live="polite">
           <AnimatePresence mode="wait" initial={false}>
             <FeaturedQuote
               key={`${currentIndex}-${currentComment.text}`}
@@ -195,36 +220,26 @@ export function ReviewsPanel({ name, brand, reviews }: ReviewsPanelProps) {
           </AnimatePresence>
         </div>
 
-        <div className="mt-4 flex flex-col items-center gap-2.5">
-          <div className="grid grid-cols-[1.75rem_5.5rem_1.75rem] items-center justify-center gap-2.5 text-[10px] font-semibold uppercase tracking-[0.24em] text-[#f5f0e6]/[0.5]">
-            <button
-              type="button"
+        <div className="mt-5 flex w-full flex-col items-center gap-3">
+          <div className="grid grid-cols-[2.25rem_5.75rem_2.25rem] items-center justify-center gap-3 text-[10px] font-semibold uppercase tracking-[0.24em] text-[#f5f0e6]/[0.5]">
+            <ReviewArrowButton
+              direction="previous"
               onClick={() => stepReview(-1)}
               disabled={!hasMultiple}
-              className="flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-white/[0.02] text-white/45 transition-colors hover:border-scent-accent/35 hover:text-scent-accent disabled:cursor-default disabled:opacity-25 disabled:hover:border-white/10 disabled:hover:text-white/45"
-              aria-label="Previous review"
-              title="Previous review"
-            >
-              <ChevronLeft size={14} strokeWidth={1.8} />
-            </button>
+            />
             <span className="text-center tabular-nums">{positionLabel}</span>
-            <button
-              type="button"
+            <ReviewArrowButton
+              direction="next"
               onClick={() => stepReview(1)}
               disabled={!hasMultiple}
-              className="flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-white/[0.02] text-white/45 transition-colors hover:border-scent-accent/35 hover:text-scent-accent disabled:cursor-default disabled:opacity-25 disabled:hover:border-white/10 disabled:hover:text-white/45"
-              aria-label="Next review"
-              title="Next review"
-            >
-              <ChevronRight size={14} strokeWidth={1.8} />
-            </button>
+            />
           </div>
 
           {hasMultiple ? (
             <button
               type="button"
               onClick={() => setExpanded((open) => !open)}
-              className="border-b border-white/15 px-1 pb-1 text-[9px] font-bold uppercase tracking-[0.26em] text-white/48 transition-colors hover:border-scent-accent/55 hover:text-scent-accent"
+              className="border border-white/[0.075] bg-black/10 px-3.5 py-2 text-[9px] font-bold uppercase tracking-[0.24em] text-white/42 transition-colors hover:border-white/15 hover:bg-white/[0.035] hover:text-white/68 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/22"
               aria-expanded={expanded}
             >
               {expanded ? "Close List" : "View All"}
@@ -240,25 +255,25 @@ export function ReviewsPanel({ name, brand, reviews }: ReviewsPanelProps) {
               animate={{ opacity: 1, y: 0 }}
               exit={reduced ? { opacity: 0 } : { opacity: 0, y: -8 }}
               transition={{ duration: reduced ? 0 : 0.28, ease: REVIEW_EASE }}
-              className="mt-5 w-full max-w-[520px] border-t border-white/[0.055]"
+              className="mt-7 w-full border-t border-white/[0.055]"
             >
               {comments.map((comment, index) => (
                 <li key={`${comment.text}-${index}`} className="border-b border-white/[0.045]">
                   <button
                     type="button"
                     onClick={() => selectReview(index)}
-                    className="group flex w-full flex-col items-center gap-2.5 px-1 py-4 text-center transition-colors hover:bg-white/[0.018]"
+                    className="group grid w-full grid-cols-[2.75rem_minmax(0,1fr)] items-start gap-3 px-1 py-4 text-left transition-colors hover:bg-white/[0.018] sm:grid-cols-[3.5rem_minmax(0,1fr)] sm:px-3"
                     aria-current={index === currentIndex ? "true" : undefined}
                   >
                     <span
-                      className={`text-[9px] font-semibold uppercase tracking-[0.28em] tabular-nums ${
+                      className={`pt-1 text-center text-[9px] font-semibold uppercase tracking-[0.28em] tabular-nums ${
                         index === currentIndex ? "text-scent-accent/80" : "text-white/28"
                       }`}
                     >
                       {String(index + 1).padStart(2, "0")}
                     </span>
                     <span
-                      className={`max-w-[34rem] font-serif text-[17px] italic leading-[1.6] transition-colors ${
+                      className={`max-w-[68rem] font-serif text-[17px] italic leading-[1.6] transition-colors ${
                         index === currentIndex
                           ? "text-[#f5f0e6]/80"
                           : "text-white/52 group-hover:text-white/70"
