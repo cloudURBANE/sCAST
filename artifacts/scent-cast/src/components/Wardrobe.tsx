@@ -7,7 +7,6 @@ import {
   CalendarDays,
   Activity,
   CircleDollarSign,
-  Info,
   RefreshCw,
   Undo2,
   HelpCircle,
@@ -364,31 +363,6 @@ function FragrancePanel({
 
 
 type DetailMetaRow = { label: string; value: string };
-
-function DetailMetaStrip({ rows }: { rows: DetailMetaRow[] }) {
-  if (rows.length === 0) return null;
-
-  return (
-    <div className="w-full max-w-4xl border border-white/[0.08] bg-black/22 px-3 py-2 sm:px-4 sm:py-2.5">
-      <div className="flex min-w-0 flex-col divide-y divide-white/[0.08] sm:flex-row sm:divide-x sm:divide-y-0">
-        {rows.map(({ label, value }) => (
-          <div
-            key={label}
-            className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center gap-1 px-2 py-3 text-center sm:min-h-[3.125rem] sm:px-2.5"
-          >
-            <p className="text-[8px] font-semibold uppercase tracking-[0.2em] text-white/40">{label}</p>
-            <p
-              className="max-w-full text-balance break-words text-[11px] font-medium leading-snug text-white/[0.82] sm:text-[12px]"
-              title={value}
-            >
-              {value}
-            </p>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 function toTitleCase(value: string): string {
   return value.replace(/\b\w/g, (c) => c.toUpperCase());
@@ -1597,8 +1571,8 @@ export const Wardrobe: React.FC<{
                     </div>
 
                     <div className="space-y-3 sm:space-y-4 lg:h-full">
-                      <FragrancePanel 
-                        title="Bottle Visual" 
+                      <FragrancePanel
+                        title="About This Fragrance"
                         className="lg:h-full lg:min-h-[21.25rem]"
                         titleSuffix={
                           <button
@@ -1643,6 +1617,19 @@ export const Wardrobe: React.FC<{
                                 <Maximize2 size={13} strokeWidth={2} />
                                 Enlarge
                               </button>
+                            </div>
+                          ) : null}
+
+                          {!bottleImageToolsOpen && detailMetaRows.length > 0 ? (
+                            <div className="border-t border-white/[0.06] pt-3">
+                              <div className="grid grid-cols-2 gap-px">
+                                {detailMetaRows.map(({ label, value }) => (
+                                  <div key={label} className="flex flex-col items-center gap-1 py-2 text-center">
+                                    <p className="text-[8px] font-semibold uppercase tracking-[0.2em] text-white/35">{label}</p>
+                                    <p className="text-[11px] font-medium leading-snug text-white/72">{value}</p>
+                                  </div>
+                                ))}
+                              </div>
                             </div>
                           ) : null}
 
@@ -2025,20 +2012,6 @@ export const Wardrobe: React.FC<{
                       </FragrancePanel>
                     </div>
                   </div>
-
-                  <FragrancePanel title="About This Fragrance">
-                    <div className="flex flex-col items-center justify-center gap-3 px-4 py-4 text-center">
-                      {selectedMetrics?.main_accords?.accord_summary?.trim() ? (
-                        <>
-                          <Info size={18} className="shrink-0 text-white/55" />
-                          <p className="mx-auto max-w-3xl text-sm leading-relaxed text-white/56">
-                            {selectedMetrics.main_accords.accord_summary.trim()}
-                          </p>
-                        </>
-                      ) : null}
-                      <DetailMetaStrip rows={detailMetaRows} />
-                    </div>
-                  </FragrancePanel>
 
                   <ReviewsPanel
                     name={entryName(selectedItem)}
