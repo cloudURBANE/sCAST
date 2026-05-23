@@ -8,7 +8,6 @@ import {
   Info,
   Maximize2,
   ShoppingBag,
-  ThumbsUp,
   Wind,
   X,
 } from 'lucide-react';
@@ -417,7 +416,6 @@ function ProfileScorePanel({
   const performance = metrics?.performance_score ?? null;
   const value = metrics?.value_score ?? null;
   const consensusScore = scoreNumber(headline?.crowd_consensus_score);
-  const communityScore = scoreNumber(metrics?.community_interest_score?.score);
   const wearProfile = formatWearProfile(metrics?.wear_profile);
 
   if (!metrics || !hasDerivedMetricsContent(metrics)) {
@@ -450,6 +448,13 @@ function ProfileScorePanel({
   };
   const statCards: StatCard[] = [
     {
+      icon: Info,
+      label: "Profile Score",
+      cycle: [],
+      value: consensusScore !== null ? `${consensusScore}/100` : null,
+      sub: headline?.label ?? "Intelligence profile",
+    },
+    {
       icon: CalendarDays,
       label: "Wear Profile",
       cycle: wearParts,
@@ -464,13 +469,6 @@ function ProfileScorePanel({
       sub: perfParts.length > 0 ? "Longevity / Sillage" : null,
     },
     {
-      icon: ThumbsUp,
-      label: "Community",
-      cycle: [],
-      value: communityScore !== null ? `${communityScore}/100` : null,
-      sub: communityScore !== null ? "Interest" : null,
-    },
-    {
       icon: CircleDollarSign,
       label: "Value",
       cycle: [],
@@ -481,17 +479,7 @@ function ProfileScorePanel({
 
   return (
     <div className="space-y-3 sm:space-y-5">
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-[1.15fr_1.3fr_0.9fr_0.9fr_0.9fr] border-y border-white/[0.04]">
-        <div className="col-span-2 sm:col-span-4 lg:col-span-1 flex flex-col items-center justify-center px-4 py-5 border-b lg:border-b-0 lg:border-r border-white/[0.04] text-center">
-          <p className="text-[10px] uppercase tracking-[0.28em] text-white/64 font-bold">Profile Score</p>
-          <div className="mt-1 flex items-end justify-center gap-2">
-            <span className="font-serif italic text-6xl leading-none text-scent-accent">
-              {consensusScore ?? "--"}
-            </span>
-            <span className="pb-2 text-xl text-white/76">/100</span>
-          </div>
-          <p className="mt-1 text-sm text-scent-accent/90">{headline?.label ?? "Intelligence profile"}</p>
-        </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 border-y border-white/[0.04]">
         {statCards.map((stat, idx) => {
           const Icon = stat.icon;
           const borderClass =
