@@ -18,7 +18,7 @@ export interface ParsedFragrance {
   accords: string[];
 }
 
-const CONCENTRATION_PATTERNS: Array<{ pattern: RegExp; value: Concentration }> = [
+export const CONCENTRATION_PATTERNS: Array<{ pattern: RegExp; value: Concentration }> = [
   { pattern: /\b(extrait|extract|pure parfum)\b/i, value: "Extrait" },
   { pattern: /\bparfum\b/i, value: "Parfum" },
   { pattern: /\b(e\.?d\.?p\.?|eau\s+de\s+parfum)\b/i, value: "Eau de Parfum" },

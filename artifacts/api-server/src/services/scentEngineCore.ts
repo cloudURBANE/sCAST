@@ -10,6 +10,7 @@
  */
 
 import type { ParsedFragrance, Concentration } from "./scentParser";
+import { resolveConcentrationFast } from "./concentrationResolver";
 import type {
   ScentVector,
   PerformanceMetrics,
@@ -268,6 +269,13 @@ export async function buildProfileWithDeps(
   } as FragranceData);
 
   if (!parsed) return { error: "Failed to parse fragrance data." };
+
+  if (parsed.concentration === "Unknown") {
+    const fast = resolveConcentrationFast(finalName, finalBrand, finalDescription);
+    if (fast && fast.confidence >= 75) {
+      parsed = { ...parsed, concentration: fast.concentration };
+    }
+  }
 
   if (concentrationOverride) {
     parsed = { ...parsed, concentration: concentrationOverride };
