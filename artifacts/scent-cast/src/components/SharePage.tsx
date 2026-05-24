@@ -9,7 +9,6 @@ import {
   Maximize2,
   ShoppingBag,
   ThumbsUp,
-  Wind,
   X,
 } from 'lucide-react';
 import { BottleImage } from '@/components/BottleImage';
@@ -664,8 +663,13 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
             aria-label="Back to dashboard"
             className="flex items-center gap-2 text-white hover:opacity-85 transition-opacity outline-none focus-visible:ring-2 focus-visible:ring-white/30 rounded-sm"
           >
-            <Wind size={22} strokeWidth={1.25} className="text-scent-accent shrink-0" aria-hidden />
-            <span className="font-serif text-xl sm:text-2xl tracking-[0.14em] uppercase">{APP_BRAND_MARK}</span>
+            <img
+              src="/nav/scentbeam-nav-logo.png"
+              srcSet="/nav/scentbeam-nav-logo.png 1x, /nav/scentbeam-nav-logo@2x.png 2x"
+              alt="ScentBeam"
+              className="h-10 sm:h-12 w-auto"
+              draggable={false}
+            />
           </button>
         </div>
       </nav>
@@ -773,9 +777,14 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
 
             <div className="text-center pt-16 border-t border-white/5">
               <p className="text-[9px] uppercase tracking-[0.4em] text-white/20 font-bold mb-3">Powered by</p>
-              <div className="flex items-center justify-center gap-2 text-white/30">
-                <Wind size={16} strokeWidth={1} />
-                <span className="font-serif italic text-lg tracking-tighter uppercase">{APP_BRAND_MARK}</span>
+              <div className="flex items-center justify-center opacity-30">
+                <img
+                  src="/nav/scentbeam-nav-logo.png"
+                  srcSet="/nav/scentbeam-nav-logo.png 1x, /nav/scentbeam-nav-logo@2x.png 2x"
+                  alt="ScentBeam"
+                  className="h-5 w-auto"
+                  draggable={false}
+                />
               </div>
             </div>
           </div>
@@ -823,8 +832,13 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                   Close
                 </button>
                 <div className="flex items-center gap-3 text-white/92">
-                  <div className="h-3 w-5 border-y border-scent-accent relative before:absolute before:left-1 before:right-1 before:top-1/2 before:h-px before:-translate-y-1/2 before:bg-scent-accent" />
-                  <p className="font-serif text-sm sm:text-xl uppercase tracking-[0.42em]">Scentbeam</p>
+                  <img
+                    src="/nav/scentbeam-nav-logo.png"
+                    srcSet="/nav/scentbeam-nav-logo.png 1x, /nav/scentbeam-nav-logo@2x.png 2x"
+                    alt="ScentBeam"
+                    className="h-5 sm:h-6 w-auto opacity-90"
+                    draggable={false}
+                  />
                 </div>
                 <button
                   onClick={() => {
