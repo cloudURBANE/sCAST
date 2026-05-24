@@ -1288,3 +1288,32 @@ a {
   }
 }
 
+@keyframes brand-gold-shimmer {
+  0% {
+    background-position: 120% 0;
+  }
+  18%, 100% {
+    background-position: -120% 0;
+  }
+}
+
+.scent-brand-gold-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.84) 0%,
+    rgba(255, 255, 255, 0.84) 38%,
+    #efb863 45%,
+    #fde68a 50%,
+    #efb863 55%,
+    rgba(255, 255, 255, 0.84) 62%,
+    rgba(255, 255, 255, 0.84) 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: brand-gold-shimmer 7s ease-in-out infinite;
+  display: inline-block;
+}
+
+
