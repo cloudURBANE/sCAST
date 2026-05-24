@@ -1504,9 +1504,9 @@ export const Wardrobe: React.FC<{
                       onClick={() => openDetail(item)}
                       onMouseEnter={() => prefetchReviews(item)}
                     >
-                      <div className="scent-fragrance-card w-full h-full min-h-[32rem] transition-[transform,border-color,box-shadow] duration-500 motion-reduce:transition-none group-hover:-translate-y-1.5 motion-reduce:group-hover:translate-y-0 relative overflow-hidden flex flex-col">
+                      <div className="scent-fragrance-card w-full h-full min-h-[26rem] transition-[transform,border-color,box-shadow] duration-500 motion-reduce:transition-none group-hover:-translate-y-1.5 motion-reduce:group-hover:translate-y-0 relative overflow-hidden flex flex-col">
                         <div className="scent-card-frame" aria-hidden />
-                        <div className="relative z-[1] flex h-full flex-col items-center px-6 sm:px-8 pt-7 sm:pt-9 pb-6 sm:pb-7">
+                        <div className="relative z-[1] flex h-full flex-col items-center px-6 sm:px-8 pt-5 sm:pt-6 pb-4 sm:pb-5">
                           <p
                             className="scent-card-brand w-full"
                             data-len={brandLengthBucket(entryBrand(item))}
@@ -1514,7 +1514,7 @@ export const Wardrobe: React.FC<{
                           >
                             {entryBrand(item)}
                           </p>
-                          <div className="relative flex-1 w-full mt-4 sm:mt-5 mb-5 sm:mb-6 min-h-0">
+                          <div className="relative flex-1 w-full mt-3 sm:mt-4 mb-3 sm:mb-4 min-h-0">
                             <BottleImage
                               variant="grid"
                               src={item.imageUrl}
