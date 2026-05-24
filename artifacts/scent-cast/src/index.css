@@ -503,10 +503,10 @@ a {
 
 .scent-fragrance-card {
   background:
-    radial-gradient(140% 90% at 50% 0%, rgba(255, 245, 224, 0.045), transparent 62%),
-    linear-gradient(180deg, rgba(8, 7, 6, 0.18) 0%, rgba(5, 4, 3, 0.1) 58%, rgba(2, 2, 1, 0.04) 100%);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+    radial-gradient(140% 90% at 50% 0%, rgba(255, 245, 224, 0.028), transparent 62%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.022) 0%, rgba(255, 255, 255, 0.012) 58%, rgba(255, 255, 255, 0.006) 100%);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: var(--radius-scent);
   box-shadow:

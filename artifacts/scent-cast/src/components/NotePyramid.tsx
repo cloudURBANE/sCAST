@@ -1087,8 +1087,8 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
             const isEmpty = layer.notes.length === 0;
 
             const layerMotion = LAYER_MOTION[state][layer.key];
-            const targetY = layerMotion.y + (isGuided ? -5 : isEngaged && !isActive ? -0.8 : 0);
-            const targetScale = layerMotion.scale + (isGuided ? 0.014 : isEngaged && !isActive ? 0.003 : 0);
+            const targetY = layerMotion.y + (isEngaged && !isActive && !isGuided ? -0.8 : 0);
+            const targetScale = layerMotion.scale + (isEngaged && !isActive && !isGuided ? 0.003 : 0);
             const targetOpacity = isEngaged && !isActive ? Math.min(layerMotion.opacity + 0.08, 1) : layerMotion.opacity;
             const channelPath = linePath(layer.channel.start, layer.channel.end);
             const channelHighlightPath = linePath(
