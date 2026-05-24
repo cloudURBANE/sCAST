@@ -296,7 +296,7 @@ function LayerNotesText({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -3 }}
       transition={transition}
-      className={`scent-note-text-shell ${shouldMarquee ? 'scent-note-text-shell--marquee' : ''}`}
+      className={`scent-note-text-shell text-[9.5px] sm:text-[11px] !leading-normal ${shouldMarquee ? 'scent-note-text-shell--marquee' : ''}`}
     >
       {shouldMarquee && isComplete ? (
         <>
@@ -315,7 +315,7 @@ function LayerNotesText({
           </div>
         </>
       ) : (
-        <p className={`scent-note-copy ${shouldMarquee ? 'scent-note-copy--single-line' : ''}`} aria-label={fullText}>
+        <p className={`scent-note-copy min-h-[1.5rem] sm:min-h-[2.1rem] ${shouldMarquee ? 'scent-note-copy--single-line' : ''}`} aria-label={fullText}>
           {typedText}
           {!isComplete ? <span className="scent-note-type-caret" aria-hidden="true" /> : null}
         </p>
@@ -359,7 +359,7 @@ function MatchedNoteChip({
           ? undefined
           : { duration: pulseDuration, repeat: Infinity, ease: 'easeInOut' }
       }
-      className="inline text-[10px] font-semibold leading-relaxed text-[#ffd98a]"
+      className="inline text-[8.5px] sm:text-[10px] font-semibold leading-relaxed text-[#ffd98a]"
     >
       {note}
     </motion.span>
@@ -383,7 +383,7 @@ function LayerNotesList({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -3 }}
       transition={transition}
-      className="flex flex-wrap justify-center gap-x-2.5 gap-y-1 px-2 py-1"
+      className="flex flex-wrap justify-center gap-x-1.5 gap-y-0.5 px-1 py-0.5 sm:gap-x-2.5 sm:gap-y-1 sm:px-2 sm:py-1"
     >
       {notes.map((note) => {
         const link = links.get(note);
@@ -400,7 +400,7 @@ function LayerNotesList({
         return (
           <span
             key={note}
-            className="inline text-[10px] font-medium leading-relaxed text-white/55"
+            className="inline text-[8.5px] sm:text-[10px] font-medium leading-relaxed text-white/55"
           >
             {note}
           </span>
@@ -447,20 +447,20 @@ function LayerAccordEcho({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -3 }}
       transition={transition}
-      className="mt-1.5 flex w-full flex-col gap-1.5 border-t border-white/[0.055] pt-2 lg:hidden"
+      className="mt-1 flex w-full flex-col gap-1 border-t border-white/[0.055] pt-1.5 lg:hidden"
     >
       {matches.map((link) => {
         const pct = Math.max(12, Math.min(100, link.displayPct));
         return (
           <div
             key={link.row.label}
-            className="grid items-center gap-2 text-left"
-            style={{ gridTemplateColumns: 'minmax(4.75rem, 34%) minmax(0, 1fr)' }}
+            className="grid items-center gap-1.5 text-left"
+            style={{ gridTemplateColumns: 'minmax(4.25rem, 32%) minmax(0, 1fr)' }}
           >
-            <span className="truncate text-[8px] font-semibold uppercase leading-none tracking-[0.18em] text-white/48">
+            <span className="truncate text-[7.5px] font-semibold uppercase leading-none tracking-[0.18em] text-white/48">
               {link.row.label}
             </span>
-            <span className="relative h-[3px] overflow-hidden rounded-full bg-white/[0.08]">
+            <span className="relative h-[2px] sm:h-[3px] overflow-hidden rounded-full bg-white/[0.08]">
               <motion.span
                 className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-[#9f6a1f] via-[#fc9d19] to-[#ffe1a3]"
                 initial={false}
@@ -581,7 +581,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
       faceFills: [fill('base-left'), fill('base-right')],
       polishFill: fill('base-polish'),
       grainFill: fill('grain-deep'),
-      revealClass: 'top-[68%]',
+      revealClass: 'top-[56%] sm:top-[68%]',
       grainOpacity: 0.42,
       polishOpacity: 0.76,
       rimOpacity: 0.78,
@@ -595,7 +595,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
       faceFills: [fill('heart-left'), fill('heart-right')],
       polishFill: fill('heart-polish'),
       grainFill: fill('grain-satin'),
-      revealClass: 'top-[44%]',
+      revealClass: 'top-[36%] sm:top-[44%]',
       grainOpacity: 0.32,
       polishOpacity: 0.72,
       rimOpacity: 0.86,
@@ -609,7 +609,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
       faceFills: [fill('top-left'), fill('top-right')],
       polishFill: fill('top-polish'),
       grainFill: fill('grain-platinum'),
-      revealClass: 'top-[15%]',
+      revealClass: 'top-[10%] sm:top-[15%]',
       grainOpacity: 0.28,
       polishOpacity: 0.82,
       rimOpacity: 0.98,
@@ -1451,7 +1451,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
               animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
               exit={{ opacity: 0, y: -5, scale: 0.99, filter: 'blur(2px)' }}
               transition={prefersReducedMotion ? reducedTransition : { duration: 0.32, ease: CALM_EASE }}
-              className={`pointer-events-none absolute left-1/2 z-50 w-[84%] max-w-[17.5rem] -translate-x-1/2 overflow-hidden rounded-lg border border-white/10 bg-[#060608]/76 px-3 py-3 shadow-[0_10px_30px_-8px_rgba(0,0,0,0.78),inset_0_1px_1px_rgba(255,255,255,0.13),0_0_0_1px_rgba(252,157,25,0.07)] backdrop-blur-xl sm:max-w-[18.5rem] sm:px-3.5 ${selectedLayer.revealClass}`}
+              className={`pointer-events-none absolute left-1/2 z-50 w-[84%] max-w-[15rem] -translate-x-1/2 overflow-hidden rounded-lg border border-white/10 bg-[#060608]/76 px-2 py-2 shadow-[0_10px_30px_-8px_rgba(0,0,0,0.78),inset_0_1px_1px_rgba(255,255,255,0.13),0_0_0_1px_rgba(252,157,25,0.07)] backdrop-blur-xl sm:max-w-[18.5rem] sm:px-3.5 sm:py-3.5 ${selectedLayer.revealClass}`}
             >
               <span
                 aria-hidden
@@ -1461,16 +1461,16 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
               <motion.div
                 animate={prefersReducedMotion ? {} : { y: [0, -1, 0] }}
                 transition={floatTransition}
-                className="relative flex flex-col items-center justify-center space-y-2 text-center"
+                className="relative flex flex-col items-center justify-center space-y-1.5 sm:space-y-2 text-center"
               >
                 <motion.div
-                  initial={{ opacity: 0, y: 4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -3 }}
-                  transition={prefersReducedMotion ? reducedTransition : { duration: 0.6, delay: 0.08, ease: CALM_EASE }}
-                  className="flex w-full flex-col items-center justify-center space-y-1"
+                   initial={{ opacity: 0, y: 4 }}
+                   animate={{ opacity: 1, y: 0 }}
+                   exit={{ opacity: 0, y: -3 }}
+                   transition={prefersReducedMotion ? reducedTransition : { duration: 0.6, delay: 0.08, ease: CALM_EASE }}
+                   className="flex w-full flex-col items-center justify-center space-y-0.5 sm:space-y-1"
                 >
-                  <h3 className="bg-gradient-to-br from-[#fff3d4] via-[#fc9d19] to-[#8c5a1a] bg-clip-text text-[10.5px] font-bold uppercase tracking-[0.38em] text-transparent drop-shadow-[0_2px_10px_rgba(252,157,25,0.4)]">
+                  <h3 className="bg-gradient-to-br from-[#fff3d4] via-[#fc9d19] to-[#8c5a1a] bg-clip-text text-[9.5px] sm:text-[10.5px] font-bold uppercase tracking-[0.38em] text-transparent drop-shadow-[0_2px_10px_rgba(252,157,25,0.4)]">
                     {selectedLayer.title}
                   </h3>
 
@@ -1484,7 +1484,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                         ? reducedTransition
                         : { duration: 0.85, delay: 0.22, ease: CALM_EASE }
                     }
-                    className="block h-px w-12 origin-center rounded-full bg-gradient-to-r from-transparent via-[#ffc766] to-transparent shadow-[0_0_7px_rgba(252,157,25,0.48)]"
+                    className="block h-px w-8 sm:w-12 origin-center rounded-full bg-gradient-to-r from-transparent via-[#ffc766] to-transparent shadow-[0_0_7px_rgba(252,157,25,0.48)]"
                   />
                 </motion.div>
 
