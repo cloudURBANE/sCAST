@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { X } from 'lucide-react';
 import { BottleImage } from '@/components/BottleImage';
@@ -7,13 +7,10 @@ import type { CommunityFragranceEntry } from '@/components/community/communityDa
 interface BottleMarqueeProps {
   items: CommunityFragranceEntry[];
   loading: boolean;
+  isError?: boolean;
 }
 
 const COMMUNITY_TRACK_COPIES = 3;
-const COMMUNITY_SCROLL_PIXELS_PER_SECOND = 6;
-const COMMUNITY_SCROLL_MIN_SECONDS = 140;
-const COMMUNITY_SCROLL_MAX_SECONDS = 320;
-const COMMUNITY_SCROLL_REDUCED_MOTION_SECONDS = 640;
 
 const placeholderItems: CommunityFragranceEntry[] = [...Array(8)].map((_, index) => ({
   id: `placeholder:${index}`,
@@ -33,80 +30,14 @@ function formatNotes(notes: string[] | undefined): string {
   return notes && notes.length > 0 ? notes.join(', ') : 'Notes pending curation';
 }
 
-export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, loading }) => {
-  const trackRef = useRef<HTMLDivElement>(null);
-  const groupRef = useRef<HTMLDivElement>(null);
-  const measureMarqueeRef = useRef<(() => void) | null>(null);
+export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, loading, isError = false }) => {
   const overlayRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const triggerRefs = useRef(new Map<string, HTMLButtonElement>());
   const activeTriggerIdRef = useRef<string | null>(null);
   const [activeItem, setActiveItem] = useState<CommunityFragranceEntry | null>(null);
-  const renderedItems = loading || items.length === 0 ? placeholderItems : items;
-
-  useLayoutEffect(() => {
-    const track = trackRef.current;
-    const group = groupRef.current;
-    if (!track || !group) return;
-    let cancelled = false;
-    let animationFrame = 0;
-
-    const updateDistance = (ready = true) => {
-      if (cancelled) return;
-      const distance = group.getBoundingClientRect().width;
-      if (distance <= 0) return;
-
-      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      const duration = prefersReducedMotion
-        ? COMMUNITY_SCROLL_REDUCED_MOTION_SECONDS
-        : Math.min(
-            COMMUNITY_SCROLL_MAX_SECONDS,
-            Math.max(COMMUNITY_SCROLL_MIN_SECONDS, distance / COMMUNITY_SCROLL_PIXELS_PER_SECOND),
-          );
-
-      track.style.setProperty('--community-marquee-distance', `${distance}px`);
-      track.style.setProperty('--community-marquee-duration', `${duration}s`);
-      if (ready) {
-        track.dataset.marqueeReady = 'true';
-      }
-    };
-    measureMarqueeRef.current = () => updateDistance(track.dataset.marqueeReady === 'true');
-
-    track.dataset.marqueeReady = 'false';
-
-    const startWhenFontsSettle = () => {
-      animationFrame = window.requestAnimationFrame(() => updateDistance(true));
-    };
-
-    if (document.fonts?.ready) {
-      document.fonts.ready.then(startWhenFontsSettle);
-    } else {
-      startWhenFontsSettle();
-    }
-
-    const handleResize = () => updateDistance(track.dataset.marqueeReady === 'true');
-    const resizeObserver = new ResizeObserver(handleResize);
-    resizeObserver.observe(group);
-    window.addEventListener('resize', handleResize);
-
-    return () => {
-      cancelled = true;
-      measureMarqueeRef.current = null;
-      if (animationFrame) window.cancelAnimationFrame(animationFrame);
-      resizeObserver.disconnect();
-      window.removeEventListener('resize', handleResize);
-    };
-  }, []);
-
-  const requestMarqueeMeasure = useCallback(() => {
-    window.requestAnimationFrame(() => {
-      measureMarqueeRef.current?.();
-    });
-  }, []);
-
-  useLayoutEffect(() => {
-    requestMarqueeMeasure();
-  }, [renderedItems, requestMarqueeMeasure]);
+  const renderedItems = loading ? placeholderItems : items;
+  const renderedItemKey = renderedItems.map((item) => item.id).join('|');
 
   const closeOverlay = useCallback(() => {
     const triggerId = activeTriggerIdRef.current;
@@ -158,15 +89,26 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [activeItem, closeOverlay]);
 
+  if (!loading && (isError || items.length === 0)) {
+    return (
+      <section className="scent-community-marquee" aria-label="Community fragrance marquee">
+        <div className="flex items-center justify-center py-14">
+          <p className="text-[11px] uppercase tracking-[0.3em] text-scent-muted/40">
+            {isError ? 'Community unavailable' : 'No community fragrances yet'}
+          </p>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <>
       <section className="scent-community-marquee" aria-label="Community fragrance marquee">
-        <div className="scent-community-marquee-track" ref={trackRef}>
+        <div className="scent-community-marquee-track" key={renderedItemKey}>
           {[...Array(COMMUNITY_TRACK_COPIES)].map((_, copyIndex) => (
             <div
               className="scent-community-marquee-group"
               key={copyIndex}
-              ref={copyIndex === 0 ? groupRef : undefined}
               aria-hidden={copyIndex > 0}
             >
               {renderedItems.map((item) => (
@@ -201,8 +143,6 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
                       className="absolute inset-3"
                       adjustment={item.imageAdjustment}
                       showFrameGuide={false}
-                      onLoad={copyIndex === 0 ? requestMarqueeMeasure : undefined}
-                      onError={copyIndex === 0 ? requestMarqueeMeasure : undefined}
                     />
                     <span className="absolute left-4 top-4 font-mono text-[8px] uppercase tracking-[0.24em] text-scent-accent/75">
                       {item.curator}

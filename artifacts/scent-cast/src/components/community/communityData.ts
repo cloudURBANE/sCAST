@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import type { BottleImageAdjustment } from '@/lib/bottleImageAdjustment';
 import { normalizeApiBaseUrl } from '@/lib/imageProxy';
 
@@ -128,5 +128,7 @@ export function useCommunityFragrances() {
     queryFn: fetchCommunityFragrances,
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false,
+    retry: 1,
+    placeholderData: keepPreviousData,
   });
 }

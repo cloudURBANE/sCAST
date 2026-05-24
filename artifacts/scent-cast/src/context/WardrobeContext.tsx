@@ -428,6 +428,7 @@ interface WardrobeContextType {
 }
 
 const WardrobeContext = createContext<WardrobeContextType | undefined>(undefined);
+const WardrobeShareModalActionsContext = createContext<Pick<WardrobeContextType, 'setIsShareModalOpen'> | undefined>(undefined);
 
 export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { authToken, isAuthModalOpen, setIsAuthModalOpen, guestPromptDismissed, setGuestPromptDismissed } = useAuth();
@@ -1024,10 +1025,16 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     handleExpandArchive,
   ]);
 
+  const shareModalActions = useMemo<Pick<WardrobeContextType, 'setIsShareModalOpen'>>(() => ({
+    setIsShareModalOpen,
+  }), [setIsShareModalOpen]);
+
   return (
-    <WardrobeContext.Provider value={contextValue}>
-      {children}
-    </WardrobeContext.Provider>
+    <WardrobeShareModalActionsContext.Provider value={shareModalActions}>
+      <WardrobeContext.Provider value={contextValue}>
+        {children}
+      </WardrobeContext.Provider>
+    </WardrobeShareModalActionsContext.Provider>
   );
 };
 
@@ -1035,6 +1042,14 @@ export const useWardrobe = () => {
   const context = useContext(WardrobeContext);
   if (!context) {
     throw new Error('useWardrobe must be used within a WardrobeProvider');
+  }
+  return context;
+};
+
+export const useWardrobeShareModalActions = () => {
+  const context = useContext(WardrobeShareModalActionsContext);
+  if (!context) {
+    throw new Error('useWardrobeShareModalActions must be used within a WardrobeProvider');
   }
   return context;
 };
