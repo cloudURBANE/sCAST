@@ -12,7 +12,6 @@ import {
   Wind,
   X,
 } from 'lucide-react';
-import { LavaBackground } from './LavaBackground';
 import { BottleImage } from '@/components/BottleImage';
 import type { BottleImageAdjustment } from '@/lib/bottleImageAdjustment';
 import { APP_BRAND_MARK } from '@/lib/appBrand';
@@ -656,9 +655,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
   }, [userId, toast, retryTrigger]);
 
   return (
-    <div className="min-h-[100svh] bg-black text-white relative overflow-x-hidden">
-      <LavaBackground />
-
+    <div className="min-h-[100svh] relative overflow-x-hidden">
       <nav className="fixed top-0 left-0 right-0 h-16 sm:h-[72px] border-b border-white/5 bg-black/40 backdrop-blur-2xl z-50 px-4 sm:px-8">
         <div className="max-w-[1400px] mx-auto h-full flex items-center justify-center">
           <button

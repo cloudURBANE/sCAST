@@ -1,7 +1,6 @@
 import React, { useEffect } from 'react';
 import { Wind } from 'lucide-react';
 import { AppTopNav } from '@/components/AppTopNav';
-import { LavaBackground } from '@/components/LavaBackground';
 import { APP_BRAND_MARK } from '@/lib/appBrand';
 import { CommunityHero } from '@/components/community/CommunityHero';
 import { BottleMarquee } from '@/components/community/BottleMarquee';
@@ -27,8 +26,7 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({ authToken, onSignI
   }, []);
 
   return (
-    <div className="scent-app-shell min-h-[100svh] bg-scent-bg selection:bg-scent-accent selection:text-black text-white relative overflow-x-hidden">
-      <LavaBackground />
+    <div className="min-h-[100svh] relative overflow-x-hidden">
       <AppTopNav
         authToken={authToken}
         onSignIn={onSignIn}
@@ -49,7 +47,7 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({ authToken, onSignI
             <span className="h-px flex-1 bg-gradient-to-r from-scent-accent/10 via-scent-accent/30 to-transparent" aria-hidden="true" />
           </div>
           <div className="scent-full-bleed">
-            <BottleMarquee items={data ?? []} loading={isLoading} />
+            <BottleMarquee items={data ?? []} loading={isLoading} isError={isError} />
           </div>
           <FeaturedCaseGrid
             items={data ?? []}

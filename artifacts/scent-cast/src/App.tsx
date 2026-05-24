@@ -15,10 +15,9 @@ import { APP_BRAND_MARK } from './lib/appBrand';
 import type { ScentFamily, ScentWeatherRecommendation } from './lib/scentWeatherEngine';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { WeatherProvider, useWeather } from './context/WeatherContext';
-import { WardrobeProvider, useWardrobe } from './context/WardrobeContext';
+import { WardrobeProvider, useWardrobe, useWardrobeShareModalActions } from './context/WardrobeContext';
 import { Toaster } from './components/ui/toaster';
-
-const CommunityPage = React.lazy(() => import('@/pages/community'));
+import CommunityPage from '@/pages/community';
 
 const titleCaseToken = (value: string): string =>
   value
@@ -294,8 +293,7 @@ function DashboardView() {
   const tickerTrackKey = tickerPhrases.join('|');
 
   return (
-    <div className="scent-app-shell min-h-[100svh] bg-scent-bg selection:bg-scent-accent selection:text-black text-white relative overflow-x-hidden">
-      <LavaBackground />
+    <div className="min-h-[100svh] relative overflow-x-hidden">
       <AppTopNav
         authToken={authToken}
         onSignIn={() => setIsAuthModalOpen(true)}
@@ -513,39 +511,14 @@ function DashboardView() {
 
 function CommunityPageView() {
   const { authToken, handleSignOut, setIsAuthModalOpen } = useAuth();
-  const { setIsShareModalOpen } = useWardrobe();
+  const { setIsShareModalOpen } = useWardrobeShareModalActions();
   return (
-    <React.Suspense
-      fallback={
-        <div className="min-h-[100svh] bg-scent-bg flex flex-col items-center justify-center relative overflow-hidden">
-          <LavaBackground />
-          <div className="relative z-10 flex flex-col items-center gap-4 text-center">
-            <motion.div
-              animate={{ rotate: 360 }}
-              transition={{ repeat: Infinity, duration: 3, ease: "linear" }}
-              className="text-scent-accent"
-            >
-              <Wind size={40} />
-            </motion.div>
-            <div className="space-y-1">
-              <h1 className="font-serif font-bold italic tracking-tighter uppercase text-xl text-[#fff7ec]">
-                {APP_BRAND_MARK}
-              </h1>
-              <p className="text-xs uppercase tracking-[0.25em] text-scent-muted">
-                Loading Community Vaults...
-              </p>
-            </div>
-          </div>
-        </div>
-      }
-    >
-      <CommunityPage
-        authToken={authToken}
-        onSignIn={() => setIsAuthModalOpen(true)}
-        onShare={() => setIsShareModalOpen(true)}
-        onSignOut={handleSignOut}
-      />
-    </React.Suspense>
+    <CommunityPage
+      authToken={authToken}
+      onSignIn={() => setIsAuthModalOpen(true)}
+      onShare={() => setIsShareModalOpen(true)}
+      onSignOut={handleSignOut}
+    />
   );
 }
 
@@ -554,7 +527,7 @@ function SharePageView() {
   return <SharePage userId={userId || ''} />;
 }
 
-function AppContent() {
+function GlobalModals() {
   const {
     authToken,
     isAuthModalOpen,
@@ -602,13 +575,21 @@ function AppContent() {
 
   return (
     <>
+      {authModal}
+      {shareModal}
+    </>
+  );
+}
+
+function AppContent() {
+  return (
+    <>
       <Routes>
         <Route path="/" element={<DashboardView />} />
         <Route path="/community" element={<CommunityPageView />} />
         <Route path="/share/:userId" element={<SharePageView />} />
       </Routes>
-      {authModal}
-      {shareModal}
+      <GlobalModals />
     </>
   );
 }
@@ -618,8 +599,11 @@ export default function App() {
     <AuthProvider>
       <WeatherProvider>
         <WardrobeProvider>
-          <AppContent />
-          <Toaster />
+          <div className="scent-app-shell min-h-[100svh] bg-scent-bg selection:bg-scent-accent selection:text-black text-white relative overflow-x-hidden">
+            <LavaBackground />
+            <AppContent />
+            <Toaster />
+          </div>
         </WardrobeProvider>
       </WeatherProvider>
     </AuthProvider>

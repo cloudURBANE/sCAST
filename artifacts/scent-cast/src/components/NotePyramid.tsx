@@ -80,6 +80,13 @@ const TYPEWRITER_FRAME_MS = 24;
 const NOTE_MARQUEE_MIN_CHARS = 58;
 const NOTE_MARQUEE_MIN_COUNT = 5;
 const NO_ACTIVE_NOTES: string[] = [];
+const TOUCH_GUIDE_INTERVAL_MS = 2600;
+const TOUCH_GUIDE_LAYERS: ActiveLayer[] = ['top', 'heart', 'base'];
+const LAYER_CENTER_Y: Record<ActiveLayer, number> = {
+  top: 82,
+  heart: 200,
+  base: 319,
+};
 
 const PYRAMID_OUTER = {
   apex: [PYRAMID_CENTER_X, 25] as Point,
@@ -238,6 +245,34 @@ function useTypedNoteText(text: string, instant: boolean) {
   }, [instant, text]);
 
   return { typedText, isComplete };
+}
+
+function useTouchLayerGuide(paused: boolean) {
+  const [isTouchLike, setIsTouchLike] = React.useState(false);
+  const [guideIndex, setGuideIndex] = React.useState(0);
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+
+    const query = window.matchMedia('(hover: none), (pointer: coarse)');
+    const update = () => setIsTouchLike(query.matches);
+    update();
+
+    query.addEventListener?.('change', update);
+    return () => query.removeEventListener?.('change', update);
+  }, []);
+
+  React.useEffect(() => {
+    if (!isTouchLike || paused) return;
+
+    const interval = window.setInterval(() => {
+      setGuideIndex((current) => (current + 1) % TOUCH_GUIDE_LAYERS.length);
+    }, TOUCH_GUIDE_INTERVAL_MS);
+
+    return () => window.clearInterval(interval);
+  }, [isTouchLike, paused]);
+
+  return isTouchLike && !paused ? TOUCH_GUIDE_LAYERS[guideIndex] : null;
 }
 
 function LayerNotesText({
@@ -405,6 +440,89 @@ function LayerNotesList({
   );
 }
 
+function LayerAccordEcho({
+  notes,
+  links,
+  prefersReducedMotion,
+  transition,
+}: {
+  notes: string[];
+  links: Map<string, NoteAccordLink>;
+  prefersReducedMotion: boolean;
+  transition: Transition;
+}) {
+  const matches = React.useMemo(() => {
+    const seen = new Set<string>();
+    const out: NoteAccordLink[] = [];
+
+    for (const note of notes) {
+      const link = links.get(note);
+      if (!link) continue;
+
+      const key = link.row.label.toLowerCase();
+      if (seen.has(key)) continue;
+
+      seen.add(key);
+      out.push(link);
+    }
+
+    return out.sort((a, b) => b.displayPct - a.displayPct).slice(0, 3);
+  }, [links, notes]);
+
+  if (matches.length === 0) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 5 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -3 }}
+      transition={transition}
+      className="mt-1.5 flex w-full flex-col gap-1.5 border-t border-white/[0.055] pt-2 lg:hidden"
+    >
+      {matches.map((link) => {
+        const pct = Math.max(12, Math.min(100, link.displayPct));
+        return (
+          <div
+            key={link.row.label}
+            className="grid items-center gap-2 text-left"
+            style={{ gridTemplateColumns: 'minmax(4.75rem, 34%) minmax(0, 1fr)' }}
+          >
+            <span className="truncate text-[8px] font-semibold uppercase leading-none tracking-[0.18em] text-white/48">
+              {link.row.label}
+            </span>
+            <span className="relative h-[3px] overflow-hidden rounded-full bg-white/[0.08]">
+              <motion.span
+                className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-[#9f6a1f] via-[#fc9d19] to-[#ffe1a3]"
+                initial={false}
+                animate={{
+                  width: `${pct}%`,
+                  opacity: prefersReducedMotion ? 0.78 : [0.72, 1, 0.72],
+                  boxShadow: prefersReducedMotion
+                    ? '0 0 8px rgba(252,157,25,0.28)'
+                    : [
+                        '0 0 8px rgba(252,157,25,0.24)',
+                        '0 0 18px rgba(252,157,25,0.56)',
+                        '0 0 8px rgba(252,157,25,0.24)',
+                      ],
+                }}
+                transition={
+                  prefersReducedMotion
+                    ? { duration: 0.2 }
+                    : {
+                        width: { duration: 0.56, ease: CALM_EASE },
+                        opacity: { duration: 1.45, repeat: Infinity, ease: 'easeInOut' },
+                        boxShadow: { duration: 1.45, repeat: Infinity, ease: 'easeInOut' },
+                      }
+                }
+              />
+            </span>
+          </div>
+        );
+      })}
+    </motion.div>
+  );
+}
+
 // Particle System Generation
 const DUST_MOTES = Array.from({ length: 14 }).map((_, i) => ({
   id: `mote-${i}`,
@@ -445,10 +563,12 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
   const [focusedLayer, setFocusedLayer] = React.useState<ActiveLayer | null>(null);
   const rootRef = React.useRef<HTMLElement | null>(null);
   const pointerActivationRef = React.useRef<PointerActivation | null>(null);
+  const ignoreClickActivationRef = React.useRef(false);
   const prefersReducedMotion = useReducedMotion();
+  const guidedLayer = useTouchLayerGuide(Boolean(prefersReducedMotion || activeLayer || hoveredLayer || focusedLayer));
   const idPrefix = React.useId().replace(/:/g, '');
   const state = activeLayer ?? 'idle';
-  const engagedLayer = hoveredLayer ?? focusedLayer;
+  const engagedLayer = hoveredLayer ?? focusedLayer ?? guidedLayer;
 
   const allLinks = React.useMemo(
     () => resolveNoteAccordLinks([...topNotes, ...heartNotes, ...baseNotes], accordRows ?? []),
@@ -558,14 +678,23 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
       y: event.clientY,
     };
 
-    event.currentTarget.setPointerCapture(event.pointerId);
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // Some mobile WebKit builds expose pointer events on SVG but reject capture.
+      // The click fallback below keeps tap activation reliable there.
+    }
   }, []);
 
   const handleLayerPointerUp = React.useCallback((event: React.PointerEvent<SVGGElement>, layer: ActiveLayer) => {
     event.stopPropagation();
 
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
+      try {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      } catch {
+        // Ignore SVG pointer-capture release differences across mobile browsers.
+      }
     }
 
     const activation = pointerActivationRef.current;
@@ -575,6 +704,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
     const moved = Math.hypot(event.clientX - activation.x, event.clientY - activation.y);
     if (moved > TAP_MOVE_TOLERANCE_PX) return;
 
+    ignoreClickActivationRef.current = true;
     handleLayerActivate(layer);
   }, [handleLayerActivate]);
 
@@ -583,7 +713,11 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
     pointerActivationRef.current = null;
 
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
+      try {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      } catch {
+        // Ignore SVG pointer-capture release differences across mobile browsers.
+      }
     }
   }, []);
 
@@ -596,6 +730,17 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
     },
     [handleLayerActivate],
   );
+
+  const handleLayerClick = React.useCallback((event: React.MouseEvent<SVGGElement>, layer: ActiveLayer) => {
+    event.stopPropagation();
+
+    if (ignoreClickActivationRef.current) {
+      ignoreClickActivationRef.current = false;
+      return;
+    }
+
+    handleLayerActivate(layer);
+  }, [handleLayerActivate]);
 
   const layerOffsets = LAYER_MOTION[state];
 
@@ -966,13 +1111,14 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
 
           {layers.map((layer) => {
             const isActive = activeLayer === layer.key;
+            const isGuided = guidedLayer === layer.key && !activeLayer && !hoveredLayer && !focusedLayer;
             const isEngaged = engagedLayer === layer.key;
             const isMuted = activeLayer !== null && !isActive;
             const isEmpty = layer.notes.length === 0;
 
             const layerMotion = LAYER_MOTION[state][layer.key];
-            const targetY = layerMotion.y + (isEngaged && !isActive ? -0.8 : 0);
-            const targetScale = layerMotion.scale + (isEngaged && !isActive ? 0.003 : 0);
+            const targetY = layerMotion.y + (isGuided ? -5 : isEngaged && !isActive ? -0.8 : 0);
+            const targetScale = layerMotion.scale + (isGuided ? 0.014 : isEngaged && !isActive ? 0.003 : 0);
             const targetOpacity = isEngaged && !isActive ? Math.min(layerMotion.opacity + 0.08, 1) : layerMotion.opacity;
             const channelPath = linePath(layer.channel.start, layer.channel.end);
             const channelHighlightPath = linePath(
@@ -1006,8 +1152,8 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                     : { ...layerTransition, filter: { duration: 0.44, ease: CALM_EASE }, opacity: { duration: 0.46, ease: CALM_EASE } }
                 }
                 style={{
-                  transformBox: 'fill-box',
-                  transformOrigin: 'center',
+                  transformBox: 'view-box',
+                  transformOrigin: `${PYRAMID_CENTER_X}px ${LAYER_CENTER_Y[layer.key]}px`,
                   WebkitTapHighlightColor: 'transparent',
                   touchAction: 'manipulation',
                   willChange: activeLayer !== null || isEngaged ? 'transform, opacity, filter' : 'auto',
@@ -1026,7 +1172,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                 onPointerUp={isEmpty ? undefined : (event) => handleLayerPointerUp(event, layer.key)}
                 onPointerCancel={isEmpty ? undefined : handleLayerPointerCancel}
                 onLostPointerCapture={isEmpty ? undefined : handleLayerPointerCancel}
-                onClick={(event) => event.stopPropagation()}
+                onClick={isEmpty ? (event) => event.stopPropagation() : (event) => handleLayerClick(event, layer.key)}
                 onKeyDown={isEmpty ? undefined : (event) => handleLayerKeyDown(event, layer.key)}
               >
                 <path
@@ -1107,7 +1253,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                   animate={
                     prefersReducedMotion
                       ? { opacity: isActive ? 0.4 : 0 }
-                      : { opacity: isActive ? [0.28, 0.42, 0.28] : isEngaged ? [0.12, 0.22, 0.12] : 0 }
+                      : { opacity: isActive ? [0.28, 0.42, 0.28] : isGuided ? [0.18, 0.34, 0.18] : isEngaged ? [0.12, 0.22, 0.12] : 0 }
                   }
                   transition={pulseTransition}
                 />
@@ -1165,6 +1311,8 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                       : {
                           opacity: isActive
                             ? [0.28, 0.42, 0.28]
+                            : isGuided
+                              ? [0.14, 0.28, 0.14]
                             : isEngaged
                               ? [0.12, 0.22, 0.12]
                               : 0,
@@ -1384,18 +1532,34 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                     ? reducedTransition
                     : { duration: 0.34, delay: 0.12, ease: CALM_EASE };
                   return useChips ? (
-                    <LayerNotesList
-                      notes={tierNotes}
-                      links={allLinks}
-                      prefersReducedMotion={Boolean(prefersReducedMotion)}
-                      transition={noteTransition}
-                    />
+                    <>
+                      <LayerNotesList
+                        notes={tierNotes}
+                        links={allLinks}
+                        prefersReducedMotion={Boolean(prefersReducedMotion)}
+                        transition={noteTransition}
+                      />
+                      <LayerAccordEcho
+                        notes={tierNotes}
+                        links={allLinks}
+                        prefersReducedMotion={Boolean(prefersReducedMotion)}
+                        transition={noteTransition}
+                      />
+                    </>
                   ) : (
-                    <LayerNotesText
-                      notes={tierNotes}
-                      prefersReducedMotion={Boolean(prefersReducedMotion)}
-                      transition={noteTransition}
-                    />
+                    <>
+                      <LayerNotesText
+                        notes={tierNotes}
+                        prefersReducedMotion={Boolean(prefersReducedMotion)}
+                        transition={noteTransition}
+                      />
+                      <LayerAccordEcho
+                        notes={tierNotes}
+                        links={allLinks}
+                        prefersReducedMotion={Boolean(prefersReducedMotion)}
+                        transition={noteTransition}
+                      />
+                    </>
                   );
                 })()}
               </motion.div>
