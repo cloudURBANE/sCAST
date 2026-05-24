@@ -6,6 +6,11 @@ const EMBLEM = '/icons/transparent-emblem/scentbeam-emblem-192x192.png';
 const GOLD = 'rgba(212, 175, 55,';
 const SHOW_MS = 1180;
 
+const ROUTE_LABELS: Record<string, string> = {
+  '/': 'Wardrobe',
+  '/community': 'Community',
+};
+
 let emblemWarmPromise: Promise<void> | null = null;
 
 function warmTransitionEmblem() {
@@ -161,6 +166,7 @@ export const PageTransitionOverlay: React.FC = () => {
                 scale: [0.65, 1.0, 1.06, 1.0],
                 rotate: [0, 360],
               }}
+              exit={{ opacity: 0, scale: 0.88, transition: { duration: 0.28, ease: [0.4, 0, 1, 1] } }}
               transition={{
                 opacity: { duration: 0.36, ease: 'easeOut' },
                 scale: {
@@ -206,6 +212,29 @@ export const PageTransitionOverlay: React.FC = () => {
             >
               SCENTBEAM
             </motion.p>
+
+            {ROUTE_LABELS[location.pathname] && (
+              <motion.p
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 0.35, y: 0 }}
+                transition={{ delay: 0.42, duration: 0.32, ease: 'easeOut' }}
+                style={{
+                  fontSize: 9,
+                  letterSpacing: '0.22em',
+                  textTransform: 'uppercase',
+                  color: '#fff7ec',
+                  fontFamily: 'Georgia, "Times New Roman", serif',
+                  fontStyle: 'normal',
+                  fontWeight: 400,
+                  whiteSpace: 'nowrap',
+                  userSelect: 'none',
+                  margin: 0,
+                  padding: 0,
+                }}
+              >
+                {ROUTE_LABELS[location.pathname]}
+              </motion.p>
+            )}
           </div>
         </motion.div>
       )}

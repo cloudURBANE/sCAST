@@ -1290,13 +1290,13 @@ a {
 
 @keyframes brand-gold-shimmer {
   0% {
-    background-position: 150% 0;
+    background-position: 100% 0;
   }
-  25% {
-    background-position: -50% 0;
+  30% {
+    background-position: -100% 0;
   }
   100% {
-    background-position: -50% 0;
+    background-position: -100% 0;
   }
 }
 
@@ -1304,20 +1304,21 @@ a {
   background: linear-gradient(
     120deg,
     rgba(255, 255, 255, 0.84) 0%,
-    rgba(255, 255, 255, 0.84) 40%,
-    #efb863 46%,
-    #fde68a 50%,
-    #efb863 54%,
-    rgba(255, 255, 255, 0.84) 60%,
+    rgba(255, 255, 255, 0.84) 15%,
+    #efb863 22%,
+    #fde68a 25%,
+    #efb863 28%,
+    rgba(255, 255, 255, 0.84) 35%,
     rgba(255, 255, 255, 0.84) 100%
   );
-  background-size: 300% 100%;
+  background-size: 200% 100%;
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
   animation: brand-gold-shimmer 8s cubic-bezier(0.25, 1, 0.5, 1) infinite;
+  will-change: background-position;
   display: inline;
 }
 
