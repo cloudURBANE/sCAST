@@ -211,6 +211,7 @@ router.get("/auth/google/callback", async (req, res) => {
       sub: string;
       email: string;
       email_verified: boolean;
+      picture?: string;
     };
 
     if (!googleUser.email || !googleUser.sub) {
@@ -246,6 +247,9 @@ router.get("/auth/google/callback", async (req, res) => {
       oauth_token: user.token,
       oauth_email: user.email,
     });
+    if (googleUser.picture) {
+      params.set("oauth_picture", googleUser.picture);
+    }
 
     res.redirect(`/?${params}`);
   } catch (err) {

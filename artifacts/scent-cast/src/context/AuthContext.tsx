@@ -3,16 +3,18 @@ import React, { createContext, useCallback, useContext, useMemo, useState } from
 const STORAGE_KEYS = {
   TOKEN: 'scent_token',
   EMAIL: 'scent_email',
+  PICTURE: 'scent_picture',
 } as const;
 
 interface AuthContextType {
   authToken: string | null;
   authEmail: string | null;
+  authPictureUrl: string | null;
   isAuthModalOpen: boolean;
   guestPromptDismissed: boolean;
   setIsAuthModalOpen: (open: boolean) => void;
   setGuestPromptDismissed: (dismissed: boolean) => void;
-  handleAuth: (token: string, email: string) => void;
+  handleAuth: (token: string, email: string, pictureUrl?: string | null) => void;
   handleSignOut: () => void;
 }
 
@@ -23,9 +25,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const params = new URLSearchParams(window.location.search);
     const oauthToken = params.get('oauth_token');
     const oauthEmail = params.get('oauth_email');
+    const oauthPicture = params.get('oauth_picture');
     if (oauthToken && oauthEmail) {
       localStorage.setItem(STORAGE_KEYS.TOKEN, oauthToken);
       localStorage.setItem(STORAGE_KEYS.EMAIL, oauthEmail);
+      if (oauthPicture) {
+        localStorage.setItem(STORAGE_KEYS.PICTURE, oauthPicture);
+      } else {
+        localStorage.removeItem(STORAGE_KEYS.PICTURE);
+      }
       window.history.replaceState({}, '', window.location.pathname);
       return oauthToken;
     }
@@ -41,14 +49,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return localStorage.getItem(STORAGE_KEYS.EMAIL);
   });
 
+  const [authPictureUrl, setAuthPictureUrl] = useState<string | null>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const oauthPicture = params.get('oauth_picture');
+    if (oauthPicture) {
+      return oauthPicture;
+    }
+    return localStorage.getItem(STORAGE_KEYS.PICTURE);
+  });
+
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [guestPromptDismissed, setGuestPromptDismissed] = useState(false);
 
-  const handleAuth = useCallback((token: string, email: string) => {
+  const handleAuth = useCallback((token: string, email: string, pictureUrl?: string | null) => {
     localStorage.setItem(STORAGE_KEYS.TOKEN, token);
     localStorage.setItem(STORAGE_KEYS.EMAIL, email);
+    if (pictureUrl) {
+      localStorage.setItem(STORAGE_KEYS.PICTURE, pictureUrl);
+    } else {
+      localStorage.removeItem(STORAGE_KEYS.PICTURE);
+    }
     setAuthToken(token);
     setAuthEmail(email);
+    setAuthPictureUrl(pictureUrl ?? null);
     setIsAuthModalOpen(false);
     setGuestPromptDismissed(false);
   }, []);
@@ -56,13 +79,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const handleSignOut = useCallback(() => {
     localStorage.removeItem(STORAGE_KEYS.TOKEN);
     localStorage.removeItem(STORAGE_KEYS.EMAIL);
+    localStorage.removeItem(STORAGE_KEYS.PICTURE);
     setAuthToken(null);
     setAuthEmail(null);
+    setAuthPictureUrl(null);
   }, []);
 
   const contextValue = useMemo<AuthContextType>(() => ({
     authToken,
     authEmail,
+    authPictureUrl,
     isAuthModalOpen,
     guestPromptDismissed,
     setIsAuthModalOpen,
@@ -72,6 +98,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }), [
     authToken,
     authEmail,
+    authPictureUrl,
     isAuthModalOpen,
     guestPromptDismissed,
     handleAuth,

@@ -210,7 +210,7 @@ const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({ weather, weath
 });
 
 function DashboardView() {
-  const { authToken, handleSignOut, setIsAuthModalOpen } = useAuth();
+  const { authToken, authEmail, authPictureUrl, handleSignOut, setIsAuthModalOpen } = useAuth();
   const { weather, weatherLoading } = useWeather();
   const {
     items,
@@ -300,6 +300,8 @@ function DashboardView() {
     <div className="min-h-[100svh] relative overflow-x-hidden">
       <AppTopNav
         authToken={authToken}
+        authEmail={authEmail}
+        authPictureUrl={authPictureUrl}
         onSignIn={() => setIsAuthModalOpen(true)}
         onShare={() => setIsShareModalOpen(true)}
         onSignOut={handleSignOut}
@@ -519,11 +521,13 @@ function DashboardView() {
 }
 
 function CommunityPageView() {
-  const { authToken, handleSignOut, setIsAuthModalOpen } = useAuth();
+  const { authToken, authEmail, authPictureUrl, handleSignOut, setIsAuthModalOpen } = useAuth();
   const { setIsShareModalOpen } = useWardrobeShareModalActions();
   return (
     <CommunityPage
       authToken={authToken}
+      authEmail={authEmail}
+      authPictureUrl={authPictureUrl}
       onSignIn={() => setIsAuthModalOpen(true)}
       onShare={() => setIsShareModalOpen(true)}
       onSignOut={handleSignOut}

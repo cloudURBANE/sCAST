@@ -9,12 +9,21 @@ import { useCommunityFragrances } from '@/components/community/communityData';
 
 interface CommunityPageProps {
   authToken: string | null;
+  authEmail?: string | null;
+  authPictureUrl?: string | null;
   onSignIn: () => void;
   onShare: () => void;
   onSignOut: () => void;
 }
 
-export const CommunityPage: React.FC<CommunityPageProps> = ({ authToken, onSignIn, onShare, onSignOut }) => {
+export const CommunityPage: React.FC<CommunityPageProps> = ({
+  authToken,
+  authEmail,
+  authPictureUrl,
+  onSignIn,
+  onShare,
+  onSignOut,
+}) => {
   const { data, isLoading, isError, error, refetch } = useCommunityFragrances();
 
   useEffect(() => {
@@ -29,6 +38,8 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({ authToken, onSignI
     <div className="min-h-[100svh] relative overflow-x-hidden">
       <AppTopNav
         authToken={authToken}
+        authEmail={authEmail}
+        authPictureUrl={authPictureUrl}
         onSignIn={onSignIn}
         onShare={onShare}
         onSignOut={onSignOut}
