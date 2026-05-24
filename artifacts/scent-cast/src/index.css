@@ -6,6 +6,8 @@
   --color-scent-surface: #0a0704;
   --color-scent-border: #3b250c;
   --color-scent-accent: #c98b2c;
+  --color-scent-gold-100: #fef3c7;
+  --color-scent-gold-200: #fde68a;
   --color-scent-muted: #b7a690;
 
   --font-serif: "Cormorant Garamond", Georgia, serif;
@@ -23,12 +25,12 @@
   background-color: var(--color-scent-bg);
   color: var(--color-scent-accent);
   color-scheme: dark;
-  --scent-amber-rgb: 201 139 44;
+  --scent-gold-rgb: 201 139 44;
   --scent-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --scent-ease-snappy: cubic-bezier(0.34, 1.56, 0.64, 1);
   --scent-transition-fast: 180ms;
   --scent-transition-base: 240ms;
-  --scent-card-shadow: 0 26px 68px -40px rgb(var(--scent-amber-rgb) / 0.5), 0 18px 42px -22px rgba(0, 0, 0, 0.96);
+  --scent-card-shadow: 0 26px 68px -40px rgb(var(--scent-gold-rgb) / 0.5), 0 18px 42px -22px rgba(0, 0, 0, 0.96);
   --scent-card-glow: inset 0 1px 0 rgba(255, 226, 176, 0.1), inset 0 0 72px rgba(201, 139, 44, 0.028);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -498,7 +500,7 @@ a {
     inset 4px 5px 10px -4px rgba(0, 0, 0, 0.55),
     inset 0 3px 9px rgba(0, 0, 0, 0.5),
     inset 0 -3px 11px rgba(0, 0, 0, 0.4),
-    /* faint amber rim atmosphere */
+    /* faint gold rim atmosphere */
     inset 0 0 26px rgba(201, 139, 44, 0.06);
   transition:
     border-color var(--scent-transition-base) var(--scent-ease-out),
@@ -523,7 +525,7 @@ a {
     /* top-right: cool secondary, smaller — chromatic cool shift */
     radial-gradient(circle 4px at calc(100% - 1px) 1px, rgba(232, 240, 255, 0.78), transparent 100%),
     radial-gradient(ellipse 18px 8px at 100% 0%, rgba(210, 226, 255, 0.28), transparent 75%),
-    /* bottom-left: warm amber dispersion */
+    /* bottom-left: warm gold dispersion */
     radial-gradient(circle 4px at 1px calc(100% - 1px), rgba(255, 226, 180, 0.58), transparent 100%),
     radial-gradient(ellipse 16px 7px at 0% 100%, rgba(255, 200, 140, 0.22), transparent 75%),
     /* bottom-right: dim warm spark */

@@ -11,6 +11,11 @@ import {
   CURRENT_VAULT_SCHEMA_VERSION,
   stampVaultSchemaVersion,
 } from "./fragrancePayloadCore";
+import { db } from "@workspace/db";
+import { globalFragrancesTable, imageCacheTable } from "@workspace/db/schema";
+import { and, desc, eq, inArray } from "drizzle-orm";
+import { makeLookupKey } from "./catalogService";
+import { IMAGE_PIPELINE_VERSION } from "./imageIdentity";
 
 export {
   chooseHydratedImageUrl,
@@ -132,4 +137,83 @@ export async function hydrateImageUrl(fragrance: Record<string, any>): Promise<R
     /* non-fatal */
   }
   return { ...fragrance, imageUrl: chooseHydratedImageUrl(null, current) };
+}
+
+/**
+ * Batch version of hydrateImageUrl for loading a full wardrobe list.
+ * Replaces N×2 individual DB queries (one image_cache + one global_fragrances
+ * lookup per item) with 2 bulk queries across all items, then maps results back.
+ */
+export async function batchHydrateImageUrls(
+  fragrances: Record<string, any>[],
+): Promise<Record<string, any>[]> {
+  if (fragrances.length === 0) return [];
+
+  const indexToKey: (string | null)[] = fragrances.map((f) => {
+    const name = f.name as string | undefined;
+    const brand = f.brand as string | undefined;
+    return name && brand ? makeLookupKey(brand, name) : null;
+  });
+
+  const uniqueKeys = [...new Set(indexToKey.filter((k): k is string => k !== null))];
+
+  if (uniqueKeys.length === 0) {
+    return Promise.all(fragrances.map(hydrateImageUrl));
+  }
+
+  // Batch fetch from image_cache and global_fragrances in parallel
+  const [imageCacheRows, catalogRows] = await Promise.all([
+    db
+      .select({
+        lookupKey: imageCacheTable.lookupKey,
+        publicUrl: imageCacheTable.publicUrl,
+        backgroundRemoved: imageCacheTable.backgroundRemoved,
+      })
+      .from(imageCacheTable)
+      .where(
+        and(
+          inArray(imageCacheTable.lookupKey, uniqueKeys),
+          eq(imageCacheTable.pipelineVersion, IMAGE_PIPELINE_VERSION),
+          eq(imageCacheTable.processingStatus, "ready"),
+        ),
+      )
+      .orderBy(
+        desc(imageCacheTable.backgroundRemoved),
+        desc(imageCacheTable.lastUsedAt),
+        desc(imageCacheTable.createdAt),
+      ),
+    db
+      .select({
+        lookupKey: globalFragrancesTable.lookupKey,
+        profileData: globalFragrancesTable.profileData,
+      })
+      .from(globalFragrancesTable)
+      .where(inArray(globalFragrancesTable.lookupKey, uniqueKeys)),
+  ]);
+
+  // Pick the first usable URL per lookup key from image_cache (rows are pre-sorted)
+  const imageCacheMap = new Map<string, string>();
+  for (const row of imageCacheRows) {
+    if (!row.lookupKey || imageCacheMap.has(row.lookupKey)) continue;
+    const url = await usableImageUrlForResponse(row.publicUrl);
+    if (url) imageCacheMap.set(row.lookupKey, url);
+  }
+
+  // Pick catalog image URL as secondary fallback
+  const catalogMap = new Map<string, string>();
+  for (const row of catalogRows) {
+    if (!row.lookupKey) continue;
+    const profile = row.profileData as Record<string, unknown> | null;
+    const url = await usableImageUrlForResponse(profile?.imageUrl);
+    if (url) catalogMap.set(row.lookupKey, url);
+  }
+
+  return Promise.all(
+    fragrances.map(async (f, i) => {
+      const key = indexToKey[i];
+      const current = await usableImageUrlForResponse(f.imageUrl);
+      const resolved = key ? (imageCacheMap.get(key) ?? catalogMap.get(key) ?? null) : null;
+      return { ...f, imageUrl: chooseHydratedImageUrl(resolved, current) };
+    }),
+  );
 }

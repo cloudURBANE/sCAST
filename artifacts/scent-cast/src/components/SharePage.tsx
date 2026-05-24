@@ -709,7 +709,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                 </div>
               </div>
               {data.hideImages ? (
-                <p className="text-[10px] uppercase tracking-[0.3em] text-amber-200/65 font-bold">
+                <p className="text-[10px] uppercase tracking-[0.3em] text-scent-gold-200/65 font-bold">
                   Owner currently hides bottle images on public view
                 </p>
               ) : null}

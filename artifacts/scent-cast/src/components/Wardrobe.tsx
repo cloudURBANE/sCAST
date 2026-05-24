@@ -1289,7 +1289,7 @@ export const Wardrobe: React.FC<{
                   </div>
                 ) : null}
                 {fixWardrobeBusy ? (
-                  <p className="text-[11px] text-amber-100/70 font-sans text-center leading-snug max-w-xl px-2">
+                  <p className="text-[11px] text-scent-gold-100/70 font-sans text-center leading-snug max-w-xl px-2">
                     Rebuilding wardrobe…
                   </p>
                 ) : null}
@@ -2008,12 +2008,12 @@ export const Wardrobe: React.FC<{
                                 {hasPendingPreview && (
                                   <div className="flex flex-col gap-2 pt-2 border-t border-white/8">
                                     {!onPersistWardrobeImage ? (
-                                      <p className="text-[9px] text-amber-200/75 text-center font-sans leading-snug px-1">
+                                      <p className="text-[9px] text-scent-gold-200/75 text-center font-sans leading-snug px-1">
                                         Sign in to save this preview to your vault.
                                       </p>
                                     ) : null}
                                     {pendingPreview?.isFallback ? (
-                                      <p className="text-[9px] text-amber-200/85 text-center font-sans leading-snug px-1">
+                                      <p className="text-[9px] text-scent-gold-200/85 text-center font-sans leading-snug px-1">
                                         This preview still has a fallback background. Try another image fix before saving.
                                       </p>
                                     ) : null}

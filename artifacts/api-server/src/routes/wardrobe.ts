@@ -13,6 +13,7 @@ import { makeLookupKey } from "../services/catalogService";
 import { rebuildWardrobeForUser } from "../services/wardrobeRebuild";
 import { logger } from "../lib/logger";
 import {
+  batchHydrateImageUrls,
   hydrateImageUrl,
   normalizeFragrance,
   normalizeImageAdjustment,
@@ -45,13 +46,9 @@ router.get("/wardrobe", requireAuth, async (req: AuthRequest, res) => {
     .from(userFragrancesTable)
     .where(eq(userFragrancesTable.userId, user.id));
 
-  const fragrances = await Promise.all(
-    rows.map(async (r) => {
-      const data = normalizeFragrance(r.fragranceData as Record<string, any>);
-      const hydrated = await hydrateImageUrl(data);
-      return { ...hydrated, _dbId: r.id };
-    })
-  );
+  const normalized = rows.map((r) => normalizeFragrance(r.fragranceData as Record<string, any>));
+  const hydrated = await batchHydrateImageUrls(normalized);
+  const fragrances = hydrated.map((data, i) => ({ ...data, _dbId: rows[i]!.id }));
 
   res.json(fragrances);
 });
