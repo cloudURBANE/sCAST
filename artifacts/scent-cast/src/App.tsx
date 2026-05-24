@@ -599,7 +599,6 @@ function AppContent() {
         <Route path="/share/:userId" element={<SharePageView />} />
       </Routes>
       <GlobalModals />
-      <PageTransitionOverlay />
     </>
   );
 }
@@ -614,6 +613,7 @@ export default function App() {
             <AppContent />
             <Toaster />
           </div>
+          <PageTransitionOverlay />
         </WardrobeProvider>
       </WeatherProvider>
     </AuthProvider>
