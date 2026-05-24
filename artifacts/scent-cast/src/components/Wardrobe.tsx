@@ -424,7 +424,7 @@ function PriceValueSignal({
   const intensity = symbols.length;
   const baseClass =
     tone === "accent"
-      ? "inline-flex font-serif italic text-scent-accent font-bold drop-shadow-[0_0_10px_rgba(201,139,44,0.7)] whitespace-nowrap"
+      ? "inline-flex font-serif italic text-scent-accent font-bold drop-shadow-[0_0_10px_rgba(212,175,55,0.7)] whitespace-nowrap"
       : "inline-flex font-serif italic text-white/90 whitespace-nowrap";
   const animate =
     intensity >= 4

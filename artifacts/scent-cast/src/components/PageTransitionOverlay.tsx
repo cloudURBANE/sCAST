@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 
 const EMBLEM = '/icons/transparent-emblem/scentbeam-emblem-192x192.png';
-const GOLD = 'rgba(201, 139, 44,';
+const GOLD = 'rgba(212, 175, 55,';
 const SHOW_MS = 1180;
 
 let emblemWarmPromise: Promise<void> | null = null;
