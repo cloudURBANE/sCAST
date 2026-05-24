@@ -14,6 +14,7 @@ import {
   collectMainAccordDisplayRows,
   getFragranceDetails,
   isBackgroundEnrichmentQueued,
+  isSourceCoverageComplete,
   normalizeFragranceDetail,
   type FragranceDetail,
   type FragranceDetailRequestPayload,
@@ -124,10 +125,19 @@ function fgMetricsComplete(item: Fragrance): boolean {
   );
 }
 
+function sourceCoverageComplete(item: Fragrance): boolean {
+  return (
+    isSourceCoverageComplete(item.source_coverage) ||
+    isSourceCoverageComplete(item.raw_engine_detail?.source_coverage)
+  );
+}
+
 function wardrobeNeedsEnrichmentRefresh(item: Fragrance): boolean {
   const enrichment = item.enrichment ?? item.raw_engine_detail?.enrichment;
+  if (fgMetricsComplete(item) || sourceCoverageComplete(item)) return false;
   if (isBackgroundEnrichmentQueued(enrichment)) return true;
   const status = normalizedEnrichmentStatus(item);
+  if (status === 'completed' || status === 'complete' || status === 'not_needed') return false;
   if (status === 'failed' || status === 'ignored') return false;
   if ((enrichment?.requested_count ?? 0) >= MAX_ENRICHMENT_ATTEMPTS) return false;
   return hasFragranticaRefreshTarget(item) && !fgMetricsComplete(item);

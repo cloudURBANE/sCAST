@@ -10,7 +10,7 @@
  */
 
 import type { ParsedFragrance, Concentration } from "./scentParser";
-import { resolveConcentrationFast } from "./concentrationResolver";
+import { resolveConcentrationFast } from "./concentrationResolver.ts";
 import type {
   ScentVector,
   PerformanceMetrics,

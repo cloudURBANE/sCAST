@@ -868,8 +868,8 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                       >
                         {entryName(selectedItem)}
                       </h2>
-                      <p className="font-serif text-lg sm:text-2xl uppercase tracking-[0.28em] scent-brand-gold-shimmer">
-                        {entryBrand(selectedItem)}
+                      <p className="font-serif text-lg sm:text-2xl uppercase tracking-[0.28em] text-white/84">
+                        <span className="scent-brand-gold-shimmer">{entryBrand(selectedItem)}</span>
                       </p>
                     </div>
                   </header>

@@ -1,5 +1,5 @@
-import type { Concentration } from "./scentParser";
-import { CONCENTRATION_PATTERNS } from "./scentParser";
+import type { Concentration } from "./scentParser.ts";
+import { CONCENTRATION_PATTERNS } from "./scentParser.ts";
 
 // Top-confidence entries mirrored from search_engine/concentration_grabber.py BRAND_PRIORS
 const BRAND_PRIORS: Record<string, Concentration> = {

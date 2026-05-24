@@ -9,12 +9,41 @@ const SHARED_STYLE: React.CSSProperties = {
   perspective: '1000px',
 };
 
-function getInitialPosition(thread: ThreadLine): number {
-  const { axis, direction, wrap } = thread;
-  if (axis === 'x') {
-    return direction === 1 ? -wrap : window.innerWidth;
+const MIN_RANDOM_PERCENT = 8;
+const MAX_RANDOM_PERCENT = 92;
+const MIN_SPEED_FACTOR = 0.75;
+const MAX_SPEED_FACTOR = 1.35;
+const MAX_START_DELAY = 2200;
+
+function randomBetween(min: number, max: number): number {
+  return min + Math.random() * (max - min);
+}
+
+function randomizeThreadLane(el: HTMLElement, thread: ThreadLine): void {
+  const offset = `${randomBetween(MIN_RANDOM_PERCENT, MAX_RANDOM_PERCENT).toFixed(2)}%`;
+
+  if (thread.axis === 'x') {
+    el.style.top = offset;
+    el.style.bottom = '';
+    return;
   }
-  return direction === 1 ? -wrap : window.innerHeight;
+
+  if (thread.left != null) {
+    el.style.left = offset;
+    el.style.right = '';
+  } else {
+    el.style.right = offset;
+    el.style.left = '';
+  }
+}
+
+function getTravelLimit(thread: ThreadLine): number {
+  return thread.axis === 'x' ? window.innerWidth : window.innerHeight;
+}
+
+function getInitialPosition(thread: ThreadLine): number {
+  const limit = getTravelLimit(thread);
+  return randomBetween(-thread.wrap, limit + thread.wrap);
 }
 
 function computeTransform(thread: ThreadLine, position: number): string {
@@ -31,7 +60,7 @@ function computeOpacity(thread: ThreadLine, position: number): number {
   const { axis, direction, fade } = thread;
   if (fade == null) return 1;
 
-  const limit = axis === 'x' ? window.innerWidth : window.innerHeight;
+  const limit = getTravelLimit(thread);
 
   if (direction === 1) {
     if (position < fade) return Math.max(0, position / fade);
@@ -45,17 +74,17 @@ function computeOpacity(thread: ThreadLine, position: number): number {
 }
 
 function shouldWrap(thread: ThreadLine, position: number): boolean {
-  const { axis, direction, wrap } = thread;
-  const limit = axis === 'x' ? window.innerWidth : window.innerHeight;
+  const { direction, wrap } = thread;
+  const limit = getTravelLimit(thread);
 
   if (direction === 1) return position > limit + wrap;
   return position < -wrap;
 }
 
 function resetPosition(thread: ThreadLine): number {
-  const { axis, direction, wrap } = thread;
-  if (direction === 1) return -wrap;
-  return axis === 'x' ? window.innerWidth : window.innerHeight;
+  const { direction, wrap } = thread;
+  if (direction === 1) return randomBetween(-wrap * 3, -wrap);
+  return getTravelLimit(thread) + randomBetween(wrap, wrap * 3);
 }
 
 function startThreadAnimation(
@@ -63,14 +92,25 @@ function startThreadAnimation(
   thread: ThreadLine,
   activeRef: React.MutableRefObject<boolean>,
 ): () => void {
+  randomizeThreadLane(el, thread);
+
   let position = getInitialPosition(thread);
+  let speed = thread.speed * randomBetween(MIN_SPEED_FACTOR, MAX_SPEED_FACTOR);
+
+  el.style.transform = computeTransform(thread, position);
+
+  if (thread.fade != null) {
+    el.style.opacity = String(computeOpacity(thread, position));
+  }
 
   const tick = () => {
     if (!activeRef.current) return;
 
-    position += thread.speed * thread.direction;
+    position += speed * thread.direction;
 
     if (shouldWrap(thread, position)) {
+      randomizeThreadLane(el, thread);
+      speed = thread.speed * randomBetween(MIN_SPEED_FACTOR, MAX_SPEED_FACTOR);
       position = resetPosition(thread);
     }
 
@@ -106,11 +146,12 @@ export const ThreadBackground: React.FC = React.memo(() => {
       if (!thread) return;
 
       const tick = startThreadAnimation(el, thread, activeRef);
+      const delay = randomBetween(0, MAX_START_DELAY);
 
-      if (thread.delay === 0) {
+      if (delay < 16) {
         requestAnimationFrame(tick);
       } else {
-        timeouts.push(setTimeout(() => requestAnimationFrame(tick), thread.delay));
+        timeouts.push(setTimeout(() => requestAnimationFrame(tick), delay));
       }
     });
 
