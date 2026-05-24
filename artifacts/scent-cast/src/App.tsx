@@ -307,7 +307,7 @@ function DashboardView() {
         onSignOut={handleSignOut}
       />
 
-      <div className="pt-16 sm:pt-[72px]" />
+      <div style={{ height: 'var(--topbar-h)' }} />
 
       <main className="relative z-10 pb-24 px-4 sm:px-8 max-w-[1760px] mx-auto">
         <div className="space-y-20 sm:space-y-28 pt-10 sm:pt-14">

@@ -25,6 +25,7 @@
   background-color: var(--color-scent-bg);
   color: var(--color-scent-accent);
   color-scheme: dark;
+  --topbar-h: calc(4rem + env(safe-area-inset-top, 0px));
   --scent-gold-rgb: 212 175 55;
   --scent-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --scent-ease-snappy: cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -280,6 +281,13 @@ a {
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   transition: background var(--scent-transition-base) var(--scent-ease-out), box-shadow var(--scent-transition-base) var(--scent-ease-out);
+  /* Push nav content below the iOS status bar on notched devices */
+  height: var(--topbar-h);
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+@media (min-width: 640px) {
+  :root { --topbar-h: calc(72px + env(safe-area-inset-top, 0px)); }
 }
 
 .scent-brandmark {

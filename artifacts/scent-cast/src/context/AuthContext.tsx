@@ -40,23 +40,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return localStorage.getItem(STORAGE_KEYS.TOKEN);
   });
 
-  const [authEmail, setAuthEmail] = useState<string | null>(() => {
-    const params = new URLSearchParams(window.location.search);
-    const oauthEmail = params.get('oauth_email');
-    if (oauthEmail) {
-      return oauthEmail;
-    }
-    return localStorage.getItem(STORAGE_KEYS.EMAIL);
-  });
+  // authToken's initializer already wrote oauth_email/oauth_picture to localStorage
+  // and cleared the URL via replaceState — read from storage only.
+  const [authEmail, setAuthEmail] = useState<string | null>(() =>
+    localStorage.getItem(STORAGE_KEYS.EMAIL),
+  );
 
-  const [authPictureUrl, setAuthPictureUrl] = useState<string | null>(() => {
-    const params = new URLSearchParams(window.location.search);
-    const oauthPicture = params.get('oauth_picture');
-    if (oauthPicture) {
-      return oauthPicture;
-    }
-    return localStorage.getItem(STORAGE_KEYS.PICTURE);
-  });
+  const [authPictureUrl, setAuthPictureUrl] = useState<string | null>(() =>
+    localStorage.getItem(STORAGE_KEYS.PICTURE),
+  );
 
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [guestPromptDismissed, setGuestPromptDismissed] = useState(false);

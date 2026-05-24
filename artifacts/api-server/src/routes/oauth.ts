@@ -219,6 +219,11 @@ router.get("/auth/google/callback", async (req, res) => {
       return;
     }
 
+    if (!googleUser.email_verified) {
+      res.redirect("/?oauth_error=unverified_email");
+      return;
+    }
+
     const email = googleUser.email.toLowerCase();
     const subject = googleUser.sub;
     let user = await findUserByOAuthSubject(subject, req);
