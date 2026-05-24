@@ -437,8 +437,10 @@ a {
 
 .scent-fragrance-card {
   background:
-    radial-gradient(140% 90% at 50% 0%, rgba(28, 22, 16, 0.55), transparent 60%),
-    linear-gradient(180deg, #0a0805 0%, #050403 60%, #020201 100%);
+    radial-gradient(140% 90% at 50% 0%, rgba(255, 245, 224, 0.045), transparent 62%),
+    linear-gradient(180deg, rgba(8, 7, 6, 0.18) 0%, rgba(5, 4, 3, 0.1) 58%, rgba(2, 2, 1, 0.04) 100%);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: var(--radius-scent);
   box-shadow:
