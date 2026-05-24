@@ -3,6 +3,14 @@ import {
   type MainAccordDisplayRow,
   normalizedAccordBarPct,
 } from "./fragranceApi.ts";
+import {
+  ACCORD_ALIASES,
+  BROAD_NOTE_FAMILY_TERMS,
+  FAMILY_TO_ACCORD_MAPPINGS,
+  NOTE_ALIASES,
+  NOTE_FAMILIES,
+  type NoteFamilyWeight,
+} from "./noteAccordTaxonomy.ts";
 
 export type NoteAccordLink = {
   row: MainAccordDisplayRow;
@@ -62,140 +70,157 @@ function containsAsWords(text: string, phrase: string): boolean {
   return new RegExp(`(?:^|[^\\p{L}\\p{N}])${escaped}(?=$|[^\\p{L}\\p{N}])`, "iu").test(text);
 }
 
-const NOTE_FAMILY_TERMS: Record<string, readonly string[]> = {
-  amber: ["amber", "ambergris", "ambroxan", "labdanum", "benzoin"],
-  aquatic: ["aquatic", "marine", "sea salt", "water", "calone"],
-  aromatic: ["lavender", "rosemary", "sage", "thyme", "basil", "juniper", "clary sage"],
-  citrus: ["bergamot", "lemon", "lime", "grapefruit", "mandarin", "orange", "yuzu", "citron", "petitgrain"],
-  earthy: ["earth", "soil", "moss", "oakmoss", "patchouli", "vetiver"],
-  floral: [
-    "rose",
-    "peony",
-    "lily",
-    "lily of the valley",
-    "jasmine",
-    "iris",
-    "violet",
-    "tuberose",
-    "orange blossom",
-    "ylang ylang",
-    "neroli",
-    "magnolia",
-    "gardenia",
-    "freesia",
-    "honeysuckle",
-    "lilac",
-    "orchid",
-    "osmanthus",
-    "mimosa",
-    "geranium",
-    "carnation",
-    "narcissus",
-    "hyacinth",
-    "lotus",
-    "water lily",
-    "champaca",
-    "frangipani",
-    "heliotrope",
-  ],
-  fresh: [
-    "aldehyde",
-    "aldehydes",
-    "bergamot",
-    "lemon",
-    "lime",
-    "grapefruit",
-    "mandarin",
-    "mint",
-    "eucalyptus",
-    "green tea",
-    "tea",
-    "pear",
-    "apple",
-    "lily of the valley",
-    "neroli",
-    "petitgrain",
-    "marine",
-    "ozone",
-    "ozonic",
-  ],
-  fruity: ["apple", "pear", "peach", "plum", "apricot", "blackcurrant", "berry", "berries", "raspberry", "fig", "melon"],
-  gourmand: ["vanilla", "caramel", "praline", "chocolate", "cacao", "coffee", "honey", "sugar", "almond", "tonka"],
-  green: ["galbanum", "green leaves", "grass", "violet leaf", "fig leaf", "tomato leaf", "basil", "mint", "petitgrain"],
-  leather: ["leather", "suede", "saffron", "birch tar"],
-  musky: ["musk", "white musk", "clean musk", "ambrette", "cashmeran", "sandalwood", "iso e super"],
-  powdery: ["iris", "orris", "violet", "heliotrope", "mimosa", "tonka", "powder"],
-  smoky: ["smoke", "incense", "olibanum", "birch tar", "guaiac wood", "oud"],
-  spicy: ["pepper", "pink pepper", "cardamom", "cinnamon", "clove", "nutmeg", "saffron", "ginger", "coriander"],
-  sweet: ["vanilla", "tonka", "benzoin", "honey", "caramel", "praline", "sugar", "amber", "fruit", "fruity"],
-  woody: [
-    "wood",
-    "woods",
-    "cedar",
-    "cedarwood",
-    "sandalwood",
-    "patchouli",
-    "vetiver",
-    "agarwood",
-    "oud",
-    "guaiac",
-    "guaiac wood",
-    "rosewood",
-    "birch",
-    "oak",
-    "cashmere wood",
-    "akigalawood",
-    "iso e super",
-  ],
-};
+const MATCH_WEIGHT = {
+  exact: 100,
+  alias: 80,
+  knownMaterialFamily: 60,
+  broadFamilyFallback: 30,
+} as const;
 
-const ACCORD_FAMILY_TERMS: Record<string, readonly string[]> = {
-  amber: ["amber", "ambery", "resin", "resinous", "balsamic"],
-  aquatic: ["aquatic", "marine", "ozonic", "water"],
-  aromatic: ["aromatic", "herbal", "lavender"],
-  citrus: ["citrus"],
-  earthy: ["earthy", "mossy", "patchouli", "vetiver"],
-  floral: ["floral", "flower", "flowers", "white floral", "yellow floral"],
-  fresh: ["fresh", "freshness", "clean", "aldehydic"],
-  fruity: ["fruity", "fruit"],
-  gourmand: ["gourmand", "vanilla", "chocolate", "caramel", "sweet"],
-  green: ["green"],
-  leather: ["leather", "suede"],
-  musky: ["musk", "musky"],
-  powdery: ["powdery", "powder"],
-  smoky: ["smoky", "smoke", "incense"],
-  spicy: ["spicy", "warm spicy", "fresh spicy", "pepper"],
-  sweet: ["sweet", "vanilla", "honey"],
-  woody: ["woody", "wood", "woods", "woodiness", "cedar", "sandalwood", "oud"],
-};
+function addWeightedFamily(
+  target: Map<string, number>,
+  family: string,
+  weight: number,
+): void {
+  target.set(family, Math.max(target.get(family) ?? 0, weight));
+}
 
-function matchingFamilies(text: string, familyTerms: Record<string, readonly string[]>): Set<string> {
-  const families = new Set<string>();
-  for (const [family, terms] of Object.entries(familyTerms)) {
-    if (terms.some((term) => containsAsWords(text, term))) families.add(family);
+function aliasesForTerm(term: string, aliases: Record<string, readonly string[]>): Set<string> {
+  const result = new Set<string>();
+  for (const alias of aliases[term] ?? []) result.add(alias);
+
+  for (const [canonical, canonicalAliases] of Object.entries(aliases)) {
+    if (canonicalAliases.includes(term)) result.add(canonical);
+  }
+
+  return result;
+}
+
+function noteSearchTerms(noteNorm: string): Set<string> {
+  const terms = new Set<string>(noteTokens(noteNorm));
+  terms.add(noteNorm);
+
+  for (const term of [...terms]) {
+    for (const alias of aliasesForTerm(term, NOTE_ALIASES)) {
+      terms.add(alias);
+    }
+  }
+
+  return terms;
+}
+
+function accordSearchTerms(accordNorm: string): Set<string> {
+  const terms = new Set<string>([accordNorm]);
+
+  for (const alias of aliasesForTerm(accordNorm, ACCORD_ALIASES)) {
+    terms.add(alias);
+  }
+
+  return terms;
+}
+
+function familyWeightsFromEntries(entries: readonly NoteFamilyWeight[]): Map<string, number> {
+  const families = new Map<string, number>();
+  for (const entry of entries) {
+    addWeightedFamily(families, entry.family, entry.weight);
   }
   return families;
 }
 
-function hasFamilyOverlap(noteNorm: string, accordNorm: string): boolean {
-  const noteFamilies = matchingFamilies(noteNorm, NOTE_FAMILY_TERMS);
-  if (noteFamilies.size === 0) return false;
-  const accordFamilies = matchingFamilies(accordNorm, ACCORD_FAMILY_TERMS);
-  for (const family of noteFamilies) {
-    if (accordFamilies.has(family)) return true;
+function knownMaterialFamilyWeights(noteNorm: string): Map<string, number> {
+  const families = new Map<string, number>();
+
+  for (const term of noteSearchTerms(noteNorm)) {
+    const entries = NOTE_FAMILIES[term];
+    if (!entries) continue;
+    for (const [family, weight] of familyWeightsFromEntries(entries)) {
+      addWeightedFamily(families, family, weight);
+    }
   }
+
+  return families;
+}
+
+function broadNoteFamilyWeights(noteNorm: string): Map<string, number> {
+  const families = new Map<string, number>();
+
+  for (const [family, terms] of Object.entries(BROAD_NOTE_FAMILY_TERMS)) {
+    if (terms.some((term) => containsAsWords(noteNorm, term))) {
+      addWeightedFamily(families, family, 1);
+    }
+  }
+
+  return families;
+}
+
+function accordFamilyWeights(accordNorm: string): Map<string, number> {
+  const families = new Map<string, number>();
+  const accordTerms = accordSearchTerms(accordNorm);
+
+  for (const [family, mappings] of Object.entries(FAMILY_TO_ACCORD_MAPPINGS)) {
+    for (const mapping of mappings) {
+      const mappingTerms = new Set<string>([mapping.accord]);
+      for (const alias of aliasesForTerm(mapping.accord, ACCORD_ALIASES)) {
+        mappingTerms.add(alias);
+      }
+
+      const matches = [...mappingTerms].some((mappingTerm) => accordTerms.has(mappingTerm));
+      if (matches) addWeightedFamily(families, family, mapping.weight);
+    }
+  }
+
+  return families;
+}
+
+function weightedFamilyScore(
+  noteFamilies: Map<string, number>,
+  accordFamilies: Map<string, number>,
+  baseWeight: number,
+): number {
+  let score = 0;
+  for (const [family, noteWeight] of noteFamilies) {
+    const accordWeight = accordFamilies.get(family);
+    if (accordWeight === undefined) continue;
+    score = Math.max(score, baseWeight * noteWeight * accordWeight);
+  }
+  return score;
+}
+
+function hasAliasMatch(noteNorm: string, accordNorm: string): boolean {
+  const noteTerms = noteSearchTerms(noteNorm);
+  const accordTerms = accordSearchTerms(accordNorm);
+
+  for (const term of noteTerms) {
+    if (accordTerms.has(term)) return true;
+  }
+
+  for (const term of accordTerms) {
+    if (containsAsWords(noteNorm, term)) return true;
+  }
+
   return false;
 }
 
-// Returns 4 (exact), 3 (alias/parenthetical token), 2 (word-boundary phrase),
-// 1 (scent family), 0 (no match).
-function matchScore(noteNorm: string, accordNorm: string): 0 | 1 | 2 | 3 | 4 {
+function matchScore(noteNorm: string, accordNorm: string): number {
   if (!noteNorm || !accordNorm) return 0;
-  if (noteNorm === accordNorm) return 4;
-  if (noteTokens(noteNorm).some((t) => t === accordNorm)) return 3;
-  if (containsAsWords(noteNorm, accordNorm)) return 2;
-  if (hasFamilyOverlap(noteNorm, accordNorm)) return 1;
-  return 0;
+  if (noteNorm === accordNorm) return MATCH_WEIGHT.exact;
+  if (hasAliasMatch(noteNorm, accordNorm)) return MATCH_WEIGHT.alias;
+
+  const accordFamilies = accordFamilyWeights(accordNorm);
+  if (accordFamilies.size === 0) return 0;
+
+  const knownFamilyScore = weightedFamilyScore(
+    knownMaterialFamilyWeights(noteNorm),
+    accordFamilies,
+    MATCH_WEIGHT.knownMaterialFamily,
+  );
+  if (knownFamilyScore > 0) return knownFamilyScore;
+
+  return weightedFamilyScore(
+    broadNoteFamilyWeights(noteNorm),
+    accordFamilies,
+    MATCH_WEIGHT.broadFamilyFallback,
+  );
 }
 
 /**
