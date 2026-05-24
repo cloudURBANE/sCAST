@@ -11,6 +11,7 @@ type NotePyramidProps = {
   heartNotes: string[];
   baseNotes: string[];
   accordRows?: MainAccordDisplayRow[];
+  onActiveNotesChange?: (notes: string[]) => void;
   className?: string;
 };
 
@@ -78,6 +79,7 @@ const TAP_MOVE_TOLERANCE_PX = 10;
 const TYPEWRITER_FRAME_MS = 24;
 const NOTE_MARQUEE_MIN_CHARS = 58;
 const NOTE_MARQUEE_MIN_COUNT = 5;
+const NO_ACTIVE_NOTES: string[] = [];
 
 const PYRAMID_OUTER = {
   apex: [PYRAMID_CENTER_X, 25] as Point,
@@ -442,6 +444,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
   heartNotes,
   baseNotes,
   accordRows,
+  onActiveNotesChange,
   className = '',
 }) => {
   const [activeLayer, setActiveLayer] = React.useState<ActiveLayer | null>(null);
@@ -532,6 +535,20 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
   ], [fill, baseNotes, heartNotes, topNotes]);
 
   const selectedLayer = layers.find((layer) => layer.key === activeLayer);
+  const selectedNotes =
+    activeLayer === 'top'
+      ? topNotes
+      : activeLayer === 'heart'
+        ? heartNotes
+        : activeLayer === 'base'
+          ? baseNotes
+          : NO_ACTIVE_NOTES;
+
+  React.useEffect(() => {
+    onActiveNotesChange?.(selectedNotes);
+
+    return () => onActiveNotesChange?.([]);
+  }, [onActiveNotesChange, selectedNotes]);
 
   const handleLayerActivate = React.useCallback((layer: ActiveLayer) => {
     setActiveLayer((current) => (current === layer ? null : layer));
