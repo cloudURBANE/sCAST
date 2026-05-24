@@ -29,7 +29,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         <div className="flex flex-col items-center gap-10">
           <div className="opacity-60">
             <img
-              src="/scentbeam-logo-tight-transparent.png"
+              src="/nav/scentbeam-nav-logo.png"
+              srcSet="/nav/scentbeam-nav-logo.png 1x, /nav/scentbeam-nav-logo@2x.png 2x"
               alt="ScentBeam"
               className="h-7 w-auto"
               draggable={false}

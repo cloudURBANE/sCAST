@@ -499,7 +499,8 @@ function DashboardView() {
         <div className="max-w-[1400px] mx-auto text-center space-y-4">
           <div className="flex items-center justify-center opacity-30">
             <img
-              src="/scentbeam-logo-tight-transparent.png"
+              src="/nav/scentbeam-nav-logo.png"
+              srcSet="/nav/scentbeam-nav-logo.png 1x, /nav/scentbeam-nav-logo@2x.png 2x"
               alt="ScentBeam"
               className="h-5 w-auto"
               draggable={false}

@@ -60,23 +60,13 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
             crowd it. Horizontal padding guarantees clear space on both sides. */}
         <div className="flex items-center justify-center px-4 sm:px-10">
           <h1>
-            <picture>
-              <source
-                media="(min-width: 640px)"
-                srcSet="/scentbeam-nav-logo-256x72.png 1x, /scentbeam-nav-logo-512x144@2x.png 2x"
-                width={256}
-                height={72}
-              />
-              <img
-                src="/scentbeam-nav-logo-220x64.png"
-                srcSet="/scentbeam-nav-logo-220x64.png 1x, /scentbeam-nav-logo-440x128@2x.png 2x"
-                width={220}
-                height={64}
-                alt="ScentBeam"
-                className="h-10 sm:h-12 w-auto"
-                draggable={false}
-              />
-            </picture>
+            <img
+              src="/nav/scentbeam-nav-logo.png"
+              srcSet="/nav/scentbeam-nav-logo.png 1x, /nav/scentbeam-nav-logo@2x.png 2x"
+              alt="ScentBeam"
+              className="h-10 sm:h-12 w-auto"
+              draggable={false}
+            />
           </h1>
         </div>
 

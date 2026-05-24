@@ -663,23 +663,13 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
             aria-label="Back to dashboard"
             className="flex items-center gap-2 text-white hover:opacity-85 transition-opacity outline-none focus-visible:ring-2 focus-visible:ring-white/30 rounded-sm"
           >
-            <picture>
-              <source
-                media="(min-width: 640px)"
-                srcSet="/scentbeam-nav-logo-256x72.png 1x, /scentbeam-nav-logo-512x144@2x.png 2x"
-                width={256}
-                height={72}
-              />
-              <img
-                src="/scentbeam-nav-logo-220x64.png"
-                srcSet="/scentbeam-nav-logo-220x64.png 1x, /scentbeam-nav-logo-440x128@2x.png 2x"
-                width={220}
-                height={64}
-                alt="ScentBeam"
-                className="h-10 sm:h-12 w-auto"
-                draggable={false}
-              />
-            </picture>
+            <img
+              src="/nav/scentbeam-nav-logo.png"
+              srcSet="/nav/scentbeam-nav-logo.png 1x, /nav/scentbeam-nav-logo@2x.png 2x"
+              alt="ScentBeam"
+              className="h-10 sm:h-12 w-auto"
+              draggable={false}
+            />
           </button>
         </div>
       </nav>
@@ -789,7 +779,8 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
               <p className="text-[9px] uppercase tracking-[0.4em] text-white/20 font-bold mb-3">Powered by</p>
               <div className="flex items-center justify-center opacity-30">
                 <img
-                  src="/scentbeam-logo-tight-transparent.png"
+                  src="/nav/scentbeam-nav-logo.png"
+                  srcSet="/nav/scentbeam-nav-logo.png 1x, /nav/scentbeam-nav-logo@2x.png 2x"
                   alt="ScentBeam"
                   className="h-5 w-auto"
                   draggable={false}
@@ -842,7 +833,8 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                 </button>
                 <div className="flex items-center gap-3 text-white/92">
                   <img
-                    src="/scentbeam-logo-tight-transparent.png"
+                    src="/nav/scentbeam-nav-logo.png"
+                    srcSet="/nav/scentbeam-nav-logo.png 1x, /nav/scentbeam-nav-logo@2x.png 2x"
                     alt="ScentBeam"
                     className="h-5 sm:h-6 w-auto opacity-90"
                     draggable={false}
