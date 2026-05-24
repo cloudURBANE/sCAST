@@ -46,6 +46,28 @@ test("word-boundary guard: Rosewood does not match Rose accord", () => {
   assert.ok(!links.has("Rosewood"));
 });
 
+test("scent-family match: florals match floral accord", () => {
+  const rows: MainAccordDisplayRow[] = [{ label: "Floral", pct: 74 }];
+  const links = resolveNoteAccordLinks(["Peony", "Lily of the Valley"], rows);
+  assert.equal(links.get("Peony")?.row.label, "Floral");
+  assert.equal(links.get("Lily of the Valley")?.row.label, "Floral");
+});
+
+test("scent-family match: musk note matches musky accord", () => {
+  const rows: MainAccordDisplayRow[] = [{ label: "Musky", pct: 68 }];
+  const links = resolveNoteAccordLinks(["Musk"], rows);
+  assert.equal(links.get("Musk")?.row.label, "Musky");
+});
+
+test("scent-family match: sandalwood prefers woody accord", () => {
+  const rows: MainAccordDisplayRow[] = [
+    { label: "Musky", pct: 58 },
+    { label: "Woody", pct: 72 },
+  ];
+  const links = resolveNoteAccordLinks(["Sandalwood"], rows);
+  assert.equal(links.get("Sandalwood")?.row.label, "Woody");
+});
+
 test("multiple accord matches: picks accord with higher displayPct", () => {
   const rows: MainAccordDisplayRow[] = [
     { label: "Rose", pct: 40 },
