@@ -9,7 +9,6 @@ import {
   Maximize2,
   ShoppingBag,
   ThumbsUp,
-  Wind,
   X,
 } from 'lucide-react';
 import { BottleImage } from '@/components/BottleImage';
@@ -664,8 +663,23 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
             aria-label="Back to dashboard"
             className="flex items-center gap-2 text-white hover:opacity-85 transition-opacity outline-none focus-visible:ring-2 focus-visible:ring-white/30 rounded-sm"
           >
-            <Wind size={22} strokeWidth={1.25} className="text-scent-accent shrink-0" aria-hidden />
-            <span className="font-serif text-xl sm:text-2xl tracking-[0.14em] uppercase">{APP_BRAND_MARK}</span>
+            <picture>
+              <source
+                media="(min-width: 640px)"
+                srcSet="/scentbeam-nav-logo-256x72.png 1x, /scentbeam-nav-logo-512x144@2x.png 2x"
+                width={256}
+                height={72}
+              />
+              <img
+                src="/scentbeam-nav-logo-220x64.png"
+                srcSet="/scentbeam-nav-logo-220x64.png 1x, /scentbeam-nav-logo-440x128@2x.png 2x"
+                width={220}
+                height={64}
+                alt="ScentBeam"
+                className="h-10 sm:h-12 w-auto"
+                draggable={false}
+              />
+            </picture>
           </button>
         </div>
       </nav>
@@ -773,9 +787,13 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
 
             <div className="text-center pt-16 border-t border-white/5">
               <p className="text-[9px] uppercase tracking-[0.4em] text-white/20 font-bold mb-3">Powered by</p>
-              <div className="flex items-center justify-center gap-2 text-white/30">
-                <Wind size={16} strokeWidth={1} />
-                <span className="font-serif italic text-lg tracking-tighter uppercase">{APP_BRAND_MARK}</span>
+              <div className="flex items-center justify-center opacity-30">
+                <img
+                  src="/scentbeam-logo-tight-transparent.png"
+                  alt="ScentBeam"
+                  className="h-5 w-auto"
+                  draggable={false}
+                />
               </div>
             </div>
           </div>
@@ -823,8 +841,12 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                   Close
                 </button>
                 <div className="flex items-center gap-3 text-white/92">
-                  <div className="h-3 w-5 border-y border-scent-accent relative before:absolute before:left-1 before:right-1 before:top-1/2 before:h-px before:-translate-y-1/2 before:bg-scent-accent" />
-                  <p className="font-serif text-sm sm:text-xl uppercase tracking-[0.42em]">Scentbeam</p>
+                  <img
+                    src="/scentbeam-logo-tight-transparent.png"
+                    alt="ScentBeam"
+                    className="h-5 sm:h-6 w-auto opacity-90"
+                    draggable={false}
+                  />
                 </div>
                 <button
                   onClick={() => {

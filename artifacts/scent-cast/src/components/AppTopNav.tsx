@@ -1,7 +1,5 @@
 import React from 'react';
-import { Wind } from 'lucide-react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
-import { APP_BRAND_MARK, APP_BRAND_MARK_SHORT } from '@/lib/appBrand';
 
 interface AppTopNavProps {
   authToken: string | null;
@@ -60,14 +58,25 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
 
         {/* Brandmark — its own center column, so side controls can never
             crowd it. Horizontal padding guarantees clear space on both sides. */}
-        <div className="flex items-center justify-center gap-2 sm:gap-3 px-4 sm:px-10">
-          <Wind
-            strokeWidth={1.25}
-            className="w-[26px] h-[26px] sm:w-9 sm:h-9 shrink-0 text-scent-accent drop-shadow-[0_0_12px_rgba(201,139,44,0.26)]"
-          />
-          <h1 className="scent-brandmark font-serif text-[1.3rem] sm:text-[2rem] leading-none tracking-[0.14em] uppercase whitespace-nowrap">
-            <span className="sm:hidden">{APP_BRAND_MARK_SHORT}</span>
-            <span className="hidden sm:inline">{APP_BRAND_MARK}</span>
+        <div className="flex items-center justify-center px-4 sm:px-10">
+          <h1>
+            <picture>
+              <source
+                media="(min-width: 640px)"
+                srcSet="/scentbeam-nav-logo-256x72.png 1x, /scentbeam-nav-logo-512x144@2x.png 2x"
+                width={256}
+                height={72}
+              />
+              <img
+                src="/scentbeam-nav-logo-220x64.png"
+                srcSet="/scentbeam-nav-logo-220x64.png 1x, /scentbeam-nav-logo-440x128@2x.png 2x"
+                width={220}
+                height={64}
+                alt="ScentBeam"
+                className="h-10 sm:h-12 w-auto"
+                draggable={false}
+              />
+            </picture>
           </h1>
         </div>
 
