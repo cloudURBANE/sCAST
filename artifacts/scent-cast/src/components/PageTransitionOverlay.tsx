@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 
@@ -40,7 +40,7 @@ export const PageTransitionOverlay: React.FC = () => {
     warmTransitionEmblem();
   }, []);
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     if (location.pathname === prevPath.current) return;
     prevPath.current = location.pathname;
 
