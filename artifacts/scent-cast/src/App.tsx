@@ -7,6 +7,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ScentIntentModal } from './components/ScentIntentModal';
 import { ScentNotesInfographic } from './components/ScentNotesInfographic';
 import { LavaBackground } from './components/LavaBackground';
+import { ThreadBackground } from './components/threads/ThreadBackground';
+
+/** Switch app shell background: `'threads'` (ThanksBeam tip page) or `'lava'` (WebGL). */
+const APP_BACKGROUND = 'threads' as 'threads' | 'lava';
 import { AppTopNav } from './components/AppTopNav';
 import { AuthModal } from './components/AuthModal';
 import { SharePage } from './components/SharePage';
@@ -606,7 +610,7 @@ export default function App() {
       <WeatherProvider>
         <WardrobeProvider>
           <div className="scent-app-shell min-h-[100svh] bg-scent-bg selection:bg-scent-accent selection:text-black text-white relative overflow-x-hidden">
-            <LavaBackground />
+            {APP_BACKGROUND === 'lava' ? <LavaBackground /> : <ThreadBackground />}
             <AppContent />
             <Toaster />
           </div>

@@ -1,10 +1,32 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 
 const EMBLEM = '/icons/transparent-emblem/scentbeam-emblem-192x192.png';
 const GOLD = 'rgba(201, 139, 44,';
 const SHOW_MS = 1180;
+
+let emblemWarmPromise: Promise<void> | null = null;
+
+function warmTransitionEmblem() {
+  if (typeof document === 'undefined' || typeof window === 'undefined') return;
+
+  const existingPreload = document.querySelector<HTMLLinkElement>(`link[rel="preload"][href="${EMBLEM}"]`);
+  if (!existingPreload) {
+    const preload = document.createElement('link');
+    preload.rel = 'preload';
+    preload.as = 'image';
+    preload.href = EMBLEM;
+    document.head.appendChild(preload);
+  }
+
+  if (!emblemWarmPromise) {
+    const image = new Image();
+    image.decoding = 'async';
+    image.src = EMBLEM;
+    emblemWarmPromise = image.decode?.().catch(() => undefined) ?? Promise.resolve();
+  }
+}
 
 export const PageTransitionOverlay: React.FC = () => {
   const location = useLocation();
@@ -15,9 +37,14 @@ export const PageTransitionOverlay: React.FC = () => {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    warmTransitionEmblem();
+  }, []);
+
+  useLayoutEffect(() => {
     if (location.pathname === prevPath.current) return;
     prevPath.current = location.pathname;
 
+    warmTransitionEmblem();
     if (timer.current) clearTimeout(timer.current);
     setAnimKey(k => k + 1);
     setVisible(true);
@@ -44,11 +71,15 @@ export const PageTransitionOverlay: React.FC = () => {
             background: `radial-gradient(ellipse 55% 50% at 50% 50%, rgba(16, 10, 2, 0.96) 0%, rgba(3, 2, 1, 0.98) 100%)`,
             backdropFilter: 'blur(16px) saturate(0.55)',
             WebkitBackdropFilter: 'blur(16px) saturate(0.55)',
+            contain: 'layout paint style',
+            isolation: 'isolate',
+            transform: 'translate3d(0, 0, 0)',
+            willChange: 'opacity, backdrop-filter',
           }}
           aria-hidden="true"
           role="presentation"
         >
-          {/* Diffuse amber bloom — expands and dissolves */}
+          {/* Diffuse gold bloom — expands and dissolves */}
           <motion.div
             initial={{ scale: 0.05, opacity: 0 }}
             animate={{
@@ -64,6 +95,7 @@ export const PageTransitionOverlay: React.FC = () => {
               borderRadius: '50%',
               background: `radial-gradient(circle, ${GOLD} 0.85) 0%, ${GOLD} 0.22) 45%, transparent 72%)`,
               pointerEvents: 'none',
+              willChange: 'transform, opacity',
             }}
           />
 
@@ -84,6 +116,7 @@ export const PageTransitionOverlay: React.FC = () => {
               borderRadius: '50%',
               border: `1px solid ${GOLD} 0.55)`,
               pointerEvents: 'none',
+              willChange: 'transform, opacity',
             }}
           />
 
@@ -103,6 +136,7 @@ export const PageTransitionOverlay: React.FC = () => {
               borderRadius: '50%',
               border: `0.5px solid ${GOLD} 0.28)`,
               pointerEvents: 'none',
+              willChange: 'transform, opacity',
             }}
           />
 
@@ -148,6 +182,7 @@ export const PageTransitionOverlay: React.FC = () => {
                   `drop-shadow(0 0 42px ${GOLD} 0.22))`,
                   'brightness(1.2)',
                 ].join(' '),
+                willChange: 'transform, opacity',
               }}
             />
 

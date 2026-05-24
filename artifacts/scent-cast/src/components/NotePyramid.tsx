@@ -797,7 +797,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
           aria-label="Interactive fragrance note pyramid"
         >
           <defs>
-            <radialGradient id={id('background-amber-air')} cx="50%" cy="48%" r="58%">
+            <radialGradient id={id('background-gold-air')} cx="50%" cy="48%" r="58%">
               <stop offset="0" stopColor="#ffb84d" stopOpacity="0.14" />
               <stop offset="0.45" stopColor="#ffb84d" stopOpacity="0.06" />
               <stop offset="1" stopColor="#ffb84d" stopOpacity="0" />
@@ -886,7 +886,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
               <stop offset="1" stopColor="#ffffff" stopOpacity="0" />
             </linearGradient>
 
-            <linearGradient id={id('active-edge-amber')} x1="30" y1="40" x2="330" y2="370" gradientUnits="userSpaceOnUse">
+            <linearGradient id={id('active-edge-gold')} x1="30" y1="40" x2="330" y2="370" gradientUnits="userSpaceOnUse">
               <stop offset="0" stopColor="#ffb84d" stopOpacity="0.2" />
               <stop offset="0.42" stopColor="#ffeaad" stopOpacity="0.75" />
               <stop offset="0.58" stopColor="#fc9d19" stopOpacity="0.55" />
@@ -921,13 +921,13 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
               <stop offset="1" stopColor="#ffffff" stopOpacity="0.22" />
             </linearGradient>
 
-            <linearGradient id={id('groove-amber')} x1="180" y1="25" x2="180" y2="372" gradientUnits="userSpaceOnUse">
+            <linearGradient id={id('groove-gold')} x1="180" y1="25" x2="180" y2="372" gradientUnits="userSpaceOnUse">
               <stop offset="0" stopColor="#ffeaad" stopOpacity="0.65" />
               <stop offset="0.45" stopColor="#fc9d19" stopOpacity="0.5" />
               <stop offset="1" stopColor="#6b400a" stopOpacity="0.25" />
             </linearGradient>
 
-            <radialGradient id={id('amber-dot')} cx="36%" cy="30%" r="74%">
+            <radialGradient id={id('gold-dot')} cx="36%" cy="30%" r="74%">
               <stop offset="0" stopColor="#fff3d4" />
               <stop offset="0.24" stopColor="#ffc766" />
               <stop offset="0.55" stopColor="#fc9d19" />
@@ -935,7 +935,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
               <stop offset="1" stopColor="#211003" />
             </radialGradient>
 
-            <radialGradient id={id('amber-glow')} cx="50%" cy="50%" r="50%">
+            <radialGradient id={id('gold-glow')} cx="50%" cy="50%" r="50%">
               <stop offset="0" stopColor="#fcaa28" stopOpacity="0.68" />
               <stop offset="0.44" stopColor="#fc9d19" stopOpacity="0.28" />
               <stop offset="1" stopColor="#fc9d19" stopOpacity="0" />
@@ -998,7 +998,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
               </feMerge>
             </filter>
 
-            <filter id={id('amber-soft')} x="-180%" y="-180%" width="460%" height="460%" colorInterpolationFilters="sRGB">
+            <filter id={id('gold-soft')} x="-180%" y="-180%" width="460%" height="460%" colorInterpolationFilters="sRGB">
               <feGaussianBlur in="SourceGraphic" stdDeviation="1.45" result="blur" />
               <feMerge>
                 <feMergeNode in="blur" />
@@ -1029,13 +1029,13 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
             </linearGradient>
           </defs>
 
-          {/* Ambient depth field — soft amber air + slow-drifting starfield. No grid, no reticles. */}
+          {/* Ambient depth field — soft gold air + slow-drifting starfield. No grid, no reticles. */}
           <g aria-hidden pointerEvents="none" className="mix-blend-screen">
             <motion.circle
               cx="180"
               cy="210"
               r="190"
-              fill={fill('background-amber-air')}
+              fill={fill('background-gold-air')}
               animate={prefersReducedMotion ? { opacity: 0.55 } : { opacity: [0.4, 0.62, 0.4], scale: [0.985, 1.015, 0.985] }}
               transition={atmosphericTransition}
               style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
@@ -1244,7 +1244,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                 <motion.path
                   d={channelPath}
                   fill="none"
-                  stroke={fill('groove-amber')}
+                  stroke={fill('groove-gold')}
                   strokeWidth="1.1"
                   strokeLinecap="round"
                   pointerEvents="none"
@@ -1299,7 +1299,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                 <motion.path
                   d={layer.hitPath}
                   fill="none"
-                  stroke={fill('active-edge-amber')}
+                  stroke={fill('active-edge-gold')}
                   strokeWidth="0.85"
                   strokeLinejoin="miter"
                   pointerEvents="none"
@@ -1342,7 +1342,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                     r="1.4"
                     fill="#fff8e6"
                     pointerEvents="none"
-                    filter={fill('amber-soft')}
+                    filter={fill('gold-soft')}
                     initial={false}
                     animate={prefersReducedMotion ? { opacity: 0.78 } : { opacity: [0.6, 0.95, 0.6] }}
                     transition={pulseTransition}
@@ -1372,7 +1372,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                     cx={PYRAMID_CENTER_X}
                     cy={dot.y}
                     r="11.5"
-                    fill={fill('amber-glow')}
+                    fill={fill('gold-glow')}
                     animate={
                       prefersReducedMotion
                         ? { opacity: 0.42, r: 11 }
@@ -1385,8 +1385,8 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                     cx={PYRAMID_CENTER_X}
                     cy={dot.y}
                     r="2.85"
-                    fill={fill('amber-dot')}
-                    filter={fill('amber-soft')}
+                    fill={fill('gold-dot')}
+                    filter={fill('gold-soft')}
                     animate={
                       prefersReducedMotion
                         ? { opacity: 1, r: 2.85 }
@@ -1441,7 +1441,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
               cx="180"
               cy="397"
               r="9"
-              fill={fill('amber-glow')}
+              fill={fill('gold-glow')}
               animate={prefersReducedMotion ? { opacity: 0.38, r: 9 } : { opacity: [0.26, 0.46, 0.26], r: [9, 10.5, 9] }}
               transition={pulseTransition}
             />

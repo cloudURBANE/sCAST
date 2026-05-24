@@ -12,6 +12,27 @@ type CyclingTilePairProps = {
   secondaryClass: string;
 };
 
+function CyclingTileContent({
+  part,
+  primaryClass,
+  secondaryClass,
+}: {
+  part: CyclingPart;
+  primaryClass: string;
+  secondaryClass: string;
+}) {
+  return (
+    <>
+      <p className={primaryClass}>
+        <span className="block leading-tight">{part.primary}</span>
+      </p>
+      <p className={secondaryClass}>
+        <span className="block leading-snug">{part.secondary}</span>
+      </p>
+    </>
+  );
+}
+
 /** Synced primary+secondary pair that crossfades through `parts` (e.g. Spring → Summer → Day). */
 export function CyclingTilePair({ parts, primaryClass, secondaryClass }: CyclingTilePairProps) {
   const [phase, setPhase] = React.useState(0);
@@ -26,43 +47,49 @@ export function CyclingTilePair({ parts, primaryClass, secondaryClass }: Cycling
   if (parts.length === 0) return null;
 
   const current = parts[phase % parts.length];
+
+  if (parts.length === 1) {
+    return (
+      <CyclingTileContent part={current} primaryClass={primaryClass} secondaryClass={secondaryClass} />
+    );
+  }
+
+  // Opacity + transform only — filter blur breaks on iOS Safari and can leave text invisible.
   const transition = prefersReducedMotion
-    ? { duration: 0.12 }
+    ? { duration: 0.28, ease: CYCLE_EASE }
     : { duration: 0.52, ease: CYCLE_EASE };
 
   const initial = prefersReducedMotion
     ? { opacity: 0 }
-    : { opacity: 0, y: 7, filter: 'blur(4px)', scale: 0.985 };
+    : { opacity: 0, y: 8, scale: 0.985 };
   const animate = prefersReducedMotion
-    ? { opacity: 1 }
-    : { opacity: 1, y: 0, filter: 'blur(0px)', scale: 1 };
+    ? { opacity: 1, y: 0, scale: 1 }
+    : { opacity: 1, y: 0, scale: 1 };
   const exit = prefersReducedMotion
     ? { opacity: 0 }
-    : { opacity: 0, y: -6, filter: 'blur(3px)', scale: 0.992 };
+    : { opacity: 0, y: -6, scale: 0.992 };
 
   return (
-    <div
-      className="relative grid w-full place-items-center [&>*]:col-start-1 [&>*]:row-start-1"
-      aria-live="polite"
-      aria-atomic="true"
-    >
-      <AnimatePresence initial={false}>
-        <motion.div
-          key={phase}
-          initial={initial}
-          animate={animate}
-          exit={exit}
-          transition={transition}
-          className="flex w-full flex-col items-center justify-center"
-        >
-          <p className={primaryClass}>
-            <span className="block leading-tight">{current.primary}</span>
-          </p>
-          <p className={secondaryClass}>
-            <span className="block leading-snug">{current.secondary}</span>
-          </p>
-        </motion.div>
-      </AnimatePresence>
+    <div className="relative w-full" aria-live="polite" aria-atomic="true">
+      {/* Invisible sizer keeps tile height stable while absolute layers crossfade (Safari grid fix). */}
+      <div className="invisible pointer-events-none flex w-full flex-col items-center justify-center" aria-hidden="true">
+        <CyclingTileContent part={current} primaryClass={primaryClass} secondaryClass={secondaryClass} />
+      </div>
+
+      <div className="absolute inset-0 flex items-center justify-center overflow-visible">
+        <AnimatePresence initial={false}>
+          <motion.div
+            key={phase}
+            initial={initial}
+            animate={animate}
+            exit={exit}
+            transition={transition}
+            className="absolute inset-0 flex w-full flex-col items-center justify-center motion-safe:[transform:translateZ(0)] motion-safe:[backface-visibility:hidden] motion-safe:[will-change:transform,opacity]"
+          >
+            <CyclingTileContent part={current} primaryClass={primaryClass} secondaryClass={secondaryClass} />
+          </motion.div>
+        </AnimatePresence>
+      </div>
     </div>
   );
 }
