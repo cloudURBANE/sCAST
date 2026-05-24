@@ -211,6 +211,9 @@ function DashboardView() {
   const { weather, weatherLoading } = useWeather();
   const {
     items,
+    wardrobeLoaded,
+    wardrobeError,
+    retryLoadWardrobe,
     isIntentModalOpen,
     activeRecommendation,
     activeEngineRecommendation,
@@ -374,6 +377,9 @@ function DashboardView() {
               wardrobeFixHint={wardrobeFixHint}
               onExpandArchive={handleExpandArchive}
               authToken={authToken}
+              wardrobeLoaded={wardrobeLoaded}
+              wardrobeError={wardrobeError}
+              onRetryLoadWardrobe={retryLoadWardrobe}
             />
           </div>
           <section className="hidden">
@@ -433,10 +439,12 @@ function DashboardView() {
                       <p className="text-[8px] uppercase tracking-[0.3em] text-scent-muted mb-2 font-bold">Olfactory Reason</p>
                       <p className="text-sm italic text-scent-muted leading-relaxed">{recommendationReason || 'Optimal olfactory alignment with your current atmospheric conditions.'}</p>
                     </div>
+                    {activeRecommendation.concentration && activeRecommendation.concentration !== 'Unknown' && (
                     <div>
                       <p className="text-[8px] uppercase tracking-[0.3em] text-scent-muted mb-2 font-bold">Concentration</p>
-                      <p className="text-sm italic text-scent-muted leading-relaxed">{activeRecommendation.concentration || 'Eau de Parfum'}</p>
+                      <p className="text-sm italic text-scent-muted leading-relaxed">{activeRecommendation.concentration}</p>
                     </div>
+                    )}
                     <div className="sm:col-span-2">
                       <ScentNotesInfographic
                         derivedMetrics={
@@ -507,7 +515,30 @@ function CommunityPageView() {
   const { authToken, handleSignOut, setIsAuthModalOpen } = useAuth();
   const { setIsShareModalOpen } = useWardrobe();
   return (
-    <React.Suspense fallback={<div className="min-h-[100svh] bg-scent-bg" />}>
+    <React.Suspense
+      fallback={
+        <div className="min-h-[100svh] bg-scent-bg flex flex-col items-center justify-center relative overflow-hidden">
+          <LavaBackground />
+          <div className="relative z-10 flex flex-col items-center gap-4 text-center">
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ repeat: Infinity, duration: 3, ease: "linear" }}
+              className="text-scent-accent"
+            >
+              <Wind size={40} />
+            </motion.div>
+            <div className="space-y-1">
+              <h1 className="font-serif font-bold italic tracking-tighter uppercase text-xl text-[#fff7ec]">
+                {APP_BRAND_MARK}
+              </h1>
+              <p className="text-xs uppercase tracking-[0.25em] text-scent-muted">
+                Loading Community Vaults...
+              </p>
+            </div>
+          </div>
+        </div>
+      }
+    >
       <CommunityPage
         authToken={authToken}
         onSignIn={() => setIsAuthModalOpen(true)}

@@ -118,6 +118,8 @@ export function ReviewsPanel({ name, brand, reviews }: ReviewsPanelProps) {
   const [loading, setLoading] = useState(() => reviews.length > 0 && !initialCached?.length);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [expanded, setExpanded] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   const prefersReducedMotion = useReducedMotion();
   const reduced = prefersReducedMotion ?? false;
@@ -131,26 +133,41 @@ export function ReviewsPanel({ name, brand, reviews }: ReviewsPanelProps) {
     if (reviews.length === 0) {
       setComments([]);
       setLoading(false);
+      setFetchError(null);
       return;
     }
     const cached = getCachedReviewSummary(cacheKey);
     if (cached?.length) {
       setComments(cached);
       setLoading(false);
+      setFetchError(null);
       return;
     }
     const controller = new AbortController();
     setLoading(true);
+    setFetchError(null);
     setComments([]);
     summarizeReviews({ name, brand, reviews }, { signal: controller.signal })
       .then((result) => {
-        if (!controller.signal.aborted) setComments(result);
+        if (!controller.signal.aborted) {
+          if (result && result.length > 0) {
+            setComments(result);
+          } else {
+            setFetchError("Distillation produced no molecular impressions.");
+          }
+        }
+      })
+      .catch((err) => {
+        if (!controller.signal.aborted) {
+          console.error("Failed to summarize reviews", err);
+          setFetchError(err?.message || "Failed to load review distillation.");
+        }
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [reviewsKey, name, brand, cacheKey]);
+  }, [reviewsKey, name, brand, cacheKey, retryCount]);
 
   useEffect(() => {
     setCurrentIndex(0);
@@ -163,8 +180,53 @@ export function ReviewsPanel({ name, brand, reviews }: ReviewsPanelProps) {
     ));
   }, [comments.length]);
 
-  if (reviews.length === 0) return null;
-  if (!loading && comments.length === 0) return null;
+  if (reviews.length === 0) {
+    return (
+      <ReviewsShell>
+        <ReviewsHeader />
+        <div className={`flex w-full flex-col items-center justify-center px-5 py-12 text-center ${REVIEW_CENTER_OFFSET}`}>
+          <p className="font-serif italic text-lg text-white/55">
+            No reviews yet for this fragrance. Molecular impressions pending.
+          </p>
+        </div>
+      </ReviewsShell>
+    );
+  }
+
+  if (fetchError) {
+    return (
+      <ReviewsShell>
+        <ReviewsHeader />
+        <div className={`flex w-full flex-col items-center justify-center gap-4 px-5 py-8 text-center ${REVIEW_CENTER_OFFSET}`}>
+          <div className="space-y-1">
+            <p className="text-sm font-serif italic text-white/80">Impression Calibrator Failed</p>
+            <p className="text-xs text-scent-muted max-w-md">{fetchError}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setRetryCount((c) => c + 1)}
+            className="flex h-8 items-center justify-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.025] px-4 text-[9px] font-bold uppercase tracking-[0.24em] text-white/44 transition-colors hover:border-scent-accent/32 hover:bg-scent-accent/[0.06] hover:text-scent-accent"
+          >
+            <RefreshCw size={11} className="text-inherit" />
+            <span>Retry</span>
+          </button>
+        </div>
+      </ReviewsShell>
+    );
+  }
+
+  if (!loading && comments.length === 0) {
+    return (
+      <ReviewsShell>
+        <ReviewsHeader />
+        <div className={`flex w-full flex-col items-center justify-center px-5 py-12 text-center ${REVIEW_CENTER_OFFSET}`}>
+          <p className="font-serif italic text-lg text-white/55">
+            No reviews yet for this fragrance. Molecular impressions pending.
+          </p>
+        </div>
+      </ReviewsShell>
+    );
+  }
 
   if (loading) {
     return (

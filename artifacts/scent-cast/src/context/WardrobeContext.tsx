@@ -405,6 +405,8 @@ interface WardrobeContextType {
   wardrobeFixBusy: boolean;
   wardrobeFixHint: string | null;
   vaultSearchUiActive: boolean;
+  wardrobeError: string | null;
+  retryLoadWardrobe: () => void;
   setItems: React.Dispatch<React.SetStateAction<Fragrance[]>>;
   setIsIntentModalOpen: (open: boolean) => void;
   setIsShareModalOpen: (open: boolean) => void;
@@ -434,6 +436,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const [items, setItems] = useState<Fragrance[]>([]);
   const [wardrobeLoaded, setWardrobeLoaded] = useState(false);
+  const [wardrobeError, setWardrobeError] = useState<string | null>(null);
   const [isIntentModalOpen, setIsIntentModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [activeRecommendation, setActiveRecommendation] = useState<Fragrance | null>(null);
@@ -468,6 +471,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const now = Date.now();
     if (now - lastMutationRef.current < 5000) return;
 
+    setWardrobeError(null);
     try {
       const res = await fetch('/api/wardrobe', {
         headers: { Authorization: `Bearer ${token}` },
@@ -482,6 +486,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
         console.error("Failed to load wardrobe", err);
+        setWardrobeError((err as Error).message || "Check your internet connection.");
         toast({
           title: "Synchronization Error",
           description: "Could not fetch your latest wardrobe. Check your internet connection.",
@@ -492,6 +497,13 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setWardrobeLoaded(true);
     }
   }, [toast]);
+
+  const retryLoadWardrobe = useCallback(() => {
+    if (authToken) {
+      lastMutationRef.current = 0;
+      loadWardrobe(authToken);
+    }
+  }, [authToken, loadWardrobe]);
 
   // Reset auto-rebuild attempt on auth change
   useEffect(() => {
@@ -946,6 +958,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (!authToken) {
       setItems([]);
       setWardrobeLoaded(false);
+      setWardrobeError(null);
       setWardrobeRevertSnapshot(null);
       setWardrobeFixHint(null);
     }
@@ -954,6 +967,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const contextValue = useMemo<WardrobeContextType>(() => ({
     items,
     wardrobeLoaded,
+    wardrobeError,
     isIntentModalOpen,
     isShareModalOpen,
     activeRecommendation,
@@ -973,6 +987,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setUserId,
     setVaultSearchUiActive,
     loadWardrobe,
+    retryLoadWardrobe,
     handleAddItem,
     handlePersistWardrobeImage,
     handlePersistWardrobeDetailRefresh,
@@ -985,6 +1000,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }), [
     items,
     wardrobeLoaded,
+    wardrobeError,
     isIntentModalOpen,
     isShareModalOpen,
     activeRecommendation,
@@ -996,6 +1012,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     wardrobeFixHint,
     vaultSearchUiActive,
     loadWardrobe,
+    retryLoadWardrobe,
     handleAddItem,
     handlePersistWardrobeImage,
     handlePersistWardrobeDetailRefresh,
