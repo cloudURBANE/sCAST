@@ -265,7 +265,7 @@ const DENSITY: Record<AccordDensity, AccordDensityStyle> = {
   relaxed: {
     bodyPadding: "px-4 py-4 sm:px-5 sm:py-5",
     trackHeight: "h-[9px] sm:h-[10px]",
-    valueColWidth: "2.5rem",
+    valueColWidth: "2.75rem",
     labelColWidth: "clamp(5.25rem, 34%, 8.75rem)",
     labelFont: "text-[10.5px] sm:text-[11.5px] tracking-[0.16em]",
     valueFont: "text-[11.5px] sm:text-[12.5px]",
@@ -274,7 +274,7 @@ const DENSITY: Record<AccordDensity, AccordDensityStyle> = {
   balanced: {
     bodyPadding: "px-4 py-3.5 sm:px-5 sm:py-4",
     trackHeight: "h-[7px] sm:h-[8px]",
-    valueColWidth: "2.5rem",
+    valueColWidth: "2.75rem",
     labelColWidth: "clamp(5rem, 35%, 8.25rem)",
     labelFont: "text-[10px] sm:text-[11px] tracking-[0.14em]",
     valueFont: "text-[11px] sm:text-[12px]",
@@ -283,7 +283,7 @@ const DENSITY: Record<AccordDensity, AccordDensityStyle> = {
   compact: {
     bodyPadding: "px-4 py-3 sm:px-5 sm:py-3.5",
     trackHeight: "h-[6px] sm:h-[7px]",
-    valueColWidth: "2.25rem",
+    valueColWidth: "2.55rem",
     labelColWidth: "clamp(4.75rem, 36%, 7.75rem)",
     labelFont: "text-[9.5px] sm:text-[10.5px] tracking-[0.12em]",
     valueFont: "text-[10.5px] sm:text-[11.5px]",
@@ -451,6 +451,32 @@ function AccordPanel({
                       aria-hidden
                     />
                   </motion.div>
+                  {isPyramidMatch ? (
+                    <motion.span
+                      className="pointer-events-none absolute top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#fc9d19]"
+                      style={{ left: `${fillPct}%` }}
+                      initial={false}
+                      animate={
+                        reduced
+                          ? { opacity: 0.82, scale: 1 }
+                          : {
+                              opacity: [0.48, 1, 0.48],
+                              scale: [0.82, 1.35, 0.82],
+                              boxShadow: [
+                                "0 0 5px rgba(252,157,25,0.36)",
+                                "0 0 18px rgba(252,157,25,0.82)",
+                                "0 0 5px rgba(252,157,25,0.36)",
+                              ],
+                            }
+                      }
+                      transition={
+                        reduced
+                          ? { duration: 0.2 }
+                          : { duration: 1.25, repeat: Infinity, ease: "easeInOut" }
+                      }
+                      aria-hidden
+                    />
+                  ) : null}
                 </div>
                 <motion.p
                   className={`text-right leading-none text-white tabular-nums tracking-tight ${densityStyle.valueFont}`}
@@ -464,7 +490,7 @@ function AccordPanel({
                   }}
                   aria-label={`${fillPct} percent`}
                 >
-                  {fillPct}
+                  {fillPct}%
                 </motion.p>
               </motion.li>
             );

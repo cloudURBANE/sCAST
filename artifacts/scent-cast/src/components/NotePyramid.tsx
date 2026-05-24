@@ -329,28 +329,23 @@ function MatchedNoteChip({
   prefersReducedMotion: boolean;
 }) {
   const pct = link.displayPct;
-  const glowRadius = Math.round(4 + pct * 0.06);
-  const glowAlpha = ((pct / 100) * 0.52).toFixed(2);
+  const glowRadius = Math.round(5 + pct * 0.08);
+  const glowAlpha = ((pct / 100) * 0.62).toFixed(2);
   const pulseDuration = 2.4 + (1 - pct / 100) * 0.8;
 
   return (
     <motion.span
       title={`${link.row.label} · ${pct}%`}
-      style={
-        prefersReducedMotion
-          ? {
-              background: `linear-gradient(90deg, rgba(252,157,25,0.18) ${pct}%, rgba(252,157,25,0.06) ${pct}%)`,
-            }
-          : undefined
-      }
+      style={{ textShadow: `0 0 ${glowRadius}px rgba(252,157,25,${prefersReducedMotion ? "0.28" : glowAlpha})` }}
       animate={
         prefersReducedMotion
           ? undefined
           : {
-              boxShadow: [
-                `0 0 0px rgba(252,157,25,0)`,
+              opacity: [0.82, 1, 0.82],
+              textShadow: [
+                `0 0 ${Math.max(3, glowRadius - 4)}px rgba(252,157,25,0.28)`,
                 `0 0 ${glowRadius}px rgba(252,157,25,${glowAlpha})`,
-                `0 0 0px rgba(252,157,25,0)`,
+                `0 0 ${Math.max(3, glowRadius - 4)}px rgba(252,157,25,0.28)`,
               ],
             }
       }
@@ -359,11 +354,9 @@ function MatchedNoteChip({
           ? undefined
           : { duration: pulseDuration, repeat: Infinity, ease: 'easeInOut' }
       }
-      className="inline-flex items-center gap-1 rounded-full border border-[#fc9d19]/30 bg-[#fc9d19]/10 px-2 py-0.5 text-[10px] font-medium text-[#ffd98a]"
+      className="inline text-[10px] font-semibold leading-relaxed text-[#ffd98a]"
     >
-      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#fc9d19]" aria-hidden />
       {note}
-      <span className="tabular-nums text-[9px] text-[#fc9d19]/80">{pct}%</span>
     </motion.span>
   );
 }
@@ -385,7 +378,7 @@ function LayerNotesList({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -3 }}
       transition={transition}
-      className="flex flex-wrap justify-center gap-1.5 px-2 py-1"
+      className="flex flex-wrap justify-center gap-x-2.5 gap-y-1 px-2 py-1"
     >
       {notes.map((note) => {
         const link = links.get(note);
@@ -402,7 +395,7 @@ function LayerNotesList({
         return (
           <span
             key={note}
-            className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-medium text-white/55"
+            className="inline text-[10px] font-medium leading-relaxed text-white/55"
           >
             {note}
           </span>

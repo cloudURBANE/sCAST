@@ -10,11 +10,21 @@ export type NoteAccordLink = {
 };
 
 export function normalizeNoteLabel(label: string): string {
-  return label.toLowerCase().trim().replace(/\s+/g, " ");
+  return label
+    .normalize("NFKD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, " ");
 }
 
 export function normalizeAccordLabel(label: string): string {
-  return label.toLowerCase().trim().replace(/\s+/g, " ");
+  return label
+    .normalize("NFKD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, " ");
 }
 
 function isPlainObjectRecord(value: unknown): value is Record<string, unknown> {
@@ -52,12 +62,139 @@ function containsAsWords(text: string, phrase: string): boolean {
   return new RegExp(`(?:^|[^\\p{L}\\p{N}])${escaped}(?=$|[^\\p{L}\\p{N}])`, "iu").test(text);
 }
 
-// Returns 3 (exact), 2 (alias/parenthetical token), 1 (word-boundary phrase), 0 (no match).
-function matchScore(noteNorm: string, accordNorm: string): 0 | 1 | 2 | 3 {
+const NOTE_FAMILY_TERMS: Record<string, readonly string[]> = {
+  amber: ["amber", "ambergris", "ambroxan", "labdanum", "benzoin"],
+  aquatic: ["aquatic", "marine", "sea salt", "water", "calone"],
+  aromatic: ["lavender", "rosemary", "sage", "thyme", "basil", "juniper", "clary sage"],
+  citrus: ["bergamot", "lemon", "lime", "grapefruit", "mandarin", "orange", "yuzu", "citron", "petitgrain"],
+  earthy: ["earth", "soil", "moss", "oakmoss", "patchouli", "vetiver"],
+  floral: [
+    "rose",
+    "peony",
+    "lily",
+    "lily of the valley",
+    "jasmine",
+    "iris",
+    "violet",
+    "tuberose",
+    "orange blossom",
+    "ylang ylang",
+    "neroli",
+    "magnolia",
+    "gardenia",
+    "freesia",
+    "honeysuckle",
+    "lilac",
+    "orchid",
+    "osmanthus",
+    "mimosa",
+    "geranium",
+    "carnation",
+    "narcissus",
+    "hyacinth",
+    "lotus",
+    "water lily",
+    "champaca",
+    "frangipani",
+    "heliotrope",
+  ],
+  fresh: [
+    "aldehyde",
+    "aldehydes",
+    "bergamot",
+    "lemon",
+    "lime",
+    "grapefruit",
+    "mandarin",
+    "mint",
+    "eucalyptus",
+    "green tea",
+    "tea",
+    "pear",
+    "apple",
+    "lily of the valley",
+    "neroli",
+    "petitgrain",
+    "marine",
+    "ozone",
+    "ozonic",
+  ],
+  fruity: ["apple", "pear", "peach", "plum", "apricot", "blackcurrant", "berry", "berries", "raspberry", "fig", "melon"],
+  gourmand: ["vanilla", "caramel", "praline", "chocolate", "cacao", "coffee", "honey", "sugar", "almond", "tonka"],
+  green: ["galbanum", "green leaves", "grass", "violet leaf", "fig leaf", "tomato leaf", "basil", "mint", "petitgrain"],
+  leather: ["leather", "suede", "saffron", "birch tar"],
+  musky: ["musk", "white musk", "clean musk", "ambrette", "cashmeran", "sandalwood", "iso e super"],
+  powdery: ["iris", "orris", "violet", "heliotrope", "mimosa", "tonka", "powder"],
+  smoky: ["smoke", "incense", "olibanum", "birch tar", "guaiac wood", "oud"],
+  spicy: ["pepper", "pink pepper", "cardamom", "cinnamon", "clove", "nutmeg", "saffron", "ginger", "coriander"],
+  sweet: ["vanilla", "tonka", "benzoin", "honey", "caramel", "praline", "sugar", "amber", "fruit", "fruity"],
+  woody: [
+    "wood",
+    "woods",
+    "cedar",
+    "cedarwood",
+    "sandalwood",
+    "patchouli",
+    "vetiver",
+    "agarwood",
+    "oud",
+    "guaiac",
+    "guaiac wood",
+    "rosewood",
+    "birch",
+    "oak",
+    "cashmere wood",
+    "akigalawood",
+    "iso e super",
+  ],
+};
+
+const ACCORD_FAMILY_TERMS: Record<string, readonly string[]> = {
+  amber: ["amber", "ambery", "resin", "resinous", "balsamic"],
+  aquatic: ["aquatic", "marine", "ozonic", "water"],
+  aromatic: ["aromatic", "herbal", "lavender"],
+  citrus: ["citrus"],
+  earthy: ["earthy", "mossy", "patchouli", "vetiver"],
+  floral: ["floral", "flower", "flowers", "white floral", "yellow floral"],
+  fresh: ["fresh", "freshness", "clean", "aldehydic"],
+  fruity: ["fruity", "fruit"],
+  gourmand: ["gourmand", "vanilla", "chocolate", "caramel", "sweet"],
+  green: ["green"],
+  leather: ["leather", "suede"],
+  musky: ["musk", "musky"],
+  powdery: ["powdery", "powder"],
+  smoky: ["smoky", "smoke", "incense"],
+  spicy: ["spicy", "warm spicy", "fresh spicy", "pepper"],
+  sweet: ["sweet", "vanilla", "honey"],
+  woody: ["woody", "wood", "woods", "woodiness", "cedar", "sandalwood", "oud"],
+};
+
+function matchingFamilies(text: string, familyTerms: Record<string, readonly string[]>): Set<string> {
+  const families = new Set<string>();
+  for (const [family, terms] of Object.entries(familyTerms)) {
+    if (terms.some((term) => containsAsWords(text, term))) families.add(family);
+  }
+  return families;
+}
+
+function hasFamilyOverlap(noteNorm: string, accordNorm: string): boolean {
+  const noteFamilies = matchingFamilies(noteNorm, NOTE_FAMILY_TERMS);
+  if (noteFamilies.size === 0) return false;
+  const accordFamilies = matchingFamilies(accordNorm, ACCORD_FAMILY_TERMS);
+  for (const family of noteFamilies) {
+    if (accordFamilies.has(family)) return true;
+  }
+  return false;
+}
+
+// Returns 4 (exact), 3 (alias/parenthetical token), 2 (word-boundary phrase),
+// 1 (scent family), 0 (no match).
+function matchScore(noteNorm: string, accordNorm: string): 0 | 1 | 2 | 3 | 4 {
   if (!noteNorm || !accordNorm) return 0;
-  if (noteNorm === accordNorm) return 3;
-  if (noteTokens(noteNorm).some((t) => t === accordNorm)) return 2;
-  if (containsAsWords(noteNorm, accordNorm)) return 1;
+  if (noteNorm === accordNorm) return 4;
+  if (noteTokens(noteNorm).some((t) => t === accordNorm)) return 3;
+  if (containsAsWords(noteNorm, accordNorm)) return 2;
+  if (hasFamilyOverlap(noteNorm, accordNorm)) return 1;
   return 0;
 }
 
