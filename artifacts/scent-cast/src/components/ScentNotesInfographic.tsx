@@ -7,7 +7,11 @@ import {
   normalizedAccordBarPct,
   resolveMainAccordChartRows,
 } from '@/lib/fragranceApi';
-import { collectLinkableMainAccordRows } from '@/lib/noteAccordLinks';
+import {
+  collectLinkableMainAccordRows,
+  normalizeAccordLabel,
+  resolveNoteAccordLinks,
+} from '@/lib/noteAccordLinks';
 import { NotePyramid } from './NotePyramid';
 
 interface ScentNotesInfographicProps {
@@ -27,6 +31,11 @@ interface ScentNotesInfographicProps {
 }
 
 type DisplayPyramid = { top: string[]; heart: string[]; base: string[]; flat: string[] };
+type ActiveNotesListener = () => void;
+
+const EMPTY_ACTIVE_NOTES: string[] = [];
+const activeNotesByScope = new Map<string, string[]>();
+const activeNotesListeners = new Map<string, Set<ActiveNotesListener>>();
 
 function resolvePyramid(
   derivedMetrics?: DerivedMetrics | null,
@@ -76,6 +85,57 @@ function normalizeDisplayPyramid(pyramid: DisplayPyramid): DisplayPyramid {
     base: dedupeNotes(pyramid.base),
     flat: dedupeNotes(pyramid.flat),
   };
+}
+
+function pyramidScopeKey(pyramid: DisplayPyramid): string {
+  return [pyramid.top, pyramid.heart, pyramid.base, pyramid.flat]
+    .map((notes) => notes.map((note) => note.toLowerCase()).join(","))
+    .join("|");
+}
+
+function sameNotes(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((note, index) => note === b[index]);
+}
+
+function getActiveNotesSnapshot(scopeKey: string): string[] {
+  return activeNotesByScope.get(scopeKey) ?? EMPTY_ACTIVE_NOTES;
+}
+
+function subscribeActiveNotes(scopeKey: string, listener: ActiveNotesListener): () => void {
+  let listeners = activeNotesListeners.get(scopeKey);
+  if (!listeners) {
+    listeners = new Set<ActiveNotesListener>();
+    activeNotesListeners.set(scopeKey, listeners);
+  }
+
+  listeners.add(listener);
+
+  return () => {
+    listeners?.delete(listener);
+    if (listeners?.size === 0) activeNotesListeners.delete(scopeKey);
+  };
+}
+
+function setActiveNotesSnapshot(scopeKey: string, notes: string[]) {
+  const next = notes.length > 0 ? dedupeNotes(notes) : EMPTY_ACTIVE_NOTES;
+  const current = getActiveNotesSnapshot(scopeKey);
+  if (sameNotes(current, next)) return;
+
+  if (next.length > 0) {
+    activeNotesByScope.set(scopeKey, next);
+  } else {
+    activeNotesByScope.delete(scopeKey);
+  }
+
+  activeNotesListeners.get(scopeKey)?.forEach((listener) => listener());
+}
+
+function useActivePyramidNotes(scopeKey: string): string[] {
+  return React.useSyncExternalStore(
+    React.useCallback((listener) => subscribeActiveNotes(scopeKey, listener), [scopeKey]),
+    React.useCallback(() => getActiveNotesSnapshot(scopeKey), [scopeKey]),
+    () => EMPTY_ACTIVE_NOTES,
+  );
 }
 
 function Panel({
@@ -257,9 +317,11 @@ function rankIntensity(index: number, total: number): {
 
 function AccordPanel({
   rows,
+  activeNotes = EMPTY_ACTIVE_NOTES,
   className = "",
 }: {
   rows: ReturnType<typeof resolveMainAccordChartRows>;
+  activeNotes?: string[];
   className?: string;
 }) {
   const accordContentKey =
@@ -273,6 +335,14 @@ function AccordPanel({
   const displayRows = rows.slice(0, 10);
   const density = resolveAccordDensity(displayRows.length);
   const densityStyle = DENSITY[density];
+  const activeAccordLabels = React.useMemo(() => {
+    if (activeNotes.length === 0 || displayRows.length === 0) return new Set<string>();
+    return new Set(
+      [...resolveNoteAccordLinks(activeNotes, displayRows).values()].map((link) =>
+        normalizeAccordLabel(link.row.label),
+      ),
+    );
+  }, [activeNotes, displayRows]);
 
   if (rows.length === 0) {
     return (
@@ -300,6 +370,11 @@ function AccordPanel({
             const fillPct = normalizedAccordBarPct(row, index, displayRows.length);
             const rowDelay = ACCORD_ROW_DELAY_START + index * ACCORD_STAGGER_S;
             const intensity = rankIntensity(index, displayRows.length);
+            const isPyramidMatch = activeAccordLabels.has(normalizeAccordLabel(row.label));
+            const pulseGlow = `0 0 ${Math.round(20 + fillPct * 0.08)}px rgba(252,157,25,0.74)`;
+            const restingGlow = isPyramidMatch
+              ? `${intensity.glow}, 0 0 0 1px rgba(252,157,25,0.34)`
+              : intensity.glow;
 
             return (
               <motion.li
@@ -325,21 +400,24 @@ function AccordPanel({
                   style={{
                     opacity: intensity.labelOpacity,
                     fontWeight: intensity.labelWeight,
+                    textShadow: isPyramidMatch ? "0 0 14px rgba(252,157,25,0.52)" : undefined,
                   }}
                   title={row.label}
                 >
                   {row.label}
                 </p>
                 <div
-                  className={`relative ${densityStyle.trackHeight} overflow-hidden rounded-full bg-black/30 ring-1 ring-inset ring-white/[0.05] shadow-[inset_0_1px_2px_rgba(0,0,0,0.6),inset_0_-1px_0_rgba(255,255,255,0.03)]`}
+                  className={`relative ${densityStyle.trackHeight} overflow-hidden rounded-full bg-black/30 ring-1 ring-inset ${isPyramidMatch ? "ring-[#fc9d19]/40" : "ring-white/[0.05]"} shadow-[inset_0_1px_2px_rgba(0,0,0,0.6),inset_0_-1px_0_rgba(255,255,255,0.03)]`}
                 >
                   <motion.div
                     className="relative h-full min-w-[3px] rounded-full bg-gradient-to-r from-[#b07a24] via-scent-accent to-[#ecd49d]"
-                    style={{ boxShadow: intensity.glow }}
+                    style={{ boxShadow: restingGlow }}
                     initial={false}
                     animate={{
                       width: reduced || revealed ? `${fillPct}%` : "2%",
                       opacity: reduced || revealed ? intensity.barOpacity : 0.32,
+                      boxShadow: isPyramidMatch && !reduced ? [restingGlow, pulseGlow, restingGlow] : restingGlow,
+                      filter: isPyramidMatch && !reduced ? ["brightness(1)", "brightness(1.34)", "brightness(1)"] : "brightness(1)",
                     }}
                     transition={{
                       width: {
@@ -352,6 +430,16 @@ function AccordPanel({
                         ease: ACCORD_ROW_EASE,
                         delay: reduced ? 0 : rowDelay + 0.08,
                       },
+                      boxShadow: isPyramidMatch && !reduced ? {
+                        duration: 1.25,
+                        repeat: Infinity,
+                        ease: "easeInOut",
+                      } : { duration: 0.2 },
+                      filter: isPyramidMatch && !reduced ? {
+                        duration: 1.25,
+                        repeat: Infinity,
+                        ease: "easeInOut",
+                      } : { duration: 0.2 },
                     }}
                   >
                     <span
@@ -390,10 +478,12 @@ function AccordPanel({
 function NotesPanel({
   pyramid,
   accordRows,
+  onActiveNotesChange,
   className = "",
 }: {
   pyramid: DisplayPyramid;
   accordRows?: MainAccordDisplayRow[];
+  onActiveNotesChange?: (notes: string[]) => void;
   className?: string;
 }) {
   return (
@@ -403,6 +493,7 @@ function NotesPanel({
         heartNotes={pyramid.heart}
         baseNotes={pyramid.base}
         accordRows={accordRows}
+        onActiveNotesChange={onActiveNotesChange}
       />
     </Panel>
   );
@@ -415,14 +506,26 @@ export const ScentNotesInfographic: React.FC<ScentNotesInfographicProps> = ({
   variant = "all",
   className = "",
 }) => {
-  const pyramid = normalizeDisplayPyramid(resolvePyramid(derivedMetrics, legacyPyramid));
-  const accordRows = resolveMainAccordChartRows(
-    derivedMetrics?.main_accords,
-    scentAxesFallback,
+  const pyramid = React.useMemo(
+    () => normalizeDisplayPyramid(resolvePyramid(derivedMetrics, legacyPyramid)),
+    [derivedMetrics, legacyPyramid],
   );
-  const noteAccordRows = collectLinkableMainAccordRows(derivedMetrics?.main_accords);
+  const accordRows = React.useMemo(
+    () => resolveMainAccordChartRows(derivedMetrics?.main_accords, scentAxesFallback),
+    [derivedMetrics?.main_accords, scentAxesFallback],
+  );
+  const noteAccordRows = React.useMemo(
+    () => collectLinkableMainAccordRows(derivedMetrics?.main_accords),
+    [derivedMetrics?.main_accords],
+  );
   const hasAccordVisual = accordRows.length > 0;
   const hasPyramid = hasAnyNotes(pyramid);
+  const scopeKey = React.useMemo(() => pyramidScopeKey(pyramid), [pyramid]);
+  const activeNotes = useActivePyramidNotes(scopeKey);
+  const handleActiveNotesChange = React.useCallback(
+    (notes: string[]) => setActiveNotesSnapshot(scopeKey, notes),
+    [scopeKey],
+  );
 
   if (!hasPyramid && !hasAccordVisual && variant !== "notes") {
     return (
@@ -435,17 +538,28 @@ export const ScentNotesInfographic: React.FC<ScentNotesInfographicProps> = ({
   }
 
   if (variant === "accords") {
-    return <AccordPanel rows={accordRows} className={className} />;
+    return <AccordPanel rows={accordRows} activeNotes={activeNotes} className={className} />;
   }
 
   if (variant === "notes") {
-    return <NotesPanel pyramid={pyramid} accordRows={noteAccordRows} className={className} />;
+    return (
+      <NotesPanel
+        pyramid={pyramid}
+        accordRows={noteAccordRows}
+        onActiveNotesChange={handleActiveNotesChange}
+        className={className}
+      />
+    );
   }
 
   return (
     <div id="scent-notes-infographic" className="space-y-3 sm:space-y-4">
-      {accordRows.length > 0 ? <AccordPanel rows={accordRows} /> : null}
-      <NotesPanel pyramid={pyramid} accordRows={noteAccordRows} />
+      {accordRows.length > 0 ? <AccordPanel rows={accordRows} activeNotes={activeNotes} /> : null}
+      <NotesPanel
+        pyramid={pyramid}
+        accordRows={noteAccordRows}
+        onActiveNotesChange={handleActiveNotesChange}
+      />
     </div>
   );
 };

@@ -16,7 +16,7 @@ interface CommunityPageProps {
 }
 
 export const CommunityPage: React.FC<CommunityPageProps> = ({ authToken, onSignIn, onShare, onSignOut }) => {
-  const { data, isLoading } = useCommunityFragrances();
+  const { data, isLoading, isError, error, refetch } = useCommunityFragrances();
 
   useEffect(() => {
     const previous = document.title;
@@ -51,7 +51,12 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({ authToken, onSignI
           <div className="scent-full-bleed">
             <BottleMarquee items={data ?? []} loading={isLoading} />
           </div>
-          <FeaturedCaseGrid items={data ?? []} loading={isLoading} />
+          <FeaturedCaseGrid
+            items={data ?? []}
+            loading={isLoading}
+            error={isError ? (error?.message || "Failed to load community") : null}
+            onRetry={refetch}
+          />
         </div>
       </main>
 

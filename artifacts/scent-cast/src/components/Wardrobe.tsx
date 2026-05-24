@@ -28,6 +28,7 @@ import {
   ArrowLeft,
 } from 'lucide-react';
 import { ReviewsPanel } from './ReviewsPanel';
+import { CyclingTilePair, type CyclingPart } from './CyclingTilePair';
 import { bottleFeaturedSlotClass } from '@/lib/bottleImageFrame';
 
 import {
@@ -368,8 +369,6 @@ function toTitleCase(value: string): string {
   return value.replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-type CyclingPart = { primary: string; secondary: string };
-
 function buildWearProfileParts(
   wear: DerivedMetrics["wear_profile"] | null | undefined,
 ): CyclingPart[] {
@@ -409,52 +408,6 @@ function buildLegacyPerformanceParts(
   if (sillage) parts.push({ primary: sillage, secondary: "Sillage" });
   if (longevity) parts.push({ primary: longevity, secondary: "Longevity" });
   return parts;
-}
-
-/** Renders a synced primary+secondary pair that cycles through `parts` (e.g. Spring → Summer → Day). */
-function CyclingTilePair({
-  parts,
-  primaryClass,
-  secondaryClass,
-}: {
-  parts: CyclingPart[];
-  primaryClass: string;
-  secondaryClass: string;
-}) {
-  const [phase, setPhase] = React.useState(0);
-  React.useEffect(() => {
-    if (parts.length <= 1) return;
-    const id = window.setInterval(() => setPhase((p) => (p + 1) % parts.length), 4500);
-    return () => window.clearInterval(id);
-  }, [parts.length]);
-  if (parts.length === 0) return null;
-  const current = parts[phase % parts.length];
-  return (
-    <>
-      <p className={primaryClass}>
-        <motion.span
-          key={`p-${current.primary}`}
-          initial={{ opacity: 0, y: 3 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-          className="block leading-tight"
-        >
-          {current.primary}
-        </motion.span>
-      </p>
-      <p className={secondaryClass}>
-        <motion.span
-          key={`s-${current.secondary}`}
-          initial={{ opacity: 0, y: 3 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-          className="block leading-snug"
-        >
-          {current.secondary}
-        </motion.span>
-      </p>
-    </>
-  );
 }
 
 type PriceSignalTone = "standard" | "accent";
@@ -830,6 +783,9 @@ export const Wardrobe: React.FC<{
   /** Scroll to / focus the hero "Add to vault" search (used by Expand Archive). */
   onExpandArchive?: () => void;
   authToken?: string | null;
+  wardrobeLoaded?: boolean;
+  wardrobeError?: string | null;
+  onRetryLoadWardrobe?: () => void;
 }> = ({
   items,
   onDelete,
@@ -841,6 +797,9 @@ export const Wardrobe: React.FC<{
   wardrobeFixHint,
   onExpandArchive,
   authToken,
+  wardrobeLoaded = true,
+  wardrobeError = null,
+  onRetryLoadWardrobe,
 }) => {
   const [selectedItem, setSelectedItem] = React.useState<Fragrance | null>(null);
 
@@ -1501,63 +1460,96 @@ export const Wardrobe: React.FC<{
         )}
 
         <div className="space-y-8 pb-28 sm:pb-36">
-          {shelves.length > 0 ? shelves.map((shelfItems, shelfIndex) => (
-            <div key={shelfIndex} className="relative group/shelf">
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-5 mb-1">
-                {shelfItems.map((item, i) => (
-                  <motion.div
-                    key={item.id}
-                    initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }} transition={{ delay: i * 0.08, duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
-                    className="group cursor-pointer relative h-full min-w-0"
-                    onClick={() => openDetail(item)}
-                    onMouseEnter={() => prefetchReviews(item)}
-                  >
-                    <div className="scent-fragrance-card w-full h-full min-h-[32rem] transition-[transform,border-color,box-shadow] duration-500 motion-reduce:transition-none group-hover:-translate-y-1.5 motion-reduce:group-hover:translate-y-0 relative overflow-hidden flex flex-col">
-                      <div className="scent-card-frame" aria-hidden />
-                      <div className="relative z-[1] flex h-full flex-col items-center px-6 sm:px-8 pt-7 sm:pt-9 pb-6 sm:pb-7">
-                        <p
-                          className="scent-card-brand w-full"
-                          data-len={brandLengthBucket(entryBrand(item))}
-                          title={entryBrand(item)}
-                        >
-                          {entryBrand(item)}
-                        </p>
-                        <div className="relative flex-1 w-full mt-4 sm:mt-5 mb-5 sm:mb-6 min-h-0">
-                          <BottleImage
-                            variant="grid"
-                            src={item.imageUrl}
-                            alt={entryName(item)}
-                            adjustment={item.imageAdjustment}
-                            className="absolute inset-0 z-10"
-                            imgClassName="brightness-[1.1] group-hover:scale-[1.035] motion-reduce:group-hover:scale-100 transition-transform duration-[900ms] motion-reduce:transition-none"
-                            loading={shelfIndex === 0 ? 'eager' : 'lazy'}
-                            fetchPriority={shelfIndex === 0 ? 'high' : undefined}
-                          />
-                        </div>
-                        <div className="scent-card-title-row shrink-0">
-                          <h3 className="scent-card-title" title={entryName(item)}>{entryName(item)}</h3>
+          {wardrobeError ? (
+            <div className="py-24 px-4 text-center border border-white/10 bg-white/[0.02] rounded-scent flex flex-col items-center justify-center gap-6">
+              <div className="space-y-2">
+                <p className="font-serif italic text-3xl text-white/90">Olfactory Vault Synchronization Offline</p>
+                <p className="text-sm text-scent-muted max-w-md mx-auto">{wardrobeError}</p>
+              </div>
+              {onRetryLoadWardrobe && (
+                <button
+                  type="button"
+                  onClick={onRetryLoadWardrobe}
+                  className="scent-primary-button px-8 py-3 rounded-scent font-serif italic text-lg"
+                >
+                  Retry Load
+                </button>
+              )}
+            </div>
+          ) : !wardrobeLoaded ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="scent-fragrance-card w-full min-h-[32rem] relative overflow-hidden flex flex-col">
+                  <div className="scent-card-frame" aria-hidden />
+                  <div className="relative z-[1] flex h-full flex-col items-center px-6 sm:px-8 pt-7 sm:pt-9 pb-6 sm:pb-7">
+                    <div className="h-4 w-2/3 bg-white/10 rounded animate-pulse mt-2" />
+                    <div className="relative flex-1 w-full mt-4 sm:mt-5 mb-5 sm:mb-6 min-h-0 flex items-center justify-center">
+                      <div className="w-24 h-48 bg-white/5 rounded-full animate-pulse opacity-50" />
+                    </div>
+                    <div className="h-6 w-3/4 bg-white/10 rounded animate-pulse shrink-0 mb-2" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : shelves.length > 0 ? (
+            shelves.map((shelfItems, shelfIndex) => (
+              <div key={shelfIndex} className="relative group/shelf">
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-5 mb-1">
+                  {shelfItems.map((item, i) => (
+                    <motion.div
+                      key={item.id}
+                      initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }}
+                      viewport={{ once: true }} transition={{ delay: i * 0.08, duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
+                      className="group cursor-pointer relative h-full min-w-0"
+                      onClick={() => openDetail(item)}
+                      onMouseEnter={() => prefetchReviews(item)}
+                    >
+                      <div className="scent-fragrance-card w-full h-full min-h-[32rem] transition-[transform,border-color,box-shadow] duration-500 motion-reduce:transition-none group-hover:-translate-y-1.5 motion-reduce:group-hover:translate-y-0 relative overflow-hidden flex flex-col">
+                        <div className="scent-card-frame" aria-hidden />
+                        <div className="relative z-[1] flex h-full flex-col items-center px-6 sm:px-8 pt-7 sm:pt-9 pb-6 sm:pb-7">
+                          <p
+                            className="scent-card-brand w-full"
+                            data-len={brandLengthBucket(entryBrand(item))}
+                            title={entryBrand(item)}
+                          >
+                            {entryBrand(item)}
+                          </p>
+                          <div className="relative flex-1 w-full mt-4 sm:mt-5 mb-5 sm:mb-6 min-h-0">
+                            <BottleImage
+                              variant="grid"
+                              src={item.imageUrl}
+                              alt={entryName(item)}
+                              adjustment={item.imageAdjustment}
+                              className="absolute inset-0 z-10"
+                              imgClassName="brightness-[1.1] group-hover:scale-[1.035] motion-reduce:group-hover:scale-100 transition-transform duration-[900ms] motion-reduce:transition-none"
+                              loading={shelfIndex === 0 ? 'eager' : 'lazy'}
+                              fetchPriority={shelfIndex === 0 ? 'high' : undefined}
+                            />
+                          </div>
+                          <div className="scent-card-title-row shrink-0">
+                            <h3 className="scent-card-title" title={entryName(item)}>{entryName(item)}</h3>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </motion.div>
-                ))}
-                {shelfIndex === shelves.length - 1 && shelfItems.length < 4 && (
-                  <button
-                    type="button"
-                    onClick={() => onExpandArchive?.()}
-                    aria-label="Expand archive — go to add fragrance search"
-                    className="scent-fragrance-card min-h-[28rem] flex flex-col items-center justify-center p-8 text-center group cursor-pointer border-dashed border-scent-accent/26 hover:bg-white/5 transition-all w-full"
-                  >
-                    <div className="w-12 h-12 border border-dashed border-scent-accent/35 flex items-center justify-center group-hover:rotate-90 transition-transform mb-4 rounded-full">
-                      <span className="text-scent-accent/55 text-3xl">+</span>
-                    </div>
-                    <p className="font-serif italic text-scent-accent/45 text-2xl tracking-tighter uppercase">Expand Archive</p>
-                  </button>
-                )}
+                    </motion.div>
+                  ))}
+                  {shelfIndex === shelves.length - 1 && shelfItems.length < 4 && (
+                    <button
+                      type="button"
+                      onClick={() => onExpandArchive?.()}
+                      aria-label="Expand archive — go to add fragrance search"
+                      className="scent-fragrance-card min-h-[28rem] flex flex-col items-center justify-center p-8 text-center group cursor-pointer border-dashed border-scent-accent/26 hover:bg-white/5 transition-all w-full"
+                    >
+                      <div className="w-12 h-12 border border-dashed border-scent-accent/35 flex items-center justify-center group-hover:rotate-90 transition-transform mb-4 rounded-full">
+                        <span className="text-scent-accent/55 text-3xl">+</span>
+                      </div>
+                      <p className="font-serif italic text-scent-accent/45 text-2xl tracking-tighter uppercase">Expand Archive</p>
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
-          )) : !searchQuery && (
+            ))
+          ) : !searchQuery && (
             <div className="py-40 text-center border border-dashed border-white/5 rounded-scent">
               <p className="font-serif italic text-4xl text-white/10">The vault is currently vacant</p>
             </div>

@@ -7,6 +7,8 @@ import type { CommunityFragranceEntry } from '@/components/community/communityDa
 interface FeaturedCaseGridProps {
   items: CommunityFragranceEntry[];
   loading: boolean;
+  error?: string | null;
+  onRetry?: () => void;
 }
 
 const gridVariants: Variants = {
@@ -27,8 +29,43 @@ const cardVariants: Variants = {
   },
 };
 
-export const FeaturedCaseGrid: React.FC<FeaturedCaseGridProps> = ({ items, loading }) => {
-  const showSkeletons = loading || items.length === 0;
+export const FeaturedCaseGrid: React.FC<FeaturedCaseGridProps> = ({
+  items,
+  loading,
+  error = null,
+  onRetry,
+}) => {
+  const showSkeletons = loading;
+
+  if (error) {
+    return (
+      <section aria-label="Community status" className="py-24 px-4 text-center border border-white/10 bg-white/[0.02] rounded-scent flex flex-col items-center justify-center gap-6">
+        <div className="space-y-2">
+          <p className="font-serif italic text-3xl text-white/90">Community Intelligence Offline</p>
+          <p className="text-sm text-scent-muted max-w-md mx-auto">{error}</p>
+        </div>
+        {onRetry && (
+          <button
+            type="button"
+            onClick={onRetry}
+            className="scent-primary-button px-8 py-3 rounded-scent font-serif italic text-lg"
+          >
+            Retry
+          </button>
+        )}
+      </section>
+    );
+  }
+
+  if (!loading && !error && items.length === 0) {
+    return (
+      <section aria-label="Community status" className="py-32 px-4 text-center border border-dashed border-white/5 rounded-scent">
+        <p className="font-serif italic text-3xl text-white/20">
+          No shared vaults are currently active. Be the first to enshrine yours.
+        </p>
+      </section>
+    );
+  }
 
   return (
     <section aria-label="Featured community wardrobes">
