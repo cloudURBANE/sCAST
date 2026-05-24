@@ -128,8 +128,24 @@ export const ThreadBackground: React.FC = React.memo(() => {
       aria-hidden="true"
     >
       {THREAD_LINES.map((thread) => {
-        const { id, top, bottom, left, right, width, height, background, boxShadow, filter, axis, direction, wrap } =
-          thread;
+        const {
+          id,
+          top,
+          bottom,
+          left,
+          right,
+          width,
+          height,
+          background,
+          boxShadow,
+          filter,
+          borderRadius,
+          mixBlendMode,
+          opacity,
+          axis,
+          direction,
+          wrap,
+        } = thread;
 
         const initialTransform =
           axis === 'x'
@@ -155,6 +171,9 @@ export const ThreadBackground: React.FC = React.memo(() => {
               background,
               boxShadow,
               filter,
+              borderRadius,
+              mixBlendMode,
+              opacity,
               transform: initialTransform,
             }}
           />

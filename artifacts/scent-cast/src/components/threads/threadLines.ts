@@ -14,6 +14,9 @@ export type ThreadLine = {
   background: string;
   boxShadow?: string;
   filter?: string;
+  borderRadius?: string;
+  mixBlendMode?: 'normal' | 'multiply' | 'screen' | 'overlay' | 'soft-light';
+  opacity?: number;
   axis: 'x' | 'y';
   direction: 1 | -1;
   speed: number;
@@ -41,11 +44,13 @@ export const THREAD_LINES: ThreadLine[] = [
   },
   {
     id: 'gold-1',
-    top: '60%', left: '0px', width: '90px', height: '2.5px',
-    background: 'linear-gradient(90deg, transparent 0%, rgba(120, 73, 18, 0.8) 25%, rgba(201, 139, 44, 0.9) 50%, rgba(251, 191, 36, 0.8) 75%, transparent 100%)',
-    boxShadow: '0 0 30px rgba(201, 139, 44, 0.6), 0 0 60px rgba(251, 191, 36, 0.35)',
-    filter: 'blur(0.3px)',
-    axis: 'x', direction: 1, speed: 2.1, wrap: 90, fade: 45, delay: 1600,
+    top: '60%', left: '0px', width: '132px', height: '3.4px',
+    background: 'linear-gradient(90deg, transparent 0%, rgba(82, 45, 9, 0.1) 10%, rgba(120, 73, 18, 0.82) 24%, rgba(255, 247, 236, 0.95) 48%, rgba(251, 191, 36, 0.86) 56%, rgba(120, 73, 18, 0.52) 78%, transparent 100%)',
+    boxShadow: '0 0 16px rgba(255, 247, 236, 0.42), 0 0 34px rgba(201, 139, 44, 0.62), 0 0 74px rgba(251, 191, 36, 0.24)',
+    filter: 'blur(0.18px)',
+    borderRadius: '999px',
+    mixBlendMode: 'screen',
+    axis: 'x', direction: 1, speed: 2.55, wrap: 132, fade: 64, delay: 1600,
   },
   {
     id: 'dark-v-1',
@@ -57,11 +62,12 @@ export const THREAD_LINES: ThreadLine[] = [
   },
   {
     id: 'gold-v-1',
-    bottom: '0px', right: '30%', width: '2.5px', height: '75px',
-    background: 'linear-gradient(180deg, transparent 0%, rgba(251, 191, 36, 0.7) 20%, rgba(201, 139, 44, 0.82) 50%, rgba(120, 73, 18, 0.7) 80%, transparent 100%)',
-    boxShadow: '0 0 25px rgba(251, 191, 36, 0.45), 0 0 50px rgba(201, 139, 44, 0.28)',
+    bottom: '0px', right: '30%', width: '2.2px', height: '96px',
+    background: 'linear-gradient(180deg, transparent 0%, rgba(255, 247, 236, 0.34) 16%, rgba(251, 191, 36, 0.72) 34%, rgba(201, 139, 44, 0.82) 54%, rgba(120, 73, 18, 0.58) 82%, transparent 100%)',
+    boxShadow: '0 0 20px rgba(251, 191, 36, 0.4), 0 0 46px rgba(201, 139, 44, 0.24)',
     filter: 'blur(0.3px)',
-    axis: 'y', direction: -1, speed: 1.9, wrap: 75, fade: 40, delay: 2400,
+    borderRadius: '999px',
+    axis: 'y', direction: -1, speed: 1.35, wrap: 96, fade: 52, delay: 2400,
   },
   {
     id: 'dark-3',
@@ -72,11 +78,12 @@ export const THREAD_LINES: ThreadLine[] = [
   },
   {
     id: 'dark-4',
-    top: '80%', left: '0px', width: '95px', height: '1.8px',
-    background: 'linear-gradient(90deg, transparent 0%, rgba(0, 0, 0, 0.4) 35%, rgba(0, 0, 0, 0.6) 50%, rgba(0, 0, 0, 0.4) 65%, transparent 100%)',
-    boxShadow: '0 0 15px rgba(0, 0, 0, 0.3), 0 0 30px rgba(0, 0, 0, 0.1)',
-    filter: 'blur(0.4px)',
-    axis: 'x', direction: 1, speed: 2.2, wrap: 95, fade: null, delay: 1200,
+    top: '80%', left: '0px', width: '118px', height: '2px',
+    background: 'linear-gradient(90deg, transparent 0%, rgba(0, 0, 0, 0.28) 18%, rgba(0, 0, 0, 0.72) 48%, rgba(255, 247, 236, 0.14) 54%, rgba(0, 0, 0, 0.42) 72%, transparent 100%)',
+    boxShadow: '0 0 18px rgba(0, 0, 0, 0.38), 0 0 34px rgba(0, 0, 0, 0.14)',
+    filter: 'blur(0.35px)',
+    borderRadius: '999px',
+    axis: 'x', direction: 1, speed: 2.85, wrap: 118, fade: null, delay: 1200,
   },
   {
     id: 'white-1',
@@ -141,11 +148,13 @@ export const THREAD_LINES: ThreadLine[] = [
   },
   {
     id: 'white-2',
-    top: '35%', left: '0px', width: '75px', height: '2px',
-    background: 'linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.7) 25%, rgba(255, 255, 255, 0.9) 50%, rgba(255, 255, 255, 0.7) 75%, transparent 100%)',
-    boxShadow: '0 0 20px rgba(255, 255, 255, 0.6), 0 0 40px rgba(255, 255, 255, 0.3)',
-    filter: 'blur(0.2px)',
-    axis: 'x', direction: 1, speed: 1.8, wrap: 75, fade: 40, delay: 8000,
+    top: '35%', left: '0px', width: '88px', height: '1.6px',
+    background: 'linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.32) 18%, rgba(255, 247, 236, 0.88) 45%, rgba(201, 139, 44, 0.32) 64%, transparent 100%)',
+    boxShadow: '0 0 18px rgba(255, 255, 255, 0.38), 0 0 34px rgba(201, 139, 44, 0.18)',
+    filter: 'blur(0.16px)',
+    borderRadius: '999px',
+    opacity: 0.92,
+    axis: 'x', direction: 1, speed: 2.25, wrap: 88, fade: 48, delay: 8000,
   },
   {
     id: 'white-v-1',
