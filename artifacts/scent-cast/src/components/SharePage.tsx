@@ -20,6 +20,7 @@ import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import { publicShareBuyLinkEndpoint } from '@/lib/shareLinks';
 import { ScentNotesInfographic } from '@/components/ScentNotesInfographic';
+import { CyclingTilePair, type CyclingPart } from '@/components/CyclingTilePair';
 import {
   collectMainAccordDisplayRows,
   extractDetailReviews,
@@ -316,8 +317,6 @@ function toTitleCase(value: string): string {
   return value.replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-type CyclingPart = { primary: string; secondary: string };
-
 function buildWearProfileParts(
   wear: DerivedMetrics["wear_profile"] | null | undefined,
 ): CyclingPart[] {
@@ -435,51 +434,6 @@ function renderValueSignal(label: string | null | undefined): React.ReactNode {
   if (normalized.includes("value") || normalized.includes("good")) return <PriceValueSignal symbols="$" label={label} />;
 
   return <span className="font-serif italic text-white/90">{label}</span>;
-}
-
-function CyclingTilePair({
-  parts,
-  primaryClass,
-  secondaryClass,
-}: {
-  parts: CyclingPart[];
-  primaryClass: string;
-  secondaryClass: string;
-}) {
-  const [phase, setPhase] = useState(0);
-  useEffect(() => {
-    if (parts.length <= 1) return;
-    const id = window.setInterval(() => setPhase((p) => (p + 1) % parts.length), 4500);
-    return () => window.clearInterval(id);
-  }, [parts.length]);
-  if (parts.length === 0) return null;
-  const current = parts[phase % parts.length];
-  return (
-    <>
-      <p className={primaryClass}>
-        <motion.span
-          key={`p-${current.primary}`}
-          initial={{ opacity: 0, y: 3 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-          className="block leading-tight"
-        >
-          {current.primary}
-        </motion.span>
-      </p>
-      <p className={secondaryClass}>
-        <motion.span
-          key={`s-${current.secondary}`}
-          initial={{ opacity: 0, y: 3 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-          className="block leading-snug"
-        >
-          {current.secondary}
-        </motion.span>
-      </p>
-    </>
-  );
 }
 
 function ProfileScorePanel({
@@ -619,6 +573,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [enlargeOpen, setEnlargeOpen] = useState(false);
   const [buyLinks, setBuyLinks] = useState<Record<string, BuyLink>>({});
+  const [retryTrigger, setRetryTrigger] = useState(0);
 
   const selectedItem = useMemo(() => {
     if (!data || !selectedItemId) return null;
@@ -698,7 +653,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
         });
       })
       .finally(() => setLoading(false));
-  }, [userId, toast]);
+  }, [userId, toast, retryTrigger]);
 
   return (
     <div className="min-h-[100svh] bg-black text-white relative overflow-x-hidden">
@@ -728,8 +683,15 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
         )}
 
         {error && (
-          <div className="flex items-center justify-center py-40">
+          <div className="flex flex-col items-center justify-center py-40 gap-6">
             <p className="font-serif italic text-red-400/60 text-2xl">{error}</p>
+            <button
+              type="button"
+              onClick={() => setRetryTrigger(t => t + 1)}
+              className="scent-primary-button px-8 py-3 rounded-scent font-serif italic text-lg"
+            >
+              Retry
+            </button>
           </div>
         )}
 
