@@ -60,7 +60,42 @@ export const PageTransitionOverlay: React.FC = () => {
     };
   }, [location.pathname]);
 
-  if (reduceMotion) return null;
+  // When reduced motion is preferred, show a brief cross-fade only — no spinning or scaling.
+  if (reduceMotion) {
+    return (
+      <AnimatePresence>
+        {visible && (
+          <motion.div
+            key={animKey}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18, ease: 'easeInOut' }}
+            className="fixed inset-0 z-[9999] flex items-center justify-center pointer-events-none"
+            style={{
+              background: `radial-gradient(ellipse 55% 50% at 50% 50%, rgba(16, 10, 2, 0.94) 0%, rgba(3, 2, 1, 0.97) 100%)`,
+              WebkitBackdropFilter: 'blur(12px)',
+              backdropFilter: 'blur(12px)',
+            }}
+            aria-hidden="true"
+            role="presentation"
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
+              <img src={EMBLEM} alt="" draggable={false} style={{ width: 80, height: 80, userSelect: 'none' }} />
+              <p style={{ fontSize: 11, letterSpacing: '0.34em', textTransform: 'uppercase', color: '#fff7ec', fontFamily: 'Georgia, serif', fontStyle: 'italic', fontWeight: 700, margin: 0, opacity: 0.5, WebkitTextSizeAdjust: 'none' as any }}>
+                SCENTBEAM
+              </p>
+              {ROUTE_LABELS[location.pathname] && (
+                <p style={{ fontSize: 11, letterSpacing: '0.22em', textTransform: 'uppercase', color: '#fff7ec', fontFamily: 'Georgia, serif', fontWeight: 400, margin: 0, opacity: 0.4, WebkitTextSizeAdjust: 'none' as any }}>
+                  {ROUTE_LABELS[location.pathname]}
+                </p>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    );
+  }
 
   return (
     <AnimatePresence>
@@ -79,7 +114,7 @@ export const PageTransitionOverlay: React.FC = () => {
             contain: 'layout paint style',
             isolation: 'isolate',
             transform: 'translate3d(0, 0, 0)',
-            willChange: 'opacity, backdrop-filter',
+            willChange: 'opacity',
           }}
           aria-hidden="true"
           role="presentation"
@@ -216,10 +251,10 @@ export const PageTransitionOverlay: React.FC = () => {
             {ROUTE_LABELS[location.pathname] && (
               <motion.p
                 initial={{ opacity: 0, y: 4 }}
-                animate={{ opacity: 0.35, y: 0 }}
+                animate={{ opacity: 0.45, y: 0 }}
                 transition={{ delay: 0.42, duration: 0.32, ease: 'easeOut' }}
                 style={{
-                  fontSize: 9,
+                  fontSize: 11,
                   letterSpacing: '0.22em',
                   textTransform: 'uppercase',
                   color: '#fff7ec',
@@ -230,6 +265,7 @@ export const PageTransitionOverlay: React.FC = () => {
                   userSelect: 'none',
                   margin: 0,
                   padding: 0,
+                  WebkitTextSizeAdjust: 'none' as any,
                 }}
               >
                 {ROUTE_LABELS[location.pathname]}
