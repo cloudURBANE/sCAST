@@ -80,8 +80,6 @@ const TYPEWRITER_FRAME_MS = 24;
 const NOTE_MARQUEE_MIN_CHARS = 58;
 const NOTE_MARQUEE_MIN_COUNT = 5;
 const NO_ACTIVE_NOTES: string[] = [];
-const TOUCH_GUIDE_INTERVAL_MS = 2600;
-const TOUCH_GUIDE_LAYERS: ActiveLayer[] = ['top', 'heart', 'base'];
 const LAYER_CENTER_Y: Record<ActiveLayer, number> = {
   top: 82,
   heart: 200,
@@ -245,34 +243,6 @@ function useTypedNoteText(text: string, instant: boolean) {
   }, [instant, text]);
 
   return { typedText, isComplete };
-}
-
-function useTouchLayerGuide(paused: boolean) {
-  const [isTouchLike, setIsTouchLike] = React.useState(false);
-  const [guideIndex, setGuideIndex] = React.useState(0);
-
-  React.useEffect(() => {
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
-
-    const query = window.matchMedia('(hover: none), (pointer: coarse)');
-    const update = () => setIsTouchLike(query.matches);
-    update();
-
-    query.addEventListener?.('change', update);
-    return () => query.removeEventListener?.('change', update);
-  }, []);
-
-  React.useEffect(() => {
-    if (!isTouchLike || paused) return;
-
-    const interval = window.setInterval(() => {
-      setGuideIndex((current) => (current + 1) % TOUCH_GUIDE_LAYERS.length);
-    }, TOUCH_GUIDE_INTERVAL_MS);
-
-    return () => window.clearInterval(interval);
-  }, [isTouchLike, paused]);
-
-  return isTouchLike && !paused ? TOUCH_GUIDE_LAYERS[guideIndex] : null;
 }
 
 function LayerNotesText({
@@ -565,7 +535,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
   const pointerActivationRef = React.useRef<PointerActivation | null>(null);
   const ignoreClickActivationRef = React.useRef(false);
   const prefersReducedMotion = useReducedMotion();
-  const guidedLayer = useTouchLayerGuide(Boolean(prefersReducedMotion || activeLayer || hoveredLayer || focusedLayer));
+  const guidedLayer = null;
   const idPrefix = React.useId().replace(/:/g, '');
   const state = activeLayer ?? 'idle';
   const engagedLayer = hoveredLayer ?? focusedLayer ?? guidedLayer;
@@ -1500,12 +1470,6 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                   transition={prefersReducedMotion ? reducedTransition : { duration: 0.6, delay: 0.08, ease: CALM_EASE }}
                   className="flex w-full flex-col items-center justify-center space-y-1"
                 >
-                  <span className="text-[8px] font-bold uppercase tracking-[0.34em] text-white/38">
-                    Scent Profile Analysis
-                  </span>
-
-                  <span className="block h-px w-32 origin-center bg-gradient-to-r from-transparent via-[#fc9d19]/56 to-transparent" />
-
                   <h3 className="bg-gradient-to-br from-[#fff3d4] via-[#fc9d19] to-[#8c5a1a] bg-clip-text text-[10.5px] font-bold uppercase tracking-[0.38em] text-transparent drop-shadow-[0_2px_10px_rgba(252,157,25,0.4)]">
                     {selectedLayer.title}
                   </h3>

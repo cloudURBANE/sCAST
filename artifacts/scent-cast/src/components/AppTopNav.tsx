@@ -20,11 +20,11 @@ interface AppTopNavProps {
   onSignOut: () => void;
 }
 
-const inactiveNavClassName =
-  'text-[10px] sm:text-[13px] font-medium uppercase tracking-[0.16em] min-[390px]:tracking-[0.22em] text-[#f4debd]/85 hover:text-white transition-colors whitespace-nowrap';
+const navBaseClassName =
+  'text-[10px] sm:text-[13px] font-medium uppercase tracking-[0.16em] min-[390px]:tracking-[0.22em] whitespace-nowrap';
 
-const activeNavClassName =
-  'text-[10px] sm:text-[13px] font-medium uppercase tracking-[0.16em] min-[390px]:tracking-[0.22em] text-scent-accent whitespace-nowrap';
+const inactiveNavClassName = `${navBaseClassName} text-[#f4debd]/85 hover:text-white transition-colors`;
+const activeNavClassName = `${navBaseClassName} text-scent-accent`;
 
 const ActiveDot: React.FC = () => (
   <span aria-hidden="true" className="hidden sm:inline-block w-1 h-1 rounded-full bg-scent-accent mr-2 align-middle" />
@@ -130,7 +130,7 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
   );
 
   return (
-    <nav className="scent-topbar fixed top-0 left-0 right-0 h-16 sm:h-[72px] z-50 px-3 sm:px-8">
+    <nav className="scent-topbar fixed top-0 left-0 right-0 z-50 px-3 sm:px-8">
       <div className="max-w-[1760px] mx-auto h-full grid grid-cols-[minmax(54px,1fr)_auto_minmax(84px,1fr)] sm:grid-cols-[1fr_auto_1fr] items-center">
         <div className="flex min-w-0 items-center gap-2 sm:gap-6 justify-self-start sm:justify-self-center">
           {authControl}
