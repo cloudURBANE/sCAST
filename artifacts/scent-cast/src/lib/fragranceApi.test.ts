@@ -163,6 +163,30 @@ test("normalizeFragranceDetail does not complete without both source signals", (
   assert.equal(isFragranceDetailEffectivelyComplete(detail), false);
 });
 
+test("normalizeFragranceDetail treats complete Fragrantica metrics as display complete", () => {
+  const detail = normalizeFragranceDetail({
+    name: "Santal 33",
+    house: "Le Labo",
+    source_coverage: {
+      complete: false,
+      basenotes: false,
+      fragrantica: true,
+      fragrantica_metrics_complete: true,
+      derived_metrics: "partial",
+    },
+    derived_metrics: {
+      headline: { summary: "Woody aromatic musk." },
+    },
+  });
+  const status = resolveSourceStatus(detail.source_coverage, detail.enrichment);
+
+  assert.equal(detail.source_coverage?.complete, true);
+  assert.equal(isFragranceDetailEffectivelyComplete(detail), true);
+  assert.equal(status.complete, true);
+  assert.equal(status.badgeLabel, "Complete");
+  assert.equal(status.metricsLabel, "Metrics ready");
+});
+
 test("resolveSourceStatus keeps stale complete flags partial without both sources", () => {
   const detail = normalizeFragranceDetail({
     name: "Sauvage",

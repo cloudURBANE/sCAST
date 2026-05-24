@@ -705,6 +705,9 @@ export function isDerivedMetricsCompleteFlag(value: unknown): boolean {
 
 export function isSourceCoverageComplete(coverage?: SourceCoverage | null): boolean {
   if (!coverage) return false;
+  if (coverage.fragrantica === true && coverage.fragrantica_metrics_complete === true) {
+    return true;
+  }
   return (
     coverage.basenotes === true &&
     coverage.fragrantica === true &&
