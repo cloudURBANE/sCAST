@@ -310,23 +310,25 @@ a {
   isolation: isolate;
   overflow: hidden;
   font-weight: 600;
-  text-shadow: 0 1px 0 rgba(255, 248, 220, 0.38);
+  text-shadow:
+    0 1px 0 rgba(255, 247, 214, 0.32),
+    0 -1px 0 rgba(59, 31, 5, 0.32);
   background:
-    linear-gradient(112deg, rgba(255, 255, 255, 0) 0 22%, rgba(255, 247, 214, 0.46) 31%, rgba(255, 255, 255, 0) 43%),
-    radial-gradient(120% 170% at 50% -28%, rgba(255, 255, 237, 0.8), rgba(255, 232, 162, 0.24) 32%, transparent 58%),
-    radial-gradient(98% 130% at 12% 4%, rgba(255, 244, 196, 0.56), transparent 38%),
-    linear-gradient(180deg, #f8df97 0%, #d8b04a 23%, #a77323 52%, #7b4f16 78%, #d4af37 100%);
-  color: #120902;
-  border: 1px solid rgba(255, 231, 169, 0.86);
+    radial-gradient(140% 220% at 50% -92%, rgba(255, 255, 234, 0.86) 0%, rgba(238, 201, 118, 0.28) 26%, transparent 48%),
+    linear-gradient(96deg, rgba(31, 17, 4, 0.46) 0%, rgba(255, 232, 168, 0.2) 13%, rgba(91, 52, 10, 0.18) 25%, rgba(255, 244, 206, 0.22) 42%, rgba(62, 35, 8, 0.24) 58%, rgba(236, 196, 103, 0.2) 75%, rgba(26, 14, 3, 0.48) 100%),
+    linear-gradient(180deg, #dec077 0%, #b1812d 19%, #7a4b12 48%, #5a330b 51%, #a87525 78%, #d5ad55 100%);
+  color: #150b03;
+  border: 1px solid rgba(237, 199, 116, 0.9);
   box-shadow:
-    0 0 0 1px rgba(26, 13, 2, 0.72),
-    0 3px 10px rgba(0, 0, 0, 0.78),
-    0 15px 34px -15px rgba(212, 175, 55, 0.62),
-    0 28px 52px -30px rgba(0, 0, 0, 0.98),
-    inset 0 1px 0 rgba(255, 255, 232, 0.74),
-    inset 0 2px 5px rgba(255, 237, 176, 0.2),
-    inset 0 -3px 7px rgba(47, 25, 4, 0.5),
-    inset 0 0 0 1px rgba(255, 235, 176, 0.28);
+    0 0 0 1px rgba(18, 9, 1, 0.78),
+    0 2px 5px rgba(0, 0, 0, 0.76),
+    0 12px 22px -14px rgba(220, 174, 69, 0.56),
+    0 28px 48px -28px rgba(0, 0, 0, 0.98),
+    inset 0 1px 0 rgba(255, 248, 213, 0.62),
+    inset 0 0 0 1px rgba(255, 222, 151, 0.22),
+    inset 0 7px 13px rgba(255, 237, 181, 0.08),
+    inset 0 -1px 0 rgba(255, 222, 139, 0.26),
+    inset 0 -8px 14px rgba(38, 19, 2, 0.42);
   transition:
     box-shadow var(--scent-transition-base) var(--scent-ease-out),
     background var(--scent-transition-base) var(--scent-ease-out),
@@ -342,14 +344,14 @@ a {
 .scent-primary-button::before {
   content: "";
   position: absolute;
-  inset: 1px 1px auto;
+  inset: 1px 2px auto;
   z-index: 0;
-  height: 58%;
+  height: 47%;
   border-radius: calc(var(--radius-scent) - 2px);
   pointer-events: none;
   background:
-    linear-gradient(180deg, rgba(255, 255, 244, 0.46), rgba(255, 246, 215, 0.16) 52%, rgba(255, 244, 215, 0));
-  opacity: 0.9;
+    radial-gradient(140% 112% at 50% 0%, rgba(255, 255, 240, 0.52), rgba(255, 235, 174, 0.12) 54%, transparent 72%);
+  opacity: 0.78;
   transition: opacity var(--scent-transition-base) var(--scent-ease-out);
 }
 
@@ -361,33 +363,35 @@ a {
   border-radius: inherit;
   pointer-events: none;
   background:
-    linear-gradient(90deg, rgba(88, 52, 12, 0.2), transparent 18% 82%, rgba(255, 246, 211, 0.28)),
-    linear-gradient(120deg, transparent 0 38%, rgba(255, 255, 238, 0.38) 45%, rgba(255, 248, 213, 0.08) 51%, transparent 60%),
-    repeating-linear-gradient(112deg, rgba(255, 255, 255, 0.08) 0 1px, transparent 1px 7px);
-  mix-blend-mode: soft-light;
-  opacity: 0.68;
+    linear-gradient(90deg, rgba(0, 0, 0, 0.2), transparent 8% 92%, rgba(255, 238, 176, 0.2)),
+    linear-gradient(112deg, transparent 0 42%, rgba(255, 255, 231, 0.22) 47%, rgba(255, 224, 142, 0.05) 52%, transparent 60%),
+    repeating-linear-gradient(99deg, rgba(255, 255, 255, 0.045) 0 1px, rgba(0, 0, 0, 0.028) 1px 2px, transparent 2px 6px),
+    repeating-radial-gradient(circle at 32% 40%, rgba(255, 255, 255, 0.055) 0 1px, transparent 1px 4px);
+  background-size: 100% 100%, 100% 100%, 18px 18px, 11px 11px;
+  mix-blend-mode: overlay;
+  opacity: 0.42;
   transition:
     opacity var(--scent-transition-base) var(--scent-ease-out),
     transform var(--scent-transition-base) var(--scent-ease-out);
 }
 
 .scent-primary-button:hover {
-  filter: saturate(1.06) brightness(1.04);
+  filter: saturate(1.02) brightness(1.035);
   background:
-    linear-gradient(112deg, rgba(255, 255, 255, 0) 0 18%, rgba(255, 249, 220, 0.62) 30%, rgba(255, 255, 255, 0) 44%),
-    radial-gradient(120% 170% at 50% -30%, rgba(255, 255, 242, 0.88), rgba(255, 232, 162, 0.28) 34%, transparent 60%),
-    radial-gradient(98% 130% at 12% 4%, rgba(255, 246, 201, 0.64), transparent 40%),
-    linear-gradient(180deg, #ffe9a8 0%, #dfba56 23%, #af7b27 52%, #855719 78%, #ddb947 100%);
-  border-color: rgba(255, 239, 192, 0.98);
+    radial-gradient(140% 220% at 50% -92%, rgba(255, 255, 238, 0.92) 0%, rgba(243, 207, 127, 0.32) 26%, transparent 48%),
+    linear-gradient(96deg, rgba(31, 17, 4, 0.42) 0%, rgba(255, 235, 177, 0.25) 13%, rgba(91, 52, 10, 0.16) 25%, rgba(255, 246, 214, 0.28) 42%, rgba(62, 35, 8, 0.2) 58%, rgba(240, 202, 111, 0.24) 75%, rgba(26, 14, 3, 0.44) 100%),
+    linear-gradient(180deg, #e7ca82 0%, #bc8a31 19%, #815117 48%, #61380e 51%, #b07c2b 78%, #dfba62 100%);
+  border-color: rgba(248, 218, 151, 0.98);
   box-shadow:
-    0 0 0 1px rgba(28, 14, 2, 0.72),
-    0 4px 12px rgba(0, 0, 0, 0.78),
-    0 18px 38px -14px rgba(212, 175, 55, 0.72),
-    0 32px 58px -30px rgba(0, 0, 0, 0.98),
-    inset 0 1px 0 rgba(255, 255, 236, 0.82),
-    inset 0 2px 5px rgba(255, 239, 183, 0.24),
-    inset 0 -3px 7px rgba(47, 25, 4, 0.54),
-    inset 0 0 0 1px rgba(255, 239, 190, 0.34);
+    0 0 0 1px rgba(18, 9, 1, 0.78),
+    0 3px 7px rgba(0, 0, 0, 0.76),
+    0 15px 27px -14px rgba(220, 174, 69, 0.64),
+    0 32px 54px -28px rgba(0, 0, 0, 0.98),
+    inset 0 1px 0 rgba(255, 250, 222, 0.68),
+    inset 0 0 0 1px rgba(255, 230, 166, 0.28),
+    inset 0 7px 13px rgba(255, 239, 187, 0.1),
+    inset 0 -1px 0 rgba(255, 226, 148, 0.3),
+    inset 0 -8px 14px rgba(38, 19, 2, 0.42);
 }
 
 .scent-primary-button:hover::before {
@@ -395,24 +399,24 @@ a {
 }
 
 .scent-primary-button:hover::after {
-  opacity: 0.82;
-  transform: translateX(2.5%);
+  opacity: 0.52;
+  transform: translateX(1.2%);
 }
 
 .scent-primary-button:active {
   background:
-    linear-gradient(112deg, rgba(255, 255, 255, 0) 0 24%, rgba(255, 238, 184, 0.34) 32%, rgba(255, 255, 255, 0) 43%),
-    radial-gradient(130% 170% at 50% -24%, rgba(255, 247, 218, 0.62), rgba(218, 170, 72, 0.2) 35%, transparent 58%),
-    linear-gradient(180deg, #deb866 0%, #b9872c 28%, #805114 64%, #66400e 100%);
-  border-color: rgba(226, 180, 89, 0.88);
+    radial-gradient(130% 200% at 50% -82%, rgba(255, 245, 207, 0.64) 0%, rgba(198, 145, 51, 0.2) 30%, transparent 50%),
+    linear-gradient(96deg, rgba(24, 12, 3, 0.54) 0%, rgba(217, 176, 91, 0.14) 18%, rgba(65, 36, 8, 0.28) 48%, rgba(208, 164, 74, 0.14) 78%, rgba(20, 10, 2, 0.56) 100%),
+    linear-gradient(180deg, #bd9552 0%, #8e601d 24%, #563109 57%, #7d5018 100%);
+  border-color: rgba(205, 155, 72, 0.88);
   box-shadow:
-    0 0 0 1px rgba(18, 9, 1, 0.7),
-    0 2px 7px rgba(0, 0, 0, 0.82),
-    0 10px 24px -16px rgba(212, 175, 55, 0.42),
-    0 20px 38px -30px rgba(0, 0, 0, 0.98),
-    inset 0 2px 5px rgba(68, 38, 9, 0.46),
-    inset 0 -2px 6px rgba(45, 24, 4, 0.64),
-    inset 0 0 0 1px rgba(226, 180, 89, 0.2);
+    0 0 0 1px rgba(16, 8, 1, 0.82),
+    0 2px 5px rgba(0, 0, 0, 0.84),
+    0 9px 22px -18px rgba(212, 175, 55, 0.36),
+    0 18px 34px -30px rgba(0, 0, 0, 0.98),
+    inset 0 2px 6px rgba(42, 22, 4, 0.56),
+    inset 0 -1px 0 rgba(225, 177, 93, 0.18),
+    inset 0 0 0 1px rgba(206, 157, 75, 0.18);
 }
 
 .scent-primary-button:active::before {
@@ -427,14 +431,17 @@ a {
 .scent-primary-button:focus-visible {
   outline: none;
   box-shadow:
-    0 0 0 1px rgba(20, 10, 1, 0.72),
-    0 0 0 3px rgba(212, 175, 55, 0.28),
-    0 0 0 5px rgba(255, 232, 172, 0.18),
-    0 4px 12px rgba(0, 0, 0, 0.78),
-    0 18px 38px -15px rgba(212, 175, 55, 0.62),
-    inset 0 1px 0 rgba(255, 255, 236, 0.76),
-    inset 0 -3px 7px rgba(47, 25, 4, 0.52),
-    inset 0 0 0 1px rgba(255, 239, 190, 0.32);
+    0 0 0 1px rgba(18, 9, 1, 0.78),
+    0 0 0 3px rgba(212, 175, 55, 0.3),
+    0 0 0 5px rgba(255, 232, 172, 0.16),
+    0 3px 7px rgba(0, 0, 0, 0.76),
+    0 15px 27px -14px rgba(220, 174, 69, 0.64),
+    0 32px 54px -28px rgba(0, 0, 0, 0.98),
+    inset 0 1px 0 rgba(255, 250, 222, 0.68),
+    inset 0 0 0 1px rgba(255, 230, 166, 0.28),
+    inset 0 7px 13px rgba(255, 239, 187, 0.1),
+    inset 0 -1px 0 rgba(255, 226, 148, 0.3),
+    inset 0 -8px 14px rgba(38, 19, 2, 0.42);
 }
 
 .scent-primary-button[disabled] {
