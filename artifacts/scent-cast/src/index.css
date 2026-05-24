@@ -1292,13 +1292,13 @@ a {
 
 @keyframes brand-gold-shimmer {
   0% {
-    background-position: 100% 0;
+    background-position: 300% 0;
   }
   30% {
-    background-position: -100% 0;
+    background-position: 100% 0;
   }
   100% {
-    background-position: -100% 0;
+    background-position: 100% 0;
   }
 }
 
@@ -1321,7 +1321,5 @@ a {
   -webkit-box-decoration-break: clone;
   animation: brand-gold-shimmer 8s cubic-bezier(0.25, 1, 0.5, 1) infinite;
   will-change: background-position;
-  display: inline;
+  display: inline-block;
 }
-
-
