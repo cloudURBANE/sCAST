@@ -310,87 +310,131 @@ a {
   isolation: isolate;
   overflow: hidden;
   font-weight: 600;
+  text-shadow: 0 1px 0 rgba(255, 248, 220, 0.38);
   background:
-    radial-gradient(150% 130% at 50% 3%, rgba(255, 238, 204, 0.24), transparent 48%),
-    linear-gradient(180deg, #efb863 0%, #c4a020 54%, #9a8010 100%);
-  color: #070402;
-  border: 1px solid rgba(255, 206, 127, 0.84);
+    linear-gradient(112deg, rgba(255, 255, 255, 0) 0 22%, rgba(255, 247, 214, 0.46) 31%, rgba(255, 255, 255, 0) 43%),
+    radial-gradient(120% 170% at 50% -28%, rgba(255, 255, 237, 0.8), rgba(255, 232, 162, 0.24) 32%, transparent 58%),
+    radial-gradient(98% 130% at 12% 4%, rgba(255, 244, 196, 0.56), transparent 38%),
+    linear-gradient(180deg, #f8df97 0%, #d8b04a 23%, #a77323 52%, #7b4f16 78%, #d4af37 100%);
+  color: #120902;
+  border: 1px solid rgba(255, 231, 169, 0.86);
   box-shadow:
-    0 0 0 1px rgba(15, 8, 2, 0.58),
-    0 3px 9px rgba(0, 0, 0, 0.72),
-    0 12px 26px -13px rgba(212, 175, 55, 0.5),
-    0 24px 42px -28px rgba(0, 0, 0, 0.95),
-    inset 0 1px 0 rgba(255, 244, 219, 0.52),
-    inset 0 -2px 5px rgba(75, 40, 8, 0.44),
-    inset 0 0 0 1px rgba(255, 223, 165, 0.2);
+    0 0 0 1px rgba(26, 13, 2, 0.72),
+    0 3px 10px rgba(0, 0, 0, 0.78),
+    0 15px 34px -15px rgba(212, 175, 55, 0.62),
+    0 28px 52px -30px rgba(0, 0, 0, 0.98),
+    inset 0 1px 0 rgba(255, 255, 232, 0.74),
+    inset 0 2px 5px rgba(255, 237, 176, 0.2),
+    inset 0 -3px 7px rgba(47, 25, 4, 0.5),
+    inset 0 0 0 1px rgba(255, 235, 176, 0.28);
   transition:
     box-shadow var(--scent-transition-base) var(--scent-ease-out),
     background var(--scent-transition-base) var(--scent-ease-out),
-    border-color var(--scent-transition-base) var(--scent-ease-out);
+    border-color var(--scent-transition-base) var(--scent-ease-out),
+    filter var(--scent-transition-base) var(--scent-ease-out);
+}
+
+.scent-primary-button > * {
+  position: relative;
+  z-index: 2;
 }
 
 .scent-primary-button::before {
   content: "";
   position: absolute;
   inset: 1px 1px auto;
-  height: 54%;
+  z-index: 0;
+  height: 58%;
   border-radius: calc(var(--radius-scent) - 2px);
   pointer-events: none;
   background:
-    linear-gradient(180deg, rgba(255, 252, 241, 0.26), rgba(255, 248, 229, 0.08) 48%, rgba(255, 244, 215, 0));
-  opacity: 0.88;
+    linear-gradient(180deg, rgba(255, 255, 244, 0.46), rgba(255, 246, 215, 0.16) 52%, rgba(255, 244, 215, 0));
+  opacity: 0.9;
   transition: opacity var(--scent-transition-base) var(--scent-ease-out);
 }
 
-.scent-primary-button:hover {
+.scent-primary-button::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  pointer-events: none;
   background:
-    radial-gradient(150% 130% at 50% 0%, rgba(255, 244, 216, 0.3), transparent 50%),
-    linear-gradient(180deg, #f5c46f 0%, #ccaa22 54%, #a48010 100%);
-  border-color: rgba(255, 223, 162, 0.95);
+    linear-gradient(90deg, rgba(88, 52, 12, 0.2), transparent 18% 82%, rgba(255, 246, 211, 0.28)),
+    linear-gradient(120deg, transparent 0 38%, rgba(255, 255, 238, 0.38) 45%, rgba(255, 248, 213, 0.08) 51%, transparent 60%),
+    repeating-linear-gradient(112deg, rgba(255, 255, 255, 0.08) 0 1px, transparent 1px 7px);
+  mix-blend-mode: soft-light;
+  opacity: 0.68;
+  transition:
+    opacity var(--scent-transition-base) var(--scent-ease-out),
+    transform var(--scent-transition-base) var(--scent-ease-out);
+}
+
+.scent-primary-button:hover {
+  filter: saturate(1.06) brightness(1.04);
+  background:
+    linear-gradient(112deg, rgba(255, 255, 255, 0) 0 18%, rgba(255, 249, 220, 0.62) 30%, rgba(255, 255, 255, 0) 44%),
+    radial-gradient(120% 170% at 50% -30%, rgba(255, 255, 242, 0.88), rgba(255, 232, 162, 0.28) 34%, transparent 60%),
+    radial-gradient(98% 130% at 12% 4%, rgba(255, 246, 201, 0.64), transparent 40%),
+    linear-gradient(180deg, #ffe9a8 0%, #dfba56 23%, #af7b27 52%, #855719 78%, #ddb947 100%);
+  border-color: rgba(255, 239, 192, 0.98);
   box-shadow:
-    0 0 0 1px rgba(19, 11, 3, 0.62),
-    0 4px 11px rgba(0, 0, 0, 0.76),
-    0 16px 30px -13px rgba(212, 175, 55, 0.6),
-    0 28px 46px -28px rgba(0, 0, 0, 0.98),
-    inset 0 1px 0 rgba(255, 247, 225, 0.6),
-    inset 0 -2px 6px rgba(82, 45, 10, 0.5),
-    inset 0 0 0 1px rgba(255, 226, 174, 0.24);
+    0 0 0 1px rgba(28, 14, 2, 0.72),
+    0 4px 12px rgba(0, 0, 0, 0.78),
+    0 18px 38px -14px rgba(212, 175, 55, 0.72),
+    0 32px 58px -30px rgba(0, 0, 0, 0.98),
+    inset 0 1px 0 rgba(255, 255, 236, 0.82),
+    inset 0 2px 5px rgba(255, 239, 183, 0.24),
+    inset 0 -3px 7px rgba(47, 25, 4, 0.54),
+    inset 0 0 0 1px rgba(255, 239, 190, 0.34);
 }
 
 .scent-primary-button:hover::before {
   opacity: 1;
 }
 
+.scent-primary-button:hover::after {
+  opacity: 0.82;
+  transform: translateX(2.5%);
+}
+
 .scent-primary-button:active {
   background:
-    radial-gradient(160% 140% at 50% -6%, rgba(255, 241, 208, 0.18), transparent 48%),
-    linear-gradient(180deg, #dfaa58 0%, #b49818 54%, #8a7c0a 100%);
-  border-color: rgba(236, 182, 93, 0.86);
+    linear-gradient(112deg, rgba(255, 255, 255, 0) 0 24%, rgba(255, 238, 184, 0.34) 32%, rgba(255, 255, 255, 0) 43%),
+    radial-gradient(130% 170% at 50% -24%, rgba(255, 247, 218, 0.62), rgba(218, 170, 72, 0.2) 35%, transparent 58%),
+    linear-gradient(180deg, #deb866 0%, #b9872c 28%, #805114 64%, #66400e 100%);
+  border-color: rgba(226, 180, 89, 0.88);
   box-shadow:
-    0 0 0 1px rgba(15, 8, 2, 0.66),
-    0 2px 6px rgba(0, 0, 0, 0.78),
-    0 10px 22px -14px rgba(212, 175, 55, 0.4),
-    0 20px 36px -28px rgba(0, 0, 0, 0.98),
-    inset 0 2px 4px rgba(86, 50, 14, 0.38),
-    inset 0 -2px 6px rgba(58, 31, 6, 0.58),
-    inset 0 0 0 1px rgba(236, 182, 93, 0.18);
+    0 0 0 1px rgba(18, 9, 1, 0.7),
+    0 2px 7px rgba(0, 0, 0, 0.82),
+    0 10px 24px -16px rgba(212, 175, 55, 0.42),
+    0 20px 38px -30px rgba(0, 0, 0, 0.98),
+    inset 0 2px 5px rgba(68, 38, 9, 0.46),
+    inset 0 -2px 6px rgba(45, 24, 4, 0.64),
+    inset 0 0 0 1px rgba(226, 180, 89, 0.2);
 }
 
 .scent-primary-button:active::before {
   opacity: 0.58;
 }
 
+.scent-primary-button:active::after {
+  opacity: 0.48;
+  transform: translateX(0);
+}
+
 .scent-primary-button:focus-visible {
   outline: none;
   box-shadow:
-    0 0 0 1px rgba(15, 8, 2, 0.62),
-    0 0 0 3px rgba(212, 175, 55, 0.24),
-    0 0 0 5px rgba(255, 214, 140, 0.14),
-    0 4px 11px rgba(0, 0, 0, 0.78),
-    0 18px 36px -16px rgba(212, 175, 55, 0.56),
-    inset 0 1px 0 rgba(255, 247, 225, 0.55),
-    inset 0 -2px 6px rgba(72, 39, 8, 0.46),
-    inset 0 0 0 1px rgba(255, 226, 174, 0.24);
+    0 0 0 1px rgba(20, 10, 1, 0.72),
+    0 0 0 3px rgba(212, 175, 55, 0.28),
+    0 0 0 5px rgba(255, 232, 172, 0.18),
+    0 4px 12px rgba(0, 0, 0, 0.78),
+    0 18px 38px -15px rgba(212, 175, 55, 0.62),
+    inset 0 1px 0 rgba(255, 255, 236, 0.76),
+    inset 0 -3px 7px rgba(47, 25, 4, 0.52),
+    inset 0 0 0 1px rgba(255, 239, 190, 0.32);
 }
 
 .scent-primary-button[disabled] {
@@ -401,7 +445,8 @@ a {
 
 @media (prefers-reduced-motion: reduce) {
   .scent-primary-button,
-  .scent-primary-button::before {
+  .scent-primary-button::before,
+  .scent-primary-button::after {
     transition-duration: 1ms;
   }
 }
