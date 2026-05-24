@@ -17,6 +17,7 @@ import { WeatherProvider, useWeather } from './context/WeatherContext';
 import { WardrobeProvider, useWardrobe, useWardrobeShareModalActions } from './context/WardrobeContext';
 import { Toaster } from './components/ui/toaster';
 import CommunityPage from '@/pages/community';
+import { PageTransitionOverlay } from './components/PageTransitionOverlay';
 
 const titleCaseToken = (value: string): string =>
   value
@@ -594,6 +595,7 @@ function AppContent() {
         <Route path="/share/:userId" element={<SharePageView />} />
       </Routes>
       <GlobalModals />
+      <PageTransitionOverlay />
     </>
   );
 }
