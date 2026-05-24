@@ -139,9 +139,6 @@ export const ThreadBackground: React.FC = React.memo(() => {
           background,
           boxShadow,
           filter,
-          borderRadius,
-          mixBlendMode,
-          opacity,
           axis,
           direction,
           wrap,
@@ -171,9 +168,6 @@ export const ThreadBackground: React.FC = React.memo(() => {
               background,
               boxShadow,
               filter,
-              borderRadius,
-              mixBlendMode,
-              opacity,
               transform: initialTransform,
             }}
           />
