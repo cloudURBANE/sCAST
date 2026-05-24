@@ -102,7 +102,7 @@ function VaultHeadlineRotation({ phrases }: { phrases: readonly string[] }) {
   if (reduceMotion) {
     return (
       <h2
-        className="flex h-[3rem] items-center justify-center font-serif italic text-[clamp(1.25rem,4vw,1.75rem)] leading-none tracking-[0.0187em] text-[#fff7ec] drop-shadow-[0_0_22px_rgba(201,139,44,0.14)]"
+        className="flex h-[3rem] items-center justify-center font-serif italic text-[clamp(1.25rem,4vw,1.75rem)] leading-none tracking-[0.0187em] text-[#fff7ec] drop-shadow-[0_0_22px_rgba(212,175,55,0.14)]"
         aria-hidden
       >
         <span className="max-w-full truncate bg-gradient-to-br from-[#fffbf5] via-[#fff7ec] to-[#e6d2b8]/88 bg-clip-text text-center text-transparent px-1">
@@ -114,7 +114,7 @@ function VaultHeadlineRotation({ phrases }: { phrases: readonly string[] }) {
 
   return (
     <h2
-      className="flex h-[3rem] items-center justify-center font-serif italic text-[clamp(1.25rem,4vw,1.75rem)] leading-none tracking-[0.0187em] text-[#fff7ec] drop-shadow-[0_0_22px_rgba(201,139,44,0.14)]"
+      className="flex h-[3rem] items-center justify-center font-serif italic text-[clamp(1.25rem,4vw,1.75rem)] leading-none tracking-[0.0187em] text-[#fff7ec] drop-shadow-[0_0_22px_rgba(212,175,55,0.14)]"
       aria-hidden
     >
       <span className="relative flex min-h-[1.15em] w-full min-w-0 max-w-full items-center justify-center px-1">
@@ -702,7 +702,7 @@ export const FragranceCapture: React.FC<{
               onBlur={() => setSearchFocused(false)}
               placeholder="Search by house or fragrance…"
               aria-label="Look up a brand or fragrance"
-              className="scent-lux-input relative z-0 w-full h-[58px] sm:h-[62px] pl-12 pr-12 text-center text-[#fff7ec] font-sans text-[15px] font-medium outline-none transition-colors placeholder:text-[#c9a97a]/42 placeholder:font-medium group-focus-within:shadow-[inset_0_1px_0_rgba(255,226,174,0.08),0_0_0_1px_rgba(201,139,44,0.15)] scroll-mt-28"
+              className="scent-lux-input relative z-0 w-full h-[58px] sm:h-[62px] pl-12 pr-12 text-center text-[#fff7ec] font-sans text-[15px] font-medium outline-none transition-colors placeholder:text-[#c9a97a]/42 placeholder:font-medium group-focus-within:shadow-[inset_0_1px_0_rgba(255,226,174,0.08),0_0_0_1px_rgba(212,175,55,0.15)] scroll-mt-28"
             />
             <motion.button
               type="submit"
@@ -730,7 +730,7 @@ export const FragranceCapture: React.FC<{
                       : { duration: 3.4, repeat: Infinity, ease: "easeInOut" }
                   }
                 >
-                  <Search size={18} strokeWidth={1.65} className="drop-shadow-[0_0_12px_rgba(201,139,44,0.22)]" />
+                  <Search size={18} strokeWidth={1.65} className="drop-shadow-[0_0_12px_rgba(212,175,55,0.22)]" />
                 </motion.span>
               )}
             </motion.button>
@@ -776,7 +776,7 @@ export const FragranceCapture: React.FC<{
                         onClick={() => setSelectedIdx(i)}
                         className={`group w-full min-h-[76px] px-5 py-4 text-center border transition-all duration-200 cursor-pointer rounded-[var(--radius-scent)] ${
                           selectedIdx === i
-                            ? 'border-scent-accent/45 bg-white/[0.06] shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_0_0_1px_rgba(201,139,44,0.12)]'
+                            ? 'border-scent-accent/45 bg-white/[0.06] shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_0_0_1px_rgba(212,175,55,0.12)]'
                             : 'border-white/10 hover:bg-white/[0.035] hover:border-white/16'
                         }`}
                         aria-pressed={selectedIdx === i}
@@ -784,7 +784,7 @@ export const FragranceCapture: React.FC<{
                         <div className="mx-auto flex min-w-0 max-w-full flex-col items-center gap-1 relative">
                           {isVetted(m) && (
                             <div className="absolute -top-1 -right-2 flex items-center gap-1">
-                              <span className="text-[7px] uppercase tracking-[0.2em] text-scent-accent/90 font-bold bg-scent-accent/5 px-1.5 py-0.5 rounded-full border border-scent-accent/20 backdrop-blur-sm shadow-[0_0_10px_rgba(201,139,44,0.1)]">
+                              <span className="text-[7px] uppercase tracking-[0.2em] text-scent-accent/90 font-bold bg-scent-accent/5 px-1.5 py-0.5 rounded-full border border-scent-accent/20 backdrop-blur-sm shadow-[0_0_10px_rgba(212,175,55,0.1)]">
                                 Vetted
                               </span>
                             </div>

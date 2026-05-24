@@ -370,7 +370,7 @@ function PriceValueSignal({
   const intensity = symbols.length;
   const baseClass =
     tone === "accent"
-      ? "inline-flex font-serif italic text-scent-accent font-bold drop-shadow-[0_0_10px_rgba(201,139,44,0.7)] whitespace-nowrap"
+      ? "inline-flex font-serif italic text-scent-accent font-bold drop-shadow-[0_0_10px_rgba(212,175,55,0.7)] whitespace-nowrap"
       : "inline-flex font-serif italic text-white/90 whitespace-nowrap";
   const animate =
     intensity >= 4
@@ -868,7 +868,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                       >
                         {entryName(selectedItem)}
                       </h2>
-                      <p className="font-serif text-lg sm:text-2xl uppercase tracking-[0.28em] text-white/84">
+                      <p className="font-serif text-lg sm:text-2xl uppercase tracking-[0.28em] scent-brand-gold-shimmer">
                         {entryBrand(selectedItem)}
                       </p>
                     </div>

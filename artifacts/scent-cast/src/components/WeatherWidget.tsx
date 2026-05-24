@@ -36,7 +36,7 @@ const getScentProfile = (temp: number, condition: string): ScentProfile => {
     return { type: "High-Velocity Citrus", description: "Volatile, sharp molecules (Bergamot, Yuzu) engineered to project without overwhelming heat.", color: "#fbbf24", viscosity: 0.02 };
   }
   if (temp < 60) {
-    return { type: "Dense Woody Ambery", description: "Heavy molecular weight (Oud, Benzoin) requiring body heat to achieve optimal sillage.", color: "#78350f", viscosity: 0.002 };
+    return { type: "Dense Woody Ambery", description: "Heavy molecular weight (Oud, Benzoin) requiring body heat to achieve optimal sillage.", color: "#c98b2c", viscosity: 0.002 };
   }
   return { type: "Balanced Iso-E Super", description: "Versatile, transparent composition adapting seamlessly to temperate climates.", color: "#a78bfa", viscosity: 0.008 };
 };

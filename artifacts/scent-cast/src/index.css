@@ -5,7 +5,7 @@
   --color-scent-bg: #030201;
   --color-scent-surface: #0a0704;
   --color-scent-border: #3b250c;
-  --color-scent-accent: #c98b2c;
+  --color-scent-accent: #D4AF37;
   --color-scent-gold-100: #fef3c7;
   --color-scent-gold-200: #fde68a;
   --color-scent-muted: #b7a690;
@@ -25,13 +25,13 @@
   background-color: var(--color-scent-bg);
   color: var(--color-scent-accent);
   color-scheme: dark;
-  --scent-gold-rgb: 201 139 44;
+  --scent-gold-rgb: 212 175 55;
   --scent-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --scent-ease-snappy: cubic-bezier(0.34, 1.56, 0.64, 1);
   --scent-transition-fast: 180ms;
   --scent-transition-base: 240ms;
   --scent-card-shadow: 0 26px 68px -40px rgb(var(--scent-gold-rgb) / 0.5), 0 18px 42px -22px rgba(0, 0, 0, 0.96);
-  --scent-card-glow: inset 0 1px 0 rgba(255, 226, 176, 0.1), inset 0 0 72px rgba(201, 139, 44, 0.028);
+  --scent-card-glow: inset 0 1px 0 rgba(255, 226, 176, 0.1), inset 0 0 72px rgba(212, 175, 55, 0.028);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -57,7 +57,7 @@ body {
 }
 
 ::selection {
-  background: rgba(219, 162, 72, 0.3);
+  background: rgba(212, 175, 55, 0.3);
   color: #fff8ee;
 }
 
@@ -88,10 +88,10 @@ a {
   background: rgba(8, 5, 3, 0.78);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
-  border: 1px solid rgba(219, 162, 72, 0.28);
+  border: 1px solid rgba(212, 175, 55, 0.28);
   box-shadow:
     inset 0 1px 0 0 rgba(255, 230, 180, 0.09),
-    inset 0 0 70px 0 rgba(201, 139, 44, 0.02),
+    inset 0 0 70px 0 rgba(212, 175, 55, 0.02),
     0 22px 44px -16px rgba(0, 0, 0, 0.8);
 }
 
@@ -99,7 +99,7 @@ a {
   background: rgba(9, 6, 4, 0.84);
   backdrop-filter: blur(26px);
   -webkit-backdrop-filter: blur(26px);
-  border: 1px solid rgba(201, 139, 44, 0.28);
+  border: 1px solid rgba(212, 175, 55, 0.28);
   box-shadow: 
     var(--scent-card-glow),
     var(--scent-card-shadow);
@@ -107,8 +107,8 @@ a {
 
 .glass-shell {
   padding: 1px;
-  background: linear-gradient(135deg, rgba(218, 161, 75, 0.68), rgba(201, 139, 44, 0.2), rgba(201, 139, 44, 0.04));
-  box-shadow: 0 18px 48px -18px rgba(0, 0, 0, 0.95), 0 0 34px rgba(201, 139, 44, 0.08);
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.68), rgba(212, 175, 55, 0.2), rgba(212, 175, 55, 0.04));
+  box-shadow: 0 18px 48px -18px rgba(0, 0, 0, 0.95), 0 0 34px rgba(212, 175, 55, 0.08);
   overflow: hidden;
   border-radius: var(--radius-scent);
 }
@@ -200,7 +200,7 @@ a {
   top: 0;
   bottom: 0;
   width: 0;
-  border-left: 1px dashed rgba(201, 139, 44, 0.56);
+  border-left: 1px dashed rgba(212, 175, 55, 0.56);
 }
 
 .bottle-frame-guide__width {
@@ -240,7 +240,7 @@ a {
 
 .bottle-frame-guide__baseline {
   bottom: 0;
-  border-top: 2px solid rgba(201, 139, 44, 0.84);
+  border-top: 2px solid rgba(212, 175, 55, 0.84);
   color: rgba(255, 214, 154, 0.88);
 }
 
@@ -256,7 +256,7 @@ a {
 /* ─── Depth & Lighting Effects ────────────────────────────────────────────── */
 
 .pedestal {
-  background: radial-gradient(circle at center, rgba(201, 139, 44, 0.16) 0%, transparent 70%);
+  background: radial-gradient(circle at center, rgba(212, 175, 55, 0.16) 0%, transparent 70%);
   position: relative;
 }
 
@@ -268,7 +268,7 @@ a {
   transform: translateX(-50%);
   width: 120%;
   height: 60px;
-  background: radial-gradient(ellipse at center, rgba(201, 139, 44, 0.22) 0%, transparent 70%);
+  background: radial-gradient(ellipse at center, rgba(212, 175, 55, 0.22) 0%, transparent 70%);
   filter: blur(20px);
   pointer-events: none;
 }
@@ -284,14 +284,14 @@ a {
 
 .scent-brandmark {
   color: #fff7ec;
-  text-shadow: 0 0 14px rgba(201, 139, 44, 0.22);
+  text-shadow: 0 0 14px rgba(212, 175, 55, 0.22);
 }
 
 .scent-lux-input {
   background: rgba(6, 4, 3, 0.86);
-  border: 1px solid rgba(219, 162, 72, 0.56);
+  border: 1px solid rgba(212, 175, 55, 0.56);
   border-radius: var(--radius-scent);
-  box-shadow: inset 0 1px 0 rgba(255, 226, 174, 0.06), inset 0 0 28px rgba(201, 139, 44, 0.025), 0 16px 34px -22px rgba(0, 0, 0, 0.9);
+  box-shadow: inset 0 1px 0 rgba(255, 226, 174, 0.06), inset 0 0 28px rgba(212, 175, 55, 0.025), 0 16px 34px -22px rgba(0, 0, 0, 0.9);
   transition:
     border-color var(--scent-transition-fast) var(--scent-ease-out),
     box-shadow var(--scent-transition-base) var(--scent-ease-out),
@@ -300,8 +300,8 @@ a {
 
 .scent-lux-input:focus,
 .scent-lux-input:focus-visible {
-  border-color: rgba(239, 179, 82, 0.9);
-  box-shadow: inset 0 1px 0 rgba(255, 226, 174, 0.08), inset 0 0 30px rgba(201, 139, 44, 0.04), 0 0 0 3px rgba(201, 139, 44, 0.12), 0 18px 38px -22px rgba(0, 0, 0, 0.95);
+  border-color: rgba(212, 175, 55, 0.9);
+  box-shadow: inset 0 1px 0 rgba(255, 226, 174, 0.08), inset 0 0 30px rgba(212, 175, 55, 0.04), 0 0 0 3px rgba(212, 175, 55, 0.12), 0 18px 38px -22px rgba(0, 0, 0, 0.95);
   outline: none;
 }
 
@@ -312,13 +312,13 @@ a {
   font-weight: 600;
   background:
     radial-gradient(150% 130% at 50% 3%, rgba(255, 238, 204, 0.24), transparent 48%),
-    linear-gradient(180deg, #efb863 0%, #cf9133 54%, #9e6318 100%);
+    linear-gradient(180deg, #efb863 0%, #c4a020 54%, #9a8010 100%);
   color: #070402;
   border: 1px solid rgba(255, 206, 127, 0.84);
   box-shadow:
     0 0 0 1px rgba(15, 8, 2, 0.58),
     0 3px 9px rgba(0, 0, 0, 0.72),
-    0 12px 26px -13px rgba(201, 139, 44, 0.5),
+    0 12px 26px -13px rgba(212, 175, 55, 0.5),
     0 24px 42px -28px rgba(0, 0, 0, 0.95),
     inset 0 1px 0 rgba(255, 244, 219, 0.52),
     inset 0 -2px 5px rgba(75, 40, 8, 0.44),
@@ -345,12 +345,12 @@ a {
 .scent-primary-button:hover {
   background:
     radial-gradient(150% 130% at 50% 0%, rgba(255, 244, 216, 0.3), transparent 50%),
-    linear-gradient(180deg, #f5c46f 0%, #dc9d43 54%, #b17220 100%);
+    linear-gradient(180deg, #f5c46f 0%, #ccaa22 54%, #a48010 100%);
   border-color: rgba(255, 223, 162, 0.95);
   box-shadow:
     0 0 0 1px rgba(19, 11, 3, 0.62),
     0 4px 11px rgba(0, 0, 0, 0.76),
-    0 16px 30px -13px rgba(201, 139, 44, 0.6),
+    0 16px 30px -13px rgba(212, 175, 55, 0.6),
     0 28px 46px -28px rgba(0, 0, 0, 0.98),
     inset 0 1px 0 rgba(255, 247, 225, 0.6),
     inset 0 -2px 6px rgba(82, 45, 10, 0.5),
@@ -364,12 +364,12 @@ a {
 .scent-primary-button:active {
   background:
     radial-gradient(160% 140% at 50% -6%, rgba(255, 241, 208, 0.18), transparent 48%),
-    linear-gradient(180deg, #dfaa58 0%, #bf8227 54%, #925812 100%);
+    linear-gradient(180deg, #dfaa58 0%, #b49818 54%, #8a7c0a 100%);
   border-color: rgba(236, 182, 93, 0.86);
   box-shadow:
     0 0 0 1px rgba(15, 8, 2, 0.66),
     0 2px 6px rgba(0, 0, 0, 0.78),
-    0 10px 22px -14px rgba(201, 139, 44, 0.4),
+    0 10px 22px -14px rgba(212, 175, 55, 0.4),
     0 20px 36px -28px rgba(0, 0, 0, 0.98),
     inset 0 2px 4px rgba(86, 50, 14, 0.38),
     inset 0 -2px 6px rgba(58, 31, 6, 0.58),
@@ -384,10 +384,10 @@ a {
   outline: none;
   box-shadow:
     0 0 0 1px rgba(15, 8, 2, 0.62),
-    0 0 0 3px rgba(201, 139, 44, 0.24),
+    0 0 0 3px rgba(212, 175, 55, 0.24),
     0 0 0 5px rgba(255, 214, 140, 0.14),
     0 4px 11px rgba(0, 0, 0, 0.78),
-    0 18px 36px -16px rgba(201, 139, 44, 0.56),
+    0 18px 36px -16px rgba(212, 175, 55, 0.56),
     inset 0 1px 0 rgba(255, 247, 225, 0.55),
     inset 0 -2px 6px rgba(72, 39, 8, 0.46),
     inset 0 0 0 1px rgba(255, 226, 174, 0.24);
@@ -412,7 +412,7 @@ a {
   align-items: center;
   gap: 1.4rem;
   width: 100%;
-  color: #d7a856;
+  color: #D4AF37;
 }
 
 .scent-entry-count::before,
@@ -426,9 +426,9 @@ a {
   background: linear-gradient(
     to right,
     transparent,
-    rgba(201, 139, 44, 0.28) 38%,
-    #d7a856 50%,
-    rgba(201, 139, 44, 0.28) 62%,
+    rgba(212, 175, 55, 0.28) 38%,
+    #D4AF37 50%,
+    rgba(212, 175, 55, 0.28) 62%,
     transparent
   );
   background-size: 240% 100%;
@@ -501,7 +501,7 @@ a {
     inset 0 3px 9px rgba(0, 0, 0, 0.5),
     inset 0 -3px 11px rgba(0, 0, 0, 0.4),
     /* faint gold rim atmosphere */
-    inset 0 0 26px rgba(201, 139, 44, 0.06);
+    inset 0 0 26px rgba(212, 175, 55, 0.06);
   transition:
     border-color var(--scent-transition-base) var(--scent-ease-out),
     box-shadow var(--scent-transition-base) var(--scent-ease-out);
@@ -574,7 +574,7 @@ a {
     inset 4px 5px 10px -4px rgba(0, 0, 0, 0.55),
     inset 0 3px 9px rgba(0, 0, 0, 0.5),
     inset 0 -3px 11px rgba(0, 0, 0, 0.4),
-    inset 0 0 32px rgba(201, 139, 44, 0.1);
+    inset 0 0 32px rgba(212, 175, 55, 0.1);
 }
 
 .scent-fragrance-card:hover .scent-card-frame::before {
@@ -680,13 +680,13 @@ a {
 
 .scent-marquee-band {
   overflow: hidden;
-  border-block: 1px solid rgba(201, 139, 44, 0.14);
-  background: linear-gradient(90deg, transparent, rgba(201, 139, 44, 0.045), transparent);
+  border-block: 1px solid rgba(212, 175, 55, 0.14);
+  background: linear-gradient(90deg, transparent, rgba(212, 175, 55, 0.045), transparent);
 }
 
 .scent-marquee-text {
   color: rgba(255, 244, 225, 0.9);
-  text-shadow: 0 0 18px rgba(201, 139, 44, 0.22);
+  text-shadow: 0 0 18px rgba(212, 175, 55, 0.22);
 }
 
 .scent-marquee-track-row {
@@ -710,7 +710,7 @@ a {
   width: clamp(1.15rem, 2.2vw, 1.85rem);
   height: 1px;
   transform: translateY(0.06em);
-  background: linear-gradient(90deg, rgba(201, 139, 44, 0), rgba(201, 139, 44, 0.72), rgba(201, 139, 44, 0));
+  background: linear-gradient(90deg, rgba(212, 175, 55, 0), rgba(212, 175, 55, 0.72), rgba(212, 175, 55, 0));
   opacity: 0.82;
 }
 
@@ -794,7 +794,7 @@ a {
 
 .scent-weather-value {
   color: #fff7ec;
-  text-shadow: 0 0 24px rgba(201, 139, 44, 0.24);
+  text-shadow: 0 0 24px rgba(212, 175, 55, 0.24);
 }
 
 .scent-hero-zone {
@@ -819,7 +819,7 @@ a {
 .scent-atmosphere-marquee {
   position: relative;
   overflow: hidden;
-  border-block: 1px solid rgba(201, 139, 44, 0.18);
+  border-block: 1px solid rgba(212, 175, 55, 0.18);
   background: linear-gradient(180deg, rgba(10, 7, 4, 0.94), rgba(4, 3, 2, 0.98));
   box-shadow: inset 0 1px 0 rgba(255, 226, 174, 0.06), 0 18px 44px -28px rgba(0, 0, 0, 0.95);
   contain: paint;
@@ -877,7 +877,7 @@ a {
   width: clamp(9rem, 18vw, 14rem);
   max-width: clamp(9rem, 18vw, 14rem);
   padding: clamp(0.85rem, 2vw, 1.1rem) clamp(0.95rem, 2vw, 1.35rem);
-  border-left: 1px solid rgba(201, 139, 44, 0.12);
+  border-left: 1px solid rgba(212, 175, 55, 0.12);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -892,7 +892,7 @@ a {
   align-items: stretch;
   gap: 0;
   overflow: hidden;
-  border: 1px solid rgba(201, 139, 44, 0.18);
+  border: 1px solid rgba(212, 175, 55, 0.18);
   border-radius: var(--radius-scent);
   background: linear-gradient(180deg, rgba(10, 7, 4, 0.84), rgba(4, 3, 2, 0.92));
   box-shadow: inset 0 1px 0 rgba(255, 226, 174, 0.06), 0 18px 44px -28px rgba(0, 0, 0, 0.95);
@@ -906,7 +906,7 @@ a {
 .scent-atmosphere-cell {
   min-width: 0;
   padding: 1.1rem 1.25rem;
-  border-left: 1px solid rgba(201, 139, 44, 0.12);
+  border-left: 1px solid rgba(212, 175, 55, 0.12);
 }
 
 .scent-atmosphere-cell:first-child {
@@ -915,7 +915,7 @@ a {
 
 .scent-atmosphere-label {
   display: block;
-  color: rgba(224, 164, 79, 0.82);
+  color: rgba(212, 175, 55, 0.82);
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.22em;
@@ -945,7 +945,7 @@ a {
   }
 
   .scent-atmosphere-cell {
-    border-top: 1px solid rgba(201, 139, 44, 0.12);
+    border-top: 1px solid rgba(212, 175, 55, 0.12);
   }
 
   .scent-atmosphere-cell:nth-child(-n + 2) {
@@ -972,7 +972,7 @@ a {
   .scent-atmosphere-cell,
   .scent-atmosphere-cell:nth-child(-n + 2) {
     border-left: 0;
-    border-top: 1px solid rgba(201, 139, 44, 0.12);
+    border-top: 1px solid rgba(212, 175, 55, 0.12);
     padding: 0.95rem 1rem;
   }
 
@@ -1287,4 +1287,33 @@ a {
     --community-marquee-duration: 640s;
   }
 }
+
+@keyframes brand-gold-shimmer {
+  0% {
+    background-position: 120% 0;
+  }
+  18%, 100% {
+    background-position: -120% 0;
+  }
+}
+
+.scent-brand-gold-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.84) 0%,
+    rgba(255, 255, 255, 0.84) 38%,
+    #efb863 45%,
+    #fde68a 50%,
+    #efb863 55%,
+    rgba(255, 255, 255, 0.84) 62%,
+    rgba(255, 255, 255, 0.84) 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: brand-gold-shimmer 7s ease-in-out infinite;
+  display: inline-block;
+}
+
 

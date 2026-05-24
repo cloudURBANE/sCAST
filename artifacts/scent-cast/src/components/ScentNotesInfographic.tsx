@@ -310,7 +310,7 @@ function rankIntensity(index: number, total: number): {
   const valueOpacity = 1 - t * 0.30; // 1.00 → ~0.70
   const barOpacity = 1 - t * 0.22;   // 1.00 → ~0.78
   const glowAlpha = (0.34 - t * 0.26).toFixed(3); // 0.34 → ~0.08
-  const glow = `0 0 ${18 - t * 10}px rgba(201,139,44,${glowAlpha})`;
+  const glow = `0 0 ${18 - t * 10}px rgba(212,175,55,${glowAlpha})`;
   const labelWeight = index === 0 ? 600 : 500;
   return { labelOpacity, valueOpacity, barOpacity, glow, labelWeight };
 }
