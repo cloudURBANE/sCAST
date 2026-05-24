@@ -74,9 +74,10 @@ a {
   z-index: 1;
   pointer-events: none;
   background:
-    radial-gradient(ellipse at 50% 13%, rgba(255, 199, 109, 0.06), transparent 32rem),
-    radial-gradient(ellipse at 50% 31rem, rgba(0, 0, 0, 0.72), transparent 46rem),
-    linear-gradient(180deg, rgba(3, 2, 1, 0.42), rgba(3, 2, 1, 0.18) 28%, rgba(3, 2, 1, 0.72));
+    linear-gradient(180deg, rgba(0, 0, 0, 0.22), rgba(0, 0, 0, 0.06) 28%, rgba(0, 0, 0, 0.64)),
+    radial-gradient(ellipse at 50% 8%, rgba(255, 238, 196, 0.055), transparent 32rem),
+    radial-gradient(ellipse at 50% 32rem, rgba(0, 0, 0, 0.86), transparent 48rem);
+  mix-blend-mode: normal;
 }
 
 /* ─── Glassmorphism System ────────────────────────────────────────────────── */
@@ -957,9 +958,9 @@ a {
 @media (max-width: 640px) {
   .scent-app-shell::before {
     background:
-      radial-gradient(ellipse at 50% 10%, rgba(255, 199, 109, 0.05), transparent 20rem),
-      radial-gradient(ellipse at 50% 25rem, rgba(0, 0, 0, 0.76), transparent 30rem),
-      linear-gradient(180deg, rgba(3, 2, 1, 0.52), rgba(3, 2, 1, 0.28) 28%, rgba(3, 2, 1, 0.78));
+      linear-gradient(180deg, rgba(0, 0, 0, 0.24), rgba(0, 0, 0, 0.08) 28%, rgba(0, 0, 0, 0.7)),
+      radial-gradient(ellipse at 50% 8%, rgba(255, 238, 196, 0.05), transparent 21rem),
+      radial-gradient(ellipse at 50% 25rem, rgba(0, 0, 0, 0.9), transparent 30rem);
   }
 
   .scent-atmosphere-strip {
@@ -1027,16 +1028,16 @@ a {
 
 @keyframes scent-lava-fallback-drift {
   0%, 100% {
-    background-position: 50% 45%, 50% 55%, 0% 50%;
-    filter: saturate(0.95) brightness(0.92);
+    background-position: 12% 18%, 78% 68%, 0% 50%, 62% 18%;
+    filter: saturate(0.98) brightness(0.95);
   }
   45% {
-    background-position: 46% 50%, 54% 49%, 100% 50%;
-    filter: saturate(1.08) brightness(1);
+    background-position: 22% 28%, 70% 58%, 100% 50%, 55% 24%;
+    filter: saturate(1.06) brightness(1.02);
   }
   72% {
-    background-position: 55% 43%, 48% 58%, 42% 50%;
-    filter: saturate(1) brightness(0.96);
+    background-position: 6% 34%, 86% 62%, 42% 50%, 67% 11%;
+    filter: saturate(1) brightness(0.98);
   }
 }
 
@@ -1046,17 +1047,17 @@ a {
   z-index: 0;
   pointer-events: none;
   opacity: 0;
-  mix-blend-mode: screen;
   background:
-    radial-gradient(ellipse at 46% 40%, rgba(209, 128, 40, 0.18), transparent 42rem),
-    radial-gradient(ellipse at 54% 64%, rgba(129, 53, 18, 0.2), transparent 36rem),
-    linear-gradient(120deg, rgba(12, 8, 5, 0.9), rgba(79, 34, 12, 0.3) 44%, rgba(8, 5, 3, 0.92));
-  background-size: 140% 140%, 130% 130%, 220% 220%;
+    linear-gradient(112deg, transparent 8%, rgba(255, 214, 126, 0.1) 22%, transparent 39%),
+    linear-gradient(68deg, transparent 16%, rgba(255, 255, 255, 0.052) 30%, transparent 48%),
+    linear-gradient(120deg, #000 0%, #060402 36%, rgba(57, 34, 10, 0.48) 48%, #010101 78%),
+    radial-gradient(ellipse at 55% 12%, rgba(255, 226, 164, 0.055), transparent 38rem);
+  background-size: 210% 210%, 190% 190%, 240% 240%, 130% 130%;
   transition: opacity 320ms var(--scent-ease-out);
 }
 
 .scent-lava-fallback--visible {
-  opacity: 0.46;
+  opacity: 1;
 }
 
 .scent-lava-fallback--animated {
@@ -1064,7 +1065,34 @@ a {
 }
 
 .scent-lava-fallback--static {
-  background-position: 50% 45%, 50% 55%, 45% 50%;
+  background-position: 12% 18%, 78% 68%, 38% 50%, 62% 18%;
+}
+
+.scent-beam-atmosphere,
+.scent-beam-grain {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.scent-beam-atmosphere {
+  background:
+    linear-gradient(100deg, transparent 0%, rgba(0, 0, 0, 0.64) 16%, transparent 32%, rgba(255, 226, 166, 0.035) 48%, transparent 66%, rgba(0, 0, 0, 0.62) 100%),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.18), transparent 24%, transparent 62%, rgba(0, 0, 0, 0.72)),
+    radial-gradient(ellipse at 50% 9%, rgba(255, 244, 218, 0.06), transparent 38rem),
+    radial-gradient(ellipse at 50% 50%, transparent 0%, transparent 44%, rgba(0, 0, 0, 0.68) 100%);
+}
+
+.scent-beam-grain {
+  opacity: 0.105;
+  mix-blend-mode: overlay;
+  background-image:
+    linear-gradient(0deg, rgba(255, 255, 255, 0.028) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px);
+  background-size: 3px 3px, 5px 5px;
+  -webkit-mask-image: radial-gradient(ellipse at center, #000 0%, #000 74%, transparent 100%);
+  mask-image: radial-gradient(ellipse at center, #000 0%, #000 74%, transparent 100%);
 }
 
 /* Each side: closed path (0% = 100%) so no snap; uneven keyframe times + per-stop
