@@ -310,6 +310,7 @@ export const FragranceCapture: React.FC<{
   }, []);
 
   const vaultSearchActive = searchFocused || searchQuery.trim().length > 0;
+  const hasSelectedMatch = selectedIdx !== null;
   useEffect(() => {
     onVaultSearchStateChange?.(vaultSearchActive);
   }, [vaultSearchActive, onVaultSearchStateChange]);
@@ -639,7 +640,7 @@ export const FragranceCapture: React.FC<{
   };
 
   return (
-    <div className="glass-shell rounded-[var(--radius-scent)] relative overflow-hidden">
+    <div className="glass-shell w-full min-w-0 rounded-[var(--radius-scent)] relative overflow-hidden">
       <AnimatePresence>
         {uploading && (
         <motion.div
@@ -669,7 +670,7 @@ export const FragranceCapture: React.FC<{
         </motion.div>
         )}
       </AnimatePresence>
-      <div className="glass rounded-[var(--radius-scent-inner)] p-4 md:p-6">
+      <div className="glass min-w-0 rounded-[var(--radius-scent-inner)] p-4 md:p-6">
         <header className="mb-[1.41rem] px-2 -translate-y-px">
           <p className="sr-only">
             Add perfumes to your vault. Example fragrance names rotate above the search field.
@@ -834,11 +835,11 @@ export const FragranceCapture: React.FC<{
                   <button
                     type="button"
                     onClick={handleConfirm}
-                    disabled={uploading || selectedIdx === null}
-                    className="scent-primary-button mt-4 h-12 w-full rounded-[var(--radius-scent)] px-4 font-serif italic text-base transition-all hover:scale-[1.02] active:scale-95 sm:mt-5 sm:h-14 sm:text-lg disabled:pointer-events-none disabled:opacity-72"
+                    disabled={uploading || !hasSelectedMatch}
+                    className="scent-primary-button mt-4 flex h-12 w-full items-center justify-center rounded-[var(--radius-scent)] px-4 font-serif italic text-base transition-all hover:scale-[1.02] active:scale-95 sm:mt-5 sm:h-14 sm:text-lg disabled:pointer-events-none disabled:opacity-72"
                   >
-                    <span className="font-serif italic text-base sm:text-lg leading-tight text-center">
-                      Sync to Vault
+                    <span className="scent-primary-button-label font-serif italic text-base sm:text-lg leading-tight text-center">
+                      {hasSelectedMatch ? 'Sync to Vault' : 'Select a Match'}
                     </span>
                   </button>
                 </div>

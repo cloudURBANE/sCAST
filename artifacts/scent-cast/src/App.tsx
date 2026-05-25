@@ -328,21 +328,17 @@ function DashboardView() {
             </div>
           </div>
 
-          <section className="scent-hero-zone mx-auto w-full max-w-2xl space-y-7 text-center">
-            <h2 className="font-serif italic text-[clamp(2.15rem,7vw,3.8rem)] text-[#fff7ec] leading-[0.98] tracking-normal">
+          <section className="scent-hero-zone mx-auto w-full max-w-2xl min-w-0 space-y-7 text-center">
+            <h2 className="mx-auto max-w-full text-balance font-serif italic text-[clamp(2.15rem,7vw,3.8rem)] text-[#fff7ec] leading-[0.98] tracking-normal">
               Find your signature for the current atmosphere.
             </h2>
             <FragranceCapture onAdd={handleAddItem} onVaultSearchStateChange={handleVaultSearchStateChange} />
             <AnimatePresence initial={false}>
-              {items.length >= 3 ? (
+              {items.length >= 3 && !vaultSearchUiActive ? (
                 <motion.div
                   key="discover-button"
                   initial={{ opacity: 0, height: 0, marginTop: 0 }}
-                  animate={{
-                    opacity: vaultSearchUiActive ? 0 : 1,
-                    height: vaultSearchUiActive ? 0 : 'auto',
-                    marginTop: vaultSearchUiActive ? 0 : '1.75rem',
-                  }}
+                  animate={{ opacity: 1, height: 'auto', marginTop: '1.75rem' }}
                   exit={{ opacity: 0, height: 0, marginTop: 0 }}
                   transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
                   style={{ overflow: 'hidden' }}
