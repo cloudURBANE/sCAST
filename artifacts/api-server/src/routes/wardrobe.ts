@@ -58,6 +58,7 @@ async function imageMetadataPatchForUrl(url: string): Promise<Record<string, unk
     ...(image?.storagePath ? { storagePath: image.storagePath } : {}),
     ...(image?.contentHash ? { imageHash: image.contentHash } : {}),
     ...(image?.storageProvider ? { storageProvider: image.storageProvider } : {}),
+    ...(image?.sourceProvider ? { sourceProvider: image.sourceProvider } : {}),
   };
 }
 

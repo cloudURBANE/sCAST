@@ -14,7 +14,7 @@ import {
 } from "./fragrancePayloadCore";
 import { db } from "@workspace/db";
 import { globalFragrancesTable, imageCacheTable } from "@workspace/db/schema";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { makeLookupKey } from "./catalogService";
 import { IMAGE_PIPELINE_VERSION } from "./imageIdentity";
 
@@ -135,7 +135,7 @@ export function normalizeFragrance(fragrance: Record<string, any>): Record<strin
   };
 }
 
-/** Prefer the shared catalog/cache image; fall back to the stored row URL only if needed. */
+/** Prefer the image saved on the wardrobe row; shared catalog/cache images only fill blanks. */
 export async function hydrateImageUrl(fragrance: Record<string, any>): Promise<Record<string, any>> {
   const current = await usableImageUrlForResponse(fragrance.imageUrl);
   const name = fragrance.name as string | undefined;
@@ -178,6 +178,7 @@ export async function batchHydrateImageUrls(
       .select({
         lookupKey: imageCacheTable.lookupKey,
         publicUrl: imageCacheTable.publicUrl,
+        sourceProvider: imageCacheTable.sourceProvider,
         backgroundRemoved: imageCacheTable.backgroundRemoved,
       })
       .from(imageCacheTable)
@@ -189,6 +190,7 @@ export async function batchHydrateImageUrls(
         ),
       )
       .orderBy(
+        desc(sql<number>`case when ${imageCacheTable.sourceProvider} = 'manual' then 1 else 0 end`),
         desc(imageCacheTable.backgroundRemoved),
         desc(imageCacheTable.lastUsedAt),
         desc(imageCacheTable.createdAt),

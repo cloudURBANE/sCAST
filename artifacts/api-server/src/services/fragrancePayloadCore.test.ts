@@ -63,20 +63,20 @@ test("stampVaultSchemaVersion preserves every other field, including falsy ones"
   }
 });
 
-test("chooseHydratedImageUrl prefers a fresh shared image over a usable stored row image", () => {
+test("chooseHydratedImageUrl keeps a usable stored row image over a shared image", () => {
   assert.equal(
     chooseHydratedImageUrl(
       "https://cdn.example.com/fresh.webp",
-      "https://cdn.example.com/stale.webp",
+      "https://cdn.example.com/manual.webp",
     ),
-    "https://cdn.example.com/fresh.webp",
+    "https://cdn.example.com/manual.webp",
   );
 });
 
-test("chooseHydratedImageUrl falls back to the stored row image when shared lookup misses", () => {
+test("chooseHydratedImageUrl falls back to the shared image when the stored row image is missing", () => {
   assert.equal(
-    chooseHydratedImageUrl(null, "https://cdn.example.com/current.webp"),
-    "https://cdn.example.com/current.webp",
+    chooseHydratedImageUrl("https://cdn.example.com/shared.webp", null),
+    "https://cdn.example.com/shared.webp",
   );
 });
 

@@ -37,6 +37,7 @@ export type CachedImageReference = {
   storagePath: string;
   imageHash: string | null;
   sourceUrlHash: string;
+  sourceProvider: string;
   storageProvider: ImageStorageProvider;
   cached: boolean;
   width: number | null;
@@ -84,6 +85,7 @@ function rowToReference(row: typeof imageCacheTable.$inferSelect, cached: boolea
     storagePath: row.storagePath,
     imageHash: row.contentHash,
     sourceUrlHash: row.sourceUrlHash,
+    sourceProvider: row.sourceProvider,
     storageProvider: row.storageProvider as ImageStorageProvider,
     cached,
     width: row.width,
@@ -116,6 +118,7 @@ async function rowToUsableReference(
 
 function readyInputToReference(input: {
   sourceUrlHash: string;
+  sourceProvider: string;
   contentHash: string;
   storageProvider: ImageStorageProvider;
   storagePath: string;
@@ -133,6 +136,7 @@ function readyInputToReference(input: {
     storagePath: input.storagePath,
     imageHash: input.contentHash,
     sourceUrlHash: input.sourceUrlHash,
+    sourceProvider: input.sourceProvider,
     storageProvider: input.storageProvider,
     cached: false,
     width: input.width,
@@ -205,7 +209,12 @@ export async function getLatestReadyCachedImageByLookupKey(
           eq(imageCacheTable.processingStatus, "ready"),
         ),
       )
-      .orderBy(desc(imageCacheTable.backgroundRemoved), desc(imageCacheTable.lastUsedAt), desc(imageCacheTable.createdAt))
+      .orderBy(
+        desc(sql<number>`case when ${imageCacheTable.sourceProvider} = 'manual' then 1 else 0 end`),
+        desc(imageCacheTable.backgroundRemoved),
+        desc(imageCacheTable.lastUsedAt),
+        desc(imageCacheTable.createdAt),
+      )
       .limit(10);
   } catch (err) {
     if (isImageCacheUnavailableError(err)) return null;
