@@ -199,7 +199,17 @@ export async function buildProfileWithDeps(
     name: profileName,
     mode: "search",
   };
+  const preservedCatalogImage =
+    concentrationOverride && catalogBase?.imageUrl
+      ? {
+          imageUrl: catalogBase.imageUrl,
+          storagePath: catalogBase.storagePath,
+          imageHash: catalogBase.imageHash ?? null,
+          storageProvider: catalogBase.storageProvider,
+        }
+      : null;
   const processedImage =
+    preservedCatalogImage ??
     (await deps
       .resolveProcessedFragranceImage({
         brand: profileBrand,
