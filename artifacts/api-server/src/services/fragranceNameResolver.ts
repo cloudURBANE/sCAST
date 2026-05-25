@@ -116,8 +116,10 @@ function applyKnownFragranceAliases(value: string): string {
     .replace(/\bfood\s*wood\b/gi, "Oud Wood")
     .replace(/\bhugo\s+boss\s+pacific\b/gi, "Hugo Boss Boss Bottled Pacific")
     .replace(/\bboss\s+bottles\s+pacific\b/gi, "Boss Bottled Pacific")
+    .replace(/\b(?:initio\s+)?parfums?\s+priv(?:e|es|ees)\s+side\s+effect\b/gi, "Initio Side Effect")
     .replace(/\bmerv(?:i|e)l(?:i|e)s\b/gi, "Merveilles")
     .replace(/\begoste\s+leogiste\b/gi, "Egoiste Platinum")
+    .replace(/\begoiste\s+l(?:egoiste|eogiste)\b/gi, "Egoiste Platinum")
     .replace(/\bego(?:\s+teast)?\s+legosti\b/gi, "Egoiste Platinum");
 }
 

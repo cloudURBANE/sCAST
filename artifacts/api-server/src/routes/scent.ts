@@ -11,6 +11,7 @@ import {
   type ImageSolverId,
 } from "../services/imageSolvers";
 import { logger } from "../lib/logger";
+import { resolveConcentrationFast } from "../services/concentrationResolver";
 import { resolveProcessedFragranceImage } from "../services/imagePipeline";
 import { reimagineBottleImage, isSupportedReimagineModel } from "../services/reimagineService";
 import { imageReferenceDiagnostic, usableImageUrlForResponse } from "../services/imageReference";
@@ -67,6 +68,12 @@ function concentrationHintToOverride(hint: ConcentrationHint): Concentration {
     default:
       return "Unknown";
   }
+}
+
+function concentrationOverrideFromInput(input: string, hint?: ConcentrationHint): Concentration | undefined {
+  if (hint) return concentrationHintToOverride(hint);
+  const fast = resolveConcentrationFast(input, "", "");
+  return fast && fast.confidence >= 95 ? fast.concentration : undefined;
 }
 
 type RefreshImageCatalogMetadata = {
@@ -165,6 +172,7 @@ router.post("/search-scent", async (req, res) => {
     return;
   }
   const normalizedHint = normalizeConcentrationHint(concentrationHint);
+  const concentrationOverride = concentrationOverrideFromInput(query, normalizedHint);
   const resolvedQuery = resolveFragranceQuery(query);
   if (resolvedQuery?.corrected) {
     logger.info(
@@ -179,6 +187,7 @@ router.post("/search-scent", async (req, res) => {
 
     const profile = await buildProfile(resolvedQuery.name, resolvedQuery.brand, undefined, {
       allowCatalogFuzzy: false,
+      ...(concentrationOverride ? { concentrationOverride } : {}),
     });
     if ("product" in profile) {
       res.json(flattenProfile(profile));
@@ -192,7 +201,7 @@ router.post("/search-scent", async (req, res) => {
   const catalogHit = await searchCatalog(queryWithHint);
   if (catalogHit) {
     const catalogImageUrl = await usableImageUrlForResponse(catalogHit.imageUrl);
-    if (catalogImageUrl) {
+    if (catalogImageUrl && !concentrationOverride) {
       res.json(flattenProfile({ ...catalogHit, imageUrl: catalogImageUrl }));
       return;
     }
@@ -217,7 +226,10 @@ router.post("/search-scent", async (req, res) => {
         pyramid: catalogHit.pyramid,
         perfumer: catalogHit.product.perfumer,
       },
-      { allowCatalogFuzzy: false },
+      {
+        allowCatalogFuzzy: false,
+        ...(concentrationOverride ? { concentrationOverride } : {}),
+      },
     );
 
     if ("product" in completed) {
@@ -238,6 +250,8 @@ router.post("/search-scent", async (req, res) => {
       description: first.description,
       pyramid: first.pyramid,
       perfumer: first.perfumer,
+    }, {
+      ...(concentrationOverride ? { concentrationOverride } : {}),
     });
     res.json("product" in profile ? flattenProfile(profile) : profile);
     return;
@@ -258,6 +272,8 @@ router.post("/search-scent", async (req, res) => {
     description: scraped.description,
     pyramid: scraped.pyramid,
     perfumer: scraped.perfumer,
+  }, {
+    ...(concentrationOverride ? { concentrationOverride } : {}),
   });
   res.json("product" in profile ? flattenProfile(profile) : profile);
 });
