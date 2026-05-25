@@ -36,12 +36,21 @@ async function findUserRowByClientId(userId: string, clientId: string) {
 
 function stripImageVersionParam(value: string): string {
   try {
-    const parsed = new URL(value);
+    const parsed = new URL(value, "http://local.invalid");
     parsed.searchParams.delete("v");
-    return parsed.toString();
+    const path = `${parsed.pathname}${parsed.search}${parsed.hash}`;
+    return /^[a-z][a-z0-9+.-]*:\/\//i.test(value) ? parsed.toString() : path;
   } catch {
     return value;
   }
+}
+
+function sourceProviderFromImageCacheRow(image: typeof imageCacheTable.$inferSelect | undefined): string | undefined {
+  if (!image) return undefined;
+  if (image.sourceProvider === "openai" || image.sourceUrl.startsWith("openai-reimagine:")) {
+    return "openai";
+  }
+  return image.sourceProvider || undefined;
 }
 
 async function imageMetadataPatchForUrl(url: string): Promise<Record<string, unknown>> {
@@ -53,12 +62,13 @@ async function imageMetadataPatchForUrl(url: string): Promise<Record<string, unk
     .orderBy(desc(imageCacheTable.lastUsedAt), desc(imageCacheTable.createdAt))
     .limit(1);
   const image = rows[0];
+  const sourceProvider = sourceProviderFromImageCacheRow(image);
   return {
     imageUrl: canonicalUrl,
     ...(image?.storagePath ? { storagePath: image.storagePath } : {}),
     ...(image?.contentHash ? { imageHash: image.contentHash } : {}),
     ...(image?.storageProvider ? { storageProvider: image.storageProvider } : {}),
-    ...(image?.sourceProvider ? { sourceProvider: image.sourceProvider } : {}),
+    ...(sourceProvider ? { sourceProvider } : {}),
   };
 }
 

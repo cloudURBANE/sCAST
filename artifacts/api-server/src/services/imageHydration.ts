@@ -9,29 +9,54 @@ function hasImageUrl(value: unknown): value is string {
   return safeImageUrlForResponse(value).length > 0;
 }
 
+export type SharedImageReference = {
+  imageUrl: string;
+  sourceProvider?: string | null;
+  sourceUrl?: string | null;
+  storagePath?: string | null;
+};
+
+async function catalogProfileImageReference(profile: Record<string, unknown> | null | undefined): Promise<SharedImageReference | null> {
+  const imageUrl = await usableImageUrlForResponse(profile?.imageUrl);
+  if (!imageUrl) return null;
+  return {
+    imageUrl,
+    sourceProvider: typeof profile?.sourceProvider === "string" ? profile.sourceProvider : null,
+    sourceUrl: typeof profile?.sourceUrl === "string" ? profile.sourceUrl : null,
+    storagePath: typeof profile?.storagePath === "string" ? profile.storagePath : null,
+  };
+}
+
 /**
  * Resolve the most reliable image for a fragrance across shared stores:
  * 1) verified processed image cache, 2) exact catalog key (Postgres),
  * 3) fuzzy catalog lookup gated by the resolver scorer.
  */
-export async function resolveSharedImageUrl(
+export async function resolveSharedImageReference(
   brand: string,
   name: string,
-): Promise<string | null> {
+): Promise<SharedImageReference | null> {
   try {
     // Metadata-only read-through from image_cache. Prefer this over saved
     // catalog URLs so older persisted refs cannot pin production to stale
     // processed objects after the pipeline has produced a newer clean image.
     const cached = await resolveCachedFragranceImage(brand, name);
-    if (cached?.backgroundRemoved && hasImageUrl(cached.imageUrl)) return cached.imageUrl;
+    if (cached?.backgroundRemoved && hasImageUrl(cached.imageUrl)) {
+      return {
+        imageUrl: cached.imageUrl,
+        sourceProvider: cached.sourceProvider,
+        sourceUrl: cached.sourceUrl ?? null,
+        storagePath: cached.storagePath,
+      };
+    }
   } catch {
     /* non-fatal */
   }
 
   try {
     const exact = await getCatalogEntry(brand, name);
-    const exactImageUrl = await usableImageUrlForResponse(exact?.imageUrl);
-    if (exactImageUrl) return exactImageUrl;
+    const exactRef = await catalogProfileImageReference(exact as unknown as Record<string, unknown> | null);
+    if (exactRef) return exactRef;
   } catch {
     /* non-fatal */
   }
@@ -47,8 +72,8 @@ export async function resolveSharedImageUrl(
           { brand: fuzzyBrand, name: fuzzyName },
         )
       ) {
-        const fuzzyImageUrl = await usableImageUrlForResponse(fuzzy.imageUrl);
-        if (fuzzyImageUrl) return fuzzyImageUrl;
+        const fuzzyRef = await catalogProfileImageReference(fuzzy as unknown as Record<string, unknown>);
+        if (fuzzyRef) return fuzzyRef;
       }
     }
   } catch {
@@ -56,4 +81,11 @@ export async function resolveSharedImageUrl(
   }
 
   return null;
+}
+
+export async function resolveSharedImageUrl(
+  brand: string,
+  name: string,
+): Promise<string | null> {
+  return (await resolveSharedImageReference(brand, name))?.imageUrl ?? null;
 }

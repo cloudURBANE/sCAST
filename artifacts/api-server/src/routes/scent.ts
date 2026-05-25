@@ -81,6 +81,7 @@ type RefreshImageCatalogMetadata = {
   storagePath?: string;
   imageHash?: string | null;
   storageProvider?: string;
+  sourceProvider?: string;
 };
 
 async function upsertRefreshImageCatalog(
@@ -100,6 +101,7 @@ async function upsertRefreshImageCatalog(
       storagePath: image.storagePath,
       imageHash: image.imageHash ?? null,
       storageProvider: image.storageProvider,
+      sourceProvider: image.sourceProvider,
     });
   }
 }
@@ -380,12 +382,14 @@ router.post("/refresh-image", async (req, res) => {
           storagePath: processed.storagePath,
           imageHash: processed.imageHash,
           storageProvider: processed.storageProvider,
+          sourceProvider: processed.sourceProvider,
         });
       }
       res.json({
         imageUrl: finalImageUrl,
         storagePath: processed.storagePath,
         imageHash: processed.imageHash,
+        sourceProvider: processed.sourceProvider,
         cached: processed.cached,
         backgroundRemoved: processed.backgroundRemoved,
         removeBgStatus: processed.removeBgStatus ?? (processed.backgroundRemoved ? "removed" : "fallback"),
@@ -483,6 +487,7 @@ router.post("/refresh-image", async (req, res) => {
         storagePath: processed.storagePath,
         imageHash: processed.imageHash,
         storageProvider: processed.storageProvider,
+        sourceProvider: processed.sourceProvider,
       });
     }
 
@@ -490,6 +495,7 @@ router.post("/refresh-image", async (req, res) => {
       imageUrl: finalImageUrl,
       storagePath: processed.storagePath,
       imageHash: processed.imageHash,
+      sourceProvider: processed.sourceProvider,
       cached: processed.cached,
       backgroundRemoved: processed.backgroundRemoved,
       removeBgStatus: processed.removeBgStatus ?? (processed.backgroundRemoved ? "removed" : "fallback"),
@@ -559,12 +565,14 @@ router.post("/reimagine-bottle-image", async (req, res) => {
       storagePath: result.storagePath,
       imageHash: result.imageHash,
       storageProvider: result.storageProvider,
+      sourceProvider: result.sourceProvider,
     });
 
     res.json({
       imageUrl: result.imageUrl,
       storagePath: result.storagePath,
       imageHash: result.imageHash,
+      sourceProvider: result.sourceProvider,
       cached: result.cached,
       backgroundRemoved: result.backgroundRemoved,
       removeBgStatus: result.removeBgStatus ?? (result.backgroundRemoved ? "removed" : "fallback"),

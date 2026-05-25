@@ -72,7 +72,6 @@ export async function usableImageUrlForResponse(value: unknown): Promise<string 
 
   const localStoragePath = storagePathFromLocalImageObjectUrl(url);
   if (localStoragePath) {
-    if (!isLocalImageObjectUrlPersistable()) return null;
     if (!(await localImageObjectExists(localStoragePath))) return null;
   }
 

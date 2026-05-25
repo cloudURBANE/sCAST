@@ -133,7 +133,7 @@ test("local image object diagnostics do not erase saved response references", as
   assert.equal((await imageReferenceDiagnostic(readyUrl)).kind, "local-object");
 });
 
-test("local image object refs are unusable unless local persistence is enabled", async () => {
+test("local image object refs can render when present but are not persistable in production", async () => {
   const { persistableImageReference, usableImageUrlForResponse } = await import("./imageReference.ts");
   const previous = {
     nodeEnv: process.env.NODE_ENV,
@@ -148,7 +148,7 @@ test("local image object refs are unusable unless local persistence is enabled",
     process.env.NODE_ENV = "production";
     process.env.IMAGE_ALLOW_LOCAL_OBJECT_STORAGE = "true";
 
-    assert.equal(await usableImageUrlForResponse(disabledUrl), null);
+    assert.equal(await usableImageUrlForResponse(disabledUrl), disabledUrl);
     assert.equal(await persistableImageReference(disabledUrl), null);
   } finally {
     restoreEnvValue("NODE_ENV", previous.nodeEnv);

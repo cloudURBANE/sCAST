@@ -33,6 +33,7 @@ export interface ScentProfile {
   storagePath?: string;
   imageHash?: string | null;
   storageProvider?: string;
+  sourceProvider?: string;
   description?: string;
   error?: string;
 }
@@ -42,6 +43,7 @@ export interface ProcessedImageRef {
   storagePath?: string;
   imageHash?: string | null;
   storageProvider?: string;
+  sourceProvider?: string;
 }
 
 export interface ResolveImageOpts {
@@ -206,6 +208,7 @@ export async function buildProfileWithDeps(
           storagePath: catalogBase.storagePath,
           imageHash: catalogBase.imageHash ?? null,
           storageProvider: catalogBase.storageProvider,
+          sourceProvider: catalogBase.sourceProvider,
         }
       : null;
   const processedImage =
@@ -320,6 +323,7 @@ export async function buildProfileWithDeps(
     storagePath: processedImage?.storagePath,
     imageHash: processedImage?.imageHash ?? null,
     storageProvider: processedImage?.storageProvider,
+    sourceProvider: processedImage?.sourceProvider,
     description: finalDescription,
   };
 

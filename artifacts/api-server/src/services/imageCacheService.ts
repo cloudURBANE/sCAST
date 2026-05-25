@@ -36,6 +36,7 @@ export type CachedImageReference = {
   imageUrl: string;
   storagePath: string;
   imageHash: string | null;
+  sourceUrl?: string | null;
   sourceUrlHash: string;
   sourceProvider: string;
   storageProvider: ImageStorageProvider;
@@ -84,6 +85,7 @@ function rowToReference(row: typeof imageCacheTable.$inferSelect, cached: boolea
     imageUrl,
     storagePath: row.storagePath,
     imageHash: row.contentHash,
+    sourceUrl: row.sourceUrl,
     sourceUrlHash: row.sourceUrlHash,
     sourceProvider: row.sourceProvider,
     storageProvider: row.storageProvider as ImageStorageProvider,
@@ -117,6 +119,7 @@ async function rowToUsableReference(
 }
 
 function readyInputToReference(input: {
+  sourceUrl: string;
   sourceUrlHash: string;
   sourceProvider: string;
   contentHash: string;
@@ -135,6 +138,7 @@ function readyInputToReference(input: {
     imageUrl: safeImageUrlForResponse(input.publicUrl),
     storagePath: input.storagePath,
     imageHash: input.contentHash,
+    sourceUrl: input.sourceUrl,
     sourceUrlHash: input.sourceUrlHash,
     sourceProvider: input.sourceProvider,
     storageProvider: input.storageProvider,
@@ -148,6 +152,15 @@ function readyInputToReference(input: {
     removeBgReason: input.removeBgReason ?? null,
     isPersisted: false,
   };
+}
+
+function sourceProviderPrioritySql() {
+  return sql<number>`case
+    when ${imageCacheTable.sourceProvider} in ('openai', 'openai-reimagine', 'openai_reimagine')
+      or ${imageCacheTable.sourceUrl} like 'openai-reimagine:%' then 2
+    when ${imageCacheTable.sourceProvider} = 'manual' then 1
+    else 0
+  end`;
 }
 
 async function markCacheHit(id: string): Promise<void> {
@@ -210,7 +223,7 @@ export async function getLatestReadyCachedImageByLookupKey(
         ),
       )
       .orderBy(
-        desc(sql<number>`case when ${imageCacheTable.sourceProvider} = 'manual' then 1 else 0 end`),
+        desc(sourceProviderPrioritySql()),
         desc(imageCacheTable.backgroundRemoved),
         desc(imageCacheTable.lastUsedAt),
         desc(imageCacheTable.createdAt),

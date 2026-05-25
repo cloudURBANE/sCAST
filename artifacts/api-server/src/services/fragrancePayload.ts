@@ -1,4 +1,4 @@
-import { resolveSharedImageUrl } from "./imageHydration";
+import { resolveSharedImageReference } from "./imageHydration";
 import { usableImageUrlForResponse } from "./imageReference";
 import {
   safeImageUrlForResponse,
@@ -9,8 +9,10 @@ import { resolvePyramidNotes } from "./fragranceNotes.ts";
 
 import {
   chooseHydratedImageUrl,
+  chooseHydratedImageUrlWithMetadata,
   CURRENT_VAULT_SCHEMA_VERSION,
   stampVaultSchemaVersion,
+  type HydratedImageCandidate,
 } from "./fragrancePayloadCore";
 import { db } from "@workspace/db";
 import { globalFragrancesTable, imageCacheTable } from "@workspace/db/schema";
@@ -20,6 +22,7 @@ import { IMAGE_PIPELINE_VERSION } from "./imageIdentity";
 
 export {
   chooseHydratedImageUrl,
+  chooseHydratedImageUrlWithMetadata,
   CURRENT_VAULT_SCHEMA_VERSION,
   isLegacyVaultRow,
   stampVaultSchemaVersion,
@@ -135,19 +138,24 @@ export function normalizeFragrance(fragrance: Record<string, any>): Record<strin
   };
 }
 
-/** Prefer the image saved on the wardrobe row; shared catalog/cache images only fill blanks. */
+/** Prefer saved manual/generated row images, but let generated cache repair stale Serper/catalog rows. */
 export async function hydrateImageUrl(fragrance: Record<string, any>): Promise<Record<string, any>> {
   const current = await usableImageUrlForResponse(fragrance.imageUrl);
+  const currentRef: HydratedImageCandidate = {
+    imageUrl: current,
+    sourceProvider: fragrance.sourceProvider,
+    storagePath: fragrance.storagePath,
+  };
   const name = fragrance.name as string | undefined;
   const brand = fragrance.brand as string | undefined;
-  if (!name || !brand) return { ...fragrance, imageUrl: chooseHydratedImageUrl(null, current) };
+  if (!name || !brand) return { ...fragrance, imageUrl: chooseHydratedImageUrlWithMetadata(null, currentRef) };
   try {
-    const sharedImageUrl = await resolveSharedImageUrl(brand, name);
-    return { ...fragrance, imageUrl: chooseHydratedImageUrl(sharedImageUrl, current) };
+    const sharedRef = await resolveSharedImageReference(brand, name);
+    return { ...fragrance, imageUrl: chooseHydratedImageUrlWithMetadata(sharedRef, currentRef) };
   } catch {
     /* non-fatal */
   }
-  return { ...fragrance, imageUrl: chooseHydratedImageUrl(null, current) };
+  return { ...fragrance, imageUrl: chooseHydratedImageUrlWithMetadata(null, currentRef) };
 }
 
 /**
@@ -179,6 +187,8 @@ export async function batchHydrateImageUrls(
         lookupKey: imageCacheTable.lookupKey,
         publicUrl: imageCacheTable.publicUrl,
         sourceProvider: imageCacheTable.sourceProvider,
+        sourceUrl: imageCacheTable.sourceUrl,
+        storagePath: imageCacheTable.storagePath,
         backgroundRemoved: imageCacheTable.backgroundRemoved,
       })
       .from(imageCacheTable)
@@ -190,7 +200,12 @@ export async function batchHydrateImageUrls(
         ),
       )
       .orderBy(
-        desc(sql<number>`case when ${imageCacheTable.sourceProvider} = 'manual' then 1 else 0 end`),
+        desc(sql<number>`case
+          when ${imageCacheTable.sourceProvider} in ('openai', 'openai-reimagine', 'openai_reimagine')
+            or ${imageCacheTable.sourceUrl} like 'openai-reimagine:%' then 2
+          when ${imageCacheTable.sourceProvider} = 'manual' then 1
+          else 0
+        end`),
         desc(imageCacheTable.backgroundRemoved),
         desc(imageCacheTable.lastUsedAt),
         desc(imageCacheTable.createdAt),
@@ -205,28 +220,47 @@ export async function batchHydrateImageUrls(
   ]);
 
   // Pick the first usable URL per lookup key from image_cache (rows are pre-sorted)
-  const imageCacheMap = new Map<string, string>();
+  const imageCacheMap = new Map<string, HydratedImageCandidate>();
   for (const row of imageCacheRows) {
     if (!row.lookupKey || imageCacheMap.has(row.lookupKey)) continue;
     const url = await usableImageUrlForResponse(row.publicUrl);
-    if (url) imageCacheMap.set(row.lookupKey, url);
+    if (url) {
+      imageCacheMap.set(row.lookupKey, {
+        imageUrl: url,
+        sourceProvider: row.sourceProvider,
+        sourceUrl: row.sourceUrl,
+        storagePath: row.storagePath,
+      });
+    }
   }
 
   // Pick catalog image URL as secondary fallback
-  const catalogMap = new Map<string, string>();
+  const catalogMap = new Map<string, HydratedImageCandidate>();
   for (const row of catalogRows) {
     if (!row.lookupKey) continue;
     const profile = row.profileData as Record<string, unknown> | null;
     const url = await usableImageUrlForResponse(profile?.imageUrl);
-    if (url) catalogMap.set(row.lookupKey, url);
+    if (url) {
+      catalogMap.set(row.lookupKey, {
+        imageUrl: url,
+        sourceProvider: profile?.sourceProvider,
+        sourceUrl: profile?.sourceUrl,
+        storagePath: profile?.storagePath,
+      });
+    }
   }
 
   return Promise.all(
     fragrances.map(async (f, i) => {
       const key = indexToKey[i];
       const current = await usableImageUrlForResponse(f.imageUrl);
+      const currentRef: HydratedImageCandidate = {
+        imageUrl: current,
+        sourceProvider: f.sourceProvider,
+        storagePath: f.storagePath,
+      };
       const resolved = key ? (imageCacheMap.get(key) ?? catalogMap.get(key) ?? null) : null;
-      return { ...f, imageUrl: chooseHydratedImageUrl(resolved, current) };
+      return { ...f, imageUrl: chooseHydratedImageUrlWithMetadata(resolved, currentRef) };
     }),
   );
 }
