@@ -109,8 +109,20 @@ function foldAscii(value: string): string {
     .replace(/[^\x20-\x7E]/g, "");
 }
 
+function applyKnownFragranceAliases(value: string): string {
+  return value
+    .replace(/\bcentel\s*33\b/gi, "Santal 33")
+    .replace(/\binito\b/gi, "Initio")
+    .replace(/\bfood\s*wood\b/gi, "Oud Wood")
+    .replace(/\bhugo\s+boss\s+pacific\b/gi, "Hugo Boss Boss Bottled Pacific")
+    .replace(/\bboss\s+bottles\s+pacific\b/gi, "Boss Bottled Pacific")
+    .replace(/\bmerv(?:i|e)l(?:i|e)s\b/gi, "Merveilles")
+    .replace(/\begoste\s+leogiste\b/gi, "Egoiste Platinum")
+    .replace(/\bego(?:\s+teast)?\s+legosti\b/gi, "Egoiste Platinum");
+}
+
 export function sanitizeFragranceQueryInput(value: string): string {
-  return foldAscii(value)
+  return applyKnownFragranceAliases(foldAscii(value))
     .replace(/https?:\/\/\S+/gi, " ")
     .replace(/<[^>]*>/g, " ")
     .replace(/[\u0000-\u001f\u007f]+/g, " ")

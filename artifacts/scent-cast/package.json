@@ -7,7 +7,7 @@
     "dev": "vite --config vite.config.ts --host 0.0.0.0",
     "build": "vite build --config vite.config.ts",
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
-    "test": "node --experimental-strip-types --test src/lib/fragranceApi.test.ts src/lib/imageProxy.test.ts src/lib/shareLinks.test.ts src/lib/noteAccordLinks.test.ts",
+    "test": "node --experimental-strip-types --test src/lib/fragranceApi.test.ts src/lib/fragranceNotes.test.ts src/lib/imageProxy.test.ts src/lib/shareLinks.test.ts src/lib/noteAccordLinks.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {

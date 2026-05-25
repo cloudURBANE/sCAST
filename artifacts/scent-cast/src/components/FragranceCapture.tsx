@@ -10,6 +10,11 @@ import {
   type FragranceDetailRequestPayload,
   type FragranceSearchResult,
 } from '@/lib/fragranceApi';
+import {
+  buildPyramidFromFlatNotes,
+  hasTieredPyramidNotes,
+  normalizePyramidNotes as normalizePyramidInput,
+} from '@/lib/fragranceNotes';
 
 /**
  * Generate a stable, collision-resistant id for newly added wardrobe items.
@@ -560,6 +565,16 @@ export const FragranceCapture: React.FC<{
       const pipelineImageUrl = firstString(
         typeof pipelineProfile.imageUrl === 'string' ? pipelineProfile.imageUrl : undefined,
       );
+      const pipelinePyramid = normalizePyramidInput(pipelineProfile.pyramid as unknown);
+      const resolvedPyramid = hasTieredPyramidNotes(pyramidNotes)
+        ? pyramidNotes
+        : hasTieredPyramidNotes(pipelinePyramid)
+          ? {
+              top: pipelinePyramid.top,
+              heart: pipelinePyramid.heart,
+              base: pipelinePyramid.base,
+            }
+          : buildPyramidFromFlatNotes(displayNotes);
 
       const saveResult = await onAdd({
         ...detail,
@@ -585,10 +600,7 @@ export const FragranceCapture: React.FC<{
         id: newFragranceId(),
         season: 'Universal',
         source_url: firstString(detail.source_url, selected.source_url),
-        pyramid:
-          pyramidNotes.top.length || pyramidNotes.heart.length || pyramidNotes.base.length
-            ? pyramidNotes
-            : undefined,
+        pyramid: hasTieredPyramidNotes(resolvedPyramid) ? resolvedPyramid : undefined,
         notes: displayNotes.length > 0 ? displayNotes : undefined,
         description:
           typeof detail.raw?.description === 'string'
