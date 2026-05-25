@@ -338,20 +338,17 @@ function DashboardView() {
                 <motion.div
                   key="discover-button"
                   initial={{ opacity: 0, height: 0, marginTop: 0 }}
-                  animate={{ opacity: 1, height: 'auto', marginTop: '1.75rem' }}
+                  animate={{
+                    opacity: vaultSearchUiActive ? 0 : 1,
+                    height: vaultSearchUiActive ? 0 : 'auto',
+                    marginTop: vaultSearchUiActive ? 0 : '1.75rem',
+                  }}
                   exit={{ opacity: 0, height: 0, marginTop: 0 }}
                   transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
                   style={{ overflow: 'hidden' }}
                 >
                   <motion.button
                     type="button"
-                    animate={{
-                      opacity: vaultSearchUiActive ? 0 : 1,
-                      y: vaultSearchUiActive ? 8 : 0,
-                    }}
-                    transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
-                    style={{ pointerEvents: vaultSearchUiActive ? 'none' : 'auto' }}
-                    tabIndex={vaultSearchUiActive ? -1 : undefined}
                     onClick={() => {
                       setIsIntentModalOpen(true);
                     }}
