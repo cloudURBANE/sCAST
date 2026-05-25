@@ -3,9 +3,10 @@ import { randomUUID } from "node:crypto";
 import { AuthRequest, requireAuth } from "../middlewares/auth";
 import { db } from "@workspace/db";
 import {
+  imageCacheTable,
   userFragrancesTable,
 } from "@workspace/db/schema";
-import { and, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { resolveSharedImageUrl } from "../services/imageHydration";
 import { rebuildWardrobeForUser } from "../services/wardrobeRebuild";
 import { logger } from "../lib/logger";
@@ -31,6 +32,33 @@ async function findUserRowByClientId(userId: string, clientId: string) {
     ))
     .limit(1);
   return rows[0] ?? null;
+}
+
+function stripImageVersionParam(value: string): string {
+  try {
+    const parsed = new URL(value);
+    parsed.searchParams.delete("v");
+    return parsed.toString();
+  } catch {
+    return value;
+  }
+}
+
+async function imageMetadataPatchForUrl(url: string): Promise<Record<string, unknown>> {
+  const canonicalUrl = stripImageVersionParam(url);
+  const rows = await db
+    .select()
+    .from(imageCacheTable)
+    .where(eq(imageCacheTable.publicUrl, canonicalUrl))
+    .orderBy(desc(imageCacheTable.lastUsedAt), desc(imageCacheTable.createdAt))
+    .limit(1);
+  const image = rows[0];
+  return {
+    imageUrl: canonicalUrl,
+    ...(image?.storagePath ? { storagePath: image.storagePath } : {}),
+    ...(image?.contentHash ? { imageHash: image.contentHash } : {}),
+    ...(image?.storageProvider ? { storageProvider: image.storageProvider } : {}),
+  };
 }
 
 router.get("/wardrobe", requireAuth, async (req: AuthRequest, res) => {
@@ -233,6 +261,7 @@ router.patch("/wardrobe/:id", requireAuth, async (req: AuthRequest, res) => {
   }
 
   let url: string | null = null;
+  let imagePatch: Record<string, unknown> = {};
   if (shouldUpdateImage) {
     if (explicitImageUrl) {
       url = explicitImageUrl;
@@ -248,6 +277,7 @@ router.patch("/wardrobe/:id", requireAuth, async (req: AuthRequest, res) => {
       res.status(409).json({ error: "No catalog image available yet for this fragrance; try refresh again." });
       return;
     }
+    imagePatch = await imageMetadataPatchForUrl(url);
   }
 
   const detailPatch: Record<string, unknown> = {};
@@ -269,7 +299,7 @@ router.patch("/wardrobe/:id", requireAuth, async (req: AuthRequest, res) => {
       ...existing,
       ...detailPatch,
       id: match.id,
-      ...(shouldUpdateImage && url ? { imageUrl: url } : {}),
+      ...(shouldUpdateImage && url ? imagePatch : {}),
       ...(hasImageAdjustment ? { imageAdjustment: normalizedImageAdjustment } : {}),
     }),
   );
