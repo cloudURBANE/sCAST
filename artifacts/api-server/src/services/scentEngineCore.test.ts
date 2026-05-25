@@ -366,6 +366,9 @@ test("concentrationOverride bypasses cached early return and rebuilds profile", 
   ok(result);
 
   assert.equal(result.concentration, "Extrait");
+  assert.equal(result.imageUrl, cached.imageUrl);
+  assert.equal(result.storagePath, cached.storagePath);
+  assert.equal(calls.resolveProcessedFragranceImage.length, 0);
   assert.equal(calls.vectorize, 1);
   assert.equal(calls.saveCatalogEntry.length, 1);
 });
@@ -389,6 +392,9 @@ test("raw concentration labels bypass cached early return without route override
 
   assert.equal(result.product.name, "Sauvage");
   assert.equal(result.concentration, "Eau de Parfum");
+  assert.equal(result.imageUrl, cached.imageUrl);
+  assert.equal(result.storagePath, cached.storagePath);
+  assert.equal(calls.resolveProcessedFragranceImage.length, 0);
   assert.equal(calls.vectorize, 1);
   assert.equal(calls.saveCatalogEntry.length, 1);
 });
