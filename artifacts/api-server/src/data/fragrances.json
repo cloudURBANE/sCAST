@@ -78,6 +78,54 @@
     "description": "A smoky, polished woods composition built around oud, rosewood, sandalwood and amber. Oud Wood is dry, smooth and resinous, with spice and vanilla softening the darker woods."
   },
   {
+    "name": "Side Effect",
+    "brand": "Initio",
+    "family": "Amber Spicy",
+    "notes": ["Rum", "Cinnamon", "Tobacco", "Vanilla"],
+    "pyramid": {
+      "top": ["Rum", "Cinnamon"],
+      "heart": ["Tobacco"],
+      "base": ["Vanilla"]
+    },
+    "description": "A warm, boozy amber fragrance built around rum, cinnamon, tobacco and vanilla, with a sweet-spiced trail."
+  },
+  {
+    "name": "Boss Bottled Pacific",
+    "brand": "Hugo Boss",
+    "family": "Woody Aquatic",
+    "notes": ["Cedrat", "Lemon", "Coconut", "Salt", "Cypress", "Cashmeran", "Patchouli", "Sandalwood"],
+    "pyramid": {
+      "top": ["Cedrat", "Lemon"],
+      "heart": ["Coconut", "Salt", "Cypress"],
+      "base": ["Cashmeran", "Patchouli", "Sandalwood"]
+    },
+    "description": "A limited Boss Bottled edition with bright citrus, salty coconut-cypress facets and a smooth woody base."
+  },
+  {
+    "name": "Egoiste Platinum",
+    "brand": "Chanel",
+    "family": "Aromatic Fougere",
+    "notes": ["Lavender", "Rosemary", "Petitgrain", "Neroli", "Geranium", "Jasmine", "Clary Sage", "Galbanum", "Cedar", "Sandalwood", "Oakmoss", "Amber", "Vetiver"],
+    "pyramid": {
+      "top": ["Lavender", "Rosemary", "Petitgrain", "Neroli"],
+      "heart": ["Geranium", "Jasmine", "Clary Sage", "Galbanum"],
+      "base": ["Cedar", "Sandalwood", "Oakmoss", "Amber", "Vetiver"]
+    },
+    "description": "A polished aromatic fougere with lavender and herbal brightness over green florals and a classic woody moss base."
+  },
+  {
+    "name": "Parfum des Merveilles",
+    "brand": "Hermes",
+    "family": "Amber Woody",
+    "notes": ["Citruses", "Green Notes", "Cognac", "Oak", "Oakmoss", "Patchouli", "Amber", "Peru Balsam"],
+    "pyramid": {
+      "top": ["Citruses", "Green Notes"],
+      "heart": ["Cognac", "Oak"],
+      "base": ["Oakmoss", "Patchouli", "Amber", "Peru Balsam"]
+    },
+    "description": "A richer parfum expression of the Merveilles family, deepening citrus and green facets into ambered woods, oakmoss, patchouli and balsam."
+  },
+  {
     "name": "Coco Mademoiselle",
     "brand": "Chanel",
     "family": "Amber Floral",

@@ -12,6 +12,7 @@ import {
   normalizeAccordLabel,
   resolveNoteAccordLinks,
 } from '@/lib/noteAccordLinks';
+import { resolveDisplayPyramid } from '@/lib/fragranceNotes';
 import { NotePyramid } from './NotePyramid';
 
 interface ScentNotesInfographicProps {
@@ -36,30 +37,6 @@ type ActiveNotesListener = () => void;
 const EMPTY_ACTIVE_NOTES: string[] = [];
 const activeNotesByScope = new Map<string, string[]>();
 const activeNotesListeners = new Map<string, Set<ActiveNotesListener>>();
-
-function resolvePyramid(
-  derivedMetrics?: DerivedMetrics | null,
-  legacy?: ScentNotesInfographicProps["legacyPyramid"],
-): DisplayPyramid {
-  const n = derivedMetrics?.notes;
-  if (n) {
-    return {
-      top: [...(n.top ?? [])].filter(Boolean),
-      heart: [...(n.heart ?? [])].filter(Boolean),
-      base: [...(n.base ?? [])].filter(Boolean),
-      flat: [...(n.flat ?? [])].filter(Boolean),
-    };
-  }
-  if (legacy) {
-    return {
-      top: [...(legacy.top ?? [])].filter(Boolean),
-      heart: [...(legacy.heart ?? [])].filter(Boolean),
-      base: [...(legacy.base ?? [])].filter(Boolean),
-      flat: [],
-    };
-  }
-  return { top: [], heart: [], base: [], flat: [] };
-}
 
 function hasAnyNotes(p: DisplayPyramid): boolean {
   return p.top.length > 0 || p.heart.length > 0 || p.base.length > 0 || p.flat.length > 0;
@@ -533,7 +510,7 @@ export const ScentNotesInfographic: React.FC<ScentNotesInfographicProps> = ({
   className = "",
 }) => {
   const pyramid = React.useMemo(
-    () => normalizeDisplayPyramid(resolvePyramid(derivedMetrics, legacyPyramid)),
+    () => normalizeDisplayPyramid(resolveDisplayPyramid(derivedMetrics?.notes, legacyPyramid)),
     [derivedMetrics, legacyPyramid],
   );
   const accordRows = React.useMemo(

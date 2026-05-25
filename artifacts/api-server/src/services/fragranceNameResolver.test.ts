@@ -114,6 +114,25 @@ test("popular fragrance aliases resolve locally when the external engine is empt
   assert.equal(coco?.name, "Coco Mademoiselle");
 });
 
+test("voice-to-text fragrance aliases resolve to local note-rich records", () => {
+  const cases = [
+    ["Centel 33 Le Labo", "Le Labo", "Santal 33"],
+    ["Inito The Side Effect", "Initio", "Side Effect"],
+    ["Tom Ford Foodwood", "Tom Ford", "Oud Wood"],
+    ["hugo boss pacific", "Hugo Boss", "Boss Bottled Pacific"],
+    ["Boss Bottles Pacific Hugo Boss", "Hugo Boss", "Boss Bottled Pacific"],
+    ["chanel egoste leogiste", "Chanel", "Egoiste Platinum"],
+    ["Ego Teast Legosti Chanel", "Chanel", "Egoiste Platinum"],
+    ["Hermes Parfum Des Mervilis", "Hermes", "Parfum des Merveilles"],
+  ] as const;
+
+  for (const [query, brand, name] of cases) {
+    const resolved = resolveFragranceQuery(query);
+    assert.equal(resolved?.brand, brand, query);
+    assert.equal(resolved?.name, name, query);
+  }
+});
+
 test("scorer rejects omitted flanker tokens while allowing concentration aliases", () => {
   assert.equal(
     scoreFragranceCandidate("Dior Sauvage", { brand: "Dior", name: "Sauvage Elixir" }).matched,

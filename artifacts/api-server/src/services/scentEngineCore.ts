@@ -17,6 +17,7 @@ import type {
   ContextProfile,
 } from "./scentVectorizer";
 import type { FragranceData } from "./datasetLoader";
+import { resolvePyramidNotes } from "./fragranceNotes.ts";
 
 export interface ScentProfile {
   product: { name: string; brand: string; perfumer?: string };
@@ -244,10 +245,9 @@ export async function buildProfileWithDeps(
     engineFallbackComplete && effectiveFallback?.description != null
       ? String(effectiveFallback.description)
       : match?.description || effectiveFallback?.description || "";
-  const finalPyramid =
-    engineFallbackComplete && effectiveFallback?.pyramid
-      ? effectiveFallback.pyramid
-      : match?.pyramid || effectiveFallback?.pyramid;
+  const finalPyramid = engineFallbackComplete
+    ? resolvePyramidNotes(effectiveFallback?.pyramid, match?.pyramid, finalNotes)
+    : resolvePyramidNotes(match?.pyramid, effectiveFallback?.pyramid, finalNotes);
   const finalPerfumer =
     engineFallbackComplete && effectiveFallback?.perfumer
       ? effectiveFallback.perfumer

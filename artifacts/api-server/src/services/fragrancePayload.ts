@@ -5,6 +5,7 @@ import {
   stripBase64ImageDataUrls,
 } from "./persistenceGuards";
 import { resolveFragranceIdentity } from "./fragranceNameResolver";
+import { resolvePyramidNotes } from "./fragranceNotes.ts";
 
 import {
   chooseHydratedImageUrl,
@@ -112,10 +113,20 @@ export function normalizeFragrance(fragrance: Record<string, any>): Record<strin
           ...(perfumer ? { perfumer } : {}),
         }
       : product;
+  const derivedNotes =
+    fragrance.raw_engine_detail?.derived_metrics?.notes ??
+    fragrance.derived_metrics?.notes ??
+    fragrance.raw_engine_detail?.raw?.notes;
+  const normalizedPyramid = resolvePyramidNotes(
+    derivedNotes,
+    fragrance.pyramid,
+    fragrance.notes,
+  );
 
   return {
     ...fragrance,
     imageUrl,
+    ...(normalizedPyramid ? { pyramid: normalizedPyramid } : {}),
     ...(imageAdjustment ? { imageAdjustment } : {}),
     ...(normalizedProduct ? { product: normalizedProduct } : {}),
     ...(normalizedName ? { name: normalizedName } : {}),

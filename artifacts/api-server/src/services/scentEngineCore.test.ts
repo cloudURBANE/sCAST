@@ -285,6 +285,37 @@ test("preferEngineData with complete fallback notes: engine notes win over cache
   assert.deepEqual(result.notes, engineNotes);
 });
 
+test("preferEngineData with flat engine notes still keeps dataset pyramid tiers", async () => {
+  const datasetPyramid = {
+    top: ["Cardamom"],
+    heart: ["Sandalwood", "Papyrus"],
+    base: ["Leather", "Amber"],
+  };
+  const { deps } = makeDeps({
+    findDatasetFragrance: () => ({
+      name: "Santal 33",
+      brand: "Le Labo",
+      family: "Woody",
+      notes: ["dataset", "notes"],
+      pyramid: datasetPyramid,
+      description: "",
+    }),
+  });
+
+  const engineNotes = ["Sandalwood", "Leather", "Cardamom"];
+  const result = await buildProfileWithDeps(
+    deps,
+    "Santal 33",
+    "Le Labo",
+    { notes: engineNotes },
+    { preferEngineData: true },
+  );
+  ok(result);
+
+  assert.deepEqual(result.notes, engineNotes);
+  assert.deepEqual(result.pyramid, datasetPyramid);
+});
+
 test("no catalog + no dataset match + no fallback notes → returns identification error", async () => {
   const { deps, calls } = makeDeps({});
 
