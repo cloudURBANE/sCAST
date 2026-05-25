@@ -599,6 +599,39 @@ function ProfileScorePanel({
     <>
       {(() => {
         const renderDesktopTile = (stat: StatCard) => {
+          if (stat.label === "Profile Score") {
+            return (
+              <div
+                key={stat.label}
+                className="min-w-0 h-full flex flex-col items-center justify-center gap-1 border border-white/15 bg-white/[0.035] px-4 py-5 text-center"
+              >
+                <div className="flex flex-1 flex-col items-center justify-center w-full pt-1">
+                  {consensusScore !== null ? (
+                    <>
+                      <div className="flex items-end justify-center gap-1.5">
+                        <span className="font-serif italic text-[2.75rem] leading-none text-scent-accent tabular-nums">
+                          {consensusScore}
+                        </span>
+                        <span className="pb-1 text-base text-white/68">/100</span>
+                      </div>
+                      <p className="min-h-[2.5em] flex items-center justify-center px-1 text-xs leading-snug text-scent-accent/85">
+                        {stat.sub ?? ""}
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="font-serif italic text-2xl text-white/55 leading-tight" aria-hidden>—</p>
+                      <p className="min-h-[2.5em] flex items-center justify-center px-1 text-[10px] leading-snug text-white/42">
+                        {stat.sub ?? ""}
+                      </p>
+                    </>
+                  )}
+                </div>
+                <p className="mt-auto text-[9px] uppercase tracking-[0.2em] text-white/55 font-bold">{stat.label}</p>
+              </div>
+            );
+          }
+
           const Icon = stat.icon;
           return (
             <div
@@ -644,6 +677,39 @@ function ProfileScorePanel({
         <div className="px-4 py-3.5">
           <div className="grid grid-cols-2 gap-1.5">
             {statCards.map((stat) => {
+              if (stat.label === "Profile Score") {
+                return (
+                  <div
+                    key={stat.label}
+                    className="min-w-0 h-full min-h-[6.15rem] flex flex-col items-center justify-center gap-1 border border-white/15 bg-white/[0.035] px-1 py-2.5 text-center"
+                  >
+                    <div className="flex flex-1 flex-col items-center justify-center w-full">
+                      {consensusScore !== null ? (
+                        <>
+                          <div className="flex items-end justify-center gap-1">
+                            <span className="font-serif italic text-2xl leading-none text-scent-accent tabular-nums">
+                              {consensusScore}
+                            </span>
+                            <span className="pb-0.5 text-[10px] text-white/65">/100</span>
+                          </div>
+                          <p className="min-h-[2.35em] flex items-center justify-center px-0 text-[10px] leading-tight text-scent-accent/85">
+                            {stat.sub ?? ""}
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-[11px] text-white/55 font-serif italic" aria-hidden>—</p>
+                          <p className="min-h-[2.35em] flex items-center justify-center px-0 text-[9px] leading-tight text-white/42">
+                            {stat.sub ?? ""}
+                          </p>
+                        </>
+                      )}
+                    </div>
+                    <p className="mt-auto max-w-full text-[7px] leading-tight uppercase tracking-[0.04em] text-white/55 font-bold [overflow-wrap:anywhere]">{stat.label}</p>
+                  </div>
+                );
+              }
+
               const Icon = stat.icon;
               return (
                 <div
