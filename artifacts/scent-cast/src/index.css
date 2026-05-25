@@ -875,7 +875,17 @@ a {
   inset: -4rem -2rem -3rem;
   z-index: -1;
   pointer-events: none;
-  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.72), rgba(0, 0, 0, 0.36) 42%, transparent 72%);
+  border-radius: calc(var(--radius-scent) + 0.5rem);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 244, 0.07), rgba(255, 255, 255, 0.015) 34%, transparent 52%),
+    linear-gradient(116deg, transparent 0 38%, rgba(255, 238, 179, 0.07) 45%, rgba(255, 255, 255, 0.02) 51%, transparent 58%),
+    repeating-linear-gradient(94deg, rgba(255, 255, 255, 0.028) 0 1px, rgba(0, 0, 0, 0.038) 1px 2px, transparent 2px 8px),
+    radial-gradient(140% 120% at 50% -22%, rgba(255, 248, 219, 0.1), transparent 42%),
+    linear-gradient(180deg, rgba(42, 31, 20, 0.72) 0%, rgba(13, 9, 6, 0.78) 43%, rgba(4, 3, 2, 0.62) 100%);
+  background-size: 100% 100%, 100% 100%, 20px 20px, 100% 100%, 100% 100%;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 235, 0.06),
+    inset 0 0 0 1px rgba(255, 227, 156, 0.06);
 }
 
 .scent-full-bleed {
@@ -1363,9 +1373,9 @@ a {
 
 @keyframes brand-gold-shimmer {
   0% {
-    background-position: 300% 0;
+    background-position: 220% 0;
   }
-  30% {
+  18% {
     background-position: 100% 0;
   }
   100% {
@@ -1375,22 +1385,28 @@ a {
 
 .scent-brand-gold-shimmer {
   background: linear-gradient(
-    120deg,
-    rgba(255, 255, 255, 0.84) 0%,
-    rgba(255, 255, 255, 0.84) 15%,
-    #efb863 22%,
-    #fde68a 25%,
-    #efb863 28%,
-    rgba(255, 255, 255, 0.84) 35%,
-    rgba(255, 255, 255, 0.84) 100%
+    112deg,
+    rgba(247, 243, 236, 0.94) 0%,
+    rgba(247, 243, 236, 0.94) 40%,
+    rgba(212, 175, 55, 0.28) 46%,
+    rgba(253, 230, 138, 0.42) 50%,
+    rgba(212, 175, 55, 0.28) 54%,
+    rgba(247, 243, 236, 0.94) 60%,
+    rgba(247, 243, 236, 0.94) 100%
   );
-  background-size: 200% 100%;
+  background-size: 220% 100%;
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
-  animation: brand-gold-shimmer 8s cubic-bezier(0.25, 1, 0.5, 1) infinite;
+  animation: brand-gold-shimmer 14s cubic-bezier(0.42, 0, 0.18, 1) infinite;
   will-change: background-position;
   display: inline-block;
+}
+
+.scent-card-brand.scent-brand-gold-shimmer {
+  text-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.4),
+    0 0 14px rgba(255, 244, 220, 0.04);
 }

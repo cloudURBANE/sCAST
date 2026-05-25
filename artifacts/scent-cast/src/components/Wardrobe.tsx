@@ -1508,7 +1508,7 @@ export const Wardrobe: React.FC<{
                         <div className="scent-card-frame" aria-hidden />
                         <div className="relative z-[1] flex h-full flex-col items-center px-6 sm:px-8 pt-5 sm:pt-6 pb-4 sm:pb-5">
                           <p
-                            className="scent-card-brand w-full"
+                            className="scent-card-brand scent-brand-gold-shimmer w-full mt-1 sm:mt-1.5"
                             data-len={brandLengthBucket(entryBrand(item))}
                             title={entryBrand(item)}
                           >
