@@ -489,12 +489,11 @@ function renderValueSignal(label: string | null | undefined): React.ReactNode {
 }
 
 /**
- * Profile Score panel, rendered in two independently-placed sections:
- *  - `section="tiles"`  — stat tiles (+ mobile score hero in one panel)
- *  - `section="score"`  — desktop score headline below the bottle visual
+ * Profile intelligence panel.
  *
- * Mobile merges the score hero and stat tiles into a single panel at the top.
- * Desktop keeps tiles in the top grid and the score below the bottle column.
+ * The score is intentionally treated as a headline tile while the supporting
+ * metrics stay compact, so the detail view has one clear hierarchy on every
+ * screen size.
  * The unavailable-state notice renders only in the `tiles` section.
  */
 function ProfileScorePanel({
@@ -558,22 +557,33 @@ function ProfileScorePanel({
     derivedPerfParts.length > 0 ? derivedPerfParts : buildLegacyPerformanceParts(legacyPerformance);
   const valueLabel = value?.dominant_label?.trim() || null;
 
-  type StatCard = {
+  type ScoreCard = {
+    kind: "score";
+    label: string;
+    score: number | null;
+    sub: string | null;
+  };
+
+  type MetricCard = {
+    kind: "metric";
     icon: typeof CalendarDays;
     label: string;
     cycle: CyclingPart[];
     value: React.ReactNode;
     sub: string | null;
   };
+
+  type StatCard = ScoreCard | MetricCard;
+
   const statCards: StatCard[] = [
     {
-      icon: Sparkles,
+      kind: "score",
       label: "Profile Score",
-      cycle: [],
-      value: consensusScore !== null ? `${consensusScore}/100` : null,
+      score: consensusScore,
       sub: headline?.label ?? "Intelligence profile",
     },
     {
+      kind: "metric",
       icon: CalendarDays,
       label: "Wear Profile",
       cycle: wearParts,
@@ -581,6 +591,7 @@ function ProfileScorePanel({
       sub: "Season / Time",
     },
     {
+      kind: "metric",
       icon: Activity,
       label: "Performance",
       cycle: perfParts,
@@ -588,6 +599,7 @@ function ProfileScorePanel({
       sub: perfParts.length > 0 ? "Longevity / Sillage" : null,
     },
     {
+      kind: "metric",
       icon: CircleDollarSign,
       label: "PRICE VALUE",
       cycle: [],
@@ -595,150 +607,164 @@ function ProfileScorePanel({
       sub: null,
     },
   ];
+  const renderScoreTile = (stat: ScoreCard, scale: "desktop" | "mobile") => {
+    const compact = scale === "mobile";
+    return (
+      <div
+        key={stat.label}
+        className={
+          compact
+            ? "min-w-0 h-full min-h-[6.15rem] flex flex-col items-center justify-center gap-1 overflow-hidden border border-scent-accent/22 bg-[radial-gradient(circle_at_50%_8%,rgba(212,175,55,0.12),rgba(255,255,255,0.035)_58%,rgba(255,255,255,0.02))] px-1.5 py-2.5 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.045)]"
+            : "min-w-0 h-full flex flex-col items-center justify-center gap-1 overflow-hidden border border-scent-accent/22 bg-[radial-gradient(circle_at_50%_0%,rgba(212,175,55,0.13),rgba(255,255,255,0.04)_58%,rgba(255,255,255,0.02))] px-4 py-5 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]"
+        }
+      >
+        <div className="flex flex-1 flex-col items-center justify-center w-full">
+          {stat.score !== null ? (
+            <>
+              <div className={`flex items-end justify-center ${compact ? "gap-1" : "gap-1.5"}`}>
+                <span
+                  className={`font-serif italic leading-none text-scent-accent tabular-nums ${
+                    compact ? "text-[1.7rem]" : "text-[2.85rem]"
+                  }`}
+                >
+                  {stat.score}
+                </span>
+                <span className={compact ? "pb-0.5 text-[10px] text-white/65" : "pb-1 text-base text-white/68"}>
+                  /100
+                </span>
+              </div>
+              <p
+                className={
+                  compact
+                    ? "min-h-[2.35em] flex items-center justify-center px-0 text-[10px] leading-tight text-scent-accent/85"
+                    : "min-h-[2.5em] flex items-center justify-center px-1 text-xs leading-snug text-scent-accent/85"
+                }
+              >
+                {stat.sub ?? ""}
+              </p>
+            </>
+          ) : (
+            <>
+              <p
+                className={compact ? "text-[11px] text-white/55 font-serif italic" : "font-serif italic text-2xl text-white/55 leading-tight"}
+                aria-hidden
+              >
+                --
+              </p>
+              <p
+                className={
+                  compact
+                    ? "min-h-[2.35em] flex items-center justify-center px-0 text-[9px] leading-tight text-white/42"
+                    : "min-h-[2.5em] flex items-center justify-center px-1 text-[10px] leading-snug text-white/42"
+                }
+              >
+                {stat.sub ?? ""}
+              </p>
+            </>
+          )}
+        </div>
+        <p
+          className={
+            compact
+              ? "mt-auto max-w-full text-[7px] leading-tight uppercase tracking-[0.08em] text-white/58 font-bold [overflow-wrap:anywhere]"
+              : "mt-auto text-[9px] uppercase tracking-[0.2em] text-white/58 font-bold"
+          }
+        >
+          {stat.label}
+        </p>
+      </div>
+    );
+  };
+
+  const renderMetricTile = (stat: MetricCard, scale: "desktop" | "mobile") => {
+    const compact = scale === "mobile";
+    const Icon = stat.icon;
+    return (
+      <div
+        key={stat.label}
+        className={
+          compact
+            ? "min-w-0 h-full min-h-[6.15rem] flex flex-col items-center justify-center gap-1 border border-white/15 bg-white/[0.035] px-1 py-2.5 text-center"
+            : "min-w-0 h-full flex flex-col items-center justify-center gap-1 border border-white/15 bg-white/[0.035] px-4 py-5 text-center"
+        }
+      >
+        <Icon size={compact ? 14 : 18} strokeWidth={1.6} className="text-scent-accent" />
+        {stat.cycle.length > 0 ? (
+          <CyclingTilePair
+            parts={stat.cycle}
+            primaryClass={
+              compact
+                ? "text-[11px] text-white/85 font-serif italic truncate max-w-full"
+                : "font-serif italic text-2xl text-white leading-tight truncate max-w-full"
+            }
+            secondaryClass={
+              compact
+                ? "min-h-[2.35em] flex items-center justify-center px-0 text-[9px] leading-tight text-white/42"
+                : "min-h-[2.5em] flex items-center justify-center px-1 text-[10px] leading-snug text-white/42"
+            }
+          />
+        ) : (
+          <>
+            {stat.value !== null ? (
+              <p
+                className={
+                  compact
+                    ? "text-[11px] text-white/85 font-serif italic truncate max-w-full"
+                    : "font-serif italic text-2xl text-white leading-tight truncate max-w-full"
+                }
+              >
+                {stat.value}
+              </p>
+            ) : (
+              <p
+                className={compact ? "text-[11px] text-white/55 font-serif italic" : "font-serif italic text-2xl text-white/55 leading-tight"}
+                aria-hidden
+              >
+                --
+              </p>
+            )}
+            <p
+              className={
+                compact
+                  ? "min-h-[2.35em] flex items-center justify-center px-0 text-[9px] leading-tight text-white/42"
+                  : "min-h-[2.5em] flex items-center justify-center px-1 text-[10px] leading-snug text-white/42"
+              }
+            >
+              {stat.sub ?? ""}
+            </p>
+          </>
+        )}
+        <p
+          className={
+            compact
+              ? "mt-auto max-w-full text-[7px] leading-tight uppercase tracking-[0.04em] text-white/55 font-bold [overflow-wrap:anywhere]"
+              : "mt-auto text-[9px] uppercase tracking-[0.2em] text-white/55 font-bold"
+          }
+        >
+          {stat.label}
+        </p>
+      </div>
+    );
+  };
+
+  const renderTile = (stat: StatCard, scale: "desktop" | "mobile") =>
+    stat.kind === "score" ? renderScoreTile(stat, scale) : renderMetricTile(stat, scale);
+
   return (
     <>
-      {(() => {
-        const renderDesktopTile = (stat: StatCard) => {
-          if (stat.label === "Profile Score") {
-            return (
-              <div
-                key={stat.label}
-                className="min-w-0 h-full flex flex-col items-center justify-center gap-1 border border-white/15 bg-white/[0.035] px-4 py-5 text-center"
-              >
-                <div className="flex flex-1 flex-col items-center justify-center w-full pt-1">
-                  {consensusScore !== null ? (
-                    <>
-                      <div className="flex items-end justify-center gap-1.5">
-                        <span className="font-serif italic text-[2.75rem] leading-none text-scent-accent tabular-nums">
-                          {consensusScore}
-                        </span>
-                        <span className="pb-1 text-base text-white/68">/100</span>
-                      </div>
-                      <p className="min-h-[2.5em] flex items-center justify-center px-1 text-xs leading-snug text-scent-accent/85">
-                        {stat.sub ?? ""}
-                      </p>
-                    </>
-                  ) : (
-                    <>
-                      <p className="font-serif italic text-2xl text-white/55 leading-tight" aria-hidden>—</p>
-                      <p className="min-h-[2.5em] flex items-center justify-center px-1 text-[10px] leading-snug text-white/42">
-                        {stat.sub ?? ""}
-                      </p>
-                    </>
-                  )}
-                </div>
-                <p className="mt-auto text-[9px] uppercase tracking-[0.2em] text-white/55 font-bold">{stat.label}</p>
-              </div>
-            );
-          }
-
-          const Icon = stat.icon;
-          return (
-            <div
-              key={stat.label}
-              className="min-w-0 h-full flex flex-col items-center justify-center gap-1 border border-white/15 bg-white/[0.035] px-4 py-5 text-center"
-            >
-              <Icon size={18} strokeWidth={1.6} className="text-scent-accent" />
-              {stat.cycle.length > 0 ? (
-                <CyclingTilePair
-                  parts={stat.cycle}
-                  primaryClass="font-serif italic text-2xl text-white leading-tight truncate max-w-full"
-                  secondaryClass="min-h-[2.5em] flex items-center justify-center px-1 text-[10px] leading-snug text-white/42"
-                />
-              ) : (
-                <>
-                  {stat.value !== null ? (
-                    <p className="font-serif italic text-2xl text-white leading-tight truncate max-w-full">{stat.value}</p>
-                  ) : (
-                    <p className="font-serif italic text-2xl text-white/55 leading-tight" aria-hidden>—</p>
-                  )}
-                  <p className="min-h-[2.5em] flex items-center justify-center px-1 text-[10px] leading-snug text-white/42">
-                    {stat.sub ?? ""}
-                  </p>
-                </>
-              )}
-              <p className="mt-auto text-[9px] uppercase tracking-[0.2em] text-white/55 font-bold">{stat.label}</p>
-            </div>
-          );
-        };
-        return (
-          <div className="hidden sm:grid sm:grid-cols-[1.12fr_1.95fr_1fr] gap-3 sm:gap-4 items-stretch">
-            {renderDesktopTile(statCards[0])}
-            <div className="grid grid-cols-2 gap-3 sm:gap-4 items-stretch">
-              {renderDesktopTile(statCards[1])}
-              {renderDesktopTile(statCards[2])}
-            </div>
-            {renderDesktopTile(statCards[3])}
-          </div>
-        );
-      })()}
+      <div className="hidden sm:grid sm:grid-cols-[1.12fr_1.95fr_1fr] gap-3 sm:gap-4 items-stretch">
+        {renderTile(statCards[0], "desktop")}
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 items-stretch">
+          {renderTile(statCards[1], "desktop")}
+          {renderTile(statCards[2], "desktop")}
+        </div>
+        {renderTile(statCards[3], "desktop")}
+      </div>
 
       <FragrancePanel title="Derived Intelligence" className="sm:hidden">
         <div className="px-4 py-3.5">
           <div className="grid grid-cols-2 gap-1.5">
-            {statCards.map((stat) => {
-              if (stat.label === "Profile Score") {
-                return (
-                  <div
-                    key={stat.label}
-                    className="min-w-0 h-full min-h-[6.15rem] flex flex-col items-center justify-center gap-1 border border-white/15 bg-white/[0.035] px-1 py-2.5 text-center"
-                  >
-                    <div className="flex flex-1 flex-col items-center justify-center w-full">
-                      {consensusScore !== null ? (
-                        <>
-                          <div className="flex items-end justify-center gap-1">
-                            <span className="font-serif italic text-2xl leading-none text-scent-accent tabular-nums">
-                              {consensusScore}
-                            </span>
-                            <span className="pb-0.5 text-[10px] text-white/65">/100</span>
-                          </div>
-                          <p className="min-h-[2.35em] flex items-center justify-center px-0 text-[10px] leading-tight text-scent-accent/85">
-                            {stat.sub ?? ""}
-                          </p>
-                        </>
-                      ) : (
-                        <>
-                          <p className="text-[11px] text-white/55 font-serif italic" aria-hidden>—</p>
-                          <p className="min-h-[2.35em] flex items-center justify-center px-0 text-[9px] leading-tight text-white/42">
-                            {stat.sub ?? ""}
-                          </p>
-                        </>
-                      )}
-                    </div>
-                    <p className="mt-auto max-w-full text-[7px] leading-tight uppercase tracking-[0.04em] text-white/55 font-bold [overflow-wrap:anywhere]">{stat.label}</p>
-                  </div>
-                );
-              }
-
-              const Icon = stat.icon;
-              return (
-                <div
-                  key={stat.label}
-                  className="min-w-0 h-full min-h-[6.15rem] flex flex-col items-center justify-center gap-1 border border-white/15 bg-white/[0.035] px-1 py-2.5 text-center"
-                >
-                  <Icon size={14} strokeWidth={1.6} className="text-scent-accent" />
-                  {stat.cycle.length > 0 ? (
-                    <CyclingTilePair
-                      parts={stat.cycle}
-                      primaryClass="text-[11px] text-white/85 font-serif italic truncate max-w-full"
-                      secondaryClass="min-h-[2.35em] flex items-center justify-center px-0 text-[9px] leading-tight text-white/42"
-                    />
-                  ) : (
-                    <>
-                      {stat.value !== null ? (
-                        <p className="text-[11px] text-white/85 font-serif italic truncate max-w-full">{stat.value}</p>
-                      ) : (
-                        <p className="text-[11px] text-white/55 font-serif italic" aria-hidden>—</p>
-                      )}
-                      <p className="min-h-[2.35em] flex items-center justify-center px-0 text-[9px] leading-tight text-white/42">
-                        {stat.sub ?? ""}
-                      </p>
-                    </>
-                  )}
-                  <p className="mt-auto max-w-full text-[7px] leading-tight uppercase tracking-[0.04em] text-white/55 font-bold [overflow-wrap:anywhere]">{stat.label}</p>
-                </div>
-              );
-            })}
+            {statCards.map((stat) => renderTile(stat, "mobile"))}
           </div>
         </div>
       </FragrancePanel>

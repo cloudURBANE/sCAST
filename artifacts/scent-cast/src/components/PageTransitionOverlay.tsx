@@ -6,10 +6,7 @@ const EMBLEM = '/icons/transparent-emblem/scentbeam-emblem-192x192.png';
 const GOLD = 'rgba(212, 175, 55,';
 const SHOW_MS = 1180;
 
-const ROUTE_LABELS: Record<string, string> = {
-  '/': 'Wardrobe',
-  '/community': 'Community',
-};
+const ROUTE_LABELS: Record<string, string> = {};
 
 let emblemWarmPromise: Promise<void> | null = null;
 
@@ -82,14 +79,6 @@ export const PageTransitionOverlay: React.FC = () => {
           >
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
               <img src={EMBLEM} alt="" draggable={false} style={{ width: 80, height: 80, userSelect: 'none' }} />
-              <p style={{ fontSize: 11, letterSpacing: '0.34em', textTransform: 'uppercase', color: '#fff7ec', fontFamily: 'Georgia, serif', fontStyle: 'italic', fontWeight: 700, margin: 0, opacity: 0.5, WebkitTextSizeAdjust: 'none' as any }}>
-                SCENTBEAM
-              </p>
-              {ROUTE_LABELS[location.pathname] && (
-                <p style={{ fontSize: 11, letterSpacing: '0.22em', textTransform: 'uppercase', color: '#fff7ec', fontFamily: 'Georgia, serif', fontWeight: 400, margin: 0, opacity: 0.4, WebkitTextSizeAdjust: 'none' as any }}>
-                  {ROUTE_LABELS[location.pathname]}
-                </p>
-              )}
             </div>
           </motion.div>
         )}
@@ -227,50 +216,6 @@ export const PageTransitionOverlay: React.FC = () => {
               }}
             />
 
-            <motion.p
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 0.5, y: 0 }}
-              transition={{ delay: 0.28, duration: 0.38, ease: 'easeOut' }}
-              style={{
-                fontSize: 10,
-                letterSpacing: '0.34em',
-                textTransform: 'uppercase',
-                color: '#fff7ec',
-                fontFamily: 'Georgia, "Times New Roman", serif',
-                fontStyle: 'italic',
-                fontWeight: 700,
-                whiteSpace: 'nowrap',
-                userSelect: 'none',
-                margin: 0,
-                padding: 0,
-              }}
-            >
-              SCENTBEAM
-            </motion.p>
-
-            {ROUTE_LABELS[location.pathname] && (
-              <motion.p
-                initial={{ opacity: 0, y: 4 }}
-                animate={{ opacity: 0.45, y: 0 }}
-                transition={{ delay: 0.42, duration: 0.32, ease: 'easeOut' }}
-                style={{
-                  fontSize: 11,
-                  letterSpacing: '0.22em',
-                  textTransform: 'uppercase',
-                  color: '#fff7ec',
-                  fontFamily: 'Georgia, "Times New Roman", serif',
-                  fontStyle: 'normal',
-                  fontWeight: 400,
-                  whiteSpace: 'nowrap',
-                  userSelect: 'none',
-                  margin: 0,
-                  padding: 0,
-                  WebkitTextSizeAdjust: 'none' as any,
-                }}
-              >
-                {ROUTE_LABELS[location.pathname]}
-              </motion.p>
-            )}
           </div>
         </motion.div>
       )}

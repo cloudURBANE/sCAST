@@ -51,7 +51,7 @@ type PipelineSource = {
 };
 
 export type ProcessedImageResult = CachedImageReference & {
-  sourceProvider: ImageSourceProvider;
+  sourceProvider: string;
   pipelineVersion: string;
   removeBgStatus?: RemoveBgStatus | null;
   removeBgReason?: RemoveBgReason | null;
@@ -473,7 +473,7 @@ export async function resolveProcessedFragranceImage(
   if (input.allowLookupCache !== false && !input.sourceUrl) {
     const cachedByLookup = await getLatestReadyCachedImageByLookupKey(lookupKey);
     if (cachedByLookup && (!removeBackground || cachedByLookup.backgroundRemoved)) {
-      const result = { ...cachedByLookup, sourceProvider, pipelineVersion: IMAGE_PIPELINE_VERSION };
+      const result = { ...cachedByLookup, pipelineVersion: IMAGE_PIPELINE_VERSION };
       return attachTrace(result, makeTrace({ ...traceBase, final: result }));
     }
   }
@@ -481,7 +481,7 @@ export async function resolveProcessedFragranceImage(
   if (input.allowLookupCache !== false && !input.sourceUrl && searchQueryHash) {
     const cachedByQuery = await getLatestReadyCachedImageBySearchQueryHash(searchQueryHash);
     if (cachedByQuery && (!removeBackground || cachedByQuery.backgroundRemoved)) {
-      const result = { ...cachedByQuery, sourceProvider, pipelineVersion: IMAGE_PIPELINE_VERSION };
+      const result = { ...cachedByQuery, pipelineVersion: IMAGE_PIPELINE_VERSION };
       return attachTrace(result, makeTrace({ ...traceBase, final: result }));
     }
   }
