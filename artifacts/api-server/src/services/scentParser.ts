@@ -20,11 +20,11 @@ export interface ParsedFragrance {
 
 export const CONCENTRATION_PATTERNS: Array<{ pattern: RegExp; value: Concentration }> = [
   { pattern: /\b(extrait|extract|pure parfum)\b/i, value: "Extrait" },
-  { pattern: /\bparfum\b/i, value: "Parfum" },
   { pattern: /\b(e\.?d\.?p\.?|eau\s+de\s+parfum)\b/i, value: "Eau de Parfum" },
   { pattern: /\b(e\.?d\.?t\.?|eau\s+de\s+toilette)\b/i, value: "Eau de Toilette" },
   { pattern: /\b(e\.?d\.?c\.?|eau\s+de\s+cologne)\b/i, value: "Eau de Cologne" },
   { pattern: /\bbody\s+spray\b/i, value: "Body Spray" },
+  { pattern: /\bparfum\b/i, value: "Parfum" },
 ];
 
 const ACCORD_KEYWORDS = [

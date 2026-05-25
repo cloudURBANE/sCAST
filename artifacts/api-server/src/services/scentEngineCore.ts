@@ -136,7 +136,10 @@ export async function buildProfileWithDeps(
 ): Promise<ScentProfile | { error: string }> {
   const allowCatalogFuzzy = opts?.allowCatalogFuzzy ?? true;
   const preferEngineData = opts?.preferEngineData ?? false;
-  const concentrationOverride = opts?.concentrationOverride;
+  const inputConcentration = resolveConcentrationFast(name, "", "");
+  const concentrationOverride =
+    opts?.concentrationOverride ??
+    (inputConcentration?.confidence === 95 ? inputConcentration.concentration : undefined);
   const identity = deps.resolveFragranceIdentity(brand, name);
   const profileBrand = identity.brand;
   const profileName = identity.name;
@@ -146,8 +149,8 @@ export async function buildProfileWithDeps(
   const cached = await deps.getCatalogEntry(profileBrand, profileName);
   if (cached && !preferEngineData) {
     const cachedImageUrl = await deps.usableImageUrlForResponse(cached.imageUrl);
-    if (cachedImageUrl) return { ...cached, imageUrl: cachedImageUrl };
-    catalogBase = cached;
+    if (cachedImageUrl && !concentrationOverride) return { ...cached, imageUrl: cachedImageUrl };
+    catalogBase = cachedImageUrl ? { ...cached, imageUrl: cachedImageUrl } : cached;
   } else if (cached && preferEngineData) {
     catalogBase = cached;
   }
@@ -157,8 +160,8 @@ export async function buildProfileWithDeps(
     const fuzzy = await deps.searchCatalog(`${profileBrand} ${profileName}`);
     if (fuzzy) {
       const fuzzyImageUrl = await deps.usableImageUrlForResponse(fuzzy.imageUrl);
-      if (fuzzyImageUrl) return { ...fuzzy, imageUrl: fuzzyImageUrl };
-      catalogBase = fuzzy;
+      if (fuzzyImageUrl && !concentrationOverride) return { ...fuzzy, imageUrl: fuzzyImageUrl };
+      catalogBase = fuzzyImageUrl ? { ...fuzzy, imageUrl: fuzzyImageUrl } : fuzzy;
     }
   }
 
@@ -271,7 +274,11 @@ export async function buildProfileWithDeps(
   if (!parsed) return { error: "Failed to parse fragrance data." };
 
   if (parsed.concentration === "Unknown") {
-    const fast = resolveConcentrationFast(finalName, finalBrand, finalDescription);
+    const concentrationName = [name, finalName].filter(Boolean).join(" ");
+    const concentrationDescription = [brand !== finalBrand ? brand : "", finalDescription]
+      .filter(Boolean)
+      .join(" ");
+    const fast = resolveConcentrationFast(concentrationName, finalBrand, concentrationDescription);
     if (fast && fast.confidence >= 75) {
       parsed = { ...parsed, concentration: fast.concentration };
     }

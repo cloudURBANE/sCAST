@@ -216,16 +216,16 @@ test("B2: allowCatalogFuzzy=false skips searchCatalog entirely (rebuild identity
   assert.equal(calls.searchCatalog.length, 0, "fuzzy catalog must not be queried");
 });
 
-test("fuzzy catalog hit with usable image short-circuits like an exact hit", async () => {
+test("fuzzy catalog hit without concentration text short-circuits like an exact hit", async () => {
   const fuzzy = makeProfile({ product: { name: "Sauvage", brand: "Dior" } });
   const { deps, calls } = makeDeps({
     searchCatalog: async (q) => {
-      assert.equal(q, "Dior Sauvage EDP");
+      assert.equal(q, "Dior Savauge");
       return fuzzy;
     },
   });
 
-  const result = await buildProfileWithDeps(deps, "Sauvage EDP", "Dior");
+  const result = await buildProfileWithDeps(deps, "Savauge", "Dior");
   ok(result);
 
   assert.equal(result.product.name, "Sauvage");
@@ -345,6 +345,87 @@ test("concentrationOverride is applied to the final profile after parse", async 
   ok(result);
 
   assert.equal(result.concentration, "Extrait");
+});
+
+test("concentrationOverride bypasses cached early return and rebuilds profile", async () => {
+  const cached = makeProfile({ concentration: "Eau de Toilette" });
+  const { deps, calls } = makeDeps({
+    getCatalogEntry: async () => cached,
+    findDatasetFragrance: () => ({
+      name: "Sauvage",
+      brand: "Dior",
+      family: "Fresh Spicy",
+      notes: ["bergamot"],
+      description: "",
+    }),
+  });
+
+  const result = await buildProfileWithDeps(deps, "Sauvage", "Dior", undefined, {
+    concentrationOverride: "Extrait",
+  });
+  ok(result);
+
+  assert.equal(result.concentration, "Extrait");
+  assert.equal(calls.vectorize, 1);
+  assert.equal(calls.saveCatalogEntry.length, 1);
+});
+
+test("raw concentration labels bypass cached early return without route override", async () => {
+  const cached = makeProfile({ concentration: "Eau de Toilette" });
+  const { deps, calls } = makeDeps({
+    resolveFragranceIdentity: () => ({ brand: "Dior", name: "Sauvage" }),
+    getCatalogEntry: async () => cached,
+    findDatasetFragrance: () => ({
+      name: "Sauvage",
+      brand: "Dior",
+      family: "Fresh Spicy",
+      notes: ["bergamot"],
+      description: "",
+    }),
+  });
+
+  const result = await buildProfileWithDeps(deps, "Sauvage EDP 100ml", "Dior");
+  ok(result);
+
+  assert.equal(result.product.name, "Sauvage");
+  assert.equal(result.concentration, "Eau de Parfum");
+  assert.equal(calls.vectorize, 1);
+  assert.equal(calls.saveCatalogEntry.length, 1);
+});
+
+test("raw concentration labels survive identity normalization", async () => {
+  const { deps } = makeDeps({
+    resolveFragranceIdentity: () => ({ brand: "Dior", name: "Sauvage" }),
+    parseFragrance: (data) =>
+      data
+        ? {
+            notes: data.notes ?? [],
+            pyramidNotes: {
+              top: data.pyramid?.top ?? [],
+              heart: data.pyramid?.heart ?? [],
+              base: data.pyramid?.base ?? [],
+            },
+            family: data.family ?? "unknown",
+            description: data.description ?? "",
+            perfumer: data.perfumer ?? "",
+            concentration: "Unknown",
+            accords: [],
+          }
+        : null,
+    findDatasetFragrance: () => ({
+      name: "Sauvage",
+      brand: "Dior",
+      family: "Fresh Spicy",
+      notes: ["bergamot"],
+      description: "",
+    }),
+  });
+
+  const result = await buildProfileWithDeps(deps, "Sauvage EDP 100ml", "Dior");
+  ok(result);
+
+  assert.equal(result.product.name, "Sauvage");
+  assert.equal(result.concentration, "Eau de Parfum");
 });
 
 test("saveCatalogEntry rejection is reported and remains non-fatal", async () => {

@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   asciiForImageSearch,
+  findDatasetFragrance,
   fragranceCatalogSearchTerms,
   hasMeaningfulFragranceQuery,
   isLikelySameFragranceIdentity,
@@ -122,7 +123,10 @@ test("voice-to-text fragrance aliases resolve to local note-rich records", () =>
     ["hugo boss pacific", "Hugo Boss", "Boss Bottled Pacific"],
     ["Boss Bottles Pacific Hugo Boss", "Hugo Boss", "Boss Bottled Pacific"],
     ["chanel egoste leogiste", "Chanel", "Egoiste Platinum"],
+    ["Egoiste Legoiste", "Chanel", "Egoiste Platinum"],
     ["Ego Teast Legosti Chanel", "Chanel", "Egoiste Platinum"],
+    ["Parfums Prives Side Effect", "Initio", "Side Effect"],
+    ["Initio Parfums Prives Side Effect", "Initio", "Side Effect"],
     ["Hermes Parfum Des Mervilis", "Hermes", "Parfum des Merveilles"],
   ] as const;
 
@@ -130,6 +134,21 @@ test("voice-to-text fragrance aliases resolve to local note-rich records", () =>
     const resolved = resolveFragranceQuery(query);
     assert.equal(resolved?.brand, brand, query);
     assert.equal(resolved?.name, name, query);
+  }
+});
+
+test("problem voice aliases resolve to dataset records with top notes", () => {
+  const cases = [
+    ["Egoiste Legoiste", ["Lavender", "Rosemary", "Petitgrain", "Neroli"]],
+    ["Parfums Prives Side Effect", ["Rum", "Cinnamon"]],
+  ] as const;
+
+  for (const [query, topNotes] of cases) {
+    const resolved = resolveFragranceQuery(query);
+    assert.ok(resolved, query);
+
+    const dataset = findDatasetFragrance(resolved.brand, resolved.name);
+    assert.deepEqual(dataset?.pyramid?.top, topNotes, query);
   }
 });
 
