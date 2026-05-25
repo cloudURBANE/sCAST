@@ -832,10 +832,14 @@ export const FragranceCapture: React.FC<{
                     ) : null}
                   </AnimatePresence>
                   <button
+                    type="button"
                     onClick={handleConfirm}
-                    className="scent-primary-button mt-4 h-12 w-full rounded-[var(--radius-scent)] px-4 font-serif italic text-base transition-all hover:scale-[1.02] active:scale-95 sm:mt-5 sm:h-14 sm:text-lg"
+                    disabled={uploading || selectedIdx === null}
+                    className="scent-primary-button mt-4 h-12 w-full rounded-[var(--radius-scent)] px-4 font-serif italic text-base transition-all hover:scale-[1.02] active:scale-95 sm:mt-5 sm:h-14 sm:text-lg disabled:pointer-events-none disabled:opacity-72"
                   >
-                    Sync to Vault
+                    <span className="font-serif italic text-base sm:text-lg leading-tight text-center">
+                      Sync to Vault
+                    </span>
                   </button>
                 </div>
               </div>
