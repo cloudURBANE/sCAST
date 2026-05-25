@@ -144,6 +144,7 @@ export function flattenProfile(profile: ScentProfile): Record<string, unknown> {
     storagePath: profile.storagePath,
     imageHash: profile.imageHash,
     storageProvider: profile.storageProvider,
+    sourceProvider: profile.sourceProvider,
     product: profile.product,
   };
 }

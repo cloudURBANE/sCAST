@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   chooseHydratedImageUrl,
+  chooseHydratedImageUrlWithMetadata,
   CURRENT_VAULT_SCHEMA_VERSION,
   isLegacyVaultRow,
   stampVaultSchemaVersion,
@@ -82,4 +83,41 @@ test("chooseHydratedImageUrl falls back to the shared image when the stored row 
 
 test("chooseHydratedImageUrl returns empty when neither source has an image", () => {
   assert.equal(chooseHydratedImageUrl("", "   "), "");
+});
+
+test("chooseHydratedImageUrlWithMetadata keeps a saved manual row image over shared images", () => {
+  assert.equal(
+    chooseHydratedImageUrlWithMetadata(
+      { imageUrl: "https://cdn.example.com/openai.webp", sourceProvider: "openai" },
+      { imageUrl: "https://cdn.example.com/manual.webp", sourceProvider: "manual" },
+    ),
+    "https://cdn.example.com/manual.webp",
+  );
+});
+
+test("chooseHydratedImageUrlWithMetadata lets generated cache replace stale non-manual row images", () => {
+  assert.equal(
+    chooseHydratedImageUrlWithMetadata(
+      {
+        imageUrl: "https://cdn.example.com/generated.webp",
+        sourceProvider: "manual",
+        sourceUrl: "openai-reimagine:gpt-image-2:abc:def",
+      },
+      { imageUrl: "https://retailer.example.com/stale.jpg", sourceProvider: "serper" },
+    ),
+    "https://cdn.example.com/generated.webp",
+  );
+});
+
+test("chooseHydratedImageUrlWithMetadata treats processed manual paths as saved manual images", () => {
+  assert.equal(
+    chooseHydratedImageUrlWithMetadata(
+      { imageUrl: "https://cdn.example.com/shared.webp", sourceProvider: "manual" },
+      {
+        imageUrl: "https://storage.example.com/images/processed/manual/reflection.webp",
+        storagePath: "images/processed/manual/reflection.webp",
+      },
+    ),
+    "https://storage.example.com/images/processed/manual/reflection.webp",
+  );
 });

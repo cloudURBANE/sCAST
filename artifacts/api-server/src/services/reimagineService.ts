@@ -251,7 +251,7 @@ export async function reimagineBottleImage(
 
   const model = resolveModel(input.model);
   const lookupKey = makeLookupKey(input.brand, input.name);
-  const sourceProvider = "manual" as const;
+  const sourceProvider = "openai" as const;
 
   const loaded = await loadSourceBytes(input.sourceUrl);
   const pngForEdit = await toPngForOpenAI(loaded.buffer);

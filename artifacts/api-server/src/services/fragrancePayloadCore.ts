@@ -41,3 +41,70 @@ export function chooseHydratedImageUrl(
 ): string {
   return nonEmptyString(currentImageUrl) ?? nonEmptyString(sharedImageUrl) ?? "";
 }
+
+export type HydratedImageCandidate = {
+  imageUrl?: unknown;
+  sourceProvider?: unknown;
+  sourceUrl?: unknown;
+  storagePath?: unknown;
+};
+
+function normalizedSourceProvider(value: unknown): string | null {
+  const provider = nonEmptyString(value)?.toLowerCase();
+  return provider ? provider.replace(/[_\s]+/g, "-") : null;
+}
+
+function candidateText(candidate: HydratedImageCandidate): string {
+  return [
+    candidate.imageUrl,
+    candidate.sourceProvider,
+    candidate.sourceUrl,
+    candidate.storagePath,
+  ]
+    .map((value) => nonEmptyString(value)?.toLowerCase())
+    .filter((value): value is string => Boolean(value))
+    .join(" ");
+}
+
+function isOpenAiReimaginedImage(candidate: HydratedImageCandidate): boolean {
+  const provider = normalizedSourceProvider(candidate.sourceProvider);
+  if (provider === "openai" || provider === "openai-reimagine") return true;
+  return candidateText(candidate).includes("openai-reimagine:");
+}
+
+function isManualOrGeneratedImage(candidate: HydratedImageCandidate): boolean {
+  const provider = normalizedSourceProvider(candidate.sourceProvider);
+  if (provider === "manual" || isOpenAiReimaginedImage(candidate)) return true;
+  const text = candidateText(candidate);
+  return (
+    text.includes("/images/processed/manual/") ||
+    text.includes("images/processed/manual/") ||
+    text.includes("/images/processed/openai/") ||
+    text.includes("images/processed/openai/")
+  );
+}
+
+/**
+ * Row images are normally authoritative, but stale Serper/catalog row images
+ * should not hide a newer generated/manual cache result for the same fragrance.
+ */
+export function chooseHydratedImageUrlWithMetadata(
+  shared: HydratedImageCandidate | null | undefined,
+  current: HydratedImageCandidate | null | undefined,
+): string {
+  const currentImageUrl = nonEmptyString(current?.imageUrl);
+  const sharedImageUrl = nonEmptyString(shared?.imageUrl);
+
+  if (!currentImageUrl) return sharedImageUrl ?? "";
+  if (!sharedImageUrl) return currentImageUrl;
+
+  if (isManualOrGeneratedImage({ ...(current ?? {}), imageUrl: currentImageUrl })) {
+    return currentImageUrl;
+  }
+
+  if (isManualOrGeneratedImage({ ...(shared ?? {}), imageUrl: sharedImageUrl })) {
+    return sharedImageUrl;
+  }
+
+  return currentImageUrl;
+}
