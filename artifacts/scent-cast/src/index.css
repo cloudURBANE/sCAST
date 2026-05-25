@@ -1411,36 +1411,30 @@ a {
 }
 
 @keyframes brand-gold-shimmer {
-  0% {
-    background-position: 220% 0;
-  }
-  18% {
-    background-position: 100% 0;
-  }
-  100% {
-    background-position: 100% 0;
-  }
+  from { background-position: 220% 0; }
+  to   { background-position: -20% 0; }
 }
 
 .scent-brand-gold-shimmer {
   color: rgba(247, 243, 236, 0.94);
   background: linear-gradient(
-    112deg,
-    rgba(247, 243, 236, 0.94) 0%,
-    rgba(247, 243, 236, 0.94) 40%,
-    rgba(212, 175, 55, 0.28) 46%,
-    rgba(253, 230, 138, 0.42) 50%,
-    rgba(212, 175, 55, 0.28) 54%,
-    rgba(247, 243, 236, 0.94) 60%,
-    rgba(247, 243, 236, 0.94) 100%
+    90deg,
+    rgba(255, 247, 201, 0.92) 0%,
+    rgba(255, 247, 201, 0.92) 32%,
+    #f5dc86 42%,
+    #d4a847 50%,
+    #f5dc86 58%,
+    rgba(255, 247, 201, 0.92) 68%,
+    rgba(255, 247, 201, 0.92) 100%
   );
   background-size: 220% 100%;
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
+  text-shadow: none;
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
-  animation: brand-gold-shimmer 14s cubic-bezier(0.42, 0, 0.18, 1) infinite;
+  animation: brand-gold-shimmer 6s linear infinite;
   will-change: background-position;
   display: inline-block;
 }
@@ -1450,10 +1444,4 @@ a {
     animation: none;
     background-position: 100% 0;
   }
-}
-
-.scent-card-brand.scent-brand-gold-shimmer {
-  text-shadow:
-    0 1px 0 rgba(0, 0, 0, 0.4),
-    0 0 14px rgba(255, 244, 220, 0.04);
 }

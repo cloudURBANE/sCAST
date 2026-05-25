@@ -1600,11 +1600,11 @@ export const Wardrobe: React.FC<{
                         <div className="scent-card-frame" aria-hidden />
                         <div className="relative z-[1] flex h-full flex-col items-center px-6 sm:px-8 pt-5 sm:pt-6 pb-4 sm:pb-5">
                           <p
-                            className="scent-card-brand scent-brand-gold-shimmer w-full mt-1 sm:mt-1.5"
+                            className="scent-card-brand w-full mt-1 sm:mt-1.5"
                             data-len={brandLengthBucket(entryBrand(item))}
                             title={entryBrand(item)}
                           >
-                            {entryBrand(item)}
+                            <span className="scent-brand-gold-shimmer">{entryBrand(item)}</span>
                           </p>
                           <div className="relative flex-1 w-full mt-3 sm:mt-4 mb-3 sm:mb-4 min-h-0">
                             <BottleImage
