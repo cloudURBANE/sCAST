@@ -96,6 +96,15 @@ export default defineConfig(async () => {
       fs: {
         strict: true,
       },
+      proxy: {
+        "/api": {
+          target:
+            process.env.BACKEND_ORIGIN?.trim() ||
+            process.env.VITE_API_BASE_URL?.trim() ||
+            "https://scast-production.up.railway.app",
+          changeOrigin: true,
+        },
+      },
     },
     preview: {
       port,
