@@ -127,11 +127,11 @@ const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({ weather, weath
   const atmosphereTrackKey = [condition, humidity, temp, location].join('|');
 
   const metrics = [
-    { label: 'Matrix', value: condition },
-    { label: 'Saturation', value: humidity },
-    { label: 'Chronos', value: <LiveClock /> },
-    { label: 'Atmosphere', value: temp },
-    { label: 'Coordinate', value: location },
+    { label: 'Matrix', subtitle: 'Conditions', value: condition },
+    { label: 'Saturation', subtitle: 'Humidity', value: humidity },
+    { label: 'Chronos', subtitle: 'Time', value: <LiveClock /> },
+    { label: 'Atmosphere', subtitle: 'Temperature', value: temp },
+    { label: 'Coordinate', subtitle: 'Location', value: location },
   ];
 
   useLayoutEffect(() => {
@@ -198,7 +198,12 @@ const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({ weather, weath
           >
             {metrics.map((metric) => (
               <div key={metric.label} className="scent-atmosphere-marquee-cell">
-                <span className="scent-atmosphere-label">{metric.label}</span>
+                <span className="scent-atmosphere-label">
+                  {metric.label}
+                  {metric.subtitle && (
+                    <span className="ml-1 opacity-40 normal-case tracking-normal text-[0.7em]">({metric.subtitle})</span>
+                  )}
+                </span>
                 <span className="scent-atmosphere-value">{metric.value}</span>
               </div>
             ))}
@@ -334,25 +339,59 @@ function DashboardView() {
             </h2>
             <FragranceCapture onAdd={handleAddItem} onVaultSearchStateChange={handleVaultSearchStateChange} />
             <AnimatePresence initial={false}>
-              {items.length >= 3 && !vaultSearchUiActive ? (
+              {items.length === 0 && !vaultSearchUiActive ? (
                 <motion.div
-                  key="discover-button"
+                  key="how-it-works"
                   initial={{ opacity: 0, height: 0, marginTop: 0 }}
                   animate={{ opacity: 1, height: 'auto', marginTop: '1.75rem' }}
                   exit={{ opacity: 0, height: 0, marginTop: 0 }}
                   transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
                   style={{ overflow: 'hidden' }}
                 >
-                  <motion.button
-                    type="button"
-                    onClick={() => {
-                      setIsIntentModalOpen(true);
-                    }}
-                    className="scent-primary-button w-full min-h-[60px] sm:h-16 flex items-center justify-center gap-2.5 sm:gap-4 px-4 transition-all group rounded-[var(--radius-scent)]"
-                  >
-                    <Play size={19} className="fill-current shrink-0 group-hover:scale-110 transition-transform" />
-                    <span className="font-serif italic text-lg sm:text-2xl leading-tight text-center">Discover Your Signature Scent</span>
-                  </motion.button>
+                  <div className="grid grid-cols-3 gap-3 sm:gap-5 text-center">
+                    {([
+                      { step: '1', text: 'Search a fragrance above' },
+                      { step: '2', text: 'Add 3 to your vault' },
+                      { step: '3', text: 'Discover your match' },
+                    ] as const).map(({ step, text }) => (
+                      <div key={step} className="flex flex-col items-center gap-2">
+                        <span className="w-7 h-7 rounded-full border border-scent-accent/30 flex items-center justify-center text-[11px] font-bold text-scent-accent/60 shrink-0">{step}</span>
+                        <p className="text-[10px] uppercase tracking-[0.18em] text-scent-muted leading-relaxed">{text}</p>
+                      </div>
+                    ))}
+                  </div>
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
+            <AnimatePresence initial={false}>
+              {!vaultSearchUiActive ? (
+                <motion.div
+                  key="discover-cta"
+                  initial={{ opacity: 0, height: 0, marginTop: 0 }}
+                  animate={{ opacity: 1, height: 'auto', marginTop: '1.75rem' }}
+                  exit={{ opacity: 0, height: 0, marginTop: 0 }}
+                  transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
+                  style={{ overflow: 'hidden' }}
+                >
+                  {items.length >= 3 ? (
+                    <motion.button
+                      type="button"
+                      onClick={() => setIsIntentModalOpen(true)}
+                      className="scent-primary-button w-full min-h-[60px] sm:h-16 flex items-center justify-center gap-2.5 sm:gap-4 px-4 transition-all group rounded-[var(--radius-scent)]"
+                    >
+                      <Play size={19} className="fill-current shrink-0 group-hover:scale-110 transition-transform" aria-hidden />
+                      <span className="font-serif italic text-lg sm:text-2xl leading-tight text-center">Discover Your Signature Scent</span>
+                    </motion.button>
+                  ) : (
+                    <div className="w-full min-h-[60px] sm:h-16 flex items-center justify-center gap-2.5 sm:gap-4 px-4 rounded-[var(--radius-scent)] border border-white/10 bg-white/[0.025]">
+                      <Play size={19} className="fill-current shrink-0 opacity-25" aria-hidden />
+                      <span className="font-serif italic text-lg sm:text-xl leading-tight text-center text-white/30">
+                        {items.length === 0
+                          ? 'Add 3 fragrances to unlock discovery'
+                          : `Add ${3 - items.length} more fragrance${3 - items.length !== 1 ? 's' : ''} to unlock discovery`}
+                      </span>
+                    </div>
+                  )}
                 </motion.div>
               ) : null}
             </AnimatePresence>
@@ -379,19 +418,6 @@ function DashboardView() {
               onRetryLoadWardrobe={retryLoadWardrobe}
             />
           </div>
-          <section className="hidden">
-            <FragranceCapture onAdd={handleAddItem} />
-            <button
-              onClick={() => {
-                if (items.length === 0) { alert("Your vault is empty! Add at least one fragrance to discover your match."); return; }
-                setIsIntentModalOpen(true);
-              }}
-              className="scent-primary-button w-full h-14 flex items-center justify-center gap-4 transition-all group rounded-[var(--radius-scent)]"
-            >
-              <Play size={19} className="fill-current group-hover:scale-110 transition-transform" />
-              <span className="font-serif italic text-xl sm:text-2xl">Discover Your Signature Scent</span>
-            </button>
-          </section>
         </div>
       </main>
 

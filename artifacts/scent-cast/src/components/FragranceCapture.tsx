@@ -774,7 +774,7 @@ export const FragranceCapture: React.FC<{
               <div className="flex max-h-[min(72dvh,26rem)] min-h-0 flex-col sm:max-h-[min(72dvh,28rem)] md:max-h-[min(64dvh,29rem)]">
                 <div className="mb-3 sm:mb-5 flex shrink-0 justify-center px-1">
                   <p className="text-[9px] uppercase tracking-[0.34em] text-scent-muted font-bold">
-                    Archive Matches{' '}
+                    Search Results{' '}
                     <span className="tabular-nums text-scent-accent/75 tracking-[0.12em]">
                       ({matches.length})
                     </span>
@@ -828,7 +828,7 @@ export const FragranceCapture: React.FC<{
                         exit={{ opacity: 0, y: -4 }}
                         className="text-center text-[10px] uppercase tracking-[0.24em] text-scent-accent/72 font-bold"
                       >
-                        Ready for Vault Sync
+                        Selected — ready to add
                       </motion.p>
                     ) : null}
                   </AnimatePresence>
@@ -839,7 +839,7 @@ export const FragranceCapture: React.FC<{
                     className="scent-primary-button mt-4 flex h-12 w-full items-center justify-center rounded-[var(--radius-scent)] px-4 font-serif italic text-base transition-all hover:scale-[1.02] active:scale-95 sm:mt-5 sm:h-14 sm:text-lg disabled:pointer-events-none disabled:opacity-72"
                   >
                     <span className="scent-primary-button-label font-serif italic text-base sm:text-lg leading-tight text-center">
-                      {hasSelectedMatch ? 'Sync to Vault' : 'Select a Match'}
+                      {hasSelectedMatch ? 'Add to Vault' : 'Select a Result'}
                     </span>
                   </button>
                 </div>
