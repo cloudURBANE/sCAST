@@ -1642,8 +1642,17 @@ export const Wardrobe: React.FC<{
               </div>
             ))
           ) : !searchQuery && (
-            <div className="py-40 text-center border border-dashed border-white/5 rounded-scent">
+            <div className="py-32 text-center border border-dashed border-white/5 rounded-scent flex flex-col items-center gap-6">
               <p className="font-serif italic text-4xl text-white/10">The vault is currently vacant</p>
+              {onExpandArchive && (
+                <button
+                  type="button"
+                  onClick={onExpandArchive}
+                  className="text-[11px] uppercase tracking-[0.22em] text-scent-accent/55 font-bold hover:text-scent-accent/80 transition-colors border border-scent-accent/20 hover:border-scent-accent/40 px-5 py-2.5 rounded-full"
+                >
+                  Add your first fragrance
+                </button>
+              )}
             </div>
           )}
         </div>
