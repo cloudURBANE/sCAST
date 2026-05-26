@@ -64,6 +64,10 @@ Read in this order:
 
 Then validate the staging restore with row counts and API login before changing production environment variables.
 
+## Usability
+
+Site-wide UX/usability work (navigation clarity, search feedback, empty states, accessibility) is documented in [`docs/SITE_USABILITY_FIX_PLAN.md`](./SITE_USABILITY_FIX_PLAN.md). Read it before Phase 1+ UI changes; update its decision log rather than creating parallel handoffs.
+
 ## Indexing Update (2026-05-07)
 
 For future codebase passes, treat `docs/RUNTIME_NAVIGATION_INDEX.md` as the entrypoint for "where behavior lives now." It captures currently active routes, table exports, and image/affiliate runtime flows that older recovery-focused maps do not fully cover.
