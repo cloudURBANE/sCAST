@@ -33,6 +33,16 @@
   --scent-transition-base: 240ms;
   --scent-card-shadow: 0 26px 68px -40px rgb(var(--scent-gold-rgb) / 0.5), 0 18px 42px -22px rgba(0, 0, 0, 0.96);
   --scent-card-glow: inset 0 1px 0 rgba(255, 226, 176, 0.1), inset 0 0 72px rgba(212, 175, 55, 0.028);
+  --scent-wood-base:
+    radial-gradient(ellipse 48% 92% at 16% 44%, rgba(136, 82, 24, 0.18), transparent 68%),
+    radial-gradient(ellipse 42% 78% at 82% 58%, rgba(184, 125, 43, 0.14), transparent 64%),
+    radial-gradient(140% 120% at 50% -22%, rgba(255, 245, 210, 0.14), transparent 42%),
+    radial-gradient(120% 180% at 50% 118%, rgba(211, 154, 54, 0.14), transparent 50%),
+    linear-gradient(180deg, rgba(43, 30, 18, 0.98) 0%, rgba(17, 10, 5, 0.99) 48%, rgba(5, 3, 2, 1) 100%);
+  --scent-wood-grain:
+    linear-gradient(180deg, rgba(255, 250, 232, 0.08), rgba(255, 255, 255, 0.015) 31%, transparent 58%, rgba(0, 0, 0, 0.16) 100%),
+    repeating-linear-gradient(88deg, rgba(255, 236, 178, 0.022) 0 1px, transparent 1px 9px, rgba(0, 0, 0, 0.03) 9px 11px, transparent 11px 24px),
+    repeating-linear-gradient(96deg, transparent 0 16px, rgba(205, 139, 50, 0.024) 16px 17px, transparent 17px 37px);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -366,10 +376,7 @@ a {
   z-index: -2;
   border-radius: calc(var(--radius-scent) - 4px);
   pointer-events: none;
-  background:
-    radial-gradient(140% 120% at 50% -22%, rgba(255, 248, 219, 0.18), transparent 42%),
-    radial-gradient(120% 180% at 50% 118%, rgba(212, 159, 58, 0.16), transparent 48%),
-    linear-gradient(180deg, rgba(42, 31, 20, 0.98) 0%, rgba(13, 9, 6, 0.99) 43%, rgba(4, 3, 2, 1) 100%);
+  background: var(--scent-wood-base);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 235, 0.12),
     inset 0 0 0 1px rgba(255, 227, 156, 0.12),
@@ -386,15 +393,11 @@ a {
   z-index: -1;
   border-radius: calc(var(--radius-scent) - 5px);
   pointer-events: none;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 244, 0.13), rgba(255, 255, 255, 0.025) 34%, transparent 52%),
-    linear-gradient(116deg, transparent 0 38%, rgba(255, 238, 179, 0.13) 45%, rgba(255, 255, 255, 0.035) 51%, transparent 58%),
-    repeating-linear-gradient(94deg, rgba(255, 255, 255, 0.035) 0 1px, rgba(0, 0, 0, 0.045) 1px 2px, transparent 2px 8px);
-  background-size: 100% 100%, 100% 100%, 20px 20px;
-  opacity: 0.72;
+  background: var(--scent-wood-grain);
+  background-size: 100% 100%, 34px 100%, 58px 100%;
+  opacity: 0.66;
   transition:
-    opacity var(--scent-transition-base) var(--scent-ease-out),
-    transform var(--scent-transition-base) var(--scent-ease-out);
+    opacity var(--scent-transition-base) var(--scent-ease-out);
 }
 
 .scent-primary-button:hover {
@@ -412,15 +415,11 @@ a {
 }
 
 .scent-primary-button:hover::before {
-  background:
-    radial-gradient(140% 120% at 50% -22%, rgba(255, 248, 219, 0.22), transparent 43%),
-    radial-gradient(120% 180% at 50% 118%, rgba(212, 159, 58, 0.18), transparent 48%),
-    linear-gradient(180deg, rgba(48, 36, 23, 0.98) 0%, rgba(15, 10, 7, 0.99) 43%, rgba(4, 3, 2, 1) 100%);
+  filter: brightness(1.06) saturate(1.04);
 }
 
 .scent-primary-button:hover::after {
-  opacity: 0.86;
-  transform: translateX(1.2%);
+  opacity: 0.76;
 }
 
 .scent-primary-button:active {
@@ -444,7 +443,6 @@ a {
 
 .scent-primary-button:active::after {
   opacity: 0.54;
-  transform: translateX(0);
 }
 
 .scent-primary-button:focus-visible {
@@ -539,10 +537,7 @@ a {
 
 .scent-fragrance-card::before {
   z-index: -2;
-  background:
-    radial-gradient(140% 120% at 50% -22%, rgba(255, 248, 219, 0.14), transparent 42%),
-    radial-gradient(120% 180% at 50% 118%, rgba(212, 159, 58, 0.13), transparent 48%),
-    linear-gradient(180deg, rgba(42, 31, 20, 0.9) 0%, rgba(13, 9, 6, 0.94) 43%, rgba(4, 3, 2, 0.98) 100%);
+  background: var(--scent-wood-base);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 235, 0.09),
     inset 0 0 0 1px rgba(255, 227, 156, 0.08),
@@ -552,12 +547,9 @@ a {
 
 .scent-fragrance-card::after {
   z-index: -1;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 244, 0.09), rgba(255, 255, 255, 0.018) 34%, transparent 52%),
-    linear-gradient(116deg, transparent 0 38%, rgba(255, 238, 179, 0.095) 45%, rgba(255, 255, 255, 0.026) 51%, transparent 58%),
-    repeating-linear-gradient(94deg, rgba(255, 255, 255, 0.03) 0 1px, rgba(0, 0, 0, 0.04) 1px 2px, transparent 2px 8px);
-  background-size: 100% 100%, 100% 100%, 20px 20px;
-  opacity: 0.64;
+  background: var(--scent-wood-grain);
+  background-size: 100% 100%, 34px 100%, 58px 100%;
+  opacity: 0.58;
 }
 
 .scent-fragrance-card:hover {
@@ -1411,36 +1403,30 @@ a {
 }
 
 @keyframes brand-gold-shimmer {
-  0% {
-    background-position: 220% 0;
-  }
-  18% {
-    background-position: 100% 0;
-  }
-  100% {
-    background-position: 100% 0;
-  }
+  from { background-position: 220% 0; }
+  to   { background-position: -20% 0; }
 }
 
 .scent-brand-gold-shimmer {
   color: rgba(247, 243, 236, 0.94);
   background: linear-gradient(
-    112deg,
-    rgba(247, 243, 236, 0.94) 0%,
-    rgba(247, 243, 236, 0.94) 40%,
-    rgba(212, 175, 55, 0.28) 46%,
-    rgba(253, 230, 138, 0.42) 50%,
-    rgba(212, 175, 55, 0.28) 54%,
-    rgba(247, 243, 236, 0.94) 60%,
-    rgba(247, 243, 236, 0.94) 100%
+    90deg,
+    rgba(255, 247, 201, 0.92) 0%,
+    rgba(255, 247, 201, 0.92) 32%,
+    #f5dc86 42%,
+    #d4a847 50%,
+    #f5dc86 58%,
+    rgba(255, 247, 201, 0.92) 68%,
+    rgba(255, 247, 201, 0.92) 100%
   );
   background-size: 220% 100%;
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
+  text-shadow: none;
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
-  animation: brand-gold-shimmer 14s cubic-bezier(0.42, 0, 0.18, 1) infinite;
+  animation: brand-gold-shimmer 6s linear infinite;
   will-change: background-position;
   display: inline-block;
 }
@@ -1450,10 +1436,4 @@ a {
     animation: none;
     background-position: 100% 0;
   }
-}
-
-.scent-card-brand.scent-brand-gold-shimmer {
-  text-shadow:
-    0 1px 0 rgba(0, 0, 0, 0.4),
-    0 0 14px rgba(255, 244, 220, 0.04);
 }

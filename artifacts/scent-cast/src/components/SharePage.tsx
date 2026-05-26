@@ -739,7 +739,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                           data-len={brandLengthBucket(brand)}
                           title={brand}
                         >
-                          {brand}
+                          <span className="scent-brand-gold-shimmer">{brand}</span>
                         </p>
                         <div className="relative flex-1 w-full mt-4 sm:mt-5 mb-5 sm:mb-6 min-h-0">
                           {!data.hideImages ? (
