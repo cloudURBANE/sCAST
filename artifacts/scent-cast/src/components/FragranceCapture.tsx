@@ -381,7 +381,10 @@ export const FragranceCapture: React.FC<{
       if (nextMatches.length > 0) {
         setLoadingStatus("Intelligence Collation Complete.");
       } else if (primarySearchError) {
-        setErrorStatus(primarySearchError.message || 'Search failed.');
+        const message = primarySearchError.message === 'Failed to fetch'
+          ? 'Fragrance search is temporarily unavailable. Check your connection and try again.'
+          : primarySearchError.message || 'Search failed.';
+        setErrorStatus(message);
         setLoadingStatus('Search failed.');
       } else {
         setLoadingStatus("No fragrance match found.");

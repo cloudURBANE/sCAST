@@ -851,19 +851,73 @@ function viteEnv(key: string): string | undefined {
 }
 
 function getFragranceEngineApiBase() {
-  const base = viteEnv("VITE_FRAGRANCE_API_URL")?.trim();
-
-  if (!base) {
-    throw new Error(
-      [
-        "Missing VITE_FRAGRANCE_API_URL (fragrance catalog / search backend).",
-        "For local dev: add it to artifacts/scent-cast/.env.local, or define it in ScentCast.env at the repo root, then restart the Vite dev server.",
-        "For production: add VITE_FRAGRANCE_API_URL in the frontend host env (e.g. Vercel) and redeploy.",
-      ].join(" "),
-    );
+  const appBase = getAppApiBase();
+  // Production Vercel leaves VITE_API_BASE_URL empty so browser calls stay same-origin.
+  // Cross-origin Railway fetches often fail for guests (ad blockers, privacy mode, CORP).
+  if (!appBase) {
+    return "/api/engine";
   }
 
-  return base.replace(/\/+$/, "");
+  const direct = viteEnv("VITE_FRAGRANCE_API_URL")?.trim();
+  if (direct) {
+    return direct.replace(/\/+$/, "");
+  }
+
+  return `${appBase}/api/engine`;
+}
+
+function usesFragranceEngineProxy(base: string): boolean {
+  const normalized = base.replace(/\/+$/, "");
+  return normalized === "/api/engine" || normalized.endsWith("/api/engine");
+}
+
+function fragranceEngineUrl(path: string): string {
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  const base = getFragranceEngineApiBase().replace(/\/+$/, "");
+  if (usesFragranceEngineProxy(base)) {
+    return `${base}${normalizedPath}`;
+  }
+  return `${base}/api${normalizedPath}`;
+}
+
+function isFetchNetworkError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  if (err.name === "AbortError") return false;
+  return err.message === "Failed to fetch" || err.message.includes("NetworkError");
+}
+
+function directFragranceEngineUrl(path: string): string | null {
+  const direct = viteEnv("VITE_FRAGRANCE_API_URL")?.trim();
+  if (!direct) return null;
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  return `${direct.replace(/\/+$/, "")}/api${normalizedPath}`;
+}
+
+async function fetchFragranceEngine(
+  path: string,
+  init?: RequestInit,
+): Promise<Response> {
+  const [pathname, query = ""] = path.split("?", 2);
+  const querySuffix = query ? `?${query}` : "";
+  const primaryUrl = `${fragranceEngineUrl(pathname)}${querySuffix}`;
+  let lastError: unknown;
+
+  try {
+    const res = await fetch(primaryUrl, init);
+    if (res.ok || res.status < 500) return res;
+    lastError = new Error(`Fragrance engine request failed: ${res.status}`);
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") throw err;
+    lastError = err;
+  }
+
+  const fallbackUrl = directFragranceEngineUrl(pathname);
+  if (fallbackUrl && fallbackUrl !== primaryUrl) {
+    return fetch(`${fallbackUrl}${querySuffix}`, init);
+  }
+
+  if (lastError instanceof Error) throw lastError;
+  throw new Error("Fragrance engine request failed");
 }
 
 function getSearchApiBase() {
@@ -1028,31 +1082,44 @@ export async function searchFragrances(
   const cached = getCachedFragranceSearch(query);
   if (cached) return cached;
 
-  const base = getSearchApiBase();
-  const res = await fetch(
-    `${base}/api/fragrances/search?q=${encodeURIComponent(query)}`,
-    { signal: options?.signal },
-  );
+  let data: unknown;
+  try {
+    const res = await fetchFragranceEngine(
+      `/fragrances/search?q=${encodeURIComponent(query)}`,
+      { signal: options?.signal },
+    );
 
-  if (!res.ok) {
-    throw new Error(await apiErrorMessage(res, `Fragrance search failed: ${res.status}`));
+    if (!res.ok) {
+      throw new Error(await apiErrorMessage(res, `Fragrance search failed: ${res.status}`));
+    }
+
+    data = await res.json();
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") throw err;
+    if (isFetchNetworkError(err)) {
+      try {
+        return await searchAppFragrances(query, options);
+      } catch (fallbackErr) {
+        if (fallbackErr instanceof Error && fallbackErr.name === "AbortError") throw fallbackErr;
+      }
+    }
+    throw err;
   }
 
-  const data = await res.json();
   const rawResults: unknown[] = Array.isArray(data)
     ? data
-    : Array.isArray(data?.results)
-      ? data.results
+    : Array.isArray((data as { results?: unknown[] })?.results)
+      ? (data as { results: unknown[] }).results
       : [];
 
   const response: FragranceSearchResponse = {
-    query: typeof data?.query === "string" ? data.query : query,
+    query: typeof (data as { query?: unknown })?.query === "string" ? (data as { query: string }).query : query,
     results: rawResults
       .map((result) => normalizeFragranceSearchResult(result, query, "srt"))
       .filter((result): result is FragranceSearchResult => {
         return result !== null && hasDisplayableSearchIdentity(query, result);
       }),
-    diagnostics: normalizeSearchDiagnostics(data?.diagnostics),
+    diagnostics: normalizeSearchDiagnostics((data as { diagnostics?: unknown })?.diagnostics),
   };
 
   if (shouldSupplementWithAppSearch(query, response)) {
@@ -1119,23 +1186,22 @@ export async function getFragranceDetails(
     id.startsWith("catalog:") ||
     id.startsWith("dataset:") ||
     id.startsWith("local:");
-  const url =
-    useAppApi
-      ? appApiUrl("/api/fragrances/details")
-      : `${getFragranceEngineApiBase()}/api/fragrances/details`;
   const requestBody = {
     ...("id" in payload ? { id: payload.id } : {}),
     ...("source_url" in payload && payload.source_url ? { source_url: payload.source_url } : {}),
   };
-
-  const res = await fetch(url, {
+  const requestInit: RequestInit = {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
     body: JSON.stringify(requestBody),
     signal: options?.signal,
-  });
+  };
+
+  const res = useAppApi
+    ? await fetch(appApiUrl("/api/fragrances/details"), requestInit)
+    : await fetchFragranceEngine("/fragrances/details", requestInit);
 
   if (!res.ok) {
     throw new Error(await apiErrorMessage(res, `Fragrance detail fetch failed: ${res.status}`));
@@ -1154,7 +1220,7 @@ export async function requeueFragranceDetails(
     throw new Error("Fragrance refresh needs an engine id or source URL.");
   }
 
-  const res = await fetch(`${getFragranceEngineApiBase()}/api/fragrances/details/requeue`, {
+  const res = await fetchFragranceEngine("/fragrances/details/requeue", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

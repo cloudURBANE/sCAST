@@ -332,9 +332,11 @@ test("getFragranceDetails posts opaque id and source URL to SRT details", async 
 test("requeueFragranceDetails posts force refresh to SRT engine", async (t) => {
   const previousFetch = globalThis.fetch;
   const previousApiUrl = process.env.VITE_FRAGRANCE_API_URL;
+  const previousAppApiUrl = process.env.VITE_API_BASE_URL;
   const requests: Array<{ url: string; init?: RequestInit }> = [];
 
   process.env.VITE_FRAGRANCE_API_URL = "https://engine.example.test/";
+  process.env.VITE_API_BASE_URL = "https://app-api.example.test";
   Object.defineProperty(globalThis, "fetch", {
     configurable: true,
     value: async (url: string, init?: RequestInit) => {
@@ -359,6 +361,11 @@ test("requeueFragranceDetails posts force refresh to SRT engine", async (t) => {
     } else {
       process.env.VITE_FRAGRANCE_API_URL = previousApiUrl;
     }
+    if (previousAppApiUrl === undefined) {
+      delete process.env.VITE_API_BASE_URL;
+    } else {
+      process.env.VITE_API_BASE_URL = previousAppApiUrl;
+    }
   });
 
   const response = await requeueFragranceDetails({
@@ -379,6 +386,63 @@ test("requeueFragranceDetails posts force refresh to SRT engine", async (t) => {
     source_url: "https://www.fragrantica.com/perfume/Dior/Sauvage-31861.html",
     priority: 10,
   });
+});
+
+test("searchFragrances uses same-origin engine proxy when app API base is unset", async (t) => {
+  const previousFetch = globalThis.fetch;
+  const previousApiUrl = process.env.VITE_FRAGRANCE_API_URL;
+  const previousAppApiUrl = process.env.VITE_API_BASE_URL;
+  const requests: Array<{ url: string; init?: RequestInit }> = [];
+
+  delete process.env.VITE_API_BASE_URL;
+  process.env.VITE_FRAGRANCE_API_URL = "https://engine.example.test";
+  Object.defineProperty(globalThis, "fetch", {
+    configurable: true,
+    value: async (url: string, init?: RequestInit) => {
+      requests.push({ url, init });
+      return new Response(
+        JSON.stringify({
+          query: "Dior Sauvage",
+          results: [
+            {
+              id: "opaque-token",
+              name: "Sauvage Eau de Parfum",
+              house: "Christian Dior",
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    },
+  });
+
+  t.after(() => {
+    Object.defineProperty(globalThis, "fetch", {
+      configurable: true,
+      value: previousFetch,
+    });
+    if (previousApiUrl === undefined) {
+      delete process.env.VITE_FRAGRANCE_API_URL;
+    } else {
+      process.env.VITE_FRAGRANCE_API_URL = previousApiUrl;
+    }
+    if (previousAppApiUrl === undefined) {
+      delete process.env.VITE_API_BASE_URL;
+    } else {
+      process.env.VITE_API_BASE_URL = previousAppApiUrl;
+    }
+  });
+
+  await searchFragrances("Dior Sauvage");
+
+  assert.equal(requests.length, 1);
+  assert.equal(
+    requests[0].url,
+    "/api/engine/fragrances/search?q=Dior%20Sauvage",
+  );
 });
 
 test("searchFragrances uses the fragrance engine API instead of the app API", async (t) => {
