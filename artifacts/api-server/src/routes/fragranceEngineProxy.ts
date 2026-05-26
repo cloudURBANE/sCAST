@@ -71,6 +71,6 @@ async function proxyToEngine(req: Request, res: Response) {
   }
 }
 
-router.all("/engine/*", proxyToEngine);
+router.all("/engine/*path", proxyToEngine);
 
 export default router;
