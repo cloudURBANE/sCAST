@@ -526,6 +526,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const abortController = new AbortController();
 
     if (authToken) {
+      setWardrobeLoaded(false);
       loadWardrobe(authToken, abortController.signal);
       fetch('/api/share-settings', { 
         headers: { Authorization: `Bearer ${authToken}` },
@@ -968,7 +969,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   useEffect(() => {
     if (!authToken) {
       setItems([]);
-      setWardrobeLoaded(false);
+      setWardrobeLoaded(true);
       setWardrobeError(null);
       setWardrobeRevertSnapshot(null);
       setWardrobeFixHint(null);
