@@ -18,7 +18,7 @@ import { ShareModal } from './components/ShareModal';
 import type { ScentFamily, ScentWeatherRecommendation } from './lib/scentWeatherEngine';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { WeatherProvider, useWeather } from './context/WeatherContext';
-import { WardrobeProvider, useWardrobe, useWardrobeShareModalActions } from './context/WardrobeContext';
+import { WardrobeProvider, useWardrobe, useWardrobeItems, useWardrobeShareModalActions } from './context/WardrobeContext';
 import { Toaster } from './components/ui/toaster';
 import CommunityPage from '@/pages/community';
 import { PageTransitionOverlay } from './components/PageTransitionOverlay';
@@ -83,6 +83,157 @@ const ATMOSPHERE_TRACK_COPIES = 4;
 const ATMOSPHERE_SCROLL_PIXELS_PER_SECOND = 14;
 const ATMOSPHERE_SCROLL_MIN_SECONDS = 72;
 const ATMOSPHERE_SCROLL_MAX_SECONDS = 160;
+const ATMOSPHERE_SCROLL_REDUCED_MOTION_SECONDS = 240;
+const HERO_TRACK_COPIES = 4;
+const HERO_SCROLL_PIXELS_PER_SECOND = 14;
+const HERO_SCROLL_MIN_SECONDS = 60;
+const HERO_SCROLL_MAX_SECONDS = 180;
+const HERO_SCROLL_REDUCED_MOTION_SECONDS = 240;
+
+function getHeroTickerPhrases(items: Fragrance[]): string[] {
+  if (!items.length) {
+    return [
+      'Add scents to your vault and unlock deeper discovery',
+      'Atmospheric nuance is analyzed to guide each wear',
+      'Your signature profile is syncing with the current environment',
+    ];
+  }
+
+  const phrases: string[] = [];
+
+  const families = items.map(i => i.family).filter(Boolean) as string[];
+  if (families.length > 0) {
+    const fc: Record<string, number> = {};
+    families.forEach(f => { fc[f] = (fc[f] || 0) + 1; });
+    const topFamily = Object.entries(fc).sort((a, b) => b[1] - a[1])[0][0];
+    phrases.push(`Predominantly ${topFamily.toLowerCase()} olfactory signature`);
+  }
+
+  const allNotes = items.flatMap(i => i.notes || []);
+  if (allNotes.length > 0) {
+    const nc: Record<string, number> = {};
+    allNotes.forEach(n => { const k = n.toLowerCase(); nc[k] = (nc[k] || 0) + 1; });
+    const [topNote, topCount] = Object.entries(nc).sort((a, b) => b[1] - a[1])[0];
+    if (topCount > 1) phrases.push(`Recurring molecule detected: ${topNote}`);
+  }
+
+  const vectors = items.map(i => i.scent_vector).filter(Boolean) as NonNullable<Fragrance['scent_vector']>[];
+  if (vectors.length > 0) {
+    const dims = ['freshness', 'sweetness', 'woodiness', 'spice', 'warmth', 'musk'] as const;
+    const labels: Record<string, string> = {
+      freshness: 'fresh and airy', sweetness: 'sweet and gourmand',
+      woodiness: 'woody and grounded', spice: 'spiced and bold',
+      warmth: 'warm and enveloping', musk: 'musky and skin-close',
+    };
+    const top = dims
+      .map(d => ({ d, avg: vectors.reduce((s, v) => s + v[d], 0) / vectors.length }))
+      .sort((a, b) => b.avg - a.avg)[0];
+    if (top.avg >= 4.5) phrases.push(`Your vault reads ${labels[top.d]}`);
+  }
+
+  const seasons = items.map(i => i.season).filter(Boolean) as string[];
+  if (seasons.length > 0) {
+    const sc: Record<string, number> = {};
+    seasons.forEach(s => { sc[s] = (sc[s] || 0) + 1; });
+    const [topSeason, topSeasonCount] = Object.entries(sc).sort((a, b) => b[1] - a[1])[0];
+    if (topSeasonCount > 1) phrases.push(`Calibrated for ${topSeason.toLowerCase()} conditions`);
+  }
+
+  const brands = new Set(items.map(i => i.brand).filter(Boolean));
+  if (brands.size > 1) phrases.push(`${brands.size} houses represented in your collection`);
+
+  if (phrases.length < 3) phrases.push('Olfactory intelligence active', 'Atmospheric pairing in progress');
+
+  return phrases;
+}
+
+interface HeroMarqueeProps {
+  phrases: string[];
+}
+
+const HeroMarquee: React.FC<HeroMarqueeProps> = React.memo(({ phrases }) => {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const groupRef = useRef<HTMLSpanElement>(null);
+  const phraseKey = useMemo(() => phrases.join('|'), [phrases]);
+
+  useLayoutEffect(() => {
+    const track = trackRef.current;
+    const group = groupRef.current;
+    if (!track || !group) return;
+    let cancelled = false;
+    let animationFrame = 0;
+
+    const updateDistance = (ready = true) => {
+      if (cancelled) return;
+      const distance = group.getBoundingClientRect().width;
+      if (distance <= 0) return;
+
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const duration = prefersReducedMotion
+        ? HERO_SCROLL_REDUCED_MOTION_SECONDS
+        : Math.min(
+            HERO_SCROLL_MAX_SECONDS,
+            Math.max(HERO_SCROLL_MIN_SECONDS, distance / HERO_SCROLL_PIXELS_PER_SECOND),
+          );
+
+      track.style.setProperty('--hero-marquee-distance', `${distance}px`);
+      track.style.setProperty('--hero-marquee-duration', `${duration}s`);
+      if (ready) {
+        track.dataset.marqueeReady = 'true';
+      }
+    };
+
+    if (track.dataset.marqueeReady !== 'true') {
+      track.dataset.marqueeReady = 'false';
+    }
+
+    const startWhenFontsSettle = () => {
+      animationFrame = window.requestAnimationFrame(() => updateDistance(true));
+    };
+
+    if (document.fonts?.ready) {
+      document.fonts.ready.then(startWhenFontsSettle);
+    } else {
+      startWhenFontsSettle();
+    }
+
+    const handleResize = () => updateDistance(track.dataset.marqueeReady === 'true');
+    const resizeObserver = new ResizeObserver(handleResize);
+    resizeObserver.observe(group);
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      cancelled = true;
+      if (animationFrame) window.cancelAnimationFrame(animationFrame);
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [phraseKey]);
+
+  return (
+    <div className="scent-marquee-band scent-full-bleed w-full overflow-hidden py-[17px] sm:py-[18px] flex select-none relative">
+      <div ref={trackRef} className="scent-marquee-track-row whitespace-nowrap scent-marquee-text">
+        {[...Array(HERO_TRACK_COPIES)].map((_, copyIndex) => (
+          <span
+            key={copyIndex}
+            ref={copyIndex === 0 ? groupRef : undefined}
+            className="scent-marquee-phrase-group flex items-center"
+            aria-hidden={copyIndex > 0}
+          >
+            {phrases.map((phrase, phraseIndex) => (
+              <React.Fragment key={`${phraseIndex}:${phrase}`}>
+                <span className="scent-marquee-phrase whitespace-nowrap">{phrase}</span>
+                {phraseIndex < phrases.length - 1 ? (
+                  <span className="scent-marquee-divider shrink-0" aria-hidden="true" />
+                ) : null}
+              </React.Fragment>
+            ))}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+});
 
 const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({ weather, weatherLoading }) => {
   const trackRef = useRef<HTMLDivElement>(null);
@@ -124,8 +275,6 @@ const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({ weather, weath
   const condition = weatherLoading ? '—' : getWeatherString(weather, ['condition', 'description'], '—');
   const humidity = weatherLoading ? '—' : Number.isFinite(humidityValue) ? `${humidityValue}%` : '—';
   const location = weather?.location ?? '—';
-  const atmosphereTrackKey = [condition, humidity, temp, location].join('|');
-
   const metrics = [
     { label: 'Matrix', subtitle: 'Conditions', value: condition },
     { label: 'Saturation', subtitle: 'Humidity', value: humidity },
@@ -148,7 +297,7 @@ const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({ weather, weath
 
       const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       const duration = prefersReducedMotion
-        ? 240
+        ? ATMOSPHERE_SCROLL_REDUCED_MOTION_SECONDS
         : Math.min(
             ATMOSPHERE_SCROLL_MAX_SECONDS,
             Math.max(ATMOSPHERE_SCROLL_MIN_SECONDS, distance / ATMOSPHERE_SCROLL_PIXELS_PER_SECOND),
@@ -161,7 +310,9 @@ const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({ weather, weath
       }
     };
 
-    track.dataset.marqueeReady = 'false';
+    if (track.dataset.marqueeReady !== 'true') {
+      track.dataset.marqueeReady = 'false';
+    }
 
     const startWhenFontsSettle = () => {
       animationFrame = window.requestAnimationFrame(() => updateDistance(true));
@@ -188,7 +339,7 @@ const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({ weather, weath
 
   return (
     <section className="scent-atmosphere-marquee" aria-label="Current atmosphere">
-      <div className="scent-atmosphere-marquee-track" key={atmosphereTrackKey} ref={trackRef}>
+      <div className="scent-atmosphere-marquee-track" ref={trackRef}>
         {[...Array(ATMOSPHERE_TRACK_COPIES)].map((_, copyIndex) => (
           <div
             className="scent-atmosphere-marquee-group"
@@ -214,9 +365,25 @@ const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({ weather, weath
   );
 });
 
+const HomepageHeroMarquee: React.FC = React.memo(() => {
+  const items = useWardrobeItems();
+  const tickerPhrases = useMemo(() => getHeroTickerPhrases(items), [items]);
+
+  return <HeroMarquee phrases={tickerPhrases} />;
+});
+
+const HomepageAtmosphereChrome: React.FC = React.memo(() => {
+  const { weather, weatherLoading } = useWeather();
+
+  return (
+    <div className="scent-full-bleed">
+      <AtmosphereBar weather={weather} weatherLoading={weatherLoading} />
+    </div>
+  );
+});
+
 function DashboardView() {
   const { authToken, authEmail, authPictureUrl, handleSignOut, setIsAuthModalOpen } = useAuth();
-  const { weather, weatherLoading } = useWeather();
   const {
     items,
     wardrobeLoaded,
@@ -242,65 +409,6 @@ function DashboardView() {
     handleExpandArchive,
   } = useWardrobe();
 
-  const tickerPhrases = useMemo(() => {
-    if (!items.length) {
-      return [
-        'Add scents to your vault and unlock deeper discovery',
-        'Atmospheric nuance is analyzed to guide each wear',
-        'Your signature profile is syncing with the current environment',
-      ];
-    }
-
-    const phrases: string[] = [];
-
-    const families = items.map(i => i.family).filter(Boolean) as string[];
-    if (families.length > 0) {
-      const fc: Record<string, number> = {};
-      families.forEach(f => { fc[f] = (fc[f] || 0) + 1; });
-      const topFamily = Object.entries(fc).sort((a, b) => b[1] - a[1])[0][0];
-      phrases.push(`Predominantly ${topFamily.toLowerCase()} olfactory signature`);
-    }
-
-    const allNotes = items.flatMap(i => i.notes || []);
-    if (allNotes.length > 0) {
-      const nc: Record<string, number> = {};
-      allNotes.forEach(n => { const k = n.toLowerCase(); nc[k] = (nc[k] || 0) + 1; });
-      const [topNote, topCount] = Object.entries(nc).sort((a, b) => b[1] - a[1])[0];
-      if (topCount > 1) phrases.push(`Recurring molecule detected: ${topNote}`);
-    }
-
-    const vectors = items.map(i => i.scent_vector).filter(Boolean) as NonNullable<Fragrance['scent_vector']>[];
-    if (vectors.length > 0) {
-      const dims = ['freshness', 'sweetness', 'woodiness', 'spice', 'warmth', 'musk'] as const;
-      const labels: Record<string, string> = {
-        freshness: 'fresh and airy', sweetness: 'sweet and gourmand',
-        woodiness: 'woody and grounded', spice: 'spiced and bold',
-        warmth: 'warm and enveloping', musk: 'musky and skin-close',
-      };
-      const top = dims
-        .map(d => ({ d, avg: vectors.reduce((s, v) => s + v[d], 0) / vectors.length }))
-        .sort((a, b) => b.avg - a.avg)[0];
-      if (top.avg >= 4.5) phrases.push(`Your vault reads ${labels[top.d]}`);
-    }
-
-    const seasons = items.map(i => i.season).filter(Boolean) as string[];
-    if (seasons.length > 0) {
-      const sc: Record<string, number> = {};
-      seasons.forEach(s => { sc[s] = (sc[s] || 0) + 1; });
-      const [topSeason, topSeasonCount] = Object.entries(sc).sort((a, b) => b[1] - a[1])[0];
-      if (topSeasonCount > 1) phrases.push(`Calibrated for ${topSeason.toLowerCase()} conditions`);
-    }
-
-    const brands = new Set(items.map(i => i.brand).filter(Boolean));
-    if (brands.size > 1) phrases.push(`${brands.size} houses represented in your collection`);
-
-    if (phrases.length < 3) phrases.push('Olfactory intelligence active', 'Atmospheric pairing in progress');
-
-    return phrases;
-  }, [items]);
-
-  const tickerTrackKey = tickerPhrases.join('|');
-
   return (
     <div className="min-h-[100svh] relative overflow-x-hidden">
       <AppTopNav
@@ -316,22 +424,7 @@ function DashboardView() {
 
       <main className="relative z-10 pb-24 px-4 sm:px-8 max-w-[1760px] mx-auto">
         <div className="space-y-20 sm:space-y-28 pt-10 sm:pt-14">
-          <div className="scent-marquee-band scent-full-bleed w-full overflow-hidden py-[17px] sm:py-[18px] flex select-none relative">
-            <div key={tickerTrackKey} className="scent-marquee-track-row flex animate-infinite-scroll whitespace-nowrap scent-marquee-text">
-              {[...Array(4)].map((_, i) => (
-                <span key={i} className="scent-marquee-phrase-group flex items-center" aria-hidden={i > 0}>
-                  {tickerPhrases.map((phrase, j) => (
-                    <React.Fragment key={phrase}>
-                      <span className="scent-marquee-phrase whitespace-nowrap">{phrase}</span>
-                      {j < tickerPhrases.length - 1 ? (
-                        <span className="scent-marquee-divider shrink-0" aria-hidden="true" />
-                      ) : null}
-                    </React.Fragment>
-                  ))}
-                </span>
-              ))}
-            </div>
-          </div>
+          <HomepageHeroMarquee />
 
           <section className="scent-hero-zone mx-auto w-full max-w-2xl min-w-0 space-y-7 text-center">
             <h2 className="mx-auto max-w-full text-balance font-serif italic text-[clamp(2.15rem,7vw,3.8rem)] text-[#fff7ec] leading-[0.98] tracking-normal">
@@ -397,9 +490,7 @@ function DashboardView() {
             </AnimatePresence>
           </section>
 
-          <div className="scent-full-bleed">
-            <AtmosphereBar weather={weather} weatherLoading={weatherLoading} />
-          </div>
+          <HomepageAtmosphereChrome />
 
           <div>
             <Wardrobe

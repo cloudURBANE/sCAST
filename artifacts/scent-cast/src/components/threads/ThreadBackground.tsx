@@ -7,6 +7,7 @@ const SHARED_STYLE: React.CSSProperties = {
   willChange: 'transform',
   backfaceVisibility: 'hidden',
   perspective: '1000px',
+  contain: 'paint style',
 };
 
 const MIN_RANDOM_PERCENT = 8;
@@ -14,6 +15,16 @@ const MAX_RANDOM_PERCENT = 92;
 const MIN_SPEED_FACTOR = 0.75;
 const MAX_SPEED_FACTOR = 1.35;
 const MAX_START_DELAY = 2200;
+const OPACITY_WRITE_THRESHOLD = 0.025;
+
+type ThreadAnimationState = {
+  el: HTMLElement;
+  thread: ThreadLine;
+  position: number;
+  speed: number;
+  startAt: number;
+  lastOpacity: number | null;
+};
 
 function randomBetween(min: number, max: number): number {
   return min + Math.random() * (max - min);
@@ -87,43 +98,39 @@ function resetPosition(thread: ThreadLine): number {
   return getTravelLimit(thread) + randomBetween(wrap, wrap * 3);
 }
 
-function startThreadAnimation(
-  el: HTMLElement,
-  thread: ThreadLine,
-  activeRef: React.MutableRefObject<boolean>,
-): () => void {
+function createThreadState(el: HTMLElement, thread: ThreadLine, now: number): ThreadAnimationState {
   randomizeThreadLane(el, thread);
 
-  let position = getInitialPosition(thread);
-  let speed = thread.speed * randomBetween(MIN_SPEED_FACTOR, MAX_SPEED_FACTOR);
-
-  el.style.transform = computeTransform(thread, position);
-
-  if (thread.fade != null) {
-    el.style.opacity = String(computeOpacity(thread, position));
-  }
-
-  const tick = () => {
-    if (!activeRef.current) return;
-
-    position += speed * thread.direction;
-
-    if (shouldWrap(thread, position)) {
-      randomizeThreadLane(el, thread);
-      speed = thread.speed * randomBetween(MIN_SPEED_FACTOR, MAX_SPEED_FACTOR);
-      position = resetPosition(thread);
-    }
-
-    el.style.transform = computeTransform(thread, position);
-
-    if (thread.fade != null) {
-      el.style.opacity = String(computeOpacity(thread, position));
-    }
-
-    requestAnimationFrame(tick);
+  const state: ThreadAnimationState = {
+    el,
+    thread,
+    position: getInitialPosition(thread),
+    speed: thread.speed * randomBetween(MIN_SPEED_FACTOR, MAX_SPEED_FACTOR),
+    startAt: now + randomBetween(0, MAX_START_DELAY),
+    lastOpacity: null,
   };
 
-  return tick;
+  writeThreadState(state, true);
+  return state;
+}
+
+function writeThreadState(state: ThreadAnimationState, forceOpacity = false): void {
+  const { el, thread, position } = state;
+  el.style.transform = computeTransform(thread, position);
+
+  if (thread.fade == null) return;
+
+  const opacity = computeOpacity(thread, position);
+  if (
+    forceOpacity ||
+    state.lastOpacity == null ||
+    Math.abs(opacity - state.lastOpacity) >= OPACITY_WRITE_THRESHOLD ||
+    opacity === 0 ||
+    opacity === 1
+  ) {
+    el.style.opacity = opacity.toFixed(3);
+    state.lastOpacity = opacity;
+  }
 }
 
 /**
@@ -131,33 +138,90 @@ function startThreadAnimation(
  */
 export const ThreadBackground: React.FC = React.memo(() => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const activeRef = useRef(true);
 
   useEffect(() => {
-    activeRef.current = true;
     const container = containerRef.current;
     if (!container) return undefined;
 
     const elements = container.querySelectorAll<HTMLElement>('[data-thread]');
-    const timeouts: ReturnType<typeof setTimeout>[] = [];
+    const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const states: ThreadAnimationState[] = [];
+    let animationFrame = 0;
+    let lastTime: number | null = null;
+    let cancelled = false;
 
     elements.forEach((el, index) => {
       const thread = THREAD_LINES[index];
       if (!thread) return;
-
-      const tick = startThreadAnimation(el, thread, activeRef);
-      const delay = randomBetween(0, MAX_START_DELAY);
-
-      if (delay < 16) {
-        requestAnimationFrame(tick);
-      } else {
-        timeouts.push(setTimeout(() => requestAnimationFrame(tick), delay));
-      }
+      states.push(createThreadState(el, thread, performance.now()));
     });
 
+    const stopLoop = () => {
+      if (animationFrame) {
+        window.cancelAnimationFrame(animationFrame);
+        animationFrame = 0;
+      }
+      lastTime = null;
+    };
+
+    const tick = (now: number) => {
+      if (cancelled || motionQuery.matches || document.visibilityState === 'hidden') {
+        stopLoop();
+        return;
+      }
+
+      const elapsedFrames = lastTime == null ? 1 : Math.min(2, ((now - lastTime) * 60) / 1000);
+      lastTime = now;
+
+      states.forEach((state) => {
+        if (now < state.startAt) return;
+
+        state.position += state.speed * state.thread.direction * elapsedFrames;
+
+        if (shouldWrap(state.thread, state.position)) {
+          randomizeThreadLane(state.el, state.thread);
+          state.speed = state.thread.speed * randomBetween(MIN_SPEED_FACTOR, MAX_SPEED_FACTOR);
+          state.position = resetPosition(state.thread);
+          state.lastOpacity = null;
+        }
+
+        writeThreadState(state);
+      });
+
+      animationFrame = window.requestAnimationFrame(tick);
+    };
+
+    const startLoop = () => {
+      if (cancelled || animationFrame || motionQuery.matches || document.visibilityState === 'hidden') return;
+      lastTime = null;
+      animationFrame = window.requestAnimationFrame(tick);
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        stopLoop();
+        return;
+      }
+      startLoop();
+    };
+
+    const handleMotionPreferenceChange = () => {
+      if (motionQuery.matches) {
+        stopLoop();
+        return;
+      }
+      startLoop();
+    };
+
+    startLoop();
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    motionQuery.addEventListener('change', handleMotionPreferenceChange);
+
     return () => {
-      activeRef.current = false;
-      timeouts.forEach(clearTimeout);
+      cancelled = true;
+      stopLoop();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      motionQuery.removeEventListener('change', handleMotionPreferenceChange);
     };
   }, []);
 
