@@ -1604,7 +1604,7 @@ export const Wardrobe: React.FC<{
                             data-len={brandLengthBucket(entryBrand(item))}
                             title={entryBrand(item)}
                           >
-                            <span className="scent-brand-gold-shimmer">{entryBrand(item)}</span>
+                            <span className="scent-brand-gold-shimmer" data-text={entryBrand(item)}>{entryBrand(item)}</span>
                           </p>
                           <div className="relative flex-1 w-full mt-3 sm:mt-4 mb-3 sm:mb-4 min-h-0">
                             <BottleImage
@@ -1690,7 +1690,7 @@ export const Wardrobe: React.FC<{
                         {entryName(selectedItem)}
                       </h2>
                       <p className="font-serif text-lg sm:text-2xl uppercase tracking-[0.28em] text-white/84">
-                        <span className="scent-brand-gold-shimmer">{entryBrand(selectedItem)}</span>
+                        <span className="scent-brand-gold-shimmer" data-text={entryBrand(selectedItem)}>{entryBrand(selectedItem)}</span>
                       </p>
                     </div>
                   </header>

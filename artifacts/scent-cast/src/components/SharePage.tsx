@@ -739,7 +739,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                           data-len={brandLengthBucket(brand)}
                           title={brand}
                         >
-                          <span className="scent-brand-gold-shimmer">{brand}</span>
+                          <span className="scent-brand-gold-shimmer" data-text={brand}>{brand}</span>
                         </p>
                         <div className="relative flex-1 w-full mt-4 sm:mt-5 mb-5 sm:mb-6 min-h-0">
                           {!data.hideImages ? (
@@ -869,7 +869,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                         {entryName(selectedItem)}
                       </h2>
                       <p className="font-serif text-lg sm:text-2xl uppercase tracking-[0.28em] text-white/84">
-                        <span className="scent-brand-gold-shimmer">{entryBrand(selectedItem)}</span>
+                        <span className="scent-brand-gold-shimmer" data-text={entryBrand(selectedItem)}>{entryBrand(selectedItem)}</span>
                       </p>
                     </div>
                   </header>
