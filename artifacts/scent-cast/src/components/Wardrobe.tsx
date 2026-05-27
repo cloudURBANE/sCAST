@@ -1594,7 +1594,6 @@ export const Wardrobe: React.FC<{
                           <BrandGoldLabel
                             brand={entryBrand(item)}
                             className="scent-card-brand w-full mt-1 sm:mt-1.5"
-                            sheenDelay={(shelfIndex * 4 + i) * 0.4}
                           />
                           <div className="relative flex-1 w-full mt-3 sm:mt-4 mb-3 sm:mb-4 min-h-0">
                             <BottleImage

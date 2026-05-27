@@ -730,7 +730,6 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                         <BrandGoldLabel
                           brand={brand}
                           className="scent-card-brand w-full"
-                          sheenDelay={i * 0.4}
                         />
                         <div className="relative flex-1 w-full mt-4 sm:mt-5 mb-5 sm:mb-6 min-h-0">
                           {!data.hideImages ? (

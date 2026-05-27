@@ -1445,14 +1445,23 @@ a {
     rgba(255, 247, 201, 0) 100%
   );
   background-size: 260% 100%;
-  background-position: 145% 0;
+  background-position: 52% 0;
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
-  animation: brand-gold-sheen 7.2s linear infinite;
-  animation-delay: var(--brand-sheen-delay, 0s);
+  opacity: 0.55;
+}
+
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .scent-fragrance-card:hover .scent-brand-gold-shimmer::after,
+  .scent-fragrance-card:focus-within .scent-brand-gold-shimmer::after,
+  .scent-brand-gold-shimmer:hover::after,
+  .scent-brand-gold-shimmer:focus-visible::after {
+    animation: brand-gold-sheen 1.9s ease-out 1;
+    opacity: 1;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -17,42 +17,22 @@ type BrandGoldLabelProps = Omit<React.HTMLAttributes<HTMLElement>, 'children'> &
   as?: BrandGoldLabelElement;
   brand: string;
   shimmer?: boolean;
-  sheenDelay?: number | string;
 };
-
-type BrandGoldLabelStyle = React.CSSProperties & {
-  '--brand-sheen-delay'?: string;
-};
-
-function formatSheenDelay(delay: number | string): string {
-  return typeof delay === 'number' ? `${delay}s` : delay;
-}
 
 export const BrandGoldLabel: React.FC<BrandGoldLabelProps> = ({
   as = 'p',
   brand,
   className = 'scent-card-brand',
   shimmer = true,
-  sheenDelay,
-  style,
   title,
   ...props
 }) => {
-  const labelStyle: BrandGoldLabelStyle =
-    sheenDelay === undefined
-      ? (style as BrandGoldLabelStyle)
-      : {
-          ...style,
-          '--brand-sheen-delay': formatSheenDelay(sheenDelay),
-        };
-
   return React.createElement(
     as,
     {
       ...props,
       className,
       'data-len': brandLengthBucket(brand),
-      style: labelStyle,
       title: title ?? brand,
     },
     shimmer ? (
