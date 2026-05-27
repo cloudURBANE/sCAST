@@ -784,6 +784,22 @@ a {
   overflow: hidden;
   border-block: 1px solid rgba(212, 175, 55, 0.14);
   background: linear-gradient(90deg, transparent, rgba(212, 175, 55, 0.045), transparent);
+  contain: paint;
+  --hero-edge-fade: clamp(2rem, 6vw, 4.75rem);
+  -webkit-mask-image: linear-gradient(
+    90deg,
+    transparent 0,
+    #000 var(--hero-edge-fade),
+    #000 calc(100% - var(--hero-edge-fade)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    90deg,
+    transparent 0,
+    #000 var(--hero-edge-fade),
+    #000 calc(100% - var(--hero-edge-fade)),
+    transparent 100%
+  );
 }
 
 .scent-marquee-text {
@@ -792,12 +808,25 @@ a {
 }
 
 .scent-marquee-track-row {
+  display: flex;
+  width: max-content;
   gap: 0;
   font-size: clamp(11.3px, 0.72vw, 11.4px);
   letter-spacing: 0.5em;
   text-transform: uppercase;
   font-family: "Iowan Old Style", "Times New Roman", serif;
   font-style: italic;
+  --hero-marquee-distance: 0px;
+  --hero-marquee-duration: 96s;
+  will-change: transform;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  animation: hero-marquee-scroll var(--hero-marquee-duration) linear infinite;
+}
+
+.scent-marquee-track-row:not([data-marquee-ready="true"]) {
+  animation: none;
+  transform: translate3d(0, 0, 0);
 }
 
 .scent-marquee-phrase-group {
@@ -1115,6 +1144,11 @@ a {
 @keyframes infinite-scroll {
   from { transform: translate3d(0, 0, 0); }
   to { transform: translate3d(-50%, 0, 0); }
+}
+
+@keyframes hero-marquee-scroll {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(calc(var(--hero-marquee-distance) * -1), 0, 0); }
 }
 
 @keyframes atmosphere-marquee-scroll {
