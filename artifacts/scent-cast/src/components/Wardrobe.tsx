@@ -40,6 +40,7 @@ import {
   type NormalizedBottleImageAdjustment,
 } from '@/lib/bottleImageAdjustment';
 import { BottleImage } from '@/components/BottleImage';
+import { BrandGoldLabel } from '@/components/BrandGoldLabel';
 import { ScentNotesInfographic } from '@/components/ScentNotesInfographic';
 import {
   WARDROBE_CLARIFY_SOLVERS,
@@ -186,15 +187,6 @@ function entryNotesCardLine(item: Fragrance, maxNotes = 3): string {
   const visible = tokens.slice(0, maxNotes);
   const joined = visible.join(CARD_NOTE_JOINER);
   return tokens.length > maxNotes ? `${joined}\u2026` : joined;
-}
-
-/** Adaptive brand-text sizing bucket. Longer brand names get smaller type. */
-function brandLengthBucket(brand: string): "short" | "medium" | "long" | "xlong" {
-  const len = brand.trim().length;
-  if (len <= 10) return "short";
-  if (len <= 16) return "medium";
-  if (len <= 24) return "long";
-  return "xlong";
 }
 
 function entryNotes(item: Fragrance): string {
@@ -1599,13 +1591,11 @@ export const Wardrobe: React.FC<{
                       <div className="scent-fragrance-card w-full h-full min-h-[26rem] transition-[transform,border-color,box-shadow] duration-500 motion-reduce:transition-none group-hover:-translate-y-1.5 motion-reduce:group-hover:translate-y-0 relative overflow-hidden flex flex-col">
                         <div className="scent-card-frame" aria-hidden />
                         <div className="relative z-[1] flex h-full flex-col items-center px-6 sm:px-8 pt-5 sm:pt-6 pb-4 sm:pb-5">
-                          <p
+                          <BrandGoldLabel
+                            brand={entryBrand(item)}
                             className="scent-card-brand w-full mt-1 sm:mt-1.5"
-                            data-len={brandLengthBucket(entryBrand(item))}
-                            title={entryBrand(item)}
-                          >
-                            <span className="scent-brand-gold-shimmer">{entryBrand(item)}</span>
-                          </p>
+                            sheenDelay={(shelfIndex * 4 + i) * 0.4}
+                          />
                           <div className="relative flex-1 w-full mt-3 sm:mt-4 mb-3 sm:mb-4 min-h-0">
                             <BottleImage
                               variant="grid"
@@ -1689,9 +1679,10 @@ export const Wardrobe: React.FC<{
                       >
                         {entryName(selectedItem)}
                       </h2>
-                      <p className="font-serif text-lg sm:text-2xl uppercase tracking-[0.28em] text-white/84">
-                        <span className="scent-brand-gold-shimmer">{entryBrand(selectedItem)}</span>
-                      </p>
+                      <BrandGoldLabel
+                        brand={entryBrand(selectedItem)}
+                        className="font-serif text-lg sm:text-2xl uppercase tracking-[0.28em] text-white/84"
+                      />
                     </div>
                   </header>
 

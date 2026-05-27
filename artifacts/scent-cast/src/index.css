@@ -707,11 +707,12 @@ a {
   font-size: var(--brand-size);
   font-style: normal;
   font-weight: 400;
-  line-height: 1;
+  line-height: 1.28;
   letter-spacing: 0;
   text-transform: none;
   text-align: center;
   text-wrap: balance;
+  padding-block: 0.12em 0.08em;
   text-shadow:
     0 1px 0 rgba(0, 0, 0, 0.55),
     0 0 22px rgba(255, 244, 220, 0.08);
@@ -729,7 +730,7 @@ a {
 
 .scent-card-brand[data-len="xlong"] {
   --brand-size: clamp(1.125rem, 1.575vw, 1.485rem);
-  line-height: 1.05;
+  line-height: 1.32;
 }
 
 .scent-card-title-row {
@@ -1402,38 +1403,73 @@ a {
   }
 }
 
-@keyframes brand-gold-shimmer {
-  from { background-position: 220% 0; }
-  to   { background-position: -20% 0; }
+@keyframes brand-gold-sheen {
+  0%,
+  12% {
+    background-position: 145% 0;
+  }
+
+  72%,
+  100% {
+    background-position: -45% 0;
+  }
 }
 
 .scent-brand-gold-shimmer {
-  color: rgba(247, 243, 236, 0.94);
+  position: relative;
+  display: inline-block;
+  color: #f7f3ec;
+  -webkit-text-fill-color: currentColor;
+  filter:
+    drop-shadow(0 1px 0 rgba(8, 4, 1, 0.76))
+    drop-shadow(0 0 18px rgba(255, 232, 175, 0.12));
+  isolation: isolate;
+}
+
+.scent-brand-gold-shimmer::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  color: transparent;
   background: linear-gradient(
-    90deg,
-    rgba(255, 247, 201, 0.92) 0%,
-    rgba(255, 247, 201, 0.92) 32%,
-    #f5dc86 42%,
-    #d4a847 50%,
-    #f5dc86 58%,
-    rgba(255, 247, 201, 0.92) 68%,
-    rgba(255, 247, 201, 0.92) 100%
+    105deg,
+    rgba(255, 247, 201, 0) 0%,
+    rgba(255, 247, 201, 0) 35%,
+    rgba(255, 247, 201, 0.52) 43%,
+    #fff3b4 49%,
+    #d8a83d 53%,
+    rgba(255, 247, 201, 0.46) 60%,
+    rgba(255, 247, 201, 0) 69%,
+    rgba(255, 247, 201, 0) 100%
   );
-  background-size: 220% 100%;
+  background-size: 260% 100%;
+  background-position: 145% 0;
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  text-shadow: none;
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
-  animation: brand-gold-shimmer 6s linear infinite;
-  will-change: background-position;
-  display: inline-block;
+  animation: brand-gold-sheen 7.2s linear infinite;
+  animation-delay: var(--brand-sheen-delay, 0s);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .scent-brand-gold-shimmer {
+  .scent-brand-gold-shimmer::after {
     animation: none;
-    background-position: 100% 0;
+    background-position: 52% 0;
+  }
+}
+
+@media (forced-colors: active) {
+  .scent-brand-gold-shimmer {
+    color: CanvasText;
+    -webkit-text-fill-color: CanvasText;
+    filter: none;
+  }
+
+  .scent-brand-gold-shimmer::after {
+    content: none;
   }
 }

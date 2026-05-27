@@ -12,6 +12,7 @@ import {
   X,
 } from 'lucide-react';
 import { BottleImage } from '@/components/BottleImage';
+import { BrandGoldLabel } from '@/components/BrandGoldLabel';
 import type { BottleImageAdjustment } from '@/lib/bottleImageAdjustment';
 import { APP_BRAND_MARK } from '@/lib/appBrand';
 import { useNavigate } from 'react-router-dom';
@@ -200,14 +201,6 @@ function hasDerivedMetricsContent(metrics?: DerivedMetrics | null): boolean {
       collectMainAccordDisplayRows(metrics.main_accords).length > 0 ||
       hasDerivedMetricNotes(metrics),
   );
-}
-
-function brandLengthBucket(brand: string): "short" | "medium" | "long" | "xlong" {
-  const len = brand.trim().length;
-  if (len <= 10) return "short";
-  if (len <= 16) return "medium";
-  if (len <= 24) return "long";
-  return "xlong";
 }
 
 function FragrancePanel({
@@ -734,13 +727,11 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                     <div className="scent-fragrance-card w-full h-full min-h-[32rem] transition-[transform,border-color,box-shadow] duration-500 motion-reduce:transition-none group-hover:-translate-y-1.5 motion-reduce:group-hover:translate-y-0 relative overflow-hidden flex flex-col">
                       <div className="scent-card-frame" aria-hidden />
                       <div className="relative z-[1] flex h-full flex-col items-center px-6 sm:px-8 pt-7 sm:pt-9 pb-6 sm:pb-7">
-                        <p
+                        <BrandGoldLabel
+                          brand={brand}
                           className="scent-card-brand w-full"
-                          data-len={brandLengthBucket(brand)}
-                          title={brand}
-                        >
-                          <span className="scent-brand-gold-shimmer">{brand}</span>
-                        </p>
+                          sheenDelay={i * 0.4}
+                        />
                         <div className="relative flex-1 w-full mt-4 sm:mt-5 mb-5 sm:mb-6 min-h-0">
                           {!data.hideImages ? (
                           <BottleImage
@@ -868,9 +859,10 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                       >
                         {entryName(selectedItem)}
                       </h2>
-                      <p className="font-serif text-lg sm:text-2xl uppercase tracking-[0.28em] text-white/84">
-                        <span className="scent-brand-gold-shimmer">{entryBrand(selectedItem)}</span>
-                      </p>
+                      <BrandGoldLabel
+                        brand={entryBrand(selectedItem)}
+                        className="font-serif text-lg sm:text-2xl uppercase tracking-[0.28em] text-white/84"
+                      />
                     </div>
                   </header>
 
