@@ -111,6 +111,12 @@ export const BottleImage: React.FC<BottleImageProps> = ({
     }
   };
 
+  // Strip brightness filter for video path: video was mastered against a black card at 1.0 brightness;
+  // applying brightness-[1.1] from imgClassName would make the bottle appear overlit vs. the card.
+  const videoClassName = imgClassName
+    ? imgClassName.split(/\s+/).filter(cls => !cls.includes('brightness')).join(' ')
+    : undefined;
+
   // When rendering video: poster handles visual feedback, bypass img loading/error state.
   const showPlaceholder = useVideo ? false : (!url || broken);
   const showSkeleton = useVideo ? false : (isLoading && !broken);
@@ -143,9 +149,8 @@ export const BottleImage: React.FC<BottleImageProps> = ({
             >
               {useVideo ? (
                 <video
-                  className={cn('bottle-packshot-video min-h-0 min-w-0 origin-bottom transform-gpu select-none', imgClassName)}
+                  className={cn('bottle-packshot-video min-h-0 min-w-0 origin-bottom transform-gpu select-none', videoClassName)}
                   src={videoSrc!}
-                  poster={url || undefined}
                   autoPlay
                   loop
                   muted
