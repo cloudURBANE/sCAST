@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useReducedMotion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { bottleArtboardClass, bottleImageFillClass, type BottleImageVariant } from '@/lib/bottleImageFrame';
 import {
@@ -37,6 +38,8 @@ type BottleImageProps = {
   fetchPriority?: 'high' | 'low' | 'auto';
   onLoad?: () => void;
   onError?: () => void;
+  /** Beta: render a looping video instead of <img>. Falls back to <img> when prefers-reduced-motion is active. */
+  videoSrc?: string | null;
 };
 
 function BottleFrameGuide() {
@@ -69,7 +72,11 @@ export const BottleImage: React.FC<BottleImageProps> = ({
   fetchPriority,
   onLoad,
   onError,
+  videoSrc,
 }) => {
+  const reduceMotion = useReducedMotion();
+  const useVideo = !!videoSrc && !reduceMotion;
+
   const url = proxy ? proxiedImageUrl(src, { packshot: true }) : (src ?? '');
 
   const [prevUrl, setPrevUrl] = useState(url);
@@ -104,8 +111,9 @@ export const BottleImage: React.FC<BottleImageProps> = ({
     }
   };
 
-  const showPlaceholder = !url || broken;
-  const showSkeleton = isLoading && !broken;
+  // When rendering video: poster handles visual feedback, bypass img loading/error state.
+  const showPlaceholder = useVideo ? false : (!url || broken);
+  const showSkeleton = useVideo ? false : (isLoading && !broken);
 
   // ① Root: sized by parent. ② Artboard: inset + flex-end + .bottle-packshot-img shelf CSS.
   return (
@@ -126,25 +134,40 @@ export const BottleImage: React.FC<BottleImageProps> = ({
                 </div>
               </div>
             )}
-            <div 
+            <div
               className={cn(
-                "bottle-packshot-frame transition-opacity duration-300", 
+                "bottle-packshot-frame transition-opacity duration-300",
                 showSkeleton ? "opacity-0" : "opacity-100"
-              )} 
+              )}
               style={bottleImageAdjustmentStyle(adjustment)}
             >
-              <img
-                key={`${url}-${retryCount}`}
-                src={url}
-                alt={alt}
-                className={bottleImageFillClass(imgClassName)}
-                referrerPolicy="no-referrer"
-                loading={loading}
-                fetchPriority={fetchPriority}
-                decoding="async"
-                onLoad={handleLoad}
-                onError={handleError}
-              />
+              {useVideo ? (
+                <video
+                  className={cn('bottle-packshot-video min-h-0 min-w-0 origin-bottom transform-gpu select-none', imgClassName)}
+                  src={videoSrc!}
+                  poster={url || undefined}
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                  disablePictureInPicture
+                  preload="metadata"
+                  aria-label={alt}
+                />
+              ) : (
+                <img
+                  key={`${url}-${retryCount}`}
+                  src={url}
+                  alt={alt}
+                  className={bottleImageFillClass(imgClassName)}
+                  referrerPolicy="no-referrer"
+                  loading={loading}
+                  fetchPriority={fetchPriority}
+                  decoding="async"
+                  onLoad={handleLoad}
+                  onError={handleError}
+                />
+              )}
             </div>
           </>
         )}

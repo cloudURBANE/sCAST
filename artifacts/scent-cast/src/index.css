@@ -168,7 +168,8 @@ a {
   will-change: transform;
 }
 
-.bottle-packshot-img {
+.bottle-packshot-img,
+.bottle-packshot-video {
   display: block;
   width: auto;
   max-width: 100%;

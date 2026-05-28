@@ -40,6 +40,7 @@ import {
   type NormalizedBottleImageAdjustment,
 } from '@/lib/bottleImageAdjustment';
 import { BottleImage } from '@/components/BottleImage';
+import { betaVideoUrlForFragrance } from '@/lib/bottleVideoBeta';
 import { BrandGoldLabel } from '@/components/BrandGoldLabel';
 import { ScentNotesInfographic } from '@/components/ScentNotesInfographic';
 import {
@@ -1599,6 +1600,7 @@ export const Wardrobe: React.FC<{
                             <BottleImage
                               variant="grid"
                               src={item.imageUrl}
+                              videoSrc={betaVideoUrlForFragrance(item)}
                               alt={entryName(item)}
                               adjustment={item.imageAdjustment}
                               className="absolute inset-0 z-10"
