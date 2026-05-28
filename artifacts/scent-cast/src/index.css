@@ -33,16 +33,13 @@
   --scent-transition-base: 240ms;
   --scent-card-shadow: 0 26px 68px -40px rgb(var(--scent-gold-rgb) / 0.5), 0 18px 42px -22px rgba(0, 0, 0, 0.96);
   --scent-card-glow: inset 0 1px 0 rgba(255, 226, 176, 0.1), inset 0 0 72px rgba(212, 175, 55, 0.028);
-  --scent-wood-base:
-    radial-gradient(ellipse 48% 92% at 16% 44%, rgba(136, 82, 24, 0.18), transparent 68%),
-    radial-gradient(ellipse 42% 78% at 82% 58%, rgba(184, 125, 43, 0.14), transparent 64%),
-    radial-gradient(140% 120% at 50% -22%, rgba(255, 245, 210, 0.14), transparent 42%),
-    radial-gradient(120% 180% at 50% 118%, rgba(211, 154, 54, 0.14), transparent 50%),
-    linear-gradient(180deg, rgba(43, 30, 18, 0.98) 0%, rgba(17, 10, 5, 0.99) 48%, rgba(5, 3, 2, 1) 100%);
-  --scent-wood-grain:
-    linear-gradient(180deg, rgba(255, 250, 232, 0.08), rgba(255, 255, 255, 0.015) 31%, transparent 58%, rgba(0, 0, 0, 0.16) 100%),
-    repeating-linear-gradient(88deg, rgba(255, 236, 178, 0.022) 0 1px, transparent 1px 9px, rgba(0, 0, 0, 0.03) 9px 11px, transparent 11px 24px),
-    repeating-linear-gradient(96deg, transparent 0 16px, rgba(205, 139, 50, 0.024) 16px 17px, transparent 17px 37px);
+  --scent-black-panel:
+    radial-gradient(120% 120% at 50% -24%, rgba(255, 246, 220, 0.035), transparent 42%),
+    radial-gradient(120% 180% at 50% 118%, rgba(212, 175, 55, 0.035), transparent 50%),
+    linear-gradient(180deg, #060606 0%, #020202 56%, #000 100%);
+  --scent-black-sheen:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.012) 36%, transparent 62%),
+    radial-gradient(80% 120% at 50% 0%, rgba(212, 175, 55, 0.026), transparent 60%);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -50,7 +47,7 @@
 }
 
 html, body {
-  background-color: var(--color-scent-bg);
+  background-color: #000;
   margin: 0;
   min-height: 100vh;
 }
@@ -87,9 +84,10 @@ a {
   z-index: 1;
   pointer-events: none;
   background:
-    linear-gradient(180deg, rgba(0, 0, 0, 0.22), rgba(0, 0, 0, 0.06) 28%, rgba(0, 0, 0, 0.64)),
-    radial-gradient(ellipse at 50% 8%, rgba(255, 238, 196, 0.055), transparent 32rem),
-    radial-gradient(ellipse at 50% 32rem, rgba(0, 0, 0, 0.86), transparent 48rem);
+    linear-gradient(180deg, rgba(0, 0, 0, 0.24), rgba(0, 0, 0, 0.08) 28%, rgba(0, 0, 0, 0.78)),
+    radial-gradient(ellipse at 24% 8%, rgba(212, 175, 55, 0.026), transparent 34rem),
+    radial-gradient(ellipse at 78% 38rem, rgba(212, 175, 55, 0.018), transparent 42rem),
+    radial-gradient(ellipse at 50% 30rem, rgba(0, 0, 0, 0.9), transparent 48rem);
   mix-blend-mode: normal;
 }
 
@@ -335,7 +333,7 @@ a {
     0 1px 0 rgba(255, 249, 220, 0.18),
     0 2px 12px rgba(0, 0, 0, 0.72);
   background:
-    linear-gradient(126deg, #fff4ba 0%, #c7922c 12%, #68420d 25%, #f4d174 39%, #3b2408 52%, #b77b1e 68%, #fff0b6 82%, #7b4d11 100%);
+    linear-gradient(126deg, rgba(255, 239, 180, 0.74) 0%, rgba(199, 146, 44, 0.48) 13%, rgba(45, 31, 9, 0.92) 29%, rgba(244, 209, 116, 0.56) 43%, rgba(8, 6, 3, 0.98) 58%, rgba(183, 123, 30, 0.45) 74%, rgba(255, 240, 182, 0.62) 100%);
   border: 1px solid rgba(255, 224, 142, 0.8);
   box-shadow:
     0 0 0 1px rgba(10, 5, 1, 0.9),
@@ -374,10 +372,10 @@ a {
   content: "";
   position: absolute;
   inset: 2px;
-  z-index: -2;
+  z-index: 0;
   border-radius: calc(var(--radius-scent) - 4px);
   pointer-events: none;
-  background: var(--scent-wood-base);
+  background: var(--scent-black-panel);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 235, 0.12),
     inset 0 0 0 1px rgba(255, 227, 156, 0.12),
@@ -391,12 +389,11 @@ a {
   content: "";
   position: absolute;
   inset: 3px;
-  z-index: -1;
+  z-index: 1;
   border-radius: calc(var(--radius-scent) - 5px);
   pointer-events: none;
-  background: var(--scent-wood-grain);
-  background-size: 100% 100%, 34px 100%, 58px 100%;
-  opacity: 0.66;
+  background: var(--scent-black-sheen);
+  opacity: 0.52;
   transition:
     opacity var(--scent-transition-base) var(--scent-ease-out);
 }
@@ -404,7 +401,7 @@ a {
 .scent-primary-button:hover {
   filter: saturate(1.03) brightness(1.04);
   background:
-    linear-gradient(126deg, #fff8c9 0%, #d5a13a 12%, #735016 25%, #ffe18b 39%, #49300d 52%, #c98f2b 68%, #fff4c4 82%, #8a5b18 100%);
+    linear-gradient(126deg, rgba(255, 248, 201, 0.82) 0%, rgba(213, 161, 58, 0.54) 13%, rgba(55, 39, 12, 0.94) 29%, rgba(255, 225, 139, 0.62) 43%, rgba(9, 7, 4, 0.98) 58%, rgba(201, 143, 43, 0.52) 74%, rgba(255, 244, 196, 0.7) 100%);
   border-color: rgba(255, 235, 173, 0.96);
   box-shadow:
     0 0 0 1px rgba(10, 5, 1, 0.9),
@@ -425,7 +422,7 @@ a {
 
 .scent-primary-button:active {
   background:
-    linear-gradient(126deg, #d8b765 0%, #9f6d1c 12%, #53330a 25%, #d2a947 39%, #2d1b06 52%, #8e5c16 68%, #e1bf6f 82%, #5f3a0d 100%);
+    linear-gradient(126deg, rgba(216, 183, 101, 0.72) 0%, rgba(159, 109, 28, 0.44) 14%, rgba(28, 19, 7, 0.98) 36%, rgba(210, 169, 71, 0.42) 58%, rgba(4, 3, 2, 1) 100%);
   border-color: rgba(207, 163, 78, 0.9);
   box-shadow:
     0 0 0 1px rgba(10, 5, 1, 0.94),
@@ -437,9 +434,7 @@ a {
 }
 
 .scent-primary-button:active::before {
-  background:
-    radial-gradient(130% 110% at 50% -18%, rgba(255, 239, 186, 0.12), transparent 42%),
-    linear-gradient(180deg, rgba(21, 15, 10, 0.99), rgba(5, 3, 2, 1));
+  background: linear-gradient(180deg, rgba(5, 5, 5, 0.99), #000);
 }
 
 .scent-primary-button:active::after {
@@ -510,8 +505,8 @@ a {
   position: relative;
   isolation: isolate;
   background:
-    radial-gradient(140% 90% at 50% 0%, rgba(255, 245, 224, 0.028), transparent 62%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.022) 0%, rgba(255, 255, 255, 0.012) 58%, rgba(255, 255, 255, 0.006) 100%);
+    radial-gradient(140% 90% at 50% 0%, rgba(255, 245, 224, 0.018), transparent 62%),
+    linear-gradient(180deg, #050505 0%, #020202 58%, #000 100%);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   border: 1px solid rgba(255, 255, 255, 0.06);
@@ -538,19 +533,18 @@ a {
 
 .scent-fragrance-card::before {
   z-index: -2;
-  background: var(--scent-wood-base);
+  background: var(--scent-black-panel);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 235, 0.09),
     inset 0 0 0 1px rgba(255, 227, 156, 0.08),
     inset 0 -14px 22px rgba(0, 0, 0, 0.44);
-  opacity: 0.78;
+  opacity: 1;
 }
 
 .scent-fragrance-card::after {
   z-index: -1;
-  background: var(--scent-wood-grain);
-  background-size: 100% 100%, 34px 100%, 58px 100%;
-  opacity: 0.58;
+  background: var(--scent-black-sheen);
+  opacity: 0.34;
 }
 
 .scent-fragrance-card:hover {
@@ -1100,9 +1094,10 @@ a {
 @media (max-width: 640px) {
   .scent-app-shell::before {
     background:
-      linear-gradient(180deg, rgba(0, 0, 0, 0.24), rgba(0, 0, 0, 0.08) 28%, rgba(0, 0, 0, 0.7)),
-      radial-gradient(ellipse at 50% 8%, rgba(255, 238, 196, 0.05), transparent 21rem),
-      radial-gradient(ellipse at 50% 25rem, rgba(0, 0, 0, 0.9), transparent 30rem);
+      linear-gradient(180deg, rgba(0, 0, 0, 0.28), rgba(0, 0, 0, 0.1) 28%, rgba(0, 0, 0, 0.82)),
+      radial-gradient(ellipse at 26% 8%, rgba(212, 175, 55, 0.022), transparent 22rem),
+      radial-gradient(ellipse at 72% 24rem, rgba(212, 175, 55, 0.014), transparent 28rem),
+      radial-gradient(ellipse at 50% 25rem, rgba(0, 0, 0, 0.92), transparent 30rem);
   }
 
   .scent-atmosphere-strip {
