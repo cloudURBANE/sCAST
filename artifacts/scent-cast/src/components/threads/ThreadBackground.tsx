@@ -247,14 +247,14 @@ export const ThreadBackground: React.FC = React.memo(() => {
       className="fixed inset-0 overflow-hidden pointer-events-none"
       style={{
         zIndex: 0,
-        // Promote the whole fixed background into a single, isolated compositor
-        // layer so document scrolling translates a cached layer instead of
-        // repainting the fixed region (and its 25 child layers) every frame.
-        transform: 'translateZ(0)',
-        willChange: 'transform',
-        contain: 'layout paint',
+        // NOTE: do NOT paint-contain or GPU-promote this fixed container.
+        // On iOS Safari, a position:fixed element that is `contain: paint` +
+        // `translateZ(0)` with composited children gets rasterized ONCE and is
+        // only re-rasterized on scroll/touch — the rAF loop keeps writing child
+        // transforms but WebKit never repaints the snapshot, so the whole
+        // background appears frozen and only updates when you scroll. Let each
+        // thread composite independently instead (see SHARED_STYLE).
         isolation: 'isolate',
-        backfaceVisibility: 'hidden',
       }}
       aria-hidden="true"
     >
