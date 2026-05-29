@@ -68,6 +68,11 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({ weather: propWeath
   const containerRef = useRef<HTMLDivElement>(null);
   const hoverFrameRef = useRef<number | null>(null);
   const pendingMouseRef = useRef<{ x: number; y: number } | null>(null);
+  // The decorative <Canvas> below runs a continuous WebGL render loop. Gate it
+  // on visibility so it stops rendering while scrolled off-screen instead of
+  // burning a frame loop (and competing with scroll) the whole time the page is
+  // open. The context stays alive — only the loop pauses/resumes.
+  const [inView, setInView] = useState(true);
 
   const weather = propWeather !== undefined ? propWeather : internalWeather;
   const loading = propLoading !== undefined ? propLoading : internalLoading;
@@ -102,6 +107,17 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({ weather: propWeath
     return () => {
       if (hoverFrameRef.current !== null) cancelAnimationFrame(hoverFrameRef.current);
     };
+  }, []);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setInView(entry.isIntersecting),
+      { rootMargin: '200px' },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
   }, []);
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -144,7 +160,7 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({ weather: propWeath
         style={{ background: 'radial-gradient(600px circle at var(--mouse-x) var(--mouse-y), rgba(255,255,255,0.08), transparent 40%)' }}
       />
       <div className="absolute inset-0 z-0 opacity-20 mix-blend-screen pointer-events-none">
-        <Canvas camera={{ position: [0, 0, 5] }}>
+        <Canvas camera={{ position: [0, 0, 5] }} frameloop={inView ? 'always' : 'never'}>
           <ambientLight intensity={0.5} />
           <directionalLight position={[10, 10, 5]} intensity={1} />
           <AtmosphericViscosity profile={scentProfile} />
