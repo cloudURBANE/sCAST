@@ -2,11 +2,10 @@ import React, { useEffect, useRef } from 'react';
 import { THREAD_LINES, type ThreadLine } from './threadLines';
 
 const SHARED_STYLE: React.CSSProperties = {
-  position: 'fixed',
+  position: 'absolute',
   zIndex: 0,
   willChange: 'transform',
   backfaceVisibility: 'hidden',
-  perspective: '1000px',
   contain: 'paint',
 };
 
@@ -246,7 +245,17 @@ export const ThreadBackground: React.FC = React.memo(() => {
     <div
       ref={containerRef}
       className="fixed inset-0 overflow-hidden pointer-events-none"
-      style={{ zIndex: 0 }}
+      style={{
+        zIndex: 0,
+        // Promote the whole fixed background into a single, isolated compositor
+        // layer so document scrolling translates a cached layer instead of
+        // repainting the fixed region (and its 25 child layers) every frame.
+        transform: 'translateZ(0)',
+        willChange: 'transform',
+        contain: 'layout paint',
+        isolation: 'isolate',
+        backfaceVisibility: 'hidden',
+      }}
       aria-hidden="true"
     >
       {THREAD_LINES.map((thread) => {
