@@ -581,7 +581,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
       faceFills: [fill('base-left'), fill('base-right')],
       polishFill: fill('base-polish'),
       grainFill: fill('grain-deep'),
-      revealClass: 'top-[56%] sm:top-[68%]',
+      revealClass: 'top-[52%] sm:top-[60%]',
       grainOpacity: 0.42,
       polishOpacity: 0.76,
       rimOpacity: 0.78,
@@ -730,13 +730,14 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
     },
   ];
 
-  const { pulseTransition, floatTransition, shimmerTransition, atmosphericTransition } = React.useMemo(() => {
+  const { pulseTransition, floatTransition, shimmerTransition, atmosphericTransition, glyphTransition } = React.useMemo(() => {
     if (prefersReducedMotion) {
       return {
         pulseTransition: reducedTransition,
         floatTransition: reducedTransition,
         shimmerTransition: reducedTransition,
         atmosphericTransition: reducedTransition,
+        glyphTransition: reducedTransition,
       };
     }
     return {
@@ -744,6 +745,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
       floatTransition: { duration: 8.5, ease: 'easeInOut', repeat: Infinity, repeatType: 'mirror' } as Transition,
       shimmerTransition: { duration: 6.4, ease: SOFT_EASE, repeat: Infinity, repeatType: 'mirror' } as Transition,
       atmosphericTransition: { duration: 10, ease: SOFT_EASE, repeat: Infinity, repeatType: 'mirror' } as Transition,
+      glyphTransition: { duration: 7.2, ease: 'easeInOut', repeat: Infinity, repeatType: 'mirror' } as Transition,
     };
   }, [prefersReducedMotion]);
 
@@ -913,23 +915,31 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
 
             <linearGradient id={id('glyph-line-left')} x1="106" y1="397" x2="164" y2="397" gradientUnits="userSpaceOnUse">
               <stop offset="0" stopColor="#fc9d19" stopOpacity="0" />
-              <stop offset="0.62" stopColor="#fc9d19" stopOpacity="0.55" />
-              <stop offset="1" stopColor="#ffc766" stopOpacity="0.95" />
+              <stop offset="0.34" stopColor="#9f6a1f" stopOpacity="0.42" />
+              <stop offset="0.76" stopColor="#fc9d19" stopOpacity="0.88" />
+              <stop offset="1" stopColor="#fff0bf" stopOpacity="1" />
             </linearGradient>
 
             <linearGradient id={id('glyph-line-right')} x1="196" y1="397" x2="254" y2="397" gradientUnits="userSpaceOnUse">
-              <stop offset="0" stopColor="#ffc766" stopOpacity="0.95" />
-              <stop offset="0.38" stopColor="#fc9d19" stopOpacity="0.55" />
+              <stop offset="0" stopColor="#fff0bf" stopOpacity="1" />
+              <stop offset="0.24" stopColor="#fc9d19" stopOpacity="0.88" />
+              <stop offset="0.66" stopColor="#9f6a1f" stopOpacity="0.42" />
               <stop offset="1" stopColor="#fc9d19" stopOpacity="0" />
             </linearGradient>
 
             <radialGradient id={id('glyph-sphere')} cx="36%" cy="30%" r="72%">
-              <stop offset="0" stopColor="#fff3d4" />
-              <stop offset="0.22" stopColor="#ffc766" />
-              <stop offset="0.5" stopColor="#fc9d19" />
-              <stop offset="0.74" stopColor="#7a4b0d" />
-              <stop offset="1" stopColor="#fff3d4" />
+              <stop offset="0" stopColor="#fff8e8" />
+              <stop offset="0.2" stopColor="#ffe2a0" />
+              <stop offset="0.46" stopColor="#fcaa28" />
+              <stop offset="0.72" stopColor="#8b5310" />
+              <stop offset="1" stopColor="#2d1504" />
             </radialGradient>
+
+            <linearGradient id={id('glyph-rim')} x1="173" y1="390" x2="187" y2="404" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stopColor="#fff6dd" stopOpacity="0.95" />
+              <stop offset="0.48" stopColor="#ffc766" stopOpacity="0.78" />
+              <stop offset="1" stopColor="#7a4b0d" stopOpacity="0.52" />
+            </linearGradient>
 
             <pattern id={id('grain-platinum')} width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(-13)">
               <path d="M0 1 H7 M0 4 H7" stroke="#384044" strokeOpacity="0.22" strokeWidth="0.45" />
@@ -983,11 +993,8 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
             </filter>
 
             <filter id={id('glyph-soft')} x="-80%" y="-800%" width="260%" height="1700%" colorInterpolationFilters="sRGB">
-              <feGaussianBlur in="SourceGraphic" stdDeviation="1.35" result="blur" />
-              <feMerge>
-                <feMergeNode in="blur" />
-                <feMergeNode in="SourceGraphic" />
-              </feMerge>
+              <feDropShadow dx="0" dy="1.2" stdDeviation="1.1" floodColor="#000000" floodOpacity="0.42" />
+              <feDropShadow dx="0" dy="0" stdDeviation="2.2" floodColor="#fc9d19" floodOpacity="0.34" />
             </filter>
 
             <linearGradient id={id('ground-line')} x1="20" y1="380" x2="340" y2="380" gradientUnits="userSpaceOnUse">
@@ -1380,66 +1387,112 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
             )}
           </AnimatePresence>
 
-          <g aria-hidden pointerEvents="none" filter={fill('glyph-soft')}>
-            <motion.line
-              x1="105"
+          <motion.g
+            aria-hidden
+            pointerEvents="none"
+            filter={fill('glyph-soft')}
+            animate={prefersReducedMotion ? { opacity: 0.95, y: 0 } : { opacity: [0.82, 1, 0.82], y: [0, -1.1, 0] }}
+            transition={glyphTransition}
+            style={{
+              transformBox: 'view-box',
+              transformOrigin: '180px 397px',
+              willChange: prefersReducedMotion ? 'auto' : 'transform, opacity',
+            }}
+          >
+            <motion.ellipse
+              cx="180"
+              cy="400.5"
+              rx="31"
+              ry="3.3"
+              fill={fill('gold-glow')}
+              animate={prefersReducedMotion ? { opacity: 0.42, scaleX: 1 } : { opacity: [0.28, 0.48, 0.28], scaleX: [0.92, 1.08, 0.92] }}
+              transition={pulseTransition}
+              style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
+            />
+
+            <line
+              x1="96"
               y1="397"
-              x2="164"
+              x2="170"
               y2="397"
               stroke={fill('glyph-line-left')}
-              strokeWidth="0.75"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeOpacity="0.32"
+              vectorEffect="non-scaling-stroke"
+            />
+
+            <line
+              x1="190"
+              y1="397"
+              x2="264"
+              y2="397"
+              stroke={fill('glyph-line-right')}
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeOpacity="0.32"
+              vectorEffect="non-scaling-stroke"
+            />
+
+            <motion.line
+              x1="100"
+              y1="397"
+              x2="170"
+              y2="397"
+              stroke={fill('glyph-line-left')}
+              strokeWidth="1.1"
               strokeLinecap="round"
               vectorEffect="non-scaling-stroke"
-              animate={prefersReducedMotion ? { opacity: 0.75 } : { opacity: [0.55, 0.85, 0.55] }}
+              animate={prefersReducedMotion ? { opacity: 0.92 } : { opacity: [0.74, 1, 0.74] }}
               transition={pulseTransition}
             />
 
             <motion.line
-              x1="196"
+              x1="190"
               y1="397"
-              x2="255"
+              x2="260"
               y2="397"
               stroke={fill('glyph-line-right')}
-              strokeWidth="0.75"
+              strokeWidth="1.1"
               strokeLinecap="round"
               vectorEffect="non-scaling-stroke"
-              animate={prefersReducedMotion ? { opacity: 0.75 } : { opacity: [0.55, 0.85, 0.55] }}
+              animate={prefersReducedMotion ? { opacity: 0.92 } : { opacity: [0.74, 1, 0.74] }}
               transition={pulseTransition}
             />
 
             <motion.circle
               cx="180"
               cy="397"
-              r="9"
+              r="13"
               fill={fill('gold-glow')}
-              animate={prefersReducedMotion ? { opacity: 0.38, r: 9 } : { opacity: [0.26, 0.46, 0.26], r: [9, 10.5, 9] }}
+              animate={prefersReducedMotion ? { opacity: 0.58, scale: 1 } : { opacity: [0.38, 0.62, 0.38], scale: [0.92, 1.08, 0.92] }}
               transition={pulseTransition}
+              style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
             />
 
             <motion.circle
               cx="180"
               cy="397"
-              r="6.3"
+              r="7.4"
               fill={fill('glyph-sphere')}
-              animate={
-                prefersReducedMotion
-                  ? { opacity: 0.95, r: 6.3 }
-                  : { opacity: [0.82, 0.98, 0.82], r: [6.3, 6.8, 6.3] }
-              }
+              animate={prefersReducedMotion ? { opacity: 1, scale: 1 } : { opacity: [0.92, 1, 0.92], scale: [0.96, 1.04, 0.96] }}
               transition={pulseTransition}
+              style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
             />
 
             <circle
               cx="180"
               cy="397"
-              r="6.7"
+              r="8.1"
               fill="none"
-              stroke="#ffc766"
-              strokeOpacity="0.45"
-              strokeWidth="0.4"
+              stroke={fill('glyph-rim')}
+              strokeOpacity="0.82"
+              strokeWidth="0.55"
               vectorEffect="non-scaling-stroke"
             />
-          </g>
+
+            <circle cx="177.4" cy="394.3" r="1.45" fill="#fff8e8" opacity="0.82" />
+          </motion.g>
         </svg>
 
         {/* Enhanced Hovering Glassmorphic Text UI */}
