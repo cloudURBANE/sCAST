@@ -16,7 +16,6 @@ interface ReviewsPanelProps {
 }
 
 const REVIEW_EASE = [0.22, 1, 0.36, 1] as const;
-const REVIEW_CENTER_OFFSET = "lg:translate-x-5";
 
 function formatReviewPosition(index: number, total: number) {
   const width = Math.max(2, String(total).length);
@@ -34,7 +33,7 @@ function ReviewsShell({ children }: { children: React.ReactNode }) {
 function ReviewsHeader() {
   return (
     <div className="border-b border-white/[0.05] px-4 py-3 text-center">
-      <p className={`inline-block text-[10px] font-bold uppercase tracking-[0.34em] text-white/70 ${REVIEW_CENTER_OFFSET}`}>
+      <p className="text-[11px] uppercase tracking-[0.34em] text-white/70 font-bold">
         Reviews
       </p>
     </div>
@@ -61,8 +60,7 @@ function FeaturedQuote({
       className="mx-auto flex w-full max-w-[62rem] flex-col items-center text-center"
     >
       <blockquote
-        className="mx-auto max-w-[54rem] break-words text-center font-serif text-[20px] italic leading-[1.5] tracking-normal text-[#f5f0e6]/[0.88] [overflow-wrap:anywhere] sm:text-[22px] lg:text-[24px]"
-        style={{ fontFamily: "var(--font-serif)" }}
+        className="mx-auto max-w-[54rem] break-words text-center font-serif text-[20px] italic leading-[1.5] tracking-normal text-white/80 [overflow-wrap:anywhere] sm:text-[22px] lg:text-[24px]"
       >
         &ldquo;{comment.text}&rdquo;
       </blockquote>
@@ -184,7 +182,7 @@ export function ReviewsPanel({ name, brand, reviews }: ReviewsPanelProps) {
     return (
       <ReviewsShell>
         <ReviewsHeader />
-        <div className={`flex w-full flex-col items-center justify-center px-5 py-12 text-center ${REVIEW_CENTER_OFFSET}`}>
+        <div className="flex w-full flex-col items-center justify-center px-4 py-10 text-center sm:px-5">
           <p className="font-serif italic text-lg text-white/55">
             No reviews yet for this fragrance. Molecular impressions pending.
           </p>
@@ -197,7 +195,7 @@ export function ReviewsPanel({ name, brand, reviews }: ReviewsPanelProps) {
     return (
       <ReviewsShell>
         <ReviewsHeader />
-        <div className={`flex w-full flex-col items-center justify-center gap-4 px-5 py-8 text-center ${REVIEW_CENTER_OFFSET}`}>
+        <div className="flex w-full flex-col items-center justify-center gap-4 px-4 py-5 text-center sm:px-5">
           <div className="space-y-1">
             <p className="text-sm font-serif italic text-white/80">Impression Calibrator Failed</p>
             <p className="text-xs text-scent-muted max-w-md">{fetchError}</p>
@@ -219,7 +217,7 @@ export function ReviewsPanel({ name, brand, reviews }: ReviewsPanelProps) {
     return (
       <ReviewsShell>
         <ReviewsHeader />
-        <div className={`flex w-full flex-col items-center justify-center px-5 py-12 text-center ${REVIEW_CENTER_OFFSET}`}>
+        <div className="flex w-full flex-col items-center justify-center px-4 py-10 text-center sm:px-5">
           <p className="font-serif italic text-lg text-white/55">
             No reviews yet for this fragrance. Molecular impressions pending.
           </p>
@@ -232,7 +230,7 @@ export function ReviewsPanel({ name, brand, reviews }: ReviewsPanelProps) {
     return (
       <ReviewsShell>
         <ReviewsHeader />
-        <div className={`flex w-full flex-col items-center justify-center gap-4 px-5 py-8 animate-pulse sm:px-8 ${REVIEW_CENTER_OFFSET}`}>
+        <div className="flex w-full flex-col items-center justify-center gap-4 px-4 py-5 animate-pulse sm:px-5">
           <div className="flex items-center gap-2">
             <RefreshCw size={13} className="animate-spin text-white/40" />
             <p className="text-[11px] uppercase tracking-[0.22em] text-white/40 font-bold">
@@ -263,17 +261,8 @@ export function ReviewsPanel({ name, brand, reviews }: ReviewsPanelProps) {
     <ReviewsShell>
       <ReviewsHeader />
 
-      <div className="relative flex w-full flex-col items-center overflow-hidden px-4 py-6 sm:px-7 sm:py-7 lg:px-10">
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-scent-accent/18 to-transparent"
-        />
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-x-[14%] bottom-0 h-px bg-gradient-to-r from-transparent via-white/[0.045] to-transparent"
-        />
-
-        <div className={`grid min-h-[8.5rem] w-full place-items-center sm:min-h-[9rem] ${REVIEW_CENTER_OFFSET}`} aria-live="polite">
+      <div className="relative flex w-full flex-col items-center overflow-hidden px-4 py-5 sm:px-5 sm:py-5">
+        <div className="grid min-h-[8.5rem] w-full place-items-center sm:min-h-[9rem]" aria-live="polite">
           <AnimatePresence mode="wait" initial={false}>
             <FeaturedQuote
               key={`${currentIndex}-${currentComment.text}`}
@@ -284,8 +273,8 @@ export function ReviewsPanel({ name, brand, reviews }: ReviewsPanelProps) {
         </div>
 
         {hasMultiple ? (
-          <div className={`mt-5 flex w-full flex-col items-center gap-3 ${REVIEW_CENTER_OFFSET}`}>
-            <div className="grid grid-cols-[2rem_5.75rem_2rem] items-center justify-center gap-3 text-[10px] font-semibold uppercase tracking-[0.24em] text-[#f5f0e6]/[0.5]">
+          <div className="mt-5 flex w-full flex-col items-center gap-3">
+            <div className="grid grid-cols-[2rem_5.75rem_2rem] items-center justify-center gap-3 text-[10px] font-semibold uppercase tracking-[0.24em] text-scent-muted/60">
               <ReviewArrowButton
                 direction="previous"
                 onClick={() => stepReview(-1)}
@@ -338,10 +327,9 @@ export function ReviewsPanel({ name, brand, reviews }: ReviewsPanelProps) {
                     <span
                       className={`block min-w-0 max-w-[68rem] break-words font-serif text-[16px] italic leading-[1.58] transition-colors [overflow-wrap:anywhere] sm:text-[17px] ${
                         index === currentIndex
-                          ? "text-[#f5f0e6]/80"
+                          ? "text-white/80"
                           : "text-white/52 group-hover:text-white/70"
                       }`}
-                      style={{ fontFamily: "var(--font-serif)" }}
                     >
                       &ldquo;{comment.text}&rdquo;
                     </span>
