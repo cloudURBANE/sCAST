@@ -1202,7 +1202,7 @@ a {
   opacity: 1;
 }
 
-.scent-lava-fallback--animated {
+.scent-lava-fallback--visible.scent-lava-fallback--animated {
   animation: scent-lava-fallback-drift 26s ease-in-out infinite;
 }
 
@@ -1210,31 +1210,20 @@ a {
   background-position: 12% 18%, 78% 68%, 38% 50%, 62% 18%;
 }
 
-.scent-beam-atmosphere,
-.scent-beam-grain {
+.scent-beam-overlay {
   position: fixed;
   inset: 0;
   pointer-events: none;
-  z-index: 1;
-}
-
-.scent-beam-atmosphere {
+  z-index: 0;
+  contain: paint;
   background:
+    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.03) 0, rgba(255, 255, 255, 0.03) 0.55px, transparent 0.75px),
     linear-gradient(100deg, transparent 0%, rgba(0, 0, 0, 0.64) 16%, transparent 32%, rgba(255, 226, 166, 0.035) 48%, transparent 66%, rgba(0, 0, 0, 0.62) 100%),
     linear-gradient(180deg, rgba(0, 0, 0, 0.18), transparent 24%, transparent 62%, rgba(0, 0, 0, 0.72)),
     radial-gradient(ellipse at 50% 9%, rgba(255, 244, 218, 0.06), transparent 38rem),
     radial-gradient(ellipse at 50% 50%, transparent 0%, transparent 44%, rgba(0, 0, 0, 0.68) 100%);
-}
-
-.scent-beam-grain {
-  opacity: 0.105;
-  mix-blend-mode: overlay;
-  background-image:
-    linear-gradient(0deg, rgba(255, 255, 255, 0.028) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px);
-  background-size: 3px 3px, 5px 5px;
-  -webkit-mask-image: radial-gradient(ellipse at center, #000 0%, #000 74%, transparent 100%);
-  mask-image: radial-gradient(ellipse at center, #000 0%, #000 74%, transparent 100%);
+  background-size: 4px 4px, auto, auto, auto, auto;
+  background-repeat: repeat, no-repeat, no-repeat, no-repeat, no-repeat;
 }
 
 /* Each side: closed path (0% = 100%) so no snap; uneven keyframe times + per-stop
@@ -1364,7 +1353,7 @@ a {
     animation: none;
   }
 
-  .scent-lava-fallback--animated {
+  .scent-lava-fallback--visible.scent-lava-fallback--animated {
     animation: none;
   }
 }
