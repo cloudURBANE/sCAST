@@ -71,8 +71,6 @@ export const PageTransitionOverlay: React.FC = () => {
             className="fixed inset-0 z-[9999] flex items-center justify-center pointer-events-none"
             style={{
               background: `radial-gradient(ellipse 55% 50% at 50% 50%, rgba(16, 10, 2, 0.94) 0%, rgba(3, 2, 1, 0.97) 100%)`,
-              WebkitBackdropFilter: 'blur(12px)',
-              backdropFilter: 'blur(12px)',
             }}
             aria-hidden="true"
             role="presentation"
@@ -98,10 +96,7 @@ export const PageTransitionOverlay: React.FC = () => {
           className="fixed inset-0 z-[9999] flex items-center justify-center pointer-events-none"
           style={{
             background: `radial-gradient(ellipse 55% 50% at 50% 50%, rgba(16, 10, 2, 0.96) 0%, rgba(3, 2, 1, 0.98) 100%)`,
-            backdropFilter: 'blur(16px) saturate(0.55)',
-            WebkitBackdropFilter: 'blur(16px) saturate(0.55)',
-            contain: 'layout paint style',
-            isolation: 'isolate',
+            contain: 'layout paint',
             transform: 'translate3d(0, 0, 0)',
             willChange: 'opacity',
           }}

@@ -7,7 +7,7 @@ const SHARED_STYLE: React.CSSProperties = {
   willChange: 'transform',
   backfaceVisibility: 'hidden',
   perspective: '1000px',
-  contain: 'paint style',
+  contain: 'paint',
 };
 
 const MIN_RANDOM_PERCENT = 8;
@@ -23,6 +23,7 @@ type ThreadAnimationState = {
   position: number;
   speed: number;
   startAt: number;
+  lanePercent: number;
   lastOpacity: number | null;
 };
 
@@ -30,22 +31,8 @@ function randomBetween(min: number, max: number): number {
   return min + Math.random() * (max - min);
 }
 
-function randomizeThreadLane(el: HTMLElement, thread: ThreadLine): void {
-  const offset = `${randomBetween(MIN_RANDOM_PERCENT, MAX_RANDOM_PERCENT).toFixed(2)}%`;
-
-  if (thread.axis === 'x') {
-    el.style.top = offset;
-    el.style.bottom = '';
-    return;
-  }
-
-  if (thread.left != null) {
-    el.style.left = offset;
-    el.style.right = '';
-  } else {
-    el.style.right = offset;
-    el.style.left = '';
-  }
+function randomizeThreadLane(): number {
+  return randomBetween(MIN_RANDOM_PERCENT, MAX_RANDOM_PERCENT);
 }
 
 function getTravelLimit(thread: ThreadLine): number {
@@ -57,14 +44,29 @@ function getInitialPosition(thread: ThreadLine): number {
   return randomBetween(-thread.wrap, limit + thread.wrap);
 }
 
-function computeTransform(thread: ThreadLine, position: number): string {
+function getLaneOffset(thread: ThreadLine, lanePercent: number): number {
+  const limit = thread.axis === 'x' ? window.innerHeight : window.innerWidth;
+  const offset = (limit * lanePercent) / 100;
+
+  if (thread.axis === 'y' && thread.left == null) {
+    return -offset;
+  }
+
+  return offset;
+}
+
+function computeTransform(thread: ThreadLine, position: number, lanePercent: number): string {
   const { axis, direction } = thread;
+
   if (axis === 'x') {
     const x = direction === 1 ? position : position - window.innerWidth;
-    return `translateX(${x}px)`;
+    const y = getLaneOffset(thread, lanePercent);
+    return `translate3d(${x}px, ${y}px, 0)`;
   }
+
+  const x = getLaneOffset(thread, lanePercent);
   const y = direction === 1 ? position : position - window.innerHeight;
-  return `translateY(${y}px)`;
+  return `translate3d(${x}px, ${y}px, 0)`;
 }
 
 function computeOpacity(thread: ThreadLine, position: number): number {
@@ -99,14 +101,13 @@ function resetPosition(thread: ThreadLine): number {
 }
 
 function createThreadState(el: HTMLElement, thread: ThreadLine, now: number): ThreadAnimationState {
-  randomizeThreadLane(el, thread);
-
   const state: ThreadAnimationState = {
     el,
     thread,
     position: getInitialPosition(thread),
     speed: thread.speed * randomBetween(MIN_SPEED_FACTOR, MAX_SPEED_FACTOR),
     startAt: now + randomBetween(0, MAX_START_DELAY),
+    lanePercent: randomizeThreadLane(),
     lastOpacity: null,
   };
 
@@ -115,10 +116,16 @@ function createThreadState(el: HTMLElement, thread: ThreadLine, now: number): Th
 }
 
 function writeThreadState(state: ThreadAnimationState, forceOpacity = false): void {
-  const { el, thread, position } = state;
-  el.style.transform = computeTransform(thread, position);
+  const { el, thread, position, lanePercent } = state;
+  el.style.transform = computeTransform(thread, position, lanePercent);
 
-  if (thread.fade == null) return;
+  if (thread.fade == null) {
+    if (forceOpacity && state.lastOpacity !== 1) {
+      el.style.opacity = '1';
+      state.lastOpacity = 1;
+    }
+    return;
+  }
 
   const opacity = computeOpacity(thread, position);
   if (
@@ -179,7 +186,7 @@ export const ThreadBackground: React.FC = React.memo(() => {
         state.position += state.speed * state.thread.direction * elapsedFrames;
 
         if (shouldWrap(state.thread, state.position)) {
-          randomizeThreadLane(state.el, state.thread);
+          state.lanePercent = randomizeThreadLane();
           state.speed = state.thread.speed * randomBetween(MIN_SPEED_FACTOR, MAX_SPEED_FACTOR);
           state.position = resetPosition(state.thread);
           state.lastOpacity = null;
@@ -225,6 +232,16 @@ export const ThreadBackground: React.FC = React.memo(() => {
     };
   }, []);
 
+  const getAnchorStyle = (thread: ThreadLine): React.CSSProperties => {
+    if (thread.axis === 'x') {
+      return thread.left != null ? { top: '0px', left: '0px' } : { top: '0px', right: '0px' };
+    }
+
+    const blockAnchor = thread.top != null ? { top: '0px' } : { bottom: '0px' };
+    const inlineAnchor = thread.left != null ? { left: '0px' } : { right: '0px' };
+    return { ...blockAnchor, ...inlineAnchor };
+  };
+
   return (
     <div
       ref={containerRef}
@@ -235,10 +252,6 @@ export const ThreadBackground: React.FC = React.memo(() => {
       {THREAD_LINES.map((thread) => {
         const {
           id,
-          top,
-          bottom,
-          left,
-          right,
           width,
           height,
           background,
@@ -252,11 +265,11 @@ export const ThreadBackground: React.FC = React.memo(() => {
         const initialTransform =
           axis === 'x'
             ? direction === 1
-              ? `translateX(-${wrap}px)`
-              : `translateX(${wrap}px)`
+              ? `translate3d(-${wrap}px, 0, 0)`
+              : `translate3d(${wrap}px, 0, 0)`
             : direction === 1
-              ? `translateY(-${wrap}px)`
-              : `translateY(${wrap}px)`;
+              ? `translate3d(0, -${wrap}px, 0)`
+              : `translate3d(0, ${wrap}px, 0)`;
 
         return (
           <div
@@ -264,15 +277,13 @@ export const ThreadBackground: React.FC = React.memo(() => {
             data-thread={id}
             style={{
               ...SHARED_STYLE,
-              top,
-              bottom,
-              left,
-              right,
+              ...getAnchorStyle(thread),
               width,
               height,
               background,
               boxShadow,
               filter,
+              opacity: 0,
               transform: initialTransform,
             }}
           />

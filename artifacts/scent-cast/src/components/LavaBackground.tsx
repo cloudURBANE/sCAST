@@ -42,6 +42,7 @@ export const LavaBackground: React.FC = React.memo(() => {
     const fragmentShaderSource = `
       precision highp float;
       uniform float u_time;
+      uniform float u_frame;
       uniform vec2 u_resolution;
 
       float hash(vec2 p) {
@@ -140,7 +141,7 @@ export const LavaBackground: React.FC = React.memo(() => {
         float topGlaze = smoothstep(-0.2, 1.0, uv.y) * (0.018 + atmosphere * 0.02);
         color += vec3(1.0, 0.74, 0.36) * topGlaze;
 
-        float grain = hash(gl_FragCoord.xy + floor(u_time * 24.0)) - 0.5;
+        float grain = hash(gl_FragCoord.xy + vec2(u_frame * 1.37, u_frame * -0.73)) - 0.5;
         color += grain * 0.018;
 
         gl_FragColor = vec4(max(color, vec3(0.0)), 1.0);
@@ -197,13 +198,15 @@ export const LavaBackground: React.FC = React.memo(() => {
     gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
 
     const timeLocation = gl.getUniformLocation(program, 'u_time');
+    const frameLocation = gl.getUniformLocation(program, 'u_frame');
     const resolutionLocation = gl.getUniformLocation(program, 'u_resolution');
-    if (!timeLocation || !resolutionLocation) {
+    if (!timeLocation || !frameLocation || !resolutionLocation) {
       failToFallback();
       return;
     }
 
     let animId: number | null = null;
+    let frameCount = 0;
     setWebglFailed(false);
 
     const resizeCanvas = () => {
@@ -219,7 +222,9 @@ export const LavaBackground: React.FC = React.memo(() => {
 
     const render = (time: number) => {
       resizeCanvas();
+      frameCount += 1;
       gl.uniform1f(timeLocation, time * 0.001);
+      gl.uniform1f(frameLocation, frameCount);
       gl.uniform2f(resolutionLocation, canvas.width, canvas.height);
       gl.clearColor(0, 0, 0, 1);
       gl.clear(gl.COLOR_BUFFER_BIT);
@@ -264,12 +269,20 @@ export const LavaBackground: React.FC = React.memo(() => {
     };
   }, [reducedMotion]);
 
+  const fallbackVisible = webglFailed || reducedMotion;
+  const fallbackClassName = [
+    'scent-lava-fallback',
+    reducedMotion ? 'scent-lava-fallback--static' : null,
+    fallbackVisible ? 'scent-lava-fallback--visible' : null,
+    fallbackVisible && !reducedMotion ? 'scent-lava-fallback--animated' : null,
+  ]
+    .filter(Boolean)
+    .join(' ');
+
   return (
     <>
       <div
-        className={`scent-lava-fallback ${reducedMotion ? 'scent-lava-fallback--static' : 'scent-lava-fallback--animated'} ${
-          webglFailed || reducedMotion ? 'scent-lava-fallback--visible' : ''
-        }`}
+        className={fallbackClassName}
         aria-hidden="true"
       />
       {!reducedMotion && !webglFailed ? (
@@ -279,8 +292,7 @@ export const LavaBackground: React.FC = React.memo(() => {
           style={{ zIndex: 0 }}
         />
       ) : null}
-      <div className="scent-beam-atmosphere" aria-hidden="true" />
-      <div className="scent-beam-grain" aria-hidden="true" />
+      <div className="scent-beam-overlay" aria-hidden="true" />
     </>
   );
 });
