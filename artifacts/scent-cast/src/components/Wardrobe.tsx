@@ -607,8 +607,8 @@ function ProfileScorePanel({
         key={stat.label}
         className={
           compact
-            ? "min-w-0 h-full min-h-[6.15rem] flex flex-col items-center justify-center gap-1 overflow-hidden border border-scent-accent/22 bg-[radial-gradient(circle_at_50%_8%,rgba(212,175,55,0.12),rgba(255,255,255,0.035)_58%,rgba(255,255,255,0.02))] px-1.5 py-2.5 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.045)]"
-            : "min-w-0 h-full flex flex-col items-center justify-center gap-1 overflow-hidden border border-scent-accent/22 bg-[radial-gradient(circle_at_50%_0%,rgba(212,175,55,0.13),rgba(255,255,255,0.04)_58%,rgba(255,255,255,0.02))] px-4 py-5 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]"
+            ? "min-w-0 h-full min-h-[6.15rem] flex flex-col items-center justify-center gap-1 overflow-hidden border border-scent-accent/22 bg-white/[0.035] px-1.5 py-2.5 text-center"
+            : "min-w-0 h-full flex flex-col items-center justify-center gap-1 overflow-hidden border border-scent-accent/22 bg-white/[0.035] px-4 py-5 text-center"
         }
       >
         <div className="flex flex-1 flex-col items-center justify-center w-full">
