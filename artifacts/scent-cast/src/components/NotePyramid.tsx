@@ -951,7 +951,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
               <stop offset="1" stopColor="#2d1504" />
             </radialGradient>
 
-            <linearGradient id={id('glyph-rim')} x1="173" y1="390" x2="187" y2="404" gradientUnits="userSpaceOnUse">
+            <linearGradient id={id('glyph-rim')} x1="173" y1="393" x2="187" y2="407" gradientUnits="userSpaceOnUse">
               <stop offset="0" stopColor="#fff6dd" stopOpacity="0.95" />
               <stop offset="0.48" stopColor="#ffc766" stopOpacity="0.78" />
               <stop offset="1" stopColor="#7a4b0d" stopOpacity="0.52" />
@@ -1413,147 +1413,109 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
             aria-hidden
             pointerEvents="none"
             filter={fill('glyph-soft')}
-            animate={prefersReducedMotion ? { opacity: 0.98, y: 0 } : { opacity: [0.9, 1, 0.9], y: [0, -0.9, 0] }}
+            animate={prefersReducedMotion ? { opacity: 0.96, y: 0 } : { opacity: [0.88, 1, 0.88], y: [0, -0.6, 0] }}
             transition={glyphTransition}
             style={{
               transformBox: 'view-box',
-              transformOrigin: '180px 397px',
+              transformOrigin: '180px 401px',
               willChange: prefersReducedMotion ? 'auto' : 'transform, opacity',
             }}
           >
+            {/* Soft pedestal underlight — a wide, flat halo resting on the glossy black surface */}
             <motion.ellipse
               cx="180"
-              cy="404"
-              rx="90"
-              ry="8.6"
+              cy="403"
+              rx="96"
+              ry="6.2"
               fill={fill('glyph-underlight')}
-              animate={prefersReducedMotion ? { opacity: 0.58, scaleX: 1 } : { opacity: [0.36, 0.62, 0.36], scaleX: [0.94, 1.04, 0.94] }}
+              animate={prefersReducedMotion ? { opacity: 0.42, scaleX: 1 } : { opacity: [0.26, 0.44, 0.26], scaleX: [0.96, 1.03, 0.96] }}
               transition={glyphTransition}
               style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
             />
 
+            {/* Primary reflection — a clean, symmetric gold hairline that fades at both ends */}
             <path
-              d="M74 401 C103 393 134 391 169 397"
-              stroke={fill('glyph-line-left')}
-              strokeWidth="5.2"
-              strokeLinecap="round"
-              strokeOpacity="0.28"
-              fill="none"
-              vectorEffect="non-scaling-stroke"
-            />
-
-            <path
-              d="M191 397 C226 391 257 393 286 401"
-              stroke={fill('glyph-line-right')}
-              strokeWidth="5.2"
-              strokeLinecap="round"
-              strokeOpacity="0.28"
-              fill="none"
-              vectorEffect="non-scaling-stroke"
-            />
-
-            <motion.path
-              d="M82 400 C111 394 139 393 169 397"
-              stroke={fill('glyph-line-left')}
-              strokeWidth="2.1"
-              strokeLinecap="round"
-              fill="none"
-              vectorEffect="non-scaling-stroke"
-              animate={prefersReducedMotion ? { opacity: 0.96 } : { opacity: [0.78, 1, 0.78] }}
-              transition={pulseTransition}
-            />
-
-            <motion.path
-              d="M191 397 C221 393 249 394 278 400"
-              stroke={fill('glyph-line-right')}
-              strokeWidth="2.1"
-              strokeLinecap="round"
-              fill="none"
-              vectorEffect="non-scaling-stroke"
-              animate={prefersReducedMotion ? { opacity: 0.96 } : { opacity: [0.78, 1, 0.78] }}
-              transition={pulseTransition}
-            />
-
-            <path
-              d="M96 405 C123 401 153 400 180 400 C207 400 237 401 264 405"
+              d="M92 402 C123 400 152 399.4 180 399.4 C208 399.4 237 400 268 402"
               stroke={fill('glyph-plinth')}
-              strokeWidth="1.6"
+              strokeWidth="1.5"
               strokeLinecap="round"
               fill="none"
-              opacity="0.72"
+              opacity="0.85"
               vectorEffect="non-scaling-stroke"
             />
 
+            {/* Secondary polish reflection — shorter and fainter, just beneath the first */}
             <path
-              d="M137 392 L168 397 L137 402 M223 392 L192 397 L223 402"
-              stroke="#ffd98a"
-              strokeOpacity="0.34"
-              strokeWidth="0.65"
+              d="M120 405 C143 403.6 162 403.2 180 403.2 C198 403.2 217 403.6 240 405"
+              stroke={fill('glyph-plinth')}
+              strokeWidth="0.8"
               strokeLinecap="round"
-              strokeLinejoin="round"
               fill="none"
+              opacity="0.4"
               vectorEffect="non-scaling-stroke"
             />
 
+            {/* Gentle traveling sheen drifting along the reflection */}
             <motion.g
-              animate={prefersReducedMotion ? { opacity: 0 } : { opacity: [0, 0.72, 0], x: [-34, 34, 34] }}
-              transition={{ duration: 4.8, ease: SOFT_EASE, repeat: Infinity, repeatDelay: 1.2 }}
+              animate={prefersReducedMotion ? { opacity: 0 } : { opacity: [0, 0.5, 0], x: [-30, 30, 30] }}
+              transition={{ duration: 4.8, ease: SOFT_EASE, repeat: Infinity, repeatDelay: 1.4 }}
               style={{
                 transformBox: 'view-box',
-                transformOrigin: '180px 397px',
+                transformOrigin: '180px 401px',
                 willChange: prefersReducedMotion ? 'auto' : 'transform, opacity',
               }}
             >
               <path
-                d="M96 398 C124 393 151 394 172 397 M188 397 C209 394 236 393 264 398"
+                d="M104 401 C132 399.4 158 399 178 399.2 M182 399.2 C202 399 228 399.4 256 401"
                 stroke={fill('glyph-shimmer')}
-                strokeWidth="1.15"
+                strokeWidth="1.05"
                 strokeLinecap="round"
                 fill="none"
                 vectorEffect="non-scaling-stroke"
               />
             </motion.g>
 
+            {/* Center orb — small, refined, seated into the reflection base */}
             <motion.circle
               cx="180"
-              cy="397"
-              r="18"
+              cy="400"
+              r="13"
               fill={fill('gold-glow')}
-              animate={prefersReducedMotion ? { opacity: 0.7, scale: 1 } : { opacity: [0.44, 0.72, 0.44], scale: [0.95, 1.08, 0.95] }}
+              animate={prefersReducedMotion ? { opacity: 0.5, scale: 1 } : { opacity: [0.3, 0.5, 0.3], scale: [0.96, 1.06, 0.96] }}
               transition={pulseTransition}
               style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
             />
 
             <circle
               cx="180"
-              cy="397"
-              r="10.1"
+              cy="400"
+              r="7.4"
               fill="#2a1404"
-              opacity="0.52"
+              opacity="0.5"
             />
 
             <motion.circle
               cx="180"
-              cy="397"
-              r="8.8"
+              cy="400"
+              r="6.4"
               fill={fill('glyph-sphere')}
-              animate={prefersReducedMotion ? { opacity: 1, scale: 1 } : { opacity: [0.95, 1, 0.95], scale: [0.98, 1.035, 0.98] }}
+              animate={prefersReducedMotion ? { opacity: 1, scale: 1 } : { opacity: [0.95, 1, 0.95], scale: [0.98, 1.03, 0.98] }}
               transition={pulseTransition}
               style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
             />
 
             <circle
               cx="180"
-              cy="397"
-              r="9.8"
+              cy="400"
+              r="7.1"
               fill="none"
               stroke={fill('glyph-rim')}
-              strokeOpacity="0.9"
-              strokeWidth="0.8"
+              strokeOpacity="0.85"
+              strokeWidth="0.7"
               vectorEffect="non-scaling-stroke"
             />
 
-            <circle cx="177.2" cy="393.7" r="1.8" fill="#fff8e8" opacity="0.88" />
+            <circle cx="178" cy="397.4" r="1.4" fill="#fff8e8" opacity="0.85" />
           </motion.g>
         </svg>
 
