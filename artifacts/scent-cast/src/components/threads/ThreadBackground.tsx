@@ -6,7 +6,6 @@ const SHARED_STYLE: React.CSSProperties = {
   zIndex: 0,
   willChange: 'transform',
   backfaceVisibility: 'hidden',
-  contain: 'paint',
 };
 
 const MIN_RANDOM_PERCENT = 8;
@@ -221,13 +220,21 @@ export const ThreadBackground: React.FC = React.memo(() => {
 
     startLoop();
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    motionQuery.addEventListener('change', handleMotionPreferenceChange);
+    if (typeof motionQuery.addEventListener === 'function') {
+      motionQuery.addEventListener('change', handleMotionPreferenceChange);
+    } else {
+      motionQuery.addListener(handleMotionPreferenceChange);
+    }
 
     return () => {
       cancelled = true;
       stopLoop();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      motionQuery.removeEventListener('change', handleMotionPreferenceChange);
+      if (typeof motionQuery.removeEventListener === 'function') {
+        motionQuery.removeEventListener('change', handleMotionPreferenceChange);
+      } else {
+        motionQuery.removeListener(handleMotionPreferenceChange);
+      }
     };
   }, []);
 
@@ -247,13 +254,10 @@ export const ThreadBackground: React.FC = React.memo(() => {
       className="fixed inset-0 overflow-hidden pointer-events-none"
       style={{
         zIndex: 0,
-        // NOTE: do NOT paint-contain or GPU-promote this fixed container.
-        // On iOS Safari, a position:fixed element that is `contain: paint` +
-        // `translateZ(0)` with composited children gets rasterized ONCE and is
-        // only re-rasterized on scroll/touch — the rAF loop keeps writing child
-        // transforms but WebKit never repaints the snapshot, so the whole
-        // background appears frozen and only updates when you scroll. Let each
-        // thread composite independently instead (see SHARED_STYLE).
+        // Keep the fixed background in its own composited layer so iPad Safari
+        // repaints child transform writes even when the page has no scroll path.
+        transform: 'translate3d(0, 0, 0)',
+        willChange: 'transform',
         isolation: 'isolate',
       }}
       aria-hidden="true"
