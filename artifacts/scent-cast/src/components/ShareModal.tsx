@@ -189,7 +189,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="absolute inset-0 bg-black/90 backdrop-blur-2xl"
+            className="absolute inset-0 bg-black/90 backdrop-blur-sm"
           />
           <motion.div
             ref={modalRef}

@@ -91,6 +91,15 @@ const HERO_SCROLL_MIN_SECONDS = 60;
 const HERO_SCROLL_MAX_SECONDS = 180;
 const HERO_SCROLL_REDUCED_MOTION_SECONDS = 240;
 
+function AtmospherePlaceholder({ label, active }: { label: string; active: boolean }) {
+  return (
+    <span
+      className={`scent-atmosphere-placeholder${active ? '' : ' scent-atmosphere-placeholder--static'}`}
+      aria-label={active ? `Loading ${label}` : `${label} unavailable`}
+    />
+  );
+}
+
 function getHeroTickerPhrases(items: Fragrance[]): string[] {
   if (!items.length) {
     return [
@@ -272,10 +281,30 @@ const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({ weather, weath
 
   const tempValue = getWeatherNumber(weather, ['temperature_f', 'temperature', 'temp'], Number.NaN);
   const humidityValue = getWeatherNumber(weather, ['humidity_percent', 'humidity'], Number.NaN);
-  const temp = weatherLoading ? '—' : Number.isFinite(tempValue) ? `${Math.round(tempValue)}°F` : '—';
-  const condition = weatherLoading ? '—' : getWeatherString(weather, ['condition', 'description'], '—');
-  const humidity = weatherLoading ? '—' : Number.isFinite(humidityValue) ? `${humidityValue}%` : '—';
-  const location = weather?.location ?? '—';
+  const pendingWeather = weatherLoading && !weather;
+  const tempMissing = !Number.isFinite(tempValue);
+  const humidityMissing = !Number.isFinite(humidityValue);
+  const conditionText = getWeatherString(weather, ['condition', 'description']);
+  const locationText = firstString(weather?.location);
+  const temp = pendingWeather || tempMissing
+    ? <AtmospherePlaceholder label="temperature" active={pendingWeather} />
+    : `${Math.round(tempValue)}°F`;
+  const condition = pendingWeather || !conditionText
+    ? <AtmospherePlaceholder label="conditions" active={pendingWeather} />
+    : conditionText;
+  const humidity = pendingWeather || humidityMissing
+    ? <AtmospherePlaceholder label="humidity" active={pendingWeather} />
+    : `${humidityValue}%`;
+  const location = pendingWeather || !locationText
+    ? <AtmospherePlaceholder label="location" active={pendingWeather} />
+    : locationText;
+  const atmosphereDisplayKey = [
+    pendingWeather ? 'pending' : 'ready',
+    tempMissing ? 'temp-missing' : `temp:${Math.round(tempValue)}`,
+    humidityMissing ? 'humidity-missing' : `humidity:${humidityValue}`,
+    conditionText || 'condition-missing',
+    locationText || 'location-missing',
+  ].join('|');
   const metrics = [
     { label: 'Matrix', subtitle: 'Conditions', value: condition },
     { label: 'Saturation', subtitle: 'Humidity', value: humidity },
@@ -336,10 +365,10 @@ const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({ weather, weath
       resizeObserver.disconnect();
       window.removeEventListener('resize', handleResize);
     };
-  }, [condition, humidity, temp, location]);
+  }, [atmosphereDisplayKey]);
 
   return (
-    <section className="scent-atmosphere-marquee" aria-label="Current atmosphere">
+    <section className="scent-atmosphere-marquee" aria-label="Current atmosphere" aria-busy={pendingWeather}>
       <div className="scent-atmosphere-marquee-track" ref={trackRef}>
         {[...Array(ATMOSPHERE_TRACK_COPIES)].map((_, copyIndex) => (
           <div
@@ -531,7 +560,7 @@ function DashboardView() {
             key="recommendation-overlay"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             transition={{ duration: 0.35, ease: 'easeInOut' }}
-            className="fixed inset-0 z-[110] bg-black/95 backdrop-blur-3xl flex flex-col"
+            className="fixed inset-0 z-[110] bg-black/95 backdrop-blur-sm flex flex-col"
             role="dialog"
             aria-modal="true"
             aria-labelledby="recommendation-overlay-title"

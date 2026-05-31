@@ -162,13 +162,15 @@ function nearestOverflowScrollAncestor(start: HTMLElement | null): HTMLElement |
 function useAccordPanelReveal(contentKey: string) {
   const reduced = useReducedMotion();
   const containerRef = useRef<HTMLDivElement>(null);
-  const [revealed, setRevealed] = useState(reduced);
+  const [revealed, setRevealed] = useState(Boolean(reduced));
 
   useEffect(() => {
-    setRevealed(reduced);
-  }, [contentKey, reduced]);
+    if (reduced) setRevealed(true);
+  }, [reduced]);
 
   useEffect(() => {
+    if (revealed) return;
+
     if (reduced) {
       setRevealed(true);
       return;
@@ -215,9 +217,9 @@ function useAccordPanelReveal(contentKey: string) {
       window.clearTimeout(fallbackTimer);
       obs?.disconnect();
     };
-  }, [contentKey, reduced]);
+  }, [contentKey, reduced, revealed]);
 
-  return { containerRef, revealed: revealed || reduced, reduced };
+  return { containerRef, revealed: revealed || Boolean(reduced), reduced: Boolean(reduced) };
 }
 
 type AccordDensity = "relaxed" | "balanced" | "compact";
@@ -348,7 +350,7 @@ function AccordPanel({
             const rowDelay = ACCORD_ROW_DELAY_START + index * ACCORD_STAGGER_S;
             const intensity = rankIntensity(index, displayRows.length);
             const isPyramidMatch = activeAccordLabels.has(normalizeAccordLabel(row.label));
-            const pulseGlow = `0 0 ${Math.round(20 + fillPct * 0.08)}px rgba(252,157,25,0.74)`;
+            const activeGlow = `0 0 ${Math.round(16 + fillPct * 0.06)}px rgba(252,157,25,0.62)`;
             const restingGlow = isPyramidMatch
               ? `${intensity.glow}, 0 0 0 1px rgba(252,157,25,0.34)`
               : intensity.glow;
@@ -393,8 +395,8 @@ function AccordPanel({
                     animate={{
                       width: reduced || revealed ? `${fillPct}%` : "2%",
                       opacity: reduced || revealed ? intensity.barOpacity : 0.32,
-                      boxShadow: isPyramidMatch && !reduced ? [restingGlow, pulseGlow, restingGlow] : restingGlow,
-                      filter: isPyramidMatch && !reduced ? ["brightness(1)", "brightness(1.34)", "brightness(1)"] : "brightness(1)",
+                      boxShadow: isPyramidMatch ? `${restingGlow}, ${activeGlow}` : restingGlow,
+                      filter: isPyramidMatch && !reduced ? "brightness(1.16)" : "brightness(1)",
                     }}
                     transition={{
                       width: {
@@ -407,16 +409,8 @@ function AccordPanel({
                         ease: ACCORD_ROW_EASE,
                         delay: reduced ? 0 : rowDelay + 0.08,
                       },
-                      boxShadow: isPyramidMatch && !reduced ? {
-                        duration: 1.25,
-                        repeat: Infinity,
-                        ease: "easeInOut",
-                      } : { duration: 0.2 },
-                      filter: isPyramidMatch && !reduced ? {
-                        duration: 1.25,
-                        repeat: Infinity,
-                        ease: "easeInOut",
-                      } : { duration: 0.2 },
+                      boxShadow: { duration: 0.2 },
+                      filter: { duration: 0.2 },
                     }}
                   >
                     <span
@@ -433,24 +427,12 @@ function AccordPanel({
                       className="pointer-events-none absolute top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#fc9d19]"
                       style={{ left: `${fillPct}%` }}
                       initial={false}
-                      animate={
-                        reduced
-                          ? { opacity: 0.82, scale: 1 }
-                          : {
-                              opacity: [0.48, 1, 0.48],
-                              scale: [0.82, 1.35, 0.82],
-                              boxShadow: [
-                                "0 0 5px rgba(252,157,25,0.36)",
-                                "0 0 18px rgba(252,157,25,0.82)",
-                                "0 0 5px rgba(252,157,25,0.36)",
-                              ],
-                            }
-                      }
-                      transition={
-                        reduced
-                          ? { duration: 0.2 }
-                          : { duration: 1.25, repeat: Infinity, ease: "easeInOut" }
-                      }
+                      animate={{
+                        opacity: reduced ? 0.82 : 0.92,
+                        scale: reduced ? 1 : 1.08,
+                        boxShadow: "0 0 12px rgba(252,157,25,0.68)",
+                      }}
+                      transition={{ duration: 0.2 }}
                       aria-hidden
                     />
                   ) : null}

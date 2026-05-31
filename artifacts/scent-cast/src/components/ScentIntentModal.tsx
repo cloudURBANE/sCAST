@@ -57,10 +57,9 @@ export const ScentIntentModal: React.FC<ScentIntentModalProps> = ({ isOpen, onCl
     onDismiss: handleClose,
   });
 
-  if (!isOpen) return null;
-
   return (
     <AnimatePresence>
+      {isOpen ? (
       <motion.div
         ref={modalRef}
         key="scent-intent-modal"
@@ -68,7 +67,7 @@ export const ScentIntentModal: React.FC<ScentIntentModalProps> = ({ isOpen, onCl
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={{ duration: 0.25 }}
-        className="fixed inset-0 z-[200] bg-black/95 backdrop-blur-3xl flex flex-col"
+        className="fixed inset-0 z-[200] bg-black/95 backdrop-blur-sm flex flex-col"
         role="dialog"
         aria-modal="true"
         aria-labelledby="scent-intent-title"
@@ -89,6 +88,7 @@ export const ScentIntentModal: React.FC<ScentIntentModalProps> = ({ isOpen, onCl
             type="button"
             onClick={handleClose}
             className="p-2 text-white/40 hover:text-white hover:bg-white/10 transition-all active:scale-95"
+            aria-label="Close discovery flow"
           >
             <X size={20} />
           </button>
@@ -242,6 +242,7 @@ export const ScentIntentModal: React.FC<ScentIntentModalProps> = ({ isOpen, onCl
           </button>
         </div>
       </motion.div>
+      ) : null}
     </AnimatePresence>
   );
 };

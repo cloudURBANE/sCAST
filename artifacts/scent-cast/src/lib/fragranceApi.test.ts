@@ -127,6 +127,18 @@ test("normalizeFragranceSearchResult reads nested product identity", () => {
   assert.equal(result?.brand, "Le Labo");
 });
 
+test("normalizeFragranceSearchResult does not use the raw search query as the fragrance name", () => {
+  const result = normalizeFragranceSearchResult(
+    {
+      id: "weak-result",
+      brand: "Dior",
+    },
+    "dior sauvage with vanilla",
+  );
+
+  assert.equal(result, null);
+});
+
 test("normalizeFragranceSearchResult preserves quality metrics", () => {
   const result = normalizeFragranceSearchResult(
     {

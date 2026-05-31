@@ -1437,7 +1437,7 @@ export const Wardrobe: React.FC<{
                     transition={{ duration: 0.18 }}
                     id="wardrobe-search-suggestions"
                     role="listbox"
-                    className="absolute left-0 right-0 top-full mt-2 max-h-[min(320px,50vh)] overflow-y-auto rounded-[var(--radius-scent)] border border-scent-accent/32 bg-neutral-950/98 shadow-[0_24px_48px_rgba(0,0,0,0.78)] backdrop-blur-xl scrollbar-hide z-30"
+                    className="absolute left-0 right-0 top-full mt-2 max-h-[min(320px,50vh)] overflow-y-auto rounded-[var(--radius-scent)] border border-scent-accent/32 bg-neutral-950/98 shadow-[0_24px_48px_rgba(0,0,0,0.78)] backdrop-blur-sm scrollbar-hide z-30"
                   >
                     <li className="px-3 py-2 border-b border-white/8 pointer-events-none">
                       <p className="text-[8px] uppercase tracking-[0.35em] text-white/35 font-bold font-sans">
@@ -1660,7 +1660,7 @@ export const Wardrobe: React.FC<{
             aria-modal="true"
             aria-labelledby="fragrance-detail-title"
           >
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={closeDetail} className="absolute inset-0 bg-black/95 backdrop-blur-3xl" />
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={closeDetail} className="absolute inset-0 bg-black/95 backdrop-blur-sm" />
             <motion.div
               className="relative w-full h-full sm:h-[94dvh] sm:max-w-[100rem] sm:mx-4 bg-[#030303] shadow-2xl overflow-hidden flex flex-col border-0 sm:border border-white/8"
             >

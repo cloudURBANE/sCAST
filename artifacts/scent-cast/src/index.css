@@ -95,8 +95,8 @@ a {
 
 .glass {
   background: rgba(8, 5, 3, 0.78);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   border: 1px solid rgba(212, 175, 55, 0.28);
   box-shadow:
     inset 0 1px 0 0 rgba(255, 230, 180, 0.09),
@@ -106,8 +106,8 @@ a {
 
 .glass-acrylic {
   background: rgba(9, 6, 4, 0.84);
-  backdrop-filter: blur(26px);
-  -webkit-backdrop-filter: blur(26px);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   border: 1px solid rgba(212, 175, 55, 0.28);
   box-shadow: 
     var(--scent-card-glow),
@@ -509,8 +509,6 @@ a {
   background:
     radial-gradient(140% 90% at 50% 0%, rgba(255, 245, 224, 0.018), transparent 62%),
     linear-gradient(180deg, #050505 0%, #020202 58%, #000 100%);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: var(--radius-scent);
   box-shadow:
@@ -1032,8 +1030,8 @@ a {
   border-radius: var(--radius-scent);
   background: linear-gradient(180deg, rgba(10, 7, 4, 0.84), rgba(4, 3, 2, 0.92));
   box-shadow: inset 0 1px 0 rgba(255, 226, 174, 0.06), 0 18px 44px -28px rgba(0, 0, 0, 0.95);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   transition:
     border-color var(--scent-transition-fast) var(--scent-ease-out),
     box-shadow var(--scent-transition-base) var(--scent-ease-out);
@@ -1073,6 +1071,46 @@ a {
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 100%;
+}
+
+.scent-atmosphere-placeholder {
+  position: relative;
+  display: inline-flex;
+  width: clamp(4.4rem, 7vw, 6.6rem);
+  height: 0.72em;
+  overflow: hidden;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(255, 247, 236, 0.08), rgba(212, 175, 55, 0.1), rgba(255, 247, 236, 0.08));
+  box-shadow: inset 0 0 0 1px rgba(255, 247, 236, 0.045);
+}
+
+.scent-atmosphere-placeholder::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 247, 236, 0.24), transparent);
+  animation: scent-atmosphere-placeholder-sweep 1.45s var(--scent-ease-out) infinite;
+}
+
+.scent-atmosphere-placeholder--static::after {
+  animation: none;
+  transform: translateX(0);
+  opacity: 0.35;
+}
+
+@keyframes scent-atmosphere-placeholder-sweep {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scent-atmosphere-placeholder::after {
+    animation: none;
+    transform: translateX(0);
+    opacity: 0.35;
+  }
 }
 
 @media (max-width: 1024px) {

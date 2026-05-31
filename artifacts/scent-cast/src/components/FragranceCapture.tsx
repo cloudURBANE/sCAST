@@ -167,12 +167,11 @@ function truncateMatchLine(text: string, max: number): string {
   return `${t.slice(0, Math.max(0, max - 1)).trimEnd()}…`;
 }
 
-function profileToFallbackMatch(profile: Record<string, unknown>, query: string): FragranceMatch | null {
+function profileToFallbackMatch(profile: Record<string, unknown>, _query: string): FragranceMatch | null {
   const product = profile.product as Record<string, unknown> | undefined;
   const name = firstString(
     typeof product?.name === 'string' ? product.name : undefined,
     typeof profile.name === 'string' ? profile.name : undefined,
-    query,
   );
   const brand = firstString(
     typeof product?.brand === 'string' ? product.brand : undefined,
@@ -349,19 +348,21 @@ export const FragranceCapture: React.FC<{
         const searchData = await searchFragrances(targetQuery, { signal: controller.signal });
         const results = Array.isArray(searchData.results) ? searchData.results : [];
         nextMatches = results
-          .map((result): FragranceMatch => {
+          .map((result): FragranceMatch | null => {
             const house = firstString(result.house, result.brand) ?? "";
             const id = firstString(result.id) ?? "";
+            const name = firstString(result.name);
+            if (!name) return null;
             return {
               ...result,
               id,
-              name: firstString(result.name) ?? targetQuery.trim(),
+              name,
               house,
               brand: house,
               origin: result.origin ?? 'srt',
             };
           })
-          .filter((result) => Boolean(result.id || firstString(result.source_url)));
+          .filter((result): result is FragranceMatch => Boolean(result && (result.id || firstString(result.source_url))));
       } catch (err: unknown) {
         if (err instanceof Error && err.name === 'AbortError') return;
         primarySearchError =
@@ -651,7 +652,7 @@ export const FragranceCapture: React.FC<{
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.28 }}
-          className="absolute inset-0 bg-black/90 backdrop-blur-xl z-50 flex flex-col items-center justify-center p-8 text-center"
+          className="absolute inset-0 bg-black/90 backdrop-blur-sm z-50 flex flex-col items-center justify-center p-8 text-center"
         >
           <motion.div
             animate={

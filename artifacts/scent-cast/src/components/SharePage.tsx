@@ -677,7 +677,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
 
   return (
     <div className="min-h-[100svh] relative overflow-x-hidden">
-      <nav className="fixed top-0 left-0 right-0 h-[calc(4rem+env(safe-area-inset-top))] sm:h-[calc(72px+env(safe-area-inset-top))] border-b border-white/5 bg-black/40 backdrop-blur-2xl z-50 px-4 sm:px-8 pt-[env(safe-area-inset-top)]">
+      <nav className="fixed top-0 left-0 right-0 h-[calc(4rem+env(safe-area-inset-top))] sm:h-[calc(72px+env(safe-area-inset-top))] border-b border-white/5 bg-black/78 backdrop-blur-sm z-50 px-4 sm:px-8 pt-[env(safe-area-inset-top)]">
         <div className="max-w-[1400px] mx-auto h-16 sm:h-[72px] flex items-center justify-center">
           <button
             type="button"
@@ -825,7 +825,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={closeSelectedDetail}
-              className="absolute inset-0 bg-black/95 backdrop-blur-3xl"
+              className="absolute inset-0 bg-black/95 backdrop-blur-sm"
             />
             <motion.div
               initial={{ opacity: 0, y: 18, scale: 0.985 }}
