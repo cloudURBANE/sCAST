@@ -553,6 +553,9 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
         setActiveLayer(null);
       }
     };
@@ -563,11 +566,11 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
       setActiveLayer(null);
     };
 
-    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', handleKeyDown, { capture: true });
     document.addEventListener('pointerdown', handlePointerDown);
 
     return () => {
-      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keydown', handleKeyDown, { capture: true });
       document.removeEventListener('pointerdown', handlePointerDown);
     };
   }, [activeLayer]);

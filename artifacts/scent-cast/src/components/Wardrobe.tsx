@@ -43,6 +43,7 @@ import { BottleImage } from '@/components/BottleImage';
 import { betaVideoUrlForFragrance } from '@/lib/bottleVideoBeta';
 import { BrandGoldLabel } from '@/components/BrandGoldLabel';
 import { ScentNotesInfographic } from '@/components/ScentNotesInfographic';
+import { useModalBehavior } from '@/hooks/use-modal-behavior';
 import {
   WARDROBE_CLARIFY_SOLVERS,
   WARDROBE_REFRESH_COUNT_STORAGE_KEY,
@@ -966,6 +967,10 @@ export const Wardrobe: React.FC<{
   const [enlargeOpen, setEnlargeOpen] = React.useState(false);
   const [bottleImageToolsOpen, setBottleImageToolsOpen] = React.useState(false);
   const [deleteConfirming, setDeleteConfirming] = React.useState(false);
+  const detailModalRef = React.useRef<HTMLDivElement | null>(null);
+  const detailCloseButtonRef = React.useRef<HTMLButtonElement | null>(null);
+  const enlargeModalRef = React.useRef<HTMLDivElement | null>(null);
+  const enlargeCloseButtonRef = React.useRef<HTMLButtonElement | null>(null);
   const [frameDraft, setFrameDraft] = React.useState<NormalizedBottleImageAdjustment>(
     DEFAULT_BOTTLE_IMAGE_ADJUSTMENT,
   );
@@ -995,28 +1000,24 @@ export const Wardrobe: React.FC<{
     setFrameDraft(DEFAULT_BOTTLE_IMAGE_ADJUSTMENT);
   }, []);
 
-  // Modal scroll lock + Escape (enlarge closes first)
-  React.useEffect(() => {
-    if (!selectedItem) return;
+  const closeEnlargedBottle = React.useCallback(() => {
+    setEnlargeOpen(false);
+  }, []);
 
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      if (enlargeOpen) {
-        setEnlargeOpen(false);
-        e.preventDefault();
-      } else {
-        closeDetail();
-      }
-    };
+  useModalBehavior({
+    isOpen: Boolean(selectedItem),
+    containerRef: detailModalRef,
+    initialFocusRef: detailCloseButtonRef,
+    onDismiss: closeDetail,
+  });
 
-    document.addEventListener('keydown', handleKeyDown);
-    document.body.style.overflow = 'hidden';
-
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = '';
-    };
-  }, [selectedItem, enlargeOpen, closeDetail]);
+  useModalBehavior({
+    isOpen: Boolean(selectedItem && enlargeOpen),
+    containerRef: enlargeModalRef,
+    initialFocusRef: enlargeCloseButtonRef,
+    onDismiss: closeEnlargedBottle,
+    lockScroll: false,
+  });
 
   React.useEffect(() => {
     if (!selectedItem?.id) return;
@@ -1653,6 +1654,7 @@ export const Wardrobe: React.FC<{
       <AnimatePresence>
         {selectedItem && (
           <div 
+            ref={detailModalRef}
             className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden"
             role="dialog"
             aria-modal="true"
@@ -2182,6 +2184,7 @@ export const Wardrobe: React.FC<{
 
                 <div className="grid grid-cols-2 overflow-hidden rounded-lg border border-white/10 bg-white/[0.02]">
                   <button
+                    ref={detailCloseButtonRef}
                     type="button"
                     onClick={() => {
                       if (deleteConfirming) {
@@ -2224,6 +2227,7 @@ export const Wardrobe: React.FC<{
             <AnimatePresence>
               {enlargeOpen && detailBottleUrl ? (
                 <motion.div
+                  ref={enlargeModalRef}
                   key="bottle-enlarge"
                   role="dialog"
                   aria-modal="true"
@@ -2236,6 +2240,7 @@ export const Wardrobe: React.FC<{
                   onClick={() => setEnlargeOpen(false)}
                 >
                   <button
+                    ref={enlargeCloseButtonRef}
                     type="button"
                     onClick={() => setEnlargeOpen(false)}
                     className="absolute top-4 right-4 z-10 p-2 rounded-full border border-white/15 bg-white/10 text-white hover:bg-white/20 transition-colors"

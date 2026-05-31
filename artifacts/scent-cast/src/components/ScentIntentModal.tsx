@@ -2,6 +2,7 @@ import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ArrowRight, Home, Sunset, Briefcase, Moon, Coffee, Zap, Flame, Users, Bed, type LucideIcon } from 'lucide-react';
 import { DestinationType, EnergyState } from './Wardrobe';
+import { useModalBehavior } from '@/hooks/use-modal-behavior';
 
 interface ScentIntentModalProps {
   isOpen: boolean;
@@ -28,6 +29,8 @@ export const ScentIntentModal: React.FC<ScentIntentModalProps> = ({ isOpen, onCl
   const [step, setStep] = React.useState(1);
   const [destination, setDestination] = React.useState<DestinationType | null>(null);
   const [energy, setEnergy] = React.useState<EnergyState | null>(null);
+  const modalRef = React.useRef<HTMLDivElement | null>(null);
+  const closeButtonRef = React.useRef<HTMLButtonElement | null>(null);
 
   const handleNext = () => {
     if (step === 1 && destination) {
@@ -47,17 +50,28 @@ export const ScentIntentModal: React.FC<ScentIntentModalProps> = ({ isOpen, onCl
     }, 300);
   };
 
+  useModalBehavior({
+    isOpen,
+    containerRef: modalRef,
+    initialFocusRef: closeButtonRef,
+    onDismiss: handleClose,
+  });
+
   if (!isOpen) return null;
 
   return (
     <AnimatePresence>
       <motion.div
+        ref={modalRef}
         key="scent-intent-modal"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={{ duration: 0.25 }}
         className="fixed inset-0 z-[200] bg-black/95 backdrop-blur-3xl flex flex-col"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="scent-intent-title"
       >
         {/* Pinned header — step indicator + X always visible */}
         <div
@@ -71,6 +85,7 @@ export const ScentIntentModal: React.FC<ScentIntentModalProps> = ({ isOpen, onCl
             </p>
           </div>
           <button
+            ref={closeButtonRef}
             type="button"
             onClick={handleClose}
             className="p-2 text-white/40 hover:text-white hover:bg-white/10 transition-all active:scale-95"
@@ -105,7 +120,7 @@ export const ScentIntentModal: React.FC<ScentIntentModalProps> = ({ isOpen, onCl
                 className="space-y-4 py-2"
               >
                 <header className="mb-4">
-                  <h2 className="font-serif italic text-2xl sm:text-4xl text-white tracking-tighter">
+                  <h2 id="scent-intent-title" className="font-serif italic text-2xl sm:text-4xl text-white tracking-tighter">
                     What is your destination?
                   </h2>
                   <p className="text-sm text-white/30 font-sans mt-1">
@@ -155,7 +170,7 @@ export const ScentIntentModal: React.FC<ScentIntentModalProps> = ({ isOpen, onCl
                 className="space-y-4 py-2"
               >
                 <header className="mb-4">
-                  <h2 className="font-serif italic text-2xl sm:text-4xl text-white tracking-tighter">
+                  <h2 id="scent-intent-title" className="font-serif italic text-2xl sm:text-4xl text-white tracking-tighter">
                     Define your energy state
                   </h2>
                   <p className="text-sm text-white/30 font-sans mt-1">

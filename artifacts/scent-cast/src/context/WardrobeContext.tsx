@@ -958,7 +958,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     setActiveEngineRecommendation(winner.recommendation);
     setRecommendationReason(winner.recommendation.explanation);
-    setTimeout(() => setActiveRecommendation(winner.item), 800);
+    setActiveRecommendation(winner.item);
   }, [items, weather]);
 
   const closeRecommendationOverlay = useCallback(() => {

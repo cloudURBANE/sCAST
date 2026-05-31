@@ -4,6 +4,7 @@ import { X, Link, Check, Eye, EyeOff, ExternalLink, Search } from 'lucide-react'
 import { BottleImage } from '@/components/BottleImage';
 import type { BottleImageAdjustment } from '@/lib/bottleImageAdjustment';
 import { useToast } from '@/hooks/use-toast';
+import { useModalBehavior } from '@/hooks/use-modal-behavior';
 
 interface FragranceItem {
   id: string;
@@ -40,6 +41,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
   const [hideImages, setHideImages] = useState(false);
   const [hideImagesBusy, setHideImagesBusy] = useState(false);
   const [shareId, setShareId] = useState<string | null>(null);
+  const modalRef = useRef<HTMLDivElement | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const sharePathId = shareId || userId || '';
@@ -52,9 +54,15 @@ export const ShareModal: React.FC<ShareModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       setSearch('');
-      setTimeout(() => searchRef.current?.focus(), 150);
     }
   }, [isOpen]);
+
+  useModalBehavior({
+    isOpen,
+    containerRef: modalRef,
+    initialFocusRef: searchRef,
+    onDismiss: onClose,
+  });
 
   useEffect(() => {
     if (!isOpen || !authToken) return;
@@ -184,19 +192,23 @@ export const ShareModal: React.FC<ShareModalProps> = ({
             className="absolute inset-0 bg-black/90 backdrop-blur-2xl"
           />
           <motion.div
+            ref={modalRef}
             initial={{ opacity: 0, y: 40 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 40 }}
             transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
             className="relative w-full sm:max-w-lg mx-0 sm:mx-6 bg-neutral-950 border-t sm:border border-white/10 sm:rounded-[1.5rem] overflow-hidden shadow-2xl flex flex-col"
             style={{ maxHeight: '90dvh' }}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="share-modal-title"
           >
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-5 border-b border-white/5 shrink-0">
               <div className="flex items-center gap-3 min-w-0">
                 <div className="w-1.5 h-1.5 rounded-full bg-scent-accent animate-pulse shrink-0" />
                 <div className="min-w-0">
-                  <p className="text-[9px] uppercase tracking-[0.5em] text-scent-accent font-bold">Share Vault</p>
+                  <p id="share-modal-title" className="text-[9px] uppercase tracking-[0.5em] text-scent-accent font-bold">Share Vault</p>
                   <p className="text-[9px] text-white/25 mt-0.5 font-sans">
                     {visibleCount} of {items.length} visible
                   </p>

@@ -1,5 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
+import { useModalBehavior } from '@/hooks/use-modal-behavior';
 
 interface AuthModalProps {
   onAuth: (token: string, email: string) => void;
@@ -15,12 +16,29 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   subtitle,
   allowDismiss = false,
 }) => {
+  const modalRef = React.useRef<HTMLDivElement | null>(null);
+  const primaryActionRef = React.useRef<HTMLButtonElement | null>(null);
+
+  useModalBehavior({
+    isOpen: true,
+    containerRef: modalRef,
+    initialFocusRef: primaryActionRef,
+    onDismiss: allowDismiss ? onClose : undefined,
+    closeOnEscape: allowDismiss,
+  });
+
   const handleGoogleSignIn = () => {
     window.location.href = '/api/auth/google';
   };
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black">
+    <div
+      ref={modalRef}
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-black"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="auth-modal-title"
+    >
       <motion.div
         initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
@@ -39,7 +57,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
           <div className="text-center space-y-3">
             <p className="text-[10px] uppercase tracking-[0.5em] text-white/30 font-bold">Olfactory Intelligence</p>
-            <h1 className="font-serif italic text-4xl sm:text-5xl text-white tracking-tighter leading-tight">
+            <h1 id="auth-modal-title" className="font-serif italic text-4xl sm:text-5xl text-white tracking-tighter leading-tight">
               {title ?? <>Sign in to access<br />your vault</>}
             </h1>
             <p className="text-sm text-white/30 font-sans">
@@ -49,6 +67,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
           <div className="w-full space-y-4">
             <button
+              ref={primaryActionRef}
               onClick={handleGoogleSignIn}
               className="w-full h-14 bg-white text-black font-sans font-semibold text-sm flex items-center justify-center gap-3 hover:bg-neutral-100 transition-all rounded-2xl"
             >
