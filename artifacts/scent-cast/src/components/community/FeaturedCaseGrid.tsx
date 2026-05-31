@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import type { Variants } from 'framer-motion';
+import { CommunityFragranceOverlay } from '@/components/community/CommunityFragranceOverlay';
 import { CommunityFragranceCard } from '@/components/community/CommunityFragranceCard';
 import type { CommunityFragranceEntry } from '@/components/community/communityData';
 
@@ -36,6 +37,26 @@ export const FeaturedCaseGrid: React.FC<FeaturedCaseGridProps> = ({
   onRetry,
 }) => {
   const showSkeletons = loading;
+  const [activeItem, setActiveItem] = React.useState<CommunityFragranceEntry | null>(null);
+  const triggerRefs = React.useRef(new Map<string, HTMLButtonElement>());
+  const activeTriggerIdRef = React.useRef<string | null>(null);
+
+  const openItem = React.useCallback((entry: CommunityFragranceEntry) => {
+    activeTriggerIdRef.current = entry.id;
+    setActiveItem(entry);
+  }, []);
+
+  const closeOverlay = React.useCallback(() => {
+    setActiveItem(null);
+  }, []);
+
+  const restoreTriggerFocus = React.useCallback(() => {
+    const triggerId = activeTriggerIdRef.current;
+    if (triggerId) {
+      triggerRefs.current.get(triggerId)?.focus();
+    }
+    activeTriggerIdRef.current = null;
+  }, []);
 
   if (error) {
     return (
@@ -68,31 +89,47 @@ export const FeaturedCaseGrid: React.FC<FeaturedCaseGridProps> = ({
   }
 
   return (
-    <section aria-label="Featured community wardrobes">
-      <motion.div
-        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 sm:gap-8"
-        variants={gridVariants}
-        initial="initial"
-        animate="animate"
-      >
-        {showSkeletons
-          ? [...Array(8)].map((_, index) => (
-              <div key={`skeleton-${index}`} className="scent-fragrance-card animate-pulse relative aspect-[3/4.6] p-5 sm:p-6">
-                <div className="scent-card-frame" aria-hidden="true" />
-                <div className="relative z-10 flex h-full flex-col">
-                  <div className="ml-auto h-3 w-24 bg-white/10" />
-                  <div className="my-5 min-h-0 flex-1 rounded-sm border border-dashed border-white/10 bg-white/[0.03]" />
-                  <div className="mx-auto h-7 w-36 bg-white/10" />
-                  <div className="mx-auto mt-4 h-3 w-44 bg-white/10" />
+    <>
+      <section aria-label="Featured community wardrobes">
+        <motion.div
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 sm:gap-8"
+          variants={gridVariants}
+          initial="initial"
+          animate="animate"
+        >
+          {showSkeletons
+            ? [...Array(8)].map((_, index) => (
+                <div key={`skeleton-${index}`} className="scent-fragrance-card animate-pulse relative aspect-[3/4.6] p-5 sm:p-6">
+                  <div className="scent-card-frame" aria-hidden="true" />
+                  <div className="relative z-10 flex h-full flex-col">
+                    <div className="flex justify-end">
+                      <div className="h-3 w-24 bg-white/10" />
+                    </div>
+                    <div className="my-3 min-h-0 flex-1 rounded-sm border border-dashed border-white/10 bg-white/[0.03]" />
+                    <div className="mx-auto mt-2 h-7 w-36 bg-white/10" />
+                    <div className="mx-auto mt-2 h-4 w-44 bg-white/10" />
+                    <div className="mx-auto mt-2 h-3 w-28 bg-white/10" />
+                  </div>
                 </div>
-              </div>
-            ))
-          : items.map((entry) => (
-              <motion.div key={entry.id} variants={cardVariants}>
-                <CommunityFragranceCard item={entry} />
-              </motion.div>
-            ))}
-      </motion.div>
-    </section>
+              ))
+            : items.map((entry) => (
+                <motion.div key={entry.id} variants={cardVariants}>
+                  <CommunityFragranceCard
+                    item={entry}
+                    onOpen={openItem}
+                    ref={(node) => {
+                      if (node) {
+                        triggerRefs.current.set(entry.id, node);
+                      } else {
+                        triggerRefs.current.delete(entry.id);
+                      }
+                    }}
+                  />
+                </motion.div>
+              ))}
+        </motion.div>
+      </section>
+      <CommunityFragranceOverlay item={activeItem} onClose={closeOverlay} restoreFocus={restoreTriggerFocus} />
+    </>
   );
 };

@@ -1,21 +1,21 @@
 import React from 'react';
 import { BottleImage } from '@/components/BottleImage';
+import { BrandGoldLabel } from '@/components/BrandGoldLabel';
 import type { CommunityFragranceEntry } from '@/components/community/communityData';
 
 interface CommunityFragranceCardProps {
   item: CommunityFragranceEntry;
+  onOpen: (item: CommunityFragranceEntry) => void;
 }
 
-export function brandLengthBucket(brand: string): 'short' | 'medium' | 'long' | 'xlong' {
-  const length = brand.trim().length;
-  if (length <= 8) return 'short';
-  if (length <= 14) return 'medium';
-  if (length <= 22) return 'long';
-  return 'xlong';
-}
-
-export const CommunityFragranceCard: React.FC<CommunityFragranceCardProps> = ({ item }) => (
-  <article className="scent-fragrance-card relative aspect-[3/4.6] p-5 sm:p-6 flex flex-col group cursor-pointer">
+export const CommunityFragranceCard = React.forwardRef<HTMLButtonElement, CommunityFragranceCardProps>(({ item, onOpen }, ref) => (
+  <button
+    type="button"
+    ref={ref}
+    onClick={() => onOpen(item)}
+    aria-label={`Open ${item.name} by ${item.brand}, curated by ${item.curator}`}
+    className="scent-fragrance-card relative aspect-[3/4.6] p-5 sm:p-6 flex flex-col group cursor-pointer text-left outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
+  >
     <div className="scent-card-frame" aria-hidden="true" />
     <div className="relative z-10 flex justify-end">
       <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-scent-accent/80">
@@ -28,14 +28,12 @@ export const CommunityFragranceCard: React.FC<CommunityFragranceCardProps> = ({ 
         alt={`${item.name} by ${item.brand}`}
         variant="card"
         className="absolute inset-0"
-        imgClassName="brightness-[1.1] group-hover:scale-[1.035] motion-reduce:group-hover:scale-100 transition-transform duration-[900ms] motion-reduce:transition-none"
+        imgClassName="scent-hover-scale brightness-[1.1] transition-transform duration-[900ms] motion-reduce:transition-none"
         adjustment={item.imageAdjustment}
       />
     </div>
     <div className="relative z-10 mt-2">
-      <span className="scent-card-brand block" data-len={brandLengthBucket(item.brand)}>
-        {item.brand}
-      </span>
+      <BrandGoldLabel as="span" brand={item.brand} className="scent-card-brand block" />
     </div>
     <div className="scent-card-title-row relative z-10 mt-2">
       <h3 className="scent-card-title" title={item.name}>{item.name}</h3>
@@ -45,5 +43,7 @@ export const CommunityFragranceCard: React.FC<CommunityFragranceCardProps> = ({ 
         {item.family}
       </p>
     ) : null}
-  </article>
-);
+  </button>
+));
+
+CommunityFragranceCard.displayName = 'CommunityFragranceCard';

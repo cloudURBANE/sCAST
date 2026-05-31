@@ -68,15 +68,17 @@ export function CyclingTilePair({ parts, primaryClass, secondaryClass }: Cycling
   const exit = prefersReducedMotion
     ? { opacity: 0 }
     : { opacity: 0, y: -6, scale: 0.992 };
+  const staticLabel = parts.map((part) => `${part.primary}. ${part.secondary}`).join(' ');
 
   return (
-    <div className="relative w-full" aria-live="polite" aria-atomic="true">
+    <div className="relative w-full">
+      <span className="sr-only">{staticLabel}</span>
       {/* Invisible sizer keeps tile height stable while absolute layers crossfade (Safari grid fix). */}
       <div className="invisible pointer-events-none flex w-full flex-col items-center justify-center" aria-hidden="true">
         <CyclingTileContent part={current} primaryClass={primaryClass} secondaryClass={secondaryClass} />
       </div>
 
-      <div className="absolute inset-0 flex items-center justify-center overflow-visible">
+      <div className="absolute inset-0 flex items-center justify-center overflow-visible" aria-hidden="true">
         <AnimatePresence initial={false}>
           <motion.div
             key={phase}

@@ -6,8 +6,6 @@ const EMBLEM = '/icons/transparent-emblem/scentbeam-emblem-192x192.png';
 const GOLD = 'rgba(212, 175, 55,';
 const SHOW_MS = 1180;
 
-const ROUTE_LABELS: Record<string, string> = {};
-
 let emblemWarmPromise: Promise<void> | null = null;
 
 function warmTransitionEmblem() {

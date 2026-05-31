@@ -79,6 +79,7 @@ const TAP_MOVE_TOLERANCE_PX = 10;
 const TYPEWRITER_FRAME_MS = 24;
 const NOTE_MARQUEE_MIN_CHARS = 58;
 const NOTE_MARQUEE_MIN_COUNT = 5;
+const DECORATIVE_REPEAT_COUNT = 2;
 const NO_ACTIVE_NOTES: string[] = [];
 const LAYER_CENTER_Y: Record<ActiveLayer, number> = {
   top: 82,
@@ -357,7 +358,7 @@ function MatchedNoteChip({
       transition={
         prefersReducedMotion
           ? undefined
-          : { duration: pulseDuration, repeat: Infinity, ease: 'easeInOut' }
+          : { duration: pulseDuration, repeat: DECORATIVE_REPEAT_COUNT, ease: 'easeInOut' }
       }
       className="inline text-[8.5px] sm:text-[10px] font-semibold leading-relaxed text-[#ffd98a]"
     >
@@ -480,8 +481,8 @@ function LayerAccordEcho({
                     ? { duration: 0.2 }
                     : {
                         width: { duration: 0.56, ease: CALM_EASE },
-                        opacity: { duration: 1.45, repeat: Infinity, ease: 'easeInOut' },
-                        boxShadow: { duration: 1.45, repeat: Infinity, ease: 'easeInOut' },
+                        opacity: { duration: 1.45, repeat: DECORATIVE_REPEAT_COUNT, ease: 'easeInOut' },
+                        boxShadow: { duration: 1.45, repeat: DECORATIVE_REPEAT_COUNT, ease: 'easeInOut' },
                       }
                 }
               />
@@ -744,11 +745,11 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
       };
     }
     return {
-      pulseTransition: { duration: 5.4, ease: SOFT_EASE, repeat: Infinity, repeatType: 'mirror' } as Transition,
-      floatTransition: { duration: 8.5, ease: 'easeInOut', repeat: Infinity, repeatType: 'mirror' } as Transition,
-      shimmerTransition: { duration: 6.4, ease: SOFT_EASE, repeat: Infinity, repeatType: 'mirror' } as Transition,
-      atmosphericTransition: { duration: 10, ease: SOFT_EASE, repeat: Infinity, repeatType: 'mirror' } as Transition,
-      glyphTransition: { duration: 7.2, ease: 'easeInOut', repeat: Infinity, repeatType: 'mirror' } as Transition,
+      pulseTransition: { duration: 5.4, ease: SOFT_EASE, repeat: DECORATIVE_REPEAT_COUNT, repeatType: 'mirror' } as Transition,
+      floatTransition: { duration: 8.5, ease: 'easeInOut', repeat: DECORATIVE_REPEAT_COUNT, repeatType: 'mirror' } as Transition,
+      shimmerTransition: { duration: 6.4, ease: SOFT_EASE, repeat: DECORATIVE_REPEAT_COUNT, repeatType: 'mirror' } as Transition,
+      atmosphericTransition: { duration: 10, ease: SOFT_EASE, repeat: DECORATIVE_REPEAT_COUNT, repeatType: 'mirror' } as Transition,
+      glyphTransition: { duration: 7.2, ease: 'easeInOut', repeat: DECORATIVE_REPEAT_COUNT, repeatType: 'mirror' } as Transition,
     };
   }, [prefersReducedMotion]);
 
@@ -1059,7 +1060,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                   duration: 7 + (idx % 5) * 1.4,
                   delay: idx * 0.42,
                   ease: SOFT_EASE,
-                  repeat: Infinity,
+                  repeat: DECORATIVE_REPEAT_COUNT,
                   repeatType: 'mirror',
                 }}
               />
@@ -1084,7 +1085,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                 transition={{
                   duration: mote.duration,
                   delay: mote.delay,
-                  repeat: Infinity,
+                  repeat: DECORATIVE_REPEAT_COUNT,
                   ease: 'easeInOut',
                 }}
               />
@@ -1461,7 +1462,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
             {/* Gentle traveling sheen drifting along the reflection */}
             <motion.g
               animate={prefersReducedMotion ? { opacity: 0 } : { opacity: [0, 0.5, 0], x: [-30, 30, 30] }}
-              transition={{ duration: 4.8, ease: SOFT_EASE, repeat: Infinity, repeatDelay: 1.4 }}
+              transition={{ duration: 4.8, ease: SOFT_EASE, repeat: DECORATIVE_REPEAT_COUNT, repeatDelay: 1.4 }}
               style={{
                 transformBox: 'view-box',
                 transformOrigin: '180px 401px',

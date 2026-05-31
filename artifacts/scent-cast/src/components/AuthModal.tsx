@@ -3,7 +3,6 @@ import { motion } from 'framer-motion';
 import { useModalBehavior } from '@/hooks/use-modal-behavior';
 
 interface AuthModalProps {
-  onAuth: (token: string, email: string) => void;
   onClose?: () => void;
   title?: React.ReactNode;
   subtitle?: string;

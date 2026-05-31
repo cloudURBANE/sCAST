@@ -485,21 +485,17 @@ function renderValueSignal(label: string | null | undefined): React.ReactNode {
 /**
  * Profile intelligence panel.
  *
- * The score is intentionally treated as a headline tile while the supporting
- * metrics stay compact, so the detail view has one clear hierarchy on every
- * screen size.
- * The unavailable-state notice renders only in the `tiles` section.
+ * The score and supporting metrics stay compact, so the detail view has one
+ * clear hierarchy on every screen size.
  */
 function ProfileScorePanel({
   metrics,
   coverage,
   legacyPerformance,
-  section,
 }: {
   metrics?: DerivedMetrics | null;
   coverage?: SourceCoverage;
   legacyPerformance?: Fragrance["performance"];
-  section: "tiles" | "score";
 }) {
   const headline = metrics?.headline ?? null;
   const performance = metrics?.performance_score ?? null;
@@ -508,7 +504,7 @@ function ProfileScorePanel({
   const wearProfile = formatWearProfile(metrics?.wear_profile);
 
   if (!metrics || !hasDerivedMetricsContent(metrics)) {
-    if (section === "score" || !coverage) return null;
+    if (!coverage) return null;
 
     return (
       <FragrancePanel title="Derived Intelligence">
@@ -525,22 +521,6 @@ function ProfileScorePanel({
           ) : null}
         </div>
       </FragrancePanel>
-    );
-  }
-
-  // --- Score headline section (desktop: below the bottle visual) -----------
-  if (section === "score") {
-    return (
-      <div className="hidden sm:flex flex-col items-center justify-center border border-white/10 bg-white/[0.025] px-4 py-6 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]">
-        <p className="text-[10px] uppercase tracking-[0.28em] text-white/64 font-bold">Profile Score</p>
-        <div className="mt-1 flex items-end justify-center gap-2">
-          <span className="font-serif italic text-6xl leading-none text-scent-accent">
-            {consensusScore ?? "--"}
-          </span>
-          <span className="pb-2 text-xl text-white/76">/100</span>
-        </div>
-        <p className="mt-1 text-sm text-scent-accent/90">{headline?.label ?? "Intelligence profile"}</p>
-      </div>
     );
   }
 
@@ -1529,7 +1509,7 @@ export const Wardrobe: React.FC<{
                         alt={entryName(featuredItem)}
                         adjustment={featuredItem.imageAdjustment}
                         className="min-h-0 w-full flex-1"
-                        imgClassName="group-hover:scale-105 transition-transform duration-1000 brightness-[1.15]"
+                        imgClassName="scent-hover-scale transition-transform duration-1000 brightness-[1.15]"
                         loading="eager"
                         fetchPriority="high"
                       />
@@ -1590,7 +1570,7 @@ export const Wardrobe: React.FC<{
                       onClick={() => openDetail(item)}
                       onMouseEnter={() => prefetchReviews(item)}
                     >
-                      <div className="scent-fragrance-card w-full h-full min-h-[26rem] transition-[transform,border-color,box-shadow] duration-500 motion-reduce:transition-none group-hover:-translate-y-1.5 motion-reduce:group-hover:translate-y-0 relative overflow-hidden flex flex-col">
+                      <div className="scent-fragrance-card scent-hover-lift w-full h-full min-h-[26rem] transition-[transform,border-color,box-shadow] duration-500 motion-reduce:transition-none relative overflow-hidden flex flex-col">
                         <div className="scent-card-frame" aria-hidden />
                         <div className="relative z-[1] flex h-full flex-col items-center px-6 sm:px-8 pt-5 sm:pt-6 pb-4 sm:pb-5">
                           <BrandGoldLabel
@@ -1605,7 +1585,7 @@ export const Wardrobe: React.FC<{
                               alt={entryName(item)}
                               adjustment={item.imageAdjustment}
                               className="absolute inset-0 z-10"
-                              imgClassName="brightness-[1.1] group-hover:scale-[1.035] motion-reduce:group-hover:scale-100 transition-transform duration-[900ms] motion-reduce:transition-none"
+                              imgClassName="scent-hover-scale brightness-[1.1] transition-transform duration-[900ms] motion-reduce:transition-none"
                               loading={shelfIndex === 0 ? 'eager' : 'lazy'}
                               fetchPriority={shelfIndex === 0 ? 'high' : undefined}
                             />
@@ -1690,7 +1670,6 @@ export const Wardrobe: React.FC<{
                   </header>
 
                   <ProfileScorePanel
-                    section="tiles"
                     metrics={selectedMetrics}
                     coverage={selectedCoverage}
                     legacyPerformance={selectedItem.performance}

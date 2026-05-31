@@ -131,7 +131,7 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
 
   return (
     <nav className="scent-topbar fixed top-0 left-0 right-0 z-50 px-3 sm:px-8">
-      <div className="max-w-[1760px] mx-auto h-full grid grid-cols-[minmax(54px,1fr)_auto_minmax(84px,1fr)] sm:grid-cols-[1fr_auto_1fr] items-center">
+      <div className="max-w-[1760px] mx-auto h-full grid grid-cols-[minmax(84px,1fr)_auto_minmax(84px,1fr)] sm:grid-cols-[1fr_auto_1fr] items-center">
         <div className="flex min-w-0 items-center gap-2 sm:gap-6 justify-self-start sm:justify-self-center">
           {authControl}
           {!isHomeRoute ? (

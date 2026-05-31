@@ -547,12 +547,22 @@ a {
   opacity: 0.34;
 }
 
-.scent-fragrance-card:hover {
-  border-color: rgba(255, 255, 255, 0.14);
-  box-shadow:
-    0 34px 72px -36px rgba(0, 0, 0, 0.98),
-    0 18px 38px -20px rgba(0, 0, 0, 0.9),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+@media (hover: hover) and (pointer: fine) {
+  .scent-fragrance-card:hover {
+    border-color: rgba(255, 255, 255, 0.14);
+    box-shadow:
+      0 34px 72px -36px rgba(0, 0, 0, 0.98),
+      0 18px 38px -20px rgba(0, 0, 0, 0.9),
+      inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  }
+
+  .group:hover .scent-hover-lift {
+    transform: translateY(-0.375rem);
+  }
+
+  .group:hover .scent-hover-scale {
+    transform: scale(1.035);
+  }
 }
 
 .scent-fragrance-card:focus-within {
@@ -654,37 +664,46 @@ a {
     inset 0 2px 6px rgba(0, 0, 0, 0.22);
 }
 
-.scent-fragrance-card:hover .scent-card-frame {
-  border-color: rgba(255, 255, 255, 0.34);
-  box-shadow:
-    0 0 0 1px rgba(0, 0, 0, 0.6),
-    0 0 0 2px rgba(255, 224, 174, 0.09),
-    0 12px 28px -10px rgba(0, 0, 0, 0.75),
-    inset 0 1px 0 rgba(255, 255, 255, 0.52),
-    inset 0 2px 1px -1px rgba(244, 248, 255, 0.3),
-    inset 0 4px 3px -3px rgba(255, 255, 255, 0.2),
-    inset 0 -1px 0 rgba(255, 212, 154, 0.2),
-    inset 0 -2px 1px -1px rgba(255, 200, 138, 0.1),
-    inset 1px 0 0 rgba(220, 232, 255, 0.1),
-    inset -1px 0 0 rgba(255, 218, 168, 0.1),
-    inset 4px 5px 10px -4px rgba(0, 0, 0, 0.55),
-    inset 0 3px 9px rgba(0, 0, 0, 0.5),
-    inset 0 -3px 11px rgba(0, 0, 0, 0.4),
-    inset 0 0 32px rgba(212, 175, 55, 0.1);
+@media (hover: hover) and (pointer: fine) {
+  .scent-fragrance-card:hover .scent-card-frame {
+    border-color: rgba(255, 255, 255, 0.34);
+    box-shadow:
+      0 0 0 1px rgba(0, 0, 0, 0.6),
+      0 0 0 2px rgba(255, 224, 174, 0.09),
+      0 12px 28px -10px rgba(0, 0, 0, 0.75),
+      inset 0 1px 0 rgba(255, 255, 255, 0.52),
+      inset 0 2px 1px -1px rgba(244, 248, 255, 0.3),
+      inset 0 4px 3px -3px rgba(255, 255, 255, 0.2),
+      inset 0 -1px 0 rgba(255, 212, 154, 0.2),
+      inset 0 -2px 1px -1px rgba(255, 200, 138, 0.1),
+      inset 1px 0 0 rgba(220, 232, 255, 0.1),
+      inset -1px 0 0 rgba(255, 218, 168, 0.1),
+      inset 4px 5px 10px -4px rgba(0, 0, 0, 0.55),
+      inset 0 3px 9px rgba(0, 0, 0, 0.5),
+      inset 0 -3px 11px rgba(0, 0, 0, 0.4),
+      inset 0 0 32px rgba(212, 175, 55, 0.1);
+  }
+
+  .scent-fragrance-card:hover .scent-card-frame::before {
+    opacity: 1;
+  }
+
+  .scent-fragrance-card:hover .scent-card-frame::after {
+    border-color: rgba(255, 255, 255, 0.12);
+    box-shadow:
+      0 0 0 1px rgba(0, 0, 0, 0.34),
+      inset 0 1px 0 rgba(255, 255, 255, 0.22),
+      inset 0 2px 2px -2px rgba(255, 248, 232, 0.18),
+      inset 0 -1px 0 rgba(255, 210, 158, 0.1),
+      inset 0 2px 6px rgba(0, 0, 0, 0.22);
+  }
 }
 
-.scent-fragrance-card:hover .scent-card-frame::before {
-  opacity: 1;
-}
-
-.scent-fragrance-card:hover .scent-card-frame::after {
-  border-color: rgba(255, 255, 255, 0.12);
-  box-shadow:
-    0 0 0 1px rgba(0, 0, 0, 0.34),
-    inset 0 1px 0 rgba(255, 255, 255, 0.22),
-    inset 0 2px 2px -2px rgba(255, 248, 232, 0.18),
-    inset 0 -1px 0 rgba(255, 210, 158, 0.1),
-    inset 0 2px 6px rgba(0, 0, 0, 0.22);
+@media (prefers-reduced-motion: reduce) {
+  .scent-hover-lift,
+  .scent-hover-scale {
+    transform: none !important;
+  }
 }
 
 .scent-card-frame::before,
