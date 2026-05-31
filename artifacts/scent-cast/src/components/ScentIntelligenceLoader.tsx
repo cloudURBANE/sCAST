@@ -15,8 +15,16 @@ import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
  */
 
 const EMBLEM = '/icons/transparent-emblem/scentbeam-emblem-96x96.png';
-const GOLD = 'rgba(212, 175, 55,'; // close each use with e.g. `${GOLD} 0.5)`
 const EASE_OUT: [number, number, number, number] = [0.22, 1, 0.36, 1];
+
+/**
+ * Brand gold (the `--scent-gold-rgb` token, 212 175 55) at a given alpha.
+ * Kept as a literal `rgba(...)` rather than `rgb(var(--scent-gold-rgb) / a)`
+ * on purpose: the emblem's `filter` below is interpolated by framer-motion,
+ * which cannot tween across a CSS custom property — a var() there would snap
+ * instead of fade. Plain numbers keep the transition buttery.
+ */
+const gold = (alpha: number): string => `rgba(212, 175, 55, ${alpha})`;
 
 export type ScentIntelligenceLoaderProps = {
   status: string;
@@ -51,8 +59,8 @@ const Orbit: React.FC<{
         marginLeft: -dotSize / 2,
         marginTop: -dotSize / 2,
         borderRadius: '50%',
-        background: `radial-gradient(circle, ${GOLD} 0.95) 0%, ${GOLD} 0.5) 45%, transparent 72%)`,
-        boxShadow: `0 0 ${Math.round(dotSize * 1.7)}px ${GOLD} 0.5)`,
+        background: `radial-gradient(circle, ${gold(0.95)} 0%, ${gold(0.5)} 45%, transparent 72%)`,
+        boxShadow: `0 0 ${Math.round(dotSize * 1.7)}px ${gold(0.5)}`,
       }}
     />
   </motion.div>
@@ -60,8 +68,8 @@ const Orbit: React.FC<{
 
 function emblemFilter(complete: boolean): string {
   return complete
-    ? `drop-shadow(0 0 22px ${GOLD} 0.6)) brightness(1.5)`
-    : `drop-shadow(0 0 14px ${GOLD} 0.5)) brightness(1.12)`;
+    ? `drop-shadow(0 0 22px ${gold(0.6)}) brightness(1.5)`
+    : `drop-shadow(0 0 14px ${gold(0.5)}) brightness(1.12)`;
 }
 
 export const ScentIntelligenceLoader: React.FC<ScentIntelligenceLoaderProps> = ({
@@ -84,7 +92,7 @@ export const ScentIntelligenceLoader: React.FC<ScentIntelligenceLoaderProps> = (
             width: 150,
             height: 150,
             borderRadius: '50%',
-            background: `radial-gradient(circle, ${GOLD} 0.16) 0%, ${GOLD} 0.05) 42%, transparent 70%)`,
+            background: `radial-gradient(circle, ${gold(0.16)} 0%, ${gold(0.05)} 42%, transparent 70%)`,
             filter: 'blur(6px)',
           }}
           animate={reduceMotion ? { opacity: 0.75 } : { opacity: complete ? [0.75, 1, 0.85] : [0.5, 0.78, 0.5] }}
@@ -101,14 +109,14 @@ export const ScentIntelligenceLoader: React.FC<ScentIntelligenceLoaderProps> = (
         <motion.div
           aria-hidden
           className="absolute"
-          style={{ width: 118, height: 118, borderRadius: '50%', border: `1px solid ${GOLD} 0.16)` }}
+          style={{ width: 118, height: 118, borderRadius: '50%', border: `1px solid ${gold(0.16)}` }}
           animate={{ opacity: complete ? 0.5 : 0.28 }}
           transition={{ duration: 0.5, ease: EASE_OUT }}
         />
         <motion.div
           aria-hidden
           className="absolute"
-          style={{ width: 82, height: 82, borderRadius: '50%', border: `1px solid ${GOLD} 0.22)` }}
+          style={{ width: 82, height: 82, borderRadius: '50%', border: `1px solid ${gold(0.22)}` }}
           animate={{ opacity: complete ? 0.6 : 0.34 }}
           transition={{ duration: 0.5, ease: EASE_OUT }}
         />
@@ -124,7 +132,7 @@ export const ScentIntelligenceLoader: React.FC<ScentIntelligenceLoaderProps> = (
               key="bloom"
               aria-hidden
               className="absolute"
-              style={{ width: 84, height: 84, borderRadius: '50%', border: `1px solid ${GOLD} 0.5)` }}
+              style={{ width: 84, height: 84, borderRadius: '50%', border: `1px solid ${gold(0.5)}` }}
               initial={{ scale: 0.6, opacity: 0 }}
               animate={{ scale: [0.6, 1.9], opacity: [0.55, 0] }}
               exit={{ opacity: 0 }}
@@ -158,11 +166,13 @@ export const ScentIntelligenceLoader: React.FC<ScentIntelligenceLoaderProps> = (
                     filter: { duration: 0.4 },
                   }
           }
-          style={{ width: 46, height: 46, userSelect: 'none', willChange: 'transform' }}
+          style={{ width: 46, height: 46, userSelect: 'none', pointerEvents: 'none', willChange: 'transform' }}
         />
       </div>
 
-      {/* Status — cross-fades, fixed min-height kills the width/height jolt */}
+      {/* Status — cross-fades, fixed min-height kills the width/height jolt.
+          This is the single polite live region for the overlay; the veil in
+          FragranceCapture deliberately carries no role to avoid double-announce. */}
       <div className="flex min-h-[2.1rem] items-center justify-center px-4" aria-live="polite" aria-atomic="true">
         <AnimatePresence mode="wait">
           <motion.h3
@@ -184,6 +194,7 @@ export const ScentIntelligenceLoader: React.FC<ScentIntelligenceLoaderProps> = (
           {substatus && !complete && (
             <motion.p
               key="substatus"
+              aria-hidden
               initial={{ opacity: 0 }}
               animate={{ opacity: reduceMotion ? 0.5 : [0.32, 0.6, 0.32] }}
               exit={{ opacity: 0 }}

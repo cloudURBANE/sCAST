@@ -391,7 +391,7 @@ export const FragranceCapture: React.FC<{
           setLoadingStatus('No fragrance match found.');
         }
       }
-      // On success leave loadingStatus as "Researching Fragrance…"; the overlay
+      // On success leave loadingStatus as "Researching Fragrance..."; the overlay
       // exits via finally → setUploading(false) and the results list animates in.
       setMatches(nextMatches);
       setSelectedIdx(nextMatches.length > 0 ? 0 : null);
@@ -657,13 +657,12 @@ export const FragranceCapture: React.FC<{
             transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
             className="absolute inset-0 z-50 flex flex-col items-center justify-center p-8 backdrop-blur-md"
             style={{
-              background:
-                'radial-gradient(ellipse 70% 60% at 50% 16%, rgba(212,175,55,0.06), transparent 60%),' +
-                'radial-gradient(ellipse 85% 55% at 50% 102%, rgba(212,175,55,0.05), transparent 64%),' +
-                'rgba(3,2,1,0.7)',
+              // Glass veil: faint top/bottom gold warmth over near-black so the
+              // card stays dimly visible. The loader owns the polite live region,
+              // so this container intentionally carries no role.
+              background: `radial-gradient(ellipse 70% 60% at 50% 16%, rgba(212,175,55,0.06), transparent 60%), radial-gradient(ellipse 85% 55% at 50% 102%, rgba(212,175,55,0.05), transparent 64%), rgba(3,2,1,0.7)`,
               boxShadow: 'inset 0 1px 0 rgba(255,230,180,0.08), inset 0 0 90px rgba(212,175,55,0.05)',
             }}
-            role="status"
           >
             <ScentIntelligenceLoader
               status={loadingStatus}
