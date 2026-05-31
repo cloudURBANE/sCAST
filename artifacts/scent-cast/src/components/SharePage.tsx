@@ -753,7 +753,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                     className="group cursor-pointer relative h-full min-w-0"
                     onClick={() => setSelectedItemId(fragranceId)}
                   >
-                    <div className="scent-fragrance-card w-full h-full min-h-[32rem] transition-[transform,border-color,box-shadow] duration-500 motion-reduce:transition-none group-hover:-translate-y-1.5 motion-reduce:group-hover:translate-y-0 relative overflow-hidden flex flex-col">
+                    <div className="scent-fragrance-card scent-hover-lift w-full h-full min-h-[32rem] transition-[transform,border-color,box-shadow] duration-500 motion-reduce:transition-none relative overflow-hidden flex flex-col">
                       <div className="scent-card-frame" aria-hidden />
                       <div className="relative z-[1] flex h-full flex-col items-center px-6 sm:px-8 pt-7 sm:pt-9 pb-6 sm:pb-7">
                         <BrandGoldLabel
@@ -768,7 +768,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                             alt={name}
                             adjustment={item.imageAdjustment}
                             className="absolute inset-0 z-10"
-                            imgClassName="brightness-[1.1] group-hover:scale-[1.035] motion-reduce:group-hover:scale-100 transition-transform duration-[900ms] motion-reduce:transition-none"
+                            imgClassName="scent-hover-scale brightness-[1.1] transition-transform duration-[900ms] motion-reduce:transition-none"
                           />
                         ) : (
                           <div className="absolute inset-0 flex items-center justify-center px-6 text-center">

@@ -6,11 +6,7 @@ import { Play, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ScentIntentModal } from './components/ScentIntentModal';
 import { ScentNotesInfographic } from './components/ScentNotesInfographic';
-import { LavaBackground } from './components/LavaBackground';
 import { ThreadBackground } from './components/threads/ThreadBackground';
-
-/** Switch app shell background: `'threads'` (ThanksBeam tip page) or `'lava'` (WebGL). */
-const APP_BACKGROUND = 'threads' as 'threads' | 'lava';
 import { AppTopNav } from './components/AppTopNav';
 import { AuthModal } from './components/AuthModal';
 import { SharePage } from './components/SharePage';
@@ -23,6 +19,7 @@ import { Toaster } from './components/ui/toaster';
 import CommunityPage from '@/pages/community';
 import { PageTransitionOverlay } from './components/PageTransitionOverlay';
 import { useModalBehavior } from '@/hooks/use-modal-behavior';
+import NotFound from '@/pages/not-found';
 
 const titleCaseToken = (value: string): string =>
   value
@@ -700,14 +697,12 @@ function GlobalModals() {
     setIsAuthModalOpen,
     guestPromptDismissed,
     setGuestPromptDismissed,
-    handleAuth,
   } = useAuth();
 
   const { items, setItems, isShareModalOpen, setIsShareModalOpen, userId } = useWardrobe();
 
   const authModal = isAuthModalOpen ? (
     <AuthModal
-      onAuth={handleAuth}
       onClose={() => {
         setIsAuthModalOpen(false);
         setGuestPromptDismissed(true);
@@ -754,6 +749,7 @@ function AppContent() {
         <Route path="/" element={<DashboardView />} />
         <Route path="/community" element={<CommunityPageView />} />
         <Route path="/share/:userId" element={<SharePageView />} />
+        <Route path="*" element={<NotFound />} />
       </Routes>
       <GlobalModals />
     </>
@@ -766,7 +762,7 @@ export default function App() {
       <WeatherProvider>
         <WardrobeProvider>
           <div className="scent-app-shell min-h-[100svh] bg-scent-bg selection:bg-scent-accent selection:text-black text-white relative overflow-x-hidden">
-            {APP_BACKGROUND === 'lava' ? <LavaBackground /> : <ThreadBackground />}
+            <ThreadBackground />
             <AppContent />
             <Toaster />
           </div>

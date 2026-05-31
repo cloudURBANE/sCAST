@@ -6,7 +6,7 @@ export const CommunityHero: React.FC = () => (
       Walk through the community's wardrobes.
     </h2>
     <p className="font-serif italic text-base sm:text-lg text-scent-muted leading-relaxed max-w-xl mx-auto">
-      Curated signatures from our community of olfactory explorers - drifting through, one bottle at a time.
+      Curated signatures from our community of olfactory explorers, drifting through one bottle at a time.
     </p>
   </section>
 );
