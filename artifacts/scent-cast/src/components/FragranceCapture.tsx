@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Search, RefreshCw } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import { ScentIntelligenceLoader } from './ScentIntelligenceLoader';
 import {
   collectMainAccordDisplayRows,
   getFragranceDetails,
@@ -379,17 +380,19 @@ export const FragranceCapture: React.FC<{
       }
 
       setHasSearched(true);
-      if (nextMatches.length > 0) {
-        setLoadingStatus("Intelligence Collation Complete.");
-      } else if (primarySearchError) {
-        const message = primarySearchError.message === 'Failed to fetch'
-          ? 'Fragrance search is temporarily unavailable. Check your connection and try again.'
-          : primarySearchError.message || 'Search failed.';
-        setErrorStatus(message);
-        setLoadingStatus('Search failed.');
-      } else {
-        setLoadingStatus("No fragrance match found.");
+      if (nextMatches.length === 0) {
+        if (primarySearchError) {
+          const message = primarySearchError.message === 'Failed to fetch'
+            ? 'Fragrance search is temporarily unavailable. Check your connection and try again.'
+            : primarySearchError.message || 'Search failed.';
+          setErrorStatus(message);
+          setLoadingStatus('Search failed.');
+        } else {
+          setLoadingStatus('No fragrance match found.');
+        }
       }
+      // On success leave loadingStatus as "Researching Fragrance…"; the overlay
+      // exits via finally → setUploading(false) and the results list animates in.
       setMatches(nextMatches);
       setSelectedIdx(nextMatches.length > 0 ? 0 : null);
 
@@ -647,31 +650,27 @@ export const FragranceCapture: React.FC<{
     <div className="glass-shell w-full min-w-0 rounded-[var(--radius-scent)] relative overflow-hidden">
       <AnimatePresence>
         {uploading && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.28 }}
-          className="absolute inset-0 bg-black/90 backdrop-blur-sm z-50 flex flex-col items-center justify-center p-8 text-center"
-        >
           <motion.div
-            animate={
-              syncComplete
-                ? { rotate: 0, scale: [1, 1.08, 1] }
-                : { rotate: [0, 360], scale: [1, 1.1, 1] }
-            }
-            transition={
-              syncComplete
-                ? { duration: 0.46, ease: "easeOut" }
-                : { duration: 3, repeat: Infinity, ease: "linear" }
-            }
-            className={`w-20 h-20 border-t-2 rounded-full mb-6 ${
-              syncComplete ? 'border-scent-accent/75' : 'border-white/40'
-            }`}
-          />
-          <h3 className="font-serif italic text-xl text-white mb-2">{loadingStatus}</h3>
-          <p className="text-white/30 text-[10px] uppercase tracking-[0.3em] font-sans font-bold italic animate-pulse">Processing Olfactory Data</p>
-        </motion.div>
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+            className="absolute inset-0 z-50 flex flex-col items-center justify-center p-8 backdrop-blur-md"
+            style={{
+              background:
+                'radial-gradient(ellipse 70% 60% at 50% 16%, rgba(212,175,55,0.06), transparent 60%),' +
+                'radial-gradient(ellipse 85% 55% at 50% 102%, rgba(212,175,55,0.05), transparent 64%),' +
+                'rgba(3,2,1,0.7)',
+              boxShadow: 'inset 0 1px 0 rgba(255,230,180,0.08), inset 0 0 90px rgba(212,175,55,0.05)',
+            }}
+            role="status"
+          >
+            <ScentIntelligenceLoader
+              status={loadingStatus}
+              substatus="Processing Olfactory Data"
+              complete={syncComplete}
+            />
+          </motion.div>
         )}
       </AnimatePresence>
       <div className="glass min-w-0 rounded-[var(--radius-scent-inner)] p-4 md:p-6">
@@ -709,7 +708,7 @@ export const FragranceCapture: React.FC<{
         </AnimatePresence>
 
         <div className="mx-auto max-w-lg text-center -mt-0.5">
-          <form onSubmit={handleSearch} className="relative group">
+          <form onSubmit={handleSearch} aria-busy={uploading} className="relative group">
             <input
               id="scent-add-to-vault-search"
               type="text"
@@ -730,26 +729,14 @@ export const FragranceCapture: React.FC<{
               className="absolute right-2.5 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent p-0 text-scent-accent/78 shadow-none outline-none transition-colors hover:text-[#fff7ec] focus-visible:ring-2 focus-visible:ring-scent-accent/35 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent disabled:pointer-events-none disabled:opacity-45 group-focus-within:text-scent-accent/92"
               aria-label="Search"
             >
-              {uploading ? (
-                <RefreshCw size={18} strokeWidth={1.65} className="text-scent-accent/88 animate-spin" aria-hidden />
-              ) : (
-                <motion.span
-                  className="relative inline-flex"
-                  aria-hidden
-                  animate={
-                    reduceMotion
-                      ? undefined
-                      : { opacity: [0.74, 1, 0.74] }
-                  }
-                  transition={
-                    reduceMotion
-                      ? undefined
-                      : { duration: 3.4, repeat: Infinity, ease: "easeInOut" }
-                  }
-                >
-                  <Search size={18} strokeWidth={1.65} className="drop-shadow-[0_0_12px_rgba(212,175,55,0.22)]" />
-                </motion.span>
-              )}
+              <motion.span
+                className="relative inline-flex"
+                aria-hidden
+                animate={reduceMotion || uploading ? undefined : { opacity: [0.74, 1, 0.74] }}
+                transition={reduceMotion || uploading ? undefined : { duration: 3.4, repeat: Infinity, ease: 'easeInOut' }}
+              >
+                <Search size={18} strokeWidth={1.65} className="drop-shadow-[0_0_12px_rgba(212,175,55,0.22)]" />
+              </motion.span>
             </motion.button>
           </form>
         </div>
