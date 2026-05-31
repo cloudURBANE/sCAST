@@ -83,7 +83,7 @@ function ReviewArrowButton({
 }: {
   direction: "previous" | "next";
   disabled: boolean;
-  onClick: () => void;
+  onClick: (e: React.MouseEvent<HTMLButtonElement>) => void;
 }) {
   const Icon = direction === "previous" ? ChevronLeft : ChevronRight;
   const label = direction === "previous" ? "Previous review" : "Next review";
@@ -180,6 +180,18 @@ export function ReviewsPanel({ name, brand, reviews }: ReviewsPanelProps) {
     ));
   }, [comments.length]);
 
+  useEffect(() => {
+    if (comments.length <= 1 || showControls || loading) {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setCurrentIndex((prevIndex) => (prevIndex + 1) % comments.length);
+    }, 6000);
+
+    return () => clearInterval(interval);
+  }, [comments.length, showControls, loading]);
+
   if (reviews.length === 0) {
     return (
       <ReviewsShell>
@@ -263,7 +275,25 @@ export function ReviewsPanel({ name, brand, reviews }: ReviewsPanelProps) {
     <ReviewsShell>
       <ReviewsHeader />
 
-      <div className="relative flex w-full flex-col items-center overflow-hidden px-4 py-5 sm:px-5 sm:py-5">
+      <div
+        className={`relative flex w-full flex-col items-center overflow-hidden px-4 py-5 sm:px-5 sm:py-5 transition-colors duration-200 ${
+          !showControls && hasMultiple ? "cursor-pointer hover:bg-white/[0.01]" : ""
+        }`}
+        onClick={() => {
+          if (!showControls && hasMultiple) {
+            setShowControls(true);
+          }
+        }}
+        onKeyDown={(e) => {
+          if ((e.key === "Enter" || e.key === " ") && !showControls && hasMultiple) {
+            e.preventDefault();
+            setShowControls(true);
+          }
+        }}
+        tabIndex={!showControls && hasMultiple ? 0 : undefined}
+        role={!showControls && hasMultiple ? "button" : undefined}
+        aria-label={!showControls && hasMultiple ? "Interact to view all reviews and controls" : undefined}
+      >
         <div className="grid min-h-[8.5rem] w-full place-items-center sm:min-h-[9rem]" aria-live="polite">
           <AnimatePresence mode="wait" initial={false}>
             <FeaturedQuote
@@ -274,69 +304,61 @@ export function ReviewsPanel({ name, brand, reviews }: ReviewsPanelProps) {
           </AnimatePresence>
         </div>
 
-        {hasMultiple ? (
-          <AnimatePresence initial={false}>
-            {!showControls ? (
-              <motion.button
-                key="more-reviews-btn"
-                type="button"
-                onClick={() => setShowControls(true)}
-                initial={reduced ? { opacity: 1 } : { opacity: 0, y: -4 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={reduced ? { opacity: 0 } : { opacity: 0, y: -4 }}
-                transition={{ duration: reduced ? 0 : 0.2 }}
-                className="mt-5 flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.025] px-4 py-2 text-[9px] font-bold uppercase tracking-[0.24em] text-white/44 transition-colors hover:border-scent-accent/32 hover:bg-scent-accent/[0.06] hover:text-scent-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/22"
-              >
-                <span>More Reviews</span>
-                <ChevronDown size={11} className="opacity-70" />
-              </motion.button>
-            ) : (
-              <motion.div
-                key="reviews-controls"
-                initial={reduced ? { opacity: 1 } : { opacity: 0, y: -8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={reduced ? { opacity: 0 } : { opacity: 0, y: -8 }}
-                transition={{ duration: reduced ? 0 : 0.25, ease: REVIEW_EASE }}
-                className="mt-5 flex w-full flex-col items-center gap-3"
-              >
-                <div className="grid grid-cols-[2rem_5.75rem_2rem] items-center justify-center gap-3 text-[10px] font-semibold uppercase tracking-[0.24em] text-scent-muted/60">
-                  <ReviewArrowButton
-                    direction="previous"
-                    onClick={() => stepReview(-1)}
-                    disabled={false}
-                  />
-                  <span className="text-center tabular-nums">{positionLabel}</span>
-                  <ReviewArrowButton
-                    direction="next"
-                    onClick={() => stepReview(1)}
-                    disabled={false}
-                  />
-                </div>
+        {hasMultiple && showControls ? (
+          <motion.div
+            key="reviews-controls"
+            initial={reduced ? { opacity: 1 } : { opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={reduced ? { opacity: 0 } : { opacity: 0, height: 0 }}
+            transition={{ duration: reduced ? 0 : 0.25, ease: REVIEW_EASE }}
+            className="mt-5 flex w-full flex-col items-center gap-3 overflow-hidden"
+          >
+            <div className="grid grid-cols-[2rem_5.75rem_2rem] items-center justify-center gap-3 text-[10px] font-semibold uppercase tracking-[0.24em] text-scent-muted/60">
+              <ReviewArrowButton
+                direction="previous"
+                onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                  e.stopPropagation();
+                  stepReview(-1);
+                }}
+                disabled={false}
+              />
+              <span className="text-center tabular-nums">{positionLabel}</span>
+              <ReviewArrowButton
+                direction="next"
+                onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                  e.stopPropagation();
+                  stepReview(1);
+                }}
+                disabled={false}
+              />
+            </div>
 
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setExpanded((open) => !open)}
-                    className="rounded-full border border-white/[0.08] bg-white/[0.025] px-4 py-2 text-[9px] font-bold uppercase tracking-[0.24em] text-white/44 transition-colors hover:border-scent-accent/32 hover:bg-scent-accent/[0.06] hover:text-scent-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/22"
-                    aria-expanded={expanded}
-                  >
-                    {expanded ? "Close List" : "View All"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowControls(false);
-                      setExpanded(false);
-                    }}
-                    className="flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.025] px-4 py-2 text-[9px] font-bold uppercase tracking-[0.24em] text-white/44 transition-colors hover:border-scent-accent/32 hover:bg-scent-accent/[0.06] hover:text-scent-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/22"
-                  >
-                    <span>Collapse</span>
-                    <ChevronUp size={11} className="opacity-70" />
-                  </button>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                  e.stopPropagation();
+                  setExpanded((open) => !open);
+                }}
+                className="rounded-full border border-white/[0.08] bg-white/[0.025] px-4 py-2 text-[9px] font-bold uppercase tracking-[0.24em] text-white/44 transition-colors hover:border-scent-accent/32 hover:bg-scent-accent/[0.06] hover:text-scent-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/22"
+                aria-expanded={expanded}
+              >
+                {expanded ? "Close List" : "View All"}
+              </button>
+              <button
+                type="button"
+                onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                  e.stopPropagation();
+                  setShowControls(false);
+                  setExpanded(false);
+                }}
+                className="flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.025] px-4 py-2 text-[9px] font-bold uppercase tracking-[0.24em] text-white/44 transition-colors hover:border-scent-accent/32 hover:bg-scent-accent/[0.06] hover:text-scent-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/22"
+              >
+                <span>Collapse</span>
+                <ChevronUp size={11} className="opacity-70" />
+              </button>
+            </div>
+          </motion.div>
         ) : null}
 
         <AnimatePresence initial={false}>
@@ -353,7 +375,10 @@ export function ReviewsPanel({ name, brand, reviews }: ReviewsPanelProps) {
                 <li key={`${comment.text}-${index}`} className="border-b border-white/[0.045]">
                   <button
                     type="button"
-                    onClick={() => selectReview(index)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      selectReview(index);
+                    }}
                     className="group grid w-full grid-cols-[2.5rem_minmax(0,1fr)] items-start gap-3 px-1 py-4 text-left transition-colors hover:bg-white/[0.018] sm:grid-cols-[3.5rem_minmax(0,1fr)] sm:px-3 lg:px-10"
                     aria-current={index === currentIndex ? "true" : undefined}
                   >
