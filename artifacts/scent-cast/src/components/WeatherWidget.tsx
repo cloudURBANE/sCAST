@@ -166,7 +166,7 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({ weather: propWeath
           <AtmosphericViscosity profile={scentProfile} />
         </Canvas>
       </div>
-      <div className="relative z-20 w-full p-6 md:p-8 flex flex-col lg:flex-row gap-6 lg:gap-12 items-center backdrop-blur-xl">
+      <div className="relative z-20 w-full p-6 md:p-8 flex flex-col lg:flex-row gap-6 lg:gap-12 items-center backdrop-blur-sm">
         <div className="flex flex-col sm:flex-row items-center gap-8 lg:gap-12">
           <div className="flex items-center gap-4">
             <div className="flex items-baseline gap-1">

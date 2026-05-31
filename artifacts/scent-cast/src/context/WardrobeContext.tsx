@@ -4,6 +4,7 @@ import { useWeather } from './WeatherContext';
 import { useToast } from '@/hooks/use-toast';
 import type { Fragrance, DestinationType, EnergyState } from '@/components/Wardrobe';
 import type { BottleImageAdjustment } from '@/lib/bottleImageAdjustment';
+import { reconcileWardrobeItems } from '@/lib/wardrobeReconcile';
 import {
   calculateScentWeatherRecommendation,
   type ScentFamily,
@@ -494,7 +495,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
       const data: Fragrance[] = await res.json();
       if (isMutatingRef.current) return;
-      setItems(data);
+      setItems((prev) => reconcileWardrobeItems(prev, data));
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
         console.error("Failed to load wardrobe", err);
@@ -958,7 +959,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     setActiveEngineRecommendation(winner.recommendation);
     setRecommendationReason(winner.recommendation.explanation);
-    setTimeout(() => setActiveRecommendation(winner.item), 800);
+    setActiveRecommendation(winner.item);
   }, [items, weather]);
 
   const closeRecommendationOverlay = useCallback(() => {

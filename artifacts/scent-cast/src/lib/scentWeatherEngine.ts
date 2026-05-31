@@ -654,11 +654,15 @@ function calculateSprayCount(
   if (settingType === "work") contextualMax = Math.min(contextualMax, 2);
   if (context.hotHumid) contextualMax = Math.min(contextualMax, 2);
 
-  const boundedRecommended = Math.max(0, Math.min(contextualMax, Math.round(recommended)));
+  const wearableMinimum = contextualMax > 0 ? 1 : 0;
+  const boundedRecommended = Math.max(
+    wearableMinimum,
+    Math.min(contextualMax, Math.round(recommended)),
+  );
 
   return {
     recommended: boundedRecommended,
-    min: Math.max(0, boundedRecommended - 1),
+    min: Math.max(wearableMinimum, boundedRecommended - 1),
     max: Math.min(contextualMax, boundedRecommended + 1),
   };
 }

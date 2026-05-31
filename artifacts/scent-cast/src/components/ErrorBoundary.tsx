@@ -32,8 +32,8 @@ export class ErrorBoundary extends Component<Props, State> {
   public render() {
     if (this.state.hasError) {
       return (
-        <div className="fixed inset-0 z-[999] flex items-center justify-center p-6 bg-[#080808]/90 backdrop-blur-2xl text-white font-sans">
-          <div className="relative w-full max-w-lg overflow-hidden border border-white/10 rounded-[var(--radius-scent)] bg-black/40 backdrop-blur-xl p-8 sm:p-12 shadow-2xl space-y-8">
+        <div className="fixed inset-0 z-[999] flex items-center justify-center p-6 bg-[#080808]/90 backdrop-blur-sm text-white font-sans">
+          <div className="relative w-full max-w-lg overflow-hidden border border-white/10 rounded-[var(--radius-scent)] bg-black/70 backdrop-blur-sm p-8 sm:p-12 shadow-2xl space-y-8">
             <div className="absolute top-0 left-0 w-full h-[3px] bg-gradient-to-r from-red-500/70 via-orange-500/70 to-red-500/70" />
             
             <div className="flex flex-col items-center text-center space-y-6">

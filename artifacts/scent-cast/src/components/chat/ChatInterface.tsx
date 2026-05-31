@@ -56,7 +56,7 @@ export const ChatInterface: React.FC = () => {
   };
 
   return (
-    <div className="max-w-5xl mx-auto h-[80vh] flex flex-col pt-8 bg-white/[0.01] backdrop-blur-3xl rounded-[3rem] border border-white/5 shadow-2xl relative overflow-hidden">
+    <div className="max-w-5xl mx-auto h-[80vh] flex flex-col pt-8 bg-white/[0.01] backdrop-blur-sm rounded-[3rem] border border-white/5 shadow-2xl relative overflow-hidden">
       <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-16 pb-32 px-12 scroll-smooth">
         <AnimatePresence mode="popLayout">
           {messages.map((m, i) => (
@@ -87,7 +87,7 @@ export const ChatInterface: React.FC = () => {
 
       <div className="absolute bottom-10 left-1/2 -translate-x-1/2 w-full max-w-3xl px-8 z-30">
         <div className="relative group">
-          <div className="absolute inset-0 bg-white/[0.03] backdrop-blur-2xl rounded-2xl -z-10 border border-white/10 group-focus-within:border-white/20 transition-all duration-500 shadow-xl" />
+          <div className="absolute inset-0 bg-white/[0.03] backdrop-blur-sm rounded-2xl -z-10 border border-white/10 group-focus-within:border-white/20 transition-all duration-500 shadow-xl" />
           <div className="flex items-end gap-4 p-5">
             <textarea
               value={input}

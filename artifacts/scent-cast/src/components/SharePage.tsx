@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
@@ -30,6 +30,7 @@ import {
   type SourceCoverage,
 } from '@/lib/fragranceApi';
 import { ReviewsPanel } from '@/components/ReviewsPanel';
+import { useModalBehavior } from '@/hooks/use-modal-behavior';
 
 interface ScentVector {
   freshness: number;
@@ -565,6 +566,10 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
   const [enlargeOpen, setEnlargeOpen] = useState(false);
   const [buyLinks, setBuyLinks] = useState<Record<string, BuyLink>>({});
   const [retryTrigger, setRetryTrigger] = useState(0);
+  const detailModalRef = React.useRef<HTMLDivElement | null>(null);
+  const detailCloseButtonRef = React.useRef<HTMLButtonElement | null>(null);
+  const enlargeModalRef = React.useRef<HTMLDivElement | null>(null);
+  const enlargeCloseButtonRef = React.useRef<HTMLButtonElement | null>(null);
 
   const selectedItem = useMemo(() => {
     if (!data || !selectedItemId) return null;
@@ -589,6 +594,30 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
         { label: 'Environment', value: stringValue(selectedItem.season) },
       ].filter((row): row is { label: string; value: string } => Boolean(row.value))
     : [];
+
+  const closeSelectedDetail = useCallback(() => {
+    setSelectedItemId(null);
+    setEnlargeOpen(false);
+  }, []);
+
+  const closeEnlargedBottle = useCallback(() => {
+    setEnlargeOpen(false);
+  }, []);
+
+  useModalBehavior({
+    isOpen: Boolean(selectedItem),
+    containerRef: detailModalRef,
+    initialFocusRef: detailCloseButtonRef,
+    onDismiss: closeSelectedDetail,
+  });
+
+  useModalBehavior({
+    isOpen: Boolean(selectedItem && enlargeOpen),
+    containerRef: enlargeModalRef,
+    initialFocusRef: enlargeCloseButtonRef,
+    onDismiss: closeEnlargedBottle,
+    lockScroll: false,
+  });
 
   useEffect(() => {
     setLoading(true);
@@ -648,8 +677,8 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
 
   return (
     <div className="min-h-[100svh] relative overflow-x-hidden">
-      <nav className="fixed top-0 left-0 right-0 h-16 sm:h-[72px] border-b border-white/5 bg-black/40 backdrop-blur-2xl z-50 px-4 sm:px-8">
-        <div className="max-w-[1400px] mx-auto h-full flex items-center justify-center">
+      <nav className="fixed top-0 left-0 right-0 h-[calc(4rem+env(safe-area-inset-top))] sm:h-[calc(72px+env(safe-area-inset-top))] border-b border-white/5 bg-black/78 backdrop-blur-sm z-50 px-4 sm:px-8 pt-[env(safe-area-inset-top)]">
+        <div className="max-w-[1400px] mx-auto h-16 sm:h-[72px] flex items-center justify-center">
           <button
             type="button"
             onClick={() => navigate('/')}
@@ -667,7 +696,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
         </div>
       </nav>
 
-      <div className="pt-16 sm:pt-[72px]" />
+      <div className="h-[calc(4rem+env(safe-area-inset-top))] sm:h-[calc(72px+env(safe-area-inset-top))]" />
 
       <main className="relative z-10 px-4 sm:px-8 max-w-[1760px] mx-auto py-16 sm:py-20">
         {loading && (
@@ -785,6 +814,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
       <AnimatePresence>
         {selectedItem ? (
           <div
+            ref={detailModalRef}
             className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden"
             role="dialog"
             aria-modal="true"
@@ -794,11 +824,8 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => {
-                setSelectedItemId(null);
-                setEnlargeOpen(false);
-              }}
-              className="absolute inset-0 bg-black/95 backdrop-blur-3xl"
+              onClick={closeSelectedDetail}
+              className="absolute inset-0 bg-black/95 backdrop-blur-sm"
             />
             <motion.div
               initial={{ opacity: 0, y: 18, scale: 0.985 }}
@@ -812,11 +839,9 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                 style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))' }}
               >
                 <button
+                  ref={detailCloseButtonRef}
                   type="button"
-                  onClick={() => {
-                    setSelectedItemId(null);
-                    setEnlargeOpen(false);
-                  }}
+                  onClick={closeSelectedDetail}
                   className="text-[10px] uppercase tracking-[0.22em] text-white/58 hover:text-white transition-colors"
                 >
                   Close
@@ -831,10 +856,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                   />
                 </div>
                 <button
-                  onClick={() => {
-                    setSelectedItemId(null);
-                    setEnlargeOpen(false);
-                  }}
+                  onClick={closeSelectedDetail}
                   aria-label="Close profile"
                   className="shrink-0 p-2 bg-white/5 hover:bg-white/10 transition-all rounded-full border border-white/10 text-white group"
                 >
@@ -983,6 +1005,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
             <AnimatePresence>
               {enlargeOpen && selectedItem.imageUrl && !data?.hideImages ? (
                 <motion.div
+                  ref={enlargeModalRef}
                   key="share-bottle-enlarge"
                   role="dialog"
                   aria-modal="true"
@@ -995,6 +1018,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                   onClick={() => setEnlargeOpen(false)}
                 >
                   <button
+                    ref={enlargeCloseButtonRef}
                     type="button"
                     onClick={() => setEnlargeOpen(false)}
                     className="absolute top-4 right-4 z-10 p-2 rounded-full border border-white/15 bg-white/10 text-white hover:bg-white/20 transition-colors"

@@ -22,6 +22,7 @@ import { WardrobeProvider, useWardrobe, useWardrobeItems, useWardrobeShareModalA
 import { Toaster } from './components/ui/toaster';
 import CommunityPage from '@/pages/community';
 import { PageTransitionOverlay } from './components/PageTransitionOverlay';
+import { useModalBehavior } from '@/hooks/use-modal-behavior';
 
 const titleCaseToken = (value: string): string =>
   value
@@ -89,6 +90,15 @@ const HERO_SCROLL_PIXELS_PER_SECOND = 14;
 const HERO_SCROLL_MIN_SECONDS = 60;
 const HERO_SCROLL_MAX_SECONDS = 180;
 const HERO_SCROLL_REDUCED_MOTION_SECONDS = 240;
+
+function AtmospherePlaceholder({ label, active }: { label: string; active: boolean }) {
+  return (
+    <span
+      className={`scent-atmosphere-placeholder${active ? '' : ' scent-atmosphere-placeholder--static'}`}
+      aria-label={active ? `Loading ${label}` : `${label} unavailable`}
+    />
+  );
+}
 
 function getHeroTickerPhrases(items: Fragrance[]): string[] {
   if (!items.length) {
@@ -271,10 +281,30 @@ const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({ weather, weath
 
   const tempValue = getWeatherNumber(weather, ['temperature_f', 'temperature', 'temp'], Number.NaN);
   const humidityValue = getWeatherNumber(weather, ['humidity_percent', 'humidity'], Number.NaN);
-  const temp = weatherLoading ? '—' : Number.isFinite(tempValue) ? `${Math.round(tempValue)}°F` : '—';
-  const condition = weatherLoading ? '—' : getWeatherString(weather, ['condition', 'description'], '—');
-  const humidity = weatherLoading ? '—' : Number.isFinite(humidityValue) ? `${humidityValue}%` : '—';
-  const location = weather?.location ?? '—';
+  const pendingWeather = weatherLoading && !weather;
+  const tempMissing = !Number.isFinite(tempValue);
+  const humidityMissing = !Number.isFinite(humidityValue);
+  const conditionText = getWeatherString(weather, ['condition', 'description']);
+  const locationText = firstString(weather?.location);
+  const temp = pendingWeather || tempMissing
+    ? <AtmospherePlaceholder label="temperature" active={pendingWeather} />
+    : `${Math.round(tempValue)}°F`;
+  const condition = pendingWeather || !conditionText
+    ? <AtmospherePlaceholder label="conditions" active={pendingWeather} />
+    : conditionText;
+  const humidity = pendingWeather || humidityMissing
+    ? <AtmospherePlaceholder label="humidity" active={pendingWeather} />
+    : `${humidityValue}%`;
+  const location = pendingWeather || !locationText
+    ? <AtmospherePlaceholder label="location" active={pendingWeather} />
+    : locationText;
+  const atmosphereDisplayKey = [
+    pendingWeather ? 'pending' : 'ready',
+    tempMissing ? 'temp-missing' : `temp:${Math.round(tempValue)}`,
+    humidityMissing ? 'humidity-missing' : `humidity:${humidityValue}`,
+    conditionText || 'condition-missing',
+    locationText || 'location-missing',
+  ].join('|');
   const metrics = [
     { label: 'Matrix', subtitle: 'Conditions', value: condition },
     { label: 'Saturation', subtitle: 'Humidity', value: humidity },
@@ -335,10 +365,10 @@ const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({ weather, weath
       resizeObserver.disconnect();
       window.removeEventListener('resize', handleResize);
     };
-  }, [condition, humidity, temp, location]);
+  }, [atmosphereDisplayKey]);
 
   return (
-    <section className="scent-atmosphere-marquee" aria-label="Current atmosphere">
+    <section className="scent-atmosphere-marquee" aria-label="Current atmosphere" aria-busy={pendingWeather}>
       <div className="scent-atmosphere-marquee-track" ref={trackRef}>
         {[...Array(ATMOSPHERE_TRACK_COPIES)].map((_, copyIndex) => (
           <div
@@ -408,6 +438,15 @@ function DashboardView() {
     handleVaultSearchStateChange,
     handleExpandArchive,
   } = useWardrobe();
+  const recommendationOverlayRef = useRef<HTMLDivElement | null>(null);
+  const recommendationCloseRef = useRef<HTMLButtonElement | null>(null);
+
+  useModalBehavior({
+    isOpen: Boolean(activeRecommendation),
+    containerRef: recommendationOverlayRef,
+    initialFocusRef: recommendationCloseRef,
+    onDismiss: closeRecommendationOverlay,
+  });
 
   return (
     <div className="min-h-[100svh] relative overflow-x-hidden">
@@ -517,10 +556,14 @@ function DashboardView() {
       <AnimatePresence mode="wait">
         {activeRecommendation && (
           <motion.div
+            ref={recommendationOverlayRef}
             key="recommendation-overlay"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             transition={{ duration: 0.35, ease: 'easeInOut' }}
-            className="fixed inset-0 z-[110] bg-black/95 backdrop-blur-3xl flex flex-col"
+            className="fixed inset-0 z-[110] bg-black/95 backdrop-blur-sm flex flex-col"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="recommendation-overlay-title"
           >
             {/* Pinned top bar — X always visible */}
             <div
@@ -528,7 +571,7 @@ function DashboardView() {
               style={{ paddingTop: 'max(1.25rem, env(safe-area-inset-top))' }}
             >
               <p className="text-[9px] uppercase tracking-[0.4em] text-scent-accent font-bold">Strategic Alignment Found</p>
-              <button onClick={closeRecommendationOverlay} className="p-2 text-white/40 hover:text-white hover:bg-white/10 transition-all active:scale-95">
+              <button ref={recommendationCloseRef} onClick={closeRecommendationOverlay} className="p-2 text-white/40 hover:text-white hover:bg-white/10 transition-all active:scale-95" aria-label="Close recommendation">
                 <X size={20} />
               </button>
             </div>
@@ -541,7 +584,7 @@ function DashboardView() {
               <div className="flex items-center justify-center min-h-full px-5 py-6 sm:px-16 sm:py-12">
                 <div className="max-w-2xl w-full text-center space-y-6 sm:space-y-12">
                   <header>
-                    <h2 className="font-serif italic text-2xl sm:text-6xl mb-4">You should wear</h2>
+                    <h2 id="recommendation-overlay-title" className="font-serif italic text-2xl sm:text-6xl mb-4">You should wear</h2>
                     <div className="h-px w-16 bg-white/20 mx-auto" />
                   </header>
                   <div className="py-6 sm:py-16 border-y border-white/10 group cursor-pointer" onClick={closeRecommendationOverlay}>
@@ -602,7 +645,7 @@ function DashboardView() {
             {/* Pinned bottom — Confirm always visible */}
             <div
               className="px-5 pt-3 shrink-0 border-t border-white/5"
-              style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-top))' }}
+              style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))' }}
             >
               <button onClick={closeRecommendationOverlay} className="w-full py-4 bg-scent-accent text-black uppercase tracking-[0.3em] text-[10px] font-bold hover:opacity-90 transition-opacity active:scale-[0.98]">
                 Confirm Alignment

@@ -127,6 +127,18 @@ test("normalizeFragranceSearchResult reads nested product identity", () => {
   assert.equal(result?.brand, "Le Labo");
 });
 
+test("normalizeFragranceSearchResult does not use the raw search query as the fragrance name", () => {
+  const result = normalizeFragranceSearchResult(
+    {
+      id: "weak-result",
+      brand: "Dior",
+    },
+    "dior sauvage with vanilla",
+  );
+
+  assert.equal(result, null);
+});
+
 test("normalizeFragranceSearchResult preserves quality metrics", () => {
   const result = normalizeFragranceSearchResult(
     {
@@ -163,7 +175,7 @@ test("normalizeFragranceDetail does not complete without both source signals", (
   assert.equal(isFragranceDetailEffectivelyComplete(detail), false);
 });
 
-test("normalizeFragranceDetail treats complete Fragrantica metrics as display complete", () => {
+test("normalizeFragranceDetail keeps fragrantica-only metrics partial", () => {
   const detail = normalizeFragranceDetail({
     name: "Santal 33",
     house: "Le Labo",
@@ -180,11 +192,12 @@ test("normalizeFragranceDetail treats complete Fragrantica metrics as display co
   });
   const status = resolveSourceStatus(detail.source_coverage, detail.enrichment);
 
-  assert.equal(detail.source_coverage?.complete, true);
-  assert.equal(isFragranceDetailEffectivelyComplete(detail), true);
-  assert.equal(status.complete, true);
-  assert.equal(status.badgeLabel, "Complete");
-  assert.equal(status.metricsLabel, "Metrics ready");
+  assert.equal(detail.source_coverage?.complete, false);
+  assert.equal(isFragranceDetailEffectivelyComplete(detail), false);
+  assert.equal(status.complete, false);
+  assert.equal(status.badgeLabel, "Partial");
+  assert.equal(status.sourceCountLabel, "Sources 1 of 2");
+  assert.equal(status.metricsLabel, "Metrics pending");
 });
 
 test("resolveSourceStatus keeps stale complete flags partial without both sources", () => {

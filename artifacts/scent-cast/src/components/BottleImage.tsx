@@ -75,21 +75,24 @@ export const BottleImage: React.FC<BottleImageProps> = ({
   videoSrc,
 }) => {
   const reduceMotion = useReducedMotion();
-  const useVideo = !!videoSrc && !reduceMotion;
-
   const url = proxy ? proxiedImageUrl(src, { packshot: true }) : (src ?? '');
+  const mediaKey = `${url}\u0000${videoSrc ?? ''}`;
 
-  const [prevUrl, setPrevUrl] = useState(url);
+  const imgRef = React.useRef<HTMLImageElement | null>(null);
+  const [prevMediaKey, setPrevMediaKey] = useState(mediaKey);
   const [broken, setBroken] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const [isLoading, setIsLoading] = useState(!!url);
+  const [videoFailed, setVideoFailed] = useState(false);
+  const useVideo = !!videoSrc && !reduceMotion && !videoFailed;
 
-  // Synchronously reset state if the URL changes
-  if (url !== prevUrl) {
-    setPrevUrl(url);
+  // Synchronously reset state if the image/video source changes.
+  if (mediaKey !== prevMediaKey) {
+    setPrevMediaKey(mediaKey);
     setBroken(false);
     setRetryCount(0);
     setIsLoading(!!url);
+    setVideoFailed(false);
   }
 
   const handleLoad = () => {
@@ -111,13 +114,31 @@ export const BottleImage: React.FC<BottleImageProps> = ({
     }
   };
 
+  React.useEffect(() => {
+    if (useVideo || !url || broken || !isLoading) return;
+    const img = imgRef.current;
+    if (!img?.complete) return;
+
+    if (img.naturalWidth > 0) {
+      handleLoad();
+    } else {
+      handleError();
+    }
+  }, [broken, isLoading, retryCount, url, useVideo]);
+
+  const handleVideoError = () => {
+    setVideoFailed(true);
+    setIsLoading(!!url);
+    if (!url) onError?.();
+  };
+
   // Strip brightness filter for video path: video was mastered against a black card at 1.0 brightness;
   // applying brightness-[1.1] from imgClassName would make the bottle appear overlit vs. the card.
   const videoClassName = imgClassName
     ? imgClassName.split(/\s+/).filter(cls => !cls.includes('brightness')).join(' ')
     : undefined;
 
-  // When rendering video: poster handles visual feedback, bypass img loading/error state.
+  // When rendering video, its poster handles visual feedback; failed video falls back to the still image.
   const showPlaceholder = useVideo ? false : (!url || broken);
   const showSkeleton = useVideo ? false : (isLoading && !broken);
 
@@ -157,10 +178,13 @@ export const BottleImage: React.FC<BottleImageProps> = ({
                   playsInline
                   disablePictureInPicture
                   preload="metadata"
+                  poster={url || undefined}
+                  onError={handleVideoError}
                   aria-label={alt}
                 />
               ) : (
                 <img
+                  ref={imgRef}
                   key={`${url}-${retryCount}`}
                   src={url}
                   alt={alt}

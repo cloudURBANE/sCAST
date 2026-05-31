@@ -1,4 +1,4 @@
-const FRAGRANCE_SEARCH_CACHE_STORAGE_KEY = "scentcast.fragranceSearchCache.v3";
+const FRAGRANCE_SEARCH_CACHE_STORAGE_KEY = "scentcast.fragranceSearchCache.v4";
 const FRAGRANCE_SEARCH_CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const FRAGRANCE_SEARCH_CACHE_MAX_ENTRIES = 100;
 const SUPPLEMENTAL_SEARCH_MIN_RESULTS = 8;
@@ -463,8 +463,8 @@ export function normalizeFragranceSearchResult(
     sourceIdentity.name,
     structuredIdIdentity.name,
     opaqueIdIdentity.name,
-    fallbackQuery,
   );
+  if (!name) return null;
   const house = firstNonEmptyString(
     result.house,
     result.brand,
@@ -490,7 +490,7 @@ export function normalizeFragranceSearchResult(
   return {
     ...(result as FragranceSearchResult),
     id,
-    name: name ?? fallbackQuery.trim(),
+    name,
     house,
     brand: firstNonEmptyString(result.brand, house),
     year: typeof result.year === "number" ? result.year : null,
@@ -705,13 +705,12 @@ export function isDerivedMetricsCompleteFlag(value: unknown): boolean {
 
 export function isSourceCoverageComplete(coverage?: SourceCoverage | null): boolean {
   if (!coverage) return false;
-  if (coverage.fragrantica === true && coverage.fragrantica_metrics_complete === true) {
-    return true;
-  }
   return (
     coverage.basenotes === true &&
     coverage.fragrantica === true &&
-    (coverage.complete === true || isDerivedMetricsCompleteFlag(coverage.derived_metrics))
+    (coverage.complete === true ||
+      coverage.fragrantica_metrics_complete === true ||
+      isDerivedMetricsCompleteFlag(coverage.derived_metrics))
   );
 }
 
