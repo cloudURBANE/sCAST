@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
-import { ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
+import { ChevronLeft, ChevronRight, RefreshCw, ChevronDown, ChevronUp } from "lucide-react";
 import {
   summarizeReviews,
   getCachedReviewSummary,
@@ -116,6 +116,7 @@ export function ReviewsPanel({ name, brand, reviews }: ReviewsPanelProps) {
   const [loading, setLoading] = useState(() => reviews.length > 0 && !initialCached?.length);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [expanded, setExpanded] = useState(false);
+  const [showControls, setShowControls] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
@@ -170,6 +171,7 @@ export function ReviewsPanel({ name, brand, reviews }: ReviewsPanelProps) {
   useEffect(() => {
     setCurrentIndex(0);
     setExpanded(false);
+    setShowControls(false);
   }, [cacheKey]);
 
   useEffect(() => {
@@ -273,30 +275,68 @@ export function ReviewsPanel({ name, brand, reviews }: ReviewsPanelProps) {
         </div>
 
         {hasMultiple ? (
-          <div className="mt-5 flex w-full flex-col items-center gap-3">
-            <div className="grid grid-cols-[2rem_5.75rem_2rem] items-center justify-center gap-3 text-[10px] font-semibold uppercase tracking-[0.24em] text-scent-muted/60">
-              <ReviewArrowButton
-                direction="previous"
-                onClick={() => stepReview(-1)}
-                disabled={false}
-              />
-              <span className="text-center tabular-nums">{positionLabel}</span>
-              <ReviewArrowButton
-                direction="next"
-                onClick={() => stepReview(1)}
-                disabled={false}
-              />
-            </div>
+          <AnimatePresence initial={false}>
+            {!showControls ? (
+              <motion.button
+                key="more-reviews-btn"
+                type="button"
+                onClick={() => setShowControls(true)}
+                initial={reduced ? { opacity: 1 } : { opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={reduced ? { opacity: 0 } : { opacity: 0, y: -4 }}
+                transition={{ duration: reduced ? 0 : 0.2 }}
+                className="mt-5 flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.025] px-4 py-2 text-[9px] font-bold uppercase tracking-[0.24em] text-white/44 transition-colors hover:border-scent-accent/32 hover:bg-scent-accent/[0.06] hover:text-scent-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/22"
+              >
+                <span>More Reviews</span>
+                <ChevronDown size={11} className="opacity-70" />
+              </motion.button>
+            ) : (
+              <motion.div
+                key="reviews-controls"
+                initial={reduced ? { opacity: 1 } : { opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={reduced ? { opacity: 0 } : { opacity: 0, y: -8 }}
+                transition={{ duration: reduced ? 0 : 0.25, ease: REVIEW_EASE }}
+                className="mt-5 flex w-full flex-col items-center gap-3"
+              >
+                <div className="grid grid-cols-[2rem_5.75rem_2rem] items-center justify-center gap-3 text-[10px] font-semibold uppercase tracking-[0.24em] text-scent-muted/60">
+                  <ReviewArrowButton
+                    direction="previous"
+                    onClick={() => stepReview(-1)}
+                    disabled={false}
+                  />
+                  <span className="text-center tabular-nums">{positionLabel}</span>
+                  <ReviewArrowButton
+                    direction="next"
+                    onClick={() => stepReview(1)}
+                    disabled={false}
+                  />
+                </div>
 
-            <button
-              type="button"
-              onClick={() => setExpanded((open) => !open)}
-              className="rounded-full border border-white/[0.08] bg-white/[0.025] px-4 py-2 text-[9px] font-bold uppercase tracking-[0.24em] text-white/44 transition-colors hover:border-scent-accent/32 hover:bg-scent-accent/[0.06] hover:text-scent-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/22"
-              aria-expanded={expanded}
-            >
-              {expanded ? "Close List" : "View All"}
-            </button>
-          </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setExpanded((open) => !open)}
+                    className="rounded-full border border-white/[0.08] bg-white/[0.025] px-4 py-2 text-[9px] font-bold uppercase tracking-[0.24em] text-white/44 transition-colors hover:border-scent-accent/32 hover:bg-scent-accent/[0.06] hover:text-scent-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/22"
+                    aria-expanded={expanded}
+                  >
+                    {expanded ? "Close List" : "View All"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowControls(false);
+                      setExpanded(false);
+                    }}
+                    className="flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.025] px-4 py-2 text-[9px] font-bold uppercase tracking-[0.24em] text-white/44 transition-colors hover:border-scent-accent/32 hover:bg-scent-accent/[0.06] hover:text-scent-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/22"
+                  >
+                    <span>Collapse</span>
+                    <ChevronUp size={11} className="opacity-70" />
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         ) : null}
 
         <AnimatePresence initial={false}>
