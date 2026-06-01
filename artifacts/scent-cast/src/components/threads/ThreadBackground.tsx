@@ -4,6 +4,10 @@ import { THREAD_LINES, type ThreadLine } from './threadLines';
 /**
  * Ambient "thread" background, rendered on a single <canvas>.
  *
+ * NOTE: the canvas rewrite did not resolve the affected iPad freeze. The
+ * diagnostic route treats this renderer as one measured mode, not as proof of
+ * the root cause.
+ *
  * Why canvas instead of 24 GPU-composited <div>s driven by transform writes:
  *  - iPad Safari froze the old approach. A `position: fixed` element with
  *    composited children is rasterized once and only re-rasterized on scroll;
@@ -230,6 +234,27 @@ type ThreadState = {
   lanePercent: number;
 };
 
+export type ThreadBackgroundFrameMetrics = {
+  drawCount: number;
+  now: number;
+  sample: {
+    id: string;
+    x: number;
+    y: number;
+    position: number;
+    opacity: number;
+  } | null;
+  viewport: {
+    width: number;
+    height: number;
+    dpr: number;
+  };
+};
+
+type ThreadBackgroundProps = {
+  onFrame?: (metrics: ThreadBackgroundFrameMetrics) => void;
+};
+
 function createThreadState(thread: ThreadLine, sprite: ThreadSprite, now: number): ThreadState {
   return {
     thread,
@@ -243,10 +268,15 @@ function createThreadState(thread: ThreadLine, sprite: ThreadSprite, now: number
 
 /**
  * Nexus-style moving thread lines from the ThanksBeam tip page (bundle function
- * a6), re-implemented on a canvas so iPad Safari actually repaints them.
+ * a6), re-implemented on a canvas in the current production build.
  */
-export const ThreadBackground: React.FC = React.memo(() => {
+export const ThreadBackground: React.FC<ThreadBackgroundProps> = React.memo(({ onFrame }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const onFrameRef = useRef(onFrame);
+
+  useEffect(() => {
+    onFrameRef.current = onFrame;
+  }, [onFrame]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -264,6 +294,7 @@ export const ThreadBackground: React.FC = React.memo(() => {
     let animationFrame = 0;
     let lastTime: number | null = null;
     let cancelled = false;
+    let drawCount = 0;
 
     const sizeCanvas = () => {
       canvas.width = Math.round(window.innerWidth * dpr);
@@ -273,6 +304,7 @@ export const ThreadBackground: React.FC = React.memo(() => {
     };
 
     const draw = () => {
+      let sample: ThreadBackgroundFrameMetrics['sample'] = null;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       for (const state of states) {
         const opacity = state.thread.fade == null ? 1 : computeOpacity(state.thread, state.position);
@@ -284,10 +316,24 @@ export const ThreadBackground: React.FC = React.memo(() => {
           state.sprite.boxW,
           state.sprite.boxH,
         );
+        if (!sample) {
+          sample = { id: state.thread.id, x, y, position: state.position, opacity };
+        }
         ctx.globalAlpha = opacity;
         ctx.drawImage(state.sprite.canvas, (x - state.sprite.pad) * dpr, (y - state.sprite.pad) * dpr);
       }
       ctx.globalAlpha = 1;
+      drawCount += 1;
+      onFrameRef.current?.({
+        drawCount,
+        now: performance.now(),
+        sample,
+        viewport: {
+          width: window.innerWidth,
+          height: window.innerHeight,
+          dpr,
+        },
+      });
     };
 
     const stopLoop = () => {

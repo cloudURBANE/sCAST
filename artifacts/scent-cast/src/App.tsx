@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useLayoutEffect, useMemo } from 'react';
-import { Routes, Route, useParams } from 'react-router-dom';
+import { Routes, Route, useLocation, useParams } from 'react-router-dom';
 import { FragranceCapture } from './components/FragranceCapture';
 import { Wardrobe, Fragrance, DestinationType, EnergyState } from './components/Wardrobe';
 import { Play, X } from 'lucide-react';
@@ -17,6 +17,7 @@ import { WeatherProvider, useWeather } from './context/WeatherContext';
 import { WardrobeProvider, useWardrobe, useWardrobeItems, useWardrobeShareModalActions } from './context/WardrobeContext';
 import { Toaster } from './components/ui/toaster';
 import CommunityPage from '@/pages/community';
+import IpadFreezeLab from '@/pages/ipad-freeze-lab';
 import { PageTransitionOverlay } from './components/PageTransitionOverlay';
 import { useModalBehavior } from '@/hooks/use-modal-behavior';
 import NotFound from '@/pages/not-found';
@@ -748,6 +749,7 @@ function AppContent() {
       <Routes>
         <Route path="/" element={<DashboardView />} />
         <Route path="/community" element={<CommunityPageView />} />
+        <Route path="/debug/ipad-freeze" element={<IpadFreezeLab />} />
         <Route path="/share/:userId" element={<SharePageView />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
@@ -757,12 +759,15 @@ function AppContent() {
 }
 
 export default function App() {
+  const location = useLocation();
+  const isFreezeLab = location.pathname === '/debug/ipad-freeze';
+
   return (
     <AuthProvider>
       <WeatherProvider>
         <WardrobeProvider>
           <div className="scent-app-shell min-h-[100svh] bg-scent-bg selection:bg-scent-accent selection:text-black text-white relative overflow-x-hidden">
-            <ThreadBackground />
+            {isFreezeLab ? null : <ThreadBackground />}
             <AppContent />
             <Toaster />
           </div>
