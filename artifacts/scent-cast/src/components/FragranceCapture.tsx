@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Search } from 'lucide-react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { ScentIntelligenceLoader } from './ScentIntelligenceLoader';
@@ -149,6 +150,8 @@ interface FragranceMatch extends FragranceSearchResult {
   family?: unknown;
 }
 
+type LoadingSurface = 'search' | 'sync' | null;
+
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)
   ?.trim()
   .replace(/\/+$/, "");
@@ -166,6 +169,16 @@ function truncateMatchLine(text: string, max: number): string {
   const t = text.trim();
   if (t.length <= max) return t;
   return `${t.slice(0, Math.max(0, max - 1)).trimEnd()}…`;
+}
+
+const INVALID_RESULT_NAME_STARTERS = new Set(['and', '&', 'by', 'de', 'du', 'di', 'et']);
+
+function isDisplayableResultName(value: unknown): value is string {
+  if (typeof value !== 'string') return false;
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+  const firstToken = trimmed.split(/\s+/)[0]?.toLowerCase();
+  return !INVALID_RESULT_NAME_STARTERS.has(firstToken);
 }
 
 function profileToFallbackMatch(profile: Record<string, unknown>, _query: string): FragranceMatch | null {
@@ -297,6 +310,7 @@ export const FragranceCapture: React.FC<{
   const [errorStatus, setErrorStatus] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
   const [syncComplete, setSyncComplete] = useState(false);
+  const [loadingSurface, setLoadingSurface] = useState<LoadingSurface>(null);
   const reduceMotion = useReducedMotion();
 
   const searchAbortController = useRef<AbortController | null>(null);
@@ -335,6 +349,7 @@ export const FragranceCapture: React.FC<{
     searchAbortController.current = controller;
 
     setUploading(true);
+    setLoadingSurface('search');
     setLoadingStatus("Researching Fragrance...");
     setMatches([]);
     setErrorStatus(null);
@@ -353,7 +368,7 @@ export const FragranceCapture: React.FC<{
             const house = firstString(result.house, result.brand) ?? "";
             const id = firstString(result.id) ?? "";
             const name = firstString(result.name);
-            if (!name) return null;
+            if (!isDisplayableResultName(name)) return null;
             return {
               ...result,
               id,
@@ -401,6 +416,7 @@ export const FragranceCapture: React.FC<{
       setErrorStatus(err instanceof Error ? err.message : "Search failed.");
     } finally {
       setUploading(false);
+      setLoadingSurface(null);
     }
   };
 
@@ -415,6 +431,7 @@ export const FragranceCapture: React.FC<{
     const selected = matches[selectedIdx];
     if (selected.scent_vector) {
       setUploading(true);
+      setLoadingSurface('sync');
       setSyncComplete(true);
       const familyStr = typeof selected.family === 'string' ? selected.family : '';
       try {
@@ -442,6 +459,7 @@ export const FragranceCapture: React.FC<{
         setSyncComplete(false);
       } finally {
         setUploading(false);
+        setLoadingSurface(null);
       }
       return;
     }
@@ -461,6 +479,7 @@ export const FragranceCapture: React.FC<{
     syncAbortController.current = controller;
 
     setUploading(true);
+    setLoadingSurface('sync');
     setLoadingStatus("Fetching Fragrance Intelligence...");
     setSyncComplete(false);
 
@@ -635,6 +654,7 @@ export const FragranceCapture: React.FC<{
       setErrorStatus(err?.message || "Fragrance detail fetch failed. Please check your connection.");
     } finally {
       setUploading(false);
+      setLoadingSurface(null);
     }
   };
 
@@ -646,31 +666,40 @@ export const FragranceCapture: React.FC<{
     setSyncComplete(false);
   };
 
+  const loadingVeil = uploading ? (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+      className={
+        loadingSurface === 'sync'
+          ? 'fixed inset-0 z-[130] flex flex-col items-center justify-center px-6 py-[max(2rem,env(safe-area-inset-top))] backdrop-blur-sm'
+          : 'absolute inset-0 z-50 flex flex-col items-center justify-center p-8 backdrop-blur-md'
+      }
+      style={{
+        background:
+          loadingSurface === 'sync'
+            ? 'radial-gradient(ellipse 58% 46% at 50% 36%, rgba(212,175,55,0.08), transparent 64%), radial-gradient(ellipse 88% 62% at 50% 108%, rgba(212,175,55,0.05), transparent 68%), rgba(3,2,1,0.92)'
+            : 'radial-gradient(ellipse 70% 60% at 50% 16%, rgba(212,175,55,0.06), transparent 60%), radial-gradient(ellipse 85% 55% at 50% 102%, rgba(212,175,55,0.05), transparent 64%), rgba(3,2,1,0.7)',
+        boxShadow:
+          loadingSurface === 'sync'
+            ? 'inset 0 1px 0 rgba(255,230,180,0.06), inset 0 0 120px rgba(212,175,55,0.045)'
+            : 'inset 0 1px 0 rgba(255,230,180,0.08), inset 0 0 90px rgba(212,175,55,0.05)',
+      }}
+    >
+      <ScentIntelligenceLoader
+        status={loadingStatus}
+        substatus="Processing Olfactory Data"
+        complete={syncComplete}
+      />
+    </motion.div>
+  ) : null;
+
   return (
     <div className="glass-shell w-full min-w-0 rounded-[var(--radius-scent)] relative overflow-hidden">
       <AnimatePresence>
-        {uploading && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
-            className="absolute inset-0 z-50 flex flex-col items-center justify-center p-8 backdrop-blur-md"
-            style={{
-              // Glass veil: faint top/bottom gold warmth over near-black so the
-              // card stays dimly visible. The loader owns the polite live region,
-              // so this container intentionally carries no role.
-              background: `radial-gradient(ellipse 70% 60% at 50% 16%, rgba(212,175,55,0.06), transparent 60%), radial-gradient(ellipse 85% 55% at 50% 102%, rgba(212,175,55,0.05), transparent 64%), rgba(3,2,1,0.7)`,
-              boxShadow: 'inset 0 1px 0 rgba(255,230,180,0.08), inset 0 0 90px rgba(212,175,55,0.05)',
-            }}
-          >
-            <ScentIntelligenceLoader
-              status={loadingStatus}
-              substatus="Processing Olfactory Data"
-              complete={syncComplete}
-            />
-          </motion.div>
-        )}
+        {loadingSurface === 'search' ? loadingVeil : null}
       </AnimatePresence>
       <div className="glass min-w-0 rounded-[var(--radius-scent-inner)] p-4 md:p-6">
         <header className="mb-[1.41rem] px-2 -translate-y-px">
@@ -759,9 +788,9 @@ export const FragranceCapture: React.FC<{
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0, y: -8 }}
               transition={{ duration: 0.34, ease: [0.22, 1, 0.36, 1] }}
-              className="mt-8 pt-6 border-t border-white/10 mx-auto max-w-lg w-full"
+              className="mt-6 pt-5 border-t border-white/10 mx-auto max-w-lg w-full sm:mt-8 sm:pt-6"
             >
-              <div className="flex max-h-[min(72dvh,26rem)] min-h-0 flex-col sm:max-h-[min(72dvh,28rem)] md:max-h-[min(64dvh,29rem)]">
+              <div className="flex min-h-0 flex-col">
                 <div className="mb-3 sm:mb-5 flex shrink-0 justify-center px-1">
                   <p className="text-[9px] uppercase tracking-[0.34em] text-scent-muted font-bold">
                     Search Results{' '}
@@ -770,40 +799,40 @@ export const FragranceCapture: React.FC<{
                     </span>
                   </p>
                 </div>
-                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1 scrollbar-hide">
+                <div className="max-h-[min(42dvh,18rem)] min-h-0 overflow-y-auto overscroll-contain pr-1 scrollbar-hide sm:max-h-[min(42dvh,20rem)]">
                   <div className="grid grid-cols-1 gap-2.5">
                     {matches.map((m, i) => (
                       <button
                         key={m.id || m.source_url || `match-${i}`}
                         type="button"
                         onClick={() => setSelectedIdx(i)}
-                        className={`group w-full min-h-[76px] px-5 py-4 text-center border transition-all duration-200 cursor-pointer rounded-[var(--radius-scent)] ${
+                        className={`group w-full min-h-[80px] px-4 py-3 text-left border transition-all duration-200 cursor-pointer rounded-[var(--radius-scent)] sm:min-h-[88px] ${
                           selectedIdx === i
                             ? 'border-scent-accent/45 bg-white/[0.06] shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_0_0_1px_rgba(212,175,55,0.12)]'
                             : 'border-white/10 hover:bg-white/[0.035] hover:border-white/16'
                         }`}
                         aria-pressed={selectedIdx === i}
                       >
-                        <div className="mx-auto flex min-w-0 max-w-full flex-col items-center gap-1 relative">
-                          {isVetted(m) && (
-                            <div className="absolute -top-1 -right-2 flex items-center gap-1">
-                              <span className="text-[7px] uppercase tracking-[0.2em] text-scent-accent/90 font-bold bg-scent-accent/5 px-1.5 py-0.5 rounded-full border border-scent-accent/20 backdrop-blur-sm shadow-[0_0_10px_rgba(212,175,55,0.1)]">
-                                Vetted
-                              </span>
-                            </div>
-                          )}
-                          <p
-                            className="font-serif italic text-[1.12rem] leading-snug text-[#fff7ec] max-w-full truncate px-1"
-                            title={m.name}
-                          >
-                            {truncateMatchLine(m.name, MATCH_LINE_MAX_CHARS)}
-                          </p>
-                          <p
-                            className="text-[11px] uppercase tracking-[0.16em] text-scent-accent/80 font-sans font-bold max-w-full truncate px-1"
-                            title={m.brand || 'House unavailable'}
-                          >
-                            {truncateMatchLine(m.brand || 'House unavailable', MATCH_LINE_MAX_CHARS)}
-                          </p>
+                        <div className="grid min-w-0 grid-cols-[1fr_auto] items-start gap-3">
+                          <div className="min-w-0 space-y-1">
+                            <p
+                              className="font-serif italic text-[1.16rem] leading-snug text-[#fff7ec] max-w-full truncate"
+                              title={m.name}
+                            >
+                              {truncateMatchLine(m.name, MATCH_LINE_MAX_CHARS)}
+                            </p>
+                            <p
+                              className="text-[11px] uppercase tracking-[0.16em] text-scent-accent/80 font-sans font-bold max-w-full truncate"
+                              title={m.brand || 'House unavailable'}
+                            >
+                              {truncateMatchLine(m.brand || 'House unavailable', MATCH_LINE_MAX_CHARS)}
+                            </p>
+                          </div>
+                          {isVetted(m) ? (
+                            <span className="mt-0.5 shrink-0 rounded-full border border-scent-accent/20 bg-scent-accent/[0.06] px-2 py-1 text-[7px] font-bold uppercase tracking-[0.18em] text-scent-accent/88 shadow-[0_0_10px_rgba(212,175,55,0.1)]">
+                              Vetted
+                            </span>
+                          ) : null}
                         </div>
                       </button>
                     ))}
@@ -826,7 +855,7 @@ export const FragranceCapture: React.FC<{
                     type="button"
                     onClick={handleConfirm}
                     disabled={uploading || !hasSelectedMatch}
-                    className="scent-primary-button mt-4 flex h-12 w-full items-center justify-center rounded-[var(--radius-scent)] px-4 font-serif italic text-base transition-all hover:scale-[1.02] active:scale-95 sm:mt-5 sm:h-14 sm:text-lg disabled:pointer-events-none disabled:opacity-72"
+                    className="scent-primary-button mt-3 flex h-12 w-full items-center justify-center rounded-[var(--radius-scent)] px-4 font-serif italic text-base transition-all hover:scale-[1.02] active:scale-95 sm:mt-5 sm:h-14 sm:text-lg disabled:pointer-events-none disabled:opacity-72"
                   >
                     <span className="scent-primary-button-label font-serif italic text-base sm:text-lg leading-tight text-center">
                       {hasSelectedMatch ? 'Add to Vault' : 'Select a Result'}
@@ -838,6 +867,12 @@ export const FragranceCapture: React.FC<{
           )}
         </AnimatePresence>
       </div>
+      {typeof document !== 'undefined'
+        ? createPortal(
+            <AnimatePresence>{loadingSurface === 'sync' ? loadingVeil : null}</AnimatePresence>,
+            document.body,
+          )
+        : null}
     </div>
   );
 };
