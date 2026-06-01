@@ -1,29 +1,37 @@
 import React, { useEffect, useRef } from 'react';
 import { THREAD_LINES, type ThreadLine } from './threadLines';
 
-const SHARED_STYLE: React.CSSProperties = {
-  position: 'absolute',
-  zIndex: 0,
-  willChange: 'transform',
-  backfaceVisibility: 'hidden',
-};
+/**
+ * Ambient "thread" background, rendered on a single <canvas>.
+ *
+ * Why canvas instead of 24 GPU-composited <div>s driven by transform writes:
+ *  - iPad Safari froze the old approach. A `position: fixed` element with
+ *    composited children is rasterized once and only re-rasterized on scroll;
+ *    with no scroll path (common on iPad's tall viewport) the rAF loop kept
+ *    writing child transforms but WebKit never repainted the snapshot, so the
+ *    whole background sat frozen. iPhone happens to have a scroll path and
+ *    desktop WebKit/Blink don't have the bug — which is exactly why only iPad
+ *    froze while iPhone and desktop animated fine.
+ *  - Drawing to a canvas dirties its bitmap every frame, forcing a real repaint
+ *    regardless of compositing — immune to that freeze.
+ *  - One element + cheap sprite blits replaces 24 layers each re-blurring a
+ *    multi-stop box-shadow every frame (the point of this performance pass).
+ *
+ * Each thread is pre-rendered ONCE into an offscreen sprite (gradient + glow),
+ * then every frame we blit the sprite at its new position with a per-thread
+ * alpha for the edge fade. The motion math (speed, lanes, wrap, stagger,
+ * reduced-motion + visibility pausing) is preserved verbatim from the DOM
+ * version so the look is unchanged.
+ */
 
 const MIN_RANDOM_PERCENT = 8;
 const MAX_RANDOM_PERCENT = 92;
 const MIN_SPEED_FACTOR = 0.75;
 const MAX_SPEED_FACTOR = 1.35;
 const MAX_START_DELAY = 2200;
-const OPACITY_WRITE_THRESHOLD = 0.025;
-
-type ThreadAnimationState = {
-  el: HTMLElement;
-  thread: ThreadLine;
-  position: number;
-  speed: number;
-  startAt: number;
-  lanePercent: number;
-  lastOpacity: number | null;
-};
+// Glows are soft, so cap the sprite backing-store resolution to bound memory on
+// retina / iPad without any visible loss on the thin lines.
+const MAX_DPR = 2;
 
 function randomBetween(min: number, max: number): number {
   return min + Math.random() * (max - min);
@@ -32,6 +40,117 @@ function randomBetween(min: number, max: number): number {
 function randomizeThreadLane(): number {
   return randomBetween(MIN_RANDOM_PERCENT, MAX_RANDOM_PERCENT);
 }
+
+// ── CSS gradient / box-shadow parsing (only the shapes used in threadLines) ──
+
+/** Split on top-level commas, ignoring commas inside rgba()/rgb() parens. */
+function splitTopLevel(input: string): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < input.length; i += 1) {
+    const ch = input[i];
+    if (ch === '(') depth += 1;
+    else if (ch === ')') depth -= 1;
+    else if (ch === ',' && depth === 0) {
+      out.push(input.slice(start, i));
+      start = i + 1;
+    }
+  }
+  out.push(input.slice(start));
+  return out.map((part) => part.trim()).filter(Boolean);
+}
+
+type GradientStop = { offset: number; color: string };
+
+/** Parse `linear-gradient(<angle>, <color> <pct>%, …)` into stops. */
+function parseGradientStops(css: string): GradientStop[] {
+  const inner = css.slice(css.indexOf('(') + 1, css.lastIndexOf(')'));
+  const parts = splitTopLevel(inner);
+  parts.shift(); // drop the leading angle (always 90deg / 180deg here)
+  const stops: GradientStop[] = [];
+  for (const part of parts) {
+    const match = part.match(/^(.*?)\s+(-?[\d.]+)%$/);
+    if (!match) continue;
+    stops.push({
+      color: match[1].trim(),
+      offset: Math.min(1, Math.max(0, parseFloat(match[2]) / 100)),
+    });
+  }
+  return stops;
+}
+
+type ShadowLayer = { blur: number; color: string };
+
+/** Parse `0 0 <blur>px <color>, …` glow layers. */
+function parseBoxShadow(css?: string): ShadowLayer[] {
+  if (!css) return [];
+  const layers: ShadowLayer[] = [];
+  for (const part of splitTopLevel(css)) {
+    const colorMatch = part.match(/(rgba?\([^)]*\)|#[0-9a-fA-F]{3,8}|transparent)\s*$/);
+    if (!colorMatch || colorMatch.index == null) continue;
+    const lengths = part.slice(0, colorMatch.index).trim().split(/\s+/);
+    const blur = parseFloat(lengths[2] ?? '0');
+    layers.push({ blur: Number.isFinite(blur) ? blur : 0, color: colorMatch[1] });
+  }
+  return layers;
+}
+
+// ── sprites ──
+
+type ThreadSprite = {
+  canvas: HTMLCanvasElement;
+  pad: number; // CSS px of glow padding around the line, on every side
+  boxW: number; // CSS px line box (matches the old <div> width/height)
+  boxH: number;
+};
+
+/** Pre-rasterize one thread (gradient + every glow layer) into an offscreen canvas. */
+function buildSprite(thread: ThreadLine, dpr: number): ThreadSprite {
+  const boxW = parseFloat(thread.width);
+  const boxH = parseFloat(thread.height);
+  const shadows = parseBoxShadow(thread.boxShadow);
+  const maxBlur = shadows.reduce((acc, shadow) => Math.max(acc, shadow.blur), 0);
+  const pad = Math.ceil(maxBlur + 2);
+
+  const cssW = boxW + pad * 2;
+  const cssH = boxH + pad * 2;
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.ceil(cssW * dpr);
+  canvas.height = Math.ceil(cssH * dpr);
+
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    // Work directly in device pixels (no ctx.scale) so shadowBlur is predictable
+    // across browsers — it scales with dpr the same way the line geometry does.
+    const x0 = pad * dpr;
+    const y0 = pad * dpr;
+    const w = boxW * dpr;
+    const h = boxH * dpr;
+
+    const stops = parseGradientStops(thread.background);
+    const grad =
+      thread.axis === 'x'
+        ? ctx.createLinearGradient(x0, 0, x0 + w, 0)
+        : ctx.createLinearGradient(0, y0, 0, y0 + h);
+    for (const stop of stops) grad.addColorStop(stop.offset, stop.color);
+    ctx.fillStyle = grad;
+
+    // Glow layers first (blurred copies of the line), then the crisp line on top.
+    for (const shadow of shadows) {
+      ctx.save();
+      ctx.shadowBlur = shadow.blur * dpr;
+      ctx.shadowColor = shadow.color;
+      ctx.fillRect(x0, y0, w, h);
+      ctx.restore();
+    }
+    ctx.fillRect(x0, y0, w, h);
+  }
+
+  return { canvas, pad, boxW, boxH };
+}
+
+// ── motion math (ported verbatim from the DOM version) ──
 
 function getTravelLimit(thread: ThreadLine): number {
   return thread.axis === 'x' ? window.innerWidth : window.innerHeight;
@@ -45,30 +164,37 @@ function getInitialPosition(thread: ThreadLine): number {
 function getLaneOffset(thread: ThreadLine, lanePercent: number): number {
   const limit = thread.axis === 'x' ? window.innerHeight : window.innerWidth;
   const offset = (limit * lanePercent) / 100;
-
-  if (thread.axis === 'y' && thread.left == null) {
-    return -offset;
-  }
-
+  if (thread.axis === 'y' && thread.left == null) return -offset;
   return offset;
 }
 
-function computeTransform(thread: ThreadLine, position: number, lanePercent: number): string {
-  const { axis, direction } = thread;
+/**
+ * Top-left of the thread box in viewport CSS px — the old CSS anchor (top/left
+ * vs bottom/right) folded into the same translate the rAF loop used to write.
+ */
+function computeTopLeft(
+  thread: ThreadLine,
+  position: number,
+  lanePercent: number,
+  boxW: number,
+  boxH: number,
+): { x: number; y: number } {
+  const lane = getLaneOffset(thread, lanePercent);
 
-  if (axis === 'x') {
-    const x = direction === 1 ? position : position - window.innerWidth;
-    const y = getLaneOffset(thread, lanePercent);
-    return `translate3d(${x}px, ${y}px, 0)`;
+  if (thread.axis === 'x') {
+    const baseLeft = thread.left != null ? 0 : window.innerWidth - boxW;
+    const tx = thread.direction === 1 ? position : position - window.innerWidth;
+    return { x: baseLeft + tx, y: lane };
   }
 
-  const x = getLaneOffset(thread, lanePercent);
-  const y = direction === 1 ? position : position - window.innerHeight;
-  return `translate3d(${x}px, ${y}px, 0)`;
+  const baseTop = thread.top != null ? 0 : window.innerHeight - boxH;
+  const baseLeft = thread.left != null ? 0 : window.innerWidth - boxW;
+  const ty = thread.direction === 1 ? position : position - window.innerHeight;
+  return { x: baseLeft + lane, y: baseTop + ty };
 }
 
 function computeOpacity(thread: ThreadLine, position: number): number {
-  const { axis, direction, fade } = thread;
+  const { direction, fade } = thread;
   if (fade == null) return 1;
 
   const limit = getTravelLimit(thread);
@@ -85,81 +211,84 @@ function computeOpacity(thread: ThreadLine, position: number): number {
 }
 
 function shouldWrap(thread: ThreadLine, position: number): boolean {
-  const { direction, wrap } = thread;
   const limit = getTravelLimit(thread);
-
-  if (direction === 1) return position > limit + wrap;
-  return position < -wrap;
+  if (thread.direction === 1) return position > limit + thread.wrap;
+  return position < -thread.wrap;
 }
 
 function resetPosition(thread: ThreadLine): number {
-  const { direction, wrap } = thread;
-  if (direction === 1) return randomBetween(-wrap * 3, -wrap);
-  return getTravelLimit(thread) + randomBetween(wrap, wrap * 3);
+  if (thread.direction === 1) return randomBetween(-thread.wrap * 3, -thread.wrap);
+  return getTravelLimit(thread) + randomBetween(thread.wrap, thread.wrap * 3);
 }
 
-function createThreadState(el: HTMLElement, thread: ThreadLine, now: number): ThreadAnimationState {
-  const state: ThreadAnimationState = {
-    el,
+type ThreadState = {
+  thread: ThreadLine;
+  sprite: ThreadSprite;
+  position: number;
+  speed: number;
+  startAt: number;
+  lanePercent: number;
+};
+
+function createThreadState(thread: ThreadLine, sprite: ThreadSprite, now: number): ThreadState {
+  return {
     thread,
+    sprite,
     position: getInitialPosition(thread),
     speed: thread.speed * randomBetween(MIN_SPEED_FACTOR, MAX_SPEED_FACTOR),
     startAt: now + randomBetween(0, MAX_START_DELAY),
     lanePercent: randomizeThreadLane(),
-    lastOpacity: null,
   };
-
-  writeThreadState(state, true);
-  return state;
-}
-
-function writeThreadState(state: ThreadAnimationState, forceOpacity = false): void {
-  const { el, thread, position, lanePercent } = state;
-  el.style.transform = computeTransform(thread, position, lanePercent);
-
-  if (thread.fade == null) {
-    if (forceOpacity && state.lastOpacity !== 1) {
-      el.style.opacity = '1';
-      state.lastOpacity = 1;
-    }
-    return;
-  }
-
-  const opacity = computeOpacity(thread, position);
-  if (
-    forceOpacity ||
-    state.lastOpacity == null ||
-    Math.abs(opacity - state.lastOpacity) >= OPACITY_WRITE_THRESHOLD ||
-    opacity === 0 ||
-    opacity === 1
-  ) {
-    el.style.opacity = opacity.toFixed(3);
-    state.lastOpacity = opacity;
-  }
 }
 
 /**
- * Nexus-style moving thread lines from the ThanksBeam tip page (bundle function a6).
+ * Nexus-style moving thread lines from the ThanksBeam tip page (bundle function
+ * a6), re-implemented on a canvas so iPad Safari actually repaints them.
  */
 export const ThreadBackground: React.FC = React.memo(() => {
-  const containerRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return undefined;
+    const canvas = canvasRef.current;
+    if (!canvas) return undefined;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return undefined;
 
-    const elements = container.querySelectorAll<HTMLElement>('[data-thread]');
+    let dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
+    let sprites = THREAD_LINES.map((thread) => buildSprite(thread, dpr));
+    const states: ThreadState[] = THREAD_LINES.map((thread, index) =>
+      createThreadState(thread, sprites[index], performance.now()),
+    );
+
     const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const states: ThreadAnimationState[] = [];
     let animationFrame = 0;
     let lastTime: number | null = null;
     let cancelled = false;
 
-    elements.forEach((el, index) => {
-      const thread = THREAD_LINES[index];
-      if (!thread) return;
-      states.push(createThreadState(el, thread, performance.now()));
-    });
+    const sizeCanvas = () => {
+      canvas.width = Math.round(window.innerWidth * dpr);
+      canvas.height = Math.round(window.innerHeight * dpr);
+      canvas.style.width = `${window.innerWidth}px`;
+      canvas.style.height = `${window.innerHeight}px`;
+    };
+
+    const draw = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (const state of states) {
+        const opacity = state.thread.fade == null ? 1 : computeOpacity(state.thread, state.position);
+        if (opacity <= 0) continue;
+        const { x, y } = computeTopLeft(
+          state.thread,
+          state.position,
+          state.lanePercent,
+          state.sprite.boxW,
+          state.sprite.boxH,
+        );
+        ctx.globalAlpha = opacity;
+        ctx.drawImage(state.sprite.canvas, (x - state.sprite.pad) * dpr, (y - state.sprite.pad) * dpr);
+      }
+      ctx.globalAlpha = 1;
+    };
 
     const stopLoop = () => {
       if (animationFrame) {
@@ -178,8 +307,8 @@ export const ThreadBackground: React.FC = React.memo(() => {
       const elapsedFrames = lastTime == null ? 1 : Math.min(2, ((now - lastTime) * 60) / 1000);
       lastTime = now;
 
-      states.forEach((state) => {
-        if (now < state.startAt) return;
+      for (const state of states) {
+        if (now < state.startAt) continue;
 
         state.position += state.speed * state.thread.direction * elapsedFrames;
 
@@ -187,12 +316,10 @@ export const ThreadBackground: React.FC = React.memo(() => {
           state.lanePercent = randomizeThreadLane();
           state.speed = state.thread.speed * randomBetween(MIN_SPEED_FACTOR, MAX_SPEED_FACTOR);
           state.position = resetPosition(state.thread);
-          state.lastOpacity = null;
         }
+      }
 
-        writeThreadState(state);
-      });
-
+      draw();
       animationFrame = window.requestAnimationFrame(tick);
     };
 
@@ -200,6 +327,19 @@ export const ThreadBackground: React.FC = React.memo(() => {
       if (cancelled || animationFrame || motionQuery.matches || document.visibilityState === 'hidden') return;
       lastTime = null;
       animationFrame = window.requestAnimationFrame(tick);
+    };
+
+    const handleResize = () => {
+      const nextDpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
+      if (nextDpr !== dpr) {
+        dpr = nextDpr;
+        sprites = THREAD_LINES.map((thread) => buildSprite(thread, dpr));
+        states.forEach((state, index) => {
+          state.sprite = sprites[index];
+        });
+      }
+      sizeCanvas();
+      if (!animationFrame) draw(); // keep the static frame correct while paused
     };
 
     const handleVisibilityChange = () => {
@@ -213,12 +353,17 @@ export const ThreadBackground: React.FC = React.memo(() => {
     const handleMotionPreferenceChange = () => {
       if (motionQuery.matches) {
         stopLoop();
+        draw(); // freeze on a clean static frame
         return;
       }
       startLoop();
     };
 
+    sizeCanvas();
+    draw(); // initial paint — also the reduced-motion static frame
     startLoop();
+
+    window.addEventListener('resize', handleResize);
     document.addEventListener('visibilitychange', handleVisibilityChange);
     if (typeof motionQuery.addEventListener === 'function') {
       motionQuery.addEventListener('change', handleMotionPreferenceChange);
@@ -229,6 +374,7 @@ export const ThreadBackground: React.FC = React.memo(() => {
     return () => {
       cancelled = true;
       stopLoop();
+      window.removeEventListener('resize', handleResize);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       if (typeof motionQuery.removeEventListener === 'function') {
         motionQuery.removeEventListener('change', handleMotionPreferenceChange);
@@ -238,71 +384,13 @@ export const ThreadBackground: React.FC = React.memo(() => {
     };
   }, []);
 
-  const getAnchorStyle = (thread: ThreadLine): React.CSSProperties => {
-    if (thread.axis === 'x') {
-      return thread.left != null ? { top: '0px', left: '0px' } : { top: '0px', right: '0px' };
-    }
-
-    const blockAnchor = thread.top != null ? { top: '0px' } : { bottom: '0px' };
-    const inlineAnchor = thread.left != null ? { left: '0px' } : { right: '0px' };
-    return { ...blockAnchor, ...inlineAnchor };
-  };
-
   return (
-    <div
-      ref={containerRef}
-      className="fixed inset-0 overflow-hidden pointer-events-none"
-      style={{
-        zIndex: 0,
-        // Keep the fixed background in its own composited layer so iPad Safari
-        // repaints child transform writes even when the page has no scroll path.
-        transform: 'translate3d(0, 0, 0)',
-        willChange: 'transform',
-        isolation: 'isolate',
-      }}
+    <canvas
+      ref={canvasRef}
+      className="fixed inset-0 pointer-events-none"
+      style={{ zIndex: 0 }}
       aria-hidden="true"
-    >
-      {THREAD_LINES.map((thread) => {
-        const {
-          id,
-          width,
-          height,
-          background,
-          boxShadow,
-          filter,
-          axis,
-          direction,
-          wrap,
-        } = thread;
-
-        const initialTransform =
-          axis === 'x'
-            ? direction === 1
-              ? `translate3d(-${wrap}px, 0, 0)`
-              : `translate3d(${wrap}px, 0, 0)`
-            : direction === 1
-              ? `translate3d(0, -${wrap}px, 0)`
-              : `translate3d(0, ${wrap}px, 0)`;
-
-        return (
-          <div
-            key={id}
-            data-thread={id}
-            style={{
-              ...SHARED_STYLE,
-              ...getAnchorStyle(thread),
-              width,
-              height,
-              background,
-              boxShadow,
-              filter,
-              opacity: 0,
-              transform: initialTransform,
-            }}
-          />
-        );
-      })}
-    </div>
+    />
   );
 });
 
