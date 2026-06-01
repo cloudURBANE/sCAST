@@ -3,7 +3,6 @@ import {
   getThreadTravelSize,
   THREAD_LINES,
   threadGradientToCss,
-  threadShadowToCss,
   type ThreadLine,
 } from './threadLines';
 import './ThreadBackground.css';
@@ -120,7 +119,6 @@ type ThreadBackgroundProps = {
 
 type ThreadLineStyle = React.CSSProperties & {
   '--thread-core': string;
-  '--thread-shadow': string;
   '--thread-filter': string;
 };
 
@@ -138,7 +136,6 @@ function getThreadStyle(thread: ThreadLine): ThreadLineStyle {
     width: `${thread.width}px`,
     height: `${thread.height}px`,
     '--thread-core': threadGradientToCss(thread.axis, thread.coreStops),
-    '--thread-shadow': thread.shadowLayers.length ? threadShadowToCss(thread.shadowLayers) : 'none',
     '--thread-filter': thread.filter ?? 'none',
   };
 }
