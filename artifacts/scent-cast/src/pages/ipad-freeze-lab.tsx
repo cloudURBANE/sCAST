@@ -4,7 +4,13 @@ import {
   ThreadBackground,
   type ThreadBackgroundFrameMetrics,
 } from '@/components/threads/ThreadBackground';
-import { THREAD_LINES, type ThreadLine } from '@/components/threads/threadLines';
+import {
+  getThreadTravelSize,
+  THREAD_LINES,
+  threadGradientToCss,
+  threadShadowToCss,
+  type ThreadLine,
+} from '@/components/threads/threadLines';
 
 type LabMode = 'production' | 'dom' | 'css' | 'canvas' | 'vanilla';
 
@@ -54,7 +60,7 @@ const LAB_MODES: Array<{ id: LabMode; label: string; description: string }> = [
   {
     id: 'production',
     label: 'Production',
-    description: 'Current ThreadBackground component with production canvas draws counted.',
+    description: 'Current ThreadBackground component with production frame writes counted.',
   },
   {
     id: 'dom',
@@ -823,14 +829,13 @@ function getTravelLimit(thread: ThreadLine): number {
 
 function getInitialPosition(thread: ThreadLine): number {
   const limit = getTravelLimit(thread);
-  return randomBetween(-thread.wrap, limit + thread.wrap);
+  const travelSize = getThreadTravelSize(thread);
+  return randomBetween(-travelSize, limit + travelSize);
 }
 
 function getLaneOffset(thread: ThreadLine, lanePercent: number): number {
   const limit = thread.axis === 'x' ? window.innerHeight : window.innerWidth;
-  const offset = (limit * lanePercent) / 100;
-  if (thread.axis === 'y' && thread.left == null) return -offset;
-  return offset;
+  return (limit * lanePercent) / 100;
 }
 
 function computeTopLeft(
@@ -843,43 +848,43 @@ function computeTopLeft(
   const lane = getLaneOffset(thread, lanePercent);
 
   if (thread.axis === 'x') {
-    const baseLeft = thread.left != null ? 0 : window.innerWidth - boxW;
-    const tx = thread.direction === 1 ? position : position - window.innerWidth;
-    return { x: baseLeft + tx, y: lane };
+    const x = thread.direction === 1 ? position : position - boxW;
+    return { x, y: lane };
   }
 
-  const baseTop = thread.top != null ? 0 : window.innerHeight - boxH;
-  const baseLeft = thread.left != null ? 0 : window.innerWidth - boxW;
-  const ty = thread.direction === 1 ? position : position - window.innerHeight;
-  return { x: baseLeft + lane, y: baseTop + ty };
+  const y = thread.direction === 1 ? position : position - boxH;
+  return { x: lane, y };
 }
 
 function computeOpacity(thread: ThreadLine, position: number): number {
   const { direction, fade } = thread;
-  if (fade == null) return 1;
+  if (fade == null) return thread.presence;
 
   const limit = getTravelLimit(thread);
+  let fadeOpacity = 1;
 
   if (direction === 1) {
-    if (position < fade) return Math.max(0, position / fade);
-    if (position > limit - fade) return Math.max(0, (limit + fade - position) / fade);
+    if (position < fade) fadeOpacity = Math.max(0, position / fade);
+    else if (position > limit - fade) fadeOpacity = Math.max(0, (limit + fade - position) / fade);
   } else {
-    if (position > limit - fade) return Math.max(0, (limit - position) / fade);
-    if (position < fade) return Math.max(0, position / fade);
+    if (position > limit - fade) fadeOpacity = Math.max(0, (limit - position) / fade);
+    else if (position < fade) fadeOpacity = Math.max(0, position / fade);
   }
 
-  return 1;
+  return fadeOpacity * thread.presence;
 }
 
 function shouldWrap(thread: ThreadLine, position: number): boolean {
   const limit = getTravelLimit(thread);
-  if (thread.direction === 1) return position > limit + thread.wrap;
-  return position < -thread.wrap;
+  const travelSize = getThreadTravelSize(thread);
+  if (thread.direction === 1) return position > limit + travelSize;
+  return position < -travelSize;
 }
 
 function resetPosition(thread: ThreadLine): number {
-  if (thread.direction === 1) return randomBetween(-thread.wrap * 3, -thread.wrap);
-  return getTravelLimit(thread) + randomBetween(thread.wrap, thread.wrap * 3);
+  const travelSize = getThreadTravelSize(thread);
+  if (thread.direction === 1) return randomBetween(-travelSize * 3, -travelSize);
+  return getTravelLimit(thread) + randomBetween(travelSize, travelSize * 3);
 }
 
 function createMotionState(thread: ThreadLine, now: number): MotionState {
@@ -906,66 +911,19 @@ function advanceMotionStates(states: MotionState[], now: number, elapsedFrames: 
 
 function threadBox(thread: ThreadLine) {
   return {
-    width: parseFloat(thread.width),
-    height: parseFloat(thread.height),
+    width: thread.width,
+    height: thread.height,
   };
 }
 
 function baseThreadStyle(thread: ThreadLine): React.CSSProperties {
   return {
-    width: thread.width,
-    height: thread.height,
-    background: thread.background,
-    boxShadow: thread.boxShadow,
+    width: `${thread.width}px`,
+    height: `${thread.height}px`,
+    background: threadGradientToCss(thread.axis, thread.coreStops),
+    boxShadow: threadShadowToCss(thread.shadowLayers),
     filter: thread.filter,
   };
-}
-
-function splitTopLevel(input: string): string[] {
-  const out: string[] = [];
-  let depth = 0;
-  let start = 0;
-  for (let i = 0; i < input.length; i += 1) {
-    const ch = input[i];
-    if (ch === '(') depth += 1;
-    else if (ch === ')') depth -= 1;
-    else if (ch === ',' && depth === 0) {
-      out.push(input.slice(start, i));
-      start = i + 1;
-    }
-  }
-  out.push(input.slice(start));
-  return out.map((part) => part.trim()).filter(Boolean);
-}
-
-function parseGradientStops(css: string): Array<{ offset: number; color: string }> {
-  const inner = css.slice(css.indexOf('(') + 1, css.lastIndexOf(')'));
-  const parts = splitTopLevel(inner);
-  parts.shift();
-  return parts
-    .map((part) => {
-      const match = part.match(/^(.*?)\s+(-?[\d.]+)%$/);
-      if (!match) return null;
-      return {
-        color: match[1].trim(),
-        offset: Math.min(1, Math.max(0, parseFloat(match[2]) / 100)),
-      };
-    })
-    .filter((stop): stop is { offset: number; color: string } => Boolean(stop));
-}
-
-function parseShadow(css?: string): { blur: number; color: string } {
-  if (!css) return { blur: 0, color: 'transparent' };
-  let blur = 0;
-  let color = 'rgba(255, 247, 236, 0.35)';
-  for (const layer of splitTopLevel(css)) {
-    const colorMatch = layer.match(/(rgba?\([^)]*\)|#[0-9a-fA-F]{3,8}|transparent)\s*$/);
-    if (colorMatch?.[1]) color = colorMatch[1];
-    const lengths = layer.slice(0, colorMatch?.index ?? layer.length).trim().split(/\s+/);
-    const nextBlur = parseFloat(lengths[2] ?? '0');
-    if (Number.isFinite(nextBlur)) blur = Math.max(blur, nextBlur);
-  }
-  return { blur, color };
 }
 
 function drawThread(ctx: CanvasRenderingContext2D, state: MotionState, dpr: number) {
@@ -974,14 +932,16 @@ function drawThread(ctx: CanvasRenderingContext2D, state: MotionState, dpr: numb
   const opacity = computeOpacity(state.thread, state.position);
   if (opacity <= 0) return null;
 
-  const stops = parseGradientStops(state.thread.background);
   const grad =
     state.thread.axis === 'x'
       ? ctx.createLinearGradient(x * dpr, y * dpr, (x + width) * dpr, y * dpr)
       : ctx.createLinearGradient(x * dpr, y * dpr, x * dpr, (y + height) * dpr);
-  for (const stop of stops) grad.addColorStop(stop.offset, stop.color);
+  for (const stop of state.thread.coreStops) grad.addColorStop(stop.offset, stop.color);
 
-  const shadow = parseShadow(state.thread.boxShadow);
+  const shadow = state.thread.shadowLayers.reduce(
+    (strongest, layer) => (layer.blur > strongest.blur ? layer : strongest),
+    { blur: 0, color: 'transparent' },
+  );
   ctx.save();
   ctx.globalAlpha = opacity;
   ctx.shadowBlur = shadow.blur * dpr;
@@ -1003,7 +963,16 @@ function ProductionMode({ probe }: { probe: FreezeProbe }) {
   useProbeRender(probe, 'ProductionMode');
   const handleFrame = useCallback(
     (metrics: ThreadBackgroundFrameMetrics) => {
-      probe.reportCanvasFrame('production-thread-background', metrics);
+      probe.reportDomWrite('production-thread-background', {
+        mode: 'production',
+        renderer: 'production-thread-background',
+        sampleId: metrics.sample?.id,
+        x: metrics.sample?.x,
+        y: metrics.sample?.y,
+        position: metrics.sample?.position,
+        opacity: metrics.sample?.opacity,
+        drawCount: metrics.drawCount,
+      });
     },
     [probe],
   );
@@ -1088,6 +1057,7 @@ function CssAnimationMode({ probe }: { probe: FreezeProbe }) {
     () =>
       THREAD_LINES.map((thread) => {
         const lane = randomizeThreadLane();
+        const travelSize = getThreadTravelSize(thread);
         const duration = Math.max(7, Math.min(95, 110 / Math.max(thread.speed, 0.2)));
         const delay = -randomBetween(0, duration);
         const style = {
@@ -1099,26 +1069,26 @@ function CssAnimationMode({ probe }: { probe: FreezeProbe }) {
           '--lab-from-x':
             thread.axis === 'x'
               ? thread.direction === 1
-                ? `${-thread.wrap}px`
-                : `calc(100vw + ${thread.wrap}px)`
+                ? `${-travelSize}px`
+                : `calc(100vw + ${travelSize}px)`
               : '0px',
           '--lab-to-x':
             thread.axis === 'x'
               ? thread.direction === 1
-                ? `calc(100vw + ${thread.wrap}px)`
-                : `${-thread.wrap}px`
+                ? `calc(100vw + ${travelSize}px)`
+                : `${-travelSize}px`
               : '0px',
           '--lab-from-y':
             thread.axis === 'y'
               ? thread.direction === 1
-                ? `${-thread.wrap}px`
-                : `calc(100vh + ${thread.wrap}px)`
+                ? `${-travelSize}px`
+                : `calc(100vh + ${travelSize}px)`
               : '0px',
           '--lab-to-y':
             thread.axis === 'y'
               ? thread.direction === 1
-                ? `calc(100vh + ${thread.wrap}px)`
-                : `${-thread.wrap}px`
+                ? `calc(100vh + ${travelSize}px)`
+                : `${-travelSize}px`
               : '0px',
         } as React.CSSProperties & Record<string, string>;
         return { thread, style };
