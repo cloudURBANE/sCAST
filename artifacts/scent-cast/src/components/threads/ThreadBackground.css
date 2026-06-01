@@ -1,0 +1,317 @@
+.scent-thread-field {
+  --thread-gold: 212 175 55;
+  --thread-cream: 255 247 236;
+  --thread-amber: 255 183 83;
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  isolation: isolate;
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.18), transparent 22%, transparent 62%, rgba(0, 0, 0, 0.66)),
+    linear-gradient(112deg, transparent 0%, rgba(var(--thread-gold) / 0.024) 33%, transparent 54%),
+    linear-gradient(68deg, transparent 8%, rgba(var(--thread-cream) / 0.018) 48%, transparent 73%),
+    #030201;
+  contain: paint;
+}
+
+.scent-thread-field::before,
+.scent-thread-field::after {
+  content: "";
+  position: absolute;
+  inset: -8%;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.scent-thread-field::before {
+  background:
+    repeating-linear-gradient(
+      112deg,
+      transparent 0 34px,
+      rgba(var(--thread-gold) / 0.012) 35px,
+      transparent 37px,
+      transparent 76px
+    ),
+    repeating-linear-gradient(
+      68deg,
+      transparent 0 42px,
+      rgba(var(--thread-cream) / 0.01) 43px,
+      transparent 45px,
+      transparent 98px
+    ),
+    repeating-linear-gradient(
+      0deg,
+      transparent 0 28px,
+      rgba(var(--thread-gold) / 0.007) 29px,
+      transparent 30px,
+      transparent 64px
+    );
+  opacity: 0.9;
+  -webkit-mask-image:
+    linear-gradient(180deg, transparent 0%, #000 8%, #000 92%, transparent 100%),
+    linear-gradient(90deg, transparent 0%, #000 7%, #000 93%, transparent 100%);
+  mask-image:
+    linear-gradient(180deg, transparent 0%, #000 8%, #000 92%, transparent 100%),
+    linear-gradient(90deg, transparent 0%, #000 7%, #000 93%, transparent 100%);
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+}
+
+.scent-thread-field::after {
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(0, 0, 0, 0.62), transparent 18%, transparent 82%, rgba(0, 0, 0, 0.62)),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.42), transparent 18%, transparent 70%, rgba(0, 0, 0, 0.76)),
+    linear-gradient(116deg, transparent 6%, rgba(var(--thread-gold) / 0.035) 35%, transparent 58%, rgba(var(--thread-cream) / 0.018) 78%, transparent 100%);
+  opacity: 0.82;
+}
+
+.scent-thread-line {
+  --thread-angle: 90deg;
+  --thread-halo-inset: -8px -24px;
+  --thread-halo-opacity: 0.46;
+  --thread-glint-opacity: 0.38;
+  --thread-halo-scale: 1;
+  --thread-glint-scale: 1;
+  --thread-shadow: none;
+  --thread-filter: none;
+  --thread-halo:
+    linear-gradient(
+      var(--thread-angle),
+      transparent 0%,
+      rgba(var(--thread-gold) / 0.16) 36%,
+      rgba(var(--thread-cream) / 0.12) 50%,
+      rgba(var(--thread-gold) / 0.12) 64%,
+      transparent 100%
+    );
+  --thread-glint:
+    linear-gradient(
+      var(--thread-angle),
+      transparent 0%,
+      rgba(var(--thread-cream) / 0.0) 24%,
+      rgba(var(--thread-cream) / 0.46) 49%,
+      rgba(var(--thread-gold) / 0.2) 58%,
+      transparent 100%
+    );
+  --thread-grain:
+    repeating-linear-gradient(
+      var(--thread-angle),
+      transparent 0 9px,
+      rgba(var(--thread-cream) / 0.26) 10px,
+      transparent 11px,
+      transparent 22px
+    );
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 2;
+  border-radius: 999px;
+  background: var(--thread-core);
+  box-shadow: var(--thread-shadow);
+  filter: var(--thread-filter);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate3d(0, 0, 0);
+  transform-origin: center;
+  backface-visibility: hidden;
+  will-change: transform, opacity;
+}
+
+.scent-thread-line::before,
+.scent-thread-line::after {
+  content: "";
+  position: absolute;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.scent-thread-line::before {
+  inset: var(--thread-halo-inset);
+  z-index: -1;
+  background: var(--thread-halo);
+  opacity: calc(var(--thread-halo-opacity) * var(--thread-halo-scale));
+}
+
+.scent-thread-line::after {
+  inset: -0.5px;
+  z-index: 1;
+  background: var(--thread-glint), var(--thread-grain);
+  opacity: calc(var(--thread-glint-opacity) * var(--thread-glint-scale));
+}
+
+.scent-thread-line--axis-y {
+  --thread-angle: 180deg;
+  --thread-halo-inset: -24px -8px;
+}
+
+.scent-thread-line--depth-far {
+  z-index: 1;
+  --thread-halo-opacity: 0.24;
+  --thread-glint-opacity: 0.16;
+}
+
+.scent-thread-line--depth-mid {
+  z-index: 2;
+  --thread-halo-opacity: 0.38;
+  --thread-glint-opacity: 0.3;
+}
+
+.scent-thread-line--depth-near {
+  z-index: 3;
+  --thread-halo-opacity: 0.58;
+  --thread-glint-opacity: 0.46;
+}
+
+.scent-thread-line--tone-shadow {
+  --thread-halo:
+    linear-gradient(
+      var(--thread-angle),
+      transparent 0%,
+      rgba(0, 0, 0, 0.28) 25%,
+      rgba(0, 0, 0, 0.62) 50%,
+      rgba(var(--thread-gold) / 0.035) 58%,
+      transparent 100%
+    );
+  --thread-glint:
+    linear-gradient(
+      var(--thread-angle),
+      transparent 0%,
+      rgba(var(--thread-cream) / 0.0) 42%,
+      rgba(var(--thread-cream) / 0.12) 53%,
+      transparent 66%
+    );
+  --thread-grain:
+    repeating-linear-gradient(
+      var(--thread-angle),
+      transparent 0 13px,
+      rgba(0, 0, 0, 0.4) 14px,
+      transparent 15px,
+      transparent 30px
+    );
+}
+
+.scent-thread-line--tone-smoke {
+  --thread-halo:
+    linear-gradient(
+      var(--thread-angle),
+      transparent 0%,
+      rgba(166, 132, 78, 0.045) 24%,
+      rgba(var(--thread-cream) / 0.08) 48%,
+      rgba(84, 63, 38, 0.05) 70%,
+      transparent 100%
+    );
+  --thread-glint:
+    linear-gradient(
+      var(--thread-angle),
+      transparent 0%,
+      rgba(var(--thread-cream) / 0.16) 47%,
+      rgba(var(--thread-gold) / 0.08) 58%,
+      transparent 100%
+    );
+}
+
+.scent-thread-line--tone-gold {
+  --thread-halo:
+    linear-gradient(
+      var(--thread-angle),
+      transparent 0%,
+      rgba(90, 48, 8, 0.08) 14%,
+      rgba(var(--thread-gold) / 0.25) 36%,
+      rgba(var(--thread-cream) / 0.2) 50%,
+      rgba(var(--thread-gold) / 0.18) 68%,
+      transparent 100%
+    );
+  --thread-glint:
+    linear-gradient(
+      var(--thread-angle),
+      transparent 0%,
+      rgba(255, 231, 167, 0.0) 20%,
+      rgba(255, 246, 218, 0.62) 48%,
+      rgba(212, 175, 55, 0.32) 58%,
+      transparent 100%
+    );
+}
+
+.scent-thread-line--tone-champagne {
+  --thread-halo:
+    linear-gradient(
+      var(--thread-angle),
+      transparent 0%,
+      rgba(var(--thread-cream) / 0.12) 28%,
+      rgba(255, 255, 252, 0.26) 50%,
+      rgba(var(--thread-gold) / 0.1) 70%,
+      transparent 100%
+    );
+  --thread-glint:
+    linear-gradient(
+      var(--thread-angle),
+      transparent 0%,
+      rgba(255, 247, 236, 0.0) 18%,
+      rgba(255, 255, 252, 0.76) 49%,
+      rgba(255, 229, 175, 0.28) 63%,
+      transparent 100%
+    );
+}
+
+.scent-thread-line--tone-ember {
+  --thread-halo:
+    linear-gradient(
+      var(--thread-angle),
+      transparent 0%,
+      rgba(105, 45, 8, 0.08) 14%,
+      rgba(var(--thread-amber) / 0.18) 45%,
+      rgba(212, 109, 32, 0.14) 66%,
+      transparent 100%
+    );
+  --thread-glint:
+    linear-gradient(
+      var(--thread-angle),
+      transparent 0%,
+      rgba(255, 207, 128, 0.0) 23%,
+      rgba(255, 207, 128, 0.48) 50%,
+      rgba(156, 73, 16, 0.2) 66%,
+      transparent 100%
+    );
+}
+
+@media (max-width: 640px) {
+  .scent-thread-field::before {
+    opacity: 0.72;
+  }
+
+  .scent-thread-field::after {
+    opacity: 0.9;
+  }
+
+  .scent-thread-line--depth-far {
+    --thread-halo-opacity: 0.18;
+    --thread-glint-opacity: 0.12;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .scent-thread-line {
+    --thread-halo-scale: 0.82;
+    --thread-glint-scale: 0.9;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scent-thread-field {
+    background:
+      linear-gradient(180deg, rgba(0, 0, 0, 0.16), transparent 24%, transparent 64%, rgba(0, 0, 0, 0.7)),
+      linear-gradient(112deg, transparent 0%, rgba(var(--thread-gold) / 0.032) 34%, transparent 58%),
+      linear-gradient(68deg, transparent 10%, rgba(var(--thread-cream) / 0.024) 50%, transparent 76%),
+      #030201;
+  }
+
+  .scent-thread-field::before {
+    opacity: 0.98;
+  }
+
+  .scent-thread-line {
+    will-change: auto;
+  }
+}

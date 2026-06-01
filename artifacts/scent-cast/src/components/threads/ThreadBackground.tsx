@@ -1,5 +1,12 @@
 import React, { useEffect, useRef } from 'react';
-import { THREAD_LINES, type ThreadLine } from './threadLines';
+import {
+  getThreadTravelSize,
+  THREAD_LINES,
+  threadGradientToCss,
+  threadShadowToCss,
+  type ThreadLine,
+} from './threadLines';
+import './ThreadBackground.css';
 
 const MIN_RANDOM_PERCENT = 8;
 const MAX_RANDOM_PERCENT = 92;
@@ -21,14 +28,13 @@ function getTravelLimit(thread: ThreadLine): number {
 
 function getInitialPosition(thread: ThreadLine): number {
   const limit = getTravelLimit(thread);
-  return randomBetween(-thread.wrap, limit + thread.wrap);
+  const travelSize = getThreadTravelSize(thread);
+  return randomBetween(-travelSize, limit + travelSize);
 }
 
 function getLaneOffset(thread: ThreadLine, lanePercent: number): number {
   const limit = thread.axis === 'x' ? window.innerHeight : window.innerWidth;
-  const offset = (limit * lanePercent) / 100;
-  if (thread.axis === 'y' && thread.left == null) return -offset;
-  return offset;
+  return (limit * lanePercent) / 100;
 }
 
 function computeTopLeft(
@@ -41,43 +47,43 @@ function computeTopLeft(
   const lane = getLaneOffset(thread, lanePercent);
 
   if (thread.axis === 'x') {
-    const baseLeft = thread.left != null ? 0 : window.innerWidth - boxW;
-    const tx = thread.direction === 1 ? position : position - window.innerWidth;
-    return { x: baseLeft + tx, y: lane };
+    const x = thread.direction === 1 ? position : position - boxW;
+    return { x, y: lane };
   }
 
-  const baseTop = thread.top != null ? 0 : window.innerHeight - boxH;
-  const baseLeft = thread.left != null ? 0 : window.innerWidth - boxW;
-  const ty = thread.direction === 1 ? position : position - window.innerHeight;
-  return { x: baseLeft + lane, y: baseTop + ty };
+  const y = thread.direction === 1 ? position : position - boxH;
+  return { x: lane, y };
 }
 
 function computeOpacity(thread: ThreadLine, position: number): number {
   const { direction, fade } = thread;
-  if (fade == null) return 1;
+  if (fade == null) return thread.presence;
 
   const limit = getTravelLimit(thread);
+  let fadeOpacity = 1;
 
   if (direction === 1) {
-    if (position < fade) return Math.max(0, position / fade);
-    if (position > limit - fade) return Math.max(0, (limit + fade - position) / fade);
+    if (position < fade) fadeOpacity = Math.max(0, position / fade);
+    else if (position > limit - fade) fadeOpacity = Math.max(0, (limit + fade - position) / fade);
   } else {
-    if (position > limit - fade) return Math.max(0, (limit - position) / fade);
-    if (position < fade) return Math.max(0, position / fade);
+    if (position > limit - fade) fadeOpacity = Math.max(0, (limit - position) / fade);
+    else if (position < fade) fadeOpacity = Math.max(0, position / fade);
   }
 
-  return 1;
+  return fadeOpacity * thread.presence;
 }
 
 function shouldWrap(thread: ThreadLine, position: number): boolean {
   const limit = getTravelLimit(thread);
-  if (thread.direction === 1) return position > limit + thread.wrap;
-  return position < -thread.wrap;
+  const travelSize = getThreadTravelSize(thread);
+  if (thread.direction === 1) return position > limit + travelSize;
+  return position < -travelSize;
 }
 
 function resetPosition(thread: ThreadLine): number {
-  if (thread.direction === 1) return randomBetween(-thread.wrap * 3, -thread.wrap);
-  return getTravelLimit(thread) + randomBetween(thread.wrap, thread.wrap * 3);
+  const travelSize = getThreadTravelSize(thread);
+  if (thread.direction === 1) return randomBetween(-travelSize * 3, -travelSize);
+  return getTravelLimit(thread) + randomBetween(travelSize, travelSize * 3);
 }
 
 type ThreadState = {
@@ -112,6 +118,31 @@ type ThreadBackgroundProps = {
   onFrame?: (metrics: ThreadBackgroundFrameMetrics) => void;
 };
 
+type ThreadLineStyle = React.CSSProperties & {
+  '--thread-core': string;
+  '--thread-shadow': string;
+  '--thread-filter': string;
+};
+
+function getThreadClassName(thread: ThreadLine): string {
+  return [
+    'scent-thread-line',
+    `scent-thread-line--axis-${thread.axis}`,
+    `scent-thread-line--tone-${thread.tone}`,
+    `scent-thread-line--depth-${thread.depth}`,
+  ].join(' ');
+}
+
+function getThreadStyle(thread: ThreadLine): ThreadLineStyle {
+  return {
+    width: `${thread.width}px`,
+    height: `${thread.height}px`,
+    '--thread-core': threadGradientToCss(thread.axis, thread.coreStops),
+    '--thread-shadow': thread.shadowLayers.length ? threadShadowToCss(thread.shadowLayers) : 'none',
+    '--thread-filter': thread.filter ?? 'none',
+  };
+}
+
 function createThreadState(thread: ThreadLine, now: number): ThreadState {
   return {
     thread,
@@ -120,20 +151,36 @@ function createThreadState(thread: ThreadLine, now: number): ThreadState {
     speed: thread.speed * randomBetween(MIN_SPEED_FACTOR, MAX_SPEED_FACTOR),
     startAt: now + randomBetween(0, MAX_START_DELAY),
     lanePercent: randomizeThreadLane(),
-    boxW: parseFloat(thread.width),
-    boxH: parseFloat(thread.height),
+    boxW: thread.width,
+    boxH: thread.height,
   };
+}
+
+function resetMotionState(state: ThreadState, now: number) {
+  state.position = getInitialPosition(state.thread);
+  state.speed = state.thread.speed * randomBetween(MIN_SPEED_FACTOR, MAX_SPEED_FACTOR);
+  state.startAt = now + randomBetween(0, MAX_START_DELAY);
+  state.lanePercent = randomizeThreadLane();
+}
+
+function applyReducedMotionComposition(states: ThreadState[]) {
+  for (const state of states) {
+    state.position = (getTravelLimit(state.thread) * state.thread.stillPositionPercent) / 100;
+    state.lanePercent = state.thread.stillLanePercent;
+    state.speed = state.thread.speed;
+    state.startAt = 0;
+  }
 }
 
 function applyThreadStyle(state: ThreadState): ThreadBackgroundFrameMetrics['sample'] {
   const { element, thread } = state;
   if (!element) return null;
 
-  const opacity = thread.fade == null ? 1 : computeOpacity(thread, state.position);
+  const opacity = computeOpacity(thread, state.position);
   const { x, y } = computeTopLeft(thread, state.position, state.lanePercent, state.boxW, state.boxH);
 
   element.style.transform = `translate3d(${x}px, ${y}px, 0)`;
-  element.style.opacity = `${opacity}`;
+  element.style.opacity = opacity.toFixed(3);
 
   if (opacity <= 0) return null;
   return {
@@ -162,12 +209,13 @@ export const ThreadBackground: React.FC<ThreadBackgroundProps> = React.memo(({ o
   }, [onFrame]);
 
   useEffect(() => {
+    const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
     const states = THREAD_LINES.map((thread) => createThreadState(thread, performance.now()));
     states.forEach((state) => {
       state.element = elementRefs.current.get(state.thread.id) ?? null;
     });
+    if (motionQuery.matches) applyReducedMotionComposition(states);
 
-    const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
     let animationFrame = 0;
     let lastTime: number | null = null;
     let cancelled = false;
@@ -236,6 +284,11 @@ export const ThreadBackground: React.FC<ThreadBackgroundProps> = React.memo(({ o
     };
 
     const handleResize = () => {
+      if (motionQuery.matches) {
+        applyReducedMotionComposition(states);
+        draw();
+        return;
+      }
       if (!animationFrame) draw();
     };
 
@@ -250,9 +303,12 @@ export const ThreadBackground: React.FC<ThreadBackgroundProps> = React.memo(({ o
     const handleMotionPreferenceChange = () => {
       if (motionQuery.matches) {
         stopLoop();
+        applyReducedMotionComposition(states);
         draw();
         return;
       }
+      const now = performance.now();
+      states.forEach((state) => resetMotionState(state, now));
       startLoop();
     };
 
@@ -281,29 +337,16 @@ export const ThreadBackground: React.FC<ThreadBackgroundProps> = React.memo(({ o
   }, []);
 
   return (
-    <div className="fixed inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 0 }} aria-hidden="true">
+    <div className="scent-thread-field" aria-hidden="true">
       {THREAD_LINES.map((thread) => (
         <div
           key={thread.id}
+          className={getThreadClassName(thread)}
           ref={(node) => {
             if (node) elementRefs.current.set(thread.id, node);
             else elementRefs.current.delete(thread.id);
           }}
-          style={{
-            position: 'absolute',
-            left: 0,
-            top: 0,
-            width: thread.width,
-            height: thread.height,
-            borderRadius: 999,
-            background: thread.background,
-            boxShadow: thread.boxShadow,
-            filter: thread.filter,
-            opacity: 0,
-            pointerEvents: 'none',
-            transform: 'translate3d(0, 0, 0)',
-            willChange: 'transform, opacity',
-          }}
+          style={getThreadStyle(thread)}
         />
       ))}
     </div>
