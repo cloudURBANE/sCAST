@@ -54,7 +54,7 @@ const LAB_MODES: Array<{ id: LabMode; label: string; description: string }> = [
   {
     id: 'production',
     label: 'Production',
-    description: 'Current ThreadBackground component with production canvas draws counted.',
+    description: 'Current ThreadBackground component with production frame writes counted.',
   },
   {
     id: 'dom',
@@ -1003,7 +1003,16 @@ function ProductionMode({ probe }: { probe: FreezeProbe }) {
   useProbeRender(probe, 'ProductionMode');
   const handleFrame = useCallback(
     (metrics: ThreadBackgroundFrameMetrics) => {
-      probe.reportCanvasFrame('production-thread-background', metrics);
+      probe.reportDomWrite('production-thread-background', {
+        mode: 'production',
+        renderer: 'production-thread-background',
+        sampleId: metrics.sample?.id,
+        x: metrics.sample?.x,
+        y: metrics.sample?.y,
+        position: metrics.sample?.position,
+        opacity: metrics.sample?.opacity,
+        drawCount: metrics.drawCount,
+      });
     },
     [probe],
   );
