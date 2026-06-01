@@ -70,7 +70,10 @@
 
 .scent-thread-line {
   --thread-angle: 90deg;
-  --thread-halo-inset: -8px -24px;
+  --thread-halo-inset: -10px -42px;
+  --thread-haze-inset: -18px -74px;
+  --thread-haze-blur: 14px;
+  --thread-haze-opacity: 0.42;
   --thread-halo-opacity: 0.46;
   --thread-glint-opacity: 0.38;
   --thread-halo-scale: 1;
@@ -109,7 +112,7 @@
   z-index: 2;
   border-radius: 999px;
   background: var(--thread-core);
-  box-shadow: var(--thread-shadow);
+  box-shadow: none;
   filter: var(--thread-filter);
   opacity: 0;
   pointer-events: none;
@@ -128,40 +131,50 @@
 }
 
 .scent-thread-line::before {
-  inset: var(--thread-halo-inset);
+  inset: var(--thread-haze-inset);
   z-index: -1;
-  background: var(--thread-halo);
-  opacity: calc(var(--thread-halo-opacity) * var(--thread-halo-scale));
+  background: var(--thread-core), var(--thread-halo);
+  filter: blur(var(--thread-haze-blur));
+  opacity: calc(var(--thread-haze-opacity) * var(--thread-halo-scale));
+  transform: translateZ(0);
 }
 
 .scent-thread-line::after {
-  inset: -0.5px;
+  inset: var(--thread-halo-inset);
   z-index: 1;
-  background: var(--thread-glint), var(--thread-grain);
+  background: var(--thread-glint), var(--thread-grain), var(--thread-halo);
+  filter: blur(1.8px);
   opacity: calc(var(--thread-glint-opacity) * var(--thread-glint-scale));
 }
 
 .scent-thread-line--axis-y {
   --thread-angle: 180deg;
-  --thread-halo-inset: -24px -8px;
+  --thread-halo-inset: -42px -10px;
+  --thread-haze-inset: -74px -18px;
 }
 
 .scent-thread-line--depth-far {
   z-index: 1;
-  --thread-halo-opacity: 0.24;
-  --thread-glint-opacity: 0.16;
+  --thread-haze-blur: 18px;
+  --thread-haze-opacity: 0.22;
+  --thread-halo-opacity: 0.18;
+  --thread-glint-opacity: 0.1;
 }
 
 .scent-thread-line--depth-mid {
   z-index: 2;
-  --thread-halo-opacity: 0.38;
-  --thread-glint-opacity: 0.3;
+  --thread-haze-blur: 15px;
+  --thread-haze-opacity: 0.36;
+  --thread-halo-opacity: 0.28;
+  --thread-glint-opacity: 0.2;
 }
 
 .scent-thread-line--depth-near {
   z-index: 3;
-  --thread-halo-opacity: 0.58;
-  --thread-glint-opacity: 0.46;
+  --thread-haze-blur: 12px;
+  --thread-haze-opacity: 0.5;
+  --thread-halo-opacity: 0.38;
+  --thread-glint-opacity: 0.28;
 }
 
 .scent-thread-line--tone-shadow {
