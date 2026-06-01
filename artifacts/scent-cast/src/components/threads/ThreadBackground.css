@@ -27,28 +27,9 @@
 
 .scent-thread-field::before {
   background:
-    repeating-linear-gradient(
-      112deg,
-      transparent 0 34px,
-      rgba(var(--thread-gold) / 0.012) 35px,
-      transparent 37px,
-      transparent 76px
-    ),
-    repeating-linear-gradient(
-      68deg,
-      transparent 0 42px,
-      rgba(var(--thread-cream) / 0.01) 43px,
-      transparent 45px,
-      transparent 98px
-    ),
-    repeating-linear-gradient(
-      0deg,
-      transparent 0 28px,
-      rgba(var(--thread-gold) / 0.007) 29px,
-      transparent 30px,
-      transparent 64px
-    );
-  opacity: 0.9;
+    radial-gradient(circle at 22% 18%, rgba(var(--thread-gold) / 0.042), transparent 34%),
+    radial-gradient(circle at 74% 78%, rgba(var(--thread-amber) / 0.026), transparent 38%);
+  opacity: 0.72;
   -webkit-mask-image:
     linear-gradient(180deg, transparent 0%, #000 8%, #000 92%, transparent 100%),
     linear-gradient(90deg, transparent 0%, #000 7%, #000 93%, transparent 100%);
@@ -70,48 +51,20 @@
 
 .scent-thread-line {
   --thread-angle: 90deg;
-  --thread-halo-inset: -10px -42px;
-  --thread-haze-inset: -18px -74px;
-  --thread-haze-blur: 14px;
-  --thread-haze-opacity: 0.42;
-  --thread-halo-opacity: 0.46;
-  --thread-glint-opacity: 0.38;
-  --thread-halo-scale: 1;
-  --thread-glint-scale: 1;
-  --thread-shadow: none;
+  --thread-aura-inset: -5px -12px;
+  --thread-aura-blur: 6px;
+  --thread-aura-opacity: 0.22;
+  --thread-core-opacity: 0.38;
+  --thread-core-blur: 0.35px;
+  --thread-tone-aura-opacity: 1;
+  --thread-tone-core-opacity: 1;
   --thread-filter: none;
-  --thread-halo:
-    linear-gradient(
-      var(--thread-angle),
-      transparent 0%,
-      rgba(var(--thread-gold) / 0.16) 36%,
-      rgba(var(--thread-cream) / 0.12) 50%,
-      rgba(var(--thread-gold) / 0.12) 64%,
-      transparent 100%
-    );
-  --thread-glint:
-    linear-gradient(
-      var(--thread-angle),
-      transparent 0%,
-      rgba(var(--thread-cream) / 0.0) 24%,
-      rgba(var(--thread-cream) / 0.46) 49%,
-      rgba(var(--thread-gold) / 0.2) 58%,
-      transparent 100%
-    );
-  --thread-grain:
-    repeating-linear-gradient(
-      var(--thread-angle),
-      transparent 0 9px,
-      rgba(var(--thread-cream) / 0.26) 10px,
-      transparent 11px,
-      transparent 22px
-    );
   position: absolute;
   left: 0;
   top: 0;
   z-index: 2;
   border-radius: 999px;
-  background: var(--thread-core);
+  background: transparent;
   box-shadow: none;
   filter: var(--thread-filter);
   opacity: 0;
@@ -131,162 +84,74 @@
 }
 
 .scent-thread-line::before {
-  inset: var(--thread-haze-inset);
-  z-index: -1;
-  background: var(--thread-core), var(--thread-halo);
-  filter: blur(var(--thread-haze-blur));
-  opacity: calc(var(--thread-haze-opacity) * var(--thread-halo-scale));
+  inset: var(--thread-aura-inset);
+  z-index: 0;
+  background: var(--thread-core);
+  filter: blur(var(--thread-aura-blur));
+  opacity: calc(var(--thread-aura-opacity) * var(--thread-tone-aura-opacity));
   transform: translateZ(0);
 }
 
 .scent-thread-line::after {
-  inset: var(--thread-halo-inset);
+  inset: 0;
   z-index: 1;
-  background: var(--thread-glint), var(--thread-grain), var(--thread-halo);
-  filter: blur(1.8px);
-  opacity: calc(var(--thread-glint-opacity) * var(--thread-glint-scale));
+  background: var(--thread-core);
+  filter: blur(var(--thread-core-blur));
+  opacity: calc(var(--thread-core-opacity) * var(--thread-tone-core-opacity));
 }
 
 .scent-thread-line--axis-y {
   --thread-angle: 180deg;
-  --thread-halo-inset: -42px -10px;
-  --thread-haze-inset: -74px -18px;
+  --thread-aura-inset: -12px -5px;
 }
 
 .scent-thread-line--depth-far {
   z-index: 1;
-  --thread-haze-blur: 18px;
-  --thread-haze-opacity: 0.22;
-  --thread-halo-opacity: 0.18;
-  --thread-glint-opacity: 0.1;
+  --thread-aura-blur: 7px;
+  --thread-aura-opacity: 0.14;
+  --thread-core-opacity: 0.2;
+  --thread-core-blur: 0.55px;
 }
 
 .scent-thread-line--depth-mid {
   z-index: 2;
-  --thread-haze-blur: 15px;
-  --thread-haze-opacity: 0.36;
-  --thread-halo-opacity: 0.28;
-  --thread-glint-opacity: 0.2;
+  --thread-aura-blur: 6px;
+  --thread-aura-opacity: 0.22;
+  --thread-core-opacity: 0.34;
+  --thread-core-blur: 0.4px;
 }
 
 .scent-thread-line--depth-near {
   z-index: 3;
-  --thread-haze-blur: 12px;
-  --thread-haze-opacity: 0.5;
-  --thread-halo-opacity: 0.38;
-  --thread-glint-opacity: 0.28;
+  --thread-aura-blur: 4px;
+  --thread-aura-opacity: 0.3;
+  --thread-core-opacity: 0.52;
+  --thread-core-blur: 0.2px;
 }
 
 .scent-thread-line--tone-shadow {
-  --thread-halo:
-    linear-gradient(
-      var(--thread-angle),
-      transparent 0%,
-      rgba(0, 0, 0, 0.28) 25%,
-      rgba(0, 0, 0, 0.62) 50%,
-      rgba(var(--thread-gold) / 0.035) 58%,
-      transparent 100%
-    );
-  --thread-glint:
-    linear-gradient(
-      var(--thread-angle),
-      transparent 0%,
-      rgba(var(--thread-cream) / 0.0) 42%,
-      rgba(var(--thread-cream) / 0.12) 53%,
-      transparent 66%
-    );
-  --thread-grain:
-    repeating-linear-gradient(
-      var(--thread-angle),
-      transparent 0 13px,
-      rgba(0, 0, 0, 0.4) 14px,
-      transparent 15px,
-      transparent 30px
-    );
+  --thread-tone-aura-opacity: 0.42;
+  --thread-tone-core-opacity: 0.48;
 }
 
 .scent-thread-line--tone-smoke {
-  --thread-halo:
-    linear-gradient(
-      var(--thread-angle),
-      transparent 0%,
-      rgba(166, 132, 78, 0.045) 24%,
-      rgba(var(--thread-cream) / 0.08) 48%,
-      rgba(84, 63, 38, 0.05) 70%,
-      transparent 100%
-    );
-  --thread-glint:
-    linear-gradient(
-      var(--thread-angle),
-      transparent 0%,
-      rgba(var(--thread-cream) / 0.16) 47%,
-      rgba(var(--thread-gold) / 0.08) 58%,
-      transparent 100%
-    );
+  --thread-tone-aura-opacity: 0.52;
+  --thread-tone-core-opacity: 0.58;
 }
 
 .scent-thread-line--tone-gold {
-  --thread-halo:
-    linear-gradient(
-      var(--thread-angle),
-      transparent 0%,
-      rgba(90, 48, 8, 0.08) 14%,
-      rgba(var(--thread-gold) / 0.25) 36%,
-      rgba(var(--thread-cream) / 0.2) 50%,
-      rgba(var(--thread-gold) / 0.18) 68%,
-      transparent 100%
-    );
-  --thread-glint:
-    linear-gradient(
-      var(--thread-angle),
-      transparent 0%,
-      rgba(255, 231, 167, 0.0) 20%,
-      rgba(255, 246, 218, 0.62) 48%,
-      rgba(212, 175, 55, 0.32) 58%,
-      transparent 100%
-    );
+  --thread-tone-aura-opacity: 0.96;
+  --thread-tone-core-opacity: 1;
 }
 
 .scent-thread-line--tone-champagne {
-  --thread-halo:
-    linear-gradient(
-      var(--thread-angle),
-      transparent 0%,
-      rgba(var(--thread-cream) / 0.12) 28%,
-      rgba(255, 255, 252, 0.26) 50%,
-      rgba(var(--thread-gold) / 0.1) 70%,
-      transparent 100%
-    );
-  --thread-glint:
-    linear-gradient(
-      var(--thread-angle),
-      transparent 0%,
-      rgba(255, 247, 236, 0.0) 18%,
-      rgba(255, 255, 252, 0.76) 49%,
-      rgba(255, 229, 175, 0.28) 63%,
-      transparent 100%
-    );
+  --thread-tone-aura-opacity: 0.78;
+  --thread-tone-core-opacity: 0.86;
 }
 
 .scent-thread-line--tone-ember {
-  --thread-halo:
-    linear-gradient(
-      var(--thread-angle),
-      transparent 0%,
-      rgba(105, 45, 8, 0.08) 14%,
-      rgba(var(--thread-amber) / 0.18) 45%,
-      rgba(212, 109, 32, 0.14) 66%,
-      transparent 100%
-    );
-  --thread-glint:
-    linear-gradient(
-      var(--thread-angle),
-      transparent 0%,
-      rgba(255, 207, 128, 0.0) 23%,
-      rgba(255, 207, 128, 0.48) 50%,
-      rgba(156, 73, 16, 0.2) 66%,
-      transparent 100%
-    );
+  --thread-tone-aura-opacity: 0.64;
+  --thread-tone-core-opacity: 0.72;
 }
 
 @media (max-width: 640px) {
@@ -299,15 +164,25 @@
   }
 
   .scent-thread-line--depth-far {
-    --thread-halo-opacity: 0.18;
-    --thread-glint-opacity: 0.12;
+    --thread-aura-opacity: 0.12;
+    --thread-core-opacity: 0.18;
   }
 }
 
 @media (hover: none) and (pointer: coarse) {
-  .scent-thread-line {
-    --thread-halo-scale: 0.82;
-    --thread-glint-scale: 0.9;
+  .scent-thread-line--depth-far {
+    --thread-aura-opacity: 0.1;
+    --thread-core-opacity: 0.16;
+  }
+
+  .scent-thread-line--depth-mid {
+    --thread-aura-opacity: 0.18;
+    --thread-core-opacity: 0.3;
+  }
+
+  .scent-thread-line--depth-near {
+    --thread-aura-opacity: 0.24;
+    --thread-core-opacity: 0.46;
   }
 }
 
