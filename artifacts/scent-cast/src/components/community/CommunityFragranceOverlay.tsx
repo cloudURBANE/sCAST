@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { X } from 'lucide-react';
+import { BottleImage } from '@/components/BottleImage';
+import { BrandGoldLabel } from '@/components/BrandGoldLabel';
 import type { CommunityFragranceEntry } from '@/components/community/communityData';
 
 interface CommunityFragranceOverlayProps {
@@ -81,8 +83,8 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.35, ease: 'easeInOut' }}
-          className="fixed inset-0 z-[110] bg-black/95 backdrop-blur-sm flex flex-col"
+          transition={{ duration: 0.24, ease: 'easeOut' }}
+          className="fixed inset-0 z-[110] flex flex-col bg-[#020202]"
           role="dialog"
           aria-modal="true"
           aria-labelledby="community-fragrance-overlay-title"
@@ -105,27 +107,68 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
           </div>
 
           <div className="flex-1 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}>
-            <div className="flex items-center justify-center min-h-full px-5 py-6 sm:px-16 sm:py-12">
-              <div className="max-w-2xl w-full text-center space-y-6 sm:space-y-12">
-                <header>
-                  <p className="text-[9px] uppercase tracking-[0.3em] text-scent-accent/75 mb-3">{item.curator}</p>
-                  <h2 id="community-fragrance-overlay-title" className="font-serif italic text-2xl sm:text-6xl mb-4">Inside the case</h2>
-                  <div className="h-px w-16 bg-white/20 mx-auto" />
-                </header>
-                <div className="py-6 sm:py-16 border-y border-white/10">
-                  <p className="text-sm uppercase tracking-[0.2em] text-white/40 mb-2 font-serif">{item.brand}</p>
-                  <h3 className="font-serif italic text-3xl sm:text-8xl text-white leading-tight">{item.name}</h3>
-                  {item.family ? (
-                    <p className="mt-5 text-[10px] uppercase tracking-[0.28em] text-scent-accent/80">{item.family}</p>
-                  ) : null}
+            <div className="flex min-h-full items-center justify-center px-5 py-6 sm:px-10 sm:py-10 lg:px-16">
+              <div className="grid w-full max-w-6xl gap-8 lg:grid-cols-[minmax(18rem,26rem)_minmax(0,1fr)] lg:items-center lg:gap-14">
+                <div className="scent-fragrance-card relative mx-auto flex aspect-[3/4.6] w-full max-w-[20rem] flex-col p-5 sm:max-w-[24rem] sm:p-6">
+                  <div className="scent-card-frame" aria-hidden="true" />
+                  <div className="relative z-10 flex justify-end">
+                    <span className="font-mono text-[9px] uppercase tracking-[0.22em] text-scent-accent/80">
+                      {item.curator}
+                    </span>
+                  </div>
+                  <div className="relative z-10 my-3 min-h-0 flex-1">
+                    <BottleImage
+                      src={item.imageUrl}
+                      alt={`${item.name} by ${item.brand}`}
+                      variant="card"
+                      className="absolute inset-0"
+                      imgClassName="brightness-[1.1]"
+                      adjustment={item.imageAdjustment}
+                    />
+                  </div>
+                  <div className="relative z-10 mt-2 text-center">
+                    <BrandGoldLabel as="span" brand={item.brand} className="scent-card-brand block" />
+                  </div>
+                  <div className="scent-card-title-row relative z-10 mt-2">
+                    <h3 className="scent-card-title" title={item.name}>{item.name}</h3>
+                  </div>
                 </div>
-                <div className="grid grid-cols-1 gap-5 sm:gap-7 text-left">
-                  {noteRows.map(([label, key]) => (
-                    <div key={label}>
-                      <p className="text-[8px] uppercase tracking-[0.3em] text-scent-muted mb-2 font-bold">{label}</p>
-                      <p className="text-sm italic text-scent-muted leading-relaxed">{formatNotes(item[key])}</p>
+
+                <div className="space-y-8 text-left">
+                  <header className="space-y-5">
+                    <p className="text-[9px] font-bold uppercase tracking-[0.36em] text-scent-accent/80">
+                      Community Wardrobe
+                    </p>
+                    <div className="space-y-3">
+                      <BrandGoldLabel as="p" brand={item.brand} className="font-serif text-sm uppercase tracking-[0.24em]" />
+                      <h2
+                        id="community-fragrance-overlay-title"
+                        className="font-serif text-4xl italic leading-none text-[#fff7ec] sm:text-6xl lg:text-7xl"
+                      >
+                        {item.name}
+                      </h2>
                     </div>
-                  ))}
+                    {item.family ? (
+                      <p className="text-[10px] uppercase tracking-[0.28em] text-scent-muted">
+                        {item.family}
+                      </p>
+                    ) : null}
+                  </header>
+
+                  <div className="h-px w-full bg-gradient-to-r from-scent-accent/40 via-white/10 to-transparent" />
+
+                  <div className="grid grid-cols-1 gap-5 sm:grid-cols-3 sm:gap-6">
+                    {noteRows.map(([label, key]) => (
+                      <div key={label} className="border-l border-white/10 pl-4">
+                        <p className="mb-2 text-[8px] font-bold uppercase tracking-[0.3em] text-scent-accent/70">
+                          {label}
+                        </p>
+                        <p className="font-serif text-base italic leading-relaxed text-scent-muted">
+                          {formatNotes(item[key])}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
