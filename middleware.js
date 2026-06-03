@@ -105,6 +105,15 @@ export async function middleware(request) {
     const upstream = await fetch(targetUrl, init);
     const passthrough = new Headers(upstream.headers);
     HOP_BY_HOP.forEach((h) => passthrough.delete(h));
+    // The Edge runtime's `fetch` transparently decodes the upstream body, so
+    // `upstream.body` is already the plain (decompressed) bytes -- but the
+    // upstream `content-encoding`/`content-length` headers still describe the
+    // ORIGINAL compressed response. Forwarding them tells the browser the body
+    // is still gzip/br; it then tries to decompress plain JSON and dies with
+    // net::ERR_CONTENT_DECODING_FAILED on every proxied call. Strip both so the
+    // response headers match the decoded body we actually stream back.
+    passthrough.delete("content-encoding");
+    passthrough.delete("content-length");
     return new Response(upstream.body, {
       status: upstream.status,
       statusText: upstream.statusText,

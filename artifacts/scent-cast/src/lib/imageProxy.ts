@@ -45,6 +45,43 @@ function apiUrl(path: string, apiBaseUrl = API_BASE_URL): string {
   return apiBaseUrl ? `${apiBaseUrl}${path}` : path;
 }
 
+/**
+ * Optional comma-separated allowlist of CDN origins/prefixes we control and that
+ * serve our already-processed image objects (e.g. a Supabase public bucket base
+ * or a CDN domain fronting it). URLs under these are rendered directly instead of
+ * being re-fetched through `/api/image-proxy`. Origin- or prefix-match.
+ */
+function parseImageCdnBases(raw: string | undefined): string[] {
+  if (!raw) return [];
+  return raw
+    .split(",")
+    .map((candidate) => candidate.trim().replace(/\/+$/, ""))
+    .filter(Boolean);
+}
+
+const IMAGE_CDN_BASES = parseImageCdnBases(import.meta.env?.VITE_IMAGE_CDN_BASES as string | undefined);
+
+/**
+ * True when `url` points at one of our already-processed image objects, which are
+ * served from a CDN-backed bucket with long immutable Cache-Control. These never
+ * need the proxy — sending them through `/api/image-proxy` only adds a full origin
+ * hop (browser → edge → Railway → fetch → CDN) for zero benefit. Genuinely
+ * third-party hotlink sources (search candidates, raw Fragrantica/Basenotes
+ * thumbnails) are NOT matched here, so they keep using the proxy.
+ *
+ * Processed objects always live under `images/processed/` (enforced backend-side
+ * by `assertSafeStorageKey`). Supabase public URLs and local object URLs keep that
+ * path literal; Firebase's `?alt=media` form percent-encodes the slashes, so we
+ * match `images%2Fprocessed%2F` too. The CDN-base allowlist is an explicit escape
+ * hatch for custom CDN domains where the path heuristic alone is undesirable.
+ */
+export function isProcessedStorageImageUrl(url: string, cdnBases: string[] = IMAGE_CDN_BASES): boolean {
+  if (url.includes("/images/processed/") || /images%2[fF]processed%2[fF]/.test(url)) {
+    return true;
+  }
+  return cdnBases.some((base) => url === base || url.startsWith(`${base}/`));
+}
+
 export function proxiedImageUrl(url: string | undefined | null, options?: ProxiedImageOptions): string {
   if (!url) return "";
   let u = url.trim();
@@ -64,6 +101,15 @@ export function proxiedImageUrl(url: string | undefined | null, options?: Proxie
   }
 
   if (!/^https?:\/\//i.test(u)) return u;
+
+  // Phase 1: our own processed images are already served immutable from a
+  // CDN-backed bucket, so render them directly and skip the proxy entirely.
+  // The full URL (including any v= cache-buster) is preserved as-is, and the
+  // packshot trim is intentionally ignored — these are processed transparent
+  // WebPs that must not be JPEG-trimmed (the backend proxy skips trim for them
+  // too). Only third-party hotlink sources fall through to /api/image-proxy.
+  if (isProcessedStorageImageUrl(u)) return u;
+
   // Read v= from the upstream URL so the proxy URL itself can vary by version
   // (helps the browser and any in-front CDN treat each version as distinct).
   // CRITICAL: do not strip v= from the upstream URL before encoding it. The

@@ -8,6 +8,7 @@
     "rebuild-user": "tsx ./src/rebuild-user-wardrobe.ts",
     "cleanup-images": "tsx ./src/cleanup-orphaned-images.ts",
     "verify:image-pipeline": "tsx ./src/verify-image-pipeline.ts",
+    "measure:image-load": "tsx ./src/measure-wardrobe-image-load.ts",
     "verify:poof-paths": "tsx ../artifacts/api-server/src/services/verifyPoofPaths.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
