@@ -399,7 +399,7 @@ function looksLikeNamedFragranceQuery(query: string): boolean {
   return meaningfulQueryTokens(query).length >= 2;
 }
 
-function hasKnownFragranceBrandSignal(query: string): boolean {
+export function hasKnownFragranceBrandSignal(query: string): boolean {
   const queryWords = meaningfulQueryTokens(query);
   return queryWords.some((word) => KNOWN_FRAGRANCE_BRAND_TOKENS.has(word));
 }
