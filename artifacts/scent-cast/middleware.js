@@ -104,6 +104,16 @@ export default async function middleware(request) {
     const upstream = await fetch(targetUrl, init);
     const passthrough = new Headers(upstream.headers);
     HOP_BY_HOP.forEach((h) => passthrough.delete(h));
+    // `fetch` (Node/undici runtime) transparently decodes the upstream body, so
+    // `upstream.body` is already plain (decompressed) bytes -- but the upstream
+    // `content-encoding`/`content-length` headers still describe the ORIGINAL
+    // gzip/br response. Forwarding content-encoding tells the browser the plain
+    // body is still compressed; it then fails every call with
+    // net::ERR_CONTENT_DECODING_FAILED. (content-length is already dropped via
+    // HOP_BY_HOP, but delete it explicitly here too for safety.) Strip both so
+    // the response headers match the decoded body we actually stream back.
+    passthrough.delete("content-encoding");
+    passthrough.delete("content-length");
     return new Response(upstream.body, {
       status: upstream.status,
       statusText: upstream.statusText,
