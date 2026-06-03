@@ -13,7 +13,15 @@ export interface WeatherData {
   icon?: string;
   windSpeed?: number;
   wind_speed_mph?: number;
+  apparent_temperature_f?: number;
+  precipitation_in?: number;
+  cloud_cover_percent?: number;
+  wind_direction_degrees?: number;
+  wind_gusts_mph?: number;
+  is_day?: boolean;
+  is_raining?: boolean;
   location?: string;
+  source?: string;
   isLive?: boolean;
   error?: string;
 }
