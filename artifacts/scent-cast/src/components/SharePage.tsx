@@ -68,6 +68,7 @@ interface Fragrance {
 interface ShareData {
   fragrances: Fragrance[];
   hideImages: boolean;
+  buyLinks?: Record<string, BuyLink>;
 }
 
 interface BuyLink {
@@ -639,7 +640,24 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
           : [];
 
         if (fragranceIds.length) {
-          fetch(publicShareBuyLinksEndpoint(userId, fragranceIds))
+          const embeddedBuyLinks = d?.buyLinks && typeof d.buyLinks === 'object' && !Array.isArray(d.buyLinks)
+            ? d.buyLinks as Record<string, BuyLink>
+            : {};
+          const unavailable = Object.fromEntries(
+            fragranceIds.map((fragranceId: string) => [
+              fragranceId,
+              { provider: 'rakuten', buyUrl: null, status: 'unavailable' },
+            ]),
+          );
+          const missingBuyLinkIds = fragranceIds.filter(
+            (fragranceId: string) => !Object.prototype.hasOwnProperty.call(embeddedBuyLinks, fragranceId),
+          );
+
+          setBuyLinks({ ...unavailable, ...embeddedBuyLinks });
+
+          if (missingBuyLinkIds.length === 0) return;
+
+          fetch(publicShareBuyLinksEndpoint(userId, missingBuyLinkIds))
             .then(async (response) => {
               if (!response.ok) throw new Error(`HTTP ${response.status}`);
               return response.json();
@@ -648,13 +666,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
               const links = payload?.buyLinks && typeof payload.buyLinks === 'object'
                 ? payload.buyLinks
                 : {};
-              const unavailable = Object.fromEntries(
-                fragranceIds.map((fragranceId: string) => [
-                  fragranceId,
-                  { provider: 'rakuten', buyUrl: null, status: 'unavailable' },
-                ]),
-              );
-              setBuyLinks({ ...unavailable, ...links });
+              setBuyLinks((current) => ({ ...current, ...links }));
             }).catch((e) => {
               console.error('Failed to load public share buy links', e);
               toast({

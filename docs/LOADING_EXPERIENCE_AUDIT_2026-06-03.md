@@ -10,13 +10,14 @@ Low-risk fixes applied after the audit:
 - `/api/fragrances/search` now puts a 1200 ms response budget around external source expansion and returns catalog/dataset candidates with `diagnostics.source_lookup_timeout` when source discovery overruns the budget.
 - Public share and community routes now reuse `batchHydrateImageUrls` instead of per-row `hydrateImageUrl` calls.
 - Public share buy-link loading now uses a single batch endpoint, `/api/share/:userRef/buy-links?ids=...`, with public Rakuten resolution kept cache-only.
+- Public share payloads now embed a cache-only `buyLinks` map, the share page only calls the batch endpoint for missing ids, and public buy-link cache reads are batched into one affiliate-link lookup per response.
 - `/api/usage/total` now scopes totals to the authenticated user instead of returning global ledger totals.
 - `BottleImage` clears pending retry timers on source changes, successful load, and unmount.
 - `WeatherContext` starts the default `/api/weather` fetch immediately, then upgrades with coordinate weather if geolocation succeeds.
 
 Verification after fixes:
 
-- `corepack pnpm --filter @workspace/api-server test`: pass, 161/161.
+- `corepack pnpm --filter @workspace/api-server test`: pass, 165/165.
 - `corepack pnpm --filter @workspace/scent-cast test`: pass, 75/75.
 - `corepack pnpm --filter @workspace/api-server typecheck`: pass.
 - `corepack pnpm --filter @workspace/scent-cast typecheck`: pass.
@@ -26,7 +27,7 @@ Still needs work:
 - Detail source URL enrichment can still be long-running when the app detail endpoint is the primary path. The safer larger fix is optimistic save plus background detail/image enrichment updates tied to the authenticated user's row.
 - The app fallback search now has a response budget, but it still needs proper background enrichment/rate limiting so timed-out source discovery can continue safely outside the request.
 - Community gallery remains a global public aggregation. Product needs to decide whether this is intentionally global or should be tenant/host scoped before multi-tenant rollout.
-- Public buy-link batching removes browser fanout, but deeper server-side batching or cached buy-link status embedded in `/api/share/:userRef` would reduce backend DB work further.
+- Public buy-link payload embedding and one-query cache batching are implemented. Remaining buy-link work is a cache freshness/expiry policy and explicit monitoring for stale affiliate rows; public live Rakuten lookup should remain disabled unless abuse controls are added.
 - Image proxy SSRF protections should stay as-is; performance work remains CDN caching, URL-hash cache keys, and possible `stale-while-revalidate`.
 - Usage totals are user-scoped now. Any future tenant/admin aggregate view still needs explicit role and tenant authorization.
 

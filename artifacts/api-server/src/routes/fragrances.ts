@@ -1,10 +1,6 @@
 import { Router } from "express";
 import { AuthRequest, requireAuth } from "../middlewares/auth";
-import { db } from "@workspace/db";
-import { affiliateLinksTable, userFragrancesTable } from "@workspace/db/schema";
-import { eq, sql } from "drizzle-orm";
 import { logger } from "../lib/logger";
-import { normalizeFragrance } from "../services/fragrancePayload";
 import {
   searchCatalogBrandCandidates,
   searchCatalogCandidates,
@@ -26,29 +22,20 @@ import {
   searchFragranceDatasetByBrand,
   shouldSearchExternalFragranceSources,
 } from "../services/fragranceNameResolver";
-import { createRakutenProvider, rakutenEnvReady } from "../services/rakutenProvider";
 import {
-  buildAmazonAffiliateUrl,
-  buildAmazonSearchUrl,
-  isAmazonProductUrl,
-} from "../server/affiliate/providers/amazon/amazonAffiliateUrl";
+  buyLinkResponse,
+  findFragranceRow,
+  findFragranceRowsForUser,
+  isShareHidden,
+  parseBatchIds,
+  resolveBuyLinkForFragrance,
+  resolvePublicBuyLinksForRows,
+} from "../services/buyLinks";
 import { resolveShareUser } from "../services/shareUsers";
 
 const router = Router();
 
 const SOURCE_SEARCH_RESPONSE_BUDGET_MS = 1200;
-
-type BuyLinkStatus = "active" | "unavailable";
-type UserFragranceRow = typeof userFragrancesTable.$inferSelect;
-type BuyLinkResponseOptions = {
-  buyUrl?: string | null;
-  affiliateApplied?: boolean;
-  affiliateUnavailableReason?: string;
-  network?: string;
-};
-type BuyLinkResolveOptions = {
-  allowLiveRakuten: boolean;
-};
 
 function cleanQueryParam(value: unknown): string {
   return typeof value === "string" ? value.trim().slice(0, 180) : "";
@@ -134,55 +121,6 @@ async function buildDetailFromIdentity(input: {
   };
 }
 
-function isUuidish(value: string): boolean {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
-}
-
-function buyLinkResponse(
-  provider: string,
-  status: BuyLinkStatus,
-  affiliateLinkId?: string,
-  reason?: string,
-  options: BuyLinkResponseOptions = {},
-) {
-  return {
-    provider,
-    ...(options.network ? { network: options.network } : {}),
-    buyUrl: options.buyUrl ?? (status === "active" && affiliateLinkId ? `/go/affiliate/${affiliateLinkId}` : null),
-    status,
-    ...(typeof options.affiliateApplied === "boolean" ? { affiliateApplied: options.affiliateApplied } : {}),
-    ...(options.affiliateUnavailableReason
-      ? { affiliateUnavailableReason: options.affiliateUnavailableReason }
-      : {}),
-    ...(reason ? { reason } : {}),
-  };
-}
-
-async function findFragranceRow(userId: string, id: string) {
-  if (isUuidish(id)) {
-    const byDbId = await db
-      .select()
-      .from(userFragrancesTable)
-      .where(sql`${userFragrancesTable.id} = ${id} AND ${userFragrancesTable.userId} = ${userId}`)
-      .limit(1);
-
-    if (byDbId[0]) return byDbId[0];
-  }
-
-  const byPayloadId = await db
-    .select()
-    .from(userFragrancesTable)
-    .where(sql`${userFragrancesTable.userId} = ${userId} AND ${userFragrancesTable.fragranceData}->>'id' = ${id}`)
-    .limit(1);
-
-  return byPayloadId[0] ?? null;
-}
-
-function isShareHidden(fragrance: UserFragranceRow): boolean {
-  const data = fragrance.fragranceData;
-  return Boolean(data && typeof data === "object" && (data as Record<string, unknown>).shareHidden);
-}
-
 async function searchScentSourcesWithResponseBudget(
   query: string,
   options: Parameters<typeof searchScentSources>[1],
@@ -200,47 +138,6 @@ async function searchScentSourcesWithResponseBudget(
     ]);
   } finally {
     if (timeout) clearTimeout(timeout);
-  }
-}
-
-function parseBatchIds(value: unknown): string[] {
-  const raw = Array.isArray(value) ? value : typeof value === "string" ? value.split(",") : [];
-  const seen = new Set<string>();
-  const ids: string[] = [];
-  for (const item of raw) {
-    if (typeof item !== "string") continue;
-    const id = item.trim();
-    if (!id || seen.has(id)) continue;
-    seen.add(id);
-    ids.push(id);
-    if (ids.length >= 96) break;
-  }
-  return ids;
-}
-
-function payloadFragranceId(fragrance: UserFragranceRow): string | null {
-  const data = fragrance.fragranceData;
-  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
-  const id = (data as Record<string, unknown>).id;
-  return typeof id === "string" && id.trim() ? id.trim() : null;
-}
-
-async function findCachedAffiliateLink(fragranceId: string, provider: string) {
-  const rows = await db
-    .select()
-    .from(affiliateLinksTable)
-    .where(sql`${affiliateLinksTable.fragranceId} = ${fragranceId} and ${affiliateLinksTable.provider} = ${provider} and ${affiliateLinksTable.status} = 'active'`)
-    .limit(1);
-
-  return rows[0] ?? null;
-}
-
-async function findCachedAffiliateLinkSafe(fragranceId: string, provider: string) {
-  try {
-    return await findCachedAffiliateLink(fragranceId, provider);
-  } catch (err) {
-    logger.warn({ err, fragranceId, provider }, "affiliate link cache lookup failed");
-    return null;
   }
 }
 
@@ -413,161 +310,6 @@ router.post("/fragrances/details", async (req, res) => {
   res.status(400).json({ error: "Provide id or source_url." });
 });
 
-function buildFragranceQuery(fragrance: UserFragranceRow): string {
-  const normalized = normalizeFragrance(fragrance.fragranceData as Record<string, any>);
-  return [normalized.brand, normalized.name].filter(Boolean).join(" ").trim();
-}
-
-function amazonAffiliateEnabled(): boolean {
-  return process.env.AMAZON_AFFILIATE_ENABLED?.trim().toLowerCase() === "true";
-}
-
-function amazonAssociateTag(): string | undefined {
-  return process.env.AMAZON_ASSOCIATE_TAG?.trim() || undefined;
-}
-
-function amazonMarketplace(): string | undefined {
-  return process.env.AMAZON_MARKETPLACE?.trim() || undefined;
-}
-
-function findAmazonProductUrl(value: unknown): string | null {
-  const stack: unknown[] = [value];
-  const seen = new Set<unknown>();
-
-  while (stack.length > 0 && seen.size < 200) {
-    const current = stack.pop();
-    if (!current || seen.has(current)) continue;
-    seen.add(current);
-
-    if (typeof current === "string") {
-      const trimmed = current.trim();
-      if (trimmed && isAmazonProductUrl(trimmed)) return trimmed;
-      continue;
-    }
-
-    if (Array.isArray(current)) {
-      stack.push(...current);
-      continue;
-    }
-
-    if (typeof current === "object") {
-      stack.push(...Object.values(current as Record<string, unknown>));
-    }
-  }
-
-  return null;
-}
-
-async function resolveBuyLinkForFragrance(
-  fragrance: UserFragranceRow,
-  options: BuyLinkResolveOptions,
-) {
-  let fallbackReason: string | undefined = options.allowLiveRakuten ? undefined : "BUY_LINK_NOT_CACHED";
-
-  const cachedRakuten = await findCachedAffiliateLinkSafe(fragrance.id, "rakuten");
-  if (cachedRakuten) {
-    return buyLinkResponse("rakuten", "active", cachedRakuten.id);
-  }
-
-  if (options.allowLiveRakuten && rakutenEnvReady()) {
-    const query = buildFragranceQuery(fragrance);
-    if (query) {
-      const rakuten = createRakutenProvider();
-      const result = await rakuten.resolveBuyLink({ query });
-
-      if (result.status === "active") {
-        const product = result.product;
-        let created: typeof affiliateLinksTable.$inferSelect | undefined;
-        try {
-          [created] = await db
-            .insert(affiliateLinksTable)
-            .values({
-              fragranceId: fragrance.id,
-              provider: "rakuten",
-              advertiserId: product.advertiserId,
-              advertiserName: product.advertiserName,
-              productTitle: product.title,
-              productBrand: product.brand,
-              destinationUrl: product.destinationUrl,
-              affiliateUrl: product.affiliateUrl,
-              imageUrl: product.imageUrl,
-              price: product.salePrice ?? product.price,
-              currency: product.currency,
-              matchScore: product.matchScore,
-              status: "active",
-              fetchedAt: new Date(),
-              lastVerifiedAt: new Date(),
-            })
-            .returning();
-        } catch (err) {
-          logger.warn({ err, fragranceId: fragrance.id }, "[rakuten] active buy-link cache insert failed");
-        }
-
-        if (created) {
-          return buyLinkResponse("rakuten", "active", created.id);
-        }
-
-        return buyLinkResponse("rakuten", "active", undefined, "AFFILIATE_LINK_CACHE_BYPASSED", {
-          network: "rakuten",
-          buyUrl: product.affiliateUrl,
-          affiliateApplied: true,
-        });
-      }
-
-      logger.info({ fragranceId: fragrance.id, reason: result.reason }, "[rakuten] buy-link unavailable");
-      fallbackReason = result.reason;
-    }
-  }
-
-  const cachedCj = await findCachedAffiliateLinkSafe(fragrance.id, "cj");
-  if (cachedCj) {
-    return {
-      provider: "cj",
-      buyUrl: `/go/cj/${cachedCj.id}`,
-      status: "active",
-    };
-  }
-
-  const originalAmazonUrl = findAmazonProductUrl(fragrance.fragranceData);
-  if (originalAmazonUrl) {
-    const amazon = buildAmazonAffiliateUrl({
-      productUrl: originalAmazonUrl,
-      associateTag: amazonAssociateTag(),
-      enabled: amazonAffiliateEnabled(),
-    });
-
-    return buyLinkResponse("amazon", "active", undefined, amazon.reason, {
-      network: "amazon",
-      buyUrl: amazon.url,
-      affiliateApplied: amazon.affiliateApplied,
-      affiliateUnavailableReason: amazon.reason,
-    });
-  }
-
-  const searchQuery = buildFragranceQuery(fragrance);
-  const amazonSearch = buildAmazonSearchUrl({
-    query: searchQuery,
-    marketplace: amazonMarketplace(),
-    associateTag: amazonAssociateTag(),
-    enabled: amazonAffiliateEnabled(),
-  });
-  if (amazonSearch) {
-    return buyLinkResponse("amazon", "active", undefined, "AMAZON_SEARCH_FALLBACK", {
-      network: "amazon",
-      buyUrl: amazonSearch.url,
-      affiliateApplied: amazonSearch.affiliateApplied,
-      affiliateUnavailableReason: amazonSearch.reason,
-    });
-  }
-
-  return buyLinkResponse(
-    "rakuten",
-    "unavailable",
-    undefined,
-    fallbackReason ?? (rakutenEnvReady() ? "EMPTY_FRAGRANCE_QUERY" : "RAKUTEN_CREDENTIALS_MISSING"),
-  );
-}
-
 router.get("/share/:userRef/fragrances/:id/buy-link", async (req, res) => {
   try {
     const user = await resolveShareUser(req.params.userRef as string);
@@ -604,32 +346,10 @@ router.get("/share/:userRef/buy-links", async (req, res) => {
       return;
     }
 
-    const rows = await db
-      .select()
-      .from(userFragrancesTable)
-      .where(eq(userFragrancesTable.userId, user.id));
+    const rows = await findFragranceRowsForUser(user.id);
+    const buyLinks = await resolvePublicBuyLinksForRows(rows, ids);
 
-    const rowsByPublicId = new Map<string, UserFragranceRow>();
-    for (const row of rows) {
-      if (isShareHidden(row)) continue;
-      rowsByPublicId.set(row.id, row);
-      const payloadId = payloadFragranceId(row);
-      if (payloadId) rowsByPublicId.set(payloadId, row);
-    }
-
-    const entries = await Promise.all(
-      ids.map(async (id) => {
-        const fragrance = rowsByPublicId.get(id);
-        if (!fragrance) {
-          return [id, buyLinkResponse("rakuten", "unavailable", undefined, "FRAGRANCE_NOT_FOUND")] as const;
-        }
-
-        const buyLink = await resolveBuyLinkForFragrance(fragrance, { allowLiveRakuten: false });
-        return [id, buyLink] as const;
-      }),
-    );
-
-    res.json({ buyLinks: Object.fromEntries(entries) });
+    res.json({ buyLinks });
   } catch (err) {
     logger.warn({ err }, "public share batch buy-link resolver failed");
     res.json({ buyLinks: {} });
