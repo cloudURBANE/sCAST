@@ -21,8 +21,11 @@ import {
   scentFactProfileToDetail,
   type FragranceSearchCandidate,
 } from "../services/fragranceApiCore";
-import { shouldSearchExternalFragranceSources } from "../services/fragranceNameResolver";
-import { searchFragranceDatasetByBrand } from "../services/fragranceNameResolver";
+import {
+  hasKnownFragranceBrandSignal,
+  searchFragranceDatasetByBrand,
+  shouldSearchExternalFragranceSources,
+} from "../services/fragranceNameResolver";
 import { createRakutenProvider, rakutenEnvReady } from "../services/rakutenProvider";
 import {
   buildAmazonAffiliateUrl,
@@ -207,21 +210,6 @@ router.get("/fragrances/search", async (req, res) => {
   const candidates: FragranceSearchCandidate[] = [];
 
   try {
-    const catalogBrandHits = await searchCatalogBrandCandidates(query, { limit: 12 });
-    candidates.push(...catalogBrandHits.map((hit) => candidateFromProfile("catalog", hit.profile)));
-  } catch (err) {
-    logger.warn({ err }, "fragrance search catalog brand lookup failed");
-  }
-
-  for (const item of searchFragranceDatasetByBrand(query, 12)) {
-    candidates.push(
-      candidateFromProfile("dataset", {
-        product: { brand: item.brand, name: item.name, perfumer: item.perfumer },
-      }),
-    );
-  }
-
-  try {
     const catalogHits = await searchCatalogCandidates(query, { limit: 5 });
     candidates.push(...catalogHits.map((hit) => candidateFromProfile("catalog", hit.profile)));
   } catch (err) {
@@ -258,6 +246,25 @@ router.get("/fragrances/search", async (req, res) => {
       }
     } catch (err) {
       logger.warn({ err }, "fragrance search broad source fallback failed");
+    }
+  }
+
+  // Brand expansion: supplemental fill for brand-only queries, added last so
+  // real fuzzy-scored results always take priority.
+  if (candidates.length < 16 && hasKnownFragranceBrandSignal(query)) {
+    try {
+      const catalogBrandHits = await searchCatalogBrandCandidates(query, { limit: 8 });
+      candidates.push(...catalogBrandHits.map((hit) => candidateFromProfile("catalog", hit.profile)));
+    } catch (err) {
+      logger.warn({ err }, "fragrance search catalog brand lookup failed");
+    }
+
+    for (const item of searchFragranceDatasetByBrand(query, 8)) {
+      candidates.push(
+        candidateFromProfile("dataset", {
+          product: { brand: item.brand, name: item.name, perfumer: item.perfumer },
+        }),
+      );
     }
   }
 
