@@ -151,7 +151,7 @@ VITE_FRAGRANCE_API_URL=<external Python fragrance engine base URL>
 VITE_API_BASE_URL=<optional override for the Express API base; defaults to same-origin>
 ```
 
-Optional backend integrations (all degrade gracefully when absent): Open-Meteo weather fallback location vars (`DEFAULT_WEATHER_LAT`, `DEFAULT_WEATHER_LON`, `DEFAULT_WEATHER_LOCATION`), `SERPER_API_KEY`, `REMOVE_BG_API_KEY`, `GEMINI_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_CLIENT_ID`/`SECRET`, Firebase Storage vars, Supabase Storage vars, Rakuten/Amazon affiliate vars.
+Optional backend integrations (all degrade gracefully when absent): `WEATHER_API_KEY`, `SERPER_API_KEY`, `REMOVE_BG_API_KEY`, `GEMINI_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_CLIENT_ID`/`SECRET`, Firebase Storage vars, Supabase Storage vars, Rakuten/Amazon affiliate vars.
 
 ## TypeScript project setup
 

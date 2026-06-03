@@ -17,9 +17,7 @@ Secret values are intentionally omitted. This table lists names, purpose, and fa
 | `FRONTEND_URL` | `routes/oauth.ts`, listed in local env | Backend | Public frontend URL | No secret | Indirect | Wrong OAuth base if higher priority unset. |
 | `REPLIT_DOMAINS` | `routes/oauth.ts` fallback | Backend | Comma-separated Replit domains | No | No for Vercel/Railway | Wrong callback if stale Replit value wins fallback. |
 | `REPLIT_DEV_DOMAIN` | `routes/oauth.ts` fallback | Backend | Replit dev host | No | No for Vercel/Railway | Wrong callback if stale. |
-| `DEFAULT_WEATHER_LAT` | `weatherService.ts` | Backend | Latitude float | No secret | No | `/api/weather` uses the built-in Chicago fallback when browser geolocation is unavailable. |
-| `DEFAULT_WEATHER_LON` | `weatherService.ts` | Backend | Longitude float | No secret | No | `/api/weather` uses the built-in Chicago fallback when browser geolocation is unavailable. |
-| `DEFAULT_WEATHER_LOCATION` | `weatherService.ts` | Backend | Human-readable location label | No secret | No | Simulated fallback labels the weather as Chicago. |
+| `WEATHER_API_KEY` | `weatherService.ts` | Backend | OpenWeather key | No | No | Weather falls back to demo/simulated data or auth errors. |
 | `SERPER_API_KEY` | `serperService.ts` | Backend | Serper API key | No | No | Image search disabled; fragrance image refresh weaker. |
 | `SERPER_IMAGE_API_URL` | `serperService.ts` | Backend | URL, defaults to Serper images endpoint | No | No | Image search hits wrong endpoint. |
 | `REMOVE_BG_API_KEY` | `bgService.ts` | Backend | Poof/remove-bg API key | No | No | Falls back to local trimming/normalization only. |
