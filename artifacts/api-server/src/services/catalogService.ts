@@ -10,6 +10,7 @@ import {
 import {
   fragranceCatalogSearchTerms,
   hasMeaningfulFragranceQuery,
+  matchesFragranceBrandQuery,
   sanitizeFragranceQueryInput,
   scoreFragranceCandidate,
 } from "./fragranceNameResolver";
@@ -102,6 +103,42 @@ export async function searchCatalogCandidates(
     .map(({ row, match }) => ({
       profile: sanitizeCatalogProfile(row.profileData),
       score: match.score,
+    }));
+}
+
+export async function searchCatalogBrandCandidates(
+  query: string,
+  options: Pick<CatalogSearchOptions, "limit"> = {},
+): Promise<CatalogSearchHit[]> {
+  const q = sanitizeFragranceQueryInput(query).toLowerCase();
+  if (!q) return [];
+  if (!hasMeaningfulFragranceQuery(q)) return [];
+  const limit = Math.max(1, Math.min(options.limit ?? 12, 24));
+  const terms = fragranceCatalogSearchTerms(q);
+  const conditions: SQL[] = [
+    sql`${globalFragrancesTable.brand} ILIKE ${"%" + q + "%"}`,
+    ...terms.map((term) => sql`${globalFragrancesTable.brand} ILIKE ${"%" + term + "%"}`),
+  ];
+
+  const rows = await db
+    .select()
+    .from(globalFragrancesTable)
+    .where(or(...conditions))
+    .orderBy(sql`length(${globalFragrancesTable.name}) asc`)
+    .limit(MAX_CATALOG_CANDIDATES);
+
+  const seen = new Set<string>();
+  return rows
+    .filter((row) => {
+      if (!matchesFragranceBrandQuery(q, row.brand)) return false;
+      if (seen.has(row.lookupKey)) return false;
+      seen.add(row.lookupKey);
+      return true;
+    })
+    .slice(0, limit)
+    .map((row) => ({
+      profile: sanitizeCatalogProfile(row.profileData),
+      score: 1,
     }));
 }
 

@@ -6,9 +6,11 @@ import {
   fragranceCatalogSearchTerms,
   hasMeaningfulFragranceQuery,
   isLikelySameFragranceIdentity,
+  matchesFragranceBrandQuery,
   resolveFragranceIdentity,
   resolveFragranceQuery,
   scoreFragranceCandidate,
+  searchFragranceDatasetByBrand,
   searchFragranceDataset,
   shouldSearchExternalFragranceSources,
 } from "./fragranceNameResolver.ts";
@@ -103,6 +105,22 @@ test("non-fragrance inputs and brand-only queries do not pass fuzzy scoring", ()
   assert.equal(scoreFragranceCandidate("Dior", { brand: "Dior", name: "Sauvage" }).matched, false);
   assert.equal(shouldSearchExternalFragranceSources("rouge lipstick"), false);
   assert.deepEqual(searchFragranceDataset("rouge lipstick"), []);
+});
+
+test("brand-only searches expand into actual dataset fragrance candidates", () => {
+  assert.equal(matchesFragranceBrandQuery("Dior", "Dior"), true);
+  assert.equal(matchesFragranceBrandQuery("Dior perfume", "Dior"), true);
+  assert.equal(matchesFragranceBrandQuery("Dior Sauvage", "Dior"), false);
+
+  const results = searchFragranceDatasetByBrand("Dior");
+  assert.ok(results.length >= 1);
+  assert.equal(results[0]?.brand, "Dior");
+  assert.equal(results[0]?.name, "Sauvage");
+});
+
+test("known brand-only queries are eligible for external source expansion", () => {
+  assert.equal(shouldSearchExternalFragranceSources("Dior"), true);
+  assert.equal(shouldSearchExternalFragranceSources("Creed"), true);
 });
 
 test("popular fragrance aliases resolve locally when the external engine is empty", () => {

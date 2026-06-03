@@ -227,6 +227,23 @@ function decodeFragranceUrlSegment(value: string | undefined): string {
   }
 }
 
+function basenotesIdentityFromUrlParts(parts: string[]): { house?: string; name?: string } {
+  const fragrancesIndex = parts.findIndex((part) => /^fragrances$/i.test(part));
+  const slugPart = fragrancesIndex >= 0 ? parts[fragrancesIndex + 1] : undefined;
+  if (!slugPart) return {};
+
+  const slug = slugPart.replace(/\.\d+$/i, "");
+  const byIndex = slug.toLowerCase().lastIndexOf("-by-");
+  if (byIndex < 0) return {};
+
+  const name = titleCaseFragranceSegment(cleanFragranceUrlSegment(slug.slice(0, byIndex)));
+  const house = titleCaseFragranceSegment(cleanFragranceUrlSegment(slug.slice(byIndex + 4)));
+  return {
+    ...(house ? { house } : {}),
+    ...(name ? { name } : {}),
+  };
+}
+
 function fragranceIdentityFromSourceUrl(
   value: string | undefined,
 ): { house?: string; name?: string } {
@@ -243,6 +260,12 @@ function fragranceIdentityFromSourceUrl(
     .split("/")
     .map(decodeFragranceUrlSegment)
     .filter(Boolean);
+
+  if (parsed.hostname.toLowerCase().endsWith("basenotes.com")) {
+    const basenotesIdentity = basenotesIdentityFromUrlParts(parts);
+    if (basenotesIdentity.name) return basenotesIdentity;
+  }
+
   const perfumeIndex = parts.findIndex((part) => /^perfumes?$/i.test(part));
   const housePart = perfumeIndex >= 0 ? parts[perfumeIndex + 1] : undefined;
   const namePart = perfumeIndex >= 0 ? parts[perfumeIndex + 2] : parts.at(-1);

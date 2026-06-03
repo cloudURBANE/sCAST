@@ -383,6 +383,13 @@ export function fragranceCatalogSearchTerms(query: string): string[] {
   return [...seen].slice(0, 6);
 }
 
+export function matchesFragranceBrandQuery(query: string, brand: string): boolean {
+  const queryWords = wordsFromCompact(queryCompact(query));
+  const brandWords = wordsFromCompact(compactRaw(brand));
+  if (queryWords.length === 0 || brandWords.length === 0) return false;
+  return queryWords.every((word) => brandWords.some((brandWord) => wordsMatch(word, brandWord)));
+}
+
 export function hasMeaningfulFragranceQuery(query: string): boolean {
   return meaningfulQueryTokens(query).length > 0;
 }
@@ -443,6 +450,22 @@ export function searchFragranceDataset(query: string, limit = 5): FragranceData[
     .map((item) => item.item);
 }
 
+export function searchFragranceDatasetByBrand(query: string, limit = 12): FragranceData[] {
+  const cleaned = queryCompact(query);
+  if (!cleaned || !hasMeaningfulFragranceQuery(cleaned)) return [];
+  const boundedLimit = Math.max(1, Math.min(limit, 24));
+
+  return DATASET
+    .filter((item) => matchesFragranceBrandQuery(cleaned, item.brand))
+    .sort((a, b) => {
+      const aExact = compactRaw(a.brand) === cleaned ? 0 : 1;
+      const bExact = compactRaw(b.brand) === cleaned ? 0 : 1;
+      if (aExact !== bExact) return aExact - bExact;
+      return a.name.localeCompare(b.name);
+    })
+    .slice(0, boundedLimit);
+}
+
 export function resolveFragranceIdentity(brand: string, name: string): ResolvedFragranceIdentity {
   const cleanBrand = brand.trim();
   const cleanName = cleanDisplayName(name);
@@ -466,6 +489,7 @@ export function shouldSearchExternalFragranceSources(query: string): boolean {
   if (!sanitized) return false;
   return (
     resolveFragranceQuery(sanitized) !== null ||
+    hasKnownFragranceBrandSignal(sanitized) ||
     (FRAGRANCE_INTENT_PATTERN.test(sanitized) && hasMeaningfulFragranceQuery(sanitized)) ||
     looksLikeNamedFragranceQuery(sanitized)
   );
