@@ -227,6 +227,23 @@ function decodeFragranceUrlSegment(value: string | undefined): string {
   }
 }
 
+function basenotesIdentityFromUrlParts(parts: string[]): { house?: string; name?: string } {
+  const fragrancesIndex = parts.findIndex((part) => /^fragrances$/i.test(part));
+  const slugPart = fragrancesIndex >= 0 ? parts[fragrancesIndex + 1] : undefined;
+  if (!slugPart) return {};
+
+  const slug = slugPart.replace(/\.\d+$/i, "");
+  const byIndex = slug.toLowerCase().lastIndexOf("-by-");
+  if (byIndex < 0) return {};
+
+  const name = titleCaseFragranceSegment(cleanFragranceUrlSegment(slug.slice(0, byIndex)));
+  const house = titleCaseFragranceSegment(cleanFragranceUrlSegment(slug.slice(byIndex + 4)));
+  return {
+    ...(house ? { house } : {}),
+    ...(name ? { name } : {}),
+  };
+}
+
 function fragranceIdentityFromSourceUrl(
   value: string | undefined,
 ): { house?: string; name?: string } {
@@ -243,6 +260,12 @@ function fragranceIdentityFromSourceUrl(
     .split("/")
     .map(decodeFragranceUrlSegment)
     .filter(Boolean);
+
+  if (parsed.hostname.toLowerCase().endsWith("basenotes.com")) {
+    const basenotesIdentity = basenotesIdentityFromUrlParts(parts);
+    if (basenotesIdentity.name) return basenotesIdentity;
+  }
+
   const perfumeIndex = parts.findIndex((part) => /^perfumes?$/i.test(part));
   const housePart = perfumeIndex >= 0 ? parts[perfumeIndex + 1] : undefined;
   const namePart = perfumeIndex >= 0 ? parts[perfumeIndex + 2] : parts.at(-1);
@@ -879,10 +902,24 @@ function fragranceEngineUrl(path: string): string {
   return `${base}/api${normalizedPath}`;
 }
 
-function isFetchNetworkError(err: unknown): boolean {
+export function isFetchNetworkError(err: unknown): boolean {
   if (!(err instanceof Error)) return false;
   if (err.name === "AbortError") return false;
-  return err.message === "Failed to fetch" || err.message.includes("NetworkError");
+  // Browsers report a failed fetch with engine-specific messages:
+  // Chromium/Firefox → "Failed to fetch" / "NetworkError"; WebKit (Safari,
+  // iOS/iPadOS) → "Load failed". Match all so the same-origin engine fallbacks
+  // engage on every browser, not just Chromium.
+  return (
+    err.message === "Failed to fetch" ||
+    err.message === "Load failed" ||
+    err.message.includes("NetworkError")
+  );
+}
+
+function isFragranceEngineTransportError(err: unknown): boolean {
+  if (isFetchNetworkError(err)) return true;
+  if (!(err instanceof Error)) return false;
+  return err.message.startsWith("Fragrance engine request failed:");
 }
 
 function directFragranceEngineUrl(path: string): string | null {
@@ -911,8 +948,9 @@ async function fetchFragranceEngine(
   }
 
   const fallbackUrl = directFragranceEngineUrl(pathname);
-  if (fallbackUrl && fallbackUrl !== primaryUrl) {
-    return fetch(`${fallbackUrl}${querySuffix}`, init);
+  const fallbackRequestUrl = fallbackUrl ? `${fallbackUrl}${querySuffix}` : null;
+  if (fallbackRequestUrl && fallbackRequestUrl !== primaryUrl) {
+    return fetch(fallbackRequestUrl, init);
   }
 
   if (lastError instanceof Error) throw lastError;
@@ -1088,6 +1126,10 @@ export async function searchFragrances(
       { signal: options?.signal },
     );
 
+    if (res.status >= 500) {
+      return await searchAppFragrances(query, options);
+    }
+
     if (!res.ok) {
       throw new Error(await apiErrorMessage(res, `Fragrance search failed: ${res.status}`));
     }
@@ -1095,7 +1137,7 @@ export async function searchFragrances(
     data = await res.json();
   } catch (err) {
     if (err instanceof Error && err.name === "AbortError") throw err;
-    if (isFetchNetworkError(err)) {
+    if (isFragranceEngineTransportError(err)) {
       try {
         return await searchAppFragrances(query, options);
       } catch (fallbackErr) {
@@ -1198,11 +1240,27 @@ export async function getFragranceDetails(
     signal: options?.signal,
   };
 
-  const res = useAppApi
-    ? await fetch(appApiUrl("/api/fragrances/details"), requestInit)
-    : await fetchFragranceEngine("/fragrances/details", requestInit);
+  const fetchAppDetails = () => fetch(appApiUrl("/api/fragrances/details"), requestInit);
+  let res: Response;
+  try {
+    res = useAppApi
+      ? await fetchAppDetails()
+      : await fetchFragranceEngine("/fragrances/details", requestInit);
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") throw err;
+    if (!useAppApi && isFragranceEngineTransportError(err)) {
+      res = await fetchAppDetails();
+    } else {
+      throw err;
+    }
+  }
 
   if (!res.ok) {
+    if (!useAppApi && res.status >= 500) {
+      const fallbackRes = await fetchAppDetails();
+      if (fallbackRes.ok) return fallbackRes.json();
+      res = fallbackRes;
+    }
     throw new Error(await apiErrorMessage(res, `Fragrance detail fetch failed: ${res.status}`));
   }
 

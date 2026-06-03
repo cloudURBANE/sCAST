@@ -492,7 +492,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       });
       if (res.status === 401) {
         // Token is missing/stale (e.g. left over from a DB reset). The backend
-        // rejected it, so this is not a network problem — clear the dead token
+        // rejected it, so this is not a network problem; clear the dead token
         // and re-prompt login instead of looping on a generic "sync failed".
         handleSignOut();
         setWardrobeError(null);

@@ -5,6 +5,7 @@ import {
   collectMainAccordDisplayRows,
   getFragranceDetails,
   isBackgroundEnrichmentQueued,
+  isFetchNetworkError,
   isFragranceDetailEffectivelyComplete,
   normalizeFragranceDetail,
   normalizeFragranceSearchResult,
@@ -14,6 +15,20 @@ import {
   resolveSourceStatus,
   searchFragrances,
 } from "./fragranceApi.ts";
+
+test("isFetchNetworkError recognizes WebKit, Chromium, and Firefox network failures", () => {
+  // WebKit (Safari, iOS/iPadOS) reports failed fetches as "Load failed".
+  assert.equal(isFetchNetworkError(new TypeError("Load failed")), true);
+  // Chromium.
+  assert.equal(isFetchNetworkError(new TypeError("Failed to fetch")), true);
+  // Firefox.
+  assert.equal(isFetchNetworkError(new TypeError("NetworkError when attempting to fetch resource.")), true);
+  // Aborts and non-network errors must not be treated as network failures.
+  const abort = new Error("aborted");
+  abort.name = "AbortError";
+  assert.equal(isFetchNetworkError(abort), false);
+  assert.equal(isFetchNetworkError(new Error("HTTP 500")), false);
+});
 
 test("normalizeFragranceSearchResult preserves source-url-only candidates", () => {
   const result = normalizeFragranceSearchResult(
@@ -64,6 +79,24 @@ test("normalizeFragranceSearchResult recovers house from source URL", () => {
   assert.equal(
     result?.source_url,
     "https://www.fragrantica.com/perfume/French-Avenue/Liquid-Brun-94713.html",
+  );
+});
+
+test("normalizeFragranceSearchResult recovers house from BaseNotes source URL", () => {
+  const result = normalizeFragranceSearchResult(
+    {
+      id: "basenotes-token",
+      source_url: "https://basenotes.com/fragrances/absolu-aventus-triple-aged-batch-by-creed.26272004",
+    },
+    "Creed",
+  );
+
+  assert.equal(result?.name, "Absolu Aventus Triple Aged Batch");
+  assert.equal(result?.house, "Creed");
+  assert.equal(result?.brand, "Creed");
+  assert.equal(
+    result?.source_url,
+    "https://basenotes.com/fragrances/absolu-aventus-triple-aged-batch-by-creed.26272004",
   );
 });
 
@@ -342,6 +375,60 @@ test("getFragranceDetails posts opaque id and source URL to SRT details", async 
   });
 });
 
+test("getFragranceDetails falls back to the app API when the engine fetch fails", async (t) => {
+  const previousFetch = globalThis.fetch;
+  const previousApiUrl = process.env.VITE_FRAGRANCE_API_URL;
+  const previousAppApiUrl = process.env.VITE_API_BASE_URL;
+  const requests: Array<{ url: string; init?: RequestInit }> = [];
+
+  process.env.VITE_FRAGRANCE_API_URL = "https://engine.example.test";
+  process.env.VITE_API_BASE_URL = "https://app-api.example.test";
+  Object.defineProperty(globalThis, "fetch", {
+    configurable: true,
+    value: async (url: string, init?: RequestInit) => {
+      requests.push({ url, init });
+      if (String(url).startsWith("https://engine.example.test")) {
+        throw new TypeError("Load failed");
+      }
+      return new Response(JSON.stringify({ name: "Aventus", house: "Creed" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    },
+  });
+
+  t.after(() => {
+    Object.defineProperty(globalThis, "fetch", {
+      configurable: true,
+      value: previousFetch,
+    });
+    if (previousApiUrl === undefined) {
+      delete process.env.VITE_FRAGRANCE_API_URL;
+    } else {
+      process.env.VITE_FRAGRANCE_API_URL = previousApiUrl;
+    }
+    if (previousAppApiUrl === undefined) {
+      delete process.env.VITE_API_BASE_URL;
+    } else {
+      process.env.VITE_API_BASE_URL = previousAppApiUrl;
+    }
+  });
+
+  const detail = await getFragranceDetails({
+    id: "opaque-token",
+    source_url: "https://www.fragrantica.com/perfume/Creed/Aventus-9828.html",
+  });
+
+  assert.equal(detail.name, "Aventus");
+  assert.deepEqual(
+    requests.map((request) => request.url),
+    [
+      "https://engine.example.test/api/fragrances/details",
+      "https://app-api.example.test/api/fragrances/details",
+    ],
+  );
+});
+
 test("requeueFragranceDetails posts force refresh to SRT engine", async (t) => {
   const previousFetch = globalThis.fetch;
   const previousApiUrl = process.env.VITE_FRAGRANCE_API_URL;
@@ -602,6 +689,65 @@ test("searchFragrances supplements degraded SRT breadth with app API results", a
   assert.equal(response.results[2]?.id, "catalog:Creed::Green Irish Tweed");
   assert.equal(response.results[2]?.origin, "app");
   assert.equal(response.diagnostics?.fallback_source, "db");
+});
+
+test("searchFragrances falls back to app results when the engine proxy returns 502", async (t) => {
+  const previousFetch = globalThis.fetch;
+  const previousApiUrl = process.env.VITE_FRAGRANCE_API_URL;
+  const previousAppApiUrl = process.env.VITE_API_BASE_URL;
+  const requests: string[] = [];
+
+  process.env.VITE_FRAGRANCE_API_URL = "https://engine.example.test";
+  process.env.VITE_API_BASE_URL = "https://app-api.example.test";
+  Object.defineProperty(globalThis, "fetch", {
+    configurable: true,
+    value: async (url: string) => {
+      requests.push(url);
+      if (url.startsWith("https://engine.example.test")) {
+        return new Response(JSON.stringify({ error: "Fragrance engine unreachable" }), {
+          status: 502,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      return new Response(
+        JSON.stringify({
+          query: "Dior Sauvage",
+          results: [{ id: "catalog:Dior::Sauvage", name: "Sauvage", brand: "Dior" }],
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    },
+  });
+
+  t.after(() => {
+    Object.defineProperty(globalThis, "fetch", {
+      configurable: true,
+      value: previousFetch,
+    });
+    if (previousApiUrl === undefined) {
+      delete process.env.VITE_FRAGRANCE_API_URL;
+    } else {
+      process.env.VITE_FRAGRANCE_API_URL = previousApiUrl;
+    }
+    if (previousAppApiUrl === undefined) {
+      delete process.env.VITE_API_BASE_URL;
+    } else {
+      process.env.VITE_API_BASE_URL = previousAppApiUrl;
+    }
+  });
+
+  const response = await searchFragrances("Dior Sauvage");
+
+  assert.deepEqual(requests, [
+    "https://engine.example.test/api/fragrances/search?q=Dior%20Sauvage",
+    "https://app-api.example.test/api/fragrances/search?q=Dior%20Sauvage",
+  ]);
+  assert.equal(response.results[0]?.id, "catalog:Dior::Sauvage");
+  assert.equal(response.results[0]?.origin, "app");
 });
 
 test("searchFragrances caches non-empty supplemented responses", async (t) => {
