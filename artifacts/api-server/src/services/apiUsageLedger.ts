@@ -1,6 +1,6 @@
 import { db } from "@workspace/db";
 import { apiUsageLedgerTable } from "@workspace/db/schema";
-import { count, sql, sum } from "drizzle-orm";
+import { count, eq, sql, sum } from "drizzle-orm";
 import { logger } from "../lib/logger";
 
 // OpenAI image pricing snapshot. Last reviewed: 2026-05-15.
@@ -129,7 +129,7 @@ export type UsageTotalsResponse = {
   byModel: UsageTotalsByModel[];
 };
 
-export async function getUsageTotals(): Promise<UsageTotalsResponse> {
+export async function getUsageTotals(userId?: string | null): Promise<UsageTotalsResponse> {
   const empty: UsageTotalsResponse = {
     totalUsd: 0,
     count: 0,
@@ -140,6 +140,7 @@ export async function getUsageTotals(): Promise<UsageTotalsResponse> {
   };
 
   try {
+    const usageScope = userId ? eq(apiUsageLedgerTable.userId, userId) : sql`true`;
     const [overall] = await db
       .select({
         total: sum(apiUsageLedgerTable.estimatedCostUsd),
@@ -147,7 +148,8 @@ export async function getUsageTotals(): Promise<UsageTotalsResponse> {
         successCount: sql<number>`count(*) filter (where ${apiUsageLedgerTable.status} = 'success')`,
         failureCount: sql<number>`count(*) filter (where ${apiUsageLedgerTable.status} = 'failure')`,
       })
-      .from(apiUsageLedgerTable);
+      .from(apiUsageLedgerTable)
+      .where(usageScope);
 
     const byModel = await db
       .select({
@@ -156,6 +158,7 @@ export async function getUsageTotals(): Promise<UsageTotalsResponse> {
         total: sum(apiUsageLedgerTable.estimatedCostUsd),
       })
       .from(apiUsageLedgerTable)
+      .where(usageScope)
       .groupBy(apiUsageLedgerTable.model);
 
     return {

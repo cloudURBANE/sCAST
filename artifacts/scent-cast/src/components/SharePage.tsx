@@ -17,7 +17,7 @@ import type { BottleImageAdjustment } from '@/lib/bottleImageAdjustment';
 import { APP_BRAND_MARK } from '@/lib/appBrand';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
-import { publicShareBuyLinkEndpoint } from '@/lib/shareLinks';
+import { publicShareBuyLinksEndpoint } from '@/lib/shareLinks';
 import { ScentNotesInfographic } from '@/components/ScentNotesInfographic';
 import { CyclingTilePair, type CyclingPart } from '@/components/CyclingTilePair';
 import {
@@ -639,27 +639,30 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
           : [];
 
         if (fragranceIds.length) {
-          Promise.all(
-            fragranceIds.map(async (fragranceId: string) => {
-              try {
-                const response = await fetch(publicShareBuyLinkEndpoint(userId, fragranceId));
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                const buyLink = await response.json();
-                return [fragranceId, buyLink] as const;
-              } catch {
-                return [fragranceId, { provider: 'cj', buyUrl: null, status: 'unavailable' }] as const;
-              }
+          fetch(publicShareBuyLinksEndpoint(userId, fragranceIds))
+            .then(async (response) => {
+              if (!response.ok) throw new Error(`HTTP ${response.status}`);
+              return response.json();
             })
-          ).then(entries => {
-            setBuyLinks(Object.fromEntries(entries));
-          }).catch((e) => {
-            console.error('Failed to load public share buy links', e);
-            toast({
-              title: "Buying options unavailable",
-              description: "We could not load current purchase links for this shared vault.",
-              variant: "destructive"
+            .then((payload) => {
+              const links = payload?.buyLinks && typeof payload.buyLinks === 'object'
+                ? payload.buyLinks
+                : {};
+              const unavailable = Object.fromEntries(
+                fragranceIds.map((fragranceId: string) => [
+                  fragranceId,
+                  { provider: 'rakuten', buyUrl: null, status: 'unavailable' },
+                ]),
+              );
+              setBuyLinks({ ...unavailable, ...links });
+            }).catch((e) => {
+              console.error('Failed to load public share buy links', e);
+              toast({
+                title: "Buying options unavailable",
+                description: "We could not load current purchase links for this shared vault.",
+                variant: "destructive"
+              });
             });
-          });
         } else {
           setBuyLinks({});
         }

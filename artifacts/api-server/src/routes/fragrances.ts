@@ -2,7 +2,7 @@ import { Router } from "express";
 import { AuthRequest, requireAuth } from "../middlewares/auth";
 import { db } from "@workspace/db";
 import { affiliateLinksTable, userFragrancesTable } from "@workspace/db/schema";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { normalizeFragrance } from "../services/fragrancePayload";
 import {
@@ -35,6 +35,8 @@ import {
 import { resolveShareUser } from "../services/shareUsers";
 
 const router = Router();
+
+const SOURCE_SEARCH_RESPONSE_BUDGET_MS = 1200;
 
 type BuyLinkStatus = "active" | "unavailable";
 type UserFragranceRow = typeof userFragrancesTable.$inferSelect;
@@ -181,6 +183,48 @@ function isShareHidden(fragrance: UserFragranceRow): boolean {
   return Boolean(data && typeof data === "object" && (data as Record<string, unknown>).shareHidden);
 }
 
+async function searchScentSourcesWithResponseBudget(
+  query: string,
+  options: Parameters<typeof searchScentSources>[1],
+): Promise<{ urls: string[]; timedOut: boolean }> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      searchScentSources(query, options).then((urls) => ({ urls, timedOut: false })),
+      new Promise<{ urls: string[]; timedOut: boolean }>((resolve) => {
+        timeout = setTimeout(
+          () => resolve({ urls: [], timedOut: true }),
+          SOURCE_SEARCH_RESPONSE_BUDGET_MS,
+        );
+      }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
+
+function parseBatchIds(value: unknown): string[] {
+  const raw = Array.isArray(value) ? value : typeof value === "string" ? value.split(",") : [];
+  const seen = new Set<string>();
+  const ids: string[] = [];
+  for (const item of raw) {
+    if (typeof item !== "string") continue;
+    const id = item.trim();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    ids.push(id);
+    if (ids.length >= 96) break;
+  }
+  return ids;
+}
+
+function payloadFragranceId(fragrance: UserFragranceRow): string | null {
+  const data = fragrance.fragranceData;
+  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
+  const id = (data as Record<string, unknown>).id;
+  return typeof id === "string" && id.trim() ? id.trim() : null;
+}
+
 async function findCachedAffiliateLink(fragranceId: string, provider: string) {
   const rows = await db
     .select()
@@ -208,6 +252,7 @@ router.get("/fragrances/search", async (req, res) => {
   }
 
   const candidates: FragranceSearchCandidate[] = [];
+  let sourceLookupTimedOut = false;
 
   try {
     const catalogHits = await searchCatalogCandidates(query, { limit: 5 });
@@ -226,7 +271,8 @@ router.get("/fragrances/search", async (req, res) => {
 
   if (shouldSearchExternalFragranceSources(query)) {
     try {
-      const urls = await searchScentSources(query, { maxCandidates: 16 });
+      const { urls, timedOut } = await searchScentSourcesWithResponseBudget(query, { maxCandidates: 16 });
+      sourceLookupTimedOut ||= timedOut;
       for (const url of urls) {
         const candidate = candidateFromSourceUrl(url, query);
         if (candidate) candidates.push(candidate);
@@ -239,7 +285,8 @@ router.get("/fragrances/search", async (req, res) => {
   if (candidates.length === 0) {
     try {
       const fallbackQuery = searchQueryWithFragranceIntent(query);
-      const urls = await searchScentSources(fallbackQuery, { maxCandidates: 16 });
+      const { urls, timedOut } = await searchScentSourcesWithResponseBudget(fallbackQuery, { maxCandidates: 16 });
+      sourceLookupTimedOut ||= timedOut;
       for (const url of urls) {
         const candidate = candidateFromSourceUrl(url, query);
         if (candidate) candidates.push(candidate);
@@ -271,6 +318,9 @@ router.get("/fragrances/search", async (req, res) => {
   res.json({
     query,
     results: dedupeCandidates(candidates).slice(0, 16),
+    ...(sourceLookupTimedOut
+      ? { diagnostics: { source_lookup_timeout: true, source_lookup_budget_ms: SOURCE_SEARCH_RESPONSE_BUDGET_MS } }
+      : {}),
   });
 });
 
@@ -537,6 +587,52 @@ router.get("/share/:userRef/fragrances/:id/buy-link", async (req, res) => {
   } catch (err) {
     logger.warn({ err }, "public share buy-link resolver failed");
     res.json(buyLinkResponse("rakuten", "unavailable", undefined, "BUY_LINK_RESOLUTION_FAILED"));
+  }
+});
+
+router.get("/share/:userRef/buy-links", async (req, res) => {
+  try {
+    const ids = parseBatchIds(req.query.ids);
+    if (ids.length === 0) {
+      res.json({ buyLinks: {} });
+      return;
+    }
+
+    const user = await resolveShareUser(req.params.userRef as string);
+    if (!user) {
+      res.status(404).json({ buyLinks: {} });
+      return;
+    }
+
+    const rows = await db
+      .select()
+      .from(userFragrancesTable)
+      .where(eq(userFragrancesTable.userId, user.id));
+
+    const rowsByPublicId = new Map<string, UserFragranceRow>();
+    for (const row of rows) {
+      if (isShareHidden(row)) continue;
+      rowsByPublicId.set(row.id, row);
+      const payloadId = payloadFragranceId(row);
+      if (payloadId) rowsByPublicId.set(payloadId, row);
+    }
+
+    const entries = await Promise.all(
+      ids.map(async (id) => {
+        const fragrance = rowsByPublicId.get(id);
+        if (!fragrance) {
+          return [id, buyLinkResponse("rakuten", "unavailable", undefined, "FRAGRANCE_NOT_FOUND")] as const;
+        }
+
+        const buyLink = await resolveBuyLinkForFragrance(fragrance, { allowLiveRakuten: false });
+        return [id, buyLink] as const;
+      }),
+    );
+
+    res.json({ buyLinks: Object.fromEntries(entries) });
+  } catch (err) {
+    logger.warn({ err }, "public share batch buy-link resolver failed");
+    res.json({ buyLinks: {} });
   }
 });
 

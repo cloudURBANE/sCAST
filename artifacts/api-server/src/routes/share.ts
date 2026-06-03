@@ -3,7 +3,7 @@ import { AuthRequest, requireAuth } from "../middlewares/auth";
 import { db } from "@workspace/db";
 import { userFragrancesTable, userSettingsTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
-import { hydrateImageUrl, normalizeFragrance } from "../services/fragrancePayload";
+import { batchHydrateImageUrls, normalizeFragrance } from "../services/fragrancePayload";
 import { getShareIdForUser, resolveShareUser } from "../services/shareUsers";
 
 const router = Router();
@@ -51,14 +51,12 @@ router.get("/share/:userRef", async (req, res) => {
     .map(r => ({ rowId: r.id, data: r.fragranceData as Record<string, any> }))
     .filter(({ data }) => !data.shareHidden);
 
-  const fragrances: Record<string, any>[] = await Promise.all(
-    visibleFragranceRows.map(async ({ rowId, data: raw }) => {
-      let frag = normalizeFragrance(raw);
-      frag = await hydrateImageUrl(frag);
-
-      return { ...(frag as Record<string, any>), _dbId: rowId };
-    })
-  );
+  const normalized = visibleFragranceRows.map(({ data: raw }) => normalizeFragrance(raw));
+  const hydrated = await batchHydrateImageUrls(normalized);
+  const fragrances = hydrated.map((frag, i) => ({
+    ...(frag as Record<string, any>),
+    _dbId: visibleFragranceRows[i]!.rowId,
+  }));
 
   res.json({ fragrances, hideImages: settings.shareHideImages, shareUserId: user.id });
 });

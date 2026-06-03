@@ -929,22 +929,80 @@ function directFragranceEngineUrl(path: string): string | null {
   return `${direct.replace(/\/+$/, "")}/api${normalizedPath}`;
 }
 
+// Backoff schedule (ms) for transient-network/5xx retries of the primary engine
+// request. A Railway cold start or deploy/OOM restart leaves the host briefly
+// unreachable (a few seconds), which the browser surfaces as a "Failed to fetch"
+// — the exact error that drives the "temporarily unavailable" banner. Retrying
+// across that window lets a momentary blip self-heal instead of erroring out.
+// Lengths chosen to span a typical restart while keeping the truly-down case
+// from feeling sluggish (worst added latency ≈ 1.7s before falling through).
+const ENGINE_RETRY_BACKOFF_MS = [500, 1200] as const;
+
+type FragranceEngineFetchOptions = {
+  retryBackoffMs?: readonly number[];
+};
+
+function abortableSleep(ms: number, signal?: AbortSignal | null): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException("Aborted", "AbortError"));
+      return;
+    }
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new DOMException("Aborted", "AbortError"));
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+// True for failures that a brief retry can plausibly recover: a thrown
+// browser-level network error (host momentarily unreachable) or a 5xx surfaced
+// as our wrapped engine error. 4xx and aborts are intentionally excluded.
+function isRetriableEngineError(err: unknown): boolean {
+  if (isFetchNetworkError(err)) return true;
+  return (
+    err instanceof Error &&
+    err.message.startsWith("Fragrance engine request failed:")
+  );
+}
+
 async function fetchFragranceEngine(
   path: string,
   init?: RequestInit,
+  options: FragranceEngineFetchOptions = {},
 ): Promise<Response> {
   const [pathname, query = ""] = path.split("?", 2);
   const querySuffix = query ? `?${query}` : "";
   const primaryUrl = `${fragranceEngineUrl(pathname)}${querySuffix}`;
+  const retryBackoffMs = options.retryBackoffMs ?? ENGINE_RETRY_BACKOFF_MS;
   let lastError: unknown;
 
-  try {
-    const res = await fetch(primaryUrl, init);
-    if (res.ok || res.status < 500) return res;
-    lastError = new Error(`Fragrance engine request failed: ${res.status}`);
-  } catch (err) {
-    if (err instanceof Error && err.name === "AbortError") throw err;
-    lastError = err;
+  for (let attempt = 0; attempt <= retryBackoffMs.length; attempt++) {
+    try {
+      const res = await fetch(primaryUrl, init);
+      if (res.ok || res.status < 500) return res;
+      lastError = new Error(`Fragrance engine request failed: ${res.status}`);
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") throw err;
+      lastError = err;
+    }
+
+    // Retry the primary across a transient blip before falling through to the
+    // direct fallback / surfacing the error. Only retry recoverable failures,
+    // and only while attempts remain.
+    if (
+      attempt < retryBackoffMs.length &&
+      isRetriableEngineError(lastError)
+    ) {
+      await abortableSleep(retryBackoffMs[attempt]!, init?.signal);
+      continue;
+    }
+    break;
   }
 
   const fallbackUrl = directFragranceEngineUrl(pathname);
@@ -1124,6 +1182,7 @@ export async function searchFragrances(
     const res = await fetchFragranceEngine(
       `/fragrances/search?q=${encodeURIComponent(query)}`,
       { signal: options?.signal },
+      { retryBackoffMs: [] },
     );
 
     if (res.status >= 500) {
@@ -1245,7 +1304,7 @@ export async function getFragranceDetails(
   try {
     res = useAppApi
       ? await fetchAppDetails()
-      : await fetchFragranceEngine("/fragrances/details", requestInit);
+      : await fetchFragranceEngine("/fragrances/details", requestInit, { retryBackoffMs: [] });
   } catch (err) {
     if (err instanceof Error && err.name === "AbortError") throw err;
     if (!useAppApi && isFragranceEngineTransportError(err)) {
