@@ -6,6 +6,7 @@ import { ScentIntelligenceLoader } from './ScentIntelligenceLoader';
 import {
   collectMainAccordDisplayRows,
   getFragranceDetails,
+  isFetchNetworkError,
   normalizeFragranceDetail,
   searchFragrances,
   type FragranceDetail,
@@ -151,6 +152,7 @@ interface FragranceMatch extends FragranceSearchResult {
 }
 
 type LoadingSurface = 'search' | 'sync' | null;
+type ErrorPhase = 'search' | 'sync' | null;
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)
   ?.trim()
@@ -308,6 +310,7 @@ export const FragranceCapture: React.FC<{
   const [searchQuery, setSearchQuery] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
   const [errorStatus, setErrorStatus] = useState<string | null>(null);
+  const [errorPhase, setErrorPhase] = useState<ErrorPhase>(null);
   const [hasSearched, setHasSearched] = useState(false);
   const [syncComplete, setSyncComplete] = useState(false);
   const [loadingSurface, setLoadingSurface] = useState<LoadingSurface>(null);
@@ -353,6 +356,7 @@ export const FragranceCapture: React.FC<{
     setLoadingStatus("Researching Fragrance...");
     setMatches([]);
     setErrorStatus(null);
+    setErrorPhase(null);
     setHasSearched(false);
     setSyncComplete(false);
 
@@ -397,10 +401,11 @@ export const FragranceCapture: React.FC<{
       setHasSearched(true);
       if (nextMatches.length === 0) {
         if (primarySearchError) {
-          const message = primarySearchError.message === 'Failed to fetch'
+          const message = isFetchNetworkError(primarySearchError)
             ? 'Fragrance search is temporarily unavailable. Check your connection and try again.'
             : primarySearchError.message || 'Search failed.';
           setErrorStatus(message);
+          setErrorPhase('search');
           setLoadingStatus('Search failed.');
         } else {
           setLoadingStatus('No fragrance match found.');
@@ -414,15 +419,11 @@ export const FragranceCapture: React.FC<{
     } catch (err: unknown) {
       if (err instanceof Error && err.name === 'AbortError') return; // Ignore expected aborts
       setErrorStatus(err instanceof Error ? err.message : "Search failed.");
+      setErrorPhase('search');
     } finally {
       setUploading(false);
       setLoadingSurface(null);
     }
-  };
-
-  const handleRetry = () => {
-    setErrorStatus(null);
-    handleSearch();
   };
 
   const handleConfirm = async () => {
@@ -449,6 +450,7 @@ export const FragranceCapture: React.FC<{
         );
         if (saveResult?.error) {
           setErrorStatus(`Added locally, but database save failed: ${saveResult.error}`);
+          setErrorPhase('sync');
           setSyncComplete(false);
           return;
         }
@@ -456,6 +458,7 @@ export const FragranceCapture: React.FC<{
         resetState();
       } catch (err: any) {
         setErrorStatus(err?.message || "Vault sync failed. Please try again.");
+        setErrorPhase('sync');
         setSyncComplete(false);
       } finally {
         setUploading(false);
@@ -643,6 +646,7 @@ export const FragranceCapture: React.FC<{
       );
       if (saveResult?.error) {
         setErrorStatus(`Added locally, but database save failed: ${saveResult.error}`);
+        setErrorPhase('sync');
         setSyncComplete(false);
         return;
       }
@@ -651,11 +655,27 @@ export const FragranceCapture: React.FC<{
       resetState();
     } catch (err: any) {
       if (err.name === 'AbortError') return;
-      setErrorStatus(err?.message || "Fragrance detail fetch failed. Please check your connection.");
+      setErrorStatus(
+        isFetchNetworkError(err)
+          ? 'Fragrance sync is temporarily unavailable. Check your connection and try again.'
+          : err?.message || "Fragrance detail fetch failed. Please check your connection.",
+      );
+      setErrorPhase('sync');
     } finally {
       setUploading(false);
       setLoadingSurface(null);
     }
+  };
+
+  const handleRetry = () => {
+    setErrorStatus(null);
+    const shouldRetrySync = errorPhase === 'sync' && selectedIdx !== null && matches[selectedIdx];
+    setErrorPhase(null);
+    if (shouldRetrySync) {
+      void handleConfirm();
+      return;
+    }
+    void handleSearch();
   };
 
   const resetState = () => {
@@ -663,6 +683,7 @@ export const FragranceCapture: React.FC<{
     setSelectedIdx(null);
     setHasSearched(false);
     setSearchQuery("");
+    setErrorPhase(null);
     setSyncComplete(false);
   };
 
@@ -741,7 +762,7 @@ export const FragranceCapture: React.FC<{
               id="scent-add-to-vault-search"
               type="text"
               value={searchQuery}
-              onChange={(e) => { setSearchQuery(e.target.value); setErrorStatus(null); }}
+              onChange={(e) => { setSearchQuery(e.target.value); setErrorStatus(null); setErrorPhase(null); }}
               onFocus={() => setSearchFocused(true)}
               onBlur={() => setSearchFocused(false)}
               placeholder="Search by house or fragrance…"

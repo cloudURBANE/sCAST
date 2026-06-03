@@ -443,7 +443,7 @@ const WardrobeItemsContext = createContext<Fragrance[] | undefined>(undefined);
 const WardrobeShareModalActionsContext = createContext<Pick<WardrobeContextType, 'setIsShareModalOpen'> | undefined>(undefined);
 
 export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { authToken, isAuthModalOpen, setIsAuthModalOpen, guestPromptDismissed, setGuestPromptDismissed } = useAuth();
+  const { authToken, isAuthModalOpen, setIsAuthModalOpen, guestPromptDismissed, setGuestPromptDismissed, handleSignOut } = useAuth();
   const { weather } = useWeather();
   const { toast } = useToast();
 
@@ -490,6 +490,19 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         headers: { Authorization: `Bearer ${token}` },
         signal
       });
+      if (res.status === 401) {
+        // Token is missing/stale (e.g. left over from a DB reset). The backend
+        // rejected it, so this is not a network problem; clear the dead token
+        // and re-prompt login instead of looping on a generic "sync failed".
+        handleSignOut();
+        setWardrobeError(null);
+        setIsAuthModalOpen(true);
+        toast({
+          title: "Session Expired",
+          description: "Please sign in again to sync your wardrobe.",
+        });
+        return;
+      }
       if (!res.ok) {
         throw new Error(`HTTP ${res.status}`);
       }
@@ -509,7 +522,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     } finally {
       setWardrobeLoaded(true);
     }
-  }, [toast]);
+  }, [toast, handleSignOut, setIsAuthModalOpen]);
 
   const retryLoadWardrobe = useCallback(() => {
     if (authToken) {
