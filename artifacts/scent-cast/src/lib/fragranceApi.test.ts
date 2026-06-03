@@ -82,6 +82,24 @@ test("normalizeFragranceSearchResult recovers house from source URL", () => {
   );
 });
 
+test("normalizeFragranceSearchResult recovers house from BaseNotes source URL", () => {
+  const result = normalizeFragranceSearchResult(
+    {
+      id: "basenotes-token",
+      source_url: "https://basenotes.com/fragrances/absolu-aventus-triple-aged-batch-by-creed.26272004",
+    },
+    "Creed",
+  );
+
+  assert.equal(result?.name, "Absolu Aventus Triple Aged Batch");
+  assert.equal(result?.house, "Creed");
+  assert.equal(result?.brand, "Creed");
+  assert.equal(
+    result?.source_url,
+    "https://basenotes.com/fragrances/absolu-aventus-triple-aged-batch-by-creed.26272004",
+  );
+});
+
 test("normalizeFragranceSearchResult recovers house from source id", () => {
   const result = normalizeFragranceSearchResult(
     {

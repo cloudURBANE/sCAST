@@ -47,6 +47,23 @@ function decodePathSegment(value: string | undefined): string {
   }
 }
 
+function basenotesIdentityFromPath(parts: string[]): { brand?: string; name?: string } {
+  const fragrancesIndex = parts.findIndex((part) => /^fragrances$/i.test(part));
+  const slugPart = fragrancesIndex >= 0 ? parts[fragrancesIndex + 1] : undefined;
+  if (!slugPart) return {};
+
+  const slug = slugPart.replace(/\.\d+$/i, "");
+  const byIndex = slug.toLowerCase().lastIndexOf("-by-");
+  if (byIndex < 0) return {};
+
+  const name = titleCase(cleanSegment(slug.slice(0, byIndex)));
+  const brand = titleCase(cleanSegment(slug.slice(byIndex + 4)));
+  return {
+    ...(brand ? { brand } : {}),
+    ...(name ? { name } : {}),
+  };
+}
+
 export function parseFragranceSourceUrl(value: string): SourceUrlIdentity | null {
   let parsed: URL;
   try {
@@ -63,6 +80,17 @@ export function parseFragranceSourceUrl(value: string): SourceUrlIdentity | null
     .filter(Boolean);
 
   if (parts.length === 0) return null;
+
+  if (parsed.hostname.toLowerCase().endsWith("basenotes.com")) {
+    const identity = basenotesIdentityFromPath(parts);
+    if (identity.name) {
+      return {
+        sourceUrl: parsed.toString(),
+        ...(identity.brand ? { brand: identity.brand } : {}),
+        name: identity.name,
+      };
+    }
+  }
 
   const perfumeIndex = parts.findIndex((part) => /^perfumes?$/i.test(part));
   const brandPart = perfumeIndex >= 0 ? parts[perfumeIndex + 1] : undefined;

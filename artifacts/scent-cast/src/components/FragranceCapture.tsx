@@ -421,8 +421,11 @@ export const FragranceCapture: React.FC<{
       setErrorStatus(err instanceof Error ? err.message : "Search failed.");
       setErrorPhase('search');
     } finally {
-      setUploading(false);
-      setLoadingSurface(null);
+      if (searchAbortController.current === controller) {
+        searchAbortController.current = null;
+        setUploading(false);
+        setLoadingSurface(null);
+      }
     }
   };
 
@@ -433,7 +436,8 @@ export const FragranceCapture: React.FC<{
     if (selected.scent_vector) {
       setUploading(true);
       setLoadingSurface('sync');
-      setSyncComplete(true);
+      setLoadingStatus("Syncing to Vault...");
+      setSyncComplete(false);
       const familyStr = typeof selected.family === 'string' ? selected.family : '';
       try {
         const saveResult = await onAdd({
@@ -454,6 +458,7 @@ export const FragranceCapture: React.FC<{
           setSyncComplete(false);
           return;
         }
+        setSyncComplete(true);
         await sleep(420);
         resetState();
       } catch (err: any) {
@@ -662,8 +667,11 @@ export const FragranceCapture: React.FC<{
       );
       setErrorPhase('sync');
     } finally {
-      setUploading(false);
-      setLoadingSurface(null);
+      if (syncAbortController.current === controller) {
+        syncAbortController.current = null;
+        setUploading(false);
+        setLoadingSurface(null);
+      }
     }
   };
 

@@ -30,6 +30,31 @@ test("source-url search candidates never serialize blank identity fields", () =>
   assert.equal(candidate?.source_url, "https://www.fragrantica.com/perfume/French-Avenue/Liquid-Brun-98765.html");
 });
 
+test("parses BaseNotes source URLs into a stable fragrance identity", () => {
+  const identity = parseFragranceSourceUrl(
+    "https://basenotes.com/fragrances/absolu-aventus-triple-aged-batch-by-creed.26272004",
+  );
+
+  assert.equal(
+    identity?.sourceUrl,
+    "https://basenotes.com/fragrances/absolu-aventus-triple-aged-batch-by-creed.26272004",
+  );
+  assert.equal(identity?.brand, "Creed");
+  assert.equal(identity?.name, "Absolu Aventus Triple Aged Batch");
+});
+
+test("BaseNotes source candidates recover brand and name from the URL slug", () => {
+  const candidate = candidateFromSourceUrl(
+    "https://basenotes.com/fragrances/sauvage-by-dior.26147250",
+    "Dior",
+  );
+
+  assert.equal(candidate?.id, "source:https://basenotes.com/fragrances/sauvage-by-dior.26147250");
+  assert.equal(candidate?.brand, "Dior");
+  assert.equal(candidate?.house, "Dior");
+  assert.equal(candidate?.name, "Sauvage");
+});
+
 test("identity ids round-trip without relying on blank detail fallbacks", () => {
   const id = encodeIdentityId("dataset", "Maison Francis Kurkdjian", "Baccarat Rouge 540");
   assert.deepEqual(decodeIdentityId(id), {
