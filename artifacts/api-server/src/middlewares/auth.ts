@@ -13,7 +13,14 @@ export function getToken(req: Request): string | null {
   return null;
 }
 
+// users.token is a `uuid` column. A non-UUID token (e.g. a legacy/stale value left
+// in a browser's localStorage) makes Postgres throw "invalid input syntax for type
+// uuid", which surfaced as a 500. Reject malformed tokens here so callers see a clean
+// 401 (and the SPA can re-prompt login) instead of an unrecoverable server error.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function getUserByToken(token: string) {
+  if (!UUID_RE.test(token)) return null;
   const users = await db
     .select()
     .from(usersTable)
