@@ -83,7 +83,7 @@ export const ScentIntelligenceLoader: React.FC<ScentIntelligenceLoaderProps> = (
   return (
     <div className="flex flex-col items-center justify-center text-center">
       {/* Orbital zone */}
-      <div className="relative mb-7 grid h-[132px] w-[132px] place-items-center">
+      <div className="relative mb-7 grid h-[132px] w-[132px] place-items-center overflow-visible">
         {/* Radial warmth */}
         <motion.div
           aria-hidden

@@ -695,26 +695,49 @@ export const FragranceCapture: React.FC<{
     setSyncComplete(false);
   };
 
-  const loadingVeil = uploading ? (
+  /* Sync overlay — full-screen portal, separate from the search overlay. */
+  const syncVeil = uploading && loadingSurface === 'sync' ? (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
-      className={
-        loadingSurface === 'sync'
-          ? 'fixed inset-0 z-[130] flex flex-col items-center justify-center px-6 py-[max(2rem,env(safe-area-inset-top))] backdrop-blur-sm'
-          : 'absolute inset-0 z-50 flex flex-col items-center justify-center p-8 backdrop-blur-md'
-      }
+      className="fixed inset-0 z-[130] flex flex-col items-center justify-center px-6 py-[max(2rem,env(safe-area-inset-top))] backdrop-blur-sm"
       style={{
         background:
-          loadingSurface === 'sync'
-            ? 'radial-gradient(ellipse 58% 46% at 50% 36%, rgba(212,175,55,0.08), transparent 64%), radial-gradient(ellipse 88% 62% at 50% 108%, rgba(212,175,55,0.05), transparent 68%), rgba(3,2,1,0.92)'
-            : 'radial-gradient(ellipse 70% 60% at 50% 16%, rgba(212,175,55,0.06), transparent 60%), radial-gradient(ellipse 85% 55% at 50% 102%, rgba(212,175,55,0.05), transparent 64%), rgba(3,2,1,0.7)',
+          'radial-gradient(ellipse 58% 46% at 50% 36%, rgba(212,175,55,0.08), transparent 64%), radial-gradient(ellipse 88% 62% at 50% 108%, rgba(212,175,55,0.05), transparent 68%), rgba(3,2,1,0.92)',
         boxShadow:
-          loadingSurface === 'sync'
-            ? 'inset 0 1px 0 rgba(255,230,180,0.06), inset 0 0 120px rgba(212,175,55,0.045)'
-            : 'inset 0 1px 0 rgba(255,230,180,0.08), inset 0 0 90px rgba(212,175,55,0.05)',
+          'inset 0 1px 0 rgba(255,230,180,0.06), inset 0 0 120px rgba(212,175,55,0.045)',
+      }}
+    >
+      <ScentIntelligenceLoader
+        status={loadingStatus}
+        substatus="Processing Olfactory Data"
+        complete={syncComplete}
+      />
+    </motion.div>
+  ) : null;
+
+  /* Search overlay — lives *inside* the card, positioned absolute but with
+     a min-height that forces the card to expand so the orbital animation
+     never clips. The card's `.glass-shell` has overflow:hidden, so if the
+     overlay is shorter than the loader, the top/bottom of the orbits gets
+     cut off. By setting min-height on both the overlay *and* a spacer in
+     the card flow, the card grows to accommodate the full animation. */
+  const SEARCH_LOADER_MIN_H = 320; // px – enough for 132px orb zone + margins + text
+  const searchVeil = uploading && loadingSurface === 'search' ? (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+      className="absolute inset-0 z-50 flex flex-col items-center justify-center p-8 backdrop-blur-md"
+      style={{
+        minHeight: SEARCH_LOADER_MIN_H,
+        background:
+          'radial-gradient(ellipse 70% 60% at 50% 16%, rgba(212,175,55,0.06), transparent 60%), radial-gradient(ellipse 85% 55% at 50% 102%, rgba(212,175,55,0.05), transparent 64%), rgba(3,2,1,0.7)',
+        boxShadow:
+          'inset 0 1px 0 rgba(255,230,180,0.08), inset 0 0 90px rgba(212,175,55,0.05)',
       }}
     >
       <ScentIntelligenceLoader
@@ -727,8 +750,26 @@ export const FragranceCapture: React.FC<{
 
   return (
     <div className="glass-shell w-full min-w-0 rounded-[var(--radius-scent)] relative overflow-hidden">
+      {/* Invisible spacer: when the search loader is visible, this div
+          participates in the normal flow and forces the card to be at
+          least as tall as the loader's min-height. Without this, the
+          absolute-positioned overlay doesn't contribute to the card's
+          intrinsic height and the 132px orbital zone + 150px radial
+          warmth get clipped by the glass-shell overflow:hidden. */}
       <AnimatePresence>
-        {loadingSurface === 'search' ? loadingVeil : null}
+        {loadingSurface === 'search' && uploading && (
+          <motion.div
+            initial={{ height: 0 }}
+            animate={{ height: SEARCH_LOADER_MIN_H }}
+            exit={{ height: 0 }}
+            transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+            aria-hidden
+            style={{ pointerEvents: 'none' }}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {searchVeil}
       </AnimatePresence>
       <div className="glass min-w-0 rounded-[var(--radius-scent-inner)] p-4 md:p-6">
         <header className="mb-[1.41rem] px-2 -translate-y-px">
@@ -898,7 +939,7 @@ export const FragranceCapture: React.FC<{
       </div>
       {typeof document !== 'undefined'
         ? createPortal(
-            <AnimatePresence>{loadingSurface === 'sync' ? loadingVeil : null}</AnimatePresence>,
+            <AnimatePresence>{syncVeil}</AnimatePresence>,
             document.body,
           )
         : null}
