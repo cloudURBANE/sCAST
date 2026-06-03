@@ -79,15 +79,23 @@ export const BottleImage: React.FC<BottleImageProps> = ({
   const mediaKey = `${url}\u0000${videoSrc ?? ''}`;
 
   const imgRef = React.useRef<HTMLImageElement | null>(null);
+  const retryTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const [prevMediaKey, setPrevMediaKey] = useState(mediaKey);
   const [broken, setBroken] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const [isLoading, setIsLoading] = useState(!!url);
   const [videoFailed, setVideoFailed] = useState(false);
   const useVideo = !!videoSrc && !reduceMotion && !videoFailed;
+  const clearRetryTimer = React.useCallback(() => {
+    if (retryTimerRef.current !== null) {
+      clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = null;
+    }
+  }, []);
 
   // Synchronously reset state if the image/video source changes.
   if (mediaKey !== prevMediaKey) {
+    clearRetryTimer();
     setPrevMediaKey(mediaKey);
     setBroken(false);
     setRetryCount(0);
@@ -95,16 +103,21 @@ export const BottleImage: React.FC<BottleImageProps> = ({
     setVideoFailed(false);
   }
 
+  React.useEffect(() => clearRetryTimer, [clearRetryTimer]);
+
   const handleLoad = () => {
+    clearRetryTimer();
     setIsLoading(false);
     setBroken(false);
     onLoad?.();
   };
 
   const handleError = () => {
+    clearRetryTimer();
     if (retryCount < 2) {
       // Retry after a 300ms delay to absorb transient proxy/network blips
-      setTimeout(() => {
+      retryTimerRef.current = setTimeout(() => {
+        retryTimerRef.current = null;
         setRetryCount((prev) => prev + 1);
       }, 300);
     } else {

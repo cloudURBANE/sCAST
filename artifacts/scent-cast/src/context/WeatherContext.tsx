@@ -56,9 +56,9 @@ export const WeatherProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   useEffect(() => {
     const abortController = new AbortController();
+    fetchWeather(undefined, undefined, abortController.signal);
 
     if (!navigator.geolocation) {
-      fetchWeather(undefined, undefined, abortController.signal);
       return () => abortController.abort();
     }
     
@@ -70,7 +70,6 @@ export const WeatherProvider: React.FC<{ children: React.ReactNode }> = ({ child
       },
       () => {
         setLocationStatus('denied');
-        fetchWeather(undefined, undefined, abortController.signal);
       },
       { timeout: 10000, enableHighAccuracy: false }
     );

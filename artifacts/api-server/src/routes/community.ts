@@ -2,7 +2,7 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { userFragrancesTable, userSettingsTable, usersTable } from "@workspace/db/schema";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { hydrateImageUrl, normalizeFragrance } from "../services/fragrancePayload";
+import { batchHydrateImageUrls, normalizeFragrance } from "../services/fragrancePayload";
 import { shareHandleFromEmail } from "../services/shareIdentity";
 
 const router = Router();
@@ -51,18 +51,12 @@ function noteList(fragrance: Record<string, any>, key: "top" | "heart" | "base")
   );
 }
 
-async function toCommunityFragrance(row: {
+function toCommunityFragrance(row: {
   rowId: string;
   userEmail: string;
-  fragranceData: unknown;
-}): Promise<Record<string, any> | null> {
-  if (!row.fragranceData || typeof row.fragranceData !== "object" || Array.isArray(row.fragranceData)) {
-    return null;
-  }
-
-  let fragrance = normalizeFragrance(row.fragranceData as Record<string, any>);
-  fragrance = await hydrateImageUrl(fragrance);
-
+  fragrance: Record<string, any>;
+}): Record<string, any> | null {
+  const { fragrance } = row;
   const name = firstString(fragrance.name, fragrance.product?.name);
   const brand = firstString(fragrance.brand, fragrance.house, fragrance.product?.brand);
   const imageUrl = firstString(fragrance.imageUrl, fragrance.image_url);
@@ -110,7 +104,20 @@ router.get("/community/fragrances", async (req, res, next) => {
       .orderBy(desc(userFragrancesTable.createdAt))
       .limit(fetchLimit);
 
-    const hydrated = await Promise.all(rows.map(toCommunityFragrance));
+    const normalizedRows = rows.flatMap((row) => {
+      if (!row.fragranceData || typeof row.fragranceData !== "object" || Array.isArray(row.fragranceData)) {
+        return [];
+      }
+      return [{
+        rowId: row.rowId,
+        userEmail: row.userEmail,
+        fragrance: normalizeFragrance(row.fragranceData as Record<string, any>),
+      }];
+    });
+    const hydratedFragrances = await batchHydrateImageUrls(normalizedRows.map((row) => row.fragrance));
+    const hydrated = normalizedRows.map((row, i) =>
+      toCommunityFragrance({ ...row, fragrance: hydratedFragrances[i]! }),
+    );
     const fragrances = hydrated.filter((entry): entry is Record<string, any> => entry !== null).slice(0, limit);
 
     res.json({ fragrances });
