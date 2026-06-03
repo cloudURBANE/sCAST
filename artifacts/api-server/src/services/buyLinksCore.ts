@@ -25,7 +25,92 @@ export type CachedAffiliateLinkLike = {
   id: string;
   provider: string;
   status: string;
+  fetchedAt?: Date | string | null;
+  lastVerifiedAt?: Date | string | null;
+  createdAt?: Date | string | null;
 };
+
+/**
+ * Default time-to-live for a cached affiliate buy-link row before it is treated
+ * as stale on public pages. Affiliate destination/landing URLs rot (advertiser
+ * drops, deep links expire), so a cached row that has not been re-verified within
+ * this window is no longer served as "active" and falls through to the fallback
+ * search link instead.
+ */
+export const DEFAULT_BUY_LINK_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+export type AffiliateLinkFreshnessReason = "fresh" | "expired" | "unknown_age";
+
+export type AffiliateLinkFreshness = {
+  /** Whether the link may still be served to public visitors. */
+  fresh: boolean;
+  reason: AffiliateLinkFreshnessReason;
+  /** Age in ms relative to the reference timestamp, or null when undateable. */
+  ageMs: number | null;
+};
+
+function toDate(value: Date | string | null | undefined): Date | null {
+  if (value === null || value === undefined) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+/**
+ * Most-recent timestamp that proves the row is still good: an explicit
+ * verification beats the original fetch, which beats the row's creation time.
+ */
+export function affiliateLinkReferenceDate(link: CachedAffiliateLinkLike): Date | null {
+  return toDate(link.lastVerifiedAt) ?? toDate(link.fetchedAt) ?? toDate(link.createdAt);
+}
+
+export function classifyAffiliateLinkFreshness(
+  link: CachedAffiliateLinkLike,
+  now: Date = new Date(),
+  ttlMs: number = DEFAULT_BUY_LINK_CACHE_TTL_MS,
+): AffiliateLinkFreshness {
+  const reference = affiliateLinkReferenceDate(link);
+  if (!reference) {
+    // No timestamp on the row (e.g. legacy rows predating the freshness columns).
+    // Keep it servable so we do not silently drop working links, but surface it
+    // so monitoring can find rows whose age we cannot prove.
+    return { fresh: true, reason: "unknown_age", ageMs: null };
+  }
+  const ageMs = now.getTime() - reference.getTime();
+  if (Number.isFinite(ttlMs) && ttlMs > 0 && ageMs > ttlMs) {
+    return { fresh: false, reason: "expired", ageMs };
+  }
+  return { fresh: true, reason: "fresh", ageMs };
+}
+
+export type AffiliateLinkObservation<T extends CachedAffiliateLinkLike> = {
+  link: T;
+  reason: AffiliateLinkFreshnessReason;
+  ageMs: number | null;
+};
+
+export type PartitionedAffiliateLinks<T extends CachedAffiliateLinkLike> = {
+  /** Links that may still be served (fresh or undateable). */
+  servable: T[];
+  /** Non-fresh links (expired or undateable) collected for monitoring. */
+  observations: AffiliateLinkObservation<T>[];
+};
+
+export function partitionAffiliateLinksByFreshness<T extends CachedAffiliateLinkLike>(
+  links: T[],
+  now: Date = new Date(),
+  ttlMs: number = DEFAULT_BUY_LINK_CACHE_TTL_MS,
+): PartitionedAffiliateLinks<T> {
+  const servable: T[] = [];
+  const observations: AffiliateLinkObservation<T>[] = [];
+  for (const link of links) {
+    const freshness = classifyAffiliateLinkFreshness(link, now, ttlMs);
+    if (freshness.fresh) servable.push(link);
+    if (freshness.reason !== "fresh") {
+      observations.push({ link, reason: freshness.reason, ageMs: freshness.ageMs });
+    }
+  }
+  return { servable, observations };
+}
 
 export type BuyLinkEnv = {
   amazonAffiliateEnabled?: boolean;
@@ -191,17 +276,29 @@ export function resolveFallbackBuyLink(
   );
 }
 
+export type BuyLinkFreshnessOptions = {
+  now?: Date;
+  ttlMs?: number;
+};
+
 export function resolvePublicBuyLinkFromCachedLinks<T extends CachedAffiliateLinkLike>(
   fragrance: PublicFragranceLike,
   cachedLinks: T[] = [],
   env: BuyLinkEnv = {},
+  freshness: BuyLinkFreshnessOptions = {},
 ): BuyLinkResponse {
-  const cachedRakuten = cachedProviderLink(cachedLinks, "rakuten");
+  const { servable } = partitionAffiliateLinksByFreshness(
+    cachedLinks,
+    freshness.now ?? new Date(),
+    freshness.ttlMs ?? DEFAULT_BUY_LINK_CACHE_TTL_MS,
+  );
+
+  const cachedRakuten = cachedProviderLink(servable, "rakuten");
   if (cachedRakuten) {
     return buyLinkResponse("rakuten", "active", cachedRakuten.id);
   }
 
-  const cachedCj = cachedProviderLink(cachedLinks, "cj");
+  const cachedCj = cachedProviderLink(servable, "cj");
   if (cachedCj) {
     return cjBuyLinkResponse(cachedCj);
   }

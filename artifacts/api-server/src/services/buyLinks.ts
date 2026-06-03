@@ -5,13 +5,16 @@ import { logger } from "../lib/logger";
 import {
   buildFragranceQuery,
   buyLinkResponse,
+  classifyAffiliateLinkFreshness,
+  DEFAULT_BUY_LINK_CACHE_TTL_MS,
   isShareHidden,
   parseBatchIds,
+  partitionAffiliateLinksByFreshness,
   payloadFragranceId,
   resolveFallbackBuyLink,
   resolvePublicBuyLinkFromCachedLinks as resolvePublicBuyLinkFromCachedLinksCore,
 } from "./buyLinksCore";
-import type { BuyLinkEnv, BuyLinkResponse } from "./buyLinksCore";
+import type { AffiliateLinkObservation, BuyLinkEnv, BuyLinkResponse } from "./buyLinksCore";
 import { createRakutenProvider, rakutenEnvReady } from "./rakutenProvider";
 
 export type UserFragranceRow = typeof userFragrancesTable.$inferSelect;
@@ -70,6 +73,80 @@ function currentBuyLinkEnv(): BuyLinkEnv {
     amazonMarketplace: amazonMarketplace(),
     rakutenEnvReady: rakutenEnvReady(),
   };
+}
+
+function buyLinkCacheTtlMs(): number {
+  const raw = Number(process.env.BUY_LINK_CACHE_TTL_MS);
+  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_BUY_LINK_CACHE_TTL_MS;
+}
+
+export type BuyLinkFreshnessStats = {
+  /** Cached rows skipped because they aged past the TTL. */
+  expired: number;
+  /** Cached rows served but missing freshness timestamps (legacy/in-flight rows). */
+  unknownAge: number;
+  /** ISO timestamp of the most recent non-fresh observation, or null. */
+  lastStaleAt: string | null;
+};
+
+const buyLinkFreshnessStats: BuyLinkFreshnessStats = {
+  expired: 0,
+  unknownAge: 0,
+  lastStaleAt: null,
+};
+
+export function getBuyLinkFreshnessStats(): BuyLinkFreshnessStats {
+  return { ...buyLinkFreshnessStats };
+}
+
+export function resetBuyLinkFreshnessStats(): void {
+  buyLinkFreshnessStats.expired = 0;
+  buyLinkFreshnessStats.unknownAge = 0;
+  buyLinkFreshnessStats.lastStaleAt = null;
+}
+
+/**
+ * Surface stale affiliate cache rows for monitoring. Expired rows are logged at
+ * warn level (they were dropped from public responses and need re-verification);
+ * undateable rows are logged at info level so operators can backfill timestamps.
+ */
+function recordAffiliateLinkObservations(
+  observations: AffiliateLinkObservation<AffiliateLinkRow>[],
+): void {
+  if (observations.length === 0) return;
+
+  const expired = observations.filter((obs) => obs.reason === "expired");
+  const unknownAge = observations.filter((obs) => obs.reason === "unknown_age");
+
+  buyLinkFreshnessStats.expired += expired.length;
+  buyLinkFreshnessStats.unknownAge += unknownAge.length;
+  buyLinkFreshnessStats.lastStaleAt = new Date().toISOString();
+
+  if (expired.length > 0) {
+    logger.warn(
+      {
+        event: "affiliate_link_stale",
+        count: expired.length,
+        links: expired.slice(0, 20).map((obs) => ({
+          affiliateLinkId: obs.link.id,
+          fragranceId: obs.link.fragranceId,
+          provider: obs.link.provider,
+          ageMs: obs.ageMs,
+        })),
+      },
+      "expired affiliate buy-link cache rows skipped",
+    );
+  }
+
+  if (unknownAge.length > 0) {
+    logger.info(
+      {
+        event: "affiliate_link_unknown_age",
+        count: unknownAge.length,
+      },
+      "affiliate buy-link cache rows missing freshness timestamps",
+    );
+  }
 }
 
 async function findCachedAffiliateLink(fragranceId: string, provider: string) {
@@ -132,10 +209,17 @@ export async function resolveBuyLinkForFragrance(
   options: BuyLinkResolveOptions,
 ): Promise<BuyLinkResponse> {
   let fallbackReason: string | undefined = options.allowLiveRakuten ? undefined : "BUY_LINK_NOT_CACHED";
+  const ttlMs = buyLinkCacheTtlMs();
 
   const cachedRakuten = await findCachedAffiliateLinkSafe(fragrance.id, "rakuten");
   if (cachedRakuten) {
-    return buyLinkResponse("rakuten", "active", cachedRakuten.id);
+    const freshness = classifyAffiliateLinkFreshness(cachedRakuten, new Date(), ttlMs);
+    if (freshness.fresh) {
+      return buyLinkResponse("rakuten", "active", cachedRakuten.id);
+    }
+    recordAffiliateLinkObservations([
+      { link: cachedRakuten, reason: freshness.reason, ageMs: freshness.ageMs },
+    ]);
   }
 
   if (options.allowLiveRakuten && rakutenEnvReady()) {
@@ -190,7 +274,11 @@ export async function resolveBuyLinkForFragrance(
 
   const cachedCj = await findCachedAffiliateLinkSafe(fragrance.id, "cj");
   if (cachedCj) {
-    return resolvePublicBuyLinkFromCachedLinksCore(fragrance, [cachedCj], currentBuyLinkEnv());
+    const { servable, observations } = partitionAffiliateLinksByFreshness([cachedCj], new Date(), ttlMs);
+    recordAffiliateLinkObservations(observations);
+    if (servable.length > 0) {
+      return resolvePublicBuyLinkFromCachedLinksCore(fragrance, servable, currentBuyLinkEnv());
+    }
   }
 
   return resolveFallbackBuyLink(fragrance, fallbackReason, currentBuyLinkEnv());
@@ -222,6 +310,17 @@ export async function resolvePublicBuyLinksForRows(
     rowsNeedingLinks.map((row) => row.id),
   );
 
+  const now = new Date();
+  const ttlMs = buyLinkCacheTtlMs();
+  const servableByFragranceId = new Map<string, AffiliateLinkRow[]>();
+  const observations: AffiliateLinkObservation<AffiliateLinkRow>[] = [];
+  for (const [fragranceId, links] of cachedLinksByFragranceId) {
+    const partition = partitionAffiliateLinksByFreshness(links, now, ttlMs);
+    servableByFragranceId.set(fragranceId, partition.servable);
+    observations.push(...partition.observations);
+  }
+  recordAffiliateLinkObservations(observations);
+
   return Object.fromEntries(
     outputIds.map((id) => {
       const fragrance = rowsByPublicId.get(id);
@@ -231,7 +330,7 @@ export async function resolvePublicBuyLinksForRows(
 
       return [
         id,
-        resolvePublicBuyLinkFromCachedLinks(fragrance, cachedLinksByFragranceId.get(fragrance.id) ?? []),
+        resolvePublicBuyLinkFromCachedLinks(fragrance, servableByFragranceId.get(fragrance.id) ?? []),
       ] as const;
     }),
   );

@@ -11,6 +11,7 @@ Low-risk fixes applied after the audit:
 - Public share and community routes now reuse `batchHydrateImageUrls` instead of per-row `hydrateImageUrl` calls.
 - Public share buy-link loading now uses a single batch endpoint, `/api/share/:userRef/buy-links?ids=...`, with public Rakuten resolution kept cache-only.
 - Public share payloads now embed a cache-only `buyLinks` map, the share page only calls the batch endpoint for missing ids, and public buy-link cache reads are batched into one affiliate-link lookup per response.
+- Cached affiliate buy-links now have a freshness/expiry policy: rows older than `BUY_LINK_CACHE_TTL_MS` (default 30 days, by `last_verified_at` → `fetched_at` → `created_at`) are skipped on public/share paths and fall through to the search-link fallback; undateable legacy rows stay servable but are flagged. Stale/undateable rows are surfaced through structured `affiliate_link_stale` warn logs and an admin-only counter at `GET /api/admin/buy-links/freshness`.
 - `/api/usage/total` now scopes totals to the authenticated user instead of returning global ledger totals.
 - `BottleImage` clears pending retry timers on source changes, successful load, and unmount.
 - `WeatherContext` starts the default `/api/weather` fetch immediately, then upgrades with coordinate weather if geolocation succeeds.
@@ -27,7 +28,7 @@ Still needs work:
 - Detail source URL enrichment can still be long-running when the app detail endpoint is the primary path. The safer larger fix is optimistic save plus background detail/image enrichment updates tied to the authenticated user's row.
 - The app fallback search now has a response budget, but it still needs proper background enrichment/rate limiting so timed-out source discovery can continue safely outside the request.
 - Community gallery remains a global public aggregation. Product needs to decide whether this is intentionally global or should be tenant/host scoped before multi-tenant rollout.
-- Public buy-link payload embedding and one-query cache batching are implemented. Remaining buy-link work is a cache freshness/expiry policy and explicit monitoring for stale affiliate rows; public live Rakuten lookup should remain disabled unless abuse controls are added.
+- Public buy-link payload embedding, one-query cache batching, a cache freshness/expiry policy, and stale-row monitoring (`affiliate_link_stale` logs + `GET /api/admin/buy-links/freshness`) are all implemented. The only remaining buy-link work is operational: wire the stale counters/logs into an alert and add a background re-verification job so expired rows are refreshed rather than just skipped. Public live Rakuten lookup should remain disabled unless abuse controls are added.
 - Image proxy SSRF protections should stay as-is; performance work remains CDN caching, URL-hash cache keys, and possible `stale-while-revalidate`.
 - Usage totals are user-scoped now. Any future tenant/admin aggregate view still needs explicit role and tenant authorization.
 
