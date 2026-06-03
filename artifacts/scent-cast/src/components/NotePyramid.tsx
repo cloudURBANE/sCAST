@@ -1144,7 +1144,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                   opacity: targetOpacity,
                   scale: targetScale,
                   filter: isEmpty
-                    ? 'saturate(0.5) brightness(0.62)'
+                    ? 'saturate(1.05) brightness(0.88)'
                     : isMuted
                       ? 'saturate(0.85) brightness(0.92)'
                       : 'saturate(1) brightness(1)',

@@ -1561,11 +1561,11 @@ export const Wardrobe: React.FC<{
             shelves.map((shelfItems, shelfIndex) => (
               <div key={shelfIndex} className="relative group/shelf">
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-5 mb-1">
-                  {shelfItems.map((item, i) => (
+                  {shelfItems.map((item) => (
                     <motion.div
                       key={item.id}
-                      initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }}
-                      viewport={{ once: true }} transition={{ delay: i * 0.08, duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
+                      initial={{ opacity: 0, y: 10 }} whileInView={{ opacity: 1, y: 0 }}
+                      viewport={{ once: true, margin: '0px 0px 15% 0px' }} transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
                       className="group cursor-pointer relative h-full min-w-0"
                       onClick={() => openDetail(item)}
                       onMouseEnter={() => prefetchReviews(item)}

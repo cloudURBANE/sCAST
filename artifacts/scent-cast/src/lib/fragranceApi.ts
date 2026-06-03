@@ -1365,6 +1365,65 @@ export type SummarizedComment = {
 
 const reviewSummaryMemoryCache = new Map<string, SummarizedComment[]>();
 
+const REVIEW_SUMMARY_STORAGE_PREFIX = "scent_review_summary:";
+const REVIEW_SUMMARY_THEMES = ["performance", "season", "vibe", "general"] as const;
+
+/** FNV-1a 32-bit — compact, stable sessionStorage key (avoids 6k-char keys). */
+function hashReviewCacheKey(key: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < key.length; i++) {
+    h ^= key.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(36);
+}
+
+function coerceSummarizedComments(value: unknown): SummarizedComment[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((c): SummarizedComment | null => {
+      if (c && typeof c === "object" && typeof (c as any).text === "string") {
+        const rawTheme = (c as any).theme;
+        const themeVal =
+          typeof rawTheme === "string" &&
+          (REVIEW_SUMMARY_THEMES as readonly string[]).includes(rawTheme.toLowerCase())
+            ? (rawTheme.toLowerCase() as SummarizedComment["theme"])
+            : "general";
+        return { text: (c as any).text.trim(), theme: themeVal };
+      }
+      return null;
+    })
+    .filter((c): c is SummarizedComment => c !== null && c.text.length > 0);
+}
+
+/** Reads a previously persisted summary for this exact key (survives reloads within the session). */
+function readPersistedReviewSummary(cacheKey: string): SummarizedComment[] | undefined {
+  if (typeof sessionStorage === "undefined") return undefined;
+  try {
+    const raw = sessionStorage.getItem(REVIEW_SUMMARY_STORAGE_PREFIX + hashReviewCacheKey(cacheKey));
+    if (!raw) return undefined;
+    const parsed = JSON.parse(raw) as { k?: unknown; c?: unknown };
+    // Verify the full key to guard against the (rare) 32-bit hash collision.
+    if (!parsed || parsed.k !== cacheKey) return undefined;
+    const comments = coerceSummarizedComments(parsed.c);
+    return comments.length > 0 ? comments : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function persistReviewSummary(cacheKey: string, comments: SummarizedComment[]): void {
+  if (typeof sessionStorage === "undefined" || comments.length === 0) return;
+  try {
+    sessionStorage.setItem(
+      REVIEW_SUMMARY_STORAGE_PREFIX + hashReviewCacheKey(cacheKey),
+      JSON.stringify({ k: cacheKey, c: comments }),
+    );
+  } catch {
+    /* quota / privacy mode — the in-memory cache still serves this session */
+  }
+}
+
 /** Stable key for in-session review summary cache (matches server `makeLookupKey` + review text). */
 export function reviewSummaryCacheKey(
   name: string | undefined,
@@ -1379,7 +1438,13 @@ export function reviewSummaryCacheKey(
 
 export function getCachedReviewSummary(cacheKey: string): SummarizedComment[] | undefined {
   const hit = reviewSummaryMemoryCache.get(cacheKey);
-  return hit?.length ? hit : undefined;
+  if (hit?.length) return hit;
+  const persisted = readPersistedReviewSummary(cacheKey);
+  if (persisted) {
+    reviewSummaryMemoryCache.set(cacheKey, persisted);
+    return persisted;
+  }
+  return undefined;
 }
 
 /** Pulls the raw scraped reviews off a fragrance detail payload (engine puts them on `raw.reviews`). */
@@ -1443,6 +1508,7 @@ export async function summarizeReviews(
 
     if (comments.length > 0) {
       reviewSummaryMemoryCache.set(cacheKey, comments);
+      persistReviewSummary(cacheKey, comments);
     }
     return comments;
   } catch {
