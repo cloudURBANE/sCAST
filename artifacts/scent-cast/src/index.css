@@ -1444,6 +1444,13 @@ a {
   transform: translate3d(0, 0, 0);
 }
 
+.scent-community-marquee-track[data-overlay-open="true"] {
+  animation: none;
+  pointer-events: none;
+  transform: translate3d(0, 0, 0);
+  visibility: hidden;
+}
+
 @media (hover: hover) {
   .scent-community-marquee-track:hover {
     animation-play-state: paused;
@@ -1454,20 +1461,25 @@ a {
   display: flex;
   align-items: flex-end;
   flex: 0 0 auto;
-  gap: clamp(1.5rem, 3vw, 3rem);
-  padding-right: clamp(1.5rem, 3vw, 3rem);
+  gap: clamp(2rem, 3.6vw, 4rem);
+  padding-right: clamp(2rem, 3.6vw, 4rem);
 }
 
 .scent-community-marquee-cell {
-  flex: 0 0 clamp(11rem, 22vw, 18rem);
-  width: clamp(11rem, 22vw, 18rem);
-  height: clamp(15rem, 28vw, 22rem);
+  flex: 0 0 clamp(15rem, 24vw, 22rem);
+  width: clamp(15rem, 24vw, 22rem);
+  height: clamp(23rem, 36vw, 33rem);
   position: relative;
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  will-change: transform;
-  transform: translateZ(0);
+}
+
+.scent-community-marquee-card {
+  box-shadow:
+    0 34px 78px -40px rgba(0, 0, 0, 0.98),
+    0 16px 34px -22px rgba(0, 0, 0, 0.9),
+    inset 0 1px 0 rgba(255, 255, 255, 0.045);
 }
 
 @keyframes community-marquee-scroll {

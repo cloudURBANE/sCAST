@@ -8,7 +8,7 @@
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --experimental-strip-types --test src/middlewares/adminSecret.test.ts src/services/packshotTrim.test.ts src/services/imageSolvers.test.ts src/services/imagePipelineCore.test.ts src/services/serperService.test.ts src/services/fragranceNameResolver.test.ts src/services/fragranceApiCore.test.ts src/services/shareIdentity.test.ts src/services/rakutenProvider.test.ts src/services/enrichmentQueueCore.test.ts src/services/scentVectorizer.test.ts src/services/scentEngineCore.test.ts src/services/fragranceNotes.test.ts src/services/fragrancePayloadCore.test.ts src/server/affiliate/providers/amazon/amazonAffiliateUrl.test.ts",
+    "test": "node --experimental-strip-types --test src/middlewares/adminSecret.test.ts src/services/packshotTrim.test.ts src/services/imageSolvers.test.ts src/services/imagePipelineCore.test.ts src/services/serperService.test.ts src/services/fragranceNameResolver.test.ts src/services/fragranceApiCore.test.ts src/services/shareIdentity.test.ts src/services/rakutenProvider.test.ts src/services/enrichmentQueueCore.test.ts src/services/scentVectorizer.test.ts src/services/scentEngineCore.test.ts src/services/fragranceNotes.test.ts src/services/fragrancePayloadCore.test.ts src/services/weatherService.test.ts src/server/affiliate/providers/amazon/amazonAffiliateUrl.test.ts",
     "backtest:scent-facts": "node --experimental-strip-types src/lib/scent-facts/backtest.ts"
   },
   "dependencies": {

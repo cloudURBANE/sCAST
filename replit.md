@@ -49,12 +49,12 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
 - **Port**: auto-assigned
 
 **API Routes (`/api/`):**
-- `GET /weather` — Live weather via OpenWeatherMap (or demo fallback)
+- `GET /weather` — Live weather via Open-Meteo (or simulated fallback)
 - `POST /scent-profile` — Build full fragrance intelligence profile (vectorize + image search + bg removal)
 - `POST /search-scent` — Search local dataset + Wikipedia fallback
 
 **Services:**
-- `weatherService.ts` — OpenWeatherMap (3.0 + 2.5 fallback)
+- `weatherService.ts` — Open-Meteo current forecast adapter
 - `imageService.ts` — Serper image search
 - `bgService.ts` — Poof API + sharp normalization
 - `scentEngine.ts` — Core orchestrator for profile building
@@ -66,6 +66,6 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
 **Key dependencies:** `axios`, `sharp`, `cheerio`, `form-data`
 
 ## Environment Variables (Optional)
-- `WEATHER_API_KEY` — OpenWeatherMap API key for live weather data
+- `DEFAULT_WEATHER_LAT` / `DEFAULT_WEATHER_LON` / `DEFAULT_WEATHER_LOCATION` — optional fallback location when browser geolocation is unavailable
 - `SERPER_API_KEY` (+ optional `SERPER_IMAGE_API_URL`) — Serper image search for fragrance images
 - `REMOVE_BG_API_KEY` — Poof API key for background removal from bottle images

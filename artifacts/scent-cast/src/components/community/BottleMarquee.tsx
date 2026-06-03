@@ -1,6 +1,7 @@
 import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { BottleImage } from '@/components/BottleImage';
+import { BrandGoldLabel } from '@/components/BrandGoldLabel';
 import { CommunityFragranceOverlay } from '@/components/community/CommunityFragranceOverlay';
 import type { CommunityFragranceEntry } from '@/components/community/communityData';
 
@@ -124,7 +125,13 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
   return (
     <>
       <section className="scent-community-marquee" aria-label="Community fragrance marquee">
-        <div className="scent-community-marquee-track" key={trackKey} ref={trackRef}>
+        <div
+          className="scent-community-marquee-track"
+          key={trackKey}
+          ref={trackRef}
+          data-overlay-open={activeItem ? 'true' : undefined}
+          aria-hidden={activeItem ? 'true' : undefined}
+        >
           {[...Array(COMMUNITY_TRACK_COPIES)].map((_, copyIndex) => (
             <div
               className="scent-community-marquee-group"
@@ -146,7 +153,7 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
                         triggerRefs.current.delete(item.id);
                       }
                     }}
-                    className="pedestal relative h-full w-full cursor-pointer rounded-[var(--radius-scent)] border border-white/8 bg-black/25 p-3 text-left shadow-[0_24px_60px_-36px_rgba(0,0,0,0.95)] outline-none transition-colors hover:border-white/16 focus-visible:border-white/24 focus-visible:ring-2 focus-visible:ring-scent-accent/40"
+                    className="scent-fragrance-card scent-community-marquee-card group relative flex h-full w-full cursor-pointer flex-col p-5 sm:p-6 text-left outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
                     whileHover={{ y: -8, scale: 1.04 }}
                     transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
                     onClick={() => {
@@ -156,20 +163,31 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
                       }
                     }}
                   >
-                    <div className="absolute inset-x-5 bottom-4 h-px bg-gradient-to-r from-transparent via-scent-accent/35 to-transparent" aria-hidden="true" />
-                    <BottleImage
-                      src={item.imageUrl}
-                      alt={`${item.name} by ${item.brand}`}
-                      variant="display"
-                      className="absolute inset-3"
-                      adjustment={item.imageAdjustment}
-                      showFrameGuide={false}
-                      onLoad={copyIndex === 0 ? requestMarqueeMeasure : undefined}
-                      onError={copyIndex === 0 ? requestMarqueeMeasure : undefined}
-                    />
-                    <span className="absolute left-4 top-4 font-mono text-[8px] uppercase tracking-[0.24em] text-scent-accent/75">
-                      {item.curator}
-                    </span>
+                    <div className="scent-card-frame" aria-hidden="true" />
+                    <div className="relative z-10 flex justify-end">
+                      <span className="font-mono text-[8px] uppercase tracking-[0.22em] text-scent-accent/80">
+                        {item.curator}
+                      </span>
+                    </div>
+                    <div className="relative z-10 my-3 min-h-0 flex-1">
+                      <BottleImage
+                        src={item.imageUrl}
+                        alt={`${item.name} by ${item.brand}`}
+                        variant="card"
+                        className="absolute inset-0"
+                        imgClassName="scent-hover-scale brightness-[1.1] transition-transform duration-[900ms] motion-reduce:transition-none"
+                        adjustment={item.imageAdjustment}
+                        showFrameGuide={false}
+                        onLoad={copyIndex === 0 ? requestMarqueeMeasure : undefined}
+                        onError={copyIndex === 0 ? requestMarqueeMeasure : undefined}
+                      />
+                    </div>
+                    <div className="relative z-10 mt-2 text-center">
+                      <BrandGoldLabel as="span" brand={item.brand} className="scent-card-brand block" />
+                    </div>
+                    <div className="scent-card-title-row relative z-10 mt-2">
+                      <h3 className="scent-card-title" title={item.name}>{item.name}</h3>
+                    </div>
                   </motion.button>
                 </div>
               ))}

@@ -28,7 +28,7 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
 
   useEffect(() => {
     const previous = document.title;
-    document.title = 'Community — SCENTBEAM';
+    document.title = 'Community - SCENTBEAM';
     return () => {
       document.title = previous;
     };
@@ -75,7 +75,7 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
             <Wind size={18} />
             <p className="font-serif font-bold italic tracking-tighter uppercase">{APP_BRAND_MARK}</p>
           </div>
-          <p className="text-[10px] uppercase tracking-[0.2em] text-scent-muted">© 2026 Olfactory Intelligence Systems</p>
+          <p className="text-[10px] uppercase tracking-[0.2em] text-scent-muted">&copy; 2026 Olfactory Intelligence Systems</p>
         </div>
       </footer>
     </div>

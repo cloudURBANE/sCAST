@@ -92,7 +92,7 @@ export const FeaturedCaseGrid: React.FC<FeaturedCaseGridProps> = ({
     <>
       <section aria-label="Featured community wardrobes">
         <motion.div
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 sm:gap-8"
+          className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-7 sm:gap-8 lg:gap-10"
           variants={gridVariants}
           initial="initial"
           animate="animate"
