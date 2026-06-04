@@ -6,8 +6,39 @@ import { requireAdminSecret } from "../middlewares/adminSecret";
 import { rebuildWardrobeForUser } from "../services/wardrobeRebuild";
 import { getBuyLinkFreshnessStats } from "../services/buyLinks";
 import { getDefaultTenantId } from "../services/tenants";
+import { getKeyPool, listKeyPools, parseKeyList } from "../lib/keyPool";
+import { logger } from "../lib/logger";
 
 const router = Router();
+
+// Live health of the rotating API-key pools (Serper, Poof background removal).
+// Masked keys only. Lets you watch free-tier keys drain and see when a pool is
+// running low — without redeploying.
+router.get("/admin/key-pools", requireAdminSecret, (_req, res) => {
+  res.json({ pools: listKeyPools().map((pool) => pool.snapshot()) });
+});
+
+// Hot-add free-tier keys to a pool at runtime (no redeploy). Body: { keys }
+// where keys is a comma/space/newline-delimited string or an array of strings.
+// Re-adding a retired/cooling key revives it.
+router.post("/admin/key-pools/:pool/keys", requireAdminSecret, (req, res) => {
+  const poolName = String(req.params.pool ?? "");
+  const pool = getKeyPool(poolName);
+  if (!pool) {
+    res.status(404).json({ error: `Unknown pool '${poolName}'`, pools: listKeyPools().map((p) => p.name) });
+    return;
+  }
+  const rawKeys = (req.body as { keys?: string | string[] })?.keys;
+  const list = Array.isArray(rawKeys) ? rawKeys : typeof rawKeys === "string" ? [rawKeys] : [];
+  const keys = parseKeyList(...list);
+  if (keys.length === 0) {
+    res.status(400).json({ error: "Provide one or more keys in the `keys` field" });
+    return;
+  }
+  const added = pool.addKeys(keys);
+  logger.info({ pool: poolName, added, size: pool.size }, "[admin] hot-added API keys to pool");
+  res.json({ added, snapshot: pool.snapshot() });
+});
 
 // Ops-only counters for stale/undateable affiliate buy-link cache rows seen
 // while resolving public share buy links. Pairs with the structured
