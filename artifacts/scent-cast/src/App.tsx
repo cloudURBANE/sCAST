@@ -379,9 +379,9 @@ const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({ weather, weath
             {metrics.map((metric) => (
               <div key={metric.label} className="scent-atmosphere-marquee-cell">
                 <span className="scent-atmosphere-label">
-                  {metric.label}
+                  <span className="scent-atmosphere-label-text">{metric.label}</span>
                   {metric.subtitle && (
-                    <span className="ml-1 opacity-40 normal-case tracking-normal text-[0.7em]">({metric.subtitle})</span>
+                    <span className="scent-atmosphere-subtitle">({metric.subtitle})</span>
                   )}
                 </span>
                 <span className="scent-atmosphere-value">{metric.value}</span>

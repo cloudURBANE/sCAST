@@ -515,7 +515,9 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const isMutatingRef = useRef(false);
   const lastMutationRef = useRef(0);
   const appStateRefreshInFlightRef = useRef(false);
+  const itemsRef = useRef(items);
   const authTokenRef = useRef(authToken);
+  itemsRef.current = items;
   authTokenRef.current = authToken;
 
   const handleVaultSearchStateChange = useCallback((active: boolean) => {
@@ -934,7 +936,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const refreshPendingDetails = async () => {
       if (cancelled || enrichmentRefreshInFlightRef.current || isMutatingRef.current) return;
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
-      const targets = items
+      const targets = itemsRef.current
         .filter(wardrobeNeedsEnrichmentRefresh)
         .slice(0, 3);
       if (targets.length === 0) return;
@@ -975,7 +977,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       abortController.abort();
       window.clearInterval(id);
     };
-  }, [authToken, wardrobeLoaded, items, handlePersistWardrobeDetailRefresh]);
+  }, [authToken, wardrobeLoaded, items.length, handlePersistWardrobeDetailRefresh]);
 
   const handleRevertWardrobe = useCallback(() => {
     if (!wardrobeRevertSnapshot) return;

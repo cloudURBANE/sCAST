@@ -27,11 +27,15 @@ export const BrandGoldLabel: React.FC<BrandGoldLabelProps> = ({
   title,
   ...props
 }) => {
+  const labelClassName = className
+    ? `scent-brand-gold-label ${className}`
+    : 'scent-brand-gold-label';
+
   return React.createElement(
     as,
     {
       ...props,
-      className,
+      className: labelClassName,
       'data-len': brandLengthBucket(brand),
       title: title ?? brand,
     },

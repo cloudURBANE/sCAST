@@ -1,4 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400;1,600&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;700&family=Pinyon+Script&display=swap');
 @import "tailwindcss";
 
 @theme {
@@ -94,9 +93,9 @@ a {
 /* ─── Glassmorphism System ────────────────────────────────────────────────── */
 
 .glass {
-  background: rgba(8, 5, 3, 0.78);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  background: rgba(8, 5, 3, 0.82);
+  /* backdrop-filter: blur(4px); */
+  /* -webkit-backdrop-filter: blur(4px); */
   border: 1px solid rgba(212, 175, 55, 0.28);
   box-shadow:
     inset 0 1px 0 0 rgba(255, 230, 180, 0.09),
@@ -105,9 +104,9 @@ a {
 }
 
 .glass-acrylic {
-  background: rgba(9, 6, 4, 0.84);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  background: rgba(9, 6, 4, 0.88);
+  /* backdrop-filter: blur(4px); */
+  /* -webkit-backdrop-filter: blur(4px); */
   border: 1px solid rgba(212, 175, 55, 0.28);
   box-shadow: 
     var(--scent-card-glow),
@@ -1020,15 +1019,15 @@ a {
 
 .scent-atmosphere-marquee-cell {
   display: inline-flex;
-  flex: 0 0 clamp(9rem, 18vw, 14rem);
+  flex: 0 0 clamp(11rem, 18vw, 14rem);
   flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
   box-sizing: border-box;
   gap: 0.35rem;
-  width: clamp(9rem, 18vw, 14rem);
-  max-width: clamp(9rem, 18vw, 14rem);
+  width: clamp(11rem, 18vw, 14rem);
+  max-width: clamp(11rem, 18vw, 14rem);
   padding: clamp(0.85rem, 2vw, 1.1rem) clamp(0.95rem, 2vw, 1.35rem);
   border-left: 1px solid rgba(212, 175, 55, 0.12);
 }
@@ -1047,10 +1046,10 @@ a {
   overflow: hidden;
   border: 1px solid rgba(212, 175, 55, 0.18);
   border-radius: var(--radius-scent);
-  background: linear-gradient(180deg, rgba(10, 7, 4, 0.84), rgba(4, 3, 2, 0.92));
+  background: linear-gradient(180deg, rgba(10, 7, 4, 0.88), rgba(4, 3, 2, 0.94));
   box-shadow: inset 0 1px 0 rgba(255, 226, 174, 0.06), 0 18px 44px -28px rgba(0, 0, 0, 0.95);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  /* backdrop-filter: blur(4px); */
+  /* -webkit-backdrop-filter: blur(4px); */
   transition:
     border-color var(--scent-transition-fast) var(--scent-ease-out),
     box-shadow var(--scent-transition-base) var(--scent-ease-out);
@@ -1067,12 +1066,40 @@ a {
 }
 
 .scent-atmosphere-label {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   color: rgba(212, 175, 55, 0.82);
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.22em;
   text-transform: uppercase;
+}
+
+@media (min-width: 640px) {
+  .scent-atmosphere-label {
+    flex-direction: row;
+    justify-content: center;
+  }
+}
+
+.scent-atmosphere-label-text {
+  margin-right: -0.22em;
+}
+
+.scent-atmosphere-subtitle {
+  opacity: 0.4;
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 0.7em;
+  margin-top: 0.125rem;
+}
+
+@media (min-width: 640px) {
+  .scent-atmosphere-subtitle {
+    margin-top: 0;
+    margin-left: 0.25rem;
+  }
 }
 
 .scent-atmosphere-value {
@@ -1516,6 +1543,10 @@ a {
   isolation: isolate;
 }
 
+.scent-brand-gold-label {
+  position: relative;
+}
+
 .scent-brand-gold-shimmer::after {
   content: attr(data-text);
   position: absolute;
@@ -1535,7 +1566,7 @@ a {
     rgba(255, 247, 201, 0) 100%
   );
   background-size: 260% 100%;
-  background-position: 52% 0;
+  background-position: 145% 0;
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -1544,20 +1575,32 @@ a {
   opacity: 0.55;
 }
 
-@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+@media (prefers-reduced-motion: no-preference) {
   .scent-fragrance-card:hover .scent-brand-gold-shimmer::after,
   .scent-fragrance-card:focus-within .scent-brand-gold-shimmer::after,
+  .scent-fragrance-card:active .scent-brand-gold-shimmer::after,
+  .scent-brand-gold-label:hover .scent-brand-gold-shimmer::after,
+  .scent-brand-gold-label:focus-within .scent-brand-gold-shimmer::after,
+  .scent-brand-gold-label:active .scent-brand-gold-shimmer::after,
   .scent-brand-gold-shimmer:hover::after,
   .scent-brand-gold-shimmer:focus-visible::after {
-    animation: brand-gold-sheen 1.9s ease-out 1;
+    animation: brand-gold-sheen 1.9s ease-out 1 forwards;
     opacity: 1;
+    will-change: background-position;
+  }
+}
+
+@media (hover: none) and (prefers-reduced-motion: no-preference) {
+  .scent-brand-gold-shimmer::after {
+    animation: brand-gold-sheen 2.15s ease-out 0.18s 1 both;
+    opacity: 0.92;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .scent-brand-gold-shimmer::after {
     animation: none;
-    background-position: 52% 0;
+    background-position: 145% 0;
   }
 }
 
