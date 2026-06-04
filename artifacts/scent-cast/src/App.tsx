@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useLayoutEffect, useMemo } from 'react';
-import { Routes, Route, useLocation, useParams } from 'react-router-dom';
+import { Routes, Route, useLocation, useParams, type Location } from 'react-router-dom';
 import { FragranceCapture } from './components/FragranceCapture';
 import { Wardrobe, Fragrance, DestinationType, EnergyState } from './components/Wardrobe';
 import { Play, X } from 'lucide-react';
@@ -44,6 +44,12 @@ const formatSprayCount = (sprayCount: ScentWeatherRecommendation['spray_count'])
   }
   return `${sprayCount.min}-${sprayCount.max} sprays (${sprayCount.recommended} recommended)`;
 };
+
+const PAGE_TRANSITION_COVER_MS = 280;
+const PAGE_TRANSITION_SHOW_MS = 1180;
+
+const routeSignature = (location: Location): string =>
+  `${location.pathname}${location.search}`;
 
 const LiveClock: React.FC = React.memo(() => {
   const [time, setTime] = useState(new Date());
@@ -758,10 +764,10 @@ function GlobalModals() {
   );
 }
 
-function AppContent() {
+function AppContent({ location }: { location: Location }) {
   return (
     <>
-      <Routes>
+      <Routes location={location}>
         <Route path="/" element={<DashboardView />} />
         <Route path="/community" element={<CommunityPageView />} />
         <Route path="/debug/ipad-freeze" element={<IpadFreezeLab />} />
@@ -775,12 +781,43 @@ function AppContent() {
 
 export default function App() {
   const location = useLocation();
-  const isFreezeLab = location.pathname === '/debug/ipad-freeze';
+  const [renderedLocation, setRenderedLocation] = useState<Location>(location);
+  const [transitionVisible, setTransitionVisible] = useState(false);
+  const [transitionKey, setTransitionKey] = useState(0);
+  const activeRouteRef = useRef(routeSignature(location));
+  const coverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isFreezeLab = renderedLocation.pathname === '/debug/ipad-freeze';
   // On a constrained iPad PWA the per-frame animated thread background outruns
   // Safari's compositor during fast scroll (black flashes / late paint). Drop it
   // there and let the static app-shell background carry the look instead.
   const { lowMotionRenderMode } = useRenderBudget();
   const showThreadBackground = !isFreezeLab && !lowMotionRenderMode;
+
+  useLayoutEffect(() => {
+    const nextRoute = routeSignature(location);
+    if (nextRoute === activeRouteRef.current) return;
+    activeRouteRef.current = nextRoute;
+
+    if (coverTimerRef.current) clearTimeout(coverTimerRef.current);
+    if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+
+    setTransitionKey((key) => key + 1);
+    setTransitionVisible(true);
+
+    coverTimerRef.current = setTimeout(() => {
+      setRenderedLocation(location);
+    }, PAGE_TRANSITION_COVER_MS);
+
+    hideTimerRef.current = setTimeout(() => {
+      setTransitionVisible(false);
+    }, PAGE_TRANSITION_SHOW_MS);
+  }, [location]);
+
+  useEffect(() => () => {
+    if (coverTimerRef.current) clearTimeout(coverTimerRef.current);
+    if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+  }, []);
 
   return (
     <AuthProvider>
@@ -788,10 +825,10 @@ export default function App() {
         <WardrobeProvider>
           <div className="scent-app-shell min-h-[100svh] bg-scent-bg selection:bg-scent-accent selection:text-black text-white relative overflow-x-hidden">
             {showThreadBackground ? <ThreadBackground /> : null}
-            <AppContent />
+            <AppContent location={renderedLocation} />
             <Toaster />
           </div>
-          <PageTransitionOverlay />
+          <PageTransitionOverlay visible={transitionVisible} animationKey={transitionKey} />
         </WardrobeProvider>
       </WeatherProvider>
     </AuthProvider>
