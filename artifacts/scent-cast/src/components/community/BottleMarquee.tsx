@@ -4,6 +4,7 @@ import { BottleImage } from '@/components/BottleImage';
 import { BrandGoldLabel } from '@/components/BrandGoldLabel';
 import { CommunityFragranceOverlay } from '@/components/community/CommunityFragranceOverlay';
 import type { CommunityFragranceEntry } from '@/components/community/communityData';
+import { isLowRenderBudget } from '@/lib/platform';
 
 interface BottleMarqueeProps {
   items: CommunityFragranceEntry[];
@@ -11,7 +12,11 @@ interface BottleMarqueeProps {
   isError?: boolean;
 }
 
-const COMMUNITY_TRACK_COPIES = 3;
+// A seamless marquee loop needs at least two copies of the track. Desktop uses a
+// third copy for extra slack on ultra-wide viewports; a constrained iPad PWA
+// renders the minimum so a route tap doesn't triple the bottle-image surfaces.
+const COMMUNITY_TRACK_COPIES_DEFAULT = 3;
+const COMMUNITY_TRACK_COPIES_LOW = 2;
 const COMMUNITY_SCROLL_PIXELS_PER_SECOND = 6;
 const COMMUNITY_SCROLL_MIN_SECONDS = 140;
 const COMMUNITY_SCROLL_MAX_SECONDS = 320;
@@ -32,6 +37,9 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
   const triggerRefs = useRef(new Map<string, HTMLButtonElement>());
   const activeTriggerIdRef = useRef<string | null>(null);
   const [activeItem, setActiveItem] = useState<CommunityFragranceEntry | null>(null);
+  const trackCopies = useRef(
+    isLowRenderBudget() ? COMMUNITY_TRACK_COPIES_LOW : COMMUNITY_TRACK_COPIES_DEFAULT,
+  ).current;
   const renderedItems = loading ? placeholderItems : items;
   const trackKey = useMemo(
     () => renderedItems.map((item) => `${item.id}:${item.imageUrl}`).join('|'),
@@ -132,7 +140,7 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
           data-overlay-open={activeItem ? 'true' : undefined}
           aria-hidden={activeItem ? 'true' : undefined}
         >
-          {[...Array(COMMUNITY_TRACK_COPIES)].map((_, copyIndex) => (
+          {[...Array(trackCopies)].map((_, copyIndex) => (
             <div
               className="scent-community-marquee-group"
               key={copyIndex}

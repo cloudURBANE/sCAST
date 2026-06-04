@@ -126,6 +126,10 @@ router.get("/community/fragrances", async (req, res, next) => {
     );
     const fragrances = hydrated.filter((entry): entry is Record<string, any> => entry !== null).slice(0, limit);
 
+    // Public, non-personalized data: let the CDN/edge serve it for a minute and
+    // keep serving stale while it revalidates, so a Community tap on iPad does
+    // not block on a cold backend round-trip every time.
+    res.set("Cache-Control", "public, s-maxage=60, stale-while-revalidate=300");
     res.json({ fragrances });
   } catch (err) {
     next(err);

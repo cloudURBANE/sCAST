@@ -21,6 +21,30 @@ import {
   type FragranceDetailRequestPayload,
 } from '@/lib/fragranceApi';
 
+// Durable onboarding completion. Once true, the dashboard shows the discover
+// state and never re-shows the add-3 flow, even while the wardrobe is hydrating
+// or returns empty. Server state (GET /api/me/app-state) is authoritative; the
+// local marker only suppresses flicker before the server responds.
+const ONBOARDING_STORAGE_KEY = 'scent_onboarding_completed';
+const WARDROBE_ONBOARDING_THRESHOLD = 3;
+
+function readOnboardingMarker(): boolean {
+  try {
+    return localStorage.getItem(ONBOARDING_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function writeOnboardingMarker(value: boolean): void {
+  try {
+    if (value) localStorage.setItem(ONBOARDING_STORAGE_KEY, '1');
+    else localStorage.removeItem(ONBOARDING_STORAGE_KEY);
+  } catch {
+    /* storage unavailable (private mode / quota) — degrade silently */
+  }
+}
+
 // Helper types and algorithms relocated from App.tsx
 type LooseRecord = Record<string, unknown>;
 
@@ -406,6 +430,9 @@ const calculateEngineAlignment = (
 interface WardrobeContextType {
   items: Fragrance[];
   wardrobeLoaded: boolean;
+  onboardingCompleted: boolean;
+  /** False until app-state has been fetched for the signed-in user (guests: true). */
+  onboardingResolved: boolean;
   isIntentModalOpen: boolean;
   isShareModalOpen: boolean;
   activeRecommendation: Fragrance | null;
@@ -449,6 +476,8 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const [items, setItems] = useState<Fragrance[]>([]);
   const [wardrobeLoaded, setWardrobeLoaded] = useState(false);
+  const [onboardingCompleted, setOnboardingCompleted] = useState<boolean>(() => readOnboardingMarker());
+  const [onboardingResolved, setOnboardingResolved] = useState<boolean>(false);
   const [wardrobeError, setWardrobeError] = useState<string | null>(null);
   const [isIntentModalOpen, setIsIntentModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
@@ -568,6 +597,48 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     return () => abortController.abort();
   }, [authToken, loadWardrobe, toast]);
+
+  // Durable onboarding/discovery state. Fetched independently of /api/wardrobe so
+  // a slow or empty wardrobe load cannot flash the add-3 flow at a completed user.
+  // Server state wins; a 401 here is left to the wardrobe loader's recovery path.
+  useEffect(() => {
+    if (!authToken) return;
+    const abortController = new AbortController();
+    setOnboardingResolved(false);
+
+    void (async () => {
+      try {
+        const res = await fetch('/api/me/app-state', {
+          headers: { Authorization: `Bearer ${authToken}` },
+          signal: abortController.signal,
+        });
+        if (!res.ok) return;
+        const data = (await res.json()) as { wardrobeOnboardingCompleted?: boolean };
+        const completed = Boolean(data.wardrobeOnboardingCompleted);
+        setOnboardingCompleted(completed);
+        writeOnboardingMarker(completed);
+      } catch (err) {
+        if ((err as Error).name !== 'AbortError') {
+          console.error('Failed to load app-state', err);
+        }
+      } finally {
+        if (!abortController.signal.aborted) setOnboardingResolved(true);
+      }
+    })();
+
+    return () => abortController.abort();
+  }, [authToken]);
+
+  // Optimistic completion: once a signed-in user reaches the threshold, mark
+  // onboarding done immediately. The server reconciles on the next app-state
+  // fetch (and the GET endpoint persists completion server-side).
+  useEffect(() => {
+    if (!authToken || onboardingCompleted) return;
+    if (items.length >= WARDROBE_ONBOARDING_THRESHOLD) {
+      setOnboardingCompleted(true);
+      writeOnboardingMarker(true);
+    }
+  }, [authToken, items.length, onboardingCompleted]);
 
   // Background polling wardrobe updates
   useEffect(() => {
@@ -988,12 +1059,20 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setWardrobeError(null);
       setWardrobeRevertSnapshot(null);
       setWardrobeFixHint(null);
+      // Clear onboarding state so a different account signing in on this device
+      // does not inherit the previous user's completed state. Guests have no
+      // server state to wait on, so treat them as already resolved.
+      setOnboardingCompleted(false);
+      writeOnboardingMarker(false);
+      setOnboardingResolved(true);
     }
   }, [authToken]);
 
   const contextValue = useMemo<WardrobeContextType>(() => ({
     items,
     wardrobeLoaded,
+    onboardingCompleted,
+    onboardingResolved,
     wardrobeError,
     isIntentModalOpen,
     isShareModalOpen,
@@ -1027,6 +1106,8 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }), [
     items,
     wardrobeLoaded,
+    onboardingCompleted,
+    onboardingResolved,
     wardrobeError,
     isIntentModalOpen,
     isShareModalOpen,

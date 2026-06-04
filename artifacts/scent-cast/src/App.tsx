@@ -20,6 +20,7 @@ import CommunityPage from '@/pages/community';
 import IpadFreezeLab from '@/pages/ipad-freeze-lab';
 import { PageTransitionOverlay } from './components/PageTransitionOverlay';
 import { useModalBehavior } from '@/hooks/use-modal-behavior';
+import { useRenderBudget } from '@/hooks/useRenderBudget';
 import NotFound from '@/pages/not-found';
 
 const titleCaseToken = (value: string): string =>
@@ -415,6 +416,8 @@ function DashboardView() {
   const {
     items,
     wardrobeLoaded,
+    onboardingCompleted,
+    onboardingResolved,
     wardrobeError,
     retryLoadWardrobe,
     isIntentModalOpen,
@@ -446,6 +449,18 @@ function DashboardView() {
     onDismiss: closeRecommendationOverlay,
   });
 
+  // A completed user (durable server flag, or >= 3 saved) is discovery-ready even
+  // while the wardrobe is still hydrating or temporarily empty. The add-3 steps
+  // only appear for genuine new users who have not completed onboarding.
+  //
+  // `stateSettled` keeps the hero area as a stable shell (no add-3 steps, no
+  // locked CTA) until onboarding state is known for a signed-in user, so a
+  // returning completed user on a fresh device never flashes the add-3 ordeal.
+  const stateSettled = !authToken || onboardingResolved;
+  const discoveryReady = onboardingCompleted || items.length >= 3;
+  const showOnboardingSteps =
+    stateSettled && !onboardingCompleted && items.length === 0 && !vaultSearchUiActive;
+
   return (
     <div className="min-h-[100svh] relative overflow-x-hidden">
       <AppTopNav
@@ -469,7 +484,7 @@ function DashboardView() {
             </h2>
             <FragranceCapture onAdd={handleAddItem} onVaultSearchStateChange={handleVaultSearchStateChange} />
             <AnimatePresence initial={false}>
-              {items.length === 0 && !vaultSearchUiActive ? (
+              {showOnboardingSteps ? (
                 <motion.div
                   key="how-it-works"
                   initial={{ opacity: 0, height: 0, marginTop: 0 }}
@@ -494,7 +509,7 @@ function DashboardView() {
               ) : null}
             </AnimatePresence>
             <AnimatePresence initial={false}>
-              {!vaultSearchUiActive ? (
+              {!vaultSearchUiActive && stateSettled ? (
                 <motion.div
                   key="discover-cta"
                   initial={{ opacity: 0, height: 0, marginTop: 0 }}
@@ -503,7 +518,7 @@ function DashboardView() {
                   transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
                   style={{ overflow: 'hidden' }}
                 >
-                  {items.length >= 3 ? (
+                  {discoveryReady ? (
                     <motion.button
                       type="button"
                       onClick={() => setIsIntentModalOpen(true)}
@@ -761,13 +776,18 @@ function AppContent() {
 export default function App() {
   const location = useLocation();
   const isFreezeLab = location.pathname === '/debug/ipad-freeze';
+  // On a constrained iPad PWA the per-frame animated thread background outruns
+  // Safari's compositor during fast scroll (black flashes / late paint). Drop it
+  // there and let the static app-shell background carry the look instead.
+  const { lowMotionRenderMode } = useRenderBudget();
+  const showThreadBackground = !isFreezeLab && !lowMotionRenderMode;
 
   return (
     <AuthProvider>
       <WeatherProvider>
         <WardrobeProvider>
           <div className="scent-app-shell min-h-[100svh] bg-scent-bg selection:bg-scent-accent selection:text-black text-white relative overflow-x-hidden">
-            {isFreezeLab ? null : <ThreadBackground />}
+            {showThreadBackground ? <ThreadBackground /> : null}
             <AppContent />
             <Toaster />
           </div>
