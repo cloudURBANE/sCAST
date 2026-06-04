@@ -1019,15 +1019,15 @@ a {
 
 .scent-atmosphere-marquee-cell {
   display: inline-flex;
-  flex: 0 0 clamp(9rem, 18vw, 14rem);
+  flex: 0 0 clamp(11rem, 18vw, 14rem);
   flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
   box-sizing: border-box;
   gap: 0.35rem;
-  width: clamp(9rem, 18vw, 14rem);
-  max-width: clamp(9rem, 18vw, 14rem);
+  width: clamp(11rem, 18vw, 14rem);
+  max-width: clamp(11rem, 18vw, 14rem);
   padding: clamp(0.85rem, 2vw, 1.1rem) clamp(0.95rem, 2vw, 1.35rem);
   border-left: 1px solid rgba(212, 175, 55, 0.12);
 }
@@ -1066,12 +1066,40 @@ a {
 }
 
 .scent-atmosphere-label {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   color: rgba(212, 175, 55, 0.82);
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.22em;
   text-transform: uppercase;
+}
+
+@media (min-width: 640px) {
+  .scent-atmosphere-label {
+    flex-direction: row;
+    justify-content: center;
+  }
+}
+
+.scent-atmosphere-label-text {
+  margin-right: -0.22em;
+}
+
+.scent-atmosphere-subtitle {
+  opacity: 0.4;
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 0.7em;
+  margin-top: 0.125rem;
+}
+
+@media (min-width: 640px) {
+  .scent-atmosphere-subtitle {
+    margin-top: 0;
+    margin-left: 0.25rem;
+  }
 }
 
 .scent-atmosphere-value {
