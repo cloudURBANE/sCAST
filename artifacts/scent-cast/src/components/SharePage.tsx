@@ -840,7 +840,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={closeSelectedDetail}
-              className="absolute inset-0 bg-black/95 backdrop-blur-sm"
+              className="absolute inset-0 bg-black/95"
             />
             <motion.div
               initial={{ opacity: 0, y: 18, scale: 0.985 }}
