@@ -1,10 +1,14 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Wind } from 'lucide-react';
 import { AppTopNav } from '@/components/AppTopNav';
 import { APP_BRAND_MARK } from '@/lib/appBrand';
 import { CommunityHero } from '@/components/community/CommunityHero';
 import { BottleMarquee } from '@/components/community/BottleMarquee';
 import { useCommunityFragrances } from '@/components/community/communityData';
+import { CommunityFeed } from '@/components/community/CommunityFeed';
+import { PostComposer } from '@/components/community/PostComposer';
+import { PostFilters } from '@/components/community/PostFilters';
+import type { CommunityPostType } from '@/components/community/communityPosts';
 
 interface CommunityPageProps {
   authToken: string | null;
@@ -24,6 +28,18 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
   onSignOut,
 }) => {
   const { data, isLoading, isError } = useCommunityFragrances();
+  const [postType, setPostType] = useState<CommunityPostType | null>(null);
+  const [postTag, setPostTag] = useState<string | null>(null);
+  const [postQuery, setPostQuery] = useState('');
+  const feedFilters = useMemo(
+    () => ({
+      type: postType,
+      tag: postTag,
+      q: postQuery,
+      limit: 12,
+    }),
+    [postType, postTag, postQuery],
+  );
 
   useEffect(() => {
     const previous = document.title;
@@ -59,6 +75,18 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
           <div className="scent-full-bleed">
             <BottleMarquee items={data ?? []} loading={isLoading} isError={isError} />
           </div>
+          <section className="mx-auto w-full max-w-[1120px] space-y-8 pt-2" aria-label="Community forum">
+            <PostComposer authToken={authToken} onSignIn={onSignIn} />
+            <PostFilters
+              type={postType}
+              tag={postTag}
+              q={postQuery}
+              onTypeChange={setPostType}
+              onTagChange={setPostTag}
+              onQueryChange={setPostQuery}
+            />
+            <CommunityFeed filters={feedFilters} authToken={authToken} onSignIn={onSignIn} />
+          </section>
         </div>
       </main>
 
