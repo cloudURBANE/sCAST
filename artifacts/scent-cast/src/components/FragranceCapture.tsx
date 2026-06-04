@@ -731,11 +731,15 @@ export const FragranceCapture: React.FC<{
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
-      className="absolute inset-0 z-50 flex flex-col items-center justify-center p-8 backdrop-blur-md"
+      className="absolute inset-0 z-50 flex flex-col items-center justify-center p-8"
       style={{
         minHeight: SEARCH_LOADER_MIN_H,
+        // No backdrop-filter: animating a blur layer in over the card is the
+        // documented iOS Safari / iPad-PWA GPU-crash construct. The veil is
+        // instead raised to ~0.9 opacity so the card reads as faintly-present
+        // depth rather than a live frosted surface.
         background:
-          'radial-gradient(ellipse 70% 60% at 50% 16%, rgba(212,175,55,0.06), transparent 60%), radial-gradient(ellipse 85% 55% at 50% 102%, rgba(212,175,55,0.05), transparent 64%), rgba(3,2,1,0.7)',
+          'radial-gradient(ellipse 70% 60% at 50% 16%, rgba(212,175,55,0.06), transparent 60%), radial-gradient(ellipse 85% 55% at 50% 102%, rgba(212,175,55,0.05), transparent 64%), rgba(3,2,1,0.9)',
         boxShadow:
           'inset 0 1px 0 rgba(255,230,180,0.08), inset 0 0 90px rgba(212,175,55,0.05)',
       }}
@@ -750,24 +754,6 @@ export const FragranceCapture: React.FC<{
 
   return (
     <div className="glass-shell w-full min-w-0 rounded-[var(--radius-scent)] relative overflow-hidden">
-      {/* Invisible spacer: when the search loader is visible, this div
-          participates in the normal flow and forces the card to be at
-          least as tall as the loader's min-height. Without this, the
-          absolute-positioned overlay doesn't contribute to the card's
-          intrinsic height and the 132px orbital zone + 150px radial
-          warmth get clipped by the glass-shell overflow:hidden. */}
-      <AnimatePresence>
-        {loadingSurface === 'search' && uploading && (
-          <motion.div
-            initial={{ height: 0 }}
-            animate={{ height: SEARCH_LOADER_MIN_H }}
-            exit={{ height: 0 }}
-            transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-            aria-hidden
-            style={{ pointerEvents: 'none' }}
-          />
-        )}
-      </AnimatePresence>
       <AnimatePresence>
         {searchVeil}
       </AnimatePresence>
@@ -854,9 +840,9 @@ export const FragranceCapture: React.FC<{
 
           {matches.length > 0 && (
             <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0, y: -8 }}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.34, ease: [0.22, 1, 0.36, 1] }}
               className="mt-6 pt-5 border-t border-white/10 mx-auto max-w-lg w-full sm:mt-8 sm:pt-6"
             >
@@ -937,6 +923,26 @@ export const FragranceCapture: React.FC<{
           )}
         </AnimatePresence>
       </div>
+      {/* Flow spacer that reserves the loader's height at the *bottom* of the
+          card so the inset-0 search veil isn't clipped by overflow:hidden.
+          Reserved instantly (initial === animate) rather than tweened from 0:
+          animating height reflowed the document every frame and made the
+          centered loader visibly drift downward as the box grew. Sitting after
+          the content, the reserve grows into empty space instead of shoving the
+          form down (no flash behind the fading-in veil). On exit it collapses
+          under the veil's fade so nothing clips. */}
+      <AnimatePresence>
+        {loadingSurface === 'search' && uploading && (
+          <motion.div
+            initial={{ height: SEARCH_LOADER_MIN_H }}
+            animate={{ height: SEARCH_LOADER_MIN_H }}
+            exit={{ height: 0 }}
+            transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+            aria-hidden
+            style={{ pointerEvents: 'none' }}
+          />
+        )}
+      </AnimatePresence>
       {typeof document !== 'undefined'
         ? createPortal(
             <AnimatePresence>{syncVeil}</AnimatePresence>,
