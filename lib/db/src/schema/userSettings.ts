@@ -10,6 +10,13 @@ export const userSettingsTable = pgTable(
     tenantId: uuid("tenant_id").references(() => tenantsTable.id),
     userId: uuid("user_id").notNull().unique().references(() => usersTable.id, { onDelete: "cascade" }),
     shareHideImages: boolean("share_hide_images").notNull().default(false),
+    // Durable onboarding progress. Lives here (not on `users`) so auth identity
+    // (`users.id` / `users.token`) stays untouched while user-facing progress
+    // sits with the rest of their preferences. Once true, the dashboard shows
+    // the discover state and never re-shows the "add 3" flow — even if the
+    // wardrobe is still hydrating, returns empty, or a poll is in flight.
+    wardrobeOnboardingCompleted: boolean("wardrobe_onboarding_completed").notNull().default(false),
+    wardrobeOnboardingCompletedAt: timestamp("wardrobe_onboarding_completed_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },

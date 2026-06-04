@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import { isIpadStandalone } from '@/lib/platform';
 
 const EMBLEM = '/icons/transparent-emblem/scentbeam-emblem-192x192.png';
 const GOLD = 'rgba(212, 175, 55,';
@@ -31,6 +32,12 @@ function warmTransitionEmblem() {
 export const PageTransitionOverlay: React.FC = () => {
   const location = useLocation();
   const reduceMotion = useReducedMotion();
+  // Installed iPad PWA can't afford a full-screen orbiting/blooming overlay
+  // running at the same time as a route mount + data fetch; fall back to the
+  // cheap cross-fade there, same as the reduced-motion path. Device class is
+  // stable for the session, so read it once (unconditional hook call).
+  const ipadStandalone = useRef(isIpadStandalone()).current;
+  const lightOverlay = reduceMotion || ipadStandalone;
   const [visible, setVisible] = useState(false);
   const [animKey, setAnimKey] = useState(0);
   const prevPath = useRef(location.pathname);
@@ -55,8 +62,9 @@ export const PageTransitionOverlay: React.FC = () => {
     };
   }, [location.pathname]);
 
-  // When reduced motion is preferred, show a brief cross-fade only — no spinning or scaling.
-  if (reduceMotion) {
+  // When reduced motion is preferred (or on a constrained iPad PWA), show a
+  // brief cross-fade only — no spinning or scaling.
+  if (lightOverlay) {
     return (
       <AnimatePresence>
         {visible && (

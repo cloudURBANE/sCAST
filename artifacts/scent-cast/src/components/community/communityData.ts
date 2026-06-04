@@ -36,6 +36,11 @@ const SEED: CommunityFragranceEntry[] = [
 
 export const COMMUNITY_FEATURED_USER_IDS: string[] = [];
 
+// Keep the first Community render small so an iPad PWA does not mount ~48 items
+// (× marquee copies) of bottle images on a single route tap. The backend caps
+// and de-dupes server-side; this is just the initial fetch ceiling.
+export const COMMUNITY_INITIAL_LIMIT = 16;
+
 const API_BASE_URL = normalizeApiBaseUrl(import.meta.env?.VITE_API_BASE_URL as string | undefined);
 
 function appApiUrl(path: string): string {
@@ -95,7 +100,7 @@ function normalizeCommunityEntry(value: unknown, index: number): CommunityFragra
 
 async function fetchCommunityFragrances(): Promise<CommunityFragranceEntry[]> {
   try {
-    const response = await fetch(appApiUrl('/api/community/fragrances'), {
+    const response = await fetch(appApiUrl(`/api/community/fragrances?limit=${COMMUNITY_INITIAL_LIMIT}`), {
       headers: { Accept: 'application/json' },
     });
 
