@@ -21,10 +21,10 @@ interface RoomDefinition {
 }
 
 const ROOMS: RoomDefinition[] = [
-  { type: 'question', label: 'Questions', Icon: MessageCircleQuestion },
+  { type: 'question', label: 'Ask the Room', Icon: MessageCircleQuestion },
   { type: 'sotd', label: 'SOTD', Icon: Sun },
   { type: 'battle', label: 'Battles', Icon: Swords },
-  { type: 'worth_it', label: 'Worth it', Icon: BadgeDollarSign },
+  { type: 'worth_it', label: 'Price Checks', Icon: BadgeDollarSign },
 ];
 
 const TAGS = [
@@ -32,10 +32,6 @@ const TAGS = [
   'office',
   'date-night',
   'longevity',
-  'blind-buy',
-  'niche',
-  'designer',
-  'layering',
 ];
 
 interface PostFiltersProps {
@@ -123,8 +119,8 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
             type="search"
             value={draftQuery}
             onChange={(event) => setDraftQuery(event.target.value)}
-            placeholder="Search posts"
-            aria-label="Search community posts"
+            placeholder="Search rooms, fragrances, tags, or notes"
+            aria-label="Search community rooms"
             className="scent-lux-input h-11 w-full rounded-full pl-11 pr-11 text-sm text-[#fff7ec] placeholder:text-scent-muted/45"
           />
           {draftQuery ? (
@@ -140,32 +136,37 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        {TAGS.map((candidate) => {
-          const normalized = sanitizeCommunityTag(candidate);
-          const active = tag === normalized;
-          return (
-            <button
-              key={candidate}
-              type="button"
-              onClick={() => onTagChange(active ? null : normalized)}
-              aria-pressed={active}
-              className={[
-                'rounded-full border px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35',
-                active
-                  ? 'border-scent-accent/44 bg-scent-accent/[0.08] text-[#fff7ec]'
-                  : 'border-white/10 bg-white/[0.02] text-scent-muted/75 hover:border-scent-accent/28 hover:text-[#fff7ec]',
-              ].join(' ')}
-            >
-              #{candidate}
-            </button>
-          );
-        })}
+      <div className="flex min-w-0 items-center gap-3 overflow-hidden">
+        <p className="shrink-0 text-[10px] font-bold uppercase tracking-[0.18em] text-scent-muted/52">
+          Popular tags
+        </p>
+        <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {TAGS.map((candidate) => {
+            const normalized = sanitizeCommunityTag(candidate);
+            const active = tag === normalized;
+            return (
+              <button
+                key={candidate}
+                type="button"
+                onClick={() => onTagChange(active ? null : normalized)}
+                aria-pressed={active}
+                className={[
+                  'shrink-0 rounded-full border px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35',
+                  active
+                    ? 'border-scent-accent/44 bg-scent-accent/[0.08] text-[#fff7ec]'
+                    : 'border-white/10 bg-white/[0.02] text-scent-muted/75 hover:border-scent-accent/28 hover:text-[#fff7ec]',
+                ].join(' ')}
+              >
+                #{candidate}
+              </button>
+            );
+          })}
+        </div>
         {type || tag || q ? (
           <button
             type="button"
             onClick={clearFilters}
-            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-scent-muted transition-colors hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-scent-muted transition-colors hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
           >
             <X size={13} strokeWidth={1.8} aria-hidden="true" />
             Clear
