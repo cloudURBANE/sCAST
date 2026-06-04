@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { requireAdminSecret } from "../middlewares/adminSecret";
 import { rebuildWardrobeForUser } from "../services/wardrobeRebuild";
 import { getBuyLinkFreshnessStats } from "../services/buyLinks";
+import { getDefaultTenantId } from "../services/tenants";
 
 const router = Router();
 
@@ -35,7 +36,8 @@ router.post("/admin/wardrobe/rebuild", requireAdminSecret, async (req, res) => {
     return;
   }
 
-  const summary = await rebuildWardrobeForUser(existing[0].id);
+  const tenantId = existing[0].tenantId ?? (await getDefaultTenantId());
+  const summary = await rebuildWardrobeForUser(tenantId, existing[0].id);
   res.json(summary);
 });
 

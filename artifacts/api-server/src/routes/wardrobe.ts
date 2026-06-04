@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { randomUUID } from "node:crypto";
 import { AuthRequest, requireAuth } from "../middlewares/auth";
+import { getTenantId } from "../middlewares/tenant";
 import { db } from "@workspace/db";
 import {
   imageCacheTable,
@@ -22,11 +23,12 @@ import { persistableImageReference } from "../services/imageReference";
 
 const router = Router();
 
-async function findUserRowByClientId(userId: string, clientId: string) {
+async function findUserRowByClientId(tenantId: string, userId: string, clientId: string) {
   const rows = await db
     .select()
     .from(userFragrancesTable)
     .where(and(
+      eq(userFragrancesTable.tenantId, tenantId),
       eq(userFragrancesTable.userId, userId),
       sql`${userFragrancesTable.fragranceData}->>'id' = ${clientId}`,
     ))
@@ -74,11 +76,15 @@ async function imageMetadataPatchForUrl(url: string): Promise<Record<string, unk
 
 router.get("/wardrobe", requireAuth, async (req: AuthRequest, res) => {
   const user = req.user!;
+  const tenantId = getTenantId(req);
 
   const rows = await db
     .select()
     .from(userFragrancesTable)
-    .where(eq(userFragrancesTable.userId, user.id));
+    .where(and(
+      eq(userFragrancesTable.tenantId, tenantId),
+      eq(userFragrancesTable.userId, user.id),
+    ));
 
   const normalized = rows.map((r) => normalizeFragrance(r.fragranceData as Record<string, any>));
   const hydrated = await batchHydrateImageUrls(normalized);
@@ -89,6 +95,7 @@ router.get("/wardrobe", requireAuth, async (req: AuthRequest, res) => {
 
 router.post("/wardrobe", requireAuth, async (req: AuthRequest, res) => {
   const user = req.user!;
+  const tenantId = getTenantId(req);
 
   const fragrance = req.body;
   if (!fragrance || !fragrance.id) {
@@ -104,7 +111,7 @@ router.post("/wardrobe", requireAuth, async (req: AuthRequest, res) => {
     return;
   }
 
-  const existing = await findUserRowByClientId(user.id, clientId);
+  const existing = await findUserRowByClientId(tenantId, user.id, clientId);
   if (existing) {
     const existingData = normalizeFragrance(existing.fragranceData as Record<string, any>);
     const merged = sanitizeFragrance({ ...existingData, ...clean, id: existing.id });
@@ -113,6 +120,7 @@ router.post("/wardrobe", requireAuth, async (req: AuthRequest, res) => {
       .update(userFragrancesTable)
       .set({ fragranceData: merged as any })
       .where(and(
+        eq(userFragrancesTable.tenantId, tenantId),
         eq(userFragrancesTable.id, existing.id),
         eq(userFragrancesTable.userId, user.id),
       ));
@@ -132,7 +140,7 @@ router.post("/wardrobe", requireAuth, async (req: AuthRequest, res) => {
 
   const [row] = await db
     .insert(userFragrancesTable)
-    .values({ id: rowId as any, userId: user.id, fragranceData: cleanWithUuid })
+    .values({ id: rowId as any, tenantId, userId: user.id, fragranceData: cleanWithUuid })
     .returning();
 
   const inserted = sanitizeFragrance(normalizeFragrance(row.fragranceData as Record<string, any>));
@@ -151,7 +159,7 @@ router.post("/wardrobe", requireAuth, async (req: AuthRequest, res) => {
  * URLs and profile fields, not bitmap dimensions in the browser.
  */
 router.post("/wardrobe/rebuild", requireAuth, async (req: AuthRequest, res) => {
-  const summary = await rebuildWardrobeForUser(req.user!.id);
+  const summary = await rebuildWardrobeForUser(getTenantId(req), req.user!.id);
   res.json(summary);
 });
 
@@ -165,12 +173,13 @@ function isUuidish(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 }
 
-async function findUserRow(userId: string, idParam: string) {
+async function findUserRow(tenantId: string, userId: string, idParam: string) {
   if (isUuidish(idParam)) {
     const rows = await db
       .select()
       .from(userFragrancesTable)
       .where(and(
+        eq(userFragrancesTable.tenantId, tenantId),
         eq(userFragrancesTable.id, idParam as any),
         eq(userFragrancesTable.userId, userId),
       ))
@@ -182,6 +191,7 @@ async function findUserRow(userId: string, idParam: string) {
     .select()
     .from(userFragrancesTable)
     .where(and(
+      eq(userFragrancesTable.tenantId, tenantId),
       eq(userFragrancesTable.userId, userId),
       sql`${userFragrancesTable.fragranceData}->>'id' = ${idParam}`,
     ))
@@ -191,6 +201,7 @@ async function findUserRow(userId: string, idParam: string) {
 
 router.patch("/wardrobe/:fragranceId/visibility", requireAuth, async (req: AuthRequest, res) => {
   const user = req.user!;
+  const tenantId = getTenantId(req);
 
   const fragranceId = req.params.fragranceId as string;
   const { shareHidden } = req.body as { shareHidden?: boolean };
@@ -199,7 +210,7 @@ router.patch("/wardrobe/:fragranceId/visibility", requireAuth, async (req: AuthR
     return;
   }
 
-  const match = await findUserRow(user.id, fragranceId);
+  const match = await findUserRow(tenantId, user.id, fragranceId);
   if (!match) { res.status(404).json({ error: "Fragrance not found" }); return; }
 
   const existing = match.fragranceData as Record<string, any>;
@@ -210,6 +221,7 @@ router.patch("/wardrobe/:fragranceId/visibility", requireAuth, async (req: AuthR
     .update(userFragrancesTable)
     .set({ fragranceData: updated as any })
     .where(and(
+      eq(userFragrancesTable.tenantId, tenantId),
       eq(userFragrancesTable.id, match.id),
       eq(userFragrancesTable.userId, user.id),
     ));
@@ -223,6 +235,7 @@ router.patch("/wardrobe/:fragranceId/visibility", requireAuth, async (req: AuthR
  */
 router.patch("/wardrobe/:id", requireAuth, async (req: AuthRequest, res) => {
   const user = req.user!;
+  const tenantId = getTenantId(req);
 
   const { syncImageFromCatalog, imageUrl, imageAdjustment } = req.body as {
     syncImageFromCatalog?: boolean;
@@ -256,7 +269,7 @@ router.patch("/wardrobe/:id", requireAuth, async (req: AuthRequest, res) => {
     return;
   }
 
-  const match = await findUserRow(user.id, req.params.id as string);
+  const match = await findUserRow(tenantId, user.id, req.params.id as string);
   if (!match) {
     res.status(404).json({ error: "Fragrance not found" });
     return;
@@ -338,6 +351,7 @@ router.patch("/wardrobe/:id", requireAuth, async (req: AuthRequest, res) => {
     .update(userFragrancesTable)
     .set({ fragranceData: merged as any })
     .where(and(
+      eq(userFragrancesTable.tenantId, tenantId),
       eq(userFragrancesTable.id, match.id),
       eq(userFragrancesTable.userId, user.id),
     ));
@@ -348,10 +362,11 @@ router.patch("/wardrobe/:id", requireAuth, async (req: AuthRequest, res) => {
 
 router.delete("/wardrobe/:id", requireAuth, async (req: AuthRequest, res) => {
   const user = req.user!;
+  const tenantId = getTenantId(req);
 
   const id = req.params.id as string;
 
-  const match = await findUserRow(user.id, id);
+  const match = await findUserRow(tenantId, user.id, id);
 
   if (!match) {
     res.status(404).json({ error: "Not found" });
@@ -362,6 +377,7 @@ router.delete("/wardrobe/:id", requireAuth, async (req: AuthRequest, res) => {
     await db
       .delete(userFragrancesTable)
       .where(and(
+        eq(userFragrancesTable.tenantId, tenantId),
         eq(userFragrancesTable.id, match.id),
         eq(userFragrancesTable.userId, user.id),
       ));

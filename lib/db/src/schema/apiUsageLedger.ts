@@ -1,3 +1,4 @@
+import { relations } from "drizzle-orm";
 import {
   index,
   integer,
@@ -8,11 +9,14 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { usersTable } from "./users";
+import { tenantsTable } from "./tenants";
 
 export const apiUsageLedgerTable = pgTable(
   "api_usage_ledger",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+
+    tenantId: uuid("tenant_id").references(() => tenantsTable.id),
 
     userId: uuid("user_id").references(() => usersTable.id, { onDelete: "set null" }),
 
@@ -43,8 +47,16 @@ export const apiUsageLedgerTable = pgTable(
       table.operation,
     ),
     userIdIdx: index("api_usage_ledger_user_id_idx").on(table.userId),
+    tenantIdIdx: index("api_usage_ledger_tenant_id_idx").on(table.tenantId),
   }),
 );
+
+export const apiUsageLedgerRelations = relations(apiUsageLedgerTable, ({ one }) => ({
+  tenant: one(tenantsTable, {
+    fields: [apiUsageLedgerTable.tenantId],
+    references: [tenantsTable.id],
+  }),
+}));
 
 export type ApiUsageLedger = typeof apiUsageLedgerTable.$inferSelect;
 export type NewApiUsageLedger = typeof apiUsageLedgerTable.$inferInsert;

@@ -14,6 +14,7 @@ export const userFragrancesTable = pgTable(
   },
   (table) => [
     index("user_fragrances_user_id_idx").on(table.userId),
+    index("user_fragrances_tenant_user_idx").on(table.tenantId, table.userId),
     index("user_fragrances_user_client_id_idx").on(
       table.userId,
       sql`(${table.fragranceData}->>'id')`,
