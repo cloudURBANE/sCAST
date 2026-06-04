@@ -4,7 +4,6 @@ import { AppTopNav } from '@/components/AppTopNav';
 import { APP_BRAND_MARK } from '@/lib/appBrand';
 import { CommunityHero } from '@/components/community/CommunityHero';
 import { BottleMarquee } from '@/components/community/BottleMarquee';
-import { FeaturedCaseGrid } from '@/components/community/FeaturedCaseGrid';
 import { useCommunityFragrances } from '@/components/community/communityData';
 
 interface CommunityPageProps {
@@ -24,7 +23,7 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
   onShare,
   onSignOut,
 }) => {
-  const { data, isLoading, isError, error, refetch } = useCommunityFragrances();
+  const { data, isLoading, isError } = useCommunityFragrances();
 
   useEffect(() => {
     const previous = document.title;
@@ -60,12 +59,6 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
           <div className="scent-full-bleed">
             <BottleMarquee items={data ?? []} loading={isLoading} isError={isError} />
           </div>
-          <FeaturedCaseGrid
-            items={data ?? []}
-            loading={isLoading}
-            error={isError ? (error?.message || "Failed to load community") : null}
-            onRetry={refetch}
-          />
         </div>
       </main>
 
