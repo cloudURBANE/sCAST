@@ -82,9 +82,9 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({ filters, authToken
   if (posts.length === 0) {
     return (
       <div className="rounded-[var(--radius-scent)] border border-scent-accent/14 bg-white/[0.025] px-6 py-14 text-center">
-        <p className="font-serif text-2xl italic text-[#fff7ec]">Be the first to post.</p>
+        <p className="font-serif text-2xl italic text-[#fff7ec]">No rooms yet.</p>
         <p className="mx-auto mt-3 max-w-lg text-sm leading-7 text-scent-muted/70">
-          Start a question, share a scent of the day, stage a battle, or ask whether a bottle is worth it.
+          Start the first room or clear your filters.
         </p>
       </div>
     );

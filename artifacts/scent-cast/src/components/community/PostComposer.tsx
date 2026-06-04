@@ -32,10 +32,10 @@ interface ComposerRoom {
 }
 
 const ROOMS: ComposerRoom[] = [
-  { type: 'question', label: 'Question', Icon: MessageCircleQuestion },
+  { type: 'question', label: 'Ask the Room', Icon: MessageCircleQuestion },
   { type: 'sotd', label: 'SOTD', Icon: Sun },
   { type: 'battle', label: 'Battle', Icon: Swords },
-  { type: 'worth_it', label: 'Worth it', Icon: BadgeDollarSign },
+  { type: 'worth_it', label: 'Price Check', Icon: BadgeDollarSign },
 ];
 
 interface PostComposerProps {
@@ -154,6 +154,7 @@ async function snapshotFromSearchResult(result: FragranceSearchResult): Promise<
 }
 
 export const PostComposer: React.FC<PostComposerProps> = ({ authToken, onSignIn }) => {
+  const [composerOpen, setComposerOpen] = useState(false);
   const [postType, setPostType] = useState<CommunityPostType>('question');
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
@@ -303,19 +304,20 @@ export const PostComposer: React.FC<PostComposerProps> = ({ authToken, onSignIn 
   const submitPost = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!authToken) {
+      setStatusMessage('Sign in to open a room.');
       onSignIn();
       return;
     }
 
     const trimmedBody = body.trim();
     if (!trimmedBody) {
-      setStatusMessage('Add a body before posting.');
+      setStatusMessage('Tell the room what to discuss before opening.');
       return;
     }
 
     const metadata = buildMetadata();
     if (!metadata) {
-      setStatusMessage('Battle posts need two options.');
+      setStatusMessage('Battle rooms need two options.');
       return;
     }
 
@@ -330,43 +332,95 @@ export const PostComposer: React.FC<PostComposerProps> = ({ authToken, onSignIn 
         fragrances: selectedFragrances,
       });
       resetComposer();
-      setStatusMessage('Posted to the community.');
+      setComposerOpen(false);
+      setStatusMessage('Room opened in the community.');
     } catch (err) {
       setStatusMessage(err instanceof Error ? err.message : 'Post could not be created.');
     }
   };
 
-  return (
-    <section className="rounded-[var(--radius-scent)] border border-scent-accent/16 bg-[linear-gradient(180deg,rgba(10,7,4,0.84),rgba(3,2,1,0.94))] p-5 shadow-[0_24px_70px_-48px_rgba(212,175,55,0.42)] sm:p-6">
-      <form onSubmit={submitPost} className="space-y-5">
+  if (!composerOpen) {
+    return (
+      <section className="rounded-[var(--radius-scent)] border border-scent-accent/16 bg-[linear-gradient(180deg,rgba(10,7,4,0.84),rgba(3,2,1,0.94))] p-5 shadow-[0_24px_70px_-48px_rgba(212,175,55,0.42)] sm:p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
+          <div className="min-w-0">
             <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-scent-accent/78">
               Community forum
             </p>
             <h2 className="mt-2 font-serif text-3xl italic leading-tight text-[#fff7ec]">
-              Start a room thread
+              Rooms already moving through the lounge.
             </h2>
+            <p className="mt-3 max-w-2xl text-sm leading-7 text-scent-muted/72">
+              Ask the room, post your SOTD, run a battle, or check if a bottle is worth it.
+            </p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {ROOMS.map(({ type, label, Icon }) => (
-              <button
-                key={type}
-                type="button"
-                onClick={() => setPostType(type)}
-                aria-pressed={postType === type}
-                className={[
-                  'inline-flex min-h-10 items-center gap-2 rounded-full border px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35',
-                  postType === type
-                    ? 'border-scent-accent/48 bg-scent-accent/[0.08] text-[#fff7ec]'
-                    : 'border-scent-accent/16 bg-white/[0.025] text-scent-muted hover:border-scent-accent/34 hover:text-[#fff7ec]',
-                ].join(' ')}
-              >
-                <Icon size={14} strokeWidth={1.8} aria-hidden="true" />
-                {label}
-              </button>
-            ))}
+          <button
+            type="button"
+            onClick={() => {
+              setComposerOpen(true);
+              setStatusMessage(null);
+            }}
+            aria-expanded="false"
+            className="scent-primary-button inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-[var(--radius-scent)] px-6 py-3 text-sm font-bold uppercase tracking-[0.18em]"
+          >
+            <Plus size={16} strokeWidth={1.8} aria-hidden="true" />
+            Start Room
+          </button>
+        </div>
+
+        {statusMessage ? (
+          <p className="mt-5 rounded-[14px] border border-scent-accent/12 bg-white/[0.025] px-4 py-3 text-sm text-scent-muted">
+            {statusMessage}
+          </p>
+        ) : null}
+      </section>
+    );
+  }
+
+  return (
+    <section className="rounded-[var(--radius-scent)] border border-scent-accent/16 bg-[linear-gradient(180deg,rgba(10,7,4,0.84),rgba(3,2,1,0.94))] p-5 shadow-[0_24px_70px_-48px_rgba(212,175,55,0.42)] sm:p-6">
+      <form onSubmit={submitPost} className="space-y-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
+            <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-scent-accent/78">
+              Community forum
+            </p>
+            <h2 className="mt-2 font-serif text-3xl italic leading-tight text-[#fff7ec]">
+              Start a room
+            </h2>
+            <p className="mt-3 max-w-2xl text-sm leading-7 text-scent-muted/72">
+              Ask the room, post your SOTD, run a battle, or check if a bottle is worth it.
+            </p>
           </div>
+          <button
+            type="button"
+            onClick={() => setComposerOpen(false)}
+            aria-expanded="true"
+            className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-full border border-scent-accent/18 bg-white/[0.025] px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-scent-muted transition-colors hover:border-scent-accent/36 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
+          >
+            <X size={14} strokeWidth={1.8} aria-hidden="true" />
+            Close
+          </button>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {ROOMS.map(({ type, label, Icon }) => (
+            <button
+              key={type}
+              type="button"
+              onClick={() => setPostType(type)}
+              aria-pressed={postType === type}
+              className={[
+                'inline-flex min-h-10 items-center gap-2 rounded-full border px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35',
+                postType === type
+                  ? 'border-scent-accent/48 bg-scent-accent/[0.08] text-[#fff7ec]'
+                  : 'border-scent-accent/16 bg-white/[0.025] text-scent-muted hover:border-scent-accent/34 hover:text-[#fff7ec]',
+              ].join(' ')}
+            >
+              <Icon size={14} strokeWidth={1.8} aria-hidden="true" />
+              {label}
+            </button>
+          ))}
         </div>
 
         <div className="grid gap-3 lg:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)]">
@@ -375,8 +429,8 @@ export const PostComposer: React.FC<PostComposerProps> = ({ authToken, onSignIn 
             value={title}
             onChange={(event) => setTitle(event.target.value)}
             maxLength={140}
-            placeholder="Optional title"
-            aria-label="Post title"
+            placeholder="Name the room"
+            aria-label="Room name"
             className="scent-lux-input h-12 w-full rounded-[var(--radius-scent)] px-4 text-sm text-[#fff7ec] placeholder:text-scent-muted/45"
           />
           <input
@@ -385,8 +439,8 @@ export const PostComposer: React.FC<PostComposerProps> = ({ authToken, onSignIn 
             onChange={(event) => setTagInput(event.target.value)}
             onKeyDown={submitTagKey}
             onBlur={() => addTagsFromInput(tagInput)}
-            placeholder="Tags, comma separated"
-            aria-label="Post tags"
+            placeholder="Add vibe tags"
+            aria-label="Room tags"
             className="scent-lux-input h-12 w-full rounded-[var(--radius-scent)] px-4 text-sm text-[#fff7ec] placeholder:text-scent-muted/45"
           />
         </div>
@@ -479,8 +533,8 @@ export const PostComposer: React.FC<PostComposerProps> = ({ authToken, onSignIn 
           onChange={(event) => setBody(event.target.value)}
           rows={5}
           maxLength={4000}
-          placeholder="What should the room know?"
-          aria-label="Post body"
+          placeholder="What should the room discuss?"
+          aria-label="Room discussion"
           className="scent-lux-input min-h-40 w-full resize-y rounded-[var(--radius-scent)] px-4 py-3 text-sm leading-7 text-[#fff7ec] placeholder:text-scent-muted/45"
         />
 
@@ -503,8 +557,8 @@ export const PostComposer: React.FC<PostComposerProps> = ({ authToken, onSignIn 
                     void searchCatalog();
                   }
                 }}
-                placeholder="Attach catalog fragrance"
-                aria-label="Search catalog fragrance"
+                placeholder="Attach a fragrance"
+                aria-label="Search fragrance to attach"
                 className="scent-lux-input h-11 w-full rounded-full pl-11 pr-4 text-sm text-[#fff7ec] placeholder:text-scent-muted/45"
               />
             </div>
@@ -611,7 +665,7 @@ export const PostComposer: React.FC<PostComposerProps> = ({ authToken, onSignIn 
             ) : (
               <Send size={16} strokeWidth={1.8} aria-hidden="true" />
             )}
-            <span>{authToken ? 'Post thread' : 'Sign in to post'}</span>
+            <span>{authToken ? 'Open Room' : 'Sign in to post'}</span>
           </button>
         </div>
       </form>
