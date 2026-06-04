@@ -1591,9 +1591,10 @@ a {
 }
 
 @media (hover: none) and (prefers-reduced-motion: no-preference) {
-  .scent-brand-gold-shimmer::after {
+  .scent-brand-gold-label--viewport-sheen .scent-brand-gold-shimmer::after {
     animation: brand-gold-sheen 2.15s ease-out 0.18s 1 both;
     opacity: 0.92;
+    will-change: background-position;
   }
 }
 
