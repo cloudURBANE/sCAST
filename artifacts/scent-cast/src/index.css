@@ -1,4 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400;1,600&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;700&family=Pinyon+Script&display=swap');
 @import "tailwindcss";
 
 @theme {
@@ -94,9 +93,9 @@ a {
 /* ─── Glassmorphism System ────────────────────────────────────────────────── */
 
 .glass {
-  background: rgba(8, 5, 3, 0.78);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  background: rgba(8, 5, 3, 0.82);
+  /* backdrop-filter: blur(4px); */
+  /* -webkit-backdrop-filter: blur(4px); */
   border: 1px solid rgba(212, 175, 55, 0.28);
   box-shadow:
     inset 0 1px 0 0 rgba(255, 230, 180, 0.09),
@@ -105,9 +104,9 @@ a {
 }
 
 .glass-acrylic {
-  background: rgba(9, 6, 4, 0.84);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  background: rgba(9, 6, 4, 0.88);
+  /* backdrop-filter: blur(4px); */
+  /* -webkit-backdrop-filter: blur(4px); */
   border: 1px solid rgba(212, 175, 55, 0.28);
   box-shadow: 
     var(--scent-card-glow),
@@ -1047,10 +1046,10 @@ a {
   overflow: hidden;
   border: 1px solid rgba(212, 175, 55, 0.18);
   border-radius: var(--radius-scent);
-  background: linear-gradient(180deg, rgba(10, 7, 4, 0.84), rgba(4, 3, 2, 0.92));
+  background: linear-gradient(180deg, rgba(10, 7, 4, 0.88), rgba(4, 3, 2, 0.94));
   box-shadow: inset 0 1px 0 rgba(255, 226, 174, 0.06), 0 18px 44px -28px rgba(0, 0, 0, 0.95);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  /* backdrop-filter: blur(4px); */
+  /* -webkit-backdrop-filter: blur(4px); */
   transition:
     border-color var(--scent-transition-fast) var(--scent-ease-out),
     box-shadow var(--scent-transition-base) var(--scent-ease-out);
