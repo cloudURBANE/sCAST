@@ -23,7 +23,11 @@ const FOCUSABLE_SELECTOR = [
 
 const modalStack: string[] = [];
 let scrollLockCount = 0;
-let previousBodyOverflow = "";
+let lockedScrollX = 0;
+let lockedScrollY = 0;
+let previousBodyStyles: Partial<
+  Pick<CSSStyleDeclaration, "overflow" | "position" | "top" | "left" | "right" | "width">
+> = {};
 
 function isVisibleFocusable(element: HTMLElement): boolean {
   if (element.hasAttribute("disabled")) return false;
@@ -41,8 +45,23 @@ function getFocusableElements(container: HTMLElement): HTMLElement[] {
 
 function lockBodyScroll(): () => void {
   if (scrollLockCount === 0) {
-    previousBodyOverflow = document.body.style.overflow;
+    lockedScrollX = window.scrollX || window.pageXOffset || 0;
+    lockedScrollY = window.scrollY || window.pageYOffset || 0;
+    previousBodyStyles = {
+      overflow: document.body.style.overflow,
+      position: document.body.style.position,
+      top: document.body.style.top,
+      left: document.body.style.left,
+      right: document.body.style.right,
+      width: document.body.style.width,
+    };
+
     document.body.style.overflow = "hidden";
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${lockedScrollY}px`;
+    document.body.style.left = `-${lockedScrollX}px`;
+    document.body.style.right = "0";
+    document.body.style.width = "100%";
   }
 
   scrollLockCount += 1;
@@ -50,8 +69,16 @@ function lockBodyScroll(): () => void {
   return () => {
     scrollLockCount = Math.max(0, scrollLockCount - 1);
     if (scrollLockCount === 0) {
-      document.body.style.overflow = previousBodyOverflow;
-      previousBodyOverflow = "";
+      document.body.style.overflow = previousBodyStyles.overflow ?? "";
+      document.body.style.position = previousBodyStyles.position ?? "";
+      document.body.style.top = previousBodyStyles.top ?? "";
+      document.body.style.left = previousBodyStyles.left ?? "";
+      document.body.style.right = previousBodyStyles.right ?? "";
+      document.body.style.width = previousBodyStyles.width ?? "";
+      window.scrollTo(lockedScrollX, lockedScrollY);
+      previousBodyStyles = {};
+      lockedScrollX = 0;
+      lockedScrollY = 0;
     }
   };
 }
