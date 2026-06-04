@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useRef, useLayoutEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect, useMemo, useCallback, startTransition } from 'react';
 import { Routes, Route, useLocation, useParams, type Location } from 'react-router-dom';
-import { flushSync } from 'react-dom';
 import { FragranceCapture } from './components/FragranceCapture';
 import { Wardrobe, Fragrance, DestinationType, EnergyState } from './components/Wardrobe';
 import { Play, X } from 'lucide-react';
@@ -46,9 +45,18 @@ const formatSprayCount = (sprayCount: ScentWeatherRecommendation['spray_count'])
   return `${sprayCount.min}-${sprayCount.max} sprays (${sprayCount.recommended} recommended)`;
 };
 
-const PAGE_TRANSITION_COVER_MS = 320;
-const PAGE_TRANSITION_MIN_SHOW_MS = 1320;
-const PAGE_TRANSITION_POST_SWAP_PAINT_MS = 220;
+const PAGE_TRANSITION_TIMING = {
+  standard: {
+    coverMs: 220,
+    minShowMs: 820,
+    postSwapPaintMs: 120,
+  },
+  lowMotion: {
+    coverMs: 150,
+    minShowMs: 560,
+    postSwapPaintMs: 80,
+  },
+} as const;
 
 const routeSignature = (location: Location): string =>
   `${location.pathname}${location.search}`;
@@ -790,6 +798,7 @@ export default function App() {
   const coverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const paintFrameRef = useRef<number | null>(null);
+  const pendingRevealRouteRef = useRef<string | null>(null);
   const transitionStartedAtRef = useRef(0);
   const isFreezeLab = renderedLocation.pathname === '/debug/ipad-freeze';
   // On a constrained iPad PWA the per-frame animated thread background outruns
@@ -797,8 +806,13 @@ export default function App() {
   // there and let the static app-shell background carry the look instead.
   const { lowMotionRenderMode } = useRenderBudget();
   const showThreadBackground = !isFreezeLab && !lowMotionRenderMode;
+  const transitionTiming = useMemo(
+    () => (lowMotionRenderMode ? PAGE_TRANSITION_TIMING.lowMotion : PAGE_TRANSITION_TIMING.standard),
+    [lowMotionRenderMode],
+  );
 
   const clearTransitionWork = useCallback(() => {
+    pendingRevealRouteRef.current = null;
     if (coverTimerRef.current) {
       clearTimeout(coverTimerRef.current);
       coverTimerRef.current = null;
@@ -818,8 +832,8 @@ export default function App() {
       paintFrameRef.current = requestAnimationFrame(() => {
         paintFrameRef.current = null;
         const elapsed = Date.now() - transitionStartedAtRef.current;
-        const remainingShowMs = Math.max(PAGE_TRANSITION_MIN_SHOW_MS - elapsed, 0);
-        const revealDelayMs = Math.max(remainingShowMs, PAGE_TRANSITION_POST_SWAP_PAINT_MS);
+        const remainingShowMs = Math.max(transitionTiming.minShowMs - elapsed, 0);
+        const revealDelayMs = Math.max(remainingShowMs, transitionTiming.postSwapPaintMs);
 
         hideTimerRef.current = setTimeout(() => {
           hideTimerRef.current = null;
@@ -827,7 +841,15 @@ export default function App() {
         }, revealDelayMs);
       });
     });
-  }, []);
+  }, [transitionTiming]);
+
+  useLayoutEffect(() => {
+    const renderedRoute = routeSignature(renderedLocation);
+    if (!transitionVisible || pendingRevealRouteRef.current !== renderedRoute) return;
+
+    pendingRevealRouteRef.current = null;
+    scheduleRevealAfterRoutePaint();
+  }, [renderedLocation, scheduleRevealAfterRoutePaint, transitionVisible]);
 
   useLayoutEffect(() => {
     const nextRoute = routeSignature(location);
@@ -843,12 +865,12 @@ export default function App() {
 
     coverTimerRef.current = setTimeout(() => {
       coverTimerRef.current = null;
-      flushSync(() => {
+      pendingRevealRouteRef.current = nextRoute;
+      startTransition(() => {
         setRenderedLocation(location);
       });
-      scheduleRevealAfterRoutePaint();
-    }, PAGE_TRANSITION_COVER_MS);
-  }, [clearTransitionWork, location, scheduleRevealAfterRoutePaint]);
+    }, transitionTiming.coverMs);
+  }, [clearTransitionWork, location, transitionTiming.coverMs]);
 
   useEffect(() => () => {
     clearTransitionWork();
