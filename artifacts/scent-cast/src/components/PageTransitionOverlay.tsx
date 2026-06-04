@@ -1,12 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import React, { useEffect, useRef } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { isIpadStandalone } from '@/lib/platform';
 
 const EMBLEM = '/icons/transparent-emblem/scentbeam-emblem-192x192.png';
 const GOLD = 'rgba(212, 175, 55,';
-const SHOW_MS = 1180;
-
 let emblemWarmPromise: Promise<void> | null = null;
 
 function warmTransitionEmblem() {
@@ -29,8 +26,15 @@ function warmTransitionEmblem() {
   }
 }
 
-export const PageTransitionOverlay: React.FC = () => {
-  const location = useLocation();
+interface PageTransitionOverlayProps {
+  visible: boolean;
+  animationKey: number;
+}
+
+export const PageTransitionOverlay: React.FC<PageTransitionOverlayProps> = ({
+  visible,
+  animationKey,
+}) => {
   const reduceMotion = useReducedMotion();
   // Installed iPad PWA can't afford a full-screen orbiting/blooming overlay
   // running at the same time as a route mount + data fetch; fall back to the
@@ -38,29 +42,13 @@ export const PageTransitionOverlay: React.FC = () => {
   // stable for the session, so read it once (unconditional hook call).
   const ipadStandalone = useRef(isIpadStandalone()).current;
   const lightOverlay = reduceMotion || ipadStandalone;
-  const [visible, setVisible] = useState(false);
-  const [animKey, setAnimKey] = useState(0);
-  const prevPath = useRef(location.pathname);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   useEffect(() => {
     warmTransitionEmblem();
   }, []);
 
   useEffect(() => {
-    if (location.pathname === prevPath.current) return;
-    prevPath.current = location.pathname;
-
-    warmTransitionEmblem();
-    if (timer.current) clearTimeout(timer.current);
-    setAnimKey(k => k + 1);
-    setVisible(true);
-    timer.current = setTimeout(() => setVisible(false), SHOW_MS);
-
-    return () => {
-      if (timer.current) clearTimeout(timer.current);
-    };
-  }, [location.pathname]);
+    if (visible) warmTransitionEmblem();
+  }, [visible]);
 
   // When reduced motion is preferred (or on a constrained iPad PWA), show a
   // brief cross-fade only — no spinning or scaling.
@@ -69,7 +57,7 @@ export const PageTransitionOverlay: React.FC = () => {
       <AnimatePresence>
         {visible && (
           <motion.div
-            key={animKey}
+            key={animationKey}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -94,7 +82,7 @@ export const PageTransitionOverlay: React.FC = () => {
     <AnimatePresence>
       {visible && (
         <motion.div
-          key={animKey}
+          key={animationKey}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}

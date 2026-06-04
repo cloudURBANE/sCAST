@@ -27,14 +27,54 @@ export const BrandGoldLabel: React.FC<BrandGoldLabelProps> = ({
   title,
   ...props
 }) => {
-  const labelClassName = className
-    ? `scent-brand-gold-label ${className}`
-    : 'scent-brand-gold-label';
+  const labelRef = React.useRef<HTMLElement | null>(null);
+  const [hasViewportSheen, setHasViewportSheen] = React.useState(false);
+  const labelClassName = [
+    'scent-brand-gold-label',
+    hasViewportSheen ? 'scent-brand-gold-label--viewport-sheen' : null,
+    className,
+  ].filter(Boolean).join(' ');
+
+  React.useEffect(() => {
+    setHasViewportSheen(false);
+  }, [brand]);
+
+  React.useEffect(() => {
+    if (
+      !shimmer ||
+      hasViewportSheen ||
+      typeof window === 'undefined' ||
+      !('IntersectionObserver' in window) ||
+      !window.matchMedia('(hover: none) and (prefers-reduced-motion: no-preference)').matches
+    ) {
+      return;
+    }
+
+    const node = labelRef.current;
+    if (!node) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        setHasViewportSheen(true);
+        observer.disconnect();
+      },
+      {
+        rootMargin: '-38% 0px -38% 0px',
+        threshold: 0,
+      },
+    );
+
+    observer.observe(node);
+
+    return () => observer.disconnect();
+  }, [brand, hasViewportSheen, shimmer]);
 
   return React.createElement(
     as,
     {
       ...props,
+      ref: labelRef,
       className: labelClassName,
       'data-len': brandLengthBucket(brand),
       title: title ?? brand,
