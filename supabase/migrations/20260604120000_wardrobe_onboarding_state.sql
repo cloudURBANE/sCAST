@@ -8,14 +8,17 @@ alter table public.user_settings
   add column if not exists wardrobe_onboarding_completed boolean not null default false;
 
 alter table public.user_settings
-  add column if not exists wardrobe_onboarding_completed_at timestamptz;
+  add column if not exists wardrobe_onboarding_completed_at timestamp without time zone;
 
 -- Backfill: anyone who already holds >= 3 wardrobe rows has demonstrably
 -- completed onboarding. Create the settings row when it does not exist yet.
 insert into public.user_settings (user_id, tenant_id, wardrobe_onboarding_completed, wardrobe_onboarding_completed_at)
-select uf.user_id, max(uf.tenant_id), true, now()
+select uf.user_id, u.tenant_id, true, now()
 from public.user_fragrances uf
-group by uf.user_id
+join public.users u
+  on u.id = uf.user_id
+ and u.tenant_id = uf.tenant_id
+group by uf.user_id, u.tenant_id
 having count(*) >= 3
 on conflict (user_id) do update
   set wardrobe_onboarding_completed = true,

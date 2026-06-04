@@ -28,18 +28,38 @@ import {
 const ONBOARDING_STORAGE_KEY = 'scent_onboarding_completed';
 const WARDROBE_ONBOARDING_THRESHOLD = 3;
 
-function readOnboardingMarker(): boolean {
+function onboardingMarkerKey(authToken: string): string {
+  return `${ONBOARDING_STORAGE_KEY}:${authToken}`;
+}
+
+function readOnboardingMarker(authToken?: string | null): boolean {
+  if (!authToken) return false;
   try {
-    return localStorage.getItem(ONBOARDING_STORAGE_KEY) === '1';
+    return localStorage.getItem(onboardingMarkerKey(authToken)) === '1';
   } catch {
     return false;
   }
 }
 
-function writeOnboardingMarker(value: boolean): void {
+function writeOnboardingMarker(authToken: string | null | undefined, value: boolean): void {
+  if (!authToken) return;
   try {
-    if (value) localStorage.setItem(ONBOARDING_STORAGE_KEY, '1');
-    else localStorage.removeItem(ONBOARDING_STORAGE_KEY);
+    const key = onboardingMarkerKey(authToken);
+    if (value) localStorage.setItem(key, '1');
+    else localStorage.removeItem(key);
+  } catch {
+    /* storage unavailable (private mode / quota) — degrade silently */
+  }
+}
+
+function clearOnboardingMarkers(): void {
+  try {
+    for (let i = localStorage.length - 1; i >= 0; i -= 1) {
+      const key = localStorage.key(i);
+      if (key === ONBOARDING_STORAGE_KEY || key?.startsWith(`${ONBOARDING_STORAGE_KEY}:`)) {
+        localStorage.removeItem(key);
+      }
+    }
   } catch {
     /* storage unavailable (private mode / quota) — degrade silently */
   }
@@ -476,7 +496,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const [items, setItems] = useState<Fragrance[]>([]);
   const [wardrobeLoaded, setWardrobeLoaded] = useState(false);
-  const [onboardingCompleted, setOnboardingCompleted] = useState<boolean>(() => readOnboardingMarker());
+  const [onboardingCompleted, setOnboardingCompleted] = useState<boolean>(false);
   const [onboardingResolved, setOnboardingResolved] = useState<boolean>(false);
   const [wardrobeError, setWardrobeError] = useState<string | null>(null);
   const [isIntentModalOpen, setIsIntentModalOpen] = useState(false);
@@ -494,6 +514,9 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const enrichmentRefreshInFlightRef = useRef(false);
   const isMutatingRef = useRef(false);
   const lastMutationRef = useRef(0);
+  const appStateRefreshInFlightRef = useRef(false);
+  const authTokenRef = useRef(authToken);
+  authTokenRef.current = authToken;
 
   const handleVaultSearchStateChange = useCallback((active: boolean) => {
     setVaultSearchUiActive(active);
@@ -560,9 +583,39 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   }, [authToken, loadWardrobe]);
 
+  const loadAppState = useCallback(async (token: string, signal?: AbortSignal): Promise<boolean> => {
+    const res = await fetch('/api/me/app-state', {
+      headers: { Authorization: `Bearer ${token}` },
+      signal,
+    });
+    if (!res.ok) {
+      throw new Error(`App-state fetch failed: HTTP ${res.status}`);
+    }
+    const data = (await res.json()) as { wardrobeOnboardingCompleted?: boolean };
+    const completed = Boolean(data.wardrobeOnboardingCompleted);
+    if (authTokenRef.current === token) {
+      setOnboardingCompleted(completed);
+      writeOnboardingMarker(token, completed);
+    }
+    return completed;
+  }, []);
+
+  const refreshOnboardingCompletionFromServer = useCallback(async (token: string) => {
+    if (appStateRefreshInFlightRef.current) return;
+    appStateRefreshInFlightRef.current = true;
+    try {
+      await loadAppState(token);
+    } catch (err) {
+      console.error('Failed to reconcile app-state', err);
+    } finally {
+      appStateRefreshInFlightRef.current = false;
+    }
+  }, [loadAppState]);
+
   // Reset auto-rebuild attempt on auth change
   useEffect(() => {
     autoWardrobeRebuildAttemptedRef.current = false;
+    appStateRefreshInFlightRef.current = false;
   }, [authToken]);
 
   // Load wardrobe & share settings on login
@@ -605,40 +658,36 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (!authToken) return;
     const abortController = new AbortController();
     setOnboardingResolved(false);
+    setOnboardingCompleted(readOnboardingMarker(authToken));
 
     void (async () => {
       try {
-        const res = await fetch('/api/me/app-state', {
-          headers: { Authorization: `Bearer ${authToken}` },
-          signal: abortController.signal,
-        });
-        if (!res.ok) return;
-        const data = (await res.json()) as { wardrobeOnboardingCompleted?: boolean };
-        const completed = Boolean(data.wardrobeOnboardingCompleted);
-        setOnboardingCompleted(completed);
-        writeOnboardingMarker(completed);
+        await loadAppState(authToken, abortController.signal);
       } catch (err) {
-        if ((err as Error).name !== 'AbortError') {
+        if ((err as Error).name !== 'AbortError' && authTokenRef.current === authToken) {
           console.error('Failed to load app-state', err);
+          setOnboardingCompleted(false);
+          writeOnboardingMarker(authToken, false);
         }
       } finally {
-        if (!abortController.signal.aborted) setOnboardingResolved(true);
+        if (!abortController.signal.aborted && authTokenRef.current === authToken) {
+          setOnboardingResolved(true);
+        }
       }
     })();
 
     return () => abortController.abort();
-  }, [authToken]);
+  }, [authToken, loadAppState]);
 
-  // Optimistic completion: once a signed-in user reaches the threshold, mark
-  // onboarding done immediately. The server reconciles on the next app-state
-  // fetch (and the GET endpoint persists completion server-side).
+  // Completion is durable only after the server sees a persisted wardrobe count
+  // at or above the threshold. This catches background/tab updates without
+  // trusting transient optimistic items while a save is still in flight.
   useEffect(() => {
     if (!authToken || onboardingCompleted) return;
-    if (items.length >= WARDROBE_ONBOARDING_THRESHOLD) {
-      setOnboardingCompleted(true);
-      writeOnboardingMarker(true);
+    if (items.length >= WARDROBE_ONBOARDING_THRESHOLD && !isMutatingRef.current) {
+      void refreshOnboardingCompletionFromServer(authToken);
     }
-  }, [authToken, items.length, onboardingCompleted]);
+  }, [authToken, items.length, onboardingCompleted, refreshOnboardingCompletionFromServer]);
 
   // Background polling wardrobe updates
   useEffect(() => {
@@ -705,6 +754,13 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
               sameWardrobeEntry(existing, newItem) ? savedItem : existing,
             ),
           );
+          if (nextCount >= WARDROBE_ONBOARDING_THRESHOLD && !onboardingCompleted) {
+            try {
+              await loadAppState(authToken);
+            } catch (err) {
+              console.error('Failed to persist onboarding completion after wardrobe save', err);
+            }
+          }
           toast({
             title: "Fragrance Enshrined",
             description: `${newItem.name} has been synced with your database.`
@@ -732,7 +788,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
 
     return { persisted: false, requiresAuth: !authToken };
-  }, [authToken, guestPromptDismissed, setIsAuthModalOpen, toast]);
+  }, [authToken, guestPromptDismissed, loadAppState, onboardingCompleted, setIsAuthModalOpen, toast]);
 
   const handlePersistWardrobeImage = useCallback(async (
     target: Fragrance,
@@ -1063,7 +1119,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       // does not inherit the previous user's completed state. Guests have no
       // server state to wait on, so treat them as already resolved.
       setOnboardingCompleted(false);
-      writeOnboardingMarker(false);
+      clearOnboardingMarkers();
       setOnboardingResolved(true);
     }
   }, [authToken]);
