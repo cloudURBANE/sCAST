@@ -463,26 +463,30 @@ function LayerAccordEcho({
             </span>
             <span className="relative h-[2px] sm:h-[3px] overflow-hidden rounded-full bg-white/[0.08]">
               <motion.span
-                className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-[#9f6a1f] via-[#fc9d19] to-[#ffe1a3]"
-                initial={false}
-                animate={{
-                  width: `${pct}%`,
-                  opacity: prefersReducedMotion ? 0.78 : [0.72, 1, 0.72],
+                className="absolute inset-y-0 left-0 origin-left rounded-full bg-gradient-to-r from-[#9f6a1f] via-[#fc9d19] to-[#ffe1a3]"
+                // Fill is full-width and revealed via `scaleX` (origin-left) so a
+                // selection change tweens a GPU transform, not `width` (layout).
+                // The glow is a static box-shadow rather than a looped one — the
+                // opacity pulse below already carries its intensity to the shadow,
+                // which avoids a per-frame box-shadow repaint over the live SVG.
+                style={{
+                  width: '100%',
+                  willChange: 'transform',
                   boxShadow: prefersReducedMotion
                     ? '0 0 8px rgba(252,157,25,0.28)'
-                    : [
-                        '0 0 8px rgba(252,157,25,0.24)',
-                        '0 0 18px rgba(252,157,25,0.56)',
-                        '0 0 8px rgba(252,157,25,0.24)',
-                      ],
+                    : '0 0 12px rgba(252,157,25,0.42)',
+                }}
+                initial={false}
+                animate={{
+                  scaleX: pct / 100,
+                  opacity: prefersReducedMotion ? 0.78 : [0.72, 1, 0.72],
                 }}
                 transition={
                   prefersReducedMotion
                     ? { duration: 0.2 }
                     : {
-                        width: { duration: 0.56, ease: CALM_EASE },
+                        scaleX: { duration: 0.56, ease: CALM_EASE },
                         opacity: { duration: 1.45, repeat: DECORATIVE_REPEAT_COUNT, ease: 'easeInOut' },
-                        boxShadow: { duration: 1.45, repeat: DECORATIVE_REPEAT_COUNT, ease: 'easeInOut' },
                       }
                 }
               />
@@ -1532,7 +1536,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
               animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
               exit={{ opacity: 0, y: -5, scale: 0.99, filter: 'blur(2px)' }}
               transition={prefersReducedMotion ? reducedTransition : { duration: 0.32, ease: CALM_EASE }}
-              className={`pointer-events-none absolute left-1/2 z-50 w-[84%] max-w-[15rem] -translate-x-1/2 overflow-hidden rounded-lg border border-white/10 bg-[#060608]/76 px-2 py-2 shadow-[0_10px_30px_-8px_rgba(0,0,0,0.78),inset_0_1px_1px_rgba(255,255,255,0.13),0_0_0_1px_rgba(252,157,25,0.07)] backdrop-blur-sm sm:max-w-[18.5rem] sm:px-3.5 sm:py-3.5 ${selectedLayer.revealClass}`}
+              className={`pointer-events-none absolute left-1/2 z-50 w-[84%] max-w-[15rem] -translate-x-1/2 overflow-hidden rounded-lg border border-white/10 bg-[#060608]/92 px-2 py-2 shadow-[0_10px_30px_-8px_rgba(0,0,0,0.78),inset_0_1px_1px_rgba(255,255,255,0.13),0_0_0_1px_rgba(252,157,25,0.07)] sm:max-w-[18.5rem] sm:px-3.5 sm:py-3.5 ${selectedLayer.revealClass}`}
             >
               <span
                 aria-hidden

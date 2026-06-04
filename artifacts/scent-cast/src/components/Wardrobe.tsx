@@ -1,6 +1,6 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import {
   X,
   Trash2,
@@ -406,6 +406,14 @@ function buildLegacyPerformanceParts(
 
 type PriceSignalTone = "standard" | "accent";
 
+// Decorative price-signal shimmer plays a couple of times then settles, matching
+// the rest of the app's bounded-loop convention (cf. NotePyramid's
+// DECORATIVE_REPEAT_COUNT). An unbounded `repeat: Infinity` here meant every `$`
+// on every catalog card ran a perpetual rAF loop — multiplied across the grid
+// that is a real per-frame load on the iPad PWA, and it ignored the OS
+// reduced-motion preference entirely.
+const PRICE_SIGNAL_REPEAT_COUNT = 2;
+
 function PriceValueSignal({
   symbols,
   label,
@@ -415,13 +423,15 @@ function PriceValueSignal({
   label: string;
   tone?: PriceSignalTone;
 }) {
+  const reduceMotion = useReducedMotion();
   const intensity = symbols.length;
   const baseClass =
     tone === "accent"
       ? "inline-flex font-serif italic text-scent-accent font-bold drop-shadow-[0_0_10px_rgba(212,175,55,0.7)] whitespace-nowrap"
       : "inline-flex font-serif italic text-white/90 whitespace-nowrap";
-  const animate =
-    intensity >= 4
+  const animate = reduceMotion
+    ? undefined
+    : intensity >= 4
       ? { y: [0, -2, 1, 0], opacity: [0.82, 1, 0.9, 0.82] }
       : intensity === 3
         ? { y: [0, -2, 0], rotate: [0, -4, 0], opacity: [0.88, 1, 0.88] }
@@ -438,13 +448,17 @@ function PriceValueSignal({
           aria-hidden="true"
           className="inline-block"
           animate={animate}
-          transition={{
-            duration,
-            delay: index * 0.11,
-            repeat: Infinity,
-            repeatType: "mirror",
-            ease: "easeInOut",
-          }}
+          transition={
+            reduceMotion
+              ? undefined
+              : {
+                  duration,
+                  delay: index * 0.11,
+                  repeat: PRICE_SIGNAL_REPEAT_COUNT,
+                  repeatType: "mirror",
+                  ease: "easeInOut",
+                }
+          }
         >
           {symbol}
         </motion.span>
@@ -1417,7 +1431,7 @@ export const Wardrobe: React.FC<{
                     transition={{ duration: 0.18 }}
                     id="wardrobe-search-suggestions"
                     role="listbox"
-                    className="absolute left-0 right-0 top-full mt-2 max-h-[min(320px,50vh)] overflow-y-auto rounded-[var(--radius-scent)] border border-scent-accent/32 bg-neutral-950/98 shadow-[0_24px_48px_rgba(0,0,0,0.78)] backdrop-blur-sm scrollbar-hide z-30"
+                    className="absolute left-0 right-0 top-full mt-2 max-h-[min(320px,50vh)] overflow-y-auto rounded-[var(--radius-scent)] border border-scent-accent/32 bg-neutral-950/98 shadow-[0_24px_48px_rgba(0,0,0,0.78)] scrollbar-hide z-30"
                   >
                     <li className="px-3 py-2 border-b border-white/8 pointer-events-none">
                       <p className="text-[8px] uppercase tracking-[0.35em] text-white/35 font-bold font-sans">

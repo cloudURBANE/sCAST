@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useRef, useLayoutEffect, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect, useMemo, useCallback } from 'react';
 import { Routes, Route, useLocation, useParams, type Location } from 'react-router-dom';
+import { flushSync } from 'react-dom';
 import { FragranceCapture } from './components/FragranceCapture';
 import { Wardrobe, Fragrance, DestinationType, EnergyState } from './components/Wardrobe';
 import { Play, X } from 'lucide-react';
@@ -18,7 +19,7 @@ import { WardrobeProvider, useWardrobe, useWardrobeItems, useWardrobeShareModalA
 import { Toaster } from './components/ui/toaster';
 import CommunityPage from '@/pages/community';
 import IpadFreezeLab from '@/pages/ipad-freeze-lab';
-import { PageTransitionOverlay } from './components/PageTransitionOverlay';
+import { PageTransitionOverlay, warmTransitionEmblem } from './components/PageTransitionOverlay';
 import { useModalBehavior } from '@/hooks/use-modal-behavior';
 import { useRenderBudget } from '@/hooks/useRenderBudget';
 import NotFound from '@/pages/not-found';
@@ -45,8 +46,9 @@ const formatSprayCount = (sprayCount: ScentWeatherRecommendation['spray_count'])
   return `${sprayCount.min}-${sprayCount.max} sprays (${sprayCount.recommended} recommended)`;
 };
 
-const PAGE_TRANSITION_COVER_MS = 280;
-const PAGE_TRANSITION_SHOW_MS = 1180;
+const PAGE_TRANSITION_COVER_MS = 320;
+const PAGE_TRANSITION_MIN_SHOW_MS = 1320;
+const PAGE_TRANSITION_POST_SWAP_PAINT_MS = 220;
 
 const routeSignature = (location: Location): string =>
   `${location.pathname}${location.search}`;
@@ -787,6 +789,8 @@ export default function App() {
   const activeRouteRef = useRef(routeSignature(location));
   const coverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const paintFrameRef = useRef<number | null>(null);
+  const transitionStartedAtRef = useRef(0);
   const isFreezeLab = renderedLocation.pathname === '/debug/ipad-freeze';
   // On a constrained iPad PWA the per-frame animated thread background outruns
   // Safari's compositor during fast scroll (black flashes / late paint). Drop it
@@ -794,30 +798,61 @@ export default function App() {
   const { lowMotionRenderMode } = useRenderBudget();
   const showThreadBackground = !isFreezeLab && !lowMotionRenderMode;
 
+  const clearTransitionWork = useCallback(() => {
+    if (coverTimerRef.current) {
+      clearTimeout(coverTimerRef.current);
+      coverTimerRef.current = null;
+    }
+    if (hideTimerRef.current) {
+      clearTimeout(hideTimerRef.current);
+      hideTimerRef.current = null;
+    }
+    if (paintFrameRef.current !== null) {
+      cancelAnimationFrame(paintFrameRef.current);
+      paintFrameRef.current = null;
+    }
+  }, []);
+
+  const scheduleRevealAfterRoutePaint = useCallback(() => {
+    paintFrameRef.current = requestAnimationFrame(() => {
+      paintFrameRef.current = requestAnimationFrame(() => {
+        paintFrameRef.current = null;
+        const elapsed = Date.now() - transitionStartedAtRef.current;
+        const remainingShowMs = Math.max(PAGE_TRANSITION_MIN_SHOW_MS - elapsed, 0);
+        const revealDelayMs = Math.max(remainingShowMs, PAGE_TRANSITION_POST_SWAP_PAINT_MS);
+
+        hideTimerRef.current = setTimeout(() => {
+          hideTimerRef.current = null;
+          setTransitionVisible(false);
+        }, revealDelayMs);
+      });
+    });
+  }, []);
+
   useLayoutEffect(() => {
     const nextRoute = routeSignature(location);
     if (nextRoute === activeRouteRef.current) return;
     activeRouteRef.current = nextRoute;
 
-    if (coverTimerRef.current) clearTimeout(coverTimerRef.current);
-    if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    clearTransitionWork();
+    warmTransitionEmblem();
 
+    transitionStartedAtRef.current = Date.now();
     setTransitionKey((key) => key + 1);
     setTransitionVisible(true);
 
     coverTimerRef.current = setTimeout(() => {
-      setRenderedLocation(location);
+      coverTimerRef.current = null;
+      flushSync(() => {
+        setRenderedLocation(location);
+      });
+      scheduleRevealAfterRoutePaint();
     }, PAGE_TRANSITION_COVER_MS);
-
-    hideTimerRef.current = setTimeout(() => {
-      setTransitionVisible(false);
-    }, PAGE_TRANSITION_SHOW_MS);
-  }, [location]);
+  }, [clearTransitionWork, location, scheduleRevealAfterRoutePaint]);
 
   useEffect(() => () => {
-    if (coverTimerRef.current) clearTimeout(coverTimerRef.current);
-    if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
-  }, []);
+    clearTransitionWork();
+  }, [clearTransitionWork]);
 
   return (
     <AuthProvider>

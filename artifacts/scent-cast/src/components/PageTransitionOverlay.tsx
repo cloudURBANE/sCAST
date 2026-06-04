@@ -1,13 +1,14 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, type CSSProperties } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { isIpadStandalone } from '@/lib/platform';
 
 const EMBLEM = '/icons/transparent-emblem/scentbeam-emblem-192x192.png';
-const GOLD = 'rgba(212, 175, 55,';
+const GOLD = '212, 175, 55';
+
 let emblemWarmPromise: Promise<void> | null = null;
 
-function warmTransitionEmblem() {
-  if (typeof document === 'undefined' || typeof window === 'undefined') return;
+export function warmTransitionEmblem(): Promise<void> | undefined {
+  if (typeof document === 'undefined' || typeof window === 'undefined') return undefined;
 
   const existingPreload = document.querySelector<HTMLLinkElement>(`link[rel="preload"][href="${EMBLEM}"]`);
   if (!existingPreload) {
@@ -15,15 +16,35 @@ function warmTransitionEmblem() {
     preload.rel = 'preload';
     preload.as = 'image';
     preload.href = EMBLEM;
+    (preload as HTMLLinkElement & { fetchPriority?: 'high' }).fetchPriority = 'high';
     document.head.appendChild(preload);
   }
 
-  if (!emblemWarmPromise) {
-    const image = new Image();
-    image.decoding = 'async';
+  if (emblemWarmPromise) return emblemWarmPromise;
+
+  const image = new Image();
+  image.decoding = 'async';
+  (image as HTMLImageElement & { fetchPriority?: 'high' }).fetchPriority = 'high';
+
+  emblemWarmPromise = new Promise<void>((resolve) => {
+    let settled = false;
+    const finish = (retryNextTime = false) => {
+      if (settled) return;
+      settled = true;
+      if (retryNextTime) emblemWarmPromise = null;
+      resolve();
+    };
+
+    image.onload = () => finish();
+    image.onerror = () => finish(true);
     image.src = EMBLEM;
-    emblemWarmPromise = image.decode?.().catch(() => undefined) ?? Promise.resolve();
-  }
+
+    if (typeof image.decode === 'function') {
+      image.decode().then(() => finish()).catch(() => undefined);
+    }
+  });
+
+  return emblemWarmPromise;
 }
 
 interface PageTransitionOverlayProps {
@@ -31,17 +52,89 @@ interface PageTransitionOverlayProps {
   animationKey: number;
 }
 
+interface MotionProfile {
+  duration: number;
+  exitDuration: number;
+  emblemSize: number;
+  bloomSize: number;
+  innerRingSize: number;
+  outerRingSize: number;
+  bloomScale: number[];
+  bloomOpacity: number[];
+  innerRingScale: number[];
+  innerRingOpacity: number[];
+  outerRingScale: number[];
+  outerRingOpacity: number[];
+  emblemRotate: number[];
+  emblemScale: number[];
+  emblemGlow: string;
+  showOuterRing: boolean;
+}
+
+const fullMotionProfile: MotionProfile = {
+  duration: 1.28,
+  exitDuration: 0.3,
+  emblemSize: 96,
+  bloomSize: 250,
+  innerRingSize: 142,
+  outerRingSize: 188,
+  bloomScale: [0.18, 1.25, 2.5],
+  bloomOpacity: [0, 0.34, 0],
+  innerRingScale: [0.28, 1.02, 1.62],
+  innerRingOpacity: [0, 0.48, 0],
+  outerRingScale: [0.34, 1.12, 1.95],
+  outerRingOpacity: [0, 0.24, 0],
+  emblemRotate: [-10, 260, 360],
+  emblemScale: [0.72, 1.02, 0.98, 1],
+  emblemGlow: [
+    `drop-shadow(0 0 16px rgba(${GOLD}, 0.56))`,
+    `drop-shadow(0 0 42px rgba(${GOLD}, 0.2))`,
+    'brightness(1.18)',
+  ].join(' '),
+  showOuterRing: true,
+};
+
+const compactMotionProfile: MotionProfile = {
+  duration: 1.16,
+  exitDuration: 0.24,
+  emblemSize: 84,
+  bloomSize: 194,
+  innerRingSize: 126,
+  outerRingSize: 164,
+  bloomScale: [0.22, 1.05, 1.84],
+  bloomOpacity: [0, 0.22, 0],
+  innerRingScale: [0.36, 0.96, 1.34],
+  innerRingOpacity: [0, 0.36, 0],
+  outerRingScale: [0.46, 1.05, 1.52],
+  outerRingOpacity: [0, 0.16, 0],
+  emblemRotate: [-6, 170, 360],
+  emblemScale: [0.78, 1, 0.97, 1],
+  emblemGlow: `drop-shadow(0 0 18px rgba(${GOLD}, 0.28)) brightness(1.1)`,
+  showOuterRing: true,
+};
+
+const overlayStyle: CSSProperties = {
+  background:
+    'radial-gradient(ellipse 55% 50% at 50% 50%, rgba(18, 11, 3, 0.96) 0%, rgba(3, 2, 1, 0.985) 100%)',
+  contain: 'layout paint',
+  isolation: 'isolate',
+  transform: 'translate3d(0, 0, 0)',
+  willChange: 'opacity',
+};
+
+const reducedOverlayStyle: CSSProperties = {
+  background:
+    'radial-gradient(ellipse 55% 50% at 50% 50%, rgba(16, 10, 2, 0.94) 0%, rgba(3, 2, 1, 0.97) 100%)',
+};
+
 export const PageTransitionOverlay: React.FC<PageTransitionOverlayProps> = ({
   visible,
   animationKey,
 }) => {
   const reduceMotion = useReducedMotion();
-  // Installed iPad PWA can't afford a full-screen orbiting/blooming overlay
-  // running at the same time as a route mount + data fetch; fall back to the
-  // cheap cross-fade there, same as the reduced-motion path. Device class is
-  // stable for the session, so read it once (unconditional hook call).
   const ipadStandalone = useRef(isIpadStandalone()).current;
-  const lightOverlay = reduceMotion || ipadStandalone;
+  const profile = ipadStandalone ? compactMotionProfile : fullMotionProfile;
+
   useEffect(() => {
     warmTransitionEmblem();
   }, []);
@@ -50,28 +143,29 @@ export const PageTransitionOverlay: React.FC<PageTransitionOverlayProps> = ({
     if (visible) warmTransitionEmblem();
   }, [visible]);
 
-  // When reduced motion is preferred (or on a constrained iPad PWA), show a
-  // brief cross-fade only — no spinning or scaling.
-  if (lightOverlay) {
+  if (reduceMotion) {
     return (
-      <AnimatePresence>
+      <AnimatePresence initial={false}>
         {visible && (
           <motion.div
             key={animationKey}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.18, ease: 'easeInOut' }}
+            transition={{ duration: 0.2, ease: 'easeInOut' }}
             className="fixed inset-0 z-[9999] flex items-center justify-center pointer-events-none"
-            style={{
-              background: `radial-gradient(ellipse 55% 50% at 50% 50%, rgba(16, 10, 2, 0.94) 0%, rgba(3, 2, 1, 0.97) 100%)`,
-            }}
+            style={reducedOverlayStyle}
             aria-hidden="true"
             role="presentation"
           >
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
-              <img src={EMBLEM} alt="" draggable={false} style={{ width: 80, height: 80, userSelect: 'none' }} />
-            </div>
+            <img
+              src={EMBLEM}
+              alt=""
+              draggable={false}
+              decoding="async"
+              fetchPriority="high"
+              style={{ width: 78, height: 78, userSelect: 'none' }}
+            />
           </motion.div>
         )}
       </AnimatePresence>
@@ -79,133 +173,138 @@ export const PageTransitionOverlay: React.FC<PageTransitionOverlayProps> = ({
   }
 
   return (
-    <AnimatePresence>
+    <AnimatePresence initial={false}>
       {visible && (
         <motion.div
           key={animationKey}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.26, ease: 'easeInOut' }}
+          transition={{ duration: profile.exitDuration, ease: 'easeInOut' }}
           className="fixed inset-0 z-[9999] flex items-center justify-center pointer-events-none"
-          style={{
-            background: `radial-gradient(ellipse 55% 50% at 50% 50%, rgba(16, 10, 2, 0.96) 0%, rgba(3, 2, 1, 0.98) 100%)`,
-            contain: 'layout paint',
-            transform: 'translate3d(0, 0, 0)',
-            willChange: 'opacity',
-          }}
+          style={overlayStyle}
           aria-hidden="true"
           role="presentation"
         >
-          {/* Diffuse gold bloom — expands and dissolves */}
           <motion.div
-            initial={{ scale: 0.05, opacity: 0 }}
+            initial={{ scale: profile.bloomScale[0], opacity: 0 }}
             animate={{
-              scale: [0.05, 1.5, 3.2],
-              opacity: [0, 0.32, 0],
+              scale: profile.bloomScale,
+              opacity: profile.bloomOpacity,
             }}
-            transition={{ duration: 1.18, times: [0, 0.35, 1], ease: 'easeOut' }}
+            transition={{ duration: profile.duration, times: [0, 0.38, 1], ease: 'easeOut' }}
             aria-hidden="true"
             style={{
               position: 'absolute',
-              width: 240,
-              height: 240,
+              width: profile.bloomSize,
+              height: profile.bloomSize,
               borderRadius: '50%',
-              background: `radial-gradient(circle, ${GOLD} 0.85) 0%, ${GOLD} 0.22) 45%, transparent 72%)`,
+              background: `radial-gradient(circle, rgba(${GOLD}, 0.72) 0%, rgba(${GOLD}, 0.2) 42%, transparent 72%)`,
               pointerEvents: 'none',
+              transform: 'translate3d(0, 0, 0)',
               willChange: 'transform, opacity',
             }}
           />
 
-          {/* Inner orbit ring — rotates outward */}
           <motion.div
-            initial={{ scale: 0.18, opacity: 0, rotate: -120 }}
+            initial={{ scale: profile.innerRingScale[0], opacity: 0, rotate: -96 }}
             animate={{
-              scale: [0.18, 1.0, 1.55],
-              opacity: [0, 0.45, 0],
-              rotate: [-120, 60, 160],
+              scale: profile.innerRingScale,
+              opacity: profile.innerRingOpacity,
+              rotate: [-96, 48, 156],
             }}
-            transition={{ duration: 1.1, times: [0, 0.42, 1], ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: profile.duration, times: [0, 0.46, 1], ease: [0.22, 1, 0.36, 1] }}
             aria-hidden="true"
             style={{
               position: 'absolute',
-              width: 136,
-              height: 136,
+              width: profile.innerRingSize,
+              height: profile.innerRingSize,
               borderRadius: '50%',
-              border: `1px solid ${GOLD} 0.55)`,
+              border: `1px solid rgba(${GOLD}, 0.54)`,
+              borderLeftColor: `rgba(${GOLD}, 0.16)`,
+              borderBottomColor: `rgba(${GOLD}, 0.12)`,
               pointerEvents: 'none',
+              transform: 'translate3d(0, 0, 0)',
               willChange: 'transform, opacity',
             }}
           />
 
-          {/* Outer orbit ring — slightly delayed, larger arc */}
-          <motion.div
-            initial={{ scale: 0.25, opacity: 0 }}
-            animate={{
-              scale: [0.25, 1.15, 2.0],
-              opacity: [0, 0.22, 0],
-            }}
-            transition={{ duration: 1.1, delay: 0.06, times: [0, 0.4, 1], ease: 'easeOut' }}
-            aria-hidden="true"
-            style={{
-              position: 'absolute',
-              width: 172,
-              height: 172,
-              borderRadius: '50%',
-              border: `0.5px solid ${GOLD} 0.28)`,
-              pointerEvents: 'none',
-              willChange: 'transform, opacity',
-            }}
-          />
+          {profile.showOuterRing ? (
+            <motion.div
+              initial={{ scale: profile.outerRingScale[0], opacity: 0, rotate: 34 }}
+              animate={{
+                scale: profile.outerRingScale,
+                opacity: profile.outerRingOpacity,
+                rotate: [34, -42, -108],
+              }}
+              transition={{ duration: profile.duration, delay: 0.04, times: [0, 0.42, 1], ease: 'easeOut' }}
+              aria-hidden="true"
+              style={{
+                position: 'absolute',
+                width: profile.outerRingSize,
+                height: profile.outerRingSize,
+                borderRadius: '50%',
+                border: `0.5px solid rgba(${GOLD}, 0.26)`,
+                borderRightColor: `rgba(${GOLD}, 0.08)`,
+                pointerEvents: 'none',
+                transform: 'translate3d(0, 0, 0)',
+                willChange: 'transform, opacity',
+              }}
+            />
+          ) : null}
 
-          {/* Emblem + wordmark — centered stack */}
-          <div
+          <motion.div
+            initial={{ opacity: 0, scale: 0.92 }}
+            animate={{ opacity: [0, 1, 1], scale: [0.92, 1.01, 1] }}
+            exit={{ opacity: 0, scale: 0.96, transition: { duration: profile.exitDuration, ease: [0.4, 0, 1, 1] } }}
+            transition={{ duration: profile.duration, times: [0, 0.24, 1], ease: [0.22, 1, 0.36, 1] }}
             style={{
               position: 'relative',
               zIndex: 1,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: 22,
+              display: 'grid',
+              placeItems: 'center',
+              width: profile.emblemSize + 30,
+              height: profile.emblemSize + 30,
+              borderRadius: '50%',
+              background: `radial-gradient(circle, rgba(${GOLD}, 0.12) 0%, rgba(${GOLD}, 0.04) 46%, transparent 70%)`,
+              transform: 'translate3d(0, 0, 0)',
+              willChange: 'transform, opacity',
             }}
           >
             <motion.img
               src={EMBLEM}
               alt=""
               draggable={false}
-              initial={{ opacity: 0, scale: 0.65, rotate: 0 }}
+              decoding="async"
+              fetchPriority="high"
+              initial={{ opacity: 0, scale: profile.emblemScale[0], rotate: profile.emblemRotate[0] }}
               animate={{
-                opacity: [0, 1, 1, 1],
-                scale: [0.65, 1.0, 1.06, 1.0],
-                rotate: [0, 360],
+                opacity: [0, 1, 1, 0.98],
+                scale: profile.emblemScale,
+                rotate: profile.emblemRotate,
               }}
-              exit={{ opacity: 0, scale: 0.88, transition: { duration: 0.28, ease: [0.4, 0, 1, 1] } }}
               transition={{
-                opacity: { duration: 0.36, ease: 'easeOut' },
+                opacity: { duration: 0.34, ease: 'easeOut' },
                 scale: {
-                  duration: 1.05,
-                  times: [0, 0.18, 0.64, 1],
+                  duration: profile.duration,
+                  times: [0, 0.2, 0.68, 1],
                   ease: 'easeInOut',
                 },
                 rotate: {
-                  duration: 1.0,
+                  duration: profile.duration - 0.12,
                   ease: [0.18, 0.82, 0.28, 1],
                 },
               }}
               style={{
-                width: 96,
-                height: 96,
+                width: profile.emblemSize,
+                height: profile.emblemSize,
                 userSelect: 'none',
-                filter: [
-                  `drop-shadow(0 0 16px ${GOLD} 0.6))`,
-                  `drop-shadow(0 0 42px ${GOLD} 0.22))`,
-                  'brightness(1.2)',
-                ].join(' '),
+                filter: profile.emblemGlow,
+                transform: 'translate3d(0, 0, 0)',
                 willChange: 'transform, opacity',
               }}
             />
-
-          </div>
+          </motion.div>
         </motion.div>
       )}
     </AnimatePresence>

@@ -8,8 +8,8 @@ import {
 export interface RenderBudget {
   /**
    * The session is a constrained surface (installed iPad PWA or reduced-motion):
-   * drop per-frame backgrounds, route-transition animation, and duplicated
-   * image surfaces.
+   * drop per-frame backgrounds, use cheaper route-transition motion, and avoid
+   * duplicated image surfaces.
    */
   lowMotionRenderMode: boolean;
   /** Specifically an installed iPad PWA. */

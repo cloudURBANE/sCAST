@@ -1,7 +1,7 @@
 // Runtime platform / device-class detection.
 //
 // iPad PWA Safari is the proven bottleneck for the heavy thread background,
-// route transition overlay, and duplicated bottle-image surfaces (see
+// full route transition overlay, and duplicated bottle-image surfaces (see
 // docs/IPAD_PWA_EXPERIENCE_FIX_PLAN.md). These helpers centralize the
 // user-agent/display-mode sniffing so components don't scatter their own ad-hoc
 // checks. Detection is deliberately conservative: we only treat a session as a
@@ -51,8 +51,8 @@ export function prefersReducedMotion(): boolean {
 /**
  * Conservative low-render-budget signal: an installed iPad PWA, or any device
  * where the user has asked for reduced motion. Components use this to drop
- * per-frame backgrounds, route-transition animations, and duplicated image
- * surfaces that fast iPad scrolling cannot keep up with.
+ * per-frame backgrounds, use cheaper route-transition motion, and avoid
+ * duplicated image surfaces that fast iPad scrolling cannot keep up with.
  */
 export function isLowRenderBudget(): boolean {
   return isIpadStandalone() || prefersReducedMotion();
