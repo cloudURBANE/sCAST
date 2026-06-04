@@ -289,6 +289,24 @@ router.patch("/wardrobe/:id", requireAuth, async (req: AuthRequest, res) => {
       return;
     }
     imagePatch = await imageMetadataPatchForUrl(url);
+
+    // A user who explicitly picks/saves a specific image (via the bottle image
+    // selector, refresh, or reimagine) is making a deliberate, authoritative
+    // choice for their own vault row. Stamp it as "manual" so hydrateImageUrl
+    // treats the saved row image as authoritative and does NOT override it with
+    // a previously cached generated/openai-reimagined image for the same
+    // fragrance. Without this, choosing a new bottle image for a fragrance that
+    // was once "reimagined" silently reverts to the old reimagined image on the
+    // next hydrate (PATCH response) and on the 60s wardrobe poll, because the
+    // freshly-picked image's own provider (e.g. "serper") loses to the shared
+    // reimagined cache in chooseHydratedImageUrlWithMetadata.
+    //
+    // This only applies to explicit picks — the syncImageFromCatalog-only path
+    // (no explicitImageUrl) keeps the resolved provider so auto-populated rows
+    // can still be upgraded by a better generated cache later.
+    if (explicitImageUrl) {
+      imagePatch.sourceProvider = "manual";
+    }
   }
 
   const detailPatch: Record<string, unknown> = {};
