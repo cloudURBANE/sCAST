@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { AuthRequest, requireAuth } from "../middlewares/auth";
+import { getTenantId } from "../middlewares/tenant";
 import { logger } from "../lib/logger";
 import {
   searchCatalogBrandCandidates,
@@ -312,13 +313,14 @@ router.post("/fragrances/details", async (req, res) => {
 
 router.get("/share/:userRef/fragrances/:id/buy-link", async (req, res) => {
   try {
-    const user = await resolveShareUser(req.params.userRef as string);
+    const tenantId = getTenantId(req);
+    const user = await resolveShareUser(req.params.userRef as string, tenantId);
     if (!user) {
       res.status(404).json(buyLinkResponse("rakuten", "unavailable", undefined, "FRAGRANCE_NOT_FOUND"));
       return;
     }
 
-    const fragrance = await findFragranceRow(user.id, req.params.id as string);
+    const fragrance = await findFragranceRow(tenantId, user.id, req.params.id as string);
     if (!fragrance || isShareHidden(fragrance)) {
       res.status(404).json(buyLinkResponse("rakuten", "unavailable", undefined, "FRAGRANCE_NOT_FOUND"));
       return;
@@ -340,13 +342,14 @@ router.get("/share/:userRef/buy-links", async (req, res) => {
       return;
     }
 
-    const user = await resolveShareUser(req.params.userRef as string);
+    const tenantId = getTenantId(req);
+    const user = await resolveShareUser(req.params.userRef as string, tenantId);
     if (!user) {
       res.status(404).json({ buyLinks: {} });
       return;
     }
 
-    const rows = await findFragranceRowsForUser(user.id);
+    const rows = await findFragranceRowsForUser(tenantId, user.id);
     const buyLinks = await resolvePublicBuyLinksForRows(rows, ids);
 
     res.json({ buyLinks });
@@ -362,7 +365,7 @@ router.get("/fragrances/:id/buy-link", requireAuth, async (req: AuthRequest, res
       res.status(401).json({ error: "Unauthorized" });
       return;
     }
-    const fragrance = await findFragranceRow(req.user.id, req.params.id as string);
+    const fragrance = await findFragranceRow(getTenantId(req), req.user.id, req.params.id as string);
     if (!fragrance) {
       res.status(404).json(buyLinkResponse("rakuten", "unavailable", undefined, "FRAGRANCE_NOT_FOUND"));
       return;

@@ -1,6 +1,6 @@
 import { db } from "@workspace/db";
 import { userFragrancesTable } from "@workspace/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { buildProfile } from "./scentEngine";
 import { flattenProfile } from "./catalogService";
 import { logger } from "../lib/logger";
@@ -18,11 +18,17 @@ export type WardrobeRebuildResult = {
   failures: { id: string; reason: string }[];
 };
 
-export async function rebuildWardrobeForUser(userId: string): Promise<WardrobeRebuildResult> {
+export async function rebuildWardrobeForUser(
+  tenantId: string,
+  userId: string,
+): Promise<WardrobeRebuildResult> {
   const rows = await db
     .select()
     .from(userFragrancesTable)
-    .where(eq(userFragrancesTable.userId, userId));
+    .where(and(
+      eq(userFragrancesTable.tenantId, tenantId),
+      eq(userFragrancesTable.userId, userId),
+    ));
 
   const failures: { id: string; reason: string }[] = [];
   let rebuilt = 0;
@@ -87,7 +93,10 @@ export async function rebuildWardrobeForUser(userId: string): Promise<WardrobeRe
       await db
         .update(userFragrancesTable)
         .set({ fragranceData: merged as any })
-        .where(eq(userFragrancesTable.id, r.id));
+        .where(and(
+          eq(userFragrancesTable.tenantId, tenantId),
+          eq(userFragrancesTable.id, r.id),
+        ));
       rebuilt++;
     } catch (err: any) {
       logger.warn({ err: err?.message, id: r.id }, "wardrobe/rebuild: row failed");

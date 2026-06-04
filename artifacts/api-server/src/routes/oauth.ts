@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { db } from "@workspace/db";
 import { usersTable } from "@workspace/db/schema";
 import { eq, and } from "drizzle-orm";
+import { getTenantId } from "../middlewares/tenant";
 
 const router = Router();
 
@@ -40,6 +41,7 @@ function getBaseUrl(req: import("express").Request): string {
 
 async function findUserByOAuthSubject(
   subject: string,
+  tenantId: string,
   req: import("express").Request,
 ): Promise<UserRow | null> {
   try {
@@ -47,7 +49,13 @@ async function findUserByOAuthSubject(
       await db
         .select()
         .from(usersTable)
-        .where(and(eq(usersTable.oauthProvider, "google"), eq(usersTable.oauthSubject, subject)))
+        .where(
+          and(
+            eq(usersTable.tenantId, tenantId),
+            eq(usersTable.oauthProvider, "google"),
+            eq(usersTable.oauthSubject, subject),
+          ),
+        )
         .limit(1)
     )[0] ?? null;
   } catch (err) {
@@ -57,9 +65,13 @@ async function findUserByOAuthSubject(
   }
 }
 
-async function findUserByEmail(email: string): Promise<UserRow | null> {
+async function findUserByEmail(email: string, tenantId: string): Promise<UserRow | null> {
   return (
-    await db.select().from(usersTable).where(eq(usersTable.email, email)).limit(1)
+    await db
+      .select()
+      .from(usersTable)
+      .where(and(eq(usersTable.tenantId, tenantId), eq(usersTable.email, email)))
+      .limit(1)
   )[0] ?? null;
 }
 
@@ -82,12 +94,13 @@ async function linkGoogleSubjectBestEffort(
 async function createGoogleUserWithFallback(
   email: string,
   subject: string,
+  tenantId: string,
   req: import("express").Request,
 ): Promise<UserRow> {
   try {
     const [created] = await db
       .insert(usersTable)
-      .values({ email, oauthProvider: "google", oauthSubject: subject })
+      .values({ tenantId, email, oauthProvider: "google", oauthSubject: subject })
       .returning();
     if (created) return created;
   } catch (err) {
@@ -97,7 +110,7 @@ async function createGoogleUserWithFallback(
   try {
     const [createdEmailOnly] = await db
       .insert(usersTable)
-      .values({ email })
+      .values({ tenantId, email })
       .returning();
 
     if (createdEmailOnly) {
@@ -110,7 +123,7 @@ async function createGoogleUserWithFallback(
     );
   }
 
-  const existing = await findUserByEmail(email);
+  const existing = await findUserByEmail(email, tenantId);
   if (existing) {
     return existing;
   }
@@ -226,15 +239,16 @@ router.get("/auth/google/callback", async (req, res) => {
 
     const email = googleUser.email.toLowerCase();
     const subject = googleUser.sub;
-    let user = await findUserByOAuthSubject(subject, req);
+    const tenantId = getTenantId(req);
+    let user = await findUserByOAuthSubject(subject, tenantId, req);
 
     if (!user) {
-      const byEmail = await findUserByEmail(email);
+      const byEmail = await findUserByEmail(email, tenantId);
       if (byEmail) {
         user = byEmail;
         await linkGoogleSubjectBestEffort(byEmail.id, subject, req);
       } else {
-        user = await createGoogleUserWithFallback(email, subject, req);
+        user = await createGoogleUserWithFallback(email, subject, tenantId, req);
       }
     }
 

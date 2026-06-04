@@ -4,6 +4,7 @@ import { userFragrancesTable, userSettingsTable, usersTable } from "@workspace/d
 import { and, desc, eq, sql } from "drizzle-orm";
 import { batchHydrateImageUrls, normalizeFragrance } from "../services/fragrancePayload";
 import { shareHandleFromEmail } from "../services/shareIdentity";
+import { getTenantId } from "../middlewares/tenant";
 
 const router = Router();
 
@@ -83,6 +84,7 @@ function toCommunityFragrance(row: {
 
 router.get("/community/fragrances", async (req, res, next) => {
   try {
+    const tenantId = getTenantId(req);
     const limit = parseLimit(req.query.limit);
     const fetchLimit = Math.min(MAX_LIMIT * FETCH_MULTIPLIER, limit * FETCH_MULTIPLIER);
 
@@ -93,10 +95,14 @@ router.get("/community/fragrances", async (req, res, next) => {
         userEmail: usersTable.email,
       })
       .from(userFragrancesTable)
-      .innerJoin(usersTable, eq(userFragrancesTable.userId, usersTable.id))
+      .innerJoin(
+        usersTable,
+        and(eq(userFragrancesTable.userId, usersTable.id), eq(usersTable.tenantId, tenantId)),
+      )
       .leftJoin(userSettingsTable, eq(userSettingsTable.userId, usersTable.id))
       .where(
         and(
+          eq(userFragrancesTable.tenantId, tenantId),
           sql`coalesce(${userSettingsTable.shareHideImages}, false) = false`,
           sql`lower(coalesce(${userFragrancesTable.fragranceData}->>'shareHidden', 'false')) <> 'true'`,
         ),

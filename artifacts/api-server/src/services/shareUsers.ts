@@ -7,12 +7,18 @@ export function shareHandleSql() {
   return sql<string>`coalesce(nullif(regexp_replace(regexp_replace(lower(split_part(${usersTable.email}, '@', 1)), '[^a-z0-9]+', '-', 'g'), '(^-+|-+$)', '', 'g'), ''), 'user')`;
 }
 
-export async function resolveShareUser(userRef: string): Promise<typeof usersTable.$inferSelect | null> {
+export async function resolveShareUser(
+  userRef: string,
+  tenantId: string,
+): Promise<typeof usersTable.$inferSelect | null> {
   if (isUuidish(userRef)) {
     const rows = await db
       .select()
       .from(usersTable)
-      .where(eq(usersTable.id, userRef.toLowerCase() as any))
+      .where(and(
+        eq(usersTable.tenantId, tenantId),
+        eq(usersTable.id, userRef.toLowerCase() as any),
+      ))
       .limit(1);
     return rows[0] ?? null;
   }
@@ -23,17 +29,26 @@ export async function resolveShareUser(userRef: string): Promise<typeof usersTab
   const rows = await db
     .select()
     .from(usersTable)
-    .where(sql`${shareHandleSql()} = ${cleanRef}`)
+    .where(and(eq(usersTable.tenantId, tenantId), sql`${shareHandleSql()} = ${cleanRef}`))
     .limit(2);
   return rows.length === 1 ? rows[0] : null;
 }
 
-export async function getShareIdForUser(user: typeof usersTable.$inferSelect): Promise<string> {
+export async function getShareIdForUser(
+  user: typeof usersTable.$inferSelect,
+  tenantId: string,
+): Promise<string> {
   const handle = shareHandleFromEmail(user.email);
+  // Handle collisions only matter within the user's own tenant — share URLs are
+  // resolved per-tenant (by subdomain).
   const duplicates = await db
     .select({ id: usersTable.id })
     .from(usersTable)
-    .where(and(sql`${usersTable.id} <> ${user.id}`, sql`${shareHandleSql()} = ${handle}`))
+    .where(and(
+      eq(usersTable.tenantId, tenantId),
+      sql`${usersTable.id} <> ${user.id}`,
+      sql`${shareHandleSql()} = ${handle}`,
+    ))
     .limit(1);
   return duplicates.length > 0 ? user.id : `@${handle}`;
 }

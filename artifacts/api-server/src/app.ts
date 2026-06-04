@@ -5,6 +5,7 @@ import cors from "cors";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import cjRedirectRouter from "./routes/cjRedirect";
+import { resolveTenant } from "./middlewares/tenant";
 import { logger } from "./lib/logger";
 import { frontendStaticDir } from "./paths";
 
@@ -34,6 +35,10 @@ app.use(
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+
+// Bind every request to a tenant (host-based, default-tenant fallback) before
+// any route runs, so authenticated and public endpoints alike are isolated.
+app.use(resolveTenant);
 
 app.use("/api", router);
 app.use(cjRedirectRouter);

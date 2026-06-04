@@ -2,6 +2,8 @@ import { db } from "@workspace/db";
 import { apiUsageLedgerTable } from "@workspace/db/schema";
 import { count, eq, sql, sum } from "drizzle-orm";
 import { logger } from "../lib/logger";
+import { getCurrentTenantId } from "../lib/tenantContext";
+import { getDefaultTenantId } from "./tenants";
 
 // OpenAI image pricing snapshot. Last reviewed: 2026-05-15.
 //
@@ -49,6 +51,7 @@ export function estimateImageGenerationCostUsd(
 }
 
 export type RecordApiUsageInput = {
+  tenantId?: string | null;
   userId?: string | null;
   provider: "openai";
   operation: "image.edits";
@@ -90,8 +93,13 @@ export async function recordApiUsage(input: RecordApiUsageInput): Promise<void> 
       ? estimateImageGenerationCostUsd(input.model, size, quality, imageCount)
       : 0;
 
+  // Stamp the row's tenant from the explicit input, the ambient request context,
+  // or the default tenant for background callers — never NULL.
+  const tenantId = input.tenantId ?? getCurrentTenantId() ?? (await getDefaultTenantId());
+
   try {
     await db.insert(apiUsageLedgerTable).values({
+      tenantId,
       userId: input.userId ?? null,
       provider: input.provider,
       operation: input.operation,

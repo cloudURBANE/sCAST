@@ -30,12 +30,12 @@ function isUuidish(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 }
 
-export async function findFragranceRow(userId: string, id: string) {
+export async function findFragranceRow(tenantId: string, userId: string, id: string) {
   if (isUuidish(id)) {
     const byDbId = await db
       .select()
       .from(userFragrancesTable)
-      .where(sql`${userFragrancesTable.id} = ${id} AND ${userFragrancesTable.userId} = ${userId}`)
+      .where(sql`${userFragrancesTable.tenantId} = ${tenantId} AND ${userFragrancesTable.id} = ${id} AND ${userFragrancesTable.userId} = ${userId}`)
       .limit(1);
 
     if (byDbId[0]) return byDbId[0];
@@ -44,14 +44,23 @@ export async function findFragranceRow(userId: string, id: string) {
   const byPayloadId = await db
     .select()
     .from(userFragrancesTable)
-    .where(sql`${userFragrancesTable.userId} = ${userId} AND ${userFragrancesTable.fragranceData}->>'id' = ${id}`)
+    .where(sql`${userFragrancesTable.tenantId} = ${tenantId} AND ${userFragrancesTable.userId} = ${userId} AND ${userFragrancesTable.fragranceData}->>'id' = ${id}`)
     .limit(1);
 
   return byPayloadId[0] ?? null;
 }
 
-export async function findFragranceRowsForUser(userId: string): Promise<UserFragranceRow[]> {
-  return db.select().from(userFragrancesTable).where(eq(userFragrancesTable.userId, userId));
+export async function findFragranceRowsForUser(
+  tenantId: string,
+  userId: string,
+): Promise<UserFragranceRow[]> {
+  return db
+    .select()
+    .from(userFragrancesTable)
+    .where(and(
+      eq(userFragrancesTable.tenantId, tenantId),
+      eq(userFragrancesTable.userId, userId),
+    ));
 }
 
 function amazonAffiliateEnabled(): boolean {
