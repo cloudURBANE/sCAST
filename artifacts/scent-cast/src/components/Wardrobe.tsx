@@ -1357,7 +1357,6 @@ export const Wardrobe: React.FC<{
       selectedMetrics,
       selectedItem?.enrichment ?? selectedItem?.raw_engine_detail?.enrichment ?? undefined,
     );
-  const detailNotesRenderMode: "full" | "constrained" = constrainedDetailMode ? "constrained" : "full";
   const detailShowDeferredContent = !constrainedDetailMode || detailDeferredContentReady;
   const detailPanelClassName = constrainedDetailMode
     ? "relative w-full h-full bg-[#030303] shadow-2xl overflow-hidden flex flex-col border-0"
@@ -1774,7 +1773,6 @@ export const Wardrobe: React.FC<{
                         legacyPyramid={selectedItem.pyramid}
                         scentAxesFallback={selectedItem.scent_vector ?? null}
                         variant="accords"
-                        renderMode={detailNotesRenderMode}
                         className={detailVisualPanelClassName}
                       />
                     </div>
@@ -1785,7 +1783,6 @@ export const Wardrobe: React.FC<{
                           derivedMetrics={selectedMetrics}
                           legacyPyramid={selectedItem.pyramid}
                           variant="notes"
-                          renderMode={detailNotesRenderMode}
                           className={detailVisualPanelClassName}
                         />
                       ) : null}
