@@ -107,6 +107,25 @@ export function initCrashTrace(): void {
   window.addEventListener("pagehide", () => crumb("unload"));
 }
 
+/**
+ * Cheap DOM census for breadcrumbs. If these counts GROW per open/close cycle,
+ * the crash is a JS/DOM leak (nodes not released); if they stay flat while the
+ * tab still dies, it's iOS decoded-image / GPU-surface cache pressure, not a
+ * leak — different fixes. iOS Safari exposes no `performance.memory`, so this
+ * delta is the closest proxy we have.
+ */
+export function domSnapshot(): string {
+  if (typeof document === "undefined") return "";
+  try {
+    const imgs = document.getElementsByTagName("img").length;
+    const nodes = document.getElementsByTagName("*").length;
+    const canvas = document.getElementsByTagName("canvas").length;
+    return `imgs=${imgs} nodes=${nodes} canvas=${canvas}`;
+  } catch {
+    return "";
+  }
+}
+
 /** Append a synchronous, crash-surviving breadcrumb. */
 export function crumb(label: string): void {
   if (!session) return;

@@ -45,7 +45,7 @@ import { BrandGoldLabel } from '@/components/BrandGoldLabel';
 import { ScentNotesInfographic } from '@/components/ScentNotesInfographic';
 import { useModalBehavior } from '@/hooks/use-modal-behavior';
 import { useRenderBudget } from '@/hooks/useRenderBudget';
-import { crumb } from '@/lib/crashTrace';
+import { crumb, domSnapshot } from '@/lib/crashTrace';
 import {
   WARDROBE_CLARIFY_SOLVERS,
   WARDROBE_REFRESH_COUNT_STORAGE_KEY,
@@ -1053,7 +1053,7 @@ export const Wardrobe: React.FC<{
 
   const openDetail = React.useCallback((item: Fragrance) => {
     detailOpenCountRef.current += 1;
-    crumb(`detail:open#${detailOpenCountRef.current}`);
+    crumb(`detail:open#${detailOpenCountRef.current} ${domSnapshot()}`);
     setDetailExitInProgress(false);
     setRefreshError(null);
     setPendingPreview(null);
@@ -1063,7 +1063,14 @@ export const Wardrobe: React.FC<{
   }, []);
 
   const closeDetail = React.useCallback(() => {
-    crumb(`detail:close#${detailOpenCountRef.current}`);
+    crumb(`detail:close#${detailOpenCountRef.current} ${domSnapshot()}`);
+    // Crash-tracer: settle marker ~1s after close. If the trail shows
+    // exit-complete#N but NO post-close#N, the kill is in the async
+    // grid-repaint window right after teardown (not a later/cumulative point).
+    {
+      const n = detailOpenCountRef.current;
+      window.setTimeout(() => crumb(`detail:post-close#${n} ${domSnapshot()}`), 1000);
+    }
     // iPad/desktop keep the body scroll locked through the brief exit animation
     // so the page behind doesn't jump while the modal fades. Phone-class WebKit
     // (iPhone / Android) must NOT hold a `position: fixed` body while a fresh
@@ -1112,6 +1119,16 @@ export const Wardrobe: React.FC<{
     containerRef: detailModalRef,
     initialFocusRef: detailCloseButtonRef,
     onDismiss: closeDetail,
+    // Phone (stackedDetailMode): do NOT lock body scroll. The detail modal is a
+    // full-screen OPAQUE portal with its own scroll container, so the page
+    // behind is never visible and never needs locking. The scroll-lock applies
+    // `position: fixed` to <body> on open and removes it on close — and toggling
+    // `position: fixed` on a long page forces iOS to re-tile/re-rasterize the
+    // entire wardrobe grid every cycle. The crash trail shows the WebContent
+    // kill lands right after close, idle on the grid (not in the modal), which
+    // is exactly that per-cycle grid re-tile compounding until iOS reclaims the
+    // tab. iPad/desktop keep the lock (panel is not full-screen there).
+    lockScroll: !stackedDetailMode,
   });
 
   useModalBehavior({
