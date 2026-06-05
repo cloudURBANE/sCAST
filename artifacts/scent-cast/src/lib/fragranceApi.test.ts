@@ -1008,6 +1008,51 @@ test("searchFragrances drops brand-only catalog archive rows", async (t) => {
   assert.deepEqual(response.results, []);
 });
 
+test("searchFragrances drops brand-only placeholders carried by opaque engine ids", async (t) => {
+  const previousFetch = globalThis.fetch;
+  const previousApiUrl = process.env.VITE_FRAGRANCE_API_URL;
+  const previousAppApiUrl = process.env.VITE_API_BASE_URL;
+
+  process.env.VITE_FRAGRANCE_API_URL = "https://engine.example.test";
+  process.env.VITE_API_BASE_URL = "https://app-api.example.test";
+  // Base64url of {"n":"Xerjoff","b":"Xerjoff","y":null,"bn":null,"fg":null} —
+  // the shape api.py:_encode_id emits for a source-less brand placeholder.
+  const brandPlaceholderId =
+    "eyJuIjoiWGVyam9mZiIsImIiOiJYZXJqb2ZmIiwieSI6bnVsbCwiYm4iOm51bGwsImZnIjpudWxsfQ";
+  Object.defineProperty(globalThis, "fetch", {
+    configurable: true,
+    value: async () =>
+      new Response(
+        JSON.stringify({
+          query: "xerjof",
+          results: [{ id: brandPlaceholderId, name: "Xerjoff", house: "Xerjoff" }],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+  });
+
+  t.after(() => {
+    Object.defineProperty(globalThis, "fetch", {
+      configurable: true,
+      value: previousFetch,
+    });
+    if (previousApiUrl === undefined) {
+      delete process.env.VITE_FRAGRANCE_API_URL;
+    } else {
+      process.env.VITE_FRAGRANCE_API_URL = previousApiUrl;
+    }
+    if (previousAppApiUrl === undefined) {
+      delete process.env.VITE_API_BASE_URL;
+    } else {
+      process.env.VITE_API_BASE_URL = previousAppApiUrl;
+    }
+  });
+
+  const response = await searchFragrances("xerjof");
+
+  assert.deepEqual(response.results, []);
+});
+
 test("getFragranceDetails keeps catalog ids on the app API", async (t) => {
   const previousFetch = globalThis.fetch;
   const previousApiUrl = process.env.VITE_FRAGRANCE_API_URL;

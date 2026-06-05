@@ -115,6 +115,19 @@ export function encodeIdentityId(prefix: "catalog" | "dataset", brand: string, n
 }
 
 export function decodeIdentityId(value: string): { brand: string; name: string } | null {
+  // Local fallback ids are minted as `local:<brand>:<name>` with raw (non
+  // URL-encoded) segments delimited by single colons — see the SPA's
+  // FragranceCapture.profileToFallbackMatch. The SPA routes these ids here
+  // (origin "app"), so decode them too or wardrobe save/detail fetches 400.
+  if (value.startsWith("local:")) {
+    const rest = value.slice("local:".length);
+    const delimiter = rest.indexOf(":");
+    if (delimiter < 0) return null;
+    const brand = rest.slice(0, delimiter).trim();
+    const name = rest.slice(delimiter + 1).trim();
+    return brand && name ? { brand, name } : null;
+  }
+
   const match = /^(?:catalog|dataset):(.+)$/.exec(value);
   if (!match) return null;
   const delimiter = match[1].indexOf("::");
