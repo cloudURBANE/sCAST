@@ -74,6 +74,32 @@ async function imageMetadataPatchForUrl(url: string): Promise<Record<string, unk
   };
 }
 
+function hasDetailRefreshPayload(body: Record<string, unknown>): boolean {
+  return (
+    Object.prototype.hasOwnProperty.call(body, "derived_metrics") ||
+    Object.prototype.hasOwnProperty.call(body, "source_coverage") ||
+    Object.prototype.hasOwnProperty.call(body, "enrichment") ||
+    Object.prototype.hasOwnProperty.call(body, "raw_engine_detail")
+  );
+}
+
+function detailRefreshPatchFromBody(body: Record<string, unknown>): Record<string, unknown> {
+  const detailPatch: Record<string, unknown> = {};
+  if (Object.prototype.hasOwnProperty.call(body, "derived_metrics")) {
+    detailPatch.derived_metrics = body.derived_metrics ?? null;
+  }
+  if (Object.prototype.hasOwnProperty.call(body, "source_coverage")) {
+    detailPatch.source_coverage = body.source_coverage ?? undefined;
+  }
+  if (Object.prototype.hasOwnProperty.call(body, "enrichment")) {
+    detailPatch.enrichment = body.enrichment ?? null;
+  }
+  if (Object.prototype.hasOwnProperty.call(body, "raw_engine_detail")) {
+    detailPatch.raw_engine_detail = body.raw_engine_detail ?? null;
+  }
+  return detailPatch;
+}
+
 router.get("/wardrobe", requireAuth, async (req: AuthRequest, res) => {
   const user = req.user!;
   const tenantId = getTenantId(req);
@@ -229,6 +255,66 @@ router.patch("/wardrobe/:fragranceId/visibility", requireAuth, async (req: AuthR
   res.json({ id: fragranceId, shareHidden });
 });
 
+router.patch("/wardrobe/detail-refresh/batch", requireAuth, async (req: AuthRequest, res) => {
+  const user = req.user!;
+  const tenantId = getTenantId(req);
+  const rawUpdates = Array.isArray(req.body?.updates) ? req.body.updates : [];
+  const updates = rawUpdates
+    .filter((update: unknown): update is Record<string, unknown> => Boolean(update && typeof update === "object" && !Array.isArray(update)))
+    .slice(0, 8);
+
+  if (updates.length === 0) {
+    res.status(400).json({ error: "updates must contain at least one detail refresh payload" });
+    return;
+  }
+
+  const items: Array<Record<string, unknown>> = [];
+  const errors: Array<{ id: string; error: string }> = [];
+
+  for (const update of updates) {
+    const id = typeof update.id === "string" ? update.id.trim() : "";
+    if (!id || !hasDetailRefreshPayload(update)) {
+      errors.push({ id: id || "unknown", error: "Missing id or detail refresh payload" });
+      continue;
+    }
+
+    try {
+      const match = await findUserRow(tenantId, user.id, id);
+      if (!match) {
+        errors.push({ id, error: "Fragrance not found" });
+        continue;
+      }
+
+      const existing = normalizeFragrance(match.fragranceData as Record<string, any>);
+      const merged = sanitizeFragrance(
+        normalizeFragrance({
+          ...existing,
+          ...detailRefreshPatchFromBody(update),
+          id: match.id,
+        }),
+      );
+      assertNoPersistedBase64Image(merged, "user_fragrances.fragrance_data");
+
+      await db
+        .update(userFragrancesTable)
+        .set({ fragranceData: merged as any })
+        .where(and(
+          eq(userFragrancesTable.tenantId, tenantId),
+          eq(userFragrancesTable.id, match.id),
+          eq(userFragrancesTable.userId, user.id),
+        ));
+
+      const hydrated = normalizeFragrance(await hydrateImageUrl(merged));
+      items.push({ ...hydrated, _dbId: match.id });
+    } catch (err) {
+      logger.warn({ err, id }, "wardrobe detail-refresh batch item failed");
+      errors.push({ id, error: err instanceof Error ? err.message : "Update failed" });
+    }
+  }
+
+  res.json({ items, errors });
+});
+
 /**
  * Merge the latest bottle image from the global catalog / cache into this vault row.
  * Use after `/api/refresh-image` so the client does not rely on ephemeral local state.
@@ -244,11 +330,7 @@ router.patch("/wardrobe/:id", requireAuth, async (req: AuthRequest, res) => {
   } & Record<string, unknown>;
   const explicitImageUrl = await persistableImageReference(imageUrl);
   const hasImageAdjustment = imageAdjustment !== undefined;
-  const hasDetailRefresh =
-    Object.prototype.hasOwnProperty.call(req.body, "derived_metrics") ||
-    Object.prototype.hasOwnProperty.call(req.body, "source_coverage") ||
-    Object.prototype.hasOwnProperty.call(req.body, "enrichment") ||
-    Object.prototype.hasOwnProperty.call(req.body, "raw_engine_detail");
+  const hasDetailRefresh = hasDetailRefreshPayload(req.body);
   const normalizedImageAdjustment = normalizeImageAdjustment(imageAdjustment);
   if (syncImageFromCatalog !== true && !explicitImageUrl && !hasImageAdjustment && !hasDetailRefresh) {
     res.status(400).json({
@@ -322,19 +404,7 @@ router.patch("/wardrobe/:id", requireAuth, async (req: AuthRequest, res) => {
     }
   }
 
-  const detailPatch: Record<string, unknown> = {};
-  if (Object.prototype.hasOwnProperty.call(req.body, "derived_metrics")) {
-    detailPatch.derived_metrics = req.body.derived_metrics ?? null;
-  }
-  if (Object.prototype.hasOwnProperty.call(req.body, "source_coverage")) {
-    detailPatch.source_coverage = req.body.source_coverage ?? undefined;
-  }
-  if (Object.prototype.hasOwnProperty.call(req.body, "enrichment")) {
-    detailPatch.enrichment = req.body.enrichment ?? null;
-  }
-  if (Object.prototype.hasOwnProperty.call(req.body, "raw_engine_detail")) {
-    detailPatch.raw_engine_detail = req.body.raw_engine_detail ?? null;
-  }
+  const detailPatch = detailRefreshPatchFromBody(req.body);
 
   const merged = sanitizeFragrance(
     normalizeFragrance({

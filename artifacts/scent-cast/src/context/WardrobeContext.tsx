@@ -72,6 +72,16 @@ type LooseRecord = Record<string, unknown>;
 // status payload never fully decodes, so a permanently-partial item does not
 // poll forever. Counted off enrichment.requested_count.
 const MAX_ENRICHMENT_ATTEMPTS = 8;
+const DETAIL_REFRESH_POLL_MS = 15_000;
+const DETAIL_REFRESH_EMPTY_BACKOFF_MS = 3 * 60_000;
+const DETAIL_REFRESH_BASE_BACKOFF_MS = 60_000;
+const DETAIL_REFRESH_MAX_BACKOFF_MS = 10 * 60_000;
+
+type DetailRefreshBackoffMeta = {
+  nextEligibleAt: number;
+  attemptCount: number;
+  lastStatus: string;
+};
 
 const isLooseRecord = (value: unknown): value is LooseRecord =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -143,6 +153,17 @@ function sameWardrobeEntry(
   if (target._dbId) return item._dbId === target._dbId;
   if (item._dbId) return false;
   return item.id === target.id;
+}
+
+function detailRefreshKeyFor(item: Pick<Fragrance, 'id' | '_dbId'>): string {
+  return item._dbId ?? item.id;
+}
+
+function detailRefreshBackoffDelay(attemptCount: number): number {
+  return Math.min(
+    DETAIL_REFRESH_MAX_BACKOFF_MS,
+    DETAIL_REFRESH_BASE_BACKOFF_MS * 2 ** Math.max(0, attemptCount - 1),
+  );
 }
 
 function normalizedEnrichmentStatus(item: Fragrance): string {
@@ -512,6 +533,8 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const autoWardrobeRebuildAttemptedRef = useRef(false);
   const enrichmentRefreshInFlightRef = useRef(false);
+  const detailRefreshBackoffRef = useRef<Map<string, DetailRefreshBackoffMeta>>(new Map());
+  const detailRefreshIdleUntilRef = useRef(0);
   const isMutatingRef = useRef(false);
   const lastMutationRef = useRef(0);
   const appStateRefreshInFlightRef = useRef(false);
@@ -618,6 +641,8 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   useEffect(() => {
     autoWardrobeRebuildAttemptedRef.current = false;
     appStateRefreshInFlightRef.current = false;
+    detailRefreshBackoffRef.current.clear();
+    detailRefreshIdleUntilRef.current = 0;
   }, [authToken]);
 
   // Load wardrobe & share settings on login
@@ -926,27 +951,123 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   }, [authToken, toast]);
 
+  const handlePersistWardrobeDetailRefreshBatch = useCallback(async (
+    updates: Array<{ target: Fragrance; detail: FragranceDetail }>,
+  ): Promise<Fragrance[]> => {
+    if (!authToken || updates.length === 0) return [];
+    isMutatingRef.current = true;
+    try {
+      const res = await fetch('/api/wardrobe/detail-refresh/batch', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({
+          updates: updates.map(({ target, detail }) => ({
+            id: target._dbId ?? target.id,
+            derived_metrics: detail.derived_metrics ?? null,
+            source_coverage: detail.source_coverage,
+            enrichment: detail.enrichment ?? null,
+            raw_engine_detail: detail,
+          })),
+        }),
+      });
+      const data = (await res.json().catch(() => null)) as {
+        items?: Array<Partial<Fragrance> & { _dbId?: string; error?: string }>;
+        error?: string;
+      } | null;
+      if (!res.ok) {
+        throw new Error(data?.error || `HTTP ${res.status}`);
+      }
+
+      const returned = Array.isArray(data?.items) ? data.items : [];
+      const mergedPairs = updates.flatMap(({ target, detail }) => {
+        const apiId = target._dbId ?? target.id;
+        const row = returned.find((item) =>
+          item._dbId === target._dbId ||
+          item._dbId === apiId ||
+          item.id === apiId ||
+          item.id === target.id,
+        );
+        if (!row) return [];
+        const next = {
+          ...target,
+          ...row,
+          id: target.id,
+          derived_metrics: detail.derived_metrics ?? null,
+          source_coverage: detail.source_coverage,
+          enrichment: detail.enrichment ?? null,
+          raw_engine_detail: detail,
+          _dbId: row._dbId ?? target._dbId,
+        } as Fragrance;
+        return [{ target, next }];
+      });
+
+      if (mergedPairs.length > 0) {
+        setItems((prev) =>
+          prev.map((item) => mergedPairs.find((pair) => sameWardrobeEntry(item, pair.target))?.next ?? item),
+        );
+      }
+      return mergedPairs.map((pair) => pair.next);
+    } catch (e) {
+      console.error('Failed to persist batched wardrobe detail refresh', e);
+      return [];
+    } finally {
+      isMutatingRef.current = false;
+      lastMutationRef.current = Date.now();
+    }
+  }, [authToken]);
+
   // Background detail enrichments scheduler
   useEffect(() => {
     if (!authToken || !wardrobeLoaded || items.length === 0) return;
     const abortController = new AbortController();
     let cancelled = false;
-    const REFRESH_MS = 15_000;
+
+    const noteBackoff = (item: Fragrance, status: string) => {
+      const key = detailRefreshKeyFor(item);
+      const current = detailRefreshBackoffRef.current.get(key);
+      const attemptCount = (current?.attemptCount ?? 0) + 1;
+      detailRefreshBackoffRef.current.set(key, {
+        attemptCount,
+        lastStatus: status,
+        nextEligibleAt: Date.now() + detailRefreshBackoffDelay(attemptCount),
+      });
+    };
+
+    const clearBackoff = (item: Fragrance) => {
+      detailRefreshBackoffRef.current.delete(detailRefreshKeyFor(item));
+    };
 
     const refreshPendingDetails = async () => {
       if (cancelled || enrichmentRefreshInFlightRef.current || isMutatingRef.current) return;
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      const now = Date.now();
+      if (detailRefreshIdleUntilRef.current > now) return;
       const targets = itemsRef.current
         .filter(wardrobeNeedsEnrichmentRefresh)
+        .filter((item) => {
+          const meta = detailRefreshBackoffRef.current.get(detailRefreshKeyFor(item));
+          return !meta || meta.nextEligibleAt <= now;
+        })
         .slice(0, 3);
-      if (targets.length === 0) return;
+      if (targets.length === 0) {
+        detailRefreshIdleUntilRef.current = now + DETAIL_REFRESH_EMPTY_BACKOFF_MS;
+        return;
+      }
+      detailRefreshIdleUntilRef.current = 0;
 
       enrichmentRefreshInFlightRef.current = true;
       try {
+        const readyUpdates: Array<{ target: Fragrance; detail: FragranceDetail }> = [];
         for (const item of targets) {
           if (cancelled) break;
           const payload = detailRefreshPayloadFor(item);
-          if (!payload) continue;
+          if (!payload) {
+            noteBackoff(item, 'missing_payload');
+            continue;
+          }
           const detail = normalizeFragranceDetail(
             (await getFragranceDetails(payload, { signal: abortController.signal })) as FragranceDetail,
           );
@@ -958,12 +1079,27 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           const metricsComplete = Boolean(
             detail.source_coverage?.fragrantica_metrics_complete,
           );
-          if (!metricsComplete && isBackgroundEnrichmentQueued(detail.enrichment)) continue;
-          await handlePersistWardrobeDetailRefresh(item, detail);
+          if (!metricsComplete && isBackgroundEnrichmentQueued(detail.enrichment)) {
+            noteBackoff(item, String(detail.enrichment?.status ?? 'queued'));
+            continue;
+          }
+          readyUpdates.push({ target: item, detail });
+        }
+
+        if (readyUpdates.length > 0) {
+          const persisted = await handlePersistWardrobeDetailRefreshBatch(readyUpdates);
+          for (const update of readyUpdates) {
+            const wasPersisted = persisted.some((item) =>
+              item.id === update.target.id || sameWardrobeEntry(item, update.target),
+            );
+            if (wasPersisted) clearBackoff(update.target);
+            else noteBackoff(update.target, 'persist_failed');
+          }
         }
       } catch (err) {
         if ((err as Error).name !== 'AbortError') {
           console.error('Background fragrance detail refresh failed', err);
+          for (const item of targets) noteBackoff(item, 'request_failed');
         }
       } finally {
         enrichmentRefreshInFlightRef.current = false;
@@ -971,13 +1107,13 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     };
 
     void refreshPendingDetails();
-    const id = window.setInterval(refreshPendingDetails, REFRESH_MS);
+    const id = window.setInterval(refreshPendingDetails, DETAIL_REFRESH_POLL_MS);
     return () => {
       cancelled = true;
       abortController.abort();
       window.clearInterval(id);
     };
-  }, [authToken, wardrobeLoaded, items.length, handlePersistWardrobeDetailRefresh]);
+  }, [authToken, wardrobeLoaded, items.length, handlePersistWardrobeDetailRefreshBatch]);
 
   const handleRevertWardrobe = useCallback(() => {
     if (!wardrobeRevertSnapshot) return;

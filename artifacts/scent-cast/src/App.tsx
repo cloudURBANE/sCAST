@@ -9,19 +9,22 @@ import { ScentNotesInfographic } from './components/ScentNotesInfographic';
 import { ThreadBackground } from './components/threads/ThreadBackground';
 import { AppTopNav } from './components/AppTopNav';
 import { AuthModal } from './components/AuthModal';
-import { SharePage } from './components/SharePage';
 import { ShareModal } from './components/ShareModal';
 import type { ScentFamily, ScentWeatherRecommendation } from './lib/scentWeatherEngine';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { WeatherProvider, useWeather } from './context/WeatherContext';
 import { WardrobeProvider, useWardrobe, useWardrobeItems, useWardrobeShareModalActions } from './context/WardrobeContext';
 import { Toaster } from './components/ui/toaster';
-import CommunityPage from '@/pages/community';
-import IpadFreezeLab from '@/pages/ipad-freeze-lab';
 import { PageTransitionOverlay, warmTransitionEmblem } from './components/PageTransitionOverlay';
 import { useModalBehavior } from '@/hooks/use-modal-behavior';
 import { useRenderBudget } from '@/hooks/useRenderBudget';
 import NotFound from '@/pages/not-found';
+
+const CommunityPage = React.lazy(() => import('@/pages/community'));
+const IpadFreezeLab = React.lazy(() => import('@/pages/ipad-freeze-lab'));
+const SharePage = React.lazy(() =>
+  import('./components/SharePage').then((module) => ({ default: module.SharePage })),
+);
 
 const titleCaseToken = (value: string): string =>
   value
@@ -774,16 +777,26 @@ function GlobalModals() {
   );
 }
 
+function RouteChunkFallback() {
+  return (
+    <div className="grid min-h-[100svh] place-items-center px-6" aria-label="Loading route">
+      <div className="h-8 w-8 rounded-full border border-white/15 border-t-scent-accent animate-spin" />
+    </div>
+  );
+}
+
 const AppContent = React.memo(function AppContent({ location }: { location: Location }) {
   return (
     <>
-      <Routes location={location}>
-        <Route path="/" element={<DashboardView />} />
-        <Route path="/community" element={<CommunityPageView />} />
-        <Route path="/debug/ipad-freeze" element={<IpadFreezeLab />} />
-        <Route path="/share/:userId" element={<SharePageView />} />
-        <Route path="*" element={<NotFound />} />
-      </Routes>
+      <React.Suspense fallback={<RouteChunkFallback />}>
+        <Routes location={location}>
+          <Route path="/" element={<DashboardView />} />
+          <Route path="/community" element={<CommunityPageView />} />
+          <Route path="/debug/ipad-freeze" element={<IpadFreezeLab />} />
+          <Route path="/share/:userId" element={<SharePageView />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </React.Suspense>
       <GlobalModals />
     </>
   );

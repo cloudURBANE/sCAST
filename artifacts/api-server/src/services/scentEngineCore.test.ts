@@ -12,6 +12,7 @@ type CallLog = {
   getCatalogEntry: Array<[string, string]>;
   searchCatalog: string[];
   saveCatalogEntry: Array<{ brand: string; name: string; profile: ScentProfile }>;
+  resolveCachedFragranceImage: Array<[string, string]>;
   resolveProcessedFragranceImage: Array<Record<string, unknown>>;
   usableImageUrlForResponse: Array<string | undefined>;
   findDatasetFragrance: Array<[string, string]>;
@@ -46,6 +47,7 @@ function makeDeps(over: Partial<ScentEngineDeps> = {}): { deps: ScentEngineDeps;
     getCatalogEntry: [],
     searchCatalog: [],
     saveCatalogEntry: [],
+    resolveCachedFragranceImage: [],
     resolveProcessedFragranceImage: [],
     usableImageUrlForResponse: [],
     findDatasetFragrance: [],
@@ -120,6 +122,11 @@ function makeDeps(over: Partial<ScentEngineDeps> = {}): { deps: ScentEngineDeps;
         return result;
       }
       calls.saveCatalogEntry.push({ brand, name, profile });
+    },
+    resolveCachedFragranceImage: async (brand, name) => {
+      calls.resolveCachedFragranceImage.push([brand, name]);
+      if (over.resolveCachedFragranceImage) return over.resolveCachedFragranceImage(brand, name);
+      return null;
     },
     resolveProcessedFragranceImage: async (opts) => {
       calls.resolveProcessedFragranceImage.push(opts as Record<string, unknown>);
@@ -523,6 +530,88 @@ test("image pipeline: search-query rejection is reported and does not abort buil
     name: "Sauvage",
     mode: "search",
   });
+});
+
+test("deferred image resolution reuses cached image and skips expensive pipeline", async () => {
+  const { deps, calls } = makeDeps({
+    findDatasetFragrance: () => ({
+      name: "Sauvage",
+      brand: "Dior",
+      family: "Fresh Spicy",
+      notes: ["bergamot"],
+      description: "",
+    }),
+    resolveCachedFragranceImage: async () => ({
+      imageUrl: "https://cdn.example.com/cached.webp",
+      storagePath: "images/processed/cached.webp",
+      imageHash: "cached",
+      storageProvider: "supabase",
+      sourceProvider: "serper",
+    }),
+  });
+
+  const result = await buildProfileWithDeps(deps, "Sauvage", "Dior", undefined, {
+    imageResolution: "deferred",
+  });
+  ok(result);
+
+  assert.equal(result.imageUrl, "https://cdn.example.com/cached.webp");
+  assert.deepEqual(calls.resolveCachedFragranceImage, [["Dior", "Sauvage"]]);
+  assert.equal(calls.resolveProcessedFragranceImage.length, 0);
+  assert.equal(calls.saveCatalogEntry.length, 1);
+});
+
+test("deferred image resolution returns profile before background pipeline finishes", async () => {
+  let finishImage!: (value: {
+    imageUrl: string;
+    storagePath: string;
+    imageHash: string;
+    storageProvider: string;
+    sourceProvider: string;
+  }) => void;
+  const slowImage = new Promise<{
+    imageUrl: string;
+    storagePath: string;
+    imageHash: string;
+    storageProvider: string;
+    sourceProvider: string;
+  }>((resolve) => {
+    finishImage = resolve;
+  });
+  const { deps, calls } = makeDeps({
+    findDatasetFragrance: () => ({
+      name: "Sauvage",
+      brand: "Dior",
+      family: "Fresh Spicy",
+      notes: ["bergamot"],
+      description: "",
+    }),
+    resolveProcessedFragranceImage: async () => slowImage,
+  });
+
+  const result = await Promise.race([
+    buildProfileWithDeps(deps, "Sauvage", "Dior", undefined, {
+      imageResolution: "deferred",
+    }),
+    new Promise<"timed_out">((resolve) => setTimeout(() => resolve("timed_out"), 25)),
+  ]);
+  assert.notEqual(result, "timed_out");
+  ok(result);
+  assert.equal(result.imageUrl, undefined);
+  assert.equal(calls.saveCatalogEntry.length, 1);
+  assert.equal(calls.resolveProcessedFragranceImage.length, 1);
+
+  finishImage({
+    imageUrl: "https://cdn.example.com/background.webp",
+    storagePath: "images/processed/background.webp",
+    imageHash: "background",
+    storageProvider: "supabase",
+    sourceProvider: "serper",
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.equal(calls.saveCatalogEntry.length, 2);
+  assert.equal(calls.saveCatalogEntry[1].profile.imageUrl, "https://cdn.example.com/background.webp");
 });
 
 test("identity normalization: uses resolveFragranceIdentity output for catalog lookup and search query", async () => {
