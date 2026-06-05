@@ -900,6 +900,7 @@ export const Wardrobe: React.FC<{
   const { lowMotionRenderMode } = useRenderBudget();
   const constrainedDetailMode = lowMotionRenderMode;
   const [detailDeferredContentReady, setDetailDeferredContentReady] = React.useState(false);
+  const [detailExitInProgress, setDetailExitInProgress] = React.useState(false);
 
   // Re-bind the open detail modal to the latest row from `items` whenever the
   // parent state updates (e.g. background enrichment landed). Without this, the
@@ -1043,6 +1044,7 @@ export const Wardrobe: React.FC<{
   }, [bottleImageToolsOpen, refreshUsageTotals]);
 
   const openDetail = React.useCallback((item: Fragrance) => {
+    setDetailExitInProgress(false);
     setRefreshError(null);
     setPendingPreview(null);
     setDeleteConfirming(false);
@@ -1051,6 +1053,9 @@ export const Wardrobe: React.FC<{
   }, []);
 
   const closeDetail = React.useCallback(() => {
+    if (selectedItem) {
+      setDetailExitInProgress(true);
+    }
     setRefreshError(null);
     setPendingPreview(null);
     setSelectedItem(null);
@@ -1058,14 +1063,14 @@ export const Wardrobe: React.FC<{
     setBottleImageToolsOpen(false);
     setDeleteConfirming(false);
     setFrameDraft(DEFAULT_BOTTLE_IMAGE_ADJUSTMENT);
-  }, []);
+  }, [selectedItem]);
 
   const closeEnlargedBottle = React.useCallback(() => {
     setEnlargeOpen(false);
   }, []);
 
   useModalBehavior({
-    isOpen: Boolean(selectedItem),
+    isOpen: Boolean(selectedItem) || detailExitInProgress,
     containerRef: detailModalRef,
     initialFocusRef: detailCloseButtonRef,
     onDismiss: closeDetail,
@@ -1740,7 +1745,7 @@ export const Wardrobe: React.FC<{
       </div>
 
       {typeof document !== 'undefined' ? createPortal(
-      <AnimatePresence>
+      <AnimatePresence onExitComplete={() => setDetailExitInProgress(false)}>
         {selectedItem && (
           <div 
             ref={detailModalRef}
