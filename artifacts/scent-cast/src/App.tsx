@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useLayoutEffect, useMemo, useCallback, startTransition } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect, useMemo, useCallback } from 'react';
 import { Routes, Route, useLocation, useParams, type Location } from 'react-router-dom';
 import { FragranceCapture } from './components/FragranceCapture';
 import { Wardrobe, Fragrance, DestinationType, EnergyState } from './components/Wardrobe';
@@ -47,14 +47,14 @@ const formatSprayCount = (sprayCount: ScentWeatherRecommendation['spray_count'])
 
 const PAGE_TRANSITION_TIMING = {
   standard: {
-    coverMs: 220,
-    minShowMs: 820,
-    postSwapPaintMs: 120,
+    coverMs: 96,
+    minShowMs: 420,
+    postSwapPaintMs: 48,
   },
   lowMotion: {
-    coverMs: 150,
-    minShowMs: 560,
-    postSwapPaintMs: 80,
+    coverMs: 72,
+    minShowMs: 280,
+    postSwapPaintMs: 32,
   },
 } as const;
 
@@ -774,7 +774,7 @@ function GlobalModals() {
   );
 }
 
-function AppContent({ location }: { location: Location }) {
+const AppContent = React.memo(function AppContent({ location }: { location: Location }) {
   return (
     <>
       <Routes location={location}>
@@ -787,7 +787,29 @@ function AppContent({ location }: { location: Location }) {
       <GlobalModals />
     </>
   );
-}
+});
+
+const AppShell = React.memo(function AppShell({
+  renderedLocation,
+  showThreadBackground,
+}: {
+  renderedLocation: Location;
+  showThreadBackground: boolean;
+}) {
+  return (
+    <AuthProvider>
+      <WeatherProvider>
+        <WardrobeProvider>
+          <div className="scent-app-shell min-h-[100svh] bg-scent-bg selection:bg-scent-accent selection:text-black text-white relative overflow-x-hidden">
+            {showThreadBackground ? <ThreadBackground /> : null}
+            <AppContent location={renderedLocation} />
+            <Toaster />
+          </div>
+        </WardrobeProvider>
+      </WeatherProvider>
+    </AuthProvider>
+  );
+});
 
 export default function App() {
   const location = useLocation();
@@ -866,9 +888,7 @@ export default function App() {
     coverTimerRef.current = setTimeout(() => {
       coverTimerRef.current = null;
       pendingRevealRouteRef.current = nextRoute;
-      startTransition(() => {
-        setRenderedLocation(location);
-      });
+      setRenderedLocation(location);
     }, transitionTiming.coverMs);
   }, [clearTransitionWork, location, transitionTiming.coverMs]);
 
@@ -877,17 +897,9 @@ export default function App() {
   }, [clearTransitionWork]);
 
   return (
-    <AuthProvider>
-      <WeatherProvider>
-        <WardrobeProvider>
-          <div className="scent-app-shell min-h-[100svh] bg-scent-bg selection:bg-scent-accent selection:text-black text-white relative overflow-x-hidden">
-            {showThreadBackground ? <ThreadBackground /> : null}
-            <AppContent location={renderedLocation} />
-            <Toaster />
-          </div>
-          <PageTransitionOverlay visible={transitionVisible} animationKey={transitionKey} />
-        </WardrobeProvider>
-      </WeatherProvider>
-    </AuthProvider>
+    <>
+      <AppShell renderedLocation={renderedLocation} showThreadBackground={showThreadBackground} />
+      <PageTransitionOverlay visible={transitionVisible} animationKey={transitionKey} />
+    </>
   );
 }

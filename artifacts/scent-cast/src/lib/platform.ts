@@ -1,19 +1,16 @@
 // Runtime platform / device-class detection.
 //
-// iPad PWA Safari is the proven bottleneck for the heavy thread background,
-// full route transition overlay, and duplicated bottle-image surfaces (see
-// docs/IPAD_PWA_EXPERIENCE_FIX_PLAN.md). These helpers centralize the
-// user-agent/display-mode sniffing so components don't scatter their own ad-hoc
-// checks. Detection is deliberately conservative: we only treat a session as a
-// constrained iPad PWA when we are confident, so desktop/regular-mobile behavior
-// is never altered.
+// iPad and coarse-pointer mobile browsers are the proven bottleneck for the
+// heavy thread background, full route transition overlay, and duplicated
+// bottle-image surfaces. These helpers centralize the device/render-budget
+// checks so components do not scatter their own ad-hoc sniffing.
 
 function hasWindow(): boolean {
   return typeof window !== "undefined" && typeof navigator !== "undefined";
 }
 
 /**
- * True for iPadOS — including modern iPads, which report a desktop "Macintosh"
+ * True for iPadOS, including modern iPads, which report a desktop "Macintosh"
  * user-agent and must be distinguished by their touch capability.
  */
 export function isIpadDevice(): boolean {
@@ -37,9 +34,24 @@ export function isStandalonePwa(): boolean {
   return Boolean(standaloneMedia || iosStandalone);
 }
 
-/** Installed iPad PWA — the specific class the render-budget reductions target. */
+/** Installed iPad PWA. */
 export function isIpadStandalone(): boolean {
   return isIpadDevice() && isStandalonePwa();
+}
+
+/** True for narrow touch devices where compositor budget is usually limited. */
+export function isConstrainedTouchDevice(): boolean {
+  if (!hasWindow()) return false;
+  if (isIpadDevice()) return true;
+
+  const coarsePointer =
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(pointer: coarse)").matches;
+  const touchPoints = navigator.maxTouchPoints || 0;
+  if (!coarsePointer && touchPoints <= 1) return false;
+
+  const shortestViewportSide = Math.min(window.innerWidth || 0, window.innerHeight || 0);
+  return shortestViewportSide > 0 && shortestViewportSide <= 920;
 }
 
 /** Honors the OS "reduce motion" accessibility preference. */
@@ -49,11 +61,10 @@ export function prefersReducedMotion(): boolean {
 }
 
 /**
- * Conservative low-render-budget signal: an installed iPad PWA, or any device
- * where the user has asked for reduced motion. Components use this to drop
- * per-frame backgrounds, use cheaper route-transition motion, and avoid
- * duplicated image surfaces that fast iPad scrolling cannot keep up with.
+ * Low-render-budget signal. Components use this to drop per-frame backgrounds,
+ * use cheaper route-transition motion, and avoid duplicated image/video surfaces
+ * that fast touch scrolling cannot keep up with.
  */
 export function isLowRenderBudget(): boolean {
-  return isIpadStandalone() || prefersReducedMotion();
+  return prefersReducedMotion() || isConstrainedTouchDevice();
 }

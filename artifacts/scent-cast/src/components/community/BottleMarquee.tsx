@@ -1,4 +1,4 @@
-import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { BottleImage } from '@/components/BottleImage';
 import { BrandGoldLabel } from '@/components/BrandGoldLabel';
@@ -46,7 +46,7 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
     [renderedItems],
   );
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     const track = trackRef.current;
     const group = groupRef.current;
     if (!track || !group) return;

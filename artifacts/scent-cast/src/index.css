@@ -162,7 +162,6 @@ a {
   transform-origin: center bottom;
   /* clip-path is on .bottle-packshot-img so % insets use the fitted bitmap box, not the full slot
      (otherwise left/right mostly trim empty letterboxing while top/bottom hit the image). */
-  will-change: transform;
 }
 
 .bottle-packshot-img,
@@ -179,7 +178,6 @@ a {
     var(--bottle-frame-crop-top) var(--bottle-frame-crop-right) var(--bottle-frame-crop-bottom)
       var(--bottle-frame-crop-left)
   );
-  will-change: clip-path;
 }
 
 .bottle-frame-guide {

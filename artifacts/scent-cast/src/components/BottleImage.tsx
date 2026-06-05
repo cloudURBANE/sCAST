@@ -7,6 +7,7 @@ import {
   type BottleImageAdjustment,
 } from '@/lib/bottleImageAdjustment';
 import { proxiedImageUrl } from '@/lib/imageProxy';
+import { isLowRenderBudget } from '@/lib/platform';
 
 /**
  * Primary UI for vault bottle artwork: handles proxy URL, **resize-up** framing (see
@@ -75,6 +76,7 @@ export const BottleImage: React.FC<BottleImageProps> = ({
   videoSrc,
 }) => {
   const reduceMotion = useReducedMotion();
+  const lowRenderBudget = React.useRef(isLowRenderBudget()).current;
   const url = proxy ? proxiedImageUrl(src, { packshot: true }) : (src ?? '');
   const mediaKey = `${url}\u0000${videoSrc ?? ''}`;
 
@@ -85,7 +87,7 @@ export const BottleImage: React.FC<BottleImageProps> = ({
   const [retryCount, setRetryCount] = useState(0);
   const [isLoading, setIsLoading] = useState(!!url);
   const [videoFailed, setVideoFailed] = useState(false);
-  const useVideo = !!videoSrc && !reduceMotion && !videoFailed;
+  const useVideo = !!videoSrc && !reduceMotion && !lowRenderBudget && !videoFailed;
   const clearRetryTimer = React.useCallback(() => {
     if (retryTimerRef.current !== null) {
       clearTimeout(retryTimerRef.current);
