@@ -1058,7 +1058,14 @@ export const Wardrobe: React.FC<{
   }, []);
 
   const closeDetail = React.useCallback(() => {
-    if (selectedItem) {
+    // iPad/desktop keep the body scroll locked through the brief exit animation
+    // so the page behind doesn't jump while the modal fades. Phone-class WebKit
+    // (iPhone / Android) must NOT hold a `position: fixed` body while a fresh
+    // full-screen portal is torn down: if `onExitComplete` fails to fire the
+    // lock is stranded, and across repeat open/close cycles that strands layers
+    // the content process can't reclaim — the documented "A problem repeatedly
+    // occurred" crash. On phones release the lock immediately instead.
+    if (selectedItem && !stackedDetailMode) {
       setDetailExitInProgress(true);
     }
     setRefreshError(null);
@@ -1068,11 +1075,22 @@ export const Wardrobe: React.FC<{
     setBottleImageToolsOpen(false);
     setDeleteConfirming(false);
     setFrameDraft(DEFAULT_BOTTLE_IMAGE_ADJUSTMENT);
-  }, [selectedItem]);
+  }, [selectedItem, stackedDetailMode]);
 
   const closeEnlargedBottle = React.useCallback(() => {
     setEnlargeOpen(false);
   }, []);
+
+  // Safety net for the scroll lock. AnimatePresence's `onExitComplete` can fail
+  // to fire on iOS (e.g. a presence child re-keyed by a rapid reopen), which
+  // would otherwise leave `detailExitInProgress` — and therefore the body lock
+  // in useModalBehavior — stuck on. Force-clear it just past the longest exit
+  // so a missed callback can never strand `position: fixed`.
+  React.useEffect(() => {
+    if (!detailExitInProgress) return;
+    const timer = window.setTimeout(() => setDetailExitInProgress(false), 300);
+    return () => window.clearTimeout(timer);
+  }, [detailExitInProgress]);
 
   useModalBehavior({
     isOpen: Boolean(selectedItem) || detailExitInProgress,
@@ -1752,7 +1770,8 @@ export const Wardrobe: React.FC<{
       {typeof document !== 'undefined' ? createPortal(
       <AnimatePresence onExitComplete={() => setDetailExitInProgress(false)}>
         {selectedItem && (
-          <div 
+          <div
+            key="wardrobe-detail-modal"
             ref={detailModalRef}
             className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden"
             role="dialog"
@@ -1763,7 +1782,7 @@ export const Wardrobe: React.FC<{
               initial={constrainedDetailMode ? false : { opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={constrainedDetailMode ? { opacity: 0 } : { opacity: 0 }}
-              transition={{ duration: constrainedDetailMode ? 0.08 : 0.2 }}
+              transition={{ duration: stackedDetailMode ? 0 : constrainedDetailMode ? 0.08 : 0.2 }}
               onClick={closeDetail}
               className="absolute inset-0 bg-black/95"
             />
@@ -1771,7 +1790,7 @@ export const Wardrobe: React.FC<{
               initial={constrainedDetailMode ? false : { opacity: 0, scale: 0.985 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={constrainedDetailMode ? { opacity: 0 } : { opacity: 0, scale: 0.99 }}
-              transition={{ duration: constrainedDetailMode ? 0.08 : 0.24, ease: [0.22, 1, 0.36, 1] }}
+              transition={{ duration: stackedDetailMode ? 0 : constrainedDetailMode ? 0.08 : 0.24, ease: [0.22, 1, 0.36, 1] }}
               className={detailPanelClassName}
             >
               <div
