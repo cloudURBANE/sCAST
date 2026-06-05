@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import {
+  isIpadDevice,
   isIpadStandalone,
   isLowRenderBudget,
   prefersReducedMotion,
@@ -12,6 +13,8 @@ export interface RenderBudget {
    * duplicated image surfaces.
    */
   lowMotionRenderMode: boolean;
+  /** Any iPadOS device (browser or installed PWA). */
+  isIpad: boolean;
   /** Specifically an installed iPad PWA. */
   isIpadStandalone: boolean;
   /** OS-level reduced-motion preference. */
@@ -21,6 +24,7 @@ export interface RenderBudget {
 function readBudget(): RenderBudget {
   return {
     lowMotionRenderMode: isLowRenderBudget(),
+    isIpad: isIpadDevice(),
     isIpadStandalone: isIpadStandalone(),
     reducedMotion: prefersReducedMotion(),
   };

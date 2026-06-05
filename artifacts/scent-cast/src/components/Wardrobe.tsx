@@ -897,8 +897,13 @@ export const Wardrobe: React.FC<{
   onRetryLoadWardrobe,
 }) => {
   const [selectedItem, setSelectedItem] = React.useState<Fragrance | null>(null);
-  const { lowMotionRenderMode } = useRenderBudget();
+  const { lowMotionRenderMode, isIpad } = useRenderBudget();
   const constrainedDetailMode = lowMotionRenderMode;
+  // iPad keeps the constrained-mode performance optimizations (deferred render,
+  // lighter motion, full-screen modal) but must retain the original three-column
+  // detail layout (accords | note pyramid | bottle). Only true mobile/phone
+  // surfaces collapse into the stacked, reordered single column.
+  const stackedDetailMode = constrainedDetailMode && !isIpad;
   const [detailDeferredContentReady, setDetailDeferredContentReady] = React.useState(false);
   const [detailExitInProgress, setDetailExitInProgress] = React.useState(false);
 
@@ -1402,10 +1407,10 @@ export const Wardrobe: React.FC<{
   const detailTitleClassName = constrainedDetailMode
     ? "font-serif italic text-4xl sm:text-5xl leading-[0.95] text-[#fff7ec] tracking-normal uppercase"
     : "font-serif italic text-5xl sm:text-7xl lg:text-8xl leading-[0.92] text-[#fff7ec] tracking-normal uppercase";
-  const detailGridClassName = constrainedDetailMode
+  const detailGridClassName = stackedDetailMode
     ? "grid grid-cols-1 items-stretch gap-3 sm:gap-4"
     : "grid grid-cols-1 items-stretch gap-3 sm:gap-4 lg:grid-cols-[1.12fr_1.95fr_1fr]";
-  const detailVisualPanelClassName = constrainedDetailMode
+  const detailVisualPanelClassName = stackedDetailMode
     ? "min-h-[16rem]"
     : "lg:h-full lg:min-h-[21.25rem]";
   const detailMetaRows = selectedItem
@@ -1798,11 +1803,11 @@ export const Wardrobe: React.FC<{
                     metrics={selectedMetrics}
                     coverage={selectedCoverage}
                     legacyPerformance={selectedItem.performance}
-                    compactOnly={constrainedDetailMode}
+                    compactOnly={stackedDetailMode}
                   />
 
                   <div className={detailGridClassName}>
-                    <div className={`space-y-3 sm:space-y-4 lg:h-full ${constrainedDetailMode ? 'order-2' : ''}`}>
+                    <div className={`space-y-3 sm:space-y-4 lg:h-full ${stackedDetailMode ? 'order-2' : ''}`}>
                       {detailShowDeferredContent ? (
                         <ScentNotesInfographic
                           derivedMetrics={selectedMetrics}
@@ -1814,7 +1819,7 @@ export const Wardrobe: React.FC<{
                       ) : null}
                     </div>
 
-                    <div className={`space-y-3 sm:space-y-4 lg:h-full ${constrainedDetailMode ? 'order-3' : ''}`}>
+                    <div className={`space-y-3 sm:space-y-4 lg:h-full ${stackedDetailMode ? 'order-3' : ''}`}>
                       {detailShowDeferredContent ? (
                         <ScentNotesInfographic
                           derivedMetrics={selectedMetrics}
@@ -1825,7 +1830,7 @@ export const Wardrobe: React.FC<{
                       ) : null}
                     </div>
 
-                    <div className={`space-y-3 sm:space-y-4 lg:h-full ${constrainedDetailMode ? 'order-1' : ''}`}>
+                    <div className={`space-y-3 sm:space-y-4 lg:h-full ${stackedDetailMode ? 'order-1' : ''}`}>
                       <FragrancePanel
                         title="About This Fragrance"
                         className={detailVisualPanelClassName}
@@ -1846,7 +1851,7 @@ export const Wardrobe: React.FC<{
                       >
                         <div className="flex flex-col p-4 space-y-3">
                           <div 
-                            className={`relative h-56 ${constrainedDetailMode ? 'sm:h-60' : 'sm:h-72 lg:h-64'} min-h-0 w-full shrink-0 overflow-hidden cursor-pointer rounded-lg border border-white/5 bg-white/[0.01]`}
+                            className={`relative h-56 ${stackedDetailMode ? 'sm:h-60' : 'sm:h-72 lg:h-64'} min-h-0 w-full shrink-0 overflow-hidden cursor-pointer rounded-lg border border-white/5 bg-white/[0.01]`}
                             onClick={() => detailBottleUrl && setEnlargeOpen(true)}
                           >
                             <BottleImage
