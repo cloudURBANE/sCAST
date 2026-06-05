@@ -375,6 +375,47 @@ test("getFragranceDetails posts opaque id and source URL to SRT details", async 
   });
 });
 
+test("getFragranceDetails can request incomplete recovery", async (t) => {
+  const previousFetch = globalThis.fetch;
+  const previousApiUrl = process.env.VITE_FRAGRANCE_API_URL;
+  const requests: Array<{ url: string; init?: RequestInit }> = [];
+
+  process.env.VITE_FRAGRANCE_API_URL = "https://example.test";
+  Object.defineProperty(globalThis, "fetch", {
+    configurable: true,
+    value: async (url: string, init?: RequestInit) => {
+      requests.push({ url, init });
+      return new Response(JSON.stringify({ name: "Aventus" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    },
+  });
+
+  t.after(() => {
+    Object.defineProperty(globalThis, "fetch", {
+      configurable: true,
+      value: previousFetch,
+    });
+    if (previousApiUrl === undefined) {
+      delete process.env.VITE_FRAGRANCE_API_URL;
+    } else {
+      process.env.VITE_FRAGRANCE_API_URL = previousApiUrl;
+    }
+  });
+
+  await getFragranceDetails({
+    source_url: "https://www.fragrantica.com/perfume/Creed/Aventus-9828.html",
+    recover_incomplete: true,
+  });
+
+  assert.equal(requests.length, 1);
+  assert.deepEqual(JSON.parse(String(requests[0].init?.body)), {
+    source_url: "https://www.fragrantica.com/perfume/Creed/Aventus-9828.html",
+    recover_incomplete: true,
+  });
+});
+
 test("getFragranceDetails falls back to the app API when the engine fetch fails", async (t) => {
   const previousFetch = globalThis.fetch;
   const previousApiUrl = process.env.VITE_FRAGRANCE_API_URL;

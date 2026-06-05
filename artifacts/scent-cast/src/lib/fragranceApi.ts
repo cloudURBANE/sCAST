@@ -1272,9 +1272,14 @@ async function searchAppFragrances(
   };
 }
 
+type FragranceDetailRequestOptions = {
+  origin?: FragranceSearchOrigin;
+  recover_incomplete?: boolean;
+};
+
 export type FragranceDetailRequestPayload =
-  | { id: string; source_url?: string; origin?: FragranceSearchOrigin }
-  | { source_url: string; id?: never; origin?: FragranceSearchOrigin };
+  | ({ id: string; source_url?: string } & FragranceDetailRequestOptions)
+  | ({ source_url: string; id?: never } & FragranceDetailRequestOptions);
 
 export async function getFragranceDetails(
   payload: FragranceDetailRequestPayload,
@@ -1289,6 +1294,7 @@ export async function getFragranceDetails(
   const requestBody = {
     ...("id" in payload ? { id: payload.id } : {}),
     ...("source_url" in payload && payload.source_url ? { source_url: payload.source_url } : {}),
+    ...(payload.recover_incomplete ? { recover_incomplete: true } : {}),
   };
   const requestInit: RequestInit = {
     method: "POST",
