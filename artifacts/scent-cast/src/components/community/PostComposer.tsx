@@ -341,33 +341,32 @@ export const PostComposer: React.FC<PostComposerProps> = ({ authToken, onSignIn 
 
   if (!composerOpen) {
     return (
-      <section className="rounded-[var(--radius-scent)] border border-scent-accent/16 bg-[linear-gradient(180deg,rgba(10,7,4,0.84),rgba(3,2,1,0.94))] p-6 shadow-[0_24px_70px_-48px_rgba(212,175,55,0.42)] sm:p-8">
-        <div className="mx-auto flex max-w-2xl flex-col items-center text-center">
+      <section className="relative overflow-hidden rounded-[var(--radius-scent)] border border-scent-accent/16 bg-[linear-gradient(180deg,rgba(0,0,0,0.86),rgba(0,0,0,0.96))] p-5 shadow-[0_24px_70px_-50px_rgba(212,175,55,0.34)] sm:p-6">
+        <button
+          type="button"
+          onClick={() => {
+            setComposerOpen(true);
+            setStatusMessage(null);
+          }}
+          aria-expanded="false"
+          className="absolute right-4 top-4 z-10 inline-flex min-h-9 items-center justify-center rounded-full border border-scent-accent/28 bg-black/78 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-[#fff7ec] shadow-[0_14px_28px_-18px_rgba(212,175,55,0.38)] transition-colors hover:border-scent-accent/48 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 sm:right-5 sm:top-5"
+        >
+          Start
+        </button>
+        <div className="mx-auto flex max-w-2xl flex-col items-center px-9 text-center sm:px-12">
           <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-scent-accent/78">
             Community forum
           </p>
-          <h2 className="mt-3 font-serif text-3xl italic leading-tight text-[#fff7ec] sm:text-4xl">
+          <h2 className="mt-3 text-balance font-serif text-3xl italic leading-tight text-[#fff7ec] sm:text-4xl">
             Rooms already moving through the lounge.
           </h2>
-          <p className="mt-3 text-sm leading-7 text-scent-muted/72">
+          <p className="mt-3 max-w-xl text-sm leading-7 text-scent-muted/72">
             Ask the room, post your SOTD, run a battle, or check if a bottle is worth it.
           </p>
-          <button
-            type="button"
-            onClick={() => {
-              setComposerOpen(true);
-              setStatusMessage(null);
-            }}
-            aria-expanded="false"
-            className="scent-primary-button mt-6 inline-flex min-h-12 items-center justify-center gap-2 rounded-[var(--radius-scent)] px-7 py-3 text-sm font-bold uppercase tracking-[0.18em]"
-          >
-            <Plus size={16} strokeWidth={1.8} aria-hidden="true" />
-            Start Room
-          </button>
         </div>
 
         {statusMessage ? (
-          <p className="mx-auto mt-5 max-w-2xl rounded-[14px] border border-scent-accent/12 bg-white/[0.025] px-4 py-3 text-center text-sm text-scent-muted">
+          <p className="mx-auto mt-5 max-w-2xl rounded-[14px] border border-scent-accent/12 bg-black/58 px-4 py-3 text-center text-sm text-scent-muted">
             {statusMessage}
           </p>
         ) : null}
@@ -376,10 +375,10 @@ export const PostComposer: React.FC<PostComposerProps> = ({ authToken, onSignIn 
   }
 
   return (
-    <section className="rounded-[var(--radius-scent)] border border-scent-accent/16 bg-[linear-gradient(180deg,rgba(10,7,4,0.84),rgba(3,2,1,0.94))] p-5 shadow-[0_24px_70px_-48px_rgba(212,175,55,0.42)] sm:p-6">
+    <section className="rounded-[var(--radius-scent)] border border-scent-accent/16 bg-[linear-gradient(180deg,rgba(0,0,0,0.86),rgba(0,0,0,0.96))] p-5 shadow-[0_24px_70px_-50px_rgba(212,175,55,0.34)] sm:p-6">
       <form onSubmit={submitPost} className="space-y-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="min-w-0">
+        <div className="relative flex flex-col items-center gap-4 text-center">
+          <div className="min-w-0 px-10 sm:px-14">
             <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-scent-accent/78">
               Community forum
             </p>
@@ -394,14 +393,14 @@ export const PostComposer: React.FC<PostComposerProps> = ({ authToken, onSignIn 
             type="button"
             onClick={() => setComposerOpen(false)}
             aria-expanded="true"
-            className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-full border border-scent-accent/18 bg-white/[0.025] px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-scent-muted transition-colors hover:border-scent-accent/36 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
+            className="absolute right-0 top-0 inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 rounded-full border border-scent-accent/18 bg-black/70 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-scent-muted transition-colors hover:border-scent-accent/36 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
           >
-            <X size={14} strokeWidth={1.8} aria-hidden="true" />
+            <X size={13} strokeWidth={1.8} aria-hidden="true" />
             Close
           </button>
         </div>
 
-        <div className="flex flex-wrap gap-2">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           {ROOMS.map(({ type, label, Icon }) => (
             <button
               key={type}
@@ -409,10 +408,10 @@ export const PostComposer: React.FC<PostComposerProps> = ({ authToken, onSignIn 
               onClick={() => setPostType(type)}
               aria-pressed={postType === type}
               className={[
-                'inline-flex min-h-10 items-center gap-2 rounded-full border px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35',
+                'inline-flex min-h-10 items-center justify-center gap-2 rounded-full border px-3 py-2 text-center text-[10px] font-bold uppercase tracking-[0.14em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35',
                 postType === type
                   ? 'border-scent-accent/48 bg-scent-accent/[0.08] text-[#fff7ec]'
-                  : 'border-scent-accent/16 bg-white/[0.025] text-scent-muted hover:border-scent-accent/34 hover:text-[#fff7ec]',
+                  : 'border-scent-accent/16 bg-black/54 text-scent-muted hover:border-scent-accent/34 hover:text-[#fff7ec]',
               ].join(' ')}
             >
               <Icon size={14} strokeWidth={1.8} aria-hidden="true" />
@@ -444,13 +443,13 @@ export const PostComposer: React.FC<PostComposerProps> = ({ authToken, onSignIn 
         </div>
 
         {tags.length > 0 ? (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap justify-center gap-2">
             {tags.map((tag) => (
               <button
                 key={tag}
                 type="button"
                 onClick={() => setTags((current) => current.filter((item) => item !== tag))}
-                className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.025] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-scent-muted transition-colors hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
+                className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/54 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-scent-muted transition-colors hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
               >
                 #{tag}
                 <X size={12} strokeWidth={1.8} aria-hidden="true" />
@@ -536,7 +535,7 @@ export const PostComposer: React.FC<PostComposerProps> = ({ authToken, onSignIn 
           className="scent-lux-input min-h-40 w-full resize-y rounded-[var(--radius-scent)] px-4 py-3 text-sm leading-7 text-[#fff7ec] placeholder:text-scent-muted/45"
         />
 
-        <div className="space-y-3 rounded-[18px] border border-scent-accent/12 bg-black/18 p-4">
+        <div className="space-y-3 rounded-[18px] border border-scent-accent/12 bg-black/72 p-4">
           <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
             <div className="relative min-w-0">
               <Search
@@ -564,7 +563,7 @@ export const PostComposer: React.FC<PostComposerProps> = ({ authToken, onSignIn 
               type="button"
               onClick={() => void searchCatalog()}
               disabled={searchingFragrance || !fragranceQuery.trim()}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-scent-accent/24 bg-white/[0.025] px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-scent-muted transition-colors hover:border-scent-accent/42 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 disabled:pointer-events-none disabled:opacity-55"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-scent-accent/24 bg-black/58 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-scent-muted transition-colors hover:border-scent-accent/42 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 disabled:pointer-events-none disabled:opacity-55"
             >
               {searchingFragrance ? (
                 <LoaderCircle size={14} className="animate-spin" aria-hidden="true" />
@@ -586,7 +585,7 @@ export const PostComposer: React.FC<PostComposerProps> = ({ authToken, onSignIn 
                     type="button"
                     onClick={() => void attachFragrance(result)}
                     disabled={busy || selectedFragrances.length >= 3}
-                    className="grid min-h-16 grid-cols-[1fr_auto] items-center gap-3 rounded-[14px] border border-white/10 bg-white/[0.02] px-4 py-3 text-left transition-colors hover:border-scent-accent/28 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 disabled:pointer-events-none disabled:opacity-55"
+                    className="grid min-h-16 grid-cols-[1fr_auto] items-center gap-3 rounded-[14px] border border-white/10 bg-black/62 px-4 py-3 text-left transition-colors hover:border-scent-accent/28 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 disabled:pointer-events-none disabled:opacity-55"
                   >
                     <span className="min-w-0">
                       <span className="block truncate font-serif text-base italic text-[#fff7ec]">
@@ -608,11 +607,11 @@ export const PostComposer: React.FC<PostComposerProps> = ({ authToken, onSignIn 
           ) : null}
 
           {selectedFragrances.length > 0 ? (
-            <div className="flex flex-wrap gap-3">
+            <div className="flex flex-wrap justify-center gap-3">
               {selectedFragrances.map((fragrance) => (
                 <div
                   key={`${fragrance.brand}:${fragrance.name}:${fragrance.imageUrl}`}
-                  className="grid w-full max-w-[18rem] grid-cols-[3.25rem_1fr_auto] items-center gap-3 rounded-[14px] border border-scent-accent/14 bg-black/24 p-2 sm:w-auto"
+                  className="grid w-full max-w-[18rem] grid-cols-[3.25rem_1fr_auto] items-center gap-3 rounded-[14px] border border-scent-accent/14 bg-black/62 p-2 sm:w-auto"
                 >
                   <div className="flex h-16 w-[3.25rem] items-center justify-center overflow-hidden rounded-[10px] bg-white/[0.035]">
                     <img
@@ -644,7 +643,7 @@ export const PostComposer: React.FC<PostComposerProps> = ({ authToken, onSignIn 
         </div>
 
         {statusMessage ? (
-          <p className="rounded-[14px] border border-scent-accent/12 bg-white/[0.025] px-4 py-3 text-sm text-scent-muted">
+          <p className="rounded-[14px] border border-scent-accent/12 bg-black/58 px-4 py-3 text-center text-sm text-scent-muted">
             {statusMessage}
           </p>
         ) : null}
