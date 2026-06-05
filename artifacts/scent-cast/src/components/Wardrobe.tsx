@@ -981,7 +981,13 @@ export const Wardrobe: React.FC<{
     }
   });
   const [clarifySolverId, setClarifySolverId] = React.useState<WardrobeImageSolverId | ''>('');
-  const [pendingPreview, setPendingPreview] = React.useState<{ itemId: string; url: string; isFallback: boolean } | null>(null);
+  // `source` distinguishes a raw web-scrape preview (refresh) from a
+  // model-generated reimagine packshot. A refresh preview that still carries a
+  // fallback background is junk and must not be saved; a reimagine preview is a
+  // finished studio packshot and stays savable even when the second background
+  // pass fell back (e.g. Poof out of credits), so a good reimagine is never
+  // stranded as unsavable.
+  const [pendingPreview, setPendingPreview] = React.useState<{ itemId: string; url: string; isFallback: boolean; source?: 'refresh' | 'reimagine' } | null>(null);
   const [reimaginingIds, setReimaginingIds] = React.useState<Set<string>>(() => new Set());
   const [usageTotals, setUsageTotals] = React.useState<UsageTotalsSnapshot | null>(null);
 
@@ -1116,7 +1122,7 @@ export const Wardrobe: React.FC<{
       }
       const nextUrl = withImageVersion(returnedImageUrl, data.imageHash || Date.now());
       const isFallback = imageProcessingNeedsRepair(data);
-      setPendingPreview({ itemId: item.id, url: nextUrl, isFallback });
+      setPendingPreview({ itemId: item.id, url: nextUrl, isFallback, source: 'refresh' });
       if (isFallback) {
         const reason =
           typeof data.removeBgReason === 'string' && data.removeBgReason.trim()
@@ -1195,11 +1201,15 @@ export const Wardrobe: React.FC<{
           } else {
             // Auto-save fell through — keep the reimagined image visible as a
             // pending preview so the user can save it manually next time they
-            // open this bottle. Nothing is lost.
+            // open this bottle. Nothing is lost. Marked source: 'reimagine' so
+            // the manual save is never blocked by the fallback-background gate
+            // (a reimagine packshot is authoritative even if the second bg pass
+            // fell back).
             setPendingPreview({
               itemId: item.id,
               url: nextUrl,
               isFallback: imageProcessingNeedsRepair(data),
+              source: 'reimagine',
             });
           }
         } else {
@@ -1208,6 +1218,7 @@ export const Wardrobe: React.FC<{
             itemId: item.id,
             url: nextUrl,
             isFallback: imageProcessingNeedsRepair(data),
+            source: 'reimagine',
           });
         }
         void refreshUsageTotals();
@@ -1227,7 +1238,9 @@ export const Wardrobe: React.FC<{
 
   const handleSavePreviewToVault = async () => {
     if (!selectedItem || !pendingPreview || pendingPreview.itemId !== selectedItem.id) return;
-    if (pendingPreview.isFallback) {
+    // Reimagine previews are finished model packshots and stay savable; only a
+    // refresh preview that still has a fallback (junk) background is blocked.
+    if (pendingPreview.isFallback && pendingPreview.source !== 'reimagine') {
       setRefreshError(
         'This preview still has a fallback background. Try another image fix before saving.',
       );
@@ -1341,6 +1354,12 @@ export const Wardrobe: React.FC<{
 
   const hasPendingPreview =
     !!selectedItem && !!pendingPreview && pendingPreview.itemId === selectedItem.id;
+
+  // Only a raw-scrape (refresh) preview with a fallback background blocks
+  // saving. A reimagine preview is a finished model packshot and is always
+  // savable, so it is never gated by the fallback-background check.
+  const previewBlocked =
+    !!pendingPreview?.isFallback && pendingPreview.source !== 'reimagine';
 
   const frameDirty =
     !!selectedItem && !bottleImageAdjustmentsEqual(frameDraft, selectedItem.imageAdjustment);
@@ -2179,7 +2198,7 @@ export const Wardrobe: React.FC<{
                                         Sign in to save this preview to your vault.
                                       </p>
                                     ) : null}
-                                    {pendingPreview?.isFallback ? (
+                                    {previewBlocked ? (
                                       <p className="text-[9px] text-scent-gold-200/85 text-center font-sans leading-snug px-1">
                                         This preview still has a fallback background. Try another image fix before saving.
                                       </p>
@@ -2191,12 +2210,12 @@ export const Wardrobe: React.FC<{
                                         disabled={
                                           persistBusy ||
                                           !onPersistWardrobeImage ||
-                                          !!pendingPreview?.isFallback
+                                          previewBlocked
                                         }
                                         title={
                                           !onPersistWardrobeImage
                                             ? 'Sign in to save to your vault'
-                                            : pendingPreview?.isFallback
+                                            : previewBlocked
                                               ? 'This preview used a fallback background — try another fix first'
                                               : undefined
                                         }
