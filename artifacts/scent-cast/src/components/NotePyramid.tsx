@@ -2,6 +2,7 @@ import React from 'react';
 import { AnimatePresence, motion, useReducedMotion, type Transition } from 'framer-motion';
 import { type MainAccordDisplayRow } from '@/lib/fragranceApi';
 import { resolveNoteAccordLinks, type NoteAccordLink } from '@/lib/noteAccordLinks';
+import { isLowRenderBudget } from '@/lib/platform';
 
 type ActiveLayer = 'top' | 'heart' | 'base';
 type Point = readonly [number, number];
@@ -540,6 +541,14 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
   const pointerActivationRef = React.useRef<PointerActivation | null>(null);
   const ignoreClickActivationRef = React.useRef(false);
   const prefersReducedMotion = useReducedMotion();
+  // Constrained touch devices (iPad / coarse-pointer phones) cannot afford the
+  // pyramid's stacked SVG filter buffers: each feGaussianBlur / feDropShadow and
+  // the full-surface drop-shadow + screen-blend allocates a large offscreen
+  // IOSurface, and re-creating them on every modal open exhausts the device's
+  // small GPU memory pool — WebKit then kills the page ("A problem repeatedly
+  // occurred"). Render a flat path (no filters / blend) there; desktop keeps the
+  // full treatment. Device class is stable, so sample once.
+  const lowRenderBudget = React.useRef(isLowRenderBudget()).current;
   const guidedLayer = null;
   const idPrefix = React.useId().replace(/:/g, '');
   const state = activeLayer ?? 'idle';
@@ -552,6 +561,12 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
 
   const id = React.useCallback((name: string) => `${idPrefix}-${name}`, [idPrefix]);
   const fill = React.useCallback((name: string) => `url(#${id(name)})`, [id]);
+  // Filter reference that collapses to `undefined` on low-render-budget devices,
+  // so the element paints without allocating an offscreen filter surface.
+  const filterRef = React.useCallback(
+    (name: string) => (lowRenderBudget ? undefined : `url(#${id(name)})`),
+    [id, lowRenderBudget],
+  );
 
   React.useEffect(() => {
     if (!activeLayer) return;
@@ -772,7 +787,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
       >
         <svg
           viewBox="0 0 360 420"
-          className="h-full w-full overflow-visible drop-shadow-[0_20px_35px_rgba(0,0,0,0.4)]"
+          className={`h-full w-full overflow-visible${lowRenderBudget ? '' : ' drop-shadow-[0_20px_35px_rgba(0,0,0,0.4)]'}`}
           role="img"
           aria-label="Interactive fragrance note pyramid"
         >
@@ -1037,7 +1052,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
           </defs>
 
           {/* Ambient depth field — soft gold air + slow-drifting starfield. No grid, no reticles. */}
-          <g aria-hidden pointerEvents="none" className="mix-blend-screen">
+          <g aria-hidden pointerEvents="none" className={lowRenderBudget ? '' : 'mix-blend-screen'}>
             <motion.circle
               cx="180"
               cy="210"
@@ -1191,7 +1206,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                   vectorEffect="non-scaling-stroke"
                 />
 
-                <g filter={isActive ? fill('piece-active-shadow') : isEngaged ? fill('piece-engaged-shadow') : fill('piece-shadow')}>
+                <g filter={isActive ? filterRef('piece-active-shadow') : isEngaged ? filterRef('piece-engaged-shadow') : filterRef('piece-shadow')}>
                   {layer.faces.map((facePath, faceIndex) => (
                     <path key={`${layer.key}-${faceIndex}`} d={facePath} fill={layer.faceFills[faceIndex]} />
                   ))}
@@ -1233,7 +1248,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                   strokeOpacity="0.85"
                   strokeWidth="7.5"
                   strokeLinecap="round"
-                  filter={fill('groove-shadow')}
+                  filter={filterRef('groove-shadow')}
                   pointerEvents="none"
                   vectorEffect="non-scaling-stroke"
                 />
@@ -1298,7 +1313,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                   }}
                   transition={{ duration: 0.85, ease: CALM_EASE }}
                   strokeLinejoin="miter"
-                  filter={fill('edge-glow')}
+                  filter={filterRef('edge-glow')}
                   pointerEvents="none"
                   vectorEffect="non-scaling-stroke"
                 />
@@ -1349,7 +1364,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                     r="1.4"
                     fill="#fff8e6"
                     pointerEvents="none"
-                    filter={fill('gold-soft')}
+                    filter={filterRef('gold-soft')}
                     initial={false}
                     animate={prefersReducedMotion ? { opacity: 0.78 } : { opacity: [0.6, 0.95, 0.6] }}
                     transition={pulseTransition}
@@ -1393,7 +1408,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                     cy={dot.y}
                     r="2.85"
                     fill={fill('gold-dot')}
-                    filter={fill('gold-soft')}
+                    filter={filterRef('gold-soft')}
                     animate={
                       prefersReducedMotion
                         ? { opacity: 1, r: 2.85 }
@@ -1420,7 +1435,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
           <motion.g
             aria-hidden
             pointerEvents="none"
-            filter={fill('glyph-soft')}
+            filter={filterRef('glyph-soft')}
             animate={prefersReducedMotion ? { opacity: 0.96, y: 0 } : { opacity: [0.88, 1, 0.88], y: [0, -0.6, 0] }}
             transition={glyphTransition}
             style={{
