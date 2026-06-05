@@ -72,9 +72,9 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
   };
 
   return (
-    <section className="space-y-4" aria-label="Community post filters">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex flex-wrap items-center gap-2">
+    <section className="space-y-5" aria-label="Community post filters">
+      <div className="flex flex-col items-center gap-4">
+        <div className="flex flex-wrap items-center justify-center gap-2">
           <button
             type="button"
             onClick={() => onTypeChange(null)}
@@ -108,7 +108,7 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
           ))}
         </div>
 
-        <div className="relative w-full lg:max-w-sm">
+        <div className="relative mx-auto w-full max-w-md">
           <Search
             size={16}
             strokeWidth={1.7}
@@ -136,11 +136,11 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
         </div>
       </div>
 
-      <div className="flex min-w-0 items-center gap-3 overflow-hidden">
+      <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2">
         <p className="shrink-0 text-[10px] font-bold uppercase tracking-[0.18em] text-scent-muted/52">
           Popular tags
         </p>
-        <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="flex flex-wrap justify-center gap-2">
           {TAGS.map((candidate) => {
             const normalized = sanitizeCommunityTag(candidate);
             const active = tag === normalized;
