@@ -879,10 +879,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                 </button>
               </div>
 
-              <div
-                className="flex-1 overflow-y-auto scrollbar-hide px-4 sm:px-7 lg:px-10 pb-4"
-                style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
-              >
+              <div className="flex-1 overflow-y-auto scrollbar-hide px-4 sm:px-7 lg:px-10 pb-4">
                 <div className="mx-auto max-w-[92rem] space-y-6 sm:space-y-8 py-5 sm:py-7">
                   <header className="mx-auto max-w-3xl grid text-center gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-x-10">
                     <p className="text-[10px] uppercase tracking-[0.36em] text-scent-accent font-bold order-1 sm:order-2 sm:col-start-2 sm:row-start-1 sm:self-center sm:text-right sm:max-w-[14rem] sm:pl-2">
