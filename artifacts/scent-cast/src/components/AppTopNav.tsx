@@ -21,7 +21,7 @@ interface AppTopNavProps {
 }
 
 const navBaseClassName =
-  'text-[10px] sm:text-[13px] font-medium uppercase tracking-[0.16em] min-[390px]:tracking-[0.22em] whitespace-nowrap';
+  'text-[10px] sm:text-[13px] font-medium uppercase tracking-[0.16em] min-[430px]:tracking-[0.22em] whitespace-nowrap';
 
 const inactiveNavClassName = `${navBaseClassName} text-[#f4debd]/85 hover:text-white transition-colors`;
 const activeNavClassName = `${navBaseClassName} text-scent-accent`;
@@ -151,7 +151,7 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
                 src="/nav/scentbeam-nav-logo.png"
                 srcSet="/nav/scentbeam-nav-logo.png 1x, /nav/scentbeam-nav-logo@2x.png 2x"
                 alt="ScentBeam"
-                className="h-8 w-auto max-w-[118px] object-contain min-[390px]:h-9 min-[390px]:max-w-[138px] sm:h-12 sm:max-w-none"
+                className="h-8 w-auto max-w-[118px] object-contain min-[430px]:h-9 min-[430px]:max-w-[138px] sm:h-12 sm:max-w-none"
                 draggable={false}
               />
             </Link>
@@ -161,7 +161,9 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
         <div className="flex min-w-0 items-center gap-2 sm:gap-6 justify-self-end sm:justify-self-center">
           <NavLink
             to="/community"
-            className={({ isActive }) => (isActive ? activeNavClassName : inactiveNavClassName)}
+            className={({ isActive }) =>
+              isActive ? `${activeNavClassName} hidden sm:inline-flex` : inactiveNavClassName
+            }
           >
             {({ isActive }) => (
               <>
