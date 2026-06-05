@@ -1,4 +1,5 @@
 import type { ScentSource, SourceClass } from "./types";
+import { getSerperPool } from "../../services/serperService";
 
 const TIMEOUT_MS = 12_000;
 const MAX_SOURCE_CHARS = 35_000;
@@ -293,8 +294,10 @@ async function searchWithDuckDuckGo(query: string): Promise<string[]> {
 }
 
 async function searchWithSerper(fragranceName: string): Promise<string[]> {
-  const apiKey = process.env.SERPER_API_KEY;
-  if (!apiKey) return [];
+  // Shares the Serper key pool with the image pipeline (same credits). The pool
+  // rotates to the next free-tier key when one is rate-limited or out of credits.
+  const pool = getSerperPool();
+  if (pool.size === 0) return [];
 
   const queries = [
     `"${fragranceName}" fragrance notes`,
@@ -302,32 +305,49 @@ async function searchWithSerper(fragranceName: string): Promise<string[]> {
     `"${fragranceName}" official fragrance notes`,
   ];
 
-  const settled = await Promise.allSettled(
-    queries.map(async (q) => {
-      const res = await fetch("https://google.serper.dev/search", {
-        method: "POST",
-        headers: {
-          "x-api-key": apiKey,
-          "Content-Type": "application/json",
-        },
-        signal: AbortSignal.timeout(TIMEOUT_MS),
-        body: JSON.stringify({ q, num: 10, gl: "us", hl: "en" }),
-      });
-      if (!res.ok) return [] as string[];
-      const data: any = await res.json();
-      const organic: any[] = Array.isArray(data?.organic) ? data.organic : [];
-      // Accept all Serper organic URLs — Google ranking is the quality gate.
-      // Unknown brand pages land as "other" class and factCheck weights them
-      // conservatively; note-signal check in readSource() filters noise.
-      return organic
-        .map((item) => (typeof item?.link === "string" ? item.link : ""))
-        .filter((u: string): boolean => Boolean(u) && isHttpUrl(u));
-    }),
-  );
+  const outcome = await pool.run<string[]>(async (apiKey) => {
+    let authFailed = false;
+    let rateLimited = false;
+    const settled = await Promise.allSettled(
+      queries.map(async (q) => {
+        const res = await fetch("https://google.serper.dev/search", {
+          method: "POST",
+          headers: {
+            "x-api-key": apiKey,
+            "Content-Type": "application/json",
+          },
+          signal: AbortSignal.timeout(TIMEOUT_MS),
+          body: JSON.stringify({ q, num: 10, gl: "us", hl: "en" }),
+        });
+        if (!res.ok) {
+          if (res.status === 401 || res.status === 402 || res.status === 403) authFailed = true;
+          else if (res.status === 429) rateLimited = true;
+          return [] as string[];
+        }
+        const data: any = await res.json();
+        const organic: any[] = Array.isArray(data?.organic) ? data.organic : [];
+        // Accept all Serper organic URLs — Google ranking is the quality gate.
+        // Unknown brand pages land as "other" class and factCheck weights them
+        // conservatively; note-signal check in readSource() filters noise.
+        return organic
+          .map((item) => (typeof item?.link === "string" ? item.link : ""))
+          .filter((u: string): boolean => Boolean(u) && isHttpUrl(u));
+      }),
+    );
 
-  return settled
-    .filter((r): r is PromiseFulfilledResult<string[]> => r.status === "fulfilled")
-    .flatMap((r) => r.value);
+    const urls = settled
+      .filter((r): r is PromiseFulfilledResult<string[]> => r.status === "fulfilled")
+      .flatMap((r) => r.value);
+
+    // Any results means the key works — return them even if some queries failed.
+    if (urls.length > 0) return { ok: true, value: urls };
+    if (authFailed) return { ok: false, action: "retire" };
+    if (rateLimited) return { ok: false, action: "cooldown" };
+    // Key works, just no organic results for this fragrance.
+    return { ok: true, value: [] };
+  });
+
+  return outcome.ok ? outcome.value : [];
 }
 
 export async function searchScentSources(

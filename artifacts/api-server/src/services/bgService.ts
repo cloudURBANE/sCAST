@@ -1,6 +1,7 @@
 import axios from "axios";
 import sharp from "sharp";
 import { logger } from "../lib/logger";
+import { KeyPool, registerKeyPool } from "../lib/keyPool";
 import { hasOpaqueLightBackground, isEffectivelyTransparent } from "./bgServiceCore";
 import { trimPackshotForBgService } from "./packshotTrim";
 import { fetchExternalImage } from "./safeImageFetch";
@@ -8,6 +9,20 @@ import { fetchExternalImage } from "./safeImageFetch";
 export { isEffectivelyTransparent };
 
 const POOF_API = "https://api.poof.bg/v1/remove";
+
+// Pool of Poof background-removal keys. Prefer the plural REMOVE_BG_API_KEYS
+// (comma-separated pool) and fall back to the legacy single REMOVE_BG_API_KEY.
+// Lazily built so dotenv has loaded by first use.
+let removeBgPool: KeyPool | null = null;
+export function getRemoveBgPool(): KeyPool {
+  if (!removeBgPool) {
+    removeBgPool = registerKeyPool(
+      KeyPool.fromEnv("removebg", [process.env.REMOVE_BG_API_KEYS, process.env.REMOVE_BG_API_KEY]),
+    );
+  }
+  return removeBgPool;
+}
+
 const NORMALIZED_LONG_EDGE = 768;
 const EDGE_PADDING_X = 30;
 const EDGE_PADDING_TOP = 34;
@@ -217,20 +232,41 @@ export async function removeBgBuffer(
   rawInput: Buffer,
   opts?: RemoveBgOptions,
 ): Promise<RemoveBgBufferResult> {
-  const apiKey = process.env.REMOVE_BG_API_KEY;
-  if (!apiKey) {
+  const pool = getRemoveBgPool();
+  if (pool.size === 0) {
     const normalized = await trimWhiteAndNormalize(rawInput);
     return { buffer: normalized, contentType: "image/png", backgroundRemoved: false, removeBgStatus: "skipped", removeBgReason: "missing_api_key" };
   }
 
-  const result = await removeBgByFile(rawInput, apiKey, opts);
-  if (result.ok) {
-    const padded = await normalizeToBottleArtwork(result.buffer);
+  // Carry the most recent per-key failure reason so the fallback result reports
+  // why removal didn't happen (rate-limit, unauthorized, server error, …).
+  let lastReason: RemoveBgReason = "poof_non_200";
+  const outcome = await pool.run<Buffer>(async (apiKey, label) => {
+    const result = await removeBgByFile(rawInput, apiKey, opts);
+    if (result.ok) return { ok: true, value: result.buffer };
+
+    lastReason = result.reason;
+    if (result.reason === "poof_rate_limited") {
+      logger.warn({ key: label }, "[bgService] key rate-limited (429); rotating to next key");
+      return { ok: false, action: "cooldown" };
+    }
+    if (result.reason === "poof_unauthorized") {
+      logger.warn({ key: label }, "[bgService] key unauthorized / out of credits; retiring");
+      return { ok: false, action: "retire" };
+    }
+    // Payload too large, empty/transparent output, preserved white background,
+    // server error, other non-200: not a key-quota problem, so rotating to
+    // another key won't help. Stop and fall back to local trim.
+    return { ok: false, action: "stop" };
+  });
+
+  if (outcome.ok) {
+    const padded = await normalizeToBottleArtwork(outcome.value);
     return { buffer: padded, contentType: "image/png", backgroundRemoved: true, removeBgStatus: "removed", removeBgReason: "removed" };
   }
 
   const normalized = await trimWhiteAndNormalize(rawInput);
-  return { buffer: normalized, contentType: "image/png", backgroundRemoved: false, removeBgStatus: "fallback", removeBgReason: result.reason };
+  return { buffer: normalized, contentType: "image/png", backgroundRemoved: false, removeBgStatus: "fallback", removeBgReason: lastReason };
 }
 
 export async function removeBgToBuffer(

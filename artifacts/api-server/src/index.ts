@@ -5,6 +5,8 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { startEnrichmentFailedJobRetrySweeper } from "./services/enrichmentQueue";
 import { ensureTenantBaseline } from "./services/tenants";
+import { getSerperPool } from "./services/serperService";
+import { getRemoveBgPool } from "./services/bgService";
 
 const rawPort = process.env["PORT"];
 
@@ -21,6 +23,14 @@ if (Number.isNaN(port) || port <= 0) {
 }
 
 async function start() {
+  // Build the API-key pools at boot (env is already loaded) so their health is
+  // visible on GET /api/admin/key-pools before the first image request. Done
+  // here rather than at module load so offline scripts (e.g. verify:poof-paths)
+  // that set stub keys after importing the service still read fresh env.
+  const serperKeys = getSerperPool().size;
+  const removeBgKeys = getRemoveBgPool().size;
+  logger.info({ serperKeys, removeBgKeys }, "API key pools initialized");
+
   // Self-heal the tenant baseline before serving: create the default tenant and
   // backfill any pre-tenant rows. This removes the need to hand-run a migration
   // in a precise order — the app converges every boot.
