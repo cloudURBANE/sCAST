@@ -44,6 +44,7 @@ import { betaVideoUrlForFragrance } from '@/lib/bottleVideoBeta';
 import { BrandGoldLabel } from '@/components/BrandGoldLabel';
 import { ScentNotesInfographic } from '@/components/ScentNotesInfographic';
 import { useModalBehavior } from '@/hooks/use-modal-behavior';
+import { useRenderBudget } from '@/hooks/useRenderBudget';
 import {
   WARDROBE_CLARIFY_SOLVERS,
   WARDROBE_REFRESH_COUNT_STORAGE_KEY,
@@ -506,10 +507,12 @@ function ProfileScorePanel({
   metrics,
   coverage,
   legacyPerformance,
+  compactOnly = false,
 }: {
   metrics?: DerivedMetrics | null;
   coverage?: SourceCoverage;
   legacyPerformance?: Fragrance["performance"];
+  compactOnly?: boolean;
 }) {
   const headline = metrics?.headline ?? null;
   const performance = metrics?.performance_score ?? null;
@@ -738,6 +741,18 @@ function ProfileScorePanel({
   const renderTile = (stat: StatCard, scale: "desktop" | "mobile") =>
     stat.kind === "score" ? renderScoreTile(stat, scale) : renderMetricTile(stat, scale);
 
+  if (compactOnly) {
+    return (
+      <FragrancePanel title="Derived Intelligence">
+        <div className="px-4 py-3.5">
+          <div className="grid grid-cols-2 gap-1.5">
+            {statCards.map((stat) => renderTile(stat, "mobile"))}
+          </div>
+        </div>
+      </FragrancePanel>
+    );
+  }
+
   return (
     <>
       <div className="hidden sm:grid sm:grid-cols-[1.12fr_1.95fr_1fr] gap-3 sm:gap-4 items-stretch">
@@ -882,6 +897,9 @@ export const Wardrobe: React.FC<{
   onRetryLoadWardrobe,
 }) => {
   const [selectedItem, setSelectedItem] = React.useState<Fragrance | null>(null);
+  const { lowMotionRenderMode } = useRenderBudget();
+  const constrainedDetailMode = lowMotionRenderMode;
+  const [detailDeferredContentReady, setDetailDeferredContentReady] = React.useState(false);
 
   // Re-bind the open detail modal to the latest row from `items` whenever the
   // parent state updates (e.g. background enrichment landed). Without this, the
@@ -898,6 +916,37 @@ export const Wardrobe: React.FC<{
       return match && match !== current ? match : current;
     });
   }, [items]);
+
+  React.useEffect(() => {
+    if (!selectedItem) {
+      setDetailDeferredContentReady(false);
+      return;
+    }
+
+    if (!constrainedDetailMode || typeof window === 'undefined') {
+      setDetailDeferredContentReady(true);
+      return;
+    }
+
+    setDetailDeferredContentReady(false);
+    let firstFrame = 0;
+    let secondFrame = 0;
+    let readyTimer: number | null = null;
+
+    firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        readyTimer = window.setTimeout(() => {
+          setDetailDeferredContentReady(true);
+        }, 180);
+      });
+    });
+
+    return () => {
+      if (firstFrame) window.cancelAnimationFrame(firstFrame);
+      if (secondFrame) window.cancelAnimationFrame(secondFrame);
+      if (readyTimer) window.clearTimeout(readyTimer);
+    };
+  }, [constrainedDetailMode, selectedItem?.id]);
 
   const prefetchReviews = React.useCallback((item: Fragrance) => {
     const rawReviews = extractDetailReviews(item.raw_engine_detail);
@@ -1308,6 +1357,23 @@ export const Wardrobe: React.FC<{
       selectedMetrics,
       selectedItem?.enrichment ?? selectedItem?.raw_engine_detail?.enrichment ?? undefined,
     );
+  const detailNotesRenderMode: "full" | "constrained" = constrainedDetailMode ? "constrained" : "full";
+  const detailShowDeferredContent = !constrainedDetailMode || detailDeferredContentReady;
+  const detailPanelClassName = constrainedDetailMode
+    ? "relative w-full h-full bg-[#030303] shadow-2xl overflow-hidden flex flex-col border-0"
+    : "relative w-full h-full sm:h-[94dvh] sm:max-w-[100rem] sm:mx-4 bg-[#030303] shadow-2xl overflow-hidden flex flex-col border-0 sm:border border-white/8";
+  const detailScrollClassName = constrainedDetailMode
+    ? "flex-1 overflow-y-auto scrollbar-hide px-4 sm:px-5 pb-4"
+    : "flex-1 overflow-y-auto scrollbar-hide px-4 sm:px-7 lg:px-10 pb-4";
+  const detailTitleClassName = constrainedDetailMode
+    ? "font-serif italic text-4xl sm:text-5xl leading-[0.95] text-[#fff7ec] tracking-normal uppercase"
+    : "font-serif italic text-5xl sm:text-7xl lg:text-8xl leading-[0.92] text-[#fff7ec] tracking-normal uppercase";
+  const detailGridClassName = constrainedDetailMode
+    ? "grid grid-cols-1 items-stretch gap-3 sm:gap-4"
+    : "grid grid-cols-1 items-stretch gap-3 sm:gap-4 lg:grid-cols-[1.12fr_1.95fr_1fr]";
+  const detailVisualPanelClassName = constrainedDetailMode
+    ? "min-h-[16rem]"
+    : "lg:h-full lg:min-h-[21.25rem]";
   const detailMetaRows = selectedItem
     ? [
         { label: 'Year', value: formatYear(selectedItem.year) },
@@ -1654,12 +1720,23 @@ export const Wardrobe: React.FC<{
             aria-modal="true"
             aria-labelledby="fragrance-detail-title"
           >
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={closeDetail} className="absolute inset-0 bg-black/95" />
             <motion.div
-              className="relative w-full h-full sm:h-[94dvh] sm:max-w-[100rem] sm:mx-4 bg-[#030303] shadow-2xl overflow-hidden flex flex-col border-0 sm:border border-white/8"
+              initial={constrainedDetailMode ? false : { opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={constrainedDetailMode ? { opacity: 0 } : { opacity: 0 }}
+              transition={{ duration: constrainedDetailMode ? 0.08 : 0.2 }}
+              onClick={closeDetail}
+              className="absolute inset-0 bg-black/95"
+            />
+            <motion.div
+              initial={constrainedDetailMode ? false : { opacity: 0, scale: 0.985 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={constrainedDetailMode ? { opacity: 0 } : { opacity: 0, scale: 0.99 }}
+              transition={{ duration: constrainedDetailMode ? 0.08 : 0.24, ease: [0.22, 1, 0.36, 1] }}
+              className={detailPanelClassName}
             >
               <div
-                className="flex-1 overflow-y-auto scrollbar-hide px-4 sm:px-7 lg:px-10 pb-4"
+                className={detailScrollClassName}
                 style={
                   {
                     WebkitOverflowScrolling: 'touch',
@@ -1672,7 +1749,7 @@ export const Wardrobe: React.FC<{
                     <div className="space-y-2">
                       <h2
                         id="fragrance-detail-title"
-                        className="font-serif italic text-5xl sm:text-7xl lg:text-8xl leading-[0.92] text-[#fff7ec] tracking-normal uppercase"
+                        className={detailTitleClassName}
                       >
                         {entryName(selectedItem)}
                       </h2>
@@ -1687,32 +1764,37 @@ export const Wardrobe: React.FC<{
                     metrics={selectedMetrics}
                     coverage={selectedCoverage}
                     legacyPerformance={selectedItem.performance}
+                    compactOnly={constrainedDetailMode}
                   />
 
-                  <div className="grid grid-cols-1 items-stretch gap-3 sm:gap-4 lg:grid-cols-[1.12fr_1.95fr_1fr]">
-                    <div className="space-y-3 sm:space-y-4 lg:h-full">
+                  <div className={detailGridClassName}>
+                    <div className={`space-y-3 sm:space-y-4 lg:h-full ${constrainedDetailMode ? 'order-2' : ''}`}>
                       <ScentNotesInfographic
                         derivedMetrics={selectedMetrics}
                         legacyPyramid={selectedItem.pyramid}
                         scentAxesFallback={selectedItem.scent_vector ?? null}
                         variant="accords"
-                        className="lg:h-full lg:min-h-[21.25rem]"
+                        renderMode={detailNotesRenderMode}
+                        className={detailVisualPanelClassName}
                       />
                     </div>
 
-                    <div className="space-y-3 sm:space-y-4 lg:h-full">
-                      <ScentNotesInfographic
-                        derivedMetrics={selectedMetrics}
-                        legacyPyramid={selectedItem.pyramid}
-                        variant="notes"
-                        className="lg:h-full lg:min-h-[21.25rem]"
-                      />
+                    <div className={`space-y-3 sm:space-y-4 lg:h-full ${constrainedDetailMode ? 'order-3' : ''}`}>
+                      {detailShowDeferredContent ? (
+                        <ScentNotesInfographic
+                          derivedMetrics={selectedMetrics}
+                          legacyPyramid={selectedItem.pyramid}
+                          variant="notes"
+                          renderMode={detailNotesRenderMode}
+                          className={detailVisualPanelClassName}
+                        />
+                      ) : null}
                     </div>
 
-                    <div className="space-y-3 sm:space-y-4 lg:h-full">
+                    <div className={`space-y-3 sm:space-y-4 lg:h-full ${constrainedDetailMode ? 'order-1' : ''}`}>
                       <FragrancePanel
                         title="About This Fragrance"
-                        className="lg:h-full lg:min-h-[21.25rem]"
+                        className={detailVisualPanelClassName}
                         titleSuffix={
                           <button
                             type="button"
@@ -1730,7 +1812,7 @@ export const Wardrobe: React.FC<{
                       >
                         <div className="flex flex-col p-4 space-y-3">
                           <div 
-                            className="relative h-56 sm:h-72 lg:h-64 min-h-0 w-full shrink-0 overflow-hidden cursor-pointer rounded-lg border border-white/5 bg-white/[0.01]"
+                            className={`relative h-56 ${constrainedDetailMode ? 'sm:h-60' : 'sm:h-72 lg:h-64'} min-h-0 w-full shrink-0 overflow-hidden cursor-pointer rounded-lg border border-white/5 bg-white/[0.01]`}
                             onClick={() => detailBottleUrl && setEnlargeOpen(true)}
                           >
                             <BottleImage
@@ -1741,7 +1823,7 @@ export const Wardrobe: React.FC<{
                               adjustment={frameDraft}
                               showFrameGuide={bottleImageToolsOpen}
                               className="absolute inset-0"
-                              imgClassName="transition-all duration-300"
+                              imgClassName={constrainedDetailMode ? "" : "transition-all duration-300"}
                             />
                           </div>
 
@@ -2152,11 +2234,13 @@ export const Wardrobe: React.FC<{
                     </div>
                   </div>
 
-                  <ReviewsPanel
-                    name={entryName(selectedItem)}
-                    brand={entryBrand(selectedItem)}
-                    reviews={extractDetailReviews(selectedItem.raw_engine_detail)}
-                  />
+                  {detailShowDeferredContent ? (
+                    <ReviewsPanel
+                      name={entryName(selectedItem)}
+                      brand={entryBrand(selectedItem)}
+                      reviews={extractDetailReviews(selectedItem.raw_engine_detail)}
+                    />
+                  ) : null}
 
                 </div>
               </div>

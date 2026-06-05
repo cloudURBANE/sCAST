@@ -18,7 +18,7 @@ import { NotePyramid } from './NotePyramid';
 interface ScentNotesInfographicProps {
   /** Preferred: Railway `derived_metrics.notes` (+ main accords summary). */
   derivedMetrics?: DerivedMetrics | null;
-  /** Top-level wardrobe/catalog 0–10 axes — used only when chart rows can't be inferred from metrics. */
+  /** Top-level wardrobe/catalog 0-10 axes - used only when chart rows can't be inferred from metrics. */
   scentAxesFallback?: NumericScentAxes | null;
   /** Legacy wardrobe pyramid when engine notes are absent. */
   legacyPyramid?: {
@@ -28,10 +28,13 @@ interface ScentNotesInfographicProps {
   };
   /** Desktop modal renders accord and note panels in different columns. */
   variant?: "all" | "accords" | "notes";
+  /** Constrained touch devices get a static, low-cost note visual. */
+  renderMode?: "full" | "constrained";
   className?: string;
 }
 
 type DisplayPyramid = { top: string[]; heart: string[]; base: string[]; flat: string[] };
+type NoteLayerKey = "top" | "heart" | "base";
 type ActiveNotesListener = () => void;
 
 const EMPTY_ACTIVE_NOTES: string[] = [];
@@ -159,10 +162,11 @@ function nearestOverflowScrollAncestor(start: HTMLElement | null): HTMLElement |
   return null;
 }
 
-function useAccordPanelReveal(contentKey: string) {
-  const reduced = useReducedMotion();
+function useAccordPanelReveal(contentKey: string, forceStatic = false) {
+  const reducedMotion = useReducedMotion();
+  const reduced = Boolean(reducedMotion || forceStatic);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [revealed, setRevealed] = useState(Boolean(reduced));
+  const [revealed, setRevealed] = useState(reduced);
 
   useEffect(() => {
     if (reduced) setRevealed(true);
@@ -297,10 +301,12 @@ function rankIntensity(index: number, total: number): {
 function AccordPanel({
   rows,
   activeNotes = EMPTY_ACTIVE_NOTES,
+  renderMode = "full",
   className = "",
 }: {
   rows: ReturnType<typeof resolveMainAccordChartRows>;
   activeNotes?: string[];
+  renderMode?: "full" | "constrained";
   className?: string;
 }) {
   const accordContentKey =
@@ -309,7 +315,8 @@ function AccordPanel({
       .map((r, i) => `${r.label}:${normalizedAccordBarPct(r, i, Math.max(1, rows.length))}`)
       .join("·");
 
-  const { containerRef, revealed, reduced } = useAccordPanelReveal(accordContentKey);
+  const constrained = renderMode === "constrained";
+  const { containerRef, revealed, reduced } = useAccordPanelReveal(accordContentKey, constrained);
 
   const displayRows = rows.slice(0, 10);
   const density = resolveAccordDensity(displayRows.length);
@@ -394,7 +401,7 @@ function AccordPanel({
                     // instead of `width` so up to 10 bars don't trigger per-frame
                     // layout on reveal. The track's overflow-hidden rounded-full
                     // clips the scaled fill, so no corner/edge distortion shows.
-                    style={{ width: `${fillPct}%`, boxShadow: restingGlow, willChange: "transform" }}
+                    style={{ width: `${fillPct}%`, boxShadow: restingGlow, willChange: reduced ? "auto" : "transform" }}
                     initial={false}
                     animate={{
                       scaleX: reduced || revealed ? 1 : 0.06,
@@ -464,17 +471,130 @@ function AccordPanel({
   );
 }
 
+function ConstrainedNotesPanel({
+  pyramid,
+  onActiveNotesChange,
+  className = "",
+}: {
+  pyramid: DisplayPyramid;
+  onActiveNotesChange?: (notes: string[]) => void;
+  className?: string;
+}) {
+  const layers = React.useMemo(
+    () => [
+      { key: "top" as NoteLayerKey, title: "Top", notes: pyramid.top },
+      { key: "heart" as NoteLayerKey, title: "Heart", notes: pyramid.heart },
+      { key: "base" as NoteLayerKey, title: "Base", notes: pyramid.base },
+    ],
+    [pyramid],
+  );
+  const firstLayerWithNotes = layers.find((layer) => layer.notes.length > 0)?.key ?? null;
+  const [activeLayer, setActiveLayer] = useState<NoteLayerKey | null>(firstLayerWithNotes);
+  const activeNotes = layers.find((layer) => layer.key === activeLayer)?.notes ?? EMPTY_ACTIVE_NOTES;
+  const allLayerNotes = React.useMemo(
+    () => dedupeNotes(layers.flatMap((layer) => layer.notes)),
+    [layers],
+  );
+  const visibleNotes = activeLayer
+    ? activeNotes
+    : (pyramid.flat.length > 0 ? pyramid.flat : allLayerNotes);
+
+  useEffect(() => {
+    setActiveLayer(firstLayerWithNotes);
+  }, [firstLayerWithNotes]);
+
+  useEffect(() => {
+    onActiveNotesChange?.(activeNotes);
+    return () => onActiveNotesChange?.([]);
+  }, [activeNotes, onActiveNotesChange]);
+
+  if (!layers.some((layer) => layer.notes.length > 0) && pyramid.flat.length === 0) {
+    return (
+      <Panel title="Note Pyramid" className={className}>
+        <div className="flex flex-1 items-center justify-center px-4 py-6 text-center">
+          <p className="text-sm italic text-white/45 font-serif">Notes unavailable.</p>
+        </div>
+      </Panel>
+    );
+  }
+
+  return (
+    <Panel title="Note Pyramid" className={className}>
+      <div className="flex flex-1 flex-col gap-3 px-4 py-4 sm:px-5">
+        <div className="grid grid-cols-3 gap-1.5">
+          {layers.map((layer) => {
+            const isActive = activeLayer === layer.key;
+            const disabled = layer.notes.length === 0;
+            return (
+              <button
+                key={layer.key}
+                type="button"
+                disabled={disabled}
+                onClick={() => setActiveLayer((current) => (current === layer.key ? null : layer.key))}
+                className={`min-h-[3.6rem] border px-2 py-2 text-center transition-colors ${
+                  isActive
+                    ? "border-scent-accent/38 bg-scent-accent/[0.075] text-scent-accent"
+                    : "border-white/[0.07] bg-white/[0.025] text-white/62"
+                } disabled:opacity-35`}
+                aria-pressed={isActive}
+              >
+                <span className="block text-[9px] font-bold uppercase tracking-[0.2em]">
+                  {layer.title}
+                </span>
+                <span className="mt-1 block text-[10px] tabular-nums text-white/42">
+                  {layer.notes.length}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="min-h-[9.5rem] border border-white/[0.055] bg-black/18 px-3 py-3">
+          {visibleNotes.length > 0 ? (
+            <div className="flex flex-wrap justify-center gap-2">
+              {visibleNotes.map((note) => (
+                <span
+                  key={note}
+                  className="max-w-full rounded-full border border-white/[0.07] bg-white/[0.025] px-3 py-1.5 text-[10px] font-medium leading-snug text-white/72 [overflow-wrap:anywhere]"
+                >
+                  {note}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="py-7 text-center text-sm italic text-white/45 font-serif">
+              No notes listed for this layer.
+            </p>
+          )}
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
 function NotesPanel({
   pyramid,
   accordRows,
   onActiveNotesChange,
+  renderMode = "full",
   className = "",
 }: {
   pyramid: DisplayPyramid;
   accordRows?: MainAccordDisplayRow[];
   onActiveNotesChange?: (notes: string[]) => void;
+  renderMode?: "full" | "constrained";
   className?: string;
 }) {
+  if (renderMode === "constrained") {
+    return (
+      <ConstrainedNotesPanel
+        pyramid={pyramid}
+        onActiveNotesChange={onActiveNotesChange}
+        className={className}
+      />
+    );
+  }
+
   return (
     <Panel title="Note Pyramid" className={`overflow-hidden ${className}`}>
       <NotePyramid
@@ -493,6 +613,7 @@ export const ScentNotesInfographic: React.FC<ScentNotesInfographicProps> = ({
   scentAxesFallback,
   legacyPyramid,
   variant = "all",
+  renderMode = "full",
   className = "",
 }) => {
   const pyramid = React.useMemo(
@@ -527,7 +648,7 @@ export const ScentNotesInfographic: React.FC<ScentNotesInfographicProps> = ({
   }
 
   if (variant === "accords") {
-    return <AccordPanel rows={accordRows} activeNotes={activeNotes} className={className} />;
+    return <AccordPanel rows={accordRows} activeNotes={activeNotes} renderMode={renderMode} className={className} />;
   }
 
   if (variant === "notes") {
@@ -536,6 +657,7 @@ export const ScentNotesInfographic: React.FC<ScentNotesInfographicProps> = ({
         pyramid={pyramid}
         accordRows={noteAccordRows}
         onActiveNotesChange={handleActiveNotesChange}
+        renderMode={renderMode}
         className={className}
       />
     );
@@ -543,11 +665,12 @@ export const ScentNotesInfographic: React.FC<ScentNotesInfographicProps> = ({
 
   return (
     <div id="scent-notes-infographic" className="space-y-3 sm:space-y-4">
-      {accordRows.length > 0 ? <AccordPanel rows={accordRows} activeNotes={activeNotes} /> : null}
+      {accordRows.length > 0 ? <AccordPanel rows={accordRows} activeNotes={activeNotes} renderMode={renderMode} /> : null}
       <NotesPanel
         pyramid={pyramid}
         accordRows={noteAccordRows}
         onActiveNotesChange={handleActiveNotesChange}
+        renderMode={renderMode}
       />
     </div>
   );
