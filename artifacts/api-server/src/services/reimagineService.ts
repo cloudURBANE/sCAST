@@ -40,6 +40,20 @@ const WEBP_QUALITY = 90;
 // faithfully than a 1024-square thumbnail would.
 const OPENAI_INPUT_MAX_DIMENSION = 2048;
 
+// The reimagine prompt carries three jobs, in priority order:
+//   1. Identity — reproduce *this* bottle and label exactly; never redesign.
+//   2. Reconstruction — the reference is usually an already-cut-out wardrobe
+//      image whose clear-glass interior was punched out to transparency by a
+//      previous background-removal pass, so the model must repair/fill those
+//      voids and emit one whole, intact bottle instead of faithfully copying
+//      the holes.
+//   3. Background-removal-safe rendering — give clear glass and the liquid
+//      enough internal substance (refraction, reflections, tint, a defining
+//      edge) and sit the bottle on a mid-light grey sweep so the *downstream*
+//      Poof cut-out keeps the full silhouette and interior instead of eating
+//      the see-through regions again.
+// Keep these blocks in sync with toPngForOpenAI (which flattens the reference
+// onto the same neutral grey) — the two must describe one consistent backdrop.
 const REIMAGINE_PROMPT = [
   "Print-grade commercial product photograph of the exact fragrance bottle shown in the reference image.",
   "Identity preservation is the single highest priority and must be enforced before any creative decision:",
@@ -51,6 +65,17 @@ const REIMAGINE_PROMPT = [
   "reproduce any engraving, embossing, etching, or relief in the glass exactly as shown;",
   "preserve the true-to-source liquid color, transparency, and fill level — do not lighten or darken the juice.",
   "Do not redesign, restyle, recolor, rename, reposition, simplify, or invent any element of the bottle or label.",
+  "Reconstruction: the reference may be a previously cut-out image whose edges or interior were damaged by automated background removal,",
+  "so rebuild the bottle as one whole, structurally complete object — fill in, repair, and seamlessly complete any region that looks missing,",
+  "erased, clipped, hollowed-out, transparent, or eaten away, including the glass body, shoulders, neck, collar, cap, label, and the liquid behind",
+  "the glass, so the silhouette is unbroken and the glass walls read as continuous, solid-walled, and intact with no gaps in the fill line.",
+  "Never copy holes, cut-outs, transparent voids, ragged edges, alpha halos, or matting artifacts from the reference; restore the bottle to how it",
+  "looked fully intact before any background removal touched it.",
+  "Background-removal-safe rendering: render every part of the bottle so a downstream automatic background remover keeps the entire silhouette and",
+  "interior. Clear glass, transparent shoulders, and the liquid must each carry enough internal substance — visible refraction, internal reflections,",
+  "true-to-source tint, subtle containment shading, and a crisp defining edge — that they read as a distinct, light-bending solid object and never as",
+  "an empty window onto the backdrop; no region of the bottle may blend into, match, or dissolve into the background color, and one continuous,",
+  "well-defined outer edge must wrap the whole bottle so the cut-out follows the true silhouette without punching holes through clear glass.",
   "Lighting and material rendering: large soft studio key from upper-left with a subtle fill from the opposite side,",
   "gentle rim highlight tracing the glass edges, controlled specular highlights without blown-out hotspots,",
   "physically accurate refraction and caustic light play through the liquid and at the base of the glass,",
@@ -58,7 +83,8 @@ const REIMAGINE_PROMPT = [
   "and crisp focus across the entire bottle — no motion blur, no depth-of-field smear on the label, no chromatic aberration.",
   "Composition: head-on hero packshot, single bottle perfectly centered, eye-level camera,",
   "square 1:1 framing with even margins, the bottle filling most of the frame for maximum pixel density.",
-  "Background: the bottle must be isolated on a clean studio backdrop suitable for instant background removal —",
+  "Background: isolate the bottle on a soft, even, seamless neutral mid-light grey studio sweep that stays clearly separable from clear glass and the",
+  "liquid — no pure-white blow-out that would let a background remover mistake see-through glass for the backdrop,",
   "no props, no surface, no horizon line, no second bottle, no boxes, no hands, no people, no fabric,",
   "no water droplets, no petals, no added text, no added logos, no watermarks, no frames, no borders,",
   "no drop shadow, no contact shadow, no ground reflection, no vignette, no color grading on the backdrop.",
@@ -132,6 +158,17 @@ async function loadSourceBytes(sourceUrl: string): Promise<SourceBytes> {
   };
 }
 
+// Neutral mid-light grey we composite the reference onto before sending it to
+// the model. The wardrobe source is usually an already-background-removed image
+// whose clear-glass interior has been punched out to full transparency by a
+// previous Poof pass; handing those transparent voids straight to the edit
+// endpoint lets the model faithfully reproduce the holes. Flattening onto a
+// solid neutral grey gives it a continuous, hole-free canvas to reconstruct
+// from, and matches the studio sweep REIMAGINE_PROMPT asks for so the model is
+// not reconciling two different backdrop colors. Keep this value and the
+// "mid-light grey" wording in REIMAGINE_PROMPT aligned.
+const OPENAI_INPUT_BACKDROP = { r: 209, g: 209, b: 209 } as const;
+
 async function toPngForOpenAI(buffer: Buffer): Promise<Buffer> {
   return sharp(buffer)
     .rotate()
@@ -139,7 +176,10 @@ async function toPngForOpenAI(buffer: Buffer): Promise<Buffer> {
       fit: "inside",
       withoutEnlargement: true,
     })
-    .ensureAlpha()
+    // flatten() drops the alpha channel by compositing transparent pixels —
+    // including punched-out interior voids — over the neutral backdrop, so the
+    // model never sees (and never copies) the holes left by prior bg removal.
+    .flatten({ background: OPENAI_INPUT_BACKDROP })
     .png({ compressionLevel: 9, adaptiveFiltering: true })
     .toBuffer();
 }
