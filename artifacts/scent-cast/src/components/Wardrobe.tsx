@@ -923,7 +923,7 @@ export const Wardrobe: React.FC<{
       return;
     }
 
-    if (!constrainedDetailMode || typeof window === 'undefined') {
+    if (typeof window === 'undefined') {
       setDetailDeferredContentReady(true);
       return;
     }
@@ -932,18 +932,29 @@ export const Wardrobe: React.FC<{
     let firstFrame = 0;
     let secondFrame = 0;
     let readyTimer: number | null = null;
+    let idleHandle: number | null = null;
+    const readyDelayMs = constrainedDetailMode ? 180 : 80;
+    const idleTimeoutMs = constrainedDetailMode ? 700 : 320;
 
     firstFrame = window.requestAnimationFrame(() => {
       secondFrame = window.requestAnimationFrame(() => {
-        readyTimer = window.setTimeout(() => {
+        const markReady = () => {
           setDetailDeferredContentReady(true);
-        }, 180);
+        };
+        if (typeof window.requestIdleCallback === 'function') {
+          idleHandle = window.requestIdleCallback(markReady, { timeout: idleTimeoutMs });
+        } else {
+          readyTimer = window.setTimeout(markReady, readyDelayMs);
+        }
       });
     });
 
     return () => {
       if (firstFrame) window.cancelAnimationFrame(firstFrame);
       if (secondFrame) window.cancelAnimationFrame(secondFrame);
+      if (idleHandle !== null && typeof window.cancelIdleCallback === 'function') {
+        window.cancelIdleCallback(idleHandle);
+      }
       if (readyTimer) window.clearTimeout(readyTimer);
     };
   }, [constrainedDetailMode, selectedItem?.id]);
@@ -1787,13 +1798,15 @@ export const Wardrobe: React.FC<{
 
                   <div className={detailGridClassName}>
                     <div className={`space-y-3 sm:space-y-4 lg:h-full ${constrainedDetailMode ? 'order-2' : ''}`}>
-                      <ScentNotesInfographic
-                        derivedMetrics={selectedMetrics}
-                        legacyPyramid={selectedItem.pyramid}
-                        scentAxesFallback={selectedItem.scent_vector ?? null}
-                        variant="accords"
-                        className={detailVisualPanelClassName}
-                      />
+                      {detailShowDeferredContent ? (
+                        <ScentNotesInfographic
+                          derivedMetrics={selectedMetrics}
+                          legacyPyramid={selectedItem.pyramid}
+                          scentAxesFallback={selectedItem.scent_vector ?? null}
+                          variant="accords"
+                          className={detailVisualPanelClassName}
+                        />
+                      ) : null}
                     </div>
 
                     <div className={`space-y-3 sm:space-y-4 lg:h-full ${constrainedDetailMode ? 'order-3' : ''}`}>

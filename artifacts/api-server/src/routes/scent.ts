@@ -91,7 +91,10 @@ async function upsertRefreshImageCatalog(
 ): Promise<void> {
   let baseProfile = await getCatalogEntry(brand, name);
   if (!baseProfile) {
-    const built = await buildProfile(name, brand, undefined, { allowCatalogFuzzy: false });
+    const built = await buildProfile(name, brand, undefined, {
+      allowCatalogFuzzy: false,
+      imageResolution: "skip",
+    });
     if ("product" in built) baseProfile = built;
   }
   if (baseProfile) {
@@ -158,6 +161,7 @@ router.post("/scent-profile", async (req, res) => {
     },
     {
       preferEngineData: preferEngineData === true,
+      imageResolution: "deferred",
       ...(concentrationOverride ? { concentrationOverride } : {}),
     },
   );
@@ -189,6 +193,7 @@ router.post("/search-scent", async (req, res) => {
 
     const profile = await buildProfile(resolvedQuery.name, resolvedQuery.brand, undefined, {
       allowCatalogFuzzy: false,
+      imageResolution: "deferred",
       ...(concentrationOverride ? { concentrationOverride } : {}),
     });
     if ("product" in profile) {
@@ -230,6 +235,7 @@ router.post("/search-scent", async (req, res) => {
       },
       {
         allowCatalogFuzzy: false,
+        imageResolution: "deferred",
         ...(concentrationOverride ? { concentrationOverride } : {}),
       },
     );
@@ -254,6 +260,7 @@ router.post("/search-scent", async (req, res) => {
       perfumer: first.perfumer,
     }, {
       ...(concentrationOverride ? { concentrationOverride } : {}),
+      imageResolution: "deferred",
     });
     res.json("product" in profile ? flattenProfile(profile) : profile);
     return;
@@ -276,6 +283,7 @@ router.post("/search-scent", async (req, res) => {
     perfumer: scraped.perfumer,
   }, {
     ...(concentrationOverride ? { concentrationOverride } : {}),
+    imageResolution: "deferred",
   });
   res.json("product" in profile ? flattenProfile(profile) : profile);
 });

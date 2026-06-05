@@ -88,6 +88,10 @@ export interface ScentEngineDeps {
   ) => Promise<unknown>;
 
   // Image pipeline (Serper/Poof/storage in production)
+  resolveCachedFragranceImage?: (
+    brand: string,
+    name: string,
+  ) => Promise<ProcessedImageRef | null>;
   resolveProcessedFragranceImage: (
     opts: ResolveImageOpts,
   ) => Promise<ProcessedImageRef | null>;
@@ -127,6 +131,12 @@ export interface BuildProfileOpts {
   preferEngineData?: boolean;
   /** Overrides parsed concentration (performance metrics + stored profile). */
   concentrationOverride?: Concentration;
+  /**
+   * `inline` preserves legacy behavior. `deferred` uses catalog/cache images if
+   * already available, then refreshes expensive image work in the background.
+   * `skip` builds a text-only profile and does not enqueue image work.
+   */
+  imageResolution?: "inline" | "deferred" | "skip";
 }
 
 export async function buildProfileWithDeps(
@@ -138,6 +148,7 @@ export async function buildProfileWithDeps(
 ): Promise<ScentProfile | { error: string }> {
   const allowCatalogFuzzy = opts?.allowCatalogFuzzy ?? true;
   const preferEngineData = opts?.preferEngineData ?? false;
+  const imageResolution = opts?.imageResolution ?? "inline";
   const inputConcentration = resolveConcentrationFast(name, "", "");
   const concentrationOverride =
     opts?.concentrationOverride ??
@@ -149,12 +160,11 @@ export async function buildProfileWithDeps(
   // 1. Check global catalog — exact match first, then fuzzy to catch AI naming variations
   let catalogBase: ScentProfile | null = null;
   const cached = await deps.getCatalogEntry(profileBrand, profileName);
-  if (cached && !preferEngineData) {
+  if (cached) {
     const cachedImageUrl = await deps.usableImageUrlForResponse(cached.imageUrl);
-    if (cachedImageUrl && !concentrationOverride) return { ...cached, imageUrl: cachedImageUrl };
-    catalogBase = cachedImageUrl ? { ...cached, imageUrl: cachedImageUrl } : cached;
-  } else if (cached && preferEngineData) {
-    catalogBase = cached;
+    const cachedWithUsableImage = cachedImageUrl ? { ...cached, imageUrl: cachedImageUrl } : cached;
+    if (!preferEngineData && cachedImageUrl && !concentrationOverride) return cachedWithUsableImage;
+    catalogBase = cachedWithUsableImage;
   }
 
   if (!catalogBase && allowCatalogFuzzy && !preferEngineData) {
@@ -201,8 +211,9 @@ export async function buildProfileWithDeps(
     name: profileName,
     mode: "search",
   };
+  const shouldPreserveCatalogImage = Boolean(concentrationOverride || imageResolution === "deferred");
   const preservedCatalogImage =
-    concentrationOverride && catalogBase?.imageUrl
+    shouldPreserveCatalogImage && catalogBase?.imageUrl
       ? {
           imageUrl: catalogBase.imageUrl,
           storagePath: catalogBase.storagePath,
@@ -211,8 +222,7 @@ export async function buildProfileWithDeps(
           sourceProvider: catalogBase.sourceProvider,
         }
       : null;
-  const processedImage =
-    preservedCatalogImage ??
+  const resolveImageNow = async (): Promise<ProcessedImageRef | null> =>
     (await deps
       .resolveProcessedFragranceImage({
         brand: profileBrand,
@@ -244,6 +254,22 @@ export async function buildProfileWithDeps(
             return null;
           })
       : null);
+
+  const resolveCachedImage = async (): Promise<ProcessedImageRef | null> => {
+    if (!deps.resolveCachedFragranceImage) return null;
+    return deps.resolveCachedFragranceImage(profileBrand, profileName).catch((err) => {
+      deps.reportNonFatalError?.("scentEngine.cachedImageResolution", err, imageSearchContext);
+      return null;
+    });
+  };
+
+  const processedImage =
+    imageResolution === "skip"
+      ? null
+      : preservedCatalogImage ??
+        (imageResolution === "deferred"
+          ? await resolveCachedImage()
+          : await resolveImageNow());
 
   const cleanImageUrl = processedImage?.imageUrl ?? null;
 
@@ -334,6 +360,27 @@ export async function buildProfileWithDeps(
       name: finalName,
     });
   });
+
+  if (imageResolution === "deferred" && !processedImage) {
+    void resolveImageNow()
+      .then(async (image) => {
+        if (!image?.imageUrl) return;
+        await deps.saveCatalogEntry(finalBrand, finalName, {
+          ...profile,
+          imageUrl: image.imageUrl,
+          storagePath: image.storagePath,
+          imageHash: image.imageHash ?? null,
+          storageProvider: image.storageProvider,
+          sourceProvider: image.sourceProvider,
+        });
+      })
+      .catch((err) => {
+        deps.reportNonFatalError?.("scentEngine.deferredImageResolution", err, {
+          brand: finalBrand,
+          name: finalName,
+        });
+      });
+  }
 
   return profile;
 }
