@@ -497,10 +497,7 @@ function DashboardView() {
         <div className="space-y-20 sm:space-y-28 pt-10 sm:pt-14">
           <HomepageHeroMarquee />
 
-          <section className="scent-hero-zone mx-auto w-full max-w-2xl min-w-0 space-y-7 text-center">
-            <h2 className="mx-auto max-w-full text-balance font-serif italic text-[clamp(2.15rem,7vw,3.8rem)] text-[#fff7ec] leading-[0.98] tracking-normal">
-              Find your signature for the current atmosphere.
-            </h2>
+          <section className="mx-auto w-full max-w-[60rem] min-w-0 space-y-7 text-center">
             <FragranceCapture onAdd={handleAddItem} onVaultSearchStateChange={handleVaultSearchStateChange} />
             <AnimatePresence initial={false}>
               {showOnboardingSteps ? (

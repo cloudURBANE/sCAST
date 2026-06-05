@@ -173,6 +173,20 @@ function truncateMatchLine(text: string, max: number): string {
   return `${t.slice(0, Math.max(0, max - 1)).trimEnd()}…`;
 }
 
+function matchMonogram(m: FragranceMatch): string {
+  const brand = firstString(m.brand, m.house);
+  const source = brand || firstString(m.name) || "";
+  const cleaned = source.replace(/[^a-z0-9\s]/gi, " ").trim();
+  if (!cleaned) return "SC";
+  if (/\bdior\b/i.test(cleaned)) return "CD";
+
+  const words = cleaned.split(/\s+/).filter(Boolean);
+  if (words.length >= 2) {
+    return words.slice(0, 2).map((word) => word[0]).join("").toUpperCase();
+  }
+  return cleaned.slice(0, 2).toUpperCase();
+}
+
 const INVALID_RESULT_NAME_STARTERS = new Set(['and', '&', 'by', 'de', 'du', 'di', 'et']);
 
 function isDisplayableResultName(value: unknown): value is string {
@@ -753,23 +767,24 @@ export const FragranceCapture: React.FC<{
   ) : null;
 
   return (
-    <div className="glass-shell w-full min-w-0 rounded-[var(--radius-scent)] relative overflow-hidden">
+    <div className="scent-vault-panel w-full min-w-0 relative overflow-hidden">
       <AnimatePresence>
         {searchVeil}
       </AnimatePresence>
-      <div className="glass min-w-0 rounded-[var(--radius-scent-inner)] p-4 md:p-6">
-        <header className="mb-[1.41rem] px-2 -translate-y-px">
+      <div className="scent-vault-panel-inner min-w-0">
+        <header className="mx-auto mb-6 max-w-[43rem] px-1 text-center sm:mb-7">
           <p className="sr-only">
             Add perfumes to your vault. Example fragrance names rotate above the search field.
           </p>
-          <div className="flex flex-col items-center text-center gap-[0.94rem] pt-px">
-            <div className="space-y-[0.7rem] w-full -translate-y-px">
-              <p className="text-[11px] uppercase tracking-[0.26em] text-scent-accent/85 font-bold">
-                Add To Vault
-              </p>
-              <div className="mx-auto w-full max-w-lg px-1">
-                <VaultHeadlineRotation phrases={VAULT_HEADLINE_ROTATION} />
-              </div>
+          <h2 className="mx-auto max-w-[38rem] text-balance font-serif italic text-[clamp(2.45rem,6vw,4.15rem)] leading-[1.01] tracking-normal text-[#fff7ec] drop-shadow-[0_4px_14px_rgba(0,0,0,0.72)]">
+            Find your signature for the current atmosphere.
+          </h2>
+          <div className="mt-5 space-y-2.5 sm:mt-6">
+            <p className="text-[11px] font-bold uppercase tracking-[0.34em] text-scent-accent/90">
+              Recently Added Fragrances
+            </p>
+            <div className="mx-auto w-full max-w-lg px-1">
+              <VaultHeadlineRotation phrases={VAULT_HEADLINE_ROTATION} />
             </div>
           </div>
         </header>
@@ -791,7 +806,7 @@ export const FragranceCapture: React.FC<{
           )}
         </AnimatePresence>
 
-        <div className="mx-auto max-w-lg text-center -mt-0.5">
+        <div className="mx-auto max-w-[42.75rem] text-center">
           <form onSubmit={handleSearch} aria-busy={uploading} className="relative group">
             <input
               id="scent-add-to-vault-search"
@@ -800,9 +815,9 @@ export const FragranceCapture: React.FC<{
               onChange={(e) => { setSearchQuery(e.target.value); setErrorStatus(null); setErrorPhase(null); }}
               onFocus={() => setSearchFocused(true)}
               onBlur={() => setSearchFocused(false)}
-              placeholder="Search by house or fragrance…"
+              placeholder="Search by house or fragrance..."
               aria-label="Look up a brand or fragrance"
-              className="scent-lux-input relative z-0 w-full h-[58px] sm:h-[62px] pl-12 pr-12 text-center text-[#fff7ec] font-sans text-[15px] font-medium outline-none transition-colors placeholder:text-[#c9a97a]/42 placeholder:font-medium group-focus-within:shadow-[inset_0_1px_0_rgba(255,226,174,0.08),0_0_0_1px_rgba(212,175,55,0.15)] scroll-mt-28"
+              className="scent-lux-input scent-vault-search-input relative z-0 w-full h-[60px] pl-7 pr-16 text-left text-[#fff7ec] font-sans text-[15px] font-medium outline-none transition-colors placeholder:text-[#c9a97a]/48 placeholder:font-medium sm:h-[68px] sm:pl-8 sm:pr-[4.35rem] scroll-mt-28"
             />
             <motion.button
               type="submit"
@@ -810,7 +825,7 @@ export const FragranceCapture: React.FC<{
               whileHover={uploading ? undefined : { scale: 1.06 }}
               whileTap={uploading ? undefined : { scale: 0.9 }}
               transition={{ type: "spring", stiffness: 520, damping: 22 }}
-              className="absolute right-2.5 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent p-0 text-scent-accent/78 shadow-none outline-none transition-colors hover:text-[#fff7ec] focus-visible:ring-2 focus-visible:ring-scent-accent/35 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent disabled:pointer-events-none disabled:opacity-45 group-focus-within:text-scent-accent/92"
+              className="absolute right-3.5 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-scent-accent/86 shadow-none outline-none transition-colors hover:text-[#fff7ec] focus-visible:ring-2 focus-visible:ring-scent-accent/35 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent disabled:pointer-events-none disabled:opacity-45 group-focus-within:text-scent-accent"
               aria-label="Search"
             >
               <motion.span
@@ -819,7 +834,7 @@ export const FragranceCapture: React.FC<{
                 animate={reduceMotion || uploading ? undefined : { opacity: [0.74, 1, 0.74] }}
                 transition={reduceMotion || uploading ? undefined : { duration: 3.4, repeat: Infinity, ease: 'easeInOut' }}
               >
-                <Search size={18} strokeWidth={1.65} className="drop-shadow-[0_0_12px_rgba(212,175,55,0.22)]" />
+                <Search size={23} strokeWidth={1.6} className="drop-shadow-[0_0_12px_rgba(212,175,55,0.22)]" />
               </motion.span>
             </motion.button>
           </form>
@@ -844,64 +859,58 @@ export const FragranceCapture: React.FC<{
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.34, ease: [0.22, 1, 0.36, 1] }}
-              className="mt-6 pt-5 border-t border-white/10 mx-auto max-w-lg w-full sm:mt-8 sm:pt-6"
+              className="mx-auto mt-6 w-full sm:mt-7"
             >
               <div className="flex min-h-0 flex-col">
-                <div className="mb-3 sm:mb-5 flex shrink-0 justify-center px-1">
-                  <p className="text-[9px] uppercase tracking-[0.34em] text-scent-muted font-bold">
-                    Search Results{' '}
-                    <span className="tabular-nums text-scent-accent/75 tracking-[0.12em]">
-                      ({matches.length})
-                    </span>
-                  </p>
-                </div>
-                <div className="max-h-[min(42dvh,18rem)] min-h-0 overflow-y-auto overscroll-contain pr-1 scrollbar-hide sm:max-h-[min(42dvh,20rem)]">
-                  <div className="grid grid-cols-1 gap-2.5">
-                    {matches.map((m, i) => (
-                      <button
-                        key={m.id || m.source_url || `match-${i}`}
-                        type="button"
-                        onClick={() => setSelectedIdx(i)}
-                        className={`group w-full min-h-[80px] px-4 py-3 text-left border transition-all duration-200 cursor-pointer rounded-[var(--radius-scent)] sm:min-h-[88px] ${
-                          selectedIdx === i
-                            ? 'border-scent-accent/45 bg-white/[0.06] shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_0_0_1px_rgba(212,175,55,0.12)]'
-                            : 'border-white/10 hover:bg-white/[0.035] hover:border-white/16'
-                        }`}
-                        aria-pressed={selectedIdx === i}
-                      >
-                        <div className="grid min-w-0 grid-cols-[1fr_auto] items-start gap-3">
-                          <div className="min-w-0 space-y-1">
-                            <p
-                              className="font-serif italic text-[1.16rem] leading-snug text-[#fff7ec] max-w-full truncate"
-                              title={m.name}
-                            >
-                              {truncateMatchLine(m.name, MATCH_LINE_MAX_CHARS)}
-                            </p>
-                            <p
-                              className="text-[11px] uppercase tracking-[0.16em] text-scent-accent/80 font-sans font-bold max-w-full truncate"
-                              title={m.brand || 'House unavailable'}
-                            >
-                              {truncateMatchLine(m.brand || 'House unavailable', MATCH_LINE_MAX_CHARS)}
-                            </p>
-                          </div>
-                          {isVetted(m) ? (
-                            <span className="mt-0.5 shrink-0 rounded-full border border-scent-accent/20 bg-scent-accent/[0.06] px-2 py-1 text-[7px] font-bold uppercase tracking-[0.18em] text-scent-accent/88 shadow-[0_0_10px_rgba(212,175,55,0.1)]">
-                              Vetted
-                            </span>
-                          ) : null}
-                        </div>
-                      </button>
-                    ))}
+                <div className="scent-vault-results-panel mx-auto w-full max-w-[50.5rem] px-4 py-7 sm:px-9 sm:py-9">
+                  <div className="mb-6 flex shrink-0 justify-center px-1">
+                    <p className="scent-vault-results-heading text-[10px] font-bold uppercase tracking-[0.34em] text-scent-accent/92">
+                      Search Results{' '}
+                      <span className="tabular-nums tracking-[0.12em]">
+                        ({matches.length})
+                      </span>
+                    </p>
+                  </div>
+                  <div className={`flex max-h-[min(42dvh,24rem)] min-h-0 flex-1 overflow-y-auto overscroll-contain scrollbar-hide ${matches.length === 1 ? 'items-center' : 'items-start'}`}>
+                    <div className="grid w-full grid-cols-1 gap-3">
+                      {matches.map((m, i) => (
+                        <button
+                          key={m.id || m.source_url || `match-${i}`}
+                          type="button"
+                          onClick={() => setSelectedIdx(i)}
+                          className={`scent-vault-result-card group mx-auto w-full max-w-[39.75rem] min-h-[178px] px-6 py-7 text-center transition-all duration-200 cursor-pointer sm:min-h-[218px] sm:px-8 sm:py-8 ${
+                            selectedIdx === i ? 'is-selected' : ''
+                          }`}
+                          aria-pressed={selectedIdx === i}
+                        >
+                          <span className="scent-vault-monogram mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full font-serif text-[1.55rem] font-semibold leading-none sm:mb-5 sm:h-[4.5rem] sm:w-[4.5rem] sm:text-[1.9rem]">
+                            {matchMonogram(m)}
+                          </span>
+                          <span
+                            className="mx-auto block max-w-full truncate font-serif text-[2rem] italic leading-none text-[#fff7ec] sm:text-[2.55rem]"
+                            title={m.name}
+                          >
+                            {truncateMatchLine(m.name.toLocaleLowerCase(), MATCH_LINE_MAX_CHARS)}
+                          </span>
+                          <span
+                            className="mx-auto mt-4 block max-w-full truncate font-sans text-[11px] font-bold uppercase tracking-[0.3em] text-scent-accent/92 sm:text-[12px]"
+                            title={m.brand || 'House unavailable'}
+                          >
+                            {truncateMatchLine(m.brand || 'House unavailable', MATCH_LINE_MAX_CHARS)}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
-                <div className="shrink-0 bg-[linear-gradient(180deg,rgba(5,4,3,0)_0%,rgba(5,4,3,0.76)_20%,rgba(5,4,3,0.96)_100%)] pt-4 pb-[max(0.15rem,env(safe-area-inset-bottom))]">
+                <div className="mx-auto mt-5 w-full max-w-[49.75rem] shrink-0 pb-[max(0.15rem,env(safe-area-inset-bottom))] sm:mt-6">
                   <AnimatePresence>
                     {selectedIdx !== null ? (
                       <motion.p
                         initial={{ opacity: 0, y: 5 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -4 }}
-                        className="text-center text-[10px] uppercase tracking-[0.24em] text-scent-accent/72 font-bold"
+                        className="text-center text-[11px] uppercase tracking-[0.28em] text-scent-accent/82 font-bold"
                       >
                         Selected — ready to add
                       </motion.p>
@@ -911,9 +920,9 @@ export const FragranceCapture: React.FC<{
                     type="button"
                     onClick={handleConfirm}
                     disabled={uploading || !hasSelectedMatch}
-                    className="scent-primary-button mt-3 flex h-12 w-full items-center justify-center rounded-[var(--radius-scent)] px-4 font-serif italic text-base transition-all hover:scale-[1.02] active:scale-95 sm:mt-5 sm:h-14 sm:text-lg disabled:pointer-events-none disabled:opacity-72"
+                    className="scent-vault-outline-button mt-3 flex h-[60px] w-full items-center justify-center px-4 font-serif italic text-base transition-all hover:scale-[1.01] active:scale-[0.98] sm:mt-5 sm:h-[74px] sm:text-lg disabled:pointer-events-none disabled:opacity-62"
                   >
-                    <span className="scent-primary-button-label font-serif italic text-base sm:text-lg leading-tight text-center">
+                    <span className="scent-vault-outline-button-label font-serif italic text-[1.35rem] leading-tight text-center sm:text-[1.8rem]">
                       {hasSelectedMatch ? 'Add to Vault' : 'Select a Result'}
                     </span>
                   </button>

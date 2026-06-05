@@ -1489,7 +1489,7 @@ export const Wardrobe: React.FC<{
               <label htmlFor="wardrobe-vault-search" className="sr-only">
                 Search vault fragrances and image hints
               </label>
-              <Search size={23} strokeWidth={1.5} className="pointer-events-none absolute left-5 sm:left-6 top-1/2 z-10 -translate-y-1/2 text-scent-accent/82" />
+              <Search size={23} strokeWidth={1.5} className="pointer-events-none absolute right-5 top-1/2 z-10 -translate-y-1/2 text-scent-accent/82 sm:right-6" />
               <input
                 id="wardrobe-vault-search"
                 type="text"
@@ -1523,9 +1523,9 @@ export const Wardrobe: React.FC<{
                     setSearchFocused(false);
                   }
                 }}
-                placeholder="Search vault or image hint (e.g. watermark, sauvage)…"
+                placeholder="Search vault or image hint (e.g. watermark, sauvage)..."
                 autoComplete="off"
-                className="scent-lux-input w-full h-[58px] sm:h-[68px] pl-14 sm:pl-16 pr-14 sm:pr-16 text-center text-[#fff7ec] font-sans text-[15px] sm:text-base outline-none transition-all placeholder:text-[#d9c2a4]/58"
+                className="scent-lux-input scent-vault-search-input w-full h-[58px] pl-7 pr-14 text-left text-[#fff7ec] font-sans text-[15px] outline-none transition-all placeholder:text-[#d9c2a4]/58 sm:h-[68px] sm:pl-8 sm:pr-16 sm:text-base"
               />
               <AnimatePresence>
                 {searchDropdownOpen ? (

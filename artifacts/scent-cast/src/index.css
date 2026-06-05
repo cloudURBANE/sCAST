@@ -121,6 +121,41 @@ a {
   border-radius: var(--radius-scent);
 }
 
+.scent-vault-panel {
+  position: relative;
+  border: 1px solid rgba(232, 181, 90, 0.72);
+  border-radius: calc(var(--radius-scent) + 12px);
+  padding: clamp(2.35rem, 4.8vw, 3.65rem) clamp(1rem, 5vw, 5.25rem) clamp(1.55rem, 3.6vw, 2.25rem);
+  background:
+    radial-gradient(95% 80% at 50% 8%, rgba(255, 247, 222, 0.035), transparent 58%),
+    radial-gradient(72% 68% at 50% 100%, rgba(212, 175, 55, 0.035), transparent 68%),
+    linear-gradient(180deg, rgba(13, 12, 9, 0.9), rgba(4, 4, 3, 0.96) 62%, rgba(2, 2, 2, 0.985));
+  box-shadow:
+    0 32px 88px -54px rgba(212, 175, 55, 0.42),
+    0 28px 72px -36px rgba(0, 0, 0, 0.98),
+    inset 0 1px 0 rgba(255, 232, 179, 0.1),
+    inset 0 0 0 1px rgba(255, 225, 157, 0.025),
+    inset 0 0 80px rgba(212, 175, 55, 0.02);
+}
+
+.scent-vault-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background:
+    linear-gradient(90deg, transparent, rgba(255, 232, 180, 0.035) 50%, transparent),
+    radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.045), transparent 34rem);
+  opacity: 0.58;
+}
+
+.scent-vault-panel-inner {
+  position: relative;
+  z-index: 1;
+}
+
 .glass-shelf::after {
   content: '';
   position: absolute;
@@ -319,6 +354,145 @@ a {
   border-color: rgba(212, 175, 55, 0.9);
   box-shadow: inset 0 1px 0 rgba(255, 226, 174, 0.08), inset 0 0 30px rgba(212, 175, 55, 0.04), 0 0 0 3px rgba(212, 175, 55, 0.12), 0 18px 38px -22px rgba(0, 0, 0, 0.95);
   outline: none;
+}
+
+.scent-vault-search-input {
+  border-radius: 999px;
+  background:
+    radial-gradient(130% 160% at 50% 0%, rgba(255, 248, 224, 0.018), transparent 44%),
+    rgba(4, 4, 3, 0.88);
+  border-color: rgba(232, 181, 90, 0.72);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 236, 183, 0.08),
+    inset 0 0 28px rgba(212, 175, 55, 0.018),
+    0 14px 30px -22px rgba(0, 0, 0, 0.94);
+}
+
+.scent-vault-search-input:focus,
+.scent-vault-search-input:focus-visible {
+  border-color: rgba(255, 214, 128, 0.92);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 236, 183, 0.12),
+    inset 0 0 32px rgba(212, 175, 55, 0.035),
+    0 0 0 2px rgba(212, 175, 55, 0.12),
+    0 18px 38px -24px rgba(0, 0, 0, 0.96);
+}
+
+.scent-vault-results-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: clamp(19rem, 30vw, 25.25rem);
+  border: 1px solid rgba(202, 151, 72, 0.46);
+  border-radius: calc(var(--radius-scent) + 5px);
+  background:
+    radial-gradient(85% 70% at 50% 0%, rgba(255, 244, 212, 0.018), transparent 58%),
+    linear-gradient(180deg, rgba(9, 9, 6, 0.78), rgba(4, 4, 3, 0.92));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 229, 170, 0.055),
+    inset 0 0 36px rgba(212, 175, 55, 0.018),
+    0 24px 52px -36px rgba(0, 0, 0, 0.96);
+}
+
+.scent-vault-results-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 1.15rem;
+  white-space: nowrap;
+}
+
+.scent-vault-results-heading::before,
+.scent-vault-results-heading::after {
+  content: "";
+  width: clamp(3rem, 9vw, 7rem);
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(212, 175, 55, 0.68), transparent);
+}
+
+.scent-vault-result-card {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border: 1px solid rgba(232, 181, 90, 0.62);
+  border-radius: calc(var(--radius-scent) - 6px);
+  color: #fff7ec;
+  background:
+    radial-gradient(78% 78% at 50% 7%, rgba(255, 247, 225, 0.035), transparent 60%),
+    radial-gradient(85% 90% at 50% 105%, rgba(212, 175, 55, 0.035), transparent 68%),
+    linear-gradient(180deg, rgba(28, 27, 22, 0.74), rgba(10, 10, 8, 0.9));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 232, 179, 0.12),
+    inset 0 0 34px rgba(212, 175, 55, 0.03),
+    0 16px 36px -25px rgba(0, 0, 0, 0.94);
+}
+
+.scent-vault-result-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(255, 232, 174, 0.025), transparent);
+  opacity: 0.7;
+}
+
+.scent-vault-result-card:hover,
+.scent-vault-result-card.is-selected {
+  border-color: rgba(255, 216, 128, 0.88);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 238, 192, 0.16),
+    inset 0 0 40px rgba(212, 175, 55, 0.045),
+    0 18px 40px -26px rgba(212, 175, 55, 0.22),
+    0 18px 42px -26px rgba(0, 0, 0, 0.98);
+}
+
+.scent-vault-monogram {
+  border: 1px solid rgba(232, 181, 90, 0.72);
+  color: #e9c06a;
+  background:
+    radial-gradient(circle at 50% 22%, rgba(255, 243, 200, 0.09), transparent 44%),
+    rgba(3, 3, 2, 0.5);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 238, 191, 0.12),
+    0 0 22px rgba(212, 175, 55, 0.08);
+  text-shadow: 0 0 12px rgba(212, 175, 55, 0.24);
+}
+
+.scent-vault-outline-button {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(255, 216, 128, 0.86);
+  border-radius: var(--radius-scent);
+  background:
+    radial-gradient(70% 120% at 50% 0%, rgba(255, 244, 204, 0.026), transparent 48%),
+    rgba(2, 2, 2, 0.74);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 236, 183, 0.09),
+    inset 0 0 24px rgba(212, 175, 55, 0.018),
+    0 18px 42px -30px rgba(0, 0, 0, 0.98);
+}
+
+.scent-vault-outline-button:hover {
+  border-color: rgba(255, 230, 160, 0.98);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 243, 202, 0.13),
+    inset 0 0 30px rgba(212, 175, 55, 0.03),
+    0 20px 44px -31px rgba(212, 175, 55, 0.26),
+    0 18px 42px -30px rgba(0, 0, 0, 0.98);
+}
+
+.scent-vault-outline-button:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 3px rgba(212, 175, 55, 0.18),
+    inset 0 1px 0 rgba(255, 243, 202, 0.13),
+    inset 0 0 30px rgba(212, 175, 55, 0.03);
+}
+
+.scent-vault-outline-button-label {
+  color: #e8be62;
+  text-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.9),
+    0 0 18px rgba(212, 175, 55, 0.12);
 }
 
 .scent-primary-button {
