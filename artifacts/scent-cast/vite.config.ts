@@ -47,15 +47,6 @@ applyViteApiUrlsFromScentCastEnv();
 export default defineConfig(async () => {
   const basePath = process.env.BASE_PATH ?? "/";
 
-  // Stable, human-readable identifier for the exact bundle being served. On
-  // Vercel this is the deploying commit; locally it falls back to a build
-  // timestamp. Surfaced in-app (CrashTraceBadge) so we can confirm a device is
-  // actually running a fresh deploy rather than a cached PWA bundle.
-  const buildId =
-    process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ||
-    process.env.BUILD_ID?.trim() ||
-    new Date().toISOString().slice(0, 19).replace("T", " ");
-
   const rawPort = process.env.PORT?.trim();
   let port = 5173;
   if (rawPort) {
@@ -67,9 +58,6 @@ export default defineConfig(async () => {
 
   return {
     base: basePath,
-    define: {
-      __BUILD_ID__: JSON.stringify(buildId),
-    },
     plugins: [
       react(),
       tailwindcss(),
