@@ -230,7 +230,7 @@ test("normalizeFragranceDetail keeps fragrantica-only metrics partial", () => {
   assert.equal(status.complete, false);
   assert.equal(status.badgeLabel, "Partial");
   assert.equal(status.sourceCountLabel, "Sources 1 of 2");
-  assert.equal(status.metricsLabel, "Metrics pending");
+  assert.equal(status.metricsLabel, "Metric coverage incomplete");
 });
 
 test("resolveSourceStatus keeps stale complete flags partial without both sources", () => {
@@ -256,9 +256,9 @@ test("resolveSourceStatus keeps stale complete flags partial without both source
   assert.equal(detail.source_coverage?.complete, false);
   assert.equal(status.complete, false);
   assert.equal(status.badgeLabel, "Partial");
-  assert.equal(status.statusText, "Community-source profile available. Some source data is still pending.");
+  assert.equal(status.statusText, "Community-source profile available. Source coverage is incomplete.");
   assert.equal(status.sourceCountLabel, "Sources 0 of 2");
-  assert.equal(status.metricsLabel, "Metrics pending");
+  assert.equal(status.metricsLabel, "Metric coverage incomplete");
 
   const staleTerminalStatus = resolveSourceStatus(detail.source_coverage, {
     status: "not_needed",

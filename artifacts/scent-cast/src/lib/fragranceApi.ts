@@ -738,7 +738,7 @@ export function isSourceCoverageComplete(coverage?: SourceCoverage | null): bool
 }
 
 const VERIFIED_SOURCE_PROFILE_COPY = "Verified community-source profile available.";
-const PARTIAL_SOURCE_PROFILE_COPY = "Community-source profile available. Some source data is still pending.";
+const PARTIAL_SOURCE_PROFILE_COPY = "Community-source profile available. Source coverage is incomplete.";
 
 const ENRICHMENT_STATUS_COPY: Record<string, string> = {
   not_needed: VERIFIED_SOURCE_PROFILE_COPY,
@@ -801,7 +801,7 @@ export function resolveSourceStatus(
     summary,
     sourceCount,
     sourceCountLabel: hasCoverage ? `Sources ${sourceCount} of 2` : null,
-    metricsLabel: hasCoverage ? (complete ? "Metrics ready" : "Metrics pending") : null,
+    metricsLabel: hasCoverage ? (complete ? "Metrics ready" : "Metric coverage incomplete") : null,
     enrichmentMessage,
     statusText,
     shouldShowEnrichmentMessage: Boolean(
