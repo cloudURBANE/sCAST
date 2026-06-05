@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, type CSSProperties } from 'react';
-import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
-import { isIpadStandalone } from '@/lib/platform';
+import { motion, useReducedMotion } from 'framer-motion';
+import { isLowRenderBudget } from '@/lib/platform';
 
 const EMBLEM = '/icons/transparent-emblem/scentbeam-emblem-192x192.png';
 const GOLD = '212, 175, 55';
@@ -67,38 +67,32 @@ interface MotionProfile {
   outerRingOpacity: number[];
   emblemRotate: number[];
   emblemScale: number[];
-  emblemGlow: string;
   showBloom: boolean;
   showOuterRing: boolean;
 }
 
 const fullMotionProfile: MotionProfile = {
-  duration: 0.86,
-  exitDuration: 0.22,
+  duration: 0.52,
+  exitDuration: 0.14,
   emblemSize: 92,
-  bloomSize: 224,
+  bloomSize: 192,
   innerRingSize: 136,
   outerRingSize: 176,
-  bloomScale: [0.2, 1.08, 1.9],
-  bloomOpacity: [0, 0.28, 0],
+  bloomScale: [0.28, 0.96, 1.2],
+  bloomOpacity: [0, 0.12, 0],
   innerRingScale: [0.36, 1, 1.42],
   innerRingOpacity: [0, 0.42, 0],
   outerRingScale: [0.42, 1.06, 1.58],
   outerRingOpacity: [0, 0.18, 0],
-  emblemRotate: [-8, 180, 260],
+  emblemRotate: [-6, 24, 0],
   emblemScale: [0.76, 1.02, 0.99, 1],
-  emblemGlow: [
-    `drop-shadow(0 0 14px rgba(${GOLD}, 0.48))`,
-    `drop-shadow(0 0 28px rgba(${GOLD}, 0.18))`,
-    'brightness(1.18)',
-  ].join(' '),
-  showBloom: true,
-  showOuterRing: true,
+  showBloom: false,
+  showOuterRing: false,
 };
 
 const compactMotionProfile: MotionProfile = {
-  duration: 0.58,
-  exitDuration: 0.16,
+  duration: 0.34,
+  exitDuration: 0.1,
   emblemSize: 76,
   bloomSize: 160,
   innerRingSize: 112,
@@ -111,7 +105,6 @@ const compactMotionProfile: MotionProfile = {
   outerRingOpacity: [0, 0.1, 0],
   emblemRotate: [-4, 18, 0],
   emblemScale: [0.9, 1.03, 0.99, 1],
-  emblemGlow: 'brightness(1.08)',
   showBloom: false,
   showOuterRing: false,
 };
@@ -128,6 +121,8 @@ const overlayStyle: CSSProperties = {
 const reducedOverlayStyle: CSSProperties = {
   background:
     'radial-gradient(ellipse 55% 50% at 50% 50%, rgba(16, 10, 2, 0.94) 0%, rgba(3, 2, 1, 0.97) 100%)',
+  contain: 'layout paint',
+  isolation: 'isolate',
 };
 
 export const PageTransitionOverlay: React.FC<PageTransitionOverlayProps> = ({
@@ -135,8 +130,8 @@ export const PageTransitionOverlay: React.FC<PageTransitionOverlayProps> = ({
   animationKey,
 }) => {
   const reduceMotion = useReducedMotion();
-  const ipadStandalone = useRef(isIpadStandalone()).current;
-  const profile = ipadStandalone ? compactMotionProfile : fullMotionProfile;
+  const lowRenderBudget = useRef(isLowRenderBudget()).current;
+  const profile = lowRenderBudget ? compactMotionProfile : fullMotionProfile;
 
   useEffect(() => {
     warmTransitionEmblem();
@@ -146,49 +141,45 @@ export const PageTransitionOverlay: React.FC<PageTransitionOverlayProps> = ({
     if (visible) warmTransitionEmblem();
   }, [visible]);
 
+  if (!visible) return null;
+
   if (reduceMotion) {
     return (
-      <AnimatePresence initial={false}>
-        {visible && (
-          <motion.div
-            key={animationKey}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2, ease: 'easeInOut' }}
-            className="fixed inset-0 z-[9999] flex items-center justify-center pointer-events-none"
-            style={reducedOverlayStyle}
-            aria-hidden="true"
-            role="presentation"
-          >
-            <img
-              src={EMBLEM}
-              alt=""
-              draggable={false}
-              decoding="async"
-              fetchPriority="high"
-              style={{ width: 78, height: 78, userSelect: 'none' }}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <motion.div
+        key={animationKey}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.14, ease: 'easeInOut' }}
+        className="fixed inset-0 z-[9999] flex items-center justify-center pointer-events-auto"
+        style={reducedOverlayStyle}
+        data-page-transition-overlay="true"
+        aria-hidden="true"
+        role="presentation"
+      >
+        <img
+          src={EMBLEM}
+          alt=""
+          draggable={false}
+          decoding="async"
+          fetchPriority="high"
+          style={{ width: 78, height: 78, userSelect: 'none' }}
+        />
+      </motion.div>
     );
   }
 
   return (
-    <AnimatePresence initial={false}>
-      {visible && (
-        <motion.div
-          key={animationKey}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: profile.exitDuration, ease: 'easeInOut' }}
-          className="fixed inset-0 z-[9999] flex items-center justify-center pointer-events-none"
-          style={overlayStyle}
-          aria-hidden="true"
-          role="presentation"
-        >
+    <motion.div
+      key={animationKey}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: profile.exitDuration, ease: 'easeInOut' }}
+      className="fixed inset-0 z-[9999] flex items-center justify-center pointer-events-auto"
+      style={overlayStyle}
+      data-page-transition-overlay="true"
+      aria-hidden="true"
+      role="presentation"
+    >
           {profile.showBloom ? (
             <motion.div
               initial={{ scale: profile.bloomScale[0], opacity: 0 }}
@@ -261,7 +252,6 @@ export const PageTransitionOverlay: React.FC<PageTransitionOverlayProps> = ({
           <motion.div
             initial={{ opacity: 0, scale: 0.92 }}
             animate={{ opacity: [0, 1, 1], scale: [0.92, 1.01, 1] }}
-            exit={{ opacity: 0, scale: 0.96, transition: { duration: profile.exitDuration, ease: [0.4, 0, 1, 1] } }}
             transition={{ duration: profile.duration, times: [0, 0.24, 1], ease: [0.22, 1, 0.36, 1] }}
             style={{
               position: 'relative',
@@ -304,14 +294,11 @@ export const PageTransitionOverlay: React.FC<PageTransitionOverlayProps> = ({
                 width: profile.emblemSize,
                 height: profile.emblemSize,
                 userSelect: 'none',
-                filter: profile.emblemGlow,
                 transform: 'translate3d(0, 0, 0)',
                 willChange: 'transform, opacity',
               }}
             />
           </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+    </motion.div>
   );
 };

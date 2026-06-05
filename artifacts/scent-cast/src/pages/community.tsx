@@ -19,6 +19,47 @@ interface CommunityPageProps {
   onSignOut: () => void;
 }
 
+const COMMUNITY_BODY_WAKE_DELAY_MS = 640;
+
+function useAfterInitialRoutePaint() {
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    let firstFrame = 0;
+    let secondFrame = 0;
+    let settleTimer: number | null = null;
+    let idleHandle: number | null = null;
+
+    firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        settleTimer = window.setTimeout(() => {
+          const scheduleIdle = window.requestIdleCallback as
+            | ((callback: IdleRequestCallback, options?: IdleRequestOptions) => number)
+            | undefined;
+
+          if (scheduleIdle) {
+            idleHandle = scheduleIdle(() => setReady(true), { timeout: 700 });
+            return;
+          }
+
+          setReady(true);
+        }, COMMUNITY_BODY_WAKE_DELAY_MS);
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      window.cancelAnimationFrame(secondFrame);
+      if (settleTimer) window.clearTimeout(settleTimer);
+      if (idleHandle !== null && window.cancelIdleCallback) window.cancelIdleCallback(idleHandle);
+    };
+  }, []);
+
+  return ready;
+}
+
 export const CommunityPage: React.FC<CommunityPageProps> = ({
   authToken,
   authEmail,
@@ -27,7 +68,8 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
   onShare,
   onSignOut,
 }) => {
-  const { data, isLoading, isError } = useCommunityFragrances();
+  const communityBodyReady = useAfterInitialRoutePaint();
+  const { data, isLoading, isError } = useCommunityFragrances(communityBodyReady);
   const [postType, setPostType] = useState<CommunityPostType | null>(null);
   const [postTag, setPostTag] = useState<string | null>(null);
   const [postQuery, setPostQuery] = useState('');
@@ -73,20 +115,30 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
             <span className="h-px flex-1 bg-gradient-to-r from-scent-accent/10 via-scent-accent/30 to-transparent" aria-hidden="true" />
           </div>
           <div className="scent-full-bleed">
-            <BottleMarquee items={data ?? []} loading={isLoading} isError={isError} />
+            {communityBodyReady ? (
+              <BottleMarquee items={data ?? []} loading={isLoading} isError={isError} />
+            ) : (
+              <section className="scent-community-marquee" aria-hidden="true">
+                <div className="scent-community-marquee-group opacity-0">
+                  <div className="scent-community-marquee-cell" />
+                </div>
+              </section>
+            )}
           </div>
-          <section className="mx-auto w-full max-w-[1120px] space-y-8 pt-2" aria-label="Community forum">
-            <PostComposer authToken={authToken} onSignIn={onSignIn} />
-            <PostFilters
-              type={postType}
-              tag={postTag}
-              q={postQuery}
-              onTypeChange={setPostType}
-              onTagChange={setPostTag}
-              onQueryChange={setPostQuery}
-            />
-            <CommunityFeed filters={feedFilters} authToken={authToken} onSignIn={onSignIn} />
-          </section>
+          {communityBodyReady ? (
+            <section className="mx-auto w-full max-w-[1120px] space-y-8 pt-2" aria-label="Community forum">
+              <PostComposer authToken={authToken} onSignIn={onSignIn} />
+              <PostFilters
+                type={postType}
+                tag={postTag}
+                q={postQuery}
+                onTypeChange={setPostType}
+                onTagChange={setPostTag}
+                onQueryChange={setPostQuery}
+              />
+              <CommunityFeed filters={feedFilters} authToken={authToken} onSignIn={onSignIn} />
+            </section>
+          ) : null}
         </div>
       </main>
 

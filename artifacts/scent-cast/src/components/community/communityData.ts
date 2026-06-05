@@ -127,10 +127,11 @@ async function fetchCommunityFragrances(): Promise<CommunityFragranceEntry[]> {
   return SEED;
 }
 
-export function useCommunityFragrances() {
+export function useCommunityFragrances(enabled = true) {
   return useQuery({
     queryKey: ['community', 'featured', 'v2'],
     queryFn: fetchCommunityFragrances,
+    enabled,
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false,
     retry: 1,

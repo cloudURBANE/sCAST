@@ -43,6 +43,7 @@ export function useRenderBudget(): RenderBudget {
     const queries = [
       window.matchMedia("(prefers-reduced-motion: reduce)"),
       window.matchMedia("(display-mode: standalone)"),
+      window.matchMedia("(pointer: coarse)"),
     ];
     const update = () => setBudget(readBudget());
     update();
@@ -54,8 +55,10 @@ export function useRenderBudget(): RenderBudget {
         query.addListener(update);
       }
     }
+    window.addEventListener("resize", update, { passive: true });
 
     return () => {
+      window.removeEventListener("resize", update);
       for (const query of queries) {
         if (typeof query.removeEventListener === "function") {
           query.removeEventListener("change", update);
