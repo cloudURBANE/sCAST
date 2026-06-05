@@ -71,6 +71,24 @@ test("identity id decoding allows colons inside the decoded brand", () => {
   });
 });
 
+test("decodes local fallback ids minted with single-colon raw segments", () => {
+  assert.deepEqual(decodeIdentityId("local:Xerjoff:Naxos"), {
+    brand: "Xerjoff",
+    name: "Naxos",
+  });
+});
+
+test("local id decoding keeps colons that belong to the fragrance name", () => {
+  assert.deepEqual(decodeIdentityId("local:Dior:Sauvage: Elixir"), {
+    brand: "Dior",
+    name: "Sauvage: Elixir",
+  });
+});
+
+test("rejects a local id that is missing its name segment", () => {
+  assert.equal(decodeIdentityId("local:Xerjoff"), null);
+});
+
 test("scent fact details carry source coverage and raw source URLs", () => {
   const detail = scentFactProfileToDetail({
     id: "source:https://www.fragrantica.com/perfume/Dior/Sauvage-31861.html",
