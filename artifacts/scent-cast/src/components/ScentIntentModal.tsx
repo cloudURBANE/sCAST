@@ -105,10 +105,7 @@ export const ScentIntentModal: React.FC<ScentIntentModalProps> = ({ isOpen, onCl
         </div>
 
         {/* Scrollable body */}
-        <div
-          className="flex-1 overflow-y-auto px-5 sm:px-8 py-2"
-          style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
-        >
+        <div className="flex-1 overflow-y-auto px-5 sm:px-8 py-2">
           <AnimatePresence mode="wait">
             {step === 1 ? (
               <motion.div

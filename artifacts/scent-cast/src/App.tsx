@@ -606,10 +606,7 @@ function DashboardView() {
             </div>
 
             {/* Scrollable middle */}
-            <div
-              className="flex-1 overflow-y-auto"
-              style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
-            >
+            <div className="flex-1 overflow-y-auto">
               <div className="flex items-center justify-center min-h-full px-5 py-6 sm:px-16 sm:py-12">
                 <div className="max-w-2xl w-full text-center space-y-6 sm:space-y-12">
                   <header>

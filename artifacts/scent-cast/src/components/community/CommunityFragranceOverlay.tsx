@@ -106,7 +106,7 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}>
+          <div className="flex-1 overflow-y-auto">
             <div className="flex min-h-full items-center justify-center px-5 py-6 sm:px-10 sm:py-10 lg:px-16">
               <div className="grid w-full max-w-6xl gap-8 lg:grid-cols-[minmax(18rem,26rem)_minmax(0,1fr)] lg:items-center lg:gap-14">
                 <div className="scent-fragrance-card relative mx-auto flex aspect-[3/4.6] w-full max-w-[20rem] flex-col p-5 sm:max-w-[24rem] sm:p-6">

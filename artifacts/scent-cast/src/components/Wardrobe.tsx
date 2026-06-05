@@ -1417,7 +1417,14 @@ export const Wardrobe: React.FC<{
     );
   const detailShowDeferredContent = !constrainedDetailMode || detailDeferredContentReady;
   const detailPanelClassName = constrainedDetailMode
-    ? "relative w-full h-full bg-[#030303] shadow-2xl overflow-hidden flex flex-col border-0"
+    // Constrained surfaces (iPhone/Android) render the panel full-screen and
+    // fully opaque, so its drop shadow is entirely behind the panel and never
+    // visible — but `shadow-2xl` still makes the compositor allocate a large
+    // offscreen surface for the blurred shadow on every open. Drop it here: it
+    // is invisible cost on exactly the devices that hit the memory-pressure
+    // crash. Desktop keeps the floating panel (h-[94dvh], mx-4) where the
+    // shadow is actually seen.
+    ? "relative w-full h-full bg-[#030303] overflow-hidden flex flex-col border-0"
     : "relative w-full h-full sm:h-[94dvh] sm:max-w-[100rem] sm:mx-4 bg-[#030303] shadow-2xl overflow-hidden flex flex-col border-0 sm:border border-white/8";
   const detailScrollClassName = constrainedDetailMode
     ? "flex-1 overflow-y-auto scrollbar-hide px-4 sm:px-5 pb-4"
@@ -1797,7 +1804,14 @@ export const Wardrobe: React.FC<{
                 className={detailScrollClassName}
                 style={
                   {
-                    WebkitOverflowScrolling: 'touch',
+                    // NOTE: `-webkit-overflow-scrolling: touch` deliberately omitted.
+                    // On iOS it forces a dedicated, *content-sized* momentum-scroll
+                    // compositing layer (an offscreen IOSurface) for this — the
+                    // tallest scroll area in the app — allocated fresh on every
+                    // detail-modal open. Across repeat open/close that GPU memory
+                    // accumulates and trips the WebContent memory-pressure kill
+                    // ("A problem repeatedly occurred"). Momentum scrolling is the
+                    // default on iOS 13+, so the property is pure cost with no gain.
                     paddingTop: 'max(1.25rem, env(safe-area-inset-top))',
                   } as React.CSSProperties
                 }
