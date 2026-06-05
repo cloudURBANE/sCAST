@@ -72,18 +72,21 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
   };
 
   return (
-    <section className="space-y-5" aria-label="Community post filters">
+    <section
+      className="rounded-[var(--radius-scent)] border border-scent-accent/12 bg-black/58 p-4 shadow-[0_20px_54px_-44px_rgba(212,175,55,0.34)] sm:p-5"
+      aria-label="Community post filters"
+    >
       <div className="flex flex-col items-center gap-4">
-        <div className="flex flex-wrap items-center justify-center gap-2">
+        <div className="grid w-full grid-cols-2 gap-2 sm:grid-cols-5">
           <button
             type="button"
             onClick={() => onTypeChange(null)}
             aria-pressed={type === null}
             className={[
-              'inline-flex min-h-10 items-center gap-2 rounded-full border px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35',
+              'inline-flex min-h-10 items-center justify-center gap-2 rounded-full border px-3 py-2 text-center text-[10px] font-bold uppercase tracking-[0.14em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35',
               type === null
                 ? 'border-scent-accent/48 bg-scent-accent/[0.08] text-[#fff7ec]'
-                : 'border-scent-accent/16 bg-white/[0.025] text-scent-muted hover:border-scent-accent/34 hover:text-[#fff7ec]',
+                : 'border-scent-accent/16 bg-black/54 text-scent-muted hover:border-scent-accent/34 hover:text-[#fff7ec]',
             ].join(' ')}
           >
             <Grid2X2 size={14} strokeWidth={1.7} aria-hidden="true" />
@@ -96,10 +99,10 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
               onClick={() => onTypeChange(roomType)}
               aria-pressed={type === roomType}
               className={[
-                'inline-flex min-h-10 items-center gap-2 rounded-full border px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35',
+                'inline-flex min-h-10 items-center justify-center gap-2 rounded-full border px-3 py-2 text-center text-[10px] font-bold uppercase tracking-[0.14em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35',
                 type === roomType
                   ? 'border-scent-accent/48 bg-scent-accent/[0.08] text-[#fff7ec]'
-                  : 'border-scent-accent/16 bg-white/[0.025] text-scent-muted hover:border-scent-accent/34 hover:text-[#fff7ec]',
+                  : 'border-scent-accent/16 bg-black/54 text-scent-muted hover:border-scent-accent/34 hover:text-[#fff7ec]',
               ].join(' ')}
             >
               <Icon size={14} strokeWidth={1.7} aria-hidden="true" />
@@ -136,7 +139,7 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2">
+      <div className="mt-4 flex flex-wrap items-center justify-center gap-x-3 gap-y-2">
         <p className="shrink-0 text-[10px] font-bold uppercase tracking-[0.18em] text-scent-muted/52">
           Popular tags
         </p>
@@ -154,7 +157,7 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
                   'shrink-0 rounded-full border px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35',
                   active
                     ? 'border-scent-accent/44 bg-scent-accent/[0.08] text-[#fff7ec]'
-                    : 'border-white/10 bg-white/[0.02] text-scent-muted/75 hover:border-scent-accent/28 hover:text-[#fff7ec]',
+                    : 'border-white/10 bg-black/54 text-scent-muted/75 hover:border-scent-accent/28 hover:text-[#fff7ec]',
                 ].join(' ')}
               >
                 #{candidate}

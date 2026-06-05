@@ -64,11 +64,11 @@ const FragranceChips: React.FC<{ post: CommunityPost }> = ({ post }) => {
   if (fragrances.length === 0) return null;
 
   return (
-    <div className="mt-4 flex flex-wrap gap-3">
+    <div className="mt-4 flex flex-wrap justify-center gap-3">
       {fragrances.map((fragrance) => (
         <div
           key={`${fragrance.brand}:${fragrance.name}:${fragrance.imageUrl}`}
-          className="grid w-full max-w-[18rem] grid-cols-[3.25rem_1fr] items-center gap-3 rounded-[14px] border border-scent-accent/14 bg-black/24 p-2 sm:w-auto"
+          className="grid w-full max-w-[18rem] grid-cols-[3.25rem_1fr] items-center gap-3 rounded-[14px] border border-scent-accent/14 bg-black/62 p-2 text-left sm:w-auto"
         >
           <div className="flex h-16 w-[3.25rem] items-center justify-center overflow-hidden rounded-[10px] bg-white/[0.035]">
             <img
@@ -105,11 +105,11 @@ const MetadataLine: React.FC<{ post: CommunityPost }> = ({ post }) => {
 
     if (items.length === 0) return null;
     return (
-      <div className="mt-4 flex flex-wrap gap-2">
+      <div className="mt-4 flex flex-wrap justify-center gap-2">
         {items.map(([label, value]) => (
           <span
             key={label}
-            className="rounded-full border border-white/10 bg-white/[0.025] px-3 py-1 text-[11px] text-scent-muted"
+            className="rounded-full border border-white/10 bg-black/54 px-3 py-1 text-[11px] text-scent-muted"
           >
             <span className="font-bold uppercase tracking-[0.12em] text-scent-accent/75">{label}</span>
             <span className="ml-2 text-[#fff7ec]/78">{value}</span>
@@ -123,7 +123,7 @@ const MetadataLine: React.FC<{ post: CommunityPost }> = ({ post }) => {
     const priceContext = metadataString(post, 'price_context') ?? metadataString(post, 'priceContext');
     if (!priceContext) return null;
     return (
-      <p className="mt-4 rounded-[14px] border border-scent-accent/14 bg-scent-accent/[0.045] px-4 py-3 text-sm text-[#fff7ec]/82">
+      <p className="mx-auto mt-4 max-w-2xl rounded-[14px] border border-scent-accent/14 bg-black/62 px-4 py-3 text-center text-sm text-[#fff7ec]/82">
         <span className="font-bold uppercase tracking-[0.14em] text-scent-accent/75">Price context</span>
         <span className="ml-2">{priceContext}</span>
       </p>
@@ -165,7 +165,7 @@ const BattleVotes: React.FC<{
   };
 
   return (
-    <div className="mt-4 space-y-3">
+    <div className="mx-auto mt-4 max-w-2xl space-y-3">
       {options.map((option) => {
         const count = post.votes[option] ?? 0;
         const pct = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
@@ -175,7 +175,7 @@ const BattleVotes: React.FC<{
             type="button"
             onClick={() => submitVote(option)}
             disabled={voteMutation.isPending}
-            className="group relative w-full overflow-hidden rounded-[14px] border border-scent-accent/16 bg-white/[0.025] px-4 py-3 text-left transition-colors hover:border-scent-accent/38 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 disabled:pointer-events-none disabled:opacity-55"
+            className="group relative w-full overflow-hidden rounded-[14px] border border-scent-accent/16 bg-black/58 px-4 py-3 text-left transition-colors hover:border-scent-accent/38 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 disabled:pointer-events-none disabled:opacity-55"
           >
             <span
               className="absolute inset-y-0 left-0 bg-scent-accent/[0.075] transition-[width]"
@@ -203,10 +203,10 @@ export const PostCard: React.FC<PostCardProps> = ({ post, authToken, onSignIn })
   const heading = post.title?.trim() || detail.label;
 
   return (
-    <article className="rounded-[var(--radius-scent)] border border-scent-accent/14 bg-[linear-gradient(180deg,rgba(10,7,4,0.82),rgba(3,2,1,0.94))] p-5 shadow-[0_22px_58px_-40px_rgba(0,0,0,0.96)] sm:p-6">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+    <article className="mx-auto w-full max-w-[960px] rounded-[var(--radius-scent)] border border-scent-accent/14 bg-[linear-gradient(180deg,rgba(0,0,0,0.84),rgba(0,0,0,0.96))] p-5 text-center shadow-[0_22px_58px_-40px_rgba(0,0,0,0.96)] sm:p-6">
+      <header className="flex flex-col items-center gap-4">
         <div className="min-w-0">
-          <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-[0.16em]">
+          <div className="mb-3 flex flex-wrap items-center justify-center gap-2 text-[11px] uppercase tracking-[0.16em]">
             <span className="inline-flex items-center gap-2 rounded-full border border-scent-accent/18 bg-scent-accent/[0.05] px-3 py-1 font-bold text-scent-accent/82">
               <Icon size={13} strokeWidth={1.8} aria-hidden="true" />
               {detail.label}
@@ -219,14 +219,14 @@ export const PostCard: React.FC<PostCardProps> = ({ post, authToken, onSignIn })
             </Link>
             <span className="text-scent-muted/45">{formatCommunityTime(post.createdAt)}</span>
           </div>
-          <h3 className="break-words font-serif text-2xl italic leading-tight text-[#fff7ec] sm:text-3xl">
+          <h3 className="break-words text-balance font-serif text-2xl italic leading-tight text-[#fff7ec] sm:text-3xl">
             {heading}
           </h3>
         </div>
       </header>
 
       <div className="mt-4 space-y-4">
-        <p className="whitespace-pre-line break-words text-sm leading-7 text-[#fff7ec]/84 sm:text-base sm:leading-8">
+        <p className="mx-auto max-w-3xl whitespace-pre-line break-words text-sm leading-7 text-[#fff7ec]/84 sm:text-base sm:leading-8">
           {post.body}
         </p>
         <MetadataLine post={post} />
@@ -237,11 +237,11 @@ export const PostCard: React.FC<PostCardProps> = ({ post, authToken, onSignIn })
       </div>
 
       {post.tags.length > 0 ? (
-        <div className="mt-5 flex flex-wrap gap-2">
+        <div className="mt-5 flex flex-wrap justify-center gap-2">
           {post.tags.map((tag) => (
             <span
               key={tag}
-              className="rounded-full border border-white/10 bg-white/[0.02] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-scent-muted/75"
+              className="rounded-full border border-white/10 bg-black/54 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-scent-muted/75"
             >
               #{tag}
             </span>
@@ -249,7 +249,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post, authToken, onSignIn })
         </div>
       ) : null}
 
-      <footer className="mt-5 flex flex-col gap-3 border-t border-white/10 pt-4 md:flex-row md:items-center md:justify-between">
+      <footer className="mt-5 flex flex-col items-center justify-center gap-3 border-t border-white/10 pt-4 md:flex-row md:justify-center">
         <ReactionBar
           targetType="post"
           targetId={post.id}
@@ -260,7 +260,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post, authToken, onSignIn })
         <button
           type="button"
           onClick={() => setCommentsOpen((open) => !open)}
-          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-scent-accent/16 bg-white/[0.025] px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-scent-muted transition-colors hover:border-scent-accent/34 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
+          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-scent-accent/16 bg-black/58 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-scent-muted transition-colors hover:border-scent-accent/34 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
           aria-expanded={commentsOpen}
         >
           <MessageCircle size={14} strokeWidth={1.8} aria-hidden="true" />

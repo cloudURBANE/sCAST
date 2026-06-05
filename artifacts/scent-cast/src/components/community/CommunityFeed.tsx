@@ -50,11 +50,11 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({ filters, authToken
 
   if (isLoading) {
     return (
-      <div className="grid gap-4" aria-label="Loading community posts">
+      <div className="mx-auto grid w-full max-w-[960px] gap-4" aria-label="Loading community posts">
         {[0, 1, 2].map((item) => (
           <div
             key={item}
-            className="min-h-[13rem] rounded-[var(--radius-scent)] border border-scent-accent/12 bg-white/[0.025] p-5"
+            className="min-h-[13rem] rounded-[var(--radius-scent)] border border-scent-accent/12 bg-black/58 p-5"
           >
             <div className="mb-5 h-4 w-28 rounded-full bg-scent-accent/10" />
             <div className="mb-3 h-6 w-2/3 rounded-full bg-white/[0.055]" />
@@ -81,7 +81,7 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({ filters, authToken
 
   if (posts.length === 0) {
     return (
-      <div className="rounded-[var(--radius-scent)] border border-scent-accent/14 bg-white/[0.025] px-6 py-14 text-center">
+      <div className="mx-auto w-full max-w-[960px] rounded-[var(--radius-scent)] border border-scent-accent/14 bg-black/58 px-6 py-14 text-center">
         <p className="font-serif text-2xl italic text-[#fff7ec]">No rooms yet.</p>
         <p className="mx-auto mt-3 max-w-lg text-sm leading-7 text-scent-muted/70">
           Start the first room or clear your filters.
@@ -102,7 +102,7 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({ filters, authToken
             type="button"
             onClick={() => void fetchNextPage()}
             disabled={isFetchingNextPage}
-            className="inline-flex min-h-11 items-center gap-2 rounded-full border border-scent-accent/22 bg-white/[0.025] px-5 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-scent-muted transition-colors hover:border-scent-accent/42 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 disabled:pointer-events-none disabled:opacity-55"
+            className="inline-flex min-h-11 items-center gap-2 rounded-full border border-scent-accent/22 bg-black/58 px-5 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-scent-muted transition-colors hover:border-scent-accent/42 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 disabled:pointer-events-none disabled:opacity-55"
           >
             {isFetchingNextPage ? (
               <LoaderCircle size={15} className="animate-spin" aria-hidden="true" />
