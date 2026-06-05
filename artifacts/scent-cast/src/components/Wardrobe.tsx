@@ -45,6 +45,7 @@ import { BrandGoldLabel } from '@/components/BrandGoldLabel';
 import { ScentNotesInfographic } from '@/components/ScentNotesInfographic';
 import { useModalBehavior } from '@/hooks/use-modal-behavior';
 import { useRenderBudget } from '@/hooks/useRenderBudget';
+import { crumb } from '@/lib/crashTrace';
 import {
   WARDROBE_CLARIFY_SOLVERS,
   WARDROBE_REFRESH_COUNT_STORAGE_KEY,
@@ -945,6 +946,7 @@ export const Wardrobe: React.FC<{
     firstFrame = window.requestAnimationFrame(() => {
       secondFrame = window.requestAnimationFrame(() => {
         const markReady = () => {
+          crumb(`detail:deferred-ready#${detailOpenCountRef.current}`);
           setDetailDeferredContentReady(true);
         };
         if (typeof window.requestIdleCallback === 'function') {
@@ -1034,6 +1036,7 @@ export const Wardrobe: React.FC<{
   const [bottleImageToolsOpen, setBottleImageToolsOpen] = React.useState(false);
   const [deleteConfirming, setDeleteConfirming] = React.useState(false);
   const detailModalRef = React.useRef<HTMLDivElement | null>(null);
+  const detailOpenCountRef = React.useRef(0);
   const detailCloseButtonRef = React.useRef<HTMLButtonElement | null>(null);
   const enlargeModalRef = React.useRef<HTMLDivElement | null>(null);
   const enlargeCloseButtonRef = React.useRef<HTMLButtonElement | null>(null);
@@ -1049,6 +1052,8 @@ export const Wardrobe: React.FC<{
   }, [bottleImageToolsOpen, refreshUsageTotals]);
 
   const openDetail = React.useCallback((item: Fragrance) => {
+    detailOpenCountRef.current += 1;
+    crumb(`detail:open#${detailOpenCountRef.current}`);
     setDetailExitInProgress(false);
     setRefreshError(null);
     setPendingPreview(null);
@@ -1058,6 +1063,7 @@ export const Wardrobe: React.FC<{
   }, []);
 
   const closeDetail = React.useCallback(() => {
+    crumb(`detail:close#${detailOpenCountRef.current}`);
     if (selectedItem) {
       setDetailExitInProgress(true);
     }
@@ -1750,7 +1756,12 @@ export const Wardrobe: React.FC<{
       </div>
 
       {typeof document !== 'undefined' ? createPortal(
-      <AnimatePresence onExitComplete={() => setDetailExitInProgress(false)}>
+      <AnimatePresence
+        onExitComplete={() => {
+          crumb(`detail:exit-complete#${detailOpenCountRef.current}`);
+          setDetailExitInProgress(false);
+        }}
+      >
         {selectedItem && (
           <div 
             ref={detailModalRef}
