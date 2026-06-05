@@ -243,9 +243,14 @@ async function bgRemoveAndEncode(rawModelBuffer: Buffer): Promise<{
   // Always pipe the raw model output through the same bg-removal service the
   // rest of the wardrobe pipeline uses. Even if gpt-image-2 returns a clean
   // packshot, Poof gives us a reliable alpha edge and the standard 768px
-  // packshot framing. If Poof is unavailable, removeBgBuffer falls back to
-  // local trim so we still get a usable image.
-  const removed = await removeBgBuffer(rawModelBuffer);
+  // packshot framing. The reimagine output is, by construction, a single
+  // isolated product packshot on a uniform studio sweep, so we request Poof's
+  // `type=product` preset — it cuts product packshots more cleanly than the
+  // auto preset and carries the "preserved an opaque light background" retry
+  // guard, which matters now that the model sits the bottle on a mid-light grey
+  // sweep instead of pure white. If Poof is unavailable, removeBgBuffer falls
+  // back to local trim so we still get a usable image.
+  const removed = await removeBgBuffer(rawModelBuffer, { poofType: "product" });
 
   const encoded = await sharp(removed.buffer, { failOn: "truncated" })
     .rotate()
