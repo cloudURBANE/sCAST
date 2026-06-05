@@ -198,12 +198,22 @@ function sourceCoverageComplete(item: Fragrance): boolean {
   );
 }
 
+function wardrobeNeedsIncompleteRecovery(item: Fragrance): boolean {
+  if (fgMetricsComplete(item) || sourceCoverageComplete(item)) return false;
+  const status = normalizedEnrichmentStatus(item);
+  if (status !== 'completed' && status !== 'complete') return false;
+  const enrichment = item.enrichment ?? item.raw_engine_detail?.enrichment;
+  if ((enrichment?.requested_count ?? 0) >= MAX_ENRICHMENT_ATTEMPTS) return false;
+  return hasFragranticaRefreshTarget(item);
+}
+
 function wardrobeNeedsEnrichmentRefresh(item: Fragrance): boolean {
   const enrichment = item.enrichment ?? item.raw_engine_detail?.enrichment;
   if (fgMetricsComplete(item) || sourceCoverageComplete(item)) return false;
   if (isBackgroundEnrichmentQueued(enrichment)) return true;
   const status = normalizedEnrichmentStatus(item);
-  if (status === 'completed' || status === 'complete' || status === 'not_needed') return false;
+  if (status === 'completed' || status === 'complete') return wardrobeNeedsIncompleteRecovery(item);
+  if (status === 'not_needed') return false;
   if (status === 'failed' || status === 'ignored') return false;
   if ((enrichment?.requested_count ?? 0) >= MAX_ENRICHMENT_ATTEMPTS) return false;
   return hasFragranticaRefreshTarget(item) && !fgMetricsComplete(item);
@@ -218,15 +228,18 @@ function detailRefreshPayloadFor(item: Fragrance): FragranceDetailRequestPayload
     detail?.raw?.source_urls?.bn_url,
   );
   const engineId = firstString(item.fragranceApiId, detail?.id);
+  const recoveryFlag = wardrobeNeedsIncompleteRecovery(item)
+    ? { recover_incomplete: true }
+    : {};
   if (engineId) {
     const origin = engineId.startsWith('catalog:') ||
       engineId.startsWith('dataset:') ||
       engineId.startsWith('local:')
       ? 'app'
       : 'srt';
-    return { id: engineId, ...(sourceUrl ? { source_url: sourceUrl } : {}), origin };
+    return { id: engineId, ...(sourceUrl ? { source_url: sourceUrl } : {}), origin, ...recoveryFlag };
   }
-  return sourceUrl ? { source_url: sourceUrl, origin: 'srt' } : null;
+  return sourceUrl ? { source_url: sourceUrl, origin: 'srt', ...recoveryFlag } : null;
 }
 
 const RAIN_CONDITION_SIGNALS = ['rain', 'drizzle', 'storm'];
@@ -1080,6 +1093,25 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             detail.source_coverage?.fragrantica_metrics_complete,
           );
           if (!metricsComplete && isBackgroundEnrichmentQueued(detail.enrichment)) {
+            setItems((prev) =>
+              prev.map((existing) =>
+                sameWardrobeEntry(existing, item)
+                  ? {
+                      ...existing,
+                      enrichment: detail.enrichment ?? existing.enrichment,
+                      source_coverage: detail.source_coverage ?? existing.source_coverage,
+                      raw_engine_detail: {
+                        ...(existing.raw_engine_detail ?? {}),
+                        enrichment:
+                          detail.enrichment ?? existing.raw_engine_detail?.enrichment,
+                        source_coverage:
+                          detail.source_coverage ??
+                          existing.raw_engine_detail?.source_coverage,
+                      },
+                    }
+                  : existing,
+              ),
+            );
             noteBackoff(item, String(detail.enrichment?.status ?? 'queued'));
             continue;
           }

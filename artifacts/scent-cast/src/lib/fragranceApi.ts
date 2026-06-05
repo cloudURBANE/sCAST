@@ -738,7 +738,7 @@ export function isSourceCoverageComplete(coverage?: SourceCoverage | null): bool
 }
 
 const VERIFIED_SOURCE_PROFILE_COPY = "Verified community-source profile available.";
-const PARTIAL_SOURCE_PROFILE_COPY = "Community-source profile available. Some source data is still pending.";
+const PARTIAL_SOURCE_PROFILE_COPY = "Community-source profile available. Source coverage is incomplete.";
 
 const ENRICHMENT_STATUS_COPY: Record<string, string> = {
   not_needed: VERIFIED_SOURCE_PROFILE_COPY,
@@ -801,7 +801,7 @@ export function resolveSourceStatus(
     summary,
     sourceCount,
     sourceCountLabel: hasCoverage ? `Sources ${sourceCount} of 2` : null,
-    metricsLabel: hasCoverage ? (complete ? "Metrics ready" : "Metrics pending") : null,
+    metricsLabel: hasCoverage ? (complete ? "Metrics ready" : "Metric coverage incomplete") : null,
     enrichmentMessage,
     statusText,
     shouldShowEnrichmentMessage: Boolean(
@@ -1272,9 +1272,14 @@ async function searchAppFragrances(
   };
 }
 
+type FragranceDetailRequestOptions = {
+  origin?: FragranceSearchOrigin;
+  recover_incomplete?: boolean;
+};
+
 export type FragranceDetailRequestPayload =
-  | { id: string; source_url?: string; origin?: FragranceSearchOrigin }
-  | { source_url: string; id?: never; origin?: FragranceSearchOrigin };
+  | ({ id: string; source_url?: string } & FragranceDetailRequestOptions)
+  | ({ source_url: string; id?: never } & FragranceDetailRequestOptions);
 
 export async function getFragranceDetails(
   payload: FragranceDetailRequestPayload,
@@ -1289,6 +1294,7 @@ export async function getFragranceDetails(
   const requestBody = {
     ...("id" in payload ? { id: payload.id } : {}),
     ...("source_url" in payload && payload.source_url ? { source_url: payload.source_url } : {}),
+    ...(payload.recover_incomplete ? { recover_incomplete: true } : {}),
   };
   const requestInit: RequestInit = {
     method: "POST",
