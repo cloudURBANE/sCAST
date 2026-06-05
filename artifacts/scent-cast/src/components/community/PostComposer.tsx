@@ -341,19 +341,17 @@ export const PostComposer: React.FC<PostComposerProps> = ({ authToken, onSignIn 
 
   if (!composerOpen) {
     return (
-      <section className="rounded-[var(--radius-scent)] border border-scent-accent/16 bg-[linear-gradient(180deg,rgba(10,7,4,0.84),rgba(3,2,1,0.94))] p-5 shadow-[0_24px_70px_-48px_rgba(212,175,55,0.42)] sm:p-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="min-w-0">
-            <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-scent-accent/78">
-              Community forum
-            </p>
-            <h2 className="mt-2 font-serif text-3xl italic leading-tight text-[#fff7ec]">
-              Rooms already moving through the lounge.
-            </h2>
-            <p className="mt-3 max-w-2xl text-sm leading-7 text-scent-muted/72">
-              Ask the room, post your SOTD, run a battle, or check if a bottle is worth it.
-            </p>
-          </div>
+      <section className="rounded-[var(--radius-scent)] border border-scent-accent/16 bg-[linear-gradient(180deg,rgba(10,7,4,0.84),rgba(3,2,1,0.94))] p-6 shadow-[0_24px_70px_-48px_rgba(212,175,55,0.42)] sm:p-8">
+        <div className="mx-auto flex max-w-2xl flex-col items-center text-center">
+          <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-scent-accent/78">
+            Community forum
+          </p>
+          <h2 className="mt-3 font-serif text-3xl italic leading-tight text-[#fff7ec] sm:text-4xl">
+            Rooms already moving through the lounge.
+          </h2>
+          <p className="mt-3 text-sm leading-7 text-scent-muted/72">
+            Ask the room, post your SOTD, run a battle, or check if a bottle is worth it.
+          </p>
           <button
             type="button"
             onClick={() => {
@@ -361,7 +359,7 @@ export const PostComposer: React.FC<PostComposerProps> = ({ authToken, onSignIn 
               setStatusMessage(null);
             }}
             aria-expanded="false"
-            className="scent-primary-button inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-[var(--radius-scent)] px-6 py-3 text-sm font-bold uppercase tracking-[0.18em]"
+            className="scent-primary-button mt-6 inline-flex min-h-12 items-center justify-center gap-2 rounded-[var(--radius-scent)] px-7 py-3 text-sm font-bold uppercase tracking-[0.18em]"
           >
             <Plus size={16} strokeWidth={1.8} aria-hidden="true" />
             Start Room
@@ -369,7 +367,7 @@ export const PostComposer: React.FC<PostComposerProps> = ({ authToken, onSignIn 
         </div>
 
         {statusMessage ? (
-          <p className="mt-5 rounded-[14px] border border-scent-accent/12 bg-white/[0.025] px-4 py-3 text-sm text-scent-muted">
+          <p className="mx-auto mt-5 max-w-2xl rounded-[14px] border border-scent-accent/12 bg-white/[0.025] px-4 py-3 text-center text-sm text-scent-muted">
             {statusMessage}
           </p>
         ) : null}

@@ -1495,7 +1495,7 @@ a {
 .scent-community-marquee-cell {
   flex: 0 0 clamp(15rem, 24vw, 22rem);
   width: clamp(15rem, 24vw, 22rem);
-  height: clamp(23rem, 36vw, 33rem);
+  height: clamp(20.5rem, 32vw, 29.5rem);
   position: relative;
   display: flex;
   align-items: flex-end;
