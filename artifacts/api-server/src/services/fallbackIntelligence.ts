@@ -92,40 +92,34 @@ const KNOWN_MULTI_WORD_BRANDS = [
 ];
 
 function parseQuery(query: string): { brand: string; name: string } {
-  const parts = query.split(" ");
-  if (parts.length <= 1) {
-    return { brand: parts[0] || "Unknown", name: parts[0] || "Unknown" };
-  }
+  const cleaned = query.trim();
 
-  const lowerQuery = query.toLowerCase();
+  const lowerQuery = cleaned.toLowerCase();
   for (const b of KNOWN_MULTI_WORD_BRANDS) {
     if (lowerQuery.startsWith(b)) {
-      const brand = query.substring(0, b.length);
-      const name = query.substring(b.length).trim() || brand;
+      const brand = cleaned.substring(0, b.length);
+      const name = cleaned.substring(b.length).trim() || brand;
       return { brand, name };
     }
   }
 
-  const brand = parts[0] || "Unknown";
-  const name = parts.slice(1).join(" ") || parts[0];
-  return { brand, name };
+  // We cannot reliably infer the brand from a free-text query. The previous
+  // implementation assumed the first word was the brand, which turned
+  // "Royal Sapphire" into {brand:"Royal", name:"Sapphire"} and "Michael Jordan"
+  // into {brand:"Michael", name:"Jordan"} -- fabricated identities that rendered
+  // as "Sapphire by Royal" and poisoned global_fragrances once persisted. Leave
+  // the brand unknown and keep the full query as the name; downstream
+  // resolveFragranceIdentity recovers the real brand from the dataset when it can.
+  return { brand: "", name: cleaned };
 }
 
-export async function deepScrapeFragrance(query: string): Promise<ScrapedFragrance> {
-  const defaultResult = (): ScrapedFragrance => {
-    const { brand, name } = parseQuery(query);
-    const notes = ["Citrus", "Musk", "Wood"];
-    return {
-      name,
-      brand,
-      perfumer: "",
-      notes,
-      pyramid: classifyNotesByPosition(notes),
-      family: "Fresh",
-      description: `Basic profile for ${query}.`,
-    };
-  };
-
+// Returns `null` when there is no real evidence the query is a fragrance.
+// It used to fabricate a generic "Citrus/Musk/Wood" profile around a naive
+// brand/name word-split for ANY input, which the caller then persisted to
+// global_fragrances -- the source of the "Sapphire by Royal" bug. Now it only
+// returns a profile when the Wikipedia snippet actually yields fragrance notes,
+// and signals "not found" otherwise so the caller can decline to invent/persist.
+export async function deepScrapeFragrance(query: string): Promise<ScrapedFragrance | null> {
   try {
     const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query + " perfume fragrance")}&utf8=&format=json`;
     const res = await axios.get(searchUrl, { headers: { "User-Agent": "OlfactoryApp/1.0" } });
@@ -143,9 +137,11 @@ export async function deepScrapeFragrance(query: string): Promise<ScrapedFragran
       n => n.charAt(0).toUpperCase() + n.slice(1)
     );
 
-    const notes = foundNotes.length > 0 ? foundNotes : ["Citrus", "Musk", "Wood"];
-    const pyramid = classifyNotesByPosition(notes);
-    const family = detectFamily(notes, snippet);
+    // No detectable fragrance notes -> we have nothing real. Don't fabricate.
+    if (foundNotes.length === 0) return null;
+
+    const pyramid = classifyNotesByPosition(foundNotes);
+    const family = detectFamily(foundNotes, snippet);
     const perfumer = extractPerfumer(snippet);
 
     const { brand, name } = parseQuery(query);
@@ -154,12 +150,12 @@ export async function deepScrapeFragrance(query: string): Promise<ScrapedFragran
       name,
       brand,
       perfumer,
-      notes,
+      notes: foundNotes,
       pyramid,
       family,
-      description: snippet ? `${snippet.substring(0, 300)}...` : `Standard profile for ${query}.`,
+      description: `${snippet.substring(0, 300)}...`,
     };
   } catch {
-    return defaultResult();
+    return null;
   }
 }
