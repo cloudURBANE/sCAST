@@ -51,12 +51,12 @@ const formatSprayCount = (sprayCount: ScentWeatherRecommendation['spray_count'])
 const PAGE_TRANSITION_TIMING = {
   standard: {
     coverMs: 96,
-    minShowMs: 420,
+    minShowMs: 360,
     postSwapPaintMs: 48,
   },
   lowMotion: {
     coverMs: 72,
-    minShowMs: 280,
+    minShowMs: 240,
     postSwapPaintMs: 32,
   },
 } as const;
@@ -830,11 +830,12 @@ export default function App() {
   const pendingRevealRouteRef = useRef<string | null>(null);
   const transitionStartedAtRef = useRef(0);
   const isFreezeLab = renderedLocation.pathname === '/debug/ipad-freeze';
-  // On a constrained iPad PWA the per-frame animated thread background outruns
-  // Safari's compositor during fast scroll (black flashes / late paint). Drop it
-  // there and let the static app-shell background carry the look instead.
+  // The thread background runs the measured DOM-transform path, which presents
+  // smoothly on iPad and iOS, so it renders on every surface except the freeze
+  // lab. It still composes a static (no rAF loop) arrangement under
+  // prefers-reduced-motion — that branch lives inside ThreadBackground itself.
   const { lowMotionRenderMode } = useRenderBudget();
-  const showThreadBackground = !isFreezeLab && !lowMotionRenderMode;
+  const showThreadBackground = !isFreezeLab;
   const transitionTiming = useMemo(
     () => (lowMotionRenderMode ? PAGE_TRANSITION_TIMING.lowMotion : PAGE_TRANSITION_TIMING.standard),
     [lowMotionRenderMode],

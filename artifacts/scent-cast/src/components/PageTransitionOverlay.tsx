@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, type CSSProperties } from 'react';
-import { motion, useReducedMotion } from 'framer-motion';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { isLowRenderBudget } from '@/lib/platform';
 
 const EMBLEM = '/icons/transparent-emblem/scentbeam-emblem-192x192.png';
@@ -54,7 +54,12 @@ interface PageTransitionOverlayProps {
 
 interface MotionProfile {
   duration: number;
-  exitDuration: number;
+  // Cover (fade-in) must finish before App.tsx swaps the route at `coverMs`, or
+  // the page change flashes through the still-translucent overlay.
+  coverDuration: number;
+  // Reveal (fade-out) — the new route is already painted underneath, so this is
+  // a soft uncover rather than a hard cut.
+  revealDuration: number;
   emblemSize: number;
   bloomSize: number;
   innerRingSize: number;
@@ -73,7 +78,8 @@ interface MotionProfile {
 
 const fullMotionProfile: MotionProfile = {
   duration: 0.52,
-  exitDuration: 0.14,
+  coverDuration: 0.08,
+  revealDuration: 0.26,
   emblemSize: 92,
   bloomSize: 192,
   innerRingSize: 136,
@@ -92,7 +98,8 @@ const fullMotionProfile: MotionProfile = {
 
 const compactMotionProfile: MotionProfile = {
   duration: 0.34,
-  exitDuration: 0.1,
+  coverDuration: 0.06,
+  revealDuration: 0.2,
   emblemSize: 76,
   bloomSize: 160,
   innerRingSize: 112,
@@ -141,39 +148,37 @@ export const PageTransitionOverlay: React.FC<PageTransitionOverlayProps> = ({
     if (visible) warmTransitionEmblem();
   }, [visible]);
 
-  if (!visible) return null;
-
-  if (reduceMotion) {
-    return (
-      <motion.div
-        key={animationKey}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.14, ease: 'easeInOut' }}
-        className="fixed inset-0 z-[9999] flex items-center justify-center pointer-events-auto"
-        style={reducedOverlayStyle}
-        data-page-transition-overlay="true"
-        aria-hidden="true"
-        role="presentation"
-      >
-        <img
-          src={EMBLEM}
-          alt=""
-          draggable={false}
-          decoding="async"
-          fetchPriority="high"
-          style={{ width: 78, height: 78, userSelect: 'none' }}
-        />
-      </motion.div>
-    );
-  }
-
-  return (
+  const reducedContent = (
     <motion.div
       key={animationKey}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      transition={{ duration: profile.exitDuration, ease: 'easeInOut' }}
+      exit={{ opacity: 0, pointerEvents: 'none', transition: { duration: 0.18, ease: 'easeInOut' } }}
+      transition={{ duration: 0.12, ease: 'easeOut' }}
+      className="fixed inset-0 z-[9999] flex items-center justify-center pointer-events-auto"
+      style={reducedOverlayStyle}
+      data-page-transition-overlay="true"
+      aria-hidden="true"
+      role="presentation"
+    >
+      <img
+        src={EMBLEM}
+        alt=""
+        draggable={false}
+        decoding="async"
+        fetchPriority="high"
+        style={{ width: 78, height: 78, userSelect: 'none' }}
+      />
+    </motion.div>
+  );
+
+  const fullContent = (
+    <motion.div
+      key={animationKey}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0, pointerEvents: 'none', transition: { duration: profile.revealDuration, ease: 'easeInOut' } }}
+      transition={{ duration: profile.coverDuration, ease: 'easeOut' }}
       className="fixed inset-0 z-[9999] flex items-center justify-center pointer-events-auto"
       style={overlayStyle}
       data-page-transition-overlay="true"
@@ -300,5 +305,11 @@ export const PageTransitionOverlay: React.FC<PageTransitionOverlayProps> = ({
             />
           </motion.div>
     </motion.div>
+  );
+
+  return (
+    <AnimatePresence>
+      {visible ? (reduceMotion ? reducedContent : fullContent) : null}
+    </AnimatePresence>
   );
 };
