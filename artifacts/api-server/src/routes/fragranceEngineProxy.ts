@@ -24,6 +24,12 @@ const HOP_BY_HOP = new Set([
   "upgrade",
   "host",
   "content-length",
+  // Node's fetch (undici) transparently decompresses the upstream body, so
+  // `await upstream.arrayBuffer()` is already plain bytes. Forwarding the
+  // upstream `content-encoding` would mislabel that decompressed body as still
+  // gzip/br, and the browser would fail to decode it — surfacing as an empty
+  // response and forcing the SPA to fall back to the degraded Express search.
+  "content-encoding",
 ]);
 
 async function proxyToEngine(req: Request, res: Response) {
