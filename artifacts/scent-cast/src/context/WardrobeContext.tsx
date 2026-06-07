@@ -551,6 +551,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const isMutatingRef = useRef(false);
   const lastMutationRef = useRef(0);
   const appStateRefreshInFlightRef = useRef(false);
+  const imageBackfillTimersRef = useRef<number[]>([]);
   const itemsRef = useRef(items);
   const authTokenRef = useRef(authToken);
   itemsRef.current = items;
@@ -627,6 +628,45 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       loadWardrobe(authToken);
     }
   }, [authToken, loadWardrobe]);
+
+  const clearImageBackfillTimers = useCallback(() => {
+    for (const id of imageBackfillTimersRef.current) {
+      window.clearTimeout(id);
+    }
+    imageBackfillTimersRef.current = [];
+  }, []);
+
+  // New fragrances save with no image: `POST /api/scent-profile` resolves images
+  // deferred (returns empty now, backfills the shared catalog in the background),
+  // so the tile only fills in when `GET /api/wardrobe` re-hydrates from the catalog.
+  // Without help, the soonest that happens is the 60s background poll — the tile
+  // sits on "No image" for up to a minute. Kick a short, decaying burst of polls so
+  // the image appears within seconds. Delays clear the 5s post-mutation cooldown in
+  // `loadWardrobe` and stop early once the saved row has an image.
+  const scheduleImageBackfillRehydrate = useCallback(
+    (token: string, target: Pick<Fragrance, 'id' | '_dbId'>) => {
+      clearImageBackfillTimers();
+      const POLL_SCHEDULE_MS = [6000, 12000, 20000, 32000, 48000];
+      for (const delay of POLL_SCHEDULE_MS) {
+        const id = window.setTimeout(() => {
+          if (authTokenRef.current !== token) return;
+          const current = itemsRef.current.find((item) => sameWardrobeEntry(item, target));
+          const resolved =
+            typeof current?.imageUrl === 'string' && current.imageUrl.trim().length > 0;
+          // Row gone (deleted) or image already arrived → stop the remaining burst.
+          if (!current || resolved) {
+            clearImageBackfillTimers();
+            return;
+          }
+          void loadWardrobe(token);
+        }, delay);
+        imageBackfillTimersRef.current.push(id);
+      }
+    },
+    [clearImageBackfillTimers, loadWardrobe],
+  );
+
+  useEffect(() => clearImageBackfillTimers, [clearImageBackfillTimers]);
 
   const loadAppState = useCallback(async (token: string, signal?: AbortSignal): Promise<boolean> => {
     const res = await fetch('/api/me/app-state', {
@@ -812,6 +852,13 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             title: "Fragrance Enshrined",
             description: `${newItem.name} has been synced with your database.`
           });
+          // Deferred image resolution saves the row imageless; poll the catalog
+          // re-hydrate quickly instead of waiting for the 60s background tick.
+          const savedHasImage =
+            typeof savedItem.imageUrl === 'string' && savedItem.imageUrl.trim().length > 0;
+          if (!savedHasImage) {
+            scheduleImageBackfillRehydrate(authToken, savedItem);
+          }
           return { persisted: true };
         }
         throw new Error('Wardrobe save failed: empty API response');
@@ -835,7 +882,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
 
     return { persisted: false, requiresAuth: !authToken };
-  }, [authToken, guestPromptDismissed, loadAppState, onboardingCompleted, setIsAuthModalOpen, toast]);
+  }, [authToken, guestPromptDismissed, loadAppState, onboardingCompleted, scheduleImageBackfillRehydrate, setIsAuthModalOpen, toast]);
 
   const handlePersistWardrobeImage = useCallback(async (
     target: Fragrance,
