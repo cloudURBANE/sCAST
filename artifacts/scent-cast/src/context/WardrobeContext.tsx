@@ -597,7 +597,14 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         throw new Error(`HTTP ${res.status}`);
       }
       const data: Fragrance[] = await res.json();
+      // Discard a payload that resolved across a mutation. The entry guard only
+      // caught loads that *started* during a mutation; a poll already in-flight
+      // when the user saves (e.g. Find Image) finishes after isMutatingRef has
+      // flipped back to false and would otherwise stomp the optimistic image
+      // with stale rows — the "tester → old image → tester" flicker. The 5s
+      // cooldown matches the entry guard above.
       if (isMutatingRef.current) return;
+      if (Date.now() - lastMutationRef.current < 5000) return;
       setItems((prev) => reconcileWardrobeItems(prev, data));
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
