@@ -4,7 +4,6 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "hello": "tsx ./src/hello.ts",
     "rebuild-user": "tsx ./src/rebuild-user-wardrobe.ts",
     "cleanup-images": "tsx ./src/cleanup-orphaned-images.ts",
     "verify:image-pipeline": "tsx ./src/verify-image-pipeline.ts",
