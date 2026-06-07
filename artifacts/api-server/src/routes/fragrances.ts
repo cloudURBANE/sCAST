@@ -20,6 +20,7 @@ import {
 } from "../services/fragranceApiCore";
 import {
   hasKnownFragranceBrandSignal,
+  scoreFragranceCandidate,
   searchFragranceDatasetByBrand,
   shouldSearchExternalFragranceSources,
 } from "../services/fragranceNameResolver";
@@ -76,6 +77,26 @@ function searchQueryWithFragranceIntent(query: string): string {
   return /\b(?:cologne|fragrance|perfume|parfum|edt|edp|edc|eau\s+de|extrait)\b/i.test(query)
     ? query
     : `${query} perfume`;
+}
+
+// External search engines return URLs in raw indexer order, which for nickname
+// queries (e.g. "Liam Grey", the community name for the grey Liam bottle) often
+// floats a flanker ("Liam Blue Shine") above the base fragrance ("Liam").
+// Re-rank URL-derived candidates by their fuzzy match score against the query so
+// the closest identity wins; the score penalizes candidate names that add
+// unmatched variant tokens, so the base scores above its flankers.
+function rankSourceCandidatesByQuery(
+  candidates: FragranceSearchCandidate[],
+  query: string,
+): FragranceSearchCandidate[] {
+  return candidates
+    .map((candidate, index) => ({
+      candidate,
+      index,
+      score: scoreFragranceCandidate(query, { brand: candidate.brand, name: candidate.name }, 0).score,
+    }))
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .map((entry) => entry.candidate);
 }
 
 function dedupeCandidates(candidates: FragranceSearchCandidate[]): FragranceSearchCandidate[] {
@@ -336,10 +357,12 @@ router.get("/fragrances/search", async (req, res) => {
     try {
       const { urls, timedOut } = await searchScentSourcesWithResponseBudget(query, { maxCandidates: 16 });
       sourceLookupTimedOut ||= timedOut;
+      const sourceCandidates: FragranceSearchCandidate[] = [];
       for (const url of urls) {
         const candidate = candidateFromSourceUrl(url, query);
-        if (candidate) candidates.push(candidate);
+        if (candidate) sourceCandidates.push(candidate);
       }
+      candidates.push(...rankSourceCandidatesByQuery(sourceCandidates, query));
     } catch (err) {
       logger.warn({ err }, "fragrance search source lookup failed");
     }
@@ -350,10 +373,12 @@ router.get("/fragrances/search", async (req, res) => {
       const fallbackQuery = searchQueryWithFragranceIntent(query);
       const { urls, timedOut } = await searchScentSourcesWithResponseBudget(fallbackQuery, { maxCandidates: 16 });
       sourceLookupTimedOut ||= timedOut;
+      const sourceCandidates: FragranceSearchCandidate[] = [];
       for (const url of urls) {
         const candidate = candidateFromSourceUrl(url, query);
-        if (candidate) candidates.push(candidate);
+        if (candidate) sourceCandidates.push(candidate);
       }
+      candidates.push(...rankSourceCandidatesByQuery(sourceCandidates, query));
     } catch (err) {
       logger.warn({ err }, "fragrance search broad source fallback failed");
     }

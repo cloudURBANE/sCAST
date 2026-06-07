@@ -136,10 +136,15 @@ export const BottleImage: React.FC<BottleImageProps> = ({
 
     if (img.naturalWidth > 0) {
       handleLoad();
-    } else {
+    } else if (loading !== 'lazy') {
+      // An eager image that is `complete` with zero natural width genuinely
+      // failed to decode. A lazy image, however, reports `complete && naturalWidth === 0`
+      // on iOS Safari while it is still deferred off-screen (not an error) —
+      // flagging it here is what surfaced "Unavailable" on the iPhone grid even
+      // though the URL was fine. For lazy images, wait for the real load/error event.
       handleError();
     }
-  }, [broken, isLoading, retryCount, url, useVideo]);
+  }, [broken, isLoading, retryCount, url, useVideo, loading]);
 
   const handleVideoError = () => {
     setVideoFailed(true);
