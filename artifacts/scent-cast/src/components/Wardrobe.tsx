@@ -808,8 +808,7 @@ function concentrationHintFromValue(
 }
 
 function suggestionPrimaryLine(s: WardrobeSearchSuggestion): string {
-  if (s.kind === 'fragrance') return `${entryName(s.item)} — ${entryBrand(s.item)}`;
-  return s.label;
+  return `${entryName(s.item)} — ${entryBrand(s.item)}`;
 }
 
 function SuggestionTypingLabel({ text, animate }: { text: string; animate: boolean }) {
@@ -1030,7 +1029,6 @@ export const Wardrobe: React.FC<{
     }
   }, [authToken]);
   const [persistBusy, setPersistBusy] = React.useState(false);
-  const [vaultSolverBanner, setVaultSolverBanner] = React.useState<string | null>(null);
   const [searchFocused, setSearchFocused] = React.useState(false);
   const [searchHighlightIndex, setSearchHighlightIndex] = React.useState(0);
   const [enlargeOpen, setEnlargeOpen] = React.useState(false);
@@ -1044,7 +1042,6 @@ export const Wardrobe: React.FC<{
   const [frameDraft, setFrameDraft] = React.useState<NormalizedBottleImageAdjustment>(
     DEFAULT_BOTTLE_IMAGE_ADJUSTMENT,
   );
-  const solverPrefillRef = React.useRef<WardrobeImageSolverId | null>(null);
   const searchBlurTimerRef = React.useRef<number | null>(null);
 
   React.useEffect(() => {
@@ -1143,14 +1140,7 @@ export const Wardrobe: React.FC<{
   React.useEffect(() => {
     if (!selectedItem?.id) return;
     setFrameDraft(normalizeBottleImageAdjustment(selectedItem.imageAdjustment));
-    const pre = solverPrefillRef.current;
-    if (pre) {
-      setClarifySolverId(pre);
-      solverPrefillRef.current = null;
-      setVaultSolverBanner(null);
-    } else {
-      setClarifySolverId('');
-    }
+    setClarifySolverId('');
   }, [selectedItem?.id]);
 
   const handleRefreshImage = async (item: Fragrance, solverId?: WardrobeImageSolverId) => {
@@ -1382,21 +1372,14 @@ export const Wardrobe: React.FC<{
   }, [searchQuery, searchSuggestions.length]);
 
   const applySearchSuggestion = React.useCallback((s: WardrobeSearchSuggestion) => {
-    if (s.kind === 'fragrance') {
-      const nm = entryName(s.item);
-      const br = entryBrand(s.item);
-      setSearchQuery(`${br} ${nm}`.trim());
-      setSearchFocused(false);
-      setRefreshError(null);
-      setPendingPreview(null);
-      setFrameDraft(normalizeBottleImageAdjustment((s.item as Fragrance).imageAdjustment));
-      setSelectedItem(s.item as Fragrance);
-    } else {
-      solverPrefillRef.current = s.id;
-      setVaultSolverBanner(`Next profile: image hint — ${s.label}`);
-      setSearchQuery('');
-      setSearchFocused(false);
-    }
+    const nm = entryName(s.item);
+    const br = entryBrand(s.item);
+    setSearchQuery(`${br} ${nm}`.trim());
+    setSearchFocused(false);
+    setRefreshError(null);
+    setPendingPreview(null);
+    setFrameDraft(normalizeBottleImageAdjustment((s.item as Fragrance).imageAdjustment));
+    setSelectedItem(s.item as Fragrance);
   }, []);
 
   // Performance Optimization: Memoize shelf chunking
@@ -1581,7 +1564,7 @@ export const Wardrobe: React.FC<{
                     setSearchFocused(false);
                   }
                 }}
-                placeholder="Search vault or image hint (e.g. watermark, sauvage)..."
+                placeholder="Search vault (e.g. sauvage)..."
                 autoComplete="off"
                 className="scent-lux-input scent-vault-search-input w-full h-[58px] pl-7 pr-14 text-left text-[#fff7ec] font-sans text-[15px] outline-none transition-all placeholder:text-[#d9c2a4]/58 sm:h-[68px] sm:pl-8 sm:pr-16 sm:text-base"
               />
@@ -1604,14 +1587,11 @@ export const Wardrobe: React.FC<{
                     {searchSuggestions.map((sug, idx) => {
                       const active = idx === searchHighlightIndex;
                       const primary = suggestionPrimaryLine(sug);
-                      const sub =
-                        sug.kind === 'solver'
-                          ? 'Image search tuning — Find image uses this hint'
-                          : [sug.item.family, ...(sug.item.notes ?? []).slice(0, 2)]
-                              .filter(Boolean)
-                              .join(' · ');
+                      const sub = [sug.item.family, ...(sug.item.notes ?? []).slice(0, 2)]
+                        .filter(Boolean)
+                        .join(' · ');
                       return (
-                        <li key={`${sug.kind}-${sug.kind === 'fragrance' ? sug.item.id : sug.id}`} role="none">
+                        <li key={`fragrance-${sug.item.id}`} role="none">
                           <button
                             type="button"
                             role="option"
@@ -1639,19 +1619,7 @@ export const Wardrobe: React.FC<{
                   </motion.ul>
                 ) : null}
               </AnimatePresence>
-              {vaultSolverBanner ? (
-                <div className="mt-3 flex items-start gap-2 rounded-lg border border-scent-accent/35 bg-scent-accent/10 px-3 py-2.5 text-left">
-                  <p className="flex-1 text-[11px] text-white/80 font-sans leading-snug">{vaultSolverBanner}</p>
-                  <button
-                    type="button"
-                    onClick={() => setVaultSolverBanner(null)}
-                    className="shrink-0 text-[10px] uppercase tracking-widest text-white/45 hover:text-white px-1"
-                    aria-label="Dismiss hint"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ) : null}
+
             </div>
             <div className="scent-full-bleed w-full">
               <div className="scent-entry-count w-full font-serif italic text-xl sm:text-2xl whitespace-nowrap">
