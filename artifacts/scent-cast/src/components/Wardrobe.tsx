@@ -10,6 +10,7 @@ import {
   RefreshCw,
   Undo2,
   HelpCircle,
+  AlertCircle,
   Sparkles,
   Check,
   Maximize2,
@@ -2036,6 +2037,36 @@ export const Wardrobe: React.FC<{
                                   </button>
                                 </div>
 
+                                {/* Action-adjacent status: an error or fallback warning is
+                                    shown right under the buttons the user just tapped, so a
+                                    failed reimagine/refresh never collapses silently and reads
+                                    as a phantom modal reset. The pinned-footer copy below stays
+                                    as the fallback for when this tools panel is closed (e.g. a
+                                    background reimagine that fails after the user navigates away). */}
+                                {!selectedReimagining && refreshError ? (
+                                  <div
+                                    role="alert"
+                                    className="flex items-start gap-2 rounded-lg border border-red-400/30 bg-red-500/[0.08] px-3 py-2.5"
+                                  >
+                                    <AlertCircle size={13} className="mt-px shrink-0 text-red-300/90" />
+                                    <p className="text-[10px] leading-snug text-red-200/90 font-sans">
+                                      {refreshError}
+                                    </p>
+                                  </div>
+                                ) : null}
+
+                                {!selectedReimagining && !refreshError && bgFallbackWarning ? (
+                                  <div
+                                    role="status"
+                                    className="flex items-start gap-2 rounded-lg border border-yellow-400/25 bg-yellow-500/[0.07] px-3 py-2.5"
+                                  >
+                                    <AlertCircle size={13} className="mt-px shrink-0 text-yellow-300/80" />
+                                    <p className="text-[10px] leading-snug text-yellow-200/85 font-sans">
+                                      {bgFallbackWarning}
+                                    </p>
+                                  </div>
+                                ) : null}
+
                                 {selectedReimagining ? (
                                   <div className="rounded-lg border border-white/15 bg-white/[0.04] px-2.5 py-2.5 text-center space-y-1">
                                     <p className="text-[8px] uppercase tracking-[0.28em] text-white/70 font-bold">
@@ -2354,10 +2385,14 @@ export const Wardrobe: React.FC<{
                 className="px-5 pt-3 shrink-0 border-t border-white/5 flex flex-col gap-3"
                 style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))' }}
               >
-                {refreshError && (
+                {/* Footer fallback only — when the bottle tools panel is open the
+                    same message is shown inline beside the action buttons above, so
+                    avoid rendering it twice. This keeps errors reachable for actions
+                    that complete after the panel is closed (e.g. a background reimagine). */}
+                {!bottleImageToolsOpen && refreshError && (
                   <p className="text-[9px] text-red-400/80 text-center leading-snug px-2 py-1">{refreshError}</p>
                 )}
-                {!refreshError && bgFallbackWarning && (
+                {!bottleImageToolsOpen && !refreshError && bgFallbackWarning && (
                   <p className="text-[9px] text-yellow-400/70 text-center leading-snug px-2 py-1">{bgFallbackWarning}</p>
                 )}
 
