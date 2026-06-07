@@ -54,6 +54,30 @@ test("isProcessedStorageImageUrl matches the configurable CDN-base allowlist", (
   assert.equal(isProcessedStorageImageUrl("https://fimgs.net/mdimg/perfume/375x500.123.jpg", bases), false);
 });
 
+test("forceProxy routes a processed CDN object back through the proxy (Phase-4 fallback)", () => {
+  const raw =
+    "https://abc.supabase.co/storage/v1/object/public/images/images/processed/brand/slug/hash-v3.webp?v=v3";
+  // Without forceProxy it renders directly (Phase 1).
+  assert.equal(
+    proxiedImageUrl(raw, { apiBaseUrl: "https://api.example.com" }),
+    raw,
+  );
+  // With forceProxy it is wrapped in /api/image-proxy so a failed direct fetch can be retried.
+  const forced = proxiedImageUrl(raw, { apiBaseUrl: "https://api.example.com", forceProxy: true });
+  assert.equal(
+    forced,
+    "https://api.example.com/api/image-proxy?url=" + encodeURIComponent(raw) + "&v=v3",
+  );
+});
+
+test("forceProxy still returns local image-object paths as-is (proxying localhost is pointless)", () => {
+  const raw = "/api/image-objects/images/processed/brand/bottle.webp?v=abc123";
+  assert.equal(
+    proxiedImageUrl(raw, { apiBaseUrl: "http://localhost:3002", forceProxy: true }),
+    "http://localhost:3002/api/image-objects/images/processed/brand/bottle.webp?v=abc123",
+  );
+});
+
 test("remote images still go through API image proxy with cache version preserved", () => {
   const url = proxiedImageUrl(
     "https://cdn.example.com/bottle.jpg?v=fresh",

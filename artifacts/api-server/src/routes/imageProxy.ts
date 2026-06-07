@@ -1,6 +1,12 @@
 import { Router } from "express";
 import { logger } from "../lib/logger";
 import { trimPackshotForImageProxy } from "../services/packshotTrim";
+import {
+  cacheControlForImageTarget,
+  imageProxyCache,
+  imageProxyCacheKey,
+  type ImageProxyPayload,
+} from "../services/imageProxyCache";
 import { fetchExternalImage, parseAndValidateExternalImageUrl } from "../services/safeImageFetch";
 
 const router = Router();
@@ -29,31 +35,41 @@ router.get("/image-proxy", async (req, res) => {
     return;
   }
 
+  // Key the cache + in-flight dedup on the normalized upstream URL + trim flag
+  // (trim changes the bytes). The downstream Cache-Control depends only on the
+  // target URL, so it is computed here and stays correct across cache hits.
+  const cacheKey = imageProxyCacheKey(target.toString(), doTrim);
+  const cacheControl = cacheControlForImageTarget(target);
+
   try {
-    const upstream = await fetchExternalImage(target.toString());
-    let body = upstream.buffer;
-    let outType = upstream.contentType;
+    const payload = await imageProxyCache.getOrLoad(cacheKey, async (): Promise<ImageProxyPayload> => {
+      const upstream = await fetchExternalImage(target.toString());
+      let body = upstream.buffer;
+      let outType = upstream.contentType;
 
-    // Skip JPEG packshot trim for images that are already processed transparent
-    // WebPs from our own pipeline. Trim re-encodes to JPEG, which would flatten
-    // alpha onto white and undo background removal in the UI.
-    const isWebp = outType === "image/webp";
-    const isGif = outType === "image/gif";
-    const isProcessedObject = target.toString().includes("/images/processed/");
-    if (doTrim && !isWebp && !isGif && !isProcessedObject) {
-      const trimmed = await trimPackshotForImageProxy(body);
-      if (trimmed.ok) {
-        body = trimmed.buffer;
-        outType = trimmed.contentType;
-      } else {
-        logger.debug({ url: String(url).slice(0, 120) }, "image-proxy: packshot trim skipped, passthrough");
+      // Skip JPEG packshot trim for images that are already processed transparent
+      // WebPs from our own pipeline. Trim re-encodes to JPEG, which would flatten
+      // alpha onto white and undo background removal in the UI.
+      const isWebp = outType === "image/webp";
+      const isGif = outType === "image/gif";
+      const isProcessedObject = target.toString().includes("/images/processed/");
+      if (doTrim && !isWebp && !isGif && !isProcessedObject) {
+        const trimmed = await trimPackshotForImageProxy(body);
+        if (trimmed.ok) {
+          body = trimmed.buffer;
+          outType = trimmed.contentType;
+        } else {
+          logger.debug({ url: String(url).slice(0, 120) }, "image-proxy: packshot trim skipped, passthrough");
+        }
       }
-    }
 
-    res.setHeader("Content-Type", outType);
-    res.setHeader("Cache-Control", "public, max-age=86400");
+      return { body, contentType: outType };
+    });
+
+    res.setHeader("Content-Type", payload.contentType);
+    res.setHeader("Cache-Control", cacheControl);
     res.setHeader("Access-Control-Allow-Origin", "*");
-    res.end(body);
+    res.end(payload.body);
   } catch (err: any) {
     logger.error({ err: err.message, url }, "image-proxy: fetch failed");
     res.status(502).json({ error: "Failed to fetch image" });

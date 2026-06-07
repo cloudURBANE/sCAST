@@ -6,8 +6,19 @@ import {
   bottleImageAdjustmentStyle,
   type BottleImageAdjustment,
 } from '@/lib/bottleImageAdjustment';
-import { proxiedImageUrl } from '@/lib/imageProxy';
+import { isProcessedStorageImageUrl, proxiedImageUrl } from '@/lib/imageProxy';
 import { isLowRenderBudget } from '@/lib/platform';
+import { reportImageMetric } from '@/lib/imageTelemetry';
+
+const RETRY_LIMIT = 2;
+const RETRY_BASE_MS = 250;
+
+const nowMs = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+
+/** Exponential backoff with full jitter — absorbs transient blips without a retry stampede. */
+function backoffDelayMs(attempt: number): number {
+  return RETRY_BASE_MS * 2 ** attempt + Math.random() * RETRY_BASE_MS;
+}
 
 /**
  * Primary UI for vault bottle artwork: handles proxy URL, **resize-up** framing (see
@@ -77,17 +88,37 @@ export const BottleImage: React.FC<BottleImageProps> = ({
 }) => {
   const reduceMotion = useReducedMotion();
   const lowRenderBudget = React.useRef(isLowRenderBudget()).current;
+  // Direct URL the SPA would normally render (proxy-bypassed for our own
+  // processed CDN objects per Phase 1).
   const url = proxy ? proxiedImageUrl(src, { packshot: true }) : (src ?? '');
+
+  // Phase 4 fallback: when `url` is a *direct* CDN passthrough for one of our own
+  // processed objects, keep a proxied version ready. If the direct fetch fails
+  // (e.g. a transient 403 from a referrer/CDN policy) we retry once through
+  // /api/image-proxy before declaring the image unavailable. Third-party images
+  // are already proxied, so they have no further fallback.
+  const trimmedSrc = (src ?? '').trim();
+  const hasDirectCdnSrc =
+    proxy && /^https?:\/\//i.test(trimmedSrc) && isProcessedStorageImageUrl(trimmedSrc);
+  const proxyFallbackUrl = hasDirectCdnSrc ? proxiedImageUrl(src, { forceProxy: true }) : '';
   const mediaKey = `${url}\u0000${videoSrc ?? ''}`;
 
   const imgRef = React.useRef<HTMLImageElement | null>(null);
   const retryTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const loadStartRef = React.useRef<number>(nowMs());
+  const errorCountRef = React.useRef(0);
+  const reportedRef = React.useRef(false);
   const [prevMediaKey, setPrevMediaKey] = useState(mediaKey);
   const [broken, setBroken] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
+  const [usedProxyFallback, setUsedProxyFallback] = useState(false);
   const [isLoading, setIsLoading] = useState(!!url);
   const [videoFailed, setVideoFailed] = useState(false);
   const useVideo = !!videoSrc && !reduceMotion && !lowRenderBudget && !videoFailed;
+
+  const canProxyFallback = !!proxyFallbackUrl && proxyFallbackUrl !== url;
+  const activeUrl = usedProxyFallback ? proxyFallbackUrl : url;
+
   const clearRetryTimer = React.useCallback(() => {
     if (retryTimerRef.current !== null) {
       clearTimeout(retryTimerRef.current);
@@ -101,36 +132,69 @@ export const BottleImage: React.FC<BottleImageProps> = ({
     setPrevMediaKey(mediaKey);
     setBroken(false);
     setRetryCount(0);
+    setUsedProxyFallback(false);
     setIsLoading(!!url);
     setVideoFailed(false);
+    loadStartRef.current = nowMs();
+    errorCountRef.current = 0;
+    reportedRef.current = false;
   }
 
   React.useEffect(() => clearRetryTimer, [clearRetryTimer]);
+
+  // Emit exactly one terminal metric per media-load cycle.
+  const report = (outcome: 'load' | 'error' | 'proxy-fallback') => {
+    if (reportedRef.current) return;
+    reportedRef.current = true;
+    reportImageMetric({
+      outcome,
+      ms: nowMs() - loadStartRef.current,
+      attempts: errorCountRef.current,
+      usedProxyFallback,
+      url: activeUrl,
+      variant,
+    });
+  };
 
   const handleLoad = () => {
     clearRetryTimer();
     setIsLoading(false);
     setBroken(false);
+    report(usedProxyFallback ? 'proxy-fallback' : 'load');
     onLoad?.();
   };
 
   const handleError = () => {
     clearRetryTimer();
-    if (retryCount < 2) {
-      // Retry after a 300ms delay to absorb transient proxy/network blips
+    errorCountRef.current += 1;
+
+    if (retryCount < RETRY_LIMIT) {
+      // Jittered exponential backoff to absorb transient proxy/network blips.
       retryTimerRef.current = setTimeout(() => {
         retryTimerRef.current = null;
         setRetryCount((prev) => prev + 1);
-      }, 300);
-    } else {
-      setBroken(true);
-      setIsLoading(false);
-      onError?.();
+      }, backoffDelayMs(retryCount));
+      return;
     }
+
+    // Retries exhausted. If this was a direct CDN URL, fall back to the proxy
+    // once (with a fresh retry budget) before giving up — the safety net for a
+    // processed object that transiently 403s on the direct path.
+    if (canProxyFallback && !usedProxyFallback) {
+      setUsedProxyFallback(true);
+      setRetryCount(0);
+      setIsLoading(true);
+      return;
+    }
+
+    setBroken(true);
+    setIsLoading(false);
+    report('error');
+    onError?.();
   };
 
   React.useEffect(() => {
-    if (useVideo || !url || broken || !isLoading) return;
+    if (useVideo || !activeUrl || broken || !isLoading) return;
     const img = imgRef.current;
     if (!img?.complete) return;
 
@@ -144,7 +208,7 @@ export const BottleImage: React.FC<BottleImageProps> = ({
       // though the URL was fine. For lazy images, wait for the real load/error event.
       handleError();
     }
-  }, [broken, isLoading, retryCount, url, useVideo, loading]);
+  }, [broken, isLoading, retryCount, activeUrl, useVideo, loading, usedProxyFallback]);
 
   const handleVideoError = () => {
     setVideoFailed(true);
@@ -205,8 +269,8 @@ export const BottleImage: React.FC<BottleImageProps> = ({
               ) : (
                 <img
                   ref={imgRef}
-                  key={`${url}-${retryCount}`}
-                  src={url}
+                  key={`${activeUrl}-${retryCount}`}
+                  src={activeUrl}
                   alt={alt}
                   className={bottleImageFillClass(imgClassName)}
                   referrerPolicy="no-referrer"
