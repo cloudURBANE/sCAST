@@ -113,14 +113,6 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
       <main className="relative z-10 pb-24 px-4 sm:px-8 max-w-[1760px] mx-auto">
         <div className="space-y-16 pt-10 sm:space-y-24 sm:pt-14">
           <CommunityHero />
-          <div className="flex items-center gap-4 text-center">
-            <span className="h-px flex-1 bg-gradient-to-r from-transparent via-scent-accent/30 to-scent-accent/10" aria-hidden="true" />
-            <p className="shrink-0 text-[9px] uppercase tracking-[0.2em] text-scent-muted/80 sm:text-[11px] sm:tracking-[0.32em]">
-              <span className="sm:hidden">Community vault</span>
-              <span className="hidden sm:inline">Drifting through the community vault</span>
-            </p>
-            <span className="h-px flex-1 bg-gradient-to-r from-scent-accent/10 via-scent-accent/30 to-transparent" aria-hidden="true" />
-          </div>
           <div className="scent-full-bleed">
             {communityBodyReady ? (
               <BottleMarquee items={data ?? []} loading={isLoading} isError={isError} />
@@ -133,7 +125,7 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
             )}
           </div>
           {communityBodyReady ? (
-            <section className="mx-auto w-full max-w-[1180px] space-y-6 pt-1 sm:space-y-7" aria-label="Community forum">
+            <section className="w-full space-y-6 sm:space-y-7" aria-label="Community forum">
               <PostComposer ref={composerRef} authToken={authToken} onSignIn={onSignIn} />
               <PostFilters
                 type={postType}

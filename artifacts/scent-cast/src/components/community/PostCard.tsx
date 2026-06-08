@@ -29,7 +29,7 @@ interface PostTypeDetail {
 }
 
 const POST_TYPE_DETAILS: Record<CommunityPostType, PostTypeDetail> = {
-  question: { label: 'Ask the Room', Icon: MessageCircleQuestion },
+  question: { label: 'Question', Icon: MessageCircleQuestion },
   sotd: { label: 'SOTD', Icon: Sun },
   battle: { label: 'Battle', Icon: Swords },
   worth_it: { label: 'Price Check', Icon: BadgeDollarSign },

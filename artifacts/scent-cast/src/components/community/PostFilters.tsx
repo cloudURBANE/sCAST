@@ -21,7 +21,7 @@ interface RoomDefinition {
 }
 
 const ROOMS: RoomDefinition[] = [
-  { type: 'question', label: 'Ask the Room', Icon: MessageCircleQuestion },
+  { type: 'question', label: 'Questions', Icon: MessageCircleQuestion },
   { type: 'sotd', label: 'SOTD', Icon: Sun },
   { type: 'battle', label: 'Battles', Icon: Swords },
   { type: 'worth_it', label: 'Price Checks', Icon: BadgeDollarSign },
