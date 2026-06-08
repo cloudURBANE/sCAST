@@ -464,7 +464,12 @@ export async function recordImageFailure(input: {
         set: {
           processingStatus: "failed",
           failureReason: input.failureReason.slice(0, 500),
-          updatedAt: new Date(),
+          // Anchor the negative-cache TTL to the *first* failure: only advance
+          // updated_at when transitioning into "failed" from another status. A
+          // repeat failure of an already-failed row keeps the original
+          // timestamp so the 6h retry window (shouldRetryFailedImageStatus) can
+          // actually elapse instead of being reset on every attempt (BE-5).
+          updatedAt: sql`case when ${imageCacheTable.processingStatus} = 'failed' then ${imageCacheTable.updatedAt} else now() end`,
         },
       });
   } catch (err) {
