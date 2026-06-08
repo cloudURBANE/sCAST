@@ -30,7 +30,7 @@ type SerperResponse = {
 
 /** Full packshot refinement appended for normal refresh paths. */
 const SERPER_SUFFIX_DEFAULT =
-  "single fragrance bottle bottle only no box no tester no sample no vial no decant centered product packshot front view plain background no plants no lifestyle no text overlay studio shot";
+  "single fragrance bottle bottle only no box no carton no packaging no gift set no coffret no tester no sample no vial no decant centered product packshot front view plain background no plants no lifestyle no text overlay studio shot";
 
 /** Shorter suffix on clarify/solver paths so negative keywords stay meaningful. */
 const SERPER_SUFFIX_SOLVER = "single fragrance bottle packshot isolated product photo no sample no tester";
