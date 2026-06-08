@@ -6,6 +6,7 @@ import { ScentIntelligenceLoader } from './ScentIntelligenceLoader';
 import {
   collectMainAccordDisplayRows,
   getFragranceDetails,
+  isBackgroundEnrichmentQueued,
   isFetchNetworkError,
   normalizeFragranceDetail,
   searchFragrances,
@@ -72,6 +73,28 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
+}
+
+/**
+ * True once a detail payload carries scraped olfactory notes (flat or any
+ * pyramid tier). Used to stop polling early when notes land even if the
+ * enrichment status hasn't flipped to a terminal value yet.
+ */
+function detailHasUsableNotes(detail: FragranceDetail): boolean {
+  const metricNotes = detail.derived_metrics?.notes;
+  const rawNotes = detail.raw?.notes;
+  return (
+    firstNonEmptyNoteList(
+      metricNotes?.flat,
+      rawNotes?.flat,
+      metricNotes?.top,
+      rawNotes?.top,
+      metricNotes?.heart,
+      rawNotes?.heart,
+      metricNotes?.base,
+      rawNotes?.base,
+    ).length > 0
+  );
 }
 
 /** Rotating vault headline — example house + scent pairs. */
@@ -618,9 +641,35 @@ export const FragranceCapture: React.FC<{
         });
       }
 
-      const detail = normalizeFragranceDetail(
+      let detail = normalizeFragranceDetail(
         (await getFragranceDetails(detailsRequest, { signal: controller.signal })) as FragranceDetail,
       );
+
+      // New fragrances return a provisional detail with no notes while the
+      // backend scrapes the olfactory pyramid in the background
+      // (enrichment.status === "pending"|"processing"). Forwarding that empty
+      // payload straight to /scent-profile makes buildProfile throw
+      // "Could not identify this fragrance." Poll the detail endpoint until the
+      // background enrichment reaches a terminal status (or notes arrive)
+      // before building the vector profile.
+      const POLL_INTERVAL_MS = 2000;
+      const MAX_POLL_ATTEMPTS = 15; // ~30s ceiling
+      for (
+        let attempt = 0;
+        attempt < MAX_POLL_ATTEMPTS &&
+        !controller.signal.aborted &&
+        isBackgroundEnrichmentQueued(detail.enrichment) &&
+        !detailHasUsableNotes(detail);
+        attempt += 1
+      ) {
+        setLoadingStatus('Scraping olfactory notes...');
+        await sleep(POLL_INTERVAL_MS);
+        if (controller.signal.aborted) break;
+        detail = normalizeFragranceDetail(
+          (await getFragranceDetails(detailsRequest, { signal: controller.signal })) as FragranceDetail,
+        );
+      }
+
       const metricNotes = detail.derived_metrics?.notes;
       const rawNotes = detail.raw?.notes;
       const pyramidNotes = {
