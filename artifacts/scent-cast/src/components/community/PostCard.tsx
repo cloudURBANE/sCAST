@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useId, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   BadgeDollarSign,
@@ -86,7 +86,7 @@ const FragranceChips: React.FC<{ post: CommunityPost }> = ({ post }) => {
               {fragrance.brand}
             </p>
             {fragrance.family ? (
-              <p className="mt-1 truncate text-[11px] text-scent-muted/65">{fragrance.family}</p>
+              <p className="mt-1 truncate text-[11px] text-scent-muted/70">{fragrance.family}</p>
             ) : null}
           </div>
         </div>
@@ -198,12 +198,16 @@ const BattleVotes: React.FC<{
 
 export const PostCard: React.FC<PostCardProps> = ({ post, authToken, onSignIn }) => {
   const [commentsOpen, setCommentsOpen] = useState(false);
+  const headingId = useId();
   const detail = POST_TYPE_DETAILS[post.postType];
   const Icon = detail.Icon;
   const heading = post.title?.trim() || detail.label;
 
   return (
-    <article className="mx-auto w-full max-w-[960px] rounded-[var(--radius-scent)] border border-scent-accent/14 bg-[linear-gradient(180deg,rgba(0,0,0,0.84),rgba(0,0,0,0.96))] p-5 text-center shadow-[0_22px_58px_-40px_rgba(0,0,0,0.96)] sm:p-6">
+    <article
+      aria-labelledby={headingId}
+      className="mx-auto w-full max-w-[960px] rounded-[var(--radius-scent)] border border-scent-accent/14 bg-[linear-gradient(180deg,rgba(0,0,0,0.84),rgba(0,0,0,0.96))] p-5 text-center shadow-[0_22px_58px_-40px_rgba(0,0,0,0.96)] sm:p-6"
+    >
       <header className="flex flex-col items-center gap-4">
         <div className="min-w-0">
           <div className="mb-3 flex flex-wrap items-center justify-center gap-2 text-[11px] uppercase tracking-[0.16em]">
@@ -217,9 +221,12 @@ export const PostCard: React.FC<PostCardProps> = ({ post, authToken, onSignIn })
             >
               {displayCommunityAuthor(post.author)}
             </Link>
-            <span className="text-scent-muted/45">{formatCommunityTime(post.createdAt)}</span>
+            <span className="text-scent-muted/70">{formatCommunityTime(post.createdAt)}</span>
           </div>
-          <h3 className="break-words text-balance font-serif text-2xl italic leading-tight text-[#fff7ec] sm:text-3xl">
+          <h3
+            id={headingId}
+            className="break-words text-balance font-serif text-2xl italic leading-tight text-[#fff7ec] sm:text-3xl"
+          >
             {heading}
           </h3>
         </div>
@@ -250,6 +257,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post, authToken, onSignIn })
       ) : null}
 
       <footer className="mt-5 flex flex-col items-center justify-center gap-3 border-t border-white/10 pt-4 md:flex-row md:justify-center">
+        <h4 className="sr-only">Post actions</h4>
         <ReactionBar
           targetType="post"
           targetId={post.id}
@@ -260,8 +268,9 @@ export const PostCard: React.FC<PostCardProps> = ({ post, authToken, onSignIn })
         <button
           type="button"
           onClick={() => setCommentsOpen((open) => !open)}
-          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-scent-accent/16 bg-black/58 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-scent-muted transition-colors hover:border-scent-accent/34 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
+          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-scent-accent/16 bg-black/58 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-scent-muted transition-colors hover:border-scent-accent/34 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
           aria-expanded={commentsOpen}
+          aria-label={commentsOpen ? 'Hide comments' : `View ${post.counts.comments} comments`}
         >
           <MessageCircle size={14} strokeWidth={1.8} aria-hidden="true" />
           {post.counts.comments} comments

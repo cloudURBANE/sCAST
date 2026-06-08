@@ -83,7 +83,7 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
             onClick={() => onTypeChange(null)}
             aria-pressed={type === null}
             className={[
-              'inline-flex min-h-10 items-center justify-center gap-2 rounded-full border px-3 py-2 text-center text-[10px] font-bold uppercase tracking-[0.14em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35',
+              'inline-flex min-h-11 items-center justify-center gap-2 rounded-full border px-3 py-2 text-center text-[10px] font-bold uppercase tracking-[0.14em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35',
               type === null
                 ? 'border-scent-accent/48 bg-scent-accent/[0.08] text-[#fff7ec]'
                 : 'border-scent-accent/16 bg-black/54 text-scent-muted hover:border-scent-accent/34 hover:text-[#fff7ec]',
@@ -99,7 +99,7 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
               onClick={() => onTypeChange(roomType)}
               aria-pressed={type === roomType}
               className={[
-                'inline-flex min-h-10 items-center justify-center gap-2 rounded-full border px-3 py-2 text-center text-[10px] font-bold uppercase tracking-[0.14em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35',
+                'inline-flex min-h-11 items-center justify-center gap-2 rounded-full border px-3 py-2 text-center text-[10px] font-bold uppercase tracking-[0.14em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35',
                 type === roomType
                   ? 'border-scent-accent/48 bg-scent-accent/[0.08] text-[#fff7ec]'
                   : 'border-scent-accent/16 bg-black/54 text-scent-muted hover:border-scent-accent/34 hover:text-[#fff7ec]',
@@ -131,7 +131,7 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
               type="button"
               onClick={() => setDraftQuery('')}
               aria-label="Clear search"
-              className="absolute right-3 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-scent-muted transition-colors hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
+              className="absolute right-1.5 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full text-scent-muted transition-colors hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
             >
               <X size={15} strokeWidth={1.8} aria-hidden="true" />
             </button>
@@ -140,7 +140,7 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
       </div>
 
       <div className="mt-4 flex flex-wrap items-center justify-center gap-x-3 gap-y-2">
-        <p className="shrink-0 text-[10px] font-bold uppercase tracking-[0.18em] text-scent-muted/52">
+        <p className="shrink-0 text-[10px] font-bold uppercase tracking-[0.18em] text-scent-muted/70">
           Popular tags
         </p>
         <div className="flex flex-wrap justify-center gap-2">

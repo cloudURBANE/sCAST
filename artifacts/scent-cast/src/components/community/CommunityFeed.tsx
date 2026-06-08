@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef } from 'react';
-import { LoaderCircle } from 'lucide-react';
+import { LoaderCircle, Plus, X } from 'lucide-react';
 import { PostCard } from '@/components/community/PostCard';
 import {
   type CommunityPostFilters,
@@ -10,9 +10,38 @@ interface CommunityFeedProps {
   filters: CommunityPostFilters;
   authToken: string | null;
   onSignIn: () => void;
+  onStartRoom: () => void;
+  onClearFilters: () => void;
 }
 
-export const CommunityFeed: React.FC<CommunityFeedProps> = ({ filters, authToken, onSignIn }) => {
+function emptyStateCopy(filters: CommunityPostFilters): { title: string; body: string } {
+  if (filters.q || filters.tag) {
+    return {
+      title: 'No rooms match yet.',
+      body: 'Try a different search or clear your filters to see every room.',
+    };
+  }
+  switch (filters.type) {
+    case 'sotd':
+      return { title: 'No scents of the day yet.', body: 'Be the first to share your scent of the day.' };
+    case 'question':
+      return { title: 'No questions yet.', body: 'Ask the room for a recommendation or an honest verdict.' };
+    case 'battle':
+      return { title: 'No battles yet.', body: 'Pit two bottles against each other and let the room vote.' };
+    case 'worth_it':
+      return { title: 'No price checks yet.', body: 'Ask the room whether a bottle is worth it before you buy.' };
+    default:
+      return { title: 'No rooms yet.', body: 'Start the first room and get the conversation going.' };
+  }
+}
+
+export const CommunityFeed: React.FC<CommunityFeedProps> = ({
+  filters,
+  authToken,
+  onSignIn,
+  onStartRoom,
+  onClearFilters,
+}) => {
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const {
     data,
@@ -80,12 +109,33 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({ filters, authToken
   }
 
   if (posts.length === 0) {
+    const hasActiveFilters = Boolean(filters.type || filters.tag || filters.q);
+    const { title, body } = emptyStateCopy(filters);
     return (
       <div className="mx-auto w-full max-w-[960px] rounded-[var(--radius-scent)] border border-scent-accent/14 bg-black/58 px-6 py-14 text-center">
-        <p className="font-serif text-2xl italic text-[#fff7ec]">No rooms yet.</p>
-        <p className="mx-auto mt-3 max-w-lg text-sm leading-7 text-scent-muted/70">
-          Start the first room or clear your filters.
-        </p>
+        <p className="font-serif text-2xl italic text-[#fff7ec]">{title}</p>
+        <p className="mx-auto mt-3 max-w-lg text-sm leading-7 text-scent-muted/70">{body}</p>
+        <div className="mt-6 flex justify-center">
+          {hasActiveFilters ? (
+            <button
+              type="button"
+              onClick={onClearFilters}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-scent-accent/22 bg-black/58 px-5 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-scent-muted transition-colors hover:border-scent-accent/42 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
+            >
+              <X size={15} strokeWidth={1.8} aria-hidden="true" />
+              Clear filters
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={onStartRoom}
+              className="scent-primary-button inline-flex min-h-11 items-center justify-center gap-2 rounded-[var(--radius-scent)] px-6 py-3 text-sm font-bold uppercase tracking-[0.18em]"
+            >
+              <Plus size={16} strokeWidth={1.8} aria-hidden="true" />
+              <span>Start a room</span>
+            </button>
+          )}
+        </div>
       </div>
     );
   }
@@ -110,7 +160,7 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({ filters, authToken
             {isFetchingNextPage ? 'Loading' : 'Load more'}
           </button>
         ) : (
-          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-scent-muted/48">
+          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-scent-muted/70">
             End of feed
           </p>
         )}

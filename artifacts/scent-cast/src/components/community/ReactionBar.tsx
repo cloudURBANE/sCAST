@@ -56,8 +56,8 @@ export const ReactionBar: React.FC<ReactionBarProps> = ({
             disabled={mutation.isPending}
             aria-label={`${label} ${targetType}`}
             className={[
-              'inline-flex min-h-9 items-center justify-center gap-2 rounded-full border border-scent-accent/16 bg-black/58 text-scent-muted transition-colors hover:border-scent-accent/34 hover:bg-scent-accent/[0.055] hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 disabled:pointer-events-none disabled:opacity-55',
-              compact ? 'px-2.5 py-1 text-[10px]' : 'px-3 py-1.5 text-[11px]',
+              'inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-scent-accent/16 bg-black/58 text-scent-muted transition-colors hover:border-scent-accent/34 hover:bg-scent-accent/[0.055] hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 disabled:pointer-events-none disabled:opacity-55',
+              compact ? 'px-3 py-1.5 text-[10px]' : 'px-4 py-2 text-[11px]',
             ].join(' ')}
           >
             <Icon size={compact ? 13 : 14} strokeWidth={1.7} aria-hidden="true" />

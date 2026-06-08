@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import {
   BadgeDollarSign,
   LoaderCircle,
@@ -41,6 +41,11 @@ const ROOMS: ComposerRoom[] = [
 interface PostComposerProps {
   authToken: string | null;
   onSignIn: () => void;
+}
+
+export interface PostComposerHandle {
+  /** Expand the composer, scroll it into view, and move focus into the form. */
+  open: () => void;
 }
 
 function firstString(...values: unknown[]): string | undefined {
@@ -153,7 +158,10 @@ async function snapshotFromSearchResult(result: FragranceSearchResult): Promise<
   };
 }
 
-export const PostComposer: React.FC<PostComposerProps> = ({ authToken, onSignIn }) => {
+export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(function PostComposer(
+  { authToken, onSignIn },
+  ref,
+) {
   const [composerOpen, setComposerOpen] = useState(false);
   const [postType, setPostType] = useState<CommunityPostType>('question');
   const [title, setTitle] = useState('');
@@ -173,11 +181,29 @@ export const PostComposer: React.FC<PostComposerProps> = ({ authToken, onSignIn 
   const [selectedFragrances, setSelectedFragrances] = useState<CommunityFragranceSnapshot[]>([]);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const fragranceAbortRef = useRef<AbortController | null>(null);
+  const sectionRef = useRef<HTMLElement | null>(null);
+  const titleInputRef = useRef<HTMLInputElement | null>(null);
   const createPost = useCreateCommunityPost(authToken);
 
   useEffect(() => {
     return () => fragranceAbortRef.current?.abort();
   }, []);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      open: () => {
+        setComposerOpen(true);
+        setStatusMessage(null);
+        // Wait for the expanded form to mount, then bring it into view and focus it.
+        requestAnimationFrame(() => {
+          sectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          requestAnimationFrame(() => titleInputRef.current?.focus());
+        });
+      },
+    }),
+    [],
+  );
 
   const addTagsFromInput = (value: string) => {
     const nextTags = value
@@ -341,7 +367,10 @@ export const PostComposer: React.FC<PostComposerProps> = ({ authToken, onSignIn 
 
   if (!composerOpen) {
     return (
-      <section className="relative overflow-hidden rounded-[var(--radius-scent)] border border-scent-accent/16 bg-[linear-gradient(180deg,rgba(0,0,0,0.86),rgba(0,0,0,0.96))] p-5 shadow-[0_24px_70px_-50px_rgba(212,175,55,0.34)] sm:p-6">
+      <section
+        ref={sectionRef}
+        className="relative overflow-hidden rounded-[var(--radius-scent)] border border-scent-accent/16 bg-[linear-gradient(180deg,rgba(0,0,0,0.86),rgba(0,0,0,0.96))] p-5 shadow-[0_24px_70px_-50px_rgba(212,175,55,0.34)] sm:p-6"
+      >
         <button
           type="button"
           onClick={() => {
@@ -349,7 +378,7 @@ export const PostComposer: React.FC<PostComposerProps> = ({ authToken, onSignIn 
             setStatusMessage(null);
           }}
           aria-expanded="false"
-          className="absolute right-4 top-4 z-10 inline-flex min-h-9 items-center justify-center rounded-full border border-scent-accent/28 bg-black/78 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-[#fff7ec] shadow-[0_14px_28px_-18px_rgba(212,175,55,0.38)] transition-colors hover:border-scent-accent/48 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 sm:right-5 sm:top-5"
+          className="absolute right-4 top-4 z-10 inline-flex min-h-11 items-center justify-center rounded-full border border-scent-accent/28 bg-black/78 px-4 py-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[#fff7ec] shadow-[0_14px_28px_-18px_rgba(212,175,55,0.38)] transition-colors hover:border-scent-accent/48 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 sm:right-5 sm:top-5"
         >
           Start
         </button>
@@ -375,7 +404,10 @@ export const PostComposer: React.FC<PostComposerProps> = ({ authToken, onSignIn 
   }
 
   return (
-    <section className="rounded-[var(--radius-scent)] border border-scent-accent/16 bg-[linear-gradient(180deg,rgba(0,0,0,0.86),rgba(0,0,0,0.96))] p-5 shadow-[0_24px_70px_-50px_rgba(212,175,55,0.34)] sm:p-6">
+    <section
+      ref={sectionRef}
+      className="rounded-[var(--radius-scent)] border border-scent-accent/16 bg-[linear-gradient(180deg,rgba(0,0,0,0.86),rgba(0,0,0,0.96))] p-5 shadow-[0_24px_70px_-50px_rgba(212,175,55,0.34)] sm:p-6"
+    >
       <form onSubmit={submitPost} className="space-y-5">
         <div className="relative flex flex-col items-center gap-4 text-center">
           <div className="min-w-0 px-10 sm:px-14">
@@ -393,7 +425,7 @@ export const PostComposer: React.FC<PostComposerProps> = ({ authToken, onSignIn 
             type="button"
             onClick={() => setComposerOpen(false)}
             aria-expanded="true"
-            className="absolute right-0 top-0 inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 rounded-full border border-scent-accent/18 bg-black/70 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-scent-muted transition-colors hover:border-scent-accent/36 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
+            className="absolute right-0 top-0 inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 rounded-full border border-scent-accent/18 bg-black/70 px-4 py-2 text-[10px] font-bold uppercase tracking-[0.14em] text-scent-muted transition-colors hover:border-scent-accent/36 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
           >
             <X size={13} strokeWidth={1.8} aria-hidden="true" />
             Close
@@ -408,7 +440,7 @@ export const PostComposer: React.FC<PostComposerProps> = ({ authToken, onSignIn 
               onClick={() => setPostType(type)}
               aria-pressed={postType === type}
               className={[
-                'inline-flex min-h-10 items-center justify-center gap-2 rounded-full border px-3 py-2 text-center text-[10px] font-bold uppercase tracking-[0.14em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35',
+                'inline-flex min-h-11 items-center justify-center gap-2 rounded-full border px-3 py-2 text-center text-[10px] font-bold uppercase tracking-[0.14em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35',
                 postType === type
                   ? 'border-scent-accent/48 bg-scent-accent/[0.08] text-[#fff7ec]'
                   : 'border-scent-accent/16 bg-black/54 text-scent-muted hover:border-scent-accent/34 hover:text-[#fff7ec]',
@@ -422,6 +454,7 @@ export const PostComposer: React.FC<PostComposerProps> = ({ authToken, onSignIn 
 
         <div className="grid gap-3 lg:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)]">
           <input
+            ref={titleInputRef}
             type="text"
             value={title}
             onChange={(event) => setTitle(event.target.value)}
@@ -632,7 +665,7 @@ export const PostComposer: React.FC<PostComposerProps> = ({ authToken, onSignIn 
                     type="button"
                     onClick={() => removeFragrance(fragrance)}
                     aria-label={`Remove ${fragrance.name}`}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-full text-scent-muted transition-colors hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
+                    className="inline-flex h-11 w-11 items-center justify-center rounded-full text-scent-muted transition-colors hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
                   >
                     <X size={14} strokeWidth={1.8} aria-hidden="true" />
                   </button>
@@ -649,7 +682,7 @@ export const PostComposer: React.FC<PostComposerProps> = ({ authToken, onSignIn 
         ) : null}
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-scent-muted/50">
+          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-scent-muted/70">
             {body.trim().length}/4000
           </p>
           <button
@@ -668,4 +701,6 @@ export const PostComposer: React.FC<PostComposerProps> = ({ authToken, onSignIn 
       </form>
     </section>
   );
-};
+});
+
+PostComposer.displayName = 'PostComposer';
