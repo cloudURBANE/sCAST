@@ -260,10 +260,38 @@ export const BottleImage: React.FC<BottleImageProps> = ({
                 Fetching
               </span>
             </div>
-          ) : (
+          ) : broken ? (
+            // An <img> mounted and errored after retries — keep it textual.
+            // A bottle silhouette here would imply "still coming", which is wrong.
             <div className="flex h-full w-full min-h-0 items-center justify-center rounded-sm border border-dashed border-white/15 bg-white/[0.03] px-1">
               <span className="text-center text-[8px] uppercase leading-tight tracking-widest text-white/30">
-                {broken ? 'Unavailable' : 'No image'}
+                Unavailable
+              </span>
+            </div>
+          ) : (
+            // BE-1: no image ever resolved (brand absent from the bundled dataset
+            // and the live pipeline found nothing). Show one generic bottle
+            // silhouette rather than bare "No image" text — a brand-agnostic
+            // placeholder that reads as an intentional empty packshot. Inline SVG
+            // (no asset fetch, never persisted) so it can't reintroduce a spinner.
+            <div className="flex h-full w-full min-h-0 flex-col items-center justify-center gap-1.5 rounded-sm border border-dashed border-white/15 bg-white/[0.03] px-1">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.25"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+                className="size-5 text-white/25"
+              >
+                {/* cap, neck, shoulders, body — a generic perfume bottle */}
+                <path d="M10 2.5h4v2h-4z" />
+                <path d="M10.5 4.5v2.2c0 .5-.25.95-.7 1.25C8.7 8.7 8 9.9 8 11.2V19a2.5 2.5 0 0 0 2.5 2.5h3A2.5 2.5 0 0 0 16 19v-7.8c0-1.3-.7-2.5-1.8-3.25-.45-.3-.7-.75-.7-1.25V4.5" />
+                <path d="M9 13.5h6" />
+              </svg>
+              <span className="text-center text-[8px] uppercase leading-tight tracking-widest text-white/25">
+                No image
               </span>
             </div>
           )
