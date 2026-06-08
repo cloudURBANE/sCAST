@@ -7,7 +7,7 @@
   --color-scent-accent: #D4AF37;
   --color-scent-gold-100: #fef3c7;
   --color-scent-gold-200: #fde68a;
-  --color-scent-muted: #b7a690;
+  --color-scent-muted: #c4b39b;
 
   --font-serif: "Cormorant Garamond", Georgia, serif;
   --font-sans: "Inter", system-ui, -apple-system, sans-serif;
@@ -435,14 +435,55 @@ a {
   opacity: 0.7;
 }
 
+/* Hover/keyboard-focus: a *gentle* lift. Deliberately weaker than the
+   committed-selection state below so the two never read as the same thing —
+   the old shared rule made "what's under my cursor" indistinguishable from
+   "what I've actually chosen". */
 .scent-vault-result-card:hover,
-.scent-vault-result-card.is-selected {
-  border-color: rgba(255, 216, 128, 0.88);
+.scent-vault-result-card:focus-visible {
+  border-color: rgba(255, 216, 128, 0.78);
   box-shadow:
-    inset 0 1px 0 rgba(255, 238, 192, 0.16),
-    inset 0 0 40px rgba(212, 175, 55, 0.045),
-    0 18px 40px -26px rgba(212, 175, 55, 0.22),
+    inset 0 1px 0 rgba(255, 238, 192, 0.14),
+    inset 0 0 38px rgba(212, 175, 55, 0.04),
+    0 16px 38px -27px rgba(212, 175, 55, 0.18),
     0 18px 42px -26px rgba(0, 0, 0, 0.98);
+}
+
+/* Committed selection: an unmistakable double-ring + warmer fill. This is the
+   single source of "this is the result that gets added", paired with the
+   checkmark badge rendered in FragranceCapture. */
+.scent-vault-result-card.is-selected {
+  border-color: rgba(255, 226, 150, 0.98);
+  background:
+    radial-gradient(78% 78% at 50% 7%, rgba(255, 247, 225, 0.07), transparent 60%),
+    radial-gradient(85% 90% at 50% 105%, rgba(212, 175, 55, 0.075), transparent 68%),
+    linear-gradient(180deg, rgba(42, 38, 27, 0.84), rgba(14, 13, 9, 0.92));
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 226, 150, 0.5),
+    inset 0 1px 0 rgba(255, 244, 205, 0.22),
+    inset 0 0 54px rgba(212, 175, 55, 0.085),
+    0 0 0 1px rgba(255, 216, 128, 0.46),
+    0 22px 48px -25px rgba(212, 175, 55, 0.34),
+    0 18px 42px -26px rgba(0, 0, 0, 0.98);
+}
+
+/* Gold "selected" check badge — pinned to the card's top-right corner. */
+.scent-vault-result-check {
+  border: 1px solid rgba(255, 232, 170, 0.95);
+  color: #1a1205;
+  background: linear-gradient(180deg, #f8e3a6 0%, #dcb457 100%);
+  box-shadow:
+    0 2px 12px rgba(212, 175, 55, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+
+/* Suppress the native WebKit clear/decoration affordances on the round vault
+   search fields — `type="search"` (added for the mobile "Search" enter key)
+   otherwise paints an "×" that collides with our custom right-aligned icon. */
+.scent-vault-search-input::-webkit-search-cancel-button,
+.scent-vault-search-input::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 .scent-vault-monogram {
