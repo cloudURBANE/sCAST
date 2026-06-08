@@ -5,6 +5,7 @@ import { removeBgBuffer, type RemoveBgReason, type RemoveBgStatus } from "./bgSe
 import { makeLookupKey } from "./catalogService";
 import {
   buildProcessedImageStorageKey,
+  getLatestReadyCachedImageBySearchQueryHash,
   hashBuffer,
   hashString,
   recordImageFailure,
@@ -23,22 +24,48 @@ import { fetchExternalImage } from "./safeImageFetch";
 // Last reviewed against OpenAI image pricing: 2026-05-15. Update this comment
 // whenever the model list or default changes so a future reader can decide
 // quickly whether to refresh the pricing in the cost ledger phase.
-const SUPPORTED_REIMAGINE_MODELS = ["gpt-image-2"] as const;
+// gpt-image-1 is the cheaper sibling; it is accepted so ops can dial cost down
+// via OPENAI_REIMAGINE_MODEL without a code change.
+const SUPPORTED_REIMAGINE_MODELS = ["gpt-image-2", "gpt-image-1"] as const;
 type ReimagineModel = (typeof SUPPORTED_REIMAGINE_MODELS)[number];
 
 const DEFAULT_REIMAGINE_MODEL: ReimagineModel = "gpt-image-2";
 const DEFAULT_REIMAGINE_SIZE = "1024x1024";
-const DEFAULT_REIMAGINE_QUALITY = "high";
 const OPENAI_IMAGE_EDITS_ENDPOINT = "https://api.openai.com/v1/images/edits";
 const OPENAI_TIMEOUT_MS = 240_000;
 const MAX_OUTPUT_DIMENSION = 768;
 const WEBP_QUALITY = 90;
+
+// Quality is the single biggest cost lever on the image-edits endpoint. The
+// default stays "high" so existing output is unchanged, but ops can dial it down
+// (e.g. "medium"/"low") via OPENAI_REIMAGINE_QUALITY without a deploy. "auto"
+// lets the model pick.
+const REIMAGINE_QUALITIES = ["low", "medium", "high", "auto"] as const;
+type ReimagineQuality = (typeof REIMAGINE_QUALITIES)[number];
+const DEFAULT_REIMAGINE_QUALITY: ReimagineQuality = "high";
+
+function resolveQuality(): ReimagineQuality {
+  const fromEnv = process.env.OPENAI_REIMAGINE_QUALITY?.trim().toLowerCase();
+  if (fromEnv && (REIMAGINE_QUALITIES as readonly string[]).includes(fromEnv)) {
+    return fromEnv as ReimagineQuality;
+  }
+  return DEFAULT_REIMAGINE_QUALITY;
+}
+
 // Maximum dimension of the PNG we send to OpenAI as the reference image.
 // gpt-image-2 accepts up to 25MB per image; a 2048-square PNG with full
 // compression typically lands well under that and gives the model far more
 // pixels of label artwork, cap detail, and glass refraction to reproduce
-// faithfully than a 1024-square thumbnail would.
-const OPENAI_INPUT_MAX_DIMENSION = 2048;
+// faithfully than a 1024-square thumbnail would. Tunable via
+// OPENAI_REIMAGINE_INPUT_DIM (clamped to 512..2048) so ops can trade fidelity
+// for upload size/cost; default preserves current behaviour.
+const DEFAULT_OPENAI_INPUT_MAX_DIMENSION = 2048;
+
+function resolveInputMaxDimension(): number {
+  const raw = Number(process.env.OPENAI_REIMAGINE_INPUT_DIM?.trim());
+  if (!Number.isFinite(raw)) return DEFAULT_OPENAI_INPUT_MAX_DIMENSION;
+  return Math.min(2048, Math.max(512, Math.round(raw)));
+}
 
 // The reimagine prompt carries three jobs, in priority order:
 //   1. Identity — reproduce *this* bottle and label exactly; never redesign.
@@ -169,10 +196,10 @@ async function loadSourceBytes(sourceUrl: string): Promise<SourceBytes> {
 // "mid-light grey" wording in REIMAGINE_PROMPT aligned.
 const OPENAI_INPUT_BACKDROP = { r: 209, g: 209, b: 209 } as const;
 
-async function toPngForOpenAI(buffer: Buffer): Promise<Buffer> {
+async function toPngForOpenAI(buffer: Buffer, maxDimension: number): Promise<Buffer> {
   return sharp(buffer)
     .rotate()
-    .resize(OPENAI_INPUT_MAX_DIMENSION, OPENAI_INPUT_MAX_DIMENSION, {
+    .resize(maxDimension, maxDimension, {
       fit: "inside",
       withoutEnlargement: true,
     })
@@ -192,6 +219,7 @@ type OpenAIImageEditsResponse = {
 async function callOpenAIImageEdits(input: {
   pngBuffer: Buffer;
   model: ReimagineModel;
+  quality: ReimagineQuality;
   apiKey: string;
 }): Promise<Buffer> {
   const FormData = (await import("form-data")).default;
@@ -201,7 +229,7 @@ async function callOpenAIImageEdits(input: {
   form.append("prompt", REIMAGINE_PROMPT);
   form.append("n", "1");
   form.append("size", DEFAULT_REIMAGINE_SIZE);
-  form.append("quality", DEFAULT_REIMAGINE_QUALITY);
+  form.append("quality", input.quality);
   // No `background=transparent` here: gpt-image-2 may not honor it, and even
   // when it does the alpha edges are inconsistent. Transparency is delivered
   // by piping the raw model output through removeBgBuffer (Poof) afterwards,
@@ -282,11 +310,28 @@ export type ReimagineBottleImageInput = {
   model?: string | null;
   userId?: string | null;
   fragranceId?: string | null;
+  /**
+   * When true, skip the cache pre-check and always bill a fresh OpenAI
+   * generation. Lets a user deliberately re-roll a result they didn't like
+   * while identical/accidental repeat clicks stay free by default.
+   */
+  force?: boolean;
 };
 
 export type ReimagineBottleImageResult = CachedImageReference & {
   model: ReimagineModel;
 };
+
+// Identity of a reimagine *input* (source image + model + quality), independent
+// of the non-deterministic output. Stored as the row's searchQueryHash so an
+// identical request can be served from cache instead of re-billing OpenAI.
+function reimagineInputIdentityHash(
+  inputHash: string,
+  model: ReimagineModel,
+  quality: ReimagineQuality,
+): string {
+  return hashString(`openai-reimagine-input:${model}:${quality}:${inputHash}`);
+}
 
 export async function reimagineBottleImage(
   input: ReimagineBottleImageInput,
@@ -295,16 +340,34 @@ export async function reimagineBottleImage(
   if (!apiKey) throw new Error("OPENAI_API_KEY is not configured");
 
   const model = resolveModel(input.model);
+  const quality = resolveQuality();
   const lookupKey = makeLookupKey(input.brand, input.name);
   const sourceProvider = "openai" as const;
 
   const loaded = await loadSourceBytes(input.sourceUrl);
-  const pngForEdit = await toPngForOpenAI(loaded.buffer);
+  const inputIdentityHash = reimagineInputIdentityHash(loaded.inputHash, model, quality);
+
+  // Cost guard: an identical (source, model, quality) reimagine that already
+  // produced a ready image is returned straight from cache — no second OpenAI
+  // bill. `force` opts out for a deliberate re-roll.
+  if (!input.force) {
+    const cached = await getLatestReadyCachedImageBySearchQueryHash(inputIdentityHash);
+    if (cached) {
+      logger.info(
+        { lookupKey, model, quality, sourceUrlHash: cached.sourceUrlHash },
+        "[reimagine] served cached reimagine; skipped OpenAI call",
+      );
+      return { ...cached, model };
+    }
+  }
+
+  const pngForEdit = await toPngForOpenAI(loaded.buffer, resolveInputMaxDimension());
 
   logger.info(
     {
       lookupKey,
       model,
+      quality,
       sourceKind: input.sourceUrl.startsWith("data:")
         ? "data"
         : input.sourceUrl.startsWith("/api/image-objects/")
@@ -318,7 +381,7 @@ export async function reimagineBottleImage(
 
   let generated: Buffer;
   try {
-    generated = await callOpenAIImageEdits({ pngBuffer: pngForEdit, model, apiKey });
+    generated = await callOpenAIImageEdits({ pngBuffer: pngForEdit, model, quality, apiKey });
   } catch (err) {
     const reason = err instanceof Error ? err.message : "OpenAI image edit failed";
     await recordApiUsage({
@@ -327,7 +390,7 @@ export async function reimagineBottleImage(
       operation: "image.edits",
       model,
       size: DEFAULT_REIMAGINE_SIZE,
-      quality: DEFAULT_REIMAGINE_QUALITY,
+      quality,
       imageCount: 1,
       status: "failure",
       failureReason: reason,
@@ -341,7 +404,7 @@ export async function reimagineBottleImage(
     operation: "image.edits",
     model,
     size: DEFAULT_REIMAGINE_SIZE,
-    quality: DEFAULT_REIMAGINE_QUALITY,
+    quality,
     imageCount: 1,
     status: "success",
   });
@@ -393,7 +456,9 @@ export async function reimagineBottleImage(
       sourceProvider,
       sourceUrl: sourceUrlForDb,
       sourceUrlHash,
-      searchQueryHash: null,
+      // Keyed on the input identity (source + model + quality) so the next
+      // identical reimagine is a cache hit and never re-bills OpenAI.
+      searchQueryHash: inputIdentityHash,
       contentHash,
       storageProvider: uploaded.provider,
       storagePath: uploaded.storagePath,

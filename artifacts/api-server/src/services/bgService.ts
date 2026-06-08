@@ -3,6 +3,7 @@ import sharp from "sharp";
 import { logger } from "../lib/logger";
 import { KeyPool, registerKeyPool } from "../lib/keyPool";
 import { hasOpaqueLightBackground, isEffectivelyTransparent } from "./bgServiceCore";
+import { localWhiteChromaKey } from "./localChromaKey";
 import { trimPackshotForBgService } from "./packshotTrim";
 import { fetchExternalImage } from "./safeImageFetch";
 
@@ -121,6 +122,7 @@ export type RemoveBgReason =
   | "poof_empty_output"
   | "poof_white_background"
   | "local_trim_fallback"
+  | "local_chroma_key"
   | "openai_reimagine";
 
 export type RemoveBgOptions = {
@@ -228,12 +230,44 @@ export type RemoveBgBufferResult = {
   removeBgReason: RemoveBgReason;
 };
 
+// Local, API-free cut-out for sources on a flat near-white plate. Returns a
+// genuine transparent packshot (status "removed") when the edge-connected chroma
+// key succeeds, or null when the source is not on an opaque light background or
+// the heuristic declines — in which case the caller keeps its trim fallback.
+async function tryLocalChromaKey(rawInput: Buffer): Promise<RemoveBgBufferResult | null> {
+  try {
+    if (!(await hasOpaqueLightBackground(rawInput))) return null;
+    const keyed = await localWhiteChromaKey(rawInput);
+    if (!keyed) return null;
+    const padded = await normalizeToBottleArtwork(keyed.buffer);
+    logger.info(
+      { removedFraction: Number(keyed.removedFraction.toFixed(3)) },
+      "[bgService] local white chroma-key produced a transparent cut-out",
+    );
+    return {
+      buffer: padded,
+      contentType: "image/png",
+      backgroundRemoved: true,
+      removeBgStatus: "removed",
+      removeBgReason: "local_chroma_key",
+    };
+  } catch (error) {
+    logger.warn(
+      { message: error instanceof Error ? error.message : String(error) },
+      "[bgService] local chroma-key failed; using border-trim fallback",
+    );
+    return null;
+  }
+}
+
 export async function removeBgBuffer(
   rawInput: Buffer,
   opts?: RemoveBgOptions,
 ): Promise<RemoveBgBufferResult> {
   const pool = getRemoveBgPool();
   if (pool.size === 0) {
+    const keyed = await tryLocalChromaKey(rawInput);
+    if (keyed) return keyed;
     const normalized = await trimWhiteAndNormalize(rawInput);
     return { buffer: normalized, contentType: "image/png", backgroundRemoved: false, removeBgStatus: "skipped", removeBgReason: "missing_api_key" };
   }
@@ -264,6 +298,12 @@ export async function removeBgBuffer(
     const padded = await normalizeToBottleArtwork(outcome.value);
     return { buffer: padded, contentType: "image/png", backgroundRemoved: true, removeBgStatus: "removed", removeBgReason: "removed" };
   }
+
+  // Poof failed/fell through. Before settling for a border-trimmed image that
+  // still carries the white plate, attempt a local chroma-key cut-out when the
+  // source is on an opaque light background.
+  const keyed = await tryLocalChromaKey(rawInput);
+  if (keyed) return keyed;
 
   const normalized = await trimWhiteAndNormalize(rawInput);
   return { buffer: normalized, contentType: "image/png", backgroundRemoved: false, removeBgStatus: "fallback", removeBgReason: lastReason };
