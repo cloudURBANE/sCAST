@@ -9,7 +9,6 @@ import {
 import { isProcessedStorageImageUrl, proxiedImageUrl } from '@/lib/imageProxy';
 import { isLowRenderBudget } from '@/lib/platform';
 import { reportImageMetric } from '@/lib/imageTelemetry';
-import { Spinner } from './ui/spinner';
 
 const RETRY_LIMIT = 2;
 const RETRY_BASE_MS = 250;
@@ -232,14 +231,15 @@ export const BottleImage: React.FC<BottleImageProps> = ({
     <div className={cn('relative min-h-0 min-w-0', className)}>
       <div className={bottleArtboardClass(variant)}>
         {showPlaceholder ? (
+          // No usable image: either the source is empty (nothing to load) or the
+          // <img> errored after retries. Neither case is "loading", so we never spin
+          // here — an indefinite spinner is exactly what stranded fragrances whose
+          // backend image never arrives (see BottleImage spinner-gap bug). The pulsing
+          // skeleton (`showSkeleton`) is the real in-flight affordance for a live URL.
           <div className="flex h-full w-full min-h-0 items-center justify-center rounded-sm border border-dashed border-white/15 bg-white/[0.03] px-1">
-            {broken ? (
-              <span className="text-center text-[8px] uppercase leading-tight tracking-widest text-white/30">
-                Unavailable
-              </span>
-            ) : (
-              <Spinner className="text-white/30" />
-            )}
+            <span className="text-center text-[8px] uppercase leading-tight tracking-widest text-white/30">
+              {broken ? 'Unavailable' : 'No image'}
+            </span>
           </div>
         ) : (
           <>
