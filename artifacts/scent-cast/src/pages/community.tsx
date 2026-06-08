@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Wind } from 'lucide-react';
 import { AppTopNav } from '@/components/AppTopNav';
 import { APP_BRAND_MARK } from '@/lib/appBrand';
@@ -6,7 +6,7 @@ import { CommunityHero } from '@/components/community/CommunityHero';
 import { BottleMarquee } from '@/components/community/BottleMarquee';
 import { useCommunityFragrances } from '@/components/community/communityData';
 import { CommunityFeed } from '@/components/community/CommunityFeed';
-import { PostComposer } from '@/components/community/PostComposer';
+import { PostComposer, type PostComposerHandle } from '@/components/community/PostComposer';
 import { PostFilters } from '@/components/community/PostFilters';
 import type { CommunityPostType } from '@/components/community/communityPosts';
 
@@ -73,6 +73,12 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
   const [postType, setPostType] = useState<CommunityPostType | null>(null);
   const [postTag, setPostTag] = useState<string | null>(null);
   const [postQuery, setPostQuery] = useState('');
+  const composerRef = useRef<PostComposerHandle | null>(null);
+  const clearCommunityFilters = useCallback(() => {
+    setPostType(null);
+    setPostTag(null);
+    setPostQuery('');
+  }, []);
   const feedFilters = useMemo(
     () => ({
       type: postType,
@@ -128,7 +134,7 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
           </div>
           {communityBodyReady ? (
             <section className="mx-auto w-full max-w-[1180px] space-y-6 pt-1 sm:space-y-7" aria-label="Community forum">
-              <PostComposer authToken={authToken} onSignIn={onSignIn} />
+              <PostComposer ref={composerRef} authToken={authToken} onSignIn={onSignIn} />
               <PostFilters
                 type={postType}
                 tag={postTag}
@@ -137,7 +143,13 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
                 onTagChange={setPostTag}
                 onQueryChange={setPostQuery}
               />
-              <CommunityFeed filters={feedFilters} authToken={authToken} onSignIn={onSignIn} />
+              <CommunityFeed
+                filters={feedFilters}
+                authToken={authToken}
+                onSignIn={onSignIn}
+                onStartRoom={() => composerRef.current?.open()}
+                onClearFilters={clearCommunityFilters}
+              />
             </section>
           ) : null}
         </div>

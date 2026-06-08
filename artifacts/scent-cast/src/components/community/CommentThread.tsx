@@ -71,7 +71,7 @@ export const CommentThread: React.FC<CommentThreadProps> = ({ postId, authToken,
                   >
                     {displayCommunityAuthor(comment.author)}
                   </Link>
-                  <span className="text-scent-muted/45">{formatCommunityTime(comment.createdAt)}</span>
+                  <span className="text-scent-muted/70">{formatCommunityTime(comment.createdAt)}</span>
                 </div>
                 <p className="whitespace-pre-line text-sm leading-7 text-[#fff7ec]/88">{comment.body}</p>
                 <div className="mt-3">
@@ -104,13 +104,13 @@ export const CommentThread: React.FC<CommentThreadProps> = ({ postId, authToken,
           <p className="text-sm text-red-100">{errorMessage}</p>
         ) : null}
         <div className="flex items-center justify-between gap-3">
-          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-scent-muted/50">
+          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-scent-muted/70">
             {body.trim().length}/2000
           </p>
           <button
             type="submit"
             disabled={commentMutation.isPending || (authToken ? !body.trim() : false)}
-            className="inline-flex min-h-10 items-center gap-2 rounded-full border border-scent-accent/30 bg-scent-accent/[0.07] px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-[#fff7ec] transition-colors hover:border-scent-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 disabled:pointer-events-none disabled:opacity-55"
+            className="inline-flex min-h-11 items-center gap-2 rounded-full border border-scent-accent/30 bg-scent-accent/[0.07] px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-[#fff7ec] transition-colors hover:border-scent-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 disabled:pointer-events-none disabled:opacity-55"
           >
             {commentMutation.isPending ? (
               <LoaderCircle size={14} className="animate-spin" aria-hidden="true" />
