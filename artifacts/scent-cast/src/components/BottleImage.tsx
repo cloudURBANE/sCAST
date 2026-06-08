@@ -9,6 +9,7 @@ import {
 import { isProcessedStorageImageUrl, proxiedImageUrl } from '@/lib/imageProxy';
 import { isLowRenderBudget } from '@/lib/platform';
 import { reportImageMetric } from '@/lib/imageTelemetry';
+import { Spinner } from './ui/spinner';
 
 const RETRY_LIMIT = 2;
 const RETRY_BASE_MS = 250;
@@ -232,9 +233,13 @@ export const BottleImage: React.FC<BottleImageProps> = ({
       <div className={bottleArtboardClass(variant)}>
         {showPlaceholder ? (
           <div className="flex h-full w-full min-h-0 items-center justify-center rounded-sm border border-dashed border-white/15 bg-white/[0.03] px-1">
-            <span className="text-center text-[8px] uppercase leading-tight tracking-widest text-white/30">
-              {broken ? 'Unavailable' : 'No image'}
-            </span>
+            {broken ? (
+              <span className="text-center text-[8px] uppercase leading-tight tracking-widest text-white/30">
+                Unavailable
+              </span>
+            ) : (
+              <Spinner className="text-white/30" />
+            )}
           </div>
         ) : (
           <>
