@@ -32,11 +32,19 @@ interface ComposerRoom {
 }
 
 const ROOMS: ComposerRoom[] = [
-  { type: 'question', label: 'Ask the Room', Icon: MessageCircleQuestion },
+  { type: 'question', label: 'Ask a question', Icon: MessageCircleQuestion },
   { type: 'sotd', label: 'SOTD', Icon: Sun },
   { type: 'battle', label: 'Battle', Icon: Swords },
   { type: 'worth_it', label: 'Price Check', Icon: BadgeDollarSign },
 ];
+
+// Each post type gets a direct, action-oriented submit label.
+const SUBMIT_LABELS: Record<CommunityPostType, string> = {
+  question: 'Post your question',
+  sotd: 'Post your SOTD',
+  battle: 'Start the battle',
+  worth_it: 'Post price check',
+};
 
 interface PostComposerProps {
   authToken: string | null;
@@ -390,7 +398,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
             Rooms already moving through the lounge.
           </h2>
           <p className="mt-3 max-w-xl text-sm leading-7 text-scent-muted/72">
-            Ask the room, post your SOTD, run a battle, or check if a bottle is worth it.
+            Ask a question, share your SOTD, run a battle, or check if a bottle is worth it.
           </p>
         </div>
 
@@ -418,7 +426,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
               Start a room
             </h2>
             <p className="mt-3 max-w-2xl text-sm leading-7 text-scent-muted/72">
-              Ask the room, post your SOTD, run a battle, or check if a bottle is worth it.
+              Ask a question, share your SOTD, run a battle, or check if a bottle is worth it.
             </p>
           </div>
           <button
@@ -695,7 +703,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
             ) : (
               <Send size={16} strokeWidth={1.8} aria-hidden="true" />
             )}
-            <span>{authToken ? 'Open Room' : 'Sign in to post'}</span>
+            <span>{authToken ? SUBMIT_LABELS[postType] : 'Sign in to post'}</span>
           </button>
         </div>
       </form>
