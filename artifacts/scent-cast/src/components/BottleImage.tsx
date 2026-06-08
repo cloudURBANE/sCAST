@@ -9,7 +9,7 @@ import {
 import { isProcessedStorageImageUrl, proxiedImageUrl } from '@/lib/imageProxy';
 import { isLowRenderBudget } from '@/lib/platform';
 import { reportImageMetric } from '@/lib/imageTelemetry';
-import { Spinner } from './ui/spinner';
+import { Spinner } from '@/components/ui/spinner';
 
 const RETRY_LIMIT = 2;
 const RETRY_BASE_MS = 250;
@@ -53,6 +53,13 @@ type BottleImageProps = {
   onError?: () => void;
   /** Beta: render a looping video instead of <img>. Falls back to <img> when prefers-reduced-motion is active. */
   videoSrc?: string | null;
+  /**
+   * The fragrance's image is being actively backfilled in the background (the
+   * row saved imageless and a poll burst is running). When there's no `src` yet,
+   * show a bounded "fetching…" spinner instead of the static "No image" — an
+   * honest pending signal. Never spins indefinitely: the burst clears it.
+   */
+  isSyncing?: boolean;
 };
 
 function BottleFrameGuide() {
@@ -86,6 +93,7 @@ export const BottleImage: React.FC<BottleImageProps> = ({
   onLoad,
   onError,
   videoSrc,
+  isSyncing = false,
 }) => {
   const reduceMotion = useReducedMotion();
   const lowRenderBudget = React.useRef(isLowRenderBudget()).current;
@@ -226,21 +234,67 @@ export const BottleImage: React.FC<BottleImageProps> = ({
   // When rendering video, its poster handles visual feedback; failed video falls back to the still image.
   const showPlaceholder = useVideo ? false : (!url || broken);
   const showSkeleton = useVideo ? false : (isLoading && !broken);
+  // Empty source, but the backend is still actively resolving the image: show a
+  // bounded "fetching…" spinner rather than the static "No image". (`showPlaceholder
+  // && !broken` already implies there's no `src`.) The caller guarantees this is
+  // time-bounded, so it can never strand the indefinite spinner FE-1 removed.
+  const showFetchingPlaceholder = showPlaceholder && !broken && isSyncing;
 
   // ① Root: sized by parent. ② Artboard: inset + flex-end + .bottle-packshot-img shelf CSS.
   return (
     <div className={cn('relative min-h-0 min-w-0', className)}>
       <div className={bottleArtboardClass(variant)}>
         {showPlaceholder ? (
-          <div className="flex h-full w-full min-h-0 items-center justify-center rounded-sm border border-dashed border-white/15 bg-white/[0.03] px-1">
-            {broken ? (
+          // No usable image. Two distinct states, never an indefinite spinner:
+          //  • actively syncing → a *bounded* "Fetching" spinner (the burst clears it),
+          //    so a freshly-added tile reads honestly while its image resolves.
+          //  • otherwise → static text. An empty source (nothing to load) shows
+          //    "No image"; an <img> that errored after retries shows "Unavailable".
+          //    A perpetual spinner here is exactly what stranded fragrances whose
+          //    backend image never arrives (the BottleImage spinner-gap bug).
+          // The pulsing skeleton (`showSkeleton`) remains the affordance for a live URL.
+          showFetchingPlaceholder ? (
+            <div className="flex h-full w-full min-h-0 flex-col items-center justify-center gap-1.5 rounded-sm border border-dashed border-white/15 bg-white/[0.03] px-1">
+              <Spinner className="size-3 text-white/30" />
+              <span className="text-center text-[8px] uppercase leading-tight tracking-widest text-white/25">
+                Fetching
+              </span>
+            </div>
+          ) : broken ? (
+            // An <img> mounted and errored after retries — keep it textual.
+            // A bottle silhouette here would imply "still coming", which is wrong.
+            <div className="flex h-full w-full min-h-0 items-center justify-center rounded-sm border border-dashed border-white/15 bg-white/[0.03] px-1">
               <span className="text-center text-[8px] uppercase leading-tight tracking-widest text-white/30">
                 Unavailable
               </span>
-            ) : (
-              <Spinner className="text-white/30" />
-            )}
-          </div>
+            </div>
+          ) : (
+            // BE-1: no image ever resolved (brand absent from the bundled dataset
+            // and the live pipeline found nothing). Show one generic bottle
+            // silhouette rather than bare "No image" text — a brand-agnostic
+            // placeholder that reads as an intentional empty packshot. Inline SVG
+            // (no asset fetch, never persisted) so it can't reintroduce a spinner.
+            <div className="flex h-full w-full min-h-0 flex-col items-center justify-center gap-1.5 rounded-sm border border-dashed border-white/15 bg-white/[0.03] px-1">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.25"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+                className="size-5 text-white/25"
+              >
+                {/* cap, neck, shoulders, body — a generic perfume bottle */}
+                <path d="M10 2.5h4v2h-4z" />
+                <path d="M10.5 4.5v2.2c0 .5-.25.95-.7 1.25C8.7 8.7 8 9.9 8 11.2V19a2.5 2.5 0 0 0 2.5 2.5h3A2.5 2.5 0 0 0 16 19v-7.8c0-1.3-.7-2.5-1.8-3.25-.45-.3-.7-.75-.7-1.25V4.5" />
+                <path d="M9 13.5h6" />
+              </svg>
+              <span className="text-center text-[8px] uppercase leading-tight tracking-widest text-white/25">
+                No image
+              </span>
+            </div>
+          )
         ) : (
           <>
             {showSkeleton && (

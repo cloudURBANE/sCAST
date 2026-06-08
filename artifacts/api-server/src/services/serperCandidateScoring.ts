@@ -1,5 +1,13 @@
-const MIN_IMAGE_WIDTH = 500;
-const MIN_IMAGE_HEIGHT = 500;
+// Hard floor below which an image is treated as a thumbnail/icon, not a packshot.
+// Measured against live Serper payloads (YSL Libre / MYSLF / Y "Le Parfum", 2026-06):
+// the official YSL CDN (yslbeautyus.com / yslbeauty.com) serves 320×320, Sephora 350×350,
+// Macy's 328×400, Bloomingdale's 320×400 — i.e. the *highest-trust* packshots are 320–350px.
+// A 500px floor `-Infinity`'d exactly those before the trusted-host bonus could apply, leaving
+// brand-new releases imageless. The ranking score below already rewards larger dimensions
+// (`Math.min(4, floor(min/400))`), so a hard 500 floor was redundant punishment. 300 still
+// rejects favicons/sprites while admitting every real packshot observed in the wild.
+const MIN_IMAGE_WIDTH = 300;
+const MIN_IMAGE_HEIGHT = 300;
 const MIN_ASPECT_RATIO = 0.5;
 const MAX_ASPECT_RATIO = 2;
 

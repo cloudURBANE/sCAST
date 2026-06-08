@@ -498,6 +498,8 @@ interface WardrobeContextType {
   wardrobeFixHint: string | null;
   vaultSearchUiActive: boolean;
   wardrobeError: string | null;
+  /** True while a freshly-added imageless tile is actively backfilling its image. */
+  isImageSyncing: (item: Pick<Fragrance, 'id' | '_dbId'>) => boolean;
   retryLoadWardrobe: () => void;
   setItems: React.Dispatch<React.SetStateAction<Fragrance[]>>;
   setIsIntentModalOpen: (open: boolean) => void;
@@ -552,6 +554,12 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const lastMutationRef = useRef(0);
   const appStateRefreshInFlightRef = useRef(false);
   const imageBackfillTimersRef = useRef<number[]>([]);
+  // The single fragrance whose image is being actively backfilled (one burst runs
+  // at a time — see `scheduleImageBackfillRehydrate`). Drives the honest "fetching
+  // image…" affordance so a freshly-added imageless tile shows a spinner *while it
+  // is genuinely syncing*, then settles to "No image" once the burst gives up —
+  // rather than spinning forever (FE-1) or lying with "No image" mid-fetch.
+  const [imageSyncTarget, setImageSyncTarget] = useState<Pick<Fragrance, 'id' | '_dbId'> | null>(null);
   const itemsRef = useRef(items);
   const authTokenRef = useRef(authToken);
   itemsRef.current = items;
@@ -634,6 +642,9 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       window.clearTimeout(id);
     }
     imageBackfillTimersRef.current = [];
+    // Stopping the burst (image arrived, row deleted, auth changed, or unmount)
+    // also drops the syncing affordance — the tile reverts to its real state.
+    setImageSyncTarget(null);
   }, []);
 
   // New fragrances save with no image: `POST /api/scent-profile` resolves images
@@ -646,10 +657,15 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const scheduleImageBackfillRehydrate = useCallback(
     (token: string, target: Pick<Fragrance, 'id' | '_dbId'>) => {
       clearImageBackfillTimers();
+      // Mark the tile as actively syncing for the lifetime of the burst.
+      setImageSyncTarget(target);
       const POLL_SCHEDULE_MS = [6000, 12000, 20000, 32000, 48000];
       for (const delay of POLL_SCHEDULE_MS) {
         const id = window.setTimeout(() => {
-          if (authTokenRef.current !== token) return;
+          if (authTokenRef.current !== token) {
+            clearImageBackfillTimers();
+            return;
+          }
           const current = itemsRef.current.find((item) => sameWardrobeEntry(item, target));
           const resolved =
             typeof current?.imageUrl === 'string' && current.imageUrl.trim().length > 0;
@@ -662,11 +678,30 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }, delay);
         imageBackfillTimersRef.current.push(id);
       }
+      // Hard stop just after the final poll: if the image still hasn't landed,
+      // drop the syncing affordance so the tile settles to "No image" instead of
+      // spinning indefinitely. This guarantees the spinner is always bounded —
+      // never reintroducing the perpetual-spinner bug FE-1 fixed.
+      const giveUpId = window.setTimeout(() => {
+        setImageSyncTarget((current) =>
+          current && sameWardrobeEntry(current, target) ? null : current,
+        );
+      }, POLL_SCHEDULE_MS[POLL_SCHEDULE_MS.length - 1] + 4000);
+      imageBackfillTimersRef.current.push(giveUpId);
     },
     [clearImageBackfillTimers, loadWardrobe],
   );
 
   useEffect(() => clearImageBackfillTimers, [clearImageBackfillTimers]);
+
+  // True only while a tile's image is being actively backfilled, so the UI can
+  // show "fetching image…" instead of a premature "No image". Matches the burst's
+  // own `sameWardrobeEntry` logic so it survives the id→_dbId hydration swap.
+  const isImageSyncing = useCallback(
+    (item: Pick<Fragrance, 'id' | '_dbId'>) =>
+      imageSyncTarget != null && sameWardrobeEntry(item, imageSyncTarget),
+    [imageSyncTarget],
+  );
 
   const loadAppState = useCallback(async (token: string, signal?: AbortSignal): Promise<boolean> => {
     const res = await fetch('/api/me/app-state', {
@@ -1364,6 +1399,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     wardrobeFixBusy,
     wardrobeFixHint,
     vaultSearchUiActive,
+    isImageSyncing,
     setItems,
     setIsIntentModalOpen,
     setIsShareModalOpen,
@@ -1399,6 +1435,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     wardrobeFixBusy,
     wardrobeFixHint,
     vaultSearchUiActive,
+    isImageSyncing,
     loadWardrobe,
     retryLoadWardrobe,
     handleAddItem,

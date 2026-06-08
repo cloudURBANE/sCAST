@@ -31,3 +31,21 @@ export function concentrationsConflict(target: Concentration, candidate: Concent
   if (target === "Unknown" || candidate === "Unknown") return false;
   return target !== candidate;
 }
+
+/**
+ * Some concentration mismatches are genuinely ambiguous rather than disqualifying.
+ * The bare "Parfum" value is a marketing catch-all: the parser fires it for loose
+ * uses like "Le Parfum" / "The Parfum" that retailers routinely list as an
+ * "Eau de Parfum" (and historically "parfum" meant the extrait). So when one side
+ * is the unreliable bare "Parfum" and the other is also in the concentrated parfum
+ * family (Parfum / Extrait / Eau de Parfum), the mismatch is soft — it should be
+ * penalised, not hard-skipped, so the correct packshot survives (BE-8).
+ *
+ * The lighter fresh tier (Eau de Toilette / Eau de Cologne) is excluded: an EDT/EDC
+ * vs EDP mismatch stays a firm conflict.
+ */
+export function concentrationsAmbiguouslyAdjacent(a: Concentration, b: Concentration): boolean {
+  if (a === b) return false;
+  const parfumFamily: ReadonlySet<Concentration> = new Set(["Parfum", "Extrait", "Eau de Parfum"]);
+  return (a === "Parfum" || b === "Parfum") && parfumFamily.has(a) && parfumFamily.has(b);
+}

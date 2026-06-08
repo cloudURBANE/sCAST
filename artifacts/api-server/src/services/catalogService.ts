@@ -14,9 +14,14 @@ import {
   sanitizeFragranceQueryInput,
   scoreFragranceCandidate,
 } from "./fragranceNameResolver";
+// Brand canonicalization lives in the pure brandAliasCore (unit-tested in
+// isolation); re-exported below to keep catalogService's public API stable.
+import { canonicalizeBrand, brandSpellings } from "./brandAliasCore";
+
+export { canonicalizeBrand, brandSpellings };
 
 export function makeLookupKey(brand: string, name: string): string {
-  return `${brand.trim().toLowerCase()}::${name.trim().toLowerCase()}`;
+  return `${canonicalizeBrand(brand)}::${name.trim().toLowerCase()}`;
 }
 
 function sanitizeCatalogProfile(profile: unknown): ScentProfile {
