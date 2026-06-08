@@ -882,6 +882,8 @@ export const Wardrobe: React.FC<{
   wardrobeLoaded?: boolean;
   wardrobeError?: string | null;
   onRetryLoadWardrobe?: () => void;
+  /** True while a freshly-added imageless tile is actively backfilling its image. */
+  isImageSyncing?: (item: Pick<Fragrance, 'id' | '_dbId'>) => boolean;
 }> = ({
   items,
   onDelete,
@@ -896,6 +898,7 @@ export const Wardrobe: React.FC<{
   wardrobeLoaded = true,
   wardrobeError = null,
   onRetryLoadWardrobe,
+  isImageSyncing,
 }) => {
   const [selectedItem, setSelectedItem] = React.useState<Fragrance | null>(null);
   const { lowMotionRenderMode, isIpad } = useRenderBudget();
@@ -1653,6 +1656,7 @@ export const Wardrobe: React.FC<{
                         src={featuredItem.imageUrl}
                         alt={entryName(featuredItem)}
                         adjustment={featuredItem.imageAdjustment}
+                        isSyncing={isImageSyncing?.(featuredItem)}
                         className="min-h-0 w-full flex-1"
                         imgClassName="scent-hover-scale transition-transform duration-1000 brightness-[1.15]"
                         loading="eager"
@@ -1729,6 +1733,7 @@ export const Wardrobe: React.FC<{
                               videoSrc={betaVideoUrlForFragrance(item)}
                               alt={entryName(item)}
                               adjustment={item.imageAdjustment}
+                              isSyncing={isImageSyncing?.(item)}
                               className="absolute inset-0 z-10"
                               imgClassName="scent-hover-scale brightness-[1.1] transition-transform duration-[900ms] motion-reduce:transition-none"
                               loading={shelfIndex === 0 ? 'eager' : 'lazy'}

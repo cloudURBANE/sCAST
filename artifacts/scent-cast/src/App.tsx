@@ -447,6 +447,7 @@ function DashboardView() {
     wardrobeFixBusy,
     wardrobeFixHint,
     vaultSearchUiActive,
+    isImageSyncing,
     setIsIntentModalOpen,
     setIsShareModalOpen,
     handleAddItem,
@@ -575,6 +576,7 @@ function DashboardView() {
               wardrobeLoaded={wardrobeLoaded}
               wardrobeError={wardrobeError}
               onRetryLoadWardrobe={retryLoadWardrobe}
+              isImageSyncing={isImageSyncing}
             />
           </div>
         </div>

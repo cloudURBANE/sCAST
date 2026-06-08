@@ -9,6 +9,7 @@ import {
 import { isProcessedStorageImageUrl, proxiedImageUrl } from '@/lib/imageProxy';
 import { isLowRenderBudget } from '@/lib/platform';
 import { reportImageMetric } from '@/lib/imageTelemetry';
+import { Spinner } from '@/components/ui/spinner';
 
 const RETRY_LIMIT = 2;
 const RETRY_BASE_MS = 250;
@@ -52,6 +53,13 @@ type BottleImageProps = {
   onError?: () => void;
   /** Beta: render a looping video instead of <img>. Falls back to <img> when prefers-reduced-motion is active. */
   videoSrc?: string | null;
+  /**
+   * The fragrance's image is being actively backfilled in the background (the
+   * row saved imageless and a poll burst is running). When there's no `src` yet,
+   * show a bounded "fetching…" spinner instead of the static "No image" — an
+   * honest pending signal. Never spins indefinitely: the burst clears it.
+   */
+  isSyncing?: boolean;
 };
 
 function BottleFrameGuide() {
@@ -85,6 +93,7 @@ export const BottleImage: React.FC<BottleImageProps> = ({
   onLoad,
   onError,
   videoSrc,
+  isSyncing = false,
 }) => {
   const reduceMotion = useReducedMotion();
   const lowRenderBudget = React.useRef(isLowRenderBudget()).current;
@@ -225,22 +234,39 @@ export const BottleImage: React.FC<BottleImageProps> = ({
   // When rendering video, its poster handles visual feedback; failed video falls back to the still image.
   const showPlaceholder = useVideo ? false : (!url || broken);
   const showSkeleton = useVideo ? false : (isLoading && !broken);
+  // Empty source, but the backend is still actively resolving the image: show a
+  // bounded "fetching…" spinner rather than the static "No image". (`showPlaceholder
+  // && !broken` already implies there's no `src`.) The caller guarantees this is
+  // time-bounded, so it can never strand the indefinite spinner FE-1 removed.
+  const showFetchingPlaceholder = showPlaceholder && !broken && isSyncing;
 
   // ① Root: sized by parent. ② Artboard: inset + flex-end + .bottle-packshot-img shelf CSS.
   return (
     <div className={cn('relative min-h-0 min-w-0', className)}>
       <div className={bottleArtboardClass(variant)}>
         {showPlaceholder ? (
-          // No usable image: either the source is empty (nothing to load) or the
-          // <img> errored after retries. Neither case is "loading", so we never spin
-          // here — an indefinite spinner is exactly what stranded fragrances whose
-          // backend image never arrives (see BottleImage spinner-gap bug). The pulsing
-          // skeleton (`showSkeleton`) is the real in-flight affordance for a live URL.
-          <div className="flex h-full w-full min-h-0 items-center justify-center rounded-sm border border-dashed border-white/15 bg-white/[0.03] px-1">
-            <span className="text-center text-[8px] uppercase leading-tight tracking-widest text-white/30">
-              {broken ? 'Unavailable' : 'No image'}
-            </span>
-          </div>
+          // No usable image. Two distinct states, never an indefinite spinner:
+          //  • actively syncing → a *bounded* "Fetching" spinner (the burst clears it),
+          //    so a freshly-added tile reads honestly while its image resolves.
+          //  • otherwise → static text. An empty source (nothing to load) shows
+          //    "No image"; an <img> that errored after retries shows "Unavailable".
+          //    A perpetual spinner here is exactly what stranded fragrances whose
+          //    backend image never arrives (the BottleImage spinner-gap bug).
+          // The pulsing skeleton (`showSkeleton`) remains the affordance for a live URL.
+          showFetchingPlaceholder ? (
+            <div className="flex h-full w-full min-h-0 flex-col items-center justify-center gap-1.5 rounded-sm border border-dashed border-white/15 bg-white/[0.03] px-1">
+              <Spinner className="size-3 text-white/30" />
+              <span className="text-center text-[8px] uppercase leading-tight tracking-widest text-white/25">
+                Fetching
+              </span>
+            </div>
+          ) : (
+            <div className="flex h-full w-full min-h-0 items-center justify-center rounded-sm border border-dashed border-white/15 bg-white/[0.03] px-1">
+              <span className="text-center text-[8px] uppercase leading-tight tracking-widest text-white/30">
+                {broken ? 'Unavailable' : 'No image'}
+              </span>
+            </div>
+          )
         ) : (
           <>
             {showSkeleton && (
