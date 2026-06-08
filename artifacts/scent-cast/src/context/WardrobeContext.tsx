@@ -27,6 +27,11 @@ import {
 // local marker only suppresses flicker before the server responds.
 const ONBOARDING_STORAGE_KEY = 'scent_onboarding_completed';
 const WARDROBE_ONBOARDING_THRESHOLD = 3;
+// How many guest-added fragrances before we interrupt with the sign-in modal.
+// Raised from 2 → 5 so a guest can meaningfully try the product (build a small
+// wardrobe) before being asked to create an account; the gentler GuestSaveBanner
+// nudges in the meantime.
+const GUEST_SAVE_PROMPT_THRESHOLD = 5;
 
 function onboardingMarkerKey(authToken: string): string {
   return `${ONBOARDING_STORAGE_KEY}:${authToken}`;
@@ -911,7 +916,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         isMutatingRef.current = false;
         lastMutationRef.current = Date.now();
       }
-    } else if (nextCount >= 2 && !guestPromptDismissed) {
+    } else if (nextCount >= GUEST_SAVE_PROMPT_THRESHOLD && !guestPromptDismissed) {
       setIsAuthModalOpen(true);
       return { persisted: false, requiresAuth: true };
     }

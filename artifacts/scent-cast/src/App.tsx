@@ -9,6 +9,7 @@ import { ScentNotesInfographic } from './components/ScentNotesInfographic';
 import { ThreadBackground } from './components/threads/ThreadBackground';
 import { AppTopNav } from './components/AppTopNav';
 import { AuthModal } from './components/AuthModal';
+import { GuestSaveBanner } from './components/GuestSaveBanner';
 import { ShareModal } from './components/ShareModal';
 import type { ScentFamily, ScentWeatherRecommendation } from './lib/scentWeatherEngine';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -732,6 +733,21 @@ function GlobalModals() {
 
   const { items, setItems, isShareModalOpen, setIsShareModalOpen, userId } = useWardrobe();
 
+  // Gentle guest nudge: shown once a guest has saved at least one fragrance
+  // locally, while the hard modal is closed and they haven't waved it off.
+  const showGuestBanner = !authToken && !isAuthModalOpen && !guestPromptDismissed && items.length >= 1;
+  const guestBanner = (
+    <AnimatePresence>
+      {showGuestBanner ? (
+        <GuestSaveBanner
+          itemCount={items.length}
+          onSignIn={() => setIsAuthModalOpen(true)}
+          onDismiss={() => setGuestPromptDismissed(true)}
+        />
+      ) : null}
+    </AnimatePresence>
+  );
+
   const authModal = isAuthModalOpen ? (
     <AuthModal
       onClose={() => {
@@ -767,6 +783,7 @@ function GlobalModals() {
 
   return (
     <>
+      {guestBanner}
       {authModal}
       {shareModal}
     </>

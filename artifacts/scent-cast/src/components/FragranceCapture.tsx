@@ -1,6 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { Search } from 'lucide-react';
+import { Check, Search } from 'lucide-react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { ScentIntelligenceLoader } from './ScentIntelligenceLoader';
 import {
@@ -187,6 +187,31 @@ function matchMonogram(m: FragranceMatch): string {
   return cleaned.slice(0, 2).toUpperCase();
 }
 
+/**
+ * Stable identity for a result row. Selection, filtering, and React keys all
+ * use this instead of the array index so a result stays selected when the
+ * visible list is re-derived by the House/Gender filters. Every match passes
+ * the `id || source_url` guard in `handleSearch`, so this is always non-empty.
+ */
+function matchKey(m: FragranceMatch): string {
+  return firstString(m.id, m.source_url) ?? '';
+}
+
+/** Bucket the engine's free-form gender string into a stable filter label. */
+function genderLabel(value: unknown): 'Men' | 'Women' | 'Unisex' | null {
+  const g = firstString(value)?.toLowerCase();
+  if (!g) return null;
+  if (g.includes('unisex')) return 'Unisex';
+  const hasWomen = /\b(women|woman|female|femme|feminine)\b/.test(g);
+  const hasMen = /\b(men|man|male|homme|masculine)\b/.test(g);
+  if (hasWomen && hasMen) return 'Unisex';
+  if (hasWomen) return 'Women';
+  if (hasMen) return 'Men';
+  return null;
+}
+
+const GENDER_FILTER_ORDER: ReadonlyArray<'Men' | 'Women' | 'Unisex'> = ['Women', 'Men', 'Unisex'];
+
 const INVALID_RESULT_NAME_STARTERS = new Set(['and', '&', 'by', 'de', 'du', 'di', 'et']);
 
 function isDisplayableResultName(value: unknown): value is string {
@@ -320,7 +345,9 @@ export const FragranceCapture: React.FC<{
   const [uploading, setUploading] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState("");
   const [matches, setMatches] = useState<FragranceMatch[]>([]);
-  const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [houseFilter, setHouseFilter] = useState<string | null>(null);
+  const [genderFilter, setGenderFilter] = useState<'Men' | 'Women' | 'Unisex' | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
   const [errorStatus, setErrorStatus] = useState<string | null>(null);
@@ -332,6 +359,9 @@ export const FragranceCapture: React.FC<{
 
   const searchAbortController = useRef<AbortController | null>(null);
   const syncAbortController = useRef<AbortController | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const resultsRef = useRef<HTMLDivElement | null>(null);
+  const actionBarRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     return () => {
@@ -340,8 +370,53 @@ export const FragranceCapture: React.FC<{
     };
   }, []);
 
+  // Filter chips operate on the full result set; the rendered list, available
+  // chips, and the resolved selection are all derived from it so nothing drifts
+  // out of sync when a filter hides the currently-selected row.
+  const availableHouses = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const m of matches) {
+      const house = firstString(m.house, m.brand);
+      if (house && !seen.has(house.toLowerCase())) seen.set(house.toLowerCase(), house);
+    }
+    return Array.from(seen.values()).sort((a, b) => a.localeCompare(b));
+  }, [matches]);
+
+  const availableGenders = useMemo(() => {
+    const present = new Set<'Men' | 'Women' | 'Unisex'>();
+    for (const m of matches) {
+      const label = genderLabel(m.gender);
+      if (label) present.add(label);
+    }
+    return GENDER_FILTER_ORDER.filter((label) => present.has(label));
+  }, [matches]);
+
+  const visibleMatches = useMemo(() => {
+    return matches.filter((m) => {
+      if (houseFilter) {
+        const house = firstString(m.house, m.brand);
+        if (!house || house.toLowerCase() !== houseFilter.toLowerCase()) return false;
+      }
+      if (genderFilter && genderLabel(m.gender) !== genderFilter) return false;
+      return true;
+    });
+  }, [matches, houseFilter, genderFilter]);
+
+  const selectedMatch = useMemo(
+    () => visibleMatches.find((m) => matchKey(m) === selectedId) ?? null,
+    [visibleMatches, selectedId],
+  );
+
   const vaultSearchActive = searchFocused || searchQuery.trim().length > 0;
-  const hasSelectedMatch = selectedIdx !== null;
+  const hasSelectedMatch = selectedMatch !== null;
+
+  // When a filter hides the selected row, fall back to the first still-visible
+  // result so the "ready to add" CTA never points at something off-screen.
+  useEffect(() => {
+    if (visibleMatches.length === 0) return;
+    if (selectedId && visibleMatches.some((m) => matchKey(m) === selectedId)) return;
+    setSelectedId(matchKey(visibleMatches[0]));
+  }, [visibleMatches, selectedId]);
   useEffect(() => {
     onVaultSearchStateChange?.(vaultSearchActive);
   }, [vaultSearchActive, onVaultSearchStateChange]);
@@ -369,6 +444,9 @@ export const FragranceCapture: React.FC<{
     setLoadingSurface('search');
     setLoadingStatus("Researching Fragrance...");
     setMatches([]);
+    setSelectedId(null);
+    setHouseFilter(null);
+    setGenderFilter(null);
     setErrorStatus(null);
     setErrorPhase(null);
     setHasSearched(false);
@@ -428,7 +506,7 @@ export const FragranceCapture: React.FC<{
       // On success leave loadingStatus as "Researching Fragrance..."; the overlay
       // exits via finally → setUploading(false) and the results list animates in.
       setMatches(nextMatches);
-      setSelectedIdx(nextMatches.length > 0 ? 0 : null);
+      setSelectedId(nextMatches.length > 0 ? matchKey(nextMatches[0]) : null);
 
     } catch (err: unknown) {
       if (err instanceof Error && err.name === 'AbortError') return; // Ignore expected aborts
@@ -444,9 +522,9 @@ export const FragranceCapture: React.FC<{
   };
 
   const handleConfirm = async () => {
-    if (selectedIdx === null || !matches[selectedIdx] || !onAdd) return;
-    
-    const selected = matches[selectedIdx];
+    if (!selectedMatch || !onAdd) return;
+
+    const selected = selectedMatch;
     if (selected.scent_vector) {
       setUploading(true);
       setLoadingSurface('sync');
@@ -670,7 +748,9 @@ export const FragranceCapture: React.FC<{
         return;
       }
       setSyncComplete(true);
-      await sleep(620);
+      // Hold just long enough for the loader's ~0.5s "complete" flourish to read,
+      // then return to the vault — trimmed from 620ms so the add feels snappier.
+      await sleep(500);
       resetState();
     } catch (err: any) {
       if (err.name === 'AbortError') return;
@@ -691,7 +771,7 @@ export const FragranceCapture: React.FC<{
 
   const handleRetry = () => {
     setErrorStatus(null);
-    const shouldRetrySync = errorPhase === 'sync' && selectedIdx !== null && matches[selectedIdx];
+    const shouldRetrySync = errorPhase === 'sync' && selectedMatch !== null;
     setErrorPhase(null);
     if (shouldRetrySync) {
       void handleConfirm();
@@ -702,12 +782,45 @@ export const FragranceCapture: React.FC<{
 
   const resetState = () => {
     setMatches([]);
-    setSelectedIdx(null);
+    setSelectedId(null);
+    setHouseFilter(null);
+    setGenderFilter(null);
     setHasSearched(false);
     setSearchQuery("");
     setErrorPhase(null);
     setSyncComplete(false);
   };
+
+  // "New search" — clear the result surface but keep the user on the search
+  // field so they can immediately type again (resetState empties the query too).
+  const handleNewSearch = () => {
+    resetState();
+    setErrorStatus(null);
+    window.requestAnimationFrame(() => {
+      searchInputRef.current?.focus({ preventScroll: false });
+      searchInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  };
+
+  // Bring freshly-arrived results into view so the list isn't stranded below the
+  // fold on tall mobile layouts. Runs once per result set, after the overlay clears.
+  useEffect(() => {
+    if (matches.length === 0 || uploading) return;
+    const id = window.requestAnimationFrame(() => {
+      resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [matches.length, uploading]);
+
+  const chipClass = (active: boolean): string =>
+    `inline-flex max-w-[11rem] items-center truncate rounded-full border px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 ${
+      active
+        ? 'border-scent-accent/80 bg-scent-accent/15 text-[#fff7ec]'
+        : 'border-white/12 text-scent-muted hover:border-scent-accent/45 hover:text-[#fff7ec]'
+    }`;
+
+  const filtersActive = houseFilter !== null || genderFilter !== null;
+  const showFilterBar = availableHouses.length > 1 || availableGenders.length > 1;
 
   /* Sync overlay — full-screen portal, separate from the search overlay. */
   const syncVeil = uploading && loadingSurface === 'sync' ? (
@@ -766,6 +879,34 @@ export const FragranceCapture: React.FC<{
     </motion.div>
   ) : null;
 
+  /* Mobile action bar — a fixed, viewport-pinned CTA so "Add to Vault" is always
+     reachable while browsing a long result list. Portaled to <body> because the
+     panel root is overflow:hidden, which traps a CSS `position: sticky` bar. The
+     desktop CTA stays inline (`sm:block`); this is `sm:hidden`. */
+  const mobileActionBar = matches.length > 0 && !uploading ? (
+    <motion.div
+      key="mobile-action-bar"
+      initial={reduceMotion ? false : { opacity: 0, y: 24 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 24 }}
+      transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
+      className="fixed inset-x-0 bottom-0 z-[120] bg-gradient-to-t from-scent-bg via-scent-bg/95 to-transparent px-4 pb-[max(0.7rem,env(safe-area-inset-bottom))] pt-8 sm:hidden"
+    >
+      <div className="mx-auto w-full max-w-[39.75rem]">
+        <button
+          type="button"
+          onClick={handleConfirm}
+          disabled={!hasSelectedMatch}
+          className="scent-vault-outline-button flex h-[58px] w-full items-center justify-center px-4 transition-transform active:scale-[0.98] disabled:pointer-events-none disabled:opacity-62"
+        >
+          <span className="scent-vault-outline-button-label font-serif italic text-[1.3rem] leading-tight text-center">
+            {hasSelectedMatch ? 'Add to Vault' : 'Select a Result'}
+          </span>
+        </button>
+      </div>
+    </motion.div>
+  ) : null;
+
   return (
     <div className="scent-vault-panel w-full min-w-0 relative overflow-hidden">
       <AnimatePresence>
@@ -809,8 +950,13 @@ export const FragranceCapture: React.FC<{
         <div className="mx-auto max-w-[42.75rem] text-center">
           <form onSubmit={handleSearch} aria-busy={uploading} className="relative group">
             <input
+              ref={searchInputRef}
               id="scent-add-to-vault-search"
-              type="text"
+              type="search"
+              enterKeyHint="search"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               value={searchQuery}
               onChange={(e) => { setSearchQuery(e.target.value); setErrorStatus(null); setErrorPhase(null); }}
               onFocus={() => setSearchFocused(true)}
@@ -855,57 +1001,144 @@ export const FragranceCapture: React.FC<{
 
           {matches.length > 0 && (
             <motion.div
+              ref={resultsRef}
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.34, ease: [0.22, 1, 0.36, 1] }}
-              className="mx-auto mt-6 w-full sm:mt-7"
+              className="mx-auto mt-6 w-full scroll-mt-24 pb-24 sm:mt-7 sm:pb-0"
             >
               <div className="flex min-h-0 flex-col">
                 <div className="scent-vault-results-panel mx-auto w-full max-w-[50.5rem] px-4 py-7 sm:px-9 sm:py-9">
-                  <div className="mb-6 flex shrink-0 justify-center px-1">
-                    <p className="scent-vault-results-heading text-[10px] font-bold uppercase tracking-[0.34em] text-scent-accent/92">
+                  {/* Results-nav header: count on the left, "New search" on the
+                      right. Lives outside the scroll area below, so it stays put
+                      while the list scrolls. */}
+                  <div className="mb-4 flex shrink-0 items-center justify-between gap-3 px-1">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-scent-accent/92">
                       Search Results{' '}
-                      <span className="tabular-nums tracking-[0.12em]">
-                        ({matches.length})
+                      <span className="tabular-nums tracking-[0.12em] text-scent-accent/70">
+                        {filtersActive
+                          ? `${visibleMatches.length} of ${matches.length}`
+                          : matches.length}
                       </span>
                     </p>
+                    <button
+                      type="button"
+                      onClick={handleNewSearch}
+                      className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/12 px-3 py-1.5 text-[9px] font-bold uppercase tracking-[0.22em] text-scent-muted transition-colors hover:border-scent-accent/45 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
+                    >
+                      <Search size={12} strokeWidth={2} aria-hidden />
+                      New search
+                    </button>
                   </div>
-                  <div className={`flex max-h-[min(42dvh,24rem)] min-h-0 flex-1 overflow-y-auto overscroll-contain scrollbar-hide ${matches.length === 1 ? 'items-center' : 'items-start'}`}>
-                    <div className="grid w-full grid-cols-1 gap-3">
-                      {matches.map((m, i) => (
-                        <button
-                          key={m.id || m.source_url || `match-${i}`}
-                          type="button"
-                          onClick={() => setSelectedIdx(i)}
-                          className={`scent-vault-result-card group mx-auto w-full max-w-[39.75rem] min-h-[178px] px-6 py-7 text-center transition-all duration-200 cursor-pointer sm:min-h-[218px] sm:px-8 sm:py-8 ${
-                            selectedIdx === i ? 'is-selected' : ''
-                          }`}
-                          aria-pressed={selectedIdx === i}
-                        >
-                          <span className="scent-vault-monogram mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full font-serif text-[1.55rem] font-semibold leading-none sm:mb-5 sm:h-[4.5rem] sm:w-[4.5rem] sm:text-[1.9rem]">
-                            {matchMonogram(m)}
-                          </span>
-                          <span
-                            className="mx-auto block max-w-full truncate font-serif text-[2rem] italic leading-none text-[#fff7ec] sm:text-[2.55rem]"
-                            title={m.name}
-                          >
-                            {truncateMatchLine(m.name.toLocaleLowerCase(), MATCH_LINE_MAX_CHARS)}
-                          </span>
-                          <span
-                            className="mx-auto mt-4 block max-w-full truncate font-sans text-[11px] font-bold uppercase tracking-[0.3em] text-scent-accent/92 sm:text-[12px]"
-                            title={m.brand || 'House unavailable'}
-                          >
-                            {truncateMatchLine(m.brand || 'House unavailable', MATCH_LINE_MAX_CHARS)}
-                          </span>
-                        </button>
-                      ))}
+
+                  {showFilterBar && (
+                    <div className="mb-5 flex shrink-0 flex-col gap-2 px-1">
+                      {availableGenders.length > 1 && (
+                        <div className="flex flex-wrap items-center justify-center gap-1.5">
+                          <button type="button" onClick={() => setGenderFilter(null)} className={chipClass(genderFilter === null)}>
+                            All
+                          </button>
+                          {availableGenders.map((g) => (
+                            <button
+                              key={g}
+                              type="button"
+                              onClick={() => setGenderFilter((cur) => (cur === g ? null : g))}
+                              className={chipClass(genderFilter === g)}
+                            >
+                              {g}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {availableHouses.length > 1 && (
+                        <div className="flex flex-wrap items-center justify-center gap-1.5">
+                          <button type="button" onClick={() => setHouseFilter(null)} className={chipClass(houseFilter === null)}>
+                            All houses
+                          </button>
+                          {availableHouses.map((h) => (
+                            <button
+                              key={h}
+                              type="button"
+                              title={h}
+                              onClick={() => setHouseFilter((cur) => (cur?.toLowerCase() === h.toLowerCase() ? null : h))}
+                              className={chipClass(houseFilter?.toLowerCase() === h.toLowerCase())}
+                            >
+                              {h}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
+                  )}
+
+                  <div className={`flex max-h-[min(42dvh,24rem)] min-h-0 flex-1 overflow-y-auto overscroll-contain scrollbar-hide ${visibleMatches.length === 1 ? 'items-center' : 'items-start'}`}>
+                    {visibleMatches.length === 0 ? (
+                      <div className="m-auto flex flex-col items-center gap-3 py-10 text-center">
+                        <p className="font-serif italic text-lg text-white/45">No results match these filters</p>
+                        <button
+                          type="button"
+                          onClick={() => { setHouseFilter(null); setGenderFilter(null); }}
+                          className="text-[10px] font-bold uppercase tracking-[0.24em] text-scent-accent hover:underline focus-visible:outline-none focus-visible:underline"
+                        >
+                          Clear filters
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="grid w-full grid-cols-1 gap-3">
+                        {visibleMatches.map((m) => {
+                          const key = matchKey(m);
+                          const isSelected = key === selectedId;
+                          return (
+                            <button
+                              key={key}
+                              type="button"
+                              onClick={() => setSelectedId(key)}
+                              className={`scent-vault-result-card group mx-auto w-full max-w-[39.75rem] min-h-[178px] px-6 py-7 text-center transition-all duration-200 cursor-pointer sm:min-h-[218px] sm:px-8 sm:py-8 ${
+                                isSelected ? 'is-selected' : ''
+                              }`}
+                              aria-pressed={isSelected}
+                            >
+                              {isSelected && (
+                                <motion.span
+                                  initial={reduceMotion ? false : { scale: 0.5, opacity: 0 }}
+                                  animate={{ scale: 1, opacity: 1 }}
+                                  transition={{ type: 'spring', stiffness: 520, damping: 24 }}
+                                  className="scent-vault-result-check pointer-events-none absolute right-3 top-3 z-10 flex h-7 w-7 items-center justify-center rounded-full sm:right-4 sm:top-4 sm:h-8 sm:w-8"
+                                  aria-hidden
+                                >
+                                  <Check size={16} strokeWidth={3} />
+                                </motion.span>
+                              )}
+                              <span className="scent-vault-monogram mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full font-serif text-[1.55rem] font-semibold leading-none sm:mb-5 sm:h-[4.5rem] sm:w-[4.5rem] sm:text-[1.9rem]">
+                                {matchMonogram(m)}
+                              </span>
+                              <span
+                                className="mx-auto block max-w-full truncate font-serif text-[2rem] italic leading-none text-[#fff7ec] sm:text-[2.55rem]"
+                                title={m.name}
+                              >
+                                {truncateMatchLine(m.name, MATCH_LINE_MAX_CHARS)}
+                              </span>
+                              <span
+                                className="mx-auto mt-4 block max-w-full truncate font-sans text-[11px] font-bold uppercase tracking-[0.3em] text-scent-accent/92 sm:text-[12px]"
+                                title={m.brand || 'House unavailable'}
+                              >
+                                {truncateMatchLine(m.brand || 'House unavailable', MATCH_LINE_MAX_CHARS)}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 </div>
-                <div className="mx-auto mt-5 w-full max-w-[49.75rem] shrink-0 pb-[max(0.15rem,env(safe-area-inset-bottom))] sm:mt-6">
+                {/* Desktop action area sits inline below the panel. On mobile the
+                    panel can run past the fold, so the CTA is instead rendered as a
+                    fixed bottom bar (portaled to escape the panel's overflow:hidden)
+                    — see `mobileActionBar`. */}
+                <div className="mx-auto mt-5 hidden w-full max-w-[49.75rem] shrink-0 pb-[max(0.15rem,env(safe-area-inset-bottom))] sm:mt-6 sm:block">
                   <AnimatePresence>
-                    {selectedIdx !== null ? (
+                    {hasSelectedMatch ? (
                       <motion.p
                         initial={{ opacity: 0, y: 5 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -954,7 +1187,10 @@ export const FragranceCapture: React.FC<{
       </AnimatePresence>
       {typeof document !== 'undefined'
         ? createPortal(
-            <AnimatePresence>{syncVeil}</AnimatePresence>,
+            <>
+              <AnimatePresence>{syncVeil}</AnimatePresence>
+              <AnimatePresence>{mobileActionBar}</AnimatePresence>
+            </>,
             document.body,
           )
         : null}

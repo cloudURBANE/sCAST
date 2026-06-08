@@ -1536,7 +1536,11 @@ export const Wardrobe: React.FC<{
               <Search size={23} strokeWidth={1.5} className="pointer-events-none absolute right-5 top-1/2 z-10 -translate-y-1/2 text-scent-accent/82 sm:right-6" />
               <input
                 id="wardrobe-vault-search"
-                type="text"
+                type="search"
+                enterKeyHint="search"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 role="combobox"
                 aria-expanded={searchDropdownOpen}
                 aria-controls="wardrobe-search-suggestions"
