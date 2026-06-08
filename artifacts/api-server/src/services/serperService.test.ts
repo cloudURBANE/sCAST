@@ -82,3 +82,27 @@ test("scoreSerperImageCandidate prefers a portrait bottle over a wide box+bottle
     `portrait (${portraitBottle}) should outrank wide (${wideComposition})`,
   );
 });
+
+test("scoreSerperImageCandidate admits trusted-host packshots below the old 500px floor", () => {
+  // Live Serper dims (YSL Libre / MYSLF / Y "Le Parfum", 2026-06): the official
+  // YSL CDN serves 320×320, Sephora 350×350, Macy's 328×400 — all previously
+  // `-Infinity`'d by the 500px floor. They must now survive (BE-3).
+  for (const c of [
+    { imageUrl: "https://www.yslbeautyus.com/libre-le-parfum.png", title: "YSL Libre Le Parfum 3.0 oz", source: "YSL Beauty", imageWidth: 320, imageHeight: 320 },
+    { imageUrl: "https://slimages.macysassets.com/ysl-libre.jpg", title: "Yves Saint Laurent Libre Le Parfum Spray", source: "Macy's", imageWidth: 328, imageHeight: 400 },
+  ]) {
+    const score = scoreSerperImageCandidate(c);
+    assert.ok(Number.isFinite(score) && score > 0, `${c.source} ${c.imageWidth}×${c.imageHeight} packshot should pass`);
+  }
+});
+
+test("scoreSerperImageCandidate still rejects sub-300px thumbnails/icons", () => {
+  const tinyIcon = scoreSerperImageCandidate({
+    imageUrl: "https://www.sephora.com/sprite/perfume-thumb.png",
+    title: "YSL Libre perfume bottle",
+    source: "Sephora",
+    imageWidth: 120,
+    imageHeight: 120,
+  });
+  assert.equal(tinyIcon, -Infinity);
+});

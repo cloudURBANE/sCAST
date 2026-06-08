@@ -96,6 +96,20 @@ export interface ScentEngineDeps {
     opts: ResolveImageOpts,
   ) => Promise<ProcessedImageRef | null>;
   usableImageUrlForResponse: (url?: string) => Promise<string | null>;
+  /**
+   * BE-2: backfill a freshly-resolved image into already-persisted user
+   * wardrobe rows for this fragrance that are *still imageless*. A deferred
+   * save returns `imageUrl: ""`; the frontend persists the wardrobe row before
+   * the background Serper pass finishes, so without this the resolved image
+   * only ever lands in the shared catalog and the user's own tile stays empty
+   * until a full reload. Implementations MUST only fill empty rows (never
+   * overwrite an existing image or a user override) and match on brand+name.
+   */
+  backfillUserFragranceImages?: (
+    brand: string,
+    name: string,
+    image: ProcessedImageRef,
+  ) => Promise<void>;
   reportNonFatalError?: (
     area: string,
     error: unknown,
@@ -373,6 +387,18 @@ export async function buildProfileWithDeps(
           storageProvider: image.storageProvider,
           sourceProvider: image.sourceProvider,
         });
+        // BE-2: the deferred save returned an empty image and the frontend has
+        // already persisted the wardrobe row(s) by now. Push the resolved image
+        // into any still-imageless user_fragrances rows for this fragrance so
+        // the user's tile self-heals without waiting for a full reload.
+        await deps
+          .backfillUserFragranceImages?.(finalBrand, finalName, image)
+          .catch((err) => {
+            deps.reportNonFatalError?.("scentEngine.userImageBackfill", err, {
+              brand: finalBrand,
+              name: finalName,
+            });
+          });
       })
       .catch((err) => {
         deps.reportNonFatalError?.("scentEngine.deferredImageResolution", err, {
