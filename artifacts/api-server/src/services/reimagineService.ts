@@ -53,13 +53,17 @@ function resolveQuality(): ReimagineQuality {
 }
 
 // Maximum dimension of the PNG we send to OpenAI as the reference image.
-// gpt-image-2 accepts up to 25MB per image; a 2048-square PNG with full
-// compression typically lands well under that and gives the model far more
-// pixels of label artwork, cap detail, and glass refraction to reproduce
-// faithfully than a 1024-square thumbnail would. Tunable via
-// OPENAI_REIMAGINE_INPUT_DIM (clamped to 512..2048) so ops can trade fidelity
-// for upload size/cost; default preserves current behaviour.
-const DEFAULT_OPENAI_INPUT_MAX_DIMENSION = 2048;
+// Image-input tokens scale with the reference resolution, so this is the
+// largest cost lever we can move WITHOUT touching output quality. The model
+// renders at DEFAULT_REIMAGINE_SIZE (1024²) and we then downscale the result to
+// MAX_OUTPUT_DIMENSION (768px) before storing it, so any reference detail above
+// ~1024px is resolved away by the render and then thrown away by the downscale
+// — the user never sees it. A 1024-square reference therefore matches the
+// render size 1:1 and delivers identical final quality at roughly a quarter of
+// the input-image pixels (and tokens) of the old 2048-square default. Ops who
+// want to spend more for marginal fidelity can raise it via
+// OPENAI_REIMAGINE_INPUT_DIM (clamped to 512..2048).
+const DEFAULT_OPENAI_INPUT_MAX_DIMENSION = 1024;
 
 function resolveInputMaxDimension(): number {
   const raw = Number(process.env.OPENAI_REIMAGINE_INPUT_DIM?.trim());

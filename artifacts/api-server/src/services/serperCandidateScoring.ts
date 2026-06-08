@@ -88,8 +88,23 @@ const BLOCKED_TEXT_HINTS = [
   "boxed",
   "in box",
   "box packaging",
+  "box and bottle",
+  "bottle and box",
+  "box +",
+  "+ box",
+  "& box",
+  "and box",
+  "with packaging",
+  "with case",
+  "gift box",
+  "gift packaging",
+  "coffret",
   "carton",
+  "display box",
+  "wooden box",
   "packaging only",
+  "value set",
+  "holiday set",
   "set of",
   "bundle",
   "lot of",
@@ -208,6 +223,21 @@ export function scoreSerperImageCandidate(candidate: SerperImageScoringInput): n
   if (/\.png(\?.*)?$/i.test(imageUrl)) score += 2;
   if (width && height) {
     score += Math.min(4, Math.floor(Math.min(width, height) / 400));
+
+    // Aspect ratio as a visual proxy for "single bottle vs. bottle + box".
+    // Text filtering can only catch boxes the title *names*; many retailer and
+    // marketplace shots show the bottle standing next to its carton with a
+    // title that never says "box". A lone perfume bottle is markedly taller
+    // than wide (portrait), whereas a bottle-plus-box composition (or a
+    // lifestyle/flat-lay shot) is square or landscape. So reward portrait
+    // framing and penalize wide framing to bias ranking toward clean,
+    // single-bottle packshots without needing to see the pixels.
+    const aspect = width / height;
+    if (aspect <= 0.85) {
+      score += 3; // tall, bottle-shaped — most likely a single bottle
+    } else if (aspect >= 1.15) {
+      score -= 3; // wide — disproportionately bottle+box, sets, or lifestyle
+    }
   } else {
     // Missing Serper dimension metadata — soft penalty rather than silent pass.
     score -= 2;
