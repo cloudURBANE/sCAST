@@ -62,6 +62,29 @@ function sniffImageMime(buffer: Buffer): string | null {
   return null;
 }
 
+/**
+ * Positive markup/text signal: the body begins with `<` (after an optional BOM
+ * and leading ASCII whitespace). Used to reject HTML error/WAF pages that are
+ * served behind an `image/*` content-type. None of the raster formats we accept
+ * (JPEG/PNG/GIF/WebP/AVIF) start with `<`, so this never trips on a genuine
+ * image while reliably catching disguised markup.
+ */
+export function looksLikeMarkupOrText(buffer: Buffer): boolean {
+  let i = 0;
+  // Skip a UTF-8 BOM.
+  if (buffer.length >= 3 && buffer[0] === 0xef && buffer[1] === 0xbb && buffer[2] === 0xbf) {
+    i = 3;
+  }
+  // Skip leading ASCII whitespace (space, tab, LF, CR).
+  while (
+    i < buffer.length &&
+    (buffer[i] === 0x20 || buffer[i] === 0x09 || buffer[i] === 0x0a || buffer[i] === 0x0d)
+  ) {
+    i += 1;
+  }
+  return i < buffer.length && buffer[i] === 0x3c; // '<'
+}
+
 export type SafeImageFetchResult = {
   buffer: Buffer;
   contentType: string;
@@ -235,6 +258,13 @@ export async function fetchExternalImage(
 
     const buffer = await readLimitedBody(response, maxBytes);
 
+    // A real image is never empty. An empty 200 body (some retailers/WAFs return
+    // one behind an image content-type) decodes to naturalWidth === 0 in the
+    // browser — exactly the "poisoned" payload that stranded the bottle skeleton.
+    if (buffer.length === 0) {
+      throw new UnsafeImageUrlError("Image body was empty");
+    }
+
     let contentType = resolvedType;
     if (!isAllowedDeclared) {
       const sniffed = sniffImageMime(buffer);
@@ -244,6 +274,13 @@ export async function fetchExternalImage(
         );
       }
       contentType = sniffed;
+    } else if (looksLikeMarkupOrText(buffer)) {
+      // The header declared an allowed image type, but the bytes are HTML/markup
+      // — a WAF challenge or error page wearing an `image/*` content-type. Reject
+      // it: the proxy then returns 502 (the cache never stores loader rejections,
+      // so the garbage can't poison the shared cache) and the client falls through
+      // to "Unavailable" instead of an endless skeleton.
+      throw new UnsafeImageUrlError("Image body was not a decodable image (markup payload)");
     }
 
     return {
