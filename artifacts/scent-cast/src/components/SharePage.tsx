@@ -770,12 +770,12 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                   >
                     <div className="scent-fragrance-card scent-hover-lift w-full h-full min-h-[32rem] transition-[transform,border-color,box-shadow] duration-500 motion-reduce:transition-none relative overflow-hidden flex flex-col">
                       <div className="scent-card-frame" aria-hidden />
-                      <div className="relative z-[1] flex h-full flex-col items-center px-6 sm:px-8 pt-7 sm:pt-9 pb-6 sm:pb-7">
+                      <div className="relative z-[1] flex h-full flex-col items-center px-6 sm:px-8 py-7 sm:py-9">
                         <BrandGoldLabel
                           brand={brand}
                           className="scent-card-brand w-full"
                         />
-                        <div className="relative flex-1 w-full mt-4 sm:mt-5 mb-5 sm:mb-6 min-h-0">
+                        <div className="relative flex-1 w-full my-5 sm:my-6 min-h-0">
                           {!data.hideImages ? (
                           <BottleImage
                             variant="grid"

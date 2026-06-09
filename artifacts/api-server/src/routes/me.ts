@@ -5,6 +5,7 @@ import { db } from "@workspace/db";
 import { userFragrancesTable, userSettingsTable } from "@workspace/db/schema";
 import { and, eq, sql } from "drizzle-orm";
 import { deriveAppState } from "../services/appStateCore";
+import { isAdminUser } from "../lib/adminAccess";
 import { logger } from "../lib/logger";
 
 const router = Router();
@@ -64,7 +65,10 @@ router.get("/me/app-state", requireAuth, async (req: AuthRequest, res) => {
     }
   }
 
-  res.json(state);
+  // Additive: lets the SPA show admin-only controls (e.g. the bottle-image
+  // uploader) without a separate round-trip. The upload route still enforces
+  // admin access server-side; this flag is only a UI hint.
+  res.json({ ...state, isAdmin: isAdminUser(user) });
 });
 
 export default router;
