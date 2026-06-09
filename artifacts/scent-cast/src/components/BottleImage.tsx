@@ -209,12 +209,24 @@ export const BottleImage: React.FC<BottleImageProps> = ({
 
     if (img.naturalWidth > 0) {
       handleLoad();
-    } else if (loading !== 'lazy') {
-      // An eager image that is `complete` with zero natural width genuinely
-      // failed to decode. A lazy image, however, reports `complete && naturalWidth === 0`
-      // on iOS Safari while it is still deferred off-screen (not an error) —
-      // flagging it here is what surfaced "Unavailable" on the iPhone grid even
-      // though the URL was fine. For lazy images, wait for the real load/error event.
+    } else if (loading !== 'lazy' || img.currentSrc) {
+      // `complete && naturalWidth === 0` is ambiguous; `currentSrc` disambiguates
+      // it (it is only set once the browser has actually selected and fetched a
+      // source for this element):
+      //  • Eager image → it was fetched and decoded to zero width: a genuine
+      //    failure (broken / corrupt / empty body). Flag it.
+      //  • Lazy image with a NON-EMPTY `currentSrc` → the browser did fetch a
+      //    source and it still came back undecodable. This is the real bug we are
+      //    fixing: a "poisoned" URL (cached 0-byte file or HTML/WAF page disguised
+      //    as an image) resolves synchronously from cache, so its load/error event
+      //    fires before our handlers attach and is missed — leaving the pulsing
+      //    skeleton spinning forever, even across refreshes. Flag it so it falls
+      //    through retries/proxy-fallback to "Unavailable".
+      //  • Lazy image with an EMPTY `currentSrc` → the browser has NOT fetched it
+      //    yet. iOS Safari reports such a still-deferred off-screen image as
+      //    `complete && naturalWidth === 0`; that is not an error (flagging it is
+      //    what once surfaced a false "Unavailable" on the iPhone grid). Skip it
+      //    and wait for the real load/error event once it scrolls into view.
       handleError();
     }
   }, [broken, isLoading, retryCount, activeUrl, useVideo, loading, usedProxyFallback]);
