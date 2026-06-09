@@ -153,7 +153,11 @@ async function readJson<T>(res: Response, fallback: string): Promise<T> {
   if (!res.ok) {
     throw new Error(await apiErrorMessage(res, fallback));
   }
-  return (await res.json()) as T;
+  try {
+    return (await res.json()) as T;
+  } catch (err) {
+    throw new Error(fallback);
+  }
 }
 
 export function sanitizeCommunityTag(value: string): string {
