@@ -526,6 +526,7 @@ interface WardrobeContextType {
     fragranceId?: string | null;
     file?: File;
     imageUrl?: string;
+    sourcePageUrl?: string;
     removeBackground: boolean;
   }) => Promise<{ imageUrl: string; imageHash?: string; backgroundRemoved: boolean }>;
   handlePersistWardrobeDetailRefresh: (target: Fragrance, detail: FragranceDetail) => Promise<Fragrance | null>;
@@ -1031,6 +1032,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     fragranceId?: string | null;
     file?: File;
     imageUrl?: string;
+    sourcePageUrl?: string;
     removeBackground: boolean;
   }): Promise<{ imageUrl: string; imageHash?: string; backgroundRemoved: boolean }> => {
     if (!authToken) throw new Error('Sign in required');
@@ -1060,6 +1062,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         },
         body: JSON.stringify({
           imageUrl: input.imageUrl,
+          sourcePageUrl: input.sourcePageUrl,
           brand: input.brand,
           name: input.name,
           removeBackground: input.removeBackground,

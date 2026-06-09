@@ -204,9 +204,9 @@ export async function batchHydrateImageUrls(
       )
       .orderBy(
         desc(sql<number>`case
+          when ${imageCacheTable.sourceProvider} = 'manual' then 3
           when ${imageCacheTable.sourceProvider} in ('openai', 'openai-reimagine', 'openai_reimagine')
             or ${imageCacheTable.sourceUrl} like 'openai-reimagine:%' then 2
-          when ${imageCacheTable.sourceProvider} = 'manual' then 1
           else 0
         end`),
         desc(imageCacheTable.backgroundRemoved),

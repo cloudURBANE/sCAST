@@ -1,7 +1,7 @@
 import sharp from "sharp";
 import { logger } from "../lib/logger";
 import { removeBgBuffer, type RemoveBgReason, type RemoveBgStatus } from "./bgService";
-import { makeLookupKey } from "./catalogService";
+import { getCatalogEntry, makeLookupKey, saveCatalogEntry } from "./catalogService";
 import {
   buildProcessedImageStorageKey,
   hashBuffer,
@@ -168,6 +168,24 @@ export async function processAdminBottleImage(
         { lookupKey, sourceUrlHash, storagePath: recorded.storagePath },
         "[admin-upload] image_cache row not persisted (DB unavailable); URL still returned for this request",
       );
+    }
+
+    const catalogEntry = await getCatalogEntry(input.brand, input.name);
+    if (catalogEntry) {
+      const updatedProfile = {
+        ...catalogEntry,
+        imageUrl: publicUrl,
+        imageHash: contentHash,
+        sourceProvider,
+        storagePath: uploaded.storagePath,
+        storageProvider: uploaded.provider,
+      };
+      await saveCatalogEntry(input.brand, input.name, updatedProfile).catch((err) => {
+        logger.warn(
+          { err: err instanceof Error ? err.message : String(err), lookupKey },
+          "[admin-upload] failed to update global catalog with new image",
+        );
+      });
     }
 
     return { ...recorded, backgroundRemoved };
