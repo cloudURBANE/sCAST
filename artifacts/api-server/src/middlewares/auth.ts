@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import { usersTable } from "@workspace/db/schema";
 import { and, eq } from "drizzle-orm";
 import { getTenantId } from "./tenant";
+import { isAdminUser } from "../lib/adminAccess";
 
 export interface AuthRequest extends Request {
   user?: typeof usersTable.$inferSelect;
@@ -50,5 +51,18 @@ export async function requireAuth(req: AuthRequest, res: Response, next: NextFun
   }
 
   req.user = user;
+  next();
+}
+
+/**
+ * Gate a route to admin users only. Must run *after* `requireAuth` so `req.user`
+ * is populated. Returns 403 (authenticated but not authorized) for non-admins,
+ * keeping it distinct from the 401 `requireAuth` issues for missing/invalid auth.
+ */
+export function requireAdmin(req: AuthRequest, res: Response, next: NextFunction): void {
+  if (!isAdminUser(req.user)) {
+    res.status(403).json({ error: "Admin access required" });
+    return;
+  }
   next();
 }
