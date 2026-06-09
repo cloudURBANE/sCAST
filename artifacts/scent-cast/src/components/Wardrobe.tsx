@@ -1752,9 +1752,9 @@ export const Wardrobe: React.FC<{
               {[...Array(4)].map((_, i) => (
                 <div key={i} className="scent-fragrance-card w-full min-h-[32rem] relative overflow-hidden flex flex-col">
                   <div className="scent-card-frame" aria-hidden />
-                  <div className="relative z-[1] flex h-full flex-col items-center px-6 sm:px-8 pt-7 sm:pt-9 pb-6 sm:pb-7">
+                  <div className="relative z-[1] flex h-full flex-col items-center px-6 sm:px-8 py-7 sm:py-9">
                     <div className="h-4 w-2/3 bg-white/10 rounded animate-pulse mt-2" />
-                    <div className="relative flex-1 w-full mt-4 sm:mt-5 mb-5 sm:mb-6 min-h-0 flex items-center justify-center">
+                    <div className="relative flex-1 w-full my-5 sm:my-6 min-h-0 flex items-center justify-center">
                       <div className="w-24 h-48 bg-white/5 rounded-full animate-pulse opacity-50" />
                     </div>
                     <div className="h-6 w-3/4 bg-white/10 rounded animate-pulse shrink-0 mb-2" />
@@ -1777,7 +1777,7 @@ export const Wardrobe: React.FC<{
                     >
                       <div className="scent-fragrance-card scent-hover-lift w-full h-full min-h-[26rem] transition-[transform,border-color,box-shadow] duration-500 motion-reduce:transition-none relative overflow-hidden flex flex-col">
                         <div className="scent-card-frame" aria-hidden />
-                        <div className="relative z-[1] flex h-full flex-col items-center px-6 sm:px-8 pt-5 sm:pt-6 pb-4 sm:pb-5">
+                        <div className="relative z-[1] flex h-full flex-col items-center px-6 sm:px-8 py-5 sm:py-6">
                           <BrandGoldLabel
                             brand={entryBrand(item)}
                             className="scent-card-brand w-full mt-1 sm:mt-1.5"
