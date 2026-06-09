@@ -20,6 +20,7 @@ import { PageTransitionOverlay, warmTransitionEmblem } from './components/PageTr
 import { useModalBehavior } from '@/hooks/use-modal-behavior';
 import { useRenderBudget } from '@/hooks/useRenderBudget';
 import NotFound from '@/pages/not-found';
+import { SEO } from './components/SEO';
 
 const CommunityPage = React.lazy(() => import('@/pages/community'));
 const IpadFreezeLab = React.lazy(() => import('@/pages/ipad-freeze-lab'));
@@ -484,6 +485,7 @@ function DashboardView() {
 
   return (
     <div className="min-h-[100svh] relative overflow-x-hidden">
+      <SEO />
       <AppTopNav
         authToken={authToken}
         authEmail={authEmail}
@@ -716,20 +718,28 @@ function CommunityPageView() {
   const { authToken, authEmail, authPictureUrl, handleSignOut, setIsAuthModalOpen } = useAuth();
   const { setIsShareModalOpen } = useWardrobeShareModalActions();
   return (
-    <CommunityPage
-      authToken={authToken}
+    <>
+      <SEO title="Community | ScentBeam" description="Discuss and discover fragrances with the community." url="https://scentbeam.com/community" />
+      <CommunityPage
+        authToken={authToken}
       authEmail={authEmail}
       authPictureUrl={authPictureUrl}
       onSignIn={() => setIsAuthModalOpen(true)}
       onShare={() => setIsShareModalOpen(true)}
       onSignOut={handleSignOut}
     />
+    </>
   );
 }
 
 function SharePageView() {
   const { userId } = useParams<{ userId: string }>();
-  return <SharePage userId={userId || ''} />;
+  return (
+    <>
+      <SEO title="Shared Wardrobe | ScentBeam" description="Check out this fragrance wardrobe." />
+      <SharePage userId={userId || ''} />
+    </>
+  );
 }
 
 function GlobalModals() {

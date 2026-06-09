@@ -34,6 +34,7 @@ import { bottleFeaturedSlotClass } from '@/lib/bottleImageFrame';
 
 import {
   BOTTLE_CROP_STORED_MAX,
+  BOTTLE_FRAME_LIMITS,
   DEFAULT_BOTTLE_IMAGE_ADJUSTMENT,
   bottleImageAdjustmentsEqual,
   normalizeBottleImageAdjustment,
@@ -2090,8 +2091,8 @@ export const Wardrobe: React.FC<{
                                     </label>
                                     <input
                                       type="range"
-                                      min="0.7"
-                                      max="1.45"
+                                      min={BOTTLE_FRAME_LIMITS.scale.min}
+                                      max={BOTTLE_FRAME_LIMITS.scale.max}
                                       step="0.01"
                                       value={frameDraft.scale}
                                       onChange={(e) => updateFrameDraft({ scale: Number(e.target.value) })}
@@ -2108,8 +2109,8 @@ export const Wardrobe: React.FC<{
                                     </label>
                                     <input
                                       type="range"
-                                      min="-18"
-                                      max="18"
+                                      min={BOTTLE_FRAME_LIMITS.x.min}
+                                      max={BOTTLE_FRAME_LIMITS.x.max}
                                       step="0.5"
                                       value={frameDraft.x}
                                       onChange={(e) => updateFrameDraft({ x: Number(e.target.value) })}
@@ -2126,8 +2127,8 @@ export const Wardrobe: React.FC<{
                                     </label>
                                     <input
                                       type="range"
-                                      min="-18"
-                                      max="18"
+                                      min={BOTTLE_FRAME_LIMITS.y.min}
+                                      max={BOTTLE_FRAME_LIMITS.y.max}
                                       step="0.5"
                                       value={frameDraft.y}
                                       onChange={(e) => updateFrameDraft({ y: Number(e.target.value) })}
