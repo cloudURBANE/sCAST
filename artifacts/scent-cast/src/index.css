@@ -534,6 +534,14 @@ a {
   text-shadow:
     0 1px 0 rgba(0, 0, 0, 0.9),
     0 0 18px rgba(212, 175, 55, 0.12);
+  transition: color var(--scent-transition-base, 0.18s) var(--scent-ease-out, ease);
+}
+
+.scent-vault-outline-button:hover .scent-vault-outline-button-label {
+  color: #fff7ec;
+  text-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.9),
+    0 0 20px rgba(212, 175, 55, 0.28);
 }
 
 .scent-primary-button {

@@ -546,12 +546,22 @@ function DashboardView() {
                       <span className="font-serif italic text-lg sm:text-2xl leading-tight text-center">Discover Your Signature Scent</span>
                     </motion.button>
                   ) : (
-                    <div className="w-full min-h-[60px] sm:h-16 flex items-center justify-center gap-2.5 sm:gap-4 px-4 rounded-[var(--radius-scent)] border border-white/10 bg-white/[0.025]">
-                      <Play size={19} className="fill-current shrink-0 opacity-25" aria-hidden />
-                      <span className="font-serif italic text-lg sm:text-xl leading-tight text-center text-white/30">
+                    <div className="w-full min-h-[60px] sm:min-h-16 flex flex-col items-center justify-center gap-2.5 px-4 py-3 rounded-[var(--radius-scent)] border border-white/10 bg-white/[0.025]">
+                      <div className="flex items-center gap-2" role="progressbar" aria-valuemin={0} aria-valuemax={3} aria-valuenow={Math.min(items.length, 3)} aria-label="Fragrances added toward discovery">
+                        {[0, 1, 2].map((i) => (
+                          <span
+                            key={i}
+                            className={`h-1.5 w-9 rounded-full transition-colors duration-300 sm:w-12 ${
+                              i < items.length ? 'bg-scent-accent/85 shadow-[0_0_10px_rgba(212,175,55,0.35)]' : 'bg-white/12'
+                            }`}
+                          />
+                        ))}
+                      </div>
+                      <span className="font-serif italic text-base sm:text-lg leading-tight text-center text-white/55">
+                        <span className="tabular-nums not-italic font-sans font-bold tracking-[0.12em] text-scent-accent/80">{Math.min(items.length, 3)}/3</span>
                         {items.length === 0
-                          ? 'Add 3 fragrances to unlock discovery'
-                          : `Add ${3 - items.length} more fragrance${3 - items.length !== 1 ? 's' : ''} to unlock discovery`}
+                          ? ' — add 3 fragrances to unlock discovery'
+                          : ` — ${3 - items.length} more to unlock discovery`}
                       </span>
                     </div>
                   )}
