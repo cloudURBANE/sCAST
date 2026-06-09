@@ -1,6 +1,9 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { X } from 'lucide-react';
+
+// How long the gentle nudge lingers before it bows out on its own.
+const AUTO_DISMISS_MS = 9000;
 
 interface GuestSaveBannerProps {
   itemCount: number;
@@ -21,6 +24,17 @@ export const GuestSaveBanner: React.FC<GuestSaveBannerProps> = ({
   onDismiss,
 }) => {
   const countLabel = itemCount === 1 ? '1 fragrance' : `${itemCount} fragrances`;
+
+  // Auto-retire after a short while so the nudge makes its point and then bows
+  // out instead of permanently occupying the top of the viewport. A ref keeps
+  // the timer from resetting on every parent re-render (onDismiss is an inline
+  // closure upstream, so its identity changes each render).
+  const onDismissRef = useRef(onDismiss);
+  onDismissRef.current = onDismiss;
+  useEffect(() => {
+    const timer = window.setTimeout(() => onDismissRef.current(), AUTO_DISMISS_MS);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   return (
     <motion.div

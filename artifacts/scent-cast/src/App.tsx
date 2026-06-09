@@ -733,9 +733,11 @@ function GlobalModals() {
 
   const { items, setItems, isShareModalOpen, setIsShareModalOpen, userId } = useWardrobe();
 
-  // Gentle guest nudge: shown once a guest has saved at least one fragrance
-  // locally, while the hard modal is closed and they haven't waved it off.
-  const showGuestBanner = !authToken && !isAuthModalOpen && !guestPromptDismissed && items.length >= 1;
+  // Gentle guest nudge: surfaces only once a guest has shown real intent (a few
+  // saves), while the hard modal is closed and they haven't waved it off. It
+  // also auto-retires after a few seconds (see GuestSaveBanner) so it never
+  // becomes a fixture pinned over the top of every screen.
+  const showGuestBanner = !authToken && !isAuthModalOpen && !guestPromptDismissed && items.length >= 3;
   const guestBanner = (
     <AnimatePresence>
       {showGuestBanner ? (

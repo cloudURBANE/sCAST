@@ -587,9 +587,11 @@ export const FragranceCapture: React.FC<{
       return;
     }
 
-    const selectedId = firstString(selected.id);
+    // Local detail id for this confirm — named distinctly from the `selectedId`
+    // selection *state* above so it can never shadow it.
+    const selectedDetailId = firstString(selected.id);
     const selectedSourceUrl = firstString(selected.source_url);
-    if (!selectedId && !selectedSourceUrl) {
+    if (!selectedDetailId && !selectedSourceUrl) {
       setErrorStatus("Selected fragrance is missing a detail identifier.");
       return;
     }
@@ -607,28 +609,28 @@ export const FragranceCapture: React.FC<{
     setSyncComplete(false);
 
     try {
-      const syntheticSourceUrl = selectedId?.startsWith('source:')
-        ? firstString(selectedId.slice('source:'.length))
+      const syntheticSourceUrl = selectedDetailId?.startsWith('source:')
+        ? firstString(selectedDetailId.slice('source:'.length))
         : undefined;
       const detailSourceUrl = firstString(selectedSourceUrl, syntheticSourceUrl);
       const selectedOrigin = syntheticSourceUrl
         ? 'app'
         : selected.origin ??
           (
-            selectedId?.startsWith('catalog:') ||
-            selectedId?.startsWith('dataset:') ||
-            selectedId?.startsWith('local:')
+            selectedDetailId?.startsWith('catalog:') ||
+            selectedDetailId?.startsWith('dataset:') ||
+            selectedDetailId?.startsWith('local:')
               ? 'app'
               : 'srt'
           );
       const detailsRequest: FragranceDetailRequestPayload =
         selectedOrigin === 'app' && detailSourceUrl
           ? { source_url: detailSourceUrl, origin: 'app' }
-          : selectedOrigin === 'app' && selectedId
-            ? { id: selectedId, origin: 'app' }
-            : selectedId
+          : selectedOrigin === 'app' && selectedDetailId
+            ? { id: selectedDetailId, origin: 'app' }
+            : selectedDetailId
           ? {
-              id: selectedId,
+              id: selectedDetailId,
               origin: 'srt',
             }
           : { source_url: detailSourceUrl as string, origin: 'app' };
@@ -645,15 +647,15 @@ export const FragranceCapture: React.FC<{
         (await getFragranceDetails(detailsRequest, { signal: controller.signal })) as FragranceDetail,
       );
 
-      // New fragrances return a provisional detail with no notes while the
-      // backend scrapes the olfactory pyramid in the background
-      // (enrichment.status === "pending"|"processing"). Forwarding that empty
-      // payload straight to /scent-profile makes buildProfile throw
-      // "Could not identify this fragrance." Poll the detail endpoint until the
-      // background enrichment reaches a terminal status (or notes arrive)
-      // before building the vector profile.
-      const POLL_INTERVAL_MS = 2000;
-      const MAX_POLL_ATTEMPTS = 15; // ~30s ceiling
+      // A brand-new fragrance can come back as a provisional detail with no
+      // notes while the backend scrapes the olfactory pyramid in the background
+      // (enrichment.status === "pending"|"processing"). Give it a brief,
+      // non-blocking grace — a couple of quick re-checks rather than the old
+      // ~30s poll that read as a frozen screen — so a fast scrape upgrades the
+      // vector. If notes still haven't landed we proceed immediately; the
+      // local-profile fallback below keeps the add from failing either way.
+      const POLL_INTERVAL_MS = 1000;
+      const MAX_POLL_ATTEMPTS = 2; // ~2s ceiling, down from ~30s
       for (
         let attempt = 0;
         attempt < MAX_POLL_ATTEMPTS &&
@@ -662,7 +664,6 @@ export const FragranceCapture: React.FC<{
         !detailHasUsableNotes(detail);
         attempt += 1
       ) {
-        setLoadingStatus('Scraping olfactory notes...');
         await sleep(POLL_INTERVAL_MS);
         if (controller.signal.aborted) break;
         detail = normalizeFragranceDetail(
