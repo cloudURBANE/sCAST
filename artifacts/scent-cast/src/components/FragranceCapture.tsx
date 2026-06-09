@@ -841,6 +841,13 @@ export const FragranceCapture: React.FC<{
     setSyncComplete(false);
   };
 
+  // "Back to search" — return focus to the field without discarding results or
+  // the current query, so users can refine and re-run without scrolling up.
+  const scrollToSearch = () => {
+    searchInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    searchInputRef.current?.focus({ preventScroll: true });
+  };
+
   // "New search" — clear the result surface but keep the user on the search
   // field so they can immediately type again (resetState empties the query too).
   const handleNewSearch = () => {
@@ -943,11 +950,21 @@ export const FragranceCapture: React.FC<{
       className="fixed inset-x-0 bottom-0 z-[120] bg-gradient-to-t from-scent-bg via-scent-bg/95 to-transparent px-4 pb-[max(0.7rem,env(safe-area-inset-bottom))] pt-8 sm:hidden"
     >
       <div className="mx-auto w-full max-w-[39.75rem]">
+        <div className="mb-2 flex justify-center">
+          <button
+            type="button"
+            onClick={scrollToSearch}
+            className="inline-flex items-center gap-1.5 rounded-full border border-white/14 bg-scent-bg/70 px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-scent-accent/90 transition-colors hover:border-scent-accent/55 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
+          >
+            <Search size={12} strokeWidth={2.2} aria-hidden />
+            Back to search
+          </button>
+        </div>
         <button
           type="button"
           onClick={handleConfirm}
           disabled={!hasSelectedMatch}
-          className="scent-vault-outline-button flex h-[58px] w-full items-center justify-center px-4 transition-transform active:scale-[0.98] disabled:pointer-events-none disabled:opacity-62"
+          className="scent-vault-outline-button flex h-[58px] w-full cursor-pointer items-center justify-center px-4 transition-transform hover:scale-[1.01] active:scale-[0.98] disabled:pointer-events-none disabled:opacity-62"
         >
           <span className="scent-vault-outline-button-label font-serif italic text-[1.3rem] leading-tight text-center">
             {hasSelectedMatch ? 'Add to Vault' : 'Select a Result'}
@@ -1072,14 +1089,23 @@ export const FragranceCapture: React.FC<{
                           : matches.length}
                       </span>
                     </p>
-                    <button
-                      type="button"
-                      onClick={handleNewSearch}
-                      className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/12 px-3 py-1.5 text-[9px] font-bold uppercase tracking-[0.22em] text-scent-muted transition-colors hover:border-scent-accent/45 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
-                    >
-                      <Search size={12} strokeWidth={2} aria-hidden />
-                      New search
-                    </button>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={scrollToSearch}
+                        className="hidden shrink-0 items-center gap-1.5 rounded-full border border-white/12 px-3 py-1.5 text-[9px] font-bold uppercase tracking-[0.22em] text-scent-muted transition-colors hover:border-scent-accent/45 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 sm:inline-flex"
+                      >
+                        ↑ Back to top
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleNewSearch}
+                        className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/12 px-3 py-1.5 text-[9px] font-bold uppercase tracking-[0.22em] text-scent-muted transition-colors hover:border-scent-accent/45 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
+                      >
+                        <Search size={12} strokeWidth={2} aria-hidden />
+                        New search
+                      </button>
+                    </div>
                   </div>
 
                   {showFilterBar && (
@@ -1170,7 +1196,7 @@ export const FragranceCapture: React.FC<{
                                 {truncateMatchLine(m.name, MATCH_LINE_MAX_CHARS)}
                               </span>
                               <span
-                                className="mx-auto mt-4 block max-w-full truncate font-sans text-[11px] font-bold uppercase tracking-[0.3em] text-scent-accent/92 sm:text-[12px]"
+                                className="mx-auto mt-4 block max-w-full truncate font-sans text-[12.5px] font-bold uppercase tracking-[0.28em] text-[#f3dca6] sm:text-[13.5px]"
                                 title={m.brand || 'House unavailable'}
                               >
                                 {truncateMatchLine(m.brand || 'House unavailable', MATCH_LINE_MAX_CHARS)}
