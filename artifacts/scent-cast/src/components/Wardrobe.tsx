@@ -882,6 +882,7 @@ export const Wardrobe: React.FC<{
     fragranceId?: string | null;
     file?: File;
     imageUrl?: string;
+    sourcePageUrl?: string;
     removeBackground: boolean;
   }) => Promise<{ imageUrl: string; imageHash?: string; backgroundRemoved: boolean }>;
   featuredItem?: Fragrance | null;
