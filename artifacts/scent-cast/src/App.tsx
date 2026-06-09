@@ -450,10 +450,12 @@ function DashboardView() {
     wardrobeFixHint,
     vaultSearchUiActive,
     isImageSyncing,
+    isAdmin,
     setIsIntentModalOpen,
     setIsShareModalOpen,
     handleAddItem,
     handlePersistWardrobeImage,
+    uploadAdminBottleImage,
     handleRevertWardrobe,
     handleDeleteItem,
     handleIntentComplete,
@@ -579,6 +581,8 @@ function DashboardView() {
               items={items}
               onDelete={handleDeleteItem}
               onPersistWardrobeImage={authToken ? handlePersistWardrobeImage : undefined}
+              isAdmin={isAdmin}
+              onUploadBottleImage={authToken && isAdmin ? uploadAdminBottleImage : undefined}
               featuredItem={activeRecommendation}
               onRevertWardrobe={handleRevertWardrobe}
               fixWardrobeBusy={wardrobeFixBusy}

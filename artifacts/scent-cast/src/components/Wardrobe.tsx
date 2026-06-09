@@ -27,6 +27,8 @@ import {
   ArrowRight,
   ArrowDown,
   ArrowLeft,
+  Upload,
+  Link2,
 } from 'lucide-react';
 import { ReviewsPanel } from './ReviewsPanel';
 import { CyclingTilePair, type CyclingPart } from './CyclingTilePair';
@@ -871,6 +873,17 @@ export const Wardrobe: React.FC<{
     imageUrl?: string,
     imageAdjustment?: BottleImageAdjustment,
   ) => Promise<Fragrance | null>;
+  /** True when the signed-in user is an admin; gates the bottle-image uploader. */
+  isAdmin?: boolean;
+  /** Admin-only: re-host an uploaded file/URL and return a persistable image URL. */
+  onUploadBottleImage?: (input: {
+    brand: string;
+    name: string;
+    fragranceId?: string | null;
+    file?: File;
+    imageUrl?: string;
+    removeBackground: boolean;
+  }) => Promise<{ imageUrl: string; imageHash?: string; backgroundRemoved: boolean }>;
   featuredItem?: Fragrance | null;
   /** Restore in-memory snapshot after an automatic legacy wardrobe rebuild (this tab only). */
   onRevertWardrobe?: () => void;
@@ -889,6 +902,8 @@ export const Wardrobe: React.FC<{
   items,
   onDelete,
   onPersistWardrobeImage,
+  isAdmin = false,
+  onUploadBottleImage,
   featuredItem,
   onRevertWardrobe,
   fixWardrobeBusy,
@@ -1010,7 +1025,13 @@ export const Wardrobe: React.FC<{
   // finished studio packshot and stays savable even when the second background
   // pass fell back (e.g. Poof out of credits), so a good reimagine is never
   // stranded as unsavable.
-  const [pendingPreview, setPendingPreview] = React.useState<{ itemId: string; url: string; isFallback: boolean; source?: 'refresh' | 'reimagine' } | null>(null);
+  const [pendingPreview, setPendingPreview] = React.useState<{ itemId: string; url: string; isFallback: boolean; source?: 'refresh' | 'reimagine' | 'upload' } | null>(null);
+  // Admin-only bottle-image uploader (drag/drop + click + paste-URL).
+  const [uploadDragActive, setUploadDragActive] = React.useState(false);
+  const [uploadUrlInput, setUploadUrlInput] = React.useState('');
+  const [uploadRemoveBg, setUploadRemoveBg] = React.useState(false);
+  const [uploadBusy, setUploadBusy] = React.useState(false);
+  const uploadFileInputRef = React.useRef<HTMLInputElement | null>(null);
   const [reimaginingIds, setReimaginingIds] = React.useState<Set<string>>(() => new Set());
   const [usageTotals, setUsageTotals] = React.useState<UsageTotalsSnapshot | null>(null);
 
@@ -1353,6 +1374,36 @@ export const Wardrobe: React.FC<{
     }
   };
 
+  // Admin-only: re-host an uploaded file / pasted URL, then show it as a pending
+  // preview so the admin can frame it and Save through the normal vault path.
+  const runAdminBottleUpload = async (source: { file?: File; imageUrl?: string }) => {
+    if (!selectedItem || !onUploadBottleImage) return;
+    if (source.file && !source.file.type.startsWith('image/')) {
+      setRefreshError('That file is not an image. Choose a PNG, JPG, or WebP.');
+      return;
+    }
+    setUploadBusy(true);
+    setRefreshError(null);
+    setBgFallbackWarning(null);
+    try {
+      const result = await onUploadBottleImage({
+        brand: entryBrand(selectedItem),
+        name: entryName(selectedItem),
+        fragranceId: selectedItem._dbId ?? selectedItem.id,
+        file: source.file,
+        imageUrl: source.imageUrl,
+        removeBackground: uploadRemoveBg,
+      });
+      const nextUrl = withImageVersion(result.imageUrl, result.imageHash || Date.now());
+      setPendingPreview({ itemId: selectedItem.id, url: nextUrl, isFallback: false, source: 'upload' });
+      setUploadUrlInput('');
+    } catch (err: any) {
+      setRefreshError(err?.message || 'Image upload failed');
+    } finally {
+      setUploadBusy(false);
+    }
+  };
+
   // Performance Optimization: Memoize computationally heavy filter operations
   const filteredItems = React.useMemo(() => {
     const q = deferredSearchQuery.trim();
@@ -1409,7 +1460,7 @@ export const Wardrobe: React.FC<{
 
   const imageToolbarBusy =
     !!selectedItem &&
-    (refreshingId === selectedItem.id || selectedReimagining || persistBusy);
+    (refreshingId === selectedItem.id || selectedReimagining || persistBusy || uploadBusy);
 
   const hasPendingPreview =
     !!selectedItem && !!pendingPreview && pendingPreview.itemId === selectedItem.id;
@@ -2014,6 +2065,107 @@ export const Wardrobe: React.FC<{
                                     )}
                                   </button>
                                 </div>
+
+                                {isAdmin && onUploadBottleImage ? (
+                                  <div className="rounded-lg border border-scent-accent/20 bg-scent-accent/[0.04] p-2.5 space-y-2.5">
+                                    <p className="text-[8px] uppercase tracking-[0.25em] text-scent-accent/70 font-bold">
+                                      Admin · Replace image
+                                    </p>
+
+                                    <input
+                                      ref={uploadFileInputRef}
+                                      type="file"
+                                      accept="image/png,image/jpeg,image/webp"
+                                      className="hidden"
+                                      onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        e.target.value = '';
+                                        if (file) void runAdminBottleUpload({ file });
+                                      }}
+                                    />
+
+                                    <button
+                                      type="button"
+                                      onClick={() => uploadFileInputRef.current?.click()}
+                                      onDragOver={(e) => {
+                                        e.preventDefault();
+                                        if (!uploadDragActive) setUploadDragActive(true);
+                                      }}
+                                      onDragLeave={() => setUploadDragActive(false)}
+                                      onDrop={(e) => {
+                                        e.preventDefault();
+                                        setUploadDragActive(false);
+                                        const file = e.dataTransfer.files?.[0];
+                                        if (file) void runAdminBottleUpload({ file });
+                                      }}
+                                      disabled={imageToolbarBusy}
+                                      className={`w-full min-h-[64px] rounded-lg border border-dashed flex flex-col items-center justify-center gap-1 px-3 py-3 text-center transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                                        uploadDragActive
+                                          ? 'border-scent-accent/70 bg-scent-accent/[0.1]'
+                                          : 'border-white/18 bg-black/25 hover:border-scent-accent/45 hover:bg-white/[0.04]'
+                                      }`}
+                                    >
+                                      {uploadBusy ? (
+                                        <RefreshCw size={14} className="animate-spin text-scent-accent/80" />
+                                      ) : (
+                                        <Upload size={14} className="text-white/55" />
+                                      )}
+                                      <span className="text-[9px] uppercase tracking-[0.16em] text-white/55 font-bold font-sans">
+                                        {uploadBusy ? 'Uploading…' : 'Drop image or click to upload'}
+                                      </span>
+                                    </button>
+
+                                    <div className="flex gap-1.5">
+                                      <div className="relative flex-1">
+                                        <Link2
+                                          size={11}
+                                          className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-white/30"
+                                        />
+                                        <input
+                                          type="url"
+                                          inputMode="url"
+                                          placeholder="…or paste image URL"
+                                          value={uploadUrlInput}
+                                          onChange={(e) => setUploadUrlInput(e.target.value)}
+                                          onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && uploadUrlInput.trim() && !imageToolbarBusy) {
+                                              e.preventDefault();
+                                              void runAdminBottleUpload({ imageUrl: uploadUrlInput.trim() });
+                                            }
+                                          }}
+                                          disabled={imageToolbarBusy}
+                                          aria-label="Image URL to upload"
+                                          className="w-full bg-black/45 border border-white/12 text-white text-[11px] py-2 pl-7 pr-2 rounded-lg font-sans outline-none focus:border-scent-accent/50 disabled:opacity-40"
+                                        />
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          if (uploadUrlInput.trim()) {
+                                            void runAdminBottleUpload({ imageUrl: uploadUrlInput.trim() });
+                                          }
+                                        }}
+                                        disabled={imageToolbarBusy || !uploadUrlInput.trim()}
+                                        className="shrink-0 min-h-[36px] px-3 rounded-lg bg-white/[0.06] text-white uppercase tracking-[0.16em] text-[9px] font-bold border border-white/15 hover:bg-white/[0.1] disabled:opacity-35 disabled:cursor-not-allowed"
+                                      >
+                                        Add
+                                      </button>
+                                    </div>
+
+                                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                                      <input
+                                        type="checkbox"
+                                        checked={uploadRemoveBg}
+                                        onChange={(e) => setUploadRemoveBg(e.target.checked)}
+                                        disabled={imageToolbarBusy}
+                                        className="h-3.5 w-3.5 accent-scent-accent disabled:opacity-40"
+                                      />
+                                      <span className="text-[9px] uppercase tracking-[0.14em] text-white/52 font-bold font-sans">
+                                        Remove background
+                                      </span>
+                                    </label>
+                                  </div>
+                                ) : null}
 
                                 {/* Action-adjacent status: an error or fallback warning is
                                     shown right under the buttons the user just tapped, so a

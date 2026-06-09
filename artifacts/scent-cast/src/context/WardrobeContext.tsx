@@ -503,6 +503,8 @@ interface WardrobeContextType {
   wardrobeFixHint: string | null;
   vaultSearchUiActive: boolean;
   wardrobeError: string | null;
+  /** True when the signed-in user is an admin (server-confirmed via app-state). */
+  isAdmin: boolean;
   /** True while a freshly-added imageless tile is actively backfilling its image. */
   isImageSyncing: (item: Pick<Fragrance, 'id' | '_dbId'>) => boolean;
   retryLoadWardrobe: () => void;
@@ -517,6 +519,15 @@ interface WardrobeContextType {
   loadWardrobe: (token: string, signal?: AbortSignal) => Promise<void>;
   handleAddItem: (item: any) => Promise<{ persisted: boolean; requiresAuth?: boolean; error?: string }>;
   handlePersistWardrobeImage: (target: Fragrance, imageUrl?: string, imageAdjustment?: BottleImageAdjustment) => Promise<Fragrance | null>;
+  /** Admin-only: re-host an uploaded file / URL and return a persistable image URL. */
+  uploadAdminBottleImage: (input: {
+    brand: string;
+    name: string;
+    fragranceId?: string | null;
+    file?: File;
+    imageUrl?: string;
+    removeBackground: boolean;
+  }) => Promise<{ imageUrl: string; imageHash?: string; backgroundRemoved: boolean }>;
   handlePersistWardrobeDetailRefresh: (target: Fragrance, detail: FragranceDetail) => Promise<Fragrance | null>;
   handleRevertWardrobe: () => void;
   handleDeleteItem: (target: Fragrance) => Promise<void>;
@@ -550,6 +561,9 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [wardrobeFixBusy, setWardrobeFixBusy] = useState(false);
   const [wardrobeFixHint, setWardrobeFixHint] = useState<string | null>(null);
   const [vaultSearchUiActive, setVaultSearchUiActive] = useState(false);
+  // Admin flag from GET /api/me/app-state. UI hint only — the upload route
+  // enforces admin access server-side regardless of this value.
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const autoWardrobeRebuildAttemptedRef = useRef(false);
   const enrichmentRefreshInFlightRef = useRef(false);
@@ -716,10 +730,11 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (!res.ok) {
       throw new Error(`App-state fetch failed: HTTP ${res.status}`);
     }
-    const data = (await res.json()) as { wardrobeOnboardingCompleted?: boolean };
+    const data = (await res.json()) as { wardrobeOnboardingCompleted?: boolean; isAdmin?: boolean };
     const completed = Boolean(data.wardrobeOnboardingCompleted);
     if (authTokenRef.current === token) {
       setOnboardingCompleted(completed);
+      setIsAdmin(Boolean(data.isAdmin));
       writeOnboardingMarker(token, completed);
     }
     return completed;
@@ -743,6 +758,8 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     appStateRefreshInFlightRef.current = false;
     detailRefreshBackoffRef.current.clear();
     detailRefreshIdleUntilRef.current = 0;
+    // Clear admin until app-state reconfirms it for the new token (and on sign-out).
+    setIsAdmin(false);
   }, [authToken]);
 
   // Load wardrobe & share settings on login
@@ -1002,6 +1019,70 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       lastMutationRef.current = Date.now();
     }
   }, [authToken, toast]);
+
+  // Admin-only: upload/replace a bottle image (file or URL) via the re-hosting
+  // endpoint, returning a persistable storage URL. The caller then runs the
+  // returned URL through the normal preview -> handlePersistWardrobeImage save
+  // path, so this does not touch wardrobe state itself. Throws on failure so the
+  // editor can surface a clear error and keep the original image.
+  const uploadAdminBottleImage = useCallback(async (input: {
+    brand: string;
+    name: string;
+    fragranceId?: string | null;
+    file?: File;
+    imageUrl?: string;
+    removeBackground: boolean;
+  }): Promise<{ imageUrl: string; imageHash?: string; backgroundRemoved: boolean }> => {
+    if (!authToken) throw new Error('Sign in required');
+
+    let res: Response;
+    if (input.file) {
+      const params = new URLSearchParams({
+        brand: input.brand,
+        name: input.name,
+        removeBackground: String(input.removeBackground),
+      });
+      if (input.fragranceId) params.set('fragranceId', String(input.fragranceId));
+      res = await fetch(`/api/admin/bottle-image/upload?${params.toString()}`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          'Content-Type': input.file.type || 'application/octet-stream',
+        },
+        body: input.file,
+      });
+    } else {
+      res = await fetch('/api/admin/bottle-image/upload', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          imageUrl: input.imageUrl,
+          brand: input.brand,
+          name: input.name,
+          removeBackground: input.removeBackground,
+          fragranceId: input.fragranceId ?? undefined,
+        }),
+      });
+    }
+
+    const data = (await res.json().catch(() => ({}))) as {
+      imageUrl?: string;
+      imageHash?: string;
+      backgroundRemoved?: boolean;
+      error?: string;
+    };
+    if (!res.ok || !data.imageUrl) {
+      throw new Error(data.error || `Upload failed (HTTP ${res.status})`);
+    }
+    return {
+      imageUrl: data.imageUrl,
+      imageHash: data.imageHash,
+      backgroundRemoved: Boolean(data.backgroundRemoved),
+    };
+  }, [authToken]);
 
   const handlePersistWardrobeDetailRefresh = useCallback(async (
     target: Fragrance,
@@ -1404,6 +1485,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     wardrobeFixBusy,
     wardrobeFixHint,
     vaultSearchUiActive,
+    isAdmin,
     isImageSyncing,
     setItems,
     setIsIntentModalOpen,
@@ -1417,6 +1499,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     retryLoadWardrobe,
     handleAddItem,
     handlePersistWardrobeImage,
+    uploadAdminBottleImage,
     handlePersistWardrobeDetailRefresh,
     handleRevertWardrobe,
     handleDeleteItem,
@@ -1440,11 +1523,13 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     wardrobeFixBusy,
     wardrobeFixHint,
     vaultSearchUiActive,
+    isAdmin,
     isImageSyncing,
     loadWardrobe,
     retryLoadWardrobe,
     handleAddItem,
     handlePersistWardrobeImage,
+    uploadAdminBottleImage,
     handlePersistWardrobeDetailRefresh,
     handleRevertWardrobe,
     handleDeleteItem,
