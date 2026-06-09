@@ -7,6 +7,7 @@ import {
 } from "../services/adminBottleImageUpload";
 import { ImageObjectStorageConfigurationError } from "../services/imageObjectStorage";
 import { fetchExternalImage } from "../services/safeImageFetch";
+import { extractImageUrlsFromSourcePage } from "../services/sourcePageImage";
 
 const router = Router();
 
@@ -72,19 +73,29 @@ router.post(
           ? body.fragranceId.trim()
           : null;
         const imageUrl = typeof body.imageUrl === "string" ? body.imageUrl.trim() : "";
-        if (!imageUrl) {
-          res.status(400).json({ error: "Provide an image file or imageUrl" });
+        const sourcePageUrl = typeof body.sourcePageUrl === "string" ? body.sourcePageUrl.trim() : "";
+        if (!imageUrl && !sourcePageUrl) {
+          res.status(400).json({ error: "Provide an image file, imageUrl, or sourcePageUrl" });
           return;
         }
         try {
-          const downloaded = await fetchExternalImage(imageUrl);
+          let resolvedImageUrl = imageUrl;
+          if (sourcePageUrl) {
+            const extracted = await extractImageUrlsFromSourcePage(sourcePageUrl);
+            resolvedImageUrl = extracted.imageUrls[0];
+            if (!resolvedImageUrl) {
+              res.status(400).json({ error: "No usable image found on the source page" });
+              return;
+            }
+          }
+          const downloaded = await fetchExternalImage(resolvedImageUrl);
           buffer = downloaded.buffer;
         } catch (err) {
           logger.warn(
             { err: err instanceof Error ? err.message : String(err) },
             "[admin-upload] could not fetch image URL",
           );
-          res.status(400).json({ error: "Could not fetch that image URL" });
+          res.status(400).json({ error: err instanceof Error ? err.message : "Could not fetch that image URL" });
           return;
         }
       }

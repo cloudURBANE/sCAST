@@ -1029,6 +1029,7 @@ export const Wardrobe: React.FC<{
   // Admin-only bottle-image uploader (drag/drop + click + paste-URL).
   const [uploadDragActive, setUploadDragActive] = React.useState(false);
   const [uploadUrlInput, setUploadUrlInput] = React.useState('');
+  const [sourceUrlInput, setSourceUrlInput] = React.useState('');
   const [uploadRemoveBg, setUploadRemoveBg] = React.useState(false);
   const [uploadBusy, setUploadBusy] = React.useState(false);
   const uploadFileInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -1376,7 +1377,7 @@ export const Wardrobe: React.FC<{
 
   // Admin-only: re-host an uploaded file / pasted URL, then show it as a pending
   // preview so the admin can frame it and Save through the normal vault path.
-  const runAdminBottleUpload = async (source: { file?: File; imageUrl?: string }) => {
+  const runAdminBottleUpload = async (source: { file?: File; imageUrl?: string; sourcePageUrl?: string }) => {
     if (!selectedItem || !onUploadBottleImage) return;
     if (source.file && !source.file.type.startsWith('image/')) {
       setRefreshError('That file is not an image. Choose a PNG, JPG, or WebP.');
@@ -1392,11 +1393,13 @@ export const Wardrobe: React.FC<{
         fragranceId: selectedItem._dbId ?? selectedItem.id,
         file: source.file,
         imageUrl: source.imageUrl,
+        sourcePageUrl: source.sourcePageUrl,
         removeBackground: uploadRemoveBg,
       });
       const nextUrl = withImageVersion(result.imageUrl, result.imageHash || Date.now());
       setPendingPreview({ itemId: selectedItem.id, url: nextUrl, isFallback: false, source: 'upload' });
       setUploadUrlInput('');
+      setSourceUrlInput('');
     } catch (err: any) {
       setRefreshError(err?.message || 'Image upload failed');
     } finally {
@@ -2149,6 +2152,43 @@ export const Wardrobe: React.FC<{
                                         className="shrink-0 min-h-[36px] px-3 rounded-lg bg-white/[0.06] text-white uppercase tracking-[0.16em] text-[9px] font-bold border border-white/15 hover:bg-white/[0.1] disabled:opacity-35 disabled:cursor-not-allowed"
                                       >
                                         Add
+                                      </button>
+                                    </div>
+
+                                    <div className="flex gap-1.5">
+                                      <div className="relative flex-1">
+                                        <Link2
+                                          size={11}
+                                          className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-white/30"
+                                        />
+                                        <input
+                                          type="url"
+                                          inputMode="url"
+                                          placeholder="…or paste FG/Parfumo URL"
+                                          value={sourceUrlInput}
+                                          onChange={(e) => setSourceUrlInput(e.target.value)}
+                                          onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && sourceUrlInput.trim() && !imageToolbarBusy) {
+                                              e.preventDefault();
+                                              void runAdminBottleUpload({ sourcePageUrl: sourceUrlInput.trim() });
+                                            }
+                                          }}
+                                          disabled={imageToolbarBusy}
+                                          aria-label="Source page URL to extract image from"
+                                          className="w-full bg-black/45 border border-white/12 text-white text-[11px] py-2 pl-7 pr-2 rounded-lg font-sans outline-none focus:border-scent-accent/50 disabled:opacity-40"
+                                        />
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          if (sourceUrlInput.trim()) {
+                                            void runAdminBottleUpload({ sourcePageUrl: sourceUrlInput.trim() });
+                                          }
+                                        }}
+                                        disabled={imageToolbarBusy || !sourceUrlInput.trim()}
+                                        className="shrink-0 min-h-[36px] px-3 rounded-lg bg-white/[0.06] text-white uppercase tracking-[0.16em] text-[9px] font-bold border border-white/15 hover:bg-white/[0.1] disabled:opacity-35 disabled:cursor-not-allowed"
+                                      >
+                                        Fetch
                                       </button>
                                     </div>
 
