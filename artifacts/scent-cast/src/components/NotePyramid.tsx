@@ -82,9 +82,14 @@ const TYPEWRITER_FRAME_MS = 24;
 const NOTE_MARQUEE_MIN_CHARS = 58;
 const NOTE_MARQUEE_MIN_COUNT = 5;
 const DECORATIVE_REPEAT_COUNT = 2;
-const GUIDE_START_DELAY_MS = 560;
-const GUIDE_LAYER_DURATION_MS = 1180;
-const GUIDE_TRACE_DURATION_S = 1.06;
+const GUIDE_START_DELAY_MS = 620;
+const GUIDE_LAYER_DURATION_MS = 2200;
+const GUIDE_TRACE_DURATION_S = 1.9;
+// Draw → hold-fully-outlined → release. Keeps each silhouette completely
+// traced before it gracefully fades, so the hint always reads as a finished
+// outline rather than a stroke that vanishes mid-draw.
+const GUIDE_TRACE_TIMES = [0, 0.46, 0.72, 1] as const;
+const GUIDE_PATH_KEYFRAMES = [0, 1, 1, 1] as const;
 const GUIDE_INTERSECTION_RATIO = 0.22;
 const NO_ACTIVE_NOTES: string[] = [];
 const LAYER_CENTER_Y: Record<ActiveLayer, number> = {
@@ -588,10 +593,10 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
   }, [topNotes.length, heartNotes.length, baseNotes.length]);
   const guideCanPlay = shouldPlayGuide && guideLayerSequence.length > 0;
   const guideVisualsMounted = guideCanPlay && isGuideSequencing;
-  const guideBandStrokeWidth = lowRenderBudget ? 5.8 : 3.4;
-  const guideCoreStrokeWidth = lowRenderBudget ? 2.65 : 1.45;
-  const guideGlintStrokeWidth = lowRenderBudget ? 2.45 : 1.7;
-  const guideDash = lowRenderBudget ? '0.12 0.88' : '0.07 0.93';
+  // Soft outer halo + crisp core. Slightly heavier on low-render-budget
+  // devices, where the bevel/halo paint without the gold-soft bloom filter.
+  const guideHaloStrokeWidth = lowRenderBudget ? 6.4 : 4.2;
+  const guideCoreStrokeWidth = lowRenderBudget ? 2.4 : 1.4;
 
   const allLinks = React.useMemo(
     () => resolveNoteAccordLinks([...topNotes, ...heartNotes, ...baseNotes], accordRows ?? []),
@@ -1019,23 +1024,29 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
               <stop offset="1" stopColor="#ffe0a0" stopOpacity="0.9" />
             </linearGradient>
 
-            <linearGradient id={id('groove-core')} x1="180" y1="25" x2="180" y2="372" gradientUnits="userSpaceOnUse">
-              <stop offset="0" stopColor="#08090a" />
-              <stop offset="0.45" stopColor="#262a2c" />
-              <stop offset="0.58" stopColor="#07090b" />
-              <stop offset="1" stopColor="#020304" />
+            {/* Center-ridge crest — a polished metallic catch-light that runs the
+                full height of the spine where the two tier faces meet. Bright,
+                warm gold at the apex falling to a deep antique gold at the base
+                so the raised edge reads as solid bevelled metal, not a drawn line. */}
+            <linearGradient id={id('ridge-core')} x1="180" y1="25" x2="180" y2="372" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stopColor="#fffdf4" stopOpacity="0.98" />
+              <stop offset="0.32" stopColor="#ffe9b8" stopOpacity="0.9" />
+              <stop offset="0.66" stopColor="#ffcf70" stopOpacity="0.66" />
+              <stop offset="1" stopColor="#b87924" stopOpacity="0.42" />
+            </linearGradient>
+
+            {/* Shadow side of the ridge — the face turning away from the light,
+                seated just to the right of the crest to give the spine volume. */}
+            <linearGradient id={id('ridge-shadow')} x1="180" y1="25" x2="180" y2="372" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stopColor="#180d02" stopOpacity="0.42" />
+              <stop offset="0.5" stopColor="#0a0500" stopOpacity="0.58" />
+              <stop offset="1" stopColor="#000000" stopOpacity="0.68" />
             </linearGradient>
 
             <linearGradient id={id('groove-highlight')} x1="180" y1="25" x2="180" y2="372" gradientUnits="userSpaceOnUse">
-              <stop offset="0" stopColor="#ffffff" stopOpacity="0.75" />
-              <stop offset="0.42" stopColor="#ffffff" stopOpacity="0.45" />
+              <stop offset="0" stopColor="#ffffff" stopOpacity="0.85" />
+              <stop offset="0.42" stopColor="#ffffff" stopOpacity="0.5" />
               <stop offset="1" stopColor="#ffffff" stopOpacity="0.22" />
-            </linearGradient>
-
-            <linearGradient id={id('groove-gold')} x1="180" y1="25" x2="180" y2="372" gradientUnits="userSpaceOnUse">
-              <stop offset="0" stopColor="#ffeaad" stopOpacity="0.65" />
-              <stop offset="0.45" stopColor="#fc9d19" stopOpacity="0.5" />
-              <stop offset="1" stopColor="#6b400a" stopOpacity="0.25" />
             </linearGradient>
 
             <radialGradient id={id('gold-dot')} cx="36%" cy="30%" r="74%">
@@ -1145,12 +1156,6 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                 <feMergeNode in="blur" />
                 <feMergeNode in="SourceGraphic" />
               </feMerge>
-            </filter>
-
-            <filter id={id('groove-shadow')} x="-250%" y="-12%" width="600%" height="124%" colorInterpolationFilters="sRGB">
-              <feDropShadow dx="-1" dy="0" stdDeviation="0.9" floodColor="#ffffff" floodOpacity="0.22" />
-              <feDropShadow dx="1.4" dy="0" stdDeviation="1.1" floodColor="#000000" floodOpacity="0.78" />
-              <feDropShadow dx="0" dy="2" stdDeviation="1.4" floodColor="#000000" floodOpacity="0.5" />
             </filter>
 
             <filter id={id('glyph-soft')} x="-80%" y="-800%" width="260%" height="1700%" colorInterpolationFilters="sRGB">
@@ -1289,10 +1294,6 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
             const targetScale = layerMotion.scale + (isEngaged && !isActive && !isGuided ? 0.003 : 0);
             const targetOpacity = isEngaged && !isActive ? Math.min(layerMotion.opacity + 0.08, 1) : layerMotion.opacity;
             const channelPath = linePath(layer.channel.start, layer.channel.end);
-            const channelHighlightPath = linePath(
-              offsetPoint(layer.channel.start, -2),
-              offsetPoint(layer.channel.end, -2),
-            );
 
             return (
               <motion.g
@@ -1391,24 +1392,22 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                   />
                 </g>
 
+                {/* Center ridge — the chiselled raised spine where the two tier
+                    faces meet. Assembled from offset gradient hairlines (no filter
+                    dependency) so the bevel reads as a solid 3D edge on every
+                    device, including the filter-less low-render-budget path:
+                      1. a shadow band on the light-away (right) side for volume,
+                      2. the polished metallic crest catching the key light,
+                      3. a razor specular hairline pinned to the apex.
+                    The gold-soft bloom on the crest is desktop-only (filterRef
+                    collapses to undefined on constrained devices). */}
                 <path
-                  d={channelPath}
+                  d={linePath(offsetPoint(layer.channel.start, 1.5), offsetPoint(layer.channel.end, 1.5))}
                   fill="none"
-                  stroke="#010202"
-                  strokeOpacity="0.85"
-                  strokeWidth="7.5"
+                  stroke={fill('ridge-shadow')}
+                  strokeWidth="3"
                   strokeLinecap="round"
-                  filter={filterRef('groove-shadow')}
-                  pointerEvents="none"
-                  vectorEffect="non-scaling-stroke"
-                />
-
-                <path
-                  d={channelPath}
-                  fill="none"
-                  stroke={fill('groove-core')}
-                  strokeWidth="4.4"
-                  strokeLinecap="round"
+                  opacity={isActive ? 0.72 : isEngaged ? 0.66 : 0.6}
                   pointerEvents="none"
                   vectorEffect="non-scaling-stroke"
                 />
@@ -1416,35 +1415,24 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                 <motion.path
                   d={channelPath}
                   fill="none"
-                  stroke={fill('groove-gold')}
-                  strokeWidth="1.1"
+                  stroke={fill('ridge-core')}
+                  strokeWidth="1.6"
                   strokeLinecap="round"
+                  filter={filterRef('gold-soft')}
                   pointerEvents="none"
                   vectorEffect="non-scaling-stroke"
                   initial={false}
-                  animate={
-                    prefersReducedMotion
-                      ? { opacity: isActive ? 0.4 : isGuided && lowRenderBudget ? 0.46 : 0 }
-                      : {
-                          opacity: isActive
-                            ? [0.28, 0.42, 0.28]
-                            : isGuided
-                              ? [0.18, 0.34, 0.18]
-                              : isEngaged
-                                ? [0.12, 0.22, 0.12]
-                                : 0,
-                        }
-                  }
-                  transition={pulseTransition}
+                  animate={{ opacity: isActive ? 1 : isEngaged ? 0.94 : 0.82 }}
+                  transition={prefersReducedMotion ? reducedTransition : { duration: 0.6, ease: CALM_EASE }}
                 />
 
                 <path
-                  d={channelHighlightPath}
+                  d={linePath(offsetPoint(layer.channel.start, -0.55), offsetPoint(layer.channel.end, -0.55))}
                   fill="none"
                   stroke={fill('groove-highlight')}
-                  strokeWidth="0.85"
+                  strokeWidth="0.6"
                   strokeLinecap="round"
-                  opacity={isActive ? 0.7 : isEngaged ? 0.6 : 0.5}
+                  opacity={isActive ? 0.9 : isEngaged ? 0.78 : 0.62}
                   pointerEvents="none"
                   vectorEffect="non-scaling-stroke"
                 />
@@ -1517,32 +1505,39 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                   />
                 )}
 
+                {/* Premium guide outline — a single, slow, seamless gold tracer that
+                    draws the complete tier silhouette, holds it fully outlined, then
+                    releases. Two coupled strokes: a soft gold halo for the bloom and a
+                    crisp pearlescent-gold core for the edge. Both share the identical
+                    closed hit-path, so the outline lands on the exact shape every time;
+                    the sequence runs top → heart → base one tier at a time. */}
                 {guideVisualsMounted && (
                   <motion.path
                     d={layer.hitPath}
                     fill="none"
                     stroke="#fc9d19"
-                    strokeWidth={guideBandStrokeWidth}
+                    strokeWidth={guideHaloStrokeWidth}
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     pointerEvents="none"
                     vectorEffect="non-scaling-stroke"
+                    filter={filterRef('gold-soft')}
                     initial={false}
                     animate={
                       isGuided
                         ? {
-                            pathLength: [0, 1],
-                            opacity: lowRenderBudget ? [0, 0.5, 0.08] : [0, 0.32, 0.04],
+                            pathLength: [...GUIDE_PATH_KEYFRAMES],
+                            opacity: lowRenderBudget ? [0, 0.62, 0.62, 0] : [0, 0.46, 0.46, 0],
                           }
                         : { pathLength: 0, opacity: 0 }
                     }
                     transition={
                       isGuided
                         ? {
-                            pathLength: { duration: GUIDE_TRACE_DURATION_S, ease: CALM_EASE },
-                            opacity: { duration: GUIDE_TRACE_DURATION_S, times: [0, 0.22, 1], ease: CALM_EASE },
+                            pathLength: { duration: GUIDE_TRACE_DURATION_S, times: [...GUIDE_TRACE_TIMES], ease: CALM_EASE },
+                            opacity: { duration: GUIDE_TRACE_DURATION_S, times: [...GUIDE_TRACE_TIMES], ease: CALM_EASE },
                           }
-                        : { duration: 0.12, ease: CALM_EASE }
+                        : { duration: 0.2, ease: CALM_EASE }
                     }
                   />
                 )}
@@ -1551,7 +1546,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                   <motion.path
                     d={layer.hitPath}
                     fill="none"
-                    stroke={fill('active-edge-gold')}
+                    stroke={fill('outer-rim')}
                     strokeWidth={guideCoreStrokeWidth}
                     strokeLinecap="round"
                     strokeLinejoin="miter"
@@ -1561,73 +1556,21 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                     initial={false}
                     animate={
                       isGuided
-                        ? { pathLength: [0, 1], opacity: lowRenderBudget ? [0, 1, 0.26] : [0, 0.95, 0.18] }
+                        ? {
+                            pathLength: [...GUIDE_PATH_KEYFRAMES],
+                            opacity: [0, 1, 1, 0],
+                          }
                         : { pathLength: 0, opacity: 0 }
                     }
                     transition={
                       isGuided
                         ? {
-                            pathLength: { duration: GUIDE_TRACE_DURATION_S, ease: CALM_EASE },
-                            opacity: { duration: GUIDE_TRACE_DURATION_S, times: [0, 0.22, 1], ease: CALM_EASE },
+                            pathLength: { duration: GUIDE_TRACE_DURATION_S, times: [...GUIDE_TRACE_TIMES], ease: CALM_EASE },
+                            opacity: { duration: GUIDE_TRACE_DURATION_S, times: [...GUIDE_TRACE_TIMES], ease: CALM_EASE },
                           }
-                        : { duration: 0.18, ease: CALM_EASE }
+                        : { duration: 0.2, ease: CALM_EASE }
                     }
                   />
-                )}
-
-                {/* Traveling guide glint: follows the exact tier silhouette during the one-shot hint. */}
-                {guideVisualsMounted && (
-                  <motion.path
-                    d={layer.hitPath}
-                    pathLength={1}
-                    fill="none"
-                    stroke="#fff6dd"
-                    strokeWidth={guideGlintStrokeWidth}
-                    strokeLinecap="round"
-                    strokeLinejoin="miter"
-                    strokeDasharray={guideDash}
-                    pointerEvents="none"
-                    vectorEffect="non-scaling-stroke"
-                    filter={filterRef('gold-soft')}
-                    initial={false}
-                    animate={isGuided ? { strokeDashoffset: [0, -1], opacity: [0, 0.95, 0] } : { opacity: 0 }}
-                    transition={
-                      isGuided
-                        ? {
-                            strokeDashoffset: { duration: GUIDE_TRACE_DURATION_S, ease: 'linear' },
-                            opacity: { duration: GUIDE_TRACE_DURATION_S, times: [0, 0.18, 1], ease: CALM_EASE },
-                          }
-                        : { opacity: { duration: 0.18, ease: CALM_EASE } }
-                    }
-                  />
-                )}
-
-                {/* Guide arrival pulse: a cheap geometry cue that keeps the trace readable on small iOS screens. */}
-                {guideVisualsMounted && (
-                  <motion.g
-                    aria-hidden
-                    pointerEvents="none"
-                    initial={false}
-                    animate={isGuided ? { opacity: [0, 1, 0], scale: [0.6, 1.08, 0.92] } : { opacity: 0, scale: 0.78 }}
-                    transition={isGuided ? { duration: GUIDE_TRACE_DURATION_S, times: [0, 0.36, 1], ease: CALM_EASE } : { duration: 0.12, ease: CALM_EASE }}
-                    style={{
-                      transformBox: 'view-box',
-                      transformOrigin: `${PYRAMID_CENTER_X}px ${LAYER_CENTER_Y[layer.key]}px`,
-                    }}
-                  >
-                    <circle
-                      cx={PYRAMID_CENTER_X}
-                      cy={LAYER_CENTER_Y[layer.key]}
-                      r={lowRenderBudget ? 14 : 11}
-                      fill={fill('gold-glow')}
-                    />
-                    <circle
-                      cx={PYRAMID_CENTER_X}
-                      cy={LAYER_CENTER_Y[layer.key]}
-                      r={lowRenderBudget ? 3.4 : 2.6}
-                      fill="#fff6dd"
-                    />
-                  </motion.g>
                 )}
 
                 {/* Keyboard focus ring — visible only on :focus-visible via parent class */}
