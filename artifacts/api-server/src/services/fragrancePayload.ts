@@ -6,6 +6,7 @@ import {
 } from "./persistenceGuards";
 import { resolveFragranceIdentity } from "./fragranceNameResolver";
 import { resolvePyramidNotes } from "./fragranceNotes.ts";
+import { logger } from "../lib/logger";
 
 import {
   chooseHydratedImageUrl,
@@ -161,6 +162,33 @@ export async function hydrateImageUrl(fragrance: Record<string, any>): Promise<R
   return { ...fragrance, imageUrl: chooseHydratedImageUrlWithMetadata(null, currentRef) };
 }
 
+async function hydrateImageUrlSafely(
+  fragrance: Record<string, any>,
+  context: string,
+): Promise<Record<string, any>> {
+  try {
+    return await hydrateImageUrl(fragrance);
+  } catch (err) {
+    logger.warn(
+      {
+        err,
+        context,
+        brand: typeof fragrance.brand === "string" ? fragrance.brand : undefined,
+        name: typeof fragrance.name === "string" ? fragrance.name : undefined,
+      },
+      "fragrance image hydration failed; returning row without shared image lookup",
+    );
+    return {
+      ...fragrance,
+      imageUrl: chooseHydratedImageUrlWithMetadata(null, {
+        imageUrl: fragrance.imageUrl,
+        sourceProvider: fragrance.sourceProvider,
+        storagePath: fragrance.storagePath,
+      }),
+    };
+  }
+}
+
 /**
  * Batch version of hydrateImageUrl for loading a full wardrobe list.
  * Replaces N×2 individual DB queries (one image_cache + one global_fragrances
@@ -180,47 +208,68 @@ export async function batchHydrateImageUrls(
   const uniqueKeys = [...new Set(indexToKey.filter((k): k is string => k !== null))];
 
   if (uniqueKeys.length === 0) {
-    return Promise.all(fragrances.map(hydrateImageUrl));
+    return Promise.all(fragrances.map((fragrance) => hydrateImageUrlSafely(fragrance, "no-shared-key")));
   }
 
-  // Batch fetch from image_cache and global_fragrances in parallel
-  const [imageCacheRows, catalogRows] = await Promise.all([
-    db
-      .select({
-        lookupKey: imageCacheTable.lookupKey,
-        publicUrl: imageCacheTable.publicUrl,
-        sourceProvider: imageCacheTable.sourceProvider,
-        sourceUrl: imageCacheTable.sourceUrl,
-        storagePath: imageCacheTable.storagePath,
-        backgroundRemoved: imageCacheTable.backgroundRemoved,
-      })
-      .from(imageCacheTable)
-      .where(
-        and(
-          inArray(imageCacheTable.lookupKey, uniqueKeys),
-          eq(imageCacheTable.pipelineVersion, IMAGE_PIPELINE_VERSION),
-          eq(imageCacheTable.processingStatus, "ready"),
+  let imageCacheRows: {
+    lookupKey: string | null;
+    publicUrl: string | null;
+    sourceProvider: string;
+    sourceUrl: string;
+    storagePath: string;
+    backgroundRemoved: boolean;
+  }[];
+  let catalogRows: {
+    lookupKey: string;
+    profileData: unknown;
+  }[];
+
+  try {
+    // Batch fetch from image_cache and global_fragrances in parallel.
+    [imageCacheRows, catalogRows] = await Promise.all([
+      db
+        .select({
+          lookupKey: imageCacheTable.lookupKey,
+          publicUrl: imageCacheTable.publicUrl,
+          sourceProvider: imageCacheTable.sourceProvider,
+          sourceUrl: imageCacheTable.sourceUrl,
+          storagePath: imageCacheTable.storagePath,
+          backgroundRemoved: imageCacheTable.backgroundRemoved,
+        })
+        .from(imageCacheTable)
+        .where(
+          and(
+            inArray(imageCacheTable.lookupKey, uniqueKeys),
+            eq(imageCacheTable.pipelineVersion, IMAGE_PIPELINE_VERSION),
+            eq(imageCacheTable.processingStatus, "ready"),
+          ),
+        )
+        .orderBy(
+          desc(sql<number>`case
+            when ${imageCacheTable.sourceProvider} = 'manual' then 3
+            when ${imageCacheTable.sourceProvider} in ('openai', 'openai-reimagine', 'openai_reimagine')
+              or ${imageCacheTable.sourceUrl} like 'openai-reimagine:%' then 2
+            else 0
+          end`),
+          desc(imageCacheTable.backgroundRemoved),
+          desc(imageCacheTable.lastUsedAt),
+          desc(imageCacheTable.createdAt),
         ),
-      )
-      .orderBy(
-        desc(sql<number>`case
-          when ${imageCacheTable.sourceProvider} = 'manual' then 3
-          when ${imageCacheTable.sourceProvider} in ('openai', 'openai-reimagine', 'openai_reimagine')
-            or ${imageCacheTable.sourceUrl} like 'openai-reimagine:%' then 2
-          else 0
-        end`),
-        desc(imageCacheTable.backgroundRemoved),
-        desc(imageCacheTable.lastUsedAt),
-        desc(imageCacheTable.createdAt),
-      ),
-    db
-      .select({
-        lookupKey: globalFragrancesTable.lookupKey,
-        profileData: globalFragrancesTable.profileData,
-      })
-      .from(globalFragrancesTable)
-      .where(inArray(globalFragrancesTable.lookupKey, uniqueKeys)),
-  ]);
+      db
+        .select({
+          lookupKey: globalFragrancesTable.lookupKey,
+          profileData: globalFragrancesTable.profileData,
+        })
+        .from(globalFragrancesTable)
+        .where(inArray(globalFragrancesTable.lookupKey, uniqueKeys)),
+    ]);
+  } catch (err) {
+    logger.warn(
+      { err, uniqueKeyCount: uniqueKeys.length },
+      "batch fragrance image hydration failed; falling back to per-row hydration",
+    );
+    return Promise.all(fragrances.map((fragrance) => hydrateImageUrlSafely(fragrance, "batch-fallback")));
+  }
 
   // Pick the first usable URL per lookup key from image_cache (rows are pre-sorted)
   const imageCacheMap = new Map<string, HydratedImageCandidate>();
