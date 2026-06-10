@@ -48,26 +48,6 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
       if (event.key === 'Escape') {
         event.preventDefault();
         closeOverlay();
-        return;
-      }
-
-      if (event.key !== 'Tab') return;
-      const focusable = Array.from(
-        overlayRef.current?.querySelectorAll<HTMLElement>(
-          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
-        ) ?? [],
-      ).filter((element) => !element.hasAttribute('disabled') && element.getAttribute('aria-hidden') !== 'true');
-
-      if (focusable.length === 0) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
       }
     };
 

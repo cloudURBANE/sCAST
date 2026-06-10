@@ -118,6 +118,13 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
     activeTriggerIdRef.current = null;
   }, []);
 
+  const openItem = useCallback((item: CommunityFragranceEntry) => {
+    if (!loading && item.imageUrl) {
+      activeTriggerIdRef.current = item.id;
+      setActiveItem(item);
+    }
+  }, [loading]);
+
   if (!loading && (isError || items.length === 0)) {
     return (
       <section className="scent-community-marquee" aria-label="Community fragrance marquee">
@@ -164,10 +171,11 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
                     className="scent-fragrance-card scent-community-marquee-card group relative flex h-full w-full cursor-pointer flex-col p-5 sm:p-6 text-left outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
                     whileHover={{ y: -8, scale: 1.04 }}
                     transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
-                    onClick={() => {
-                      if (!loading && item.imageUrl) {
-                        activeTriggerIdRef.current = item.id;
-                        setActiveItem(item);
+                    onClick={() => openItem(item)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        openItem(item);
                       }
                     }}
                   >

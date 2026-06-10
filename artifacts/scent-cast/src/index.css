@@ -2018,3 +2018,16 @@ a {
     content: none;
   }
 }
+
+button:focus-visible,
+a[href]:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:not([tabindex="-1"]):focus-visible {
+  outline: 2px solid rgba(255, 232, 172, 0.94);
+  outline-offset: 3px;
+  box-shadow:
+    0 0 0 5px rgba(212, 175, 55, 0.24),
+    0 0 22px rgba(255, 232, 172, 0.22);
+}

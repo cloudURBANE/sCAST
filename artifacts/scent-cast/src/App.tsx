@@ -632,10 +632,14 @@ function DashboardView() {
                     <h2 id="recommendation-overlay-title" className="font-serif italic text-2xl sm:text-6xl mb-4">You should wear</h2>
                     <div className="h-px w-16 bg-white/20 mx-auto" />
                   </header>
-                  <div className="py-6 sm:py-16 border-y border-white/10 group cursor-pointer" onClick={closeRecommendationOverlay}>
+                  <button
+                    type="button"
+                    className="w-full py-6 sm:py-16 border-y border-white/10 group cursor-pointer bg-transparent text-center"
+                    onClick={closeRecommendationOverlay}
+                  >
                     <p className="mb-2 font-serif text-sm uppercase tracking-[0.2em] text-scent-text-muted">{activeRecommendation.brand}</p>
                     <h3 className="font-serif italic text-3xl sm:text-8xl text-white leading-tight transition-transform group-hover:scale-105">{activeRecommendation.name}</h3>
-                  </div>
+                  </button>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 sm:gap-12 text-left">
                     <div>
                       <p className="mb-2 scent-type-label">Olfactory Reason</p>
@@ -692,7 +696,7 @@ function DashboardView() {
               className="px-5 pt-3 shrink-0 border-t border-white/5"
               style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))' }}
             >
-              <button onClick={closeRecommendationOverlay} className="w-full py-4 bg-scent-accent text-black scent-type-chip hover:opacity-90 transition-opacity active:scale-[0.98]">
+              <button type="button" onClick={closeRecommendationOverlay} className="w-full py-4 bg-scent-accent text-black scent-type-chip hover:opacity-90 transition-opacity active:scale-[0.98]">
                 Confirm Alignment
               </button>
             </div>
