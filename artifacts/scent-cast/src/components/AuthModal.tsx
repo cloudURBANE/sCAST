@@ -50,6 +50,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               srcSet="/nav/scentbeam-nav-logo.png 1x, /nav/scentbeam-nav-logo@2x.png 2x"
               alt="ScentBeam"
               className="h-7 w-auto"
+              decoding="async"
               draggable={false}
             />
           </div>

@@ -1585,12 +1585,37 @@ a {
   text-transform: uppercase;
 }
 
-.scrollbar-hide::-webkit-scrollbar { 
-  display: none; 
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
 }
-.scrollbar-hide { 
-  -ms-overflow-style: none; 
-  scrollbar-width: none; 
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Interaction elevation — referenced by ui/button.tsx and ui/badge.tsx since the
+   Replit theme migration but never defined, so buttons shipped with no hover or
+   pressed feedback. A border-radius-inheriting ::after overlay brightens the
+   element without touching each variant's own background classes. */
+.hover-elevate,
+.active-elevate-2 {
+  position: relative;
+}
+.hover-elevate::after,
+.active-elevate-2::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background-color: transparent;
+  pointer-events: none;
+  transition: background-color 150ms ease;
+}
+.hover-elevate:hover::after {
+  background-color: rgb(255 255 255 / 0.08);
+}
+.active-elevate-2:active::after {
+  background-color: rgb(255 255 255 / 0.16);
 }
 
 /* ─── Keyframes & Animations ──────────────────────────────────────────────── */

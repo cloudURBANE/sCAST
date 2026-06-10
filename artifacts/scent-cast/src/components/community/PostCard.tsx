@@ -75,6 +75,7 @@ const FragranceChips: React.FC<{ post: CommunityPost }> = ({ post }) => {
               src={fragrance.imageUrl}
               alt={`${fragrance.name} by ${fragrance.brand}`}
               loading="lazy"
+              decoding="async"
               className="h-full w-full object-contain"
             />
           </div>

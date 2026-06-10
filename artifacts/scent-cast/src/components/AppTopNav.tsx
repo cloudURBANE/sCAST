@@ -152,6 +152,7 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
                 srcSet="/nav/scentbeam-nav-logo.png 1x, /nav/scentbeam-nav-logo@2x.png 2x"
                 alt="ScentBeam"
                 className="h-8 w-auto max-w-[118px] object-contain min-[430px]:h-9 min-[430px]:max-w-[138px] sm:h-12 sm:max-w-none"
+                decoding="async"
                 draggable={false}
               />
             </Link>
