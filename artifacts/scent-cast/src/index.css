@@ -1013,6 +1013,117 @@ a {
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.4);
 }
 
+.scent-vault-grid-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.22rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.045);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 14px 32px -24px rgba(0, 0, 0, 0.9);
+}
+
+.scent-vault-grid-toggle__button {
+  display: inline-flex;
+  width: 2rem;
+  height: 2rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  color: rgba(255, 244, 225, 0.48);
+  transition:
+    color var(--scent-transition-fast) var(--scent-ease-out),
+    background var(--scent-transition-fast) var(--scent-ease-out),
+    box-shadow var(--scent-transition-fast) var(--scent-ease-out);
+}
+
+.scent-vault-grid-toggle__button:hover {
+  color: rgba(255, 244, 225, 0.76);
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.scent-vault-grid-toggle__button:focus-visible {
+  outline: 2px solid rgba(255, 221, 150, 0.45);
+  outline-offset: 2px;
+}
+
+.scent-vault-grid-toggle__button[aria-pressed="true"] {
+  color: #fff7ec;
+  background: rgba(212, 175, 55, 0.16);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 0 0 1px rgba(212, 175, 55, 0.18);
+}
+
+@media (max-width: 639px) {
+  .scent-vault-grid[data-compact="true"] .scent-fragrance-card {
+    border-radius: calc(var(--radius-scent) - 4px);
+    box-shadow:
+      0 18px 42px -30px rgba(0, 0, 0, 0.95),
+      0 10px 22px -18px rgba(0, 0, 0, 0.82),
+      inset 0 1px 0 rgba(255, 255, 255, 0.035);
+  }
+
+  .scent-vault-grid[data-compact="true"] .scent-fragrance-card::before,
+  .scent-vault-grid[data-compact="true"] .scent-fragrance-card::after,
+  .scent-vault-grid[data-compact="true"] .scent-card-frame {
+    inset: 0.42rem;
+    border-radius: calc(var(--radius-scent) - 14px);
+  }
+
+  .scent-vault-grid[data-compact="true"] .scent-card-frame::after {
+    inset: 3px;
+    border-radius: calc(var(--radius-scent) - 17px);
+  }
+
+  .scent-vault-grid[data-compact="true"] .scent-card-frame::before {
+    opacity: 0.72;
+  }
+
+  .scent-vault-grid[data-compact="true"] .scent-card-brand {
+    --brand-size: clamp(0.86rem, 4.7vw, 1.08rem);
+    line-height: 1.16;
+    padding-block: 0.04em;
+  }
+
+  .scent-vault-grid[data-compact="true"] .scent-card-brand[data-len="medium"] {
+    --brand-size: clamp(0.8rem, 4.2vw, 1rem);
+  }
+
+  .scent-vault-grid[data-compact="true"] .scent-card-brand[data-len="long"] {
+    --brand-size: clamp(0.72rem, 3.8vw, 0.92rem);
+  }
+
+  .scent-vault-grid[data-compact="true"] .scent-card-brand[data-len="xlong"] {
+    --brand-size: clamp(0.64rem, 3.4vw, 0.82rem);
+    line-height: 1.2;
+  }
+
+  .scent-vault-grid[data-compact="true"] .bottle-artboard {
+    inset: 4% !important;
+  }
+
+  .scent-vault-grid[data-compact="true"] .scent-card-title-row {
+    grid-template-columns: minmax(0, 0.42fr) minmax(0, auto) minmax(0, 0.42fr);
+    gap: 0.4rem;
+  }
+
+  .scent-vault-grid[data-compact="true"] .scent-card-title {
+    display: -webkit-box;
+    min-height: 2.02rem;
+    max-width: 100%;
+    overflow: hidden;
+    font-size: clamp(0.78rem, 3.7vw, 0.94rem);
+    line-height: 1.08;
+    white-space: normal;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+}
+
 
 .scent-marquee-band {
   overflow: hidden;

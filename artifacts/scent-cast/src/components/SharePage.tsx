@@ -13,10 +13,12 @@ import {
 } from 'lucide-react';
 import { BottleImage } from '@/components/BottleImage';
 import { BrandGoldLabel } from '@/components/BrandGoldLabel';
+import { VaultGridModeToggle } from '@/components/VaultGridModeToggle';
 import type { BottleImageAdjustment } from '@/lib/bottleImageAdjustment';
 import { APP_BRAND_MARK } from '@/lib/appBrand';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
+import { useVaultGridPreference } from '@/hooks/useVaultGridPreference';
 import { publicShareBuyLinksEndpoint } from '@/lib/shareLinks';
 import { ScentNotesInfographic } from '@/components/ScentNotesInfographic';
 import { CyclingTilePair, type CyclingPart } from '@/components/CyclingTilePair';
@@ -560,6 +562,7 @@ function ProfileScorePanel({
 export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { gridMode, setGridMode, isCompactGrid } = useVaultGridPreference();
   const [data, setData] = useState<ShareData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -745,6 +748,11 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                   <span>{data.fragrances.length} Entries</span>
                 </div>
               </div>
+              <VaultGridModeToggle
+                mode={gridMode}
+                onChange={setGridMode}
+                className="sm:hidden"
+              />
               {data.hideImages ? (
                 <p className="text-[10px] uppercase tracking-[0.3em] text-scent-gold-200/65 font-bold">
                   Owner currently hides bottle images on public view
@@ -753,7 +761,12 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
             </div>
 
             {data.fragrances.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-5 pb-24">
+            <div
+              className={`scent-vault-grid grid ${
+                isCompactGrid ? 'grid-cols-2 gap-2' : 'grid-cols-1 gap-3'
+              } sm:grid-cols-2 sm:gap-4 lg:gap-5 xl:grid-cols-4 pb-24`}
+              data-compact={isCompactGrid ? 'true' : 'false'}
+            >
               {data.fragrances.map((item, i) => {
                 const fragranceId = item._dbId ?? item.id;
                 const name = entryName(item);
@@ -768,14 +781,20 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                     className="group cursor-pointer relative h-full min-w-0"
                     onClick={() => setSelectedItemId(fragranceId)}
                   >
-                    <div className="scent-fragrance-card scent-hover-lift w-full h-full min-h-[32rem] transition-[transform,border-color,box-shadow] duration-500 motion-reduce:transition-none relative overflow-hidden flex flex-col">
+                    <div className={`scent-fragrance-card scent-hover-lift w-full h-full ${
+                      isCompactGrid ? 'min-h-[18rem]' : 'min-h-[32rem]'
+                    } sm:min-h-[32rem] transition-[transform,border-color,box-shadow] duration-500 motion-reduce:transition-none relative overflow-hidden flex flex-col`}>
                       <div className="scent-card-frame" aria-hidden />
-                      <div className="relative z-[1] flex h-full flex-col items-center px-6 sm:px-8 py-7 sm:py-9">
+                      <div className={`relative z-[1] flex h-full flex-col items-center ${
+                        isCompactGrid ? 'px-3 py-4' : 'px-6 py-7'
+                      } sm:px-8 sm:py-9`}>
                         <BrandGoldLabel
                           brand={brand}
                           className="scent-card-brand w-full"
                         />
-                        <div className="relative flex-1 w-full my-5 sm:my-6 min-h-0">
+                        <div className={`relative flex-1 w-full ${
+                          isCompactGrid ? 'my-3' : 'my-5'
+                        } sm:my-6 min-h-0`}>
                           {!data.hideImages ? (
                           <BottleImage
                             variant="grid"
