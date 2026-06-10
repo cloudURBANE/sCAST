@@ -83,7 +83,7 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
         {[0, 1, 2].map((item) => (
           <div
             key={item}
-            className="min-h-[13rem] rounded-[var(--radius-scent)] border border-scent-accent/12 bg-black/58 p-5"
+            className="min-h-[13rem] rounded-[var(--radius-scent)] border border-scent-accent/24 bg-black/58 p-6 shadow-[0_18px_44px_-30px_rgba(0,0,0,0.95),0_0_0_1px_rgba(212,175,55,0.06)]"
           >
             <div className="mb-5 h-4 w-28 rounded-full bg-scent-accent/10" />
             <div className="mb-3 h-6 w-2/3 rounded-full bg-white/[0.055]" />
@@ -112,9 +112,9 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
     const hasActiveFilters = Boolean(filters.type || filters.tag || filters.q);
     const { title, body } = emptyStateCopy(filters);
     return (
-      <div className="mx-auto w-full max-w-[960px] rounded-[var(--radius-scent)] border border-scent-accent/14 bg-black/58 px-6 py-14 text-center">
+      <div className="mx-auto w-full max-w-[960px] rounded-[var(--radius-scent)] border border-scent-accent/24 bg-black/58 px-6 py-14 text-center">
         <p className="font-serif text-2xl italic text-[#fff7ec]">{title}</p>
-        <p className="mx-auto mt-3 max-w-lg text-base leading-7 text-scent-text-muted">{body}</p>
+        <p className="mx-auto mt-4 max-w-lg text-base leading-7 text-scent-text-muted">{body}</p>
         <div className="mt-6 flex justify-center">
           {hasActiveFilters ? (
             <button
@@ -141,7 +141,7 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
   }
 
   return (
-    <div className="space-y-5" aria-busy={isRefetching || isFetchingNextPage}>
+    <div className="space-y-6" aria-busy={isRefetching || isFetchingNextPage}>
       {posts.map((post) => (
         <PostCard key={post.id} post={post} authToken={authToken} onSignIn={onSignIn} />
       ))}
