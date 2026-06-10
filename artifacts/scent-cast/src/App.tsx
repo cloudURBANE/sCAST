@@ -21,11 +21,12 @@ import { useModalBehavior } from '@/hooks/use-modal-behavior';
 import { useRenderBudget } from '@/hooks/useRenderBudget';
 import NotFound from '@/pages/not-found';
 import { SEO } from './components/SEO';
+import { loadRouteChunk } from '@/lib/routeChunkRecovery';
 
-const CommunityPage = React.lazy(() => import('@/pages/community'));
-const IpadFreezeLab = React.lazy(() => import('@/pages/ipad-freeze-lab'));
+const CommunityPage = React.lazy(() => loadRouteChunk(() => import('@/pages/community')));
+const IpadFreezeLab = React.lazy(() => loadRouteChunk(() => import('@/pages/ipad-freeze-lab')));
 const SharePage = React.lazy(() =>
-  import('./components/SharePage').then((module) => ({ default: module.SharePage })),
+  loadRouteChunk(() => import('./components/SharePage').then((module) => ({ default: module.SharePage }))),
 );
 
 const titleCaseToken = (value: string): string =>
