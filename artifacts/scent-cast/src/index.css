@@ -1030,6 +1030,12 @@ a {
     0 14px 32px -24px rgba(0, 0, 0, 0.9);
 }
 
+@media (min-width: 640px) {
+  .scent-vault-grid-toggle {
+    display: none;
+  }
+}
+
 .scent-vault-grid-toggle__button {
   display: inline-flex;
   width: 2rem;
