@@ -486,7 +486,7 @@ function DashboardView() {
 
           <section className="scent-hero-zone mx-auto w-full max-w-2xl min-w-0 space-y-7 text-center">
             <h2 className="mx-auto max-w-full text-balance font-serif italic text-[clamp(2.15rem,7vw,3.8rem)] text-[#fff7ec] leading-[0.98] tracking-normal">
-              Search for a fragrance, note, or brand.
+              Search any fragrance or brand.
             </h2>
             <FragranceCapture onAdd={handleAddItem} onVaultSearchStateChange={handleVaultSearchStateChange} />
             <AnimatePresence initial={false}>
