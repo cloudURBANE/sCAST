@@ -171,6 +171,7 @@ export async function saveCatalogEntry(brand: string, name: string, profile: Sce
 
 /** Flatten a ScentProfile into the flat shape the frontend expects */
 export function flattenProfile(profile: ScentProfile): Record<string, unknown> {
+  const extra = profile as ScentProfile & Record<string, unknown>;
   return {
     name: profile.product.name,
     brand: profile.product.brand,
@@ -190,5 +191,10 @@ export function flattenProfile(profile: ScentProfile): Record<string, unknown> {
     storageProvider: profile.storageProvider,
     sourceProvider: profile.sourceProvider,
     product: profile.product,
+    ...(extra.source_url ? { source_url: extra.source_url } : {}),
+    ...(extra.source_coverage ? { source_coverage: extra.source_coverage } : {}),
+    ...(extra.derived_metrics ? { derived_metrics: extra.derived_metrics } : {}),
+    ...(extra.enrichment ? { enrichment: extra.enrichment } : {}),
+    ...(extra.raw ? { raw: extra.raw } : {}),
   };
 }

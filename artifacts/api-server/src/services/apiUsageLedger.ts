@@ -35,7 +35,51 @@ const IMAGE_PRICE_TABLE: Record<PriceKey, number> = {
   [priceKey("gpt-image-2", "1024x1024", "high")]: 0.2,
 };
 
-const PRICING_LAST_CHECKED = "2026-05-15";
+const PRICING_LAST_CHECKED = "2026-06-10";
+
+// Per-token USD pricing for the token-billed image models. The flat
+// IMAGE_PRICE_TABLE above only models *output* and is structurally wrong for
+// edit calls: passing a reference image bills image-*input* tokens on top of
+// the output, which is the bulk of an edits-endpoint bill (and the reason the
+// old flat $0.20 estimate understated real spend by 2-4x). When OpenAI returns
+// a `usage` object we price from these rates instead — this is the true bill.
+// Rates are USD per token (published per-million divided by 1e6).
+// Last reviewed 2026-06-10: gpt-image-2 = $8/M image-input, $30/M image-output,
+// $5/M text-input.
+type TokenRate = { textInput: number; imageInput: number; imageOutput: number };
+const TOKEN_PRICE_TABLE: Record<string, TokenRate> = {
+  "gpt-image-2": { textInput: 5 / 1e6, imageInput: 8 / 1e6, imageOutput: 30 / 1e6 },
+  // gpt-image-1 / 1.5 / mini share the same token-rate shape; values below are
+  // the published 2026-06 rates and are only used when a `usage` block is
+  // present (otherwise the flat per-image table applies).
+  "gpt-image-1": { textInput: 5 / 1e6, imageInput: 10 / 1e6, imageOutput: 40 / 1e6 },
+  "gpt-image-1.5": { textInput: 5 / 1e6, imageInput: 8 / 1e6, imageOutput: 30 / 1e6 },
+  "gpt-image-1-mini": { textInput: 2 / 1e6, imageInput: 2.5 / 1e6, imageOutput: 8 / 1e6 },
+};
+
+export type ImageTokenUsage = {
+  textInputTokens: number;
+  imageInputTokens: number;
+  outputTokens: number;
+};
+
+/**
+ * True token-based cost when OpenAI reported usage. Prices text-input,
+ * image-input, and image-output tokens separately. Returns null when the model
+ * has no token rate (caller falls back to the flat per-image estimate).
+ */
+export function estimateImageGenerationCostFromTokens(
+  model: string,
+  usage: ImageTokenUsage,
+): number | null {
+  const rate = TOKEN_PRICE_TABLE[model];
+  if (!rate) return null;
+  return (
+    usage.textInputTokens * rate.textInput +
+    usage.imageInputTokens * rate.imageInput +
+    usage.outputTokens * rate.imageOutput
+  );
+}
 
 export function estimateImageGenerationCostUsd(
   model: string,
@@ -61,6 +105,13 @@ export type RecordApiUsageInput = {
   imageCount?: number;
   inputTokens?: number | null;
   outputTokens?: number | null;
+  /**
+   * Image-input token count from OpenAI's `usage.input_tokens_details`. When
+   * provided (with outputTokens), cost is priced from real token rates instead
+   * of the flat per-image table — the only accurate basis for edit calls.
+   */
+  imageInputTokens?: number | null;
+  textInputTokens?: number | null;
   status: "success" | "failure";
   failureReason?: string | null;
 };
@@ -88,10 +139,25 @@ export async function recordApiUsage(input: RecordApiUsageInput): Promise<void> 
   const size = input.size ?? "1024x1024";
   const quality = input.quality ?? "high";
   const imageCount = Math.max(1, Math.floor(input.imageCount ?? 1));
-  const cost =
-    input.status === "success"
-      ? estimateImageGenerationCostUsd(input.model, size, quality, imageCount)
-      : 0;
+
+  // Prefer real token-based cost when OpenAI reported usage; this captures the
+  // image-input tokens that the flat per-image table ignores. Fall back to the
+  // flat estimate only when no token usage is available.
+  function resolveCost(): number {
+    if (input.status !== "success") return 0;
+    const outputTokens = input.outputTokens ?? null;
+    if (outputTokens != null) {
+      const tokenCost = estimateImageGenerationCostFromTokens(input.model, {
+        textInputTokens: input.textInputTokens ?? 0,
+        imageInputTokens:
+          input.imageInputTokens ?? Math.max(0, (input.inputTokens ?? 0) - (input.textInputTokens ?? 0)),
+        outputTokens,
+      });
+      if (tokenCost != null) return tokenCost;
+    }
+    return estimateImageGenerationCostUsd(input.model, size, quality, imageCount);
+  }
+  const cost = resolveCost();
 
   // Stamp the row's tenant from the explicit input, the ambient request context,
   // or the default tenant for background callers — never NULL.
