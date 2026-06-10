@@ -194,6 +194,7 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
                         imgClassName="scent-hover-scale brightness-[1.1] transition-transform duration-[900ms] motion-reduce:transition-none"
                         adjustment={item.imageAdjustment}
                         showFrameGuide={false}
+                        isSyncing={loading}
                         onLoad={copyIndex === 0 ? requestMarqueeMeasure : undefined}
                         onError={copyIndex === 0 ? requestMarqueeMeasure : undefined}
                       />
