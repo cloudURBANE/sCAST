@@ -11,6 +11,7 @@ import { AppTopNav } from './components/AppTopNav';
 import { AuthModal } from './components/AuthModal';
 import { GuestSaveBanner } from './components/GuestSaveBanner';
 import { ShareModal } from './components/ShareModal';
+import { ProfileSettingsModal } from './components/ProfileSettingsModal';
 import type { ScentFamily, ScentWeatherRecommendation } from './lib/scentWeatherEngine';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { WeatherProvider, useWeather } from './context/WeatherContext';
@@ -21,11 +22,12 @@ import { useModalBehavior } from '@/hooks/use-modal-behavior';
 import { useRenderBudget } from '@/hooks/useRenderBudget';
 import NotFound from '@/pages/not-found';
 import { SEO } from './components/SEO';
+import { loadRouteChunk } from '@/lib/routeChunkRecovery';
 
-const CommunityPage = React.lazy(() => import('@/pages/community'));
-const IpadFreezeLab = React.lazy(() => import('@/pages/ipad-freeze-lab'));
+const CommunityPage = React.lazy(() => loadRouteChunk(() => import('@/pages/community')));
+const IpadFreezeLab = React.lazy(() => loadRouteChunk(() => import('@/pages/ipad-freeze-lab')));
 const SharePage = React.lazy(() =>
-  import('./components/SharePage').then((module) => ({ default: module.SharePage })),
+  loadRouteChunk(() => import('./components/SharePage').then((module) => ({ default: module.SharePage }))),
 );
 
 const titleCaseToken = (value: string): string =>
@@ -433,7 +435,7 @@ const HomepageAtmosphereChrome: React.FC = React.memo(() => {
 });
 
 function DashboardView() {
-  const { authToken, authEmail, authPictureUrl, handleSignOut, setIsAuthModalOpen } = useAuth();
+  const { authToken, authEmail, authPictureUrl, authUsername, handleSignOut, setIsAuthModalOpen, setIsProfileModalOpen } = useAuth();
   const {
     items,
     wardrobeLoaded,
@@ -510,9 +512,11 @@ function DashboardView() {
         authToken={authToken}
         authEmail={authEmail}
         authPictureUrl={authPictureUrl}
+        authUsername={authUsername}
         onSignIn={() => setIsAuthModalOpen(true)}
         onShare={() => setIsShareModalOpen(true)}
         onSignOut={handleSignOut}
+        onEditProfile={() => setIsProfileModalOpen(true)}
       />
 
       <div style={{ height: 'var(--topbar-h)' }} />
@@ -746,19 +750,21 @@ function DashboardView() {
 }
 
 function CommunityPageView() {
-  const { authToken, authEmail, authPictureUrl, handleSignOut, setIsAuthModalOpen } = useAuth();
+  const { authToken, authEmail, authPictureUrl, authUsername, handleSignOut, setIsAuthModalOpen, setIsProfileModalOpen } = useAuth();
   const { setIsShareModalOpen } = useWardrobeShareModalActions();
   return (
     <>
       <SEO title="Community | ScentBeam" description="Discuss and discover fragrances with the community." url="https://scentbeam.com/community" />
       <CommunityPage
         authToken={authToken}
-      authEmail={authEmail}
-      authPictureUrl={authPictureUrl}
-      onSignIn={() => setIsAuthModalOpen(true)}
-      onShare={() => setIsShareModalOpen(true)}
-      onSignOut={handleSignOut}
-    />
+        authEmail={authEmail}
+        authPictureUrl={authPictureUrl}
+        authUsername={authUsername}
+        onSignIn={() => setIsAuthModalOpen(true)}
+        onShare={() => setIsShareModalOpen(true)}
+        onSignOut={handleSignOut}
+        onEditProfile={() => setIsProfileModalOpen(true)}
+      />
     </>
   );
 }
@@ -776,8 +782,12 @@ function SharePageView() {
 function GlobalModals() {
   const {
     authToken,
+    authUsername,
     isAuthModalOpen,
     setIsAuthModalOpen,
+    isProfileModalOpen,
+    setIsProfileModalOpen,
+    setAuthUsername,
     guestPromptDismissed,
     setGuestPromptDismissed,
   } = useAuth();
@@ -834,11 +844,22 @@ function GlobalModals() {
     />
   );
 
+  const profileModal = (
+    <ProfileSettingsModal
+      isOpen={isProfileModalOpen}
+      onClose={() => setIsProfileModalOpen(false)}
+      authToken={authToken}
+      currentUsername={authUsername}
+      onSaved={setAuthUsername}
+    />
+  );
+
   return (
     <>
       {guestBanner}
       {authModal}
       {shareModal}
+      {profileModal}
     </>
   );
 }

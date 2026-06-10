@@ -1,5 +1,6 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { AlertOctagon, RotateCcw } from 'lucide-react';
+import { reloadForStaleRouteChunk } from '@/lib/routeChunkRecovery';
 
 interface Props {
   children: ReactNode;
@@ -21,6 +22,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    if (reloadForStaleRouteChunk(error)) return;
     console.error('Uncaught error in boundary:', error, errorInfo);
   }
 

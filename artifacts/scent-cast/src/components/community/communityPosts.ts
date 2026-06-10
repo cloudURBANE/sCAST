@@ -17,6 +17,9 @@ export interface CommunityAuthor {
   email: string;
   shareId: string;
   pictureUrl?: string;
+  // Public display name the member chose in profile settings. Absent until set;
+  // the UI falls back to a non-identifying alias rather than exposing the email.
+  username?: string;
 }
 
 export interface CommunityFragranceSnapshot {
@@ -206,14 +209,26 @@ function readHeaders(authToken?: string | null): HeadersInit {
     : { Accept: 'application/json' };
 }
 
+async function fetchPublicCommunityRead(url: string, authToken?: string | null): Promise<Response> {
+  const response = await fetch(url, {
+    headers: readHeaders(authToken),
+  });
+
+  if (authToken && (response.status === 401 || response.status === 403)) {
+    return fetch(url, {
+      headers: readHeaders(null),
+    });
+  }
+
+  return response;
+}
+
 export async function fetchCommunityPostsPage(
   filters: CommunityPostFilters,
   cursor?: string | null,
   authToken?: string | null,
 ): Promise<CommunityPostsPage> {
-  const res = await fetch(postsQueryUrl(filters, cursor), {
-    headers: readHeaders(authToken),
-  });
+  const res = await fetchPublicCommunityRead(postsQueryUrl(filters, cursor), authToken);
   return readJson<CommunityPostsPage>(res, `Community feed failed with HTTP ${res.status}`);
 }
 
@@ -221,9 +236,7 @@ export async function fetchCommunityPostDetail(
   postId: string,
   authToken?: string | null,
 ): Promise<CommunityPostDetail> {
-  const res = await fetch(appApiUrl(`/api/community/posts/${encodeURIComponent(postId)}`), {
-    headers: readHeaders(authToken),
-  });
+  const res = await fetchPublicCommunityRead(appApiUrl(`/api/community/posts/${encodeURIComponent(postId)}`), authToken);
   return readJson<CommunityPostDetail>(res, `Community post failed with HTTP ${res.status}`);
 }
 

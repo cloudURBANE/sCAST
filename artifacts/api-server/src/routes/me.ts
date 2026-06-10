@@ -71,4 +71,90 @@ router.get("/me/app-state", requireAuth, async (req: AuthRequest, res) => {
   res.json({ ...state, isAdmin: isAdminUser(user) });
 });
 
+// Public-facing community display name. 3–20 chars, letters/numbers and a few
+// separators — no leading/trailing separator, no '@' (so it never reads as an
+// email or a share handle). Empty/whitespace clears the username.
+const USERNAME_RE = /^[a-zA-Z0-9](?:[a-zA-Z0-9_.\-]{1,18}[a-zA-Z0-9])$/;
+
+function normalizeUsername(value: unknown): { username: string | null } | { error: string } {
+  if (value === null || value === undefined) return { username: null };
+  if (typeof value !== "string") return { error: "username must be a string" };
+  const trimmed = value.trim();
+  if (!trimmed) return { username: null };
+  if (!USERNAME_RE.test(trimmed)) {
+    return {
+      error:
+        "Username must be 3–20 characters: letters, numbers, and . _ - only (not at the start or end).",
+    };
+  }
+  return { username: trimmed };
+}
+
+// Returns the caller's chosen username (null when unset). Tolerant of the column
+// not yet existing in the live DB (migration lag): mirrors the auth-layer 42703
+// fallback so a fresh deploy never 500s the settings panel before the migration
+// lands — it simply reports "no username set" until then.
+router.get("/me/profile", requireAuth, async (req: AuthRequest, res) => {
+  const user = req.user!;
+  let username: string | null = null;
+  try {
+    const [row] = await db
+      .select({ username: userSettingsTable.username })
+      .from(userSettingsTable)
+      .where(eq(userSettingsTable.userId, user.id))
+      .limit(1);
+    username = row?.username ?? null;
+  } catch (err) {
+    if ((err as { code?: string } | null)?.code !== "42703") throw err;
+    logger.warn({ userId: user.id }, "user_settings.username not yet migrated — reporting null");
+  }
+  res.json({ username, email: user.email });
+});
+
+router.put("/me/profile", requireAuth, async (req: AuthRequest, res) => {
+  const user = req.user!;
+  const tenantId = getTenantId(req);
+
+  const body = (req.body ?? {}) as { username?: unknown };
+  const result = normalizeUsername(body.username);
+  if ("error" in result) {
+    res.status(400).json({ error: result.error });
+    return;
+  }
+  const { username } = result;
+
+  // Per-tenant, case-insensitive uniqueness. A unique DB index would need a
+  // partial/expression constraint (and a riskier migration); an app-level check
+  // keeps the schema additive while still preventing two members from claiming
+  // the same handle on the same tenant.
+  if (username) {
+    const clash = await db
+      .select({ userId: userSettingsTable.userId })
+      .from(userSettingsTable)
+      .where(
+        and(
+          eq(userSettingsTable.tenantId, tenantId),
+          sql`lower(${userSettingsTable.username}) = lower(${username})`,
+          sql`${userSettingsTable.userId} <> ${user.id}`,
+        ),
+      )
+      .limit(1);
+    if (clash[0]) {
+      res.status(409).json({ error: "That username is already taken." });
+      return;
+    }
+  }
+
+  const now = new Date();
+  await db
+    .insert(userSettingsTable)
+    .values({ tenantId, userId: user.id, username })
+    .onConflictDoUpdate({
+      target: userSettingsTable.userId,
+      set: { tenantId, username, updatedAt: now },
+    });
+
+  res.json({ username, email: user.email });
+});
+
 export default router;
