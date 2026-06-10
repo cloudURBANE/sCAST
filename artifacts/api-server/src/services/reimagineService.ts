@@ -42,7 +42,11 @@ const WEBP_QUALITY = 90;
 // lets the model pick.
 const REIMAGINE_QUALITIES = ["low", "medium", "high", "auto"] as const;
 type ReimagineQuality = (typeof REIMAGINE_QUALITIES)[number];
-const DEFAULT_REIMAGINE_QUALITY: ReimagineQuality = "high";
+// "medium" is the default: the output is downscaled to MAX_OUTPUT_DIMENSION
+// (768px) WebP before storage, so the extra fidelity of "high" is resolved away
+// on downscale while costing ~4x more in output tokens. Ops can restore "high"
+// via OPENAI_REIMAGINE_QUALITY for a one-off without a deploy.
+const DEFAULT_REIMAGINE_QUALITY: ReimagineQuality = "medium";
 
 function resolveQuality(): ReimagineQuality {
   const fromEnv = process.env.OPENAI_REIMAGINE_QUALITY?.trim().toLowerCase();
@@ -217,7 +221,26 @@ async function toPngForOpenAI(buffer: Buffer, maxDimension: number): Promise<Buf
 
 type OpenAIImageEditsResponse = {
   data?: Array<{ b64_json?: string }>;
+  usage?: {
+    input_tokens?: number;
+    output_tokens?: number;
+    input_tokens_details?: { text_tokens?: number; image_tokens?: number };
+  };
   error?: { message?: string };
+};
+
+// Token usage parsed from the edits response, used to bill the ledger at the
+// true token-based rate (the image-input tokens are the bulk of an edit bill).
+export type ReimagineTokenUsage = {
+  inputTokens: number;
+  outputTokens: number;
+  textInputTokens: number;
+  imageInputTokens: number;
+};
+
+type OpenAIImageEditsResult = {
+  buffer: Buffer;
+  usage: ReimagineTokenUsage | null;
 };
 
 async function callOpenAIImageEdits(input: {
@@ -225,7 +248,7 @@ async function callOpenAIImageEdits(input: {
   model: ReimagineModel;
   quality: ReimagineQuality;
   apiKey: string;
-}): Promise<Buffer> {
+}): Promise<OpenAIImageEditsResult> {
   const FormData = (await import("form-data")).default;
   const form = new FormData();
   form.append("image", input.pngBuffer, { filename: "bottle.png", contentType: "image/png" });
@@ -260,7 +283,22 @@ async function callOpenAIImageEdits(input: {
 
   const out = Buffer.from(b64, "base64");
   if (out.length === 0) throw new Error("OpenAI image edit returned an empty buffer");
-  return out;
+
+  const rawUsage = res.data?.usage;
+  let usage: ReimagineTokenUsage | null = null;
+  if (rawUsage && typeof rawUsage.output_tokens === "number") {
+    const imageInputTokens = rawUsage.input_tokens_details?.image_tokens ?? 0;
+    const textInputTokens =
+      rawUsage.input_tokens_details?.text_tokens ??
+      Math.max(0, (rawUsage.input_tokens ?? 0) - imageInputTokens);
+    usage = {
+      inputTokens: rawUsage.input_tokens ?? imageInputTokens + textInputTokens,
+      outputTokens: rawUsage.output_tokens,
+      textInputTokens,
+      imageInputTokens,
+    };
+  }
+  return { buffer: out, usage };
 }
 
 async function bgRemoveAndEncode(rawModelBuffer: Buffer): Promise<{
@@ -282,29 +320,56 @@ async function bgRemoveAndEncode(rawModelBuffer: Buffer): Promise<{
   // guard, which matters now that the model sits the bottle on a mid-light grey
   // sweep instead of pure white. If Poof is unavailable, removeBgBuffer falls
   // back to local trim so we still get a usable image.
+  // We have already paid OpenAI for `rawModelBuffer` by the time we get here, so
+  // nothing below this point is allowed to discard those bytes. removeBgBuffer
+  // itself never throws (it falls back to a local trim), but the downstream
+  // sharp re-encode can throw on a malformed buffer — if it does we salvage by
+  // encoding the raw model output directly rather than 502-ing on a paid image.
   const removed = await removeBgBuffer(rawModelBuffer, { poofType: "product" });
 
-  const encoded = await sharp(removed.buffer, { failOn: "truncated" })
-    .rotate()
-    .resize(MAX_OUTPUT_DIMENSION, MAX_OUTPUT_DIMENSION, { fit: "inside", withoutEnlargement: true })
-    .ensureAlpha()
-    .webp({ quality: WEBP_QUALITY, effort: 4, alphaQuality: 95 })
-    .toBuffer();
-
-  const meta = await sharp(encoded).metadata();
-  if (!meta.width || !meta.height) {
-    throw new Error("Reimagined image metadata missing dimensions");
+  async function encode(
+    src: Buffer,
+    backgroundRemoved: boolean,
+    removeBgStatus: RemoveBgStatus,
+    removeBgReason: RemoveBgReason,
+  ) {
+    const encoded = await sharp(src, { failOn: "truncated" })
+      .rotate()
+      .resize(MAX_OUTPUT_DIMENSION, MAX_OUTPUT_DIMENSION, { fit: "inside", withoutEnlargement: true })
+      .ensureAlpha()
+      .webp({ quality: WEBP_QUALITY, effort: 4, alphaQuality: 95 })
+      .toBuffer();
+    const meta = await sharp(encoded).metadata();
+    if (!meta.width || !meta.height) {
+      throw new Error("Reimagined image metadata missing dimensions");
+    }
+    return {
+      buffer: encoded,
+      width: meta.width,
+      height: meta.height,
+      sizeBytes: encoded.length,
+      backgroundRemoved,
+      removeBgStatus,
+      removeBgReason,
+    };
   }
 
-  return {
-    buffer: encoded,
-    width: meta.width,
-    height: meta.height,
-    sizeBytes: encoded.length,
-    backgroundRemoved: removed.backgroundRemoved,
-    removeBgStatus: removed.removeBgStatus,
-    removeBgReason: removed.removeBgReason,
-  };
+  try {
+    return await encode(
+      removed.buffer,
+      removed.backgroundRemoved,
+      removed.removeBgStatus,
+      removed.removeBgReason,
+    );
+  } catch (err) {
+    logger.warn(
+      { err: err instanceof Error ? err.message : String(err) },
+      "[reimagine] post-bg encode failed; salvaging raw paid model output without bg removal",
+    );
+    // Last-resort salvage: encode the raw model output we paid for. A packshot
+    // with the studio-grey backdrop still showing beats throwing away the bill.
+    return await encode(rawModelBuffer, false, "fallback", "local_trim_fallback");
+  }
 }
 
 export type ReimagineBottleImageInput = {
@@ -384,8 +449,14 @@ export async function reimagineBottleImage(
   );
 
   let generated: Buffer;
+  let usage: ReimagineTokenUsage | null;
   try {
-    generated = await callOpenAIImageEdits({ pngBuffer: pngForEdit, model, quality, apiKey });
+    ({ buffer: generated, usage } = await callOpenAIImageEdits({
+      pngBuffer: pngForEdit,
+      model,
+      quality,
+      apiKey,
+    }));
   } catch (err) {
     const reason = err instanceof Error ? err.message : "OpenAI image edit failed";
     await recordApiUsage({
@@ -402,6 +473,9 @@ export async function reimagineBottleImage(
     throw err;
   }
 
+  // OpenAI has now billed us. Record the true token-based cost (image-input
+  // tokens included) so the in-app meter matches the real bill instead of the
+  // flat per-image estimate that ignored edit input tokens.
   await recordApiUsage({
     userId: input.userId ?? null,
     provider: "openai",
@@ -410,6 +484,10 @@ export async function reimagineBottleImage(
     size: DEFAULT_REIMAGINE_SIZE,
     quality,
     imageCount: 1,
+    inputTokens: usage?.inputTokens ?? null,
+    outputTokens: usage?.outputTokens ?? null,
+    imageInputTokens: usage?.imageInputTokens ?? null,
+    textInputTokens: usage?.textInputTokens ?? null,
     status: "success",
   });
 
