@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, Search } from 'lucide-react';
+import { Check, Search, X } from 'lucide-react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { ScentIntelligenceLoader } from './ScentIntelligenceLoader';
 import {
@@ -908,6 +908,32 @@ export const FragranceCapture: React.FC<{
     });
   };
 
+  // Close (×) / Esc — dismiss the results surface entirely and return the user to
+  // the search field. Unlike "New search" this does NOT auto-focus the input, so
+  // closing on mobile doesn't pop the keyboard back open; it just clears and
+  // scrolls the (now-empty) search area back into view.
+  const handleDismissResults = useCallback(() => {
+    resetState();
+    setErrorStatus(null);
+    window.requestAnimationFrame(() => {
+      searchInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  }, []);
+
+  // Esc closes the results overlay while it's showing (and not mid-load). Bound at
+  // the document level so it works regardless of where focus currently sits.
+  useEffect(() => {
+    if (matches.length === 0 || uploading) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        handleDismissResults();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [matches.length, uploading, handleDismissResults]);
+
   // Bring freshly-arrived results into view so the list isn't stranded below the
   // fold on tall mobile layouts. Runs once per result set, after the overlay clears.
   useEffect(() => {
@@ -982,6 +1008,25 @@ export const FragranceCapture: React.FC<{
         substatus="Searching fragrances…"
         complete={syncComplete}
       />
+      {/* Indeterminate progress bar — a concrete "work in progress" signal beneath
+          the orbital loader so submitting a search reads as active progress rather
+          than an abrupt jump to a static overlay. Reduced-motion users get a steady
+          partial fill instead of the sweeping highlight. */}
+      <div
+        className="mt-7 h-[3px] w-44 max-w-[62%] overflow-hidden rounded-full bg-white/10"
+        role="progressbar"
+        aria-label="Searching fragrances"
+      >
+        {reduceMotion ? (
+          <div className="h-full w-2/3 rounded-full bg-scent-accent/80" />
+        ) : (
+          <motion.div
+            className="h-full w-1/3 rounded-full bg-scent-accent/85"
+            animate={{ x: ['-110%', '320%'] }}
+            transition={{ duration: 1.15, repeat: Infinity, ease: 'easeInOut' }}
+          />
+        )}
+      </div>
     </motion.div>
   ) : null;
 
@@ -1165,6 +1210,15 @@ export const FragranceCapture: React.FC<{
                         <Search size={12} strokeWidth={2} aria-hidden />
                         New search
                       </button>
+                      <button
+                        type="button"
+                        onClick={handleDismissResults}
+                        aria-label="Close results"
+                        title="Close (Esc)"
+                        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/12 text-scent-text-muted transition-colors hover:border-scent-accent/45 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
+                      >
+                        <X size={15} strokeWidth={2} aria-hidden />
+                      </button>
                     </div>
                   </div>
 
@@ -1231,7 +1285,7 @@ export const FragranceCapture: React.FC<{
                               key={key}
                               type="button"
                               onClick={() => setSelectedId(key)}
-                              className={`scent-vault-result-card group mx-auto w-full max-w-[39.75rem] min-h-[178px] px-6 py-7 text-center transition-all duration-200 cursor-pointer sm:min-h-[218px] sm:px-8 sm:py-8 ${
+                              className={`scent-vault-result-card group mx-auto w-full max-w-[39.75rem] min-h-[124px] px-6 py-5 text-center transition-all duration-200 cursor-pointer sm:min-h-[148px] sm:px-8 sm:py-6 ${
                                 isSelected ? 'is-selected' : ''
                               }`}
                               aria-pressed={isSelected}
@@ -1253,17 +1307,17 @@ export const FragranceCapture: React.FC<{
                                   <Check size={16} strokeWidth={3} />
                                 </motion.span>
                               )}
-                              <span className="scent-vault-monogram mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full font-serif text-[1.55rem] font-semibold leading-none sm:mb-5 sm:h-[4.5rem] sm:w-[4.5rem] sm:text-[1.9rem]">
+                              <span className="scent-vault-monogram mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full font-serif text-[1.35rem] font-semibold leading-none sm:mb-3.5 sm:h-16 sm:w-16 sm:text-[1.65rem]">
                                 {matchMonogram(m)}
                               </span>
                               <span
-                                className="mx-auto block max-w-full truncate font-serif text-[2rem] italic leading-none text-[#fff7ec] sm:text-[2.55rem]"
+                                className="mx-auto block max-w-full truncate font-serif text-[1.6rem] italic leading-none text-[#fff7ec] sm:text-[2rem]"
                                 title={m.name}
                               >
                                 {truncateMatchLine(m.name, MATCH_LINE_MAX_CHARS)}
                               </span>
                               <span
-                                className="mx-auto mt-4 block max-w-full truncate font-sans text-[12.5px] font-bold uppercase tracking-[0.28em] text-[#f3dca6] sm:text-[13.5px]"
+                                className="mx-auto mt-2.5 block max-w-full truncate font-sans text-[12.5px] font-bold uppercase tracking-[0.28em] text-[#f3dca6] sm:mt-3 sm:text-[13.5px]"
                                 title={m.brand || 'House unavailable'}
                               >
                                 {truncateMatchLine(m.brand || 'House unavailable', MATCH_LINE_MAX_CHARS)}
