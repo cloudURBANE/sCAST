@@ -377,7 +377,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
     return (
       <section
         ref={sectionRef}
-        className="relative overflow-hidden rounded-[var(--radius-scent)] border border-scent-accent/16 bg-[linear-gradient(180deg,rgba(0,0,0,0.86),rgba(0,0,0,0.96))] p-5 shadow-[0_24px_70px_-50px_rgba(212,175,55,0.34)] sm:p-6"
+        className="relative overflow-hidden rounded-[var(--radius-scent)] border border-scent-accent/24 bg-[linear-gradient(180deg,rgba(10,9,7,0.88),rgba(0,0,0,0.96))] p-6 shadow-[0_18px_44px_-30px_rgba(0,0,0,0.95),0_0_0_1px_rgba(212,175,55,0.06),inset_0_1px_0_rgba(255,236,183,0.06)]"
       >
         <button
           type="button"
@@ -394,16 +394,16 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
           <p className="scent-type-label text-scent-accent">
             Community forum
           </p>
-          <h2 className="mt-3 text-balance font-serif text-3xl italic leading-tight text-[#fff7ec] sm:text-4xl">
+          <h2 className="mt-4 text-balance font-serif text-3xl italic leading-tight text-[#fff7ec] sm:text-4xl">
             Rooms already moving through the lounge.
           </h2>
-          <p className="mt-3 max-w-xl text-base leading-7 text-scent-text-muted">
+          <p className="mt-4 max-w-xl text-base leading-7 text-scent-text-muted">
             Ask a question, share your SOTD, run a battle, or check if a bottle is worth it.
           </p>
         </div>
 
         {statusMessage ? (
-          <p className="mx-auto mt-5 max-w-2xl rounded-[14px] border border-scent-accent/12 bg-black/58 px-4 py-3 text-center text-base text-scent-text-muted">
+          <p className="mx-auto mt-6 max-w-2xl rounded-[14px] border border-scent-accent/12 bg-black/58 px-4 py-3 text-center text-base text-scent-text-muted">
             {statusMessage}
           </p>
         ) : null}
@@ -414,9 +414,9 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
   return (
     <section
       ref={sectionRef}
-      className="rounded-[var(--radius-scent)] border border-scent-accent/16 bg-[linear-gradient(180deg,rgba(0,0,0,0.86),rgba(0,0,0,0.96))] p-5 shadow-[0_24px_70px_-50px_rgba(212,175,55,0.34)] sm:p-6"
+      className="rounded-[var(--radius-scent)] border border-scent-accent/24 bg-[linear-gradient(180deg,rgba(10,9,7,0.88),rgba(0,0,0,0.96))] p-6 shadow-[0_18px_44px_-30px_rgba(0,0,0,0.95),0_0_0_1px_rgba(212,175,55,0.06),inset_0_1px_0_rgba(255,236,183,0.06)]"
     >
-      <form onSubmit={submitPost} className="space-y-5">
+      <form onSubmit={submitPost} className="space-y-6">
         <div className="relative flex flex-col items-center gap-4 text-center">
           <div className="min-w-0 px-10 sm:px-14">
             <p className="scent-type-label text-scent-accent">
@@ -425,7 +425,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
             <h2 className="mt-2 font-serif text-3xl italic leading-tight text-[#fff7ec]">
               Start a room
             </h2>
-            <p className="mt-3 max-w-2xl text-base leading-7 text-scent-text-muted">
+            <p className="mt-4 max-w-2xl text-base leading-7 text-scent-text-muted">
               Ask a question, share your SOTD, run a battle, or check if a bottle is worth it.
             </p>
           </div>
@@ -460,7 +460,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
           ))}
         </div>
 
-        <div className="grid gap-3 lg:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)]">
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)]">
           <input
             ref={titleInputRef}
             type="text"
@@ -500,7 +500,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
         ) : null}
 
         {postType === 'sotd' ? (
-          <div className="grid gap-3 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-3">
             <input
               type="text"
               value={weather}
@@ -532,7 +532,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
         ) : null}
 
         {postType === 'battle' ? (
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-2">
             <input
               type="text"
               value={battleA}
@@ -576,8 +576,8 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
           className="scent-lux-input min-h-40 w-full resize-y rounded-[var(--radius-scent)] px-4 py-3 text-base leading-7 text-[#fff7ec] placeholder:text-scent-text-subtle"
         />
 
-        <div className="space-y-3 rounded-[18px] border border-scent-accent/12 bg-black/72 p-4">
-          <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+        <div className="space-y-4 rounded-[18px] border border-scent-accent/12 bg-black/72 p-4">
+          <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
             <div className="relative min-w-0">
               <Search
                 size={16}
@@ -648,7 +648,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
           ) : null}
 
           {selectedFragrances.length > 0 ? (
-            <div className="flex flex-wrap justify-center gap-3">
+            <div className="flex flex-wrap justify-center gap-4">
               {selectedFragrances.map((fragrance) => (
                 <div
                   key={`${fragrance.brand}:${fragrance.name}:${fragrance.imageUrl}`}
@@ -689,7 +689,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
           </p>
         ) : null}
 
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="scent-type-meta uppercase">
             {body.trim().length}/4000
           </p>
