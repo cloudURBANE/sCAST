@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useLayoutEffect, useMemo, useCallback } from 'react';
 import { Routes, Route, useLocation, useParams, type Location } from 'react-router-dom';
-import { FragranceCapture } from './components/FragranceCapture';
+import { FragranceCapture, vaultIdentityKey } from './components/FragranceCapture';
 import { Wardrobe, Fragrance, DestinationType, EnergyState } from './components/Wardrobe';
 import { Play, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -485,6 +485,24 @@ function DashboardView() {
   const showOnboardingSteps =
     stateSettled && !onboardingCompleted && items.length === 0 && !vaultSearchUiActive;
 
+  // Brand+name identities of saved fragrances, so the search overlay can flag
+  // results that are already in the vault and offer "View in vault" instead of a
+  // silent duplicate add.
+  const vaultIdentityKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const item of items) {
+      const key = vaultIdentityKey(item.brand ?? item.product?.brand, item.name ?? item.product?.name);
+      if (key) keys.add(key);
+    }
+    return keys;
+  }, [items]);
+
+  const handleViewVault = useCallback(() => {
+    document
+      .getElementById('scent-vault-section')
+      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, []);
+
   return (
     <div className="min-h-[100svh] relative overflow-x-hidden">
       <SEO />
@@ -504,7 +522,12 @@ function DashboardView() {
           <HomepageHeroMarquee />
 
           <section className="mx-auto w-full max-w-[60rem] min-w-0 space-y-7 text-center">
-            <FragranceCapture onAdd={handleAddItem} onVaultSearchStateChange={handleVaultSearchStateChange} />
+            <FragranceCapture
+              onAdd={handleAddItem}
+              onVaultSearchStateChange={handleVaultSearchStateChange}
+              existingVaultKeys={vaultIdentityKeys}
+              onViewVault={handleViewVault}
+            />
             <AnimatePresence initial={false}>
               {showOnboardingSteps ? (
                 <motion.div
@@ -576,7 +599,7 @@ function DashboardView() {
 
           <HomepageAtmosphereChrome />
 
-          <div>
+          <div id="scent-vault-section" style={{ scrollMarginTop: 'var(--topbar-h)' }}>
             <Wardrobe
               items={items}
               onDelete={handleDeleteItem}
@@ -632,10 +655,14 @@ function DashboardView() {
                     <h2 id="recommendation-overlay-title" className="font-serif italic text-2xl sm:text-6xl mb-4">You should wear</h2>
                     <div className="h-px w-16 bg-white/20 mx-auto" />
                   </header>
-                  <div className="py-6 sm:py-16 border-y border-white/10 group cursor-pointer" onClick={closeRecommendationOverlay}>
+                  <button
+                    type="button"
+                    className="w-full py-6 sm:py-16 border-y border-white/10 group cursor-pointer bg-transparent text-center"
+                    onClick={closeRecommendationOverlay}
+                  >
                     <p className="mb-2 font-serif text-sm uppercase tracking-[0.2em] text-scent-text-muted">{activeRecommendation.brand}</p>
                     <h3 className="font-serif italic text-3xl sm:text-8xl text-white leading-tight transition-transform group-hover:scale-105">{activeRecommendation.name}</h3>
-                  </div>
+                  </button>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 sm:gap-12 text-left">
                     <div>
                       <p className="mb-2 scent-type-label">Olfactory Reason</p>
@@ -692,7 +719,7 @@ function DashboardView() {
               className="px-5 pt-3 shrink-0 border-t border-white/5"
               style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))' }}
             >
-              <button onClick={closeRecommendationOverlay} className="w-full py-4 bg-scent-accent text-black scent-type-chip hover:opacity-90 transition-opacity active:scale-[0.98]">
+              <button type="button" onClick={closeRecommendationOverlay} className="w-full py-4 bg-scent-accent text-black scent-type-chip hover:opacity-90 transition-opacity active:scale-[0.98]">
                 Confirm Alignment
               </button>
             </div>

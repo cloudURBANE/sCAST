@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, Search } from 'lucide-react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
@@ -220,6 +220,28 @@ function matchKey(m: FragranceMatch): string {
   return firstString(m.id, m.source_url) ?? '';
 }
 
+/**
+ * Brand + name identity used to tell whether a search result is already in the
+ * vault. Adding a fragrance replaces the engine id with a fresh local id, so the
+ * row's original id can't be matched back — brand+name is the only stable signal
+ * shared across the search result and the saved vault entry. Lowercased, trimmed,
+ * punctuation-stripped, and whitespace-collapsed so trivial formatting drift
+ * ("Dior — Sauvage" vs "dior sauvage") still collides. Exported so the vault key
+ * set is built with the exact same normalization the lookup uses.
+ */
+export function vaultIdentityKey(brand?: string | null, name?: string | null): string {
+  const norm = (value?: string | null) =>
+    (value ?? '')
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  const b = norm(brand);
+  const n = norm(name);
+  if (!n) return '';
+  return `${b}|${n}`;
+}
+
 /** Bucket the engine's free-form gender string into a stable filter label. */
 function genderLabel(value: unknown): 'Men' | 'Women' | 'Unisex' | null {
   const g = firstString(value)?.toLowerCase();
@@ -364,7 +386,11 @@ function isVetted(m: FragranceMatch): boolean {
 export const FragranceCapture: React.FC<{
   onAdd?: (item: any) => void | Promise<{ persisted: boolean; requiresAuth?: boolean; error?: string }>;
   onVaultSearchStateChange?: (active: boolean) => void;
-}> = ({ onAdd, onVaultSearchStateChange }) => {
+  /** Brand+name identity keys ({@link vaultIdentityKey}) of fragrances already saved. */
+  existingVaultKeys?: Set<string>;
+  /** Scroll the user to their vault — used by the "View in vault" action on duplicates. */
+  onViewVault?: () => void;
+}> = ({ onAdd, onVaultSearchStateChange, existingVaultKeys, onViewVault }) => {
   const [uploading, setUploading] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState("");
   const [matches, setMatches] = useState<FragranceMatch[]>([]);
@@ -432,6 +458,29 @@ export const FragranceCapture: React.FC<{
 
   const vaultSearchActive = searchFocused || searchQuery.trim().length > 0;
   const hasSelectedMatch = selectedMatch !== null;
+
+  // A result is "already in vault" when its brand+name identity is in the saved
+  // set. Used to badge rows and to convert the primary CTA into "View in vault"
+  // so a fragrance can't be silently added twice.
+  const matchInVault = useCallback(
+    (m: FragranceMatch): boolean => {
+      if (!existingVaultKeys || existingVaultKeys.size === 0) return false;
+      const key = vaultIdentityKey(firstString(m.brand, m.house), m.name);
+      return key.length > 0 && existingVaultKeys.has(key);
+    },
+    [existingVaultKeys],
+  );
+  const selectedInVault = selectedMatch ? matchInVault(selectedMatch) : false;
+
+  // Plain (non-memoized) so it always closes over the current `handleConfirm`,
+  // which is declared below and re-created each render.
+  const handlePrimaryAction = () => {
+    if (selectedInVault) {
+      onViewVault?.();
+      return;
+    }
+    void handleConfirm();
+  };
 
   // When a filter hides the selected row, fall back to the first still-visible
   // result so the "ready to add" CTA never points at something off-screen.
@@ -962,12 +1011,12 @@ export const FragranceCapture: React.FC<{
         </div>
         <button
           type="button"
-          onClick={handleConfirm}
+          onClick={handlePrimaryAction}
           disabled={!hasSelectedMatch}
           className="scent-vault-outline-button flex h-[58px] w-full cursor-pointer items-center justify-center px-4 transition-transform hover:scale-[1.01] active:scale-[0.98] disabled:pointer-events-none disabled:opacity-62"
         >
           <span className="scent-vault-outline-button-label font-serif italic text-[1.3rem] leading-tight text-center">
-            {hasSelectedMatch ? 'Add to Vault' : 'Select a Result'}
+            {selectedInVault ? 'View in vault' : hasSelectedMatch ? 'Add to Vault' : 'Select a Result'}
           </span>
         </button>
       </div>
@@ -1165,6 +1214,7 @@ export const FragranceCapture: React.FC<{
                         {visibleMatches.map((m) => {
                           const key = matchKey(m);
                           const isSelected = key === selectedId;
+                          const inVault = matchInVault(m);
                           return (
                             <button
                               key={key}
@@ -1175,6 +1225,12 @@ export const FragranceCapture: React.FC<{
                               }`}
                               aria-pressed={isSelected}
                             >
+                              {inVault && (
+                                <span className="pointer-events-none absolute left-3 top-3 z-10 inline-flex items-center gap-1.5 rounded-full border border-scent-accent/35 bg-scent-bg/80 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.16em] text-scent-accent sm:left-4 sm:top-4">
+                                  <Check size={11} strokeWidth={3} aria-hidden />
+                                  In vault
+                                </span>
+                              )}
                               {isSelected && (
                                 <motion.span
                                   initial={reduceMotion ? false : { scale: 0.5, opacity: 0 }}
@@ -1221,18 +1277,18 @@ export const FragranceCapture: React.FC<{
                         exit={{ opacity: 0, y: -4 }}
                         className="text-center scent-type-label text-scent-accent"
                       >
-                        Selected — ready to add
+                        {selectedInVault ? 'Already in your vault' : 'Selected — ready to add'}
                       </motion.p>
                     ) : null}
                   </AnimatePresence>
                   <button
                     type="button"
-                    onClick={handleConfirm}
+                    onClick={handlePrimaryAction}
                     disabled={uploading || !hasSelectedMatch}
                     className="scent-vault-outline-button mt-3 flex h-[60px] w-full items-center justify-center px-4 font-serif italic text-base transition-all hover:scale-[1.01] active:scale-[0.98] sm:mt-5 sm:h-[74px] sm:text-lg disabled:pointer-events-none disabled:opacity-62"
                   >
                     <span className="scent-vault-outline-button-label font-serif italic text-[1.35rem] leading-tight text-center sm:text-[1.8rem]">
-                      {hasSelectedMatch ? 'Add to Vault' : 'Select a Result'}
+                      {selectedInVault ? 'View in vault' : hasSelectedMatch ? 'Add to Vault' : 'Select a Result'}
                     </span>
                   </button>
                 </div>

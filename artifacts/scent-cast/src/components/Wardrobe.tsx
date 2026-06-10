@@ -1859,15 +1859,24 @@ export const Wardrobe: React.FC<{
               </div>
             ))
           ) : !searchQuery && (
-            <div className="py-32 text-center border border-dashed border-white/5 rounded-scent flex flex-col items-center gap-6">
-              <p className="font-serif italic text-4xl text-scent-text-subtle">The vault is currently vacant</p>
+            <div className="py-20 sm:py-24 px-6 text-center border border-dashed border-scent-accent/18 rounded-scent flex flex-col items-center gap-5 bg-white/[0.015]">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full border border-scent-accent/25 bg-scent-accent/[0.06]" aria-hidden>
+                <Sparkles size={26} strokeWidth={1.5} className="text-scent-accent" />
+              </div>
+              <div className="flex max-w-md flex-col items-center gap-2.5">
+                <h3 className="font-serif italic text-3xl sm:text-4xl text-[#fff7ec]">Your vault is empty</h3>
+                <p className="text-[15px] leading-relaxed text-scent-text-muted">
+                  Add the fragrances you own or love to build your collection and unlock personalized scent discovery.
+                </p>
+              </div>
               {onExpandArchive && (
                 <button
                   type="button"
                   onClick={onExpandArchive}
-                  className="scent-type-chip text-scent-accent hover:text-[#fff7ec] transition-colors border border-scent-accent/20 hover:border-scent-accent/40 px-5 py-2.5 rounded-full"
+                  className="scent-vault-outline-button mt-1 inline-flex items-center gap-2.5 px-7 py-3.5 transition-transform hover:scale-[1.02] active:scale-[0.98]"
                 >
-                  Add your first fragrance
+                  <Search size={16} strokeWidth={2} className="text-scent-accent" aria-hidden />
+                  <span className="scent-vault-outline-button-label font-serif italic text-lg">Add your first fragrance</span>
                 </button>
               )}
             </div>
