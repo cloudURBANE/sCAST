@@ -18,7 +18,7 @@ export interface CommunityAuthor {
   shareId: string;
   pictureUrl?: string;
   // Public display name the member chose in profile settings. Absent until set;
-  // the UI falls back to a non-identifying alias rather than exposing the email.
+  // the UI falls back to the Google email local-part rather than the full email.
   username?: string;
 }
 

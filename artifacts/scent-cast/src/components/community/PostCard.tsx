@@ -265,7 +265,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post, authToken, onSignIn })
             <span>{formatCommunityTime(post.createdAt)}</span>
           </div>
         </div>
-        <span className="inline-flex w-fit shrink-0 items-center gap-2 rounded-full border border-scent-accent/18 bg-scent-accent/[0.05] px-3 py-1 scent-type-meta font-bold uppercase text-scent-accent sm:mt-1">
+        <span className="inline-flex w-fit shrink-0 items-center gap-2 rounded-full border border-scent-accent/18 bg-scent-accent/[0.05] px-3 py-1 scent-type-meta font-bold uppercase text-scent-accent sm:mt-4">
           <Icon size={13} strokeWidth={1.8} aria-hidden="true" />
           {detail.label}
         </span>

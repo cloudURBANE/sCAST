@@ -33,11 +33,20 @@ export function displayCommunityAuthor(author: CommunityAuthor): string {
   const username = author.username?.trim();
   if (username) return username;
 
-  // Fallback for members who haven't chosen one. Privacy: never render the email
-  // (or its local-part) as a public name — that would leak PII into a public
-  // feed. Derive a stable, non-identifying alias from the account id instead.
-  const token = author.id.replace(/[^0-9a-z]/gi, '').slice(0, 6).toUpperCase();
-  return token ? `Member ${token}` : 'Community member';
+  // Fallback for members who have not chosen one: use the Google email's
+  // local-part as a readable username without exposing the full address.
+  const localPart = author.email.trim().split('@')[0]?.trim();
+  if (localPart) {
+    const withoutPlusTag = localPart.split('+')[0]?.trim() || localPart;
+    const cleaned = withoutPlusTag
+      .replace(/[._-]+/g, ' ')
+      .replace(/[^0-9a-z ]/gi, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return cleaned || withoutPlusTag;
+  }
+
+  return 'Community member';
 }
 
 export function communitySharePath(author: CommunityAuthor): string {

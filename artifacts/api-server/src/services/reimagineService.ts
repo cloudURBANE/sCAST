@@ -1,4 +1,5 @@
 import sharp from "sharp";
+import { createBoundedLimiter, LimiterQueueFullError } from "../lib/boundedLimiter";
 import { logger } from "../lib/logger";
 import { recordApiUsage } from "./apiUsageLedger";
 import { removeBgBuffer, type RemoveBgReason, type RemoveBgStatus } from "./bgService";
@@ -73,6 +74,40 @@ function resolveInputMaxDimension(): number {
   const raw = Number(process.env.OPENAI_REIMAGINE_INPUT_DIM?.trim());
   if (!Number.isFinite(raw)) return DEFAULT_OPENAI_INPUT_MAX_DIMENSION;
   return Math.min(2048, Math.max(512, Math.round(raw)));
+}
+
+// Concurrency guard. The billable phase of a reimagine (sharp PNG prep, the
+// OpenAI round-trip, Poof bg removal + sharp re-encode) is memory-heavy enough
+// that a few parallel jobs OOM-kill the container — after OpenAI has billed
+// but before the result reaches storage/DB, so the user pays for nothing and
+// no failure row is ever written. One job at a time keeps peak RSS flat; a
+// short queue absorbs honest double-clicks; anything past the queue is refused
+// up-front (HTTP 429 at the route) before a single billable byte is sent to
+// OpenAI. Both knobs are ops-tunable without a deploy.
+const DEFAULT_REIMAGINE_MAX_CONCURRENT = 1;
+const DEFAULT_REIMAGINE_MAX_QUEUE = 5;
+
+function resolveBoundedIntEnv(name: string, fallback: number, min: number, max: number): number {
+  const raw = process.env[name]?.trim();
+  if (!raw) return fallback;
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed)) return fallback;
+  return Math.min(max, Math.max(min, parsed));
+}
+
+const reimagineLimiter = createBoundedLimiter(
+  resolveBoundedIntEnv("REIMAGINE_MAX_CONCURRENT", DEFAULT_REIMAGINE_MAX_CONCURRENT, 1, 4),
+  resolveBoundedIntEnv("REIMAGINE_MAX_QUEUE", DEFAULT_REIMAGINE_MAX_QUEUE, 0, 50),
+);
+
+// Thrown when the reimagine queue is full. The route maps it to HTTP 429.
+// Refusal happens before callOpenAIImageEdits, so a rejected request is never
+// billed and never touches the ledger.
+export class ReimagineBusyError extends Error {
+  constructor() {
+    super("Too many reimagine jobs are running right now — please try again in a minute.");
+    this.name = "ReimagineBusyError";
+  }
 }
 
 // The reimagine prompt carries three jobs, in priority order:
@@ -430,35 +465,58 @@ export async function reimagineBottleImage(
     }
   }
 
-  const pngForEdit = await toPngForOpenAI(loaded.buffer, resolveInputMaxDimension());
+  // Everything below is the memory-heavy, billable phase: sharp PNG prep, the
+  // OpenAI round-trip, Poof bg removal + sharp re-encode, storage upload. It
+  // runs under reimagineLimiter so concurrent requests execute one at a time
+  // (queueing briefly) instead of OOM-killing the process mid-flight; a full
+  // queue is refused before OpenAI is ever called.
+  const runJob = async (): Promise<ReimagineBottleImageResult> => {
+    const pngForEdit = await toPngForOpenAI(loaded.buffer, resolveInputMaxDimension());
 
-  logger.info(
-    {
-      lookupKey,
-      model,
-      quality,
-      sourceKind: input.sourceUrl.startsWith("data:")
-        ? "data"
-        : input.sourceUrl.startsWith("/api/image-objects/")
-          ? "local-object"
-          : "remote",
-      sourceBytes: loaded.buffer.length,
-      uploadBytes: pngForEdit.length,
-    },
-    "[reimagine] calling OpenAI images.edits",
-  );
+    logger.info(
+      {
+        lookupKey,
+        model,
+        quality,
+        sourceKind: input.sourceUrl.startsWith("data:")
+          ? "data"
+          : input.sourceUrl.startsWith("/api/image-objects/")
+            ? "local-object"
+            : "remote",
+        sourceBytes: loaded.buffer.length,
+        uploadBytes: pngForEdit.length,
+      },
+      "[reimagine] calling OpenAI images.edits",
+    );
 
-  let generated: Buffer;
-  let usage: ReimagineTokenUsage | null;
-  try {
-    ({ buffer: generated, usage } = await callOpenAIImageEdits({
-      pngBuffer: pngForEdit,
-      model,
-      quality,
-      apiKey,
-    }));
-  } catch (err) {
-    const reason = err instanceof Error ? err.message : "OpenAI image edit failed";
+    let generated: Buffer;
+    let usage: ReimagineTokenUsage | null;
+    try {
+      ({ buffer: generated, usage } = await callOpenAIImageEdits({
+        pngBuffer: pngForEdit,
+        model,
+        quality,
+        apiKey,
+      }));
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : "OpenAI image edit failed";
+      await recordApiUsage({
+        userId: input.userId ?? null,
+        provider: "openai",
+        operation: "image.edits",
+        model,
+        size: DEFAULT_REIMAGINE_SIZE,
+        quality,
+        imageCount: 1,
+        status: "failure",
+        failureReason: reason,
+      });
+      throw err;
+    }
+
+    // OpenAI has now billed us. Record the true token-based cost (image-input
+    // tokens included) so the in-app meter matches the real bill instead of the
+    // flat per-image estimate that ignored edit input tokens.
     await recordApiUsage({
       userId: input.userId ?? null,
       provider: "openai",
@@ -467,120 +525,114 @@ export async function reimagineBottleImage(
       size: DEFAULT_REIMAGINE_SIZE,
       quality,
       imageCount: 1,
-      status: "failure",
-      failureReason: reason,
+      inputTokens: usage?.inputTokens ?? null,
+      outputTokens: usage?.outputTokens ?? null,
+      imageInputTokens: usage?.imageInputTokens ?? null,
+      textInputTokens: usage?.textInputTokens ?? null,
+      status: "success",
     });
-    throw err;
-  }
 
-  // OpenAI has now billed us. Record the true token-based cost (image-input
-  // tokens included) so the in-app meter matches the real bill instead of the
-  // flat per-image estimate that ignored edit input tokens.
-  await recordApiUsage({
-    userId: input.userId ?? null,
-    provider: "openai",
-    operation: "image.edits",
-    model,
-    size: DEFAULT_REIMAGINE_SIZE,
-    quality,
-    imageCount: 1,
-    inputTokens: usage?.inputTokens ?? null,
-    outputTokens: usage?.outputTokens ?? null,
-    imageInputTokens: usage?.imageInputTokens ?? null,
-    textInputTokens: usage?.textInputTokens ?? null,
-    status: "success",
-  });
+    const optimized = await bgRemoveAndEncode(generated);
+    const contentHash = hashBuffer(optimized.buffer);
 
-  const optimized = await bgRemoveAndEncode(generated);
-  const contentHash = hashBuffer(optimized.buffer);
+    logger.info(
+      {
+        lookupKey,
+        model,
+        backgroundRemoved: optimized.backgroundRemoved,
+        removeBgStatus: optimized.removeBgStatus,
+        removeBgReason: optimized.removeBgReason,
+        width: optimized.width,
+        height: optimized.height,
+      },
+      "[reimagine] bg removal complete",
+    );
 
-  logger.info(
-    {
+    // Synthesize a sourceUrl unique per generated output so the (sourceUrlHash,
+    // pipelineVersion) unique index in image_cache does not overwrite earlier
+    // reimagines of the same input.
+    const sourceUrlForDb = `openai-reimagine:${model}:${loaded.inputHash}:${contentHash}`;
+    const sourceUrlHash = hashString(sourceUrlForDb);
+
+    const storage = getImageObjectStorage();
+    const storagePath = buildProcessedImageStorageKey({
+      sourceProvider,
       lookupKey,
-      model,
-      backgroundRemoved: optimized.backgroundRemoved,
-      removeBgStatus: optimized.removeBgStatus,
-      removeBgReason: optimized.removeBgReason,
-      width: optimized.width,
-      height: optimized.height,
-    },
-    "[reimagine] bg removal complete",
-  );
+      sourceUrlHash,
+      contentHash,
+    });
 
-  // Synthesize a sourceUrl unique per generated output so the (sourceUrlHash,
-  // pipelineVersion) unique index in image_cache does not overwrite earlier
-  // reimagines of the same input.
-  const sourceUrlForDb = `openai-reimagine:${model}:${loaded.inputHash}:${contentHash}`;
-  const sourceUrlHash = hashString(sourceUrlForDb);
+    try {
+      const uploaded = await storage.uploadProcessedImage({
+        buffer: optimized.buffer,
+        contentType: "image/webp",
+        key: storagePath,
+      });
 
-  const storage = getImageObjectStorage();
-  const storagePath = buildProcessedImageStorageKey({
-    sourceProvider,
-    lookupKey,
-    sourceUrlHash,
-    contentHash,
-  });
+      const publicUrl = safeImageUrlForResponse(uploaded.publicUrl ?? uploaded.signedUrl ?? "");
+      if (!publicUrl) throw new Error("Storage upload did not return a usable URL");
+
+      const recorded = await recordImageReady({
+        userId: input.userId ?? null,
+        fragranceId: input.fragranceId ?? null,
+        lookupKey,
+        sourceProvider,
+        sourceUrl: sourceUrlForDb,
+        sourceUrlHash,
+        // Keyed on the input identity (source + model + quality) so the next
+        // identical reimagine is a cache hit and never re-bills OpenAI.
+        searchQueryHash: inputIdentityHash,
+        contentHash,
+        storageProvider: uploaded.provider,
+        storagePath: uploaded.storagePath,
+        publicUrl,
+        mimeType: "image/webp",
+        width: optimized.width,
+        height: optimized.height,
+        sizeBytes: uploaded.sizeBytes || optimized.sizeBytes,
+        backgroundRemoved: optimized.backgroundRemoved,
+        removeBgStatus: optimized.removeBgStatus,
+        removeBgReason: optimized.removeBgReason,
+      });
+
+      if (!recorded.isPersisted) {
+        logger.warn(
+          {
+            lookupKey,
+            sourceUrlHash,
+            sourceProvider,
+            storagePath: recorded.storagePath,
+            model,
+          },
+          "[reimagine] image_cache row not persisted (DB unavailable); next request will re-run OpenAI reimagine + storage upload",
+        );
+      }
+
+      return { ...recorded, model };
+    } catch (err) {
+      if (err instanceof ImageObjectStorageConfigurationError) throw err;
+      const reason = err instanceof Error ? err.message : "reimagine storage failed";
+      await recordImageFailure({
+        userId: input.userId ?? null,
+        fragranceId: input.fragranceId ?? null,
+        lookupKey,
+        sourceProvider,
+        sourceUrl: sourceUrlForDb,
+        sourceUrlHash,
+        searchQueryHash: null,
+        failureReason: reason,
+      }).catch(() => {});
+      throw err;
+    }
+  };
 
   try {
-    const uploaded = await storage.uploadProcessedImage({
-      buffer: optimized.buffer,
-      contentType: "image/webp",
-      key: storagePath,
-    });
-
-    const publicUrl = safeImageUrlForResponse(uploaded.publicUrl ?? uploaded.signedUrl ?? "");
-    if (!publicUrl) throw new Error("Storage upload did not return a usable URL");
-
-    const recorded = await recordImageReady({
-      userId: input.userId ?? null,
-      fragranceId: input.fragranceId ?? null,
-      lookupKey,
-      sourceProvider,
-      sourceUrl: sourceUrlForDb,
-      sourceUrlHash,
-      // Keyed on the input identity (source + model + quality) so the next
-      // identical reimagine is a cache hit and never re-bills OpenAI.
-      searchQueryHash: inputIdentityHash,
-      contentHash,
-      storageProvider: uploaded.provider,
-      storagePath: uploaded.storagePath,
-      publicUrl,
-      mimeType: "image/webp",
-      width: optimized.width,
-      height: optimized.height,
-      sizeBytes: uploaded.sizeBytes || optimized.sizeBytes,
-      backgroundRemoved: optimized.backgroundRemoved,
-      removeBgStatus: optimized.removeBgStatus,
-      removeBgReason: optimized.removeBgReason,
-    });
-
-    if (!recorded.isPersisted) {
-      logger.warn(
-        {
-          lookupKey,
-          sourceUrlHash,
-          sourceProvider,
-          storagePath: recorded.storagePath,
-          model,
-        },
-        "[reimagine] image_cache row not persisted (DB unavailable); next request will re-run OpenAI reimagine + storage upload",
-      );
-    }
-
-    return { ...recorded, model };
+    return await reimagineLimiter(runJob);
   } catch (err) {
-    if (err instanceof ImageObjectStorageConfigurationError) throw err;
-    const reason = err instanceof Error ? err.message : "reimagine storage failed";
-    await recordImageFailure({
-      userId: input.userId ?? null,
-      fragranceId: input.fragranceId ?? null,
-      lookupKey,
-      sourceProvider,
-      sourceUrl: sourceUrlForDb,
-      sourceUrlHash,
-      searchQueryHash: null,
-      failureReason: reason,
-    }).catch(() => {});
+    if (err instanceof LimiterQueueFullError) {
+      logger.warn({ lookupKey, model, quality }, "[reimagine] refused: concurrency queue full");
+      throw new ReimagineBusyError();
+    }
     throw err;
   }
 }

@@ -1232,7 +1232,11 @@ export const Wardrobe: React.FC<{
   };
 
   const handleReimagine = (item: Fragrance) => {
-    if (reimaginingIds.has(item.id)) return;
+    // Global lock: one reimagine at a time across the whole wardrobe, not just
+    // per bottle. The backend runs jobs sequentially to protect itself from
+    // OOM, so firing a second concurrent request can never finish faster — it
+    // only queues server-side or gets refused with a 429.
+    if (reimaginingIds.size > 0) return;
     const src =
       pendingPreview?.itemId === item.id ? pendingPreview.url : item.imageUrl;
     if (!src?.trim()) {
@@ -1464,6 +1468,12 @@ export const Wardrobe: React.FC<{
 
   const selectedReimagining =
     !!selectedItem && reimaginingIds.has(selectedItem.id);
+
+  // Global reimagine lock: the backend processes reimagine jobs one at a time
+  // to protect itself from OOM, so while ANY bottle is reimagining the button
+  // is blocked everywhere — parallel clicks would only queue server-side (or
+  // get a 429), never run faster.
+  const anyReimagining = reimaginingIds.size > 0;
 
   const imageToolbarBusy =
     !!selectedItem &&
@@ -2098,12 +2108,14 @@ export const Wardrobe: React.FC<{
                                     type="button"
                                     onClick={() => void handleReimagine(selectedItem)}
                                     disabled={
-                                      imageToolbarBusy || !detailBottleUrl?.trim()
+                                      imageToolbarBusy || anyReimagining || !detailBottleUrl?.trim()
                                     }
                                     title={
                                       !detailBottleUrl?.trim()
                                         ? 'Need an image first'
-                                        : 'Reimagine this bottle on a transparent background (1–3 min)'
+                                        : anyReimagining && !selectedReimagining
+                                          ? 'Another bottle is being reimagined — wait for it to finish'
+                                          : 'Reimagine this bottle on a transparent background (1–3 min)'
                                     }
                                     className="flex-1 min-h-[38px] py-2 bg-white/[0.06] text-white scent-type-chip border border-white/15 hover:bg-white/[0.1] active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 disabled:opacity-35 disabled:cursor-not-allowed rounded-lg"
                                   >
