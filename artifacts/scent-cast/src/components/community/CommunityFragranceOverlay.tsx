@@ -82,7 +82,7 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
               aria-label="Close fragrance details"
               ref={closeButtonRef}
             >
-              <X size={20} />
+              <X size={20} strokeWidth={1.75} />
             </button>
           </div>
 

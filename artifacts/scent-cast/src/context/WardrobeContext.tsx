@@ -590,10 +590,14 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const handleExpandArchive = useCallback(() => {
     const el = document.getElementById('scent-add-to-vault-search');
     if (!(el instanceof HTMLInputElement)) return;
+    // Focus synchronously, inside the click's user-gesture, so the search field
+    // visibly activates (and the mobile keyboard opens) on every platform.
+    // Deferring focus to a setTimeout breaks the user-gesture chain on iOS
+    // Safari, where focus() is then silently ignored — which made the empty-vault
+    // "Add a fragrance" button appear to do nothing for guests. Scroll after, so
+    // the field is both focused and centered in view.
+    el.focus({ preventScroll: true });
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    window.setTimeout(() => {
-      el.focus({ preventScroll: true });
-    }, 360);
   }, []);
 
   const loadWardrobe = useCallback(async (token: string, signal?: AbortSignal) => {

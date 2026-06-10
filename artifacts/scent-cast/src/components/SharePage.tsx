@@ -531,7 +531,7 @@ function ProfileScorePanel({
               key={stat.label}
               className={`min-w-0 h-full min-h-[6.15rem] sm:min-h-0 flex flex-col items-center justify-center gap-1 border-white/[0.04] px-1 py-2.5 sm:px-4 sm:py-5 text-center ${borderClass}`}
             >
-              <Icon size={18} strokeWidth={1.6} className="text-scent-accent" />
+              <Icon size={18} strokeWidth={1.75} className="text-scent-accent" />
               {stat.cycle.length > 0 ? (
                 <CyclingTilePair
                   parts={stat.cycle}
@@ -707,7 +707,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
               src="/nav/scentbeam-nav-logo.png"
               srcSet="/nav/scentbeam-nav-logo.png 1x, /nav/scentbeam-nav-logo@2x.png 2x"
               alt="ScentBeam"
-              className="h-10 sm:h-12 w-auto"
+              className="h-8 w-auto min-[390px]:h-9 sm:h-12"
               draggable={false}
             />
           </button>
@@ -743,16 +743,16 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                 <p className="text-[10px] uppercase tracking-[0.6em] text-white/40 font-bold">Shared Vault</p>
                 <h2 className="font-serif italic text-[clamp(2.65rem,8vw,5.35rem)] text-[#fff7ec] tracking-normal leading-none">Vault of Aromas</h2>
               </div>
-              <div className="scent-full-bleed w-full">
-                <div className="scent-entry-count w-full font-serif italic text-xl sm:text-2xl whitespace-nowrap">
-                  <span>{data.fragrances.length} Entries</span>
-                </div>
-              </div>
               <VaultGridModeToggle
                 mode={gridMode}
                 onChange={setGridMode}
                 className="sm:hidden"
               />
+              <div className="scent-full-bleed w-full">
+                <div className="scent-entry-count w-full font-serif italic text-xl sm:text-2xl whitespace-nowrap">
+                  <span>{data.fragrances.length} Entries</span>
+                </div>
+              </div>
               {data.hideImages ? (
                 <p className="text-[10px] uppercase tracking-[0.3em] text-scent-gold-200/65 font-bold">
                   Owner currently hides bottle images on public view
@@ -824,7 +824,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
             </div>
             ) : (
               <div className="py-40 text-center border border-dashed border-white/5 rounded-scent">
-                <p className="font-serif italic text-4xl text-white/10">The vault is currently vacant</p>
+                <p className="font-serif italic text-4xl text-white/10">Your fragrance vault is empty</p>
               </div>
             )}
 
@@ -894,7 +894,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                   aria-label="Close profile"
                   className="shrink-0 inline-flex min-h-11 min-w-11 items-center justify-center bg-white/5 hover:bg-white/10 transition-all rounded-full border border-white/10 text-white group"
                 >
-                  <X size={18} className="group-hover:rotate-90 transition-transform duration-300" />
+                  <X size={18} strokeWidth={1.75} className="group-hover:rotate-90 transition-transform duration-300" />
                 </button>
               </div>
 
@@ -973,7 +973,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                                 className="inline-flex items-center gap-1.5 rounded-sm border border-white/12 bg-white/[0.05] px-3 py-1.5 text-[9px] uppercase tracking-[0.18em] font-bold text-white/62 hover:bg-white/[0.1] hover:text-white transition-colors"
                                 aria-label="Enlarge bottle image"
                               >
-                                <Maximize2 size={13} strokeWidth={2} />
+                                <Maximize2 size={13} strokeWidth={1.75} />
                                 Enlarge
                               </button>
                             </div>
@@ -985,7 +985,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
 
                   <FragrancePanel title="About This Fragrance">
                     <div className="flex flex-col items-center justify-center gap-3 px-4 py-4 text-center">
-                      <Info size={18} className="shrink-0 text-white/55" />
+                      <Info size={18} strokeWidth={1.75} className="shrink-0 text-white/55" />
                       <p className="mx-auto max-w-3xl text-sm leading-relaxed text-white/56">
                         {selectedMetrics?.main_accords?.accord_summary?.trim() ??
                           entryNotes(selectedItem)}
@@ -1014,7 +1014,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                     rel="nofollow sponsored noopener"
                     className="flex items-center justify-center gap-2 w-full py-3.5 bg-scent-accent text-black uppercase tracking-[0.28em] text-[10px] font-bold hover:opacity-90 transition-opacity active:scale-[0.98]"
                   >
-                    <ShoppingBag size={13} />
+                    <ShoppingBag size={13} strokeWidth={1.75} />
                     Buy Now
                   </a>
                 ) : (
@@ -1023,7 +1023,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                     disabled
                     className="flex items-center justify-center gap-2 w-full py-3.5 bg-white/[0.02] border border-white/8 text-[10px] uppercase tracking-[0.22em] text-white/28 font-bold cursor-not-allowed"
                   >
-                    <ShoppingBag size={13} />
+                    <ShoppingBag size={13} strokeWidth={1.75} />
                     Buying options unavailable
                   </button>
                 )}
@@ -1055,7 +1055,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                     className="absolute top-4 right-4 z-10 flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white hover:bg-white/20 transition-colors"
                     aria-label="Close enlarged view"
                   >
-                    <X size={22} />
+                    <X size={22} strokeWidth={1.75} />
                   </button>
                   <div
                     className="relative w-full max-w-[min(100%,28rem)] aspect-[3/4] max-h-[78dvh] min-h-0"

@@ -276,6 +276,16 @@ router.post("/search-scent", async (req, res) => {
   }
 
   const scraped = await deepScrapeFragrance(queryWithHint);
+  if (!scraped) {
+    // No real fragrance data found. Returning a fabricated word-split profile
+    // here is what produced bogus "<name> by <brand>" results and poisoned the
+    // catalog, so decline cleanly instead of inventing + persisting one.
+    res.status(422).json({
+      error:
+        "Search only supports fragrance, perfume, or cologne names. Try the brand plus fragrance name, or add 'perfume' for a newer scent.",
+    });
+    return;
+  }
   const profile = await buildProfile(scraped.name, scraped.brand, {
     notes: scraped.notes,
     family: scraped.family,
