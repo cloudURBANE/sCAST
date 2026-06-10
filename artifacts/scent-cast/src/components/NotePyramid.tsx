@@ -82,7 +82,11 @@ const TYPEWRITER_FRAME_MS = 24;
 const NOTE_MARQUEE_MIN_CHARS = 58;
 const NOTE_MARQUEE_MIN_COUNT = 5;
 const DECORATIVE_REPEAT_COUNT = 2;
+const GUIDE_START_DELAY_MS = 1200;
+const GUIDE_LAYER_DURATION_MS = 1050;
+const GUIDE_TRACE_DURATION_S = 0.98;
 const NO_ACTIVE_NOTES: string[] = [];
+const GUIDE_LAYERS: ActiveLayer[] = ['top', 'heart', 'base'];
 const LAYER_CENTER_Y: Record<ActiveLayer, number> = {
   top: 82,
   heart: 200,
@@ -550,9 +554,12 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
   const [activeLayer, setActiveLayer] = React.useState<ActiveLayer | null>(null);
   const [hoveredLayer, setHoveredLayer] = React.useState<ActiveLayer | null>(null);
   const [focusedLayer, setFocusedLayer] = React.useState<ActiveLayer | null>(null);
+  const [guidedLayer, setGuidedLayer] = React.useState<ActiveLayer | null>(null);
   const rootRef = React.useRef<HTMLElement | null>(null);
   const pointerActivationRef = React.useRef<PointerActivation | null>(null);
   const ignoreClickActivationRef = React.useRef(false);
+  const guideHasPlayedRef = React.useRef(false);
+  const guideTimersRef = React.useRef<number[]>([]);
   // Constrained touch devices (iPad / coarse-pointer iPhones) cannot afford the
   // pyramid's heavy paint. Each feGaussianBlur / feDropShadow, the full-surface
   // drop-shadow, and the screen-blend layer allocates a large offscreen IOSurface,
@@ -565,11 +572,12 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
   // frame instead of stacking across opens. Desktop keeps the full treatment.
   // Device class is stable, so sample once.
   const lowRenderBudget = React.useRef(isLowRenderBudget()).current;
-  const prefersReducedMotion = useReducedMotion() || lowRenderBudget;
-  const guidedLayer = null;
+  const osPrefersReducedMotion = useReducedMotion();
+  const prefersReducedMotion = osPrefersReducedMotion === true || lowRenderBudget;
+  const shouldPlayGuide = osPrefersReducedMotion !== true;
   const idPrefix = React.useId().replace(/:/g, '');
   const state = activeLayer ?? 'idle';
-  const engagedLayer = hoveredLayer ?? focusedLayer ?? guidedLayer;
+  const engagedLayer = hoveredLayer ?? focusedLayer ?? (activeLayer ? null : guidedLayer);
 
   const allLinks = React.useMemo(
     () => resolveNoteAccordLinks([...topNotes, ...heartNotes, ...baseNotes], accordRows ?? []),
@@ -584,6 +592,63 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
     (name: string) => (lowRenderBudget ? undefined : `url(#${id(name)})`),
     [id, lowRenderBudget],
   );
+
+  const clearGuideTimers = React.useCallback(() => {
+    guideTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    guideTimersRef.current = [];
+  }, []);
+
+  React.useEffect(() => {
+    if (!shouldPlayGuide) return;
+
+    const root = rootRef.current;
+    if (!root || guideHasPlayedRef.current) return;
+
+    const playGuide = () => {
+      if (guideHasPlayedRef.current) return;
+
+      guideHasPlayedRef.current = true;
+      clearGuideTimers();
+
+      GUIDE_LAYERS.forEach((layer, index) => {
+        const timer = window.setTimeout(() => {
+          setGuidedLayer(layer);
+        }, GUIDE_START_DELAY_MS + index * GUIDE_LAYER_DURATION_MS);
+        guideTimersRef.current.push(timer);
+      });
+
+      const endTimer = window.setTimeout(() => {
+        setGuidedLayer(null);
+      }, GUIDE_START_DELAY_MS + GUIDE_LAYERS.length * GUIDE_LAYER_DURATION_MS);
+      guideTimersRef.current.push(endTimer);
+    };
+
+    if (typeof IntersectionObserver === 'undefined') {
+      playGuide();
+      return clearGuideTimers;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting && entry.intersectionRatio >= 0.38)) {
+          playGuide();
+          observer.disconnect();
+        }
+      },
+      {
+        root: null,
+        rootMargin: '0px 0px -8% 0px',
+        threshold: [0.25, 0.38, 0.55, 0.72],
+      },
+    );
+
+    observer.observe(root);
+
+    return () => {
+      observer.disconnect();
+      clearGuideTimers();
+    };
+  }, [clearGuideTimers, shouldPlayGuide]);
 
   React.useEffect(() => {
     if (!activeLayer) return;
@@ -1077,18 +1142,6 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
               <stop offset="1" stopColor="#fff8e6" stopOpacity="0" />
             </linearGradient>
 
-            <radialGradient id={id('apex-halo')} cx="50%" cy="50%" r="50%">
-              <stop offset="0" stopColor="#ffd98a" stopOpacity="0.46" />
-              <stop offset="0.42" stopColor="#fcaa28" stopOpacity="0.16" />
-              <stop offset="1" stopColor="#fc9d19" stopOpacity="0" />
-            </radialGradient>
-
-            <radialGradient id={id('background-cool-air')} cx="24%" cy="16%" r="58%">
-              <stop offset="0" stopColor="#7c93c4" stopOpacity="0.085" />
-              <stop offset="0.55" stopColor="#7c93c4" stopOpacity="0.03" />
-              <stop offset="1" stopColor="#7c93c4" stopOpacity="0" />
-            </radialGradient>
-
             <linearGradient id={id('mirror-fade')} x1="0" y1="380" x2="0" y2="420" gradientUnits="userSpaceOnUse">
               <stop offset="0" stopColor="#ffffff" stopOpacity="0.55" />
               <stop offset="0.55" stopColor="#ffffff" stopOpacity="0.16" />
@@ -1110,19 +1163,6 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
               animate={prefersReducedMotion ? { opacity: 0.55 } : { opacity: [0.4, 0.62, 0.4], scale: [0.985, 1.015, 0.985] }}
               transition={atmosphericTransition}
               style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
-            />
-
-            {/* Cool counter-light — a faint steel-blue wash opposing the gold so the metal reads dimensional */}
-            <circle cx="84" cy="74" r="190" fill={fill('background-cool-air')} />
-
-            {/* Apex halo — the summit catches the light and breathes */}
-            <motion.circle
-              cx={PYRAMID_CENTER_X}
-              cy="30"
-              r="58"
-              fill={fill('apex-halo')}
-              animate={prefersReducedMotion ? { opacity: 0.5 } : { opacity: [0.34, 0.62, 0.34] }}
-              transition={atmosphericTransition}
             />
 
             {CONSTELLATION_DOTS.map((star, idx) => (
@@ -1433,28 +1473,57 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                   />
                 )}
 
-                {/* Orbiting glint — a spark of light that runs the tier's silhouette while it is active */}
-                {!prefersReducedMotion && (
+                {shouldPlayGuide && (
+                  <motion.path
+                    d={layer.hitPath}
+                    fill="none"
+                    stroke={fill('active-edge-gold')}
+                    strokeWidth="1.45"
+                    strokeLinecap="round"
+                    strokeLinejoin="miter"
+                    pointerEvents="none"
+                    vectorEffect="non-scaling-stroke"
+                    filter={filterRef('gold-soft')}
+                    initial={false}
+                    animate={
+                      isGuided
+                        ? { pathLength: [0, 1], opacity: [0, 0.95, 0.18] }
+                        : { pathLength: 0, opacity: 0 }
+                    }
+                    transition={
+                      isGuided
+                        ? {
+                            pathLength: { duration: GUIDE_TRACE_DURATION_S, ease: CALM_EASE },
+                            opacity: { duration: GUIDE_TRACE_DURATION_S, times: [0, 0.22, 1], ease: CALM_EASE },
+                          }
+                        : { duration: 0.18, ease: CALM_EASE }
+                    }
+                  />
+                )}
+
+                {/* Traveling guide glint: follows the exact tier silhouette during the one-shot hint. */}
+                {shouldPlayGuide && (
                   <motion.path
                     d={layer.hitPath}
                     pathLength={1}
                     fill="none"
                     stroke="#fff6dd"
-                    strokeWidth="1.5"
+                    strokeWidth="1.7"
                     strokeLinecap="round"
-                    strokeDasharray="0.05 0.95"
+                    strokeLinejoin="miter"
+                    strokeDasharray="0.07 0.93"
                     pointerEvents="none"
                     vectorEffect="non-scaling-stroke"
                     filter={filterRef('gold-soft')}
                     initial={false}
-                    animate={isActive ? { strokeDashoffset: [0, -1], opacity: 0.85 } : { opacity: 0 }}
+                    animate={isGuided ? { strokeDashoffset: [0, -1], opacity: [0, 0.95, 0] } : { opacity: 0 }}
                     transition={
-                      isActive
+                      isGuided
                         ? {
-                            strokeDashoffset: { duration: 3.6, ease: 'linear', repeat: DECORATIVE_REPEAT_COUNT },
-                            opacity: { duration: 0.45, ease: CALM_EASE },
+                            strokeDashoffset: { duration: GUIDE_TRACE_DURATION_S, ease: 'linear' },
+                            opacity: { duration: GUIDE_TRACE_DURATION_S, times: [0, 0.18, 1], ease: CALM_EASE },
                           }
-                        : { opacity: { duration: 0.3, ease: CALM_EASE } }
+                        : { opacity: { duration: 0.18, ease: CALM_EASE } }
                     }
                   />
                 )}
