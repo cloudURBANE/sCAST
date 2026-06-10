@@ -21,18 +21,42 @@ export function getToken(req: Request): string | null {
 // 401 (and the SPA can re-prompt login) instead of an unrecoverable server error.
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+// Columns that have always existed on `users`. Used as a fail-safe projection so a
+// newly-declared-but-not-yet-migrated column (e.g. a column added to the schema
+// before its migration is applied to the live DB) can never take down auth. A
+// bare `db.select()` would emit every schema column; if one is missing in the DB,
+// Postgres throws "column does not exist" (42703) and EVERY authenticated request
+// 500s. We keep the fast path for the healthy case and only narrow on 42703.
+const CORE_USER_COLUMNS = {
+  id: usersTable.id,
+  tenantId: usersTable.tenantId,
+  email: usersTable.email,
+  token: usersTable.token,
+  oauthProvider: usersTable.oauthProvider,
+  oauthSubject: usersTable.oauthSubject,
+  createdAt: usersTable.createdAt,
+} as const;
+
+function isUndefinedColumnError(err: unknown): boolean {
+  return typeof err === "object" && err !== null && (err as { code?: string }).code === "42703";
+}
+
 export async function getUserByToken(token: string, tenantId?: string) {
   if (!UUID_RE.test(token)) return null;
-  const users = await db
-    .select()
-    .from(usersTable)
-    .where(
-      tenantId
-        ? and(eq(usersTable.token, token as any), eq(usersTable.tenantId, tenantId))
-        : eq(usersTable.token, token as any),
-    )
-    .limit(1);
-  return users[0] ?? null;
+  const whereClause = tenantId
+    ? and(eq(usersTable.token, token as any), eq(usersTable.tenantId, tenantId))
+    : eq(usersTable.token, token as any);
+  try {
+    const users = await db.select().from(usersTable).where(whereClause).limit(1);
+    return users[0] ?? null;
+  } catch (err) {
+    if (!isUndefinedColumnError(err)) throw err;
+    // A schema column is missing from the live DB (migration lag). Re-run with only
+    // the columns auth needs so login/sync keep working until the migration lands.
+    const rows = await db.select(CORE_USER_COLUMNS).from(usersTable).where(whereClause).limit(1);
+    const row = rows[0];
+    return row ? ({ ...row, pictureUrl: null } as typeof usersTable.$inferSelect) : null;
+  }
 }
 
 /**
