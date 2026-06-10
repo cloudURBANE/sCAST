@@ -207,8 +207,6 @@ function wardrobeNeedsIncompleteRecovery(item: Fragrance): boolean {
   if (fgMetricsComplete(item) || sourceCoverageComplete(item)) return false;
   const status = normalizedEnrichmentStatus(item);
   if (status !== 'completed' && status !== 'complete') return false;
-  const enrichment = item.enrichment ?? item.raw_engine_detail?.enrichment;
-  if ((enrichment?.requested_count ?? 0) >= MAX_ENRICHMENT_ATTEMPTS) return false;
   return hasFragranticaRefreshTarget(item);
 }
 
@@ -295,7 +293,7 @@ const getFragranceFamilies = (item: Fragrance): string[] => {
 const getFragranceAccords = (item: Fragrance): string[] => {
   const record = getFragranceRecord(item);
   const pyramid = isLooseRecord(record.pyramid) ? record.pyramid : null;
-  const dm = item.derived_metrics ?? item.raw_engine_detail?.derived_metrics ?? null;
+  const dm = item.raw_engine_detail?.derived_metrics ?? item.derived_metrics ?? null;
   const accordLabels = collectMainAccordDisplayRows(dm?.main_accords).map((r) => r.label);
   const dmNotes = dm?.notes;
 

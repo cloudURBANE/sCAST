@@ -1486,7 +1486,7 @@ export const Wardrobe: React.FC<{
   }, []);
 
   const selectedMetrics =
-    selectedItem?.derived_metrics ?? selectedItem?.raw_engine_detail?.derived_metrics ?? null;
+    selectedItem?.raw_engine_detail?.derived_metrics ?? selectedItem?.derived_metrics ?? null;
   const selectedCoverage =
     normalizeSourceCoverage(
       selectedItem?.source_coverage ?? selectedItem?.raw_engine_detail?.source_coverage,
