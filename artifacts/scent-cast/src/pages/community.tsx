@@ -1,7 +1,5 @@
 import React, { useEffect } from 'react';
-import { Wind } from 'lucide-react';
 import { AppTopNav } from '@/components/AppTopNav';
-import { APP_BRAND_MARK } from '@/lib/appBrand';
 import { CommunityHero } from '@/components/community/CommunityHero';
 import { BottleMarquee } from '@/components/community/BottleMarquee';
 import { FeaturedCaseGrid } from '@/components/community/FeaturedCaseGrid';
@@ -71,9 +69,14 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
 
       <footer className="relative z-10 border-t border-scent-accent/10 py-16 px-8 mt-24">
         <div className="max-w-[1400px] mx-auto text-center space-y-4">
-          <div className="flex items-center justify-center gap-2 opacity-30">
-            <Wind size={18} />
-            <p className="font-serif font-bold italic tracking-tighter uppercase">{APP_BRAND_MARK}</p>
+          <div className="flex items-center justify-center opacity-30">
+            <img
+              src="/nav/scentbeam-nav-logo.png"
+              srcSet="/nav/scentbeam-nav-logo.png 1x, /nav/scentbeam-nav-logo@2x.png 2x"
+              alt="ScentBeam"
+              className="h-5 w-auto"
+              draggable={false}
+            />
           </div>
           <p className="text-[10px] uppercase tracking-[0.2em] text-scent-muted">&copy; 2026 Olfactory Intelligence Systems</p>
         </div>

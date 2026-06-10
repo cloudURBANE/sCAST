@@ -97,7 +97,7 @@ function ReviewArrowButton({
       aria-label={label}
       title={label}
     >
-      <Icon size={15} strokeWidth={1.8} />
+      <Icon size={15} strokeWidth={1.75} />
     </button>
   );
 }
@@ -219,7 +219,7 @@ export function ReviewsPanel({ name, brand, reviews }: ReviewsPanelProps) {
             onClick={() => setRetryCount((c) => c + 1)}
             className="flex h-8 items-center justify-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.025] px-4 text-[9px] font-bold uppercase tracking-[0.24em] text-white/44 transition-colors hover:border-scent-accent/32 hover:bg-scent-accent/[0.06] hover:text-scent-accent"
           >
-            <RefreshCw size={11} className="text-inherit" />
+            <RefreshCw size={11} strokeWidth={1.75} className="text-inherit" />
             <span>Retry</span>
           </button>
         </div>
@@ -246,7 +246,7 @@ export function ReviewsPanel({ name, brand, reviews }: ReviewsPanelProps) {
         <ReviewsHeader />
         <div className="flex w-full flex-col items-center justify-center gap-4 px-4 py-5 animate-pulse sm:px-5">
           <div className="flex items-center gap-2">
-            <RefreshCw size={13} className="animate-spin text-white/40" />
+            <RefreshCw size={13} strokeWidth={1.75} className="animate-spin text-white/40" />
             <p className="text-[11px] uppercase tracking-[0.22em] text-white/40 font-bold">
               Distilling reviews...
             </p>
@@ -355,7 +355,7 @@ export function ReviewsPanel({ name, brand, reviews }: ReviewsPanelProps) {
                 className="flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.025] px-4 py-2 text-[9px] font-bold uppercase tracking-[0.24em] text-white/44 transition-colors hover:border-scent-accent/32 hover:bg-scent-accent/[0.06] hover:text-scent-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/22"
               >
                 <span>Collapse</span>
-                <ChevronUp size={11} className="opacity-70" />
+                <ChevronUp size={11} strokeWidth={1.75} className="opacity-70" />
               </button>
             </div>
           </motion.div>

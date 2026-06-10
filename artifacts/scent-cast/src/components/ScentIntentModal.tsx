@@ -90,7 +90,7 @@ export const ScentIntentModal: React.FC<ScentIntentModalProps> = ({ isOpen, onCl
             className="p-2 text-white/40 hover:text-white hover:bg-white/10 transition-all active:scale-95"
             aria-label="Close discovery flow"
           >
-            <X size={20} />
+            <X size={20} strokeWidth={1.75} />
           </button>
         </div>
 
@@ -137,6 +137,7 @@ export const ScentIntentModal: React.FC<ScentIntentModalProps> = ({ isOpen, onCl
                         type="button"
                         key={d.type}
                         onClick={() => setDestination(d.type)}
+                        aria-pressed={selected}
                         className={`p-3 sm:p-5 border text-left flex items-start gap-3 transition-all duration-200 active:scale-[0.97] group ${
                           selected
                             ? 'bg-white border-white'
@@ -145,6 +146,7 @@ export const ScentIntentModal: React.FC<ScentIntentModalProps> = ({ isOpen, onCl
                       >
                         <Icon
                           size={16}
+                          strokeWidth={1.75}
                           className={`mt-0.5 shrink-0 ${selected ? 'text-black' : 'text-white/30 group-hover:text-white/60'}`}
                         />
                         <div>
@@ -187,6 +189,7 @@ export const ScentIntentModal: React.FC<ScentIntentModalProps> = ({ isOpen, onCl
                         type="button"
                         key={e.type}
                         onClick={() => setEnergy(e.type)}
+                        aria-pressed={selected}
                         className={`p-3 sm:p-5 border text-left flex items-start gap-3 transition-all duration-200 active:scale-[0.97] group ${
                           selected
                             ? 'bg-white border-white'
@@ -195,6 +198,7 @@ export const ScentIntentModal: React.FC<ScentIntentModalProps> = ({ isOpen, onCl
                       >
                         <Icon
                           size={16}
+                          strokeWidth={1.75}
                           className={`mt-0.5 shrink-0 ${selected ? 'text-black' : 'text-white/30 group-hover:text-white/60'}`}
                         />
                         <div>
@@ -238,7 +242,7 @@ export const ScentIntentModal: React.FC<ScentIntentModalProps> = ({ isOpen, onCl
             className="px-6 sm:px-8 py-3 sm:py-4 bg-white text-black uppercase tracking-[0.3em] text-[10px] font-bold disabled:opacity-20 disabled:cursor-not-allowed flex items-center gap-3 hover:bg-white/90 active:scale-[0.97] transition-all duration-200"
           >
             {step === 2 ? 'Find My Match' : 'Proceed'}
-            <ArrowRight size={13} />
+            <ArrowRight size={13} strokeWidth={1.75} />
           </button>
         </div>
       </motion.div>

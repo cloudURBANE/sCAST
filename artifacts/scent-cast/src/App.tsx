@@ -486,7 +486,7 @@ function DashboardView() {
 
           <section className="scent-hero-zone mx-auto w-full max-w-2xl min-w-0 space-y-7 text-center">
             <h2 className="mx-auto max-w-full text-balance font-serif italic text-[clamp(2.15rem,7vw,3.8rem)] text-[#fff7ec] leading-[0.98] tracking-normal">
-              Find your signature for the current atmosphere.
+              Search for a fragrance, note, or brand.
             </h2>
             <FragranceCapture onAdd={handleAddItem} onVaultSearchStateChange={handleVaultSearchStateChange} />
             <AnimatePresence initial={false}>
@@ -591,7 +591,7 @@ function DashboardView() {
             >
               <p className="text-[9px] uppercase tracking-[0.4em] text-scent-accent font-bold">Strategic Alignment Found</p>
               <button ref={recommendationCloseRef} onClick={closeRecommendationOverlay} className="p-2 text-white/40 hover:text-white hover:bg-white/10 transition-all active:scale-95" aria-label="Close recommendation">
-                <X size={20} />
+                <X size={20} strokeWidth={1.75} />
               </button>
             </div>
 

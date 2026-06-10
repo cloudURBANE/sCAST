@@ -84,14 +84,14 @@ const MobileAccountMenu: React.FC<MobileAccountMenuProps> = ({
         className="cursor-pointer rounded-[6px] px-3 py-2.5 text-[12px] uppercase tracking-[0.18em] text-[#f4debd] focus:bg-scent-accent/15 focus:text-white"
         onSelect={onShare}
       >
-        <Share2 size={15} />
+        <Share2 size={15} strokeWidth={1.75} />
         Share
       </DropdownMenuItem>
       <DropdownMenuItem
         className="cursor-pointer rounded-[6px] px-3 py-2.5 text-[12px] uppercase tracking-[0.18em] text-[#f4debd] focus:bg-scent-accent/15 focus:text-white"
         onSelect={onSignOut}
       >
-        <LogOut size={15} />
+        <LogOut size={15} strokeWidth={1.75} />
         Sign Out
       </DropdownMenuItem>
     </DropdownMenuContent>

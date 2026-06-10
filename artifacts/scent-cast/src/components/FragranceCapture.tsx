@@ -712,7 +712,7 @@ export const FragranceCapture: React.FC<{
     >
       <ScentIntelligenceLoader
         status={loadingStatus}
-        substatus="Processing Olfactory Data"
+        substatus="Adding to your vault…"
         complete={syncComplete}
       />
     </motion.div>
@@ -742,7 +742,7 @@ export const FragranceCapture: React.FC<{
     >
       <ScentIntelligenceLoader
         status={loadingStatus}
-        substatus="Processing Olfactory Data"
+        substatus="Searching fragrances…"
         complete={syncComplete}
       />
     </motion.div>
@@ -833,10 +833,21 @@ export const FragranceCapture: React.FC<{
                 animate={reduceMotion || uploading ? undefined : { opacity: [0.74, 1, 0.74] }}
                 transition={reduceMotion || uploading ? undefined : { duration: 3.4, repeat: Infinity, ease: 'easeInOut' }}
               >
-                <Search size={18} strokeWidth={1.65} className="drop-shadow-[0_0_12px_rgba(212,175,55,0.22)]" />
+                <Search size={18} strokeWidth={1.75} className="drop-shadow-[0_0_12px_rgba(212,175,55,0.22)]" />
               </motion.span>
             </motion.button>
           </form>
+        </div>
+
+        {/* Screen-reader announcement for dynamic search results */}
+        <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+          {uploading
+            ? ''
+            : hasSearched
+              ? matches.length > 0
+                ? `${matches.length} fragrance ${matches.length === 1 ? 'result' : 'results'} loaded`
+                : 'No fragrance matches found'
+              : ''}
         </div>
 
         <AnimatePresence>

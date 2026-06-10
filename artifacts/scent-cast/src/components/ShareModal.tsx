@@ -215,10 +215,12 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                 </div>
               </div>
               <button
+                type="button"
                 onClick={onClose}
+                aria-label="Close share options"
                 className="p-2 bg-white/5 hover:bg-white/10 transition-all rounded-full border border-white/10 text-white group shrink-0 ml-3"
               >
-                <X size={16} className="group-hover:rotate-90 transition-transform duration-300" />
+                <X size={16} strokeWidth={1.75} className="group-hover:rotate-90 transition-transform duration-300" />
               </button>
             </div>
 
@@ -232,7 +234,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                   onClick={handleCopy}
                   className="px-4 py-3 bg-white text-black text-[9px] uppercase tracking-[0.3em] font-bold flex items-center gap-2 hover:bg-white/90 active:scale-[0.97] transition-all shrink-0"
                 >
-                  {copied ? <><Check size={11} /> Copied</> : <><Link size={11} /> Copy</>}
+                  {copied ? <><Check size={11} strokeWidth={1.75} /> Copied</> : <><Link size={11} strokeWidth={1.75} /> Copy</>}
                 </button>
               </div>
               <a
@@ -241,7 +243,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                 rel="noopener noreferrer"
                 className="flex items-center justify-center gap-2 w-full py-2.5 border border-white/8 text-white/30 hover:text-white hover:border-white/20 transition-all text-[9px] uppercase tracking-[0.35em] font-bold"
               >
-                <ExternalLink size={10} />
+                <ExternalLink size={10} strokeWidth={1.75} />
                 Preview Shared Page
               </a>
               <button
@@ -250,7 +252,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                 disabled={!authToken || hideImagesBusy}
                 className="w-full py-2.5 border border-white/8 bg-white/[0.02] disabled:opacity-45 disabled:cursor-not-allowed text-[9px] uppercase tracking-[0.3em] font-bold transition-all flex items-center justify-center gap-2 text-white/70 hover:text-white hover:border-white/20"
               >
-                {hideImages ? <EyeOff size={11} /> : <Eye size={11} />}
+                {hideImages ? <EyeOff size={11} strokeWidth={1.75} /> : <Eye size={11} strokeWidth={1.75} />}
                 {hideImages ? 'Shared images hidden' : 'Shared images visible'}
               </button>
             </div>
@@ -280,7 +282,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
 
                 {items.length > 5 && (
                   <div className="relative">
-                    <Search size={11} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/20" />
+                    <Search size={11} strokeWidth={1.75} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/20" />
                     <input
                       ref={searchRef}
                       type="text"
@@ -345,9 +347,9 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                         {isPending ? (
                           <div className="w-4 h-4 border border-white/20 border-t-white/60 rounded-full animate-spin" />
                         ) : isHidden ? (
-                          <EyeOff size={15} className="text-white/20 group-hover:text-white/50 transition-colors" />
+                          <EyeOff size={15} strokeWidth={1.75} className="text-white/20 group-hover:text-white/50 transition-colors" />
                         ) : (
-                          <Eye size={15} className="text-white/50 group-hover:text-white transition-colors" />
+                          <Eye size={15} strokeWidth={1.75} className="text-white/50 group-hover:text-white transition-colors" />
                         )}
                       </div>
                     </motion.button>

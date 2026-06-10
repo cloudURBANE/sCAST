@@ -662,7 +662,7 @@ function ProfileScorePanel({
             : "min-w-0 h-full flex flex-col items-center justify-center gap-1 border border-white/15 bg-white/[0.035] px-4 py-5 text-center"
         }
       >
-        <Icon size={compact ? 14 : 18} strokeWidth={1.6} className="text-scent-accent" />
+        <Icon size={compact ? 14 : 18} strokeWidth={1.75} className="text-scent-accent" />
         {stat.cycle.length > 0 ? (
           <CyclingTilePair
             parts={stat.cycle}
@@ -1349,7 +1349,7 @@ export const Wardrobe: React.FC<{
                       title="Restore the vault list from before the last automatic rebuild (this tab only)"
                       className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-white/15 bg-white/[0.04] text-white/70 text-[10px] uppercase tracking-[0.2em] font-bold hover:bg-white/[0.08] hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                     >
-                      <Undo2 size={14} />
+                      <Undo2 size={14} strokeWidth={1.75} />
                       Revert
                     </button>
                   </div>
@@ -1370,7 +1370,7 @@ export const Wardrobe: React.FC<{
               <label htmlFor="wardrobe-vault-search" className="sr-only">
                 Search vault fragrances and image hints
               </label>
-              <Search size={23} strokeWidth={1.5} className="pointer-events-none absolute left-5 sm:left-6 top-1/2 z-10 -translate-y-1/2 text-scent-accent/82" />
+              <Search size={23} strokeWidth={1.75} className="pointer-events-none absolute left-5 sm:left-6 top-1/2 z-10 -translate-y-1/2 text-scent-accent/82" />
               <input
                 id="wardrobe-vault-search"
                 type="text"
@@ -1477,7 +1477,12 @@ export const Wardrobe: React.FC<{
               ) : null}
             </div>
             <div className="scent-full-bleed w-full">
-              <div className="scent-entry-count w-full font-serif italic text-xl sm:text-2xl whitespace-nowrap">
+              <div
+                className="scent-entry-count w-full font-serif italic text-xl sm:text-2xl whitespace-nowrap"
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+              >
                 <span>{filteredItems.length} Entries</span>
               </div>
             </div>
@@ -1615,14 +1620,14 @@ export const Wardrobe: React.FC<{
             ))
           ) : !searchQuery && (
             <div className="py-32 text-center border border-dashed border-white/5 rounded-scent flex flex-col items-center gap-6">
-              <p className="font-serif italic text-4xl text-white/10">The vault is currently vacant</p>
+              <p className="font-serif italic text-4xl text-white/10">Your fragrance vault is empty</p>
               {onExpandArchive && (
                 <button
                   type="button"
                   onClick={onExpandArchive}
                   className="text-[11px] uppercase tracking-[0.22em] text-scent-accent/55 font-bold hover:text-scent-accent/80 transition-colors border border-scent-accent/20 hover:border-scent-accent/40 px-5 py-2.5 rounded-full"
                 >
-                  Add your first fragrance
+                  Add a fragrance
                 </button>
               )}
             </div>
@@ -1710,7 +1715,7 @@ export const Wardrobe: React.FC<{
                             aria-label="Toggle bottle image controls"
                             aria-expanded={bottleImageToolsOpen}
                           >
-                            <HelpCircle size={13} />
+                            <HelpCircle size={13} strokeWidth={1.75} />
                           </button>
                         }
                       >
@@ -1739,7 +1744,7 @@ export const Wardrobe: React.FC<{
                                 className="inline-flex items-center gap-1.5 rounded-md border border-white/15 bg-white/[0.04] px-3.5 py-1.5 text-[9px] uppercase tracking-[0.2em] font-bold text-white/62 transition-colors hover:border-scent-accent/35 hover:bg-scent-accent/[0.08] hover:text-scent-accent"
                                 aria-label="Enlarge bottle image"
                               >
-                                <Maximize2 size={13} strokeWidth={2} />
+                                <Maximize2 size={13} strokeWidth={1.75} />
                                 Enlarge
                               </button>
                             </div>
@@ -1803,11 +1808,11 @@ export const Wardrobe: React.FC<{
                                   >
                                     {refreshingId === selectedItem.id ? (
                                       <>
-                                        <RefreshCw size={11} className="animate-spin" /> Searching…
+                                        <RefreshCw size={11} strokeWidth={1.75} className="animate-spin" /> Searching…
                                       </>
                                     ) : (
                                       <>
-                                        <RefreshCw size={11} /> Find image
+                                        <RefreshCw size={11} strokeWidth={1.75} /> Find image
                                       </>
                                     )}
                                   </button>
@@ -1826,11 +1831,11 @@ export const Wardrobe: React.FC<{
                                   >
                                     {selectedReimagining ? (
                                       <>
-                                        <RefreshCw size={11} className="animate-spin" /> Reimagining…
+                                        <RefreshCw size={11} strokeWidth={1.75} className="animate-spin" /> Reimagining…
                                       </>
                                     ) : (
                                       <>
-                                        <Sparkles size={11} /> Reimagine
+                                        <Sparkles size={11} strokeWidth={1.75} /> Reimagine
                                       </>
                                     )}
                                   </button>
@@ -1872,13 +1877,13 @@ export const Wardrobe: React.FC<{
                                       aria-label="Reset bottle frame"
                                       className="p-1 rounded-md border border-white/10 bg-white/[0.04] text-white/45 hover:text-white hover:bg-white/[0.08] disabled:opacity-30"
                                     >
-                                      <RotateCcw size={11} />
+                                      <RotateCcw size={11} strokeWidth={1.75} />
                                     </button>
                                   </div>
 
                                   <div className="grid grid-cols-[4.5rem_1fr_2.5rem] items-center gap-1.5">
                                     <label className="flex items-center gap-1 text-[8px] uppercase tracking-[0.14em] text-white/42 font-bold">
-                                      <ZoomIn size={10} /> Size
+                                      <ZoomIn size={10} strokeWidth={1.75} /> Size
                                     </label>
                                     <input
                                       type="range"
@@ -1896,7 +1901,7 @@ export const Wardrobe: React.FC<{
                                     </span>
 
                                     <label className="flex items-center gap-1 text-[8px] uppercase tracking-[0.14em] text-white/42 font-bold">
-                                      <MoveHorizontal size={10} /> X
+                                      <MoveHorizontal size={10} strokeWidth={1.75} /> X
                                     </label>
                                     <input
                                       type="range"
@@ -1914,7 +1919,7 @@ export const Wardrobe: React.FC<{
                                     </span>
 
                                     <label className="flex items-center gap-1 text-[8px] uppercase tracking-[0.14em] text-white/42 font-bold">
-                                      <MoveVertical size={10} /> Y
+                                      <MoveVertical size={10} strokeWidth={1.75} /> Y
                                     </label>
                                     <input
                                       type="range"
@@ -1932,7 +1937,7 @@ export const Wardrobe: React.FC<{
                                     </span>
 
                                     <label className="flex items-center gap-1 text-[8px] uppercase tracking-[0.14em] text-white/42 font-bold">
-                                      <ArrowUp size={10} /> Top
+                                      <ArrowUp size={10} strokeWidth={1.75} /> Top
                                     </label>
                                     <input
                                       type="range"
@@ -1950,7 +1955,7 @@ export const Wardrobe: React.FC<{
                                     </span>
 
                                     <label className="flex items-center gap-1 text-[8px] uppercase tracking-[0.14em] text-white/42 font-bold">
-                                      <ArrowRight size={10} /> Right
+                                      <ArrowRight size={10} strokeWidth={1.75} /> Right
                                     </label>
                                     <input
                                       type="range"
@@ -1968,7 +1973,7 @@ export const Wardrobe: React.FC<{
                                     </span>
 
                                     <label className="flex items-center gap-1 text-[8px] uppercase tracking-[0.14em] text-white/42 font-bold">
-                                      <ArrowDown size={10} /> Bottom
+                                      <ArrowDown size={10} strokeWidth={1.75} /> Bottom
                                     </label>
                                     <input
                                       type="range"
@@ -1986,7 +1991,7 @@ export const Wardrobe: React.FC<{
                                     </span>
 
                                     <label className="flex items-center gap-1 text-[8px] uppercase tracking-[0.14em] text-white/42 font-bold">
-                                      <ArrowLeft size={10} /> Left
+                                      <ArrowLeft size={10} strokeWidth={1.75} /> Left
                                     </label>
                                     <input
                                       type="range"
@@ -2011,7 +2016,7 @@ export const Wardrobe: React.FC<{
                                       disabled={imageToolbarBusy || !detailBottleUrl?.trim()}
                                       className="min-h-[30px] rounded-md border border-white/10 bg-white/[0.035] text-[8px] uppercase tracking-[0.13em] text-white/52 font-bold flex items-center justify-center gap-1.5 disabled:opacity-30 hover:bg-white/[0.06] hover:text-white"
                                     >
-                                      <ZoomOut size={10} /> 10%
+                                      <ZoomOut size={10} strokeWidth={1.75} /> 10%
                                     </button>
                                     <button
                                       type="button"
@@ -2019,7 +2024,7 @@ export const Wardrobe: React.FC<{
                                       disabled={imageToolbarBusy || !detailBottleUrl?.trim()}
                                       className="min-h-[30px] rounded-md border border-white/10 bg-white/[0.035] text-[8px] uppercase tracking-[0.13em] text-white/52 font-bold flex items-center justify-center gap-1.5 disabled:opacity-30 hover:bg-white/[0.06] hover:text-white"
                                     >
-                                      <ZoomIn size={10} /> 10%
+                                      <ZoomIn size={10} strokeWidth={1.75} /> 10%
                                     </button>
                                     <button
                                       type="button"
@@ -2027,7 +2032,7 @@ export const Wardrobe: React.FC<{
                                       disabled={imageToolbarBusy || !detailBottleUrl?.trim()}
                                       className="min-h-[30px] rounded-md border border-white/10 bg-white/[0.035] text-[8px] uppercase tracking-[0.13em] text-white/52 font-bold flex items-center justify-center gap-1.5 disabled:opacity-30 hover:bg-white/[0.06] hover:text-white"
                                     >
-                                      <MoveHorizontal size={10} /> Center
+                                      <MoveHorizontal size={10} strokeWidth={1.75} /> Center
                                     </button>
                                     <button
                                       type="button"
@@ -2055,7 +2060,7 @@ export const Wardrobe: React.FC<{
                                       disabled={imageToolbarBusy || !detailBottleUrl?.trim()}
                                       className="min-h-[30px] rounded-md border border-white/10 bg-white/[0.035] text-[8px] uppercase tracking-[0.13em] text-white/52 font-bold flex items-center justify-center gap-1.5 disabled:opacity-30 hover:bg-white/[0.06] hover:text-white"
                                     >
-                                      <Crop size={10} /> Tight
+                                      <Crop size={10} strokeWidth={1.75} /> Tight
                                     </button>
                                   </div>
 
@@ -2068,11 +2073,11 @@ export const Wardrobe: React.FC<{
                                     >
                                       {persistBusy ? (
                                         <>
-                                          <RefreshCw size={11} className="animate-spin" /> Saving...
+                                          <RefreshCw size={11} strokeWidth={1.75} className="animate-spin" /> Saving...
                                         </>
                                       ) : (
                                         <>
-                                          <Save size={11} /> Save framing
+                                          <Save size={11} strokeWidth={1.75} /> Save framing
                                         </>
                                       )}
                                     </button>
@@ -2111,11 +2116,11 @@ export const Wardrobe: React.FC<{
                                       >
                                         {persistBusy ? (
                                           <>
-                                            <RefreshCw size={11} className="animate-spin" /> Saving…
+                                            <RefreshCw size={11} strokeWidth={1.75} className="animate-spin" /> Saving…
                                           </>
                                         ) : (
                                           <>
-                                            <Check size={11} /> Save to vault
+                                            <Check size={11} strokeWidth={1.75} /> Save to vault
                                           </>
                                         )}
                                       </button>
@@ -2194,7 +2199,7 @@ export const Wardrobe: React.FC<{
                         : 'text-white/35 hover:bg-red-500/[0.06] hover:text-red-400'
                     }`}
                   >
-                    <Trash2 size={14} className={deleteConfirming ? '' : 'group-hover:animate-bounce'} />
+                    <Trash2 size={14} strokeWidth={1.75} className={deleteConfirming ? '' : 'group-hover:animate-bounce'} />
                     <span className="hidden sm:inline">
                       {deleteConfirming ? 'Confirm delete' : 'Delete from vault'}
                     </span>
@@ -2225,7 +2230,7 @@ export const Wardrobe: React.FC<{
                     className="absolute top-4 right-4 z-10 p-2 rounded-full border border-white/15 bg-white/10 text-white hover:bg-white/20 transition-colors"
                     aria-label="Close enlarged view"
                   >
-                    <X size={22} />
+                    <X size={22} strokeWidth={1.75} />
                   </button>
                   <div
                     className="relative w-full max-w-[min(100%,28rem)] aspect-[3/4] max-h-[78dvh] min-h-0"
