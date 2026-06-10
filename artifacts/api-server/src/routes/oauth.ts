@@ -78,12 +78,17 @@ async function findUserByEmail(email: string, tenantId: string): Promise<UserRow
 async function linkGoogleSubjectBestEffort(
   userId: string,
   subject: string,
+  pictureUrl: string | null,
   req: import("express").Request,
 ): Promise<void> {
   try {
     await db
       .update(usersTable)
-      .set({ oauthProvider: "google", oauthSubject: subject })
+      .set({
+        oauthProvider: "google",
+        oauthSubject: subject,
+        ...(pictureUrl ? { pictureUrl } : {}),
+      })
       .where(eq(usersTable.id, userId));
   } catch (err) {
     // Do not fail login when optional OAuth-link columns are missing/unmigrated.
@@ -94,13 +99,20 @@ async function linkGoogleSubjectBestEffort(
 async function createGoogleUserWithFallback(
   email: string,
   subject: string,
+  pictureUrl: string | null,
   tenantId: string,
   req: import("express").Request,
 ): Promise<UserRow> {
   try {
     const [created] = await db
       .insert(usersTable)
-      .values({ tenantId, email, oauthProvider: "google", oauthSubject: subject })
+      .values({
+        tenantId,
+        email,
+        oauthProvider: "google",
+        oauthSubject: subject,
+        ...(pictureUrl ? { pictureUrl } : {}),
+      })
       .returning();
     if (created) return created;
   } catch (err) {
@@ -152,6 +164,23 @@ async function ensureUserToken(
   }
 
   return updated;
+}
+
+async function updateUserPictureBestEffort(
+  userId: string,
+  pictureUrl: string | null,
+  req: import("express").Request,
+): Promise<void> {
+  if (!pictureUrl) return;
+
+  try {
+    await db
+      .update(usersTable)
+      .set({ pictureUrl })
+      .where(eq(usersTable.id, userId));
+  } catch (err) {
+    req.log.warn({ err, userId }, "Skipping OAuth picture update for user");
+  }
 }
 
 router.get("/auth/google", (req, res) => {
@@ -239,6 +268,7 @@ router.get("/auth/google/callback", async (req, res) => {
 
     const email = googleUser.email.toLowerCase();
     const subject = googleUser.sub;
+    const pictureUrl = googleUser.picture?.trim() || null;
     const tenantId = getTenantId(req);
     let user = await findUserByOAuthSubject(subject, tenantId, req);
 
@@ -246,9 +276,9 @@ router.get("/auth/google/callback", async (req, res) => {
       const byEmail = await findUserByEmail(email, tenantId);
       if (byEmail) {
         user = byEmail;
-        await linkGoogleSubjectBestEffort(byEmail.id, subject, req);
+        await linkGoogleSubjectBestEffort(byEmail.id, subject, pictureUrl, req);
       } else {
-        user = await createGoogleUserWithFallback(email, subject, tenantId, req);
+        user = await createGoogleUserWithFallback(email, subject, pictureUrl, tenantId, req);
       }
     }
 
@@ -257,6 +287,7 @@ router.get("/auth/google/callback", async (req, res) => {
     }
 
     user = await ensureUserToken(user, req);
+    await updateUserPictureBestEffort(user.id, pictureUrl, req);
 
     if (!user.token) {
       throw new Error("OAuth callback resolved user without token/email");
@@ -266,8 +297,8 @@ router.get("/auth/google/callback", async (req, res) => {
       oauth_token: user.token,
       oauth_email: user.email,
     });
-    if (googleUser.picture) {
-      params.set("oauth_picture", googleUser.picture);
+    if (pictureUrl) {
+      params.set("oauth_picture", pictureUrl);
     }
 
     res.redirect(`/?${params}`);

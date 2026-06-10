@@ -15,6 +15,7 @@ export interface CommunityAuthor {
   id: string;
   email: string;
   shareId: string;
+  pictureUrl?: string;
 }
 
 export interface CommunityFragranceSnapshot {

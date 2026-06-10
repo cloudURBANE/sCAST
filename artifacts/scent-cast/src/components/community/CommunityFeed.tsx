@@ -100,7 +100,7 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
 
   if (isError) {
     return (
-      <div className="rounded-[var(--radius-scent)] border border-red-500/20 bg-red-500/[0.055] p-6 text-center">
+      <div className="mx-auto w-full max-w-[960px] rounded-[var(--radius-scent)] border border-red-500/20 bg-red-500/[0.055] p-6 text-center">
         <p className="text-sm font-medium text-red-100">
           {error instanceof Error ? error.message : 'Community feed is unavailable.'}
         </p>
@@ -141,7 +141,7 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
   }
 
   return (
-    <div className="space-y-6" aria-busy={isRefetching || isFetchingNextPage}>
+    <div className="mx-auto w-full max-w-[960px] space-y-6" aria-busy={isRefetching || isFetchingNextPage}>
       {posts.map((post) => (
         <PostCard key={post.id} post={post} authToken={authToken} onSignIn={onSignIn} />
       ))}

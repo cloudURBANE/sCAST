@@ -29,6 +29,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 type TenantUser = {
   id: string;
   email: string;
+  pictureUrl: string | null;
 };
 
 type PostRow = {
@@ -42,6 +43,7 @@ type PostRow = {
   createdAt: Date;
   updatedAt: Date;
   authorEmail: string;
+  authorPictureUrl: string | null;
 };
 
 type CommentRow = {
@@ -53,6 +55,7 @@ type CommentRow = {
   body: string;
   createdAt: Date;
   authorEmail: string;
+  authorPictureUrl: string | null;
 };
 
 type FragranceSnapshot = {
@@ -273,7 +276,7 @@ function voteTalliesFromRows(rows: Array<{ postId: string; choice: string; count
 
 async function tenantUsersById(tenantId: string) {
   const users = await db
-    .select({ id: usersTable.id, email: usersTable.email })
+    .select({ id: usersTable.id, email: usersTable.email, pictureUrl: usersTable.pictureUrl })
     .from(usersTable)
     .where(eq(usersTable.tenantId, tenantId));
   return {
@@ -287,6 +290,7 @@ function authorDto(user: TenantUser, tenantUsers: TenantUser[]) {
     id: user.id,
     email: user.email,
     shareId: shareIdForUser(user, tenantUsers),
+    ...(user.pictureUrl ? { pictureUrl: user.pictureUrl } : {}),
   };
 }
 
@@ -376,7 +380,7 @@ async function buildPostDtos(tenantId: string, posts: PostRow[]) {
   const usersById = tenantUsersResult.byId;
 
   return posts.map((post) => {
-    const fallbackAuthor = { id: post.userId, email: post.authorEmail };
+    const fallbackAuthor = { id: post.userId, email: post.authorEmail, pictureUrl: post.authorPictureUrl };
     const author = usersById.get(post.userId) ?? fallbackAuthor;
     const shareUsers = usersById.has(post.userId) ? tenantUsers : [...tenantUsers, fallbackAuthor];
 
@@ -426,7 +430,7 @@ async function buildCommentDtos(tenantId: string, comments: CommentRow[]) {
   const usersById = tenantUsersResult.byId;
 
   return comments.map((comment) => {
-    const fallbackAuthor = { id: comment.userId, email: comment.authorEmail };
+    const fallbackAuthor = { id: comment.userId, email: comment.authorEmail, pictureUrl: comment.authorPictureUrl };
     const author = usersById.get(comment.userId) ?? fallbackAuthor;
     const shareUsers = usersById.has(comment.userId) ? tenantUsers : [...tenantUsers, fallbackAuthor];
 
@@ -457,6 +461,7 @@ async function fetchPostRowById(tenantId: string, postId: string): Promise<PostR
       createdAt: communityPostsTable.createdAt,
       updatedAt: communityPostsTable.updatedAt,
       authorEmail: usersTable.email,
+      authorPictureUrl: usersTable.pictureUrl,
     })
     .from(communityPostsTable)
     .innerJoin(
@@ -576,6 +581,7 @@ router.get("/community/posts", async (req, res, next) => {
         createdAt: communityPostsTable.createdAt,
         updatedAt: communityPostsTable.updatedAt,
         authorEmail: usersTable.email,
+        authorPictureUrl: usersTable.pictureUrl,
       })
       .from(communityPostsTable)
       .innerJoin(
@@ -624,6 +630,7 @@ router.get("/community/posts/:id", async (req, res, next) => {
         body: communityCommentsTable.body,
         createdAt: communityCommentsTable.createdAt,
         authorEmail: usersTable.email,
+        authorPictureUrl: usersTable.pictureUrl,
       })
       .from(communityCommentsTable)
       .innerJoin(
@@ -717,7 +724,7 @@ router.post("/community/posts", requireAuth, async (req: AuthRequest, res, next)
       return post;
     });
 
-    const [post] = await buildPostDtos(tenantId, [{ ...inserted, authorEmail: user.email }]);
+    const [post] = await buildPostDtos(tenantId, [{ ...inserted, authorEmail: user.email, authorPictureUrl: user.pictureUrl }]);
     res.status(201).json({ post });
   } catch (err) {
     next(err);
@@ -758,7 +765,7 @@ router.post("/community/posts/:id/comments", requireAuth, async (req: AuthReques
       .returning();
     if (!inserted) throw new Error("Failed to create community comment");
 
-    const [comment] = await buildCommentDtos(tenantId, [{ ...inserted, authorEmail: user.email }]);
+    const [comment] = await buildCommentDtos(tenantId, [{ ...inserted, authorEmail: user.email, authorPictureUrl: user.pictureUrl }]);
     res.status(201).json({ comment });
   } catch (err) {
     next(err);

@@ -17,6 +17,7 @@ export const usersTable = pgTable(
     token: uuid("token").notNull().defaultRandom(),
     oauthProvider: text("oauth_provider"),
     oauthSubject: text("oauth_subject"),
+    pictureUrl: text("picture_url"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => [
