@@ -52,7 +52,7 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
     fetchNextPage,
     isFetchingNextPage,
     isRefetching,
-  } = useCommunityPosts(filters);
+  } = useCommunityPosts(filters, authToken);
 
   const posts = useMemo(
     () => data?.pages.flatMap((page) => page.posts) ?? [],

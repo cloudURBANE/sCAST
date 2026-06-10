@@ -368,6 +368,12 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
       resetComposer();
       setComposerOpen(false);
       setStatusMessage('Room opened in the community.');
+      // Bring the composer/feed back into view so the freshly created room is
+      // visible right after the form collapses, instead of leaving the user
+      // scrolled down inside the (now closed) editor.
+      requestAnimationFrame(() => {
+        sectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
     } catch (err) {
       setStatusMessage(err instanceof Error ? err.message : 'Post could not be created.');
     }

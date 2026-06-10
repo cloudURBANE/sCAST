@@ -1,4 +1,4 @@
-import React, { useId, useMemo, useState } from 'react';
+import React, { useEffect, useId, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   BadgeDollarSign,
@@ -162,16 +162,32 @@ const BattleVotes: React.FC<{
 }> = ({ post, authToken, onSignIn }) => {
   const voteMutation = useCommunityBattleVote(authToken);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // Replay a tap made while logged out, once the viewer signs in.
+  const [pendingChoice, setPendingChoice] = useState<string | null>(null);
   const options = battleOptions(post);
   const totalVotes = useMemo(
     () => options.reduce((sum, option) => sum + (post.votes[option] ?? 0), 0),
     [options, post.votes],
   );
+  const hasVoted = Boolean(post.viewerVote);
+  const { mutate } = voteMutation;
+
+  useEffect(() => {
+    if (!authToken || !pendingChoice) return;
+    const choice = pendingChoice;
+    setPendingChoice(null);
+    setErrorMessage(null);
+    mutate(
+      { postId: post.id, choice },
+      { onError: (err) => setErrorMessage(err instanceof Error ? err.message : 'Vote could not be saved.') },
+    );
+  }, [authToken, pendingChoice, mutate, post.id]);
 
   if (options.length !== 2) return null;
 
   const submitVote = (choice: string) => {
     if (!authToken) {
+      setPendingChoice(choice);
       onSignIn();
       return;
     }
@@ -191,23 +207,39 @@ const BattleVotes: React.FC<{
       {options.map((option) => {
         const count = post.votes[option] ?? 0;
         const pct = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
+        const picked = post.viewerVote === option;
         return (
           <button
             key={option}
             type="button"
             onClick={() => submitVote(option)}
             disabled={voteMutation.isPending}
-            className="group relative w-full overflow-hidden rounded-[14px] border border-scent-accent/16 bg-black/58 px-4 py-3 text-left transition-colors hover:border-scent-accent/38 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 disabled:pointer-events-none disabled:opacity-55"
+            aria-pressed={picked}
+            className={[
+              'group relative w-full overflow-hidden rounded-[14px] border px-4 py-3 text-left transition-colors hover:border-scent-accent/38 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 disabled:pointer-events-none disabled:opacity-55',
+              picked ? 'border-scent-accent/55 bg-scent-accent/[0.06]' : 'border-scent-accent/16 bg-black/58',
+            ].join(' ')}
           >
             <span
-              className="absolute inset-y-0 left-0 bg-scent-accent/[0.075] transition-[width]"
+              className={[
+                'absolute inset-y-0 left-0 transition-[width]',
+                picked ? 'bg-scent-accent/[0.16]' : 'bg-scent-accent/[0.075]',
+              ].join(' ')}
               style={{ width: `${pct}%` }}
               aria-hidden="true"
             />
             <span className="relative z-10 flex items-center justify-between gap-4">
-              <span className="min-w-0 truncate font-serif text-lg italic text-[#fff7ec]">{option}</span>
+              <span className="flex min-w-0 items-center gap-2">
+                <span className="min-w-0 truncate font-serif text-lg italic text-[#fff7ec]">{option}</span>
+                {picked ? (
+                  <span className="shrink-0 rounded-full border border-scent-accent/40 bg-scent-accent/[0.1] px-2 py-0.5 scent-type-meta uppercase text-scent-accent">
+                    Your pick
+                  </span>
+                ) : null}
+              </span>
+              {/* Once the viewer has voted the tally reads as results. */}
               <span className="shrink-0 font-mono text-[13px] text-scent-accent">
-                {pct}% ({count})
+                {hasVoted ? `${pct}% (${count})` : `${count}`}
               </span>
             </span>
           </button>
@@ -291,6 +323,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post, authToken, onSignIn })
           targetType="post"
           targetId={post.id}
           counts={post.counts.reactions}
+          viewerReactions={post.viewerReactions}
           authToken={authToken}
           onSignIn={onSignIn}
         />
@@ -302,7 +335,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post, authToken, onSignIn })
           aria-label={commentsOpen ? 'Hide comments' : `View ${post.counts.comments} comments`}
         >
           <MessageCircle size={14} strokeWidth={1.8} aria-hidden="true" />
-          {post.counts.comments} comments
+          {post.counts.comments > 0 ? `${post.counts.comments} comments` : 'Comment'}
           {commentsOpen ? (
             <ChevronUp size={14} strokeWidth={1.8} aria-hidden="true" />
           ) : (
