@@ -1632,7 +1632,7 @@ export const Wardrobe: React.FC<{
                 }}
                 placeholder="Search vault (e.g. sauvage)..."
                 autoComplete="off"
-                className="scent-lux-input scent-vault-search-input w-full h-[58px] pl-7 pr-14 text-left text-[#fff7ec] font-sans text-[15px] outline-none transition-all placeholder:text-scent-text-subtle sm:h-[68px] sm:pl-8 sm:pr-16 sm:text-base"
+                className="scent-lux-input scent-vault-search-input w-full h-[58px] px-14 text-center text-[#fff7ec] font-sans text-[15px] outline-none transition-all placeholder:text-scent-text-subtle sm:h-[68px] sm:px-16 sm:text-base"
               />
               <AnimatePresence>
                 {searchDropdownOpen ? (
@@ -1687,6 +1687,11 @@ export const Wardrobe: React.FC<{
               </AnimatePresence>
 
             </div>
+            <VaultGridModeToggle
+              mode={gridMode}
+              onChange={setGridMode}
+              className="sm:hidden"
+            />
             <div className="scent-full-bleed w-full">
               <div
                 className="scent-entry-count w-full font-serif italic text-xl sm:text-2xl whitespace-nowrap"
@@ -1697,11 +1702,6 @@ export const Wardrobe: React.FC<{
                 <span>{filteredItems.length} Entries</span>
               </div>
             </div>
-            <VaultGridModeToggle
-              mode={gridMode}
-              onChange={setGridMode}
-              className="sm:hidden"
-            />
           </div>
         </div>
 

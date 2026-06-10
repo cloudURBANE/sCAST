@@ -743,16 +743,16 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                 <p className="text-[10px] uppercase tracking-[0.6em] text-white/40 font-bold">Shared Vault</p>
                 <h2 className="font-serif italic text-[clamp(2.65rem,8vw,5.35rem)] text-[#fff7ec] tracking-normal leading-none">Vault of Aromas</h2>
               </div>
-              <div className="scent-full-bleed w-full">
-                <div className="scent-entry-count w-full font-serif italic text-xl sm:text-2xl whitespace-nowrap">
-                  <span>{data.fragrances.length} Entries</span>
-                </div>
-              </div>
               <VaultGridModeToggle
                 mode={gridMode}
                 onChange={setGridMode}
                 className="sm:hidden"
               />
+              <div className="scent-full-bleed w-full">
+                <div className="scent-entry-count w-full font-serif italic text-xl sm:text-2xl whitespace-nowrap">
+                  <span>{data.fragrances.length} Entries</span>
+                </div>
+              </div>
               {data.hideImages ? (
                 <p className="text-[10px] uppercase tracking-[0.3em] text-scent-gold-200/65 font-bold">
                   Owner currently hides bottle images on public view

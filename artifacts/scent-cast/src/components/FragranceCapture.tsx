@@ -1079,7 +1079,7 @@ export const FragranceCapture: React.FC<{
               onBlur={() => setSearchFocused(false)}
               placeholder="Search by house or fragrance..."
               aria-label="Look up a brand or fragrance"
-              className="scent-lux-input scent-vault-search-input relative z-0 w-full h-[60px] pl-7 pr-16 text-left text-[#fff7ec] font-sans text-base font-medium outline-none transition-colors placeholder:text-scent-text-subtle placeholder:font-medium sm:h-[68px] sm:pl-8 sm:pr-[4.35rem] scroll-mt-28"
+              className="scent-lux-input scent-vault-search-input relative z-0 w-full h-[60px] px-16 text-center text-[#fff7ec] font-sans text-base font-medium outline-none transition-colors placeholder:text-scent-text-subtle placeholder:font-medium sm:h-[68px] sm:px-[4.35rem] scroll-mt-28"
             />
             <motion.button
               type="submit"
