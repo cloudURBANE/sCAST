@@ -870,10 +870,10 @@ export const FragranceCapture: React.FC<{
   }, [matches.length, uploading]);
 
   const chipClass = (active: boolean): string =>
-    `inline-flex max-w-[11rem] items-center truncate rounded-full border px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 ${
+    `inline-flex max-w-[11rem] items-center truncate rounded-full border px-3 py-1.5 scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 ${
       active
         ? 'border-scent-accent/80 bg-scent-accent/15 text-[#fff7ec]'
-        : 'border-white/12 text-scent-muted hover:border-scent-accent/45 hover:text-[#fff7ec]'
+        : 'border-white/12 text-scent-text-muted hover:border-scent-accent/45 hover:text-[#fff7ec]'
     }`;
 
   const filtersActive = houseFilter !== null || genderFilter !== null;
@@ -954,7 +954,7 @@ export const FragranceCapture: React.FC<{
           <button
             type="button"
             onClick={scrollToSearch}
-            className="inline-flex items-center gap-1.5 rounded-full border border-white/14 bg-scent-bg/70 px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-scent-accent/90 transition-colors hover:border-scent-accent/55 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
+            className="inline-flex items-center gap-1.5 rounded-full border border-white/14 bg-scent-bg/70 px-3.5 py-1.5 scent-type-chip text-scent-accent transition-colors hover:border-scent-accent/55 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
           >
             <Search size={12} strokeWidth={2.2} aria-hidden />
             Back to search
@@ -988,7 +988,7 @@ export const FragranceCapture: React.FC<{
             Find your signature for the current atmosphere.
           </h2>
           <div className="mt-5 space-y-2.5 sm:mt-6">
-            <p className="text-[11px] font-bold uppercase tracking-[0.34em] text-scent-accent/90">
+            <p className="scent-type-label text-scent-accent">
               Recently Added Fragrances
             </p>
             <div className="mx-auto w-full max-w-lg px-1">
@@ -1005,9 +1005,9 @@ export const FragranceCapture: React.FC<{
             >
               <div className="flex flex-col items-center gap-2 mb-2">
                 <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shrink-0" />
-                <p className="text-[10px] text-red-500/90 font-medium leading-relaxed max-w-md">{errorStatus}</p>
+                <p className="max-w-md text-sm font-medium leading-relaxed text-red-200">{errorStatus}</p>
               </div>
-              <button onClick={handleRetry} className="text-[9px] uppercase tracking-widest text-red-500 font-bold hover:underline">
+              <button onClick={handleRetry} className="scent-type-chip text-red-200 hover:underline">
                 Try Again
               </button>
             </motion.div>
@@ -1030,7 +1030,7 @@ export const FragranceCapture: React.FC<{
               onBlur={() => setSearchFocused(false)}
               placeholder="Search by house or fragrance..."
               aria-label="Look up a brand or fragrance"
-              className="scent-lux-input scent-vault-search-input relative z-0 w-full h-[60px] pl-7 pr-16 text-left text-[#fff7ec] font-sans text-[15px] font-medium outline-none transition-colors placeholder:text-[#c9a97a]/48 placeholder:font-medium sm:h-[68px] sm:pl-8 sm:pr-[4.35rem] scroll-mt-28"
+              className="scent-lux-input scent-vault-search-input relative z-0 w-full h-[60px] pl-7 pr-16 text-left text-[#fff7ec] font-sans text-base font-medium outline-none transition-colors placeholder:text-scent-text-subtle placeholder:font-medium sm:h-[68px] sm:pl-8 sm:pr-[4.35rem] scroll-mt-28"
             />
             <motion.button
               type="submit"
@@ -1038,7 +1038,7 @@ export const FragranceCapture: React.FC<{
               whileHover={uploading ? undefined : { scale: 1.06 }}
               whileTap={uploading ? undefined : { scale: 0.9 }}
               transition={{ type: "spring", stiffness: 520, damping: 22 }}
-              className="absolute right-3.5 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-scent-accent/86 shadow-none outline-none transition-colors hover:text-[#fff7ec] focus-visible:ring-2 focus-visible:ring-scent-accent/35 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent disabled:pointer-events-none disabled:opacity-45 group-focus-within:text-scent-accent"
+              className="absolute right-3.5 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-scent-accent shadow-none outline-none transition-colors hover:text-[#fff7ec] focus-visible:ring-2 focus-visible:ring-scent-accent/35 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent disabled:pointer-events-none disabled:opacity-45 group-focus-within:text-scent-accent"
               aria-label="Search"
             >
               <motion.span
@@ -1059,8 +1059,8 @@ export const FragranceCapture: React.FC<{
               initial={{ opacity: 0 }} animate={{ opacity: 1 }}
               className="mt-10 py-10 border-t border-white/10 flex flex-col items-center text-center"
             >
-              <p className="font-serif italic text-lg text-white/40 mb-2">No Olfactory Matches Found</p>
-              <p className="text-[10px] uppercase tracking-widest text-scent-muted max-w-[200px] leading-relaxed">
+              <p className="mb-2 font-serif text-lg italic text-scent-text-muted">No Olfactory Matches Found</p>
+              <p className="max-w-[200px] scent-type-label leading-relaxed">
                 Try a different fragrance name or brand.
               </p>
             </motion.div>
@@ -1081,9 +1081,9 @@ export const FragranceCapture: React.FC<{
                       right. Lives outside the scroll area below, so it stays put
                       while the list scrolls. */}
                   <div className="mb-4 flex shrink-0 items-center justify-between gap-3 px-1">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-scent-accent/92">
+                    <p className="scent-type-label text-scent-accent">
                       Search Results{' '}
-                      <span className="tabular-nums tracking-[0.12em] text-scent-accent/70">
+                      <span className="tabular-nums tracking-[0.12em] text-scent-accent">
                         {filtersActive
                           ? `${visibleMatches.length} of ${matches.length}`
                           : matches.length}
@@ -1093,14 +1093,14 @@ export const FragranceCapture: React.FC<{
                       <button
                         type="button"
                         onClick={scrollToSearch}
-                        className="hidden shrink-0 items-center gap-1.5 rounded-full border border-white/12 px-3 py-1.5 text-[9px] font-bold uppercase tracking-[0.22em] text-scent-muted transition-colors hover:border-scent-accent/45 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 sm:inline-flex"
+                        className="hidden shrink-0 items-center gap-1.5 rounded-full border border-white/12 px-3 py-1.5 scent-type-chip text-scent-text-muted transition-colors hover:border-scent-accent/45 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 sm:inline-flex"
                       >
                         ↑ Back to top
                       </button>
                       <button
                         type="button"
                         onClick={handleNewSearch}
-                        className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/12 px-3 py-1.5 text-[9px] font-bold uppercase tracking-[0.22em] text-scent-muted transition-colors hover:border-scent-accent/45 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
+                        className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/12 px-3 py-1.5 scent-type-chip text-scent-text-muted transition-colors hover:border-scent-accent/45 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
                       >
                         <Search size={12} strokeWidth={2} aria-hidden />
                         New search
@@ -1151,11 +1151,11 @@ export const FragranceCapture: React.FC<{
                   <div className={`flex max-h-[min(42dvh,24rem)] min-h-0 flex-1 overflow-y-auto overscroll-contain scrollbar-hide ${visibleMatches.length === 1 ? 'items-center' : 'items-start'}`}>
                     {visibleMatches.length === 0 ? (
                       <div className="m-auto flex flex-col items-center gap-3 py-10 text-center">
-                        <p className="font-serif italic text-lg text-white/45">No results match these filters</p>
+                        <p className="font-serif italic text-lg text-scent-text-muted">No results match these filters</p>
                         <button
                           type="button"
                           onClick={() => { setHouseFilter(null); setGenderFilter(null); }}
-                          className="text-[10px] font-bold uppercase tracking-[0.24em] text-scent-accent hover:underline focus-visible:outline-none focus-visible:underline"
+                          className="scent-type-chip text-scent-accent hover:underline focus-visible:outline-none focus-visible:underline"
                         >
                           Clear filters
                         </button>
@@ -1219,7 +1219,7 @@ export const FragranceCapture: React.FC<{
                         initial={{ opacity: 0, y: 5 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -4 }}
-                        className="text-center text-[11px] uppercase tracking-[0.28em] text-scent-accent/82 font-bold"
+                        className="text-center scent-type-label text-scent-accent"
                       >
                         Selected — ready to add
                       </motion.p>

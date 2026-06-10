@@ -522,8 +522,8 @@ function DashboardView() {
                       { step: '3', text: 'Discover your match' },
                     ] as const).map(({ step, text }) => (
                       <div key={step} className="flex flex-col items-center gap-2">
-                        <span className="w-7 h-7 rounded-full border border-scent-accent/30 flex items-center justify-center text-[11px] font-bold text-scent-accent/60 shrink-0">{step}</span>
-                        <p className="text-[10px] uppercase tracking-[0.18em] text-scent-muted leading-relaxed">{text}</p>
+                        <span className="w-7 h-7 rounded-full border border-scent-accent/40 flex items-center justify-center text-[13px] font-bold text-scent-accent shrink-0">{step}</span>
+                        <p className="scent-type-chip text-scent-text-muted leading-relaxed">{text}</p>
                       </div>
                     ))}
                   </div>
@@ -562,7 +562,7 @@ function DashboardView() {
                         ))}
                       </div>
                       <span className="font-serif italic text-base sm:text-lg leading-tight text-center text-white/55">
-                        <span className="tabular-nums not-italic font-sans font-bold tracking-[0.12em] text-scent-accent/80">{Math.min(items.length, 3)}/3</span>
+                        <span className="tabular-nums not-italic font-sans font-bold tracking-[0.12em] text-scent-accent">{Math.min(items.length, 3)}/3</span>
                         {items.length === 0
                           ? ' — add 3 fragrances to unlock discovery'
                           : ` — ${3 - items.length} more to unlock discovery`}
@@ -618,8 +618,8 @@ function DashboardView() {
               className="flex items-center justify-between px-5 pb-4 shrink-0"
               style={{ paddingTop: 'max(1.25rem, env(safe-area-inset-top))' }}
             >
-              <p className="text-[9px] uppercase tracking-[0.4em] text-scent-accent font-bold">Strategic Alignment Found</p>
-              <button ref={recommendationCloseRef} onClick={closeRecommendationOverlay} className="p-2 text-white/40 hover:text-white hover:bg-white/10 transition-all active:scale-95" aria-label="Close recommendation">
+              <p className="scent-type-label text-scent-accent">Strategic Alignment Found</p>
+              <button ref={recommendationCloseRef} onClick={closeRecommendationOverlay} className="p-2 text-scent-text-subtle hover:text-white hover:bg-white/10 transition-all active:scale-95" aria-label="Close recommendation">
                 <X size={20} />
               </button>
             </div>
@@ -633,18 +633,18 @@ function DashboardView() {
                     <div className="h-px w-16 bg-white/20 mx-auto" />
                   </header>
                   <div className="py-6 sm:py-16 border-y border-white/10 group cursor-pointer" onClick={closeRecommendationOverlay}>
-                    <p className="text-sm uppercase tracking-[0.2em] text-white/40 mb-2 font-serif">{activeRecommendation.brand}</p>
+                    <p className="mb-2 font-serif text-sm uppercase tracking-[0.2em] text-scent-text-muted">{activeRecommendation.brand}</p>
                     <h3 className="font-serif italic text-3xl sm:text-8xl text-white leading-tight transition-transform group-hover:scale-105">{activeRecommendation.name}</h3>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 sm:gap-12 text-left">
                     <div>
-                      <p className="text-[8px] uppercase tracking-[0.3em] text-scent-muted mb-2 font-bold">Olfactory Reason</p>
-                      <p className="text-sm italic text-scent-muted leading-relaxed">{recommendationReason || 'Optimal olfactory alignment with your current atmospheric conditions.'}</p>
+                      <p className="mb-2 scent-type-label">Olfactory Reason</p>
+                      <p className="text-base italic text-scent-text-muted leading-relaxed">{recommendationReason || 'Optimal olfactory alignment with your current atmospheric conditions.'}</p>
                     </div>
                     {activeRecommendation.concentration && activeRecommendation.concentration !== 'Unknown' && (
                     <div>
-                      <p className="text-[8px] uppercase tracking-[0.3em] text-scent-muted mb-2 font-bold">Concentration</p>
-                      <p className="text-sm italic text-scent-muted leading-relaxed">{activeRecommendation.concentration}</p>
+                      <p className="mb-2 scent-type-label">Concentration</p>
+                      <p className="text-base italic text-scent-text-muted leading-relaxed">{activeRecommendation.concentration}</p>
                     </div>
                     )}
                     <div className="sm:col-span-2">
@@ -661,24 +661,24 @@ function DashboardView() {
                     {activeEngineRecommendation ? (
                       <>
                         <div>
-                          <p className="text-[8px] uppercase tracking-[0.3em] text-scent-muted mb-2 font-bold">Best Families</p>
-                          <p className="text-sm italic text-scent-muted leading-relaxed">{formatFamilyList(activeEngineRecommendation.best_scent_families)}</p>
+                          <p className="mb-2 scent-type-label">Best Families</p>
+                          <p className="text-base italic text-scent-text-muted leading-relaxed">{formatFamilyList(activeEngineRecommendation.best_scent_families)}</p>
                         </div>
                         <div>
-                          <p className="text-[8px] uppercase tracking-[0.3em] text-scent-muted mb-2 font-bold">Avoid Today</p>
-                          <p className="text-sm italic text-scent-muted leading-relaxed">{formatAvoidList(activeEngineRecommendation.avoid_scent_families)}</p>
+                          <p className="mb-2 scent-type-label">Avoid Today</p>
+                          <p className="text-base italic text-scent-text-muted leading-relaxed">{formatAvoidList(activeEngineRecommendation.avoid_scent_families)}</p>
                         </div>
                         <div>
-                          <p className="text-[8px] uppercase tracking-[0.3em] text-scent-muted mb-2 font-bold">Sprays</p>
-                          <p className="text-sm italic text-scent-muted leading-relaxed">{formatSprayCount(activeEngineRecommendation.spray_count)}</p>
+                          <p className="mb-2 scent-type-label">Sprays</p>
+                          <p className="text-base italic text-scent-text-muted leading-relaxed">{formatSprayCount(activeEngineRecommendation.spray_count)}</p>
                         </div>
                         <div>
-                          <p className="text-[8px] uppercase tracking-[0.3em] text-scent-muted mb-2 font-bold">Projection Risk</p>
-                          <p className="text-sm italic text-scent-muted leading-relaxed">{titleCaseToken(activeEngineRecommendation.projection_risk)}</p>
+                          <p className="mb-2 scent-type-label">Projection Risk</p>
+                          <p className="text-base italic text-scent-text-muted leading-relaxed">{titleCaseToken(activeEngineRecommendation.projection_risk)}</p>
                         </div>
                         <div>
-                          <p className="text-[8px] uppercase tracking-[0.3em] text-scent-muted mb-2 font-bold">Confidence</p>
-                          <p className="text-sm italic text-scent-muted leading-relaxed">{titleCaseToken(activeEngineRecommendation.confidence)}</p>
+                          <p className="mb-2 scent-type-label">Confidence</p>
+                          <p className="text-base italic text-scent-text-muted leading-relaxed">{titleCaseToken(activeEngineRecommendation.confidence)}</p>
                         </div>
                       </>
                     ) : null}
@@ -692,7 +692,7 @@ function DashboardView() {
               className="px-5 pt-3 shrink-0 border-t border-white/5"
               style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))' }}
             >
-              <button onClick={closeRecommendationOverlay} className="w-full py-4 bg-scent-accent text-black uppercase tracking-[0.3em] text-[10px] font-bold hover:opacity-90 transition-opacity active:scale-[0.98]">
+              <button onClick={closeRecommendationOverlay} className="w-full py-4 bg-scent-accent text-black scent-type-chip hover:opacity-90 transition-opacity active:scale-[0.98]">
                 Confirm Alignment
               </button>
             </div>
@@ -711,7 +711,7 @@ function DashboardView() {
               draggable={false}
             />
           </div>
-          <p className="text-[10px] uppercase tracking-[0.2em] text-scent-muted">© 2026 Olfactory Intelligence Systems</p>
+          <p className="scent-type-label">© 2026 Olfactory Intelligence Systems</p>
         </div>
       </footer>
     </div>

@@ -47,7 +47,7 @@ export const CommentThread: React.FC<CommentThreadProps> = ({ postId, authToken,
   };
 
   return (
-    <section className="mt-5 border-t border-white/10 pt-5" aria-label="Comments">
+    <section className="mt-6 border-t border-white/10 pt-6" aria-label="Comments">
       {detail.isLoading ? (
         <div className="flex items-center gap-2 py-4 text-sm text-scent-muted">
           <LoaderCircle size={16} className="animate-spin" aria-hidden="true" />
@@ -60,21 +60,21 @@ export const CommentThread: React.FC<CommentThreadProps> = ({ postId, authToken,
       ) : (
         <div className="space-y-4">
           {comments.length === 0 ? (
-            <p className="text-sm text-scent-muted/70">No comments yet.</p>
+            <p className="scent-type-caption">No comments yet.</p>
           ) : (
             comments.map((comment) => (
               <article key={comment.id} className="border-b border-white/8 pb-4 last:border-b-0">
-                <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-[0.16em]">
+                <div className="mb-2 flex flex-wrap items-center gap-2 scent-type-meta uppercase">
                   <Link
                     to={communitySharePath(comment.author)}
-                    className="font-bold text-scent-accent/82 transition-colors hover:text-[#fff7ec]"
+                    className="font-bold text-scent-accent transition-colors hover:text-[#fff7ec]"
                   >
                     {displayCommunityAuthor(comment.author)}
                   </Link>
-                  <span className="text-scent-muted/70">{formatCommunityTime(comment.createdAt)}</span>
+                  <span>{formatCommunityTime(comment.createdAt)}</span>
                 </div>
-                <p className="whitespace-pre-line text-sm leading-7 text-[#fff7ec]/88">{comment.body}</p>
-                <div className="mt-3">
+                <p className="whitespace-pre-line text-base leading-7 text-[#fff7ec]/88">{comment.body}</p>
+                <div className="mt-4">
                   <ReactionBar
                     targetType="comment"
                     targetId={comment.id}
@@ -90,7 +90,7 @@ export const CommentThread: React.FC<CommentThreadProps> = ({ postId, authToken,
         </div>
       )}
 
-      <form onSubmit={submitComment} className="mt-5 space-y-3">
+      <form onSubmit={submitComment} className="mt-6 space-y-4">
         <textarea
           value={body}
           onChange={(event) => setBody(event.target.value)}
@@ -98,19 +98,19 @@ export const CommentThread: React.FC<CommentThreadProps> = ({ postId, authToken,
           maxLength={2000}
           placeholder={authToken ? 'Add a comment' : 'Sign in to comment'}
           aria-label="Add a comment"
-          className="scent-lux-input min-h-24 w-full resize-y rounded-[var(--radius-scent)] px-4 py-3 text-sm leading-6 text-[#fff7ec] placeholder:text-scent-muted/45"
+          className="scent-lux-input min-h-24 w-full resize-y rounded-[var(--radius-scent)] px-4 py-3 text-base leading-7 text-[#fff7ec] placeholder:text-scent-text-subtle"
         />
         {errorMessage ? (
           <p className="text-sm text-red-100">{errorMessage}</p>
         ) : null}
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-scent-muted/70">
+        <div className="flex items-center justify-between gap-4">
+          <p className="scent-type-meta uppercase">
             {body.trim().length}/2000
           </p>
           <button
             type="submit"
             disabled={commentMutation.isPending || (authToken ? !body.trim() : false)}
-            className="inline-flex min-h-11 items-center gap-2 rounded-full border border-scent-accent/30 bg-scent-accent/[0.07] px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-[#fff7ec] transition-colors hover:border-scent-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 disabled:pointer-events-none disabled:opacity-55"
+            className="inline-flex min-h-11 items-center gap-2 rounded-full border border-scent-accent/30 bg-scent-accent/[0.07] px-4 py-2 scent-type-chip text-[#fff7ec] transition-colors hover:border-scent-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 disabled:pointer-events-none disabled:opacity-55"
           >
             {commentMutation.isPending ? (
               <LoaderCircle size={14} className="animate-spin" aria-hidden="true" />

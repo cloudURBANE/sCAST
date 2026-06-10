@@ -353,7 +353,7 @@ function FragrancePanel({
   return (
     <section className={`border border-white/[0.04] bg-gradient-to-b from-white/[0.018] to-transparent shadow-[inset_0_1px_0_rgba(255,255,255,0.025)] ${className}`}>
       <div className="relative flex items-center justify-center border-b border-white/[0.05] px-4 py-3 text-center">
-        <p className="text-[11px] font-bold uppercase tracking-[0.34em] text-white/70">
+        <p className="scent-type-label">
           {title}
         </p>
         {titleSuffix ? <div className="absolute right-3 top-1/2 -translate-y-1/2">{titleSuffix}</div> : null}
@@ -539,7 +539,7 @@ function ProfileScorePanel({
               : "Derived fragrance intelligence unavailable."}
           </p>
           {coverage.complete === false ? (
-            <p className="mt-1.5 text-[10px] uppercase tracking-[0.18em] text-white/38 font-bold">
+            <p className="mt-1.5 scent-type-label">
               Derived intelligence not available yet
             </p>
           ) : null}
@@ -627,15 +627,15 @@ function ProfileScorePanel({
                 >
                   {stat.score}
                 </span>
-                <span className={compact ? "pb-0.5 text-[10px] text-white/65" : "pb-1 text-base text-white/68"}>
+                <span className={compact ? "pb-0.5 text-[13px] text-scent-text-muted" : "pb-1 text-base text-white/68"}>
                   /100
                 </span>
               </div>
               <p
                 className={
                   compact
-                    ? "min-h-[2.35em] flex items-center justify-center px-0 text-[10px] leading-tight text-scent-accent/85"
-                    : "min-h-[2.5em] flex items-center justify-center px-1 text-xs leading-snug text-scent-accent/85"
+                    ? "min-h-[2.35em] flex items-center justify-center px-0 text-[13px] leading-tight text-scent-accent"
+                    : "min-h-[2.5em] flex items-center justify-center px-1 text-[13px] leading-snug text-scent-accent"
                 }
               >
                 {stat.sub ?? ""}
@@ -644,7 +644,7 @@ function ProfileScorePanel({
           ) : (
             <>
               <p
-                className={compact ? "text-[11px] text-white/55 font-serif italic" : "font-serif italic text-2xl text-white/55 leading-tight"}
+                className={compact ? "text-[13px] text-scent-text-subtle font-serif italic" : "font-serif italic text-2xl text-white/55 leading-tight"}
                 aria-hidden
               >
                 --
@@ -652,8 +652,8 @@ function ProfileScorePanel({
               <p
                 className={
                   compact
-                    ? "min-h-[2.35em] flex items-center justify-center px-0 text-[9px] leading-tight text-white/42"
-                    : "min-h-[2.5em] flex items-center justify-center px-1 text-[10px] leading-snug text-white/42"
+                    ? "min-h-[2.35em] flex items-center justify-center px-0 text-[13px] leading-tight text-scent-text-subtle"
+                    : "min-h-[2.5em] flex items-center justify-center px-1 text-[13px] leading-snug text-scent-text-subtle"
                 }
               >
                 {stat.sub ?? ""}
@@ -664,8 +664,8 @@ function ProfileScorePanel({
         <p
           className={
             compact
-              ? "mt-auto max-w-full text-[7px] leading-tight uppercase tracking-[0.08em] text-white/58 font-bold [overflow-wrap:anywhere]"
-              : "mt-auto text-[9px] uppercase tracking-[0.2em] text-white/58 font-bold"
+              ? "mt-auto max-w-full scent-type-chip leading-tight [overflow-wrap:anywhere]"
+              : "mt-auto scent-type-chip"
           }
         >
           {stat.label}
@@ -692,13 +692,13 @@ function ProfileScorePanel({
             parts={stat.cycle}
             primaryClass={
               compact
-                ? "text-[11px] text-white/85 font-serif italic truncate max-w-full"
+                ? "text-[13px] text-[#fff7ec] font-serif italic truncate max-w-full"
                 : "font-serif italic text-2xl text-white leading-tight truncate max-w-full"
             }
             secondaryClass={
               compact
-                ? "min-h-[2.35em] flex items-center justify-center px-0 text-[9px] leading-tight text-white/42"
-                : "min-h-[2.5em] flex items-center justify-center px-1 text-[10px] leading-snug text-white/42"
+                ? "min-h-[2.35em] flex items-center justify-center px-0 text-[13px] leading-tight text-scent-text-subtle"
+                : "min-h-[2.5em] flex items-center justify-center px-1 text-[13px] leading-snug text-scent-text-subtle"
             }
           />
         ) : (
@@ -707,7 +707,7 @@ function ProfileScorePanel({
               <p
                 className={
                   compact
-                    ? "text-[11px] text-white/85 font-serif italic truncate max-w-full"
+                    ? "text-[13px] text-[#fff7ec] font-serif italic truncate max-w-full"
                     : "font-serif italic text-2xl text-white leading-tight truncate max-w-full"
                 }
               >
@@ -715,7 +715,7 @@ function ProfileScorePanel({
               </p>
             ) : (
               <p
-                className={compact ? "text-[11px] text-white/55 font-serif italic" : "font-serif italic text-2xl text-white/55 leading-tight"}
+                className={compact ? "text-[13px] text-scent-text-subtle font-serif italic" : "font-serif italic text-2xl text-white/55 leading-tight"}
                 aria-hidden
               >
                 --
@@ -724,8 +724,8 @@ function ProfileScorePanel({
             <p
               className={
                 compact
-                  ? "min-h-[2.35em] flex items-center justify-center px-0 text-[9px] leading-tight text-white/42"
-                  : "min-h-[2.5em] flex items-center justify-center px-1 text-[10px] leading-snug text-white/42"
+                  ? "min-h-[2.35em] flex items-center justify-center px-0 text-[13px] leading-tight text-scent-text-subtle"
+                  : "min-h-[2.5em] flex items-center justify-center px-1 text-[13px] leading-snug text-scent-text-subtle"
               }
             >
               {stat.sub ?? ""}
@@ -735,8 +735,8 @@ function ProfileScorePanel({
         <p
           className={
             compact
-              ? "mt-auto max-w-full text-[7px] leading-tight uppercase tracking-[0.04em] text-white/55 font-bold [overflow-wrap:anywhere]"
-              : "mt-auto text-[9px] uppercase tracking-[0.2em] text-white/55 font-bold"
+              ? "mt-auto max-w-full scent-type-chip leading-tight [overflow-wrap:anywhere]"
+              : "mt-auto scent-type-chip"
           }
         >
           {stat.label}
@@ -1569,7 +1569,7 @@ export const Wardrobe: React.FC<{
                       onClick={onRevertWardrobe}
                       disabled={!revertAvailable || !!fixWardrobeBusy}
                       title="Restore the vault list from before the last automatic rebuild (this tab only)"
-                      className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-white/15 bg-white/[0.04] text-white/70 text-[10px] uppercase tracking-[0.2em] font-bold hover:bg-white/[0.08] hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-white/15 bg-white/[0.04] scent-type-chip text-scent-text-muted hover:bg-white/[0.08] hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                     >
                       <Undo2 size={14} />
                       Revert
@@ -1577,12 +1577,12 @@ export const Wardrobe: React.FC<{
                   </div>
                 ) : null}
                 {fixWardrobeBusy ? (
-                  <p className="text-[11px] text-scent-gold-100/70 font-sans text-center leading-snug max-w-xl px-2">
+                  <p className="text-sm text-scent-gold-100 font-sans text-center leading-snug max-w-xl px-2">
                     Rebuilding wardrobe…
                   </p>
                 ) : null}
                 {wardrobeFixHint ? (
-                  <p className="text-[11px] text-white/45 font-sans text-center leading-snug max-w-xl px-2">
+                  <p className="text-sm text-scent-text-muted font-sans text-center leading-snug max-w-xl px-2">
                     {wardrobeFixHint}
                   </p>
                 ) : null}
@@ -1592,7 +1592,7 @@ export const Wardrobe: React.FC<{
               <label htmlFor="wardrobe-vault-search" className="sr-only">
                 Search vault fragrances and image hints
               </label>
-              <Search size={23} strokeWidth={1.5} className="pointer-events-none absolute right-5 top-1/2 z-10 -translate-y-1/2 text-scent-accent/82 sm:right-6" />
+              <Search size={23} strokeWidth={1.5} className="pointer-events-none absolute right-5 top-1/2 z-10 -translate-y-1/2 text-scent-accent sm:right-6" />
               <input
                 id="wardrobe-vault-search"
                 type="search"
@@ -1632,7 +1632,7 @@ export const Wardrobe: React.FC<{
                 }}
                 placeholder="Search vault (e.g. sauvage)..."
                 autoComplete="off"
-                className="scent-lux-input scent-vault-search-input w-full h-[58px] pl-7 pr-14 text-left text-[#fff7ec] font-sans text-[15px] outline-none transition-all placeholder:text-[#d9c2a4]/58 sm:h-[68px] sm:pl-8 sm:pr-16 sm:text-base"
+                className="scent-lux-input scent-vault-search-input w-full h-[58px] pl-7 pr-14 text-left text-[#fff7ec] font-sans text-[15px] outline-none transition-all placeholder:text-scent-text-subtle sm:h-[68px] sm:pl-8 sm:pr-16 sm:text-base"
               />
               <AnimatePresence>
                 {searchDropdownOpen ? (
@@ -1646,7 +1646,7 @@ export const Wardrobe: React.FC<{
                     className="absolute left-0 right-0 top-full mt-2 max-h-[min(320px,50vh)] overflow-y-auto rounded-[var(--radius-scent)] border border-scent-accent/32 bg-neutral-950/98 shadow-[0_24px_48px_rgba(0,0,0,0.78)] scrollbar-hide z-30"
                   >
                     <li className="px-3 py-2 border-b border-white/8 pointer-events-none">
-                      <p className="text-[8px] uppercase tracking-[0.35em] text-white/35 font-bold font-sans">
+                      <p className="scent-type-label font-sans">
                         Matches
                       </p>
                     </li>
@@ -1676,7 +1676,7 @@ export const Wardrobe: React.FC<{
                               <SuggestionTypingLabel text={primary} animate={active} />
                             </div>
                             {sub ? (
-                              <div className="text-[10px] text-white/40 mt-0.5 font-sans truncate">{sub}</div>
+                              <div className="text-[13px] text-scent-text-muted mt-0.5 font-sans truncate">{sub}</div>
                             ) : null}
                           </button>
                         </li>
@@ -1717,7 +1717,7 @@ export const Wardrobe: React.FC<{
                     onClick={() => openDetail(featuredItem)}
                     onMouseEnter={() => prefetchReviews(featuredItem)}
                   >
-                    <div className="absolute top-10 left-10 text-[9px] uppercase tracking-[0.6em] text-white/30 font-bold z-20 pointer-events-none">Recommended Manifest</div>
+                    <div className="absolute top-10 left-10 scent-type-label text-scent-text-muted z-20 pointer-events-none">Recommended Manifest</div>
                     <div className={bottleFeaturedSlotClass()}>
                       <BottleImage
                         variant="featured"
@@ -1732,7 +1732,7 @@ export const Wardrobe: React.FC<{
                       />
                     </div>
                     <div className="text-center mt-4 mb-2 space-y-3 shrink-0 px-2">
-                      <p className="text-[10px] uppercase text-white/50 tracking-[0.5em] font-bold font-sans">{entryBrand(featuredItem)}</p>
+                      <p className="scent-type-label font-sans">{entryBrand(featuredItem)}</p>
                       <h4 className="font-serif italic text-3xl sm:text-5xl text-white tracking-tighter">{entryName(featuredItem)}</h4>
                     </div>
                   </motion.div>
@@ -1850,9 +1850,9 @@ export const Wardrobe: React.FC<{
                       } sm:min-h-[28rem] sm:p-8 flex flex-col items-center justify-center text-center group cursor-pointer border-dashed border-scent-accent/26 hover:bg-white/5 transition-all w-full`}
                     >
                       <div className="w-12 h-12 border border-dashed border-scent-accent/35 flex items-center justify-center group-hover:rotate-90 transition-transform mb-4 rounded-full">
-                        <span className="text-scent-accent/55 text-3xl">+</span>
+                        <span className="text-scent-accent text-3xl">+</span>
                       </div>
-                      <p className="font-serif italic text-scent-accent/45 text-2xl tracking-tighter uppercase">Expand Archive</p>
+                      <p className="font-serif italic text-scent-accent text-2xl tracking-tighter uppercase">Expand Archive</p>
                     </button>
                   )}
                 </div>
@@ -1860,12 +1860,12 @@ export const Wardrobe: React.FC<{
             ))
           ) : !searchQuery && (
             <div className="py-32 text-center border border-dashed border-white/5 rounded-scent flex flex-col items-center gap-6">
-              <p className="font-serif italic text-4xl text-white/10">The vault is currently vacant</p>
+              <p className="font-serif italic text-4xl text-scent-text-subtle">The vault is currently vacant</p>
               {onExpandArchive && (
                 <button
                   type="button"
                   onClick={onExpandArchive}
-                  className="text-[11px] uppercase tracking-[0.22em] text-scent-accent/55 font-bold hover:text-scent-accent/80 transition-colors border border-scent-accent/20 hover:border-scent-accent/40 px-5 py-2.5 rounded-full"
+                  className="scent-type-chip text-scent-accent hover:text-[#fff7ec] transition-colors border border-scent-accent/20 hover:border-scent-accent/40 px-5 py-2.5 rounded-full"
                 >
                   Add your first fragrance
                 </button>
@@ -1972,7 +1972,7 @@ export const Wardrobe: React.FC<{
                           <button
                             type="button"
                             onClick={() => setBottleImageToolsOpen((o) => !o)}
-                            className={`p-1.5 rounded-md border border-white/10 bg-white/[0.04] text-white/45 hover:text-white hover:bg-white/[0.08] transition-all flex items-center justify-center ${
+                            className={`p-1.5 rounded-md border border-white/10 bg-white/[0.04] text-scent-text-muted hover:text-white hover:bg-white/[0.08] transition-all flex items-center justify-center ${
                               bottleImageToolsOpen ? 'text-scent-accent border-scent-accent/30 bg-scent-accent/5' : ''
                             }`}
                             title="Adjust bottle image and settings"
@@ -2005,7 +2005,7 @@ export const Wardrobe: React.FC<{
                               <button
                                 type="button"
                                 onClick={() => setEnlargeOpen(true)}
-                                className="inline-flex items-center gap-1.5 rounded-md border border-white/15 bg-white/[0.04] px-3.5 py-1.5 text-[9px] uppercase tracking-[0.2em] font-bold text-white/62 transition-colors hover:border-scent-accent/35 hover:bg-scent-accent/[0.08] hover:text-scent-accent"
+                                className="inline-flex items-center gap-1.5 rounded-md border border-white/15 bg-white/[0.04] px-3.5 py-1.5 scent-type-chip text-scent-text-muted transition-colors hover:border-scent-accent/35 hover:bg-scent-accent/[0.08] hover:text-scent-accent"
                                 aria-label="Enlarge bottle image"
                               >
                                 <Maximize2 size={13} strokeWidth={2} />
@@ -2019,8 +2019,8 @@ export const Wardrobe: React.FC<{
                               <div className="grid grid-cols-2 gap-px">
                                 {detailMetaRows.map(({ label, value }) => (
                                   <div key={label} className="flex flex-col items-center gap-1 py-2 text-center">
-                                    <p className="text-[8px] font-semibold uppercase tracking-[0.2em] text-white/35">{label}</p>
-                                    <p className="text-[11px] font-medium leading-snug text-white/72">{value}</p>
+                                    <p className="scent-type-label">{label}</p>
+                                    <p className="text-sm font-medium leading-snug text-scent-text-muted">{value}</p>
                                   </div>
                                 ))}
                               </div>
@@ -2033,7 +2033,7 @@ export const Wardrobe: React.FC<{
                               role="region"
                               className="space-y-3 pt-2 border-t border-white/5"
                             >
-                              <p className="text-center text-[10px] text-white/40 leading-snug font-sans">
+                              <p className="text-center text-sm text-scent-text-muted leading-snug font-sans">
                                 Pick what looks wrong, then search — or reimagine the current bottle. Save when it looks right.
                               </p>
 
@@ -2048,7 +2048,7 @@ export const Wardrobe: React.FC<{
                                     setClarifySolverId((e.target.value || '') as WardrobeImageSolverId | '')
                                   }
                                   disabled={imageToolbarBusy}
-                                  className="w-full bg-black/45 border border-white/12 text-white text-[11px] py-2 px-2 rounded-lg font-sans outline-none focus:border-scent-accent/50 disabled:opacity-40"
+                                  className="w-full bg-black/45 border border-white/12 text-white text-sm py-2 px-2 rounded-lg font-sans outline-none focus:border-scent-accent/50 disabled:opacity-40"
                                 >
                                   <option value="">Choose what looks wrong…</option>
                                   {WARDROBE_CLARIFY_SOLVERS.map((s) => (
@@ -2068,7 +2068,7 @@ export const Wardrobe: React.FC<{
                                     title={
                                       !clarifySolverId ? 'Select an issue first' : undefined
                                     }
-                                    className="flex-1 min-h-[38px] py-2 bg-white text-black uppercase tracking-[0.22em] text-[9px] font-bold hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 disabled:opacity-45 disabled:cursor-not-allowed rounded-lg"
+                                    className="flex-1 min-h-[38px] py-2 bg-white text-black scent-type-chip hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 disabled:opacity-45 disabled:cursor-not-allowed rounded-lg"
                                   >
                                     {refreshingId === selectedItem.id ? (
                                       <>
@@ -2091,7 +2091,7 @@ export const Wardrobe: React.FC<{
                                         ? 'Need an image first'
                                         : 'Reimagine this bottle on a transparent background (1–3 min)'
                                     }
-                                    className="flex-1 min-h-[38px] py-2 bg-white/[0.06] text-white uppercase tracking-[0.18em] text-[9px] font-bold border border-white/15 hover:bg-white/[0.1] active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 disabled:opacity-35 disabled:cursor-not-allowed rounded-lg"
+                                    className="flex-1 min-h-[38px] py-2 bg-white/[0.06] text-white scent-type-chip border border-white/15 hover:bg-white/[0.1] active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 disabled:opacity-35 disabled:cursor-not-allowed rounded-lg"
                                   >
                                     {selectedReimagining ? (
                                       <>
@@ -2107,7 +2107,7 @@ export const Wardrobe: React.FC<{
 
                                 {isAdmin && onUploadBottleImage ? (
                                   <div className="rounded-lg border border-scent-accent/20 bg-scent-accent/[0.04] p-2.5 space-y-2.5">
-                                    <p className="text-[8px] uppercase tracking-[0.25em] text-scent-accent/70 font-bold">
+                                    <p className="scent-type-label text-scent-accent">
                                       Admin · Replace image
                                     </p>
 
@@ -2145,11 +2145,11 @@ export const Wardrobe: React.FC<{
                                       }`}
                                     >
                                       {uploadBusy ? (
-                                        <RefreshCw size={14} className="animate-spin text-scent-accent/80" />
+                                        <RefreshCw size={14} className="animate-spin text-scent-accent" />
                                       ) : (
                                         <Upload size={14} className="text-white/55" />
                                       )}
-                                      <span className="text-[9px] uppercase tracking-[0.16em] text-white/55 font-bold font-sans">
+                                      <span className="scent-type-chip font-sans">
                                         {uploadBusy ? 'Uploading…' : 'Drop image or click to upload'}
                                       </span>
                                     </button>
@@ -2158,7 +2158,7 @@ export const Wardrobe: React.FC<{
                                       <div className="relative flex-1">
                                         <Link2
                                           size={11}
-                                          className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-white/30"
+                                          className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-scent-text-subtle"
                                         />
                                         <input
                                           type="url"
@@ -2174,7 +2174,7 @@ export const Wardrobe: React.FC<{
                                           }}
                                           disabled={imageToolbarBusy}
                                           aria-label="Image URL to upload"
-                                          className="w-full bg-black/45 border border-white/12 text-white text-[11px] py-2 pl-7 pr-2 rounded-lg font-sans outline-none focus:border-scent-accent/50 disabled:opacity-40"
+                                          className="w-full bg-black/45 border border-white/12 text-white text-sm py-2 pl-7 pr-2 rounded-lg font-sans outline-none focus:border-scent-accent/50 disabled:opacity-40"
                                         />
                                       </div>
                                       <button
@@ -2185,7 +2185,7 @@ export const Wardrobe: React.FC<{
                                           }
                                         }}
                                         disabled={imageToolbarBusy || !uploadUrlInput.trim()}
-                                        className="shrink-0 min-h-[36px] px-3 rounded-lg bg-white/[0.06] text-white uppercase tracking-[0.16em] text-[9px] font-bold border border-white/15 hover:bg-white/[0.1] disabled:opacity-35 disabled:cursor-not-allowed"
+                                        className="shrink-0 min-h-[36px] px-3 rounded-lg bg-white/[0.06] text-white scent-type-chip border border-white/15 hover:bg-white/[0.1] disabled:opacity-35 disabled:cursor-not-allowed"
                                       >
                                         Add
                                       </button>
@@ -2195,7 +2195,7 @@ export const Wardrobe: React.FC<{
                                       <div className="relative flex-1">
                                         <Link2
                                           size={11}
-                                          className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-white/30"
+                                          className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-scent-text-subtle"
                                         />
                                         <input
                                           type="url"
@@ -2211,7 +2211,7 @@ export const Wardrobe: React.FC<{
                                           }}
                                           disabled={imageToolbarBusy}
                                           aria-label="Source page URL to extract image from"
-                                          className="w-full bg-black/45 border border-white/12 text-white text-[11px] py-2 pl-7 pr-2 rounded-lg font-sans outline-none focus:border-scent-accent/50 disabled:opacity-40"
+                                          className="w-full bg-black/45 border border-white/12 text-white text-sm py-2 pl-7 pr-2 rounded-lg font-sans outline-none focus:border-scent-accent/50 disabled:opacity-40"
                                         />
                                       </div>
                                       <button
@@ -2222,7 +2222,7 @@ export const Wardrobe: React.FC<{
                                           }
                                         }}
                                         disabled={imageToolbarBusy || !sourceUrlInput.trim()}
-                                        className="shrink-0 min-h-[36px] px-3 rounded-lg bg-white/[0.06] text-white uppercase tracking-[0.16em] text-[9px] font-bold border border-white/15 hover:bg-white/[0.1] disabled:opacity-35 disabled:cursor-not-allowed"
+                                        className="shrink-0 min-h-[36px] px-3 rounded-lg bg-white/[0.06] text-white scent-type-chip border border-white/15 hover:bg-white/[0.1] disabled:opacity-35 disabled:cursor-not-allowed"
                                       >
                                         Fetch
                                       </button>
@@ -2236,7 +2236,7 @@ export const Wardrobe: React.FC<{
                                         disabled={imageToolbarBusy}
                                         className="h-3.5 w-3.5 accent-scent-accent disabled:opacity-40"
                                       />
-                                      <span className="text-[9px] uppercase tracking-[0.14em] text-white/52 font-bold font-sans">
+                                      <span className="scent-type-chip font-sans">
                                         Remove background
                                       </span>
                                     </label>
@@ -2255,7 +2255,7 @@ export const Wardrobe: React.FC<{
                                     className="flex items-start gap-2 rounded-lg border border-red-400/30 bg-red-500/[0.08] px-3 py-2.5"
                                   >
                                     <AlertCircle size={13} className="mt-px shrink-0 text-red-300/90" />
-                                    <p className="text-[10px] leading-snug text-red-200/90 font-sans">
+                                    <p className="text-sm leading-snug text-red-100 font-sans">
                                       {refreshError}
                                     </p>
                                   </div>
@@ -2267,7 +2267,7 @@ export const Wardrobe: React.FC<{
                                     className="flex items-start gap-2 rounded-lg border border-yellow-400/25 bg-yellow-500/[0.07] px-3 py-2.5"
                                   >
                                     <AlertCircle size={13} className="mt-px shrink-0 text-yellow-300/80" />
-                                    <p className="text-[10px] leading-snug text-yellow-200/85 font-sans">
+                                    <p className="text-sm leading-snug text-yellow-100 font-sans">
                                       {bgFallbackWarning}
                                     </p>
                                   </div>
@@ -2275,10 +2275,10 @@ export const Wardrobe: React.FC<{
 
                                 {selectedReimagining ? (
                                   <div className="rounded-lg border border-white/15 bg-white/[0.04] px-2.5 py-2.5 text-center space-y-1">
-                                    <p className="text-[8px] uppercase tracking-[0.28em] text-white/70 font-bold">
+                                    <p className="scent-type-label">
                                       Reimagining your bottle
                                     </p>
-                                    <p className="text-[9px] leading-snug text-white/55 font-sans">
+                                    <p className="text-sm leading-snug text-scent-text-muted font-sans">
                                       This usually takes 1–3 minutes. You can close this panel and
                                       keep browsing — the new bottle will save to your vault
                                       automatically when it&apos;s ready.
@@ -2287,7 +2287,7 @@ export const Wardrobe: React.FC<{
                                 ) : null}
 
                                 {usageTotals ? (
-                                  <p className="text-center text-[8px] uppercase tracking-[0.22em] text-white/35 font-sans">
+                                  <p className="text-center scent-type-label font-sans">
                                     Reimagine spend so far ·{' '}
                                     <span className="tabular-nums text-white/55">
                                       ${usageTotals.totalUsd.toFixed(3)}
@@ -2298,7 +2298,7 @@ export const Wardrobe: React.FC<{
 
                                 <div className="rounded-lg border border-white/10 bg-black/22 p-2.5 space-y-2.5">
                                   <div className="flex items-center justify-between gap-2">
-                                    <p className="text-[8px] uppercase tracking-[0.25em] text-white/45 font-bold">
+                                    <p className="scent-type-label">
                                       Frame
                                     </p>
                                     <button
@@ -2307,14 +2307,14 @@ export const Wardrobe: React.FC<{
                                       disabled={imageToolbarBusy}
                                       title="Reset frame"
                                       aria-label="Reset bottle frame"
-                                      className="p-1 rounded-md border border-white/10 bg-white/[0.04] text-white/45 hover:text-white hover:bg-white/[0.08] disabled:opacity-30"
+                                      className="p-1 rounded-md border border-white/10 bg-white/[0.04] text-scent-text-muted hover:text-white hover:bg-white/[0.08] disabled:opacity-30"
                                     >
                                       <RotateCcw size={11} />
                                     </button>
                                   </div>
 
                                   <div className="grid grid-cols-[4.5rem_1fr_2.5rem] items-center gap-1.5">
-                                    <label className="flex items-center gap-1 text-[8px] uppercase tracking-[0.14em] text-white/42 font-bold">
+                                    <label className="flex items-center gap-1 scent-type-label">
                                       <ZoomIn size={10} /> Size
                                     </label>
                                     <input
@@ -2328,11 +2328,11 @@ export const Wardrobe: React.FC<{
                                       aria-label="Bottle image size"
                                       className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-white"
                                     />
-                                    <span className="text-right text-[9px] tabular-nums text-white/42">
+                                    <span className="text-right text-[13px] tabular-nums text-scent-text-muted">
                                       {framePercent(frameDraft.scale)}
                                     </span>
 
-                                    <label className="flex items-center gap-1 text-[8px] uppercase tracking-[0.14em] text-white/42 font-bold">
+                                    <label className="flex items-center gap-1 scent-type-label">
                                       <MoveHorizontal size={10} /> X
                                     </label>
                                     <input
@@ -2346,11 +2346,11 @@ export const Wardrobe: React.FC<{
                                       aria-label="Bottle horizontal position"
                                       className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-white"
                                     />
-                                    <span className="text-right text-[9px] tabular-nums text-white/42">
+                                    <span className="text-right text-[13px] tabular-nums text-scent-text-muted">
                                       {Math.round(frameDraft.x)}
                                     </span>
 
-                                    <label className="flex items-center gap-1 text-[8px] uppercase tracking-[0.14em] text-white/42 font-bold">
+                                    <label className="flex items-center gap-1 scent-type-label">
                                       <MoveVertical size={10} /> Y
                                     </label>
                                     <input
@@ -2364,11 +2364,11 @@ export const Wardrobe: React.FC<{
                                       aria-label="Bottle vertical position"
                                       className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-white"
                                     />
-                                    <span className="text-right text-[9px] tabular-nums text-white/42">
+                                    <span className="text-right text-[13px] tabular-nums text-scent-text-muted">
                                       {Math.round(frameDraft.y)}
                                     </span>
 
-                                    <label className="flex items-center gap-1 text-[8px] uppercase tracking-[0.14em] text-white/42 font-bold">
+                                    <label className="flex items-center gap-1 scent-type-label">
                                       <ArrowUp size={10} /> Top
                                     </label>
                                     <input
@@ -2382,11 +2382,11 @@ export const Wardrobe: React.FC<{
                                       aria-label="Crop from top of bottle image"
                                       className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-white"
                                     />
-                                    <span className="text-right text-[9px] tabular-nums text-white/42">
+                                    <span className="text-right text-[13px] tabular-nums text-scent-text-muted">
                                       {Math.round(frameDraft.cropTop)}
                                     </span>
 
-                                    <label className="flex items-center gap-1 text-[8px] uppercase tracking-[0.14em] text-white/42 font-bold">
+                                    <label className="flex items-center gap-1 scent-type-label">
                                       <ArrowRight size={10} /> Right
                                     </label>
                                     <input
@@ -2400,11 +2400,11 @@ export const Wardrobe: React.FC<{
                                       aria-label="Crop from right of bottle image"
                                       className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-white"
                                     />
-                                    <span className="text-right text-[9px] tabular-nums text-white/42">
+                                    <span className="text-right text-[13px] tabular-nums text-scent-text-muted">
                                       {Math.round(frameDraft.cropRight)}
                                     </span>
 
-                                    <label className="flex items-center gap-1 text-[8px] uppercase tracking-[0.14em] text-white/42 font-bold">
+                                    <label className="flex items-center gap-1 scent-type-label">
                                       <ArrowDown size={10} /> Bottom
                                     </label>
                                     <input
@@ -2418,11 +2418,11 @@ export const Wardrobe: React.FC<{
                                       aria-label="Crop from bottom of bottle image"
                                       className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-white"
                                     />
-                                    <span className="text-right text-[9px] tabular-nums text-white/42">
+                                    <span className="text-right text-[13px] tabular-nums text-scent-text-muted">
                                       {Math.round(frameDraft.cropBottom)}
                                     </span>
 
-                                    <label className="flex items-center gap-1 text-[8px] uppercase tracking-[0.14em] text-white/42 font-bold">
+                                    <label className="flex items-center gap-1 scent-type-label">
                                       <ArrowLeft size={10} /> Left
                                     </label>
                                     <input
@@ -2436,7 +2436,7 @@ export const Wardrobe: React.FC<{
                                       aria-label="Crop from left of bottle image"
                                       className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-white"
                                     />
-                                    <span className="text-right text-[9px] tabular-nums text-white/42">
+                                    <span className="text-right text-[13px] tabular-nums text-scent-text-muted">
                                       {Math.round(frameDraft.cropLeft)}
                                     </span>
                                   </div>
@@ -2446,7 +2446,7 @@ export const Wardrobe: React.FC<{
                                       type="button"
                                       onClick={() => updateFrameDraft({ scale: frameDraft.scale - 0.1 })}
                                       disabled={imageToolbarBusy || !detailBottleUrl?.trim()}
-                                      className="min-h-[30px] rounded-md border border-white/10 bg-white/[0.035] text-[8px] uppercase tracking-[0.13em] text-white/52 font-bold flex items-center justify-center gap-1.5 disabled:opacity-30 hover:bg-white/[0.06] hover:text-white"
+                                      className="min-h-[30px] rounded-md border border-white/10 bg-white/[0.035] scent-type-chip text-scent-text-muted flex items-center justify-center gap-1.5 disabled:opacity-30 hover:bg-white/[0.06] hover:text-white"
                                     >
                                       <ZoomOut size={10} /> 10%
                                     </button>
@@ -2454,7 +2454,7 @@ export const Wardrobe: React.FC<{
                                       type="button"
                                       onClick={() => updateFrameDraft({ scale: frameDraft.scale + 0.1 })}
                                       disabled={imageToolbarBusy || !detailBottleUrl?.trim()}
-                                      className="min-h-[30px] rounded-md border border-white/10 bg-white/[0.035] text-[8px] uppercase tracking-[0.13em] text-white/52 font-bold flex items-center justify-center gap-1.5 disabled:opacity-30 hover:bg-white/[0.06] hover:text-white"
+                                      className="min-h-[30px] rounded-md border border-white/10 bg-white/[0.035] scent-type-chip text-scent-text-muted flex items-center justify-center gap-1.5 disabled:opacity-30 hover:bg-white/[0.06] hover:text-white"
                                     >
                                       <ZoomIn size={10} /> 10%
                                     </button>
@@ -2462,7 +2462,7 @@ export const Wardrobe: React.FC<{
                                       type="button"
                                       onClick={() => updateFrameDraft({ x: 0, y: 0 })}
                                       disabled={imageToolbarBusy || !detailBottleUrl?.trim()}
-                                      className="min-h-[30px] rounded-md border border-white/10 bg-white/[0.035] text-[8px] uppercase tracking-[0.13em] text-white/52 font-bold flex items-center justify-center gap-1.5 disabled:opacity-30 hover:bg-white/[0.06] hover:text-white"
+                                      className="min-h-[30px] rounded-md border border-white/10 bg-white/[0.035] scent-type-chip text-scent-text-muted flex items-center justify-center gap-1.5 disabled:opacity-30 hover:bg-white/[0.06] hover:text-white"
                                     >
                                       <MoveHorizontal size={10} /> Center
                                     </button>
@@ -2490,7 +2490,7 @@ export const Wardrobe: React.FC<{
                                         })
                                       }
                                       disabled={imageToolbarBusy || !detailBottleUrl?.trim()}
-                                      className="min-h-[30px] rounded-md border border-white/10 bg-white/[0.035] text-[8px] uppercase tracking-[0.13em] text-white/52 font-bold flex items-center justify-center gap-1.5 disabled:opacity-30 hover:bg-white/[0.06] hover:text-white"
+                                      className="min-h-[30px] rounded-md border border-white/10 bg-white/[0.035] scent-type-chip text-scent-text-muted flex items-center justify-center gap-1.5 disabled:opacity-30 hover:bg-white/[0.06] hover:text-white"
                                     >
                                       <Crop size={10} /> Tight
                                     </button>
@@ -2501,7 +2501,7 @@ export const Wardrobe: React.FC<{
                                       type="button"
                                       onClick={() => void handleSaveImageFrame()}
                                       disabled={imageToolbarBusy || !onPersistWardrobeImage}
-                                      className="w-full min-h-[36px] rounded-lg bg-scent-accent text-black uppercase tracking-[0.2em] text-[9px] font-bold hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+                                      className="w-full min-h-[36px] rounded-lg bg-scent-accent text-black scent-type-chip hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
                                     >
                                       {persistBusy ? (
                                         <>
@@ -2519,12 +2519,12 @@ export const Wardrobe: React.FC<{
                                 {hasPendingPreview && (
                                   <div className="flex flex-col gap-2 pt-2 border-t border-white/8">
                                     {!onPersistWardrobeImage ? (
-                                      <p className="text-[9px] text-scent-gold-200/75 text-center font-sans leading-snug px-1">
+                                      <p className="text-sm text-scent-gold-200 text-center font-sans leading-snug px-1">
                                         Sign in to save this preview to your vault.
                                       </p>
                                     ) : null}
                                     {previewBlocked ? (
-                                      <p className="text-[9px] text-scent-gold-200/85 text-center font-sans leading-snug px-1">
+                                      <p className="text-sm text-scent-gold-200 text-center font-sans leading-snug px-1">
                                         This preview still has a fallback background. Try another image fix before saving.
                                       </p>
                                     ) : null}
@@ -2544,7 +2544,7 @@ export const Wardrobe: React.FC<{
                                               ? 'This preview used a fallback background — try another fix first'
                                               : undefined
                                         }
-                                        className="flex-1 min-h-[38px] py-2 bg-scent-accent text-black uppercase tracking-[0.2em] text-[9px] font-bold hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg"
+                                        className="flex-1 min-h-[38px] py-2 bg-scent-accent text-black scent-type-chip hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg"
                                       >
                                         {persistBusy ? (
                                           <>
@@ -2560,7 +2560,7 @@ export const Wardrobe: React.FC<{
                                         type="button"
                                         onClick={() => setPendingPreview(null)}
                                         disabled={persistBusy}
-                                        className="flex-1 min-h-[38px] py-2 bg-transparent text-white/50 uppercase tracking-[0.18em] text-[9px] font-bold border border-white/12 hover:bg-white/[0.05] hover:text-white/80 rounded-lg disabled:opacity-30"
+                                        className="flex-1 min-h-[38px] py-2 bg-transparent text-white/50 scent-type-chip border border-white/12 hover:bg-white/[0.05] hover:text-white/80 rounded-lg disabled:opacity-30"
                                       >
                                         Discard preview
                                       </button>
@@ -2596,10 +2596,10 @@ export const Wardrobe: React.FC<{
                     avoid rendering it twice. This keeps errors reachable for actions
                     that complete after the panel is closed (e.g. a background reimagine). */}
                 {!bottleImageToolsOpen && refreshError && (
-                  <p className="text-[9px] text-red-400/80 text-center leading-snug px-2 py-1">{refreshError}</p>
+                  <p className="text-sm text-red-100 text-center leading-snug px-2 py-1">{refreshError}</p>
                 )}
                 {!bottleImageToolsOpen && !refreshError && bgFallbackWarning && (
-                  <p className="text-[9px] text-yellow-400/70 text-center leading-snug px-2 py-1">{bgFallbackWarning}</p>
+                  <p className="text-sm text-yellow-100 text-center leading-snug px-2 py-1">{bgFallbackWarning}</p>
                 )}
 
 
@@ -2615,7 +2615,7 @@ export const Wardrobe: React.FC<{
                       }
                       closeDetail();
                     }}
-                    className="min-h-[46px] border-r border-white/10 px-3 py-3 text-[10px] font-bold uppercase tracking-[0.26em] text-white/52 transition-colors hover:bg-white/[0.05] hover:text-white"
+                    className="min-h-[46px] border-r border-white/10 px-3 py-3 scent-type-chip text-scent-text-muted transition-colors hover:bg-white/[0.05] hover:text-white"
                   >
                     {deleteConfirming ? 'Go back' : 'Close'}
                   </button>
@@ -2631,10 +2631,10 @@ export const Wardrobe: React.FC<{
                     }}
                     disabled={imageToolbarBusy}
                     aria-label={deleteConfirming ? "Confirm delete from vault" : "Delete from vault"}
-                    className={`group flex min-h-[46px] items-center justify-center gap-2 px-3 py-3 text-[10px] font-bold uppercase tracking-[0.24em] transition-all disabled:cursor-not-allowed disabled:opacity-25 ${
+                    className={`group flex min-h-[46px] items-center justify-center gap-2 px-3 py-3 scent-type-chip transition-all disabled:cursor-not-allowed disabled:opacity-25 ${
                       deleteConfirming
                         ? 'bg-red-500/12 text-red-300 hover:bg-red-500/18 hover:text-red-200'
-                        : 'text-white/35 hover:bg-red-500/[0.06] hover:text-red-400'
+                        : 'text-scent-text-muted hover:bg-red-500/[0.06] hover:text-red-300'
                     }`}
                   >
                     <Trash2 size={14} className={deleteConfirming ? '' : 'group-hover:animate-bounce'} />
@@ -2684,7 +2684,7 @@ export const Wardrobe: React.FC<{
                       loading="eager"
                     />
                   </div>
-                  <p className="mt-5 text-[10px] uppercase tracking-[0.35em] text-white/35 font-bold font-sans">
+                  <p className="mt-5 scent-type-label font-sans">
                     Tap outside or Esc to close
                   </p>
                 </motion.div>

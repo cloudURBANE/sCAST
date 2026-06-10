@@ -125,7 +125,7 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
             )}
           </div>
           {communityBodyReady ? (
-            <section className="w-full space-y-6 sm:space-y-7" aria-label="Community forum">
+            <section className="w-full space-y-6 sm:space-y-8" aria-label="Community forum">
               <PostComposer ref={composerRef} authToken={authToken} onSignIn={onSignIn} />
               <PostFilters
                 type={postType}
@@ -153,7 +153,7 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
             <Wind size={18} />
             <p className="font-serif font-bold italic tracking-tighter uppercase">{APP_BRAND_MARK}</p>
           </div>
-          <p className="text-[10px] uppercase tracking-[0.2em] text-scent-muted">&copy; 2026 Olfactory Intelligence Systems</p>
+          <p className="scent-type-label">&copy; 2026 Olfactory Intelligence Systems</p>
         </div>
       </footer>
     </div>

@@ -8,6 +8,10 @@
   --color-scent-gold-100: #fef3c7;
   --color-scent-gold-200: #fde68a;
   --color-scent-muted: #c4b39b;
+  --color-scent-text-primary: #fff7ec;
+  --color-scent-text-secondary: #ead8bd;
+  --color-scent-text-muted: #d8c4a8;
+  --color-scent-text-subtle: #bfae98;
 
   --font-serif: "Cormorant Garamond", Georgia, serif;
   --font-sans: "Inter", system-ui, -apple-system, sans-serif;
@@ -1539,6 +1543,47 @@ a {
 }
 
 /* ─── Utilities ───────────────────────────────────────────────────────────── */
+
+.scent-type-label {
+  color: var(--color-scent-text-secondary);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+
+.scent-type-meta {
+  color: var(--color-scent-text-muted);
+  font-size: 0.8125rem;
+  font-weight: 650;
+  letter-spacing: 0.1em;
+  line-height: 1.45;
+}
+
+.scent-type-chip {
+  color: var(--color-scent-text-secondary);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.scent-type-caption {
+  color: var(--color-scent-text-subtle);
+  font-size: 0.8125rem;
+  line-height: 1.55;
+}
+
+.scent-type-placeholder {
+  color: var(--color-scent-text-subtle);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
 
 .scrollbar-hide::-webkit-scrollbar { 
   display: none; 
