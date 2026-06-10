@@ -21,7 +21,7 @@ interface AppTopNavProps {
 }
 
 const navBaseClassName =
-  'text-[10px] sm:text-[13px] font-medium uppercase tracking-[0.16em] min-[430px]:tracking-[0.22em] whitespace-nowrap';
+  'text-[13px] sm:text-[14px] font-semibold uppercase tracking-[0.12em] min-[430px]:tracking-[0.16em] whitespace-nowrap';
 
 const inactiveNavClassName = `${navBaseClassName} text-[#f4debd]/85 hover:text-white transition-colors`;
 const activeNavClassName = `${navBaseClassName} text-scent-accent`;
@@ -61,7 +61,7 @@ const MobileAccountMenu: React.FC<MobileAccountMenuProps> = ({
           {authPictureUrl ? (
             <AvatarImage src={authPictureUrl} alt="" referrerPolicy="no-referrer" />
           ) : null}
-          <AvatarFallback className="bg-scent-surface text-[11px] font-semibold text-scent-accent">
+          <AvatarFallback className="bg-scent-surface text-[13px] font-semibold text-scent-accent">
             {getAvatarFallback(authEmail)}
           </AvatarFallback>
         </Avatar>
@@ -74,21 +74,21 @@ const MobileAccountMenu: React.FC<MobileAccountMenuProps> = ({
     >
       {authEmail ? (
         <>
-          <DropdownMenuLabel className="px-3 py-2 text-[10px] font-medium uppercase tracking-[0.16em] text-scent-muted">
+          <DropdownMenuLabel className="px-3 py-2 text-[13px] font-semibold uppercase tracking-[0.12em] text-scent-text-muted">
             {authEmail}
           </DropdownMenuLabel>
           <DropdownMenuSeparator className="bg-scent-accent/15" />
         </>
       ) : null}
       <DropdownMenuItem
-        className="cursor-pointer rounded-[6px] px-3 py-2.5 text-[12px] uppercase tracking-[0.18em] text-[#f4debd] focus:bg-scent-accent/15 focus:text-white"
+        className="cursor-pointer rounded-[6px] px-3 py-2.5 text-[13px] font-semibold uppercase tracking-[0.14em] text-[#f4debd] focus:bg-scent-accent/15 focus:text-white"
         onSelect={onShare}
       >
         <Share2 size={15} />
         Share
       </DropdownMenuItem>
       <DropdownMenuItem
-        className="cursor-pointer rounded-[6px] px-3 py-2.5 text-[12px] uppercase tracking-[0.18em] text-[#f4debd] focus:bg-scent-accent/15 focus:text-white"
+        className="cursor-pointer rounded-[6px] px-3 py-2.5 text-[13px] font-semibold uppercase tracking-[0.14em] text-[#f4debd] focus:bg-scent-accent/15 focus:text-white"
         onSelect={onSignOut}
       >
         <LogOut size={15} />
@@ -132,7 +132,7 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
   return (
     <nav className="scent-topbar fixed top-0 left-0 right-0 z-50 px-3 sm:px-8">
       <div className="max-w-[1760px] mx-auto h-full grid grid-cols-[minmax(84px,1fr)_auto_minmax(84px,1fr)] sm:grid-cols-[1fr_auto_1fr] items-center">
-        <div className="flex min-w-0 items-center gap-2 sm:gap-6 justify-self-start sm:justify-self-center">
+        <div className="flex min-w-0 items-center gap-4 sm:gap-6 justify-self-start">
           {authControl}
           {!isHomeRoute ? (
             <div className="hidden sm:flex items-center gap-6">
@@ -158,7 +158,7 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
           </h1>
         </div>
 
-        <div className="flex min-w-0 items-center gap-2 sm:gap-6 justify-self-end sm:justify-self-center">
+        <div className="flex min-w-0 items-center gap-4 sm:gap-6 justify-self-end">
           <NavLink
             to="/community"
             className={({ isActive }) =>

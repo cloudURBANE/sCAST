@@ -386,24 +386,24 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
             setStatusMessage(null);
           }}
           aria-expanded="false"
-          className="absolute right-4 top-4 z-10 inline-flex min-h-11 items-center justify-center rounded-full border border-scent-accent/28 bg-black/78 px-4 py-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[#fff7ec] shadow-[0_14px_28px_-18px_rgba(212,175,55,0.38)] transition-colors hover:border-scent-accent/48 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 sm:right-5 sm:top-5"
+          className="absolute right-4 top-4 z-10 inline-flex min-h-11 items-center justify-center rounded-full border border-scent-accent/28 bg-black/78 px-4 py-2 scent-type-chip text-[#fff7ec] shadow-[0_14px_28px_-18px_rgba(212,175,55,0.38)] transition-colors hover:border-scent-accent/48 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 sm:right-5 sm:top-5"
         >
           Start
         </button>
         <div className="mx-auto flex max-w-2xl flex-col items-center px-9 text-center sm:px-12">
-          <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-scent-accent/78">
+          <p className="scent-type-label text-scent-accent">
             Community forum
           </p>
           <h2 className="mt-3 text-balance font-serif text-3xl italic leading-tight text-[#fff7ec] sm:text-4xl">
             Rooms already moving through the lounge.
           </h2>
-          <p className="mt-3 max-w-xl text-sm leading-7 text-scent-muted/72">
+          <p className="mt-3 max-w-xl text-base leading-7 text-scent-text-muted">
             Ask a question, share your SOTD, run a battle, or check if a bottle is worth it.
           </p>
         </div>
 
         {statusMessage ? (
-          <p className="mx-auto mt-5 max-w-2xl rounded-[14px] border border-scent-accent/12 bg-black/58 px-4 py-3 text-center text-sm text-scent-muted">
+          <p className="mx-auto mt-5 max-w-2xl rounded-[14px] border border-scent-accent/12 bg-black/58 px-4 py-3 text-center text-base text-scent-text-muted">
             {statusMessage}
           </p>
         ) : null}
@@ -419,13 +419,13 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
       <form onSubmit={submitPost} className="space-y-5">
         <div className="relative flex flex-col items-center gap-4 text-center">
           <div className="min-w-0 px-10 sm:px-14">
-            <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-scent-accent/78">
+            <p className="scent-type-label text-scent-accent">
               Community forum
             </p>
             <h2 className="mt-2 font-serif text-3xl italic leading-tight text-[#fff7ec]">
               Start a room
             </h2>
-            <p className="mt-3 max-w-2xl text-sm leading-7 text-scent-muted/72">
+            <p className="mt-3 max-w-2xl text-base leading-7 text-scent-text-muted">
               Ask a question, share your SOTD, run a battle, or check if a bottle is worth it.
             </p>
           </div>
@@ -433,7 +433,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
             type="button"
             onClick={() => setComposerOpen(false)}
             aria-expanded="true"
-            className="absolute right-0 top-0 inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 rounded-full border border-scent-accent/18 bg-black/70 px-4 py-2 text-[10px] font-bold uppercase tracking-[0.14em] text-scent-muted transition-colors hover:border-scent-accent/36 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
+            className="absolute right-0 top-0 inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 rounded-full border border-scent-accent/18 bg-black/70 px-4 py-2 scent-type-chip text-scent-text-muted transition-colors hover:border-scent-accent/36 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
           >
             <X size={13} strokeWidth={1.8} aria-hidden="true" />
             Close
@@ -448,10 +448,10 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
               onClick={() => setPostType(type)}
               aria-pressed={postType === type}
               className={[
-                'inline-flex min-h-11 items-center justify-center gap-2 rounded-full border px-3 py-2 text-center text-[10px] font-bold uppercase tracking-[0.14em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35',
+                'inline-flex min-h-11 items-center justify-center gap-2 rounded-full border px-3 py-2 text-center scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35',
                 postType === type
                   ? 'border-scent-accent/48 bg-scent-accent/[0.08] text-[#fff7ec]'
-                  : 'border-scent-accent/16 bg-black/54 text-scent-muted hover:border-scent-accent/34 hover:text-[#fff7ec]',
+                  : 'border-scent-accent/16 bg-black/54 text-scent-text-muted hover:border-scent-accent/34 hover:text-[#fff7ec]',
               ].join(' ')}
             >
               <Icon size={14} strokeWidth={1.8} aria-hidden="true" />
@@ -469,7 +469,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
             maxLength={140}
             placeholder="Name the room"
             aria-label="Room name"
-            className="scent-lux-input h-12 w-full rounded-[var(--radius-scent)] px-4 text-sm text-[#fff7ec] placeholder:text-scent-muted/45"
+            className="scent-lux-input h-12 w-full rounded-[var(--radius-scent)] px-4 text-base text-[#fff7ec] placeholder:text-scent-text-subtle"
           />
           <input
             type="text"
@@ -479,7 +479,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
             onBlur={() => addTagsFromInput(tagInput)}
             placeholder="Add vibe tags"
             aria-label="Room tags"
-            className="scent-lux-input h-12 w-full rounded-[var(--radius-scent)] px-4 text-sm text-[#fff7ec] placeholder:text-scent-muted/45"
+            className="scent-lux-input h-12 w-full rounded-[var(--radius-scent)] px-4 text-base text-[#fff7ec] placeholder:text-scent-text-subtle"
           />
         </div>
 
@@ -490,7 +490,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
                 key={tag}
                 type="button"
                 onClick={() => setTags((current) => current.filter((item) => item !== tag))}
-                className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/54 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-scent-muted transition-colors hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
+                className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/54 px-3 py-1.5 scent-type-chip text-scent-text-muted transition-colors hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
               >
                 #{tag}
                 <X size={12} strokeWidth={1.8} aria-hidden="true" />
@@ -508,7 +508,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
               maxLength={80}
               placeholder="Weather"
               aria-label="Weather"
-              className="scent-lux-input h-11 rounded-full px-4 text-sm text-[#fff7ec] placeholder:text-scent-muted/45"
+              className="scent-lux-input h-11 rounded-full px-4 text-base text-[#fff7ec] placeholder:text-scent-text-subtle"
             />
             <input
               type="text"
@@ -517,7 +517,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
               maxLength={80}
               placeholder="Occasion"
               aria-label="Occasion"
-              className="scent-lux-input h-11 rounded-full px-4 text-sm text-[#fff7ec] placeholder:text-scent-muted/45"
+              className="scent-lux-input h-11 rounded-full px-4 text-base text-[#fff7ec] placeholder:text-scent-text-subtle"
             />
             <input
               type="text"
@@ -526,7 +526,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
               maxLength={80}
               placeholder="Mood"
               aria-label="Mood"
-              className="scent-lux-input h-11 rounded-full px-4 text-sm text-[#fff7ec] placeholder:text-scent-muted/45"
+              className="scent-lux-input h-11 rounded-full px-4 text-base text-[#fff7ec] placeholder:text-scent-text-subtle"
             />
           </div>
         ) : null}
@@ -540,7 +540,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
               maxLength={80}
               placeholder="Option A"
               aria-label="Battle option A"
-              className="scent-lux-input h-11 rounded-full px-4 text-sm text-[#fff7ec] placeholder:text-scent-muted/45"
+              className="scent-lux-input h-11 rounded-full px-4 text-base text-[#fff7ec] placeholder:text-scent-text-subtle"
             />
             <input
               type="text"
@@ -549,7 +549,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
               maxLength={80}
               placeholder="Option B"
               aria-label="Battle option B"
-              className="scent-lux-input h-11 rounded-full px-4 text-sm text-[#fff7ec] placeholder:text-scent-muted/45"
+              className="scent-lux-input h-11 rounded-full px-4 text-base text-[#fff7ec] placeholder:text-scent-text-subtle"
             />
           </div>
         ) : null}
@@ -562,7 +562,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
             maxLength={120}
             placeholder="Price context"
             aria-label="Price context"
-            className="scent-lux-input h-11 w-full rounded-full px-4 text-sm text-[#fff7ec] placeholder:text-scent-muted/45"
+            className="scent-lux-input h-11 w-full rounded-full px-4 text-base text-[#fff7ec] placeholder:text-scent-text-subtle"
           />
         ) : null}
 
@@ -573,7 +573,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
           maxLength={4000}
           placeholder="What should the room discuss?"
           aria-label="Room discussion"
-          className="scent-lux-input min-h-40 w-full resize-y rounded-[var(--radius-scent)] px-4 py-3 text-sm leading-7 text-[#fff7ec] placeholder:text-scent-muted/45"
+          className="scent-lux-input min-h-40 w-full resize-y rounded-[var(--radius-scent)] px-4 py-3 text-base leading-7 text-[#fff7ec] placeholder:text-scent-text-subtle"
         />
 
         <div className="space-y-3 rounded-[18px] border border-scent-accent/12 bg-black/72 p-4">
@@ -582,7 +582,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
               <Search
                 size={16}
                 strokeWidth={1.8}
-                className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-scent-accent/55"
+                className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-scent-accent"
                 aria-hidden="true"
               />
               <input
@@ -597,14 +597,14 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
                 }}
                 placeholder="Attach a fragrance"
                 aria-label="Search fragrance to attach"
-                className="scent-lux-input h-11 w-full rounded-full pl-11 pr-4 text-sm text-[#fff7ec] placeholder:text-scent-muted/45"
+                className="scent-lux-input h-11 w-full rounded-full pl-11 pr-4 text-base text-[#fff7ec] placeholder:text-scent-text-subtle"
               />
             </div>
             <button
               type="button"
               onClick={() => void searchCatalog()}
               disabled={searchingFragrance || !fragranceQuery.trim()}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-scent-accent/24 bg-black/58 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-scent-muted transition-colors hover:border-scent-accent/42 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 disabled:pointer-events-none disabled:opacity-55"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-scent-accent/24 bg-black/58 px-4 py-2 scent-type-chip text-scent-text-muted transition-colors hover:border-scent-accent/42 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 disabled:pointer-events-none disabled:opacity-55"
             >
               {searchingFragrance ? (
                 <LoaderCircle size={14} className="animate-spin" aria-hidden="true" />
@@ -632,14 +632,14 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
                       <span className="block truncate font-serif text-base italic text-[#fff7ec]">
                         {result.name}
                       </span>
-                      <span className="mt-1 block truncate text-[10px] font-bold uppercase tracking-[0.16em] text-scent-accent/70">
+                      <span className="mt-1 block truncate scent-type-label text-scent-accent">
                         {firstString(result.brand, result.house) ?? 'House unavailable'}
                       </span>
                     </span>
                     {busy ? (
-                      <LoaderCircle size={16} className="animate-spin text-scent-accent/80" aria-hidden="true" />
+                      <LoaderCircle size={16} className="animate-spin text-scent-accent" aria-hidden="true" />
                     ) : (
-                      <Plus size={16} className="text-scent-accent/80" aria-hidden="true" />
+                      <Plus size={16} className="text-scent-accent" aria-hidden="true" />
                     )}
                   </button>
                 );
@@ -665,7 +665,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
                     <p className="truncate font-serif text-base italic leading-tight text-[#fff7ec]">
                       {fragrance.name}
                     </p>
-                    <p className="mt-1 truncate text-[10px] font-bold uppercase tracking-[0.16em] text-scent-accent/75">
+                    <p className="mt-1 truncate scent-type-label text-scent-accent">
                       {fragrance.brand}
                     </p>
                   </div>
@@ -673,7 +673,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
                     type="button"
                     onClick={() => removeFragrance(fragrance)}
                     aria-label={`Remove ${fragrance.name}`}
-                    className="inline-flex h-11 w-11 items-center justify-center rounded-full text-scent-muted transition-colors hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
+                    className="inline-flex h-11 w-11 items-center justify-center rounded-full text-scent-text-muted transition-colors hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
                   >
                     <X size={14} strokeWidth={1.8} aria-hidden="true" />
                   </button>
@@ -684,13 +684,13 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
         </div>
 
         {statusMessage ? (
-          <p className="rounded-[14px] border border-scent-accent/12 bg-black/58 px-4 py-3 text-center text-sm text-scent-muted">
+          <p className="rounded-[14px] border border-scent-accent/12 bg-black/58 px-4 py-3 text-center text-base text-scent-text-muted">
             {statusMessage}
           </p>
         ) : null}
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-scent-muted/70">
+          <p className="scent-type-meta uppercase">
             {body.trim().length}/4000
           </p>
           <button

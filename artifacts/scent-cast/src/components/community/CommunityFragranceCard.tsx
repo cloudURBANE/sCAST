@@ -18,7 +18,7 @@ export const CommunityFragranceCard = React.forwardRef<HTMLButtonElement, Commun
   >
     <div className="scent-card-frame" aria-hidden="true" />
     <div className="relative z-10 flex justify-end">
-      <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-scent-accent/80">
+      <span className="font-mono scent-type-label text-scent-accent">
         from {item.curator}
       </span>
     </div>
@@ -39,7 +39,7 @@ export const CommunityFragranceCard = React.forwardRef<HTMLButtonElement, Commun
       <h3 className="scent-card-title" title={item.name}>{item.name}</h3>
     </div>
     {item.family ? (
-      <p className="relative z-10 mt-2 text-center text-[9px] uppercase tracking-[0.22em] text-scent-muted">
+      <p className="relative z-10 mt-2 text-center scent-type-meta uppercase">
         {item.family}
       </p>
     ) : null}

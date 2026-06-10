@@ -122,7 +122,7 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
     return (
       <section className="scent-community-marquee" aria-label="Community fragrance marquee">
         <div className="flex items-center justify-center py-14">
-          <p className="text-[11px] uppercase tracking-[0.3em] text-scent-muted/70">
+          <p className="scent-type-label">
             {isError ? 'Community unavailable' : 'No community fragrances yet'}
           </p>
         </div>
@@ -173,7 +173,7 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
                   >
                     <div className="scent-card-frame" aria-hidden="true" />
                     <div className="relative z-10 flex justify-end">
-                      <span className="font-mono text-[8px] uppercase tracking-[0.22em] text-scent-accent/80">
+                      <span className="font-mono scent-type-label text-scent-accent">
                         {item.curator}
                       </span>
                     </div>
