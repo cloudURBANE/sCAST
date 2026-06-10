@@ -82,11 +82,11 @@ const TYPEWRITER_FRAME_MS = 24;
 const NOTE_MARQUEE_MIN_CHARS = 58;
 const NOTE_MARQUEE_MIN_COUNT = 5;
 const DECORATIVE_REPEAT_COUNT = 2;
-const GUIDE_START_DELAY_MS = 1200;
-const GUIDE_LAYER_DURATION_MS = 1050;
-const GUIDE_TRACE_DURATION_S = 0.98;
+const GUIDE_START_DELAY_MS = 560;
+const GUIDE_LAYER_DURATION_MS = 1180;
+const GUIDE_TRACE_DURATION_S = 1.06;
+const GUIDE_INTERSECTION_RATIO = 0.22;
 const NO_ACTIVE_NOTES: string[] = [];
-const GUIDE_LAYERS: ActiveLayer[] = ['top', 'heart', 'base'];
 const LAYER_CENTER_Y: Record<ActiveLayer, number> = {
   top: 82,
   heart: 200,
@@ -555,6 +555,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
   const [hoveredLayer, setHoveredLayer] = React.useState<ActiveLayer | null>(null);
   const [focusedLayer, setFocusedLayer] = React.useState<ActiveLayer | null>(null);
   const [guidedLayer, setGuidedLayer] = React.useState<ActiveLayer | null>(null);
+  const [isGuideSequencing, setIsGuideSequencing] = React.useState(false);
   const rootRef = React.useRef<HTMLElement | null>(null);
   const pointerActivationRef = React.useRef<PointerActivation | null>(null);
   const ignoreClickActivationRef = React.useRef(false);
@@ -578,6 +579,19 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
   const idPrefix = React.useId().replace(/:/g, '');
   const state = activeLayer ?? 'idle';
   const engagedLayer = hoveredLayer ?? focusedLayer ?? (activeLayer ? null : guidedLayer);
+  const guideLayerSequence = React.useMemo<ActiveLayer[]>(() => {
+    const sequence: ActiveLayer[] = [];
+    if (topNotes.length > 0) sequence.push('top');
+    if (heartNotes.length > 0) sequence.push('heart');
+    if (baseNotes.length > 0) sequence.push('base');
+    return sequence;
+  }, [topNotes.length, heartNotes.length, baseNotes.length]);
+  const guideCanPlay = shouldPlayGuide && guideLayerSequence.length > 0;
+  const guideVisualsMounted = guideCanPlay && isGuideSequencing;
+  const guideBandStrokeWidth = lowRenderBudget ? 5.8 : 3.4;
+  const guideCoreStrokeWidth = lowRenderBudget ? 2.65 : 1.45;
+  const guideGlintStrokeWidth = lowRenderBudget ? 2.45 : 1.7;
+  const guideDash = lowRenderBudget ? '0.12 0.88' : '0.07 0.93';
 
   const allLinks = React.useMemo(
     () => resolveNoteAccordLinks([...topNotes, ...heartNotes, ...baseNotes], accordRows ?? []),
@@ -598,8 +612,15 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
     guideTimersRef.current = [];
   }, []);
 
+  const cancelGuide = React.useCallback(() => {
+    guideHasPlayedRef.current = true;
+    clearGuideTimers();
+    setGuidedLayer(null);
+    setIsGuideSequencing(false);
+  }, [clearGuideTimers]);
+
   React.useEffect(() => {
-    if (!shouldPlayGuide) return;
+    if (!guideCanPlay) return;
 
     const root = rootRef.current;
     if (!root || guideHasPlayedRef.current) return;
@@ -609,8 +630,10 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
 
       guideHasPlayedRef.current = true;
       clearGuideTimers();
+      setGuidedLayer(null);
+      setIsGuideSequencing(true);
 
-      GUIDE_LAYERS.forEach((layer, index) => {
+      guideLayerSequence.forEach((layer, index) => {
         const timer = window.setTimeout(() => {
           setGuidedLayer(layer);
         }, GUIDE_START_DELAY_MS + index * GUIDE_LAYER_DURATION_MS);
@@ -619,26 +642,31 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
 
       const endTimer = window.setTimeout(() => {
         setGuidedLayer(null);
-      }, GUIDE_START_DELAY_MS + GUIDE_LAYERS.length * GUIDE_LAYER_DURATION_MS);
+        setIsGuideSequencing(false);
+      }, GUIDE_START_DELAY_MS + guideLayerSequence.length * GUIDE_LAYER_DURATION_MS);
       guideTimersRef.current.push(endTimer);
     };
 
     if (typeof IntersectionObserver === 'undefined') {
       playGuide();
-      return clearGuideTimers;
+      return () => {
+        clearGuideTimers();
+        setGuidedLayer(null);
+        setIsGuideSequencing(false);
+      };
     }
 
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries.some((entry) => entry.isIntersecting && entry.intersectionRatio >= 0.38)) {
+        if (entries.some((entry) => entry.isIntersecting && entry.intersectionRatio >= GUIDE_INTERSECTION_RATIO)) {
           playGuide();
           observer.disconnect();
         }
       },
       {
         root: null,
-        rootMargin: '0px 0px -8% 0px',
-        threshold: [0.25, 0.38, 0.55, 0.72],
+        rootMargin: '0px 0px -2% 0px',
+        threshold: [0.12, GUIDE_INTERSECTION_RATIO, 0.38, 0.55],
       },
     );
 
@@ -647,8 +675,10 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
     return () => {
       observer.disconnect();
       clearGuideTimers();
+      setGuidedLayer(null);
+      setIsGuideSequencing(false);
     };
-  }, [clearGuideTimers, shouldPlayGuide]);
+  }, [clearGuideTimers, guideCanPlay, guideLayerSequence]);
 
   React.useEffect(() => {
     if (!activeLayer) return;
@@ -739,13 +769,15 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
   }, [onActiveNotesChange, selectedNotes]);
 
   const handleLayerActivate = React.useCallback((layer: ActiveLayer) => {
+    cancelGuide();
     setActiveLayer((current) => (current === layer ? null : layer));
-  }, []);
+  }, [cancelGuide]);
 
   const handleLayerPointerDown = React.useCallback((event: React.PointerEvent<SVGGElement>, layer: ActiveLayer) => {
     if (event.pointerType === 'mouse' && event.button !== 0) return;
 
     event.stopPropagation();
+    cancelGuide();
     pointerActivationRef.current = {
       layer,
       pointerId: event.pointerId,
@@ -759,7 +791,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
       // Some mobile WebKit builds expose pointer events on SVG but reject capture.
       // The click fallback below keeps tap activation reliable there.
     }
-  }, []);
+  }, [cancelGuide]);
 
   const handleLayerPointerUp = React.useCallback((event: React.PointerEvent<SVGGElement>, layer: ActiveLayer) => {
     event.stopPropagation();
@@ -1296,13 +1328,17 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                 }}
                 onPointerEnter={isEmpty ? undefined : (event) => {
                   if (event.pointerType !== 'mouse') return;
+                  cancelGuide();
                   setHoveredLayer(layer.key);
                 }}
                 onPointerLeave={isEmpty ? undefined : (event) => {
                   if (event.pointerType !== 'mouse') return;
                   setHoveredLayer((current) => (current === layer.key ? null : current));
                 }}
-                onFocus={isEmpty ? undefined : () => setFocusedLayer(layer.key)}
+                onFocus={isEmpty ? undefined : () => {
+                  cancelGuide();
+                  setFocusedLayer(layer.key);
+                }}
                 onBlur={isEmpty ? undefined : () => setFocusedLayer((current) => (current === layer.key ? null : current))}
                 onPointerDown={isEmpty ? undefined : (event) => handleLayerPointerDown(event, layer.key)}
                 onPointerUp={isEmpty ? undefined : (event) => handleLayerPointerUp(event, layer.key)}
@@ -1388,8 +1424,16 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                   initial={false}
                   animate={
                     prefersReducedMotion
-                      ? { opacity: isActive ? 0.4 : 0 }
-                      : { opacity: isActive ? [0.28, 0.42, 0.28] : isGuided ? [0.18, 0.34, 0.18] : isEngaged ? [0.12, 0.22, 0.12] : 0 }
+                      ? { opacity: isActive ? 0.4 : isGuided && lowRenderBudget ? 0.46 : 0 }
+                      : {
+                          opacity: isActive
+                            ? [0.28, 0.42, 0.28]
+                            : isGuided
+                              ? [0.18, 0.34, 0.18]
+                              : isEngaged
+                                ? [0.12, 0.22, 0.12]
+                                : 0,
+                        }
                   }
                   transition={pulseTransition}
                 />
@@ -1443,7 +1487,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                   initial={false}
                   animate={
                     prefersReducedMotion
-                      ? { opacity: isActive ? 0.4 : isEngaged ? 0.22 : 0 }
+                      ? { opacity: isActive ? 0.4 : isGuided && lowRenderBudget ? 0.38 : isEngaged ? 0.22 : 0 }
                       : {
                           opacity: isActive
                             ? [0.28, 0.42, 0.28]
@@ -1473,12 +1517,42 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                   />
                 )}
 
-                {shouldPlayGuide && (
+                {guideVisualsMounted && (
+                  <motion.path
+                    d={layer.hitPath}
+                    fill="none"
+                    stroke="#fc9d19"
+                    strokeWidth={guideBandStrokeWidth}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    pointerEvents="none"
+                    vectorEffect="non-scaling-stroke"
+                    initial={false}
+                    animate={
+                      isGuided
+                        ? {
+                            pathLength: [0, 1],
+                            opacity: lowRenderBudget ? [0, 0.5, 0.08] : [0, 0.32, 0.04],
+                          }
+                        : { pathLength: 0, opacity: 0 }
+                    }
+                    transition={
+                      isGuided
+                        ? {
+                            pathLength: { duration: GUIDE_TRACE_DURATION_S, ease: CALM_EASE },
+                            opacity: { duration: GUIDE_TRACE_DURATION_S, times: [0, 0.22, 1], ease: CALM_EASE },
+                          }
+                        : { duration: 0.12, ease: CALM_EASE }
+                    }
+                  />
+                )}
+
+                {guideVisualsMounted && (
                   <motion.path
                     d={layer.hitPath}
                     fill="none"
                     stroke={fill('active-edge-gold')}
-                    strokeWidth="1.45"
+                    strokeWidth={guideCoreStrokeWidth}
                     strokeLinecap="round"
                     strokeLinejoin="miter"
                     pointerEvents="none"
@@ -1487,7 +1561,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                     initial={false}
                     animate={
                       isGuided
-                        ? { pathLength: [0, 1], opacity: [0, 0.95, 0.18] }
+                        ? { pathLength: [0, 1], opacity: lowRenderBudget ? [0, 1, 0.26] : [0, 0.95, 0.18] }
                         : { pathLength: 0, opacity: 0 }
                     }
                     transition={
@@ -1502,16 +1576,16 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                 )}
 
                 {/* Traveling guide glint: follows the exact tier silhouette during the one-shot hint. */}
-                {shouldPlayGuide && (
+                {guideVisualsMounted && (
                   <motion.path
                     d={layer.hitPath}
                     pathLength={1}
                     fill="none"
                     stroke="#fff6dd"
-                    strokeWidth="1.7"
+                    strokeWidth={guideGlintStrokeWidth}
                     strokeLinecap="round"
                     strokeLinejoin="miter"
-                    strokeDasharray="0.07 0.93"
+                    strokeDasharray={guideDash}
                     pointerEvents="none"
                     vectorEffect="non-scaling-stroke"
                     filter={filterRef('gold-soft')}
@@ -1526,6 +1600,34 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                         : { opacity: { duration: 0.18, ease: CALM_EASE } }
                     }
                   />
+                )}
+
+                {/* Guide arrival pulse: a cheap geometry cue that keeps the trace readable on small iOS screens. */}
+                {guideVisualsMounted && (
+                  <motion.g
+                    aria-hidden
+                    pointerEvents="none"
+                    initial={false}
+                    animate={isGuided ? { opacity: [0, 1, 0], scale: [0.6, 1.08, 0.92] } : { opacity: 0, scale: 0.78 }}
+                    transition={isGuided ? { duration: GUIDE_TRACE_DURATION_S, times: [0, 0.36, 1], ease: CALM_EASE } : { duration: 0.12, ease: CALM_EASE }}
+                    style={{
+                      transformBox: 'view-box',
+                      transformOrigin: `${PYRAMID_CENTER_X}px ${LAYER_CENTER_Y[layer.key]}px`,
+                    }}
+                  >
+                    <circle
+                      cx={PYRAMID_CENTER_X}
+                      cy={LAYER_CENTER_Y[layer.key]}
+                      r={lowRenderBudget ? 14 : 11}
+                      fill={fill('gold-glow')}
+                    />
+                    <circle
+                      cx={PYRAMID_CENTER_X}
+                      cy={LAYER_CENTER_Y[layer.key]}
+                      r={lowRenderBudget ? 3.4 : 2.6}
+                      fill="#fff6dd"
+                    />
+                  </motion.g>
                 )}
 
                 {/* Keyboard focus ring — visible only on :focus-visible via parent class */}
