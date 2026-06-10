@@ -27,6 +27,11 @@ import {
 // local marker only suppresses flicker before the server responds.
 const ONBOARDING_STORAGE_KEY = 'scent_onboarding_completed';
 const WARDROBE_ONBOARDING_THRESHOLD = 3;
+// How many guest-added fragrances before we interrupt with the sign-in modal.
+// Raised from 2 → 5 so a guest can meaningfully try the product (build a small
+// wardrobe) before being asked to create an account; the gentler GuestSaveBanner
+// nudges in the meantime.
+const GUEST_SAVE_PROMPT_THRESHOLD = 5;
 
 function onboardingMarkerKey(authToken: string): string {
   return `${ONBOARDING_STORAGE_KEY}:${authToken}`;
@@ -72,6 +77,16 @@ type LooseRecord = Record<string, unknown>;
 // status payload never fully decodes, so a permanently-partial item does not
 // poll forever. Counted off enrichment.requested_count.
 const MAX_ENRICHMENT_ATTEMPTS = 8;
+const DETAIL_REFRESH_POLL_MS = 15_000;
+const DETAIL_REFRESH_EMPTY_BACKOFF_MS = 3 * 60_000;
+const DETAIL_REFRESH_BASE_BACKOFF_MS = 60_000;
+const DETAIL_REFRESH_MAX_BACKOFF_MS = 10 * 60_000;
+
+type DetailRefreshBackoffMeta = {
+  nextEligibleAt: number;
+  attemptCount: number;
+  lastStatus: string;
+};
 
 const isLooseRecord = (value: unknown): value is LooseRecord =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -145,6 +160,17 @@ function sameWardrobeEntry(
   return item.id === target.id;
 }
 
+function detailRefreshKeyFor(item: Pick<Fragrance, 'id' | '_dbId'>): string {
+  return item._dbId ?? item.id;
+}
+
+function detailRefreshBackoffDelay(attemptCount: number): number {
+  return Math.min(
+    DETAIL_REFRESH_MAX_BACKOFF_MS,
+    DETAIL_REFRESH_BASE_BACKOFF_MS * 2 ** Math.max(0, attemptCount - 1),
+  );
+}
+
 function normalizedEnrichmentStatus(item: Fragrance): string {
   return firstString(item.enrichment?.status, item.raw_engine_detail?.enrichment?.status)
     ?.toLowerCase() ?? '';
@@ -177,12 +203,22 @@ function sourceCoverageComplete(item: Fragrance): boolean {
   );
 }
 
+function wardrobeNeedsIncompleteRecovery(item: Fragrance): boolean {
+  if (fgMetricsComplete(item) || sourceCoverageComplete(item)) return false;
+  const status = normalizedEnrichmentStatus(item);
+  if (status !== 'completed' && status !== 'complete') return false;
+  const enrichment = item.enrichment ?? item.raw_engine_detail?.enrichment;
+  if ((enrichment?.requested_count ?? 0) >= MAX_ENRICHMENT_ATTEMPTS) return false;
+  return hasFragranticaRefreshTarget(item);
+}
+
 function wardrobeNeedsEnrichmentRefresh(item: Fragrance): boolean {
   const enrichment = item.enrichment ?? item.raw_engine_detail?.enrichment;
   if (fgMetricsComplete(item) || sourceCoverageComplete(item)) return false;
   if (isBackgroundEnrichmentQueued(enrichment)) return true;
   const status = normalizedEnrichmentStatus(item);
-  if (status === 'completed' || status === 'complete' || status === 'not_needed') return false;
+  if (status === 'completed' || status === 'complete') return wardrobeNeedsIncompleteRecovery(item);
+  if (status === 'not_needed') return false;
   if (status === 'failed' || status === 'ignored') return false;
   if ((enrichment?.requested_count ?? 0) >= MAX_ENRICHMENT_ATTEMPTS) return false;
   return hasFragranticaRefreshTarget(item) && !fgMetricsComplete(item);
@@ -197,15 +233,18 @@ function detailRefreshPayloadFor(item: Fragrance): FragranceDetailRequestPayload
     detail?.raw?.source_urls?.bn_url,
   );
   const engineId = firstString(item.fragranceApiId, detail?.id);
+  const recoveryFlag = wardrobeNeedsIncompleteRecovery(item)
+    ? { recover_incomplete: true }
+    : {};
   if (engineId) {
     const origin = engineId.startsWith('catalog:') ||
       engineId.startsWith('dataset:') ||
       engineId.startsWith('local:')
       ? 'app'
       : 'srt';
-    return { id: engineId, ...(sourceUrl ? { source_url: sourceUrl } : {}), origin };
+    return { id: engineId, ...(sourceUrl ? { source_url: sourceUrl } : {}), origin, ...recoveryFlag };
   }
-  return sourceUrl ? { source_url: sourceUrl, origin: 'srt' } : null;
+  return sourceUrl ? { source_url: sourceUrl, origin: 'srt', ...recoveryFlag } : null;
 }
 
 const RAIN_CONDITION_SIGNALS = ['rain', 'drizzle', 'storm'];
@@ -464,6 +503,10 @@ interface WardrobeContextType {
   wardrobeFixHint: string | null;
   vaultSearchUiActive: boolean;
   wardrobeError: string | null;
+  /** True when the signed-in user is an admin (server-confirmed via app-state). */
+  isAdmin: boolean;
+  /** True while a freshly-added imageless tile is actively backfilling its image. */
+  isImageSyncing: (item: Pick<Fragrance, 'id' | '_dbId'>) => boolean;
   retryLoadWardrobe: () => void;
   setItems: React.Dispatch<React.SetStateAction<Fragrance[]>>;
   setIsIntentModalOpen: (open: boolean) => void;
@@ -476,6 +519,16 @@ interface WardrobeContextType {
   loadWardrobe: (token: string, signal?: AbortSignal) => Promise<void>;
   handleAddItem: (item: any) => Promise<{ persisted: boolean; requiresAuth?: boolean; error?: string }>;
   handlePersistWardrobeImage: (target: Fragrance, imageUrl?: string, imageAdjustment?: BottleImageAdjustment) => Promise<Fragrance | null>;
+  /** Admin-only: re-host an uploaded file / URL and return a persistable image URL. */
+  uploadAdminBottleImage: (input: {
+    brand: string;
+    name: string;
+    fragranceId?: string | null;
+    file?: File;
+    imageUrl?: string;
+    sourcePageUrl?: string;
+    removeBackground: boolean;
+  }) => Promise<{ imageUrl: string; imageHash?: string; backgroundRemoved: boolean }>;
   handlePersistWardrobeDetailRefresh: (target: Fragrance, detail: FragranceDetail) => Promise<Fragrance | null>;
   handleRevertWardrobe: () => void;
   handleDeleteItem: (target: Fragrance) => Promise<void>;
@@ -509,12 +562,24 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [wardrobeFixBusy, setWardrobeFixBusy] = useState(false);
   const [wardrobeFixHint, setWardrobeFixHint] = useState<string | null>(null);
   const [vaultSearchUiActive, setVaultSearchUiActive] = useState(false);
+  // Admin flag from GET /api/me/app-state. UI hint only — the upload route
+  // enforces admin access server-side regardless of this value.
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const autoWardrobeRebuildAttemptedRef = useRef(false);
   const enrichmentRefreshInFlightRef = useRef(false);
+  const detailRefreshBackoffRef = useRef<Map<string, DetailRefreshBackoffMeta>>(new Map());
+  const detailRefreshIdleUntilRef = useRef(0);
   const isMutatingRef = useRef(false);
   const lastMutationRef = useRef(0);
   const appStateRefreshInFlightRef = useRef(false);
+  const imageBackfillTimersRef = useRef<number[]>([]);
+  // The single fragrance whose image is being actively backfilled (one burst runs
+  // at a time — see `scheduleImageBackfillRehydrate`). Drives the honest "fetching
+  // image…" affordance so a freshly-added imageless tile shows a spinner *while it
+  // is genuinely syncing*, then settles to "No image" once the burst gives up —
+  // rather than spinning forever (FE-1) or lying with "No image" mid-fetch.
+  const [imageSyncTarget, setImageSyncTarget] = useState<Pick<Fragrance, 'id' | '_dbId'> | null>(null);
   const itemsRef = useRef(items);
   const authTokenRef = useRef(authToken);
   itemsRef.current = items;
@@ -561,7 +626,14 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         throw new Error(`HTTP ${res.status}`);
       }
       const data: Fragrance[] = await res.json();
+      // Discard a payload that resolved across a mutation. The entry guard only
+      // caught loads that *started* during a mutation; a poll already in-flight
+      // when the user saves (e.g. Find Image) finishes after isMutatingRef has
+      // flipped back to false and would otherwise stomp the optimistic image
+      // with stale rows — the "tester → old image → tester" flicker. The 5s
+      // cooldown matches the entry guard above.
       if (isMutatingRef.current) return;
+      if (Date.now() - lastMutationRef.current < 5000) return;
       setItems((prev) => reconcileWardrobeItems(prev, data));
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
@@ -585,6 +657,72 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   }, [authToken, loadWardrobe]);
 
+  const clearImageBackfillTimers = useCallback(() => {
+    for (const id of imageBackfillTimersRef.current) {
+      window.clearTimeout(id);
+    }
+    imageBackfillTimersRef.current = [];
+    // Stopping the burst (image arrived, row deleted, auth changed, or unmount)
+    // also drops the syncing affordance — the tile reverts to its real state.
+    setImageSyncTarget(null);
+  }, []);
+
+  // New fragrances save with no image: `POST /api/scent-profile` resolves images
+  // deferred (returns empty now, backfills the shared catalog in the background),
+  // so the tile only fills in when `GET /api/wardrobe` re-hydrates from the catalog.
+  // Without help, the soonest that happens is the 60s background poll — the tile
+  // sits on "No image" for up to a minute. Kick a short, decaying burst of polls so
+  // the image appears within seconds. Delays clear the 5s post-mutation cooldown in
+  // `loadWardrobe` and stop early once the saved row has an image.
+  const scheduleImageBackfillRehydrate = useCallback(
+    (token: string, target: Pick<Fragrance, 'id' | '_dbId'>) => {
+      clearImageBackfillTimers();
+      // Mark the tile as actively syncing for the lifetime of the burst.
+      setImageSyncTarget(target);
+      const POLL_SCHEDULE_MS = [6000, 12000, 20000, 32000, 48000];
+      for (const delay of POLL_SCHEDULE_MS) {
+        const id = window.setTimeout(() => {
+          if (authTokenRef.current !== token) {
+            clearImageBackfillTimers();
+            return;
+          }
+          const current = itemsRef.current.find((item) => sameWardrobeEntry(item, target));
+          const resolved =
+            typeof current?.imageUrl === 'string' && current.imageUrl.trim().length > 0;
+          // Row gone (deleted) or image already arrived → stop the remaining burst.
+          if (!current || resolved) {
+            clearImageBackfillTimers();
+            return;
+          }
+          void loadWardrobe(token);
+        }, delay);
+        imageBackfillTimersRef.current.push(id);
+      }
+      // Hard stop just after the final poll: if the image still hasn't landed,
+      // drop the syncing affordance so the tile settles to "No image" instead of
+      // spinning indefinitely. This guarantees the spinner is always bounded —
+      // never reintroducing the perpetual-spinner bug FE-1 fixed.
+      const giveUpId = window.setTimeout(() => {
+        setImageSyncTarget((current) =>
+          current && sameWardrobeEntry(current, target) ? null : current,
+        );
+      }, POLL_SCHEDULE_MS[POLL_SCHEDULE_MS.length - 1] + 4000);
+      imageBackfillTimersRef.current.push(giveUpId);
+    },
+    [clearImageBackfillTimers, loadWardrobe],
+  );
+
+  useEffect(() => clearImageBackfillTimers, [clearImageBackfillTimers]);
+
+  // True only while a tile's image is being actively backfilled, so the UI can
+  // show "fetching image…" instead of a premature "No image". Matches the burst's
+  // own `sameWardrobeEntry` logic so it survives the id→_dbId hydration swap.
+  const isImageSyncing = useCallback(
+    (item: Pick<Fragrance, 'id' | '_dbId'>) =>
+      imageSyncTarget != null && sameWardrobeEntry(item, imageSyncTarget),
+    [imageSyncTarget],
+  );
+
   const loadAppState = useCallback(async (token: string, signal?: AbortSignal): Promise<boolean> => {
     const res = await fetch('/api/me/app-state', {
       headers: { Authorization: `Bearer ${token}` },
@@ -593,10 +731,11 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (!res.ok) {
       throw new Error(`App-state fetch failed: HTTP ${res.status}`);
     }
-    const data = (await res.json()) as { wardrobeOnboardingCompleted?: boolean };
+    const data = (await res.json()) as { wardrobeOnboardingCompleted?: boolean; isAdmin?: boolean };
     const completed = Boolean(data.wardrobeOnboardingCompleted);
     if (authTokenRef.current === token) {
       setOnboardingCompleted(completed);
+      setIsAdmin(Boolean(data.isAdmin));
       writeOnboardingMarker(token, completed);
     }
     return completed;
@@ -618,6 +757,10 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   useEffect(() => {
     autoWardrobeRebuildAttemptedRef.current = false;
     appStateRefreshInFlightRef.current = false;
+    detailRefreshBackoffRef.current.clear();
+    detailRefreshIdleUntilRef.current = 0;
+    // Clear admin until app-state reconfirms it for the new token (and on sign-out).
+    setIsAdmin(false);
   }, [authToken]);
 
   // Load wardrobe & share settings on login
@@ -767,6 +910,13 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             title: "Fragrance Enshrined",
             description: `${newItem.name} has been synced with your database.`
           });
+          // Deferred image resolution saves the row imageless; poll the catalog
+          // re-hydrate quickly instead of waiting for the 60s background tick.
+          const savedHasImage =
+            typeof savedItem.imageUrl === 'string' && savedItem.imageUrl.trim().length > 0;
+          if (!savedHasImage) {
+            scheduleImageBackfillRehydrate(authToken, savedItem);
+          }
           return { persisted: true };
         }
         throw new Error('Wardrobe save failed: empty API response');
@@ -784,13 +934,13 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         isMutatingRef.current = false;
         lastMutationRef.current = Date.now();
       }
-    } else if (nextCount >= 2 && !guestPromptDismissed) {
+    } else if (nextCount >= GUEST_SAVE_PROMPT_THRESHOLD && !guestPromptDismissed) {
       setIsAuthModalOpen(true);
       return { persisted: false, requiresAuth: true };
     }
 
     return { persisted: false, requiresAuth: !authToken };
-  }, [authToken, guestPromptDismissed, loadAppState, onboardingCompleted, setIsAuthModalOpen, toast]);
+  }, [authToken, guestPromptDismissed, loadAppState, onboardingCompleted, scheduleImageBackfillRehydrate, setIsAuthModalOpen, toast]);
 
   const handlePersistWardrobeImage = useCallback(async (
     target: Fragrance,
@@ -871,6 +1021,72 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   }, [authToken, toast]);
 
+  // Admin-only: upload/replace a bottle image (file or URL) via the re-hosting
+  // endpoint, returning a persistable storage URL. The caller then runs the
+  // returned URL through the normal preview -> handlePersistWardrobeImage save
+  // path, so this does not touch wardrobe state itself. Throws on failure so the
+  // editor can surface a clear error and keep the original image.
+  const uploadAdminBottleImage = useCallback(async (input: {
+    brand: string;
+    name: string;
+    fragranceId?: string | null;
+    file?: File;
+    imageUrl?: string;
+    sourcePageUrl?: string;
+    removeBackground: boolean;
+  }): Promise<{ imageUrl: string; imageHash?: string; backgroundRemoved: boolean }> => {
+    if (!authToken) throw new Error('Sign in required');
+
+    let res: Response;
+    if (input.file) {
+      const params = new URLSearchParams({
+        brand: input.brand,
+        name: input.name,
+        removeBackground: String(input.removeBackground),
+      });
+      if (input.fragranceId) params.set('fragranceId', String(input.fragranceId));
+      res = await fetch(`/api/admin/bottle-image/upload?${params.toString()}`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          'Content-Type': input.file.type || 'application/octet-stream',
+        },
+        body: input.file,
+      });
+    } else {
+      res = await fetch('/api/admin/bottle-image/upload', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          imageUrl: input.imageUrl,
+          sourcePageUrl: input.sourcePageUrl,
+          brand: input.brand,
+          name: input.name,
+          removeBackground: input.removeBackground,
+          fragranceId: input.fragranceId ?? undefined,
+        }),
+      });
+    }
+
+    const data = (await res.json().catch(() => ({}))) as {
+      imageUrl?: string;
+      imageHash?: string;
+      backgroundRemoved?: boolean;
+      error?: string;
+    };
+    if (!res.ok || !data.imageUrl) {
+      throw new Error(data.error || `Upload failed (HTTP ${res.status})`);
+    }
+    return {
+      imageUrl: data.imageUrl,
+      imageHash: data.imageHash,
+      backgroundRemoved: Boolean(data.backgroundRemoved),
+    };
+  }, [authToken]);
+
   const handlePersistWardrobeDetailRefresh = useCallback(async (
     target: Fragrance,
     detail: FragranceDetail,
@@ -926,27 +1142,123 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   }, [authToken, toast]);
 
+  const handlePersistWardrobeDetailRefreshBatch = useCallback(async (
+    updates: Array<{ target: Fragrance; detail: FragranceDetail }>,
+  ): Promise<Fragrance[]> => {
+    if (!authToken || updates.length === 0) return [];
+    isMutatingRef.current = true;
+    try {
+      const res = await fetch('/api/wardrobe/detail-refresh/batch', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({
+          updates: updates.map(({ target, detail }) => ({
+            id: target._dbId ?? target.id,
+            derived_metrics: detail.derived_metrics ?? null,
+            source_coverage: detail.source_coverage,
+            enrichment: detail.enrichment ?? null,
+            raw_engine_detail: detail,
+          })),
+        }),
+      });
+      const data = (await res.json().catch(() => null)) as {
+        items?: Array<Partial<Fragrance> & { _dbId?: string; error?: string }>;
+        error?: string;
+      } | null;
+      if (!res.ok) {
+        throw new Error(data?.error || `HTTP ${res.status}`);
+      }
+
+      const returned = Array.isArray(data?.items) ? data.items : [];
+      const mergedPairs = updates.flatMap(({ target, detail }) => {
+        const apiId = target._dbId ?? target.id;
+        const row = returned.find((item) =>
+          item._dbId === target._dbId ||
+          item._dbId === apiId ||
+          item.id === apiId ||
+          item.id === target.id,
+        );
+        if (!row) return [];
+        const next = {
+          ...target,
+          ...row,
+          id: target.id,
+          derived_metrics: detail.derived_metrics ?? null,
+          source_coverage: detail.source_coverage,
+          enrichment: detail.enrichment ?? null,
+          raw_engine_detail: detail,
+          _dbId: row._dbId ?? target._dbId,
+        } as Fragrance;
+        return [{ target, next }];
+      });
+
+      if (mergedPairs.length > 0) {
+        setItems((prev) =>
+          prev.map((item) => mergedPairs.find((pair) => sameWardrobeEntry(item, pair.target))?.next ?? item),
+        );
+      }
+      return mergedPairs.map((pair) => pair.next);
+    } catch (e) {
+      console.error('Failed to persist batched wardrobe detail refresh', e);
+      return [];
+    } finally {
+      isMutatingRef.current = false;
+      lastMutationRef.current = Date.now();
+    }
+  }, [authToken]);
+
   // Background detail enrichments scheduler
   useEffect(() => {
     if (!authToken || !wardrobeLoaded || items.length === 0) return;
     const abortController = new AbortController();
     let cancelled = false;
-    const REFRESH_MS = 15_000;
+
+    const noteBackoff = (item: Fragrance, status: string) => {
+      const key = detailRefreshKeyFor(item);
+      const current = detailRefreshBackoffRef.current.get(key);
+      const attemptCount = (current?.attemptCount ?? 0) + 1;
+      detailRefreshBackoffRef.current.set(key, {
+        attemptCount,
+        lastStatus: status,
+        nextEligibleAt: Date.now() + detailRefreshBackoffDelay(attemptCount),
+      });
+    };
+
+    const clearBackoff = (item: Fragrance) => {
+      detailRefreshBackoffRef.current.delete(detailRefreshKeyFor(item));
+    };
 
     const refreshPendingDetails = async () => {
       if (cancelled || enrichmentRefreshInFlightRef.current || isMutatingRef.current) return;
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      const now = Date.now();
+      if (detailRefreshIdleUntilRef.current > now) return;
       const targets = itemsRef.current
         .filter(wardrobeNeedsEnrichmentRefresh)
+        .filter((item) => {
+          const meta = detailRefreshBackoffRef.current.get(detailRefreshKeyFor(item));
+          return !meta || meta.nextEligibleAt <= now;
+        })
         .slice(0, 3);
-      if (targets.length === 0) return;
+      if (targets.length === 0) {
+        detailRefreshIdleUntilRef.current = now + DETAIL_REFRESH_EMPTY_BACKOFF_MS;
+        return;
+      }
+      detailRefreshIdleUntilRef.current = 0;
 
       enrichmentRefreshInFlightRef.current = true;
       try {
+        const readyUpdates: Array<{ target: Fragrance; detail: FragranceDetail }> = [];
         for (const item of targets) {
           if (cancelled) break;
           const payload = detailRefreshPayloadFor(item);
-          if (!payload) continue;
+          if (!payload) {
+            noteBackoff(item, 'missing_payload');
+            continue;
+          }
           const detail = normalizeFragranceDetail(
             (await getFragranceDetails(payload, { signal: abortController.signal })) as FragranceDetail,
           );
@@ -958,12 +1270,46 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           const metricsComplete = Boolean(
             detail.source_coverage?.fragrantica_metrics_complete,
           );
-          if (!metricsComplete && isBackgroundEnrichmentQueued(detail.enrichment)) continue;
-          await handlePersistWardrobeDetailRefresh(item, detail);
+          if (!metricsComplete && isBackgroundEnrichmentQueued(detail.enrichment)) {
+            setItems((prev) =>
+              prev.map((existing) =>
+                sameWardrobeEntry(existing, item)
+                  ? {
+                      ...existing,
+                      enrichment: detail.enrichment ?? existing.enrichment,
+                      source_coverage: detail.source_coverage ?? existing.source_coverage,
+                      raw_engine_detail: {
+                        ...(existing.raw_engine_detail ?? {}),
+                        enrichment:
+                          detail.enrichment ?? existing.raw_engine_detail?.enrichment,
+                        source_coverage:
+                          detail.source_coverage ??
+                          existing.raw_engine_detail?.source_coverage,
+                      },
+                    }
+                  : existing,
+              ),
+            );
+            noteBackoff(item, String(detail.enrichment?.status ?? 'queued'));
+            continue;
+          }
+          readyUpdates.push({ target: item, detail });
+        }
+
+        if (readyUpdates.length > 0) {
+          const persisted = await handlePersistWardrobeDetailRefreshBatch(readyUpdates);
+          for (const update of readyUpdates) {
+            const wasPersisted = persisted.some((item) =>
+              item.id === update.target.id || sameWardrobeEntry(item, update.target),
+            );
+            if (wasPersisted) clearBackoff(update.target);
+            else noteBackoff(update.target, 'persist_failed');
+          }
         }
       } catch (err) {
         if ((err as Error).name !== 'AbortError') {
           console.error('Background fragrance detail refresh failed', err);
+          for (const item of targets) noteBackoff(item, 'request_failed');
         }
       } finally {
         enrichmentRefreshInFlightRef.current = false;
@@ -971,13 +1317,13 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     };
 
     void refreshPendingDetails();
-    const id = window.setInterval(refreshPendingDetails, REFRESH_MS);
+    const id = window.setInterval(refreshPendingDetails, DETAIL_REFRESH_POLL_MS);
     return () => {
       cancelled = true;
       abortController.abort();
       window.clearInterval(id);
     };
-  }, [authToken, wardrobeLoaded, items.length, handlePersistWardrobeDetailRefresh]);
+  }, [authToken, wardrobeLoaded, items.length, handlePersistWardrobeDetailRefreshBatch]);
 
   const handleRevertWardrobe = useCallback(() => {
     if (!wardrobeRevertSnapshot) return;
@@ -1142,6 +1488,8 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     wardrobeFixBusy,
     wardrobeFixHint,
     vaultSearchUiActive,
+    isAdmin,
+    isImageSyncing,
     setItems,
     setIsIntentModalOpen,
     setIsShareModalOpen,
@@ -1154,6 +1502,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     retryLoadWardrobe,
     handleAddItem,
     handlePersistWardrobeImage,
+    uploadAdminBottleImage,
     handlePersistWardrobeDetailRefresh,
     handleRevertWardrobe,
     handleDeleteItem,
@@ -1177,10 +1526,13 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     wardrobeFixBusy,
     wardrobeFixHint,
     vaultSearchUiActive,
+    isAdmin,
+    isImageSyncing,
     loadWardrobe,
     retryLoadWardrobe,
     handleAddItem,
     handlePersistWardrobeImage,
+    uploadAdminBottleImage,
     handlePersistWardrobeDetailRefresh,
     handleRevertWardrobe,
     handleDeleteItem,

@@ -389,17 +389,21 @@ function AccordPanel({
                   className={`relative ${densityStyle.trackHeight} overflow-hidden rounded-full bg-black/30 ring-1 ring-inset ${isPyramidMatch ? "ring-[#fc9d19]/40" : "ring-white/[0.05]"} shadow-[inset_0_1px_2px_rgba(0,0,0,0.6),inset_0_-1px_0_rgba(255,255,255,0.03)]`}
                 >
                   <motion.div
-                    className="relative h-full min-w-[3px] rounded-full bg-gradient-to-r from-[#b07a24] via-scent-accent to-[#ecd49d]"
-                    style={{ boxShadow: restingGlow }}
+                    className="relative h-full min-w-[3px] origin-left rounded-full bg-gradient-to-r from-[#b07a24] via-scent-accent to-[#ecd49d]"
+                    // Width is static; the reveal animates `scaleX` (origin-left)
+                    // instead of `width` so up to 10 bars don't trigger per-frame
+                    // layout on reveal. The track's overflow-hidden rounded-full
+                    // clips the scaled fill, so no corner/edge distortion shows.
+                    style={{ width: `${fillPct}%`, boxShadow: restingGlow, willChange: "transform" }}
                     initial={false}
                     animate={{
-                      width: reduced || revealed ? `${fillPct}%` : "2%",
+                      scaleX: reduced || revealed ? 1 : 0.06,
                       opacity: reduced || revealed ? intensity.barOpacity : 0.32,
                       boxShadow: isPyramidMatch ? `${restingGlow}, ${activeGlow}` : restingGlow,
                       filter: isPyramidMatch && !reduced ? "brightness(1.16)" : "brightness(1)",
                     }}
                     transition={{
-                      width: {
+                      scaleX: {
                         duration: reduced ? 0 : 1.08,
                         ease: ACCORD_ROW_EASE,
                         delay: reduced ? 0 : rowDelay + 0.14,

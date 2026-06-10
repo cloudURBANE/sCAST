@@ -2,12 +2,16 @@
 
 @theme {
   --color-scent-bg: #030201;
-  --color-scent-surface: #0a0704;
-  --color-scent-border: #3b250c;
+  --color-scent-surface: #020202;
+  --color-scent-border: #1a1a1a;
   --color-scent-accent: #D4AF37;
   --color-scent-gold-100: #fef3c7;
   --color-scent-gold-200: #fde68a;
-  --color-scent-muted: #b7a690;
+  --color-scent-muted: #c4b39b;
+  --color-scent-text-primary: #fff7ec;
+  --color-scent-text-secondary: #ead8bd;
+  --color-scent-text-muted: #d8c4a8;
+  --color-scent-text-subtle: #bfae98;
 
   --font-serif: "Cormorant Garamond", Georgia, serif;
   --font-sans: "Inter", system-ui, -apple-system, sans-serif;
@@ -33,9 +37,9 @@
   --scent-card-shadow: 0 26px 68px -40px rgb(var(--scent-gold-rgb) / 0.5), 0 18px 42px -22px rgba(0, 0, 0, 0.96);
   --scent-card-glow: inset 0 1px 0 rgba(255, 226, 176, 0.1), inset 0 0 72px rgba(212, 175, 55, 0.028);
   --scent-black-panel:
-    radial-gradient(120% 120% at 50% -24%, rgba(255, 246, 220, 0.035), transparent 42%),
-    radial-gradient(120% 180% at 50% 118%, rgba(212, 175, 55, 0.035), transparent 50%),
-    linear-gradient(180deg, #060606 0%, #020202 56%, #000 100%);
+    radial-gradient(120% 120% at 50% -24%, rgba(255, 255, 255, 0.018), transparent 42%),
+    radial-gradient(120% 180% at 50% 118%, rgba(212, 175, 55, 0.02), transparent 50%),
+    linear-gradient(180deg, #010101 0%, #000 58%, #000 100%);
   --scent-black-sheen:
     linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.012) 36%, transparent 62%),
     radial-gradient(80% 120% at 50% 0%, rgba(212, 175, 55, 0.026), transparent 60%);
@@ -121,6 +125,41 @@ a {
   border-radius: var(--radius-scent);
 }
 
+.scent-vault-panel {
+  position: relative;
+  border: 1px solid rgba(232, 181, 90, 0.72);
+  border-radius: calc(var(--radius-scent) + 12px);
+  padding: clamp(2.35rem, 4.8vw, 3.65rem) clamp(1rem, 5vw, 5.25rem) clamp(1.55rem, 3.6vw, 2.25rem);
+  background:
+    radial-gradient(95% 80% at 50% 8%, rgba(255, 255, 255, 0.018), transparent 58%),
+    radial-gradient(72% 68% at 50% 100%, rgba(212, 175, 55, 0.022), transparent 68%),
+    linear-gradient(180deg, rgba(1, 1, 1, 0.94), rgba(0, 0, 0, 0.98) 62%, #000);
+  box-shadow:
+    0 32px 88px -54px rgba(212, 175, 55, 0.42),
+    0 28px 72px -36px rgba(0, 0, 0, 0.98),
+    inset 0 1px 0 rgba(255, 232, 179, 0.1),
+    inset 0 0 0 1px rgba(255, 225, 157, 0.025),
+    inset 0 0 80px rgba(212, 175, 55, 0.02);
+}
+
+.scent-vault-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background:
+    linear-gradient(90deg, transparent, rgba(255, 232, 180, 0.035) 50%, transparent),
+    radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.045), transparent 34rem);
+  opacity: 0.58;
+}
+
+.scent-vault-panel-inner {
+  position: relative;
+  z-index: 1;
+}
+
 .glass-shelf::after {
   content: '';
   position: absolute;
@@ -162,7 +201,6 @@ a {
   transform-origin: center bottom;
   /* clip-path is on .bottle-packshot-img so % insets use the fitted bitmap box, not the full slot
      (otherwise left/right mostly trim empty letterboxing while top/bottom hit the image). */
-  will-change: transform;
 }
 
 .bottle-packshot-img,
@@ -179,7 +217,6 @@ a {
     var(--bottle-frame-crop-top) var(--bottle-frame-crop-right) var(--bottle-frame-crop-bottom)
       var(--bottle-frame-crop-left)
   );
-  will-change: clip-path;
 }
 
 .bottle-frame-guide {
@@ -306,7 +343,7 @@ a {
 }
 
 .scent-lux-input {
-  background: rgba(6, 4, 3, 0.86);
+  background: rgba(0, 0, 0, 0.88);
   border: 1px solid rgba(212, 175, 55, 0.56);
   border-radius: var(--radius-scent);
   box-shadow: inset 0 1px 0 rgba(255, 226, 174, 0.06), inset 0 0 28px rgba(212, 175, 55, 0.025), 0 16px 34px -22px rgba(0, 0, 0, 0.9);
@@ -321,6 +358,194 @@ a {
   border-color: rgba(212, 175, 55, 0.9);
   box-shadow: inset 0 1px 0 rgba(255, 226, 174, 0.08), inset 0 0 30px rgba(212, 175, 55, 0.04), 0 0 0 3px rgba(212, 175, 55, 0.12), 0 18px 38px -22px rgba(0, 0, 0, 0.95);
   outline: none;
+}
+
+.scent-vault-search-input {
+  border-radius: 999px;
+  background:
+    radial-gradient(130% 160% at 50% 0%, rgba(255, 255, 255, 0.014), transparent 44%),
+    rgba(0, 0, 0, 0.92);
+  border-color: rgba(232, 181, 90, 0.72);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 236, 183, 0.08),
+    inset 0 0 28px rgba(212, 175, 55, 0.018),
+    0 14px 30px -22px rgba(0, 0, 0, 0.94);
+}
+
+.scent-vault-search-input:focus,
+.scent-vault-search-input:focus-visible {
+  border-color: rgba(255, 214, 128, 0.92);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 236, 183, 0.12),
+    inset 0 0 32px rgba(212, 175, 55, 0.035),
+    0 0 0 2px rgba(212, 175, 55, 0.12),
+    0 18px 38px -24px rgba(0, 0, 0, 0.96);
+}
+
+.scent-vault-results-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: clamp(19rem, 30vw, 25.25rem);
+  border: 1px solid rgba(202, 151, 72, 0.46);
+  border-radius: calc(var(--radius-scent) + 5px);
+  background:
+    radial-gradient(85% 70% at 50% 0%, rgba(255, 244, 212, 0.018), transparent 58%),
+    linear-gradient(180deg, rgba(9, 9, 6, 0.78), rgba(4, 4, 3, 0.92));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 229, 170, 0.055),
+    inset 0 0 36px rgba(212, 175, 55, 0.018),
+    0 24px 52px -36px rgba(0, 0, 0, 0.96);
+}
+
+.scent-vault-results-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 1.15rem;
+  white-space: nowrap;
+}
+
+.scent-vault-results-heading::before,
+.scent-vault-results-heading::after {
+  content: "";
+  width: clamp(3rem, 9vw, 7rem);
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(212, 175, 55, 0.68), transparent);
+}
+
+.scent-vault-result-card {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border: 1px solid rgba(232, 181, 90, 0.62);
+  border-radius: calc(var(--radius-scent) - 6px);
+  color: #fff7ec;
+  background:
+    radial-gradient(78% 78% at 50% 7%, rgba(255, 247, 225, 0.035), transparent 60%),
+    radial-gradient(85% 90% at 50% 105%, rgba(212, 175, 55, 0.035), transparent 68%),
+    linear-gradient(180deg, rgba(28, 27, 22, 0.74), rgba(10, 10, 8, 0.9));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 232, 179, 0.12),
+    inset 0 0 34px rgba(212, 175, 55, 0.03),
+    0 16px 36px -25px rgba(0, 0, 0, 0.94);
+}
+
+.scent-vault-result-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(255, 232, 174, 0.025), transparent);
+  opacity: 0.7;
+}
+
+/* Hover/keyboard-focus: a *gentle* lift. Deliberately weaker than the
+   committed-selection state below so the two never read as the same thing —
+   the old shared rule made "what's under my cursor" indistinguishable from
+   "what I've actually chosen". */
+.scent-vault-result-card:hover,
+.scent-vault-result-card:focus-visible {
+  border-color: rgba(255, 216, 128, 0.78);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 238, 192, 0.14),
+    inset 0 0 38px rgba(212, 175, 55, 0.04),
+    0 16px 38px -27px rgba(212, 175, 55, 0.18),
+    0 18px 42px -26px rgba(0, 0, 0, 0.98);
+}
+
+/* Committed selection: an unmistakable double-ring + warmer fill. This is the
+   single source of "this is the result that gets added", paired with the
+   checkmark badge rendered in FragranceCapture. */
+.scent-vault-result-card.is-selected {
+  border-color: rgba(255, 226, 150, 0.98);
+  background:
+    radial-gradient(78% 78% at 50% 7%, rgba(255, 247, 225, 0.07), transparent 60%),
+    radial-gradient(85% 90% at 50% 105%, rgba(212, 175, 55, 0.075), transparent 68%),
+    linear-gradient(180deg, rgba(42, 38, 27, 0.84), rgba(14, 13, 9, 0.92));
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 226, 150, 0.5),
+    inset 0 1px 0 rgba(255, 244, 205, 0.22),
+    inset 0 0 54px rgba(212, 175, 55, 0.085),
+    0 0 0 1px rgba(255, 216, 128, 0.46),
+    0 22px 48px -25px rgba(212, 175, 55, 0.34),
+    0 18px 42px -26px rgba(0, 0, 0, 0.98);
+}
+
+/* Gold "selected" check badge — pinned to the card's top-right corner. */
+.scent-vault-result-check {
+  border: 1px solid rgba(255, 232, 170, 0.95);
+  color: #1a1205;
+  background: linear-gradient(180deg, #f8e3a6 0%, #dcb457 100%);
+  box-shadow:
+    0 2px 12px rgba(212, 175, 55, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+
+/* Suppress the native WebKit clear/decoration affordances on the round vault
+   search fields — `type="search"` (added for the mobile "Search" enter key)
+   otherwise paints an "×" that collides with our custom right-aligned icon. */
+.scent-vault-search-input::-webkit-search-cancel-button,
+.scent-vault-search-input::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.scent-vault-monogram {
+  border: 1px solid rgba(232, 181, 90, 0.72);
+  color: #e9c06a;
+  background:
+    radial-gradient(circle at 50% 22%, rgba(255, 243, 200, 0.09), transparent 44%),
+    rgba(3, 3, 2, 0.5);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 238, 191, 0.12),
+    0 0 22px rgba(212, 175, 55, 0.08);
+  text-shadow: 0 0 12px rgba(212, 175, 55, 0.24);
+}
+
+.scent-vault-outline-button {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(255, 216, 128, 0.86);
+  border-radius: var(--radius-scent);
+  background:
+    radial-gradient(70% 120% at 50% 0%, rgba(255, 244, 204, 0.026), transparent 48%),
+    rgba(2, 2, 2, 0.74);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 236, 183, 0.09),
+    inset 0 0 24px rgba(212, 175, 55, 0.018),
+    0 18px 42px -30px rgba(0, 0, 0, 0.98);
+}
+
+.scent-vault-outline-button:hover {
+  border-color: rgba(255, 230, 160, 0.98);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 243, 202, 0.13),
+    inset 0 0 30px rgba(212, 175, 55, 0.03),
+    0 20px 44px -31px rgba(212, 175, 55, 0.26),
+    0 18px 42px -30px rgba(0, 0, 0, 0.98);
+}
+
+.scent-vault-outline-button:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 3px rgba(212, 175, 55, 0.18),
+    inset 0 1px 0 rgba(255, 243, 202, 0.13),
+    inset 0 0 30px rgba(212, 175, 55, 0.03);
+}
+
+.scent-vault-outline-button-label {
+  color: #e8be62;
+  text-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.9),
+    0 0 18px rgba(212, 175, 55, 0.12);
+  transition: color var(--scent-transition-base, 0.18s) var(--scent-ease-out, ease);
+}
+
+.scent-vault-outline-button:hover .scent-vault-outline-button-label {
+  color: #fff7ec;
+  text-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.9),
+    0 0 20px rgba(212, 175, 55, 0.28);
 }
 
 .scent-primary-button {
@@ -506,8 +731,8 @@ a {
   position: relative;
   isolation: isolate;
   background:
-    radial-gradient(140% 90% at 50% 0%, rgba(255, 245, 224, 0.018), transparent 62%),
-    linear-gradient(180deg, #050505 0%, #020202 58%, #000 100%);
+    radial-gradient(140% 90% at 50% 0%, rgba(255, 255, 255, 0.012), transparent 62%),
+    linear-gradient(180deg, #010101 0%, #000 58%, #000 100%);
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: var(--radius-scent);
   box-shadow:
@@ -792,6 +1017,117 @@ a {
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.4);
 }
 
+.scent-vault-grid-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.22rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.045);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 14px 32px -24px rgba(0, 0, 0, 0.9);
+}
+
+.scent-vault-grid-toggle__button {
+  display: inline-flex;
+  width: 2rem;
+  height: 2rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  color: rgba(255, 244, 225, 0.48);
+  transition:
+    color var(--scent-transition-fast) var(--scent-ease-out),
+    background var(--scent-transition-fast) var(--scent-ease-out),
+    box-shadow var(--scent-transition-fast) var(--scent-ease-out);
+}
+
+.scent-vault-grid-toggle__button:hover {
+  color: rgba(255, 244, 225, 0.76);
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.scent-vault-grid-toggle__button:focus-visible {
+  outline: 2px solid rgba(255, 221, 150, 0.45);
+  outline-offset: 2px;
+}
+
+.scent-vault-grid-toggle__button[aria-pressed="true"] {
+  color: #fff7ec;
+  background: rgba(212, 175, 55, 0.16);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 0 0 1px rgba(212, 175, 55, 0.18);
+}
+
+@media (max-width: 639px) {
+  .scent-vault-grid[data-compact="true"] .scent-fragrance-card {
+    border-radius: calc(var(--radius-scent) - 4px);
+    box-shadow:
+      0 18px 42px -30px rgba(0, 0, 0, 0.95),
+      0 10px 22px -18px rgba(0, 0, 0, 0.82),
+      inset 0 1px 0 rgba(255, 255, 255, 0.035);
+  }
+
+  .scent-vault-grid[data-compact="true"] .scent-fragrance-card::before,
+  .scent-vault-grid[data-compact="true"] .scent-fragrance-card::after,
+  .scent-vault-grid[data-compact="true"] .scent-card-frame {
+    inset: 0.42rem;
+    border-radius: calc(var(--radius-scent) - 14px);
+  }
+
+  .scent-vault-grid[data-compact="true"] .scent-card-frame::after {
+    inset: 3px;
+    border-radius: calc(var(--radius-scent) - 17px);
+  }
+
+  .scent-vault-grid[data-compact="true"] .scent-card-frame::before {
+    opacity: 0.72;
+  }
+
+  .scent-vault-grid[data-compact="true"] .scent-card-brand {
+    --brand-size: clamp(0.86rem, 4.7vw, 1.08rem);
+    line-height: 1.16;
+    padding-block: 0.04em;
+  }
+
+  .scent-vault-grid[data-compact="true"] .scent-card-brand[data-len="medium"] {
+    --brand-size: clamp(0.8rem, 4.2vw, 1rem);
+  }
+
+  .scent-vault-grid[data-compact="true"] .scent-card-brand[data-len="long"] {
+    --brand-size: clamp(0.72rem, 3.8vw, 0.92rem);
+  }
+
+  .scent-vault-grid[data-compact="true"] .scent-card-brand[data-len="xlong"] {
+    --brand-size: clamp(0.64rem, 3.4vw, 0.82rem);
+    line-height: 1.2;
+  }
+
+  .scent-vault-grid[data-compact="true"] .bottle-artboard {
+    inset: 4% !important;
+  }
+
+  .scent-vault-grid[data-compact="true"] .scent-card-title-row {
+    grid-template-columns: minmax(0, 0.42fr) minmax(0, auto) minmax(0, 0.42fr);
+    gap: 0.4rem;
+  }
+
+  .scent-vault-grid[data-compact="true"] .scent-card-title {
+    display: -webkit-box;
+    min-height: 2.02rem;
+    max-width: 100%;
+    overflow: hidden;
+    font-size: clamp(0.78rem, 3.7vw, 0.94rem);
+    line-height: 1.08;
+    white-space: normal;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+}
+
 
 .scent-marquee-band {
   overflow: hidden;
@@ -954,8 +1290,8 @@ a {
   border-radius: calc(var(--radius-scent) + 0.5rem);
   background:
     radial-gradient(78% 62% at 50% 0%, rgba(212, 175, 55, 0.13), transparent 64%),
-    radial-gradient(110% 82% at 50% 100%, rgba(255, 247, 236, 0.055), transparent 70%),
-    linear-gradient(180deg, rgba(42, 31, 20, 0.22), rgba(8, 6, 4, 0.24) 52%, transparent 100%);
+    radial-gradient(110% 82% at 50% 100%, rgba(255, 255, 255, 0.035), transparent 70%),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.28), rgba(0, 0, 0, 0.24) 52%, transparent 100%);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 235, 0.035),
     inset 0 0 0 1px rgba(255, 227, 156, 0.035),
@@ -972,7 +1308,7 @@ a {
   position: relative;
   overflow: hidden;
   border-block: 1px solid rgba(212, 175, 55, 0.18);
-  background: linear-gradient(180deg, rgba(10, 7, 4, 0.94), rgba(4, 3, 2, 0.98));
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.94), rgba(0, 0, 0, 0.98));
   box-shadow: inset 0 1px 0 rgba(255, 226, 174, 0.06), 0 18px 44px -28px rgba(0, 0, 0, 0.95);
   contain: paint;
   --atmosphere-edge-fade: clamp(2rem, 6vw, 4.75rem);
@@ -1046,7 +1382,7 @@ a {
   overflow: hidden;
   border: 1px solid rgba(212, 175, 55, 0.18);
   border-radius: var(--radius-scent);
-  background: linear-gradient(180deg, rgba(10, 7, 4, 0.88), rgba(4, 3, 2, 0.94));
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.88), rgba(0, 0, 0, 0.94));
   box-shadow: inset 0 1px 0 rgba(255, 226, 174, 0.06), 0 18px 44px -28px rgba(0, 0, 0, 0.95);
   /* backdrop-filter: blur(4px); */
   /* -webkit-backdrop-filter: blur(4px); */
@@ -1208,12 +1544,78 @@ a {
 
 /* ─── Utilities ───────────────────────────────────────────────────────────── */
 
-.scrollbar-hide::-webkit-scrollbar { 
-  display: none; 
+.scent-type-label {
+  color: var(--color-scent-text-secondary);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  line-height: 1.35;
+  text-transform: uppercase;
 }
-.scrollbar-hide { 
-  -ms-overflow-style: none; 
-  scrollbar-width: none; 
+
+.scent-type-meta {
+  color: var(--color-scent-text-muted);
+  font-size: 0.8125rem;
+  font-weight: 650;
+  letter-spacing: 0.1em;
+  line-height: 1.45;
+}
+
+.scent-type-chip {
+  color: var(--color-scent-text-secondary);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.scent-type-caption {
+  color: var(--color-scent-text-subtle);
+  font-size: 0.8125rem;
+  line-height: 1.55;
+}
+
+.scent-type-placeholder {
+  color: var(--color-scent-text-subtle);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Interaction elevation — referenced by ui/button.tsx and ui/badge.tsx since the
+   Replit theme migration but never defined, so buttons shipped with no hover or
+   pressed feedback. A border-radius-inheriting ::after overlay brightens the
+   element without touching each variant's own background classes. */
+.hover-elevate,
+.active-elevate-2 {
+  position: relative;
+}
+.hover-elevate::after,
+.active-elevate-2::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background-color: transparent;
+  pointer-events: none;
+  transition: background-color 150ms ease;
+}
+.hover-elevate:hover::after {
+  background-color: rgb(255 255 255 / 0.08);
+}
+.active-elevate-2:active::after {
+  background-color: rgb(255 255 255 / 0.16);
 }
 
 /* ─── Keyframes & Animations ──────────────────────────────────────────────── */
@@ -1495,7 +1897,7 @@ a {
 .scent-community-marquee-cell {
   flex: 0 0 clamp(15rem, 24vw, 22rem);
   width: clamp(15rem, 24vw, 22rem);
-  height: clamp(23rem, 36vw, 33rem);
+  height: clamp(20.5rem, 32vw, 29.5rem);
   position: relative;
   display: flex;
   align-items: flex-end;
@@ -1615,4 +2017,17 @@ a {
   .scent-brand-gold-shimmer::after {
     content: none;
   }
+}
+
+button:focus-visible,
+a[href]:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:not([tabindex="-1"]):focus-visible {
+  outline: 2px solid rgba(255, 232, 172, 0.94);
+  outline-offset: 3px;
+  box-shadow:
+    0 0 0 5px rgba(212, 175, 55, 0.24),
+    0 0 22px rgba(255, 232, 172, 0.22);
 }

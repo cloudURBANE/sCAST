@@ -87,7 +87,7 @@ export const ScentIntentModal: React.FC<ScentIntentModalProps> = ({ isOpen, onCl
             ref={closeButtonRef}
             type="button"
             onClick={handleClose}
-            className="p-2 text-white/40 hover:text-white hover:bg-white/10 transition-all active:scale-95"
+            className="-m-1 inline-flex min-h-11 min-w-11 items-center justify-center rounded-full text-white/40 hover:text-white hover:bg-white/10 transition-all active:scale-95"
             aria-label="Close discovery flow"
           >
             <X size={20} strokeWidth={1.75} />
@@ -105,10 +105,7 @@ export const ScentIntentModal: React.FC<ScentIntentModalProps> = ({ isOpen, onCl
         </div>
 
         {/* Scrollable body */}
-        <div
-          className="flex-1 overflow-y-auto px-5 sm:px-8 py-2"
-          style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
-        >
+        <div className="flex-1 overflow-y-auto px-5 sm:px-8 py-2">
           <AnimatePresence mode="wait">
             {step === 1 ? (
               <motion.div

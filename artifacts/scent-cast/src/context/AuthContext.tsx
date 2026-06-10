@@ -4,6 +4,7 @@ const STORAGE_KEYS = {
   TOKEN: 'scent_token',
   EMAIL: 'scent_email',
   PICTURE: 'scent_picture',
+  GUEST_DISMISSED: 'scent_guest_prompt_dismissed',
 } as const;
 
 interface AuthContextType {
@@ -51,7 +52,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   );
 
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [guestPromptDismissed, setGuestPromptDismissed] = useState(false);
+  // Persisted so a guest who has waved off the save prompt isn't re-nagged on
+  // every reload. Cleared on sign-in (the prompt becomes irrelevant once saved).
+  const [guestPromptDismissed, setGuestPromptDismissedState] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(STORAGE_KEYS.GUEST_DISMISSED) === '1';
+    } catch {
+      return false;
+    }
+  });
+
+  const setGuestPromptDismissed = useCallback((dismissed: boolean) => {
+    setGuestPromptDismissedState(dismissed);
+    try {
+      if (dismissed) localStorage.setItem(STORAGE_KEYS.GUEST_DISMISSED, '1');
+      else localStorage.removeItem(STORAGE_KEYS.GUEST_DISMISSED);
+    } catch {
+      /* storage unavailable (private mode / quota) — keep in-memory state only */
+    }
+  }, []);
 
   const handleAuth = useCallback((token: string, email: string, pictureUrl?: string | null) => {
     localStorage.setItem(STORAGE_KEYS.TOKEN, token);
@@ -66,7 +85,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setAuthPictureUrl(pictureUrl ?? null);
     setIsAuthModalOpen(false);
     setGuestPromptDismissed(false);
-  }, []);
+  }, [setGuestPromptDismissed]);
 
   const handleSignOut = useCallback(() => {
     localStorage.removeItem(STORAGE_KEYS.TOKEN);

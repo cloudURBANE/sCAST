@@ -1,4 +1,9 @@
 import type { RemoveBgStatus } from "./bgService";
+import {
+  concentrationsAmbiguouslyAdjacent,
+  concentrationsConflict,
+  detectConcentration,
+} from "./concentrationConflict.ts";
 import type { SerperImageCandidate } from "./serperService";
 
 const IMAGE_TOKEN_STOPWORDS = new Set([
@@ -52,6 +57,8 @@ export type ImageCandidateScoreBreakdown = {
   serperScore: number;
   identityCoverage: number;
   identityBonus: number;
+  phraseBonus: number;
+  concentrationPenalty: number;
   minEdge: number;
   minEdgeBonus: number;
   aspectRatio: number;
@@ -60,6 +67,43 @@ export type ImageCandidateScoreBreakdown = {
   fallbackPenalty: number;
   total: number;
 };
+
+// Reward a candidate whose evidence contains the full fragrance name as a
+// contiguous phrase (e.g. "Baccarat Rouge 540") over one that merely scatters
+// the same tokens. Single-token names carry no sequence information, so they
+// earn nothing here and the score is unchanged for them.
+const PHRASE_MATCH_BONUS = 2;
+
+function phraseSequenceBonus(name: string, evidence: string): number {
+  const nameTokens = tokenize(name);
+  if (nameTokens.length < 2) return 0;
+  const phrase = nameTokens.join(" ");
+  const haystack = tokenize(evidence).join(" ");
+  return haystack.includes(phrase) ? PHRASE_MATCH_BONUS : 0;
+}
+
+// A confident concentration mismatch (target EDP, candidate EDT, …) is a hard
+// identity failure even when brand/line tokens line up, so the penalty is large
+// enough to sink an otherwise-strong candidate below any clean alternative.
+const CONCENTRATION_CONFLICT_PENALTY = -10;
+// An *ambiguous* mismatch (bare "Parfum" vs "Eau de Parfum", e.g. "Le Parfum")
+// only demotes the candidate rather than disqualifying it — see
+// concentrationsAmbiguouslyAdjacent (BE-8).
+const CONCENTRATION_AMBIGUOUS_PENALTY = -3;
+
+function concentrationPenaltyFor(
+  brand: string,
+  name: string,
+  candidate: Pick<SerperImageCandidate, "imageUrl" | "title" | "source">,
+): number {
+  const target = detectConcentration(`${brand} ${name}`);
+  if (target === "Unknown") return 0;
+  const candidateConcentration = detectConcentration(candidateEvidenceText(candidate));
+  if (!concentrationsConflict(target, candidateConcentration)) return 0;
+  return concentrationsAmbiguouslyAdjacent(target, candidateConcentration)
+    ? CONCENTRATION_AMBIGUOUS_PENALTY
+    : CONCENTRATION_CONFLICT_PENALTY;
+}
 
 function tokenize(value: string): string[] {
   return value
@@ -111,6 +155,14 @@ export function shouldSkipSerperCandidateByIdentity(
   name: string,
   candidate: Pick<SerperImageCandidate, "imageUrl" | "title" | "source">,
 ): boolean {
+  // A confident concentration mismatch is disqualifying on its own, independent
+  // of token coverage — an "EDT" packshot must never satisfy an "EDP" request
+  // even when every other token (brand, line, flanker) lines up perfectly. An
+  // *ambiguous* mismatch (the softer CONCENTRATION_AMBIGUOUS_PENALTY, e.g. bare
+  // "Parfum" vs "Eau de Parfum") is only demoted via penalty, never hard-skipped,
+  // so the correct packshot for "Le Parfum" survives (BE-8).
+  if (concentrationPenaltyFor(brand, name, candidate) <= CONCENTRATION_CONFLICT_PENALTY) return true;
+
   const targetTokens = uniqueTokens(`${brand} ${name}`);
   if (targetTokens.length < 2) return false;
 
@@ -133,6 +185,8 @@ export function scoreProcessedSerperCandidateBreakdown(
 
   const serperScore = Number.isFinite(input.serperCandidate.score) ? input.serperCandidate.score : 0;
   const identityBonus = identityCoverage * 12;
+  const phraseBonus = phraseSequenceBonus(input.name, candidateEvidenceText(input.serperCandidate));
+  const concentrationPenalty = concentrationPenaltyFor(input.brand, input.name, input.serperCandidate);
 
   let minEdgeBonus = 0;
   if (minEdge >= 640) minEdgeBonus = 2;
@@ -152,6 +206,8 @@ export function scoreProcessedSerperCandidateBreakdown(
     serperScore,
     identityCoverage,
     identityBonus,
+    phraseBonus,
+    concentrationPenalty,
     minEdge,
     minEdgeBonus,
     aspectRatio: aspect,
@@ -161,6 +217,8 @@ export function scoreProcessedSerperCandidateBreakdown(
     total:
       serperScore +
       identityBonus +
+      phraseBonus +
+      concentrationPenalty +
       minEdgeBonus +
       aspectBonus +
       backgroundRemovalBonus +

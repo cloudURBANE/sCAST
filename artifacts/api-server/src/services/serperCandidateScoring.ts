@@ -1,5 +1,13 @@
-const MIN_IMAGE_WIDTH = 500;
-const MIN_IMAGE_HEIGHT = 500;
+// Hard floor below which an image is treated as a thumbnail/icon, not a packshot.
+// Measured against live Serper payloads (YSL Libre / MYSLF / Y "Le Parfum", 2026-06):
+// the official YSL CDN (yslbeautyus.com / yslbeauty.com) serves 320×320, Sephora 350×350,
+// Macy's 328×400, Bloomingdale's 320×400 — i.e. the *highest-trust* packshots are 320–350px.
+// A 500px floor `-Infinity`'d exactly those before the trusted-host bonus could apply, leaving
+// brand-new releases imageless. The ranking score below already rewards larger dimensions
+// (`Math.min(4, floor(min/400))`), so a hard 500 floor was redundant punishment. 300 still
+// rejects favicons/sprites while admitting every real packshot observed in the wild.
+const MIN_IMAGE_WIDTH = 300;
+const MIN_IMAGE_HEIGHT = 300;
 const MIN_ASPECT_RATIO = 0.5;
 const MAX_ASPECT_RATIO = 2;
 
@@ -88,8 +96,23 @@ const BLOCKED_TEXT_HINTS = [
   "boxed",
   "in box",
   "box packaging",
+  "box and bottle",
+  "bottle and box",
+  "box +",
+  "+ box",
+  "& box",
+  "and box",
+  "with packaging",
+  "with case",
+  "gift box",
+  "gift packaging",
+  "coffret",
   "carton",
+  "display box",
+  "wooden box",
   "packaging only",
+  "value set",
+  "holiday set",
   "set of",
   "bundle",
   "lot of",
@@ -208,6 +231,21 @@ export function scoreSerperImageCandidate(candidate: SerperImageScoringInput): n
   if (/\.png(\?.*)?$/i.test(imageUrl)) score += 2;
   if (width && height) {
     score += Math.min(4, Math.floor(Math.min(width, height) / 400));
+
+    // Aspect ratio as a visual proxy for "single bottle vs. bottle + box".
+    // Text filtering can only catch boxes the title *names*; many retailer and
+    // marketplace shots show the bottle standing next to its carton with a
+    // title that never says "box". A lone perfume bottle is markedly taller
+    // than wide (portrait), whereas a bottle-plus-box composition (or a
+    // lifestyle/flat-lay shot) is square or landscape. So reward portrait
+    // framing and penalize wide framing to bias ranking toward clean,
+    // single-bottle packshots without needing to see the pixels.
+    const aspect = width / height;
+    if (aspect <= 0.85) {
+      score += 3; // tall, bottle-shaped — most likely a single bottle
+    } else if (aspect >= 1.15) {
+      score -= 3; // wide — disproportionately bottle+box, sets, or lifestyle
+    }
   } else {
     // Missing Serper dimension metadata — soft penalty rather than silent pass.
     score -= 2;

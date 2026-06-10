@@ -1,9 +1,13 @@
-import React, { useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Wind } from 'lucide-react';
 import { AppTopNav } from '@/components/AppTopNav';
 import { CommunityHero } from '@/components/community/CommunityHero';
 import { BottleMarquee } from '@/components/community/BottleMarquee';
-import { FeaturedCaseGrid } from '@/components/community/FeaturedCaseGrid';
 import { useCommunityFragrances } from '@/components/community/communityData';
+import { CommunityFeed } from '@/components/community/CommunityFeed';
+import { PostComposer, type PostComposerHandle } from '@/components/community/PostComposer';
+import { PostFilters } from '@/components/community/PostFilters';
+import type { CommunityPostType } from '@/components/community/communityPosts';
 
 interface CommunityPageProps {
   authToken: string | null;
@@ -14,6 +18,47 @@ interface CommunityPageProps {
   onSignOut: () => void;
 }
 
+const COMMUNITY_BODY_WAKE_DELAY_MS = 640;
+
+function useAfterInitialRoutePaint() {
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    let firstFrame = 0;
+    let secondFrame = 0;
+    let settleTimer: number | null = null;
+    let idleHandle: number | null = null;
+
+    firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        settleTimer = window.setTimeout(() => {
+          const scheduleIdle = window.requestIdleCallback as
+            | ((callback: IdleRequestCallback, options?: IdleRequestOptions) => number)
+            | undefined;
+
+          if (scheduleIdle) {
+            idleHandle = scheduleIdle(() => setReady(true), { timeout: 700 });
+            return;
+          }
+
+          setReady(true);
+        }, COMMUNITY_BODY_WAKE_DELAY_MS);
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      window.cancelAnimationFrame(secondFrame);
+      if (settleTimer) window.clearTimeout(settleTimer);
+      if (idleHandle !== null && window.cancelIdleCallback) window.cancelIdleCallback(idleHandle);
+    };
+  }, []);
+
+  return ready;
+}
+
 export const CommunityPage: React.FC<CommunityPageProps> = ({
   authToken,
   authEmail,
@@ -22,7 +67,26 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
   onShare,
   onSignOut,
 }) => {
-  const { data, isLoading, isError, error, refetch } = useCommunityFragrances();
+  const communityBodyReady = useAfterInitialRoutePaint();
+  const { data, isLoading, isError } = useCommunityFragrances(communityBodyReady);
+  const [postType, setPostType] = useState<CommunityPostType | null>(null);
+  const [postTag, setPostTag] = useState<string | null>(null);
+  const [postQuery, setPostQuery] = useState('');
+  const composerRef = useRef<PostComposerHandle | null>(null);
+  const clearCommunityFilters = useCallback(() => {
+    setPostType(null);
+    setPostTag(null);
+    setPostQuery('');
+  }, []);
+  const feedFilters = useMemo(
+    () => ({
+      type: postType,
+      tag: postTag,
+      q: postQuery,
+      limit: 12,
+    }),
+    [postType, postTag, postQuery],
+  );
 
   useEffect(() => {
     const previous = document.title;
@@ -46,24 +110,39 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
       <div style={{ height: 'var(--topbar-h)' }} />
 
       <main className="relative z-10 pb-24 px-4 sm:px-8 max-w-[1760px] mx-auto">
-        <div className="space-y-20 sm:space-y-28 pt-10 sm:pt-14">
+        <div className="space-y-16 pt-10 sm:space-y-24 sm:pt-14">
           <CommunityHero />
-          <div className="flex items-center gap-4 text-center">
-            <span className="h-px flex-1 bg-gradient-to-r from-transparent via-scent-accent/30 to-scent-accent/10" aria-hidden="true" />
-            <p className="text-[11px] uppercase tracking-[0.32em] text-scent-muted/80">
-              Drifting through the community vault
-            </p>
-            <span className="h-px flex-1 bg-gradient-to-r from-scent-accent/10 via-scent-accent/30 to-transparent" aria-hidden="true" />
-          </div>
           <div className="scent-full-bleed">
-            <BottleMarquee items={data ?? []} loading={isLoading} isError={isError} />
+            {communityBodyReady ? (
+              <BottleMarquee items={data ?? []} loading={isLoading} isError={isError} />
+            ) : (
+              <section className="scent-community-marquee" aria-hidden="true">
+                <div className="scent-community-marquee-group opacity-0">
+                  <div className="scent-community-marquee-cell" />
+                </div>
+              </section>
+            )}
           </div>
-          <FeaturedCaseGrid
-            items={data ?? []}
-            loading={isLoading}
-            error={isError ? (error?.message || "Failed to load community") : null}
-            onRetry={refetch}
-          />
+          {communityBodyReady ? (
+            <section className="w-full space-y-6 sm:space-y-8" aria-label="Community forum">
+              <PostComposer ref={composerRef} authToken={authToken} onSignIn={onSignIn} />
+              <PostFilters
+                type={postType}
+                tag={postTag}
+                q={postQuery}
+                onTypeChange={setPostType}
+                onTagChange={setPostTag}
+                onQueryChange={setPostQuery}
+              />
+              <CommunityFeed
+                filters={feedFilters}
+                authToken={authToken}
+                onSignIn={onSignIn}
+                onStartRoom={() => composerRef.current?.open()}
+                onClearFilters={clearCommunityFilters}
+              />
+            </section>
+          ) : null}
         </div>
       </main>
 
@@ -78,7 +157,7 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
               draggable={false}
             />
           </div>
-          <p className="text-[10px] uppercase tracking-[0.2em] text-scent-muted">&copy; 2026 Olfactory Intelligence Systems</p>
+          <p className="scent-type-label">&copy; 2026 Olfactory Intelligence Systems</p>
         </div>
       </footer>
     </div>

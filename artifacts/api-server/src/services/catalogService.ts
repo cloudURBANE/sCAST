@@ -14,9 +14,14 @@ import {
   sanitizeFragranceQueryInput,
   scoreFragranceCandidate,
 } from "./fragranceNameResolver";
+// Brand canonicalization lives in the pure brandAliasCore (unit-tested in
+// isolation); re-exported below to keep catalogService's public API stable.
+import { canonicalizeBrand, brandSpellings } from "./brandAliasCore";
+
+export { canonicalizeBrand, brandSpellings };
 
 export function makeLookupKey(brand: string, name: string): string {
-  return `${brand.trim().toLowerCase()}::${name.trim().toLowerCase()}`;
+  return `${canonicalizeBrand(brand)}::${name.trim().toLowerCase()}`;
 }
 
 function sanitizeCatalogProfile(profile: unknown): ScentProfile {
@@ -75,11 +80,12 @@ export async function searchCatalogCandidates(
   const minScore = options.minScore ?? DEFAULT_CATALOG_MIN_SCORE;
   const limit = Math.max(1, Math.min(options.limit ?? 1, 10));
   const terms = fragranceCatalogSearchTerms(q);
-  const composite = sql`(${globalFragrancesTable.brand} || ' ' || ${globalFragrancesTable.name})`;
+  const composite = sql`lower(${globalFragrancesTable.brand} || ' ' || ${globalFragrancesTable.name})`;
+  const lookupKey = sql`lower(${globalFragrancesTable.lookupKey})`;
   const conditions: SQL[] = [
-    sql`${composite} ILIKE ${"%" + q + "%"}`,
-    sql`${globalFragrancesTable.lookupKey} ILIKE ${"%" + q + "%"}`,
-    ...terms.map((term) => sql`${composite} ILIKE ${"%" + term + "%"}`),
+    sql`${composite} LIKE ${"%" + q + "%"}`,
+    sql`${lookupKey} LIKE ${"%" + q + "%"}`,
+    ...terms.map((term) => sql`${composite} LIKE ${"%" + term + "%"}`),
   ];
 
   const rows = await db
@@ -115,9 +121,10 @@ export async function searchCatalogBrandCandidates(
   if (!hasMeaningfulFragranceQuery(q)) return [];
   const limit = Math.max(1, Math.min(options.limit ?? 12, 24));
   const terms = fragranceCatalogSearchTerms(q);
+  const brand = sql`lower(${globalFragrancesTable.brand})`;
   const conditions: SQL[] = [
-    sql`${globalFragrancesTable.brand} ILIKE ${"%" + q + "%"}`,
-    ...terms.map((term) => sql`${globalFragrancesTable.brand} ILIKE ${"%" + term + "%"}`),
+    sql`${brand} LIKE ${"%" + q + "%"}`,
+    ...terms.map((term) => sql`${brand} LIKE ${"%" + term + "%"}`),
   ];
 
   const rows = await db

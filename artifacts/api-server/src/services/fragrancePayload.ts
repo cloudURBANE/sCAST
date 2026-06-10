@@ -66,11 +66,14 @@ function round(value: number, precision: number): number {
 export function normalizeImageAdjustment(value: unknown): BottleImageAdjustment | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
   const input = value as Record<string, unknown>;
+  // Bounds mirror scent-cast `lib/bottleImageAdjustment.ts` (BOTTLE_FRAME_LIMITS)
+  // across the package boundary — keep the two in lockstep so the editor sliders
+  // and this server-side clamp accept the exact same framing range.
   const legacyCrop = round(clampNumber(input.crop, 0, 40, 0), 1);
   return {
-    scale: round(clampNumber(input.scale, 0.7, 1.45, DEFAULT_IMAGE_ADJUSTMENT.scale), 2),
-    x: round(clampNumber(input.x, -18, 18, DEFAULT_IMAGE_ADJUSTMENT.x), 1),
-    y: round(clampNumber(input.y, -18, 18, DEFAULT_IMAGE_ADJUSTMENT.y), 1),
+    scale: round(clampNumber(input.scale, 0.5, 1.8, DEFAULT_IMAGE_ADJUSTMENT.scale), 2),
+    x: round(clampNumber(input.x, -36, 36, DEFAULT_IMAGE_ADJUSTMENT.x), 1),
+    y: round(clampNumber(input.y, -36, 36, DEFAULT_IMAGE_ADJUSTMENT.y), 1),
     cropTop: round(clampNumber(input.cropTop, 0, 40, legacyCrop), 1),
     cropRight: round(clampNumber(input.cropRight, 0, 40, legacyCrop), 1),
     cropBottom: round(clampNumber(input.cropBottom, 0, 40, legacyCrop), 1),
@@ -201,9 +204,9 @@ export async function batchHydrateImageUrls(
       )
       .orderBy(
         desc(sql<number>`case
+          when ${imageCacheTable.sourceProvider} = 'manual' then 3
           when ${imageCacheTable.sourceProvider} in ('openai', 'openai-reimagine', 'openai_reimagine')
             or ${imageCacheTable.sourceUrl} like 'openai-reimagine:%' then 2
-          when ${imageCacheTable.sourceProvider} = 'manual' then 1
           else 0
         end`),
         desc(imageCacheTable.backgroundRemoved),

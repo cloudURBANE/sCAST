@@ -230,7 +230,7 @@ test("normalizeFragranceDetail keeps fragrantica-only metrics partial", () => {
   assert.equal(status.complete, false);
   assert.equal(status.badgeLabel, "Partial");
   assert.equal(status.sourceCountLabel, "Sources 1 of 2");
-  assert.equal(status.metricsLabel, "Metrics pending");
+  assert.equal(status.metricsLabel, "Metric coverage incomplete");
 });
 
 test("resolveSourceStatus keeps stale complete flags partial without both sources", () => {
@@ -256,9 +256,9 @@ test("resolveSourceStatus keeps stale complete flags partial without both source
   assert.equal(detail.source_coverage?.complete, false);
   assert.equal(status.complete, false);
   assert.equal(status.badgeLabel, "Partial");
-  assert.equal(status.statusText, "Community-source profile available. Some source data is still pending.");
+  assert.equal(status.statusText, "Community-source profile available. Source coverage is incomplete.");
   assert.equal(status.sourceCountLabel, "Sources 0 of 2");
-  assert.equal(status.metricsLabel, "Metrics pending");
+  assert.equal(status.metricsLabel, "Metric coverage incomplete");
 
   const staleTerminalStatus = resolveSourceStatus(detail.source_coverage, {
     status: "not_needed",
@@ -372,6 +372,47 @@ test("getFragranceDetails posts opaque id and source URL to SRT details", async 
   assert.deepEqual(JSON.parse(String(requests[0].init?.body)), {
     id: "opaque-token",
     source_url: "https://www.fragrantica.com/perfume/Creed/Silver-Mountain-Water-472.html",
+  });
+});
+
+test("getFragranceDetails can request incomplete recovery", async (t) => {
+  const previousFetch = globalThis.fetch;
+  const previousApiUrl = process.env.VITE_FRAGRANCE_API_URL;
+  const requests: Array<{ url: string; init?: RequestInit }> = [];
+
+  process.env.VITE_FRAGRANCE_API_URL = "https://example.test";
+  Object.defineProperty(globalThis, "fetch", {
+    configurable: true,
+    value: async (url: string, init?: RequestInit) => {
+      requests.push({ url, init });
+      return new Response(JSON.stringify({ name: "Aventus" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    },
+  });
+
+  t.after(() => {
+    Object.defineProperty(globalThis, "fetch", {
+      configurable: true,
+      value: previousFetch,
+    });
+    if (previousApiUrl === undefined) {
+      delete process.env.VITE_FRAGRANCE_API_URL;
+    } else {
+      process.env.VITE_FRAGRANCE_API_URL = previousApiUrl;
+    }
+  });
+
+  await getFragranceDetails({
+    source_url: "https://www.fragrantica.com/perfume/Creed/Aventus-9828.html",
+    recover_incomplete: true,
+  });
+
+  assert.equal(requests.length, 1);
+  assert.deepEqual(JSON.parse(String(requests[0].init?.body)), {
+    source_url: "https://www.fragrantica.com/perfume/Creed/Aventus-9828.html",
+    recover_incomplete: true,
   });
 });
 
@@ -943,6 +984,51 @@ test("searchFragrances drops brand-only catalog archive rows", async (t) => {
         },
       );
     },
+  });
+
+  t.after(() => {
+    Object.defineProperty(globalThis, "fetch", {
+      configurable: true,
+      value: previousFetch,
+    });
+    if (previousApiUrl === undefined) {
+      delete process.env.VITE_FRAGRANCE_API_URL;
+    } else {
+      process.env.VITE_FRAGRANCE_API_URL = previousApiUrl;
+    }
+    if (previousAppApiUrl === undefined) {
+      delete process.env.VITE_API_BASE_URL;
+    } else {
+      process.env.VITE_API_BASE_URL = previousAppApiUrl;
+    }
+  });
+
+  const response = await searchFragrances("xerjof");
+
+  assert.deepEqual(response.results, []);
+});
+
+test("searchFragrances drops brand-only placeholders carried by opaque engine ids", async (t) => {
+  const previousFetch = globalThis.fetch;
+  const previousApiUrl = process.env.VITE_FRAGRANCE_API_URL;
+  const previousAppApiUrl = process.env.VITE_API_BASE_URL;
+
+  process.env.VITE_FRAGRANCE_API_URL = "https://engine.example.test";
+  process.env.VITE_API_BASE_URL = "https://app-api.example.test";
+  // Base64url of {"n":"Xerjoff","b":"Xerjoff","y":null,"bn":null,"fg":null} —
+  // the shape api.py:_encode_id emits for a source-less brand placeholder.
+  const brandPlaceholderId =
+    "eyJuIjoiWGVyam9mZiIsImIiOiJYZXJqb2ZmIiwieSI6bnVsbCwiYm4iOm51bGwsImZnIjpudWxsfQ";
+  Object.defineProperty(globalThis, "fetch", {
+    configurable: true,
+    value: async () =>
+      new Response(
+        JSON.stringify({
+          query: "xerjof",
+          results: [{ id: brandPlaceholderId, name: "Xerjoff", house: "Xerjoff" }],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
   });
 
   t.after(() => {

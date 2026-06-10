@@ -7,6 +7,15 @@ export type ProxiedImageOptions = {
   packshot?: boolean;
   /** Test hook; defaults to Vite's configured backend origin. */
   apiBaseUrl?: string;
+  /**
+   * Force routing through `/api/image-proxy` even for our own processed CDN
+   * objects that would normally render directly. This is the Phase-4 client
+   * fallback: when a direct CDN URL fails (e.g. a transient 403 from a
+   * referrer/CDN policy), the UI retries the same object through the proxy once
+   * before giving up. Local `/api/image-objects/...` and non-http(s) inputs are
+   * still returned as-is (proxying localhost would fail SSRF and gains nothing).
+   */
+  forceProxy?: boolean;
 };
 
 function warnInvalidApiBase(envName: string, message: string) {
@@ -108,7 +117,9 @@ export function proxiedImageUrl(url: string | undefined | null, options?: Proxie
   // packshot trim is intentionally ignored — these are processed transparent
   // WebPs that must not be JPEG-trimmed (the backend proxy skips trim for them
   // too). Only third-party hotlink sources fall through to /api/image-proxy.
-  if (isProcessedStorageImageUrl(u)) return u;
+  // `forceProxy` (Phase-4 fallback) intentionally skips this passthrough so a
+  // direct CDN URL that failed can be re-attempted through the proxy.
+  if (!options?.forceProxy && isProcessedStorageImageUrl(u)) return u;
 
   // Read v= from the upstream URL so the proxy URL itself can vary by version
   // (helps the browser and any in-front CDN treat each version as distinct).

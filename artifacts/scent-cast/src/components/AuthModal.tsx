@@ -50,6 +50,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               srcSet="/nav/scentbeam-nav-logo.png 1x, /nav/scentbeam-nav-logo@2x.png 2x"
               alt="ScentBeam"
               className="h-7 w-auto"
+              decoding="async"
               draggable={false}
             />
           </div>
@@ -74,13 +75,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               Continue with Google
             </button>
             {allowDismiss && onClose ? (
-              <button
-                type="button"
-                onClick={onClose}
-                className="w-full h-11 border border-white/15 text-white/70 font-sans text-xs uppercase tracking-[0.25em] hover:text-white hover:border-white/35 transition-all rounded-2xl"
-              >
-                Continue as Guest
-              </button>
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="w-full h-[3.25rem] border border-white/25 text-white/85 font-sans text-sm font-medium flex items-center justify-center hover:text-white hover:border-white/45 hover:bg-white/[0.04] transition-all rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+                >
+                  Continue as guest
+                </button>
+                <p className="text-center text-[11px] text-white/35 font-sans">
+                  No account needed — you can sign in later to save.
+                </p>
+              </div>
             ) : null}
           </div>
         </div>

@@ -20,6 +20,7 @@ import {
 } from "../services/fragranceApiCore";
 import {
   hasKnownFragranceBrandSignal,
+  scoreFragranceCandidate,
   searchFragranceDatasetByBrand,
   shouldSearchExternalFragranceSources,
 } from "../services/fragranceNameResolver";
@@ -37,6 +38,36 @@ import { resolveShareUser } from "../services/shareUsers";
 const router = Router();
 
 const SOURCE_SEARCH_RESPONSE_BUDGET_MS = 1200;
+const SOURCE_DETAIL_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const SOURCE_DETAIL_FAILURE_TTL_MS = 10 * 60 * 1000;
+
+type SourceDetailCacheEntry = {
+  status: "pending" | "ready" | "failed";
+  detail: Record<string, unknown>;
+  expiresAt: number;
+};
+
+const sourceDetailCache = new Map<string, SourceDetailCacheEntry>();
+
+function canonicalSourceUrl(value: string): string {
+  try {
+    const parsed = new URL(value.trim());
+    parsed.hash = "";
+    return parsed.toString();
+  } catch {
+    return value.trim();
+  }
+}
+
+function getCachedSourceDetail(cacheKey: string): SourceDetailCacheEntry | null {
+  const entry = sourceDetailCache.get(cacheKey);
+  if (!entry) return null;
+  if (entry.expiresAt <= Date.now()) {
+    sourceDetailCache.delete(cacheKey);
+    return null;
+  }
+  return entry;
+}
 
 function cleanQueryParam(value: unknown): string {
   return typeof value === "string" ? value.trim().slice(0, 180) : "";
@@ -46,6 +77,26 @@ function searchQueryWithFragranceIntent(query: string): string {
   return /\b(?:cologne|fragrance|perfume|parfum|edt|edp|edc|eau\s+de|extrait)\b/i.test(query)
     ? query
     : `${query} perfume`;
+}
+
+// External search engines return URLs in raw indexer order, which for nickname
+// queries (e.g. "Liam Grey", the community name for the grey Liam bottle) often
+// floats a flanker ("Liam Blue Shine") above the base fragrance ("Liam").
+// Re-rank URL-derived candidates by their fuzzy match score against the query so
+// the closest identity wins; the score penalizes candidate names that add
+// unmatched variant tokens, so the base scores above its flankers.
+function rankSourceCandidatesByQuery(
+  candidates: FragranceSearchCandidate[],
+  query: string,
+): FragranceSearchCandidate[] {
+  return candidates
+    .map((candidate, index) => ({
+      candidate,
+      index,
+      score: scoreFragranceCandidate(query, { brand: candidate.brand, name: candidate.name }, 0).score,
+    }))
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .map((entry) => entry.candidate);
 }
 
 function dedupeCandidates(candidates: FragranceSearchCandidate[]): FragranceSearchCandidate[] {
@@ -92,6 +143,7 @@ async function buildDetailFromIdentity(input: {
 }): Promise<Record<string, unknown>> {
   const profile = await buildProfile(input.name, input.brand, undefined, {
     allowCatalogFuzzy: false,
+    imageResolution: "deferred",
   });
   if (!("product" in profile)) {
     return {
@@ -120,6 +172,140 @@ async function buildDetailFromIdentity(input: {
       message: "Detail is available locally.",
     },
   };
+}
+
+function markSourceDetailPending(
+  detail: Record<string, unknown>,
+  input: {
+    id: string;
+    sourceUrl: string;
+    brand?: string;
+    name: string;
+  },
+): Record<string, unknown> {
+  return {
+    ...detail,
+    id: input.id,
+    name: typeof detail.name === "string" && detail.name.trim() ? detail.name : input.name,
+    house:
+      typeof detail.house === "string" && detail.house.trim()
+        ? detail.house
+        : input.brand || undefined,
+    brand:
+      typeof detail.brand === "string" && detail.brand.trim()
+        ? detail.brand
+        : input.brand || undefined,
+    source_url: input.sourceUrl,
+    source_coverage:
+      detail.source_coverage && typeof detail.source_coverage === "object"
+        ? detail.source_coverage
+        : { complete: false, derived_metrics: "partial" },
+    enrichment: {
+      status: "pending",
+      requested_count: 1,
+      message: "Source detail enrichment is running in the background.",
+    },
+  };
+}
+
+async function buildEnrichedSourceDetail(input: {
+  id: string;
+  sourceUrl: string;
+  brand?: string;
+  name: string;
+  fragranceName: string;
+}): Promise<Record<string, unknown>> {
+  const facts = await getScentFacts({
+    fragranceName: input.fragranceName,
+    sourceUrl: input.sourceUrl,
+    save: false,
+  });
+  const flatNotes = [
+    ...facts.profile.top_notes,
+    ...facts.profile.heart_notes,
+    ...facts.profile.base_notes,
+  ];
+  const imageProfile = await buildProfile(
+    facts.profile.name || input.name,
+    facts.profile.brand || input.brand || "",
+    {
+      notes: flatNotes,
+      family: facts.profile.accords[0],
+      pyramid: {
+        top: facts.profile.top_notes,
+        heart: facts.profile.heart_notes,
+        base: facts.profile.base_notes,
+      },
+    },
+    {
+      preferEngineData: true,
+      allowCatalogFuzzy: false,
+      imageResolution: "deferred",
+    },
+  ).catch((err) => {
+    logger.warn(
+      {
+        err,
+        area: "fragrances.sourceDetail.buildProfile",
+        sourceUrl: input.sourceUrl,
+        fragranceName: input.fragranceName,
+      },
+      "Non-fatal buildProfile failed during source detail enrichment",
+    );
+    return null;
+  });
+
+  return scentFactProfileToDetail({
+    id: input.id,
+    sourceUrl: input.sourceUrl,
+    profile: facts.profile,
+    proof: facts.proof,
+    imageProfile: imageProfile && "product" in imageProfile ? flattenProfile(imageProfile) : undefined,
+    provisional: facts.provisional,
+  });
+}
+
+function queueSourceDetailEnrichment(input: {
+  cacheKey: string;
+  provisional: Record<string, unknown>;
+  id: string;
+  sourceUrl: string;
+  brand?: string;
+  name: string;
+  fragranceName: string;
+}): void {
+  const existing = getCachedSourceDetail(input.cacheKey);
+  if (existing?.status === "pending") return;
+
+  sourceDetailCache.set(input.cacheKey, {
+    status: "pending",
+    detail: input.provisional,
+    expiresAt: Date.now() + SOURCE_DETAIL_CACHE_TTL_MS,
+  });
+
+  void buildEnrichedSourceDetail(input)
+    .then((detail) => {
+      sourceDetailCache.set(input.cacheKey, {
+        status: "ready",
+        detail,
+        expiresAt: Date.now() + SOURCE_DETAIL_CACHE_TTL_MS,
+      });
+    })
+    .catch((err) => {
+      logger.warn({ err, sourceUrl: input.sourceUrl }, "fragrance source detail background enrichment failed");
+      sourceDetailCache.set(input.cacheKey, {
+        status: "failed",
+        detail: {
+          ...input.provisional,
+          enrichment: {
+            status: "failed",
+            requested_count: 1,
+            message: err instanceof Error ? err.message : "Source detail enrichment failed.",
+          },
+        },
+        expiresAt: Date.now() + SOURCE_DETAIL_FAILURE_TTL_MS,
+      });
+    });
 }
 
 async function searchScentSourcesWithResponseBudget(
@@ -171,10 +357,12 @@ router.get("/fragrances/search", async (req, res) => {
     try {
       const { urls, timedOut } = await searchScentSourcesWithResponseBudget(query, { maxCandidates: 16 });
       sourceLookupTimedOut ||= timedOut;
+      const sourceCandidates: FragranceSearchCandidate[] = [];
       for (const url of urls) {
         const candidate = candidateFromSourceUrl(url, query);
-        if (candidate) candidates.push(candidate);
+        if (candidate) sourceCandidates.push(candidate);
       }
+      candidates.push(...rankSourceCandidatesByQuery(sourceCandidates, query));
     } catch (err) {
       logger.warn({ err }, "fragrance search source lookup failed");
     }
@@ -185,10 +373,12 @@ router.get("/fragrances/search", async (req, res) => {
       const fallbackQuery = searchQueryWithFragranceIntent(query);
       const { urls, timedOut } = await searchScentSourcesWithResponseBudget(fallbackQuery, { maxCandidates: 16 });
       sourceLookupTimedOut ||= timedOut;
+      const sourceCandidates: FragranceSearchCandidate[] = [];
       for (const url of urls) {
         const candidate = candidateFromSourceUrl(url, query);
-        if (candidate) candidates.push(candidate);
+        if (candidate) sourceCandidates.push(candidate);
       }
+      candidates.push(...rankSourceCandidatesByQuery(sourceCandidates, query));
     } catch (err) {
       logger.warn({ err }, "fragrance search broad source fallback failed");
     }
@@ -227,7 +417,8 @@ router.post("/fragrances/details", async (req, res) => {
   const identityFromId = identityIdFromDetailBody(req.body);
 
   if (sourceUrl) {
-    const identity = parseFragranceSourceUrl(sourceUrl);
+    const cacheKey = canonicalSourceUrl(sourceUrl);
+    const identity = parseFragranceSourceUrl(cacheKey);
     if (!identity) {
       res.status(422).json({ error: "source_url must identify a fragrance page." });
       return;
@@ -235,66 +426,40 @@ router.post("/fragrances/details", async (req, res) => {
 
     const fragranceName = [identity.brand, identity.name].filter(Boolean).join(" ").trim();
     const id = `source:${identity.sourceUrl}`;
-
-    try {
-      const facts = await getScentFacts({
-        fragranceName,
-        sourceUrl: identity.sourceUrl,
-        save: false,
-      });
-      const flatNotes = [
-        ...facts.profile.top_notes,
-        ...facts.profile.heart_notes,
-        ...facts.profile.base_notes,
-      ];
-      const imageProfile = await buildProfile(
-        facts.profile.name || identity.name,
-        facts.profile.brand || identity.brand || "",
-        {
-          notes: flatNotes,
-          family: facts.profile.accords[0],
-          pyramid: {
-            top: facts.profile.top_notes,
-            heart: facts.profile.heart_notes,
-            base: facts.profile.base_notes,
-          },
-        },
-        { preferEngineData: true, allowCatalogFuzzy: false },
-      ).catch((err) => {
-        logger.warn(
-          {
-            err,
-            area: "fragrances.sourceDetail.buildProfile",
-            sourceUrl: identity.sourceUrl,
-            fragranceName,
-          },
-          "Non-fatal buildProfile failed during source detail enrichment",
-        );
-        return null;
-      });
-
-      res.json(
-        scentFactProfileToDetail({
-          id,
-          sourceUrl: identity.sourceUrl,
-          profile: facts.profile,
-          proof: facts.proof,
-          imageProfile: imageProfile && "product" in imageProfile ? flattenProfile(imageProfile) : undefined,
-          provisional: facts.provisional,
-        }),
-      );
-      return;
-    } catch (err) {
-      logger.warn({ err, sourceUrl: identity.sourceUrl }, "fragrance source detail enrichment failed");
-      const fallback = await buildDetailFromIdentity({
-        id,
-        brand: identity.brand ?? "",
-        name: identity.name,
-        sourceUrl: identity.sourceUrl,
-      });
-      res.json(fallback);
+    const cached = getCachedSourceDetail(cacheKey);
+    if (cached?.status === "ready" || cached?.status === "failed") {
+      res.json(cached.detail);
       return;
     }
+    if (cached?.status === "pending") {
+      res.json(cached.detail);
+      return;
+    }
+
+    const fallback = await buildDetailFromIdentity({
+      id,
+      brand: identity.brand ?? "",
+      name: identity.name,
+      sourceUrl: identity.sourceUrl,
+    });
+    const provisional = markSourceDetailPending(fallback, {
+      id,
+      sourceUrl: identity.sourceUrl,
+      brand: identity.brand,
+      name: identity.name,
+    });
+
+    queueSourceDetailEnrichment({
+      cacheKey,
+      provisional,
+      id,
+      sourceUrl: identity.sourceUrl,
+      brand: identity.brand,
+      name: identity.name,
+      fragranceName,
+    });
+    res.json(provisional);
+    return;
   }
 
   if (identityFromId) {

@@ -225,7 +225,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
             </div>
 
             {/* Link row */}
-            <div className="px-6 pt-5 pb-4 shrink-0 space-y-3 border-b border-white/5">
+            <div className="px-6 py-4 shrink-0 space-y-3 border-b border-white/5">
               <div className="flex gap-2">
                 <div className="flex-1 bg-white/[0.03] border border-white/10 px-4 py-3 text-[10px] text-white/40 font-mono truncate select-all">
                   {shareUrl || '—'}
@@ -260,7 +260,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
             {/* Per-cologne controls */}
             <div className="flex flex-col min-h-0 flex-1">
               {/* Section header + search */}
-              <div className="px-6 pt-4 pb-3 shrink-0 space-y-3">
+              <div className="px-6 py-4 shrink-0 space-y-3">
                 <div className="flex items-center justify-between">
                   <p className="text-[9px] uppercase tracking-[0.4em] text-white/30 font-bold">Cologne Visibility</p>
                   <div className="flex items-center gap-3">

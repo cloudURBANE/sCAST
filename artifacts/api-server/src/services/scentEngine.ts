@@ -2,7 +2,8 @@ import type { FragranceData } from "./datasetLoader";
 import { parseFragrance } from "./scentParser";
 import { vectorize, calculatePerformance, calculateContext } from "./scentVectorizer";
 import { getCatalogEntry, saveCatalogEntry, searchCatalog } from "./catalogService";
-import { resolveProcessedFragranceImage } from "./imagePipeline";
+import { backfillUserFragranceImages } from "./userImageBackfill";
+import { resolveCachedFragranceImage, resolveProcessedFragranceImage } from "./imagePipeline";
 import { usableImageUrlForResponse } from "./imageHydration";
 import { logger } from "../lib/logger";
 import {
@@ -30,8 +31,10 @@ const DEPS: ScentEngineDeps = {
   getCatalogEntry,
   searchCatalog,
   saveCatalogEntry,
+  resolveCachedFragranceImage,
   resolveProcessedFragranceImage,
   usableImageUrlForResponse,
+  backfillUserFragranceImages,
   reportNonFatalError: (area, error, context) => {
     logger.warn(
       {

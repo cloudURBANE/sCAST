@@ -72,13 +72,20 @@ function isOpenAiReimaginedImage(candidate: HydratedImageCandidate): boolean {
   return candidateText(candidate).includes("openai-reimagine:");
 }
 
-function isManualOrGeneratedImage(candidate: HydratedImageCandidate): boolean {
+function isManualImage(candidate: HydratedImageCandidate): boolean {
   const provider = normalizedSourceProvider(candidate.sourceProvider);
-  if (provider === "manual" || isOpenAiReimaginedImage(candidate)) return true;
+  if (provider === "manual") return true;
   const text = candidateText(candidate);
   return (
     text.includes("/images/processed/manual/") ||
-    text.includes("images/processed/manual/") ||
+    text.includes("images/processed/manual/")
+  );
+}
+
+function isManualOrGeneratedImage(candidate: HydratedImageCandidate): boolean {
+  if (isManualImage(candidate) || isOpenAiReimaginedImage(candidate)) return true;
+  const text = candidateText(candidate);
+  return (
     text.includes("/images/processed/openai/") ||
     text.includes("images/processed/openai/")
   );
@@ -98,11 +105,20 @@ export function chooseHydratedImageUrlWithMetadata(
   if (!currentImageUrl) return sharedImageUrl ?? "";
   if (!sharedImageUrl) return currentImageUrl;
 
-  if (isManualOrGeneratedImage({ ...(current ?? {}), imageUrl: currentImageUrl })) {
+  const currentCand = { ...(current ?? {}), imageUrl: currentImageUrl };
+  const sharedCand = { ...(shared ?? {}), imageUrl: sharedImageUrl };
+
+  const currentIsManual = isManualImage(currentCand);
+  const sharedIsManual = isManualImage(sharedCand);
+
+  if (sharedIsManual && !currentIsManual) return sharedImageUrl;
+  if (currentIsManual && !sharedIsManual) return currentImageUrl;
+
+  if (isManualOrGeneratedImage(currentCand)) {
     return currentImageUrl;
   }
 
-  if (isManualOrGeneratedImage({ ...(shared ?? {}), imageUrl: sharedImageUrl })) {
+  if (isManualOrGeneratedImage(sharedCand)) {
     return sharedImageUrl;
   }
 

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import {
+  isIpadDevice,
   isIpadStandalone,
   isLowRenderBudget,
   prefersReducedMotion,
@@ -8,10 +9,12 @@ import {
 export interface RenderBudget {
   /**
    * The session is a constrained surface (installed iPad PWA or reduced-motion):
-   * drop per-frame backgrounds, route-transition animation, and duplicated
-   * image surfaces.
+   * drop per-frame backgrounds, use cheaper route-transition motion, and avoid
+   * duplicated image surfaces.
    */
   lowMotionRenderMode: boolean;
+  /** Any iPadOS device (browser or installed PWA). */
+  isIpad: boolean;
   /** Specifically an installed iPad PWA. */
   isIpadStandalone: boolean;
   /** OS-level reduced-motion preference. */
@@ -21,6 +24,7 @@ export interface RenderBudget {
 function readBudget(): RenderBudget {
   return {
     lowMotionRenderMode: isLowRenderBudget(),
+    isIpad: isIpadDevice(),
     isIpadStandalone: isIpadStandalone(),
     reducedMotion: prefersReducedMotion(),
   };
@@ -43,6 +47,7 @@ export function useRenderBudget(): RenderBudget {
     const queries = [
       window.matchMedia("(prefers-reduced-motion: reduce)"),
       window.matchMedia("(display-mode: standalone)"),
+      window.matchMedia("(pointer: coarse)"),
     ];
     const update = () => setBudget(readBudget());
     update();
@@ -54,8 +59,10 @@ export function useRenderBudget(): RenderBudget {
         query.addListener(update);
       }
     }
+    window.addEventListener("resize", update, { passive: true });
 
     return () => {
+      window.removeEventListener("resize", update);
       for (const query of queries) {
         if (typeof query.removeEventListener === "function") {
           query.removeEventListener("change", update);

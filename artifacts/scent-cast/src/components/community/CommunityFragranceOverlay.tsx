@@ -48,26 +48,6 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
       if (event.key === 'Escape') {
         event.preventDefault();
         closeOverlay();
-        return;
-      }
-
-      if (event.key !== 'Tab') return;
-      const focusable = Array.from(
-        overlayRef.current?.querySelectorAll<HTMLElement>(
-          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
-        ) ?? [],
-      ).filter((element) => !element.hasAttribute('disabled') && element.getAttribute('aria-hidden') !== 'true');
-
-      if (focusable.length === 0) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
       }
     };
 
@@ -94,11 +74,11 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
             className="flex items-center justify-between px-5 pb-4 shrink-0"
             style={{ paddingTop: 'max(1.25rem, env(safe-area-inset-top))' }}
           >
-            <p className="text-[9px] uppercase tracking-[0.4em] text-scent-accent font-bold">Community Wardrobe</p>
+            <p className="scent-type-label text-scent-accent">Community Wardrobe</p>
             <button
               type="button"
               onClick={closeOverlay}
-              className="p-2 text-white/40 hover:text-white hover:bg-white/10 transition-all active:scale-95"
+              className="-m-1 inline-flex min-h-11 min-w-11 items-center justify-center rounded-full text-scent-text-subtle hover:text-white hover:bg-white/10 transition-all active:scale-95"
               aria-label="Close fragrance details"
               ref={closeButtonRef}
             >
@@ -106,13 +86,13 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}>
+          <div className="flex-1 overflow-y-auto">
             <div className="flex min-h-full items-center justify-center px-5 py-6 sm:px-10 sm:py-10 lg:px-16">
               <div className="grid w-full max-w-6xl gap-8 lg:grid-cols-[minmax(18rem,26rem)_minmax(0,1fr)] lg:items-center lg:gap-14">
                 <div className="scent-fragrance-card relative mx-auto flex aspect-[3/4.6] w-full max-w-[20rem] flex-col p-5 sm:max-w-[24rem] sm:p-6">
                   <div className="scent-card-frame" aria-hidden="true" />
                   <div className="relative z-10 flex justify-end">
-                    <span className="font-mono text-[9px] uppercase tracking-[0.22em] text-scent-accent/80">
+                    <span className="font-mono scent-type-label text-scent-accent">
                       {item.curator}
                     </span>
                   </div>
@@ -136,7 +116,7 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
 
                 <div className="space-y-8 text-left">
                   <header className="space-y-5">
-                    <p className="text-[9px] font-bold uppercase tracking-[0.36em] text-scent-accent/80">
+                    <p className="scent-type-label text-scent-accent">
                       Community Wardrobe
                     </p>
                     <div className="space-y-3">
@@ -149,7 +129,7 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
                       </h2>
                     </div>
                     {item.family ? (
-                      <p className="text-[10px] uppercase tracking-[0.28em] text-scent-muted">
+                      <p className="scent-type-meta uppercase">
                         {item.family}
                       </p>
                     ) : null}
@@ -160,10 +140,10 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
                   <div className="grid grid-cols-1 gap-5 sm:grid-cols-3 sm:gap-6">
                     {noteRows.map(([label, key]) => (
                       <div key={label} className="border-l border-white/10 pl-4">
-                        <p className="mb-2 text-[8px] font-bold uppercase tracking-[0.3em] text-scent-accent/70">
+                        <p className="mb-2 scent-type-label text-scent-accent">
                           {label}
                         </p>
-                        <p className="font-serif text-base italic leading-relaxed text-scent-muted">
+                        <p className="font-serif text-base italic leading-relaxed text-scent-text-muted">
                           {formatNotes(item[key])}
                         </p>
                       </div>

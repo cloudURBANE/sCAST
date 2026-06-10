@@ -13,10 +13,12 @@ import {
 } from 'lucide-react';
 import { BottleImage } from '@/components/BottleImage';
 import { BrandGoldLabel } from '@/components/BrandGoldLabel';
+import { VaultGridModeToggle } from '@/components/VaultGridModeToggle';
 import type { BottleImageAdjustment } from '@/lib/bottleImageAdjustment';
 import { APP_BRAND_MARK } from '@/lib/appBrand';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
+import { useVaultGridPreference } from '@/hooks/useVaultGridPreference';
 import { publicShareBuyLinksEndpoint } from '@/lib/shareLinks';
 import { ScentNotesInfographic } from '@/components/ScentNotesInfographic';
 import { CyclingTilePair, type CyclingPart } from '@/components/CyclingTilePair';
@@ -560,6 +562,7 @@ function ProfileScorePanel({
 export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { gridMode, setGridMode, isCompactGrid } = useVaultGridPreference();
   const [data, setData] = useState<ShareData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -745,6 +748,11 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                   <span>{data.fragrances.length} Entries</span>
                 </div>
               </div>
+              <VaultGridModeToggle
+                mode={gridMode}
+                onChange={setGridMode}
+                className="sm:hidden"
+              />
               {data.hideImages ? (
                 <p className="text-[10px] uppercase tracking-[0.3em] text-scent-gold-200/65 font-bold">
                   Owner currently hides bottle images on public view
@@ -753,7 +761,12 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
             </div>
 
             {data.fragrances.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-5 pb-24">
+            <div
+              className={`scent-vault-grid grid ${
+                isCompactGrid ? 'grid-cols-2 gap-2' : 'grid-cols-1 gap-3'
+              } sm:grid-cols-2 sm:gap-4 lg:gap-5 xl:grid-cols-4 pb-24`}
+              data-compact={isCompactGrid ? 'true' : 'false'}
+            >
               {data.fragrances.map((item, i) => {
                 const fragranceId = item._dbId ?? item.id;
                 const name = entryName(item);
@@ -768,14 +781,20 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                     className="group cursor-pointer relative h-full min-w-0"
                     onClick={() => setSelectedItemId(fragranceId)}
                   >
-                    <div className="scent-fragrance-card scent-hover-lift w-full h-full min-h-[32rem] transition-[transform,border-color,box-shadow] duration-500 motion-reduce:transition-none relative overflow-hidden flex flex-col">
+                    <div className={`scent-fragrance-card scent-hover-lift w-full h-full ${
+                      isCompactGrid ? 'min-h-[18rem]' : 'min-h-[32rem]'
+                    } sm:min-h-[32rem] transition-[transform,border-color,box-shadow] duration-500 motion-reduce:transition-none relative overflow-hidden flex flex-col`}>
                       <div className="scent-card-frame" aria-hidden />
-                      <div className="relative z-[1] flex h-full flex-col items-center px-6 sm:px-8 pt-7 sm:pt-9 pb-6 sm:pb-7">
+                      <div className={`relative z-[1] flex h-full flex-col items-center ${
+                        isCompactGrid ? 'px-3 py-4' : 'px-6 py-7'
+                      } sm:px-8 sm:py-9`}>
                         <BrandGoldLabel
                           brand={brand}
                           className="scent-card-brand w-full"
                         />
-                        <div className="relative flex-1 w-full mt-4 sm:mt-5 mb-5 sm:mb-6 min-h-0">
+                        <div className={`relative flex-1 w-full ${
+                          isCompactGrid ? 'my-3' : 'my-5'
+                        } sm:my-6 min-h-0`}>
                           {!data.hideImages ? (
                           <BottleImage
                             variant="grid"
@@ -873,16 +892,13 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                 <button
                   onClick={closeSelectedDetail}
                   aria-label="Close profile"
-                  className="shrink-0 p-2 bg-white/5 hover:bg-white/10 transition-all rounded-full border border-white/10 text-white group"
+                  className="shrink-0 inline-flex min-h-11 min-w-11 items-center justify-center bg-white/5 hover:bg-white/10 transition-all rounded-full border border-white/10 text-white group"
                 >
                   <X size={18} strokeWidth={1.75} className="group-hover:rotate-90 transition-transform duration-300" />
                 </button>
               </div>
 
-              <div
-                className="flex-1 overflow-y-auto scrollbar-hide px-4 sm:px-7 lg:px-10 pb-4"
-                style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
-              >
+              <div className="flex-1 overflow-y-auto scrollbar-hide px-4 sm:px-7 lg:px-10 pb-4">
                 <div className="mx-auto max-w-[92rem] space-y-6 sm:space-y-8 py-5 sm:py-7">
                   <header className="mx-auto max-w-3xl grid text-center gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-x-10">
                     <p className="text-[10px] uppercase tracking-[0.36em] text-scent-accent font-bold order-1 sm:order-2 sm:col-start-2 sm:row-start-1 sm:self-center sm:text-right sm:max-w-[14rem] sm:pl-2">
@@ -1036,7 +1052,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                     ref={enlargeCloseButtonRef}
                     type="button"
                     onClick={() => setEnlargeOpen(false)}
-                    className="absolute top-4 right-4 z-10 p-2 rounded-full border border-white/15 bg-white/10 text-white hover:bg-white/20 transition-colors"
+                    className="absolute top-4 right-4 z-10 flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white hover:bg-white/20 transition-colors"
                     aria-label="Close enlarged view"
                   >
                     <X size={22} strokeWidth={1.75} />

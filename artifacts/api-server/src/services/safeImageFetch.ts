@@ -13,7 +13,77 @@ const ALLOWED_IMAGE_MIME_TYPES = new Set([
   "image/gif",
 ]);
 
+// Some CDNs label perfectly valid JPEGs with non-canonical types. Normalize these
+// to image/jpeg so a real packshot isn't rejected on a cosmetic header mismatch.
+const JPEG_CONTENT_TYPE_ALIASES = new Set(["image/jpg", "image/pjpeg"]);
+
+// Content types that carry no reliable signal about the payload. Retailer/image-transform
+// CDNs frequently serve real images this way (or with no content-type at all). For these we
+// fall back to magic-byte sniffing instead of rejecting outright. Anything else that isn't an
+// allowed image type (e.g. text/html from a social crawler page) is still fast-rejected.
+const SNIFFABLE_CONTENT_TYPES = new Set([
+  "",
+  "application/octet-stream",
+  "binary/octet-stream",
+  "application/binary",
+]);
+
 const BLOCKED_HOSTS = new Set(["localhost", "localhost.localdomain"]);
+
+/** Detect an allowed image type from leading magic bytes; returns the MIME or null. */
+function sniffImageMime(buffer: Buffer): string | null {
+  if (buffer.length < 4) return null;
+  // JPEG: FF D8 FF
+  if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return "image/jpeg";
+  // PNG: 89 50 4E 47
+  if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) {
+    return "image/png";
+  }
+  // GIF: "GIF8"
+  if (buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x38) {
+    return "image/gif";
+  }
+  // WEBP: "RIFF"...."WEBP"
+  if (
+    buffer.length >= 12 &&
+    buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46 &&
+    buffer[8] === 0x57 && buffer[9] === 0x45 && buffer[10] === 0x42 && buffer[11] === 0x50
+  ) {
+    return "image/webp";
+  }
+  // AVIF/HEIF: "....ftyp" box with an avif brand
+  if (
+    buffer.length >= 12 &&
+    buffer[4] === 0x66 && buffer[5] === 0x74 && buffer[6] === 0x79 && buffer[7] === 0x70
+  ) {
+    const brand = buffer.toString("ascii", 8, 12);
+    if (brand === "avif" || brand === "avis") return "image/avif";
+  }
+  return null;
+}
+
+/**
+ * Positive markup/text signal: the body begins with `<` (after an optional BOM
+ * and leading ASCII whitespace). Used to reject HTML error/WAF pages that are
+ * served behind an `image/*` content-type. None of the raster formats we accept
+ * (JPEG/PNG/GIF/WebP/AVIF) start with `<`, so this never trips on a genuine
+ * image while reliably catching disguised markup.
+ */
+export function looksLikeMarkupOrText(buffer: Buffer): boolean {
+  let i = 0;
+  // Skip a UTF-8 BOM.
+  if (buffer.length >= 3 && buffer[0] === 0xef && buffer[1] === 0xbb && buffer[2] === 0xbf) {
+    i = 3;
+  }
+  // Skip leading ASCII whitespace (space, tab, LF, CR).
+  while (
+    i < buffer.length &&
+    (buffer[i] === 0x20 || buffer[i] === 0x09 || buffer[i] === 0x0a || buffer[i] === 0x0d)
+  ) {
+    i += 1;
+  }
+  return i < buffer.length && buffer[i] === 0x3c; // '<'
+}
 
 export type SafeImageFetchResult = {
   buffer: Buffer;
@@ -176,12 +246,43 @@ export async function fetchExternalImage(
       throw new UnsafeImageUrlError(`Image exceeds ${maxBytes} bytes`);
     }
 
-    const contentType = normalizeContentType(response.headers.get("content-type"));
-    if (!ALLOWED_IMAGE_MIME_TYPES.has(contentType)) {
-      throw new UnsafeImageUrlError(`Unsupported image content type: ${contentType || "unknown"}`);
+    const declaredType = normalizeContentType(response.headers.get("content-type"));
+    const resolvedType = JPEG_CONTENT_TYPE_ALIASES.has(declaredType) ? "image/jpeg" : declaredType;
+
+    const isAllowedDeclared = ALLOWED_IMAGE_MIME_TYPES.has(resolvedType);
+    // Fast-reject obviously-non-image types (e.g. text/html from a social crawler page)
+    // before downloading the body. Ambiguous types fall through to magic-byte sniffing.
+    if (!isAllowedDeclared && !SNIFFABLE_CONTENT_TYPES.has(resolvedType)) {
+      throw new UnsafeImageUrlError(`Unsupported image content type: ${resolvedType || "unknown"}`);
     }
 
     const buffer = await readLimitedBody(response, maxBytes);
+
+    // A real image is never empty. An empty 200 body (some retailers/WAFs return
+    // one behind an image content-type) decodes to naturalWidth === 0 in the
+    // browser — exactly the "poisoned" payload that stranded the bottle skeleton.
+    if (buffer.length === 0) {
+      throw new UnsafeImageUrlError("Image body was empty");
+    }
+
+    let contentType = resolvedType;
+    if (!isAllowedDeclared) {
+      const sniffed = sniffImageMime(buffer);
+      if (!sniffed) {
+        throw new UnsafeImageUrlError(
+          `Unsupported image content type: ${resolvedType || "unknown"} (no image signature)`,
+        );
+      }
+      contentType = sniffed;
+    } else if (looksLikeMarkupOrText(buffer)) {
+      // The header declared an allowed image type, but the bytes are HTML/markup
+      // — a WAF challenge or error page wearing an `image/*` content-type. Reject
+      // it: the proxy then returns 502 (the cache never stores loader rejections,
+      // so the garbage can't poison the shared cache) and the client falls through
+      // to "Unavailable" instead of an endless skeleton.
+      throw new UnsafeImageUrlError("Image body was not a decodable image (markup payload)");
+    }
+
     return {
       buffer,
       contentType,

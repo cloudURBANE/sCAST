@@ -2,6 +2,7 @@ import React from 'react';
 import { AnimatePresence, motion, useReducedMotion, type Transition } from 'framer-motion';
 import { type MainAccordDisplayRow } from '@/lib/fragranceApi';
 import { resolveNoteAccordLinks, type NoteAccordLink } from '@/lib/noteAccordLinks';
+import { isLowRenderBudget } from '@/lib/platform';
 
 type ActiveLayer = 'top' | 'heart' | 'base';
 type Point = readonly [number, number];
@@ -32,6 +33,7 @@ type LayerConfig = {
     start: Point;
     end: Point;
   };
+  crest?: string;
   notes: string[];
 };
 
@@ -80,6 +82,10 @@ const TYPEWRITER_FRAME_MS = 24;
 const NOTE_MARQUEE_MIN_CHARS = 58;
 const NOTE_MARQUEE_MIN_COUNT = 5;
 const DECORATIVE_REPEAT_COUNT = 2;
+const GUIDE_START_DELAY_MS = 560;
+const GUIDE_LAYER_DURATION_MS = 1180;
+const GUIDE_TRACE_DURATION_S = 1.06;
+const GUIDE_INTERSECTION_RATIO = 0.22;
 const NO_ACTIVE_NOTES: string[] = [];
 const LAYER_CENTER_Y: Record<ActiveLayer, number> = {
   top: 82,
@@ -160,10 +166,15 @@ function apexFaces(bottomY: number): readonly [string, string] {
   ];
 }
 
+function tierCrestPath(topY: number) {
+  return linePath(pointOnEdge(PYRAMID_OUTER.leftBase, topY), pointOnEdge(PYRAMID_OUTER.rightBase, topY));
+}
+
 const layerGeometry = {
   base: {
     hitPath: tierHitPath(PYRAMID_Y.baseTop, PYRAMID_Y.baseBottom),
     faces: tierFaces(PYRAMID_Y.baseTop, PYRAMID_Y.baseBottom),
+    crest: tierCrestPath(PYRAMID_Y.baseTop),
     channel: {
       start: [PYRAMID_CENTER_X, PYRAMID_Y.baseTop + 6] as Point,
       end: [PYRAMID_CENTER_X, PYRAMID_Y.baseBottom - 7] as Point,
@@ -172,6 +183,7 @@ const layerGeometry = {
   heart: {
     hitPath: tierHitPath(PYRAMID_Y.heartTop, PYRAMID_Y.heartBottom),
     faces: tierFaces(PYRAMID_Y.heartTop, PYRAMID_Y.heartBottom),
+    crest: tierCrestPath(PYRAMID_Y.heartTop),
     channel: {
       start: [PYRAMID_CENTER_X, PYRAMID_Y.heartTop + 6] as Point,
       end: [PYRAMID_CENTER_X, PYRAMID_Y.heartBottom - 6] as Point,
@@ -189,7 +201,7 @@ const layerGeometry = {
       end: [PYRAMID_CENTER_X, PYRAMID_Y.topBottom - 8] as Point,
     },
   },
-} satisfies Record<ActiveLayer, Pick<LayerConfig, 'hitPath' | 'faces' | 'channel'>>;
+} satisfies Record<ActiveLayer, Pick<LayerConfig, 'hitPath' | 'faces' | 'channel' | 'crest'>>;
 
 function formatNotes(notes: string[]) {
   return notes.length > 0 ? notes.join(', ') : 'Uncharted territory.';
@@ -463,26 +475,30 @@ function LayerAccordEcho({
             </span>
             <span className="relative h-[2px] sm:h-[3px] overflow-hidden rounded-full bg-white/[0.08]">
               <motion.span
-                className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-[#9f6a1f] via-[#fc9d19] to-[#ffe1a3]"
-                initial={false}
-                animate={{
-                  width: `${pct}%`,
-                  opacity: prefersReducedMotion ? 0.78 : [0.72, 1, 0.72],
+                className="absolute inset-y-0 left-0 origin-left rounded-full bg-gradient-to-r from-[#9f6a1f] via-[#fc9d19] to-[#ffe1a3]"
+                // Fill is full-width and revealed via `scaleX` (origin-left) so a
+                // selection change tweens a GPU transform, not `width` (layout).
+                // The glow is a static box-shadow rather than a looped one — the
+                // opacity pulse below already carries its intensity to the shadow,
+                // which avoids a per-frame box-shadow repaint over the live SVG.
+                style={{
+                  width: '100%',
+                  willChange: 'transform',
                   boxShadow: prefersReducedMotion
                     ? '0 0 8px rgba(252,157,25,0.28)'
-                    : [
-                        '0 0 8px rgba(252,157,25,0.24)',
-                        '0 0 18px rgba(252,157,25,0.56)',
-                        '0 0 8px rgba(252,157,25,0.24)',
-                      ],
+                    : '0 0 12px rgba(252,157,25,0.42)',
+                }}
+                initial={false}
+                animate={{
+                  scaleX: pct / 100,
+                  opacity: prefersReducedMotion ? 0.78 : [0.72, 1, 0.72],
                 }}
                 transition={
                   prefersReducedMotion
                     ? { duration: 0.2 }
                     : {
-                        width: { duration: 0.56, ease: CALM_EASE },
+                        scaleX: { duration: 0.56, ease: CALM_EASE },
                         opacity: { duration: 1.45, repeat: DECORATIVE_REPEAT_COUNT, ease: 'easeInOut' },
-                        boxShadow: { duration: 1.45, repeat: DECORATIVE_REPEAT_COUNT, ease: 'easeInOut' },
                       }
                 }
               />
@@ -519,6 +535,12 @@ const CONSTELLATION_DOTS = [
   { cx: 338, cy: 258, r: 0.6, opacity: 0.42 },
   { cx: 156, cy: 18, r: 0.4, opacity: 0.28 },
   { cx: 210, cy: 14, r: 0.5, opacity: 0.34 },
+  { cx: 118, cy: 46, r: 0.85, opacity: 0.52 },
+  { cx: 252, cy: 40, r: 0.6, opacity: 0.4 },
+  { cx: 40, cy: 138, r: 0.45, opacity: 0.3 },
+  { cx: 324, cy: 122, r: 0.8, opacity: 0.48 },
+  { cx: 14, cy: 332, r: 0.4, opacity: 0.26 },
+  { cx: 346, cy: 312, r: 0.5, opacity: 0.34 },
 ];
 
 export const NotePyramid: React.FC<NotePyramidProps> = ({
@@ -532,14 +554,44 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
   const [activeLayer, setActiveLayer] = React.useState<ActiveLayer | null>(null);
   const [hoveredLayer, setHoveredLayer] = React.useState<ActiveLayer | null>(null);
   const [focusedLayer, setFocusedLayer] = React.useState<ActiveLayer | null>(null);
+  const [guidedLayer, setGuidedLayer] = React.useState<ActiveLayer | null>(null);
+  const [isGuideSequencing, setIsGuideSequencing] = React.useState(false);
   const rootRef = React.useRef<HTMLElement | null>(null);
   const pointerActivationRef = React.useRef<PointerActivation | null>(null);
   const ignoreClickActivationRef = React.useRef(false);
-  const prefersReducedMotion = useReducedMotion();
-  const guidedLayer = null;
+  const guideHasPlayedRef = React.useRef(false);
+  const guideTimersRef = React.useRef<number[]>([]);
+  // Constrained touch devices (iPad / coarse-pointer iPhones) cannot afford the
+  // pyramid's heavy paint. Each feGaussianBlur / feDropShadow, the full-surface
+  // drop-shadow, and the screen-blend layer allocates a large offscreen IOSurface,
+  // and the decorative atmosphere / starfield / glow run ~10 infinite animations.
+  // Re-creating and compositing all of that on every detail-modal open exhausts
+  // the device's small GPU/memory budget — WebKit then kills the page ("A problem
+  // repeatedly occurred"). On a low render budget, render the flat, static path:
+  // no filters, no blend (gated below via filterRef / className), and treat the
+  // session as reduced-motion so every infinite animation collapses to its resting
+  // frame instead of stacking across opens. Desktop keeps the full treatment.
+  // Device class is stable, so sample once.
+  const lowRenderBudget = React.useRef(isLowRenderBudget()).current;
+  const osPrefersReducedMotion = useReducedMotion();
+  const prefersReducedMotion = osPrefersReducedMotion === true || lowRenderBudget;
+  const shouldPlayGuide = osPrefersReducedMotion !== true;
   const idPrefix = React.useId().replace(/:/g, '');
   const state = activeLayer ?? 'idle';
-  const engagedLayer = hoveredLayer ?? focusedLayer ?? guidedLayer;
+  const engagedLayer = hoveredLayer ?? focusedLayer ?? (activeLayer ? null : guidedLayer);
+  const guideLayerSequence = React.useMemo<ActiveLayer[]>(() => {
+    const sequence: ActiveLayer[] = [];
+    if (topNotes.length > 0) sequence.push('top');
+    if (heartNotes.length > 0) sequence.push('heart');
+    if (baseNotes.length > 0) sequence.push('base');
+    return sequence;
+  }, [topNotes.length, heartNotes.length, baseNotes.length]);
+  const guideCanPlay = shouldPlayGuide && guideLayerSequence.length > 0;
+  const guideVisualsMounted = guideCanPlay && isGuideSequencing;
+  const guideBandStrokeWidth = lowRenderBudget ? 5.8 : 3.4;
+  const guideCoreStrokeWidth = lowRenderBudget ? 2.65 : 1.45;
+  const guideGlintStrokeWidth = lowRenderBudget ? 2.45 : 1.7;
+  const guideDash = lowRenderBudget ? '0.12 0.88' : '0.07 0.93';
 
   const allLinks = React.useMemo(
     () => resolveNoteAccordLinks([...topNotes, ...heartNotes, ...baseNotes], accordRows ?? []),
@@ -548,6 +600,85 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
 
   const id = React.useCallback((name: string) => `${idPrefix}-${name}`, [idPrefix]);
   const fill = React.useCallback((name: string) => `url(#${id(name)})`, [id]);
+  // Filter reference that collapses to `undefined` on low-render-budget devices,
+  // so the element paints without allocating an offscreen filter surface.
+  const filterRef = React.useCallback(
+    (name: string) => (lowRenderBudget ? undefined : `url(#${id(name)})`),
+    [id, lowRenderBudget],
+  );
+
+  const clearGuideTimers = React.useCallback(() => {
+    guideTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    guideTimersRef.current = [];
+  }, []);
+
+  const cancelGuide = React.useCallback(() => {
+    guideHasPlayedRef.current = true;
+    clearGuideTimers();
+    setGuidedLayer(null);
+    setIsGuideSequencing(false);
+  }, [clearGuideTimers]);
+
+  React.useEffect(() => {
+    if (!guideCanPlay) return;
+
+    const root = rootRef.current;
+    if (!root || guideHasPlayedRef.current) return;
+
+    const playGuide = () => {
+      if (guideHasPlayedRef.current) return;
+
+      guideHasPlayedRef.current = true;
+      clearGuideTimers();
+      setGuidedLayer(null);
+      setIsGuideSequencing(true);
+
+      guideLayerSequence.forEach((layer, index) => {
+        const timer = window.setTimeout(() => {
+          setGuidedLayer(layer);
+        }, GUIDE_START_DELAY_MS + index * GUIDE_LAYER_DURATION_MS);
+        guideTimersRef.current.push(timer);
+      });
+
+      const endTimer = window.setTimeout(() => {
+        setGuidedLayer(null);
+        setIsGuideSequencing(false);
+      }, GUIDE_START_DELAY_MS + guideLayerSequence.length * GUIDE_LAYER_DURATION_MS);
+      guideTimersRef.current.push(endTimer);
+    };
+
+    if (typeof IntersectionObserver === 'undefined') {
+      playGuide();
+      return () => {
+        clearGuideTimers();
+        setGuidedLayer(null);
+        setIsGuideSequencing(false);
+      };
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting && entry.intersectionRatio >= GUIDE_INTERSECTION_RATIO)) {
+          playGuide();
+          observer.disconnect();
+        }
+      },
+      {
+        root: null,
+        rootMargin: '0px 0px -2% 0px',
+        threshold: [0.12, GUIDE_INTERSECTION_RATIO, 0.38, 0.55],
+      },
+    );
+
+    observer.observe(root);
+
+    return () => {
+      observer.disconnect();
+      clearGuideTimers();
+      setGuidedLayer(null);
+      setIsGuideSequencing(false);
+    };
+  }, [clearGuideTimers, guideCanPlay, guideLayerSequence]);
 
   React.useEffect(() => {
     if (!activeLayer) return;
@@ -638,13 +769,15 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
   }, [onActiveNotesChange, selectedNotes]);
 
   const handleLayerActivate = React.useCallback((layer: ActiveLayer) => {
+    cancelGuide();
     setActiveLayer((current) => (current === layer ? null : layer));
-  }, []);
+  }, [cancelGuide]);
 
   const handleLayerPointerDown = React.useCallback((event: React.PointerEvent<SVGGElement>, layer: ActiveLayer) => {
     if (event.pointerType === 'mouse' && event.button !== 0) return;
 
     event.stopPropagation();
+    cancelGuide();
     pointerActivationRef.current = {
       layer,
       pointerId: event.pointerId,
@@ -658,7 +791,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
       // Some mobile WebKit builds expose pointer events on SVG but reject capture.
       // The click fallback below keeps tap activation reliable there.
     }
-  }, []);
+  }, [cancelGuide]);
 
   const handleLayerPointerUp = React.useCallback((event: React.PointerEvent<SVGGElement>, layer: ActiveLayer) => {
     event.stopPropagation();
@@ -768,7 +901,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
       >
         <svg
           viewBox="0 0 360 420"
-          className="h-full w-full overflow-visible drop-shadow-[0_20px_35px_rgba(0,0,0,0.4)]"
+          className={`h-full w-full overflow-visible${lowRenderBudget ? '' : ' drop-shadow-[0_24px_44px_rgba(0,0,0,0.48)]'}`}
           role="img"
           aria-label="Interactive fragrance note pyramid"
         >
@@ -786,18 +919,20 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
             </radialGradient>
 
             <linearGradient id={id('top-left')} x1="129" y1="83" x2="181" y2="83" gradientUnits="userSpaceOnUse">
-              <stop offset="0" stopColor="#8a6a36" />
-              <stop offset="0.15" stopColor="#fff1c7" />
-              <stop offset="0.44" stopColor="#e1b966" />
-              <stop offset="0.8" stopColor="#fff8df" />
-              <stop offset="1" stopColor="#b9872e" />
+              <stop offset="0" stopColor="#96732f" />
+              <stop offset="0.14" stopColor="#fffbe8" />
+              <stop offset="0.4" stopColor="#ecc365" />
+              <stop offset="0.62" stopColor="#d9a945" />
+              <stop offset="0.82" stopColor="#fffdf0" />
+              <stop offset="1" stopColor="#c08e2e" />
             </linearGradient>
 
             <linearGradient id={id('top-right')} x1="180" y1="83" x2="231" y2="83" gradientUnits="userSpaceOnUse">
-              <stop offset="0" stopColor="#fff8df" />
-              <stop offset="0.26" stopColor="#dfb35a" />
-              <stop offset="0.68" stopColor="#9c6a22" />
-              <stop offset="1" stopColor="#5c390d" />
+              <stop offset="0" stopColor="#fffdf0" />
+              <stop offset="0.24" stopColor="#e6ba53" />
+              <stop offset="0.62" stopColor="#a06a1c" />
+              <stop offset="0.88" stopColor="#5e390b" />
+              <stop offset="1" stopColor="#3d2406" />
             </linearGradient>
 
             <radialGradient id={id('top-polish')} cx="50%" cy="25%" r="82%">
@@ -808,18 +943,18 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
             </radialGradient>
 
             <linearGradient id={id('heart-left')} x1="75" y1="200" x2="180" y2="200" gradientUnits="userSpaceOnUse">
-              <stop offset="0" stopColor="#2a1c0a" />
-              <stop offset="0.2" stopColor="#5f4216" />
-              <stop offset="0.58" stopColor="#99702f" />
-              <stop offset="0.82" stopColor="#d6ad62" />
-              <stop offset="1" stopColor="#fff0bf" />
+              <stop offset="0" stopColor="#1f1404" />
+              <stop offset="0.2" stopColor="#684a16" />
+              <stop offset="0.55" stopColor="#a87c33" />
+              <stop offset="0.8" stopColor="#e4ba68" />
+              <stop offset="1" stopColor="#fff4c9" />
             </linearGradient>
 
             <linearGradient id={id('heart-right')} x1="180" y1="200" x2="285" y2="200" gradientUnits="userSpaceOnUse">
-              <stop offset="0" stopColor="#fff0bf" />
-              <stop offset="0.22" stopColor="#c99b49" />
-              <stop offset="0.58" stopColor="#5c3c12" />
-              <stop offset="1" stopColor="#171008" />
+              <stop offset="0" stopColor="#fff4c9" />
+              <stop offset="0.2" stopColor="#d4a44c" />
+              <stop offset="0.56" stopColor="#5e3d10" />
+              <stop offset="1" stopColor="#0e0903" />
             </linearGradient>
 
             <linearGradient id={id('heart-polish')} x1="72" y1="200" x2="288" y2="200" gradientUnits="userSpaceOnUse">
@@ -831,18 +966,18 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
             </linearGradient>
 
             <linearGradient id={id('base-left')} x1="21" y1="319" x2="180" y2="319" gradientUnits="userSpaceOnUse">
-              <stop offset="0" stopColor="#050302" />
-              <stop offset="0.24" stopColor="#151008" />
-              <stop offset="0.58" stopColor="#30210c" />
-              <stop offset="0.84" stopColor="#704b16" />
-              <stop offset="1" stopColor="#a46f24" />
+              <stop offset="0" stopColor="#030201" />
+              <stop offset="0.22" stopColor="#171108" />
+              <stop offset="0.55" stopColor="#37270d" />
+              <stop offset="0.82" stopColor="#7d5418" />
+              <stop offset="1" stopColor="#b87e29" />
             </linearGradient>
 
             <linearGradient id={id('base-right')} x1="180" y1="319" x2="339" y2="319" gradientUnits="userSpaceOnUse">
-              <stop offset="0" stopColor="#a46f24" />
-              <stop offset="0.25" stopColor="#5f4115" />
-              <stop offset="0.62" stopColor="#1b1207" />
-              <stop offset="1" stopColor="#020201" />
+              <stop offset="0" stopColor="#b87e29" />
+              <stop offset="0.23" stopColor="#684716" />
+              <stop offset="0.6" stopColor="#1d1407" />
+              <stop offset="1" stopColor="#010100" />
             </linearGradient>
 
             <linearGradient id={id('base-polish')} x1="23" y1="320" x2="337" y2="320" gradientUnits="userSpaceOnUse">
@@ -1030,10 +1165,28 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
               <stop offset="0.65" stopColor="#ffc766" stopOpacity="0.35" />
               <stop offset="1" stopColor="#ffffff" stopOpacity="0" />
             </linearGradient>
+
+            <linearGradient id={id('edge-cut')} x1="21" y1="0" x2="339" y2="0" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stopColor="#fff8e6" stopOpacity="0" />
+              <stop offset="0.2" stopColor="#ffe9b8" stopOpacity="0.5" />
+              <stop offset="0.5" stopColor="#fffdf4" stopOpacity="0.92" />
+              <stop offset="0.8" stopColor="#ffe9b8" stopOpacity="0.5" />
+              <stop offset="1" stopColor="#fff8e6" stopOpacity="0" />
+            </linearGradient>
+
+            <linearGradient id={id('mirror-fade')} x1="0" y1="380" x2="0" y2="420" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stopColor="#ffffff" stopOpacity="0.55" />
+              <stop offset="0.55" stopColor="#ffffff" stopOpacity="0.16" />
+              <stop offset="1" stopColor="#ffffff" stopOpacity="0" />
+            </linearGradient>
+
+            <mask id={id('mirror-mask')} maskUnits="userSpaceOnUse" x="0" y="376" width="360" height="44">
+              <rect x="0" y="376" width="360" height="44" fill={fill('mirror-fade')} />
+            </mask>
           </defs>
 
           {/* Ambient depth field — soft gold air + slow-drifting starfield. No grid, no reticles. */}
-          <g aria-hidden pointerEvents="none" className="mix-blend-screen">
+          <g aria-hidden pointerEvents="none" className={lowRenderBudget ? '' : 'mix-blend-screen'}>
             <motion.circle
               cx="180"
               cy="210"
@@ -1094,6 +1247,18 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
 
           {/* Base Reflection */}
           <ellipse cx={PYRAMID_CENTER_X} cy={PYRAMID_Y.baseBottom + 12} rx="165" ry="12" fill={fill('pyramid-cast-reflection')} pointerEvents="none" />
+
+          {/* Mirror floor — the base tier reflected into the glossy black surface beneath the pyramid.
+              Pure geometry + a gradient mask (no filters), but still skipped on low render budgets. */}
+          {!lowRenderBudget && (
+            <g aria-hidden pointerEvents="none" mask={`url(#${id('mirror-mask')})`} opacity="0.32">
+              <g transform={`translate(0 ${(PYRAMID_Y.baseBottom + 10) * 2}) scale(1 -1)`}>
+                <path d={layerGeometry.base.faces[0]} fill={fill('base-left')} />
+                <path d={layerGeometry.base.faces[1]} fill={fill('base-right')} />
+                <path d={layerGeometry.base.hitPath} fill={fill('base-polish')} opacity="0.55" />
+              </g>
+            </g>
+          )}
 
           {/* Ground horizon line — grounds the structure with a soft luminous footing */}
           <motion.path
@@ -1163,13 +1328,17 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                 }}
                 onPointerEnter={isEmpty ? undefined : (event) => {
                   if (event.pointerType !== 'mouse') return;
+                  cancelGuide();
                   setHoveredLayer(layer.key);
                 }}
                 onPointerLeave={isEmpty ? undefined : (event) => {
                   if (event.pointerType !== 'mouse') return;
                   setHoveredLayer((current) => (current === layer.key ? null : current));
                 }}
-                onFocus={isEmpty ? undefined : () => setFocusedLayer(layer.key)}
+                onFocus={isEmpty ? undefined : () => {
+                  cancelGuide();
+                  setFocusedLayer(layer.key);
+                }}
                 onBlur={isEmpty ? undefined : () => setFocusedLayer((current) => (current === layer.key ? null : current))}
                 onPointerDown={isEmpty ? undefined : (event) => handleLayerPointerDown(event, layer.key)}
                 onPointerUp={isEmpty ? undefined : (event) => handleLayerPointerUp(event, layer.key)}
@@ -1187,7 +1356,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                   vectorEffect="non-scaling-stroke"
                 />
 
-                <g filter={isActive ? fill('piece-active-shadow') : isEngaged ? fill('piece-engaged-shadow') : fill('piece-shadow')}>
+                <g filter={isActive ? filterRef('piece-active-shadow') : isEngaged ? filterRef('piece-engaged-shadow') : filterRef('piece-shadow')}>
                   {layer.faces.map((facePath, faceIndex) => (
                     <path key={`${layer.key}-${faceIndex}`} d={facePath} fill={layer.faceFills[faceIndex]} />
                   ))}
@@ -1229,7 +1398,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                   strokeOpacity="0.85"
                   strokeWidth="7.5"
                   strokeLinecap="round"
-                  filter={fill('groove-shadow')}
+                  filter={filterRef('groove-shadow')}
                   pointerEvents="none"
                   vectorEffect="non-scaling-stroke"
                 />
@@ -1255,8 +1424,16 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                   initial={false}
                   animate={
                     prefersReducedMotion
-                      ? { opacity: isActive ? 0.4 : 0 }
-                      : { opacity: isActive ? [0.28, 0.42, 0.28] : isGuided ? [0.18, 0.34, 0.18] : isEngaged ? [0.12, 0.22, 0.12] : 0 }
+                      ? { opacity: isActive ? 0.4 : isGuided && lowRenderBudget ? 0.46 : 0 }
+                      : {
+                          opacity: isActive
+                            ? [0.28, 0.42, 0.28]
+                            : isGuided
+                              ? [0.18, 0.34, 0.18]
+                              : isEngaged
+                                ? [0.12, 0.22, 0.12]
+                                : 0,
+                        }
                   }
                   transition={pulseTransition}
                 />
@@ -1294,7 +1471,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                   }}
                   transition={{ duration: 0.85, ease: CALM_EASE }}
                   strokeLinejoin="miter"
-                  filter={fill('edge-glow')}
+                  filter={filterRef('edge-glow')}
                   pointerEvents="none"
                   vectorEffect="non-scaling-stroke"
                 />
@@ -1310,7 +1487,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                   initial={false}
                   animate={
                     prefersReducedMotion
-                      ? { opacity: isActive ? 0.4 : isEngaged ? 0.22 : 0 }
+                      ? { opacity: isActive ? 0.4 : isGuided && lowRenderBudget ? 0.38 : isEngaged ? 0.22 : 0 }
                       : {
                           opacity: isActive
                             ? [0.28, 0.42, 0.28]
@@ -1323,6 +1500,135 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                   }
                   transition={pulseTransition}
                 />
+
+                {/* Crest highlight — a bright hairline along the tier's freshly-cut upper edge */}
+                {layer.crest && (
+                  <motion.path
+                    d={layer.crest}
+                    fill="none"
+                    stroke={fill('edge-cut')}
+                    strokeWidth="1.15"
+                    strokeLinecap="round"
+                    pointerEvents="none"
+                    vectorEffect="non-scaling-stroke"
+                    initial={false}
+                    animate={{ opacity: isActive ? 0.95 : isEngaged ? 0.8 : 0.58 }}
+                    transition={{ duration: 0.6, ease: CALM_EASE }}
+                  />
+                )}
+
+                {guideVisualsMounted && (
+                  <motion.path
+                    d={layer.hitPath}
+                    fill="none"
+                    stroke="#fc9d19"
+                    strokeWidth={guideBandStrokeWidth}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    pointerEvents="none"
+                    vectorEffect="non-scaling-stroke"
+                    initial={false}
+                    animate={
+                      isGuided
+                        ? {
+                            pathLength: [0, 1],
+                            opacity: lowRenderBudget ? [0, 0.5, 0.08] : [0, 0.32, 0.04],
+                          }
+                        : { pathLength: 0, opacity: 0 }
+                    }
+                    transition={
+                      isGuided
+                        ? {
+                            pathLength: { duration: GUIDE_TRACE_DURATION_S, ease: CALM_EASE },
+                            opacity: { duration: GUIDE_TRACE_DURATION_S, times: [0, 0.22, 1], ease: CALM_EASE },
+                          }
+                        : { duration: 0.12, ease: CALM_EASE }
+                    }
+                  />
+                )}
+
+                {guideVisualsMounted && (
+                  <motion.path
+                    d={layer.hitPath}
+                    fill="none"
+                    stroke={fill('active-edge-gold')}
+                    strokeWidth={guideCoreStrokeWidth}
+                    strokeLinecap="round"
+                    strokeLinejoin="miter"
+                    pointerEvents="none"
+                    vectorEffect="non-scaling-stroke"
+                    filter={filterRef('gold-soft')}
+                    initial={false}
+                    animate={
+                      isGuided
+                        ? { pathLength: [0, 1], opacity: lowRenderBudget ? [0, 1, 0.26] : [0, 0.95, 0.18] }
+                        : { pathLength: 0, opacity: 0 }
+                    }
+                    transition={
+                      isGuided
+                        ? {
+                            pathLength: { duration: GUIDE_TRACE_DURATION_S, ease: CALM_EASE },
+                            opacity: { duration: GUIDE_TRACE_DURATION_S, times: [0, 0.22, 1], ease: CALM_EASE },
+                          }
+                        : { duration: 0.18, ease: CALM_EASE }
+                    }
+                  />
+                )}
+
+                {/* Traveling guide glint: follows the exact tier silhouette during the one-shot hint. */}
+                {guideVisualsMounted && (
+                  <motion.path
+                    d={layer.hitPath}
+                    pathLength={1}
+                    fill="none"
+                    stroke="#fff6dd"
+                    strokeWidth={guideGlintStrokeWidth}
+                    strokeLinecap="round"
+                    strokeLinejoin="miter"
+                    strokeDasharray={guideDash}
+                    pointerEvents="none"
+                    vectorEffect="non-scaling-stroke"
+                    filter={filterRef('gold-soft')}
+                    initial={false}
+                    animate={isGuided ? { strokeDashoffset: [0, -1], opacity: [0, 0.95, 0] } : { opacity: 0 }}
+                    transition={
+                      isGuided
+                        ? {
+                            strokeDashoffset: { duration: GUIDE_TRACE_DURATION_S, ease: 'linear' },
+                            opacity: { duration: GUIDE_TRACE_DURATION_S, times: [0, 0.18, 1], ease: CALM_EASE },
+                          }
+                        : { opacity: { duration: 0.18, ease: CALM_EASE } }
+                    }
+                  />
+                )}
+
+                {/* Guide arrival pulse: a cheap geometry cue that keeps the trace readable on small iOS screens. */}
+                {guideVisualsMounted && (
+                  <motion.g
+                    aria-hidden
+                    pointerEvents="none"
+                    initial={false}
+                    animate={isGuided ? { opacity: [0, 1, 0], scale: [0.6, 1.08, 0.92] } : { opacity: 0, scale: 0.78 }}
+                    transition={isGuided ? { duration: GUIDE_TRACE_DURATION_S, times: [0, 0.36, 1], ease: CALM_EASE } : { duration: 0.12, ease: CALM_EASE }}
+                    style={{
+                      transformBox: 'view-box',
+                      transformOrigin: `${PYRAMID_CENTER_X}px ${LAYER_CENTER_Y[layer.key]}px`,
+                    }}
+                  >
+                    <circle
+                      cx={PYRAMID_CENTER_X}
+                      cy={LAYER_CENTER_Y[layer.key]}
+                      r={lowRenderBudget ? 14 : 11}
+                      fill={fill('gold-glow')}
+                    />
+                    <circle
+                      cx={PYRAMID_CENTER_X}
+                      cy={LAYER_CENTER_Y[layer.key]}
+                      r={lowRenderBudget ? 3.4 : 2.6}
+                      fill="#fff6dd"
+                    />
+                  </motion.g>
+                )}
 
                 {/* Keyboard focus ring — visible only on :focus-visible via parent class */}
                 <path
@@ -1337,19 +1643,31 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                   vectorEffect="non-scaling-stroke"
                 />
 
-                {/* Apex pinpoint — single soft glow, no dashed ring, no sparkle path */}
+                {/* Apex star-flare — a four-point glint seated on the summit that breathes and slowly twists */}
                 {layer.key === 'top' && (
-                  <motion.circle
-                    cx={PYRAMID_CENTER_X}
-                    cy="27"
-                    r="1.4"
-                    fill="#fff8e6"
-                    pointerEvents="none"
-                    filter={fill('gold-soft')}
-                    initial={false}
-                    animate={prefersReducedMotion ? { opacity: 0.78 } : { opacity: [0.6, 0.95, 0.6] }}
-                    transition={pulseTransition}
-                  />
+                  <g pointerEvents="none" filter={filterRef('gold-soft')}>
+                    <motion.path
+                      d={`M${PYRAMID_CENTER_X} 18.6 L${PYRAMID_CENTER_X + 1.15} 25.85 L${PYRAMID_CENTER_X + 8.4} 27 L${PYRAMID_CENTER_X + 1.15} 28.15 L${PYRAMID_CENTER_X} 35.4 L${PYRAMID_CENTER_X - 1.15} 28.15 L${PYRAMID_CENTER_X - 8.4} 27 L${PYRAMID_CENTER_X - 1.15} 25.85 Z`}
+                      fill="#fff3d4"
+                      initial={false}
+                      animate={
+                        prefersReducedMotion
+                          ? { opacity: 0.5, scale: 0.9, rotate: 0 }
+                          : { opacity: [0.3, 0.78, 0.3], scale: [0.74, 1.06, 0.74], rotate: [0, 90] }
+                      }
+                      transition={pulseTransition}
+                      style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
+                    />
+                    <motion.circle
+                      cx={PYRAMID_CENTER_X}
+                      cy="27"
+                      r="1.4"
+                      fill="#fff8e6"
+                      initial={false}
+                      animate={prefersReducedMotion ? { opacity: 0.78 } : { opacity: [0.6, 0.95, 0.6] }}
+                      transition={pulseTransition}
+                    />
+                  </g>
                 )}
               </motion.g>
             );
@@ -1389,7 +1707,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                     cy={dot.y}
                     r="2.85"
                     fill={fill('gold-dot')}
-                    filter={fill('gold-soft')}
+                    filter={filterRef('gold-soft')}
                     animate={
                       prefersReducedMotion
                         ? { opacity: 1, r: 2.85 }
@@ -1416,7 +1734,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
           <motion.g
             aria-hidden
             pointerEvents="none"
-            filter={fill('glyph-soft')}
+            filter={filterRef('glyph-soft')}
             animate={prefersReducedMotion ? { opacity: 0.96, y: 0 } : { opacity: [0.88, 1, 0.88], y: [0, -0.6, 0] }}
             transition={glyphTransition}
             style={{
@@ -1532,11 +1850,15 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
               animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
               exit={{ opacity: 0, y: -5, scale: 0.99, filter: 'blur(2px)' }}
               transition={prefersReducedMotion ? reducedTransition : { duration: 0.32, ease: CALM_EASE }}
-              className={`pointer-events-none absolute left-1/2 z-50 w-[84%] max-w-[15rem] -translate-x-1/2 overflow-hidden rounded-lg border border-white/10 bg-[#060608]/76 px-2 py-2 shadow-[0_10px_30px_-8px_rgba(0,0,0,0.78),inset_0_1px_1px_rgba(255,255,255,0.13),0_0_0_1px_rgba(252,157,25,0.07)] backdrop-blur-sm sm:max-w-[18.5rem] sm:px-3.5 sm:py-3.5 ${selectedLayer.revealClass}`}
+              className={`pointer-events-none absolute left-1/2 z-50 w-[84%] max-w-[15rem] -translate-x-1/2 overflow-hidden rounded-lg border border-white/10 bg-[#060608]/92 px-2 py-2 shadow-[0_10px_30px_-8px_rgba(0,0,0,0.78),inset_0_1px_1px_rgba(255,255,255,0.13),0_0_0_1px_rgba(252,157,25,0.09),0_0_28px_-10px_rgba(252,157,25,0.34)] sm:max-w-[18.5rem] sm:px-3.5 sm:py-3.5 ${selectedLayer.revealClass}`}
             >
               <span
                 aria-hidden
                 className="pointer-events-none absolute inset-[3px] rounded-md border border-white/[0.045]"
+              />
+              <span
+                aria-hidden
+                className="pointer-events-none absolute inset-x-4 top-0 h-px bg-gradient-to-r from-transparent via-[#ffd98a]/55 to-transparent"
               />
 
               <motion.div

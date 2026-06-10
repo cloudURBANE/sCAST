@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef, useLayoutEffect, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect, useMemo, useCallback } from 'react';
 import { Routes, Route, useLocation, useParams, type Location } from 'react-router-dom';
-import { FragranceCapture } from './components/FragranceCapture';
+import { FragranceCapture, vaultIdentityKey } from './components/FragranceCapture';
 import { Wardrobe, Fragrance, DestinationType, EnergyState } from './components/Wardrobe';
 import { Play, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -9,19 +9,24 @@ import { ScentNotesInfographic } from './components/ScentNotesInfographic';
 import { ThreadBackground } from './components/threads/ThreadBackground';
 import { AppTopNav } from './components/AppTopNav';
 import { AuthModal } from './components/AuthModal';
-import { SharePage } from './components/SharePage';
+import { GuestSaveBanner } from './components/GuestSaveBanner';
 import { ShareModal } from './components/ShareModal';
 import type { ScentFamily, ScentWeatherRecommendation } from './lib/scentWeatherEngine';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { WeatherProvider, useWeather } from './context/WeatherContext';
 import { WardrobeProvider, useWardrobe, useWardrobeItems, useWardrobeShareModalActions } from './context/WardrobeContext';
 import { Toaster } from './components/ui/toaster';
-import CommunityPage from '@/pages/community';
-import IpadFreezeLab from '@/pages/ipad-freeze-lab';
-import { PageTransitionOverlay } from './components/PageTransitionOverlay';
+import { PageTransitionOverlay, warmTransitionEmblem } from './components/PageTransitionOverlay';
 import { useModalBehavior } from '@/hooks/use-modal-behavior';
 import { useRenderBudget } from '@/hooks/useRenderBudget';
 import NotFound from '@/pages/not-found';
+import { SEO } from './components/SEO';
+
+const CommunityPage = React.lazy(() => import('@/pages/community'));
+const IpadFreezeLab = React.lazy(() => import('@/pages/ipad-freeze-lab'));
+const SharePage = React.lazy(() =>
+  import('./components/SharePage').then((module) => ({ default: module.SharePage })),
+);
 
 const titleCaseToken = (value: string): string =>
   value
@@ -45,8 +50,18 @@ const formatSprayCount = (sprayCount: ScentWeatherRecommendation['spray_count'])
   return `${sprayCount.min}-${sprayCount.max} sprays (${sprayCount.recommended} recommended)`;
 };
 
-const PAGE_TRANSITION_COVER_MS = 280;
-const PAGE_TRANSITION_SHOW_MS = 1180;
+const PAGE_TRANSITION_TIMING = {
+  standard: {
+    coverMs: 96,
+    minShowMs: 360,
+    postSwapPaintMs: 48,
+  },
+  lowMotion: {
+    coverMs: 72,
+    minShowMs: 240,
+    postSwapPaintMs: 32,
+  },
+} as const;
 
 const routeSignature = (location: Location): string =>
   `${location.pathname}${location.search}`;
@@ -434,10 +449,13 @@ function DashboardView() {
     wardrobeFixBusy,
     wardrobeFixHint,
     vaultSearchUiActive,
+    isImageSyncing,
+    isAdmin,
     setIsIntentModalOpen,
     setIsShareModalOpen,
     handleAddItem,
     handlePersistWardrobeImage,
+    uploadAdminBottleImage,
     handleRevertWardrobe,
     handleDeleteItem,
     handleIntentComplete,
@@ -467,8 +485,27 @@ function DashboardView() {
   const showOnboardingSteps =
     stateSettled && !onboardingCompleted && items.length === 0 && !vaultSearchUiActive;
 
+  // Brand+name identities of saved fragrances, so the search overlay can flag
+  // results that are already in the vault and offer "View in vault" instead of a
+  // silent duplicate add.
+  const vaultIdentityKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const item of items) {
+      const key = vaultIdentityKey(item.brand ?? item.product?.brand, item.name ?? item.product?.name);
+      if (key) keys.add(key);
+    }
+    return keys;
+  }, [items]);
+
+  const handleViewVault = useCallback(() => {
+    document
+      .getElementById('scent-vault-section')
+      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, []);
+
   return (
     <div className="min-h-[100svh] relative overflow-x-hidden">
+      <SEO />
       <AppTopNav
         authToken={authToken}
         authEmail={authEmail}
@@ -484,11 +521,13 @@ function DashboardView() {
         <div className="space-y-20 sm:space-y-28 pt-10 sm:pt-14">
           <HomepageHeroMarquee />
 
-          <section className="scent-hero-zone mx-auto w-full max-w-2xl min-w-0 space-y-7 text-center">
-            <h2 className="mx-auto max-w-full text-balance font-serif italic text-[clamp(2.15rem,7vw,3.8rem)] text-[#fff7ec] leading-[0.98] tracking-normal">
-              Search any fragrance or brand.
-            </h2>
-            <FragranceCapture onAdd={handleAddItem} onVaultSearchStateChange={handleVaultSearchStateChange} />
+          <section className="mx-auto w-full max-w-[60rem] min-w-0 space-y-7 text-center">
+            <FragranceCapture
+              onAdd={handleAddItem}
+              onVaultSearchStateChange={handleVaultSearchStateChange}
+              existingVaultKeys={vaultIdentityKeys}
+              onViewVault={handleViewVault}
+            />
             <AnimatePresence initial={false}>
               {showOnboardingSteps ? (
                 <motion.div
@@ -506,8 +545,8 @@ function DashboardView() {
                       { step: '3', text: 'Discover your match' },
                     ] as const).map(({ step, text }) => (
                       <div key={step} className="flex flex-col items-center gap-2">
-                        <span className="w-7 h-7 rounded-full border border-scent-accent/30 flex items-center justify-center text-[11px] font-bold text-scent-accent/60 shrink-0">{step}</span>
-                        <p className="text-[10px] uppercase tracking-[0.18em] text-scent-muted leading-relaxed">{text}</p>
+                        <span className="w-7 h-7 rounded-full border border-scent-accent/40 flex items-center justify-center text-[13px] font-bold text-scent-accent shrink-0">{step}</span>
+                        <p className="scent-type-chip text-scent-text-muted leading-relaxed">{text}</p>
                       </div>
                     ))}
                   </div>
@@ -534,12 +573,22 @@ function DashboardView() {
                       <span className="font-serif italic text-lg sm:text-2xl leading-tight text-center">Discover Your Signature Scent</span>
                     </motion.button>
                   ) : (
-                    <div className="w-full min-h-[60px] sm:h-16 flex items-center justify-center gap-2.5 sm:gap-4 px-4 rounded-[var(--radius-scent)] border border-white/10 bg-white/[0.025]">
-                      <Play size={19} className="fill-current shrink-0 opacity-25" aria-hidden />
-                      <span className="font-serif italic text-lg sm:text-xl leading-tight text-center text-white/30">
+                    <div className="w-full min-h-[60px] sm:min-h-16 flex flex-col items-center justify-center gap-2.5 px-4 py-3 rounded-[var(--radius-scent)] border border-white/10 bg-white/[0.025]">
+                      <div className="flex items-center gap-2" role="progressbar" aria-valuemin={0} aria-valuemax={3} aria-valuenow={Math.min(items.length, 3)} aria-label="Fragrances added toward discovery">
+                        {[0, 1, 2].map((i) => (
+                          <span
+                            key={i}
+                            className={`h-1.5 w-9 rounded-full transition-colors duration-300 sm:w-12 ${
+                              i < items.length ? 'bg-scent-accent/85 shadow-[0_0_10px_rgba(212,175,55,0.35)]' : 'bg-white/12'
+                            }`}
+                          />
+                        ))}
+                      </div>
+                      <span className="font-serif italic text-base sm:text-lg leading-tight text-center text-white/55">
+                        <span className="tabular-nums not-italic font-sans font-bold tracking-[0.12em] text-scent-accent">{Math.min(items.length, 3)}/3</span>
                         {items.length === 0
-                          ? 'Add 3 fragrances to unlock discovery'
-                          : `Add ${3 - items.length} more fragrance${3 - items.length !== 1 ? 's' : ''} to unlock discovery`}
+                          ? ' — add 3 fragrances to unlock discovery'
+                          : ` — ${3 - items.length} more to unlock discovery`}
                       </span>
                     </div>
                   )}
@@ -550,11 +599,13 @@ function DashboardView() {
 
           <HomepageAtmosphereChrome />
 
-          <div>
+          <div id="scent-vault-section" style={{ scrollMarginTop: 'var(--topbar-h)' }}>
             <Wardrobe
               items={items}
               onDelete={handleDeleteItem}
               onPersistWardrobeImage={authToken ? handlePersistWardrobeImage : undefined}
+              isAdmin={isAdmin}
+              onUploadBottleImage={authToken && isAdmin ? uploadAdminBottleImage : undefined}
               featuredItem={activeRecommendation}
               onRevertWardrobe={handleRevertWardrobe}
               fixWardrobeBusy={wardrobeFixBusy}
@@ -565,6 +616,7 @@ function DashboardView() {
               wardrobeLoaded={wardrobeLoaded}
               wardrobeError={wardrobeError}
               onRetryLoadWardrobe={retryLoadWardrobe}
+              isImageSyncing={isImageSyncing}
             />
           </div>
         </div>
@@ -589,36 +641,37 @@ function DashboardView() {
               className="flex items-center justify-between px-5 pb-4 shrink-0"
               style={{ paddingTop: 'max(1.25rem, env(safe-area-inset-top))' }}
             >
-              <p className="text-[9px] uppercase tracking-[0.4em] text-scent-accent font-bold">Strategic Alignment Found</p>
-              <button ref={recommendationCloseRef} onClick={closeRecommendationOverlay} className="p-2 text-white/40 hover:text-white hover:bg-white/10 transition-all active:scale-95" aria-label="Close recommendation">
+              <p className="scent-type-label text-scent-accent">Strategic Alignment Found</p>
+              <button ref={recommendationCloseRef} onClick={closeRecommendationOverlay} className="-m-1 inline-flex min-h-11 min-w-11 items-center justify-center rounded-full text-scent-text-subtle hover:text-white hover:bg-white/10 transition-all active:scale-95" aria-label="Close recommendation">
                 <X size={20} strokeWidth={1.75} />
               </button>
             </div>
 
             {/* Scrollable middle */}
-            <div
-              className="flex-1 overflow-y-auto"
-              style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
-            >
+            <div className="flex-1 overflow-y-auto">
               <div className="flex items-center justify-center min-h-full px-5 py-6 sm:px-16 sm:py-12">
                 <div className="max-w-2xl w-full text-center space-y-6 sm:space-y-12">
                   <header>
                     <h2 id="recommendation-overlay-title" className="font-serif italic text-2xl sm:text-6xl mb-4">You should wear</h2>
                     <div className="h-px w-16 bg-white/20 mx-auto" />
                   </header>
-                  <div className="py-6 sm:py-16 border-y border-white/10 group cursor-pointer" onClick={closeRecommendationOverlay}>
-                    <p className="text-sm uppercase tracking-[0.2em] text-white/40 mb-2 font-serif">{activeRecommendation.brand}</p>
+                  <button
+                    type="button"
+                    className="w-full py-6 sm:py-16 border-y border-white/10 group cursor-pointer bg-transparent text-center"
+                    onClick={closeRecommendationOverlay}
+                  >
+                    <p className="mb-2 font-serif text-sm uppercase tracking-[0.2em] text-scent-text-muted">{activeRecommendation.brand}</p>
                     <h3 className="font-serif italic text-3xl sm:text-8xl text-white leading-tight transition-transform group-hover:scale-105">{activeRecommendation.name}</h3>
-                  </div>
+                  </button>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 sm:gap-12 text-left">
                     <div>
-                      <p className="text-[8px] uppercase tracking-[0.3em] text-scent-muted mb-2 font-bold">Olfactory Reason</p>
-                      <p className="text-sm italic text-scent-muted leading-relaxed">{recommendationReason || 'Optimal olfactory alignment with your current atmospheric conditions.'}</p>
+                      <p className="mb-2 scent-type-label">Olfactory Reason</p>
+                      <p className="text-base italic text-scent-text-muted leading-relaxed">{recommendationReason || 'Optimal olfactory alignment with your current atmospheric conditions.'}</p>
                     </div>
                     {activeRecommendation.concentration && activeRecommendation.concentration !== 'Unknown' && (
                     <div>
-                      <p className="text-[8px] uppercase tracking-[0.3em] text-scent-muted mb-2 font-bold">Concentration</p>
-                      <p className="text-sm italic text-scent-muted leading-relaxed">{activeRecommendation.concentration}</p>
+                      <p className="mb-2 scent-type-label">Concentration</p>
+                      <p className="text-base italic text-scent-text-muted leading-relaxed">{activeRecommendation.concentration}</p>
                     </div>
                     )}
                     <div className="sm:col-span-2">
@@ -635,24 +688,24 @@ function DashboardView() {
                     {activeEngineRecommendation ? (
                       <>
                         <div>
-                          <p className="text-[8px] uppercase tracking-[0.3em] text-scent-muted mb-2 font-bold">Best Families</p>
-                          <p className="text-sm italic text-scent-muted leading-relaxed">{formatFamilyList(activeEngineRecommendation.best_scent_families)}</p>
+                          <p className="mb-2 scent-type-label">Best Families</p>
+                          <p className="text-base italic text-scent-text-muted leading-relaxed">{formatFamilyList(activeEngineRecommendation.best_scent_families)}</p>
                         </div>
                         <div>
-                          <p className="text-[8px] uppercase tracking-[0.3em] text-scent-muted mb-2 font-bold">Avoid Today</p>
-                          <p className="text-sm italic text-scent-muted leading-relaxed">{formatAvoidList(activeEngineRecommendation.avoid_scent_families)}</p>
+                          <p className="mb-2 scent-type-label">Avoid Today</p>
+                          <p className="text-base italic text-scent-text-muted leading-relaxed">{formatAvoidList(activeEngineRecommendation.avoid_scent_families)}</p>
                         </div>
                         <div>
-                          <p className="text-[8px] uppercase tracking-[0.3em] text-scent-muted mb-2 font-bold">Sprays</p>
-                          <p className="text-sm italic text-scent-muted leading-relaxed">{formatSprayCount(activeEngineRecommendation.spray_count)}</p>
+                          <p className="mb-2 scent-type-label">Sprays</p>
+                          <p className="text-base italic text-scent-text-muted leading-relaxed">{formatSprayCount(activeEngineRecommendation.spray_count)}</p>
                         </div>
                         <div>
-                          <p className="text-[8px] uppercase tracking-[0.3em] text-scent-muted mb-2 font-bold">Projection Risk</p>
-                          <p className="text-sm italic text-scent-muted leading-relaxed">{titleCaseToken(activeEngineRecommendation.projection_risk)}</p>
+                          <p className="mb-2 scent-type-label">Projection Risk</p>
+                          <p className="text-base italic text-scent-text-muted leading-relaxed">{titleCaseToken(activeEngineRecommendation.projection_risk)}</p>
                         </div>
                         <div>
-                          <p className="text-[8px] uppercase tracking-[0.3em] text-scent-muted mb-2 font-bold">Confidence</p>
-                          <p className="text-sm italic text-scent-muted leading-relaxed">{titleCaseToken(activeEngineRecommendation.confidence)}</p>
+                          <p className="mb-2 scent-type-label">Confidence</p>
+                          <p className="text-base italic text-scent-text-muted leading-relaxed">{titleCaseToken(activeEngineRecommendation.confidence)}</p>
                         </div>
                       </>
                     ) : null}
@@ -666,7 +719,7 @@ function DashboardView() {
               className="px-5 pt-3 shrink-0 border-t border-white/5"
               style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))' }}
             >
-              <button onClick={closeRecommendationOverlay} className="w-full py-4 bg-scent-accent text-black uppercase tracking-[0.3em] text-[10px] font-bold hover:opacity-90 transition-opacity active:scale-[0.98]">
+              <button type="button" onClick={closeRecommendationOverlay} className="w-full py-4 bg-scent-accent text-black scent-type-chip hover:opacity-90 transition-opacity active:scale-[0.98]">
                 Confirm Alignment
               </button>
             </div>
@@ -685,7 +738,7 @@ function DashboardView() {
               draggable={false}
             />
           </div>
-          <p className="text-[10px] uppercase tracking-[0.2em] text-scent-muted">© 2026 Olfactory Intelligence Systems</p>
+          <p className="scent-type-label">© 2026 Olfactory Intelligence Systems</p>
         </div>
       </footer>
     </div>
@@ -696,20 +749,28 @@ function CommunityPageView() {
   const { authToken, authEmail, authPictureUrl, handleSignOut, setIsAuthModalOpen } = useAuth();
   const { setIsShareModalOpen } = useWardrobeShareModalActions();
   return (
-    <CommunityPage
-      authToken={authToken}
+    <>
+      <SEO title="Community | ScentBeam" description="Discuss and discover fragrances with the community." url="https://scentbeam.com/community" />
+      <CommunityPage
+        authToken={authToken}
       authEmail={authEmail}
       authPictureUrl={authPictureUrl}
       onSignIn={() => setIsAuthModalOpen(true)}
       onShare={() => setIsShareModalOpen(true)}
       onSignOut={handleSignOut}
     />
+    </>
   );
 }
 
 function SharePageView() {
   const { userId } = useParams<{ userId: string }>();
-  return <SharePage userId={userId || ''} />;
+  return (
+    <>
+      <SEO title="Shared Wardrobe | ScentBeam" description="Check out this fragrance wardrobe." />
+      <SharePage userId={userId || ''} />
+    </>
+  );
 }
 
 function GlobalModals() {
@@ -722,6 +783,23 @@ function GlobalModals() {
   } = useAuth();
 
   const { items, setItems, isShareModalOpen, setIsShareModalOpen, userId } = useWardrobe();
+
+  // Gentle guest nudge: surfaces only once a guest has shown real intent (a few
+  // saves), while the hard modal is closed and they haven't waved it off. It
+  // also auto-retires after a few seconds (see GuestSaveBanner) so it never
+  // becomes a fixture pinned over the top of every screen.
+  const showGuestBanner = !authToken && !isAuthModalOpen && !guestPromptDismissed && items.length >= 3;
+  const guestBanner = (
+    <AnimatePresence>
+      {showGuestBanner ? (
+        <GuestSaveBanner
+          itemCount={items.length}
+          onSignIn={() => setIsAuthModalOpen(true)}
+          onDismiss={() => setGuestPromptDismissed(true)}
+        />
+      ) : null}
+    </AnimatePresence>
+  );
 
   const authModal = isAuthModalOpen ? (
     <AuthModal
@@ -758,67 +836,45 @@ function GlobalModals() {
 
   return (
     <>
+      {guestBanner}
       {authModal}
       {shareModal}
     </>
   );
 }
 
-function AppContent({ location }: { location: Location }) {
+function RouteChunkFallback() {
   return (
-    <>
-      <Routes location={location}>
-        <Route path="/" element={<DashboardView />} />
-        <Route path="/community" element={<CommunityPageView />} />
-        <Route path="/debug/ipad-freeze" element={<IpadFreezeLab />} />
-        <Route path="/share/:userId" element={<SharePageView />} />
-        <Route path="*" element={<NotFound />} />
-      </Routes>
-      <GlobalModals />
-    </>
+    <div className="grid min-h-[100svh] place-items-center px-6" aria-label="Loading route">
+      <div className="h-8 w-8 rounded-full border border-white/15 border-t-scent-accent animate-spin" />
+    </div>
   );
 }
 
-export default function App() {
-  const location = useLocation();
-  const [renderedLocation, setRenderedLocation] = useState<Location>(location);
-  const [transitionVisible, setTransitionVisible] = useState(false);
-  const [transitionKey, setTransitionKey] = useState(0);
-  const activeRouteRef = useRef(routeSignature(location));
-  const coverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isFreezeLab = renderedLocation.pathname === '/debug/ipad-freeze';
-  // On a constrained iPad PWA the per-frame animated thread background outruns
-  // Safari's compositor during fast scroll (black flashes / late paint). Drop it
-  // there and let the static app-shell background carry the look instead.
-  const { lowMotionRenderMode } = useRenderBudget();
-  const showThreadBackground = !isFreezeLab && !lowMotionRenderMode;
+const AppContent = React.memo(function AppContent({ location }: { location: Location }) {
+  return (
+    <>
+      <React.Suspense fallback={<RouteChunkFallback />}>
+        <Routes location={location}>
+          <Route path="/" element={<DashboardView />} />
+          <Route path="/community" element={<CommunityPageView />} />
+          <Route path="/debug/ipad-freeze" element={<IpadFreezeLab />} />
+          <Route path="/share/:userId" element={<SharePageView />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </React.Suspense>
+      <GlobalModals />
+    </>
+  );
+});
 
-  useLayoutEffect(() => {
-    const nextRoute = routeSignature(location);
-    if (nextRoute === activeRouteRef.current) return;
-    activeRouteRef.current = nextRoute;
-
-    if (coverTimerRef.current) clearTimeout(coverTimerRef.current);
-    if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
-
-    setTransitionKey((key) => key + 1);
-    setTransitionVisible(true);
-
-    coverTimerRef.current = setTimeout(() => {
-      setRenderedLocation(location);
-    }, PAGE_TRANSITION_COVER_MS);
-
-    hideTimerRef.current = setTimeout(() => {
-      setTransitionVisible(false);
-    }, PAGE_TRANSITION_SHOW_MS);
-  }, [location]);
-
-  useEffect(() => () => {
-    if (coverTimerRef.current) clearTimeout(coverTimerRef.current);
-    if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
-  }, []);
-
+const AppShell = React.memo(function AppShell({
+  renderedLocation,
+  showThreadBackground,
+}: {
+  renderedLocation: Location;
+  showThreadBackground: boolean;
+}) {
   return (
     <AuthProvider>
       <WeatherProvider>
@@ -828,9 +884,104 @@ export default function App() {
             <AppContent location={renderedLocation} />
             <Toaster />
           </div>
-          <PageTransitionOverlay visible={transitionVisible} animationKey={transitionKey} />
         </WardrobeProvider>
       </WeatherProvider>
     </AuthProvider>
+  );
+});
+
+export default function App() {
+  const location = useLocation();
+  const [renderedLocation, setRenderedLocation] = useState<Location>(location);
+  const [transitionVisible, setTransitionVisible] = useState(false);
+  const [transitionKey, setTransitionKey] = useState(0);
+  const activeRouteRef = useRef(routeSignature(location));
+  const coverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const paintFrameRef = useRef<number | null>(null);
+  const pendingRevealRouteRef = useRef<string | null>(null);
+  const transitionStartedAtRef = useRef(0);
+  const isFreezeLab = renderedLocation.pathname === '/debug/ipad-freeze';
+  // The thread background's per-frame rAF transform loop presents smoothly on
+  // iPhone/desktop, but on iPad's large retina viewport it contends with
+  // Safari's compositor during fast scroll and image decode (janky scroll, late
+  // image paint, laggy card taps). Render it everywhere except iPad and the
+  // freeze lab. It still composes a static (no rAF loop) arrangement under
+  // prefers-reduced-motion — that branch lives inside ThreadBackground itself.
+  const { lowMotionRenderMode, isIpad } = useRenderBudget();
+  const showThreadBackground = !isFreezeLab && !isIpad;
+  const transitionTiming = useMemo(
+    () => (lowMotionRenderMode ? PAGE_TRANSITION_TIMING.lowMotion : PAGE_TRANSITION_TIMING.standard),
+    [lowMotionRenderMode],
+  );
+
+  const clearTransitionWork = useCallback(() => {
+    pendingRevealRouteRef.current = null;
+    if (coverTimerRef.current) {
+      clearTimeout(coverTimerRef.current);
+      coverTimerRef.current = null;
+    }
+    if (hideTimerRef.current) {
+      clearTimeout(hideTimerRef.current);
+      hideTimerRef.current = null;
+    }
+    if (paintFrameRef.current !== null) {
+      cancelAnimationFrame(paintFrameRef.current);
+      paintFrameRef.current = null;
+    }
+  }, []);
+
+  const scheduleRevealAfterRoutePaint = useCallback(() => {
+    paintFrameRef.current = requestAnimationFrame(() => {
+      paintFrameRef.current = requestAnimationFrame(() => {
+        paintFrameRef.current = null;
+        const elapsed = Date.now() - transitionStartedAtRef.current;
+        const remainingShowMs = Math.max(transitionTiming.minShowMs - elapsed, 0);
+        const revealDelayMs = Math.max(remainingShowMs, transitionTiming.postSwapPaintMs);
+
+        hideTimerRef.current = setTimeout(() => {
+          hideTimerRef.current = null;
+          setTransitionVisible(false);
+        }, revealDelayMs);
+      });
+    });
+  }, [transitionTiming]);
+
+  useLayoutEffect(() => {
+    const renderedRoute = routeSignature(renderedLocation);
+    if (!transitionVisible || pendingRevealRouteRef.current !== renderedRoute) return;
+
+    pendingRevealRouteRef.current = null;
+    scheduleRevealAfterRoutePaint();
+  }, [renderedLocation, scheduleRevealAfterRoutePaint, transitionVisible]);
+
+  useLayoutEffect(() => {
+    const nextRoute = routeSignature(location);
+    if (nextRoute === activeRouteRef.current) return;
+    activeRouteRef.current = nextRoute;
+
+    clearTransitionWork();
+    warmTransitionEmblem();
+
+    transitionStartedAtRef.current = Date.now();
+    setTransitionKey((key) => key + 1);
+    setTransitionVisible(true);
+
+    coverTimerRef.current = setTimeout(() => {
+      coverTimerRef.current = null;
+      pendingRevealRouteRef.current = nextRoute;
+      setRenderedLocation(location);
+    }, transitionTiming.coverMs);
+  }, [clearTransitionWork, location, transitionTiming.coverMs]);
+
+  useEffect(() => () => {
+    clearTransitionWork();
+  }, [clearTransitionWork]);
+
+  return (
+    <>
+      <AppShell renderedLocation={renderedLocation} showThreadBackground={showThreadBackground} />
+      <PageTransitionOverlay visible={transitionVisible} animationKey={transitionKey} />
+    </>
   );
 }

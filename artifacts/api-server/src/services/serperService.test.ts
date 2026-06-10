@@ -38,3 +38,71 @@ test("scoreSerperImageCandidate still rejects unrelated listings without bottle 
 
   assert.equal(unrelated, -Infinity);
 });
+
+test("scoreSerperImageCandidate rejects listings whose title names a box", () => {
+  for (const title of [
+    "Dior Sauvage EDP 100ml with box",
+    "Chanel Bleu de Chanel bottle and box",
+    "Versace Eros coffret gift set",
+    "Tom Ford Oud Wood gift box packaging",
+  ]) {
+    const boxed = scoreSerperImageCandidate({
+      imageUrl: "https://cdn.example.com/perfume.png",
+      title,
+      source: "Marketplace",
+      imageWidth: 800,
+      imageHeight: 800,
+    });
+    assert.equal(boxed, -Infinity, `expected "${title}" to be rejected`);
+  }
+});
+
+test("scoreSerperImageCandidate prefers a portrait bottle over a wide box+bottle shot", () => {
+  const base = {
+    imageUrl: "https://cdn.example.com/dior-sauvage-edp.png",
+    title: "Dior Sauvage EDP 100ml",
+    source: "Twisted Lily",
+  };
+
+  const portraitBottle = scoreSerperImageCandidate({
+    ...base,
+    imageWidth: 700,
+    imageHeight: 1000, // aspect 0.7 — tall, single-bottle shaped
+  });
+  const wideComposition = scoreSerperImageCandidate({
+    ...base,
+    imageWidth: 1000,
+    imageHeight: 700, // aspect ~1.43 — wide, often bottle + carton
+  });
+
+  assert.ok(Number.isFinite(portraitBottle));
+  assert.ok(Number.isFinite(wideComposition));
+  assert.ok(
+    portraitBottle > wideComposition,
+    `portrait (${portraitBottle}) should outrank wide (${wideComposition})`,
+  );
+});
+
+test("scoreSerperImageCandidate admits trusted-host packshots below the old 500px floor", () => {
+  // Live Serper dims (YSL Libre / MYSLF / Y "Le Parfum", 2026-06): the official
+  // YSL CDN serves 320×320, Sephora 350×350, Macy's 328×400 — all previously
+  // `-Infinity`'d by the 500px floor. They must now survive (BE-3).
+  for (const c of [
+    { imageUrl: "https://www.yslbeautyus.com/libre-le-parfum.png", title: "YSL Libre Le Parfum 3.0 oz", source: "YSL Beauty", imageWidth: 320, imageHeight: 320 },
+    { imageUrl: "https://slimages.macysassets.com/ysl-libre.jpg", title: "Yves Saint Laurent Libre Le Parfum Spray", source: "Macy's", imageWidth: 328, imageHeight: 400 },
+  ]) {
+    const score = scoreSerperImageCandidate(c);
+    assert.ok(Number.isFinite(score) && score > 0, `${c.source} ${c.imageWidth}×${c.imageHeight} packshot should pass`);
+  }
+});
+
+test("scoreSerperImageCandidate still rejects sub-300px thumbnails/icons", () => {
+  const tinyIcon = scoreSerperImageCandidate({
+    imageUrl: "https://www.sephora.com/sprite/perfume-thumb.png",
+    title: "YSL Libre perfume bottle",
+    source: "Sephora",
+    imageWidth: 120,
+    imageHeight: 120,
+  });
+  assert.equal(tinyIcon, -Infinity);
+});

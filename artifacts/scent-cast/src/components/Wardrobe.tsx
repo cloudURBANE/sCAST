@@ -1,6 +1,6 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import {
   X,
   Trash2,
@@ -10,6 +10,7 @@ import {
   RefreshCw,
   Undo2,
   HelpCircle,
+  AlertCircle,
   Sparkles,
   Check,
   Maximize2,
@@ -26,6 +27,8 @@ import {
   ArrowRight,
   ArrowDown,
   ArrowLeft,
+  Upload,
+  Link2,
 } from 'lucide-react';
 import { ReviewsPanel } from './ReviewsPanel';
 import { CyclingTilePair, type CyclingPart } from './CyclingTilePair';
@@ -33,6 +36,7 @@ import { bottleFeaturedSlotClass } from '@/lib/bottleImageFrame';
 
 import {
   BOTTLE_CROP_STORED_MAX,
+  BOTTLE_FRAME_LIMITS,
   DEFAULT_BOTTLE_IMAGE_ADJUSTMENT,
   bottleImageAdjustmentsEqual,
   normalizeBottleImageAdjustment,
@@ -42,8 +46,12 @@ import {
 import { BottleImage } from '@/components/BottleImage';
 import { betaVideoUrlForFragrance } from '@/lib/bottleVideoBeta';
 import { BrandGoldLabel } from '@/components/BrandGoldLabel';
+import { VaultGridModeToggle } from '@/components/VaultGridModeToggle';
 import { ScentNotesInfographic } from '@/components/ScentNotesInfographic';
 import { useModalBehavior } from '@/hooks/use-modal-behavior';
+import { useRenderBudget } from '@/hooks/useRenderBudget';
+import { useVaultGridPreference } from '@/hooks/useVaultGridPreference';
+import { crumb, domSnapshot } from '@/lib/crashTrace';
 import {
   WARDROBE_CLARIFY_SOLVERS,
   WARDROBE_REFRESH_COUNT_STORAGE_KEY,
@@ -345,7 +353,7 @@ function FragrancePanel({
   return (
     <section className={`border border-white/[0.04] bg-gradient-to-b from-white/[0.018] to-transparent shadow-[inset_0_1px_0_rgba(255,255,255,0.025)] ${className}`}>
       <div className="relative flex items-center justify-center border-b border-white/[0.05] px-4 py-3 text-center">
-        <p className="text-[11px] font-bold uppercase tracking-[0.34em] text-white/70">
+        <p className="scent-type-label">
           {title}
         </p>
         {titleSuffix ? <div className="absolute right-3 top-1/2 -translate-y-1/2">{titleSuffix}</div> : null}
@@ -406,6 +414,14 @@ function buildLegacyPerformanceParts(
 
 type PriceSignalTone = "standard" | "accent";
 
+// Decorative price-signal shimmer plays a couple of times then settles, matching
+// the rest of the app's bounded-loop convention (cf. NotePyramid's
+// DECORATIVE_REPEAT_COUNT). An unbounded `repeat: Infinity` here meant every `$`
+// on every catalog card ran a perpetual rAF loop — multiplied across the grid
+// that is a real per-frame load on the iPad PWA, and it ignored the OS
+// reduced-motion preference entirely.
+const PRICE_SIGNAL_REPEAT_COUNT = 2;
+
 function PriceValueSignal({
   symbols,
   label,
@@ -415,13 +431,15 @@ function PriceValueSignal({
   label: string;
   tone?: PriceSignalTone;
 }) {
+  const reduceMotion = useReducedMotion();
   const intensity = symbols.length;
   const baseClass =
     tone === "accent"
       ? "inline-flex font-serif italic text-scent-accent font-bold drop-shadow-[0_0_10px_rgba(212,175,55,0.7)] whitespace-nowrap"
       : "inline-flex font-serif italic text-white/90 whitespace-nowrap";
-  const animate =
-    intensity >= 4
+  const animate = reduceMotion
+    ? undefined
+    : intensity >= 4
       ? { y: [0, -2, 1, 0], opacity: [0.82, 1, 0.9, 0.82] }
       : intensity === 3
         ? { y: [0, -2, 0], rotate: [0, -4, 0], opacity: [0.88, 1, 0.88] }
@@ -438,13 +456,17 @@ function PriceValueSignal({
           aria-hidden="true"
           className="inline-block"
           animate={animate}
-          transition={{
-            duration,
-            delay: index * 0.11,
-            repeat: Infinity,
-            repeatType: "mirror",
-            ease: "easeInOut",
-          }}
+          transition={
+            reduceMotion
+              ? undefined
+              : {
+                  duration,
+                  delay: index * 0.11,
+                  repeat: PRICE_SIGNAL_REPEAT_COUNT,
+                  repeatType: "mirror",
+                  ease: "easeInOut",
+                }
+          }
         >
           {symbol}
         </motion.span>
@@ -492,10 +514,12 @@ function ProfileScorePanel({
   metrics,
   coverage,
   legacyPerformance,
+  compactOnly = false,
 }: {
   metrics?: DerivedMetrics | null;
   coverage?: SourceCoverage;
   legacyPerformance?: Fragrance["performance"];
+  compactOnly?: boolean;
 }) {
   const headline = metrics?.headline ?? null;
   const performance = metrics?.performance_score ?? null;
@@ -515,7 +539,7 @@ function ProfileScorePanel({
               : "Derived fragrance intelligence unavailable."}
           </p>
           {coverage.complete === false ? (
-            <p className="mt-1.5 text-[10px] uppercase tracking-[0.18em] text-white/38 font-bold">
+            <p className="mt-1.5 scent-type-label">
               Derived intelligence not available yet
             </p>
           ) : null}
@@ -603,15 +627,15 @@ function ProfileScorePanel({
                 >
                   {stat.score}
                 </span>
-                <span className={compact ? "pb-0.5 text-[10px] text-white/65" : "pb-1 text-base text-white/68"}>
+                <span className={compact ? "pb-0.5 text-[13px] text-scent-text-muted" : "pb-1 text-base text-white/68"}>
                   /100
                 </span>
               </div>
               <p
                 className={
                   compact
-                    ? "min-h-[2.35em] flex items-center justify-center px-0 text-[10px] leading-tight text-scent-accent/85"
-                    : "min-h-[2.5em] flex items-center justify-center px-1 text-xs leading-snug text-scent-accent/85"
+                    ? "min-h-[2.35em] flex items-center justify-center px-0 text-[13px] leading-tight text-scent-accent"
+                    : "min-h-[2.5em] flex items-center justify-center px-1 text-[13px] leading-snug text-scent-accent"
                 }
               >
                 {stat.sub ?? ""}
@@ -620,7 +644,7 @@ function ProfileScorePanel({
           ) : (
             <>
               <p
-                className={compact ? "text-[11px] text-white/55 font-serif italic" : "font-serif italic text-2xl text-white/55 leading-tight"}
+                className={compact ? "text-[13px] text-scent-text-subtle font-serif italic" : "font-serif italic text-2xl text-white/55 leading-tight"}
                 aria-hidden
               >
                 --
@@ -628,8 +652,8 @@ function ProfileScorePanel({
               <p
                 className={
                   compact
-                    ? "min-h-[2.35em] flex items-center justify-center px-0 text-[9px] leading-tight text-white/42"
-                    : "min-h-[2.5em] flex items-center justify-center px-1 text-[10px] leading-snug text-white/42"
+                    ? "min-h-[2.35em] flex items-center justify-center px-0 text-[13px] leading-tight text-scent-text-subtle"
+                    : "min-h-[2.5em] flex items-center justify-center px-1 text-[13px] leading-snug text-scent-text-subtle"
                 }
               >
                 {stat.sub ?? ""}
@@ -640,8 +664,8 @@ function ProfileScorePanel({
         <p
           className={
             compact
-              ? "mt-auto max-w-full text-[7px] leading-tight uppercase tracking-[0.08em] text-white/58 font-bold [overflow-wrap:anywhere]"
-              : "mt-auto text-[9px] uppercase tracking-[0.2em] text-white/58 font-bold"
+              ? "mt-auto max-w-full scent-type-chip leading-tight [overflow-wrap:anywhere]"
+              : "mt-auto scent-type-chip"
           }
         >
           {stat.label}
@@ -668,13 +692,13 @@ function ProfileScorePanel({
             parts={stat.cycle}
             primaryClass={
               compact
-                ? "text-[11px] text-white/85 font-serif italic truncate max-w-full"
+                ? "text-[13px] text-[#fff7ec] font-serif italic truncate max-w-full"
                 : "font-serif italic text-2xl text-white leading-tight truncate max-w-full"
             }
             secondaryClass={
               compact
-                ? "min-h-[2.35em] flex items-center justify-center px-0 text-[9px] leading-tight text-white/42"
-                : "min-h-[2.5em] flex items-center justify-center px-1 text-[10px] leading-snug text-white/42"
+                ? "min-h-[2.35em] flex items-center justify-center px-0 text-[13px] leading-tight text-scent-text-subtle"
+                : "min-h-[2.5em] flex items-center justify-center px-1 text-[13px] leading-snug text-scent-text-subtle"
             }
           />
         ) : (
@@ -683,7 +707,7 @@ function ProfileScorePanel({
               <p
                 className={
                   compact
-                    ? "text-[11px] text-white/85 font-serif italic truncate max-w-full"
+                    ? "text-[13px] text-[#fff7ec] font-serif italic truncate max-w-full"
                     : "font-serif italic text-2xl text-white leading-tight truncate max-w-full"
                 }
               >
@@ -691,7 +715,7 @@ function ProfileScorePanel({
               </p>
             ) : (
               <p
-                className={compact ? "text-[11px] text-white/55 font-serif italic" : "font-serif italic text-2xl text-white/55 leading-tight"}
+                className={compact ? "text-[13px] text-scent-text-subtle font-serif italic" : "font-serif italic text-2xl text-white/55 leading-tight"}
                 aria-hidden
               >
                 --
@@ -700,8 +724,8 @@ function ProfileScorePanel({
             <p
               className={
                 compact
-                  ? "min-h-[2.35em] flex items-center justify-center px-0 text-[9px] leading-tight text-white/42"
-                  : "min-h-[2.5em] flex items-center justify-center px-1 text-[10px] leading-snug text-white/42"
+                  ? "min-h-[2.35em] flex items-center justify-center px-0 text-[13px] leading-tight text-scent-text-subtle"
+                  : "min-h-[2.5em] flex items-center justify-center px-1 text-[13px] leading-snug text-scent-text-subtle"
               }
             >
               {stat.sub ?? ""}
@@ -711,8 +735,8 @@ function ProfileScorePanel({
         <p
           className={
             compact
-              ? "mt-auto max-w-full text-[7px] leading-tight uppercase tracking-[0.04em] text-white/55 font-bold [overflow-wrap:anywhere]"
-              : "mt-auto text-[9px] uppercase tracking-[0.2em] text-white/55 font-bold"
+              ? "mt-auto max-w-full scent-type-chip leading-tight [overflow-wrap:anywhere]"
+              : "mt-auto scent-type-chip"
           }
         >
           {stat.label}
@@ -723,6 +747,18 @@ function ProfileScorePanel({
 
   const renderTile = (stat: StatCard, scale: "desktop" | "mobile") =>
     stat.kind === "score" ? renderScoreTile(stat, scale) : renderMetricTile(stat, scale);
+
+  if (compactOnly) {
+    return (
+      <FragrancePanel title="Derived Intelligence">
+        <div className="px-4 py-3.5">
+          <div className="grid grid-cols-2 gap-1.5">
+            {statCards.map((stat) => renderTile(stat, "mobile"))}
+          </div>
+        </div>
+      </FragrancePanel>
+    );
+  }
 
   return (
     <>
@@ -777,8 +813,7 @@ function concentrationHintFromValue(
 }
 
 function suggestionPrimaryLine(s: WardrobeSearchSuggestion): string {
-  if (s.kind === 'fragrance') return `${entryName(s.item)} — ${entryBrand(s.item)}`;
-  return s.label;
+  return `${entryName(s.item)} — ${entryBrand(s.item)}`;
 }
 
 function SuggestionTypingLabel({ text, animate }: { text: string; animate: boolean }) {
@@ -840,6 +875,18 @@ export const Wardrobe: React.FC<{
     imageUrl?: string,
     imageAdjustment?: BottleImageAdjustment,
   ) => Promise<Fragrance | null>;
+  /** True when the signed-in user is an admin; gates the bottle-image uploader. */
+  isAdmin?: boolean;
+  /** Admin-only: re-host an uploaded file/URL and return a persistable image URL. */
+  onUploadBottleImage?: (input: {
+    brand: string;
+    name: string;
+    fragranceId?: string | null;
+    file?: File;
+    imageUrl?: string;
+    sourcePageUrl?: string;
+    removeBackground: boolean;
+  }) => Promise<{ imageUrl: string; imageHash?: string; backgroundRemoved: boolean }>;
   featuredItem?: Fragrance | null;
   /** Restore in-memory snapshot after an automatic legacy wardrobe rebuild (this tab only). */
   onRevertWardrobe?: () => void;
@@ -852,10 +899,14 @@ export const Wardrobe: React.FC<{
   wardrobeLoaded?: boolean;
   wardrobeError?: string | null;
   onRetryLoadWardrobe?: () => void;
+  /** True while a freshly-added imageless tile is actively backfilling its image. */
+  isImageSyncing?: (item: Pick<Fragrance, 'id' | '_dbId'>) => boolean;
 }> = ({
   items,
   onDelete,
   onPersistWardrobeImage,
+  isAdmin = false,
+  onUploadBottleImage,
   featuredItem,
   onRevertWardrobe,
   fixWardrobeBusy,
@@ -866,8 +917,19 @@ export const Wardrobe: React.FC<{
   wardrobeLoaded = true,
   wardrobeError = null,
   onRetryLoadWardrobe,
+  isImageSyncing,
 }) => {
   const [selectedItem, setSelectedItem] = React.useState<Fragrance | null>(null);
+  const { gridMode, setGridMode, isCompactGrid } = useVaultGridPreference();
+  const { lowMotionRenderMode, isIpad } = useRenderBudget();
+  const constrainedDetailMode = lowMotionRenderMode;
+  // iPad keeps the constrained-mode performance optimizations (deferred render,
+  // lighter motion, full-screen modal) but must retain the original three-column
+  // detail layout (accords | note pyramid | bottle). Only true mobile/phone
+  // surfaces collapse into the stacked, reordered single column.
+  const stackedDetailMode = constrainedDetailMode && !isIpad;
+  const [detailDeferredContentReady, setDetailDeferredContentReady] = React.useState(false);
+  const [detailExitInProgress, setDetailExitInProgress] = React.useState(false);
 
   // Re-bind the open detail modal to the latest row from `items` whenever the
   // parent state updates (e.g. background enrichment landed). Without this, the
@@ -884,6 +946,49 @@ export const Wardrobe: React.FC<{
       return match && match !== current ? match : current;
     });
   }, [items]);
+
+  React.useEffect(() => {
+    if (!selectedItem) {
+      setDetailDeferredContentReady(false);
+      return;
+    }
+
+    if (typeof window === 'undefined') {
+      setDetailDeferredContentReady(true);
+      return;
+    }
+
+    setDetailDeferredContentReady(false);
+    let firstFrame = 0;
+    let secondFrame = 0;
+    let readyTimer: number | null = null;
+    let idleHandle: number | null = null;
+    const readyDelayMs = constrainedDetailMode ? 180 : 80;
+    const idleTimeoutMs = constrainedDetailMode ? 700 : 320;
+
+    firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        const markReady = () => {
+          crumb(`detail:deferred-ready#${detailOpenCountRef.current}`);
+          setDetailDeferredContentReady(true);
+        };
+        if (typeof window.requestIdleCallback === 'function') {
+          idleHandle = window.requestIdleCallback(markReady, { timeout: idleTimeoutMs });
+        } else {
+          readyTimer = window.setTimeout(markReady, readyDelayMs);
+        }
+      });
+    });
+
+    return () => {
+      if (firstFrame) window.cancelAnimationFrame(firstFrame);
+      if (secondFrame) window.cancelAnimationFrame(secondFrame);
+      if (idleHandle !== null && typeof window.cancelIdleCallback === 'function') {
+        window.cancelIdleCallback(idleHandle);
+      }
+      if (readyTimer) window.clearTimeout(readyTimer);
+    };
+  }, [constrainedDetailMode, selectedItem?.id]);
 
   const prefetchReviews = React.useCallback((item: Fragrance) => {
     const rawReviews = extractDetailReviews(item.raw_engine_detail);
@@ -918,7 +1023,20 @@ export const Wardrobe: React.FC<{
     }
   });
   const [clarifySolverId, setClarifySolverId] = React.useState<WardrobeImageSolverId | ''>('');
-  const [pendingPreview, setPendingPreview] = React.useState<{ itemId: string; url: string; isFallback: boolean } | null>(null);
+  // `source` distinguishes a raw web-scrape preview (refresh) from a
+  // model-generated reimagine packshot. A refresh preview that still carries a
+  // fallback background is junk and must not be saved; a reimagine preview is a
+  // finished studio packshot and stays savable even when the second background
+  // pass fell back (e.g. Poof out of credits), so a good reimagine is never
+  // stranded as unsavable.
+  const [pendingPreview, setPendingPreview] = React.useState<{ itemId: string; url: string; isFallback: boolean; source?: 'refresh' | 'reimagine' | 'upload' } | null>(null);
+  // Admin-only bottle-image uploader (drag/drop + click + paste-URL).
+  const [uploadDragActive, setUploadDragActive] = React.useState(false);
+  const [uploadUrlInput, setUploadUrlInput] = React.useState('');
+  const [sourceUrlInput, setSourceUrlInput] = React.useState('');
+  const [uploadRemoveBg, setUploadRemoveBg] = React.useState(false);
+  const [uploadBusy, setUploadBusy] = React.useState(false);
+  const uploadFileInputRef = React.useRef<HTMLInputElement | null>(null);
   const [reimaginingIds, setReimaginingIds] = React.useState<Set<string>>(() => new Set());
   const [usageTotals, setUsageTotals] = React.useState<UsageTotalsSnapshot | null>(null);
 
@@ -941,20 +1059,19 @@ export const Wardrobe: React.FC<{
     }
   }, [authToken]);
   const [persistBusy, setPersistBusy] = React.useState(false);
-  const [vaultSolverBanner, setVaultSolverBanner] = React.useState<string | null>(null);
   const [searchFocused, setSearchFocused] = React.useState(false);
   const [searchHighlightIndex, setSearchHighlightIndex] = React.useState(0);
   const [enlargeOpen, setEnlargeOpen] = React.useState(false);
   const [bottleImageToolsOpen, setBottleImageToolsOpen] = React.useState(false);
   const [deleteConfirming, setDeleteConfirming] = React.useState(false);
   const detailModalRef = React.useRef<HTMLDivElement | null>(null);
+  const detailOpenCountRef = React.useRef(0);
   const detailCloseButtonRef = React.useRef<HTMLButtonElement | null>(null);
   const enlargeModalRef = React.useRef<HTMLDivElement | null>(null);
   const enlargeCloseButtonRef = React.useRef<HTMLButtonElement | null>(null);
   const [frameDraft, setFrameDraft] = React.useState<NormalizedBottleImageAdjustment>(
     DEFAULT_BOTTLE_IMAGE_ADJUSTMENT,
   );
-  const solverPrefillRef = React.useRef<WardrobeImageSolverId | null>(null);
   const searchBlurTimerRef = React.useRef<number | null>(null);
 
   React.useEffect(() => {
@@ -963,6 +1080,9 @@ export const Wardrobe: React.FC<{
   }, [bottleImageToolsOpen, refreshUsageTotals]);
 
   const openDetail = React.useCallback((item: Fragrance) => {
+    detailOpenCountRef.current += 1;
+    crumb(`detail:open#${detailOpenCountRef.current} ${domSnapshot()}`);
+    setDetailExitInProgress(false);
     setRefreshError(null);
     setPendingPreview(null);
     setDeleteConfirming(false);
@@ -971,6 +1091,24 @@ export const Wardrobe: React.FC<{
   }, []);
 
   const closeDetail = React.useCallback(() => {
+    crumb(`detail:close#${detailOpenCountRef.current} ${domSnapshot()}`);
+    // Crash-tracer: settle marker ~1s after close. If the trail shows
+    // exit-complete#N but NO post-close#N, the kill is in the async
+    // grid-repaint window right after teardown (not a later/cumulative point).
+    {
+      const n = detailOpenCountRef.current;
+      window.setTimeout(() => crumb(`detail:post-close#${n} ${domSnapshot()}`), 1000);
+    }
+    // iPad/desktop keep the body scroll locked through the brief exit animation
+    // so the page behind doesn't jump while the modal fades. Phone-class WebKit
+    // (iPhone / Android) must NOT hold a `position: fixed` body while a fresh
+    // full-screen portal is torn down: if `onExitComplete` fails to fire the
+    // lock is stranded, and across repeat open/close cycles that strands layers
+    // the content process can't reclaim — the documented "A problem repeatedly
+    // occurred" crash. On phones release the lock immediately instead.
+    if (selectedItem && !stackedDetailMode) {
+      setDetailExitInProgress(true);
+    }
     setRefreshError(null);
     setPendingPreview(null);
     setSelectedItem(null);
@@ -978,17 +1116,47 @@ export const Wardrobe: React.FC<{
     setBottleImageToolsOpen(false);
     setDeleteConfirming(false);
     setFrameDraft(DEFAULT_BOTTLE_IMAGE_ADJUSTMENT);
-  }, []);
+  }, [selectedItem, stackedDetailMode]);
 
   const closeEnlargedBottle = React.useCallback(() => {
     setEnlargeOpen(false);
   }, []);
 
+  // Safety net for the scroll lock. AnimatePresence's `onExitComplete` can fail
+  // to fire on iOS (e.g. a presence child re-keyed by a rapid reopen), which
+  // would otherwise leave `detailExitInProgress` — and therefore the body lock
+  // in useModalBehavior — stuck on. Force-clear it just past the longest exit
+  // so a missed callback can never strand `position: fixed`.
+  React.useEffect(() => {
+    if (!detailExitInProgress) return;
+    const timer = window.setTimeout(() => setDetailExitInProgress(false), 300);
+    return () => window.clearTimeout(timer);
+  }, [detailExitInProgress]);
+
+  // Crash-tracer: bracket the heavy detail subtree's mount/unmount so a kill
+  // mid-cycle leaves a breadcrumb naming the phase. Invisible; temporary.
+  React.useEffect(() => {
+    if (!selectedItem) return;
+    crumb(`detail:mounted#${detailOpenCountRef.current}`);
+    return () => crumb(`detail:unmounted#${detailOpenCountRef.current}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedItem?.id]);
+
   useModalBehavior({
-    isOpen: Boolean(selectedItem),
+    isOpen: Boolean(selectedItem) || detailExitInProgress,
     containerRef: detailModalRef,
     initialFocusRef: detailCloseButtonRef,
     onDismiss: closeDetail,
+    // Phone (stackedDetailMode): do NOT lock body scroll. The detail modal is a
+    // full-screen OPAQUE portal with its own scroll container, so the page
+    // behind is never visible and never needs locking. The scroll-lock applies
+    // `position: fixed` to <body> on open and removes it on close — and toggling
+    // `position: fixed` on a long page forces iOS to re-tile/re-rasterize the
+    // entire wardrobe grid every cycle. The crash trail shows the WebContent
+    // kill lands right after close, idle on the grid (not in the modal), which
+    // is exactly that per-cycle grid re-tile compounding until iOS reclaims the
+    // tab. iPad/desktop keep the lock (panel is not full-screen there).
+    lockScroll: !stackedDetailMode,
   });
 
   useModalBehavior({
@@ -1002,14 +1170,7 @@ export const Wardrobe: React.FC<{
   React.useEffect(() => {
     if (!selectedItem?.id) return;
     setFrameDraft(normalizeBottleImageAdjustment(selectedItem.imageAdjustment));
-    const pre = solverPrefillRef.current;
-    if (pre) {
-      setClarifySolverId(pre);
-      solverPrefillRef.current = null;
-      setVaultSolverBanner(null);
-    } else {
-      setClarifySolverId('');
-    }
+    setClarifySolverId('');
   }, [selectedItem?.id]);
 
   const handleRefreshImage = async (item: Fragrance, solverId?: WardrobeImageSolverId) => {
@@ -1053,7 +1214,7 @@ export const Wardrobe: React.FC<{
       }
       const nextUrl = withImageVersion(returnedImageUrl, data.imageHash || Date.now());
       const isFallback = imageProcessingNeedsRepair(data);
-      setPendingPreview({ itemId: item.id, url: nextUrl, isFallback });
+      setPendingPreview({ itemId: item.id, url: nextUrl, isFallback, source: 'refresh' });
       if (isFallback) {
         const reason =
           typeof data.removeBgReason === 'string' && data.removeBgReason.trim()
@@ -1132,11 +1293,15 @@ export const Wardrobe: React.FC<{
           } else {
             // Auto-save fell through — keep the reimagined image visible as a
             // pending preview so the user can save it manually next time they
-            // open this bottle. Nothing is lost.
+            // open this bottle. Nothing is lost. Marked source: 'reimagine' so
+            // the manual save is never blocked by the fallback-background gate
+            // (a reimagine packshot is authoritative even if the second bg pass
+            // fell back).
             setPendingPreview({
               itemId: item.id,
               url: nextUrl,
               isFallback: imageProcessingNeedsRepair(data),
+              source: 'reimagine',
             });
           }
         } else {
@@ -1145,6 +1310,7 @@ export const Wardrobe: React.FC<{
             itemId: item.id,
             url: nextUrl,
             isFallback: imageProcessingNeedsRepair(data),
+            source: 'reimagine',
           });
         }
         void refreshUsageTotals();
@@ -1164,7 +1330,9 @@ export const Wardrobe: React.FC<{
 
   const handleSavePreviewToVault = async () => {
     if (!selectedItem || !pendingPreview || pendingPreview.itemId !== selectedItem.id) return;
-    if (pendingPreview.isFallback) {
+    // Reimagine previews are finished model packshots and stay savable; only a
+    // refresh preview that still has a fallback (junk) background is blocked.
+    if (pendingPreview.isFallback && pendingPreview.source !== 'reimagine') {
       setRefreshError(
         'This preview still has a fallback background. Try another image fix before saving.',
       );
@@ -1211,6 +1379,38 @@ export const Wardrobe: React.FC<{
     }
   };
 
+  // Admin-only: re-host an uploaded file / pasted URL, then show it as a pending
+  // preview so the admin can frame it and Save through the normal vault path.
+  const runAdminBottleUpload = async (source: { file?: File; imageUrl?: string; sourcePageUrl?: string }) => {
+    if (!selectedItem || !onUploadBottleImage) return;
+    if (source.file && !source.file.type.startsWith('image/')) {
+      setRefreshError('That file is not an image. Choose a PNG, JPG, or WebP.');
+      return;
+    }
+    setUploadBusy(true);
+    setRefreshError(null);
+    setBgFallbackWarning(null);
+    try {
+      const result = await onUploadBottleImage({
+        brand: entryBrand(selectedItem),
+        name: entryName(selectedItem),
+        fragranceId: selectedItem._dbId ?? selectedItem.id,
+        file: source.file,
+        imageUrl: source.imageUrl,
+        sourcePageUrl: source.sourcePageUrl,
+        removeBackground: uploadRemoveBg,
+      });
+      const nextUrl = withImageVersion(result.imageUrl, result.imageHash || Date.now());
+      setPendingPreview({ itemId: selectedItem.id, url: nextUrl, isFallback: false, source: 'upload' });
+      setUploadUrlInput('');
+      setSourceUrlInput('');
+    } catch (err: any) {
+      setRefreshError(err?.message || 'Image upload failed');
+    } finally {
+      setUploadBusy(false);
+    }
+  };
+
   // Performance Optimization: Memoize computationally heavy filter operations
   const filteredItems = React.useMemo(() => {
     const q = deferredSearchQuery.trim();
@@ -1234,21 +1434,14 @@ export const Wardrobe: React.FC<{
   }, [searchQuery, searchSuggestions.length]);
 
   const applySearchSuggestion = React.useCallback((s: WardrobeSearchSuggestion) => {
-    if (s.kind === 'fragrance') {
-      const nm = entryName(s.item);
-      const br = entryBrand(s.item);
-      setSearchQuery(`${br} ${nm}`.trim());
-      setSearchFocused(false);
-      setRefreshError(null);
-      setPendingPreview(null);
-      setFrameDraft(normalizeBottleImageAdjustment((s.item as Fragrance).imageAdjustment));
-      setSelectedItem(s.item as Fragrance);
-    } else {
-      solverPrefillRef.current = s.id;
-      setVaultSolverBanner(`Next profile: image hint — ${s.label}`);
-      setSearchQuery('');
-      setSearchFocused(false);
-    }
+    const nm = entryName(s.item);
+    const br = entryBrand(s.item);
+    setSearchQuery(`${br} ${nm}`.trim());
+    setSearchFocused(false);
+    setRefreshError(null);
+    setPendingPreview(null);
+    setFrameDraft(normalizeBottleImageAdjustment((s.item as Fragrance).imageAdjustment));
+    setSelectedItem(s.item as Fragrance);
   }, []);
 
   // Performance Optimization: Memoize shelf chunking
@@ -1274,10 +1467,16 @@ export const Wardrobe: React.FC<{
 
   const imageToolbarBusy =
     !!selectedItem &&
-    (refreshingId === selectedItem.id || selectedReimagining || persistBusy);
+    (refreshingId === selectedItem.id || selectedReimagining || persistBusy || uploadBusy);
 
   const hasPendingPreview =
     !!selectedItem && !!pendingPreview && pendingPreview.itemId === selectedItem.id;
+
+  // Only a raw-scrape (refresh) preview with a fallback background blocks
+  // saving. A reimagine preview is a finished model packshot and is always
+  // savable, so it is never gated by the fallback-background check.
+  const previewBlocked =
+    !!pendingPreview?.isFallback && pendingPreview.source !== 'reimagine';
 
   const frameDirty =
     !!selectedItem && !bottleImageAdjustmentsEqual(frameDraft, selectedItem.imageAdjustment);
@@ -1294,6 +1493,29 @@ export const Wardrobe: React.FC<{
       selectedMetrics,
       selectedItem?.enrichment ?? selectedItem?.raw_engine_detail?.enrichment ?? undefined,
     );
+  const detailShowDeferredContent = !constrainedDetailMode || detailDeferredContentReady;
+  const detailPanelClassName = constrainedDetailMode
+    // Constrained surfaces (iPhone/Android) render the panel full-screen and
+    // fully opaque, so its drop shadow is entirely behind the panel and never
+    // visible — but `shadow-2xl` still makes the compositor allocate a large
+    // offscreen surface for the blurred shadow on every open. Drop it here: it
+    // is invisible cost on exactly the devices that hit the memory-pressure
+    // crash. Desktop keeps the floating panel (h-[94dvh], mx-4) where the
+    // shadow is actually seen.
+    ? "relative w-full h-full bg-[#030303] overflow-hidden flex flex-col border-0"
+    : "relative w-full h-full sm:h-[94dvh] sm:max-w-[100rem] sm:mx-4 bg-[#030303] shadow-2xl overflow-hidden flex flex-col border-0 sm:border border-white/8";
+  const detailScrollClassName = constrainedDetailMode
+    ? "flex-1 overflow-y-auto scrollbar-hide px-4 sm:px-5 pb-4"
+    : "flex-1 overflow-y-auto scrollbar-hide px-4 sm:px-7 lg:px-10 pb-4";
+  const detailTitleClassName = constrainedDetailMode
+    ? "font-serif italic text-4xl sm:text-5xl leading-[0.95] text-[#fff7ec] tracking-normal uppercase"
+    : "font-serif italic text-5xl sm:text-7xl lg:text-8xl leading-[0.92] text-[#fff7ec] tracking-normal uppercase";
+  const detailGridClassName = stackedDetailMode
+    ? "grid grid-cols-1 items-stretch gap-3 sm:gap-4"
+    : "grid grid-cols-1 items-stretch gap-3 sm:gap-4 lg:grid-cols-[1.12fr_1.95fr_1fr]";
+  const detailVisualPanelClassName = stackedDetailMode
+    ? "min-h-[16rem]"
+    : "lg:h-full lg:min-h-[21.25rem]";
   const detailMetaRows = selectedItem
     ? [
         { label: 'Year', value: formatYear(selectedItem.year) },
@@ -1347,7 +1569,7 @@ export const Wardrobe: React.FC<{
                       onClick={onRevertWardrobe}
                       disabled={!revertAvailable || !!fixWardrobeBusy}
                       title="Restore the vault list from before the last automatic rebuild (this tab only)"
-                      className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-white/15 bg-white/[0.04] text-white/70 text-[10px] uppercase tracking-[0.2em] font-bold hover:bg-white/[0.08] hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-white/15 bg-white/[0.04] scent-type-chip text-scent-text-muted hover:bg-white/[0.08] hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                     >
                       <Undo2 size={14} strokeWidth={1.75} />
                       Revert
@@ -1355,12 +1577,12 @@ export const Wardrobe: React.FC<{
                   </div>
                 ) : null}
                 {fixWardrobeBusy ? (
-                  <p className="text-[11px] text-scent-gold-100/70 font-sans text-center leading-snug max-w-xl px-2">
+                  <p className="text-sm text-scent-gold-100 font-sans text-center leading-snug max-w-xl px-2">
                     Rebuilding wardrobe…
                   </p>
                 ) : null}
                 {wardrobeFixHint ? (
-                  <p className="text-[11px] text-white/45 font-sans text-center leading-snug max-w-xl px-2">
+                  <p className="text-sm text-scent-text-muted font-sans text-center leading-snug max-w-xl px-2">
                     {wardrobeFixHint}
                   </p>
                 ) : null}
@@ -1370,10 +1592,14 @@ export const Wardrobe: React.FC<{
               <label htmlFor="wardrobe-vault-search" className="sr-only">
                 Search vault fragrances and image hints
               </label>
-              <Search size={23} strokeWidth={1.75} className="pointer-events-none absolute left-5 sm:left-6 top-1/2 z-10 -translate-y-1/2 text-scent-accent/82" />
+              <Search size={23} strokeWidth={1.75} className="pointer-events-none absolute right-5 top-1/2 z-10 -translate-y-1/2 text-scent-accent sm:right-6" />
               <input
                 id="wardrobe-vault-search"
-                type="text"
+                type="search"
+                enterKeyHint="search"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 role="combobox"
                 aria-expanded={searchDropdownOpen}
                 aria-controls="wardrobe-search-suggestions"
@@ -1404,9 +1630,9 @@ export const Wardrobe: React.FC<{
                     setSearchFocused(false);
                   }
                 }}
-                placeholder="Search vault or image hint (e.g. watermark, sauvage)…"
+                placeholder="Search vault (e.g. sauvage)..."
                 autoComplete="off"
-                className="scent-lux-input w-full h-[58px] sm:h-[68px] pl-14 sm:pl-16 pr-14 sm:pr-16 text-center text-[#fff7ec] font-sans text-[15px] sm:text-base outline-none transition-all placeholder:text-[#d9c2a4]/58"
+                className="scent-lux-input scent-vault-search-input w-full h-[58px] pl-7 pr-14 text-left text-[#fff7ec] font-sans text-[15px] outline-none transition-all placeholder:text-scent-text-subtle sm:h-[68px] sm:pl-8 sm:pr-16 sm:text-base"
               />
               <AnimatePresence>
                 {searchDropdownOpen ? (
@@ -1417,24 +1643,21 @@ export const Wardrobe: React.FC<{
                     transition={{ duration: 0.18 }}
                     id="wardrobe-search-suggestions"
                     role="listbox"
-                    className="absolute left-0 right-0 top-full mt-2 max-h-[min(320px,50vh)] overflow-y-auto rounded-[var(--radius-scent)] border border-scent-accent/32 bg-neutral-950/98 shadow-[0_24px_48px_rgba(0,0,0,0.78)] backdrop-blur-sm scrollbar-hide z-30"
+                    className="absolute left-0 right-0 top-full mt-2 max-h-[min(320px,50vh)] overflow-y-auto rounded-[var(--radius-scent)] border border-scent-accent/32 bg-neutral-950/98 shadow-[0_24px_48px_rgba(0,0,0,0.78)] scrollbar-hide z-30"
                   >
                     <li className="px-3 py-2 border-b border-white/8 pointer-events-none">
-                      <p className="text-[8px] uppercase tracking-[0.35em] text-white/35 font-bold font-sans">
+                      <p className="scent-type-label font-sans">
                         Matches
                       </p>
                     </li>
                     {searchSuggestions.map((sug, idx) => {
                       const active = idx === searchHighlightIndex;
                       const primary = suggestionPrimaryLine(sug);
-                      const sub =
-                        sug.kind === 'solver'
-                          ? 'Image search tuning — Find image uses this hint'
-                          : [sug.item.family, ...(sug.item.notes ?? []).slice(0, 2)]
-                              .filter(Boolean)
-                              .join(' · ');
+                      const sub = [sug.item.family, ...(sug.item.notes ?? []).slice(0, 2)]
+                        .filter(Boolean)
+                        .join(' · ');
                       return (
-                        <li key={`${sug.kind}-${sug.kind === 'fragrance' ? sug.item.id : sug.id}`} role="none">
+                        <li key={`fragrance-${sug.item.id}`} role="none">
                           <button
                             type="button"
                             role="option"
@@ -1453,7 +1676,7 @@ export const Wardrobe: React.FC<{
                               <SuggestionTypingLabel text={primary} animate={active} />
                             </div>
                             {sub ? (
-                              <div className="text-[10px] text-white/40 mt-0.5 font-sans truncate">{sub}</div>
+                              <div className="text-[13px] text-scent-text-muted mt-0.5 font-sans truncate">{sub}</div>
                             ) : null}
                           </button>
                         </li>
@@ -1462,19 +1685,7 @@ export const Wardrobe: React.FC<{
                   </motion.ul>
                 ) : null}
               </AnimatePresence>
-              {vaultSolverBanner ? (
-                <div className="mt-3 flex items-start gap-2 rounded-lg border border-scent-accent/35 bg-scent-accent/10 px-3 py-2.5 text-left">
-                  <p className="flex-1 text-[11px] text-white/80 font-sans leading-snug">{vaultSolverBanner}</p>
-                  <button
-                    type="button"
-                    onClick={() => setVaultSolverBanner(null)}
-                    className="shrink-0 text-[10px] uppercase tracking-widest text-white/45 hover:text-white px-1"
-                    aria-label="Dismiss hint"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ) : null}
+
             </div>
             <div className="scent-full-bleed w-full">
               <div
@@ -1486,6 +1697,11 @@ export const Wardrobe: React.FC<{
                 <span>{filteredItems.length} Entries</span>
               </div>
             </div>
+            <VaultGridModeToggle
+              mode={gridMode}
+              onChange={setGridMode}
+              className="sm:hidden"
+            />
           </div>
         </div>
 
@@ -1506,13 +1722,14 @@ export const Wardrobe: React.FC<{
                     onClick={() => openDetail(featuredItem)}
                     onMouseEnter={() => prefetchReviews(featuredItem)}
                   >
-                    <div className="absolute top-10 left-10 text-[9px] uppercase tracking-[0.6em] text-white/30 font-bold z-20 pointer-events-none">Recommended Manifest</div>
+                    <div className="absolute top-10 left-10 scent-type-label text-scent-text-muted z-20 pointer-events-none">Recommended Manifest</div>
                     <div className={bottleFeaturedSlotClass()}>
                       <BottleImage
                         variant="featured"
                         src={featuredItem.imageUrl}
                         alt={entryName(featuredItem)}
                         adjustment={featuredItem.imageAdjustment}
+                        isSyncing={isImageSyncing?.(featuredItem)}
                         className="min-h-0 w-full flex-1"
                         imgClassName="scent-hover-scale transition-transform duration-1000 brightness-[1.15]"
                         loading="eager"
@@ -1520,7 +1737,7 @@ export const Wardrobe: React.FC<{
                       />
                     </div>
                     <div className="text-center mt-4 mb-2 space-y-3 shrink-0 px-2">
-                      <p className="text-[10px] uppercase text-white/50 tracking-[0.5em] font-bold font-sans">{entryBrand(featuredItem)}</p>
+                      <p className="scent-type-label font-sans">{entryBrand(featuredItem)}</p>
                       <h4 className="font-serif italic text-3xl sm:text-5xl text-white tracking-tighter">{entryName(featuredItem)}</h4>
                     </div>
                   </motion.div>
@@ -1548,13 +1765,27 @@ export const Wardrobe: React.FC<{
               )}
             </div>
           ) : !wardrobeLoaded ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
+            <div
+              className={`scent-vault-grid grid ${
+                isCompactGrid ? 'grid-cols-2 gap-2' : 'grid-cols-1 gap-3'
+              } sm:grid-cols-2 sm:gap-4 lg:gap-5 xl:grid-cols-4`}
+              data-compact={isCompactGrid ? 'true' : 'false'}
+            >
               {[...Array(4)].map((_, i) => (
-                <div key={i} className="scent-fragrance-card w-full min-h-[32rem] relative overflow-hidden flex flex-col">
+                <div
+                  key={i}
+                  className={`scent-fragrance-card w-full ${
+                    isCompactGrid ? 'min-h-[18rem]' : 'min-h-[32rem]'
+                  } sm:min-h-[32rem] relative overflow-hidden flex flex-col`}
+                >
                   <div className="scent-card-frame" aria-hidden />
-                  <div className="relative z-[1] flex h-full flex-col items-center px-6 sm:px-8 pt-7 sm:pt-9 pb-6 sm:pb-7">
+                  <div className={`relative z-[1] flex h-full flex-col items-center ${
+                    isCompactGrid ? 'px-3 py-4' : 'px-6 py-7'
+                  } sm:px-8 sm:py-9`}>
                     <div className="h-4 w-2/3 bg-white/10 rounded animate-pulse mt-2" />
-                    <div className="relative flex-1 w-full mt-4 sm:mt-5 mb-5 sm:mb-6 min-h-0 flex items-center justify-center">
+                    <div className={`relative flex-1 w-full ${
+                      isCompactGrid ? 'my-3' : 'my-5'
+                    } sm:my-6 min-h-0 flex items-center justify-center`}>
                       <div className="w-24 h-48 bg-white/5 rounded-full animate-pulse opacity-50" />
                     </div>
                     <div className="h-6 w-3/4 bg-white/10 rounded animate-pulse shrink-0 mb-2" />
@@ -1565,7 +1796,12 @@ export const Wardrobe: React.FC<{
           ) : shelves.length > 0 ? (
             shelves.map((shelfItems, shelfIndex) => (
               <div key={shelfIndex} className="relative group/shelf">
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-5 mb-1">
+                <div
+                  className={`scent-vault-grid grid ${
+                    isCompactGrid ? 'grid-cols-2 gap-2' : 'grid-cols-1 gap-3'
+                  } sm:grid-cols-2 sm:gap-4 lg:gap-5 xl:grid-cols-4 mb-1`}
+                  data-compact={isCompactGrid ? 'true' : 'false'}
+                >
                   {shelfItems.map((item) => (
                     <motion.div
                       key={item.id}
@@ -1575,20 +1811,27 @@ export const Wardrobe: React.FC<{
                       onClick={() => openDetail(item)}
                       onMouseEnter={() => prefetchReviews(item)}
                     >
-                      <div className="scent-fragrance-card scent-hover-lift w-full h-full min-h-[26rem] transition-[transform,border-color,box-shadow] duration-500 motion-reduce:transition-none relative overflow-hidden flex flex-col">
+                      <div className={`scent-fragrance-card scent-hover-lift w-full h-full ${
+                        isCompactGrid ? 'min-h-[17.5rem]' : 'min-h-[26rem]'
+                      } sm:min-h-[26rem] transition-[transform,border-color,box-shadow] duration-500 motion-reduce:transition-none relative overflow-hidden flex flex-col`}>
                         <div className="scent-card-frame" aria-hidden />
-                        <div className="relative z-[1] flex h-full flex-col items-center px-6 sm:px-8 pt-5 sm:pt-6 pb-4 sm:pb-5">
+                        <div className={`relative z-[1] flex h-full flex-col items-center ${
+                          isCompactGrid ? 'px-3 py-4' : 'px-6 py-5'
+                        } sm:px-8 sm:py-6`}>
                           <BrandGoldLabel
                             brand={entryBrand(item)}
                             className="scent-card-brand w-full mt-1 sm:mt-1.5"
                           />
-                          <div className="relative flex-1 w-full mt-3 sm:mt-4 mb-3 sm:mb-4 min-h-0">
+                          <div className={`relative flex-1 w-full ${
+                            isCompactGrid ? 'mt-2 mb-2' : 'mt-3 mb-3'
+                          } min-h-0 sm:mt-4 sm:mb-4`}>
                             <BottleImage
                               variant="grid"
                               src={item.imageUrl}
                               videoSrc={betaVideoUrlForFragrance(item)}
                               alt={entryName(item)}
                               adjustment={item.imageAdjustment}
+                              isSyncing={isImageSyncing?.(item)}
                               className="absolute inset-0 z-10"
                               imgClassName="scent-hover-scale brightness-[1.1] transition-transform duration-[900ms] motion-reduce:transition-none"
                               loading={shelfIndex === 0 ? 'eager' : 'lazy'}
@@ -1607,27 +1850,38 @@ export const Wardrobe: React.FC<{
                       type="button"
                       onClick={() => onExpandArchive?.()}
                       aria-label="Expand archive — go to add fragrance search"
-                      className="scent-fragrance-card min-h-[28rem] flex flex-col items-center justify-center p-8 text-center group cursor-pointer border-dashed border-scent-accent/26 hover:bg-white/5 transition-all w-full"
+                      className={`scent-fragrance-card ${
+                        isCompactGrid ? 'min-h-[17.5rem] p-4' : 'min-h-[28rem] p-8'
+                      } sm:min-h-[28rem] sm:p-8 flex flex-col items-center justify-center text-center group cursor-pointer border-dashed border-scent-accent/26 hover:bg-white/5 transition-all w-full`}
                     >
                       <div className="w-12 h-12 border border-dashed border-scent-accent/35 flex items-center justify-center group-hover:rotate-90 transition-transform mb-4 rounded-full">
-                        <span className="text-scent-accent/55 text-3xl">+</span>
+                        <span className="text-scent-accent text-3xl">+</span>
                       </div>
-                      <p className="font-serif italic text-scent-accent/45 text-2xl tracking-tighter uppercase">Expand Archive</p>
+                      <p className="font-serif italic text-scent-accent text-2xl tracking-tighter uppercase">Expand Archive</p>
                     </button>
                   )}
                 </div>
               </div>
             ))
           ) : !searchQuery && (
-            <div className="py-32 text-center border border-dashed border-white/5 rounded-scent flex flex-col items-center gap-6">
-              <p className="font-serif italic text-4xl text-white/10">Your fragrance vault is empty</p>
+            <div className="py-20 sm:py-24 px-6 text-center border border-dashed border-scent-accent/18 rounded-scent flex flex-col items-center gap-5 bg-white/[0.015]">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full border border-scent-accent/25 bg-scent-accent/[0.06]" aria-hidden>
+                <Sparkles size={26} strokeWidth={1.75} className="text-scent-accent" />
+              </div>
+              <div className="flex max-w-md flex-col items-center gap-2.5">
+                <h3 className="font-serif italic text-3xl sm:text-4xl text-[#fff7ec]">Your vault is empty</h3>
+                <p className="text-[15px] leading-relaxed text-scent-text-muted">
+                  Add the fragrances you own or love to build your collection and unlock personalized scent discovery.
+                </p>
+              </div>
               {onExpandArchive && (
                 <button
                   type="button"
                   onClick={onExpandArchive}
-                  className="text-[11px] uppercase tracking-[0.22em] text-scent-accent/55 font-bold hover:text-scent-accent/80 transition-colors border border-scent-accent/20 hover:border-scent-accent/40 px-5 py-2.5 rounded-full"
+                  className="scent-vault-outline-button mt-1 inline-flex items-center gap-2.5 px-7 py-3.5 transition-transform hover:scale-[1.02] active:scale-[0.98]"
                 >
-                  Add a fragrance
+                  <Search size={16} strokeWidth={1.75} className="text-scent-accent" aria-hidden />
+                  <span className="scent-vault-outline-button-label font-serif italic text-lg">Add your first fragrance</span>
                 </button>
               )}
             </div>
@@ -1636,24 +1890,43 @@ export const Wardrobe: React.FC<{
       </div>
 
       {typeof document !== 'undefined' ? createPortal(
-      <AnimatePresence>
+      <AnimatePresence onExitComplete={() => { crumb(`detail:exit-complete#${detailOpenCountRef.current}`); setDetailExitInProgress(false); }}>
         {selectedItem && (
-          <div 
+          <div
+            key="wardrobe-detail-modal"
             ref={detailModalRef}
             className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden"
             role="dialog"
             aria-modal="true"
             aria-labelledby="fragrance-detail-title"
           >
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={closeDetail} className="absolute inset-0 bg-black/95" />
             <motion.div
-              className="relative w-full h-full sm:h-[94dvh] sm:max-w-[100rem] sm:mx-4 bg-[#030303] shadow-2xl overflow-hidden flex flex-col border-0 sm:border border-white/8"
+              initial={constrainedDetailMode ? false : { opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={constrainedDetailMode ? { opacity: 0 } : { opacity: 0 }}
+              transition={{ duration: stackedDetailMode ? 0 : constrainedDetailMode ? 0.08 : 0.2 }}
+              onClick={closeDetail}
+              className="absolute inset-0 bg-black/95"
+            />
+            <motion.div
+              initial={constrainedDetailMode ? false : { opacity: 0, scale: 0.985 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={constrainedDetailMode ? { opacity: 0 } : { opacity: 0, scale: 0.99 }}
+              transition={{ duration: stackedDetailMode ? 0 : constrainedDetailMode ? 0.08 : 0.24, ease: [0.22, 1, 0.36, 1] }}
+              className={detailPanelClassName}
             >
               <div
-                className="flex-1 overflow-y-auto scrollbar-hide px-4 sm:px-7 lg:px-10 pb-4"
+                className={detailScrollClassName}
                 style={
                   {
-                    WebkitOverflowScrolling: 'touch',
+                    // NOTE: `-webkit-overflow-scrolling: touch` deliberately omitted.
+                    // On iOS it forces a dedicated, *content-sized* momentum-scroll
+                    // compositing layer (an offscreen IOSurface) for this — the
+                    // tallest scroll area in the app — allocated fresh on every
+                    // detail-modal open. Across repeat open/close that GPU memory
+                    // accumulates and trips the WebContent memory-pressure kill
+                    // ("A problem repeatedly occurred"). Momentum scrolling is the
+                    // default on iOS 13+, so the property is pure cost with no gain.
                     paddingTop: 'max(1.25rem, env(safe-area-inset-top))',
                   } as React.CSSProperties
                 }
@@ -1663,7 +1936,7 @@ export const Wardrobe: React.FC<{
                     <div className="space-y-2">
                       <h2
                         id="fragrance-detail-title"
-                        className="font-serif italic text-5xl sm:text-7xl lg:text-8xl leading-[0.92] text-[#fff7ec] tracking-normal uppercase"
+                        className={detailTitleClassName}
                       >
                         {entryName(selectedItem)}
                       </h2>
@@ -1678,37 +1951,42 @@ export const Wardrobe: React.FC<{
                     metrics={selectedMetrics}
                     coverage={selectedCoverage}
                     legacyPerformance={selectedItem.performance}
+                    compactOnly={stackedDetailMode}
                   />
 
-                  <div className="grid grid-cols-1 items-stretch gap-3 sm:gap-4 lg:grid-cols-[1.12fr_1.95fr_1fr]">
-                    <div className="space-y-3 sm:space-y-4 lg:h-full">
-                      <ScentNotesInfographic
-                        derivedMetrics={selectedMetrics}
-                        legacyPyramid={selectedItem.pyramid}
-                        scentAxesFallback={selectedItem.scent_vector ?? null}
-                        variant="accords"
-                        className="lg:h-full lg:min-h-[21.25rem]"
-                      />
+                  <div className={detailGridClassName}>
+                    <div className={`space-y-3 sm:space-y-4 lg:h-full ${stackedDetailMode ? 'order-2' : ''}`}>
+                      {detailShowDeferredContent ? (
+                        <ScentNotesInfographic
+                          derivedMetrics={selectedMetrics}
+                          legacyPyramid={selectedItem.pyramid}
+                          scentAxesFallback={selectedItem.scent_vector ?? null}
+                          variant="accords"
+                          className={detailVisualPanelClassName}
+                        />
+                      ) : null}
                     </div>
 
-                    <div className="space-y-3 sm:space-y-4 lg:h-full">
-                      <ScentNotesInfographic
-                        derivedMetrics={selectedMetrics}
-                        legacyPyramid={selectedItem.pyramid}
-                        variant="notes"
-                        className="lg:h-full lg:min-h-[21.25rem]"
-                      />
+                    <div className={`space-y-3 sm:space-y-4 lg:h-full ${stackedDetailMode ? 'order-3' : ''}`}>
+                      {detailShowDeferredContent ? (
+                        <ScentNotesInfographic
+                          derivedMetrics={selectedMetrics}
+                          legacyPyramid={selectedItem.pyramid}
+                          variant="notes"
+                          className={detailVisualPanelClassName}
+                        />
+                      ) : null}
                     </div>
 
-                    <div className="space-y-3 sm:space-y-4 lg:h-full">
+                    <div className={`space-y-3 sm:space-y-4 lg:h-full ${stackedDetailMode ? 'order-1' : ''}`}>
                       <FragrancePanel
                         title="About This Fragrance"
-                        className="lg:h-full lg:min-h-[21.25rem]"
+                        className={detailVisualPanelClassName}
                         titleSuffix={
                           <button
                             type="button"
                             onClick={() => setBottleImageToolsOpen((o) => !o)}
-                            className={`p-1.5 rounded-md border border-white/10 bg-white/[0.04] text-white/45 hover:text-white hover:bg-white/[0.08] transition-all flex items-center justify-center ${
+                            className={`p-1.5 rounded-md border border-white/10 bg-white/[0.04] text-scent-text-muted hover:text-white hover:bg-white/[0.08] transition-all flex items-center justify-center ${
                               bottleImageToolsOpen ? 'text-scent-accent border-scent-accent/30 bg-scent-accent/5' : ''
                             }`}
                             title="Adjust bottle image and settings"
@@ -1721,7 +1999,7 @@ export const Wardrobe: React.FC<{
                       >
                         <div className="flex flex-col p-4 space-y-3">
                           <div 
-                            className="relative h-56 sm:h-72 lg:h-64 min-h-0 w-full shrink-0 overflow-hidden cursor-pointer rounded-lg border border-white/5 bg-white/[0.01]"
+                            className={`relative h-56 ${stackedDetailMode ? 'sm:h-60' : 'sm:h-72 lg:h-64'} min-h-0 w-full shrink-0 overflow-hidden cursor-pointer rounded-lg border border-white/5 bg-white/[0.01]`}
                             onClick={() => detailBottleUrl && setEnlargeOpen(true)}
                           >
                             <BottleImage
@@ -1732,7 +2010,7 @@ export const Wardrobe: React.FC<{
                               adjustment={frameDraft}
                               showFrameGuide={bottleImageToolsOpen}
                               className="absolute inset-0"
-                              imgClassName="transition-all duration-300"
+                              imgClassName={constrainedDetailMode ? "" : "transition-all duration-300"}
                             />
                           </div>
 
@@ -1741,7 +2019,7 @@ export const Wardrobe: React.FC<{
                               <button
                                 type="button"
                                 onClick={() => setEnlargeOpen(true)}
-                                className="inline-flex items-center gap-1.5 rounded-md border border-white/15 bg-white/[0.04] px-3.5 py-1.5 text-[9px] uppercase tracking-[0.2em] font-bold text-white/62 transition-colors hover:border-scent-accent/35 hover:bg-scent-accent/[0.08] hover:text-scent-accent"
+                                className="inline-flex items-center gap-1.5 rounded-md border border-white/15 bg-white/[0.04] px-3.5 py-1.5 scent-type-chip text-scent-text-muted transition-colors hover:border-scent-accent/35 hover:bg-scent-accent/[0.08] hover:text-scent-accent"
                                 aria-label="Enlarge bottle image"
                               >
                                 <Maximize2 size={13} strokeWidth={1.75} />
@@ -1755,8 +2033,8 @@ export const Wardrobe: React.FC<{
                               <div className="grid grid-cols-2 gap-px">
                                 {detailMetaRows.map(({ label, value }) => (
                                   <div key={label} className="flex flex-col items-center gap-1 py-2 text-center">
-                                    <p className="text-[8px] font-semibold uppercase tracking-[0.2em] text-white/35">{label}</p>
-                                    <p className="text-[11px] font-medium leading-snug text-white/72">{value}</p>
+                                    <p className="scent-type-label">{label}</p>
+                                    <p className="text-sm font-medium leading-snug text-scent-text-muted">{value}</p>
                                   </div>
                                 ))}
                               </div>
@@ -1769,7 +2047,7 @@ export const Wardrobe: React.FC<{
                               role="region"
                               className="space-y-3 pt-2 border-t border-white/5"
                             >
-                              <p className="text-center text-[10px] text-white/40 leading-snug font-sans">
+                              <p className="text-center text-sm text-scent-text-muted leading-snug font-sans">
                                 Pick what looks wrong, then search — or reimagine the current bottle. Save when it looks right.
                               </p>
 
@@ -1784,7 +2062,7 @@ export const Wardrobe: React.FC<{
                                     setClarifySolverId((e.target.value || '') as WardrobeImageSolverId | '')
                                   }
                                   disabled={imageToolbarBusy}
-                                  className="w-full bg-black/45 border border-white/12 text-white text-[11px] py-2 px-2 rounded-lg font-sans outline-none focus:border-scent-accent/50 disabled:opacity-40"
+                                  className="w-full bg-black/45 border border-white/12 text-white text-sm py-2 px-2 rounded-lg font-sans outline-none focus:border-scent-accent/50 disabled:opacity-40"
                                 >
                                   <option value="">Choose what looks wrong…</option>
                                   {WARDROBE_CLARIFY_SOLVERS.map((s) => (
@@ -1804,7 +2082,7 @@ export const Wardrobe: React.FC<{
                                     title={
                                       !clarifySolverId ? 'Select an issue first' : undefined
                                     }
-                                    className="flex-1 min-h-[38px] py-2 bg-white text-black uppercase tracking-[0.22em] text-[9px] font-bold hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 disabled:opacity-45 disabled:cursor-not-allowed rounded-lg"
+                                    className="flex-1 min-h-[38px] py-2 bg-white text-black scent-type-chip hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 disabled:opacity-45 disabled:cursor-not-allowed rounded-lg"
                                   >
                                     {refreshingId === selectedItem.id ? (
                                       <>
@@ -1827,7 +2105,7 @@ export const Wardrobe: React.FC<{
                                         ? 'Need an image first'
                                         : 'Reimagine this bottle on a transparent background (1–3 min)'
                                     }
-                                    className="flex-1 min-h-[38px] py-2 bg-white/[0.06] text-white uppercase tracking-[0.18em] text-[9px] font-bold border border-white/15 hover:bg-white/[0.1] active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 disabled:opacity-35 disabled:cursor-not-allowed rounded-lg"
+                                    className="flex-1 min-h-[38px] py-2 bg-white/[0.06] text-white scent-type-chip border border-white/15 hover:bg-white/[0.1] active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 disabled:opacity-35 disabled:cursor-not-allowed rounded-lg"
                                   >
                                     {selectedReimagining ? (
                                       <>
@@ -1841,12 +2119,180 @@ export const Wardrobe: React.FC<{
                                   </button>
                                 </div>
 
+                                {isAdmin && onUploadBottleImage ? (
+                                  <div className="rounded-lg border border-scent-accent/20 bg-scent-accent/[0.04] p-2.5 space-y-2.5">
+                                    <p className="scent-type-label text-scent-accent">
+                                      Admin · Replace image
+                                    </p>
+
+                                    <input
+                                      ref={uploadFileInputRef}
+                                      type="file"
+                                      accept="image/png,image/jpeg,image/webp"
+                                      className="hidden"
+                                      onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        e.target.value = '';
+                                        if (file) void runAdminBottleUpload({ file });
+                                      }}
+                                    />
+
+                                    <button
+                                      type="button"
+                                      onClick={() => uploadFileInputRef.current?.click()}
+                                      onDragOver={(e) => {
+                                        e.preventDefault();
+                                        if (!uploadDragActive) setUploadDragActive(true);
+                                      }}
+                                      onDragLeave={() => setUploadDragActive(false)}
+                                      onDrop={(e) => {
+                                        e.preventDefault();
+                                        setUploadDragActive(false);
+                                        const file = e.dataTransfer.files?.[0];
+                                        if (file) void runAdminBottleUpload({ file });
+                                      }}
+                                      disabled={imageToolbarBusy}
+                                      className={`w-full min-h-[64px] rounded-lg border border-dashed flex flex-col items-center justify-center gap-1 px-3 py-3 text-center transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                                        uploadDragActive
+                                          ? 'border-scent-accent/70 bg-scent-accent/[0.1]'
+                                          : 'border-white/18 bg-black/25 hover:border-scent-accent/45 hover:bg-white/[0.04]'
+                                      }`}
+                                    >
+                                      {uploadBusy ? (
+                                        <RefreshCw size={14} className="animate-spin text-scent-accent" />
+                                      ) : (
+                                        <Upload size={14} className="text-white/55" />
+                                      )}
+                                      <span className="scent-type-chip font-sans">
+                                        {uploadBusy ? 'Uploading…' : 'Drop image or click to upload'}
+                                      </span>
+                                    </button>
+
+                                    <div className="flex gap-1.5">
+                                      <div className="relative flex-1">
+                                        <Link2
+                                          size={11}
+                                          className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-scent-text-subtle"
+                                        />
+                                        <input
+                                          type="url"
+                                          inputMode="url"
+                                          placeholder="…or paste image URL"
+                                          value={uploadUrlInput}
+                                          onChange={(e) => setUploadUrlInput(e.target.value)}
+                                          onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && uploadUrlInput.trim() && !imageToolbarBusy) {
+                                              e.preventDefault();
+                                              void runAdminBottleUpload({ imageUrl: uploadUrlInput.trim() });
+                                            }
+                                          }}
+                                          disabled={imageToolbarBusy}
+                                          aria-label="Image URL to upload"
+                                          className="w-full bg-black/45 border border-white/12 text-white text-sm py-2 pl-7 pr-2 rounded-lg font-sans outline-none focus:border-scent-accent/50 disabled:opacity-40"
+                                        />
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          if (uploadUrlInput.trim()) {
+                                            void runAdminBottleUpload({ imageUrl: uploadUrlInput.trim() });
+                                          }
+                                        }}
+                                        disabled={imageToolbarBusy || !uploadUrlInput.trim()}
+                                        className="shrink-0 min-h-[36px] px-3 rounded-lg bg-white/[0.06] text-white scent-type-chip border border-white/15 hover:bg-white/[0.1] disabled:opacity-35 disabled:cursor-not-allowed"
+                                      >
+                                        Add
+                                      </button>
+                                    </div>
+
+                                    <div className="flex gap-1.5">
+                                      <div className="relative flex-1">
+                                        <Link2
+                                          size={11}
+                                          className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-scent-text-subtle"
+                                        />
+                                        <input
+                                          type="url"
+                                          inputMode="url"
+                                          placeholder="…or paste FG/Parfumo URL"
+                                          value={sourceUrlInput}
+                                          onChange={(e) => setSourceUrlInput(e.target.value)}
+                                          onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && sourceUrlInput.trim() && !imageToolbarBusy) {
+                                              e.preventDefault();
+                                              void runAdminBottleUpload({ sourcePageUrl: sourceUrlInput.trim() });
+                                            }
+                                          }}
+                                          disabled={imageToolbarBusy}
+                                          aria-label="Source page URL to extract image from"
+                                          className="w-full bg-black/45 border border-white/12 text-white text-sm py-2 pl-7 pr-2 rounded-lg font-sans outline-none focus:border-scent-accent/50 disabled:opacity-40"
+                                        />
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          if (sourceUrlInput.trim()) {
+                                            void runAdminBottleUpload({ sourcePageUrl: sourceUrlInput.trim() });
+                                          }
+                                        }}
+                                        disabled={imageToolbarBusy || !sourceUrlInput.trim()}
+                                        className="shrink-0 min-h-[36px] px-3 rounded-lg bg-white/[0.06] text-white scent-type-chip border border-white/15 hover:bg-white/[0.1] disabled:opacity-35 disabled:cursor-not-allowed"
+                                      >
+                                        Fetch
+                                      </button>
+                                    </div>
+
+                                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                                      <input
+                                        type="checkbox"
+                                        checked={uploadRemoveBg}
+                                        onChange={(e) => setUploadRemoveBg(e.target.checked)}
+                                        disabled={imageToolbarBusy}
+                                        className="h-3.5 w-3.5 accent-scent-accent disabled:opacity-40"
+                                      />
+                                      <span className="scent-type-chip font-sans">
+                                        Remove background
+                                      </span>
+                                    </label>
+                                  </div>
+                                ) : null}
+
+                                {/* Action-adjacent status: an error or fallback warning is
+                                    shown right under the buttons the user just tapped, so a
+                                    failed reimagine/refresh never collapses silently and reads
+                                    as a phantom modal reset. The pinned-footer copy below stays
+                                    as the fallback for when this tools panel is closed (e.g. a
+                                    background reimagine that fails after the user navigates away). */}
+                                {!selectedReimagining && refreshError ? (
+                                  <div
+                                    role="alert"
+                                    className="flex items-start gap-2 rounded-lg border border-red-400/30 bg-red-500/[0.08] px-3 py-2.5"
+                                  >
+                                    <AlertCircle size={13} className="mt-px shrink-0 text-red-300/90" />
+                                    <p className="text-sm leading-snug text-red-100 font-sans">
+                                      {refreshError}
+                                    </p>
+                                  </div>
+                                ) : null}
+
+                                {!selectedReimagining && !refreshError && bgFallbackWarning ? (
+                                  <div
+                                    role="status"
+                                    className="flex items-start gap-2 rounded-lg border border-yellow-400/25 bg-yellow-500/[0.07] px-3 py-2.5"
+                                  >
+                                    <AlertCircle size={13} className="mt-px shrink-0 text-yellow-300/80" />
+                                    <p className="text-sm leading-snug text-yellow-100 font-sans">
+                                      {bgFallbackWarning}
+                                    </p>
+                                  </div>
+                                ) : null}
+
                                 {selectedReimagining ? (
                                   <div className="rounded-lg border border-white/15 bg-white/[0.04] px-2.5 py-2.5 text-center space-y-1">
-                                    <p className="text-[8px] uppercase tracking-[0.28em] text-white/70 font-bold">
+                                    <p className="scent-type-label">
                                       Reimagining your bottle
                                     </p>
-                                    <p className="text-[9px] leading-snug text-white/55 font-sans">
+                                    <p className="text-sm leading-snug text-scent-text-muted font-sans">
                                       This usually takes 1–3 minutes. You can close this panel and
                                       keep browsing — the new bottle will save to your vault
                                       automatically when it&apos;s ready.
@@ -1855,7 +2301,7 @@ export const Wardrobe: React.FC<{
                                 ) : null}
 
                                 {usageTotals ? (
-                                  <p className="text-center text-[8px] uppercase tracking-[0.22em] text-white/35 font-sans">
+                                  <p className="text-center scent-type-label font-sans">
                                     Reimagine spend so far ·{' '}
                                     <span className="tabular-nums text-white/55">
                                       ${usageTotals.totalUsd.toFixed(3)}
@@ -1866,7 +2312,7 @@ export const Wardrobe: React.FC<{
 
                                 <div className="rounded-lg border border-white/10 bg-black/22 p-2.5 space-y-2.5">
                                   <div className="flex items-center justify-between gap-2">
-                                    <p className="text-[8px] uppercase tracking-[0.25em] text-white/45 font-bold">
+                                    <p className="scent-type-label">
                                       Frame
                                     </p>
                                     <button
@@ -1875,20 +2321,20 @@ export const Wardrobe: React.FC<{
                                       disabled={imageToolbarBusy}
                                       title="Reset frame"
                                       aria-label="Reset bottle frame"
-                                      className="p-1 rounded-md border border-white/10 bg-white/[0.04] text-white/45 hover:text-white hover:bg-white/[0.08] disabled:opacity-30"
+                                      className="p-1 rounded-md border border-white/10 bg-white/[0.04] text-scent-text-muted hover:text-white hover:bg-white/[0.08] disabled:opacity-30"
                                     >
                                       <RotateCcw size={11} strokeWidth={1.75} />
                                     </button>
                                   </div>
 
                                   <div className="grid grid-cols-[4.5rem_1fr_2.5rem] items-center gap-1.5">
-                                    <label className="flex items-center gap-1 text-[8px] uppercase tracking-[0.14em] text-white/42 font-bold">
+                                    <label className="flex items-center gap-1 scent-type-label">
                                       <ZoomIn size={10} strokeWidth={1.75} /> Size
                                     </label>
                                     <input
                                       type="range"
-                                      min="0.7"
-                                      max="1.45"
+                                      min={BOTTLE_FRAME_LIMITS.scale.min}
+                                      max={BOTTLE_FRAME_LIMITS.scale.max}
                                       step="0.01"
                                       value={frameDraft.scale}
                                       onChange={(e) => updateFrameDraft({ scale: Number(e.target.value) })}
@@ -1896,17 +2342,17 @@ export const Wardrobe: React.FC<{
                                       aria-label="Bottle image size"
                                       className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-white"
                                     />
-                                    <span className="text-right text-[9px] tabular-nums text-white/42">
+                                    <span className="text-right text-[13px] tabular-nums text-scent-text-muted">
                                       {framePercent(frameDraft.scale)}
                                     </span>
 
-                                    <label className="flex items-center gap-1 text-[8px] uppercase tracking-[0.14em] text-white/42 font-bold">
+                                    <label className="flex items-center gap-1 scent-type-label">
                                       <MoveHorizontal size={10} strokeWidth={1.75} /> X
                                     </label>
                                     <input
                                       type="range"
-                                      min="-18"
-                                      max="18"
+                                      min={BOTTLE_FRAME_LIMITS.x.min}
+                                      max={BOTTLE_FRAME_LIMITS.x.max}
                                       step="0.5"
                                       value={frameDraft.x}
                                       onChange={(e) => updateFrameDraft({ x: Number(e.target.value) })}
@@ -1914,17 +2360,17 @@ export const Wardrobe: React.FC<{
                                       aria-label="Bottle horizontal position"
                                       className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-white"
                                     />
-                                    <span className="text-right text-[9px] tabular-nums text-white/42">
+                                    <span className="text-right text-[13px] tabular-nums text-scent-text-muted">
                                       {Math.round(frameDraft.x)}
                                     </span>
 
-                                    <label className="flex items-center gap-1 text-[8px] uppercase tracking-[0.14em] text-white/42 font-bold">
+                                    <label className="flex items-center gap-1 scent-type-label">
                                       <MoveVertical size={10} strokeWidth={1.75} /> Y
                                     </label>
                                     <input
                                       type="range"
-                                      min="-18"
-                                      max="18"
+                                      min={BOTTLE_FRAME_LIMITS.y.min}
+                                      max={BOTTLE_FRAME_LIMITS.y.max}
                                       step="0.5"
                                       value={frameDraft.y}
                                       onChange={(e) => updateFrameDraft({ y: Number(e.target.value) })}
@@ -1932,11 +2378,11 @@ export const Wardrobe: React.FC<{
                                       aria-label="Bottle vertical position"
                                       className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-white"
                                     />
-                                    <span className="text-right text-[9px] tabular-nums text-white/42">
+                                    <span className="text-right text-[13px] tabular-nums text-scent-text-muted">
                                       {Math.round(frameDraft.y)}
                                     </span>
 
-                                    <label className="flex items-center gap-1 text-[8px] uppercase tracking-[0.14em] text-white/42 font-bold">
+                                    <label className="flex items-center gap-1 scent-type-label">
                                       <ArrowUp size={10} strokeWidth={1.75} /> Top
                                     </label>
                                     <input
@@ -1950,11 +2396,11 @@ export const Wardrobe: React.FC<{
                                       aria-label="Crop from top of bottle image"
                                       className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-white"
                                     />
-                                    <span className="text-right text-[9px] tabular-nums text-white/42">
+                                    <span className="text-right text-[13px] tabular-nums text-scent-text-muted">
                                       {Math.round(frameDraft.cropTop)}
                                     </span>
 
-                                    <label className="flex items-center gap-1 text-[8px] uppercase tracking-[0.14em] text-white/42 font-bold">
+                                    <label className="flex items-center gap-1 scent-type-label">
                                       <ArrowRight size={10} strokeWidth={1.75} /> Right
                                     </label>
                                     <input
@@ -1968,11 +2414,11 @@ export const Wardrobe: React.FC<{
                                       aria-label="Crop from right of bottle image"
                                       className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-white"
                                     />
-                                    <span className="text-right text-[9px] tabular-nums text-white/42">
+                                    <span className="text-right text-[13px] tabular-nums text-scent-text-muted">
                                       {Math.round(frameDraft.cropRight)}
                                     </span>
 
-                                    <label className="flex items-center gap-1 text-[8px] uppercase tracking-[0.14em] text-white/42 font-bold">
+                                    <label className="flex items-center gap-1 scent-type-label">
                                       <ArrowDown size={10} strokeWidth={1.75} /> Bottom
                                     </label>
                                     <input
@@ -1986,11 +2432,11 @@ export const Wardrobe: React.FC<{
                                       aria-label="Crop from bottom of bottle image"
                                       className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-white"
                                     />
-                                    <span className="text-right text-[9px] tabular-nums text-white/42">
+                                    <span className="text-right text-[13px] tabular-nums text-scent-text-muted">
                                       {Math.round(frameDraft.cropBottom)}
                                     </span>
 
-                                    <label className="flex items-center gap-1 text-[8px] uppercase tracking-[0.14em] text-white/42 font-bold">
+                                    <label className="flex items-center gap-1 scent-type-label">
                                       <ArrowLeft size={10} strokeWidth={1.75} /> Left
                                     </label>
                                     <input
@@ -2004,7 +2450,7 @@ export const Wardrobe: React.FC<{
                                       aria-label="Crop from left of bottle image"
                                       className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-white"
                                     />
-                                    <span className="text-right text-[9px] tabular-nums text-white/42">
+                                    <span className="text-right text-[13px] tabular-nums text-scent-text-muted">
                                       {Math.round(frameDraft.cropLeft)}
                                     </span>
                                   </div>
@@ -2014,7 +2460,7 @@ export const Wardrobe: React.FC<{
                                       type="button"
                                       onClick={() => updateFrameDraft({ scale: frameDraft.scale - 0.1 })}
                                       disabled={imageToolbarBusy || !detailBottleUrl?.trim()}
-                                      className="min-h-[30px] rounded-md border border-white/10 bg-white/[0.035] text-[8px] uppercase tracking-[0.13em] text-white/52 font-bold flex items-center justify-center gap-1.5 disabled:opacity-30 hover:bg-white/[0.06] hover:text-white"
+                                      className="min-h-[30px] rounded-md border border-white/10 bg-white/[0.035] scent-type-chip text-scent-text-muted flex items-center justify-center gap-1.5 disabled:opacity-30 hover:bg-white/[0.06] hover:text-white"
                                     >
                                       <ZoomOut size={10} strokeWidth={1.75} /> 10%
                                     </button>
@@ -2022,7 +2468,7 @@ export const Wardrobe: React.FC<{
                                       type="button"
                                       onClick={() => updateFrameDraft({ scale: frameDraft.scale + 0.1 })}
                                       disabled={imageToolbarBusy || !detailBottleUrl?.trim()}
-                                      className="min-h-[30px] rounded-md border border-white/10 bg-white/[0.035] text-[8px] uppercase tracking-[0.13em] text-white/52 font-bold flex items-center justify-center gap-1.5 disabled:opacity-30 hover:bg-white/[0.06] hover:text-white"
+                                      className="min-h-[30px] rounded-md border border-white/10 bg-white/[0.035] scent-type-chip text-scent-text-muted flex items-center justify-center gap-1.5 disabled:opacity-30 hover:bg-white/[0.06] hover:text-white"
                                     >
                                       <ZoomIn size={10} strokeWidth={1.75} /> 10%
                                     </button>
@@ -2030,7 +2476,7 @@ export const Wardrobe: React.FC<{
                                       type="button"
                                       onClick={() => updateFrameDraft({ x: 0, y: 0 })}
                                       disabled={imageToolbarBusy || !detailBottleUrl?.trim()}
-                                      className="min-h-[30px] rounded-md border border-white/10 bg-white/[0.035] text-[8px] uppercase tracking-[0.13em] text-white/52 font-bold flex items-center justify-center gap-1.5 disabled:opacity-30 hover:bg-white/[0.06] hover:text-white"
+                                      className="min-h-[30px] rounded-md border border-white/10 bg-white/[0.035] scent-type-chip text-scent-text-muted flex items-center justify-center gap-1.5 disabled:opacity-30 hover:bg-white/[0.06] hover:text-white"
                                     >
                                       <MoveHorizontal size={10} strokeWidth={1.75} /> Center
                                     </button>
@@ -2058,7 +2504,7 @@ export const Wardrobe: React.FC<{
                                         })
                                       }
                                       disabled={imageToolbarBusy || !detailBottleUrl?.trim()}
-                                      className="min-h-[30px] rounded-md border border-white/10 bg-white/[0.035] text-[8px] uppercase tracking-[0.13em] text-white/52 font-bold flex items-center justify-center gap-1.5 disabled:opacity-30 hover:bg-white/[0.06] hover:text-white"
+                                      className="min-h-[30px] rounded-md border border-white/10 bg-white/[0.035] scent-type-chip text-scent-text-muted flex items-center justify-center gap-1.5 disabled:opacity-30 hover:bg-white/[0.06] hover:text-white"
                                     >
                                       <Crop size={10} strokeWidth={1.75} /> Tight
                                     </button>
@@ -2069,7 +2515,7 @@ export const Wardrobe: React.FC<{
                                       type="button"
                                       onClick={() => void handleSaveImageFrame()}
                                       disabled={imageToolbarBusy || !onPersistWardrobeImage}
-                                      className="w-full min-h-[36px] rounded-lg bg-scent-accent text-black uppercase tracking-[0.2em] text-[9px] font-bold hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+                                      className="w-full min-h-[36px] rounded-lg bg-scent-accent text-black scent-type-chip hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
                                     >
                                       {persistBusy ? (
                                         <>
@@ -2087,12 +2533,12 @@ export const Wardrobe: React.FC<{
                                 {hasPendingPreview && (
                                   <div className="flex flex-col gap-2 pt-2 border-t border-white/8">
                                     {!onPersistWardrobeImage ? (
-                                      <p className="text-[9px] text-scent-gold-200/75 text-center font-sans leading-snug px-1">
+                                      <p className="text-sm text-scent-gold-200 text-center font-sans leading-snug px-1">
                                         Sign in to save this preview to your vault.
                                       </p>
                                     ) : null}
-                                    {pendingPreview?.isFallback ? (
-                                      <p className="text-[9px] text-scent-gold-200/85 text-center font-sans leading-snug px-1">
+                                    {previewBlocked ? (
+                                      <p className="text-sm text-scent-gold-200 text-center font-sans leading-snug px-1">
                                         This preview still has a fallback background. Try another image fix before saving.
                                       </p>
                                     ) : null}
@@ -2103,16 +2549,16 @@ export const Wardrobe: React.FC<{
                                         disabled={
                                           persistBusy ||
                                           !onPersistWardrobeImage ||
-                                          !!pendingPreview?.isFallback
+                                          previewBlocked
                                         }
                                         title={
                                           !onPersistWardrobeImage
                                             ? 'Sign in to save to your vault'
-                                            : pendingPreview?.isFallback
+                                            : previewBlocked
                                               ? 'This preview used a fallback background — try another fix first'
                                               : undefined
                                         }
-                                        className="flex-1 min-h-[38px] py-2 bg-scent-accent text-black uppercase tracking-[0.2em] text-[9px] font-bold hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg"
+                                        className="flex-1 min-h-[38px] py-2 bg-scent-accent text-black scent-type-chip hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg"
                                       >
                                         {persistBusy ? (
                                           <>
@@ -2128,7 +2574,7 @@ export const Wardrobe: React.FC<{
                                         type="button"
                                         onClick={() => setPendingPreview(null)}
                                         disabled={persistBusy}
-                                        className="flex-1 min-h-[38px] py-2 bg-transparent text-white/50 uppercase tracking-[0.18em] text-[9px] font-bold border border-white/12 hover:bg-white/[0.05] hover:text-white/80 rounded-lg disabled:opacity-30"
+                                        className="flex-1 min-h-[38px] py-2 bg-transparent text-white/50 scent-type-chip border border-white/12 hover:bg-white/[0.05] hover:text-white/80 rounded-lg disabled:opacity-30"
                                       >
                                         Discard preview
                                       </button>
@@ -2143,11 +2589,13 @@ export const Wardrobe: React.FC<{
                     </div>
                   </div>
 
-                  <ReviewsPanel
-                    name={entryName(selectedItem)}
-                    brand={entryBrand(selectedItem)}
-                    reviews={extractDetailReviews(selectedItem.raw_engine_detail)}
-                  />
+                  {detailShowDeferredContent ? (
+                    <ReviewsPanel
+                      name={entryName(selectedItem)}
+                      brand={entryBrand(selectedItem)}
+                      reviews={extractDetailReviews(selectedItem.raw_engine_detail)}
+                    />
+                  ) : null}
 
                 </div>
               </div>
@@ -2157,11 +2605,15 @@ export const Wardrobe: React.FC<{
                 className="px-5 pt-3 shrink-0 border-t border-white/5 flex flex-col gap-3"
                 style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))' }}
               >
-                {refreshError && (
-                  <p className="text-[9px] text-red-400/80 text-center leading-snug px-2 py-1">{refreshError}</p>
+                {/* Footer fallback only — when the bottle tools panel is open the
+                    same message is shown inline beside the action buttons above, so
+                    avoid rendering it twice. This keeps errors reachable for actions
+                    that complete after the panel is closed (e.g. a background reimagine). */}
+                {!bottleImageToolsOpen && refreshError && (
+                  <p className="text-sm text-red-100 text-center leading-snug px-2 py-1">{refreshError}</p>
                 )}
-                {!refreshError && bgFallbackWarning && (
-                  <p className="text-[9px] text-yellow-400/70 text-center leading-snug px-2 py-1">{bgFallbackWarning}</p>
+                {!bottleImageToolsOpen && !refreshError && bgFallbackWarning && (
+                  <p className="text-sm text-yellow-100 text-center leading-snug px-2 py-1">{bgFallbackWarning}</p>
                 )}
 
 
@@ -2177,7 +2629,7 @@ export const Wardrobe: React.FC<{
                       }
                       closeDetail();
                     }}
-                    className="min-h-[46px] border-r border-white/10 px-3 py-3 text-[10px] font-bold uppercase tracking-[0.26em] text-white/52 transition-colors hover:bg-white/[0.05] hover:text-white"
+                    className="min-h-[46px] border-r border-white/10 px-3 py-3 scent-type-chip text-scent-text-muted transition-colors hover:bg-white/[0.05] hover:text-white"
                   >
                     {deleteConfirming ? 'Go back' : 'Close'}
                   </button>
@@ -2193,10 +2645,10 @@ export const Wardrobe: React.FC<{
                     }}
                     disabled={imageToolbarBusy}
                     aria-label={deleteConfirming ? "Confirm delete from vault" : "Delete from vault"}
-                    className={`group flex min-h-[46px] items-center justify-center gap-2 px-3 py-3 text-[10px] font-bold uppercase tracking-[0.24em] transition-all disabled:cursor-not-allowed disabled:opacity-25 ${
+                    className={`group flex min-h-[46px] items-center justify-center gap-2 px-3 py-3 scent-type-chip transition-all disabled:cursor-not-allowed disabled:opacity-25 ${
                       deleteConfirming
                         ? 'bg-red-500/12 text-red-300 hover:bg-red-500/18 hover:text-red-200'
-                        : 'text-white/35 hover:bg-red-500/[0.06] hover:text-red-400'
+                        : 'text-scent-text-muted hover:bg-red-500/[0.06] hover:text-red-300'
                     }`}
                   >
                     <Trash2 size={14} strokeWidth={1.75} className={deleteConfirming ? '' : 'group-hover:animate-bounce'} />
@@ -2227,7 +2679,7 @@ export const Wardrobe: React.FC<{
                     ref={enlargeCloseButtonRef}
                     type="button"
                     onClick={() => setEnlargeOpen(false)}
-                    className="absolute top-4 right-4 z-10 p-2 rounded-full border border-white/15 bg-white/10 text-white hover:bg-white/20 transition-colors"
+                    className="absolute top-4 right-4 z-10 flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white hover:bg-white/20 transition-colors"
                     aria-label="Close enlarged view"
                   >
                     <X size={22} strokeWidth={1.75} />
@@ -2246,7 +2698,7 @@ export const Wardrobe: React.FC<{
                       loading="eager"
                     />
                   </div>
-                  <p className="mt-5 text-[10px] uppercase tracking-[0.35em] text-white/35 font-bold font-sans">
+                  <p className="mt-5 scent-type-label font-sans">
                     Tap outside or Esc to close
                   </p>
                 </motion.div>

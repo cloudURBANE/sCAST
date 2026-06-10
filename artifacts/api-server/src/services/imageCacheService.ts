@@ -23,6 +23,7 @@ export {
 import { IMAGE_PIPELINE_VERSION } from "./imageIdentity";
 
 const DEFAULT_FAILED_STATUS_RETRY_MS = 6 * 60 * 60 * 1000;
+const CACHE_HIT_FLUSH_DELAY_MS = 1500;
 
 function failedStatusRetryMs(): number {
   const raw = process.env.IMAGE_FAILED_STATUS_RETRY_MS;
@@ -163,19 +164,50 @@ function sourceProviderPrioritySql() {
   end`;
 }
 
-async function markCacheHit(id: string): Promise<void> {
-  try {
-    await db
-      .update(imageCacheTable)
-      .set({
-        hitCount: sql`${imageCacheTable.hitCount} + 1`,
-        lastUsedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(imageCacheTable.id, id));
-  } catch (err) {
-    if (!isImageCacheUnavailableError(err)) throw err;
+const pendingCacheHits = new Map<string, { count: number; lastUsedAt: Date }>();
+let cacheHitFlushTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleCacheHitFlush(): void {
+  if (cacheHitFlushTimer) return;
+  cacheHitFlushTimer = setTimeout(() => {
+    cacheHitFlushTimer = null;
+    void flushCacheHits();
+  }, CACHE_HIT_FLUSH_DELAY_MS);
+}
+
+async function flushCacheHits(): Promise<void> {
+  const batch = Array.from(pendingCacheHits.entries());
+  pendingCacheHits.clear();
+  if (batch.length === 0) return;
+
+  await Promise.all(
+    batch.map(async ([id, hit]) => {
+      try {
+        await db
+          .update(imageCacheTable)
+          .set({
+            hitCount: sql`${imageCacheTable.hitCount} + ${hit.count}`,
+            lastUsedAt: hit.lastUsedAt,
+            updatedAt: hit.lastUsedAt,
+          })
+          .where(eq(imageCacheTable.id, id));
+      } catch (err) {
+        if (!isImageCacheUnavailableError(err)) {
+          logger.warn({ err, id }, "image_cache hit accounting failed");
+        }
+      }
+    }),
+  );
+}
+
+function markCacheHitDeferred(id: string): void {
+  const current = pendingCacheHits.get(id);
+  if (current) {
+    pendingCacheHits.set(id, { count: current.count + 1, lastUsedAt: new Date() });
+  } else {
+    pendingCacheHits.set(id, { count: 1, lastUsedAt: new Date() });
   }
+  scheduleCacheHitFlush();
 }
 
 export async function getReadyCachedImageBySourceHash(
@@ -202,7 +234,7 @@ export async function getReadyCachedImageBySourceHash(
   const row = rows[0];
   if (!row) return null;
   const ref = await rowToUsableReference(row, true);
-  if (ref) await markCacheHit(row.id);
+  if (ref) markCacheHitDeferred(row.id);
   return ref;
 }
 
@@ -236,7 +268,7 @@ export async function getLatestReadyCachedImageByLookupKey(
   for (const row of rows) {
     const ref = await rowToUsableReference(row, true);
     if (ref) {
-      await markCacheHit(row.id);
+      markCacheHitDeferred(row.id);
       return ref;
     }
   }
@@ -268,7 +300,7 @@ export async function getLatestReadyCachedImageBySearchQueryHash(
   for (const row of rows) {
     const ref = await rowToUsableReference(row, true);
     if (ref) {
-      await markCacheHit(row.id);
+      markCacheHitDeferred(row.id);
       return ref;
     }
   }
@@ -432,7 +464,12 @@ export async function recordImageFailure(input: {
         set: {
           processingStatus: "failed",
           failureReason: input.failureReason.slice(0, 500),
-          updatedAt: new Date(),
+          // Anchor the negative-cache TTL to the *first* failure: only advance
+          // updated_at when transitioning into "failed" from another status. A
+          // repeat failure of an already-failed row keeps the original
+          // timestamp so the 6h retry window (shouldRetryFailedImageStatus) can
+          // actually elapse instead of being reset on every attempt (BE-5).
+          updatedAt: sql`case when ${imageCacheTable.processingStatus} = 'failed' then ${imageCacheTable.updatedAt} else now() end`,
         },
       });
   } catch (err) {

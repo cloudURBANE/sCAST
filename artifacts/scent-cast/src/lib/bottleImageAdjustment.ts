@@ -36,12 +36,23 @@ export const DEFAULT_BOTTLE_IMAGE_ADJUSTMENT: NormalizedBottleImageAdjustment = 
 };
 
 const LIMITS = {
-  scale: { min: 0.7, max: 1.45 },
-  x: { min: -18, max: 18 },
-  y: { min: -18, max: 18 },
+  // Wider framing envelope so unusual packshots can be pushed further off-center
+  // and zoomed harder. Container is `overflow-hidden`, so the extra travel only
+  // slides the bottle within its clipped slot — it can't break page layout.
+  scale: { min: 0.5, max: 1.8 },
+  x: { min: -36, max: 36 },
+  y: { min: -36, max: 36 },
   /** Stored per-edge crop strength (slider/API), 0-40. */
   cropEdge: { min: 0, max: 40 },
 } as const;
+
+/**
+ * Shared slider/clamp bounds. The editor sliders bind their min/max to these so
+ * the visible track can always reach what `normalizeBottleImageAdjustment` clamps
+ * to (no drift between UI range and stored range). The api-server clamp in
+ * `services/fragrancePayload.ts` mirrors these values across the package boundary.
+ */
+export const BOTTLE_FRAME_LIMITS = LIMITS;
 
 /** Max value for crop sliders and PATCH payloads (not equal to CSS inset %). */
 export const BOTTLE_CROP_STORED_MAX = LIMITS.cropEdge.max;

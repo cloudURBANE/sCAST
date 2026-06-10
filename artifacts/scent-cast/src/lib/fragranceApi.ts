@@ -738,7 +738,7 @@ export function isSourceCoverageComplete(coverage?: SourceCoverage | null): bool
 }
 
 const VERIFIED_SOURCE_PROFILE_COPY = "Verified community-source profile available.";
-const PARTIAL_SOURCE_PROFILE_COPY = "Community-source profile available. Some source data is still pending.";
+const PARTIAL_SOURCE_PROFILE_COPY = "Community-source profile available. Source coverage is incomplete.";
 
 const ENRICHMENT_STATUS_COPY: Record<string, string> = {
   not_needed: VERIFIED_SOURCE_PROFILE_COPY,
@@ -801,7 +801,7 @@ export function resolveSourceStatus(
     summary,
     sourceCount,
     sourceCountLabel: hasCoverage ? `Sources ${sourceCount} of 2` : null,
-    metricsLabel: hasCoverage ? (complete ? "Metrics ready" : "Metrics pending") : null,
+    metricsLabel: hasCoverage ? (complete ? "Metrics ready" : "Metric coverage incomplete") : null,
     enrichmentMessage,
     statusText,
     shouldShowEnrichmentMessage: Boolean(
@@ -1055,13 +1055,22 @@ function hasResolvedSearchHouse(result: FragranceSearchResult): boolean {
 }
 
 function isBrandOnlyArchiveResult(result: FragranceSearchResult): boolean {
-  const id = firstNonEmptyString(result.id) ?? "";
-  if (!id.startsWith("catalog:") && !id.startsWith("dataset:")) return false;
+  // A brand-only "archive" placeholder has its name equal to its house and no
+  // real source page behind it — it is never an openable fragrance.
   if (firstNonEmptyString(result.source_url)) return false;
-
   const name = normalizeForDedupe(result.name);
   const house = normalizeForDedupe(result.house ?? result.brand);
-  return Boolean(name && house && name === house);
+  if (!name || !house || name !== house) return false;
+
+  const id = firstNonEmptyString(result.id) ?? "";
+  // App-search ids carry an explicit catalog:/dataset: prefix. The Python engine
+  // instead base64-encodes its candidate ids (api.py:_encode_id), so its
+  // placeholders slip past a prefix check — decode the opaque token and treat a
+  // source-less brand==name identity as the very same brand-only card.
+  if (id.startsWith("catalog:") || id.startsWith("dataset:")) return true;
+  if (id.startsWith("source:")) return false;
+  const opaque = fragranceIdentityFromOpaqueId(id);
+  return Boolean(opaque.house || opaque.name);
 }
 
 function normalizedInitials(value: unknown): string {
@@ -1170,6 +1179,42 @@ async function apiErrorMessage(res: Response, fallback: string): Promise<string>
   return fallback;
 }
 
+/**
+ * Raised when a response body is empty or non-JSON. Vercel edge middleware
+ * strips content-length/encoding, cold-start gateways serve HTML, and 204/empty
+ * 2xx bodies all reach the client — calling `res.json()` on those throws an
+ * opaque `SyntaxError: Unexpected end of JSON input`. This carries a clear
+ * message and a stable `name`, so resilient callers can fall back instead of
+ * surfacing a crash.
+ */
+class FragranceResponseBodyError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "FragranceResponseBodyError";
+  }
+}
+
+function isResponseBodyError(err: unknown): err is FragranceResponseBodyError {
+  return err instanceof Error && err.name === "FragranceResponseBodyError";
+}
+
+async function parseJsonResponse<T>(res: Response, context: string): Promise<T> {
+  let text: string;
+  try {
+    text = await res.text();
+  } catch {
+    throw new FragranceResponseBodyError(`${context} response could not be read.`);
+  }
+  if (!text.trim()) {
+    throw new FragranceResponseBodyError(`${context} returned an empty response.`);
+  }
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new FragranceResponseBodyError(`${context} returned a malformed response.`);
+  }
+}
+
 export async function searchFragrances(
   query: string,
   options?: { signal?: AbortSignal },
@@ -1193,10 +1238,13 @@ export async function searchFragrances(
       throw new Error(await apiErrorMessage(res, `Fragrance search failed: ${res.status}`));
     }
 
-    data = await res.json();
+    data = await parseJsonResponse(res, "Fragrance search");
   } catch (err) {
     if (err instanceof Error && err.name === "AbortError") throw err;
-    if (isFragranceEngineTransportError(err)) {
+    // A transport failure or a 2xx with an empty/HTML body (truncated proxy
+    // response, cold-start gateway page) both mean the engine gave us nothing
+    // usable — try the Express app search before surfacing the error.
+    if (isFragranceEngineTransportError(err) || isResponseBodyError(err)) {
       try {
         return await searchAppFragrances(query, options);
       } catch (fallbackErr) {
@@ -1254,27 +1302,33 @@ async function searchAppFragrances(
     throw new Error(await apiErrorMessage(res, `App fragrance search failed: ${res.status}`));
   }
 
-  const data = await res.json();
+  const data = await parseJsonResponse<unknown>(res, "App fragrance search");
+  const payload = objectRecord(data);
   const rawResults: unknown[] = Array.isArray(data)
     ? data
-    : Array.isArray(data?.results)
-      ? data.results
+    : Array.isArray(payload.results)
+      ? (payload.results as unknown[])
       : [];
 
   return {
-    query: typeof data?.query === "string" ? data.query : query,
+    query: typeof payload.query === "string" ? payload.query : query,
     results: rawResults
       .map((result) => normalizeFragranceSearchResult(result, query, "app"))
       .filter((result): result is FragranceSearchResult => {
         return result !== null && hasDisplayableSearchIdentity(query, result);
       }),
-    diagnostics: normalizeSearchDiagnostics(data?.diagnostics),
+    diagnostics: normalizeSearchDiagnostics(payload.diagnostics),
   };
 }
 
+type FragranceDetailRequestOptions = {
+  origin?: FragranceSearchOrigin;
+  recover_incomplete?: boolean;
+};
+
 export type FragranceDetailRequestPayload =
-  | { id: string; source_url?: string; origin?: FragranceSearchOrigin }
-  | { source_url: string; id?: never; origin?: FragranceSearchOrigin };
+  | ({ id: string; source_url?: string } & FragranceDetailRequestOptions)
+  | ({ source_url: string; id?: never } & FragranceDetailRequestOptions);
 
 export async function getFragranceDetails(
   payload: FragranceDetailRequestPayload,
@@ -1289,6 +1343,7 @@ export async function getFragranceDetails(
   const requestBody = {
     ...("id" in payload ? { id: payload.id } : {}),
     ...("source_url" in payload && payload.source_url ? { source_url: payload.source_url } : {}),
+    ...(payload.recover_incomplete ? { recover_incomplete: true } : {}),
   };
   const requestInit: RequestInit = {
     method: "POST",
@@ -1317,13 +1372,13 @@ export async function getFragranceDetails(
   if (!res.ok) {
     if (!useAppApi && res.status >= 500) {
       const fallbackRes = await fetchAppDetails();
-      if (fallbackRes.ok) return fallbackRes.json();
+      if (fallbackRes.ok) return parseJsonResponse<FragranceDetailResponse>(fallbackRes, "Fragrance detail");
       res = fallbackRes;
     }
     throw new Error(await apiErrorMessage(res, `Fragrance detail fetch failed: ${res.status}`));
   }
 
-  return res.json();
+  return parseJsonResponse<FragranceDetailResponse>(res, "Fragrance detail");
 }
 
 export async function requeueFragranceDetails(
@@ -1353,7 +1408,7 @@ export async function requeueFragranceDetails(
     throw new Error(await apiErrorMessage(res, `Fragrance refresh requeue failed: ${res.status}`));
   }
 
-  return res.json();
+  return parseJsonResponse<FragranceDetailRequeueResponse>(res, "Fragrance refresh");
 }
 
 export type FragranceRawReview = { text: string; source?: string };

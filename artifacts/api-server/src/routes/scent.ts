@@ -11,6 +11,7 @@ import {
   type ImageSolverId,
 } from "../services/imageSolvers";
 import { logger } from "../lib/logger";
+import { rateLimitMiddleware } from "../lib/rateLimit";
 import { resolveConcentrationFast } from "../services/concentrationResolver";
 import { resolveProcessedFragranceImage } from "../services/imagePipeline";
 import { reimagineBottleImage, isSupportedReimagineModel } from "../services/reimagineService";
@@ -91,7 +92,10 @@ async function upsertRefreshImageCatalog(
 ): Promise<void> {
   let baseProfile = await getCatalogEntry(brand, name);
   if (!baseProfile) {
-    const built = await buildProfile(name, brand, undefined, { allowCatalogFuzzy: false });
+    const built = await buildProfile(name, brand, undefined, {
+      allowCatalogFuzzy: false,
+      imageResolution: "skip",
+    });
     if ("product" in built) baseProfile = built;
   }
   if (baseProfile) {
@@ -158,6 +162,7 @@ router.post("/scent-profile", async (req, res) => {
     },
     {
       preferEngineData: preferEngineData === true,
+      imageResolution: "deferred",
       ...(concentrationOverride ? { concentrationOverride } : {}),
     },
   );
@@ -189,6 +194,7 @@ router.post("/search-scent", async (req, res) => {
 
     const profile = await buildProfile(resolvedQuery.name, resolvedQuery.brand, undefined, {
       allowCatalogFuzzy: false,
+      imageResolution: "deferred",
       ...(concentrationOverride ? { concentrationOverride } : {}),
     });
     if ("product" in profile) {
@@ -230,6 +236,7 @@ router.post("/search-scent", async (req, res) => {
       },
       {
         allowCatalogFuzzy: false,
+        imageResolution: "deferred",
         ...(concentrationOverride ? { concentrationOverride } : {}),
       },
     );
@@ -254,6 +261,7 @@ router.post("/search-scent", async (req, res) => {
       perfumer: first.perfumer,
     }, {
       ...(concentrationOverride ? { concentrationOverride } : {}),
+      imageResolution: "deferred",
     });
     res.json("product" in profile ? flattenProfile(profile) : profile);
     return;
@@ -268,6 +276,16 @@ router.post("/search-scent", async (req, res) => {
   }
 
   const scraped = await deepScrapeFragrance(queryWithHint);
+  if (!scraped) {
+    // No real fragrance data found. Returning a fabricated word-split profile
+    // here is what produced bogus "<name> by <brand>" results and poisoned the
+    // catalog, so decline cleanly instead of inventing + persisting one.
+    res.status(422).json({
+      error:
+        "Search only supports fragrance, perfume, or cologne names. Try the brand plus fragrance name, or add 'perfume' for a newer scent.",
+    });
+    return;
+  }
   const profile = await buildProfile(scraped.name, scraped.brand, {
     notes: scraped.notes,
     family: scraped.family,
@@ -276,6 +294,7 @@ router.post("/search-scent", async (req, res) => {
     perfumer: scraped.perfumer,
   }, {
     ...(concentrationOverride ? { concentrationOverride } : {}),
+    imageResolution: "deferred",
   });
   res.json("product" in profile ? flattenProfile(profile) : profile);
 });
@@ -508,7 +527,19 @@ router.post("/refresh-image", async (req, res) => {
   }
 });
 
-router.post("/reimagine-bottle-image", async (req, res) => {
+// Per-IP rate limit on the (intentionally unauthenticated) reimagine endpoint —
+// each call bills OpenAI, so cap abuse without forcing login. Tunable via
+// REIMAGINE_RATE_LIMIT_PER_HOUR (default 10/hour/IP).
+const reimagineRateLimitPerHour = (() => {
+  const raw = Number(process.env.REIMAGINE_RATE_LIMIT_PER_HOUR?.trim());
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 10;
+})();
+const reimagineRateLimit = rateLimitMiddleware({
+  limit: reimagineRateLimitPerHour,
+  windowMs: 60 * 60 * 1000,
+});
+
+router.post("/reimagine-bottle-image", reimagineRateLimit, async (req, res) => {
   if (process.env.ENABLE_REIMAGINE && process.env.ENABLE_REIMAGINE.trim().toLowerCase() !== "true") {
     res.status(403).json({ error: "Reimagine is disabled in this environment." });
     return;
@@ -519,6 +550,7 @@ router.post("/reimagine-bottle-image", async (req, res) => {
     brand?: string;
     imageUrl?: unknown;
     model?: unknown;
+    force?: unknown;
   };
   const { name, brand } = body;
   if (!name || !brand) {
@@ -558,6 +590,7 @@ router.post("/reimagine-bottle-image", async (req, res) => {
       name: imageName,
       sourceUrl,
       model: requestedModel ?? null,
+      force: body.force === true,
     });
 
     await upsertRefreshImageCatalog(imageBrand, imageName, {

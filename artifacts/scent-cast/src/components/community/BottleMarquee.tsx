@@ -1,4 +1,4 @@
-import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { BottleImage } from '@/components/BottleImage';
 import { BrandGoldLabel } from '@/components/BrandGoldLabel';
@@ -46,7 +46,7 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
     [renderedItems],
   );
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     const track = trackRef.current;
     const group = groupRef.current;
     if (!track || !group) return;
@@ -118,11 +118,18 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
     activeTriggerIdRef.current = null;
   }, []);
 
+  const openItem = useCallback((item: CommunityFragranceEntry) => {
+    if (!loading && item.imageUrl) {
+      activeTriggerIdRef.current = item.id;
+      setActiveItem(item);
+    }
+  }, [loading]);
+
   if (!loading && (isError || items.length === 0)) {
     return (
       <section className="scent-community-marquee" aria-label="Community fragrance marquee">
         <div className="flex items-center justify-center py-14">
-          <p className="text-[11px] uppercase tracking-[0.3em] text-scent-muted/40">
+          <p className="scent-type-label">
             {isError ? 'Community unavailable' : 'No community fragrances yet'}
           </p>
         </div>
@@ -164,16 +171,17 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
                     className="scent-fragrance-card scent-community-marquee-card group relative flex h-full w-full cursor-pointer flex-col p-5 sm:p-6 text-left outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
                     whileHover={{ y: -8, scale: 1.04 }}
                     transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
-                    onClick={() => {
-                      if (!loading && item.imageUrl) {
-                        activeTriggerIdRef.current = item.id;
-                        setActiveItem(item);
+                    onClick={() => openItem(item)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        openItem(item);
                       }
                     }}
                   >
                     <div className="scent-card-frame" aria-hidden="true" />
                     <div className="relative z-10 flex justify-end">
-                      <span className="font-mono text-[8px] uppercase tracking-[0.22em] text-scent-accent/80">
+                      <span className="font-mono scent-type-label text-scent-accent">
                         {item.curator}
                       </span>
                     </div>
