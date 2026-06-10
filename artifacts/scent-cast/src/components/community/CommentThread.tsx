@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { LoaderCircle, Send } from 'lucide-react';
 import { ReactionBar } from '@/components/community/ReactionBar';
@@ -21,22 +21,17 @@ interface CommentThreadProps {
 export const CommentThread: React.FC<CommentThreadProps> = ({ postId, authToken, onSignIn }) => {
   const [body, setBody] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const detail = useCommunityPostDetail(postId, true);
+  // Hold a comment drafted while logged out and post it once the viewer signs in.
+  const [pendingBody, setPendingBody] = useState<string | null>(null);
+  const detail = useCommunityPostDetail(postId, true, authToken);
   const comments = detail.data?.comments ?? [];
   const commentMutation = useCreateCommunityComment(authToken);
+  const { mutate } = commentMutation;
 
-  const submitComment = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const trimmed = body.trim();
-    if (!authToken) {
-      onSignIn();
-      return;
-    }
-    if (!trimmed) return;
-
+  const postComment = (text: string) => {
     setErrorMessage(null);
-    commentMutation.mutate(
-      { postId, body: trimmed },
+    mutate(
+      { postId, body: text },
       {
         onSuccess: () => setBody(''),
         onError: (err) => {
@@ -44,6 +39,28 @@ export const CommentThread: React.FC<CommentThreadProps> = ({ postId, authToken,
         },
       },
     );
+  };
+
+  useEffect(() => {
+    if (!authToken || !pendingBody) return;
+    const text = pendingBody;
+    setPendingBody(null);
+    postComment(text);
+    // postComment is recreated each render but closes over the same stable refs;
+    // gating on authToken + pendingBody keeps this to a single replay.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authToken, pendingBody]);
+
+  const submitComment = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const trimmed = body.trim();
+    if (!authToken) {
+      if (trimmed) setPendingBody(trimmed);
+      onSignIn();
+      return;
+    }
+    if (!trimmed) return;
+    postComment(trimmed);
   };
 
   return (
@@ -79,6 +96,7 @@ export const CommentThread: React.FC<CommentThreadProps> = ({ postId, authToken,
                     targetType="comment"
                     targetId={comment.id}
                     counts={comment.counts.reactions}
+                    viewerReactions={comment.viewerReactions}
                     authToken={authToken}
                     onSignIn={onSignIn}
                     compact

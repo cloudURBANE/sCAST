@@ -368,6 +368,12 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
       resetComposer();
       setComposerOpen(false);
       setStatusMessage('Room opened in the community.');
+      // Bring the composer/feed back into view so the freshly created room is
+      // visible right after the form collapses, instead of leaving the user
+      // scrolled down inside the (now closed) editor.
+      requestAnimationFrame(() => {
+        sectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
     } catch (err) {
       setStatusMessage(err instanceof Error ? err.message : 'Post could not be created.');
     }
@@ -377,7 +383,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
     return (
       <section
         ref={sectionRef}
-        className="relative overflow-hidden rounded-[var(--radius-scent)] border border-scent-accent/24 bg-[linear-gradient(180deg,rgba(10,9,7,0.88),rgba(0,0,0,0.96))] p-6 shadow-[0_18px_44px_-30px_rgba(0,0,0,0.95),0_0_0_1px_rgba(212,175,55,0.06),inset_0_1px_0_rgba(255,236,183,0.06)]"
+        className="relative mx-auto w-full max-w-[960px] overflow-hidden rounded-[var(--radius-scent)] border border-scent-accent/24 bg-[linear-gradient(180deg,rgba(10,9,7,0.88),rgba(0,0,0,0.96))] p-6 shadow-[0_18px_44px_-30px_rgba(0,0,0,0.95),0_0_0_1px_rgba(212,175,55,0.06),inset_0_1px_0_rgba(255,236,183,0.06)]"
       >
         <button
           type="button"
@@ -414,7 +420,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
   return (
     <section
       ref={sectionRef}
-      className="rounded-[var(--radius-scent)] border border-scent-accent/24 bg-[linear-gradient(180deg,rgba(10,9,7,0.88),rgba(0,0,0,0.96))] p-6 shadow-[0_18px_44px_-30px_rgba(0,0,0,0.95),0_0_0_1px_rgba(212,175,55,0.06),inset_0_1px_0_rgba(255,236,183,0.06)]"
+      className="mx-auto w-full max-w-[960px] rounded-[var(--radius-scent)] border border-scent-accent/24 bg-[linear-gradient(180deg,rgba(10,9,7,0.88),rgba(0,0,0,0.96))] p-6 shadow-[0_18px_44px_-30px_rgba(0,0,0,0.95),0_0_0_1px_rgba(212,175,55,0.06),inset_0_1px_0_rgba(255,236,183,0.06)]"
     >
       <form onSubmit={submitPost} className="space-y-6">
         <div className="relative flex flex-col items-center gap-4 text-center">

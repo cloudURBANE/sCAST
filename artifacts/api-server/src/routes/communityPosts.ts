@@ -12,7 +12,7 @@ import {
   type CommunityReactionTargetType,
 } from "@workspace/db/schema";
 import { and, asc, desc, eq, inArray, lt, or, sql } from "drizzle-orm";
-import { AuthRequest, requireAuth } from "../middlewares/auth";
+import { AuthRequest, optionalAuth, requireAuth } from "../middlewares/auth";
 import { getTenantId } from "../middlewares/tenant";
 import { shareIdForUser } from "../services/shareIdentity";
 
@@ -29,6 +29,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 type TenantUser = {
   id: string;
   email: string;
+  pictureUrl: string | null;
 };
 
 type PostRow = {
@@ -42,6 +43,7 @@ type PostRow = {
   createdAt: Date;
   updatedAt: Date;
   authorEmail: string;
+  authorPictureUrl: string | null;
 };
 
 type CommentRow = {
@@ -53,6 +55,7 @@ type CommentRow = {
   body: string;
   createdAt: Date;
   authorEmail: string;
+  authorPictureUrl: string | null;
 };
 
 type FragranceSnapshot = {
@@ -273,7 +276,7 @@ function voteTalliesFromRows(rows: Array<{ postId: string; choice: string; count
 
 async function tenantUsersById(tenantId: string) {
   const users = await db
-    .select({ id: usersTable.id, email: usersTable.email })
+    .select({ id: usersTable.id, email: usersTable.email, pictureUrl: usersTable.pictureUrl })
     .from(usersTable)
     .where(eq(usersTable.tenantId, tenantId));
   return {
@@ -287,10 +290,76 @@ function authorDto(user: TenantUser, tenantUsers: TenantUser[]) {
     id: user.id,
     email: user.email,
     shareId: shareIdForUser(user, tenantUsers),
+    ...(user.pictureUrl ? { pictureUrl: user.pictureUrl } : {}),
   };
 }
 
-async function buildPostDtos(tenantId: string, posts: PostRow[]) {
+/**
+ * Which of `targetIds` the viewer has reacted to (and with which reaction tokens).
+ * One indexed `inArray` lookup against the unique (userId,targetType,targetId,reaction)
+ * shape — no N+1. Returns an empty map for anonymous callers.
+ */
+async function viewerReactionState(
+  tenantId: string,
+  targetType: CommunityReactionTargetType,
+  targetIds: string[],
+  viewerId?: string,
+): Promise<{ reactionsByTarget: Map<string, string[]> }> {
+  const reactionsByTarget = new Map<string, string[]>();
+  if (!viewerId || targetIds.length === 0) return { reactionsByTarget };
+
+  const rows = await db
+    .select({
+      targetId: communityReactionsTable.targetId,
+      reaction: communityReactionsTable.reaction,
+    })
+    .from(communityReactionsTable)
+    .where(and(
+      eq(communityReactionsTable.tenantId, tenantId),
+      eq(communityReactionsTable.userId, viewerId),
+      eq(communityReactionsTable.targetType, targetType),
+      inArray(communityReactionsTable.targetId, targetIds),
+    ));
+
+  for (const row of rows) {
+    const reactions = reactionsByTarget.get(row.targetId) ?? [];
+    reactions.push(row.reaction);
+    reactionsByTarget.set(row.targetId, reactions);
+  }
+  return { reactionsByTarget };
+}
+
+/** Viewer's own reactions + battle vote across a set of posts (anonymous → empty). */
+async function viewerPostState(
+  tenantId: string,
+  postIds: string[],
+  viewerId?: string,
+): Promise<{ reactionsByTarget: Map<string, string[]>; voteByPost: Map<string, string> }> {
+  const voteByPost = new Map<string, string>();
+  if (!viewerId || postIds.length === 0) {
+    return { reactionsByTarget: new Map(), voteByPost };
+  }
+
+  const [{ reactionsByTarget }, voteRows] = await Promise.all([
+    viewerReactionState(tenantId, "post", postIds, viewerId),
+    db
+      .select({
+        postId: communityVotesTable.postId,
+        choice: communityVotesTable.choice,
+      })
+      .from(communityVotesTable)
+      .where(and(
+        eq(communityVotesTable.tenantId, tenantId),
+        eq(communityVotesTable.userId, viewerId),
+        inArray(communityVotesTable.postId, postIds),
+      )),
+  ]);
+
+  for (const row of voteRows) voteByPost.set(row.postId, row.choice);
+  return { reactionsByTarget, voteByPost };
+}
+
+async function buildPostDtos(tenantId: string, posts: PostRow[], viewerId?: string) {
   if (posts.length === 0) return [];
 
   const postIds = posts.map((post) => post.id);
@@ -374,9 +443,11 @@ async function buildPostDtos(tenantId: string, posts: PostRow[]) {
   const voteTallies = voteTalliesFromRows(voteTallyRows);
   const tenantUsers = tenantUsersResult.users;
   const usersById = tenantUsersResult.byId;
+  const { reactionsByTarget: viewerReactionsByPost, voteByPost: viewerVoteByPost } =
+    await viewerPostState(tenantId, postIds, viewerId);
 
   return posts.map((post) => {
-    const fallbackAuthor = { id: post.userId, email: post.authorEmail };
+    const fallbackAuthor = { id: post.userId, email: post.authorEmail, pictureUrl: post.authorPictureUrl };
     const author = usersById.get(post.userId) ?? fallbackAuthor;
     const shareUsers = usersById.has(post.userId) ? tenantUsers : [...tenantUsers, fallbackAuthor];
 
@@ -396,11 +467,13 @@ async function buildPostDtos(tenantId: string, posts: PostRow[]) {
         reactions: reactionCounts.get(post.id) ?? {},
       },
       votes: voteTallies.get(post.id) ?? {},
+      viewerReactions: viewerReactionsByPost.get(post.id) ?? [],
+      viewerVote: viewerVoteByPost.get(post.id) ?? null,
     };
   });
 }
 
-async function buildCommentDtos(tenantId: string, comments: CommentRow[]) {
+async function buildCommentDtos(tenantId: string, comments: CommentRow[], viewerId?: string) {
   if (comments.length === 0) return [];
 
   const commentIds = comments.map((comment) => comment.id);
@@ -424,9 +497,15 @@ async function buildCommentDtos(tenantId: string, comments: CommentRow[]) {
   const reactionCounts = reactionCountsFromRows(reactionCountRows);
   const tenantUsers = tenantUsersResult.users;
   const usersById = tenantUsersResult.byId;
+  const { reactionsByTarget: viewerReactionsByComment } = await viewerReactionState(
+    tenantId,
+    "comment",
+    commentIds,
+    viewerId,
+  );
 
   return comments.map((comment) => {
-    const fallbackAuthor = { id: comment.userId, email: comment.authorEmail };
+    const fallbackAuthor = { id: comment.userId, email: comment.authorEmail, pictureUrl: comment.authorPictureUrl };
     const author = usersById.get(comment.userId) ?? fallbackAuthor;
     const shareUsers = usersById.has(comment.userId) ? tenantUsers : [...tenantUsers, fallbackAuthor];
 
@@ -440,6 +519,7 @@ async function buildCommentDtos(tenantId: string, comments: CommentRow[]) {
       counts: {
         reactions: reactionCounts.get(comment.id) ?? {},
       },
+      viewerReactions: viewerReactionsByComment.get(comment.id) ?? [],
     };
   });
 }
@@ -457,6 +537,7 @@ async function fetchPostRowById(tenantId: string, postId: string): Promise<PostR
       createdAt: communityPostsTable.createdAt,
       updatedAt: communityPostsTable.updatedAt,
       authorEmail: usersTable.email,
+      authorPictureUrl: usersTable.pictureUrl,
     })
     .from(communityPostsTable)
     .innerJoin(
@@ -504,7 +585,7 @@ async function reactionCountsForTarget(
   return reactionCountsFromRows(rows).get(targetId) ?? {};
 }
 
-router.get("/community/posts", async (req, res, next) => {
+router.get("/community/posts", optionalAuth, async (req: AuthRequest, res, next) => {
   try {
     const tenantId = getTenantId(req);
     const limit = parseLimit(req.query.limit);
@@ -548,10 +629,28 @@ router.get("/community/posts", async (req, res, next) => {
     }
     if (q) {
       const pattern = `%${q}%`;
+      // Match what the search box promises ("rooms, fragrances, tags, or notes"):
+      // title/body plus tenant-scoped EXISTS over the post's tags and the
+      // catalog-fragrance snapshot's name/brand (jsonb). Parameterized throughout.
       conditions.push(
         or(
           sql`${communityPostsTable.title} ILIKE ${pattern}`,
           sql`${communityPostsTable.body} ILIKE ${pattern}`,
+          sql`exists (
+            select 1 from ${communityTagsTable}
+            where ${communityTagsTable.tenantId} = ${tenantId}
+              and ${communityTagsTable.postId} = ${communityPostsTable.id}
+              and ${communityTagsTable.tag} ILIKE ${pattern}
+          )`,
+          sql`exists (
+            select 1 from ${communityPostFragrancesTable}
+            where ${communityPostFragrancesTable.tenantId} = ${tenantId}
+              and ${communityPostFragrancesTable.postId} = ${communityPostsTable.id}
+              and (
+                ${communityPostFragrancesTable.fragrance}->>'name' ILIKE ${pattern}
+                or ${communityPostFragrancesTable.fragrance}->>'brand' ILIKE ${pattern}
+              )
+          )`,
         )!,
       );
     }
@@ -576,6 +675,7 @@ router.get("/community/posts", async (req, res, next) => {
         createdAt: communityPostsTable.createdAt,
         updatedAt: communityPostsTable.updatedAt,
         authorEmail: usersTable.email,
+        authorPictureUrl: usersTable.pictureUrl,
       })
       .from(communityPostsTable)
       .innerJoin(
@@ -587,7 +687,7 @@ router.get("/community/posts", async (req, res, next) => {
       .limit(limit + 1);
 
     const pageRows = rows.slice(0, limit);
-    const posts = await buildPostDtos(tenantId, pageRows);
+    const posts = await buildPostDtos(tenantId, pageRows, req.user?.id);
     const last = pageRows[pageRows.length - 1] ?? null;
 
     res.json({
@@ -599,7 +699,7 @@ router.get("/community/posts", async (req, res, next) => {
   }
 });
 
-router.get("/community/posts/:id", async (req, res, next) => {
+router.get("/community/posts/:id", optionalAuth, async (req: AuthRequest, res, next) => {
   try {
     const tenantId = getTenantId(req);
     const postId = routeParam(req.params.id);
@@ -624,6 +724,7 @@ router.get("/community/posts/:id", async (req, res, next) => {
         body: communityCommentsTable.body,
         createdAt: communityCommentsTable.createdAt,
         authorEmail: usersTable.email,
+        authorPictureUrl: usersTable.pictureUrl,
       })
       .from(communityCommentsTable)
       .innerJoin(
@@ -633,8 +734,9 @@ router.get("/community/posts/:id", async (req, res, next) => {
       .where(and(eq(communityCommentsTable.tenantId, tenantId), eq(communityCommentsTable.postId, postId)))
       .orderBy(asc(communityCommentsTable.createdAt));
 
-    const [post] = await buildPostDtos(tenantId, [postRow]);
-    const comments = await buildCommentDtos(tenantId, commentRows);
+    const viewerId = req.user?.id;
+    const [post] = await buildPostDtos(tenantId, [postRow], viewerId);
+    const comments = await buildCommentDtos(tenantId, commentRows, viewerId);
 
     res.json({ post, comments });
   } catch (err) {
@@ -717,7 +819,7 @@ router.post("/community/posts", requireAuth, async (req: AuthRequest, res, next)
       return post;
     });
 
-    const [post] = await buildPostDtos(tenantId, [{ ...inserted, authorEmail: user.email }]);
+    const [post] = await buildPostDtos(tenantId, [{ ...inserted, authorEmail: user.email, authorPictureUrl: user.pictureUrl }]);
     res.status(201).json({ post });
   } catch (err) {
     next(err);
@@ -758,7 +860,7 @@ router.post("/community/posts/:id/comments", requireAuth, async (req: AuthReques
       .returning();
     if (!inserted) throw new Error("Failed to create community comment");
 
-    const [comment] = await buildCommentDtos(tenantId, [{ ...inserted, authorEmail: user.email }]);
+    const [comment] = await buildCommentDtos(tenantId, [{ ...inserted, authorEmail: user.email, authorPictureUrl: user.pictureUrl }]);
     res.status(201).json({ comment });
   } catch (err) {
     next(err);

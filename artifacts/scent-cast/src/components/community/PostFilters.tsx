@@ -73,7 +73,7 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
 
   return (
     <section
-      className="rounded-[var(--radius-scent)] border border-scent-accent/24 bg-black/58 p-4 shadow-[0_16px_40px_-32px_rgba(0,0,0,0.92),0_0_0_1px_rgba(212,175,55,0.05)] sm:p-6"
+      className="mx-auto w-full max-w-[960px] rounded-[var(--radius-scent)] border border-scent-accent/24 bg-black/58 p-4 shadow-[0_16px_40px_-32px_rgba(0,0,0,0.92),0_0_0_1px_rgba(212,175,55,0.05)] sm:p-6"
       aria-label="Community post filters"
     >
       <div className="flex flex-col items-center gap-4">

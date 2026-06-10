@@ -35,6 +35,23 @@ export async function getUserByToken(token: string, tenantId?: string) {
   return users[0] ?? null;
 }
 
+/**
+ * Like `requireAuth`, but never rejects: a valid token populates `req.user`, while
+ * a missing/invalid one simply leaves it undefined and continues. Use on public
+ * read routes that want to tailor the response to the caller (e.g. the community
+ * feed surfacing the viewer's own reactions/votes) without forcing sign-in.
+ */
+export async function optionalAuth(req: AuthRequest, _res: Response, next: NextFunction) {
+  const token = getToken(req);
+  if (token) {
+    // Scope to the request's tenant, exactly like requireAuth, so a token minted
+    // on Tenant A can't surface viewer state against Tenant B.
+    const user = await getUserByToken(token, getTenantId(req));
+    if (user) req.user = user;
+  }
+  next();
+}
+
 export async function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
   const token = getToken(req);
   if (!token) {

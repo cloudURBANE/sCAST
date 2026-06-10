@@ -3,6 +3,7 @@ import {
   useMutation,
   useQuery,
   useQueryClient,
+  type QueryClient,
 } from '@tanstack/react-query';
 import { normalizeApiBaseUrl } from '@/lib/imageProxy';
 
@@ -15,6 +16,7 @@ export interface CommunityAuthor {
   id: string;
   email: string;
   shareId: string;
+  pictureUrl?: string;
 }
 
 export interface CommunityFragranceSnapshot {
@@ -40,6 +42,10 @@ export interface CommunityPost {
     reactions: Record<string, number>;
   };
   votes: Record<string, number>;
+  // Viewer's own state ([]/null when anonymous). Lets the UI show pressed
+  // reactions and the picked battle option without a second request.
+  viewerReactions: string[];
+  viewerVote: string | null;
 }
 
 export interface CommunityComment {
@@ -52,6 +58,7 @@ export interface CommunityComment {
   counts: {
     reactions: Record<string, number>;
   };
+  viewerReactions: string[];
 }
 
 export interface CommunityPostsPage {
@@ -191,28 +198,42 @@ function postsQueryUrl(filters: CommunityPostFilters, cursor?: string | null): s
   return appApiUrl(`/api/community/posts?${params.toString()}`);
 }
 
+// Read endpoints are public but optionally authenticated: a token lets the server
+// fold in the viewer's own reactions/vote. Send it when present.
+function readHeaders(authToken?: string | null): HeadersInit {
+  return authToken
+    ? { Accept: 'application/json', Authorization: `Bearer ${authToken}` }
+    : { Accept: 'application/json' };
+}
+
 export async function fetchCommunityPostsPage(
   filters: CommunityPostFilters,
   cursor?: string | null,
+  authToken?: string | null,
 ): Promise<CommunityPostsPage> {
   const res = await fetch(postsQueryUrl(filters, cursor), {
-    headers: { Accept: 'application/json' },
+    headers: readHeaders(authToken),
   });
   return readJson<CommunityPostsPage>(res, `Community feed failed with HTTP ${res.status}`);
 }
 
-export async function fetchCommunityPostDetail(postId: string): Promise<CommunityPostDetail> {
+export async function fetchCommunityPostDetail(
+  postId: string,
+  authToken?: string | null,
+): Promise<CommunityPostDetail> {
   const res = await fetch(appApiUrl(`/api/community/posts/${encodeURIComponent(postId)}`), {
-    headers: { Accept: 'application/json' },
+    headers: readHeaders(authToken),
   });
   return readJson<CommunityPostDetail>(res, `Community post failed with HTTP ${res.status}`);
 }
 
-export function useCommunityPosts(filters: CommunityPostFilters) {
+export function useCommunityPosts(filters: CommunityPostFilters, authToken: string | null) {
   const normalizedFilters = normalizeFilters(filters);
   return useInfiniteQuery({
-    queryKey: [...COMMUNITY_POSTS_ROOT_KEY, normalizedFilters],
-    queryFn: ({ pageParam }) => fetchCommunityPostsPage(normalizedFilters, pageParam),
+    // authToken in the key so signing in/out refetches with the right viewer
+    // state and never serves another account's cached reactions/votes.
+    queryKey: [...COMMUNITY_POSTS_ROOT_KEY, normalizedFilters, authToken ?? null],
+    queryFn: ({ pageParam }) => fetchCommunityPostsPage(normalizedFilters, pageParam, authToken),
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.nextCursor,
     staleTime: 30 * 1000,
@@ -220,14 +241,118 @@ export function useCommunityPosts(filters: CommunityPostFilters) {
   });
 }
 
-export function useCommunityPostDetail(postId: string, enabled: boolean) {
+export function useCommunityPostDetail(postId: string, enabled: boolean, authToken: string | null) {
   return useQuery({
-    queryKey: [...COMMUNITY_POST_DETAIL_ROOT_KEY, postId],
-    queryFn: () => fetchCommunityPostDetail(postId),
+    queryKey: [...COMMUNITY_POST_DETAIL_ROOT_KEY, postId, authToken ?? null],
+    queryFn: () => fetchCommunityPostDetail(postId, authToken),
     enabled,
     staleTime: 15 * 1000,
     refetchOnWindowFocus: false,
   });
+}
+
+// ---------------------------------------------------------------------------
+// Optimistic cache helpers
+//
+// Likes/votes/comments are one-bit changes; refetching every infinite-scroll
+// page just to repaint one card is exactly the render-budget stutter the iPad
+// path is sensitive to. Instead we patch the affected post/comment in place
+// across every cached feed variant and the detail cache, then reconcile against
+// the server's authoritative response. No blanket invalidation.
+// ---------------------------------------------------------------------------
+
+type InfiniteFeedData = { pages: CommunityPostsPage[]; pageParams: unknown[] };
+
+/** Patch a single post wherever it lives: every cached feed page + the detail cache. */
+function patchPostEverywhere(
+  queryClient: QueryClient,
+  postId: string,
+  updater: (post: CommunityPost) => CommunityPost,
+) {
+  queryClient.setQueriesData<InfiniteFeedData>({ queryKey: COMMUNITY_POSTS_ROOT_KEY }, (data) => {
+    if (!data) return data;
+    let changed = false;
+    const pages = data.pages.map((page) => {
+      let pageChanged = false;
+      const posts = page.posts.map((post) => {
+        if (post.id !== postId) return post;
+        pageChanged = true;
+        changed = true;
+        return updater(post);
+      });
+      return pageChanged ? { ...page, posts } : page;
+    });
+    return changed ? { ...data, pages } : data;
+  });
+
+  queryClient.setQueriesData<CommunityPostDetail>({ queryKey: COMMUNITY_POST_DETAIL_ROOT_KEY }, (data) => {
+    if (!data || data.post.id !== postId) return data;
+    return { ...data, post: updater(data.post) };
+  });
+}
+
+/** Patch a single comment in the detail cache (comments only live there). */
+function patchCommentEverywhere(
+  queryClient: QueryClient,
+  commentId: string,
+  updater: (comment: CommunityComment) => CommunityComment,
+) {
+  queryClient.setQueriesData<CommunityPostDetail>({ queryKey: COMMUNITY_POST_DETAIL_ROOT_KEY }, (data) => {
+    if (!data) return data;
+    let changed = false;
+    const comments = data.comments.map((comment) => {
+      if (comment.id !== commentId) return comment;
+      changed = true;
+      return updater(comment);
+    });
+    return changed ? { ...data, comments } : data;
+  });
+}
+
+type ReactableTarget = { viewerReactions: string[]; counts: { reactions: Record<string, number> } };
+
+/** Optimistic toggle: flip membership and nudge the count by ±1. */
+function toggleReactionOn<T extends ReactableTarget>(target: T, reaction: string): T {
+  const has = target.viewerReactions.includes(reaction);
+  const reactions = { ...target.counts.reactions };
+  const next = (reactions[reaction] ?? 0) + (has ? -1 : 1);
+  if (next > 0) reactions[reaction] = next;
+  else delete reactions[reaction];
+  return {
+    ...target,
+    viewerReactions: has
+      ? target.viewerReactions.filter((r) => r !== reaction)
+      : [...target.viewerReactions, reaction],
+    counts: { ...target.counts, reactions },
+  };
+}
+
+/** Reconcile a reaction to the server's authoritative result. */
+function reconcileReactionOn<T extends ReactableTarget>(
+  target: T,
+  reaction: string,
+  active: boolean,
+  reactions: Record<string, number>,
+): T {
+  const without = target.viewerReactions.filter((r) => r !== reaction);
+  return {
+    ...target,
+    viewerReactions: active ? [...without, reaction] : without,
+    counts: { ...target.counts, reactions },
+  };
+}
+
+/** Optimistic battle vote: move the tally from the previous pick (if any) to `choice`. */
+function applyVoteToPost(post: CommunityPost, choice: string): CommunityPost {
+  if (post.viewerVote === choice) return post;
+  const votes = { ...post.votes };
+  if (post.viewerVote) {
+    const prev = (votes[post.viewerVote] ?? 0) - 1;
+    if (prev > 0) votes[post.viewerVote] = prev;
+    else delete votes[post.viewerVote];
+  }
+  votes[choice] = (votes[choice] ?? 0) + 1;
+  return { ...post, viewerVote: choice, votes };
 }
 
 export function useCreateCommunityPost(authToken: string | null) {
@@ -243,6 +368,8 @@ export function useCreateCommunityPost(authToken: string | null) {
       });
       return readJson<{ post: CommunityPost }>(res, `Community post create failed with HTTP ${res.status}`);
     },
+    // Creating a post is rare and changes ordering/filtering, so a refetch is the
+    // safe, correct choice here (unlike the per-card mutations below).
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: COMMUNITY_POSTS_ROOT_KEY });
     },
@@ -262,11 +389,24 @@ export function useCreateCommunityComment(authToken: string | null) {
       });
       return readJson<{ comment: CommunityComment }>(res, `Community comment failed with HTTP ${res.status}`);
     },
+    // Optimistically bump the feed card's comment count; let the detail cache
+    // refetch to surface the new comment itself (cheap, one post).
+    onMutate: async ({ postId }) => {
+      await queryClient.cancelQueries({ queryKey: COMMUNITY_POSTS_ROOT_KEY });
+      const previousFeeds = queryClient.getQueriesData<InfiniteFeedData>({ queryKey: COMMUNITY_POSTS_ROOT_KEY });
+      patchPostEverywhere(queryClient, postId, (post) => ({
+        ...post,
+        counts: { ...post.counts, comments: post.counts.comments + 1 },
+      }));
+      return { previousFeeds };
+    },
+    onError: (_err, _variables, context) => {
+      context?.previousFeeds?.forEach(([key, data]) => queryClient.setQueryData(key, data));
+    },
     onSuccess: async (_data, variables) => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: COMMUNITY_POSTS_ROOT_KEY }),
-        queryClient.invalidateQueries({ queryKey: [...COMMUNITY_POST_DETAIL_ROOT_KEY, variables.postId] }),
-      ]);
+      await queryClient.invalidateQueries({
+        queryKey: [...COMMUNITY_POST_DETAIL_ROOT_KEY, variables.postId],
+      });
     },
   });
 }
@@ -284,11 +424,33 @@ export function useToggleCommunityReaction(authToken: string | null) {
       });
       return readJson<ToggleCommunityReactionResult>(res, `Community reaction failed with HTTP ${res.status}`);
     },
-    onSuccess: async () => {
+    onMutate: async ({ targetType, targetId, reaction }) => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: COMMUNITY_POSTS_ROOT_KEY }),
-        queryClient.invalidateQueries({ queryKey: COMMUNITY_POST_DETAIL_ROOT_KEY }),
+        queryClient.cancelQueries({ queryKey: COMMUNITY_POSTS_ROOT_KEY }),
+        queryClient.cancelQueries({ queryKey: COMMUNITY_POST_DETAIL_ROOT_KEY }),
       ]);
+      const previousFeeds = queryClient.getQueriesData<InfiniteFeedData>({ queryKey: COMMUNITY_POSTS_ROOT_KEY });
+      const previousDetails = queryClient.getQueriesData<CommunityPostDetail>({ queryKey: COMMUNITY_POST_DETAIL_ROOT_KEY });
+      if (targetType === 'post') {
+        patchPostEverywhere(queryClient, targetId, (post) => toggleReactionOn(post, reaction));
+      } else {
+        patchCommentEverywhere(queryClient, targetId, (comment) => toggleReactionOn(comment, reaction));
+      }
+      return { previousFeeds, previousDetails };
+    },
+    onError: (_err, _variables, context) => {
+      context?.previousFeeds?.forEach(([key, data]) => queryClient.setQueryData(key, data));
+      context?.previousDetails?.forEach(([key, data]) => queryClient.setQueryData(key, data));
+    },
+    // Reconcile to the server's authoritative counts + active flag (no refetch).
+    onSuccess: (data, variables) => {
+      if (data.targetType === 'post') {
+        patchPostEverywhere(queryClient, data.targetId, (post) =>
+          reconcileReactionOn(post, variables.reaction, data.active, data.reactions));
+      } else {
+        patchCommentEverywhere(queryClient, data.targetId, (comment) =>
+          reconcileReactionOn(comment, variables.reaction, data.active, data.reactions));
+      }
     },
   });
 }
@@ -306,11 +468,27 @@ export function useCommunityBattleVote(authToken: string | null) {
       });
       return readJson<CreateCommunityVoteResult>(res, `Community vote failed with HTTP ${res.status}`);
     },
-    onSuccess: async (_data, variables) => {
+    onMutate: async ({ postId, choice }) => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: COMMUNITY_POSTS_ROOT_KEY }),
-        queryClient.invalidateQueries({ queryKey: [...COMMUNITY_POST_DETAIL_ROOT_KEY, variables.postId] }),
+        queryClient.cancelQueries({ queryKey: COMMUNITY_POSTS_ROOT_KEY }),
+        queryClient.cancelQueries({ queryKey: COMMUNITY_POST_DETAIL_ROOT_KEY }),
       ]);
+      const previousFeeds = queryClient.getQueriesData<InfiniteFeedData>({ queryKey: COMMUNITY_POSTS_ROOT_KEY });
+      const previousDetails = queryClient.getQueriesData<CommunityPostDetail>({ queryKey: COMMUNITY_POST_DETAIL_ROOT_KEY });
+      patchPostEverywhere(queryClient, postId, (post) => applyVoteToPost(post, choice));
+      return { previousFeeds, previousDetails };
+    },
+    onError: (_err, _variables, context) => {
+      context?.previousFeeds?.forEach(([key, data]) => queryClient.setQueryData(key, data));
+      context?.previousDetails?.forEach(([key, data]) => queryClient.setQueryData(key, data));
+    },
+    // Reconcile to the server's authoritative tally + the recorded choice.
+    onSuccess: (data) => {
+      patchPostEverywhere(queryClient, data.postId, (post) => ({
+        ...post,
+        votes: data.votes,
+        viewerVote: data.choice,
+      }));
     },
   });
 }
