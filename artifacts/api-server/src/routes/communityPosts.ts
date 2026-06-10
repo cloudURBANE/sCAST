@@ -7,6 +7,7 @@ import {
   communityReactionsTable,
   communityTagsTable,
   communityVotesTable,
+  userSettingsTable,
   usersTable,
   type CommunityPostType,
   type CommunityReactionTargetType,
@@ -285,13 +286,41 @@ async function tenantUsersById(tenantId: string) {
   };
 }
 
-function authorDto(user: TenantUser, tenantUsers: TenantUser[]) {
+function authorDto(user: TenantUser, tenantUsers: TenantUser[], username?: string | null) {
   return {
     id: user.id,
     email: user.email,
     shareId: shareIdForUser(user, tenantUsers),
     ...(user.pictureUrl ? { pictureUrl: user.pictureUrl } : {}),
+    ...(username ? { username } : {}),
   };
+}
+
+/**
+ * Map of userId → chosen public username for the given members. Read from
+ * `user_settings` in one indexed lookup. Tolerant of the `username` column not
+ * yet existing in the live DB (migration lag): on a 42703 it degrades to an
+ * empty map so the feed renders fallback aliases instead of 500ing — mirroring
+ * the auth-layer fallback. Authors who never set a username are simply absent.
+ */
+async function usernamesByUserId(tenantId: string, userIds: string[]): Promise<Map<string, string>> {
+  const byUserId = new Map<string, string>();
+  const ids = [...new Set(userIds)];
+  if (ids.length === 0) return byUserId;
+  try {
+    const rows = await db
+      .select({ userId: userSettingsTable.userId, username: userSettingsTable.username })
+      .from(userSettingsTable)
+      .where(and(eq(userSettingsTable.tenantId, tenantId), inArray(userSettingsTable.userId, ids)));
+    for (const row of rows) {
+      const trimmed = row.username?.trim();
+      if (trimmed) byUserId.set(row.userId, trimmed);
+    }
+  } catch (err) {
+    if ((err as { code?: string } | null)?.code !== "42703") throw err;
+    // username column not yet migrated — fall back to non-identifying aliases.
+  }
+  return byUserId;
 }
 
 /**
@@ -443,8 +472,11 @@ async function buildPostDtos(tenantId: string, posts: PostRow[], viewerId?: stri
   const voteTallies = voteTalliesFromRows(voteTallyRows);
   const tenantUsers = tenantUsersResult.users;
   const usersById = tenantUsersResult.byId;
-  const { reactionsByTarget: viewerReactionsByPost, voteByPost: viewerVoteByPost } =
-    await viewerPostState(tenantId, postIds, viewerId);
+  const [{ reactionsByTarget: viewerReactionsByPost, voteByPost: viewerVoteByPost }, usernames] =
+    await Promise.all([
+      viewerPostState(tenantId, postIds, viewerId),
+      usernamesByUserId(tenantId, posts.map((post) => post.userId)),
+    ]);
 
   return posts.map((post) => {
     const fallbackAuthor = { id: post.userId, email: post.authorEmail, pictureUrl: post.authorPictureUrl };
@@ -459,7 +491,7 @@ async function buildPostDtos(tenantId: string, posts: PostRow[], viewerId?: stri
       metadata: post.metadata ?? {},
       createdAt: post.createdAt,
       updatedAt: post.updatedAt,
-      author: authorDto(author, shareUsers),
+      author: authorDto(author, shareUsers, usernames.get(post.userId)),
       tags: tagsByPost.get(post.id) ?? [],
       fragrances: fragrancesByPost.get(post.id) ?? [],
       counts: {
@@ -497,12 +529,10 @@ async function buildCommentDtos(tenantId: string, comments: CommentRow[], viewer
   const reactionCounts = reactionCountsFromRows(reactionCountRows);
   const tenantUsers = tenantUsersResult.users;
   const usersById = tenantUsersResult.byId;
-  const { reactionsByTarget: viewerReactionsByComment } = await viewerReactionState(
-    tenantId,
-    "comment",
-    commentIds,
-    viewerId,
-  );
+  const [{ reactionsByTarget: viewerReactionsByComment }, usernames] = await Promise.all([
+    viewerReactionState(tenantId, "comment", commentIds, viewerId),
+    usernamesByUserId(tenantId, comments.map((comment) => comment.userId)),
+  ]);
 
   return comments.map((comment) => {
     const fallbackAuthor = { id: comment.userId, email: comment.authorEmail, pictureUrl: comment.authorPictureUrl };
@@ -515,7 +545,7 @@ async function buildCommentDtos(tenantId: string, comments: CommentRow[], viewer
       parentCommentId: comment.parentCommentId,
       body: comment.body,
       createdAt: comment.createdAt,
-      author: authorDto(author, shareUsers),
+      author: authorDto(author, shareUsers, usernames.get(comment.userId)),
       counts: {
         reactions: reactionCounts.get(comment.id) ?? {},
       },

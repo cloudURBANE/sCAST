@@ -29,10 +29,13 @@ export function formatCommunityTime(value: string): string {
 }
 
 export function displayCommunityAuthor(author: CommunityAuthor): string {
-  // Privacy: never render the email (or its local-part) as a public name — that
-  // would leak PII into a public feed. Derive a stable, non-identifying alias
-  // from the account id instead. (A real display-name field, if one is added to
-  // `users` later, should take precedence over this fallback.)
+  // A username the member set in profile settings is the public name.
+  const username = author.username?.trim();
+  if (username) return username;
+
+  // Fallback for members who haven't chosen one. Privacy: never render the email
+  // (or its local-part) as a public name — that would leak PII into a public
+  // feed. Derive a stable, non-identifying alias from the account id instead.
   const token = author.id.replace(/[^0-9a-z]/gi, '').slice(0, 6).toUpperCase();
   return token ? `Member ${token}` : 'Community member';
 }

@@ -1,5 +1,5 @@
 import React from 'react';
-import { LogOut, Share2 } from 'lucide-react';
+import { LogOut, Settings, Share2 } from 'lucide-react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -15,9 +15,11 @@ interface AppTopNavProps {
   authToken: string | null;
   authEmail?: string | null;
   authPictureUrl?: string | null;
+  authUsername?: string | null;
   onSignIn: () => void;
   onShare: () => void;
   onSignOut: () => void;
+  onEditProfile: () => void;
 }
 
 const navBaseClassName =
@@ -30,99 +32,120 @@ const ActiveDot: React.FC = () => (
   <span aria-hidden="true" className="hidden sm:inline-block w-1 h-1 rounded-full bg-scent-accent mr-2 align-middle" />
 );
 
-const getAvatarFallback = (email?: string | null): string => {
-  const trimmedEmail = email?.trim();
-  if (!trimmedEmail) return 'SB';
-  const localPart = trimmedEmail.split('@')[0]?.replace(/[^a-z0-9]/gi, '');
-  return (localPart || trimmedEmail).slice(0, 2).toUpperCase();
+const getAvatarFallback = (username?: string | null, email?: string | null): string => {
+  const source = username?.trim() || email?.trim();
+  if (!source) return 'SB';
+  const localPart = source.includes('@') ? source.split('@')[0] : source;
+  const compact = localPart?.replace(/[^a-z0-9]/gi, '');
+  return (compact || source).slice(0, 2).toUpperCase();
 };
 
-interface MobileAccountMenuProps {
+interface AccountMenuProps {
   authEmail?: string | null;
   authPictureUrl?: string | null;
+  authUsername?: string | null;
   onShare: () => void;
   onSignOut: () => void;
+  onEditProfile: () => void;
 }
 
-const MobileAccountMenu: React.FC<MobileAccountMenuProps> = ({
+// The single account control across all breakpoints: tapping the Google avatar
+// opens profile (username), share, and sign-out. Consolidating these under the
+// avatar keeps account actions in one predictable place instead of scattered
+// text links.
+const AccountMenu: React.FC<AccountMenuProps> = ({
   authEmail,
   authPictureUrl,
+  authUsername,
   onShare,
   onSignOut,
-}) => (
-  <DropdownMenu>
-    <DropdownMenuTrigger asChild>
-      <button
-        type="button"
-        className="flex h-10 w-10 items-center justify-center rounded-full border border-scent-accent/35 bg-black/35 shadow-[0_0_18px_rgba(212,175,55,0.12)] transition-colors hover:border-scent-accent/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55"
-        aria-label="Open account menu"
+  onEditProfile,
+}) => {
+  const displayName = authUsername?.trim() || authEmail || null;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className="flex h-10 w-10 items-center justify-center rounded-full border border-scent-accent/35 bg-black/35 shadow-[0_0_18px_rgba(212,175,55,0.12)] transition-colors hover:border-scent-accent/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55"
+          aria-label="Open account menu"
+        >
+          <Avatar className="h-9 w-9 border border-white/10 bg-scent-surface">
+            {authPictureUrl ? (
+              <AvatarImage src={authPictureUrl} alt="" referrerPolicy="no-referrer" />
+            ) : null}
+            <AvatarFallback className="bg-scent-surface text-[13px] font-semibold text-scent-accent">
+              {getAvatarFallback(authUsername, authEmail)}
+            </AvatarFallback>
+          </Avatar>
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="start"
+        sideOffset={10}
+        className="w-56 rounded-[8px] border-scent-accent/25 bg-[#090604]/95 p-1.5 text-[#fff7ec] shadow-[0_18px_48px_rgba(0,0,0,0.62)] backdrop-blur-sm"
       >
-        <Avatar className="h-9 w-9 border border-white/10 bg-scent-surface">
-          {authPictureUrl ? (
-            <AvatarImage src={authPictureUrl} alt="" referrerPolicy="no-referrer" />
-          ) : null}
-          <AvatarFallback className="bg-scent-surface text-[13px] font-semibold text-scent-accent">
-            {getAvatarFallback(authEmail)}
-          </AvatarFallback>
-        </Avatar>
-      </button>
-    </DropdownMenuTrigger>
-    <DropdownMenuContent
-      align="start"
-      sideOffset={10}
-      className="w-52 rounded-[8px] border-scent-accent/25 bg-[#090604]/95 p-1.5 text-[#fff7ec] shadow-[0_18px_48px_rgba(0,0,0,0.62)] backdrop-blur-sm"
-    >
-      {authEmail ? (
-        <>
-          <DropdownMenuLabel className="px-3 py-2 text-[13px] font-semibold uppercase tracking-[0.12em] text-scent-text-muted">
-            {authEmail}
-          </DropdownMenuLabel>
-          <DropdownMenuSeparator className="bg-scent-accent/15" />
-        </>
-      ) : null}
-      <DropdownMenuItem
-        className="cursor-pointer rounded-[6px] px-3 py-2.5 text-[13px] font-semibold uppercase tracking-[0.14em] text-[#f4debd] focus:bg-scent-accent/15 focus:text-white"
-        onSelect={onShare}
-      >
-        <Share2 size={15} />
-        Share
-      </DropdownMenuItem>
-      <DropdownMenuItem
-        className="cursor-pointer rounded-[6px] px-3 py-2.5 text-[13px] font-semibold uppercase tracking-[0.14em] text-[#f4debd] focus:bg-scent-accent/15 focus:text-white"
-        onSelect={onSignOut}
-      >
-        <LogOut size={15} />
-        Sign Out
-      </DropdownMenuItem>
-    </DropdownMenuContent>
-  </DropdownMenu>
-);
+        {displayName ? (
+          <>
+            <DropdownMenuLabel className="px-3 py-2 text-[13px] font-semibold normal-case tracking-[0.04em] text-scent-text-muted">
+              <span className="block truncate">{displayName}</span>
+              {authUsername?.trim() && authEmail ? (
+                <span className="mt-0.5 block truncate text-[11px] font-normal tracking-normal text-scent-text-subtle">
+                  {authEmail}
+                </span>
+              ) : null}
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator className="bg-scent-accent/15" />
+          </>
+        ) : null}
+        <DropdownMenuItem
+          className="cursor-pointer rounded-[6px] px-3 py-2.5 text-[13px] font-semibold uppercase tracking-[0.14em] text-[#f4debd] focus:bg-scent-accent/15 focus:text-white"
+          onSelect={onEditProfile}
+        >
+          <Settings size={15} />
+          {authUsername?.trim() ? 'Edit Username' : 'Set Username'}
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          className="cursor-pointer rounded-[6px] px-3 py-2.5 text-[13px] font-semibold uppercase tracking-[0.14em] text-[#f4debd] focus:bg-scent-accent/15 focus:text-white"
+          onSelect={onShare}
+        >
+          <Share2 size={15} />
+          Share
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          className="cursor-pointer rounded-[6px] px-3 py-2.5 text-[13px] font-semibold uppercase tracking-[0.14em] text-[#f4debd] focus:bg-scent-accent/15 focus:text-white"
+          onSelect={onSignOut}
+        >
+          <LogOut size={15} />
+          Sign Out
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+};
 
 export const AppTopNav: React.FC<AppTopNavProps> = ({
   authToken,
   authEmail,
   authPictureUrl,
+  authUsername,
   onSignIn,
   onShare,
   onSignOut,
+  onEditProfile,
 }) => {
   const { pathname } = useLocation();
   const isHomeRoute = pathname === '/';
 
   const authControl = authToken ? (
-    <>
-      <div className="sm:hidden">
-        <MobileAccountMenu
-          authEmail={authEmail}
-          authPictureUrl={authPictureUrl}
-          onShare={onShare}
-          onSignOut={onSignOut}
-        />
-      </div>
-      <button type="button" onClick={onShare} className={`${inactiveNavClassName} hidden sm:inline-flex`}>
-        Share
-      </button>
-    </>
+    <AccountMenu
+      authEmail={authEmail}
+      authPictureUrl={authPictureUrl}
+      authUsername={authUsername}
+      onShare={onShare}
+      onSignOut={onSignOut}
+      onEditProfile={onEditProfile}
+    />
   ) : (
     <button type="button" onClick={onSignIn} className={inactiveNavClassName}>
       Sign In
@@ -173,11 +196,6 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
               </>
             )}
           </NavLink>
-          {authToken ? (
-            <button type="button" onClick={onSignOut} className={`${inactiveNavClassName} hidden sm:inline-flex`}>
-              Sign Out
-            </button>
-          ) : null}
         </div>
       </div>
     </nav>

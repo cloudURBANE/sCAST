@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { LoaderCircle, Send } from 'lucide-react';
+import { CommunityAuthorAvatar } from '@/components/community/CommunityAuthorAvatar';
 import { ReactionBar } from '@/components/community/ReactionBar';
 import {
   useCommunityPostDetail,
@@ -81,26 +82,37 @@ export const CommentThread: React.FC<CommentThreadProps> = ({ postId, authToken,
           ) : (
             comments.map((comment) => (
               <article key={comment.id} className="border-b border-white/8 pb-4 last:border-b-0">
-                <div className="mb-2 flex flex-wrap items-center gap-2 scent-type-meta uppercase">
+                <div className="flex items-start gap-3">
                   <Link
                     to={communitySharePath(comment.author)}
-                    className="font-bold text-scent-accent transition-colors hover:text-[#fff7ec]"
+                    aria-label={`View ${displayCommunityAuthor(comment.author)}'s vault`}
+                    className="shrink-0 rounded-full transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
                   >
-                    {displayCommunityAuthor(comment.author)}
+                    <CommunityAuthorAvatar author={comment.author} size="sm" />
                   </Link>
-                  <span>{formatCommunityTime(comment.createdAt)}</span>
-                </div>
-                <p className="whitespace-pre-line text-base leading-7 text-[#fff7ec]/88">{comment.body}</p>
-                <div className="mt-4">
-                  <ReactionBar
-                    targetType="comment"
-                    targetId={comment.id}
-                    counts={comment.counts.reactions}
-                    viewerReactions={comment.viewerReactions}
-                    authToken={authToken}
-                    onSignIn={onSignIn}
-                    compact
-                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-2 flex flex-wrap items-center gap-2 scent-type-meta uppercase">
+                      <Link
+                        to={communitySharePath(comment.author)}
+                        className="min-w-0 max-w-full truncate font-bold text-scent-accent transition-colors hover:text-[#fff7ec]"
+                      >
+                        {displayCommunityAuthor(comment.author)}
+                      </Link>
+                      <span>{formatCommunityTime(comment.createdAt)}</span>
+                    </div>
+                    <p className="whitespace-pre-line text-base leading-7 text-[#fff7ec]/88">{comment.body}</p>
+                    <div className="mt-4">
+                      <ReactionBar
+                        targetType="comment"
+                        targetId={comment.id}
+                        counts={comment.counts.reactions}
+                        viewerReactions={comment.viewerReactions}
+                        authToken={authToken}
+                        onSignIn={onSignIn}
+                        compact
+                      />
+                    </div>
+                  </div>
                 </div>
               </article>
             ))

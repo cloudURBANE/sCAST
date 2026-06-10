@@ -11,10 +11,9 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { CommentThread } from '@/components/community/CommentThread';
+import { CommunityAuthorAvatar } from '@/components/community/CommunityAuthorAvatar';
 import { ReactionBar } from '@/components/community/ReactionBar';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
-  type CommunityAuthor,
   type CommunityPost,
   type CommunityPostType,
   useCommunityBattleVote,
@@ -60,25 +59,6 @@ function battleOptions(post: CommunityPost): string[] {
 function isAllowedSnapshotImage(imageUrl: string): boolean {
   return Boolean(imageUrl) && !imageUrl.trim().toLowerCase().startsWith('data:');
 }
-
-function authorInitials(author: CommunityAuthor): string {
-  const displayName = displayCommunityAuthor(author);
-  const compact = displayName.replace(/[^a-z0-9]/gi, '');
-  return (compact || author.email || 'SB').slice(0, 2).toUpperCase();
-}
-
-const AuthorAvatar: React.FC<{ author: CommunityAuthor }> = ({ author }) => (
-  <div className="relative shrink-0 rounded-full bg-[linear-gradient(135deg,rgba(212,175,55,0.72),rgba(255,247,236,0.1)_46%,rgba(212,175,55,0.38))] p-px shadow-[0_16px_34px_-24px_rgba(212,175,55,0.7),0_0_0_1px_rgba(255,236,183,0.08)]">
-    <Avatar className="h-12 w-12 border border-black/70 bg-[#090604] sm:h-14 sm:w-14">
-      {author.pictureUrl ? (
-        <AvatarImage src={author.pictureUrl} alt="" referrerPolicy="no-referrer" className="object-cover" />
-      ) : null}
-      <AvatarFallback className="bg-[radial-gradient(circle_at_35%_20%,rgba(212,175,55,0.22),rgba(5,3,2,0.98)_62%)] font-serif text-base font-bold italic text-scent-accent sm:text-lg">
-        {authorInitials(author)}
-      </AvatarFallback>
-    </Avatar>
-  </div>
-);
 
 const FragranceChips: React.FC<{ post: CommunityPost }> = ({ post }) => {
   const fragrances = post.fragrances.filter((fragrance) => isAllowedSnapshotImage(fragrance.imageUrl));
@@ -263,28 +243,26 @@ export const PostCard: React.FC<PostCardProps> = ({ post, authToken, onSignIn })
       aria-labelledby={headingId}
       className="mx-auto w-full max-w-[960px] rounded-[var(--radius-scent)] border border-scent-accent/24 bg-[linear-gradient(180deg,rgba(10,9,7,0.88),rgba(0,0,0,0.96))] p-5 text-left shadow-[0_18px_44px_-30px_rgba(0,0,0,0.95),0_0_0_1px_rgba(212,175,55,0.06),inset_0_1px_0_rgba(255,236,183,0.06)] sm:p-6"
     >
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex min-w-0 items-start gap-3 sm:gap-4">
-          <AuthorAvatar author={post.author} />
-          <div className="min-w-0 pt-0.5">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 scent-type-meta uppercase">
-              <Link
-                to={communitySharePath(post.author)}
-                className="min-w-0 max-w-full truncate font-bold text-scent-muted transition-colors hover:text-[#fff7ec]"
-              >
-                {authorName}
-              </Link>
-              <span className="text-scent-accent/45" aria-hidden="true">
-                /
-              </span>
-              <span>{formatCommunityTime(post.createdAt)}</span>
-            </div>
-            <h3
-              id={headingId}
-              className="mt-2 break-words text-balance font-serif text-2xl italic leading-tight text-[#fff7ec] sm:text-3xl"
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+          <Link
+            to={communitySharePath(post.author)}
+            aria-label={`View ${authorName}'s vault`}
+            className="shrink-0 rounded-full transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
+          >
+            <CommunityAuthorAvatar author={post.author} />
+          </Link>
+          <div className="min-w-0 flex flex-wrap items-center gap-x-2 gap-y-1 scent-type-meta uppercase">
+            <Link
+              to={communitySharePath(post.author)}
+              className="min-w-0 max-w-full truncate font-bold text-scent-muted transition-colors hover:text-[#fff7ec]"
             >
-              {heading}
-            </h3>
+              {authorName}
+            </Link>
+            <span className="text-scent-accent/45" aria-hidden="true">
+              /
+            </span>
+            <span>{formatCommunityTime(post.createdAt)}</span>
           </div>
         </div>
         <span className="inline-flex w-fit shrink-0 items-center gap-2 rounded-full border border-scent-accent/18 bg-scent-accent/[0.05] px-3 py-1 scent-type-meta font-bold uppercase text-scent-accent sm:mt-1">
@@ -293,8 +271,14 @@ export const PostCard: React.FC<PostCardProps> = ({ post, authToken, onSignIn })
         </span>
       </header>
 
-      <div className="mt-4 space-y-4">
-        <p className="max-w-3xl whitespace-pre-line break-words text-base leading-8 text-[#fff7ec]/88">
+      <div className="mt-5 space-y-4">
+        <h3
+          id={headingId}
+          className="break-words text-balance text-center font-serif text-2xl italic leading-tight text-[#fff7ec] sm:text-3xl"
+        >
+          {heading}
+        </h3>
+        <p className="mx-auto max-w-3xl whitespace-pre-line break-words text-center text-base leading-8 text-[#fff7ec]/88">
           {post.body}
         </p>
         <MetadataLine post={post} />

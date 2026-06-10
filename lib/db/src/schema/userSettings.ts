@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm";
-import { index, pgTable, uuid, boolean, timestamp } from "drizzle-orm/pg-core";
+import { index, pgTable, uuid, boolean, text, timestamp } from "drizzle-orm/pg-core";
 import { usersTable } from "./users";
 import { tenantsTable } from "./tenants";
 
@@ -9,6 +9,12 @@ export const userSettingsTable = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     tenantId: uuid("tenant_id").references(() => tenantsTable.id),
     userId: uuid("user_id").notNull().unique().references(() => usersTable.id, { onDelete: "cascade" }),
+    // Public display name the user chooses for the community feed. Nullable: when
+    // unset the UI falls back to a non-identifying alias rather than leaking the
+    // email. Per-tenant uniqueness is enforced at the application layer (the PUT
+    // /me/profile handler) — a case-insensitive check, not a DB constraint, so
+    // `drizzle-kit push` stays trivially additive and migration-lag tolerant.
+    username: text("username"),
     shareHideImages: boolean("share_hide_images").notNull().default(false),
     // Durable onboarding progress. Lives here (not on `users`) so auth identity
     // (`users.id` / `users.token`) stays untouched while user-facing progress

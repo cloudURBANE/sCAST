@@ -14,9 +14,11 @@ interface CommunityPageProps {
   authToken: string | null;
   authEmail?: string | null;
   authPictureUrl?: string | null;
+  authUsername?: string | null;
   onSignIn: () => void;
   onShare: () => void;
   onSignOut: () => void;
+  onEditProfile: () => void;
 }
 
 const COMMUNITY_BODY_WAKE_DELAY_MS = 640;
@@ -64,9 +66,11 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
   authToken,
   authEmail,
   authPictureUrl,
+  authUsername,
   onSignIn,
   onShare,
   onSignOut,
+  onEditProfile,
 }) => {
   const communityBodyReady = useAfterInitialRoutePaint();
   const { data, isLoading, isError } = useCommunityFragrances(communityBodyReady);
@@ -103,9 +107,11 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
         authToken={authToken}
         authEmail={authEmail}
         authPictureUrl={authPictureUrl}
+        authUsername={authUsername}
         onSignIn={onSignIn}
         onShare={onShare}
         onSignOut={onSignOut}
+        onEditProfile={onEditProfile}
       />
 
       <div style={{ height: 'var(--topbar-h)' }} />
