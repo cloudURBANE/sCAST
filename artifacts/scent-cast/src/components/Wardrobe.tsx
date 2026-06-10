@@ -46,9 +46,11 @@ import {
 import { BottleImage } from '@/components/BottleImage';
 import { betaVideoUrlForFragrance } from '@/lib/bottleVideoBeta';
 import { BrandGoldLabel } from '@/components/BrandGoldLabel';
+import { VaultGridModeToggle } from '@/components/VaultGridModeToggle';
 import { ScentNotesInfographic } from '@/components/ScentNotesInfographic';
 import { useModalBehavior } from '@/hooks/use-modal-behavior';
 import { useRenderBudget } from '@/hooks/useRenderBudget';
+import { useVaultGridPreference } from '@/hooks/useVaultGridPreference';
 import { crumb, domSnapshot } from '@/lib/crashTrace';
 import {
   WARDROBE_CLARIFY_SOLVERS,
@@ -918,6 +920,7 @@ export const Wardrobe: React.FC<{
   isImageSyncing,
 }) => {
   const [selectedItem, setSelectedItem] = React.useState<Fragrance | null>(null);
+  const { gridMode, setGridMode, isCompactGrid } = useVaultGridPreference();
   const { lowMotionRenderMode, isIpad } = useRenderBudget();
   const constrainedDetailMode = lowMotionRenderMode;
   // iPad keeps the constrained-mode performance optimizations (deferred render,
@@ -1689,6 +1692,11 @@ export const Wardrobe: React.FC<{
                 <span>{filteredItems.length} Entries</span>
               </div>
             </div>
+            <VaultGridModeToggle
+              mode={gridMode}
+              onChange={setGridMode}
+              className="sm:hidden"
+            />
           </div>
         </div>
 
@@ -1752,13 +1760,27 @@ export const Wardrobe: React.FC<{
               )}
             </div>
           ) : !wardrobeLoaded ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
+            <div
+              className={`scent-vault-grid grid ${
+                isCompactGrid ? 'grid-cols-2 gap-2' : 'grid-cols-1 gap-3'
+              } sm:grid-cols-2 sm:gap-4 lg:gap-5 xl:grid-cols-4`}
+              data-compact={isCompactGrid ? 'true' : 'false'}
+            >
               {[...Array(4)].map((_, i) => (
-                <div key={i} className="scent-fragrance-card w-full min-h-[32rem] relative overflow-hidden flex flex-col">
+                <div
+                  key={i}
+                  className={`scent-fragrance-card w-full ${
+                    isCompactGrid ? 'min-h-[18rem]' : 'min-h-[32rem]'
+                  } sm:min-h-[32rem] relative overflow-hidden flex flex-col`}
+                >
                   <div className="scent-card-frame" aria-hidden />
-                  <div className="relative z-[1] flex h-full flex-col items-center px-6 sm:px-8 py-7 sm:py-9">
+                  <div className={`relative z-[1] flex h-full flex-col items-center ${
+                    isCompactGrid ? 'px-3 py-4' : 'px-6 py-7'
+                  } sm:px-8 sm:py-9`}>
                     <div className="h-4 w-2/3 bg-white/10 rounded animate-pulse mt-2" />
-                    <div className="relative flex-1 w-full my-5 sm:my-6 min-h-0 flex items-center justify-center">
+                    <div className={`relative flex-1 w-full ${
+                      isCompactGrid ? 'my-3' : 'my-5'
+                    } sm:my-6 min-h-0 flex items-center justify-center`}>
                       <div className="w-24 h-48 bg-white/5 rounded-full animate-pulse opacity-50" />
                     </div>
                     <div className="h-6 w-3/4 bg-white/10 rounded animate-pulse shrink-0 mb-2" />
@@ -1769,7 +1791,12 @@ export const Wardrobe: React.FC<{
           ) : shelves.length > 0 ? (
             shelves.map((shelfItems, shelfIndex) => (
               <div key={shelfIndex} className="relative group/shelf">
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-5 mb-1">
+                <div
+                  className={`scent-vault-grid grid ${
+                    isCompactGrid ? 'grid-cols-2 gap-2' : 'grid-cols-1 gap-3'
+                  } sm:grid-cols-2 sm:gap-4 lg:gap-5 xl:grid-cols-4 mb-1`}
+                  data-compact={isCompactGrid ? 'true' : 'false'}
+                >
                   {shelfItems.map((item) => (
                     <motion.div
                       key={item.id}
@@ -1779,14 +1806,20 @@ export const Wardrobe: React.FC<{
                       onClick={() => openDetail(item)}
                       onMouseEnter={() => prefetchReviews(item)}
                     >
-                      <div className="scent-fragrance-card scent-hover-lift w-full h-full min-h-[26rem] transition-[transform,border-color,box-shadow] duration-500 motion-reduce:transition-none relative overflow-hidden flex flex-col">
+                      <div className={`scent-fragrance-card scent-hover-lift w-full h-full ${
+                        isCompactGrid ? 'min-h-[17.5rem]' : 'min-h-[26rem]'
+                      } sm:min-h-[26rem] transition-[transform,border-color,box-shadow] duration-500 motion-reduce:transition-none relative overflow-hidden flex flex-col`}>
                         <div className="scent-card-frame" aria-hidden />
-                        <div className="relative z-[1] flex h-full flex-col items-center px-6 sm:px-8 py-5 sm:py-6">
+                        <div className={`relative z-[1] flex h-full flex-col items-center ${
+                          isCompactGrid ? 'px-3 py-4' : 'px-6 py-5'
+                        } sm:px-8 sm:py-6`}>
                           <BrandGoldLabel
                             brand={entryBrand(item)}
                             className="scent-card-brand w-full mt-1 sm:mt-1.5"
                           />
-                          <div className="relative flex-1 w-full mt-3 sm:mt-4 mb-3 sm:mb-4 min-h-0">
+                          <div className={`relative flex-1 w-full ${
+                            isCompactGrid ? 'mt-2 mb-2' : 'mt-3 mb-3'
+                          } min-h-0 sm:mt-4 sm:mb-4`}>
                             <BottleImage
                               variant="grid"
                               src={item.imageUrl}
@@ -1812,7 +1845,9 @@ export const Wardrobe: React.FC<{
                       type="button"
                       onClick={() => onExpandArchive?.()}
                       aria-label="Expand archive — go to add fragrance search"
-                      className="scent-fragrance-card min-h-[28rem] flex flex-col items-center justify-center p-8 text-center group cursor-pointer border-dashed border-scent-accent/26 hover:bg-white/5 transition-all w-full"
+                      className={`scent-fragrance-card ${
+                        isCompactGrid ? 'min-h-[17.5rem] p-4' : 'min-h-[28rem] p-8'
+                      } sm:min-h-[28rem] sm:p-8 flex flex-col items-center justify-center text-center group cursor-pointer border-dashed border-scent-accent/26 hover:bg-white/5 transition-all w-full`}
                     >
                       <div className="w-12 h-12 border border-dashed border-scent-accent/35 flex items-center justify-center group-hover:rotate-90 transition-transform mb-4 rounded-full">
                         <span className="text-scent-accent/55 text-3xl">+</span>
