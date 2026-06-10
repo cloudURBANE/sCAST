@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useLayoutEffect, useMemo, useCallback } from 'react';
 import { Routes, Route, useLocation, useParams, type Location } from 'react-router-dom';
-import { FragranceCapture } from './components/FragranceCapture';
+import { FragranceCapture, vaultIdentityKey } from './components/FragranceCapture';
 import { Wardrobe, Fragrance, DestinationType, EnergyState } from './components/Wardrobe';
 import { Play, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -485,6 +485,24 @@ function DashboardView() {
   const showOnboardingSteps =
     stateSettled && !onboardingCompleted && items.length === 0 && !vaultSearchUiActive;
 
+  // Brand+name identities of saved fragrances, so the search overlay can flag
+  // results that are already in the vault and offer "View in vault" instead of a
+  // silent duplicate add.
+  const vaultIdentityKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const item of items) {
+      const key = vaultIdentityKey(item.brand ?? item.product?.brand, item.name ?? item.product?.name);
+      if (key) keys.add(key);
+    }
+    return keys;
+  }, [items]);
+
+  const handleViewVault = useCallback(() => {
+    document
+      .getElementById('scent-vault-section')
+      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, []);
+
   return (
     <div className="min-h-[100svh] relative overflow-x-hidden">
       <SEO />
@@ -504,7 +522,12 @@ function DashboardView() {
           <HomepageHeroMarquee />
 
           <section className="mx-auto w-full max-w-[60rem] min-w-0 space-y-7 text-center">
-            <FragranceCapture onAdd={handleAddItem} onVaultSearchStateChange={handleVaultSearchStateChange} />
+            <FragranceCapture
+              onAdd={handleAddItem}
+              onVaultSearchStateChange={handleVaultSearchStateChange}
+              existingVaultKeys={vaultIdentityKeys}
+              onViewVault={handleViewVault}
+            />
             <AnimatePresence initial={false}>
               {showOnboardingSteps ? (
                 <motion.div
@@ -576,7 +599,7 @@ function DashboardView() {
 
           <HomepageAtmosphereChrome />
 
-          <div>
+          <div id="scent-vault-section" style={{ scrollMarginTop: 'var(--topbar-h)' }}>
             <Wardrobe
               items={items}
               onDelete={handleDeleteItem}
