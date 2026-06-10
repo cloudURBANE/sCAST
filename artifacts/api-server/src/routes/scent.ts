@@ -14,7 +14,7 @@ import { logger } from "../lib/logger";
 import { rateLimitMiddleware } from "../lib/rateLimit";
 import { resolveConcentrationFast } from "../services/concentrationResolver";
 import { resolveProcessedFragranceImage } from "../services/imagePipeline";
-import { reimagineBottleImage, isSupportedReimagineModel } from "../services/reimagineService";
+import { reimagineBottleImage, isSupportedReimagineModel, ReimagineBusyError } from "../services/reimagineService";
 import { imageReferenceDiagnostic, usableImageUrlForResponse } from "../services/imageReference";
 import { parseIncomingImageUrl } from "../services/incomingImageUrl";
 import {
@@ -613,6 +613,12 @@ router.post("/reimagine-bottle-image", reimagineRateLimit, async (req, res) => {
       model: result.model,
     });
   } catch (err: any) {
+    // Queue-full refusal happens before OpenAI is called — nothing was billed.
+    if (err instanceof ReimagineBusyError) {
+      logger.warn({ brand: imageBrand, name: imageName }, "reimagine-bottle-image refused: server busy");
+      res.status(429).json({ error: err.message });
+      return;
+    }
     const message = err?.message || "Reimagine failed";
     const isConfigError = /OPENAI_API_KEY/i.test(message);
     logger.error({ err: message }, "reimagine-bottle-image failed");
