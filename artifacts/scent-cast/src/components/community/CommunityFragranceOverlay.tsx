@@ -98,7 +98,7 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
             <button
               type="button"
               onClick={closeOverlay}
-              className="p-2 text-scent-text-subtle hover:text-white hover:bg-white/10 transition-all active:scale-95"
+              className="-m-1 inline-flex min-h-11 min-w-11 items-center justify-center rounded-full text-scent-text-subtle hover:text-white hover:bg-white/10 transition-all active:scale-95"
               aria-label="Close fragrance details"
               ref={closeButtonRef}
             >

@@ -87,7 +87,7 @@ export const ScentIntentModal: React.FC<ScentIntentModalProps> = ({ isOpen, onCl
             ref={closeButtonRef}
             type="button"
             onClick={handleClose}
-            className="p-2 text-white/40 hover:text-white hover:bg-white/10 transition-all active:scale-95"
+            className="-m-1 inline-flex min-h-11 min-w-11 items-center justify-center rounded-full text-white/40 hover:text-white hover:bg-white/10 transition-all active:scale-95"
             aria-label="Close discovery flow"
           >
             <X size={20} />

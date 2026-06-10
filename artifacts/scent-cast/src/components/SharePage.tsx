@@ -892,7 +892,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                 <button
                   onClick={closeSelectedDetail}
                   aria-label="Close profile"
-                  className="shrink-0 p-2 bg-white/5 hover:bg-white/10 transition-all rounded-full border border-white/10 text-white group"
+                  className="shrink-0 inline-flex min-h-11 min-w-11 items-center justify-center bg-white/5 hover:bg-white/10 transition-all rounded-full border border-white/10 text-white group"
                 >
                   <X size={18} className="group-hover:rotate-90 transition-transform duration-300" />
                 </button>
@@ -1052,7 +1052,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                     ref={enlargeCloseButtonRef}
                     type="button"
                     onClick={() => setEnlargeOpen(false)}
-                    className="absolute top-4 right-4 z-10 p-2 rounded-full border border-white/15 bg-white/10 text-white hover:bg-white/20 transition-colors"
+                    className="absolute top-4 right-4 z-10 flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white hover:bg-white/20 transition-colors"
                     aria-label="Close enlarged view"
                   >
                     <X size={22} />

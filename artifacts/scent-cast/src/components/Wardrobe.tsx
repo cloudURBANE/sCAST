@@ -2665,7 +2665,7 @@ export const Wardrobe: React.FC<{
                     ref={enlargeCloseButtonRef}
                     type="button"
                     onClick={() => setEnlargeOpen(false)}
-                    className="absolute top-4 right-4 z-10 p-2 rounded-full border border-white/15 bg-white/10 text-white hover:bg-white/20 transition-colors"
+                    className="absolute top-4 right-4 z-10 flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white hover:bg-white/20 transition-colors"
                     aria-label="Close enlarged view"
                   >
                     <X size={22} />
