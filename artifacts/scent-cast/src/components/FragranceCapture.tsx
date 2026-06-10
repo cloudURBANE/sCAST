@@ -945,7 +945,7 @@ export const FragranceCapture: React.FC<{
     >
       <ScentIntelligenceLoader
         status={loadingStatus}
-        substatus="Processing Olfactory Data"
+        substatus="Adding to your vault…"
         complete={syncComplete}
       />
     </motion.div>
@@ -979,7 +979,7 @@ export const FragranceCapture: React.FC<{
     >
       <ScentIntelligenceLoader
         status={loadingStatus}
-        substatus="Processing Olfactory Data"
+        substatus="Searching fragrances…"
         complete={syncComplete}
       />
     </motion.div>
@@ -1034,7 +1034,7 @@ export const FragranceCapture: React.FC<{
             Add perfumes to your vault. Example fragrance names rotate above the search field.
           </p>
           <h2 className="mx-auto max-w-[38rem] text-balance font-serif italic text-[clamp(2.45rem,6vw,4.15rem)] leading-[1.01] tracking-normal text-[#fff7ec] drop-shadow-[0_4px_14px_rgba(0,0,0,0.72)]">
-            Find your signature for the current atmosphere.
+            Search any fragrance or brand.
           </h2>
           <div className="mt-5 space-y-2.5 sm:mt-6">
             <p className="scent-type-label text-scent-accent">
@@ -1096,10 +1096,21 @@ export const FragranceCapture: React.FC<{
                 animate={reduceMotion || uploading ? undefined : { opacity: [0.74, 1, 0.74] }}
                 transition={reduceMotion || uploading ? undefined : { duration: 3.4, repeat: Infinity, ease: 'easeInOut' }}
               >
-                <Search size={23} strokeWidth={1.6} className="drop-shadow-[0_0_12px_rgba(212,175,55,0.22)]" />
+                <Search size={18} strokeWidth={1.75} className="drop-shadow-[0_0_12px_rgba(212,175,55,0.22)]" />
               </motion.span>
             </motion.button>
           </form>
+        </div>
+
+        {/* Screen-reader announcement for dynamic search results */}
+        <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+          {uploading
+            ? ''
+            : hasSearched
+              ? matches.length > 0
+                ? `${matches.length} fragrance ${matches.length === 1 ? 'result' : 'results'} loaded`
+                : 'No fragrance matches found'
+              : ''}
         </div>
 
         <AnimatePresence>
