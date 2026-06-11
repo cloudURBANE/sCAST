@@ -185,7 +185,35 @@ function normalizeContentType(value: string | null): string {
   return (value ?? "").split(";")[0].trim().toLowerCase();
 }
 
-async function readLimitedBody(response: Response, maxBytes: number): Promise<Buffer> {
+function throwIfAborted(signal?: AbortSignal): void {
+  if (!signal?.aborted) return;
+  if (signal.reason instanceof Error) throw signal.reason;
+  throw new DOMException("The operation was aborted", "AbortError");
+}
+
+function anyAbortSignal(signals: AbortSignal[]): AbortSignal {
+  const any = (AbortSignal as typeof AbortSignal & {
+    any?: (signals: AbortSignal[]) => AbortSignal;
+  }).any;
+  if (any) return any(signals);
+
+  const controller = new AbortController();
+  const abort = (signal: AbortSignal) => {
+    if (!controller.signal.aborted) {
+      controller.abort(signal.reason);
+    }
+  };
+  for (const signal of signals) {
+    if (signal.aborted) {
+      abort(signal);
+      break;
+    }
+    signal.addEventListener("abort", () => abort(signal), { once: true });
+  }
+  return controller.signal;
+}
+
+async function readLimitedBody(response: Response, maxBytes: number, signal?: AbortSignal): Promise<Buffer> {
   if (!response.body) return Buffer.alloc(0);
 
   const chunks: Buffer[] = [];
@@ -193,8 +221,10 @@ async function readLimitedBody(response: Response, maxBytes: number): Promise<Bu
   const reader = response.body.getReader();
 
   while (true) {
+    throwIfAborted(signal);
     const { done, value } = await reader.read();
     if (done) break;
+    throwIfAborted(signal);
     const chunk = Buffer.from(value);
     total += chunk.length;
     if (total > maxBytes) {
@@ -211,6 +241,7 @@ export async function fetchExternalImage(
   options?: {
     maxBytes?: number;
     timeoutMs?: number;
+    signal?: AbortSignal;
   },
 ): Promise<SafeImageFetchResult> {
   const maxBytes = options?.maxBytes ?? DEFAULT_MAX_BYTES;
@@ -218,11 +249,14 @@ export async function fetchExternalImage(
   let current = parseAndValidateExternalImageUrl(rawUrl);
 
   for (let redirect = 0; redirect <= MAX_REDIRECTS; redirect += 1) {
+    throwIfAborted(options?.signal);
     await assertPublicDnsTarget(current.hostname);
 
+    const timeoutSignal = AbortSignal.timeout(timeoutMs);
+    const signal = options?.signal ? anyAbortSignal([options.signal, timeoutSignal]) : timeoutSignal;
     const response = await fetch(current.toString(), {
       redirect: "manual",
-      signal: AbortSignal.timeout(timeoutMs),
+      signal,
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Accept": "image/avif,image/webp,image/png,image/jpeg,image/gif;q=0.95,*/*;q=0.1",
@@ -256,7 +290,7 @@ export async function fetchExternalImage(
       throw new UnsafeImageUrlError(`Unsupported image content type: ${resolvedType || "unknown"}`);
     }
 
-    const buffer = await readLimitedBody(response, maxBytes);
+    const buffer = await readLimitedBody(response, maxBytes, signal);
 
     // A real image is never empty. An empty 200 body (some retailers/WAFs return
     // one behind an image content-type) decodes to naturalWidth === 0 in the
