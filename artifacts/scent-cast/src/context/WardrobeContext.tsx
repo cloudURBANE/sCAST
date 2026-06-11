@@ -26,6 +26,7 @@ import {
 // or returns empty. Server state (GET /api/me/app-state) is authoritative; the
 // local marker only suppresses flicker before the server responds.
 const ONBOARDING_STORAGE_KEY = 'scent_onboarding_completed';
+const GUEST_WARDROBE_STORAGE_KEY = 'scent_guest_wardrobe_items';
 const WARDROBE_ONBOARDING_THRESHOLD = 3;
 // How many guest-added fragrances before we interrupt with the sign-in modal.
 // Raised from 2 → 5 so a guest can meaningfully try the product (build a small
@@ -123,6 +124,49 @@ const collectStrings = (value: unknown): string[] => {
   if (Array.isArray(value)) return value.flatMap(collectStrings);
   return [];
 };
+
+function readGuestWardrobeItems(): Fragrance[] {
+  if (typeof localStorage === 'undefined') return [];
+
+  try {
+    const raw = localStorage.getItem(GUEST_WARDROBE_STORAGE_KEY);
+    if (!raw) return [];
+
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed.flatMap((value): Fragrance[] => {
+      if (!isLooseRecord(value)) return [];
+
+      const product = isLooseRecord(value.product) ? value.product : null;
+      const id = firstString(value.id, value._dbId);
+      const name = firstString(value.name, product?.name);
+      const brand = firstString(value.brand, value.house, product?.brand);
+      if (!id || !name || !brand) return [];
+
+      return [{
+        ...value,
+        id,
+        name,
+        brand,
+        imageUrl: typeof value.imageUrl === 'string' ? value.imageUrl : '',
+        season: firstString(value.season) ?? 'Universal',
+      } as Fragrance];
+    });
+  } catch {
+    return [];
+  }
+}
+
+function writeGuestWardrobeItems(items: Fragrance[]): void {
+  if (typeof localStorage === 'undefined') return;
+
+  try {
+    localStorage.setItem(GUEST_WARDROBE_STORAGE_KEY, JSON.stringify(items));
+  } catch {
+    /* storage unavailable (private mode / quota) - keep in-memory state only */
+  }
+}
 
 const getWeatherNumber = (
   weather: any,
@@ -541,11 +585,13 @@ const WardrobeItemsContext = createContext<Fragrance[] | undefined>(undefined);
 const WardrobeShareModalActionsContext = createContext<Pick<WardrobeContextType, 'setIsShareModalOpen'> | undefined>(undefined);
 
 export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { authToken, isAuthModalOpen, setIsAuthModalOpen, guestPromptDismissed, setGuestPromptDismissed, handleSignOut } = useAuth();
+  const { authToken, setIsAuthModalOpen, guestPromptDismissed, handleSignOut } = useAuth();
   const { weather } = useWeather();
   const { toast } = useToast();
 
-  const [items, setItems] = useState<Fragrance[]>([]);
+  const [items, setItems] = useState<Fragrance[]>(() =>
+    authToken ? [] : readGuestWardrobeItems(),
+  );
   const [wardrobeLoaded, setWardrobeLoaded] = useState(false);
   const [onboardingCompleted, setOnboardingCompleted] = useState<boolean>(false);
   const [onboardingResolved, setOnboardingResolved] = useState<boolean>(false);
@@ -580,24 +626,54 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [imageSyncTarget, setImageSyncTarget] = useState<Pick<Fragrance, 'id' | '_dbId'> | null>(null);
   const itemsRef = useRef(items);
   const authTokenRef = useRef(authToken);
+  const previousGuestPersistenceAuthRef = useRef(authToken);
   itemsRef.current = items;
   authTokenRef.current = authToken;
+
+  useEffect(() => {
+    if (authToken) {
+      previousGuestPersistenceAuthRef.current = authToken;
+      return;
+    }
+
+    if (previousGuestPersistenceAuthRef.current) {
+      previousGuestPersistenceAuthRef.current = authToken;
+      return;
+    }
+
+    writeGuestWardrobeItems(items);
+    previousGuestPersistenceAuthRef.current = authToken;
+  }, [authToken, items]);
 
   const handleVaultSearchStateChange = useCallback((active: boolean) => {
     setVaultSearchUiActive(active);
   }, []);
 
   const handleExpandArchive = useCallback(() => {
-    const el = document.getElementById('scent-add-to-vault-search');
-    if (!(el instanceof HTMLInputElement)) return;
+    const focusSearch = () => {
+      const el = document.getElementById('scent-add-to-vault-search');
+      if (!(el instanceof HTMLInputElement)) return false;
+
+      el.focus({ preventScroll: true });
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return true;
+    };
     // Focus synchronously, inside the click's user-gesture, so the search field
     // visibly activates (and the mobile keyboard opens) on every platform.
     // Deferring focus to a setTimeout breaks the user-gesture chain on iOS
     // Safari, where focus() is then silently ignored — which made the empty-vault
     // "Add a fragrance" button appear to do nothing for guests. Scroll after, so
     // the field is both focused and centered in view.
-    el.focus({ preventScroll: true });
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (!focusSearch()) return;
+
+    window.requestAnimationFrame(() => {
+      const el = document.getElementById('scent-add-to-vault-search');
+      if (!(el instanceof HTMLInputElement)) return;
+      if (document.activeElement !== el) {
+        el.focus({ preventScroll: true });
+      }
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
   }, []);
 
   const loadWardrobe = useCallback(async (token: string, signal?: AbortSignal) => {
@@ -771,6 +847,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     if (authToken) {
       setWardrobeLoaded(false);
+      setItems([]);
       loadWardrobe(authToken, abortController.signal);
       fetch('/api/share-settings', { 
         headers: { Authorization: `Bearer ${authToken}` },
@@ -1457,10 +1534,10 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setActiveEngineRecommendation(null);
   }, []);
 
-  // Empty items on logout
+  // Hydrate local guest items whenever there is no signed-in wardrobe.
   useEffect(() => {
     if (!authToken) {
-      setItems([]);
+      setItems(readGuestWardrobeItems());
       setWardrobeLoaded(true);
       setWardrobeError(null);
       setWardrobeRevertSnapshot(null);

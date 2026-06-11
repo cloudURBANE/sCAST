@@ -399,6 +399,11 @@ export const FragranceCapture: React.FC<{
   const [genderFilter, setGenderFilter] = useState<'Men' | 'Women' | 'Unisex' | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
+  // Raw DOM focus on the search input, including the on-load autofocus. Drives
+  // the "Press Enter to search" hint only — `searchFocused` is reserved for
+  // *user-initiated* engagement because it activates the distraction-free
+  // search mode that hides the onboarding steps and discovery CTA below.
+  const [inputFocused, setInputFocused] = useState(false);
   const [errorStatus, setErrorStatus] = useState<string | null>(null);
   const [errorPhase, setErrorPhase] = useState<ErrorPhase>(null);
   const [hasSearched, setHasSearched] = useState(false);
@@ -411,12 +416,28 @@ export const FragranceCapture: React.FC<{
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const resultsRef = useRef<HTMLDivElement | null>(null);
   const actionBarRef = useRef<HTMLDivElement | null>(null);
+  const autoFocusPendingRef = useRef(false);
 
   useEffect(() => {
     return () => {
       searchAbortController.current?.abort();
       syncAbortController.current?.abort();
     };
+  }, []);
+
+  // Auto-focus the hero search on load so users can type immediately.
+  // Desktop pointers only — on touch devices autofocus pops the keyboard and
+  // jumps the viewport. The pending ref keeps this *programmatic* focus from
+  // flipping `searchFocused`, which would activate search mode and hide the
+  // onboarding steps / discovery CTA before the user has actually engaged.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) return;
+    const el = searchInputRef.current;
+    if (!el || document.activeElement === el) return;
+    autoFocusPendingRef.current = true;
+    el.focus({ preventScroll: true });
+    if (document.activeElement !== el) autoFocusPendingRef.current = false;
   }, []);
 
   // Filter chips operate on the full result set; the rendered list, available
@@ -1124,11 +1145,19 @@ export const FragranceCapture: React.FC<{
               autoCorrect="off"
               spellCheck={false}
               value={searchQuery}
-              onChange={(e) => { setSearchQuery(e.target.value); setErrorStatus(null); setErrorPhase(null); }}
-              onFocus={() => setSearchFocused(true)}
-              onBlur={() => setSearchFocused(false)}
+              onChange={(e) => { setSearchQuery(e.target.value); setSearchFocused(true); setErrorStatus(null); setErrorPhase(null); }}
+              onFocus={() => {
+                setInputFocused(true);
+                if (autoFocusPendingRef.current) {
+                  autoFocusPendingRef.current = false;
+                  return;
+                }
+                setSearchFocused(true);
+              }}
+              onBlur={() => { setInputFocused(false); setSearchFocused(false); autoFocusPendingRef.current = false; }}
               placeholder="Search by house or fragrance..."
               aria-label="Look up a brand or fragrance"
+              aria-describedby="scent-vault-search-hint"
               className="scent-lux-input scent-vault-search-input relative z-0 w-full h-[60px] px-16 text-center text-[#fff7ec] font-sans text-base font-medium outline-none transition-colors placeholder:text-scent-text-subtle placeholder:font-medium sm:h-[68px] sm:px-[4.35rem] scroll-mt-28"
             />
             <motion.button
@@ -1150,6 +1179,24 @@ export const FragranceCapture: React.FC<{
               </motion.span>
             </motion.button>
           </form>
+          {/* Inline guidance: visible while the field is focused and idle, so a
+              first-time visitor knows how to submit. */}
+          <AnimatePresence initial={false}>
+            {inputFocused && !uploading && matches.length === 0 && !hasSearched ? (
+              <motion.p
+                key="search-enter-hint"
+                id="scent-vault-search-hint"
+                initial={reduceMotion ? false : { opacity: 0, height: 0, marginTop: 0 }}
+                animate={{ opacity: 1, height: 'auto', marginTop: '0.75rem' }}
+                exit={reduceMotion ? { opacity: 0 } : { opacity: 0, height: 0, marginTop: 0 }}
+                transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                style={{ overflow: 'hidden' }}
+                className="scent-type-chip text-scent-text-subtle"
+              >
+                Press Enter to search
+              </motion.p>
+            ) : null}
+          </AnimatePresence>
         </div>
 
         {/* Screen-reader announcement for dynamic search results */}
@@ -1290,13 +1337,13 @@ export const FragranceCapture: React.FC<{
                               key={key}
                               type="button"
                               onClick={() => setSelectedId(key)}
-                              className={`scent-vault-result-card group mx-auto w-full max-w-[39.75rem] min-h-[84px] px-4 py-3 text-center transition-all duration-200 cursor-pointer sm:min-h-[96px] sm:px-6 sm:py-3.5 ${
+                              className={`scent-vault-result-card group mx-auto w-full max-w-[39.75rem] min-h-[72px] px-4 py-2.5 text-center transition-all duration-200 cursor-pointer sm:min-h-[82px] sm:px-5 sm:py-3 ${
                                 isSelected ? 'is-selected' : ''
                               }`}
                               aria-pressed={isSelected}
                             >
                               {inVault && (
-                                <span className="pointer-events-none absolute left-3 top-3 z-10 inline-flex items-center gap-1.5 rounded-full border border-scent-accent/35 bg-scent-bg/80 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.16em] text-scent-accent sm:left-4 sm:top-4">
+                                <span className="pointer-events-none absolute left-3 top-2.5 z-10 inline-flex items-center gap-1.5 rounded-full border border-scent-accent/35 bg-scent-bg/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-scent-accent sm:left-4 sm:top-3">
                                   <Check size={11} strokeWidth={3} aria-hidden />
                                   In vault
                                 </span>
@@ -1306,23 +1353,23 @@ export const FragranceCapture: React.FC<{
                                   initial={reduceMotion ? false : { scale: 0.5, opacity: 0 }}
                                   animate={{ scale: 1, opacity: 1 }}
                                   transition={{ type: 'spring', stiffness: 520, damping: 24 }}
-                                  className="scent-vault-result-check pointer-events-none absolute right-3 top-3 z-10 flex h-7 w-7 items-center justify-center rounded-full sm:right-4 sm:top-4 sm:h-8 sm:w-8"
+                                  className="scent-vault-result-check pointer-events-none absolute right-3 top-2.5 z-10 flex h-7 w-7 items-center justify-center rounded-full sm:right-4 sm:top-3"
                                   aria-hidden
                                 >
                                   <Check size={16} strokeWidth={3} />
                                 </motion.span>
                               )}
-                              <span className="scent-vault-monogram mx-auto mb-1.5 flex h-8 w-8 items-center justify-center rounded-full font-serif text-[0.95rem] font-semibold leading-none sm:mb-2 sm:h-9 sm:w-9 sm:text-[1.05rem]">
+                              <span className="scent-vault-monogram mx-auto mb-1 flex h-7 w-7 items-center justify-center rounded-full font-serif text-[0.88rem] font-semibold leading-none sm:mb-1.5 sm:h-8 sm:w-8 sm:text-[0.98rem]">
                                 {matchMonogram(m)}
                               </span>
                               <span
-                                className="mx-auto block max-w-full truncate font-serif text-[1.15rem] italic leading-none text-[#fff7ec] sm:text-[1.35rem]"
+                                className="mx-auto block max-w-full truncate font-serif text-[1.05rem] italic leading-none text-[#fff7ec] sm:text-[1.22rem]"
                                 title={m.name}
                               >
                                 {truncateMatchLine(m.name, MATCH_LINE_MAX_CHARS)}
                               </span>
                               <span
-                                className="mx-auto mt-1.5 block max-w-full truncate font-sans text-[11px] font-bold uppercase tracking-[0.28em] text-[#f3dca6] sm:mt-2 sm:text-[12px]"
+                                className="mx-auto mt-1 block max-w-full truncate font-sans text-[10.5px] font-bold uppercase tracking-[0.24em] text-[#f3dca6] sm:mt-1.5 sm:text-[11px]"
                                 title={m.brand || 'House unavailable'}
                               >
                                 {truncateMatchLine(m.brand || 'House unavailable', MATCH_LINE_MAX_CHARS)}
@@ -1394,12 +1441,12 @@ export const FragranceCapture: React.FC<{
                 {[0, 1, 2].map((i) => (
                   <div
                     key={i}
-                    className="scent-vault-result-card mx-auto w-full max-w-[39.75rem] min-h-[84px] animate-pulse px-4 py-3 sm:min-h-[96px] sm:px-6 sm:py-3.5"
+                    className="scent-vault-result-card mx-auto w-full max-w-[39.75rem] min-h-[72px] animate-pulse px-4 py-2.5 sm:min-h-[82px] sm:px-5 sm:py-3"
                     style={{ animationDelay: `${i * 120}ms` }}
                   >
-                    <span className="mx-auto mb-1.5 flex h-8 w-8 rounded-full bg-white/10 sm:mb-2 sm:h-9 sm:w-9" />
+                    <span className="mx-auto mb-1 flex h-7 w-7 rounded-full bg-white/10 sm:mb-1.5 sm:h-8 sm:w-8" />
                     <span className="mx-auto block h-4 w-44 max-w-[70%] rounded-full bg-white/10" />
-                    <span className="mx-auto mt-1.5 block h-2.5 w-28 max-w-[50%] rounded-full bg-white/5 sm:mt-2" />
+                    <span className="mx-auto mt-1 block h-2.5 w-28 max-w-[50%] rounded-full bg-white/5 sm:mt-1.5" />
                   </div>
                 ))}
               </div>
