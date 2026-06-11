@@ -1879,12 +1879,16 @@ a {
   transform: translate3d(0, 0, 0);
 }
 
-/* Pause (never reset) while the overlay is up: the track keeps its scroll
-   position, so the shared-element zoom opens from and returns to the exact
-   card the user tapped. Hidden to drop its compositing cost behind the modal. */
-.scent-community-marquee-track[data-overlay-open="true"] {
+/* Pause (never reset) while the overlay is opening or closing: the track keeps
+   its scroll position, so the shared-element zoom returns to a stationary card. */
+.scent-community-marquee-track[data-overlay-settling="true"] {
   animation-play-state: paused;
   pointer-events: none;
+}
+
+/* Hidden only while the fullscreen modal is open; during close the track is
+   visible but still paused so the shared image can land cleanly. */
+.scent-community-marquee-track[data-overlay-open="true"] {
   visibility: hidden;
 }
 
