@@ -9,7 +9,7 @@ import { ScentNotesInfographic } from './components/ScentNotesInfographic';
 import { ThreadBackground } from './components/threads/ThreadBackground';
 import { AppTopNav } from './components/AppTopNav';
 import { AuthModal } from './components/AuthModal';
-import { GuestSaveBanner } from './components/GuestSaveBanner';
+import { GuestSaveBanner, GuestModeBanner } from './components/GuestSaveBanner';
 import { ShareModal } from './components/ShareModal';
 import { ProfileSettingsModal } from './components/ProfileSettingsModal';
 import type { ScentFamily, ScentWeatherRecommendation } from './lib/scentWeatherEngine';
@@ -803,6 +803,10 @@ function GlobalModals() {
     setAuthUsername,
     guestPromptDismissed,
     setGuestPromptDismissed,
+    guestModeActive,
+    guestModeAcknowledged,
+    setGuestModeAcknowledged,
+    handleContinueAsGuest,
   } = useAuth();
 
   const { items, setItems, isShareModalOpen, setIsShareModalOpen, userId } = useWardrobe();
@@ -812,6 +816,10 @@ function GlobalModals() {
   // also auto-retires after a few seconds (see GuestSaveBanner) so it never
   // becomes a fixture pinned over the top of every screen.
   const showGuestBanner = !authToken && !isAuthModalOpen && !guestPromptDismissed && items.length >= 3;
+  // Persistent guest-state banner after an explicit "Continue as guest". The
+  // save nudge takes priority so the two never stack in the same anchor slot.
+  const showGuestModeBanner =
+    !authToken && !isAuthModalOpen && guestModeActive && !guestModeAcknowledged && !showGuestBanner;
   const guestBanner = (
     <AnimatePresence>
       {showGuestBanner ? (
@@ -819,6 +827,11 @@ function GlobalModals() {
           itemCount={items.length}
           onSignIn={() => setIsAuthModalOpen(true)}
           onDismiss={() => setGuestPromptDismissed(true)}
+        />
+      ) : showGuestModeBanner ? (
+        <GuestModeBanner
+          onSignIn={() => setIsAuthModalOpen(true)}
+          onDismiss={() => setGuestModeAcknowledged(true)}
         />
       ) : null}
     </AnimatePresence>
@@ -830,6 +843,7 @@ function GlobalModals() {
         setIsAuthModalOpen(false);
         setGuestPromptDismissed(true);
       }}
+      onContinueAsGuest={handleContinueAsGuest}
       allowDismiss
       title={items.length >= 2 ? 'Save your wardrobe before you lose it' : undefined}
       subtitle={

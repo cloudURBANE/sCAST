@@ -504,12 +504,13 @@ export const FragranceCapture: React.FC<{
     void handleConfirm();
   };
 
-  // When a filter hides the selected row, fall back to the first still-visible
-  // result so the "ready to add" CTA never points at something off-screen.
+  // When a filter hides the selected row, clear the selection so the "ready to
+  // add" CTA never points at something off-screen. Never auto-pick another
+  // result — adding to vault must always reflect an explicit user choice.
   useEffect(() => {
-    if (visibleMatches.length === 0) return;
-    if (selectedId && visibleMatches.some((m) => matchKey(m) === selectedId)) return;
-    setSelectedId(matchKey(visibleMatches[0]));
+    if (!selectedId) return;
+    if (visibleMatches.some((m) => matchKey(m) === selectedId)) return;
+    setSelectedId(null);
   }, [visibleMatches, selectedId]);
   useEffect(() => {
     onVaultSearchStateChange?.(vaultSearchActive);
@@ -600,7 +601,9 @@ export const FragranceCapture: React.FC<{
       // On success leave loadingStatus as "Researching Fragrance..."; the overlay
       // exits via finally → setUploading(false) and the results list animates in.
       setMatches(nextMatches);
-      setSelectedId(nextMatches.length > 0 ? matchKey(nextMatches[0]) : null);
+      // No default selection: the user must explicitly pick a result before
+      // "Add to Vault" enables, so it can never act on a row they didn't choose.
+      setSelectedId(null);
 
     } catch (err: unknown) {
       if (err instanceof Error && err.name === 'AbortError') return; // Ignore expected aborts

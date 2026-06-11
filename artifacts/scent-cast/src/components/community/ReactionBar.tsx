@@ -40,14 +40,30 @@ export const ReactionBar: React.FC<ReactionBarProps> = ({
   // Remember a reaction tapped while logged out and replay it once the viewer
   // signs in, so the tap isn't silently dropped.
   const [pendingReaction, setPendingReaction] = useState<string | null>(null);
+  // The hook's onError silently rolls back the optimistic cache patch; this
+  // local notice makes that rollback visible at the bar that was clicked.
+  const [errorNotice, setErrorNotice] = useState<string | null>(null);
   const { mutate } = mutation;
+
+  const runToggle = React.useCallback(
+    (reaction: string) => {
+      setErrorNotice(null);
+      mutate(
+        { targetType, targetId, reaction },
+        {
+          onError: () => setErrorNotice("Couldn't save your reaction. Please try again."),
+        },
+      );
+    },
+    [mutate, targetType, targetId],
+  );
 
   useEffect(() => {
     if (!authToken || !pendingReaction) return;
     const reaction = pendingReaction;
     setPendingReaction(null);
-    mutate({ targetType, targetId, reaction });
-  }, [authToken, pendingReaction, mutate, targetType, targetId]);
+    runToggle(reaction);
+  }, [authToken, pendingReaction, runToggle]);
 
   const toggleReaction = (reaction: string) => {
     if (!authToken) {
@@ -55,7 +71,7 @@ export const ReactionBar: React.FC<ReactionBarProps> = ({
       onSignIn();
       return;
     }
-    mutate({ targetType, targetId, reaction });
+    runToggle(reaction);
   };
 
   return (
@@ -75,7 +91,8 @@ export const ReactionBar: React.FC<ReactionBarProps> = ({
             type="button"
             onClick={() => toggleReaction(key)}
             disabled={mutation.isPending}
-            aria-label={`${label} ${targetType}`}
+            aria-label={authToken ? `${label} ${targetType}` : `Sign in to ${label.toLowerCase()} this ${targetType}`}
+            title={authToken ? undefined : 'Sign in to react'}
             aria-pressed={active}
             className={[
               'inline-flex min-h-11 items-center justify-center gap-2 rounded-full border scent-type-chip transition-all duration-200 hover:border-scent-accent/46 hover:bg-scent-accent/[0.08] hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 disabled:pointer-events-none disabled:opacity-55',
@@ -102,6 +119,16 @@ export const ReactionBar: React.FC<ReactionBarProps> = ({
           </button>
         );
       })}
+      {errorNotice ? (
+        <p
+          role="alert"
+          className={`text-[12px] leading-snug text-red-200 font-sans ${
+            compact ? 'w-full text-center' : 'sm:col-span-3 text-center'
+          }`}
+        >
+          {errorNotice}
+        </p>
+      ) : null}
     </div>
   );
 };

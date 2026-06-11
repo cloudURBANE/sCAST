@@ -1,10 +1,11 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { useModalBehavior } from '@/hooks/use-modal-behavior';
-import { useToast } from '@/hooks/use-toast';
 
 interface AuthModalProps {
   onClose?: () => void;
+  /** Called when the user explicitly chooses to keep browsing as a guest. */
+  onContinueAsGuest?: () => void;
   title?: React.ReactNode;
   subtitle?: string;
   allowDismiss?: boolean;
@@ -12,6 +13,7 @@ interface AuthModalProps {
 
 export const AuthModal: React.FC<AuthModalProps> = ({
   onClose,
+  onContinueAsGuest,
   title,
   subtitle,
   allowDismiss = false,
@@ -27,18 +29,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     closeOnEscape: allowDismiss,
   });
 
-  const { toast } = useToast();
-
   const handleGoogleSignIn = () => {
     window.location.href = '/api/auth/google';
   };
 
   const handleContinueAsGuest = () => {
     onClose?.();
-    toast({
-      title: 'Browsing as guest',
-      description: 'You can sign in anytime to save your fragrances.',
-    });
+    // The persistent guest banner (GuestModeBanner) is the feedback surface
+    // here — a toast would vanish before most users finish reading it.
+    onContinueAsGuest?.();
   };
 
   return (
