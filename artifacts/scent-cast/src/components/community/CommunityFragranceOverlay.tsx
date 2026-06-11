@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Check, LoaderCircle, Plus, X } from 'lucide-react';
 import { BottleImage } from '@/components/BottleImage';
 import { BrandGoldLabel } from '@/components/BrandGoldLabel';
+import { COMMUNITY_IMAGE_LAYOUT_TRANSITION } from '@/components/community/communityMotion';
 import type { CommunityFragranceEntry } from '@/components/community/communityData';
 import { useWardrobe } from '@/context/WardrobeContext';
 
@@ -88,6 +89,16 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
     setAddMessage(null);
   }, [activeItemKey]);
 
+  // Lock page scroll behind the modal; restore whatever was there on close.
+  useEffect(() => {
+    if (!item) return;
+    const previousOverflow = document.documentElement.style.overflow;
+    document.documentElement.style.overflow = 'hidden';
+    return () => {
+      document.documentElement.style.overflow = previousOverflow;
+    };
+  }, [item]);
+
   useEffect(() => {
     if (!item) return;
 
@@ -95,6 +106,32 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
       if (event.key === 'Escape') {
         event.preventDefault();
         closeOverlay();
+        return;
+      }
+
+      // Cycle Tab within the dialog so focus can't land on the hidden page.
+      if (event.key !== 'Tab') return;
+      const root = overlayRef.current;
+      if (!root) return;
+      const focusables = Array.from(
+        root.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+        ),
+      );
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      const active = document.activeElement;
+      const activeInDialog = active instanceof HTMLElement && root.contains(active);
+
+      if (event.shiftKey) {
+        if (!activeInDialog || active === first) {
+          event.preventDefault();
+          last.focus();
+        }
+      } else if (!activeInDialog || active === last) {
+        event.preventDefault();
+        first.focus();
       }
     };
 
@@ -168,7 +205,11 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
           ref={overlayRef}
         >
           <div
-            className="flex items-center justify-between px-5 pb-4 shrink-0"
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 -z-10 [background:radial-gradient(58%_46%_at_28%_44%,rgba(214,178,116,0.07),transparent_72%)]"
+          />
+          <div
+            className="relative flex items-center justify-between px-5 pb-4 shrink-0"
             style={{ paddingTop: 'max(1.25rem, env(safe-area-inset-top))' }}
           >
             <p className="scent-type-label text-scent-accent">Community Wardrobe</p>
@@ -195,6 +236,7 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
                   </div>
                   <motion.div
                     layoutId={imageLayoutId ?? undefined}
+                    transition={COMMUNITY_IMAGE_LAYOUT_TRANSITION}
                     className="relative z-10 my-3 min-h-0 flex-1"
                   >
                     <BottleImage

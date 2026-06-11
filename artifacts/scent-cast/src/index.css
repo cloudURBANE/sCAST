@@ -1879,11 +1879,17 @@ a {
   transform: translate3d(0, 0, 0);
 }
 
+/* Pause (never reset) while the overlay is up: the track keeps its scroll
+   position, so the shared-element zoom opens from and returns to the exact
+   card the user tapped. Hidden to drop its compositing cost behind the modal. */
 .scent-community-marquee-track[data-overlay-open="true"] {
-  animation: none;
+  animation-play-state: paused;
   pointer-events: none;
-  transform: translate3d(0, 0, 0);
   visibility: hidden;
+}
+
+.scent-community-marquee-track[data-marquee-paused="true"] {
+  animation-play-state: paused;
 }
 
 @media (hover: hover) {

@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
+import { MotionConfig, motion } from 'framer-motion';
 import { BottleImage } from '@/components/BottleImage';
 import { BrandGoldLabel } from '@/components/BrandGoldLabel';
 import { CommunityFragranceOverlay } from '@/components/community/CommunityFragranceOverlay';
 import type { CommunityFragranceEntry } from '@/components/community/communityData';
+import { COMMUNITY_IMAGE_LAYOUT_TRANSITION } from '@/components/community/communityMotion';
 import { isLowRenderBudget } from '@/lib/platform';
 
 interface BottleMarqueeProps {
@@ -31,11 +32,11 @@ const placeholderItems: CommunityFragranceEntry[] = [...Array(8)].map((_, index)
 }));
 
 export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, loading, isError = false }) => {
+  const sectionRef = useRef<HTMLElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
   const groupRef = useRef<HTMLDivElement>(null);
   const measureMarqueeRef = useRef<(() => void) | null>(null);
-  const triggerRefs = useRef(new Map<string, HTMLButtonElement>());
-  const activeTriggerIdRef = useRef<string | null>(null);
+  const activeTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [activeItem, setActiveItem] = useState<CommunityFragranceEntry | null>(null);
   const [activeImageLayoutId, setActiveImageLayoutId] = useState<string | null>(null);
   const trackCopies = useRef(
@@ -101,6 +102,38 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
     };
   }, [trackKey]);
 
+  // A marquee nobody can see should not burn frames: pause the CSS animation
+  // while the section is scrolled out of view or the tab is backgrounded.
+  useEffect(() => {
+    const section = sectionRef.current;
+    const track = trackRef.current;
+    if (!section || !track) return;
+    let offscreen = false;
+
+    const syncPaused = () => {
+      if (offscreen || document.visibilityState === 'hidden') {
+        track.dataset.marqueePaused = 'true';
+      } else {
+        delete track.dataset.marqueePaused;
+      }
+    };
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        offscreen = entries.some((entry) => !entry.isIntersecting);
+        syncPaused();
+      },
+      { rootMargin: '160px 0px' },
+    );
+    observer.observe(section);
+    document.addEventListener('visibilitychange', syncPaused);
+
+    return () => {
+      observer.disconnect();
+      document.removeEventListener('visibilitychange', syncPaused);
+    };
+  }, [trackKey]);
+
   const requestMarqueeMeasure = useCallback(() => {
     window.requestAnimationFrame(() => {
       measureMarqueeRef.current?.();
@@ -113,20 +146,23 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
   }, []);
 
   const restoreTriggerFocus = useCallback(() => {
-    const triggerId = activeTriggerIdRef.current;
-    if (triggerId) {
-      triggerRefs.current.get(triggerId)?.focus();
+    const trigger = activeTriggerRef.current;
+    activeTriggerRef.current = null;
+    if (trigger?.isConnected) {
+      trigger.focus({ preventScroll: true });
     }
-    activeTriggerIdRef.current = null;
   }, []);
 
-  const openItem = useCallback((item: CommunityFragranceEntry, copyIndex: number) => {
-    if (!loading && item.imageUrl) {
-      activeTriggerIdRef.current = copyIndex === 0 ? item.id : null;
-      setActiveImageLayoutId(`bottle-image-${copyIndex}-${item.id}`);
-      setActiveItem(item);
-    }
-  }, [loading]);
+  const openItem = useCallback(
+    (item: CommunityFragranceEntry, copyIndex: number, trigger: HTMLButtonElement) => {
+      if (!loading && item.imageUrl) {
+        activeTriggerRef.current = trigger;
+        setActiveImageLayoutId(`bottle-image-${copyIndex}-${item.id}`);
+        setActiveItem(item);
+      }
+    },
+    [loading],
+  );
 
   if (!loading && (isError || items.length === 0)) {
     return (
@@ -141,8 +177,8 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
   }
 
   return (
-    <>
-      <section className="scent-community-marquee" aria-label="Community fragrance marquee">
+    <MotionConfig reducedMotion="user">
+      <section ref={sectionRef} className="scent-community-marquee" aria-label="Community fragrance marquee">
         <div
           className="scent-community-marquee-track"
           key={trackKey}
@@ -163,22 +199,15 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
                     type="button"
                     aria-label={`${item.name} by ${item.brand}, curated by ${item.curator}`}
                     tabIndex={copyIndex > 0 ? -1 : 0}
-                    ref={(node) => {
-                      if (copyIndex > 0) return;
-                      if (node) {
-                        triggerRefs.current.set(item.id, node);
-                      } else {
-                        triggerRefs.current.delete(item.id);
-                      }
-                    }}
                     className="scent-fragrance-card scent-community-marquee-card group relative flex h-full w-full cursor-pointer flex-col p-5 sm:p-6 text-left outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
                     whileHover={{ y: -8, scale: 1.04 }}
+                    whileTap={{ scale: 0.985 }}
                     transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
-                    onClick={() => openItem(item, copyIndex)}
+                    onClick={(event) => openItem(item, copyIndex, event.currentTarget)}
                     onKeyDown={(event) => {
                       if (event.key === 'Enter' || event.key === ' ') {
                         event.preventDefault();
-                        openItem(item, copyIndex);
+                        openItem(item, copyIndex, event.currentTarget);
                       }
                     }}
                   >
@@ -190,6 +219,7 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
                     </div>
                     <motion.div
                       layoutId={`bottle-image-${copyIndex}-${item.id}`}
+                      transition={COMMUNITY_IMAGE_LAYOUT_TRANSITION}
                       className="relative z-10 my-3 min-h-0 flex-1"
                     >
                       <BottleImage
@@ -225,6 +255,6 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
         onClose={closeOverlay}
         restoreFocus={restoreTriggerFocus}
       />
-    </>
+    </MotionConfig>
   );
 });
