@@ -67,8 +67,8 @@ function emptyStateCopy(filters: CommunityPostFilters): { title: string; body: s
   }
   if (filters.q || filters.tag) {
     return {
-      title: 'No rooms match yet.',
-      body: 'Try a different search or clear your filters to see every room.',
+      title: 'Nothing matches that search yet.',
+      body: 'Try another phrase or clear the filters to open the full room.',
       actionLabel: 'Clear filters',
       actionAriaLabel: 'Clear community filters',
     };
