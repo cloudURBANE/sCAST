@@ -20,6 +20,7 @@ import { Toaster } from './components/ui/toaster';
 import { PageTransitionOverlay, warmTransitionEmblem } from './components/PageTransitionOverlay';
 import { useModalBehavior } from '@/hooks/use-modal-behavior';
 import { useRenderBudget } from '@/hooks/useRenderBudget';
+import { useMarqueeSwipe } from '@/hooks/useMarqueeSwipe';
 import NotFound from '@/pages/not-found';
 import { SEO } from './components/SEO';
 import { loadRouteChunk } from '@/lib/routeChunkRecovery';
@@ -87,12 +88,17 @@ const LiveClock: React.FC = React.memo(() => {
       if (interval) clearInterval(interval);
     };
   }, []);
+  const display = time.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
+  // The clock sits inside a compositor-animated marquee track; WebKit can skip
+  // repainting text mutations inside that cached layer. Remounting the node on
+  // each minute (key) and isolating it on its own layer forces the repaint.
   return (
     <span
+      key={display}
       className="font-serif italic tracking-normal text-inherit leading-[1.05] text-[#fff7ec] tabular-nums"
-      style={{ fontVariantNumeric: 'tabular-nums' }}
+      style={{ fontVariantNumeric: 'tabular-nums', display: 'inline-block', transform: 'translateZ(0)', willChange: 'transform' }}
     >
-      {time.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' })}
+      {display}
     </span>
   );
 });
@@ -188,6 +194,12 @@ const HeroMarquee: React.FC<HeroMarqueeProps> = React.memo(({ phrases }) => {
   const groupRef = useRef<HTMLSpanElement>(null);
   const phraseKey = useMemo(() => phrases.join('|'), [phrases]);
 
+  useMarqueeSwipe(trackRef, {
+    distanceVar: '--hero-marquee-distance',
+    durationVar: '--hero-marquee-duration',
+    resetKey: phraseKey,
+  });
+
   useLayoutEffect(() => {
     const track = trackRef.current;
     const group = groupRef.current;
@@ -270,6 +282,11 @@ const HeroMarquee: React.FC<HeroMarqueeProps> = React.memo(({ phrases }) => {
 const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({ weather, weatherLoading }) => {
   const trackRef = useRef<HTMLDivElement>(null);
   const groupRef = useRef<HTMLDivElement>(null);
+
+  useMarqueeSwipe(trackRef, {
+    distanceVar: '--atmosphere-marquee-distance',
+    durationVar: '--atmosphere-marquee-duration',
+  });
 
   const firstFiniteNumber = (fallback: number, ...values: unknown[]): number => {
     for (const value of values) {

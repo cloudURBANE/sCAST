@@ -6,6 +6,7 @@ import { CommunityFragranceOverlay } from '@/components/community/CommunityFragr
 import type { CommunityFragranceEntry } from '@/components/community/communityData';
 import { COMMUNITY_IMAGE_LAYOUT_TRANSITION } from '@/components/community/communityMotion';
 import { isLowRenderBudget } from '@/lib/platform';
+import { useMarqueeSwipe } from '@/hooks/useMarqueeSwipe';
 
 interface BottleMarqueeProps {
   items: CommunityFragranceEntry[];
@@ -48,6 +49,14 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
     () => renderedItems.map((item) => `${item.id}:${item.imageUrl}`).join('|'),
     [renderedItems],
   );
+
+  // The track element is keyed by trackKey, so the swipe listeners must
+  // re-attach whenever it is recreated.
+  useMarqueeSwipe(trackRef, {
+    distanceVar: '--community-marquee-distance',
+    durationVar: '--community-marquee-duration',
+    resetKey: trackKey,
+  });
 
   useEffect(() => {
     const track = trackRef.current;
