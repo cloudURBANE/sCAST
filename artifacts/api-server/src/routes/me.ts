@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { AuthRequest, requireAuth } from "../middlewares/auth";
+import { AuthRequest, isUndefinedColumnError, requireAuth } from "../middlewares/auth";
 import { getTenantId } from "../middlewares/tenant";
 import { db } from "@workspace/db";
 import { userFragrancesTable, userSettingsTable } from "@workspace/db/schema";
@@ -105,7 +105,7 @@ router.get("/me/profile", requireAuth, async (req: AuthRequest, res) => {
       .limit(1);
     username = row?.username ?? null;
   } catch (err) {
-    if ((err as { code?: string } | null)?.code !== "42703") throw err;
+    if (!isUndefinedColumnError(err)) throw err;
     logger.warn({ userId: user.id }, "user_settings.username not yet migrated — reporting null");
   }
   res.json({ username, email: user.email });

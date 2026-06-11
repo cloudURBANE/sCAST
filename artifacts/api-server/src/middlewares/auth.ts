@@ -37,8 +37,15 @@ const CORE_USER_COLUMNS = {
   createdAt: usersTable.createdAt,
 } as const;
 
-function isUndefinedColumnError(err: unknown): boolean {
-  return typeof err === "object" && err !== null && (err as { code?: string }).code === "42703";
+// drizzle-orm (since 0.41) wraps driver errors in DrizzleQueryError, moving the
+// Postgres error (and its `code`) onto `cause` — so walk the cause chain instead
+// of reading `code` off the top-level error.
+export function isUndefinedColumnError(err: unknown): boolean {
+  for (let current = err, depth = 0; typeof current === "object" && current !== null && depth < 5; depth++) {
+    if ((current as { code?: string }).code === "42703") return true;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return false;
 }
 
 export async function getUserByToken(token: string, tenantId?: string) {

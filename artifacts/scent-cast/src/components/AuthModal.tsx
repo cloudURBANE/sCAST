@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { useModalBehavior } from '@/hooks/use-modal-behavior';
+import { useToast } from '@/hooks/use-toast';
 
 interface AuthModalProps {
   onClose?: () => void;
@@ -26,8 +27,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     closeOnEscape: allowDismiss,
   });
 
+  const { toast } = useToast();
+
   const handleGoogleSignIn = () => {
     window.location.href = '/api/auth/google';
+  };
+
+  const handleContinueAsGuest = () => {
+    onClose?.();
+    toast({
+      title: 'Browsing as guest',
+      description: 'You can sign in anytime to save your fragrances.',
+    });
   };
 
   return (
@@ -56,11 +67,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </div>
 
           <div className="text-center space-y-3">
-            <p className="text-[10px] uppercase tracking-[0.5em] text-white/30 font-bold">Olfactory Intelligence</p>
+            <p className="text-[10px] uppercase tracking-[0.5em] text-white/55 font-bold">Olfactory Intelligence</p>
             <h1 id="auth-modal-title" className="font-serif italic text-4xl sm:text-5xl text-white tracking-tighter leading-tight">
               {title ?? <>Sign in to access<br />your vault</>}
             </h1>
-            <p className="text-sm text-white/30 font-sans">
+            <p className="text-sm text-white/60 font-sans">
               {subtitle ?? 'Your fragrances are saved to your account.'}
             </p>
           </div>
@@ -78,12 +89,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <div className="space-y-2">
                 <button
                   type="button"
-                  onClick={onClose}
-                  className="w-full h-[3.25rem] border border-white/25 text-white/85 font-sans text-sm font-medium flex items-center justify-center hover:text-white hover:border-white/45 hover:bg-white/[0.04] transition-all rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+                  onClick={handleContinueAsGuest}
+                  className="w-full h-[3.25rem] border border-white/50 bg-white/[0.08] text-white font-sans text-sm font-semibold flex items-center justify-center hover:border-white/75 hover:bg-white/[0.14] transition-all rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
                 >
                   Continue as guest
                 </button>
-                <p className="text-center text-[11px] text-white/35 font-sans">
+                <p className="text-center text-[11px] text-white/60 font-sans">
                   No account needed — you can sign in later to save.
                 </p>
               </div>

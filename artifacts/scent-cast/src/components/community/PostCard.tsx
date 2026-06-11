@@ -183,7 +183,7 @@ const BattleVotes: React.FC<{
   };
 
   return (
-    <div className="mt-4 max-w-2xl space-y-3">
+    <div className="mt-4 max-w-2xl space-y-3" aria-live="polite">
       {options.map((option) => {
         const count = post.votes[option] ?? 0;
         const pct = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
@@ -195,8 +195,13 @@ const BattleVotes: React.FC<{
             onClick={() => submitVote(option)}
             disabled={voteMutation.isPending}
             aria-pressed={picked}
+            aria-label={
+              hasVoted
+                ? `Vote for ${option} — currently ${pct}% with ${count} ${count === 1 ? 'vote' : 'votes'}`
+                : `Vote for ${option}`
+            }
             className={[
-              'group relative w-full overflow-hidden rounded-[14px] border px-4 py-3 text-left transition-colors hover:border-scent-accent/38 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 disabled:pointer-events-none disabled:opacity-55',
+              'group relative w-full overflow-hidden rounded-[14px] border px-4 py-3 text-left transition-colors hover:border-scent-accent/38 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80 disabled:pointer-events-none disabled:opacity-55',
               picked ? 'border-scent-accent/55 bg-scent-accent/[0.06]' : 'border-scent-accent/16 bg-black/58',
             ].join(' ')}
           >
@@ -225,7 +230,7 @@ const BattleVotes: React.FC<{
           </button>
         );
       })}
-      {errorMessage ? <p className="text-sm text-red-100">{errorMessage}</p> : null}
+      {errorMessage ? <p role="alert" className="text-sm text-red-100">{errorMessage}</p> : null}
     </div>
   );
 };
@@ -248,7 +253,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post, authToken, onSignIn })
           <Link
             to={communitySharePath(post.author)}
             aria-label={`View ${authorName}'s vault`}
-            className="shrink-0 rounded-full transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
+            className="shrink-0 rounded-full transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80"
           >
             <CommunityAuthorAvatar author={post.author} />
           </Link>
@@ -314,7 +319,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post, authToken, onSignIn })
         <button
           type="button"
           onClick={() => setCommentsOpen((open) => !open)}
-          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-scent-accent/16 bg-black/58 px-4 py-2 scent-type-chip text-scent-text-muted transition-colors hover:border-scent-accent/34 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
+          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-scent-accent/16 bg-black/58 px-4 py-2 scent-type-chip text-scent-text-muted transition-colors hover:border-scent-accent/34 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80"
           aria-expanded={commentsOpen}
           aria-label={commentsOpen ? 'Hide comments' : `View ${post.counts.comments} comments`}
         >

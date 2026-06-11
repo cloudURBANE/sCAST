@@ -83,9 +83,9 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
             onClick={() => onTypeChange(null)}
             aria-pressed={type === null}
             className={[
-              'inline-flex min-h-11 items-center justify-center gap-2 rounded-full border px-3 py-2 text-center scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35',
+              'inline-flex min-h-11 items-center justify-center gap-2 rounded-full border px-3 py-2 text-center scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80',
               type === null
-                ? 'border-scent-accent/48 bg-scent-accent/[0.08] text-[#fff7ec]'
+                ? 'border-scent-accent bg-scent-accent/[0.22] font-bold text-[#fff7ec] shadow-[0_0_12px_-2px_rgba(212,175,55,0.45)]'
                 : 'border-scent-accent/16 bg-black/54 text-scent-text-muted hover:border-scent-accent/34 hover:text-[#fff7ec]',
             ].join(' ')}
           >
@@ -99,9 +99,9 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
               onClick={() => onTypeChange(roomType)}
               aria-pressed={type === roomType}
               className={[
-                'inline-flex min-h-11 items-center justify-center gap-2 rounded-full border px-3 py-2 text-center scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35',
+                'inline-flex min-h-11 items-center justify-center gap-2 rounded-full border px-3 py-2 text-center scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80',
                 type === roomType
-                  ? 'border-scent-accent/48 bg-scent-accent/[0.08] text-[#fff7ec]'
+                  ? 'border-scent-accent bg-scent-accent/[0.22] font-bold text-[#fff7ec] shadow-[0_0_12px_-2px_rgba(212,175,55,0.45)]'
                   : 'border-scent-accent/16 bg-black/54 text-scent-text-muted hover:border-scent-accent/34 hover:text-[#fff7ec]',
               ].join(' ')}
             >
@@ -131,7 +131,7 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
               type="button"
               onClick={() => setDraftQuery('')}
               aria-label="Clear search"
-              className="absolute right-1.5 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full text-scent-muted transition-colors hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
+              className="absolute right-1.5 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full text-scent-muted transition-colors hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80"
             >
               <X size={15} strokeWidth={1.8} aria-hidden="true" />
             </button>
@@ -154,9 +154,9 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
                 onClick={() => onTagChange(active ? null : normalized)}
                 aria-pressed={active}
                 className={[
-                  'shrink-0 rounded-full border px-3 py-1.5 scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35',
+                  'shrink-0 rounded-full border px-3 py-1.5 scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80',
                   active
-                    ? 'border-scent-accent/44 bg-scent-accent/[0.08] text-[#fff7ec]'
+                    ? 'border-scent-accent bg-scent-accent/[0.22] font-bold text-[#fff7ec] shadow-[0_0_12px_-2px_rgba(212,175,55,0.45)]'
                     : 'border-white/10 bg-black/54 text-scent-text-muted hover:border-scent-accent/28 hover:text-[#fff7ec]',
                 ].join(' ')}
               >
@@ -169,7 +169,7 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
           <button
             type="button"
             onClick={clearFilters}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 scent-type-chip text-scent-text-muted transition-colors hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 scent-type-chip text-scent-text-muted transition-colors hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80"
           >
             <X size={13} strokeWidth={1.8} aria-hidden="true" />
             Clear
