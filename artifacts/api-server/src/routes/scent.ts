@@ -16,6 +16,7 @@ import { resolveConcentrationFast } from "../services/concentrationResolver";
 import { resolveProcessedFragranceImage } from "../services/imagePipeline";
 import { reimagineBottleImage, isSupportedReimagineModel, ReimagineBusyError } from "../services/reimagineService";
 import { imageReferenceDiagnostic, usableImageUrlForResponse } from "../services/imageReference";
+import { resolveSharedImageReference } from "../services/imageHydration";
 import { parseIncomingImageUrl } from "../services/incomingImageUrl";
 import {
   asciiForImageSearch,
@@ -170,6 +171,28 @@ router.post("/scent-profile", async (req, res) => {
   // client can rely on top-level keys when it persists this object verbatim.
   if (!("product" in result)) { res.json(result); return; }
   res.json(flattenProfile(result));
+});
+
+// Cache-only shared-image lookup. Unlike POST /refresh-image this NEVER runs a
+// fresh Serper search — it only reads image state that already exists (the
+// processed image_cache, then the global catalog) via resolveSharedImageReference.
+// Guests poll this after adding an imageless fragrance so the tile can fill in
+// from the shared catalog without a per-add image search (cost) and without a
+// server-side wardrobe row (guests have none). Returns { imageUrl: null } when
+// nothing is cached yet, so the bounded client poll simply tries again or stops.
+router.get("/shared-image", async (req, res) => {
+  const brand = typeof req.query.brand === "string" ? req.query.brand.trim() : "";
+  const name = typeof req.query.name === "string" ? req.query.name.trim() : "";
+  if (!name) {
+    res.status(400).json({ error: "name is required" });
+    return;
+  }
+  const ref = await resolveSharedImageReference(brand, name);
+  res.json({
+    imageUrl: ref?.imageUrl ?? null,
+    storagePath: ref?.storagePath ?? null,
+    sourceProvider: ref?.sourceProvider ?? null,
+  });
 });
 
 router.post("/search-scent", async (req, res) => {

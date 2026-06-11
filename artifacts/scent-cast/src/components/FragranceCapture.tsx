@@ -8,6 +8,7 @@ import {
   getFragranceDetails,
   isBackgroundEnrichmentQueued,
   isFetchNetworkError,
+  isTransientDetailFetchError,
   normalizeFragranceDetail,
   searchFragrances,
   type FragranceDetail,
@@ -713,9 +714,35 @@ export const FragranceCapture: React.FC<{
         });
       }
 
-      let detail = normalizeFragranceDetail(
-        (await getFragranceDetails(detailsRequest, { signal: controller.signal })) as FragranceDetail,
-      );
+      let detail: FragranceDetail;
+      try {
+        detail = normalizeFragranceDetail(
+          (await getFragranceDetails(detailsRequest, { signal: controller.signal })) as FragranceDetail,
+        );
+      } catch (detailErr) {
+        if (detailErr instanceof Error && detailErr.name === 'AbortError') throw detailErr;
+        // Real failures (validation, 4xx not-found) still surface to the user.
+        if (!isTransientDetailFetchError(detailErr)) throw detailErr;
+        // Transient failure on a valid selection: synthesize a minimal detail from
+        // the selected result so the add can still proceed through the scent-profile
+        // pipeline (which only needs name/brand). The olfactory pyramid simply comes
+        // back thinner until a later detail refresh fills it in — far better than
+        // failing the whole add over a momentary engine hiccup.
+        console.warn(
+          '[FragranceCapture] detail fetch failed transiently; proceeding with best-effort profile from selected result',
+          {
+            selectedId: selected.id,
+            error: detailErr instanceof Error ? detailErr.message : String(detailErr),
+          },
+        );
+        detail = normalizeFragranceDetail({
+          id: selectedDetailId,
+          name: selected.name,
+          brand: firstString(selected.brand, selected.house),
+          house: firstString(selected.house, selected.brand),
+          source_url: selectedSourceUrl,
+        } as FragranceDetail);
+      }
 
       // A brand-new fragrance can come back as a provisional detail with no
       // notes while the backend scrapes the olfactory pyramid in the background

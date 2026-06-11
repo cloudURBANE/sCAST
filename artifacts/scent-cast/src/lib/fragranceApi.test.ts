@@ -6,6 +6,7 @@ import {
   getFragranceDetails,
   isBackgroundEnrichmentQueued,
   isFetchNetworkError,
+  isTransientDetailFetchError,
   isFragranceDetailEffectivelyComplete,
   normalizeFragranceDetail,
   normalizeFragranceSearchResult,
@@ -28,6 +29,24 @@ test("isFetchNetworkError recognizes WebKit, Chromium, and Firefox network failu
   abort.name = "AbortError";
   assert.equal(isFetchNetworkError(abort), false);
   assert.equal(isFetchNetworkError(new Error("HTTP 500")), false);
+});
+
+test("isTransientDetailFetchError treats network blips and 5xx as recoverable, 4xx as real", () => {
+  // Network failures across engines → transient (fall back to best-effort add).
+  assert.equal(isTransientDetailFetchError(new TypeError("Load failed")), true);
+  assert.equal(isTransientDetailFetchError(new TypeError("Failed to fetch")), true);
+  // getFragranceDetails throws "Fragrance detail fetch failed: <status>".
+  assert.equal(isTransientDetailFetchError(new Error("Fragrance detail fetch failed: 503")), true);
+  assert.equal(isTransientDetailFetchError(new Error("Fragrance detail fetch failed: 500")), true);
+  // 4xx is a genuine failure (e.g. not found) and must surface, not be swallowed.
+  assert.equal(isTransientDetailFetchError(new Error("Fragrance detail fetch failed: 404")), false);
+  assert.equal(isTransientDetailFetchError(new Error("Fragrance detail fetch failed: 422")), false);
+  // Aborts and unrelated errors are not transient-recoverable here.
+  const abort = new Error("aborted");
+  abort.name = "AbortError";
+  assert.equal(isTransientDetailFetchError(abort), false);
+  assert.equal(isTransientDetailFetchError(new Error("Selected fragrance is missing a detail identifier.")), false);
+  assert.equal(isTransientDetailFetchError("not an error"), false);
 });
 
 test("normalizeFragranceSearchResult preserves source-url-only candidates", () => {
@@ -461,6 +480,60 @@ test("getFragranceDetails falls back to the app API when the engine fetch fails"
   });
 
   assert.equal(detail.name, "Aventus");
+  assert.deepEqual(
+    requests.map((request) => request.url),
+    [
+      "https://engine.example.test/api/fragrances/details",
+      "https://app-api.example.test/api/fragrances/details",
+    ],
+  );
+});
+
+test("getFragranceDetails falls back to the app API when the engine returns an empty body", async (t) => {
+  const previousFetch = globalThis.fetch;
+  const previousApiUrl = process.env.VITE_FRAGRANCE_API_URL;
+  const previousAppApiUrl = process.env.VITE_API_BASE_URL;
+  const requests: Array<{ url: string; init?: RequestInit }> = [];
+
+  process.env.VITE_FRAGRANCE_API_URL = "https://engine.example.test";
+  process.env.VITE_API_BASE_URL = "https://app-api.example.test";
+  Object.defineProperty(globalThis, "fetch", {
+    configurable: true,
+    value: async (url: string, init?: RequestInit) => {
+      requests.push({ url, init });
+      if (String(url).startsWith("https://engine.example.test")) {
+        return new Response("", { status: 200 });
+      }
+      return new Response(JSON.stringify({ name: "Egoiste Platinum", house: "Chanel" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    },
+  });
+
+  t.after(() => {
+    Object.defineProperty(globalThis, "fetch", {
+      configurable: true,
+      value: previousFetch,
+    });
+    if (previousApiUrl === undefined) {
+      delete process.env.VITE_FRAGRANCE_API_URL;
+    } else {
+      process.env.VITE_FRAGRANCE_API_URL = previousApiUrl;
+    }
+    if (previousAppApiUrl === undefined) {
+      delete process.env.VITE_API_BASE_URL;
+    } else {
+      process.env.VITE_API_BASE_URL = previousAppApiUrl;
+    }
+  });
+
+  const detail = await getFragranceDetails({
+    id: "opaque-token",
+    source_url: "https://www.fragrantica.com/perfume/Chanel/Egoiste-Platinum-614.html",
+  });
+
+  assert.equal(detail.name, "Egoiste Platinum");
   assert.deepEqual(
     requests.map((request) => request.url),
     [

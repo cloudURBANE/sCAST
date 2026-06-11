@@ -2142,6 +2142,7 @@ export const Wardrobe: React.FC<{
                               alt={entryName(selectedItem)}
                               adjustment={frameDraft}
                               showFrameGuide={bottleImageToolsOpen}
+                              isSyncing={isImageSyncing?.(selectedItem)}
                               className="absolute inset-0"
                               imgClassName={constrainedDetailMode ? "" : "transition-all duration-300"}
                             />

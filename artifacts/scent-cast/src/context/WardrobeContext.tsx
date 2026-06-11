@@ -33,6 +33,12 @@ const WARDROBE_ONBOARDING_THRESHOLD = 3;
 // wardrobe) before being asked to create an account; the gentler GuestSaveBanner
 // nudges in the meantime.
 const GUEST_SAVE_PROMPT_THRESHOLD = 5;
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)
+  ?.replace(/\/+$/, '');
+
+function appApiUrl(path: string): string {
+  return API_BASE_URL ? `${API_BASE_URL}${path}` : path;
+}
 
 function onboardingMarkerKey(authToken: string): string {
   return `${ONBOARDING_STORAGE_KEY}:${authToken}`;
@@ -753,21 +759,64 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setImageSyncTarget(null);
   }, []);
 
+  // Guest backfill probe: guests have no server wardrobe row to re-hydrate, so
+  // instead of reloading `/api/wardrobe` we read the SHARED image state for this
+  // brand/name via `GET /api/shared-image`. That endpoint is cache-only (no Serper
+  // search), so polling it on the bounded schedule below is cheap and never turns
+  // a guest add into a blocking image search. When an image is found we merge it
+  // into the local guest item and persist to localStorage — but only if the item
+  // is still imageless, so a background probe can never clobber a real image the
+  // guest already has (or just set via "Find image").
+  const pollGuestSharedImage = useCallback(async (target: Fragrance) => {
+    const brand = firstString(target.brand, (target as { house?: string }).house) ?? '';
+    const name = firstString(target.name);
+    if (!name) return;
+    try {
+      const params = new URLSearchParams({ brand, name });
+      const res = await fetch(appApiUrl(`/api/shared-image?${params.toString()}`));
+      if (!res.ok) return;
+      const data = (await res.json().catch(() => null)) as { imageUrl?: string | null } | null;
+      const imageUrl = typeof data?.imageUrl === 'string' ? data.imageUrl.trim() : '';
+      if (!imageUrl) return;
+      let applied = false;
+      setItems((prev) => {
+        const next = prev.map((item) => {
+          if (!sameWardrobeEntry(item, target)) return item;
+          // Safety: never overwrite an existing non-empty image during background
+          // backfill — the guest's own image always wins.
+          if (typeof item.imageUrl === 'string' && item.imageUrl.trim().length > 0) return item;
+          applied = true;
+          return { ...item, imageUrl };
+        });
+        if (applied) writeGuestWardrobeItems(next);
+        return next;
+      });
+      if (applied) clearImageBackfillTimers();
+    } catch {
+      /* non-fatal: the next scheduled poll (or the give-up timer) handles it */
+    }
+  }, [clearImageBackfillTimers]);
+
   // New fragrances save with no image: `POST /api/scent-profile` resolves images
   // deferred (returns empty now, backfills the shared catalog in the background),
-  // so the tile only fills in when `GET /api/wardrobe` re-hydrates from the catalog.
-  // Without help, the soonest that happens is the 60s background poll — the tile
-  // sits on "No image" for up to a minute. Kick a short, decaying burst of polls so
-  // the image appears within seconds. Delays clear the 5s post-mutation cooldown in
-  // `loadWardrobe` and stop early once the saved row has an image.
+  // so the tile only fills in when the shared catalog re-hydrates. Without help the
+  // soonest that happens for a signed-in user is the 60s background poll — the tile
+  // sits on "No image" for up to a minute; guests would never see it fill in at all.
+  // Kick a short, decaying burst so the image appears within seconds. `token` is the
+  // auth token for a signed-in save (re-hydrates `/api/wardrobe`) or `null` for a
+  // guest save (probes the cache-only `/api/shared-image`). Delays clear the 5s
+  // post-mutation cooldown in `loadWardrobe` and stop early once the image arrives.
   const scheduleImageBackfillRehydrate = useCallback(
-    (token: string, target: Pick<Fragrance, 'id' | '_dbId'>) => {
+    (target: Fragrance, token: string | null) => {
       clearImageBackfillTimers();
       // Mark the tile as actively syncing for the lifetime of the burst.
       setImageSyncTarget(target);
       const POLL_SCHEDULE_MS = [6000, 12000, 20000, 32000, 48000];
       for (const delay of POLL_SCHEDULE_MS) {
         const id = window.setTimeout(() => {
+          // Auth changed since the burst began (signed in or out) → abandon: the
+          // freshly-relevant mode owns the tile now. For a guest burst `token` is
+          // null, so this fires the moment a token appears mid-burst.
           if (authTokenRef.current !== token) {
             clearImageBackfillTimers();
             return;
@@ -780,7 +829,11 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             clearImageBackfillTimers();
             return;
           }
-          void loadWardrobe(token);
+          if (token) {
+            void loadWardrobe(token);
+          } else {
+            void pollGuestSharedImage(target);
+          }
         }, delay);
         imageBackfillTimersRef.current.push(id);
       }
@@ -795,7 +848,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }, POLL_SCHEDULE_MS[POLL_SCHEDULE_MS.length - 1] + 4000);
       imageBackfillTimersRef.current.push(giveUpId);
     },
-    [clearImageBackfillTimers, loadWardrobe],
+    [clearImageBackfillTimers, loadWardrobe, pollGuestSharedImage],
   );
 
   useEffect(() => clearImageBackfillTimers, [clearImageBackfillTimers]);
@@ -1006,7 +1059,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           const savedHasImage =
             typeof savedItem.imageUrl === 'string' && savedItem.imageUrl.trim().length > 0;
           if (!savedHasImage) {
-            scheduleImageBackfillRehydrate(authToken, savedItem);
+            scheduleImageBackfillRehydrate(savedItem, authToken);
           }
           return { persisted: true };
         }
@@ -1025,7 +1078,19 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         isMutatingRef.current = false;
         lastMutationRef.current = Date.now();
       }
-    } else if (nextCount >= GUEST_SAVE_PROMPT_THRESHOLD && !guestPromptDismissed) {
+    }
+
+    // Guest path (the signed-in branch above always returns). A guest add lands
+    // imageless in local storage, so kick the same bounded burst — in guest mode
+    // it probes the cache-only `/api/shared-image` and merges any found image into
+    // local storage, instead of re-hydrating a (non-existent) server row.
+    const guestHasImage =
+      typeof newItem.imageUrl === 'string' && newItem.imageUrl.trim().length > 0;
+    if (!guestHasImage) {
+      scheduleImageBackfillRehydrate(newItem, null);
+    }
+
+    if (nextCount >= GUEST_SAVE_PROMPT_THRESHOLD && !guestPromptDismissed) {
       setIsAuthModalOpen(true);
       return { persisted: false, requiresAuth: true };
     }
@@ -1038,7 +1103,30 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     imageUrl?: string,
     imageAdjustment?: BottleImageAdjustment,
   ): Promise<Fragrance | null> => {
-    if (!authToken) return null;
+    if (!authToken) {
+      // Guest: there is no server row to PATCH, so persist the chosen image and/or
+      // framing onto the local item + localStorage. This is what lets a guest's
+      // manual "Find image" preview actually stick instead of being a throwaway
+      // preview. We only touch the matched item and leave everything else intact.
+      let next: Fragrance | null = null;
+      setItems((prev) => {
+        const updated = prev.map((item) => {
+          if (!sameWardrobeEntry(item, target)) return item;
+          next = {
+            ...item,
+            ...(imageUrl ? { imageUrl } : {}),
+            ...(imageAdjustment ? { imageAdjustment } : {}),
+          };
+          return next;
+        });
+        if (next) writeGuestWardrobeItems(updated);
+        return updated;
+      });
+      if (next) {
+        toast({ title: "Portrait Saved", description: "Bottle display styling aligned." });
+      }
+      return next;
+    }
     const apiId = target._dbId ?? target.id;
     isMutatingRef.current = true;
     try {
