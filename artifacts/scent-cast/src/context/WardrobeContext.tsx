@@ -122,6 +122,55 @@ const firstString = (...values: unknown[]): string | undefined => {
   return undefined;
 };
 
+const UNKNOWN_FACT_VALUES = new Set(['unknown', 'n/a', 'na', 'none', 'null']);
+
+const titleFactValue = (value: string): string =>
+  value
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' ')
+    .map((word) => (word.length <= 3 && word === word.toUpperCase()
+      ? word
+      : word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()))
+    .join(' ');
+
+const usefulFactString = (value: unknown, options?: { rejectUniversal?: boolean }): string | undefined => {
+  const raw = firstString(value);
+  if (!raw) return undefined;
+  const normalized = raw.trim().toLowerCase();
+  if (UNKNOWN_FACT_VALUES.has(normalized)) return undefined;
+  if (options?.rejectUniversal && normalized === 'universal') return undefined;
+  return raw.trim();
+};
+
+const detailRefreshFactPatch = (detail: FragranceDetail): Partial<Pick<Fragrance, 'year' | 'gender' | 'concentration' | 'season'>> => {
+  const patch: Partial<Pick<Fragrance, 'year' | 'gender' | 'concentration' | 'season'>> = {};
+
+  if (typeof detail.year === 'number' && Number.isFinite(detail.year)) {
+    patch.year = Math.trunc(detail.year);
+  }
+
+  const gender = usefulFactString(detail.gender);
+  if (gender) patch.gender = gender;
+
+  const concentration = usefulFactString(detail.concentration);
+  if (concentration) patch.concentration = concentration;
+
+  const explicitSeason = usefulFactString(detail.season, { rejectUniversal: true });
+  const derivedSeasons = detail.derived_metrics?.wear_profile?.primary_seasons
+    ?.map((season) => usefulFactString(season, { rejectUniversal: true }))
+    .filter((season): season is string => Boolean(season));
+  const season = explicitSeason ?? (
+    derivedSeasons && derivedSeasons.length > 0
+      ? uniqueStrings(derivedSeasons).map(titleFactValue).join(' / ')
+      : undefined
+  );
+  if (season) patch.season = season;
+
+  return patch;
+};
+
 const uniqueStrings = (values: string[]): string[] =>
   Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
 
@@ -1269,6 +1318,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const apiId = target._dbId ?? target.id;
     isMutatingRef.current = true;
     try {
+      const factPatch = detailRefreshFactPatch(detail);
       const res = await fetch(`/api/wardrobe/${apiId}`, {
         method: 'PATCH',
         headers: {
@@ -1276,6 +1326,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           Authorization: `Bearer ${authToken}`,
         },
         body: JSON.stringify({
+          ...factPatch,
           derived_metrics: detail.derived_metrics ?? null,
           source_coverage: detail.source_coverage,
           enrichment: detail.enrichment ?? null,
@@ -1329,13 +1380,17 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           Authorization: `Bearer ${authToken}`,
         },
         body: JSON.stringify({
-          updates: updates.map(({ target, detail }) => ({
-            id: target._dbId ?? target.id,
-            derived_metrics: detail.derived_metrics ?? null,
-            source_coverage: detail.source_coverage,
-            enrichment: detail.enrichment ?? null,
-            raw_engine_detail: detail,
-          })),
+          updates: updates.map(({ target, detail }) => {
+            const factPatch = detailRefreshFactPatch(detail);
+            return {
+              id: target._dbId ?? target.id,
+              ...factPatch,
+              derived_metrics: detail.derived_metrics ?? null,
+              source_coverage: detail.source_coverage,
+              enrichment: detail.enrichment ?? null,
+              raw_engine_detail: detail,
+            };
+          }),
         }),
       });
       const data = (await res.json().catch(() => null)) as {
