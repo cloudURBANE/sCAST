@@ -26,10 +26,13 @@ const navBaseClassName =
   'text-[13px] sm:text-[14px] font-semibold uppercase tracking-[0.12em] min-[430px]:tracking-[0.16em] whitespace-nowrap';
 
 const inactiveNavClassName = `${navBaseClassName} text-[#f4debd]/85 hover:text-white transition-colors`;
-const activeNavClassName = `${navBaseClassName} text-scent-accent`;
+const activeNavClassName = `${navBaseClassName} text-[#fff7ec]`;
 
 const ActiveDot: React.FC = () => (
-  <span aria-hidden="true" className="hidden sm:inline-block w-1 h-1 rounded-full bg-scent-accent mr-2 align-middle" />
+  <span
+    aria-hidden="true"
+    className="hidden h-1.5 w-1.5 shrink-0 rounded-full bg-scent-accent/75 shadow-[0_0_10px_rgba(212,175,55,0.34)] sm:block"
+  />
 );
 
 const getAvatarFallback = (username?: string | null, email?: string | null): string => {
@@ -189,7 +192,9 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
           <NavLink
             to="/community"
             className={({ isActive }) =>
-              isActive ? `${activeNavClassName} hidden sm:inline-flex` : inactiveNavClassName
+              isActive
+                ? `${activeNavClassName} hidden min-h-[44px] items-center gap-2 sm:inline-flex`
+                : inactiveNavClassName
             }
           >
             {({ isActive }) => (

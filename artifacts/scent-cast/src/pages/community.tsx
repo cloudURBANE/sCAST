@@ -131,15 +131,17 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
           </div>
           {communityBodyReady ? (
             <section className="w-full space-y-6 sm:space-y-8" aria-label="Community forum">
-              <PostComposer ref={composerRef} authToken={authToken} onSignIn={onSignIn} />
-              <PostFilters
-                type={postType}
-                tag={postTag}
-                q={postQuery}
-                onTypeChange={setPostType}
-                onTagChange={setPostTag}
-                onQueryChange={setPostQuery}
-              />
+              <div className="mx-auto w-full max-w-[960px] overflow-hidden rounded-[var(--radius-scent)] border border-scent-accent/24 bg-[linear-gradient(180deg,rgba(10,9,7,0.88),rgba(0,0,0,0.96))] shadow-[0_18px_44px_-30px_rgba(0,0,0,0.95),0_0_0_1px_rgba(212,175,55,0.06),inset_0_1px_0_rgba(255,236,183,0.06)]">
+                <PostComposer ref={composerRef} authToken={authToken} onSignIn={onSignIn} />
+                <PostFilters
+                  type={postType}
+                  tag={postTag}
+                  q={postQuery}
+                  onTypeChange={setPostType}
+                  onTagChange={setPostTag}
+                  onQueryChange={setPostQuery}
+                />
+              </div>
               <CommunityFeed
                 filters={feedFilters}
                 authToken={authToken}
