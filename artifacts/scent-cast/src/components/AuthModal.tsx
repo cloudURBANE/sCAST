@@ -90,7 +90,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <button
                   type="button"
                   onClick={handleContinueAsGuest}
-                  className="w-full h-[3.25rem] border border-white/75 bg-white/[0.18] text-white font-sans text-sm font-bold flex items-center justify-center shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] hover:border-white hover:bg-white/[0.24] transition-all rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/90 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+                  className="w-full h-[3.25rem] border border-white/90 bg-white/[0.28] text-white font-sans text-sm font-bold flex items-center justify-center shadow-[inset_0_1px_0_rgba(255,255,255,0.24),0_10px_28px_rgba(255,255,255,0.08)] hover:border-white hover:bg-white/[0.36] transition-all rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/90 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
                 >
                   Continue as guest
                 </button>

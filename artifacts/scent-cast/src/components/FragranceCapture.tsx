@@ -900,7 +900,7 @@ export const FragranceCapture: React.FC<{
     void handleSearch();
   };
 
-  const resetState = () => {
+  const resetState = useCallback(() => {
     setMatches([]);
     setSelectedId(null);
     setHouseFilter(null);
@@ -909,7 +909,16 @@ export const FragranceCapture: React.FC<{
     setSearchQuery("");
     setErrorPhase(null);
     setSyncComplete(false);
-  };
+  }, []);
+
+  const cancelActiveSearch = useCallback(() => {
+    if (loadingSurface !== 'search') return;
+    searchAbortController.current?.abort();
+    searchAbortController.current = null;
+    setUploading(false);
+    setLoadingSurface(null);
+    setLoadingStatus("");
+  }, [loadingSurface]);
 
   // "Back to search" — return focus to the field without discarding results or
   // the current query, so users can refine and re-run without scrolling up.
@@ -921,6 +930,7 @@ export const FragranceCapture: React.FC<{
   // "New search" — clear the result surface but keep the user on the search
   // field so they can immediately type again (resetState empties the query too).
   const handleNewSearch = () => {
+    cancelActiveSearch();
     resetState();
     setErrorStatus(null);
     window.requestAnimationFrame(() => {
@@ -934,12 +944,13 @@ export const FragranceCapture: React.FC<{
   // closing on mobile doesn't pop the keyboard back open; it just clears and
   // scrolls the (now-empty) search area back into view.
   const handleDismissResults = useCallback(() => {
+    cancelActiveSearch();
     resetState();
     setErrorStatus(null);
     window.requestAnimationFrame(() => {
       searchInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
-  }, []);
+  }, [cancelActiveSearch, resetState]);
 
   // Esc closes the search surface whenever it is conceptually open — results
   // showing, a completed (possibly empty) search, a typed query, or just the
@@ -948,7 +959,7 @@ export const FragranceCapture: React.FC<{
   // level so it works regardless of where focus currently sits.
   const searchSurfaceOpen = matches.length > 0 || hasSearched || vaultSearchActive;
   useEffect(() => {
-    if (!searchSurfaceOpen || uploading) return;
+    if (!searchSurfaceOpen || loadingSurface === 'sync') return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
@@ -958,7 +969,7 @@ export const FragranceCapture: React.FC<{
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [searchSurfaceOpen, uploading, handleDismissResults]);
+  }, [searchSurfaceOpen, loadingSurface, handleDismissResults]);
 
   // Bring freshly-arrived results into view so the list isn't stranded below the
   // fold on tall mobile layouts. Runs once per result set, after the overlay clears.
@@ -1127,7 +1138,11 @@ export const FragranceCapture: React.FC<{
                 <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shrink-0" />
                 <p className="max-w-md text-sm font-medium leading-relaxed text-red-200">{errorStatus}</p>
               </div>
-              <button onClick={handleRetry} className="scent-type-chip text-red-200 hover:underline">
+              <button
+                type="button"
+                onClick={handleRetry}
+                className="scent-type-chip text-red-200 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200/70"
+              >
                 Try Again
               </button>
             </motion.div>
@@ -1337,7 +1352,7 @@ export const FragranceCapture: React.FC<{
                               key={key}
                               type="button"
                               onClick={() => setSelectedId(key)}
-                              className={`scent-vault-result-card group mx-auto w-full max-w-[39.75rem] min-h-[72px] px-4 py-2.5 text-center transition-all duration-200 cursor-pointer sm:min-h-[82px] sm:px-5 sm:py-3 ${
+                              className={`scent-vault-result-card group mx-auto w-full max-w-[39.75rem] min-h-[60px] px-3.5 py-2 text-center transition-all duration-200 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55 sm:min-h-[70px] sm:px-4 sm:py-2.5 ${
                                 isSelected ? 'is-selected' : ''
                               }`}
                               aria-pressed={isSelected}
@@ -1359,7 +1374,7 @@ export const FragranceCapture: React.FC<{
                                   <Check size={16} strokeWidth={3} />
                                 </motion.span>
                               )}
-                              <span className="scent-vault-monogram mx-auto mb-1 flex h-7 w-7 items-center justify-center rounded-full font-serif text-[0.88rem] font-semibold leading-none sm:mb-1.5 sm:h-8 sm:w-8 sm:text-[0.98rem]">
+                              <span className="scent-vault-monogram mx-auto mb-0.5 flex h-6 w-6 items-center justify-center rounded-full font-serif text-[0.82rem] font-semibold leading-none sm:mb-1 sm:h-7 sm:w-7 sm:text-[0.92rem]">
                                 {matchMonogram(m)}
                               </span>
                               <span
@@ -1402,7 +1417,7 @@ export const FragranceCapture: React.FC<{
                     type="button"
                     onClick={handlePrimaryAction}
                     disabled={uploading || !hasSelectedMatch}
-                    className="scent-vault-outline-button mt-3 flex h-[60px] w-full items-center justify-center px-4 font-serif italic text-base transition-all hover:scale-[1.01] active:scale-[0.98] sm:mt-5 sm:h-[74px] sm:text-lg disabled:pointer-events-none disabled:opacity-62"
+                    className="scent-vault-outline-button mt-3 flex h-[60px] w-full items-center justify-center px-4 font-serif italic text-base transition-all hover:scale-[1.01] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55 sm:mt-5 sm:h-[74px] sm:text-lg disabled:pointer-events-none disabled:opacity-62"
                   >
                     <span className="scent-vault-outline-button-label font-serif italic text-[1.35rem] leading-tight text-center sm:text-[1.8rem]">
                       {selectedInVault ? 'View in vault' : hasSelectedMatch ? 'Add to Vault' : 'Select a Result'}
@@ -1441,10 +1456,10 @@ export const FragranceCapture: React.FC<{
                 {[0, 1, 2].map((i) => (
                   <div
                     key={i}
-                    className="scent-vault-result-card mx-auto w-full max-w-[39.75rem] min-h-[72px] animate-pulse px-4 py-2.5 sm:min-h-[82px] sm:px-5 sm:py-3"
+                    className="scent-vault-result-card mx-auto w-full max-w-[39.75rem] min-h-[60px] animate-pulse px-3.5 py-2 sm:min-h-[70px] sm:px-4 sm:py-2.5"
                     style={{ animationDelay: `${i * 120}ms` }}
                   >
-                    <span className="mx-auto mb-1 flex h-7 w-7 rounded-full bg-white/10 sm:mb-1.5 sm:h-8 sm:w-8" />
+                    <span className="mx-auto mb-0.5 flex h-6 w-6 rounded-full bg-white/10 sm:mb-1 sm:h-7 sm:w-7" />
                     <span className="mx-auto block h-4 w-44 max-w-[70%] rounded-full bg-white/10" />
                     <span className="mx-auto mt-1 block h-2.5 w-28 max-w-[50%] rounded-full bg-white/5 sm:mt-1.5" />
                   </div>
