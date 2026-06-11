@@ -60,6 +60,7 @@ import {
 import {
   buildWardrobeSearchSuggestions,
   matchesWardrobeQuery,
+  sanitizeFamilyLabel,
   type WardrobeSearchSuggestion,
 } from '@/lib/wardrobeSearchSuggest';
 import {
@@ -941,7 +942,7 @@ const VaultEmptyEmblem: React.FC = () => (
 
 export const Wardrobe: React.FC<{
   items: Fragrance[];
-  onDelete: (item: Fragrance) => void;
+  onDelete: (item: Fragrance) => void | Promise<void>;
   /** Persist the preview image to the vault row (authenticated). */
   onPersistWardrobeImage?: (
     item: Fragrance,
@@ -1137,6 +1138,8 @@ export const Wardrobe: React.FC<{
   const [enlargeOpen, setEnlargeOpen] = React.useState(false);
   const [bottleImageToolsOpen, setBottleImageToolsOpen] = React.useState(false);
   const [deleteConfirming, setDeleteConfirming] = React.useState(false);
+  const [deleteBusy, setDeleteBusy] = React.useState(false);
+  const [deleteError, setDeleteError] = React.useState<string | null>(null);
   const detailModalRef = React.useRef<HTMLDivElement | null>(null);
   const detailOpenCountRef = React.useRef(0);
   const detailCloseButtonRef = React.useRef<HTMLButtonElement | null>(null);
@@ -1146,6 +1149,7 @@ export const Wardrobe: React.FC<{
     DEFAULT_BOTTLE_IMAGE_ADJUSTMENT,
   );
   const searchBlurTimerRef = React.useRef<number | null>(null);
+  const searchInputRef = React.useRef<HTMLInputElement | null>(null);
 
   React.useEffect(() => {
     if (!bottleImageToolsOpen) return;
@@ -1611,6 +1615,8 @@ export const Wardrobe: React.FC<{
   React.useEffect(() => {
     setBottleImageToolsOpen(false);
     setDeleteConfirming(false);
+    setDeleteBusy(false);
+    setDeleteError(null);
   }, [selectedItem?.id]);
 
   React.useEffect(() => {
@@ -1675,8 +1681,36 @@ export const Wardrobe: React.FC<{
               <label htmlFor="wardrobe-vault-search" className="sr-only">
                 Search vault fragrances and image hints
               </label>
-              <Search size={23} strokeWidth={1.75} className="pointer-events-none absolute right-5 top-1/2 z-10 -translate-y-1/2 text-scent-accent sm:right-6" />
+              {searchQuery.trim().length > 0 ? (
+                <button
+                  type="button"
+                  aria-label="Clear vault search"
+                  onMouseDown={(e) => {
+                    // Run before the input's blur timer so the dropdown closes
+                    // without the focus bouncing through document.body.
+                    e.preventDefault();
+                    cancelSearchBlur();
+                    setSearchQuery('');
+                    setSearchFocused(true);
+                    searchInputRef.current?.focus();
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key !== 'Enter' && e.key !== ' ') return;
+                    e.preventDefault();
+                    cancelSearchBlur();
+                    setSearchQuery('');
+                    setSearchFocused(true);
+                    searchInputRef.current?.focus();
+                  }}
+                  className="absolute right-4 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full text-scent-accent transition-colors hover:bg-white/[0.08] hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55 sm:right-5"
+                >
+                  <X size={20} strokeWidth={1.75} aria-hidden />
+                </button>
+              ) : (
+                <Search size={23} strokeWidth={1.75} className="pointer-events-none absolute right-5 top-1/2 z-10 -translate-y-1/2 text-scent-accent sm:right-6" />
+              )}
               <input
+                ref={searchInputRef}
                 id="wardrobe-vault-search"
                 type="search"
                 enterKeyHint="search"
@@ -1740,7 +1774,7 @@ export const Wardrobe: React.FC<{
                     {searchSuggestions.map((sug, idx) => {
                       const active = idx === searchHighlightIndex;
                       const primary = suggestionPrimaryLine(sug);
-                      const sub = [sug.item.family, ...(sug.item.notes ?? []).slice(0, 2)]
+                      const sub = [sanitizeFamilyLabel(sug.item.family), ...(sug.item.notes ?? []).slice(0, 2)]
                         .filter(Boolean)
                         .join(' · ');
                       return (
@@ -2751,6 +2785,9 @@ export const Wardrobe: React.FC<{
                 {!bottleImageToolsOpen && !refreshError && bgFallbackWarning && (
                   <p className="text-sm text-yellow-100 text-center leading-snug px-2 py-1">{bgFallbackWarning}</p>
                 )}
+                {deleteError && (
+                  <p role="alert" className="text-sm text-red-100 text-center leading-snug px-2 py-1">{deleteError}</p>
+                )}
 
 
 
@@ -2765,7 +2802,8 @@ export const Wardrobe: React.FC<{
                       }
                       closeDetail();
                     }}
-                    className="min-h-[46px] border-r border-white/10 px-3 py-3 scent-type-chip text-scent-text-muted transition-colors hover:bg-white/[0.05] hover:text-white"
+                    disabled={deleteBusy}
+                    className="min-h-[46px] border-r border-white/10 px-3 py-3 scent-type-chip text-scent-text-muted transition-colors hover:bg-white/[0.05] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     {deleteConfirming ? 'Go back' : 'Close'}
                   </button>
@@ -2774,24 +2812,46 @@ export const Wardrobe: React.FC<{
                     onClick={() => {
                       if (!deleteConfirming) {
                         setDeleteConfirming(true);
+                        setDeleteError(null);
                         return;
                       }
-                      onDelete(selectedItem);
-                      closeDetail();
+                      if (deleteBusy) return;
+                      setDeleteBusy(true);
+                      setDeleteError(null);
+                      void (async () => {
+                        try {
+                          await onDelete(selectedItem);
+                          closeDetail();
+                        } catch {
+                          // Context already toasts and re-syncs; keep the modal
+                          // open with inline feedback so the click isn't lost.
+                          setDeleteError('Delete failed. The vault was re-synced — try again.');
+                          setDeleteConfirming(false);
+                        } finally {
+                          setDeleteBusy(false);
+                        }
+                      })();
                     }}
-                    disabled={imageToolbarBusy}
-                    aria-label={deleteConfirming ? "Confirm delete from vault" : "Delete from vault"}
-                    className={`group flex min-h-[46px] items-center justify-center gap-2 px-3 py-3 scent-type-chip transition-all disabled:cursor-not-allowed disabled:opacity-25 ${
-                      deleteConfirming
+                    disabled={imageToolbarBusy || deleteBusy}
+                    aria-busy={deleteBusy}
+                    aria-label={deleteBusy ? "Deleting from vault" : deleteConfirming ? "Confirm delete from vault" : "Delete from vault"}
+                    className={`group flex min-h-[46px] items-center justify-center gap-2 px-3 py-3 scent-type-chip transition-all disabled:cursor-not-allowed ${
+                      deleteBusy ? 'disabled:opacity-80' : 'disabled:opacity-25'
+                    } ${
+                      deleteConfirming || deleteBusy
                         ? 'bg-red-500/12 text-red-300 hover:bg-red-500/18 hover:text-red-200'
                         : 'text-scent-text-muted hover:bg-red-500/[0.06] hover:text-red-300'
                     }`}
                   >
-                    <Trash2 size={14} strokeWidth={1.75} className={deleteConfirming ? '' : 'group-hover:animate-bounce'} />
+                    {deleteBusy ? (
+                      <RefreshCw size={14} strokeWidth={1.75} className="animate-spin" aria-hidden />
+                    ) : (
+                      <Trash2 size={14} strokeWidth={1.75} className={deleteConfirming ? '' : 'group-hover:animate-bounce'} />
+                    )}
                     <span className="hidden sm:inline">
-                      {deleteConfirming ? 'Confirm delete' : 'Delete from vault'}
+                      {deleteBusy ? 'Deleting…' : deleteConfirming ? 'Confirm delete' : 'Delete from vault'}
                     </span>
-                    <span className="sm:hidden">{deleteConfirming ? 'Confirm' : 'Delete'}</span>
+                    <span className="sm:hidden">{deleteBusy ? 'Deleting…' : deleteConfirming ? 'Confirm' : 'Delete'}</span>
                   </button>
                 </div>
               </div>

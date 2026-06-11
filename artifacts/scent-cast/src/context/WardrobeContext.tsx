@@ -1611,6 +1611,9 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         variant: "destructive"
       });
       await loadWardrobe(authToken);
+      // Rethrow so the detail modal that triggered the delete can stay open
+      // and show inline failure feedback instead of silently closing.
+      throw err instanceof Error ? err : new Error(String(err));
     } finally {
       isMutatingRef.current = false;
       lastMutationRef.current = Date.now();

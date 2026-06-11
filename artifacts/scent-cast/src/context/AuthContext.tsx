@@ -6,6 +6,7 @@ const STORAGE_KEYS = {
   PICTURE: 'scent_picture',
   USERNAME: 'scent_username',
   GUEST_DISMISSED: 'scent_guest_prompt_dismissed',
+  GUEST_MODE_ACK: 'scent_guest_mode_acknowledged',
 } as const;
 
 interface AuthContextType {
@@ -16,10 +17,16 @@ interface AuthContextType {
   isAuthModalOpen: boolean;
   isProfileModalOpen: boolean;
   guestPromptDismissed: boolean;
+  /** True once the user explicitly chose "Continue as guest" this session. */
+  guestModeActive: boolean;
+  /** Persisted: the user dismissed the "browsing as guest" banner. */
+  guestModeAcknowledged: boolean;
   setIsAuthModalOpen: (open: boolean) => void;
   setIsProfileModalOpen: (open: boolean) => void;
   setAuthUsername: (username: string | null) => void;
   setGuestPromptDismissed: (dismissed: boolean) => void;
+  setGuestModeAcknowledged: (acknowledged: boolean) => void;
+  handleContinueAsGuest: () => void;
   handleAuth: (token: string, email: string, pictureUrl?: string | null) => void;
   handleSignOut: () => void;
 }
@@ -95,6 +102,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
+  // Session-only: flips on when the user explicitly picks "Continue as guest",
+  // which drives the persistent guest-state banner. Not persisted — a fresh
+  // visit shouldn't open with the banner unless the user chooses guest again.
+  const [guestModeActive, setGuestModeActive] = useState(false);
+
+  // Persisted: once the guest banner is dismissed it stays dismissed across
+  // reloads. Cleared on sign-in so a future signed-out guest session can show it.
+  const [guestModeAcknowledged, setGuestModeAcknowledgedState] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(STORAGE_KEYS.GUEST_MODE_ACK) === '1';
+    } catch {
+      return false;
+    }
+  });
+
+  const setGuestModeAcknowledged = useCallback((acknowledged: boolean) => {
+    setGuestModeAcknowledgedState(acknowledged);
+    try {
+      if (acknowledged) localStorage.setItem(STORAGE_KEYS.GUEST_MODE_ACK, '1');
+      else localStorage.removeItem(STORAGE_KEYS.GUEST_MODE_ACK);
+    } catch {
+      /* storage unavailable (private mode / quota) — keep in-memory state only */
+    }
+  }, []);
+
+  const handleContinueAsGuest = useCallback(() => {
+    setIsAuthModalOpen(false);
+    setGuestModeActive(true);
+  }, []);
+
   const handleAuth = useCallback((token: string, email: string, pictureUrl?: string | null) => {
     localStorage.setItem(STORAGE_KEYS.TOKEN, token);
     localStorage.setItem(STORAGE_KEYS.EMAIL, email);
@@ -108,7 +145,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setAuthPictureUrl(pictureUrl ?? null);
     setIsAuthModalOpen(false);
     setGuestPromptDismissed(false);
-  }, [setGuestPromptDismissed]);
+    setGuestModeActive(false);
+    setGuestModeAcknowledged(false);
+  }, [setGuestPromptDismissed, setGuestModeAcknowledged]);
 
   const handleSignOut = useCallback(() => {
     localStorage.removeItem(STORAGE_KEYS.TOKEN);
@@ -151,10 +190,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     isAuthModalOpen,
     isProfileModalOpen,
     guestPromptDismissed,
+    guestModeActive,
+    guestModeAcknowledged,
     setIsAuthModalOpen,
     setIsProfileModalOpen,
     setAuthUsername,
     setGuestPromptDismissed,
+    setGuestModeAcknowledged,
+    handleContinueAsGuest,
     handleAuth,
     handleSignOut,
   }), [
@@ -165,7 +208,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     isAuthModalOpen,
     isProfileModalOpen,
     guestPromptDismissed,
+    guestModeActive,
+    guestModeAcknowledged,
     setAuthUsername,
+    setGuestModeAcknowledged,
+    handleContinueAsGuest,
     handleAuth,
     handleSignOut,
   ]);

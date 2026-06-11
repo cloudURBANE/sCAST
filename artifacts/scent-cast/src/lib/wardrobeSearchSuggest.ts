@@ -13,6 +13,30 @@ export type WardrobeSearchSuggestionFragrance = { kind: 'fragrance'; item: Wardr
 export type WardrobeSearchSuggestion = WardrobeSearchSuggestionFragrance;
 
 
+/**
+ * Placeholder labels that occasionally leak in from persisted data or engine
+ * payloads. They carry no information, so display paths must drop them rather
+ * than render "Unknown Family" as if it were a real scent family.
+ */
+const PLACEHOLDER_FAMILY_LABELS = new Set([
+  'unknown family',
+  'unknown',
+  'n/a',
+  'na',
+  'none',
+  'undefined',
+  'null',
+]);
+
+/** Returns a family label fit for display, or null when it's absent/placeholder junk. */
+export function sanitizeFamilyLabel(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (PLACEHOLDER_FAMILY_LABELS.has(trimmed.toLowerCase())) return null;
+  return trimmed;
+}
+
 function entryName(item: WardrobeSuggestionFragranceShape): string {
   return item?.name || item?.product?.name || '';
 }
