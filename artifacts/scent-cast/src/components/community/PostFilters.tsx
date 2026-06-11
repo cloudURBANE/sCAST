@@ -6,6 +6,7 @@ import {
   Search,
   Sun,
   Swords,
+  Tags,
   X,
   type LucideIcon,
 } from 'lucide-react';
@@ -52,10 +53,15 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
   onQueryChange,
 }) => {
   const [draftQuery, setDraftQuery] = useState(q);
+  const [tagsOpen, setTagsOpen] = useState(false);
 
   useEffect(() => {
     setDraftQuery(q);
   }, [q]);
+
+  useEffect(() => {
+    if (tag) setTagsOpen(true);
+  }, [tag]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -73,10 +79,10 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
 
   return (
     <section
-      className="mx-auto w-full max-w-[960px] rounded-[var(--radius-scent)] border border-scent-accent/24 bg-black/58 p-4 shadow-[0_16px_40px_-32px_rgba(0,0,0,0.92),0_0_0_1px_rgba(212,175,55,0.05)] sm:p-6"
+      className="w-full bg-black/38 p-4 sm:p-5"
       aria-label="Community post filters"
     >
-      <div className="flex flex-col items-center gap-4">
+      <div className="grid items-center gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.48fr)]">
         <div className="grid w-full grid-cols-2 gap-2 sm:grid-cols-5">
           <button
             type="button"
@@ -111,7 +117,7 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
           ))}
         </div>
 
-        <div className="relative mx-auto w-full max-w-md">
+        <div className="relative w-full">
           <Search
             size={16}
             strokeWidth={1.7}
@@ -139,11 +145,48 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
         </div>
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
-        <p className="shrink-0 scent-type-label">
-          Popular tags
-        </p>
-        <div className="flex flex-wrap justify-center gap-2">
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-white/5 pt-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setTagsOpen((open) => !open)}
+            aria-expanded={tagsOpen}
+            className={[
+              'inline-flex min-h-10 items-center gap-2 rounded-full border px-3 py-2 scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80',
+              tagsOpen || tag
+                ? 'border-scent-accent/38 bg-scent-accent/[0.09] text-[#fff7ec]'
+                : 'border-white/10 bg-black/40 text-scent-text-muted hover:border-scent-accent/28 hover:text-[#fff7ec]',
+            ].join(' ')}
+          >
+            <Tags size={14} strokeWidth={1.7} aria-hidden="true" />
+            Popular tags
+          </button>
+          {tag ? (
+            <button
+              type="button"
+              onClick={() => onTagChange(null)}
+              aria-label={`Clear #${tag} tag filter`}
+              className="inline-flex min-h-10 items-center gap-2 rounded-full border border-scent-accent/42 bg-scent-accent/[0.12] px-3 py-2 scent-type-chip font-bold text-[#fff7ec] transition-colors hover:border-scent-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80"
+            >
+              #{tag}
+              <X size={13} strokeWidth={1.8} aria-hidden="true" />
+            </button>
+          ) : null}
+        </div>
+        {type || tag || q ? (
+          <button
+            type="button"
+            onClick={clearFilters}
+            className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-full px-3 py-2 scent-type-chip text-scent-text-muted transition-colors hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80"
+          >
+            <X size={13} strokeWidth={1.8} aria-hidden="true" />
+            Clear
+          </button>
+        ) : null}
+      </div>
+
+      {tagsOpen ? (
+        <div className="mt-3 flex flex-wrap gap-2 rounded-[16px] border border-white/8 bg-black/42 p-3">
           {TAGS.map((candidate) => {
             const normalized = sanitizeCommunityTag(candidate);
             const active = tag === normalized;
@@ -165,17 +208,7 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
             );
           })}
         </div>
-        {type || tag || q ? (
-          <button
-            type="button"
-            onClick={clearFilters}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 scent-type-chip text-scent-text-muted transition-colors hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80"
-          >
-            <X size={13} strokeWidth={1.8} aria-hidden="true" />
-            Clear
-          </button>
-        ) : null}
-      </div>
+      ) : null}
     </section>
   );
 };

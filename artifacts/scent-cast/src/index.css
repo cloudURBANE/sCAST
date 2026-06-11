@@ -1290,7 +1290,7 @@ a {
 .scent-hero-zone::before {
   content: "";
   position: absolute;
-  inset: -3.25rem -2rem -2.75rem;
+  inset: -1.45rem -1rem -1.25rem;
   z-index: -1;
   pointer-events: none;
   border-radius: calc(var(--radius-scent) + 0.5rem);

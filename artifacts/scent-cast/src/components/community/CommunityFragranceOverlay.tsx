@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { X } from 'lucide-react';
+import { Check, LoaderCircle, Plus, X } from 'lucide-react';
 import { BottleImage } from '@/components/BottleImage';
 import { BrandGoldLabel } from '@/components/BrandGoldLabel';
 import type { CommunityFragranceEntry } from '@/components/community/communityData';
+import { useWardrobe } from '@/context/WardrobeContext';
 
 interface CommunityFragranceOverlayProps {
   item: CommunityFragranceEntry | null;
@@ -22,6 +23,21 @@ function formatNotes(notes: string[] | undefined): string {
   return notes && notes.length > 0 ? notes.join(', ') : 'Notes pending curation';
 }
 
+function newCommunityWardrobeId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `community-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function wardrobeIdentityKey(brand?: string | null, name?: string | null): string {
+  const compact = [brand, name]
+    .map((value) => value?.trim().toLowerCase().replace(/[^a-z0-9]+/g, ''))
+    .filter(Boolean)
+    .join(':');
+  return compact;
+}
+
 export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps> = ({
   item,
   imageLayoutId,
@@ -30,6 +46,30 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
 }) => {
   const overlayRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const { items, handleAddItem } = useWardrobe();
+  const [addState, setAddState] = React.useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [addMessage, setAddMessage] = React.useState<string | null>(null);
+  const activeItemKey = item ? wardrobeIdentityKey(item.brand, item.name) : '';
+  const alreadyInWardrobe = Boolean(
+    activeItemKey &&
+      items.some((wardrobeItem) => {
+        const record = wardrobeItem as unknown as Record<string, unknown>;
+        const product = record.product && typeof record.product === 'object'
+          ? (record.product as Record<string, unknown>)
+          : {};
+        const brand = typeof record.brand === 'string'
+          ? record.brand
+          : typeof product.brand === 'string'
+            ? product.brand
+            : null;
+        const name = typeof record.name === 'string'
+          ? record.name
+          : typeof product.name === 'string'
+            ? product.name
+            : null;
+        return wardrobeIdentityKey(brand, name) === activeItemKey;
+      }),
+  );
 
   const closeOverlay = useCallback(() => {
     onClose();
@@ -44,6 +84,11 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
   }, [item]);
 
   useEffect(() => {
+    setAddState('idle');
+    setAddMessage(null);
+  }, [activeItemKey]);
+
+  useEffect(() => {
     if (!item) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -56,6 +101,56 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [item, closeOverlay]);
+
+  const addToWardrobe = useCallback(async () => {
+    if (!item || addState === 'saving' || addState === 'saved' || alreadyInWardrobe) return;
+
+    const flatNotes = [
+      ...(item.topNotes ?? []),
+      ...(item.heartNotes ?? []),
+      ...(item.baseNotes ?? []),
+    ];
+
+    setAddState('saving');
+    setAddMessage(null);
+
+    try {
+      const result = await handleAddItem({
+        id: newCommunityWardrobeId(),
+        name: item.name,
+        brand: item.brand,
+        imageUrl: item.imageUrl,
+        season: 'Universal',
+        ...(item.family ? { family: item.family } : {}),
+        ...(flatNotes.length > 0 ? { notes: flatNotes } : {}),
+        ...(flatNotes.length > 0
+          ? {
+              pyramid: {
+                top: item.topNotes ?? [],
+                heart: item.heartNotes ?? [],
+                base: item.baseNotes ?? [],
+              },
+            }
+          : {}),
+        context: {
+          source: 'community',
+          curator: item.curator,
+        },
+      });
+
+      if (result.error) {
+        setAddState('error');
+        setAddMessage(result.error);
+        return;
+      }
+
+      setAddState('saved');
+      setAddMessage(result.persisted ? 'Saved to wardrobe.' : 'Added locally. Sign in to sync.');
+    } catch (err) {
+      setAddState('error');
+      setAddMessage(err instanceof Error ? err.message : 'Could not add to wardrobe.');
+    }
+  }, [addState, alreadyInWardrobe, handleAddItem, item]);
 
   return (
     <AnimatePresence mode="wait">
@@ -147,20 +242,56 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
                       Community Wardrobe
                     </motion.p>
                     <motion.div
-                      className="space-y-3"
+                      className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start"
                       variants={{
                         hidden: { opacity: 0, y: 12 },
                         visible: { opacity: 1, y: 0, transition: { duration: 0.42, ease: 'easeOut' } },
                       }}
                     >
-                      <BrandGoldLabel as="p" brand={item.brand} className="font-serif text-sm uppercase tracking-[0.24em]" />
-                      <motion.h2
-                        id="community-fragrance-overlay-title"
-                        className="font-serif text-4xl italic leading-none text-[#fff7ec] sm:text-6xl lg:text-7xl"
+                      <div className="min-w-0 space-y-3">
+                        <BrandGoldLabel as="p" brand={item.brand} className="font-serif text-sm uppercase tracking-[0.24em]" />
+                        <motion.h2
+                          id="community-fragrance-overlay-title"
+                          className="font-serif text-4xl italic leading-none text-[#fff7ec] sm:text-6xl lg:text-7xl"
+                        >
+                          {item.name}
+                        </motion.h2>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void addToWardrobe()}
+                        disabled={addState === 'saving' || addState === 'saved' || alreadyInWardrobe}
+                        aria-label={alreadyInWardrobe || addState === 'saved' ? `${item.name} is in your wardrobe` : `Add ${item.name} to wardrobe`}
+                        className={[
+                          'inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-full border px-3.5 py-2 scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/70 sm:mt-0',
+                          alreadyInWardrobe || addState === 'saved'
+                            ? 'border-scent-accent/30 bg-scent-accent/[0.1] text-[#fff7ec]'
+                            : 'border-scent-accent/28 bg-black/58 text-scent-text-muted hover:border-scent-accent/48 hover:text-[#fff7ec]',
+                        ].join(' ')}
                       >
-                        {item.name}
-                      </motion.h2>
+                        {addState === 'saving' ? (
+                          <LoaderCircle size={16} className="animate-spin" aria-hidden="true" />
+                        ) : alreadyInWardrobe || addState === 'saved' ? (
+                          <Check size={16} strokeWidth={1.8} aria-hidden="true" />
+                        ) : (
+                          <Plus size={17} strokeWidth={1.9} aria-hidden="true" />
+                        )}
+                        <span className="hidden sm:inline">
+                          {alreadyInWardrobe || addState === 'saved' ? 'Saved' : 'Wardrobe'}
+                        </span>
+                      </button>
                     </motion.div>
+                    {addMessage ? (
+                      <motion.p
+                        className={addState === 'error' ? 'scent-type-meta uppercase text-red-200' : 'scent-type-meta uppercase text-scent-text-muted'}
+                        variants={{
+                          hidden: { opacity: 0, y: 8 },
+                          visible: { opacity: 1, y: 0, transition: { duration: 0.3, ease: 'easeOut' } },
+                        }}
+                      >
+                        {addMessage}
+                      </motion.p>
+                    ) : null}
                     {item.family ? (
                       <motion.p
                         className="scent-type-meta uppercase"
@@ -218,9 +349,9 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
             <button
               type="button"
               onClick={closeOverlay}
-              className="scent-primary-button w-full py-4 rounded-[var(--radius-scent)]"
+              className="scent-primary-button mx-auto flex min-h-11 w-full max-w-sm items-center justify-center rounded-[var(--radius-scent)] px-5 py-2.5 text-xs font-bold uppercase tracking-[0.18em]"
             >
-              Close
+              <span>Close details</span>
             </button>
           </div>
         </motion.div>
