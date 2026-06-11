@@ -4,6 +4,7 @@ import {
   BadgeDollarSign,
   ChevronDown,
   ChevronUp,
+  FlaskConical,
   MessageCircle,
   MessageCircleQuestion,
   Sun,
@@ -57,38 +58,81 @@ function battleOptions(post: CommunityPost): string[] {
 }
 
 function isAllowedSnapshotImage(imageUrl: string): boolean {
-  return Boolean(imageUrl) && !imageUrl.trim().toLowerCase().startsWith('data:');
+  return (
+    Boolean(imageUrl) && !imageUrl.trim().toLowerCase().startsWith('data:')
+  );
 }
 
-const FragranceChips: React.FC<{ post: CommunityPost }> = ({ post }) => {
-  const fragrances = post.fragrances.filter((fragrance) => isAllowedSnapshotImage(fragrance.imageUrl));
+const OrnamentalDivider: React.FC<{ className?: string }> = ({
+  className = '',
+}) => (
+  <div
+    className={[
+      'grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3',
+      className,
+    ].join(' ')}
+    aria-hidden="true"
+  >
+    <span className="h-px min-w-0 bg-gradient-to-r from-transparent via-scent-accent/20 to-scent-accent/48" />
+    <span className="h-3 w-3 rotate-45 border border-scent-accent/78 bg-black shadow-[0_0_12px_rgba(212,175,55,0.26)]" />
+    <span className="h-px min-w-0 bg-gradient-to-l from-transparent via-scent-accent/20 to-scent-accent/48" />
+  </div>
+);
+
+const FragranceShowcase: React.FC<{ post: CommunityPost }> = ({ post }) => {
+  const fragrances = post.fragrances.filter((fragrance) =>
+    isAllowedSnapshotImage(fragrance.imageUrl),
+  );
   if (fragrances.length === 0) return null;
 
   return (
-    <div className="mt-4 flex flex-wrap justify-start gap-2">
+    <div className="mx-auto mt-6 grid w-full max-w-[46rem] gap-3">
       {fragrances.map((fragrance) => (
         <div
           key={`${fragrance.brand}:${fragrance.name}:${fragrance.imageUrl}`}
-          className="grid w-full max-w-[18rem] grid-cols-[3.25rem_1fr] items-center gap-3 rounded-[14px] border border-scent-accent/14 bg-black/62 p-2 text-left sm:w-auto"
+          className="grid min-h-[14rem] overflow-hidden rounded-[20px] border border-scent-accent/24 bg-[radial-gradient(80%_90%_at_26%_86%,rgba(212,175,55,0.13),transparent_58%),linear-gradient(180deg,rgba(12,10,7,0.9),rgba(0,0,0,0.96))] shadow-[inset_0_1px_0_rgba(255,236,183,0.08),0_18px_38px_-30px_rgba(0,0,0,0.95)] sm:grid-cols-[minmax(10rem,0.95fr)_1px_minmax(0,1.05fr)]"
         >
-          <div className="flex h-16 w-[3.25rem] items-center justify-center overflow-hidden rounded-[10px] bg-white/[0.035]">
+          <div className="relative flex min-h-[13rem] items-end justify-center p-5 sm:min-h-[14rem]">
+            <span
+              className="absolute bottom-4 left-1/2 h-16 w-32 -translate-x-1/2 rounded-full bg-scent-accent/12 blur-2xl"
+              aria-hidden="true"
+            />
             <img
               src={fragrance.imageUrl}
               alt={`${fragrance.name} by ${fragrance.brand}`}
               loading="lazy"
               decoding="async"
-              className="h-full w-full object-contain"
+              className="relative z-10 h-40 max-w-full object-contain sm:h-44"
             />
           </div>
-          <div className="min-w-0">
-            <p className="truncate font-serif text-base italic leading-tight text-[#fff7ec]">
+          <span
+            className="hidden h-full w-px bg-gradient-to-b from-transparent via-scent-accent/32 to-transparent sm:block"
+            aria-hidden="true"
+          />
+          <div className="flex min-w-0 flex-col justify-center border-t border-scent-accent/16 p-5 text-center sm:border-t-0 sm:p-7 sm:text-left">
+            <p className="break-words font-serif text-3xl italic leading-tight text-[#fff7ec]">
               {fragrance.name}
             </p>
-            <p className="mt-1 truncate scent-type-label text-scent-accent">
+            <p className="mt-4 break-words text-2xl font-black uppercase leading-tight tracking-[0.12em] text-[#fff7ec] sm:text-3xl">
               {fragrance.brand}
             </p>
+            <div
+              className="mt-4 h-px w-28 max-w-full bg-gradient-to-r from-scent-accent/72 to-transparent max-sm:mx-auto"
+              aria-hidden="true"
+            />
             {fragrance.family ? (
-              <p className="mt-1 truncate scent-type-caption">{fragrance.family}</p>
+              <div className="mt-5 flex items-center justify-center gap-3 text-scent-text-muted sm:justify-start">
+                <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-scent-accent/28 bg-black/52 text-scent-accent">
+                  <FlaskConical
+                    size={16}
+                    strokeWidth={1.65}
+                    aria-hidden="true"
+                  />
+                </span>
+                <p className="min-w-0 break-words text-base font-medium leading-6">
+                  {fragrance.family}
+                </p>
+              </div>
             ) : null}
           </div>
         </div>
@@ -107,13 +151,15 @@ const MetadataLine: React.FC<{ post: CommunityPost }> = ({ post }) => {
 
     if (items.length === 0) return null;
     return (
-      <div className="mt-4 flex flex-wrap justify-start gap-2">
+      <div className="mx-auto mt-5 flex max-w-3xl flex-wrap justify-center gap-2">
         {items.map(([label, value]) => (
           <span
             key={label}
-            className="rounded-full border border-white/10 bg-black/54 px-3 py-1 scent-type-meta"
+            className="rounded-full border border-scent-accent/16 bg-black/54 px-3 py-1 scent-type-meta"
           >
-            <span className="font-bold uppercase tracking-[0.12em] text-scent-accent">{label}</span>
+            <span className="font-bold uppercase tracking-[0.12em] text-scent-accent">
+              {label}
+            </span>
             <span className="ml-2 text-[#fff7ec]/78">{value}</span>
           </span>
         ))}
@@ -122,11 +168,15 @@ const MetadataLine: React.FC<{ post: CommunityPost }> = ({ post }) => {
   }
 
   if (post.postType === 'worth_it') {
-    const priceContext = metadataString(post, 'price_context') ?? metadataString(post, 'priceContext');
+    const priceContext =
+      metadataString(post, 'price_context') ??
+      metadataString(post, 'priceContext');
     if (!priceContext) return null;
     return (
-      <p className="mt-4 max-w-2xl rounded-[14px] border border-scent-accent/14 bg-black/62 px-4 py-3 text-left text-sm text-[#fff7ec]/82">
-        <span className="font-bold uppercase tracking-[0.14em] text-scent-accent">Price context</span>
+      <p className="mx-auto mt-5 max-w-2xl rounded-[16px] border border-scent-accent/18 bg-black/62 px-4 py-3 text-center text-sm leading-6 text-[#fff7ec]/82">
+        <span className="font-bold uppercase tracking-[0.14em] text-scent-accent">
+          Price context
+        </span>
         <span className="ml-2">{priceContext}</span>
       </p>
     );
@@ -159,7 +209,12 @@ const BattleVotes: React.FC<{
     setErrorMessage(null);
     mutate(
       { postId: post.id, choice },
-      { onError: (err) => setErrorMessage(err instanceof Error ? err.message : 'Vote could not be saved.') },
+      {
+        onError: (err) =>
+          setErrorMessage(
+            err instanceof Error ? err.message : 'Vote could not be saved.',
+          ),
+      },
     );
   }, [authToken, pendingChoice, mutate, post.id]);
 
@@ -176,14 +231,16 @@ const BattleVotes: React.FC<{
       { postId: post.id, choice },
       {
         onError: (err) => {
-          setErrorMessage(err instanceof Error ? err.message : 'Vote could not be saved.');
+          setErrorMessage(
+            err instanceof Error ? err.message : 'Vote could not be saved.',
+          );
         },
       },
     );
   };
 
   return (
-    <div className="mt-4 max-w-2xl space-y-3" aria-live="polite">
+    <div className="mx-auto mt-6 max-w-2xl space-y-3" aria-live="polite">
       {options.map((option) => {
         const count = post.votes[option] ?? 0;
         const pct = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
@@ -197,12 +254,14 @@ const BattleVotes: React.FC<{
             aria-pressed={picked}
             aria-label={
               hasVoted
-                ? `Vote for ${option} — currently ${pct}% with ${count} ${count === 1 ? 'vote' : 'votes'}`
+                ? `Vote for ${option} - currently ${pct}% with ${count} ${count === 1 ? 'vote' : 'votes'}`
                 : `Vote for ${option}`
             }
             className={[
-              'group relative w-full overflow-hidden rounded-[14px] border px-4 py-3 text-left transition-colors hover:border-scent-accent/38 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80 disabled:pointer-events-none disabled:opacity-55',
-              picked ? 'border-scent-accent/55 bg-scent-accent/[0.06]' : 'border-scent-accent/16 bg-black/58',
+              'group relative w-full overflow-hidden rounded-[16px] border px-4 py-3 text-left transition-colors hover:border-scent-accent/38 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80 disabled:pointer-events-none disabled:opacity-55',
+              picked
+                ? 'border-scent-accent/55 bg-scent-accent/[0.06]'
+                : 'border-scent-accent/16 bg-black/58',
             ].join(' ')}
           >
             <span
@@ -215,7 +274,9 @@ const BattleVotes: React.FC<{
             />
             <span className="relative z-10 flex items-center justify-between gap-4">
               <span className="flex min-w-0 items-center gap-2">
-                <span className="min-w-0 truncate font-serif text-lg italic text-[#fff7ec]">{option}</span>
+                <span className="min-w-0 truncate font-serif text-lg italic text-[#fff7ec]">
+                  {option}
+                </span>
                 {picked ? (
                   <span className="shrink-0 rounded-full border border-scent-accent/40 bg-scent-accent/[0.1] px-2 py-0.5 scent-type-meta uppercase text-scent-accent">
                     Your pick
@@ -230,12 +291,20 @@ const BattleVotes: React.FC<{
           </button>
         );
       })}
-      {errorMessage ? <p role="alert" className="text-sm text-red-100">{errorMessage}</p> : null}
+      {errorMessage ? (
+        <p role="alert" className="text-sm text-red-100">
+          {errorMessage}
+        </p>
+      ) : null}
     </div>
   );
 };
 
-export const PostCard: React.FC<PostCardProps> = ({ post, authToken, onSignIn }) => {
+export const PostCard: React.FC<PostCardProps> = ({
+  post,
+  authToken,
+  onSignIn,
+}) => {
   const [commentsOpen, setCommentsOpen] = useState(false);
   const headingId = useId();
   const detail = POST_TYPE_DETAILS[post.postType];
@@ -246,59 +315,64 @@ export const PostCard: React.FC<PostCardProps> = ({ post, authToken, onSignIn })
   return (
     <article
       aria-labelledby={headingId}
-      className="mx-auto w-full max-w-[960px] rounded-[var(--radius-scent)] border border-scent-accent/24 bg-[linear-gradient(180deg,rgba(10,9,7,0.88),rgba(0,0,0,0.96))] p-5 text-left shadow-[0_18px_44px_-30px_rgba(0,0,0,0.95),0_0_0_1px_rgba(212,175,55,0.06),inset_0_1px_0_rgba(255,236,183,0.06)] sm:p-6"
+      className="mx-auto w-full max-w-[960px] overflow-hidden rounded-[calc(var(--radius-scent)+10px)] border border-scent-accent/34 bg-[radial-gradient(96%_80%_at_50%_0%,rgba(255,255,255,0.025),transparent_62%),radial-gradient(80%_60%_at_50%_100%,rgba(212,175,55,0.035),transparent_68%),linear-gradient(180deg,rgba(10,9,7,0.94),rgba(0,0,0,0.985))] p-5 text-left shadow-[0_26px_64px_-42px_rgba(212,175,55,0.36),0_28px_60px_-34px_rgba(0,0,0,0.98),inset_0_1px_0_rgba(255,236,183,0.08),inset_0_0_0_1px_rgba(255,226,174,0.025)] sm:p-8"
     >
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+      <header className="grid gap-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+        <div className="flex min-w-0 items-center gap-4 sm:gap-5">
           <Link
             to={communitySharePath(post.author)}
             aria-label={`View ${authorName}'s vault`}
             className="shrink-0 rounded-full transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80"
           >
-            <CommunityAuthorAvatar author={post.author} />
+            <CommunityAuthorAvatar author={post.author} size="lg" />
           </Link>
-          <div className="min-w-0 flex flex-wrap items-center gap-x-2 gap-y-1 scent-type-meta uppercase">
+          <div className="min-w-0">
             <Link
               to={communitySharePath(post.author)}
-              className="min-w-0 max-w-full truncate font-bold text-scent-muted transition-colors hover:text-[#fff7ec]"
+              className="block min-w-0 max-w-full truncate scent-type-chip text-base text-[#fff7ec] transition-colors hover:text-scent-accent"
             >
               {authorName}
             </Link>
-            <span className="text-scent-accent/45" aria-hidden="true">
-              /
-            </span>
-            <span>{formatCommunityTime(post.createdAt)}</span>
+            <p className="mt-2 scent-type-meta uppercase text-scent-muted">
+              {formatCommunityTime(post.createdAt)}
+            </p>
           </div>
         </div>
-        <span className="inline-flex w-fit shrink-0 items-center gap-2 rounded-full border border-scent-accent/18 bg-scent-accent/[0.05] px-3 py-1 scent-type-meta font-bold uppercase text-scent-accent sm:mt-4">
-          <Icon size={13} strokeWidth={1.8} aria-hidden="true" />
+        <span className="inline-flex min-h-12 w-fit shrink-0 items-center justify-center gap-3 rounded-full border border-scent-accent/30 bg-black/54 px-5 py-2 scent-type-chip text-scent-accent shadow-[inset_0_1px_0_rgba(255,236,183,0.06)]">
+          <Icon size={17} strokeWidth={1.75} aria-hidden="true" />
           {detail.label}
         </span>
       </header>
 
-      <div className="mt-5 space-y-4">
+      <OrnamentalDivider className="my-6 sm:my-7" />
+
+      <div className="space-y-4">
         <h3
           id={headingId}
-          className="break-words text-balance text-center font-serif text-2xl italic leading-tight text-[#fff7ec] sm:text-3xl"
+          className="break-words text-balance text-center font-serif text-4xl italic leading-tight text-[#fff7ec] sm:text-5xl"
         >
           {heading}
         </h3>
-        <p className="mx-auto max-w-3xl whitespace-pre-line break-words text-center text-base leading-8 text-[#fff7ec]/88">
+        <div
+          className="mx-auto h-px w-28 max-w-full bg-gradient-to-r from-transparent via-scent-accent/68 to-transparent"
+          aria-hidden="true"
+        />
+        <p className="mx-auto max-w-3xl whitespace-pre-line break-words text-center text-xl leading-9 text-[#fff7ec]/90">
           {post.body}
         </p>
         <MetadataLine post={post} />
         {post.postType === 'battle' ? (
           <BattleVotes post={post} authToken={authToken} onSignIn={onSignIn} />
         ) : null}
-        <FragranceChips post={post} />
+        <FragranceShowcase post={post} />
       </div>
 
       {post.tags.length > 0 ? (
-        <div className="mt-6 flex flex-wrap justify-start gap-2">
+        <div className="mx-auto mt-6 flex max-w-3xl flex-wrap justify-center gap-2">
           {post.tags.map((tag) => (
             <span
               key={tag}
-              className="rounded-full border border-white/10 bg-black/54 px-3 py-1 scent-type-chip"
+              className="rounded-full border border-scent-accent/16 bg-black/54 px-3 py-1 scent-type-chip text-scent-text-muted"
             >
               #{tag}
             </span>
@@ -306,7 +380,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post, authToken, onSignIn })
         </div>
       ) : null}
 
-      <footer className="mt-6 flex flex-col items-start gap-4 border-t border-white/10 pt-4 md:flex-row md:items-center md:justify-between">
+      <footer className="mt-8 space-y-6">
         <h4 className="sr-only">Post actions</h4>
         <ReactionBar
           targetType="post"
@@ -316,25 +390,36 @@ export const PostCard: React.FC<PostCardProps> = ({ post, authToken, onSignIn })
           authToken={authToken}
           onSignIn={onSignIn}
         />
+        <OrnamentalDivider />
         <button
           type="button"
           onClick={() => setCommentsOpen((open) => !open)}
-          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-scent-accent/16 bg-black/58 px-4 py-2 scent-type-chip text-scent-text-muted transition-colors hover:border-scent-accent/34 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80"
+          className="mx-auto flex min-h-14 w-full max-w-[38rem] items-center justify-center gap-4 rounded-full border border-scent-accent/28 bg-black/58 px-6 py-3 scent-type-chip text-[#fff7ec] shadow-[inset_0_1px_0_rgba(255,236,183,0.06)] transition-colors hover:border-scent-accent/48 hover:bg-scent-accent/[0.045] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80"
           aria-expanded={commentsOpen}
-          aria-label={commentsOpen ? 'Hide comments' : `View ${post.counts.comments} comments`}
+          aria-label={
+            commentsOpen
+              ? 'Hide comments'
+              : `View ${post.counts.comments} comments`
+          }
         >
-          <MessageCircle size={14} strokeWidth={1.8} aria-hidden="true" />
-          {post.counts.comments > 0 ? `${post.counts.comments} comments` : 'Comment'}
+          <MessageCircle size={18} strokeWidth={1.75} aria-hidden="true" />
+          {post.counts.comments > 0
+            ? `${post.counts.comments} comments`
+            : 'Comment'}
           {commentsOpen ? (
-            <ChevronUp size={14} strokeWidth={1.8} aria-hidden="true" />
+            <ChevronUp size={16} strokeWidth={1.8} aria-hidden="true" />
           ) : (
-            <ChevronDown size={14} strokeWidth={1.8} aria-hidden="true" />
+            <ChevronDown size={16} strokeWidth={1.8} aria-hidden="true" />
           )}
         </button>
       </footer>
 
       {commentsOpen ? (
-        <CommentThread postId={post.id} authToken={authToken} onSignIn={onSignIn} />
+        <CommentThread
+          postId={post.id}
+          authToken={authToken}
+          onSignIn={onSignIn}
+        />
       ) : null}
     </article>
   );
