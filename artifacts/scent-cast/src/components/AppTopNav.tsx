@@ -107,7 +107,7 @@ const AccountMenu: React.FC<AccountMenuProps> = ({
           onSelect={onEditProfile}
         >
           <Settings size={15} />
-          {authUsername?.trim() ? 'Edit Username' : 'Set Username'}
+          Settings
         </DropdownMenuItem>
         <DropdownMenuItem
           className="cursor-pointer rounded-[6px] px-3 py-2.5 text-[13px] font-semibold uppercase tracking-[0.14em] text-[#f4debd] focus:bg-scent-accent/15 focus:text-white"
