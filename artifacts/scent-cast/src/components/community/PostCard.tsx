@@ -57,10 +57,10 @@ function battleOptions(post: CommunityPost): string[] {
     .slice(0, 2);
 }
 
-function isAllowedSnapshotImage(imageUrl: string): boolean {
-  return (
-    Boolean(imageUrl) && !imageUrl.trim().toLowerCase().startsWith('data:')
-  );
+function isAllowedSnapshotImage(imageUrl: string | undefined): boolean {
+  const trimmed = imageUrl?.trim();
+  if (!trimmed) return false;
+  return !trimmed.toLowerCase().startsWith('data:');
 }
 
 const OrnamentalDivider: React.FC<{ className?: string }> = ({

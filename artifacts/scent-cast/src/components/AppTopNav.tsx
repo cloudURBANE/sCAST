@@ -16,7 +16,7 @@ interface AppTopNavProps {
   authEmail?: string | null;
   authPictureUrl?: string | null;
   authUsername?: string | null;
-  renderedRoute?: 'home' | 'community';
+  renderedRoute?: 'home' | 'community' | 'arena';
   onSignIn: () => void;
   onShare: () => void;
   onSignOut: () => void;
@@ -191,6 +191,21 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
         </div>
 
         <div className="flex min-w-0 items-center gap-4 sm:gap-6 justify-self-end">
+          <NavLink
+            to="/arena"
+            className={({ isActive }) =>
+              isActive
+                ? `${activeNavClassName} hidden min-h-[44px] items-center gap-2 sm:inline-flex`
+                : inactiveNavClassName
+            }
+          >
+            {({ isActive }) => (
+              <>
+                {isActive ? <ActiveDot /> : null}
+                Arena
+              </>
+            )}
+          </NavLink>
           <NavLink
             to="/community"
             className={({ isActive }) =>

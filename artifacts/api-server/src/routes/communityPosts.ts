@@ -62,7 +62,7 @@ type CommentRow = {
 type FragranceSnapshot = {
   name: string;
   brand: string;
-  imageUrl: string;
+  imageUrl?: string;
   family?: string;
 };
 
@@ -195,20 +195,20 @@ function normalizeFragrances(raw: unknown): { fragrances: FragranceSnapshot[] } 
     if (!isPlainObject(value)) return { error: "fragrances must contain catalog snapshot objects" };
     const name = cleanRequiredText(value.name, 120);
     const brand = cleanRequiredText(value.brand, 120);
-    const imageUrl = cleanRequiredText(value.imageUrl, 500);
+    const imageUrl = cleanOptionalText(value.imageUrl, 500);
     const family = cleanOptionalText(value.family, 80);
 
-    if (!name || !brand || !imageUrl) {
-      return { error: "each fragrance requires name, brand, and imageUrl" };
+    if (!name || !brand) {
+      return { error: "each fragrance requires name and brand" };
     }
-    if (!isAllowedCatalogImageUrl(imageUrl)) {
+    if (imageUrl && !isAllowedCatalogImageUrl(imageUrl)) {
       return { error: "fragrance imageUrl must be an existing http(s) or image-object URL" };
     }
 
     fragrances.push({
       name,
       brand,
-      imageUrl,
+      ...(imageUrl ? { imageUrl } : {}),
       ...(family ? { family } : {}),
     });
   }
@@ -1012,8 +1012,14 @@ router.post("/community/posts/:id/votes", requireAuth, async (req: AuthRequest, 
 
     const metadata = isPlainObject(post.metadata) ? post.metadata : {};
     const rawOptions = Array.isArray(metadata.options) ? metadata.options : [];
-    const options = rawOptions.filter((option: unknown): option is string => typeof option === "string");
-    if (options.length === 2 && !options.includes(choice)) {
+    const options = rawOptions.map((option: unknown) =>
+      typeof option === "string" ? option.trim() : "",
+    );
+    if (options.length !== 2 || options.some((option) => !option)) {
+      sendBadRequest(res, "battle metadata requires exactly two valid options");
+      return;
+    }
+    if (!options.includes(choice)) {
       sendBadRequest(res, "choice must match one of the battle options");
       return;
     }

@@ -1,6 +1,7 @@
-import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import React, { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import {
   BadgeDollarSign,
+  Check,
   LoaderCircle,
   MessageCircleQuestion,
   Plus,
@@ -25,6 +26,7 @@ import {
   sanitizeCommunityTag,
   useCreateCommunityPost,
 } from '@/components/community/communityPosts';
+import { useWardrobeItems } from '@/context/WardrobeContext';
 
 interface ComposerRoom {
   type: CommunityPostType;
@@ -133,6 +135,76 @@ function detailPayloadFor(result: FragranceSearchResult): FragranceDetailRequest
   return null;
 }
 
+type BattleFragranceCandidate = CommunityFragranceSnapshot & {
+  id: string;
+  source: 'wardrobe' | 'global';
+  result?: FragranceSearchResult;
+};
+
+function snapshotIdentityKey(snapshot: Pick<CommunityFragranceSnapshot, 'brand' | 'name'>): string {
+  return `${snapshot.brand.trim().toLowerCase()}::${snapshot.name.trim().toLowerCase()}`;
+}
+
+function snapshotFromWardrobeItem(item: Record<string, unknown>, index: number): BattleFragranceCandidate | null {
+  const name = firstString(item.name, objectRecord(item.product).name);
+  const brand = firstString(item.brand, item.house, objectRecord(item.product).brand);
+  if (!name || !brand) return null;
+
+  const imageUrl = firstString(item.imageUrl, item.image_url);
+  const family = firstString(item.family);
+  return {
+    id: firstString(item._dbId, item.id) ?? `wardrobe:${index}:${brand}:${name}`,
+    source: 'wardrobe',
+    name,
+    brand,
+    ...(isAllowedCatalogImageUrl(imageUrl) ? { imageUrl } : {}),
+    ...(family ? { family } : {}),
+  };
+}
+
+function candidateFromSearchResult(result: FragranceSearchResult): BattleFragranceCandidate | null {
+  const name = firstString(result.name);
+  const brand = firstString(result.brand, result.house);
+  if (!name || !brand) return null;
+  const imageUrl = searchResultImageUrl(result);
+  return {
+    id: firstString(result.id, result.source_url, `global:${brand}:${name}`) ?? `global:${brand}:${name}`,
+    source: 'global',
+    name,
+    brand,
+    result,
+    ...(isAllowedCatalogImageUrl(imageUrl) ? { imageUrl } : {}),
+  };
+}
+
+function filterWardrobeCandidates(candidates: BattleFragranceCandidate[], query: string): BattleFragranceCandidate[] {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) return [];
+  const terms = normalized.split(/\s+/).filter(Boolean);
+  return candidates
+    .filter((candidate) => {
+      const haystack = `${candidate.brand} ${candidate.name}`.toLowerCase();
+      return terms.every((term) => haystack.includes(term));
+    })
+    .slice(0, 6);
+}
+
+function mergeBattleCandidates(
+  wardrobe: BattleFragranceCandidate[],
+  global: BattleFragranceCandidate[],
+): BattleFragranceCandidate[] {
+  const seen = new Set<string>();
+  const merged: BattleFragranceCandidate[] = [];
+  for (const candidate of [...wardrobe, ...global]) {
+    const key = snapshotIdentityKey(candidate);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(candidate);
+    if (merged.length >= 8) break;
+  }
+  return merged;
+}
+
 async function snapshotFromSearchResult(result: FragranceSearchResult): Promise<CommunityFragranceSnapshot> {
   const name = firstString(result.name);
   const brand = firstString(result.brand, result.house);
@@ -150,22 +222,114 @@ async function snapshotFromSearchResult(result: FragranceSearchResult): Promise<
   }
 
   const payload = detailPayloadFor(result);
-  if (!payload) throw new Error('Catalog result is missing a detail lookup id.');
+  if (!payload) {
+    return { name, brand };
+  }
 
   const detail = await getFragranceDetails(payload);
   const imageUrl = detailImageUrl(detail);
-  if (!isAllowedCatalogImageUrl(imageUrl)) {
-    throw new Error('Catalog image is unavailable for this fragrance.');
-  }
-
   const family = firstString(detail.family, (detail as Record<string, unknown>).family);
   return {
     name: firstString(detail.name, name) ?? name,
     brand: firstString(detail.brand, detail.house, brand) ?? brand,
-    imageUrl,
+    ...(isAllowedCatalogImageUrl(imageUrl) ? { imageUrl } : {}),
     ...(family ? { family } : {}),
   };
 }
+
+interface BattleFragrancePickerProps {
+  label: string;
+  value: string;
+  selected: CommunityFragranceSnapshot | null;
+  results: BattleFragranceCandidate[];
+  loading: boolean;
+  selecting: boolean;
+  onQueryChange: (value: string) => void;
+  onSelect: (candidate: BattleFragranceCandidate) => void;
+  onClear: () => void;
+}
+
+const BattleFragrancePicker: React.FC<BattleFragrancePickerProps> = ({
+  label,
+  value,
+  selected,
+  results,
+  loading,
+  selecting,
+  onQueryChange,
+  onSelect,
+  onClear,
+}) => (
+  <div className="relative min-w-0">
+    <label className="mb-2 block scent-type-label text-scent-accent/82">{label}</label>
+    <div className="relative">
+      <Search
+        size={15}
+        strokeWidth={1.8}
+        className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-scent-accent"
+        aria-hidden="true"
+      />
+      <input
+        type="search"
+        value={value}
+        onChange={(event) => onQueryChange(event.target.value)}
+        maxLength={120}
+        placeholder="Search your wardrobe and catalog"
+        aria-label={label}
+        aria-autocomplete="list"
+        className="scent-lux-input h-12 w-full rounded-[var(--radius-scent)] pl-11 pr-12 text-base text-[#fff7ec] placeholder:text-scent-text-subtle"
+      />
+      {selected ? (
+        <button
+          type="button"
+          onClick={onClear}
+          aria-label={`Clear ${label}`}
+          className="absolute right-2 top-1/2 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full text-scent-text-muted transition-colors hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
+        >
+          <X size={14} strokeWidth={1.8} aria-hidden="true" />
+        </button>
+      ) : loading ? (
+        <LoaderCircle
+          size={16}
+          className="absolute right-4 top-1/2 -translate-y-1/2 animate-spin text-scent-accent"
+          aria-hidden="true"
+        />
+      ) : null}
+    </div>
+
+    {selected ? (
+      <div className="mt-2 flex items-center gap-2 rounded-[14px] border border-scent-accent/18 bg-scent-accent/[0.06] px-3 py-2 text-left">
+        <Check size={15} className="shrink-0 text-scent-accent" aria-hidden="true" />
+        <span className="min-w-0">
+          <span className="block truncate font-serif text-base italic text-[#fff7ec]">{selected.name}</span>
+          <span className="block truncate scent-type-label text-scent-accent/82">{selected.brand}</span>
+        </span>
+      </div>
+    ) : null}
+
+    {results.length > 0 && !selected ? (
+      <div className="absolute left-0 right-0 top-full z-30 mt-2 max-h-72 overflow-y-auto rounded-[18px] border border-scent-accent/28 bg-neutral-950/98 p-2 shadow-[0_24px_48px_rgba(0,0,0,0.78)]">
+        {results.map((candidate) => (
+          <button
+            key={`${candidate.source}:${candidate.id}`}
+            type="button"
+            onClick={() => onSelect(candidate)}
+            disabled={selecting}
+            className="grid w-full grid-cols-[1fr_auto] items-center gap-3 rounded-[14px] px-3 py-2.5 text-left transition-colors hover:bg-scent-accent/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:pointer-events-none disabled:opacity-55"
+          >
+            <span className="min-w-0">
+              <span className="block truncate font-serif text-base italic text-[#fff7ec]">{candidate.name}</span>
+              <span className="mt-1 block truncate scent-type-label text-scent-accent/82">{candidate.brand}</span>
+            </span>
+            <span className="rounded-full border border-scent-accent/18 px-2 py-1 scent-type-meta uppercase text-scent-text-muted">
+              {candidate.source === 'wardrobe' ? 'Vault' : 'Catalog'}
+            </span>
+          </button>
+        ))}
+      </div>
+    ) : null}
+  </div>
+);
 
 export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(function PostComposer(
   { authToken, onSignIn },
@@ -182,6 +346,13 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
   const [mood, setMood] = useState('');
   const [battleA, setBattleA] = useState('');
   const [battleB, setBattleB] = useState('');
+  const [battleASelection, setBattleASelection] = useState<CommunityFragranceSnapshot | null>(null);
+  const [battleBSelection, setBattleBSelection] = useState<CommunityFragranceSnapshot | null>(null);
+  const [battleAResults, setBattleAResults] = useState<BattleFragranceCandidate[]>([]);
+  const [battleBResults, setBattleBResults] = useState<BattleFragranceCandidate[]>([]);
+  const [searchingBattleA, setSearchingBattleA] = useState(false);
+  const [searchingBattleB, setSearchingBattleB] = useState(false);
+  const [selectingBattleSide, setSelectingBattleSide] = useState<'a' | 'b' | null>(null);
   const [priceContext, setPriceContext] = useState('');
   const [fragranceQuery, setFragranceQuery] = useState('');
   const [fragranceResults, setFragranceResults] = useState<FragranceSearchResult[]>([]);
@@ -190,13 +361,97 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
   const [selectedFragrances, setSelectedFragrances] = useState<CommunityFragranceSnapshot[]>([]);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const fragranceAbortRef = useRef<AbortController | null>(null);
+  const battleAAbortRef = useRef<AbortController | null>(null);
+  const battleBAbortRef = useRef<AbortController | null>(null);
   const sectionRef = useRef<HTMLElement | null>(null);
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const createPost = useCreateCommunityPost(authToken);
+  const wardrobeItems = useWardrobeItems();
+  const wardrobeBattleCandidates = useMemo(
+    () =>
+      wardrobeItems
+        .map((item, index) => snapshotFromWardrobeItem(item as unknown as Record<string, unknown>, index))
+        .filter((candidate): candidate is BattleFragranceCandidate => candidate !== null),
+    [wardrobeItems],
+  );
 
   useEffect(() => {
-    return () => fragranceAbortRef.current?.abort();
+    return () => {
+      fragranceAbortRef.current?.abort();
+      battleAAbortRef.current?.abort();
+      battleBAbortRef.current?.abort();
+    };
   }, []);
+
+  useEffect(() => {
+    if (postType !== 'battle') return undefined;
+
+    const runBattleSearch = (
+      query: string,
+      selected: CommunityFragranceSnapshot | null,
+      abortRef: React.MutableRefObject<AbortController | null>,
+      setResults: React.Dispatch<React.SetStateAction<BattleFragranceCandidate[]>>,
+      setSearching: React.Dispatch<React.SetStateAction<boolean>>,
+    ) => {
+      const trimmed = query.trim();
+      abortRef.current?.abort();
+      if (selected || trimmed.length < 2) {
+        setResults([]);
+        setSearching(false);
+        return undefined;
+      }
+
+      const wardrobeMatches = filterWardrobeCandidates(wardrobeBattleCandidates, trimmed);
+      setResults(wardrobeMatches);
+      const controller = new AbortController();
+      abortRef.current = controller;
+      const timer = window.setTimeout(() => {
+        setSearching(true);
+        searchFragrances(trimmed, { signal: controller.signal })
+          .then((response) => {
+            const globalMatches = response.results
+              .map(candidateFromSearchResult)
+              .filter((candidate): candidate is BattleFragranceCandidate => candidate !== null);
+            setResults(mergeBattleCandidates(wardrobeMatches, globalMatches));
+          })
+          .catch((err) => {
+            if (err instanceof Error && err.name === 'AbortError') return;
+            setResults(wardrobeMatches);
+          })
+          .finally(() => {
+            if (abortRef.current === controller) {
+              abortRef.current = null;
+              setSearching(false);
+            }
+          });
+      }, 240);
+
+      return () => {
+        window.clearTimeout(timer);
+        controller.abort();
+      };
+    };
+
+    const cleanupA = runBattleSearch(
+      battleA,
+      battleASelection,
+      battleAAbortRef,
+      setBattleAResults,
+      setSearchingBattleA,
+    );
+    const cleanupB = runBattleSearch(
+      battleB,
+      battleBSelection,
+      battleBAbortRef,
+      setBattleBResults,
+      setSearchingBattleB,
+    );
+
+    return () => {
+      cleanupA?.();
+      cleanupB?.();
+    };
+  }, [battleA, battleASelection, battleB, battleBSelection, postType, wardrobeBattleCandidates]);
 
   useImperativeHandle(
     ref,
@@ -312,6 +567,52 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
     );
   };
 
+  const selectBattleCandidate = async (side: 'a' | 'b', candidate: BattleFragranceCandidate) => {
+    setSelectingBattleSide(side);
+    setStatusMessage(null);
+    try {
+      const fallbackSnapshot: CommunityFragranceSnapshot = {
+        name: candidate.name,
+        brand: candidate.brand,
+        ...(candidate.imageUrl ? { imageUrl: candidate.imageUrl } : {}),
+        ...(candidate.family ? { family: candidate.family } : {}),
+      };
+      let snapshot = fallbackSnapshot;
+      if (candidate.result) {
+        try {
+          snapshot = await snapshotFromSearchResult(candidate.result);
+        } catch {
+          snapshot = fallbackSnapshot;
+        }
+      }
+      if (side === 'a') {
+        setBattleA(snapshot.name);
+        setBattleASelection(snapshot);
+        setBattleAResults([]);
+      } else {
+        setBattleB(snapshot.name);
+        setBattleBSelection(snapshot);
+        setBattleBResults([]);
+      }
+    } catch (err) {
+      setStatusMessage(err instanceof Error ? err.message : 'Fragrance could not be selected.');
+    } finally {
+      setSelectingBattleSide(null);
+    }
+  };
+
+  const clearBattleSelection = (side: 'a' | 'b') => {
+    if (side === 'a') {
+      setBattleA('');
+      setBattleASelection(null);
+      setBattleAResults([]);
+    } else {
+      setBattleB('');
+      setBattleBSelection(null);
+      setBattleBResults([]);
+    }
+  };
+
   const buildMetadata = (): Record<string, unknown> | null => {
     if (postType === 'question') return {};
     if (postType === 'sotd') {
@@ -322,7 +623,9 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
       };
     }
     if (postType === 'battle') {
-      const options = [battleA.trim(), battleB.trim()].filter(Boolean);
+      if (!battleASelection || !battleBSelection) return null;
+      if (snapshotIdentityKey(battleASelection) === snapshotIdentityKey(battleBSelection)) return null;
+      const options = [battleASelection.name.trim(), battleBSelection.name.trim()].filter(Boolean);
       if (options.length !== 2) return null;
       return { options };
     }
@@ -339,6 +642,10 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
     setMood('');
     setBattleA('');
     setBattleB('');
+    setBattleASelection(null);
+    setBattleBSelection(null);
+    setBattleAResults([]);
+    setBattleBResults([]);
     setPriceContext('');
     setFragranceQuery('');
     setFragranceResults([]);
@@ -361,9 +668,20 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
 
     const metadata = buildMetadata();
     if (!metadata) {
-      setStatusMessage('Battle rooms need two options.');
+      setStatusMessage(
+        postType === 'battle'
+          ? 'Pick two different fragrances from your vault or the catalog.'
+          : 'Battle rooms need two options.',
+      );
       return;
     }
+
+    const postFragrances =
+      postType === 'battle'
+        ? [battleASelection, battleBSelection].filter(
+            (fragrance): fragrance is CommunityFragranceSnapshot => fragrance !== null,
+          )
+        : selectedFragrances;
 
     setStatusMessage(null);
     try {
@@ -373,7 +691,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
         body: trimmedBody,
         metadata,
         tags,
-        fragrances: selectedFragrances,
+        fragrances: postFragrances,
       });
       resetComposer();
       setComposerOpen(false);
@@ -549,23 +867,33 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
 
         {postType === 'battle' ? (
           <div className="grid gap-4 md:grid-cols-2">
-            <input
-              type="text"
+            <BattleFragrancePicker
+              label="Option A"
               value={battleA}
-              onChange={(event) => setBattleA(event.target.value)}
-              maxLength={80}
-              placeholder="Option A"
-              aria-label="Battle option A"
-              className="scent-lux-input h-11 rounded-full px-4 text-base text-[#fff7ec] placeholder:text-scent-text-subtle"
+              selected={battleASelection}
+              results={battleAResults}
+              loading={searchingBattleA}
+              selecting={selectingBattleSide === 'a'}
+              onQueryChange={(value) => {
+                setBattleA(value);
+                setBattleASelection(null);
+              }}
+              onSelect={(candidate) => void selectBattleCandidate('a', candidate)}
+              onClear={() => clearBattleSelection('a')}
             />
-            <input
-              type="text"
+            <BattleFragrancePicker
+              label="Option B"
               value={battleB}
-              onChange={(event) => setBattleB(event.target.value)}
-              maxLength={80}
-              placeholder="Option B"
-              aria-label="Battle option B"
-              className="scent-lux-input h-11 rounded-full px-4 text-base text-[#fff7ec] placeholder:text-scent-text-subtle"
+              selected={battleBSelection}
+              results={battleBResults}
+              loading={searchingBattleB}
+              selecting={selectingBattleSide === 'b'}
+              onQueryChange={(value) => {
+                setBattleB(value);
+                setBattleBSelection(null);
+              }}
+              onSelect={(candidate) => void selectBattleCandidate('b', candidate)}
+              onClear={() => clearBattleSelection('b')}
             />
           </div>
         ) : null}
@@ -592,6 +920,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
           className="scent-lux-input min-h-40 w-full resize-y rounded-[var(--radius-scent)] px-4 py-3 text-base leading-7 text-[#fff7ec] placeholder:text-scent-text-subtle"
         />
 
+        {postType !== 'battle' ? (
         <div className="space-y-4 rounded-[18px] border border-scent-accent/12 bg-black/72 p-4">
           <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
             <div className="relative min-w-0">
@@ -671,11 +1000,15 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
                   className="grid w-full max-w-[18rem] grid-cols-[3.25rem_1fr_auto] items-center gap-3 rounded-[14px] border border-scent-accent/14 bg-black/62 p-2 sm:w-auto"
                 >
                   <div className="flex h-16 w-[3.25rem] items-center justify-center overflow-hidden rounded-[10px] bg-white/[0.035]">
-                    <img
-                      src={fragrance.imageUrl}
-                      alt={`${fragrance.name} by ${fragrance.brand}`}
-                      className="h-full w-full object-contain"
-                    />
+                    {fragrance.imageUrl ? (
+                      <img
+                        src={fragrance.imageUrl}
+                        alt={`${fragrance.name} by ${fragrance.brand}`}
+                        className="h-full w-full object-contain"
+                      />
+                    ) : (
+                      <span className="px-1 text-center scent-type-placeholder">No image</span>
+                    )}
                   </div>
                   <div className="min-w-0">
                     <p className="truncate font-serif text-base italic leading-tight text-[#fff7ec]">
@@ -698,6 +1031,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
             </div>
           ) : null}
         </div>
+        ) : null}
 
         {statusMessage ? (
           <p className="rounded-[14px] border border-scent-accent/12 bg-black/58 px-4 py-3 text-center text-base text-scent-text-muted">
