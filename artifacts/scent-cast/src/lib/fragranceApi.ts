@@ -922,6 +922,23 @@ function isFragranceEngineTransportError(err: unknown): boolean {
   return err.message.startsWith("Fragrance engine request failed:");
 }
 
+/**
+ * A detail fetch that fails on a network blip or a 5xx is transient: the selected
+ * search result itself is valid, so callers can fall back to a best-effort profile
+ * from its brand/name rather than failing the whole add. A 4xx (e.g. a genuine
+ * "not found") is a real failure and returns false so it surfaces unchanged.
+ * Matches the `Fragrance detail fetch failed: <status>` message thrown by
+ * {@link getFragranceDetails}.
+ */
+export function isTransientDetailFetchError(err: unknown): boolean {
+  if (isFetchNetworkError(err)) return true;
+  if (err instanceof Error) {
+    const match = err.message.match(/fetch failed:\s*(\d{3})/i);
+    if (match) return Number(match[1]) >= 500;
+  }
+  return false;
+}
+
 function directFragranceEngineUrl(path: string): string | null {
   const direct = viteEnv("VITE_FRAGRANCE_API_URL")?.trim();
   if (!direct) return null;
@@ -1355,6 +1372,13 @@ export async function getFragranceDetails(
   };
 
   const fetchAppDetails = () => fetch(appApiUrl("/api/fragrances/details"), requestInit);
+  const parseAppDetailsFallback = async (): Promise<FragranceDetailResponse> => {
+    const fallbackRes = await fetchAppDetails();
+    if (fallbackRes.ok) {
+      return parseJsonResponse<FragranceDetailResponse>(fallbackRes, "Fragrance detail");
+    }
+    throw new Error(await apiErrorMessage(fallbackRes, `Fragrance detail fetch failed: ${fallbackRes.status}`));
+  };
   let res: Response;
   try {
     res = useAppApi
@@ -1371,14 +1395,19 @@ export async function getFragranceDetails(
 
   if (!res.ok) {
     if (!useAppApi && res.status >= 500) {
-      const fallbackRes = await fetchAppDetails();
-      if (fallbackRes.ok) return parseJsonResponse<FragranceDetailResponse>(fallbackRes, "Fragrance detail");
-      res = fallbackRes;
+      return parseAppDetailsFallback();
     }
     throw new Error(await apiErrorMessage(res, `Fragrance detail fetch failed: ${res.status}`));
   }
 
-  return parseJsonResponse<FragranceDetailResponse>(res, "Fragrance detail");
+  try {
+    return await parseJsonResponse<FragranceDetailResponse>(res, "Fragrance detail");
+  } catch (err) {
+    if (!useAppApi && isResponseBodyError(err)) {
+      return parseAppDetailsFallback();
+    }
+    throw err;
+  }
 }
 
 export async function requeueFragranceDetails(

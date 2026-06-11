@@ -620,7 +620,7 @@ function DashboardView() {
             <Wardrobe
               items={items}
               onDelete={handleDeleteItem}
-              onPersistWardrobeImage={authToken ? handlePersistWardrobeImage : undefined}
+              onPersistWardrobeImage={handlePersistWardrobeImage}
               isAdmin={isAdmin}
               onUploadBottleImage={authToken && isAdmin ? uploadAdminBottleImage : undefined}
               featuredItem={activeRecommendation}
