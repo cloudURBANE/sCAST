@@ -38,10 +38,10 @@ const TAGS = [
 
 function roomButtonClass(active: boolean, extra = '') {
   return [
-    'group flex min-h-16 w-full items-center justify-center gap-3 rounded-[18px] border px-4 py-3 text-center scent-type-chip transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80',
+    'group flex min-h-12 w-full items-center justify-center gap-2.5 rounded-full border px-3 py-2 text-center scent-type-chip transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80',
     active
-      ? 'border-scent-accent/86 bg-scent-accent/[0.22] font-bold text-[#fff7ec] shadow-[0_20px_38px_-24px_rgba(212,175,55,0.88),inset_0_1px_0_rgba(255,244,210,0.18)]'
-      : 'border-scent-accent/22 bg-black/54 text-scent-text-muted hover:-translate-y-0.5 hover:border-scent-accent/58 hover:bg-scent-accent/[0.09] hover:text-[#fff7ec] hover:shadow-[0_16px_32px_-26px_rgba(212,175,55,0.68)]',
+      ? 'border-scent-accent/70 bg-scent-accent/[0.18] font-bold text-[#fff7ec] shadow-[inset_0_1px_0_rgba(255,244,210,0.14)]'
+      : 'border-scent-accent/14 bg-black/30 text-scent-text-muted hover:border-scent-accent/42 hover:bg-scent-accent/[0.055] hover:text-[#fff7ec]',
     extra,
   ]
     .filter(Boolean)
@@ -50,10 +50,10 @@ function roomButtonClass(active: boolean, extra = '') {
 
 function tagButtonClass(active: boolean) {
   return [
-    'flex h-11 w-full min-w-0 items-center justify-center rounded-full border px-2 text-center text-xs font-bold uppercase tracking-[0.12em] transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80',
+    'flex h-10 w-full min-w-0 items-center justify-center rounded-full border px-2 text-center text-xs font-bold uppercase tracking-[0.12em] transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80',
     active
-      ? 'border-scent-accent/90 bg-scent-accent/[0.26] text-[#fff7ec] shadow-[0_16px_30px_-20px_rgba(212,175,55,0.9),inset_0_1px_0_rgba(255,244,210,0.16)]'
-      : 'border-scent-accent/24 bg-black/54 text-[#d9c099] hover:-translate-y-0.5 hover:border-scent-accent/62 hover:bg-scent-accent/[0.1] hover:text-[#fff7ec] hover:shadow-[0_14px_28px_-24px_rgba(212,175,55,0.7)]',
+      ? 'border-scent-accent/76 bg-scent-accent/[0.18] text-[#fff7ec] shadow-[inset_0_1px_0_rgba(255,244,210,0.14)]'
+      : 'border-scent-accent/16 bg-black/30 text-[#d9c099] hover:border-scent-accent/46 hover:bg-scent-accent/[0.065] hover:text-[#fff7ec]',
   ].join(' ');
 }
 
@@ -97,21 +97,21 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
 
   return (
     <section
-      className="w-full bg-black/42 p-4 sm:p-6"
+      className="w-full border-t border-scent-accent/10 bg-black/30 p-4 sm:p-5"
       aria-label="Community post filters"
     >
-      <div className="mx-auto grid w-full max-w-[850px] gap-4 sm:gap-5">
-        <div className="grid w-full gap-3">
+      <div className="mx-auto grid w-full max-w-[850px] gap-4">
+        <div className="grid w-full gap-2.5">
+          <div className="grid w-full grid-cols-2 gap-2.5 sm:grid-cols-5">
           <button
             type="button"
             onClick={() => onTypeChange(null)}
             aria-pressed={type === null}
-            className={roomButtonClass(type === null, 'sm:min-h-[4.35rem]')}
+            className={roomButtonClass(type === null)}
           >
-            <Grid2X2 size={19} strokeWidth={1.65} aria-hidden="true" />
-            All rooms
+            <Grid2X2 size={17} strokeWidth={1.65} aria-hidden="true" />
+            <span className="min-w-0 [overflow-wrap:anywhere]">All rooms</span>
           </button>
-          <div className="grid w-full grid-cols-2 gap-3">
             {ROOMS.map(({ type: roomType, label, Icon }) => (
               <button
                 key={roomType}
@@ -120,7 +120,7 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
                 aria-pressed={type === roomType}
                 className={roomButtonClass(type === roomType)}
               >
-                <Icon size={19} strokeWidth={1.65} aria-hidden="true" />
+                <Icon size={17} strokeWidth={1.65} aria-hidden="true" />
                 <span className="min-w-0 [overflow-wrap:anywhere]">
                   {label}
                 </span>
@@ -142,7 +142,7 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
             onChange={(event) => setDraftQuery(event.target.value)}
             placeholder="Search rooms, fragrances, tags, or notes"
             aria-label="Search community rooms"
-            className="scent-lux-input h-14 w-full rounded-[18px] px-14 text-center text-base text-[#fff7ec] placeholder:text-scent-text-subtle"
+            className="scent-lux-input h-[3.25rem] w-full rounded-full px-14 text-center text-base text-[#fff7ec] placeholder:text-scent-text-subtle"
           />
           {draftQuery ? (
             <button
@@ -156,7 +156,7 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
           ) : null}
         </div>
 
-        <div className="border-t border-scent-accent/10 pt-4">
+        <div className="border-t border-scent-accent/10 pt-3.5">
           <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-4">
             <span
               className="h-px min-w-0 bg-gradient-to-r from-transparent to-scent-accent/38"
@@ -170,7 +170,7 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
               aria-hidden="true"
             />
           </div>
-          <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+          <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
             {TAGS.map((candidate) => {
               const normalized = sanitizeCommunityTag(candidate);
               const active = tag === normalized;
@@ -193,7 +193,7 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
             })}
           </div>
           {hasFilters ? (
-            <div className="mt-4 flex justify-center">
+            <div className="mt-3 flex justify-center">
               <button
                 type="button"
                 onClick={clearFilters}

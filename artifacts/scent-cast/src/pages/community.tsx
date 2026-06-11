@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Wind } from 'lucide-react';
 import { AppTopNav } from '@/components/AppTopNav';
 import { CommunityHero } from '@/components/community/CommunityHero';
 import { BottleMarquee } from '@/components/community/BottleMarquee';
@@ -116,8 +115,8 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
 
       <div style={{ height: 'var(--topbar-h)' }} />
 
-      <main className="relative z-10 pb-24 px-4 sm:px-8 max-w-[1760px] mx-auto">
-        <div className="space-y-16 pt-10 sm:space-y-24 sm:pt-14">
+      <main className="relative z-10 mx-auto max-w-[1760px] px-4 pb-24 sm:px-8">
+        <div className="space-y-14 pt-9 sm:space-y-20 sm:pt-12">
           <CommunityHero />
           <div className="scent-full-bleed">
             {communityBodyReady ? (
@@ -131,8 +130,8 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
             )}
           </div>
           {communityBodyReady ? (
-            <section className="w-full space-y-6 sm:space-y-8" aria-label="Community forum">
-              <div className="mx-auto w-full max-w-[960px] overflow-hidden rounded-[var(--radius-scent)] border border-scent-accent/24 bg-[linear-gradient(180deg,rgba(10,9,7,0.88),rgba(0,0,0,0.96))] shadow-[0_18px_44px_-30px_rgba(0,0,0,0.95),0_0_0_1px_rgba(212,175,55,0.06),inset_0_1px_0_rgba(255,236,183,0.06)]">
+            <section className="w-full space-y-5 sm:space-y-7" aria-label="Community forum">
+              <div className="mx-auto w-full max-w-[940px] overflow-hidden rounded-[calc(var(--radius-scent)-2px)] border border-scent-accent/18 bg-[linear-gradient(180deg,rgba(10,9,7,0.82),rgba(0,0,0,0.94))] shadow-[0_18px_44px_-34px_rgba(0,0,0,0.95),0_0_0_1px_rgba(212,175,55,0.045),inset_0_1px_0_rgba(255,236,183,0.05)]">
                 <PostComposer ref={composerRef} authToken={authToken} onSignIn={onSignIn} />
                 <PostFilters
                   type={postType}

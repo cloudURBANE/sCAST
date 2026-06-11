@@ -79,7 +79,7 @@ export const ReactionBar: React.FC<ReactionBarProps> = ({
       className={
         compact
           ? 'flex flex-wrap items-center justify-center gap-2'
-          : 'grid w-full gap-3 sm:grid-cols-3'
+          : 'flex w-full flex-wrap items-center justify-center gap-3'
       }
     >
       {REACTIONS.map(({ key, label, Icon }) => {
@@ -95,24 +95,24 @@ export const ReactionBar: React.FC<ReactionBarProps> = ({
             title={authToken ? undefined : 'Sign in to react'}
             aria-pressed={active}
             className={[
-              'inline-flex min-h-11 items-center justify-center gap-2 rounded-full border scent-type-chip transition-all duration-200 hover:border-scent-accent/46 hover:bg-scent-accent/[0.08] hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 disabled:pointer-events-none disabled:opacity-55',
+              'inline-flex items-center justify-center rounded-full scent-type-chip transition-all duration-200 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:pointer-events-none disabled:opacity-55',
               active
-                ? 'border-scent-accent/82 bg-scent-accent/[0.24] text-[#fff7ec] shadow-[0_12px_28px_-20px_rgba(212,175,55,0.92),inset_0_1px_0_rgba(255,244,210,0.16)]'
-                : 'border-scent-accent/16 bg-black/58 text-scent-text-muted',
-              compact ? 'px-3 py-1.5' : 'w-full px-4 py-3',
+                ? 'bg-scent-accent/[0.16] text-[#fff7ec] shadow-[inset_0_0_0_1px_rgba(212,175,55,0.48)]'
+                : 'text-scent-text-muted hover:bg-white/[0.045]',
+              compact ? 'min-h-9 gap-1.5 px-2.5 py-1.5' : 'min-h-11 gap-2 px-3.5 py-2.5',
             ].join(' ')}
           >
             <Icon
-              size={compact ? 14 : 16}
+              size={compact ? 15 : 18}
               strokeWidth={active ? 2.1 : 1.8}
               aria-hidden="true"
               className={active ? 'fill-current text-scent-accent opacity-100 drop-shadow-[0_0_8px_rgba(212,175,55,0.45)]' : undefined}
             />
-            <span className="font-bold uppercase tracking-[0.16em]">
+            <span className={compact ? 'sr-only' : 'sr-only sm:not-sr-only sm:font-bold sm:uppercase sm:tracking-[0.16em]'}>
               {label}
             </span>
             {count > 0 ? (
-              <span className="font-mono text-[15px] font-bold leading-none text-scent-accent sm:text-base">
+              <span className="font-mono text-[13px] font-bold leading-none text-scent-accent sm:text-[15px]">
                 {count}
               </span>
             ) : null}
@@ -123,7 +123,7 @@ export const ReactionBar: React.FC<ReactionBarProps> = ({
         <p
           role="alert"
           className={`text-[12px] leading-snug text-red-200 font-sans ${
-            compact ? 'w-full text-center' : 'sm:col-span-3 text-center'
+            compact ? 'w-full text-center' : 'w-full text-center'
           }`}
         >
           {errorNotice}

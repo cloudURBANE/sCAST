@@ -73,9 +73,9 @@ const OrnamentalDivider: React.FC<{ className?: string }> = ({
     ].join(' ')}
     aria-hidden="true"
   >
-    <span className="h-px min-w-0 bg-gradient-to-r from-transparent via-scent-accent/20 to-scent-accent/48" />
-    <span className="h-3 w-3 rotate-45 border border-scent-accent/78 bg-black shadow-[0_0_12px_rgba(212,175,55,0.26)]" />
-    <span className="h-px min-w-0 bg-gradient-to-l from-transparent via-scent-accent/20 to-scent-accent/48" />
+    <span className="h-px min-w-0 bg-gradient-to-r from-transparent via-scent-accent/12 to-scent-accent/34" />
+    <span className="h-1.5 w-1.5 rounded-full bg-scent-accent/70 shadow-[0_0_10px_rgba(212,175,55,0.22)]" />
+    <span className="h-px min-w-0 bg-gradient-to-l from-transparent via-scent-accent/12 to-scent-accent/34" />
   </div>
 );
 
@@ -315,9 +315,9 @@ export const PostCard: React.FC<PostCardProps> = ({
   return (
     <article
       aria-labelledby={headingId}
-      className="mx-auto w-full max-w-[960px] overflow-hidden rounded-[calc(var(--radius-scent)+10px)] border border-scent-accent/34 bg-[radial-gradient(96%_80%_at_50%_0%,rgba(255,255,255,0.025),transparent_62%),radial-gradient(80%_60%_at_50%_100%,rgba(212,175,55,0.035),transparent_68%),linear-gradient(180deg,rgba(10,9,7,0.94),rgba(0,0,0,0.985))] p-5 text-left shadow-[0_26px_64px_-42px_rgba(212,175,55,0.36),0_28px_60px_-34px_rgba(0,0,0,0.98),inset_0_1px_0_rgba(255,236,183,0.08),inset_0_0_0_1px_rgba(255,226,174,0.025)] sm:p-8"
+      className="mx-auto w-full max-w-[940px] overflow-hidden rounded-[calc(var(--radius-scent)+2px)] border border-scent-accent/24 bg-[radial-gradient(88%_68%_at_50%_0%,rgba(255,255,255,0.022),transparent_64%),linear-gradient(180deg,rgba(10,9,7,0.92),rgba(0,0,0,0.982))] p-5 text-left shadow-[0_22px_56px_-42px_rgba(212,175,55,0.30),0_28px_60px_-38px_rgba(0,0,0,0.98),inset_0_1px_0_rgba(255,236,183,0.065)] sm:p-7"
     >
-      <header className="grid gap-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+      <header className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
         <div className="flex min-w-0 items-center gap-4 sm:gap-5">
           <Link
             to={communitySharePath(post.author)}
@@ -338,18 +338,18 @@ export const PostCard: React.FC<PostCardProps> = ({
             </p>
           </div>
         </div>
-        <span className="inline-flex min-h-12 w-fit shrink-0 items-center justify-center gap-3 rounded-full border border-scent-accent/30 bg-black/54 px-5 py-2 scent-type-chip text-scent-accent shadow-[inset_0_1px_0_rgba(255,236,183,0.06)]">
+        <span className="inline-flex min-h-10 w-fit shrink-0 items-center justify-center gap-2.5 rounded-full bg-scent-accent/[0.075] px-4 py-2 scent-type-chip text-scent-accent shadow-[inset_0_0_0_1px_rgba(212,175,55,0.20)]">
           <Icon size={17} strokeWidth={1.75} aria-hidden="true" />
           {detail.label}
         </span>
       </header>
 
-      <OrnamentalDivider className="my-6 sm:my-7" />
+      <OrnamentalDivider className="my-5 sm:my-6" />
 
       <div className="space-y-4">
         <h3
           id={headingId}
-          className="break-words text-balance text-center font-serif text-4xl italic leading-tight text-[#fff7ec] sm:text-5xl"
+          className="break-words text-balance text-center font-serif text-3xl italic leading-tight text-[#fff7ec] sm:text-5xl"
         >
           {heading}
         </h3>
@@ -357,7 +357,7 @@ export const PostCard: React.FC<PostCardProps> = ({
           className="mx-auto h-px w-28 max-w-full bg-gradient-to-r from-transparent via-scent-accent/68 to-transparent"
           aria-hidden="true"
         />
-        <p className="mx-auto max-w-3xl whitespace-pre-line break-words text-center text-xl leading-9 text-[#fff7ec]/90">
+        <p className="mx-auto max-w-3xl whitespace-pre-line break-words text-center text-lg leading-8 text-[#fff7ec]/88 sm:text-xl sm:leading-9">
           {post.body}
         </p>
         <MetadataLine post={post} />
@@ -380,7 +380,7 @@ export const PostCard: React.FC<PostCardProps> = ({
         </div>
       ) : null}
 
-      <footer className="mt-8 space-y-6">
+      <footer className="mt-7 space-y-5">
         <h4 className="sr-only">Post actions</h4>
         <ReactionBar
           targetType="post"
@@ -390,11 +390,10 @@ export const PostCard: React.FC<PostCardProps> = ({
           authToken={authToken}
           onSignIn={onSignIn}
         />
-        <OrnamentalDivider />
         <button
           type="button"
           onClick={() => setCommentsOpen((open) => !open)}
-          className="mx-auto flex min-h-14 w-full max-w-[38rem] items-center justify-center gap-4 rounded-full border border-scent-accent/28 bg-black/58 px-6 py-3 scent-type-chip text-[#fff7ec] shadow-[inset_0_1px_0_rgba(255,236,183,0.06)] transition-colors hover:border-scent-accent/48 hover:bg-scent-accent/[0.045] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80"
+          className="mx-auto flex min-h-11 w-fit min-w-[10rem] items-center justify-center gap-2.5 rounded-full px-4 py-2 scent-type-chip text-scent-text-muted transition-colors hover:bg-white/[0.045] hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/60"
           aria-expanded={commentsOpen}
           aria-label={
             commentsOpen
