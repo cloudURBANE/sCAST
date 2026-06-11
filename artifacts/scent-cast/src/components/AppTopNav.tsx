@@ -158,9 +158,12 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
         <div className="flex min-w-0 items-center gap-4 sm:gap-6 justify-self-start">
           {authControl}
           {!isHomeRoute ? (
-            <div className="hidden sm:flex items-center gap-6">
-              <span className="w-px h-3 bg-scent-accent/20 shrink-0" aria-hidden="true" />
-              <Link to="/" className={inactiveNavClassName}>
+            <div className="flex items-center gap-3 sm:gap-6">
+              <span className="hidden sm:block w-px h-3 bg-scent-accent/20 shrink-0" aria-hidden="true" />
+              <Link
+                to="/"
+                className={`${inactiveNavClassName} relative z-10 inline-flex min-h-[44px] items-center`}
+              >
                 Home
               </Link>
             </div>

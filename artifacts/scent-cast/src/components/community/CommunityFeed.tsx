@@ -52,6 +52,7 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
     fetchNextPage,
     isFetchingNextPage,
     isRefetching,
+    refetch,
   } = useCommunityPosts(filters, authToken);
 
   const posts = useMemo(
@@ -100,10 +101,21 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
 
   if (isError) {
     return (
-      <div className="mx-auto w-full max-w-[960px] rounded-[var(--radius-scent)] border border-red-500/20 bg-red-500/[0.055] p-6 text-center">
-        <p className="text-sm font-medium text-red-100">
+      <div
+        role="alert"
+        className="mx-auto w-full max-w-[960px] rounded-[var(--radius-scent)] border border-red-500/20 bg-red-500/[0.055] p-6 text-center"
+      >
+        <p className="font-serif text-xl italic text-red-100">The feed could not load.</p>
+        <p className="mt-2 text-sm font-medium text-red-100/85">
           {error instanceof Error ? error.message : 'Community feed is unavailable.'}
         </p>
+        <button
+          type="button"
+          onClick={() => void refetch()}
+          className="mt-5 inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-red-200/40 px-5 py-2 scent-type-chip text-red-100 transition-colors hover:border-red-200/70 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200/80"
+        >
+          Try again
+        </button>
       </div>
     );
   }
@@ -120,7 +132,7 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
             <button
               type="button"
               onClick={onClearFilters}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-scent-accent/22 bg-black/58 px-5 py-2 scent-type-chip text-scent-text-muted transition-colors hover:border-scent-accent/42 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-scent-accent/22 bg-black/58 px-5 py-2 scent-type-chip text-scent-text-muted transition-colors hover:border-scent-accent/42 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80"
             >
               <X size={15} strokeWidth={1.8} aria-hidden="true" />
               Clear filters
@@ -152,7 +164,7 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
             type="button"
             onClick={() => void fetchNextPage()}
             disabled={isFetchingNextPage}
-            className="inline-flex min-h-11 items-center gap-2 rounded-full border border-scent-accent/22 bg-black/58 px-5 py-2 scent-type-chip text-scent-text-muted transition-colors hover:border-scent-accent/42 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 disabled:pointer-events-none disabled:opacity-55"
+            className="inline-flex min-h-11 items-center gap-2 rounded-full border border-scent-accent/22 bg-black/58 px-5 py-2 scent-type-chip text-scent-text-muted transition-colors hover:border-scent-accent/42 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80 disabled:pointer-events-none disabled:opacity-55"
           >
             {isFetchingNextPage ? (
               <LoaderCircle size={15} className="animate-spin" aria-hidden="true" />
@@ -160,9 +172,20 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
             {isFetchingNextPage ? 'Loading' : 'Load more'}
           </button>
         ) : (
-          <p className="scent-type-label">
-            End of feed
-          </p>
+          <div className="flex w-full flex-col items-center gap-4 rounded-[var(--radius-scent)] border border-scent-accent/24 bg-black/58 px-6 py-10 text-center">
+            <p className="font-serif text-xl italic text-[#fff7ec]">You&rsquo;ve reached the end.</p>
+            <p className="max-w-md text-sm leading-6 text-scent-text-muted">
+              Keep the conversation going — ask a question, share your scent of the day, or start a battle.
+            </p>
+            <button
+              type="button"
+              onClick={onStartRoom}
+              className="scent-primary-button inline-flex min-h-11 items-center justify-center gap-2 rounded-[var(--radius-scent)] px-6 py-3 text-sm font-bold uppercase tracking-[0.18em] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80"
+            >
+              <Plus size={16} strokeWidth={1.8} aria-hidden="true" />
+              <span>Start a room</span>
+            </button>
+          </div>
         )}
       </div>
     </div>

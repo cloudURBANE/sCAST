@@ -13,7 +13,7 @@ import {
   type CommunityReactionTargetType,
 } from "@workspace/db/schema";
 import { and, asc, desc, eq, inArray, lt, or, sql } from "drizzle-orm";
-import { AuthRequest, optionalAuth, requireAuth } from "../middlewares/auth";
+import { AuthRequest, isUndefinedColumnError, optionalAuth, requireAuth } from "../middlewares/auth";
 import { getTenantId } from "../middlewares/tenant";
 import { shareIdForUser } from "../services/shareIdentity";
 
@@ -317,7 +317,7 @@ async function usernamesByUserId(tenantId: string, userIds: string[]): Promise<M
       if (trimmed) byUserId.set(row.userId, trimmed);
     }
   } catch (err) {
-    if ((err as { code?: string } | null)?.code !== "42703") throw err;
+    if (!isUndefinedColumnError(err)) throw err;
     // username column not yet migrated — fall back to non-identifying aliases.
   }
   return byUserId;
