@@ -37,41 +37,96 @@ function parsePositiveInt(raw: string | undefined, fallback: number): number {
   return Number.isFinite(n) && n >= 0 ? Math.floor(n) : fallback;
 }
 
+export class ImageProxyAbortedError extends Error {
+  constructor(message = "Image proxy request aborted") {
+    super(message);
+    this.name = "ImageProxyAbortedError";
+  }
+}
+
+export class ImageProxyQueueFullError extends Error {
+  constructor(message = "Image proxy queue is full") {
+    super(message);
+    this.name = "ImageProxyQueueFullError";
+  }
+}
+
+function abortError(signal?: AbortSignal): Error {
+  if (signal?.reason instanceof Error) return signal.reason;
+  return new ImageProxyAbortedError();
+}
+
+type SemaphoreWaiter = {
+  resolve: () => void;
+  reject: (err: Error) => void;
+  signal?: AbortSignal;
+  onAbort?: () => void;
+};
+
 /**
  * A minimal fair semaphore. `acquire()` resolves immediately while slots are
- * free, otherwise queues FIFO until a `release()` frees one.
+ * free, otherwise queues FIFO until a `release()` frees one. Queueing is bounded
+ * and abortable so disconnected clients do not pile up behind the proxy loader.
  */
 export class Semaphore {
   private active = 0;
-  private readonly waiters: Array<() => void> = [];
+  private readonly waiters: SemaphoreWaiter[] = [];
   private readonly max: number;
+  private readonly maxQueue: number;
 
-  constructor(max: number) {
+  constructor(max: number, maxQueue = Number.POSITIVE_INFINITY) {
     this.max = max;
+    this.maxQueue = Math.max(0, maxQueue);
   }
 
-  acquire(): Promise<void> {
+  acquire(options: { signal?: AbortSignal } = {}): Promise<void> {
+    const { signal } = options;
+    if (signal?.aborted) return Promise.reject(abortError(signal));
+
     if (this.active < this.max) {
       this.active += 1;
       return Promise.resolve();
     }
-    return new Promise<void>((resolve) => {
-      this.waiters.push(() => {
-        this.active += 1;
-        resolve();
-      });
+
+    if (this.waiters.length >= this.maxQueue) {
+      return Promise.reject(new ImageProxyQueueFullError());
+    }
+
+    return new Promise<void>((resolve, reject) => {
+      const waiter: SemaphoreWaiter = {
+        resolve: () => {
+          if (waiter.signal && waiter.onAbort) {
+            waiter.signal.removeEventListener("abort", waiter.onAbort);
+          }
+          this.active += 1;
+          resolve();
+        },
+        reject,
+        signal,
+      };
+      waiter.onAbort = () => {
+        const idx = this.waiters.indexOf(waiter);
+        if (idx >= 0) this.waiters.splice(idx, 1);
+        waiter.reject(abortError(signal));
+      };
+      if (signal) signal.addEventListener("abort", waiter.onAbort, { once: true });
+      this.waiters.push(waiter);
     });
   }
 
   release(): void {
     this.active -= 1;
+    if (this.active < 0) this.active = 0;
     const next = this.waiters.shift();
-    if (next) next();
+    if (next) next.resolve();
   }
 
   /** Test/introspection helper. */
   get inUse(): number {
     return this.active;
+  }
+  get queueLength(): number {
+    return this.waiters.length;
   }
 }
 
@@ -79,15 +134,23 @@ export type ImageProxyCacheOptions = {
   maxBytes?: number;
   ttlMs?: number;
   maxConcurrency?: number;
+  maxQueue?: number;
   /** Injectable clock for deterministic tests. */
   now?: () => number;
+};
+
+type InFlightEntry = {
+  controller: AbortController;
+  consumers: number;
+  promise: Promise<ImageProxyPayload>;
+  settled: boolean;
 };
 
 export class ImageProxyCache {
   // Insertion order == LRU order: least-recently-used is the first key. A `get`
   // hit re-inserts the key to move it to the most-recently-used end.
   private readonly store = new Map<string, CacheRecord>();
-  private readonly inFlight = new Map<string, Promise<ImageProxyPayload>>();
+  private readonly inFlightEntries = new Map<string, InFlightEntry>();
   private readonly limiter: Semaphore;
   private readonly maxBytes: number;
   private readonly ttlMs: number;
@@ -99,7 +162,8 @@ export class ImageProxyCache {
     this.ttlMs = options.ttlMs ?? parsePositiveInt(process.env.IMAGE_PROXY_CACHE_TTL_MS, 60 * 60 * 1000);
     this.now = options.now ?? Date.now;
     const concurrency = options.maxConcurrency ?? parsePositiveInt(process.env.IMAGE_PROXY_MAX_CONCURRENCY, 8);
-    this.limiter = new Semaphore(Math.max(1, concurrency));
+    const maxQueue = options.maxQueue ?? parsePositiveInt(process.env.IMAGE_PROXY_MAX_QUEUE, 256);
+    this.limiter = new Semaphore(Math.max(1, concurrency), maxQueue);
   }
 
   private get(key: string): ImageProxyPayload | undefined {
@@ -147,27 +211,83 @@ export class ImageProxyCache {
    * successful result. Loader rejections are never cached and propagate to all
    * waiters so the route still returns its error status.
    */
-  async getOrLoad(key: string, loader: () => Promise<ImageProxyPayload>): Promise<ImageProxyPayload> {
+  async getOrLoad(
+    key: string,
+    loader: (signal: AbortSignal) => Promise<ImageProxyPayload>,
+    options: { signal?: AbortSignal } = {},
+  ): Promise<ImageProxyPayload> {
+    if (options.signal?.aborted) throw abortError(options.signal);
+
     const cached = this.get(key);
     if (cached) return cached;
 
-    const existing = this.inFlight.get(key);
-    if (existing) return existing;
+    const existing = this.inFlightEntries.get(key);
+    if (existing) return this.attachConsumer(existing, options.signal);
 
+    const controller = new AbortController();
+    const entry: InFlightEntry = {
+      controller,
+      consumers: 0,
+      promise: undefined as unknown as Promise<ImageProxyPayload>,
+      settled: false,
+    };
     const task = (async () => {
-      await this.limiter.acquire();
+      let acquired = false;
       try {
-        const payload = await loader();
+        await this.limiter.acquire({ signal: controller.signal });
+        acquired = true;
+        if (controller.signal.aborted) throw abortError(controller.signal);
+        const payload = await loader(controller.signal);
+        if (controller.signal.aborted) throw abortError(controller.signal);
         this.set(key, payload);
         return payload;
       } finally {
-        this.limiter.release();
-        this.inFlight.delete(key);
+        if (acquired) this.limiter.release();
+        entry.settled = true;
+        this.inFlightEntries.delete(key);
       }
     })();
+    entry.promise = task;
 
-    this.inFlight.set(key, task);
-    return task;
+    this.inFlightEntries.set(key, entry);
+    return this.attachConsumer(entry, options.signal);
+  }
+
+  private attachConsumer(entry: InFlightEntry, signal?: AbortSignal): Promise<ImageProxyPayload> {
+    if (signal?.aborted) return Promise.reject(abortError(signal));
+
+    entry.consumers += 1;
+    let released = false;
+    let onAbort: (() => void) | undefined;
+
+    const releaseConsumer = () => {
+      if (released) return;
+      released = true;
+      if (signal && onAbort) signal.removeEventListener("abort", onAbort);
+      entry.consumers -= 1;
+      if (entry.consumers <= 0 && !entry.settled) {
+        entry.controller.abort(new ImageProxyAbortedError("Image proxy request abandoned"));
+      }
+    };
+
+    return new Promise<ImageProxyPayload>((resolve, reject) => {
+      onAbort = () => {
+        releaseConsumer();
+        reject(abortError(signal));
+      };
+      if (signal) signal.addEventListener("abort", onAbort, { once: true });
+
+      entry.promise.then(
+        (payload) => {
+          releaseConsumer();
+          resolve(payload);
+        },
+        (err: unknown) => {
+          releaseConsumer();
+          reject(err);
+        },
+      );
+    });
   }
 
   /** Test/introspection helpers. */
@@ -178,7 +298,7 @@ export class ImageProxyCache {
     return this.store.size;
   }
   get inFlightCount(): number {
-    return this.inFlight.size;
+    return this.inFlightEntries.size;
   }
 }
 

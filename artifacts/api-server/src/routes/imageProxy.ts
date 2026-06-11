@@ -3,8 +3,10 @@ import { logger } from "../lib/logger";
 import { trimPackshotForImageProxy } from "../services/packshotTrim";
 import {
   cacheControlForImageTarget,
+  ImageProxyAbortedError,
   imageProxyCache,
   imageProxyCacheKey,
+  ImageProxyQueueFullError,
   type ImageProxyPayload,
 } from "../services/imageProxyCache";
 import { fetchExternalImage, parseAndValidateExternalImageUrl } from "../services/safeImageFetch";
@@ -16,6 +18,17 @@ function wantsPackshotTrim(req: { query: Record<string, unknown> }): boolean {
   if (typeof v === "string") return v === "1" || /^true$/i.test(v);
   if (Array.isArray(v) && typeof v[0] === "string") return v[0] === "1" || /^true$/i.test(v[0]);
   return false;
+}
+
+function isAbortError(err: unknown): boolean {
+  return err instanceof ImageProxyAbortedError ||
+    (err instanceof Error && err.name === "AbortError");
+}
+
+function throwIfSignalAborted(signal: AbortSignal): void {
+  if (!signal.aborted) return;
+  if (signal.reason instanceof Error) throw signal.reason;
+  throw new ImageProxyAbortedError();
 }
 
 router.get("/image-proxy", async (req, res) => {
@@ -40,10 +53,29 @@ router.get("/image-proxy", async (req, res) => {
   // target URL, so it is computed here and stays correct across cache hits.
   const cacheKey = imageProxyCacheKey(target.toString(), doTrim);
   const cacheControl = cacheControlForImageTarget(target);
+  const clientAbort = new AbortController();
+  let responseFinished = false;
+  const abortClientRequest = () => {
+    if (!responseFinished && !clientAbort.signal.aborted) {
+      clientAbort.abort(new ImageProxyAbortedError("image-proxy client disconnected"));
+    }
+  };
+  const abortIncompleteRequest = () => {
+    if (!req.complete) abortClientRequest();
+  };
+  const markResponseFinished = () => {
+    responseFinished = true;
+  };
+
+  req.on("aborted", abortClientRequest);
+  req.on("close", abortIncompleteRequest);
+  res.on("close", abortClientRequest);
+  res.on("finish", markResponseFinished);
 
   try {
-    const payload = await imageProxyCache.getOrLoad(cacheKey, async (): Promise<ImageProxyPayload> => {
-      const upstream = await fetchExternalImage(target.toString());
+    const payload = await imageProxyCache.getOrLoad(cacheKey, async (signal): Promise<ImageProxyPayload> => {
+      const upstream = await fetchExternalImage(target.toString(), { signal });
+      throwIfSignalAborted(signal);
       let body = upstream.buffer;
       let outType = upstream.contentType;
 
@@ -55,6 +87,7 @@ router.get("/image-proxy", async (req, res) => {
       const isProcessedObject = target.toString().includes("/images/processed/");
       if (doTrim && !isWebp && !isGif && !isProcessedObject) {
         const trimmed = await trimPackshotForImageProxy(body);
+        throwIfSignalAborted(signal);
         if (trimmed.ok) {
           body = trimmed.buffer;
           outType = trimmed.contentType;
@@ -70,9 +103,33 @@ router.get("/image-proxy", async (req, res) => {
     res.setHeader("Cache-Control", cacheControl);
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.end(payload.body);
-  } catch (err: any) {
-    logger.error({ err: err.message, url }, "image-proxy: fetch failed");
-    res.status(502).json({ error: "Failed to fetch image" });
+  } catch (err: unknown) {
+    if (err instanceof ImageProxyQueueFullError) {
+      logger.warn({ url: String(url).slice(0, 120) }, "image-proxy: queue full");
+      if (!res.headersSent && !res.writableEnded) {
+        res.status(429).json({ error: "Image proxy is busy, retry later" });
+      }
+      return;
+    }
+
+    if (clientAbort.signal.aborted || isAbortError(err)) {
+      logger.debug({ url: String(url).slice(0, 120) }, "image-proxy: request aborted");
+      if (!res.headersSent && !res.writableEnded && !req.socket.destroyed) {
+        res.status(499).end();
+      }
+      return;
+    }
+
+    const message = err instanceof Error ? err.message : String(err);
+    logger.error({ err: message, url }, "image-proxy: fetch failed");
+    if (!res.headersSent && !res.writableEnded) {
+      res.status(502).json({ error: "Failed to fetch image" });
+    }
+  } finally {
+    req.off("aborted", abortClientRequest);
+    req.off("close", abortIncompleteRequest);
+    res.off("close", abortClientRequest);
+    res.off("finish", markResponseFinished);
   }
 });
 

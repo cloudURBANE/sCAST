@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   cacheControlForImageTarget,
+  ImageProxyAbortedError,
   imageProxyCacheKey,
   ImageProxyCache,
+  ImageProxyQueueFullError,
   isImmutableImageTarget,
   Semaphore,
   type ImageProxyPayload,
@@ -146,6 +148,35 @@ test("Semaphore caps concurrent holders and serves waiters FIFO", async () => {
   assert.equal(sem.inUse, 2);
 });
 
+test("Semaphore rejects new waiters when the queue is full", async () => {
+  const sem = new Semaphore(1, 1);
+  await sem.acquire();
+
+  const queued = sem.acquire();
+  await Promise.resolve();
+  assert.equal(sem.queueLength, 1);
+  await assert.rejects(sem.acquire(), ImageProxyQueueFullError);
+
+  sem.release();
+  await queued;
+  sem.release();
+});
+
+test("Semaphore removes an aborted waiter from the queue", async () => {
+  const sem = new Semaphore(1, 4);
+  const controller = new AbortController();
+  await sem.acquire();
+
+  const queued = sem.acquire({ signal: controller.signal });
+  assert.equal(sem.queueLength, 1);
+  controller.abort(new ImageProxyAbortedError("gone"));
+
+  await assert.rejects(queued, ImageProxyAbortedError);
+  assert.equal(sem.queueLength, 0);
+  sem.release();
+  assert.equal(sem.inUse, 0);
+});
+
 test("getOrLoad never runs more loaders concurrently than the limiter allows", async () => {
   const cache = new ImageProxyCache({ maxBytes: 1 << 20, ttlMs: 10_000, maxConcurrency: 2 });
   let active = 0;
@@ -169,6 +200,88 @@ test("getOrLoad never runs more loaders concurrently than the limiter allows", a
   await all;
   // The remaining two were admitted only after slots freed — peak never grew.
   assert.equal(peak, 2);
+});
+
+test("getOrLoad rejects over-capacity distinct queued loads instead of waiting forever", async () => {
+  const cache = new ImageProxyCache({ maxBytes: 1 << 20, ttlMs: 10_000, maxConcurrency: 1, maxQueue: 1 });
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  const hold = cache.getOrLoad("hold", async () => {
+    await gate;
+    return payload(1);
+  });
+  const queued = cache.getOrLoad("queued", async () => payload(1));
+
+  await new Promise((r) => setTimeout(r, 10));
+  await assert.rejects(cache.getOrLoad("rejected", async () => payload(1)), ImageProxyQueueFullError);
+
+  release();
+  await Promise.all([hold, queued]);
+});
+
+test("getOrLoad aborts an abandoned queued load before its loader runs", async () => {
+  const cache = new ImageProxyCache({ maxBytes: 1 << 20, ttlMs: 10_000, maxConcurrency: 1, maxQueue: 4 });
+  const controller = new AbortController();
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  let abandonedLoaderCalls = 0;
+
+  const hold = cache.getOrLoad("hold", async () => {
+    await gate;
+    return payload(1);
+  });
+  const abandoned = cache.getOrLoad(
+    "abandoned",
+    async () => {
+      abandonedLoaderCalls += 1;
+      return payload(1);
+    },
+    { signal: controller.signal },
+  );
+
+  await new Promise((r) => setTimeout(r, 10));
+  assert.equal(cache.inFlightCount, 2);
+  controller.abort(new ImageProxyAbortedError("client left"));
+  await assert.rejects(abandoned, ImageProxyAbortedError);
+  assert.equal(abandonedLoaderCalls, 0);
+
+  release();
+  await hold;
+  assert.equal(cache.inFlightCount, 0);
+});
+
+test("getOrLoad keeps a deduped queued load alive while any consumer remains", async () => {
+  const cache = new ImageProxyCache({ maxBytes: 1 << 20, ttlMs: 10_000, maxConcurrency: 1, maxQueue: 4 });
+  const first = new AbortController();
+  const second = new AbortController();
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  let sharedLoaderCalls = 0;
+
+  const hold = cache.getOrLoad("hold", async () => {
+    await gate;
+    return payload(1);
+  });
+  const abandoned = cache.getOrLoad(
+    "shared",
+    async (signal) => {
+      assert.equal(signal.aborted, false);
+      sharedLoaderCalls += 1;
+      return payload(2);
+    },
+    { signal: first.signal },
+  );
+  const active = cache.getOrLoad("shared", async () => payload(3), { signal: second.signal });
+
+  await new Promise((r) => setTimeout(r, 10));
+  first.abort(new ImageProxyAbortedError("first client left"));
+  await assert.rejects(abandoned, ImageProxyAbortedError);
+
+  release();
+  await hold;
+  const result = await active;
+  assert.equal(result.body.byteLength, 2);
+  assert.equal(sharedLoaderCalls, 1);
 });
 
 test("imageProxyCacheKey distinguishes the trim flag", () => {
