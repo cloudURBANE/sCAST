@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { AuthRequest, requireAuth } from "../middlewares/auth";
+import { AuthRequest, isUndefinedColumnError, requireAuth } from "../middlewares/auth";
 import { db } from "@workspace/db";
 import { userFragrancesTable, userSettingsTable } from "@workspace/db/schema";
 import { and, eq } from "drizzle-orm";
@@ -7,30 +7,68 @@ import { getTenantId } from "../middlewares/tenant";
 import { batchHydrateImageUrls, normalizeFragrance } from "../services/fragrancePayload";
 import { isShareHidden, resolvePublicBuyLinksForRows } from "../services/buyLinks";
 import { getShareIdForUser, resolveShareUser } from "../services/shareUsers";
+import { logger } from "../lib/logger";
 
 const router = Router();
 
-async function getOrCreateSettings(userId: string, tenantId: string) {
-  const rows = await db
-    .select()
-    .from(userSettingsTable)
-    .where(eq(userSettingsTable.userId, userId))
-    .limit(1);
-  if (rows[0]) return rows[0];
+type ShareSettings = {
+  userId: string;
+  tenantId: string | null;
+  shareHideImages: boolean;
+};
 
-  const [created] = await db
-    .insert(userSettingsTable)
-    .values({ userId, tenantId })
-    .onConflictDoNothing({ target: userSettingsTable.userId })
-    .returning();
-  if (created) return created;
+const SHARE_SETTINGS_COLUMNS = {
+  userId: userSettingsTable.userId,
+  tenantId: userSettingsTable.tenantId,
+  shareHideImages: userSettingsTable.shareHideImages,
+} as const;
 
-  const retry = await db
-    .select()
-    .from(userSettingsTable)
-    .where(eq(userSettingsTable.userId, userId))
-    .limit(1);
-  if (retry[0]) return retry[0];
+async function selectShareSettings(userId: string, tenantId: string): Promise<ShareSettings | null> {
+  try {
+    const rows = await db
+      .select(SHARE_SETTINGS_COLUMNS)
+      .from(userSettingsTable)
+      .where(eq(userSettingsTable.userId, userId))
+      .limit(1);
+    return rows[0] ?? null;
+  } catch (err) {
+    if (!isUndefinedColumnError(err)) throw err;
+    logger.warn({ userId }, "user_settings tenant/preference columns not fully migrated; using legacy share settings projection");
+    const rows = await db
+      .select({
+        userId: userSettingsTable.userId,
+        shareHideImages: userSettingsTable.shareHideImages,
+      })
+      .from(userSettingsTable)
+      .where(eq(userSettingsTable.userId, userId))
+      .limit(1);
+    const row = rows[0];
+    return row ? { ...row, tenantId } : null;
+  }
+}
+
+async function insertShareSettings(userId: string, tenantId: string): Promise<void> {
+  try {
+    await db
+      .insert(userSettingsTable)
+      .values({ userId, tenantId })
+      .onConflictDoNothing({ target: userSettingsTable.userId });
+  } catch (err) {
+    if (!isUndefinedColumnError(err)) throw err;
+    await db
+      .insert(userSettingsTable)
+      .values({ userId })
+      .onConflictDoNothing({ target: userSettingsTable.userId });
+  }
+}
+
+async function getOrCreateSettings(userId: string, tenantId: string): Promise<ShareSettings> {
+  const existing = await selectShareSettings(userId, tenantId);
+  if (existing) return existing;
+
+  await insertShareSettings(userId, tenantId);
+  const retry = await selectShareSettings(userId, tenantId);
+  if (retry) return retry;
   throw new Error("Failed to create share settings");
 }
 
@@ -93,13 +131,24 @@ router.post("/share-settings", requireAuth, async (req: AuthRequest, res) => {
     return;
   }
 
-  await db
-    .insert(userSettingsTable)
-    .values({ userId: user.id, tenantId, shareHideImages: hideImages })
-    .onConflictDoUpdate({
-      target: userSettingsTable.userId,
-      set: { tenantId, shareHideImages: hideImages, updatedAt: new Date() },
-    });
+  try {
+    await db
+      .insert(userSettingsTable)
+      .values({ userId: user.id, tenantId, shareHideImages: hideImages })
+      .onConflictDoUpdate({
+        target: userSettingsTable.userId,
+        set: { tenantId, shareHideImages: hideImages, updatedAt: new Date() },
+      });
+  } catch (err) {
+    if (!isUndefinedColumnError(err)) throw err;
+    await db
+      .insert(userSettingsTable)
+      .values({ userId: user.id, shareHideImages: hideImages })
+      .onConflictDoUpdate({
+        target: userSettingsTable.userId,
+        set: { shareHideImages: hideImages, updatedAt: new Date() },
+      });
+  }
 
   const shareId = await getShareIdForUser(user, tenantId);
   res.json({

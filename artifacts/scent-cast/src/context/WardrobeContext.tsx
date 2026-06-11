@@ -910,9 +910,9 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setWardrobeLoaded(false);
       setItems([]);
       loadWardrobe(authToken, abortController.signal);
-      fetch('/api/share-settings', { 
+      fetch('/api/share-settings', {
         headers: { Authorization: `Bearer ${authToken}` },
-        signal: abortController.signal 
+        signal: abortController.signal,
       })
         .then(r => {
           if (!r.ok) throw new Error("Settings fetch failed");
@@ -922,11 +922,6 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         .catch((err) => {
           if (err.name !== 'AbortError') {
             console.error("Settings load failed", err);
-            toast({
-              title: "Settings Sync Failed",
-              description: "Could not load sharing configuration. Please try again.",
-              variant: "destructive"
-            });
           }
         });
     } else {
