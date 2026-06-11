@@ -80,7 +80,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             <button
               ref={primaryActionRef}
               onClick={handleGoogleSignIn}
-              className="w-full h-14 bg-white text-black font-sans font-semibold text-sm flex items-center justify-center gap-3 hover:bg-neutral-100 transition-all rounded-2xl"
+              className="w-full h-14 bg-white text-black font-sans font-semibold text-sm flex items-center justify-center gap-3 hover:bg-neutral-100 transition-all rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/85 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
             >
               <GoogleIcon />
               Continue with Google
@@ -90,7 +90,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <button
                   type="button"
                   onClick={handleContinueAsGuest}
-                  className="w-full h-[3.25rem] border border-white/50 bg-white/[0.08] text-white font-sans text-sm font-semibold flex items-center justify-center hover:border-white/75 hover:bg-white/[0.14] transition-all rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
+                  className="w-full h-[3.25rem] border border-white/75 bg-white/[0.18] text-white font-sans text-sm font-bold flex items-center justify-center shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] hover:border-white hover:bg-white/[0.24] transition-all rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/90 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
                 >
                   Continue as guest
                 </button>

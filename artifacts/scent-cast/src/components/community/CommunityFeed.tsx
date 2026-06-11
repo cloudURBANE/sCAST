@@ -141,7 +141,7 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
             <button
               type="button"
               onClick={onStartRoom}
-              className="scent-primary-button inline-flex min-h-11 items-center justify-center gap-2 rounded-[var(--radius-scent)] px-6 py-3 text-sm font-bold uppercase tracking-[0.18em]"
+              className="scent-primary-button inline-flex min-h-11 items-center justify-center gap-2 rounded-[var(--radius-scent)] px-6 py-3 text-sm font-bold uppercase tracking-[0.18em] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80"
             >
               <Plus size={16} strokeWidth={1.8} aria-hidden="true" />
               <span>Start a room</span>

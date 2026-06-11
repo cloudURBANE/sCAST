@@ -1579,7 +1579,7 @@ export const Wardrobe: React.FC<{
                       onClick={onRevertWardrobe}
                       disabled={!revertAvailable || !!fixWardrobeBusy}
                       title="Restore the vault list from before the last automatic rebuild (this tab only)"
-                      className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-white/15 bg-white/[0.04] scent-type-chip text-scent-text-muted hover:bg-white/[0.08] hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-white/15 bg-white/[0.04] scent-type-chip text-scent-text-muted hover:bg-white/[0.08] hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:opacity-30 disabled:cursor-not-allowed"
                     >
                       <Undo2 size={14} strokeWidth={1.75} />
                       Revert
@@ -1622,6 +1622,13 @@ export const Wardrobe: React.FC<{
                 }}
                 onBlur={scheduleSearchBlur}
                 onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    e.preventDefault();
+                    cancelSearchBlur();
+                    setSearchFocused(false);
+                    e.currentTarget.blur();
+                    return;
+                  }
                   if (!searchDropdownOpen) return;
                   if (e.key === 'ArrowDown') {
                     e.preventDefault();
@@ -1635,9 +1642,6 @@ export const Wardrobe: React.FC<{
                     e.preventDefault();
                     const pick = searchSuggestions[searchHighlightIndex];
                     if (pick) applySearchSuggestion(pick);
-                  } else if (e.key === 'Escape') {
-                    e.preventDefault();
-                    setSearchFocused(false);
                   }
                 }}
                 placeholder="Search vault (e.g. sauvage)..."
@@ -1672,7 +1676,7 @@ export const Wardrobe: React.FC<{
                             type="button"
                             role="option"
                             aria-selected={active}
-                            className={`w-full text-left px-3 py-2.5 transition-colors border-b border-white/[0.06] last:border-b-0 ${
+                            className={`w-full text-left px-3 py-2.5 transition-colors border-b border-white/[0.06] last:border-b-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-scent-accent/55 ${
                               active ? 'bg-white/[0.09]' : 'hover:bg-white/[0.05]'
                             }`}
                             onMouseEnter={() => setSearchHighlightIndex(idx)}
@@ -1862,7 +1866,7 @@ export const Wardrobe: React.FC<{
                       aria-label="Expand archive — go to add fragrance search"
                       className={`scent-fragrance-card ${
                         isCompactGrid ? 'min-h-[17.5rem] p-4' : 'min-h-[28rem] p-8'
-                      } sm:min-h-[28rem] sm:p-8 flex flex-col items-center justify-center text-center group cursor-pointer border-dashed border-scent-accent/26 hover:bg-white/5 transition-all w-full`}
+                        } sm:min-h-[28rem] sm:p-8 flex flex-col items-center justify-center text-center group cursor-pointer border-dashed border-scent-accent/26 hover:bg-white/5 transition-all w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/50`}
                     >
                       <div className="w-12 h-12 border border-dashed border-scent-accent/35 flex items-center justify-center group-hover:rotate-90 transition-transform mb-4 rounded-full">
                         <span className="text-scent-accent text-3xl">+</span>
