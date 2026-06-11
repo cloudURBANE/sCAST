@@ -1772,7 +1772,7 @@ export const Wardrobe: React.FC<{
                 <button
                   type="button"
                   onClick={onRetryLoadWardrobe}
-                  className="scent-primary-button px-8 py-3 rounded-scent font-serif italic text-lg"
+                  className="scent-primary-button px-8 py-3 rounded-scent font-serif italic text-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55"
                 >
                   Retry Load
                 </button>
@@ -1892,7 +1892,7 @@ export const Wardrobe: React.FC<{
                 <button
                   type="button"
                   onClick={onExpandArchive}
-                  className="scent-vault-outline-button mt-1 inline-flex items-center gap-2.5 px-7 py-3.5 transition-transform hover:scale-[1.02] active:scale-[0.98]"
+                  className="scent-vault-outline-button mt-1 inline-flex items-center gap-2.5 px-7 py-3.5 transition-transform hover:scale-[1.02] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55"
                 >
                   <Search size={16} strokeWidth={1.75} className="text-scent-accent" aria-hidden />
                   <span className="scent-vault-outline-button-label font-serif italic text-lg">Add your first fragrance</span>

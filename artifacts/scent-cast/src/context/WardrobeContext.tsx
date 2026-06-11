@@ -650,6 +650,8 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, []);
 
   const handleExpandArchive = useCallback(() => {
+    setVaultSearchUiActive(true);
+
     const focusSearch = () => {
       const el = document.getElementById('scent-add-to-vault-search');
       if (!(el instanceof HTMLInputElement)) return false;
@@ -664,15 +666,14 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     // Safari, where focus() is then silently ignored — which made the empty-vault
     // "Add a fragrance" button appear to do nothing for guests. Scroll after, so
     // the field is both focused and centered in view.
-    if (!focusSearch()) return;
+    focusSearch();
 
     window.requestAnimationFrame(() => {
-      const el = document.getElementById('scent-add-to-vault-search');
-      if (!(el instanceof HTMLInputElement)) return;
-      if (document.activeElement !== el) {
-        el.focus({ preventScroll: true });
-      }
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (focusSearch()) return;
+
+      window.requestAnimationFrame(() => {
+        focusSearch();
+      });
     });
   }, []);
 
@@ -943,8 +944,12 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     let nextCount = 0;
     setItems((prev) => {
-      nextCount = prev.length + 1;
-      return [newItem, ...prev];
+      const nextItems = [newItem, ...prev];
+      nextCount = nextItems.length;
+      if (!authToken) {
+        writeGuestWardrobeItems(nextItems);
+      }
+      return nextItems;
     });
 
     if (authToken) {

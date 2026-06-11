@@ -175,15 +175,16 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
           <div className="flex w-full flex-col items-center gap-4 rounded-[var(--radius-scent)] border border-scent-accent/24 bg-black/58 px-6 py-10 text-center">
             <p className="font-serif text-xl italic text-[#fff7ec]">You&rsquo;ve reached the end.</p>
             <p className="max-w-md text-sm leading-6 text-scent-text-muted">
-              Keep the conversation going — ask a question, share your scent of the day, or start a battle.
+              Keep the conversation going. Share a fragrance, ask a question, or start a battle.
             </p>
             <button
               type="button"
               onClick={onStartRoom}
+              aria-label="Share a fragrance or start a community room"
               className="scent-primary-button inline-flex min-h-11 items-center justify-center gap-2 rounded-[var(--radius-scent)] px-6 py-3 text-sm font-bold uppercase tracking-[0.18em] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80"
             >
               <Plus size={16} strokeWidth={1.8} aria-hidden="true" />
-              <span>Start a room</span>
+              <span>Share or start a room</span>
             </button>
           </div>
         )}
