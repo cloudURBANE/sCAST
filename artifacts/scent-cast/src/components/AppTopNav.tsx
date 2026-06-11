@@ -16,6 +16,7 @@ interface AppTopNavProps {
   authEmail?: string | null;
   authPictureUrl?: string | null;
   authUsername?: string | null;
+  renderedRoute?: 'home' | 'community';
   onSignIn: () => void;
   onShare: () => void;
   onSignOut: () => void;
@@ -132,13 +133,14 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
   authEmail,
   authPictureUrl,
   authUsername,
+  renderedRoute,
   onSignIn,
   onShare,
   onSignOut,
   onEditProfile,
 }) => {
   const { pathname } = useLocation();
-  const isHomeRoute = pathname === '/';
+  const isHomeRoute = renderedRoute ? renderedRoute === 'home' : pathname === '/';
 
   const authControl = authToken ? (
     <AccountMenu

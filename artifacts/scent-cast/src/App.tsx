@@ -513,6 +513,7 @@ function DashboardView() {
         authEmail={authEmail}
         authPictureUrl={authPictureUrl}
         authUsername={authUsername}
+        renderedRoute="home"
         onSignIn={() => setIsAuthModalOpen(true)}
         onShare={() => setIsShareModalOpen(true)}
         onSignOut={handleSignOut}

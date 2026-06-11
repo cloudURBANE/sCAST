@@ -1,6 +1,29 @@
 @import "tailwindcss";
 
 @theme {
+  --color-background: #030201;
+  --color-foreground: #fff7ec;
+  --color-card: #080604;
+  --color-card-foreground: #fff7ec;
+  --color-popover: #080604;
+  --color-popover-foreground: #fff7ec;
+  --color-primary: #d4af37;
+  --color-primary-foreground: #080604;
+  --color-primary-border: #f1d27a;
+  --color-secondary: #1f1710;
+  --color-secondary-foreground: #fff7ec;
+  --color-secondary-border: #d8bd82;
+  --color-muted: #17120d;
+  --color-muted-foreground: #ead8bd;
+  --color-accent: #d4af37;
+  --color-accent-foreground: #080604;
+  --color-destructive: #dc2626;
+  --color-destructive-foreground: #fff7ec;
+  --color-destructive-border: #fecaca;
+  --color-border: #d8bd82;
+  --color-input: #d8bd82;
+  --color-ring: #ffe6a3;
+
   --color-scent-bg: #030201;
   --color-scent-surface: #020202;
   --color-scent-border: #1a1a1a;
@@ -34,6 +57,8 @@
   --scent-ease-snappy: cubic-bezier(0.34, 1.56, 0.64, 1);
   --scent-transition-fast: 180ms;
   --scent-transition-base: 240ms;
+  --button-outline: rgba(255, 221, 150, 0.72);
+  --badge-outline: rgba(255, 221, 150, 0.7);
   --scent-card-shadow: 0 26px 68px -40px rgb(var(--scent-gold-rgb) / 0.5), 0 18px 42px -22px rgba(0, 0, 0, 0.96);
   --scent-card-glow: inset 0 1px 0 rgba(255, 226, 176, 0.1), inset 0 0 72px rgba(212, 175, 55, 0.028);
   --scent-black-panel:

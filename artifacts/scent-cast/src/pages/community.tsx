@@ -107,6 +107,7 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
         authEmail={authEmail}
         authPictureUrl={authPictureUrl}
         authUsername={authUsername}
+        renderedRoute="community"
         onSignIn={onSignIn}
         onShare={onShare}
         onSignOut={onSignOut}
@@ -146,7 +147,7 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
                 filters={feedFilters}
                 authToken={authToken}
                 onSignIn={onSignIn}
-                onStartRoom={() => composerRef.current?.open()}
+                onStartRoom={(preset) => composerRef.current?.open(preset)}
                 onClearFilters={clearCommunityFilters}
               />
             </section>
