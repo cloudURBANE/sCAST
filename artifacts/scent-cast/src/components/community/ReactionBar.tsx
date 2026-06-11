@@ -78,24 +78,24 @@ export const ReactionBar: React.FC<ReactionBarProps> = ({
             aria-label={`${label} ${targetType}`}
             aria-pressed={active}
             className={[
-              'inline-flex min-h-11 items-center justify-center gap-2 rounded-full border scent-type-chip transition-colors hover:border-scent-accent/34 hover:bg-scent-accent/[0.055] hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 disabled:pointer-events-none disabled:opacity-55',
+              'inline-flex min-h-11 items-center justify-center gap-2 rounded-full border scent-type-chip transition-all duration-200 hover:border-scent-accent/46 hover:bg-scent-accent/[0.08] hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 disabled:pointer-events-none disabled:opacity-55',
               active
-                ? 'border-scent-accent/55 bg-scent-accent/[0.12] text-[#fff7ec]'
+                ? 'border-scent-accent/82 bg-scent-accent/[0.24] text-[#fff7ec] shadow-[0_12px_28px_-20px_rgba(212,175,55,0.92),inset_0_1px_0_rgba(255,244,210,0.16)]'
                 : 'border-scent-accent/16 bg-black/58 text-scent-text-muted',
               compact ? 'px-3 py-1.5' : 'w-full px-4 py-3',
             ].join(' ')}
           >
             <Icon
-              size={compact ? 13 : 14}
-              strokeWidth={1.7}
+              size={compact ? 14 : 16}
+              strokeWidth={active ? 2.1 : 1.8}
               aria-hidden="true"
-              className={active ? 'fill-current text-scent-accent' : undefined}
+              className={active ? 'fill-current text-scent-accent opacity-100 drop-shadow-[0_0_8px_rgba(212,175,55,0.45)]' : undefined}
             />
             <span className="font-bold uppercase tracking-[0.16em]">
               {label}
             </span>
             {count > 0 ? (
-              <span className="font-mono text-[13px] text-scent-accent">
+              <span className="font-mono text-[15px] font-bold leading-none text-scent-accent sm:text-base">
                 {count}
               </span>
             ) : null}

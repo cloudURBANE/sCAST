@@ -19,6 +19,7 @@ import {
   type FragranceSearchResult,
 } from '@/lib/fragranceApi';
 import {
+  COMMUNITY_POST_TYPES,
   type CommunityFragranceSnapshot,
   type CommunityPostType,
   sanitizeCommunityTag,
@@ -53,7 +54,7 @@ interface PostComposerProps {
 
 export interface PostComposerHandle {
   /** Expand the composer, scroll it into view, and move focus into the form. */
-  open: () => void;
+  open: (preset?: { type?: CommunityPostType | null; tag?: string | null }) => void;
 }
 
 function firstString(...values: unknown[]): string | undefined {
@@ -200,7 +201,16 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
   useImperativeHandle(
     ref,
     () => ({
-      open: () => {
+      open: (preset) => {
+        if (preset?.type && COMMUNITY_POST_TYPES.includes(preset.type)) {
+          setPostType(preset.type);
+        }
+        if (preset?.tag) {
+          const nextTag = sanitizeCommunityTag(preset.tag);
+          if (nextTag) {
+            setTags((current) => (current.includes(nextTag) ? current : [nextTag, ...current].slice(0, 8)));
+          }
+        }
         setComposerOpen(true);
         setStatusMessage(null);
         // Wait for the expanded form to mount, then bring it into view and focus it.

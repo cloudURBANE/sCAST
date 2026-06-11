@@ -38,10 +38,10 @@ const TAGS = [
 
 function roomButtonClass(active: boolean, extra = '') {
   return [
-    'group flex min-h-16 w-full items-center justify-center gap-3 rounded-[18px] border px-4 py-3 text-center scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80',
+    'group flex min-h-16 w-full items-center justify-center gap-3 rounded-[18px] border px-4 py-3 text-center scent-type-chip transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80',
     active
-      ? 'border-scent-accent/72 bg-scent-accent/[0.16] font-bold text-[#fff7ec] shadow-[0_18px_34px_-26px_rgba(212,175,55,0.72),inset_0_1px_0_rgba(255,244,210,0.12)]'
-      : 'border-scent-accent/18 bg-black/54 text-scent-text-muted hover:border-scent-accent/42 hover:bg-scent-accent/[0.045] hover:text-[#fff7ec]',
+      ? 'border-scent-accent/86 bg-scent-accent/[0.22] font-bold text-[#fff7ec] shadow-[0_20px_38px_-24px_rgba(212,175,55,0.88),inset_0_1px_0_rgba(255,244,210,0.18)]'
+      : 'border-scent-accent/22 bg-black/54 text-scent-text-muted hover:-translate-y-0.5 hover:border-scent-accent/58 hover:bg-scent-accent/[0.09] hover:text-[#fff7ec] hover:shadow-[0_16px_32px_-26px_rgba(212,175,55,0.68)]',
     extra,
   ]
     .filter(Boolean)
@@ -50,10 +50,10 @@ function roomButtonClass(active: boolean, extra = '') {
 
 function tagButtonClass(active: boolean) {
   return [
-    'flex h-11 w-full min-w-0 items-center justify-center rounded-full border px-2 text-center text-xs font-bold uppercase tracking-[0.12em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80',
+    'flex h-11 w-full min-w-0 items-center justify-center rounded-full border px-2 text-center text-xs font-bold uppercase tracking-[0.12em] transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80',
     active
-      ? 'border-scent-accent/72 bg-scent-accent/[0.18] text-[#fff7ec] shadow-[0_14px_28px_-22px_rgba(212,175,55,0.72)]'
-      : 'border-scent-accent/18 bg-black/54 text-scent-text-muted hover:border-scent-accent/42 hover:bg-scent-accent/[0.045] hover:text-[#fff7ec]',
+      ? 'border-scent-accent/90 bg-scent-accent/[0.26] text-[#fff7ec] shadow-[0_16px_30px_-20px_rgba(212,175,55,0.9),inset_0_1px_0_rgba(255,244,210,0.16)]'
+      : 'border-scent-accent/24 bg-black/54 text-[#d9c099] hover:-translate-y-0.5 hover:border-scent-accent/62 hover:bg-scent-accent/[0.1] hover:text-[#fff7ec] hover:shadow-[0_14px_28px_-24px_rgba(212,175,55,0.7)]',
   ].join(' ');
 }
 
