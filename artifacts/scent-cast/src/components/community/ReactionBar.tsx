@@ -59,7 +59,13 @@ export const ReactionBar: React.FC<ReactionBarProps> = ({
   };
 
   return (
-    <div className="flex flex-wrap items-center justify-center gap-2">
+    <div
+      className={
+        compact
+          ? 'flex flex-wrap items-center justify-center gap-2'
+          : 'grid w-full gap-3 sm:grid-cols-3'
+      }
+    >
       {REACTIONS.map(({ key, label, Icon }) => {
         const count = counts[key] ?? 0;
         const active = viewerReactions.includes(key);
@@ -76,7 +82,7 @@ export const ReactionBar: React.FC<ReactionBarProps> = ({
               active
                 ? 'border-scent-accent/55 bg-scent-accent/[0.12] text-[#fff7ec]'
                 : 'border-scent-accent/16 bg-black/58 text-scent-text-muted',
-              compact ? 'px-3 py-1.5' : 'px-4 py-2',
+              compact ? 'px-3 py-1.5' : 'w-full px-4 py-3',
             ].join(' ')}
           >
             <Icon
@@ -85,8 +91,14 @@ export const ReactionBar: React.FC<ReactionBarProps> = ({
               aria-hidden="true"
               className={active ? 'fill-current text-scent-accent' : undefined}
             />
-            <span className="font-bold uppercase tracking-[0.16em]">{label}</span>
-            {count > 0 ? <span className="font-mono text-[13px] text-scent-accent">{count}</span> : null}
+            <span className="font-bold uppercase tracking-[0.16em]">
+              {label}
+            </span>
+            {count > 0 ? (
+              <span className="font-mono text-[13px] text-scent-accent">
+                {count}
+              </span>
+            ) : null}
           </button>
         );
       })}
