@@ -65,7 +65,7 @@ export const CommentThread: React.FC<CommentThreadProps> = ({ postId, authToken,
   };
 
   return (
-    <section className="mt-6 border-t border-white/10 pt-6" aria-label="Comments">
+    <section className="mt-6 border-t border-white/8 pt-5" aria-label="Comments">
       {detail.isLoading ? (
         <div className="flex items-center gap-2 py-4 text-sm text-scent-muted">
           <LoaderCircle size={16} className="animate-spin" aria-hidden="true" />
@@ -76,12 +76,17 @@ export const CommentThread: React.FC<CommentThreadProps> = ({ postId, authToken,
           {detail.error instanceof Error ? detail.error.message : 'Comments are unavailable.'}
         </p>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-3">
           {comments.length === 0 ? (
-            <p className="scent-type-caption">No comments yet.</p>
+            <p className="rounded-[calc(var(--radius-scent)-10px)] border border-white/8 bg-white/[0.025] px-4 py-3 text-center scent-type-caption">
+              No comments yet.
+            </p>
           ) : (
             comments.map((comment) => (
-              <article key={comment.id} className="border-b border-white/8 pb-4 last:border-b-0">
+              <article
+                key={comment.id}
+                className="rounded-[calc(var(--radius-scent)-8px)] border border-white/8 bg-white/[0.025] px-4 py-4 shadow-[inset_0_1px_0_rgba(255,236,183,0.035)]"
+              >
                 <div className="flex items-start gap-3">
                   <Link
                     to={communitySharePath(comment.author)}
@@ -91,7 +96,7 @@ export const CommentThread: React.FC<CommentThreadProps> = ({ postId, authToken,
                     <CommunityAuthorAvatar author={comment.author} size="sm" />
                   </Link>
                   <div className="min-w-0 flex-1">
-                    <div className="mb-2 flex flex-wrap items-center gap-2 scent-type-meta uppercase">
+                    <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 scent-type-meta uppercase">
                       <Link
                         to={communitySharePath(comment.author)}
                         className="min-w-0 max-w-full truncate font-bold text-scent-accent transition-colors hover:text-[#fff7ec]"
@@ -140,7 +145,7 @@ export const CommentThread: React.FC<CommentThreadProps> = ({ postId, authToken,
           <button
             type="submit"
             disabled={commentMutation.isPending || (authToken ? !body.trim() : false)}
-            className="inline-flex min-h-11 items-center gap-2 rounded-full border border-scent-accent/30 bg-scent-accent/[0.07] px-4 py-2 scent-type-chip text-[#fff7ec] transition-colors hover:border-scent-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 disabled:pointer-events-none disabled:opacity-55"
+            className="inline-flex min-h-11 items-center gap-2 rounded-full bg-scent-accent/[0.09] px-4 py-2 scent-type-chip text-[#fff7ec] shadow-[inset_0_0_0_1px_rgba(212,175,55,0.26)] transition-colors hover:bg-scent-accent/[0.14] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:pointer-events-none disabled:opacity-55"
           >
             {commentMutation.isPending ? (
               <LoaderCircle size={14} className="animate-spin" aria-hidden="true" />

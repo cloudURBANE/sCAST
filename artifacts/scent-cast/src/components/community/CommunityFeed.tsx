@@ -157,11 +157,11 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
 
   if (isLoading) {
     return (
-      <div className="mx-auto grid w-full max-w-[960px] gap-4" aria-label="Loading community posts">
+      <div className="mx-auto grid w-full max-w-[940px] gap-4" aria-label="Loading community posts">
         {[0, 1, 2].map((item) => (
           <div
             key={item}
-            className="min-h-[13rem] rounded-[var(--radius-scent)] border border-scent-accent/24 bg-black/58 p-6 shadow-[0_18px_44px_-30px_rgba(0,0,0,0.95),0_0_0_1px_rgba(212,175,55,0.06)]"
+            className="min-h-[12rem] rounded-[calc(var(--radius-scent)+2px)] border border-scent-accent/18 bg-black/46 p-6 shadow-[0_18px_44px_-34px_rgba(0,0,0,0.95),inset_0_1px_0_rgba(255,236,183,0.04)]"
           >
             <div className="mb-5 h-4 w-28 rounded-full bg-scent-accent/10" />
             <div className="mb-3 h-6 w-2/3 rounded-full bg-white/[0.055]" />
@@ -180,7 +180,7 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
     return (
       <div
         role="alert"
-        className="mx-auto w-full max-w-[960px] rounded-[var(--radius-scent)] border border-red-500/20 bg-red-500/[0.055] p-6 text-center"
+        className="mx-auto w-full max-w-[940px] rounded-[calc(var(--radius-scent)+2px)] border border-red-500/20 bg-red-500/[0.055] p-6 text-center"
       >
         <p className="font-serif text-xl italic text-red-100">The feed could not load.</p>
         <p className="mt-2 text-sm font-medium text-red-100/85">
@@ -202,7 +202,7 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
     const shouldClearFilters = Boolean(filters.q);
     const { title, body, actionLabel, actionAriaLabel } = emptyStateCopy(filters);
     return (
-      <div className="mx-auto w-full max-w-[960px] rounded-[var(--radius-scent)] border border-scent-accent/24 bg-black/58 px-6 py-14 text-center">
+      <div className="mx-auto w-full max-w-[940px] rounded-[calc(var(--radius-scent)+2px)] border border-scent-accent/18 bg-black/46 px-6 py-12 text-center shadow-[inset_0_1px_0_rgba(255,236,183,0.04)]">
         <p className="font-serif text-2xl italic text-[#fff7ec]">{title}</p>
         <p className="mx-auto mt-4 max-w-lg text-base leading-7 text-scent-text-muted">{body}</p>
         <div className="mt-6 flex justify-center">
@@ -245,7 +245,7 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
   const endCopy = roomActionCopy(filters.type);
 
   return (
-    <div className="mx-auto w-full max-w-[960px] space-y-6" aria-busy={isRefetching || isFetchingNextPage}>
+    <div className="mx-auto w-full max-w-[940px] space-y-5 sm:space-y-6" aria-busy={isRefetching || isFetchingNextPage}>
       {posts.map((post) => (
         <PostCard key={post.id} post={post} authToken={authToken} onSignIn={onSignIn} />
       ))}
@@ -264,7 +264,7 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
             {isFetchingNextPage ? 'Loading' : 'Load more'}
           </button>
         ) : (
-          <div className="flex w-full flex-col items-center gap-4 rounded-[var(--radius-scent)] border border-scent-accent/24 bg-black/58 px-6 py-10 text-center">
+          <div className="flex w-full flex-col items-center gap-4 rounded-[calc(var(--radius-scent)+2px)] border border-scent-accent/18 bg-black/46 px-6 py-10 text-center shadow-[inset_0_1px_0_rgba(255,236,183,0.04)]">
             <p className="font-serif text-xl italic text-[#fff7ec]">You&rsquo;ve reached the end.</p>
             <p className="max-w-md text-sm leading-6 text-scent-text-muted">
               {filters.tag
