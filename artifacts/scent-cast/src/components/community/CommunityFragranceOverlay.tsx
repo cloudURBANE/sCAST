@@ -3,13 +3,17 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Check, LoaderCircle, Plus, X } from 'lucide-react';
 import { BottleImage } from '@/components/BottleImage';
 import { BrandGoldLabel } from '@/components/BrandGoldLabel';
-import { COMMUNITY_IMAGE_LAYOUT_TRANSITION } from '@/components/community/communityMotion';
+import {
+  COMMUNITY_IMAGE_LAYOUT_TRANSITION,
+  COMMUNITY_IMAGE_LAYOUT_TRANSITION_LOW_RENDER,
+} from '@/components/community/communityMotion';
 import type { CommunityFragranceEntry } from '@/components/community/communityData';
 import { useWardrobe } from '@/context/WardrobeContext';
 
 interface CommunityFragranceOverlayProps {
   item: CommunityFragranceEntry | null;
   imageLayoutId?: string | null;
+  lowRenderBudget?: boolean;
   onClose: () => void;
   onExitComplete?: () => void;
   restoreFocus?: () => void;
@@ -43,6 +47,7 @@ function wardrobeIdentityKey(brand?: string | null, name?: string | null): strin
 export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps> = ({
   item,
   imageLayoutId,
+  lowRenderBudget = false,
   onClose,
   onExitComplete,
   restoreFocus,
@@ -52,6 +57,9 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
   const { items, handleAddItem } = useWardrobe();
   const [addState, setAddState] = React.useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [addMessage, setAddMessage] = React.useState<string | null>(null);
+  const imageLayoutTransition = lowRenderBudget
+    ? COMMUNITY_IMAGE_LAYOUT_TRANSITION_LOW_RENDER
+    : COMMUNITY_IMAGE_LAYOUT_TRANSITION;
   const activeItemKey = item ? wardrobeIdentityKey(item.brand, item.name) : '';
   const alreadyInWardrobe = Boolean(
     activeItemKey &&
@@ -242,7 +250,7 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
                   </div>
                   <motion.div
                     layoutId={imageLayoutId ?? undefined}
-                    transition={COMMUNITY_IMAGE_LAYOUT_TRANSITION}
+                    transition={imageLayoutTransition}
                     className="relative z-10 my-3 min-h-0 flex-1"
                   >
                     <BottleImage

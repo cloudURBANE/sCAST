@@ -1,10 +1,13 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { MotionConfig, motion } from 'framer-motion';
 import { BottleImage } from '@/components/BottleImage';
 import { BrandGoldLabel } from '@/components/BrandGoldLabel';
 import { CommunityFragranceOverlay } from '@/components/community/CommunityFragranceOverlay';
 import type { CommunityFragranceEntry } from '@/components/community/communityData';
-import { COMMUNITY_IMAGE_LAYOUT_TRANSITION } from '@/components/community/communityMotion';
+import {
+  COMMUNITY_IMAGE_LAYOUT_TRANSITION,
+  COMMUNITY_IMAGE_LAYOUT_TRANSITION_LOW_RENDER,
+} from '@/components/community/communityMotion';
 import { isLowRenderBudget } from '@/lib/platform';
 import { useMarqueeSwipe } from '@/hooks/useMarqueeSwipe';
 
@@ -41,9 +44,15 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
   const [activeItem, setActiveItem] = useState<CommunityFragranceEntry | null>(null);
   const [activeImageLayoutId, setActiveImageLayoutId] = useState<string | null>(null);
   const [overlayClosing, setOverlayClosing] = useState(false);
+  const lowRenderBudget = useRef(isLowRenderBudget()).current;
   const trackCopies = useRef(
-    isLowRenderBudget() ? COMMUNITY_TRACK_COPIES_LOW : COMMUNITY_TRACK_COPIES_DEFAULT,
+    lowRenderBudget ? COMMUNITY_TRACK_COPIES_LOW : COMMUNITY_TRACK_COPIES_DEFAULT,
   ).current;
+  const imageLayoutTransition = lowRenderBudget
+    ? COMMUNITY_IMAGE_LAYOUT_TRANSITION_LOW_RENDER
+    : COMMUNITY_IMAGE_LAYOUT_TRANSITION;
+  const cardHoverMotion = lowRenderBudget ? undefined : { y: -8, scale: 1.04 };
+  const cardTapMotion = lowRenderBudget ? undefined : { scale: 0.985 };
   const renderedItems = loading ? placeholderItems : items;
   const trackKey = useMemo(
     () => renderedItems.map((item) => `${item.id}:${item.imageUrl}`).join('|'),
@@ -58,7 +67,7 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
     resetKey: trackKey,
   });
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const track = trackRef.current;
     const group = groupRef.current;
     if (!track || !group) return;
@@ -217,8 +226,8 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
                     aria-label={`${item.name} by ${item.brand}, curated by ${item.curator}`}
                     tabIndex={copyIndex > 0 ? -1 : 0}
                     className="scent-fragrance-card scent-community-marquee-card group relative flex h-full w-full cursor-pointer flex-col p-5 sm:p-6 text-left outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
-                    whileHover={{ y: -8, scale: 1.04 }}
-                    whileTap={{ scale: 0.985 }}
+                    whileHover={cardHoverMotion}
+                    whileTap={cardTapMotion}
                     transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
                     onClick={(event) => openItem(item, copyIndex, event.currentTarget)}
                     onKeyDown={(event) => {
@@ -236,7 +245,7 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
                     </div>
                     <motion.div
                       layoutId={`bottle-image-${copyIndex}-${item.id}`}
-                      transition={COMMUNITY_IMAGE_LAYOUT_TRANSITION}
+                      transition={imageLayoutTransition}
                       className="relative z-10 my-3 min-h-0 flex-1"
                     >
                       <BottleImage
@@ -269,6 +278,7 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
       <CommunityFragranceOverlay
         item={activeItem}
         imageLayoutId={activeImageLayoutId}
+        lowRenderBudget={lowRenderBudget}
         onClose={closeOverlay}
         onExitComplete={handleOverlayExitComplete}
         restoreFocus={restoreTriggerFocus}

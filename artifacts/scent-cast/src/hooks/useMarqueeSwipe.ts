@@ -80,7 +80,7 @@ export function useMarqueeSwipe(
       if (manual) return;
       offset = normalizeLoop(-readTranslateX(track), readVar(distanceVar));
       manual = true;
-      track.style.animation = 'none';
+      track.style.animationDelay = '';
       track.dataset.marqueeDragging = 'true';
       applyTransform();
     };
@@ -88,15 +88,14 @@ export function useMarqueeSwipe(
     const resumeCss = () => {
       if (!manual) return;
       manual = false;
-      delete track.dataset.marqueeDragging;
       const distance = readVar(distanceVar);
       const duration = readVar(durationVar);
       const progress = distance > 0 ? normalizeLoop(offset, distance) / distance : 0;
-      // Clearing the inline shorthand restores the class animation; the
-      // negative delay restarts it mid-loop at the current position.
-      track.style.animation = '';
-      track.style.transform = '';
+      // Put the resume offset in place before the CSS animation is restored.
+      // WebKit can otherwise paint one frame at the default keyframe position.
       track.style.animationDelay = duration > 0 ? `-${(progress * duration).toFixed(3)}s` : '';
+      track.style.transform = '';
+      delete track.dataset.marqueeDragging;
     };
 
     const stepMomentum = (now: number) => {
