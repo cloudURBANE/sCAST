@@ -920,19 +920,24 @@ export const FragranceCapture: React.FC<{
     });
   }, []);
 
-  // Esc closes the results overlay while it's showing (and not mid-load). Bound at
-  // the document level so it works regardless of where focus currently sits.
+  // Esc closes the search surface whenever it is conceptually open — results
+  // showing, a completed (possibly empty) search, a typed query, or just the
+  // focused field. Gating on `matches.length` alone left Esc dead before any
+  // results arrived, forcing users onto the × button. Bound at the document
+  // level so it works regardless of where focus currently sits.
+  const searchSurfaceOpen = matches.length > 0 || hasSearched || vaultSearchActive;
   useEffect(() => {
-    if (matches.length === 0 || uploading) return;
+    if (!searchSurfaceOpen || uploading) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
+        searchInputRef.current?.blur();
         handleDismissResults();
       }
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [matches.length, uploading, handleDismissResults]);
+  }, [searchSurfaceOpen, uploading, handleDismissResults]);
 
   // Bring freshly-arrived results into view so the list isn't stranded below the
   // fold on tall mobile layouts. Runs once per result set, after the overlay clears.
@@ -948,7 +953,7 @@ export const FragranceCapture: React.FC<{
     `inline-flex max-w-[11rem] items-center truncate rounded-full border px-3 py-1.5 scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 ${
       active
         ? 'border-scent-accent/80 bg-scent-accent/15 text-[#fff7ec]'
-        : 'border-white/12 text-scent-text-muted hover:border-scent-accent/45 hover:text-[#fff7ec]'
+        : 'border-white/30 text-scent-text-muted hover:border-scent-accent/45 hover:text-[#fff7ec]'
     }`;
 
   const filtersActive = houseFilter !== null || genderFilter !== null;
@@ -1048,7 +1053,7 @@ export const FragranceCapture: React.FC<{
           <button
             type="button"
             onClick={scrollToSearch}
-            className="inline-flex items-center gap-1.5 rounded-full border border-white/14 bg-scent-bg/70 px-3.5 py-1.5 scent-type-chip text-scent-accent transition-colors hover:border-scent-accent/55 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
+            className="inline-flex items-center gap-1.5 rounded-full border border-white/30 bg-scent-bg/70 px-3.5 py-1.5 scent-type-chip text-scent-accent transition-colors hover:border-scent-accent/55 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
           >
             <Search size={12} strokeWidth={2.2} aria-hidden />
             Back to search
@@ -1198,14 +1203,14 @@ export const FragranceCapture: React.FC<{
                       <button
                         type="button"
                         onClick={scrollToSearch}
-                        className="hidden shrink-0 items-center gap-1.5 rounded-full border border-white/12 px-3 py-1.5 scent-type-chip text-scent-text-muted transition-colors hover:border-scent-accent/45 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 sm:inline-flex"
+                        className="hidden shrink-0 items-center gap-1.5 rounded-full border border-white/30 px-3 py-1.5 scent-type-chip text-scent-text-muted transition-colors hover:border-scent-accent/45 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 sm:inline-flex"
                       >
                         ↑ Back to top
                       </button>
                       <button
                         type="button"
                         onClick={handleNewSearch}
-                        className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/12 px-3 py-1.5 scent-type-chip text-scent-text-muted transition-colors hover:border-scent-accent/45 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
+                        className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/30 px-3 py-1.5 scent-type-chip text-scent-text-muted transition-colors hover:border-scent-accent/45 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
                       >
                         <Search size={12} strokeWidth={2} aria-hidden />
                         New search
@@ -1215,7 +1220,7 @@ export const FragranceCapture: React.FC<{
                         onClick={handleDismissResults}
                         aria-label="Close results"
                         title="Close (Esc)"
-                        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/12 text-scent-text-muted transition-colors hover:border-scent-accent/45 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
+                        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/30 text-scent-text-muted transition-colors hover:border-scent-accent/45 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
                       >
                         <X size={15} strokeWidth={2} aria-hidden />
                       </button>
@@ -1262,7 +1267,7 @@ export const FragranceCapture: React.FC<{
                     </div>
                   )}
 
-                  <div className={`flex max-h-[min(42dvh,24rem)] min-h-0 flex-1 overflow-y-auto overscroll-contain scrollbar-hide ${visibleMatches.length === 1 ? 'items-center' : 'items-start'}`}>
+                  <div className={`flex max-h-[min(54dvh,28rem)] min-h-0 flex-1 overflow-y-auto overscroll-contain scrollbar-hide ${visibleMatches.length === 1 ? 'items-center' : 'items-start'}`}>
                     {visibleMatches.length === 0 ? (
                       <div className="m-auto flex flex-col items-center gap-3 py-10 text-center">
                         <p className="font-serif italic text-lg text-scent-text-muted">No results match these filters</p>
@@ -1285,7 +1290,7 @@ export const FragranceCapture: React.FC<{
                               key={key}
                               type="button"
                               onClick={() => setSelectedId(key)}
-                              className={`scent-vault-result-card group mx-auto w-full max-w-[39.75rem] min-h-[124px] px-6 py-5 text-center transition-all duration-200 cursor-pointer sm:min-h-[148px] sm:px-8 sm:py-6 ${
+                              className={`scent-vault-result-card group mx-auto w-full max-w-[39.75rem] min-h-[84px] px-4 py-3 text-center transition-all duration-200 cursor-pointer sm:min-h-[96px] sm:px-6 sm:py-3.5 ${
                                 isSelected ? 'is-selected' : ''
                               }`}
                               aria-pressed={isSelected}
@@ -1307,17 +1312,17 @@ export const FragranceCapture: React.FC<{
                                   <Check size={16} strokeWidth={3} />
                                 </motion.span>
                               )}
-                              <span className="scent-vault-monogram mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full font-serif text-[1.35rem] font-semibold leading-none sm:mb-3.5 sm:h-16 sm:w-16 sm:text-[1.65rem]">
+                              <span className="scent-vault-monogram mx-auto mb-1.5 flex h-8 w-8 items-center justify-center rounded-full font-serif text-[0.95rem] font-semibold leading-none sm:mb-2 sm:h-9 sm:w-9 sm:text-[1.05rem]">
                                 {matchMonogram(m)}
                               </span>
                               <span
-                                className="mx-auto block max-w-full truncate font-serif text-[1.6rem] italic leading-none text-[#fff7ec] sm:text-[2rem]"
+                                className="mx-auto block max-w-full truncate font-serif text-[1.15rem] italic leading-none text-[#fff7ec] sm:text-[1.35rem]"
                                 title={m.name}
                               >
                                 {truncateMatchLine(m.name, MATCH_LINE_MAX_CHARS)}
                               </span>
                               <span
-                                className="mx-auto mt-2.5 block max-w-full truncate font-sans text-[12.5px] font-bold uppercase tracking-[0.28em] text-[#f3dca6] sm:mt-3 sm:text-[13.5px]"
+                                className="mx-auto mt-1.5 block max-w-full truncate font-sans text-[11px] font-bold uppercase tracking-[0.28em] text-[#f3dca6] sm:mt-2 sm:text-[12px]"
                                 title={m.brand || 'House unavailable'}
                               >
                                 {truncateMatchLine(m.brand || 'House unavailable', MATCH_LINE_MAX_CHARS)}
@@ -1362,24 +1367,44 @@ export const FragranceCapture: React.FC<{
           )}
         </AnimatePresence>
       </div>
-      {/* Flow spacer that reserves the loader's height at the *bottom* of the
-          card so the inset-0 search veil isn't clipped by overflow:hidden.
-          Reserved instantly (initial === animate) rather than tweened from 0:
-          animating height reflowed the document every frame and made the
-          centered loader visibly drift downward as the box grew. Sitting after
-          the content, the reserve grows into empty space instead of shoving the
-          form down (no flash behind the fading-in veil). On exit it collapses
-          under the veil's fade so nothing clips. */}
+      {/* Skeleton result list in the flow space below the form. It doubles as
+          the height reserve that keeps the inset-0 search veil from being
+          clipped by overflow:hidden (min-height matches the loader), and gives
+          the list area a card-shaped loading state so results cross-fade into
+          place instead of snapping in when the veil clears. Height is reserved
+          instantly (no tween) so the centered loader doesn't drift as the box
+          grows; on exit it collapses under the veil's fade so nothing clips. */}
       <AnimatePresence>
         {loadingSurface === 'search' && uploading && (
           <motion.div
-            initial={{ height: SEARCH_LOADER_MIN_H }}
-            animate={{ height: SEARCH_LOADER_MIN_H }}
-            exit={{ height: 0 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
             aria-hidden
-            style={{ pointerEvents: 'none' }}
-          />
+            style={{ pointerEvents: 'none', minHeight: SEARCH_LOADER_MIN_H }}
+            className="mx-auto mt-6 w-full overflow-hidden sm:mt-7"
+          >
+            <div className="scent-vault-results-panel mx-auto w-full max-w-[50.5rem] px-4 py-7 sm:px-9 sm:py-9">
+              <div className="mb-4 flex items-center justify-between px-1">
+                <span className="h-3.5 w-32 animate-pulse rounded-full bg-white/10" />
+                <span className="h-7 w-7 animate-pulse rounded-full bg-white/5" />
+              </div>
+              <div className="grid w-full grid-cols-1 gap-3">
+                {[0, 1, 2].map((i) => (
+                  <div
+                    key={i}
+                    className="scent-vault-result-card mx-auto w-full max-w-[39.75rem] min-h-[84px] animate-pulse px-4 py-3 sm:min-h-[96px] sm:px-6 sm:py-3.5"
+                    style={{ animationDelay: `${i * 120}ms` }}
+                  >
+                    <span className="mx-auto mb-1.5 flex h-8 w-8 rounded-full bg-white/10 sm:mb-2 sm:h-9 sm:w-9" />
+                    <span className="mx-auto block h-4 w-44 max-w-[70%] rounded-full bg-white/10" />
+                    <span className="mx-auto mt-1.5 block h-2.5 w-28 max-w-[50%] rounded-full bg-white/5 sm:mt-2" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
       {typeof document !== 'undefined'
