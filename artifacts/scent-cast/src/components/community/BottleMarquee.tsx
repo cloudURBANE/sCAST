@@ -39,6 +39,7 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
   const activeTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [activeItem, setActiveItem] = useState<CommunityFragranceEntry | null>(null);
   const [activeImageLayoutId, setActiveImageLayoutId] = useState<string | null>(null);
+  const [overlayClosing, setOverlayClosing] = useState(false);
   const trackCopies = useRef(
     isLowRenderBudget() ? COMMUNITY_TRACK_COPIES_LOW : COMMUNITY_TRACK_COPIES_DEFAULT,
   ).current;
@@ -141,8 +142,8 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
   }, []);
 
   const closeOverlay = useCallback(() => {
+    setOverlayClosing(true);
     setActiveItem(null);
-    setActiveImageLayoutId(null);
   }, []);
 
   const restoreTriggerFocus = useCallback(() => {
@@ -153,10 +154,16 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
     }
   }, []);
 
+  const handleOverlayExitComplete = useCallback(() => {
+    setOverlayClosing(false);
+    setActiveImageLayoutId(null);
+  }, []);
+
   const openItem = useCallback(
     (item: CommunityFragranceEntry, copyIndex: number, trigger: HTMLButtonElement) => {
       if (!loading && item.imageUrl) {
         activeTriggerRef.current = trigger;
+        setOverlayClosing(false);
         setActiveImageLayoutId(`bottle-image-${copyIndex}-${item.id}`);
         setActiveItem(item);
       }
@@ -184,7 +191,8 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
           key={trackKey}
           ref={trackRef}
           data-overlay-open={activeItem ? 'true' : undefined}
-          aria-hidden={activeItem ? 'true' : undefined}
+          data-overlay-settling={activeItem || overlayClosing ? 'true' : undefined}
+          aria-hidden={activeItem || overlayClosing ? 'true' : undefined}
         >
           {[...Array(trackCopies)].map((_, copyIndex) => (
             <div
@@ -253,6 +261,7 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
         item={activeItem}
         imageLayoutId={activeImageLayoutId}
         onClose={closeOverlay}
+        onExitComplete={handleOverlayExitComplete}
         restoreFocus={restoreTriggerFocus}
       />
     </MotionConfig>

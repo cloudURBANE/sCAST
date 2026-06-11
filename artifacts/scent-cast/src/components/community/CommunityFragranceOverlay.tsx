@@ -11,6 +11,7 @@ interface CommunityFragranceOverlayProps {
   item: CommunityFragranceEntry | null;
   imageLayoutId?: string | null;
   onClose: () => void;
+  onExitComplete?: () => void;
   restoreFocus?: () => void;
 }
 
@@ -43,6 +44,7 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
   item,
   imageLayoutId,
   onClose,
+  onExitComplete,
   restoreFocus,
 }) => {
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -74,10 +76,14 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
 
   const closeOverlay = useCallback(() => {
     onClose();
+  }, [onClose]);
+
+  const handleExitComplete = useCallback(() => {
+    onExitComplete?.();
     window.requestAnimationFrame(() => {
       restoreFocus?.();
     });
-  }, [onClose, restoreFocus]);
+  }, [onExitComplete, restoreFocus]);
 
   useEffect(() => {
     if (!item) return;
@@ -190,7 +196,7 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
   }, [addState, alreadyInWardrobe, handleAddItem, item]);
 
   return (
-    <AnimatePresence mode="wait">
+    <AnimatePresence mode="wait" onExitComplete={handleExitComplete}>
       {item ? (
         <motion.div
           key="community-fragrance-overlay"
