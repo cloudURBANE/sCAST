@@ -21,6 +21,7 @@ type LayerConfig = {
   title: string;
   ariaLabel: string;
   hitPath: string;
+  hitPathLength: number;
   faces: readonly [string, string];
   faceFills: readonly [string, string];
   polishFill: string;
@@ -43,6 +44,23 @@ const SOFT_EASE: [number, number, number, number] = [0.42, 0, 0.58, 1];
 type LayerMotionState = ActiveLayer | 'idle';
 type LayerOffset = { y: number; scale: number; opacity: number };
 type PointerActivation = { layer: ActiveLayer; pointerId: number; x: number; y: number };
+type PolygonGeometry = { path: string; length: number };
+type DustMote = {
+  id: string;
+  cx: number;
+  cy: number;
+  r: number;
+  delay: number;
+  duration: number;
+  sway: number;
+};
+
+type ConstellationDot = {
+  cx: number;
+  cy: number;
+  r: number;
+  opacity: number;
+};
 
 const LAYER_MOTION: Record<LayerMotionState, Record<ActiveLayer, LayerOffset>> = {
   idle: {
@@ -89,7 +107,6 @@ const GUIDE_TRACE_DURATION_S = 1.9;
 // traced before it gracefully fades, so the hint always reads as a finished
 // outline rather than a stroke that vanishes mid-draw.
 const GUIDE_TRACE_TIMES = [0, 0.46, 0.72, 1] as const;
-const GUIDE_PATH_KEYFRAMES = [0, 1, 1, 1] as const;
 const GUIDE_INTERSECTION_RATIO = 0.22;
 const NO_ACTIVE_NOTES: string[] = [];
 const LAYER_CENTER_Y: Record<ActiveLayer, number> = {
@@ -120,8 +137,21 @@ function pointToken([x, y]: Point) {
   return `${svgNumber(x)} ${svgNumber(y)}`;
 }
 
+function segmentLength([fromX, fromY]: Point, [toX, toY]: Point) {
+  return Math.hypot(toX - fromX, toY - fromY);
+}
+
+function polygonGeometry(points: readonly Point[]): PolygonGeometry {
+  const [firstPoint] = points;
+  const closedPoints = [...points, firstPoint];
+  const path = `M${closedPoints.map(pointToken).join(' L')}`;
+  const length = closedPoints.slice(1).reduce((total, point, index) => total + segmentLength(closedPoints[index], point), 0);
+
+  return { path, length };
+}
+
 function polygonPath(points: readonly Point[]) {
-  return `M${points.map(pointToken).join(' L')} Z`;
+  return polygonGeometry(points).path;
 }
 
 function linePath(from: Point, to: Point) {
@@ -136,8 +166,8 @@ function pointOnEdge(edgeEnd: Point, y: number): Point {
   return [apexX + (endX - apexX) * progress, y];
 }
 
-function tierHitPath(topY: number, bottomY: number) {
-  return polygonPath([
+function tierHitGeometry(topY: number, bottomY: number) {
+  return polygonGeometry([
     pointOnEdge(PYRAMID_OUTER.leftBase, topY),
     pointOnEdge(PYRAMID_OUTER.rightBase, topY),
     pointOnEdge(PYRAMID_OUTER.rightBase, bottomY),
@@ -175,9 +205,18 @@ function tierCrestPath(topY: number) {
   return linePath(pointOnEdge(PYRAMID_OUTER.leftBase, topY), pointOnEdge(PYRAMID_OUTER.rightBase, topY));
 }
 
+const baseHitGeometry = tierHitGeometry(PYRAMID_Y.baseTop, PYRAMID_Y.baseBottom);
+const heartHitGeometry = tierHitGeometry(PYRAMID_Y.heartTop, PYRAMID_Y.heartBottom);
+const topHitGeometry = polygonGeometry([
+  PYRAMID_OUTER.apex,
+  pointOnEdge(PYRAMID_OUTER.rightBase, PYRAMID_Y.topBottom),
+  pointOnEdge(PYRAMID_OUTER.leftBase, PYRAMID_Y.topBottom),
+]);
+
 const layerGeometry = {
   base: {
-    hitPath: tierHitPath(PYRAMID_Y.baseTop, PYRAMID_Y.baseBottom),
+    hitPath: baseHitGeometry.path,
+    hitPathLength: baseHitGeometry.length,
     faces: tierFaces(PYRAMID_Y.baseTop, PYRAMID_Y.baseBottom),
     crest: tierCrestPath(PYRAMID_Y.baseTop),
     channel: {
@@ -186,7 +225,8 @@ const layerGeometry = {
     },
   },
   heart: {
-    hitPath: tierHitPath(PYRAMID_Y.heartTop, PYRAMID_Y.heartBottom),
+    hitPath: heartHitGeometry.path,
+    hitPathLength: heartHitGeometry.length,
     faces: tierFaces(PYRAMID_Y.heartTop, PYRAMID_Y.heartBottom),
     crest: tierCrestPath(PYRAMID_Y.heartTop),
     channel: {
@@ -195,18 +235,15 @@ const layerGeometry = {
     },
   },
   top: {
-    hitPath: polygonPath([
-      PYRAMID_OUTER.apex,
-      pointOnEdge(PYRAMID_OUTER.rightBase, PYRAMID_Y.topBottom),
-      pointOnEdge(PYRAMID_OUTER.leftBase, PYRAMID_Y.topBottom),
-    ]),
+    hitPath: topHitGeometry.path,
+    hitPathLength: topHitGeometry.length,
     faces: apexFaces(PYRAMID_Y.topBottom),
     channel: {
       start: [PYRAMID_CENTER_X, PYRAMID_OUTER.apex[1] + 9] as Point,
       end: [PYRAMID_CENTER_X, PYRAMID_Y.topBottom - 8] as Point,
     },
   },
-} satisfies Record<ActiveLayer, Pick<LayerConfig, 'hitPath' | 'faces' | 'channel' | 'crest'>>;
+} satisfies Record<ActiveLayer, Pick<LayerConfig, 'hitPath' | 'hitPathLength' | 'faces' | 'channel' | 'crest'>>;
 
 function formatNotes(notes: string[]) {
   return notes.length > 0 ? notes.join(', ') : 'Uncharted territory.';
@@ -515,19 +552,25 @@ function LayerAccordEcho({
   );
 }
 
-// Particle System Generation
-const DUST_MOTES = Array.from({ length: 14 }).map((_, i) => ({
-  id: `mote-${i}`,
-  cx: 30 + Math.random() * 300,
-  cy: 50 + Math.random() * 320,
-  r: 0.35 + Math.random() * 1.1,
-  delay: Math.random() * 7,
-  duration: 12 + Math.random() * 10,
-  sway: (Math.random() - 0.5) * 12,
+function seededUnit(index: number, salt: number) {
+  const value = Math.sin(index * 91.73 + salt * 17.19) * 10000;
+  return value - Math.floor(value);
+}
+
+// Deterministic dust field. Canvas animation below draws these in one render loop
+// instead of keeping a separate animated SVG node alive for each mote.
+const DUST_MOTES: DustMote[] = Array.from({ length: 14 }, (_, index) => ({
+  id: `mote-${index}`,
+  cx: 30 + seededUnit(index, 1) * 300,
+  cy: 50 + seededUnit(index, 2) * 320,
+  r: 0.35 + seededUnit(index, 3) * 1.1,
+  delay: seededUnit(index, 4) * 7,
+  duration: 12 + seededUnit(index, 5) * 10,
+  sway: (seededUnit(index, 6) - 0.5) * 12,
 }));
 
 // Static constellation pinpricks — fixed deep-field starlight for parallax depth
-const CONSTELLATION_DOTS = [
+const CONSTELLATION_DOTS: ConstellationDot[] = [
   { cx: 48, cy: 78, r: 0.7, opacity: 0.45 },
   { cx: 312, cy: 62, r: 0.5, opacity: 0.32 },
   { cx: 28, cy: 198, r: 0.55, opacity: 0.4 },
@@ -547,6 +590,120 @@ const CONSTELLATION_DOTS = [
   { cx: 14, cy: 332, r: 0.4, opacity: 0.26 },
   { cx: 346, cy: 312, r: 0.5, opacity: 0.34 },
 ];
+
+function drawAtmosphere(
+  context: CanvasRenderingContext2D,
+  viewportWidth: number,
+  viewportHeight: number,
+  timeMs: number,
+  reducedMotion: boolean,
+) {
+  context.clearRect(0, 0, viewportWidth, viewportHeight);
+
+  const scale = Math.min(viewportWidth / 360, viewportHeight / 420);
+  const offsetX = (viewportWidth - 360 * scale) / 2;
+  const offsetY = (viewportHeight - 420 * scale) / 2;
+
+  context.save();
+  context.translate(offsetX, offsetY);
+  context.scale(scale, scale);
+  context.globalCompositeOperation = 'screen';
+
+  CONSTELLATION_DOTS.forEach((star, index) => {
+    const pulse = reducedMotion ? 0.85 : 0.55 + 0.4 * ((Math.sin(timeMs / (1120 + index * 80) + index * 0.8) + 1) / 2);
+    context.globalAlpha = star.opacity * pulse;
+    context.fillStyle = '#fff8e6';
+    context.beginPath();
+    context.arc(star.cx, star.cy, star.r, 0, Math.PI * 2);
+    context.fill();
+  });
+
+  DUST_MOTES.forEach((mote) => {
+    const progress = reducedMotion ? 0.35 : ((timeMs / 1000 + mote.delay) % mote.duration) / mote.duration;
+    const driftY = reducedMotion ? 0 : -42 * progress;
+    const driftX = reducedMotion ? 0 : Math.sin(progress * Math.PI * 2) * mote.sway;
+    context.globalAlpha = reducedMotion ? 0.08 : Math.sin(progress * Math.PI) * 0.22;
+    context.fillStyle = '#ffffff';
+    context.beginPath();
+    context.arc(mote.cx + driftX, mote.cy + driftY, mote.r, 0, Math.PI * 2);
+    context.fill();
+  });
+
+  context.restore();
+  context.globalAlpha = 1;
+  context.globalCompositeOperation = 'source-over';
+}
+
+function AtmosphereCanvas({ reducedMotion, lowRenderBudget }: { reducedMotion: boolean; lowRenderBudget: boolean }) {
+  const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
+
+  React.useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || typeof window === 'undefined') return;
+
+    const canvasContext = canvas.getContext('2d', { alpha: true });
+    if (!canvasContext) return;
+    const renderContext: CanvasRenderingContext2D = canvasContext;
+
+    let animationFrame = 0;
+    let viewportWidth = 0;
+    let viewportHeight = 0;
+    const pixelRatio = reducedMotion || lowRenderBudget ? 1 : Math.min(window.devicePixelRatio || 1, 1.75);
+
+    function queueRender() {
+      if (!reducedMotion && document.visibilityState === 'visible' && animationFrame === 0) {
+        animationFrame = window.requestAnimationFrame(render);
+      }
+    }
+
+    function render(timeMs: number) {
+      animationFrame = 0;
+      renderContext.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+      drawAtmosphere(renderContext, viewportWidth, viewportHeight, timeMs, reducedMotion);
+      queueRender();
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'visible') {
+        queueRender();
+        return;
+      }
+
+      if (animationFrame !== 0) {
+        window.cancelAnimationFrame(animationFrame);
+        animationFrame = 0;
+      }
+    }
+
+    const resize = () => {
+      const rect = canvas.getBoundingClientRect();
+      viewportWidth = Math.max(1, rect.width);
+      viewportHeight = Math.max(1, rect.height);
+      canvas.width = Math.round(viewportWidth * pixelRatio);
+      canvas.height = Math.round(viewportHeight * pixelRatio);
+      render(window.performance.now());
+    };
+
+    const observer = new ResizeObserver(resize);
+    observer.observe(canvas);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    resize();
+
+    return () => {
+      observer.disconnect();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.cancelAnimationFrame(animationFrame);
+    };
+  }, [lowRenderBudget, reducedMotion]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      aria-hidden
+      className={`pointer-events-none absolute inset-0 z-0 h-full w-full ${lowRenderBudget ? '' : 'mix-blend-screen'}`}
+    />
+  );
+}
 
 export const NotePyramid: React.FC<NotePyramidProps> = ({
   topNotes,
@@ -904,9 +1061,11 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={prefersReducedMotion ? reducedTransition : { duration: 1.1, ease: CALM_EASE }}
       >
+        <AtmosphereCanvas reducedMotion={prefersReducedMotion} lowRenderBudget={lowRenderBudget} />
+
         <svg
           viewBox="0 0 360 420"
-          className={`h-full w-full overflow-visible${lowRenderBudget ? '' : ' drop-shadow-[0_24px_44px_rgba(0,0,0,0.48)]'}`}
+          className={`relative z-10 h-full w-full overflow-visible${lowRenderBudget ? '' : ' drop-shadow-[0_24px_44px_rgba(0,0,0,0.48)]'}`}
           role="img"
           aria-label="Interactive fragrance note pyramid"
         >
@@ -1142,7 +1301,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
               <feDropShadow dx="0" dy="0" stdDeviation="5" floodColor="#ffb84d" floodOpacity="0.18" />
             </filter>
 
-            <filter id={id('edge-glow')} x="-12%" y="-12%" width="124%" height="124%" colorInterpolationFilters="sRGB">
+            <filter id={id('edge-glow')} filterUnits="userSpaceOnUse" x="-24" y="-24" width="408" height="468" colorInterpolationFilters="sRGB">
               <feGaussianBlur in="SourceGraphic" stdDeviation="1.2" result="blur" />
               <feMerge>
                 <feMergeNode in="blur" />
@@ -1150,7 +1309,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
               </feMerge>
             </filter>
 
-            <filter id={id('gold-soft')} x="-180%" y="-180%" width="460%" height="460%" colorInterpolationFilters="sRGB">
+            <filter id={id('gold-soft')} filterUnits="userSpaceOnUse" x="-48" y="-48" width="456" height="516" colorInterpolationFilters="sRGB">
               <feGaussianBlur in="SourceGraphic" stdDeviation="1.45" result="blur" />
               <feMerge>
                 <feMergeNode in="blur" />
@@ -1202,52 +1361,6 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
               style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
             />
 
-            {CONSTELLATION_DOTS.map((star, idx) => (
-              <motion.circle
-                key={`star-${idx}`}
-                cx={star.cx}
-                cy={star.cy}
-                r={star.r}
-                fill="#fff8e6"
-                animate={
-                  prefersReducedMotion
-                    ? { opacity: star.opacity * 0.85 }
-                    : { opacity: [star.opacity * 0.55, star.opacity * 0.95, star.opacity * 0.55] }
-                }
-                transition={{
-                  duration: 7 + (idx % 5) * 1.4,
-                  delay: idx * 0.42,
-                  ease: SOFT_EASE,
-                  repeat: DECORATIVE_REPEAT_COUNT,
-                  repeatType: 'mirror',
-                }}
-              />
-            ))}
-          </g>
-
-          {/* Particle Motes — gentle vertical drift with subtle horizontal sway */}
-          <g aria-hidden pointerEvents="none">
-            {DUST_MOTES.map((mote) => (
-              <motion.circle
-                key={mote.id}
-                cx={mote.cx}
-                cy={mote.cy}
-                r={mote.r}
-                fill="#ffffff"
-                initial={{ opacity: 0, y: 0, x: 0 }}
-                animate={
-                  prefersReducedMotion
-                    ? { opacity: 0.08 }
-                    : { opacity: [0, 0.22, 0], y: [0, -42], x: [0, mote.sway, 0] }
-                }
-                transition={{
-                  duration: mote.duration,
-                  delay: mote.delay,
-                  repeat: DECORATIVE_REPEAT_COUNT,
-                  ease: 'easeInOut',
-                }}
-              />
-            ))}
           </g>
 
           {/* Base Reflection */}
@@ -1294,6 +1407,9 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
             const targetScale = layerMotion.scale + (isEngaged && !isActive && !isGuided ? 0.003 : 0);
             const targetOpacity = isEngaged && !isActive ? Math.min(layerMotion.opacity + 0.08, 1) : layerMotion.opacity;
             const channelPath = linePath(layer.channel.start, layer.channel.end);
+            const guideDashLength = layer.hitPathLength;
+            const guideDashPattern = `${guideDashLength} ${guideDashLength}`;
+            const guideDashTrace = [guideDashLength, 0, 0, 0];
 
             return (
               <motion.g
@@ -1522,23 +1638,26 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                     pointerEvents="none"
                     vectorEffect="non-scaling-stroke"
                     filter={filterRef('gold-soft')}
+                    strokeDasharray={guideDashPattern}
+                    strokeDashoffset={guideDashLength}
                     initial={false}
                     animate={
                       isGuided
                         ? {
-                            pathLength: [...GUIDE_PATH_KEYFRAMES],
+                            strokeDashoffset: guideDashTrace,
                             opacity: lowRenderBudget ? [0, 0.62, 0.62, 0] : [0, 0.46, 0.46, 0],
                           }
-                        : { pathLength: 0, opacity: 0 }
+                        : { strokeDashoffset: guideDashLength, opacity: 0 }
                     }
                     transition={
                       isGuided
                         ? {
-                            pathLength: { duration: GUIDE_TRACE_DURATION_S, times: [...GUIDE_TRACE_TIMES], ease: CALM_EASE },
+                            strokeDashoffset: { duration: GUIDE_TRACE_DURATION_S, times: [...GUIDE_TRACE_TIMES], ease: CALM_EASE },
                             opacity: { duration: GUIDE_TRACE_DURATION_S, times: [...GUIDE_TRACE_TIMES], ease: CALM_EASE },
                           }
                         : { duration: 0.2, ease: CALM_EASE }
                     }
+                    style={{ willChange: 'stroke-dashoffset, opacity' }}
                   />
                 )}
 
@@ -1553,23 +1672,26 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                     pointerEvents="none"
                     vectorEffect="non-scaling-stroke"
                     filter={filterRef('gold-soft')}
+                    strokeDasharray={guideDashPattern}
+                    strokeDashoffset={guideDashLength}
                     initial={false}
                     animate={
                       isGuided
                         ? {
-                            pathLength: [...GUIDE_PATH_KEYFRAMES],
+                            strokeDashoffset: guideDashTrace,
                             opacity: [0, 1, 1, 0],
                           }
-                        : { pathLength: 0, opacity: 0 }
+                        : { strokeDashoffset: guideDashLength, opacity: 0 }
                     }
                     transition={
                       isGuided
                         ? {
-                            pathLength: { duration: GUIDE_TRACE_DURATION_S, times: [...GUIDE_TRACE_TIMES], ease: CALM_EASE },
+                            strokeDashoffset: { duration: GUIDE_TRACE_DURATION_S, times: [...GUIDE_TRACE_TIMES], ease: CALM_EASE },
                             opacity: { duration: GUIDE_TRACE_DURATION_S, times: [...GUIDE_TRACE_TIMES], ease: CALM_EASE },
                           }
                         : { duration: 0.2, ease: CALM_EASE }
                     }
+                    style={{ willChange: 'stroke-dashoffset, opacity' }}
                   />
                 )}
 
