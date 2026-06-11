@@ -1198,6 +1198,8 @@ a {
   font-style: italic;
   --hero-marquee-distance: 0px;
   --hero-marquee-duration: 96s;
+  touch-action: pan-y;
+  cursor: grab;
   will-change: transform;
   transform: translateZ(0);
   backface-visibility: hidden;
@@ -1207,6 +1209,13 @@ a {
 .scent-marquee-track-row:not([data-marquee-ready="true"]) {
   animation: none;
   transform: translate3d(0, 0, 0);
+}
+
+/* Set by useMarqueeSwipe while a pointer is scrubbing a marquee track. */
+.scent-marquee-track-row[data-marquee-dragging="true"],
+.scent-atmosphere-marquee-track[data-marquee-dragging="true"],
+.scent-community-marquee-track[data-marquee-dragging="true"] {
+  cursor: grabbing;
 }
 
 .scent-marquee-phrase-group {
@@ -1364,6 +1373,10 @@ a {
   width: max-content;
   --atmosphere-marquee-distance: 0px;
   --atmosphere-marquee-duration: 96s;
+  touch-action: pan-y;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
   will-change: transform;
   transform: translateZ(0);
   backface-visibility: hidden;
@@ -1892,6 +1905,7 @@ a {
   display: flex;
   width: max-content;
   --community-marquee-duration: 240s;
+  touch-action: pan-y;
   will-change: transform;
   transform: translateZ(0);
   backface-visibility: hidden;
