@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm";
-import { index, pgTable, uuid, boolean, text, timestamp } from "drizzle-orm/pg-core";
+import { index, pgTable, uuid, boolean, text, timestamp, doublePrecision } from "drizzle-orm/pg-core";
 import { usersTable } from "./users";
 import { tenantsTable } from "./tenants";
 
@@ -16,6 +16,13 @@ export const userSettingsTable = pgTable(
     // `drizzle-kit push` stays trivially additive and migration-lag tolerant.
     username: text("username"),
     shareHideImages: boolean("share_hide_images").notNull().default(false),
+    // User-approved weather location. Coordinates are captured only after an
+    // explicit browser geolocation request and are used to avoid IP fallback
+    // jumps between sessions/devices.
+    weatherLatitude: doublePrecision("weather_latitude"),
+    weatherLongitude: doublePrecision("weather_longitude"),
+    weatherLocationLabel: text("weather_location_label"),
+    weatherLocationUpdatedAt: timestamp("weather_location_updated_at"),
     // Durable onboarding progress. Lives here (not on `users`) so auth identity
     // (`users.id` / `users.token`) stays untouched while user-facing progress
     // sits with the rest of their preferences. Once true, the dashboard shows

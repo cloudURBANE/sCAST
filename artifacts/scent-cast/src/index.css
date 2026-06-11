@@ -1200,6 +1200,9 @@ a {
   --hero-marquee-duration: 96s;
   touch-action: pan-y;
   cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
   will-change: transform;
   transform: translateZ(0);
   backface-visibility: hidden;
@@ -1377,6 +1380,7 @@ a {
   cursor: grab;
   user-select: none;
   -webkit-user-select: none;
+  -webkit-touch-callout: none;
   will-change: transform;
   transform: translateZ(0);
   backface-visibility: hidden;
@@ -1906,6 +1910,9 @@ a {
   width: max-content;
   --community-marquee-duration: 240s;
   touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
   will-change: transform;
   transform: translateZ(0);
   backface-visibility: hidden;

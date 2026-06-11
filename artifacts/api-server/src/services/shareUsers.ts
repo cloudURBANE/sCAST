@@ -3,6 +3,30 @@ import { usersTable } from "@workspace/db/schema";
 import { and, eq, sql } from "drizzle-orm";
 import { cleanShareRef, isUuidish, shareHandleFromEmail } from "./shareIdentity";
 
+const SHARE_USER_COLUMNS = {
+  id: usersTable.id,
+  tenantId: usersTable.tenantId,
+  email: usersTable.email,
+  token: usersTable.token,
+  oauthProvider: usersTable.oauthProvider,
+  oauthSubject: usersTable.oauthSubject,
+  createdAt: usersTable.createdAt,
+} as const;
+
+type ShareUserRow = {
+  id: string;
+  tenantId: string | null;
+  email: string;
+  token: string;
+  oauthProvider: string | null;
+  oauthSubject: string | null;
+  createdAt: Date;
+};
+
+function shareUserFromRow(row: ShareUserRow): typeof usersTable.$inferSelect {
+  return { ...row, pictureUrl: null };
+}
+
 export function shareHandleSql() {
   return sql<string>`coalesce(nullif(regexp_replace(regexp_replace(lower(split_part(${usersTable.email}, '@', 1)), '[^a-z0-9]+', '-', 'g'), '(^-+|-+$)', '', 'g'), ''), 'user')`;
 }
@@ -13,25 +37,25 @@ export async function resolveShareUser(
 ): Promise<typeof usersTable.$inferSelect | null> {
   if (isUuidish(userRef)) {
     const rows = await db
-      .select()
+      .select(SHARE_USER_COLUMNS)
       .from(usersTable)
       .where(and(
         eq(usersTable.tenantId, tenantId),
         eq(usersTable.id, userRef.toLowerCase() as any),
       ))
       .limit(1);
-    return rows[0] ?? null;
+    return rows[0] ? shareUserFromRow(rows[0]) : null;
   }
 
   const cleanRef = cleanShareRef(userRef);
   if (!cleanRef) return null;
 
   const rows = await db
-    .select()
+    .select(SHARE_USER_COLUMNS)
     .from(usersTable)
     .where(and(eq(usersTable.tenantId, tenantId), sql`${shareHandleSql()} = ${cleanRef}`))
     .limit(2);
-  return rows.length === 1 ? rows[0] : null;
+  return rows.length === 1 ? shareUserFromRow(rows[0]!) : null;
 }
 
 export async function getShareIdForUser(

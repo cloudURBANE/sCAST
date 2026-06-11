@@ -27,16 +27,23 @@ router.get("/me/app-state", requireAuth, async (req: AuthRequest, res) => {
     .where(and(eq(userFragrancesTable.tenantId, tenantId), eq(userFragrancesTable.userId, user.id)));
   const wardrobeCount = countRow?.count ?? 0;
 
-  const [settings] = await db
-    .select({ completed: userSettingsTable.wardrobeOnboardingCompleted })
-    .from(userSettingsTable)
-    .where(eq(userSettingsTable.userId, user.id))
-    .limit(1);
+  let onboardingCompletedFlag = false;
+  try {
+    const [settings] = await db
+      .select({ completed: userSettingsTable.wardrobeOnboardingCompleted })
+      .from(userSettingsTable)
+      .where(eq(userSettingsTable.userId, user.id))
+      .limit(1);
+    onboardingCompletedFlag = settings?.completed ?? false;
+  } catch (err) {
+    if (!isUndefinedColumnError(err)) throw err;
+    logger.warn({ userId: user.id }, "user_settings onboarding columns not yet migrated — deriving state from wardrobe count only");
+  }
 
   const { state, shouldPersistCompletion } = deriveAppState({
     authenticated: true,
     wardrobeCount,
-    onboardingCompletedFlag: settings?.completed ?? false,
+    onboardingCompletedFlag,
   });
 
   if (shouldPersistCompletion) {
@@ -111,6 +118,133 @@ router.get("/me/profile", requireAuth, async (req: AuthRequest, res) => {
   res.json({ username, email: user.email });
 });
 
+type WeatherLocationResponse = {
+  lat: number;
+  lon: number;
+  label: string | null;
+  updatedAt: string | null;
+};
+
+function finiteCoordinate(value: unknown, min: number, max: number): number | null {
+  const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value) : Number.NaN;
+  return Number.isFinite(parsed) && parsed >= min && parsed <= max ? parsed : null;
+}
+
+function cleanWeatherLocationLabel(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed.slice(0, 80) : null;
+}
+
+function weatherLocationDto(row: {
+  weatherLatitude: number | null;
+  weatherLongitude: number | null;
+  weatherLocationLabel: string | null;
+  weatherLocationUpdatedAt: Date | null;
+}): WeatherLocationResponse | null {
+  if (typeof row.weatherLatitude !== "number" || typeof row.weatherLongitude !== "number") return null;
+  return {
+    lat: row.weatherLatitude,
+    lon: row.weatherLongitude,
+    label: row.weatherLocationLabel ?? null,
+    updatedAt: row.weatherLocationUpdatedAt?.toISOString() ?? null,
+  };
+}
+
+router.get("/me/weather-location", requireAuth, async (req: AuthRequest, res) => {
+  const user = req.user!;
+  try {
+    const [row] = await db
+      .select({
+        weatherLatitude: userSettingsTable.weatherLatitude,
+        weatherLongitude: userSettingsTable.weatherLongitude,
+        weatherLocationLabel: userSettingsTable.weatherLocationLabel,
+        weatherLocationUpdatedAt: userSettingsTable.weatherLocationUpdatedAt,
+      })
+      .from(userSettingsTable)
+      .where(eq(userSettingsTable.userId, user.id))
+      .limit(1);
+    res.json({ location: row ? weatherLocationDto(row) : null, persistenceAvailable: true });
+  } catch (err) {
+    if (!isUndefinedColumnError(err)) throw err;
+    logger.warn({ userId: user.id }, "user_settings weather location columns not yet migrated");
+    res.json({ location: null, persistenceAvailable: false });
+  }
+});
+
+router.put("/me/weather-location", requireAuth, async (req: AuthRequest, res) => {
+  const user = req.user!;
+  const tenantId = getTenantId(req);
+  const body = (req.body ?? {}) as { lat?: unknown; lon?: unknown; label?: unknown };
+  const lat = finiteCoordinate(body.lat, -90, 90);
+  const lon = finiteCoordinate(body.lon, -180, 180);
+  if (lat === null || lon === null) {
+    res.status(400).json({ error: "Valid lat and lon are required." });
+    return;
+  }
+
+  const now = new Date();
+  const label = cleanWeatherLocationLabel(body.label);
+  try {
+    await db
+      .insert(userSettingsTable)
+      .values({
+        tenantId,
+        userId: user.id,
+        weatherLatitude: lat,
+        weatherLongitude: lon,
+        weatherLocationLabel: label,
+        weatherLocationUpdatedAt: now,
+      })
+      .onConflictDoUpdate({
+        target: userSettingsTable.userId,
+        set: {
+          tenantId,
+          weatherLatitude: lat,
+          weatherLongitude: lon,
+          weatherLocationLabel: label,
+          weatherLocationUpdatedAt: now,
+          updatedAt: now,
+        },
+      });
+  } catch (err) {
+    if (!isUndefinedColumnError(err)) throw err;
+    logger.warn({ userId: user.id }, "Cannot persist weather location before migration is applied");
+    res.status(503).json({ error: "Weather location sync is temporarily unavailable." });
+    return;
+  }
+
+  res.json({
+    location: {
+      lat,
+      lon,
+      label,
+      updatedAt: now.toISOString(),
+    } satisfies WeatherLocationResponse,
+  });
+});
+
+router.delete("/me/weather-location", requireAuth, async (req: AuthRequest, res) => {
+  const user = req.user!;
+  try {
+    await db
+      .update(userSettingsTable)
+      .set({
+        weatherLatitude: null,
+        weatherLongitude: null,
+        weatherLocationLabel: null,
+        weatherLocationUpdatedAt: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(userSettingsTable.userId, user.id));
+  } catch (err) {
+    if (!isUndefinedColumnError(err)) throw err;
+    res.status(503).json({ error: "Weather location sync is temporarily unavailable." });
+    return;
+  }
+  res.json({ location: null });
+});
+
 router.put("/me/profile", requireAuth, async (req: AuthRequest, res) => {
   const user = req.user!;
   const tenantId = getTenantId(req);
@@ -128,17 +262,25 @@ router.put("/me/profile", requireAuth, async (req: AuthRequest, res) => {
   // keeps the schema additive while still preventing two members from claiming
   // the same handle on the same tenant.
   if (username) {
-    const clash = await db
-      .select({ userId: userSettingsTable.userId })
-      .from(userSettingsTable)
-      .where(
-        and(
-          eq(userSettingsTable.tenantId, tenantId),
-          sql`lower(${userSettingsTable.username}) = lower(${username})`,
-          sql`${userSettingsTable.userId} <> ${user.id}`,
-        ),
-      )
-      .limit(1);
+    let clash: Array<{ userId: string }> = [];
+    try {
+      clash = await db
+        .select({ userId: userSettingsTable.userId })
+        .from(userSettingsTable)
+        .where(
+          and(
+            eq(userSettingsTable.tenantId, tenantId),
+            sql`lower(${userSettingsTable.username}) = lower(${username})`,
+            sql`${userSettingsTable.userId} <> ${user.id}`,
+          ),
+        )
+        .limit(1);
+    } catch (err) {
+      if (!isUndefinedColumnError(err)) throw err;
+      logger.warn({ userId: user.id }, "Cannot save username before migration is applied");
+      res.status(503).json({ error: "Username storage is temporarily unavailable. Please try again soon." });
+      return;
+    }
     if (clash[0]) {
       res.status(409).json({ error: "That username is already taken." });
       return;
@@ -146,13 +288,20 @@ router.put("/me/profile", requireAuth, async (req: AuthRequest, res) => {
   }
 
   const now = new Date();
-  await db
-    .insert(userSettingsTable)
-    .values({ tenantId, userId: user.id, username })
-    .onConflictDoUpdate({
-      target: userSettingsTable.userId,
-      set: { tenantId, username, updatedAt: now },
-    });
+  try {
+    await db
+      .insert(userSettingsTable)
+      .values({ tenantId, userId: user.id, username })
+      .onConflictDoUpdate({
+        target: userSettingsTable.userId,
+        set: { tenantId, username, updatedAt: now },
+      });
+  } catch (err) {
+    if (!isUndefinedColumnError(err)) throw err;
+    logger.warn({ userId: user.id }, "Cannot save username before migration is applied");
+    res.status(503).json({ error: "Username storage is temporarily unavailable. Please try again soon." });
+    return;
+  }
 
   res.json({ username, email: user.email });
 });

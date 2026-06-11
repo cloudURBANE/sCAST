@@ -202,6 +202,26 @@ export function useMarqueeSwipe(
       frame = requestAnimationFrame(stepMomentum);
     };
 
+    const onTouchMove = (event: TouchEvent) => {
+      // iOS Safari fires pointercancel and claims the gesture for page scroll
+      // during horizontal pans on a pan-y element unless the touch default is
+      // prevented (w3c/pointerevents#303). Pointer events alone never survive
+      // long enough to commit a drag, so horizontal intent is detected here
+      // and the native scroll suppressed; vertical moves stay untouched so
+      // page scrolling keeps working.
+      if (dragging) {
+        event.preventDefault();
+        return;
+      }
+      if (!pending || event.touches.length !== 1) return;
+      const touch = event.touches[0];
+      const dx = touch.clientX - startX;
+      const dy = touch.clientY - startY;
+      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) >= DRAG_COMMIT_PX) {
+        event.preventDefault();
+      }
+    };
+
     const onClickCapture = (event: MouseEvent) => {
       if (!suppressClick) return;
       suppressClick = false;
@@ -217,6 +237,7 @@ export function useMarqueeSwipe(
     track.addEventListener('pointermove', onPointerMove);
     track.addEventListener('pointerup', finishPointer);
     track.addEventListener('pointercancel', finishPointer);
+    track.addEventListener('touchmove', onTouchMove, { passive: false });
     track.addEventListener('click', onClickCapture, true);
     track.addEventListener('dragstart', onDragStart);
 
@@ -227,6 +248,7 @@ export function useMarqueeSwipe(
       track.removeEventListener('pointermove', onPointerMove);
       track.removeEventListener('pointerup', finishPointer);
       track.removeEventListener('pointercancel', finishPointer);
+      track.removeEventListener('touchmove', onTouchMove);
       track.removeEventListener('click', onClickCapture, true);
       track.removeEventListener('dragstart', onDragStart);
     };

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useLayoutEffect, useMemo, useCallba
 import { Routes, Route, useLocation, useParams, type Location } from 'react-router-dom';
 import { FragranceCapture, vaultIdentityKey } from './components/FragranceCapture';
 import { Wardrobe, Fragrance, DestinationType, EnergyState } from './components/Wardrobe';
-import { Play, X } from 'lucide-react';
+import { LocateFixed, LoaderCircle, Play, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ScentIntentModal } from './components/ScentIntentModal';
 import { ScentNotesInfographic } from './components/ScentNotesInfographic';
@@ -106,6 +106,8 @@ const LiveClock: React.FC = React.memo(() => {
 interface AtmosphereBarProps {
   weather: any;
   weatherLoading: boolean;
+  locationStatus: 'idle' | 'requesting' | 'granted' | 'denied' | 'unsupported';
+  onRequestLocation: () => void;
 }
 
 const ATMOSPHERE_TRACK_COPIES = 4;
@@ -279,7 +281,12 @@ const HeroMarquee: React.FC<HeroMarqueeProps> = React.memo(({ phrases }) => {
   );
 });
 
-const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({ weather, weatherLoading }) => {
+const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({
+  weather,
+  weatherLoading,
+  locationStatus,
+  onRequestLocation,
+}) => {
   const trackRef = useRef<HTMLDivElement>(null);
   const groupRef = useRef<HTMLDivElement>(null);
 
@@ -351,6 +358,10 @@ const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({ weather, weath
     { label: 'Atmosphere', subtitle: 'Temperature', value: temp },
     { label: 'Coordinate', subtitle: 'Location', value: location },
   ];
+  const locating = locationStatus === 'requesting';
+  const locationButtonLabel = locationStatus === 'granted'
+    ? 'Refresh current location'
+    : 'Use current location';
 
   useLayoutEffect(() => {
     const track = trackRef.current;
@@ -407,7 +418,7 @@ const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({ weather, weath
   }, [atmosphereDisplayKey]);
 
   return (
-    <section className="scent-atmosphere-marquee" aria-label="Current atmosphere" aria-busy={pendingWeather}>
+    <section className="scent-atmosphere-marquee relative" aria-label="Current atmosphere" aria-busy={pendingWeather}>
       <div className="scent-atmosphere-marquee-track" ref={trackRef}>
         {[...Array(ATMOSPHERE_TRACK_COPIES)].map((_, copyIndex) => (
           <div
@@ -430,6 +441,20 @@ const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({ weather, weath
           </div>
         ))}
       </div>
+      <button
+        type="button"
+        onClick={onRequestLocation}
+        disabled={locating}
+        aria-label={locationButtonLabel}
+        title={locationButtonLabel}
+        className="absolute right-3 top-1/2 z-10 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-white/12 bg-black/70 text-white/70 shadow-lg backdrop-blur-md transition-colors hover:border-scent-accent/45 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40 disabled:cursor-wait disabled:opacity-60 sm:right-5"
+      >
+        {locating ? (
+          <LoaderCircle size={15} className="animate-spin" aria-hidden="true" />
+        ) : (
+          <LocateFixed size={15} strokeWidth={1.8} aria-hidden="true" />
+        )}
+      </button>
     </section>
   );
 });
@@ -442,11 +467,16 @@ const HomepageHeroMarquee: React.FC = React.memo(() => {
 });
 
 const HomepageAtmosphereChrome: React.FC = React.memo(() => {
-  const { weather, weatherLoading } = useWeather();
+  const { weather, weatherLoading, locationStatus, requestLocation } = useWeather();
 
   return (
     <div className="scent-full-bleed">
-      <AtmosphereBar weather={weather} weatherLoading={weatherLoading} />
+      <AtmosphereBar
+        weather={weather}
+        weatherLoading={weatherLoading}
+        locationStatus={locationStatus}
+        onRequestLocation={() => void requestLocation()}
+      />
     </div>
   );
 });
