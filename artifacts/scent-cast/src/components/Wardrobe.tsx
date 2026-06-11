@@ -866,51 +866,76 @@ function framePercent(value: number): string {
   return `${Math.round(value * 100)}%`;
 }
 
+const EMPTY_VAULT_STEPS = [
+  {
+    icon: Search,
+    title: 'Search your first bottle',
+    description: 'Use the vault search to find any fragrance you own, wear, or want to compare.',
+  },
+  {
+    icon: Check,
+    title: 'Build a three-scent signal',
+    description: 'Three saved fragrances give the matcher enough taste context to recommend well.',
+  },
+  {
+    icon: Sparkles,
+    title: 'Unlock daily discovery',
+    description: 'Your vault becomes the source for practical, weather-aware scent picks.',
+  },
+] as const;
+
 const VaultEmptyEmblem: React.FC = () => (
   <svg
-    viewBox="0 0 96 96"
+    viewBox="0 0 112 112"
     role="img"
     aria-label="Empty fragrance vault"
-    className="h-20 w-20 text-scent-accent sm:h-24 sm:w-24"
+    className="h-28 w-28 text-scent-accent sm:h-32 sm:w-32"
   >
     <defs>
-      <linearGradient id="vault-empty-gold" x1="24" y1="10" x2="72" y2="86" gradientUnits="userSpaceOnUse">
+      <linearGradient id="vault-empty-gold" x1="24" y1="9" x2="88" y2="100" gradientUnits="userSpaceOnUse">
         <stop stopColor="#fff2bd" />
         <stop offset="0.46" stopColor="#d4af37" />
         <stop offset="1" stopColor="#8a5a18" />
       </linearGradient>
+      <radialGradient id="vault-empty-glow" cx="0" cy="0" r="1" gradientTransform="matrix(0 44 -44 0 56 46)" gradientUnits="userSpaceOnUse">
+        <stop stopColor="#fff2bd" stopOpacity="0.2" />
+        <stop offset="1" stopColor="#d4af37" stopOpacity="0" />
+      </radialGradient>
     </defs>
+    <circle cx="56" cy="56" r="48" fill="url(#vault-empty-glow)" />
     <path
-      d="M24 41c0-14.4 9.8-25 24-25s24 10.6 24 25"
+      d="M31 47c0-16.7 10.2-29 25-29s25 12.3 25 29"
       fill="none"
       stroke="url(#vault-empty-gold)"
       strokeWidth="3.2"
       strokeLinecap="round"
     />
     <path
-      d="M21 40h54c3.9 0 7 3.1 7 7v23c0 4.4-3.6 8-8 8H22c-4.4 0-8-3.6-8-8V47c0-3.9 3.1-7 7-7Z"
+      d="M21 44h70c4.4 0 8 3.6 8 8v31c0 5-4 9-9 9H22c-5 0-9-4-9-9V52c0-4.4 3.6-8 8-8Z"
       fill="rgba(212,175,55,0.07)"
       stroke="url(#vault-empty-gold)"
       strokeWidth="2.7"
     />
     <path
-      d="M31 54h34M31 64h22"
+      d="M28 58h56M28 78h56"
       fill="none"
       stroke="currentColor"
-      strokeOpacity="0.62"
+      strokeOpacity="0.22"
       strokeWidth="2.2"
       strokeLinecap="round"
     />
     <path
-      d="M48 26v31"
-      fill="none"
+      d="M36 75V61c0-2.2 1.8-4 4-4h4c2.2 0 4 1.8 4 4v14M52 75V55c0-2.2 1.8-4 4-4h4c2.2 0 4 1.8 4 4v20M68 75V62c0-2.2 1.8-4 4-4h4c2.2 0 4 1.8 4 4v13"
+      fill="rgba(255,247,236,0.045)"
       stroke="currentColor"
-      strokeOpacity="0.22"
+      strokeOpacity="0.5"
       strokeWidth="2"
       strokeLinecap="round"
+      strokeLinejoin="round"
     />
-    <circle cx="68" cy="63" r="6.5" fill="rgba(255,247,236,0.05)" stroke="currentColor" strokeOpacity="0.48" strokeWidth="2" />
-    <path d="M68 59v8M64 63h8" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    <path d="M56 28v27" fill="none" stroke="currentColor" strokeOpacity="0.2" strokeWidth="2" strokeLinecap="round" />
+    <circle cx="81" cy="78" r="8" fill="rgba(0,0,0,0.72)" stroke="currentColor" strokeOpacity="0.62" strokeWidth="2" />
+    <path d="M81 73v10M76 78h10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
   </svg>
 );
 
@@ -1927,30 +1952,70 @@ export const Wardrobe: React.FC<{
               </div>
             ))
           ) : !searchQuery && (
-            <div className="relative overflow-hidden rounded-[var(--radius-scent)] border border-scent-accent/24 bg-[linear-gradient(180deg,rgba(255,247,236,0.035),rgba(255,247,236,0.012)_42%,rgba(0,0,0,0.28))] px-6 py-[4.5rem] text-center shadow-[inset_0_1px_0_rgba(255,236,183,0.08),0_28px_70px_-54px_rgba(212,175,55,0.5)] sm:px-10 sm:py-24">
-              <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-scent-accent/45 to-transparent" />
-              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(212,175,55,0.1),transparent_36%)]" />
-              <div className="relative z-[1] mx-auto flex max-w-xl flex-col items-center gap-6">
-                <div className="flex h-24 w-24 items-center justify-center rounded-full border border-scent-accent/22 bg-black/35 shadow-[inset_0_1px_0_rgba(255,236,183,0.1),0_22px_50px_-34px_rgba(212,175,55,0.62)] sm:h-28 sm:w-28">
-                  <VaultEmptyEmblem />
-                </div>
-                <div className="flex flex-col items-center gap-3">
+            <div className="relative overflow-hidden rounded-[var(--radius-scent)] border border-scent-accent/26 bg-[linear-gradient(180deg,rgba(255,247,236,0.05),rgba(255,247,236,0.014)_38%,rgba(0,0,0,0.34))] px-5 py-10 text-center shadow-[inset_0_1px_0_rgba(255,236,183,0.1),0_30px_78px_-56px_rgba(212,175,55,0.55)] sm:px-8 sm:py-14 lg:px-12">
+              <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-scent-accent/50 to-transparent" aria-hidden />
+              <div className="pointer-events-none absolute inset-x-10 bottom-0 h-px bg-gradient-to-r from-transparent via-white/12 to-transparent" aria-hidden />
+              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(212,175,55,0.13),transparent_34%),radial-gradient(circle_at_12%_88%,rgba(255,247,236,0.04),transparent_26%)]" aria-hidden />
+              <div className="relative z-[1] mx-auto grid max-w-6xl gap-8 text-left lg:grid-cols-[minmax(0,1.08fr)_minmax(20rem,0.92fr)] lg:items-center">
+                <div className="flex min-w-0 flex-col items-center text-center lg:items-start lg:text-left">
+                  <div className="mb-5 flex h-32 w-32 items-center justify-center rounded-[calc(var(--radius-scent)+10px)] border border-scent-accent/24 bg-black/38 shadow-[inset_0_1px_0_rgba(255,236,183,0.1),0_24px_54px_-34px_rgba(212,175,55,0.68)] sm:h-36 sm:w-36" aria-hidden>
+                    <VaultEmptyEmblem />
+                  </div>
                   <p className="scent-type-label text-scent-accent/85">Collection Vault</p>
-                  <h3 className="font-serif italic text-3xl leading-none text-[#fff7ec] sm:text-4xl">Your vault is empty</h3>
-                  <p className="max-w-[34rem] text-[15px] leading-relaxed text-scent-text-muted sm:text-base">
-                    Add the fragrances you own or love to build your collection and unlock personalized scent discovery.
+                  <h3 className="mt-3 max-w-[34rem] font-serif italic text-4xl leading-none text-[#fff7ec] sm:text-5xl">Start with the bottles you actually wear</h3>
+                  <p className="mt-4 max-w-[38rem] text-[15px] leading-relaxed text-scent-text-muted sm:text-base">
+                    Add three fragrances to turn an empty shelf into a usable taste profile. Once the vault has enough signal, ScentBeam can recommend what fits the day instead of guessing from a blank slate.
                   </p>
+                  <div className="mt-6 w-full max-w-[28rem] rounded-[calc(var(--radius-scent)-8px)] border border-scent-accent/16 bg-black/30 p-3 shadow-[inset_0_1px_0_rgba(255,236,183,0.06)]">
+                    <div className="mb-2 flex items-center justify-between gap-4">
+                      <span className="scent-type-label text-scent-accent/80">Discovery signal</span>
+                      <span className="font-mono text-[11px] font-semibold tabular-nums text-scent-accent">0/3</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2" role="progressbar" aria-valuemin={0} aria-valuemax={3} aria-valuenow={0} aria-label="Fragrances added toward discovery">
+                      {[0, 1, 2].map((slot) => (
+                        <span key={slot} className="h-2 rounded-full bg-white/12" />
+                      ))}
+                    </div>
+                  </div>
+                  {onExpandArchive && (
+                    <button
+                      type="button"
+                      onClick={() => onExpandArchive({ target: 'vault' })}
+                      className="scent-vault-outline-button mt-6 inline-flex min-h-[54px] items-center gap-2.5 px-7 py-3.5 transition-transform hover:scale-[1.02] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55"
+                    >
+                      <Search size={16} strokeWidth={1.75} className="text-scent-accent" aria-hidden />
+                      <span className="scent-vault-outline-button-label font-serif italic text-lg">Add your first fragrance</span>
+                    </button>
+                  )}
                 </div>
-                {onExpandArchive && (
-                  <button
-                    type="button"
-                    onClick={() => onExpandArchive({ target: 'vault' })}
-                    className="scent-vault-outline-button mt-1 inline-flex min-h-[52px] items-center gap-2.5 px-7 py-3.5 transition-transform hover:scale-[1.02] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55"
-                  >
-                    <Search size={16} strokeWidth={1.75} className="text-scent-accent" aria-hidden />
-                    <span className="scent-vault-outline-button-label font-serif italic text-lg">Add your first fragrance</span>
-                  </button>
-                )}
+
+                <div className="relative rounded-[calc(var(--radius-scent)-4px)] border border-white/10 bg-black/34 p-4 shadow-[inset_0_1px_0_rgba(255,236,183,0.07)] sm:p-5">
+                  <div className="mb-5 flex items-center justify-between gap-4">
+                    <div>
+                      <p className="scent-type-label text-scent-accent/85">How it becomes useful</p>
+                      <p className="mt-1 text-sm leading-relaxed text-scent-text-subtle">A simple path from empty vault to daily recommendation.</p>
+                    </div>
+                    <div className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-full border border-scent-accent/22 bg-scent-accent/[0.06] text-scent-accent sm:flex" aria-hidden>
+                      <Sparkles size={18} strokeWidth={1.75} />
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    {EMPTY_VAULT_STEPS.map(({ icon: Icon, title, description }, index) => (
+                      <div key={title} className="grid grid-cols-[2.5rem_minmax(0,1fr)] gap-3 rounded-[calc(var(--radius-scent)-10px)] border border-white/8 bg-white/[0.025] p-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full border border-scent-accent/24 bg-black/34 text-scent-accent">
+                          <Icon size={16} strokeWidth={1.75} aria-hidden />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-[10px] font-semibold tabular-nums text-scent-accent/72">0{index + 1}</span>
+                            <p className="font-serif italic text-xl leading-tight text-[#fff7ec]">{title}</p>
+                          </div>
+                          <p className="mt-1 text-sm leading-relaxed text-scent-text-muted">{description}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           )}
