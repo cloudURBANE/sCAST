@@ -20,6 +20,10 @@ import {
 } from "../services/fragrancePayload";
 import { assertNoPersistedBase64Image } from "../services/persistenceGuards";
 import { persistableImageReference } from "../services/imageReference";
+import {
+  detailRefreshPatchFromBody,
+  hasDetailRefreshPayload,
+} from "../services/wardrobeDetailFacts";
 
 const router = Router();
 
@@ -72,57 +76,6 @@ async function imageMetadataPatchForUrl(url: string): Promise<Record<string, unk
     ...(image?.storageProvider ? { storageProvider: image.storageProvider } : {}),
     ...(sourceProvider ? { sourceProvider } : {}),
   };
-}
-
-function hasDetailRefreshPayload(body: Record<string, unknown>): boolean {
-  return (
-    Object.prototype.hasOwnProperty.call(body, "year") ||
-    Object.prototype.hasOwnProperty.call(body, "gender") ||
-    Object.prototype.hasOwnProperty.call(body, "concentration") ||
-    Object.prototype.hasOwnProperty.call(body, "season") ||
-    Object.prototype.hasOwnProperty.call(body, "derived_metrics") ||
-    Object.prototype.hasOwnProperty.call(body, "source_coverage") ||
-    Object.prototype.hasOwnProperty.call(body, "enrichment") ||
-    Object.prototype.hasOwnProperty.call(body, "raw_engine_detail")
-  );
-}
-
-function usefulDetailFactString(value: unknown, options?: { rejectUniversal?: boolean }): string | undefined {
-  if (typeof value !== "string") return undefined;
-  const trimmed = value.trim();
-  if (!trimmed) return undefined;
-  const normalized = trimmed.toLowerCase();
-  if (normalized === "unknown" || normalized === "n/a" || normalized === "na" || normalized === "none" || normalized === "null") {
-    return undefined;
-  }
-  if (options?.rejectUniversal && normalized === "universal") return undefined;
-  return trimmed;
-}
-
-function detailRefreshPatchFromBody(body: Record<string, unknown>): Record<string, unknown> {
-  const detailPatch: Record<string, unknown> = {};
-  if (typeof body.year === "number" && Number.isFinite(body.year)) {
-    detailPatch.year = Math.trunc(body.year);
-  }
-  const gender = usefulDetailFactString(body.gender);
-  if (gender) detailPatch.gender = gender;
-  const concentration = usefulDetailFactString(body.concentration);
-  if (concentration) detailPatch.concentration = concentration;
-  const season = usefulDetailFactString(body.season, { rejectUniversal: true });
-  if (season) detailPatch.season = season;
-  if (Object.prototype.hasOwnProperty.call(body, "derived_metrics")) {
-    detailPatch.derived_metrics = body.derived_metrics ?? null;
-  }
-  if (Object.prototype.hasOwnProperty.call(body, "source_coverage")) {
-    detailPatch.source_coverage = body.source_coverage ?? undefined;
-  }
-  if (Object.prototype.hasOwnProperty.call(body, "enrichment")) {
-    detailPatch.enrichment = body.enrichment ?? null;
-  }
-  if (Object.prototype.hasOwnProperty.call(body, "raw_engine_detail")) {
-    detailPatch.raw_engine_detail = body.raw_engine_detail ?? null;
-  }
-  return detailPatch;
 }
 
 router.get("/wardrobe", requireAuth, async (req: AuthRequest, res) => {

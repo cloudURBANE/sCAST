@@ -1318,6 +1318,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const apiId = target._dbId ?? target.id;
     isMutatingRef.current = true;
     try {
+      const factPatch = detailRefreshFactPatch(detail);
       const res = await fetch(`/api/wardrobe/${apiId}`, {
         method: 'PATCH',
         headers: {
@@ -1325,7 +1326,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           Authorization: `Bearer ${authToken}`,
         },
         body: JSON.stringify({
-          ...detailRefreshFactPatch(detail),
+          ...factPatch,
           derived_metrics: detail.derived_metrics ?? null,
           source_coverage: detail.source_coverage,
           enrichment: detail.enrichment ?? null,
@@ -1339,7 +1340,6 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const next: Fragrance = {
         ...target,
         ...data,
-        ...detailRefreshFactPatch(detail),
         id: target.id,
         derived_metrics: detail.derived_metrics ?? null,
         source_coverage: detail.source_coverage,
@@ -1380,14 +1380,17 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           Authorization: `Bearer ${authToken}`,
         },
         body: JSON.stringify({
-          updates: updates.map(({ target, detail }) => ({
-            id: target._dbId ?? target.id,
-            ...detailRefreshFactPatch(detail),
-            derived_metrics: detail.derived_metrics ?? null,
-            source_coverage: detail.source_coverage,
-            enrichment: detail.enrichment ?? null,
-            raw_engine_detail: detail,
-          })),
+          updates: updates.map(({ target, detail }) => {
+            const factPatch = detailRefreshFactPatch(detail);
+            return {
+              id: target._dbId ?? target.id,
+              ...factPatch,
+              derived_metrics: detail.derived_metrics ?? null,
+              source_coverage: detail.source_coverage,
+              enrichment: detail.enrichment ?? null,
+              raw_engine_detail: detail,
+            };
+          }),
         }),
       });
       const data = (await res.json().catch(() => null)) as {
@@ -1411,7 +1414,6 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         const next = {
           ...target,
           ...row,
-          ...detailRefreshFactPatch(detail),
           id: target.id,
           derived_metrics: detail.derived_metrics ?? null,
           source_coverage: detail.source_coverage,
