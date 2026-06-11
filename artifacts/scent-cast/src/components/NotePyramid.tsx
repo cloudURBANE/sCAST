@@ -95,6 +95,7 @@ const reducedTransition: Transition = {
 };
 
 const PYRAMID_CENTER_X = 180;
+const APEX_GLINT_Y = 27;
 const TAP_MOVE_TOLERANCE_PX = 10;
 const TYPEWRITER_FRAME_MS = 24;
 const NOTE_MARQUEE_MIN_CHARS = 58;
@@ -1226,6 +1227,37 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
               <stop offset="1" stopColor="#fc9d19" stopOpacity="0" />
             </radialGradient>
 
+            <radialGradient id={id('apex-glint-aura')} cx="50%" cy="50%" r="56%">
+              <stop offset="0" stopColor="#fffdf4" stopOpacity="0.5" />
+              <stop offset="0.28" stopColor="#ffe7ad" stopOpacity="0.26" />
+              <stop offset="0.62" stopColor="#fc9d19" stopOpacity="0.1" />
+              <stop offset="1" stopColor="#fc9d19" stopOpacity="0" />
+            </radialGradient>
+
+            <radialGradient id={id('apex-glint-core')} cx="42%" cy="32%" r="72%">
+              <stop offset="0" stopColor="#ffffff" stopOpacity="1" />
+              <stop offset="0.2" stopColor="#fff9e8" stopOpacity="1" />
+              <stop offset="0.44" stopColor="#ffe1a3" stopOpacity="0.92" />
+              <stop offset="0.72" stopColor="#fcaa28" stopOpacity="0.68" />
+              <stop offset="1" stopColor="#7a4b0d" stopOpacity="0.08" />
+            </radialGradient>
+
+            <linearGradient id={id('apex-glint-beam')} x1="160" y1="27" x2="200" y2="27" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stopColor="#ffffff" stopOpacity="0" />
+              <stop offset="0.28" stopColor="#ffe0a0" stopOpacity="0.34" />
+              <stop offset="0.49" stopColor="#fffdf4" stopOpacity="0.96" />
+              <stop offset="0.54" stopColor="#d9f7ff" stopOpacity="0.52" />
+              <stop offset="0.74" stopColor="#ffd98a" stopOpacity="0.26" />
+              <stop offset="1" stopColor="#ffffff" stopOpacity="0" />
+            </linearGradient>
+
+            <linearGradient id={id('apex-glint-prism')} x1="172" y1="19" x2="188" y2="35" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stopColor="#d9f7ff" stopOpacity="0.36" />
+              <stop offset="0.34" stopColor="#fffdf4" stopOpacity="0.74" />
+              <stop offset="0.62" stopColor="#ffd98a" stopOpacity="0.8" />
+              <stop offset="1" stopColor="#fc9d19" stopOpacity="0.2" />
+            </linearGradient>
+
             <linearGradient id={id('glyph-line-left')} x1="76" y1="400" x2="171" y2="397" gradientUnits="userSpaceOnUse">
               <stop offset="0" stopColor="#6b400a" stopOpacity="0" />
               <stop offset="0.28" stopColor="#a76f20" stopOpacity="0.58" />
@@ -1317,6 +1349,20 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
               <feGaussianBlur in="SourceGraphic" stdDeviation="1.45" result="blur" />
               <feMerge>
                 <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+
+            <filter id={id('apex-glint-bloom')} filterUnits="userSpaceOnUse" x="148" y="-6" width="64" height="68" colorInterpolationFilters="sRGB">
+              <feGaussianBlur in="SourceGraphic" stdDeviation="2.35" result="softBloom" />
+              <feColorMatrix
+                in="softBloom"
+                type="matrix"
+                values="1.08 0 0 0 0  0 1.01 0 0 0  0 0 0.88 0 0  0 0 0 0.72 0"
+                result="warmBloom"
+              />
+              <feMerge>
+                <feMergeNode in="warmBloom" />
                 <feMergeNode in="SourceGraphic" />
               </feMerge>
             </filter>
@@ -1710,31 +1756,135 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                   vectorEffect="non-scaling-stroke"
                 />
 
-                {/* Apex star-flare — a four-point glint seated on the summit that breathes and slowly twists */}
+                {/* Apex glint: faceted lens flare seated on the pyramid summit. */}
                 {layer.key === 'top' && (
-                  <g pointerEvents="none" filter={filterRef('gold-soft')}>
-                    <motion.path
-                      d={`M${PYRAMID_CENTER_X} 18.6 L${PYRAMID_CENTER_X + 1.15} 25.85 L${PYRAMID_CENTER_X + 8.4} 27 L${PYRAMID_CENTER_X + 1.15} 28.15 L${PYRAMID_CENTER_X} 35.4 L${PYRAMID_CENTER_X - 1.15} 28.15 L${PYRAMID_CENTER_X - 8.4} 27 L${PYRAMID_CENTER_X - 1.15} 25.85 Z`}
-                      fill="#fff3d4"
+                  <motion.g
+                    pointerEvents="none"
+                    className={lowRenderBudget ? '' : 'mix-blend-screen'}
+                    initial={false}
+                    animate={
+                      prefersReducedMotion
+                        ? { opacity: isMuted ? 0.42 : 0.78, scale: isActive || isEngaged ? 1 : 0.92, rotate: 0 }
+                        : {
+                            opacity: isMuted
+                              ? [0.28, 0.4, 0.28]
+                              : isActive
+                                ? [0.76, 0.98, 0.76]
+                              : isEngaged
+                                ? [0.64, 0.9, 0.64]
+                              : [0.46, 0.7, 0.46],
+                            scale: isActive
+                              ? [0.98, 1.1, 0.98]
+                              : isEngaged
+                                ? [0.94, 1.06, 0.94]
+                              : [0.9, 1, 0.9],
+                            rotate: [-3, 4, -3],
+                          }
+                    }
+                    transition={pulseTransition}
+                    style={{
+                      transformBox: 'view-box',
+                      transformOrigin: `${PYRAMID_CENTER_X}px ${APEX_GLINT_Y}px`,
+                      willChange: prefersReducedMotion ? 'auto' : 'transform, opacity',
+                    }}
+                  >
+                    <motion.circle
+                      cx={PYRAMID_CENTER_X}
+                      cy={APEX_GLINT_Y}
+                      r="23"
+                      fill={fill('apex-glint-aura')}
+                      filter={filterRef('apex-glint-bloom')}
                       initial={false}
                       animate={
                         prefersReducedMotion
-                          ? { opacity: 0.5, scale: 0.9, rotate: 0 }
-                          : { opacity: [0.3, 0.78, 0.3], scale: [0.74, 1.06, 0.74], rotate: [0, 90] }
+                          ? { opacity: isMuted ? 0.22 : 0.42, scale: 0.92 }
+                          : { opacity: [0.24, isActive || isEngaged ? 0.62 : 0.42, 0.24], scale: [0.86, 1.08, 0.86] }
                       }
-                      transition={pulseTransition}
-                      style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
+                      transition={atmosphericTransition}
+                    />
+
+                    <g filter={filterRef('apex-glint-bloom')}>
+                      <motion.line
+                        x1={PYRAMID_CENTER_X - 28}
+                        y1={APEX_GLINT_Y}
+                        x2={PYRAMID_CENTER_X + 28}
+                        y2={APEX_GLINT_Y}
+                        stroke={fill('apex-glint-beam')}
+                        strokeWidth="1.35"
+                        strokeLinecap="round"
+                        vectorEffect="non-scaling-stroke"
+                        initial={false}
+                        animate={prefersReducedMotion ? { opacity: 0.7 } : { opacity: [0.44, 0.9, 0.44] }}
+                        transition={pulseTransition}
+                      />
+                      <motion.line
+                        x1={PYRAMID_CENTER_X}
+                        y1={APEX_GLINT_Y - 18}
+                        x2={PYRAMID_CENTER_X}
+                        y2={APEX_GLINT_Y + 22}
+                        stroke={fill('apex-glint-beam')}
+                        strokeWidth="1.05"
+                        strokeLinecap="round"
+                        vectorEffect="non-scaling-stroke"
+                        initial={false}
+                        animate={prefersReducedMotion ? { opacity: 0.62 } : { opacity: [0.32, 0.74, 0.32] }}
+                        transition={pulseTransition}
+                      />
+                      <motion.line
+                        x1={PYRAMID_CENTER_X - 13}
+                        y1={APEX_GLINT_Y - 13}
+                        x2={PYRAMID_CENTER_X + 13}
+                        y2={APEX_GLINT_Y + 13}
+                        stroke={fill('apex-glint-prism')}
+                        strokeWidth="0.8"
+                        strokeLinecap="round"
+                        vectorEffect="non-scaling-stroke"
+                        initial={false}
+                        animate={prefersReducedMotion ? { opacity: 0.48 } : { opacity: [0.24, 0.58, 0.24] }}
+                        transition={shimmerTransition}
+                      />
+                      <motion.line
+                        x1={PYRAMID_CENTER_X - 11}
+                        y1={APEX_GLINT_Y + 11}
+                        x2={PYRAMID_CENTER_X + 11}
+                        y2={APEX_GLINT_Y - 11}
+                        stroke={fill('apex-glint-prism')}
+                        strokeWidth="0.68"
+                        strokeLinecap="round"
+                        vectorEffect="non-scaling-stroke"
+                        initial={false}
+                        animate={prefersReducedMotion ? { opacity: 0.38 } : { opacity: [0.18, 0.48, 0.18] }}
+                        transition={shimmerTransition}
+                      />
+                    </g>
+
+                    <path
+                      d={`M${PYRAMID_CENTER_X} ${APEX_GLINT_Y - 8.8} L${PYRAMID_CENTER_X + 2.6} ${APEX_GLINT_Y - 2.6} L${PYRAMID_CENTER_X + 9.6} ${APEX_GLINT_Y} L${PYRAMID_CENTER_X + 2.6} ${APEX_GLINT_Y + 2.6} L${PYRAMID_CENTER_X} ${APEX_GLINT_Y + 9.2} L${PYRAMID_CENTER_X - 2.6} ${APEX_GLINT_Y + 2.6} L${PYRAMID_CENTER_X - 9.6} ${APEX_GLINT_Y} L${PYRAMID_CENTER_X - 2.6} ${APEX_GLINT_Y - 2.6} Z`}
+                      fill={fill('apex-glint-core')}
+                      stroke={fill('apex-glint-prism')}
+                      strokeWidth="0.45"
+                      strokeLinejoin="round"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                    <ellipse
+                      cx={PYRAMID_CENTER_X - 2.2}
+                      cy={APEX_GLINT_Y - 1.9}
+                      rx="2.9"
+                      ry="1.45"
+                      fill="#ffffff"
+                      opacity="0.74"
+                      transform={`rotate(-26 ${PYRAMID_CENTER_X - 2.2} ${APEX_GLINT_Y - 1.9})`}
                     />
                     <motion.circle
                       cx={PYRAMID_CENTER_X}
-                      cy="27"
-                      r="1.4"
-                      fill="#fff8e6"
+                      cy={APEX_GLINT_Y}
+                      r="1.65"
+                      fill="#fffdf4"
                       initial={false}
-                      animate={prefersReducedMotion ? { opacity: 0.78 } : { opacity: [0.6, 0.95, 0.6] }}
+                      animate={prefersReducedMotion ? { opacity: 0.92 } : { opacity: [0.72, 1, 0.72], r: [1.35, 1.85, 1.35] }}
                       transition={pulseTransition}
                     />
-                  </g>
+                  </motion.g>
                 )}
               </motion.g>
             );
