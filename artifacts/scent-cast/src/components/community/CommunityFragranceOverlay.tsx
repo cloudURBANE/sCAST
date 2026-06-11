@@ -7,6 +7,7 @@ import type { CommunityFragranceEntry } from '@/components/community/communityDa
 
 interface CommunityFragranceOverlayProps {
   item: CommunityFragranceEntry | null;
+  imageLayoutId?: string | null;
   onClose: () => void;
   restoreFocus?: () => void;
 }
@@ -23,6 +24,7 @@ function formatNotes(notes: string[] | undefined): string {
 
 export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps> = ({
   item,
+  imageLayoutId,
   onClose,
   restoreFocus,
 }) => {
@@ -96,16 +98,22 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
                       {item.curator}
                     </span>
                   </div>
-                  <div className="relative z-10 my-3 min-h-0 flex-1">
+                  <motion.div
+                    layoutId={imageLayoutId ?? undefined}
+                    className="relative z-10 my-3 min-h-0 flex-1"
+                  >
                     <BottleImage
                       src={item.imageUrl}
                       alt={`${item.name} by ${item.brand}`}
-                      variant="card"
+                      variant="detail"
+                      proxy={false}
+                      loading="eager"
+                      fetchPriority="high"
                       className="absolute inset-0"
                       imgClassName="brightness-[1.1]"
                       adjustment={item.imageAdjustment}
                     />
-                  </div>
+                  </motion.div>
                   <div className="relative z-10 mt-2 text-center">
                     <BrandGoldLabel as="span" brand={item.brand} className="scent-card-brand block" />
                   </div>
@@ -114,42 +122,91 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
                   </div>
                 </div>
 
-                <div className="space-y-8 text-left">
-                  <header className="space-y-5">
-                    <p className="scent-type-label text-scent-accent">
+                <motion.div
+                  className="space-y-8 text-left"
+                  initial="hidden"
+                  animate="visible"
+                  variants={{
+                    hidden: {},
+                    visible: {
+                      transition: {
+                        delayChildren: 0.12,
+                        staggerChildren: 0.08,
+                      },
+                    },
+                  }}
+                >
+                  <motion.header className="space-y-5">
+                    <motion.p
+                      className="scent-type-label text-scent-accent"
+                      variants={{
+                        hidden: { opacity: 0, y: 10 },
+                        visible: { opacity: 1, y: 0, transition: { duration: 0.38, ease: 'easeOut' } },
+                      }}
+                    >
                       Community Wardrobe
-                    </p>
-                    <div className="space-y-3">
+                    </motion.p>
+                    <motion.div
+                      className="space-y-3"
+                      variants={{
+                        hidden: { opacity: 0, y: 12 },
+                        visible: { opacity: 1, y: 0, transition: { duration: 0.42, ease: 'easeOut' } },
+                      }}
+                    >
                       <BrandGoldLabel as="p" brand={item.brand} className="font-serif text-sm uppercase tracking-[0.24em]" />
-                      <h2
+                      <motion.h2
                         id="community-fragrance-overlay-title"
                         className="font-serif text-4xl italic leading-none text-[#fff7ec] sm:text-6xl lg:text-7xl"
                       >
                         {item.name}
-                      </h2>
-                    </div>
+                      </motion.h2>
+                    </motion.div>
                     {item.family ? (
-                      <p className="scent-type-meta uppercase">
+                      <motion.p
+                        className="scent-type-meta uppercase"
+                        variants={{
+                          hidden: { opacity: 0, y: 8 },
+                          visible: { opacity: 1, y: 0, transition: { duration: 0.36, ease: 'easeOut' } },
+                        }}
+                      >
                         {item.family}
-                      </p>
+                      </motion.p>
                     ) : null}
-                  </header>
+                  </motion.header>
 
-                  <div className="h-px w-full bg-gradient-to-r from-scent-accent/40 via-white/10 to-transparent" />
+                  <motion.div
+                    className="h-px w-full bg-gradient-to-r from-scent-accent/40 via-white/10 to-transparent"
+                    variants={{
+                      hidden: { opacity: 0, scaleX: 0.96 },
+                      visible: {
+                        opacity: 1,
+                        scaleX: 1,
+                        transition: { duration: 0.4, ease: 'easeOut' },
+                      },
+                    }}
+                    style={{ transformOrigin: 'left' }}
+                  />
 
                   <div className="grid grid-cols-1 gap-5 sm:grid-cols-3 sm:gap-6">
                     {noteRows.map(([label, key]) => (
-                      <div key={label} className="border-l border-white/10 pl-4">
+                      <motion.div
+                        key={label}
+                        className="border-l border-white/10 pl-4"
+                        variants={{
+                          hidden: { opacity: 0, y: 10 },
+                          visible: { opacity: 1, y: 0, transition: { duration: 0.36, ease: 'easeOut' } },
+                        }}
+                      >
                         <p className="mb-2 scent-type-label text-scent-accent">
                           {label}
                         </p>
                         <p className="font-serif text-base italic leading-relaxed text-scent-text-muted">
                           {formatNotes(item[key])}
                         </p>
-                      </div>
+                      </motion.div>
                     ))}
                   </div>
-                </div>
+                </motion.div>
               </div>
             </div>
           </div>
