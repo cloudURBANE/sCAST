@@ -1863,7 +1863,8 @@ export const Wardrobe: React.FC<{
                     <button
                       type="button"
                       onClick={() => onExpandArchive?.()}
-                      aria-label="Expand archive — go to add fragrance search"
+                      aria-label="Add a fragrance to your vault"
+                      title="Add a fragrance to your vault"
                       className={`scent-fragrance-card ${
                         isCompactGrid ? 'min-h-[17.5rem] p-4' : 'min-h-[28rem] p-8'
                         } sm:min-h-[28rem] sm:p-8 flex flex-col items-center justify-center text-center group cursor-pointer border-dashed border-scent-accent/26 hover:bg-white/5 transition-all w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/50`}
@@ -1871,7 +1872,7 @@ export const Wardrobe: React.FC<{
                       <div className="w-12 h-12 border border-dashed border-scent-accent/35 flex items-center justify-center group-hover:rotate-90 transition-transform mb-4 rounded-full">
                         <span className="text-scent-accent text-3xl">+</span>
                       </div>
-                      <p className="font-serif italic text-scent-accent text-2xl tracking-tighter uppercase">Expand Archive</p>
+                      <p className="font-serif italic text-scent-accent text-2xl tracking-tighter uppercase">Add Fragrance</p>
                     </button>
                   )}
                 </div>
