@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, LoaderCircle, X } from 'lucide-react';
+import { Check, CloudSun, LocateFixed, LoaderCircle, UserRound, X } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { useModalBehavior } from '@/hooks/use-modal-behavior';
+import { useWeather } from '@/context/WeatherContext';
 
 interface ProfileSettingsModalProps {
   isOpen: boolean;
@@ -14,9 +15,23 @@ interface ProfileSettingsModalProps {
 }
 
 const USERNAME_MAX = 20;
-// Mirrors the server contract (PUT /api/me/profile): 3–20 chars, letters/numbers
+// Mirrors the server contract (PUT /api/me/profile): 3-20 chars, letters/numbers
 // and . _ -, never at the start or end. Empty clears the username.
 const USERNAME_RE = /^[a-zA-Z0-9](?:[a-zA-Z0-9_.\-]{1,18}[a-zA-Z0-9])$/;
+
+const LOCATION_STATUS_COPY = {
+  idle: 'Default weather source',
+  requesting: 'Requesting location',
+  granted: 'Current location active',
+  denied: 'Location access blocked',
+  unsupported: 'Location unavailable',
+} as const;
+
+const LOCATION_SOURCE_COPY = {
+  fallback: 'Regional fallback',
+  preferred: 'Saved preference',
+  browser: 'Device location',
+} as const;
 
 export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
   isOpen,
@@ -27,13 +42,13 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
 }) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { weather, weatherLoading, locationStatus, locationSource, requestLocation } = useWeather();
   const [value, setValue] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const modalRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Reset the field to the current name each time the panel opens.
   useEffect(() => {
     if (isOpen) {
       setValue(currentUsername ?? '');
@@ -51,11 +66,21 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
   const trimmed = value.trim();
   const unchanged = trimmed === (currentUsername ?? '');
   const formatInvalid = trimmed.length > 0 && !USERNAME_RE.test(trimmed);
+  const locating = locationStatus === 'requesting';
+  const locationButtonLabel = locationStatus === 'granted'
+    ? 'Refresh current location'
+    : 'Use current location';
+  const locationSourceLabel = locating
+    ? 'Awaiting permission'
+    : LOCATION_SOURCE_COPY[locationSource];
+  const weatherLocation = typeof weather?.location === 'string' && weather.location.trim()
+    ? weather.location.trim()
+    : 'Not set';
 
   const handleSave = async () => {
     if (!authToken || saving) return;
     if (formatInvalid) {
-      setError('Use 3–20 characters: letters, numbers, and . _ - only (not at the start or end).');
+      setError('Use 3-20 characters: letters, numbers, and . _ - only (not at the start or end).');
       return;
     }
     setSaving(true);
@@ -75,13 +100,12 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
       }
       const savedUsername = typeof data?.username === 'string' ? data.username : null;
       onSaved(savedUsername);
-      // Author names are baked into cached community payloads — refetch so the
-      // feed and comments reflect the new name without a hard reload.
+      // Author names are baked into cached community payloads, so refetch after a rename.
       void queryClient.invalidateQueries({ queryKey: ['community'] });
       toast({
         title: savedUsername ? 'Username updated' : 'Username cleared',
         description: savedUsername
-          ? `You'll appear as “${savedUsername}” in the community.`
+          ? `You'll appear as "${savedUsername}" in the community.`
           : 'Your posts now show a private alias.',
       });
       onClose();
@@ -92,10 +116,15 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
     }
   };
 
+  const handleLocationRequest = () => {
+    if (locating) return;
+    void requestLocation();
+  };
+
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center">
+        <div className="fixed inset-0 z-[200] flex items-end justify-center sm:items-center">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -109,84 +138,141 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 40 }}
             transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-            className="relative w-full sm:max-w-md mx-0 sm:mx-6 bg-neutral-950 border-t sm:border border-white/10 sm:rounded-[1.5rem] overflow-hidden shadow-2xl"
+            className="relative max-h-[92svh] w-full overflow-hidden border-t border-white/10 bg-neutral-950 shadow-2xl sm:mx-6 sm:max-w-xl sm:rounded-[1.5rem] sm:border"
             role="dialog"
             aria-modal="true"
             aria-labelledby="profile-modal-title"
           >
-            <div className="flex items-center justify-between px-6 py-5 border-b border-white/5">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-1.5 h-1.5 rounded-full bg-scent-accent animate-pulse shrink-0" />
+            <div className="flex items-center justify-between border-b border-white/5 px-6 py-5">
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-scent-accent" />
                 <div className="min-w-0">
-                  <p id="profile-modal-title" className="text-[9px] uppercase tracking-[0.5em] text-scent-accent font-bold">
-                    Profile
+                  <p id="profile-modal-title" className="text-[9px] font-bold uppercase tracking-[0.5em] text-scent-accent">
+                    Settings
                   </p>
-                  <p className="text-[9px] text-white/25 mt-0.5 font-sans">Community display name</p>
+                  <p className="mt-0.5 font-sans text-[9px] text-white/25">Account and atmosphere</p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={onClose}
                 aria-label="Close"
-                className="p-2 bg-white/5 hover:bg-white/10 transition-all rounded-full border border-white/10 text-white group shrink-0 ml-3"
+                className="group ml-3 shrink-0 rounded-full border border-white/10 bg-white/5 p-2 text-white transition-all hover:bg-white/10"
               >
-                <X size={16} className="group-hover:rotate-90 transition-transform duration-300" />
+                <X size={16} className="transition-transform duration-300 group-hover:rotate-90" />
               </button>
             </div>
 
-            <form
-              className="px-6 py-6 space-y-4"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void handleSave();
-              }}
-            >
-              <label htmlFor="profile-username" className="block">
-                <span className="text-[9px] uppercase tracking-[0.4em] text-white/30 font-bold">Username</span>
-                <input
-                  id="profile-username"
-                  ref={inputRef}
-                  type="text"
-                  value={value}
-                  maxLength={USERNAME_MAX}
-                  onChange={(event) => {
-                    setValue(event.target.value);
-                    if (error) setError(null);
-                  }}
-                  placeholder="e.g. velvet_oud"
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  spellCheck={false}
-                  className="mt-2 w-full bg-white/[0.03] border border-white/10 px-4 py-3 text-base text-white placeholder:text-white/20 focus:border-scent-accent/40 outline-none transition-all font-sans rounded-[10px]"
-                />
-              </label>
+            <div className="max-h-[calc(92svh-5.5rem)] overflow-y-auto px-5 py-5 sm:px-6 sm:py-6">
+              <div className="space-y-4">
+                <section className="rounded-[12px] border border-white/10 bg-white/[0.025] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                  <div className="mb-4 flex items-center gap-3">
+                    <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-scent-accent/20 bg-scent-accent/[0.08] text-scent-accent">
+                      <UserRound size={16} aria-hidden="true" />
+                    </span>
+                    <div className="min-w-0">
+                      <h3 className="text-[10px] font-bold uppercase tracking-[0.34em] text-[#fff7ec]">Profile</h3>
+                      <p className="mt-0.5 text-[11px] text-white/35">Community identity</p>
+                    </div>
+                  </div>
 
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-[11px] leading-snug text-white/35">
-                  {error ? (
-                    <span className="text-red-300">{error}</span>
-                  ) : (
-                    'Letters, numbers, and . _ - · leave blank to stay anonymous.'
-                  )}
-                </p>
-                <span className="shrink-0 font-mono text-[11px] text-white/30">
-                  {trimmed.length}/{USERNAME_MAX}
-                </span>
+                  <form
+                    className="space-y-4"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void handleSave();
+                    }}
+                  >
+                    <label htmlFor="profile-username" className="block">
+                      <span className="text-[9px] font-bold uppercase tracking-[0.32em] text-white/35">Username</span>
+                      <input
+                        id="profile-username"
+                        ref={inputRef}
+                        type="text"
+                        value={value}
+                        maxLength={USERNAME_MAX}
+                        onChange={(event) => {
+                          setValue(event.target.value);
+                          if (error) setError(null);
+                        }}
+                        placeholder="e.g. velvet_oud"
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        spellCheck={false}
+                        className="mt-2 w-full rounded-[10px] border border-white/10 bg-black/30 px-4 py-3 font-sans text-base text-white outline-none transition-all placeholder:text-white/20 focus:border-scent-accent/45 focus:ring-2 focus:ring-scent-accent/10"
+                      />
+                    </label>
+
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-[11px] leading-snug text-white/35">
+                        {error ? (
+                          <span className="text-red-300">{error}</span>
+                        ) : (
+                          'Letters, numbers, and . _ -; leave blank to stay anonymous.'
+                        )}
+                      </p>
+                      <span className="shrink-0 font-mono text-[11px] text-white/30">
+                        {trimmed.length}/{USERNAME_MAX}
+                      </span>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={saving || unchanged || formatInvalid || !authToken}
+                      className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full border border-scent-accent/30 bg-scent-accent/[0.08] px-4 py-3 text-[13px] font-semibold uppercase tracking-[0.16em] text-[#fff7ec] transition-colors hover:border-scent-accent/55 hover:bg-scent-accent/[0.12] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 disabled:pointer-events-none disabled:opacity-45"
+                    >
+                      {saving ? (
+                        <LoaderCircle size={15} className="animate-spin" aria-hidden="true" />
+                      ) : (
+                        <Check size={15} strokeWidth={2} aria-hidden="true" />
+                      )}
+                      {saving ? 'Saving' : 'Save username'}
+                    </button>
+                  </form>
+                </section>
+
+                <section className="rounded-[12px] border border-scent-accent/20 bg-[linear-gradient(180deg,rgba(212,175,55,0.07),rgba(255,255,255,0.025))] p-4 shadow-[inset_0_1px_0_rgba(255,236,183,0.08)]">
+                  <div className="mb-4 flex items-center gap-3">
+                    <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-scent-accent/24 bg-black/35 text-scent-accent">
+                      <CloudSun size={17} aria-hidden="true" />
+                    </span>
+                    <div className="min-w-0">
+                      <h3 className="text-[10px] font-bold uppercase tracking-[0.34em] text-[#fff7ec]">Atmosphere</h3>
+                      <p className="mt-0.5 text-[11px] text-white/35">{locationSourceLabel}</p>
+                    </div>
+                  </div>
+
+                  <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div className="rounded-[10px] border border-white/10 bg-black/25 px-3.5 py-3">
+                      <dt className="text-[9px] font-bold uppercase tracking-[0.28em] text-white/30">Location</dt>
+                      <dd className="mt-1 min-w-0 truncate text-sm text-[#fff7ec]" title={weatherLoading ? 'Loading' : weatherLocation}>
+                        {weatherLoading ? 'Loading' : weatherLocation}
+                      </dd>
+                    </div>
+                    <div className="rounded-[10px] border border-white/10 bg-black/25 px-3.5 py-3">
+                      <dt className="text-[9px] font-bold uppercase tracking-[0.28em] text-white/30">Status</dt>
+                      <dd className="mt-1 min-w-0 truncate text-sm text-[#fff7ec]" title={LOCATION_STATUS_COPY[locationStatus]}>
+                        {LOCATION_STATUS_COPY[locationStatus]}
+                      </dd>
+                    </div>
+                  </dl>
+
+                  <button
+                    type="button"
+                    onClick={handleLocationRequest}
+                    disabled={locating}
+                    className="mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full border border-scent-accent/35 bg-[#d4af37] px-4 py-3 text-[13px] font-bold uppercase tracking-[0.16em] text-black shadow-[0_14px_34px_rgba(212,175,55,0.16)] transition-colors hover:bg-[#e6c85e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950 disabled:cursor-wait disabled:opacity-70"
+                  >
+                    {locating ? (
+                      <LoaderCircle size={15} className="animate-spin" aria-hidden="true" />
+                    ) : (
+                      <LocateFixed size={15} strokeWidth={2} aria-hidden="true" />
+                    )}
+                    {locating ? 'Locating' : locationButtonLabel}
+                  </button>
+                </section>
               </div>
-
-              <button
-                type="submit"
-                disabled={saving || unchanged || formatInvalid || !authToken}
-                className="inline-flex w-full min-h-12 items-center justify-center gap-2 rounded-full border border-scent-accent/30 bg-scent-accent/[0.08] px-4 py-3 text-[13px] font-semibold uppercase tracking-[0.16em] text-[#fff7ec] transition-colors hover:border-scent-accent/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 disabled:pointer-events-none disabled:opacity-45"
-              >
-                {saving ? (
-                  <LoaderCircle size={15} className="animate-spin" aria-hidden="true" />
-                ) : (
-                  <Check size={15} strokeWidth={2} aria-hidden="true" />
-                )}
-                {saving ? 'Saving' : 'Save username'}
-              </button>
-            </form>
+            </div>
           </motion.div>
         </div>
       )}

@@ -34,7 +34,7 @@ interface WeatherContextType {
   weatherLoading: boolean;
   locationStatus: LocationStatus;
   locationSource: LocationSource;
-  fetchWeather: (lat?: number, lon?: number, signal?: AbortSignal) => Promise<void>;
+  fetchWeather: (lat?: number, lon?: number, signal?: AbortSignal, source?: LocationSource) => Promise<void>;
   requestLocation: () => Promise<void>;
 }
 
@@ -136,7 +136,12 @@ export const WeatherProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const { authToken } = useAuth();
   const { toast } = useToast();
 
-  const fetchWeather = useCallback(async (lat?: number, lon?: number, signal?: AbortSignal) => {
+  const fetchWeather = useCallback(async (
+    lat?: number,
+    lon?: number,
+    signal?: AbortSignal,
+    source?: LocationSource,
+  ) => {
     const seq = fetchSeqRef.current + 1;
     fetchSeqRef.current = seq;
     setWeatherLoading(true);
@@ -146,7 +151,7 @@ export const WeatherProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const url = hasCoords ? `/api/weather?lat=${lat}&lon=${lon}` : '/api/weather';
       const response = await axios.get(url, { signal });
       if (fetchSeqRef.current !== seq) return;
-      setLocationSource(hasCoords ? 'preferred' : 'fallback');
+      setLocationSource(source ?? (hasCoords ? 'preferred' : 'fallback'));
       setWeather(response.data);
     } catch (err) {
       if (!axios.isCancel(err) && fetchSeqRef.current === seq) {
@@ -229,7 +234,7 @@ export const WeatherProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setLocationStatus('granted');
       setLocationSource('browser');
       void syncWeatherLocation(authToken, nextLocation);
-      await fetchWeather(nextLocation.lat, nextLocation.lon);
+      await fetchWeather(nextLocation.lat, nextLocation.lon, undefined, 'browser');
     } catch (err) {
       console.error("Location request failed", err);
       setLocationStatus('denied');
