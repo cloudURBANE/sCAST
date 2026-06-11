@@ -132,6 +132,8 @@ export type FragranceDetail = {
   brand?: string;
   year?: number | null;
   gender?: string | null;
+  concentration?: string | null;
+  season?: string | null;
   imageUrl?: string;
   image_url?: string;
   source_url?: string | null;

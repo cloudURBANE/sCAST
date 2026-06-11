@@ -76,6 +76,10 @@ async function imageMetadataPatchForUrl(url: string): Promise<Record<string, unk
 
 function hasDetailRefreshPayload(body: Record<string, unknown>): boolean {
   return (
+    Object.prototype.hasOwnProperty.call(body, "year") ||
+    Object.prototype.hasOwnProperty.call(body, "gender") ||
+    Object.prototype.hasOwnProperty.call(body, "concentration") ||
+    Object.prototype.hasOwnProperty.call(body, "season") ||
     Object.prototype.hasOwnProperty.call(body, "derived_metrics") ||
     Object.prototype.hasOwnProperty.call(body, "source_coverage") ||
     Object.prototype.hasOwnProperty.call(body, "enrichment") ||
@@ -83,8 +87,29 @@ function hasDetailRefreshPayload(body: Record<string, unknown>): boolean {
   );
 }
 
+function usefulDetailFactString(value: unknown, options?: { rejectUniversal?: boolean }): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  const normalized = trimmed.toLowerCase();
+  if (normalized === "unknown" || normalized === "n/a" || normalized === "na" || normalized === "none" || normalized === "null") {
+    return undefined;
+  }
+  if (options?.rejectUniversal && normalized === "universal") return undefined;
+  return trimmed;
+}
+
 function detailRefreshPatchFromBody(body: Record<string, unknown>): Record<string, unknown> {
   const detailPatch: Record<string, unknown> = {};
+  if (typeof body.year === "number" && Number.isFinite(body.year)) {
+    detailPatch.year = Math.trunc(body.year);
+  }
+  const gender = usefulDetailFactString(body.gender);
+  if (gender) detailPatch.gender = gender;
+  const concentration = usefulDetailFactString(body.concentration);
+  if (concentration) detailPatch.concentration = concentration;
+  const season = usefulDetailFactString(body.season, { rejectUniversal: true });
+  if (season) detailPatch.season = season;
   if (Object.prototype.hasOwnProperty.call(body, "derived_metrics")) {
     detailPatch.derived_metrics = body.derived_metrics ?? null;
   }
