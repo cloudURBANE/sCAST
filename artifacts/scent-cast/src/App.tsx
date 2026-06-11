@@ -543,17 +543,20 @@ function DashboardView() {
                   transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
                   style={{ overflow: 'hidden' }}
                 >
-                  <div className="grid grid-cols-3 gap-3 sm:gap-5 text-center">
-                    {([
-                      { step: '1', text: 'Search a fragrance above' },
-                      { step: '2', text: 'Add 3 to your vault' },
-                      { step: '3', text: 'Discover your match' },
-                    ] as const).map(({ step, text }) => (
-                      <div key={step} className="flex flex-col items-center gap-2">
-                        <span className="w-7 h-7 rounded-full border border-scent-accent/40 flex items-center justify-center text-[13px] font-bold text-scent-accent shrink-0">{step}</span>
-                        <p className="scent-type-chip text-scent-text-muted leading-relaxed">{text}</p>
-                      </div>
-                    ))}
+                  <div className="rounded-[var(--radius-scent)] border border-scent-accent/18 bg-black/32 px-3 py-4 shadow-[inset_0_1px_0_rgba(255,236,183,0.06)] sm:px-5 sm:py-5">
+                    <div className="relative grid grid-cols-3 text-center">
+                      <div className="pointer-events-none absolute left-[16.666%] right-[16.666%] top-3.5 h-px bg-gradient-to-r from-scent-accent/18 via-scent-accent/42 to-scent-accent/18" aria-hidden />
+                      {([
+                        { step: '1', text: 'Search a fragrance above' },
+                        { step: '2', text: 'Add 3 to your vault' },
+                        { step: '3', text: 'Discover your match' },
+                      ] as const).map(({ step, text }) => (
+                        <div key={step} className="relative flex min-w-0 flex-col items-center gap-2 px-1 sm:px-3">
+                          <span className="relative z-[1] flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-scent-accent/62 bg-[#080604] text-[13px] font-bold tabular-nums text-scent-accent shadow-[0_0_0_4px_rgba(0,0,0,0.72),0_8px_20px_-14px_rgba(212,175,55,0.9)]">{step}</span>
+                          <p className="scent-type-chip max-w-[9.5rem] text-center text-[10px] leading-snug text-scent-text-muted sm:text-[11px] sm:leading-relaxed">{text}</p>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </motion.div>
               ) : null}
@@ -578,23 +581,25 @@ function DashboardView() {
                       <span className="font-serif italic text-lg sm:text-2xl leading-tight text-center">Discover Your Signature Scent</span>
                     </motion.button>
                   ) : (
-                    <div className="w-full min-h-[60px] sm:min-h-16 flex flex-col items-center justify-center gap-2.5 px-4 py-3 rounded-[var(--radius-scent)] border border-white/10 bg-white/[0.025]">
-                      <div className="flex items-center gap-2" role="progressbar" aria-valuemin={0} aria-valuemax={3} aria-valuenow={Math.min(items.length, 3)} aria-label="Fragrances added toward discovery">
-                        {[0, 1, 2].map((i) => (
-                          <span
-                            key={i}
-                            className={`h-1.5 w-9 rounded-full transition-colors duration-300 sm:w-12 ${
-                              i < items.length ? 'bg-scent-accent/85 shadow-[0_0_10px_rgba(212,175,55,0.35)]' : 'bg-white/12'
-                            }`}
-                          />
-                        ))}
+                    <div className="flex w-full min-h-[76px] flex-col items-center justify-center rounded-[var(--radius-scent)] border border-scent-accent/18 bg-black/32 px-4 py-4 shadow-[inset_0_1px_0_rgba(255,236,183,0.06)] sm:min-h-20 sm:px-6">
+                      <div className="flex w-full max-w-[30rem] flex-col items-center gap-3">
+                        <div className="grid w-full grid-cols-3 gap-2" role="progressbar" aria-valuemin={0} aria-valuemax={3} aria-valuenow={Math.min(items.length, 3)} aria-label="Fragrances added toward discovery">
+                          {[0, 1, 2].map((i) => (
+                            <span
+                              key={i}
+                              className={`h-2 rounded-full transition-colors duration-300 ${
+                                i < items.length ? 'bg-scent-accent/85 shadow-[0_0_10px_rgba(212,175,55,0.35)]' : 'bg-white/12'
+                              }`}
+                            />
+                          ))}
+                        </div>
+                        <span className="text-center font-serif italic text-base leading-tight text-white/55 sm:text-lg">
+                          <span className="tabular-nums not-italic font-sans font-bold tracking-[0.12em] text-scent-accent">{Math.min(items.length, 3)}/3</span>
+                          {items.length === 0
+                            ? ' — add 3 fragrances to unlock discovery'
+                            : ` — ${3 - items.length} more to unlock discovery`}
+                        </span>
                       </div>
-                      <span className="font-serif italic text-base sm:text-lg leading-tight text-center text-white/55">
-                        <span className="tabular-nums not-italic font-sans font-bold tracking-[0.12em] text-scent-accent">{Math.min(items.length, 3)}/3</span>
-                        {items.length === 0
-                          ? ' — add 3 fragrances to unlock discovery'
-                          : ` — ${3 - items.length} more to unlock discovery`}
-                      </span>
                     </div>
                   )}
                 </motion.div>

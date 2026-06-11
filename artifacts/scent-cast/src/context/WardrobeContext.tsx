@@ -577,7 +577,7 @@ interface WardrobeContextType {
   handleIntentComplete: (intent: { destination: DestinationType; energy: EnergyState }) => void;
   closeRecommendationOverlay: () => void;
   handleVaultSearchStateChange: (active: boolean) => void;
-  handleExpandArchive: () => void;
+  handleExpandArchive: (options?: { target?: 'hero' | 'vault' }) => void;
 }
 
 const WardrobeContext = createContext<WardrobeContextType | undefined>(undefined);
@@ -649,12 +649,19 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setVaultSearchUiActive(active);
   }, []);
 
-  const handleExpandArchive = useCallback(() => {
+  const handleExpandArchive = useCallback((options?: { target?: 'hero' | 'vault' }) => {
     setVaultSearchUiActive(true);
+    const target = options?.target ?? 'hero';
+    const searchInputIds =
+      target === 'vault'
+        ? ['wardrobe-vault-search', 'scent-add-to-vault-search']
+        : ['scent-add-to-vault-search', 'wardrobe-vault-search'];
 
     const focusSearch = () => {
-      const el = document.getElementById('scent-add-to-vault-search');
-      if (!(el instanceof HTMLInputElement)) return false;
+      const el = searchInputIds
+        .map((id) => document.getElementById(id))
+        .find((candidate): candidate is HTMLInputElement => candidate instanceof HTMLInputElement);
+      if (!el) return false;
 
       el.focus({ preventScroll: true });
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });

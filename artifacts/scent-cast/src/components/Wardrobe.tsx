@@ -866,6 +866,54 @@ function framePercent(value: number): string {
   return `${Math.round(value * 100)}%`;
 }
 
+const VaultEmptyEmblem: React.FC = () => (
+  <svg
+    viewBox="0 0 96 96"
+    role="img"
+    aria-label="Empty fragrance vault"
+    className="h-20 w-20 text-scent-accent sm:h-24 sm:w-24"
+  >
+    <defs>
+      <linearGradient id="vault-empty-gold" x1="24" y1="10" x2="72" y2="86" gradientUnits="userSpaceOnUse">
+        <stop stopColor="#fff2bd" />
+        <stop offset="0.46" stopColor="#d4af37" />
+        <stop offset="1" stopColor="#8a5a18" />
+      </linearGradient>
+    </defs>
+    <path
+      d="M24 41c0-14.4 9.8-25 24-25s24 10.6 24 25"
+      fill="none"
+      stroke="url(#vault-empty-gold)"
+      strokeWidth="3.2"
+      strokeLinecap="round"
+    />
+    <path
+      d="M21 40h54c3.9 0 7 3.1 7 7v23c0 4.4-3.6 8-8 8H22c-4.4 0-8-3.6-8-8V47c0-3.9 3.1-7 7-7Z"
+      fill="rgba(212,175,55,0.07)"
+      stroke="url(#vault-empty-gold)"
+      strokeWidth="2.7"
+    />
+    <path
+      d="M31 54h34M31 64h22"
+      fill="none"
+      stroke="currentColor"
+      strokeOpacity="0.62"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+    />
+    <path
+      d="M48 26v31"
+      fill="none"
+      stroke="currentColor"
+      strokeOpacity="0.22"
+      strokeWidth="2"
+      strokeLinecap="round"
+    />
+    <circle cx="68" cy="63" r="6.5" fill="rgba(255,247,236,0.05)" stroke="currentColor" strokeOpacity="0.48" strokeWidth="2" />
+    <path d="M68 59v8M64 63h8" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+  </svg>
+);
+
 export const Wardrobe: React.FC<{
   items: Fragrance[];
   onDelete: (item: Fragrance) => void;
@@ -893,8 +941,8 @@ export const Wardrobe: React.FC<{
   fixWardrobeBusy?: boolean;
   revertAvailable?: boolean;
   wardrobeFixHint?: string | null;
-  /** Scroll to / focus the hero "Add to vault" search (used by Expand Archive). */
-  onExpandArchive?: () => void;
+  /** Scroll to / focus an add/search surface (used by Expand Archive). */
+  onExpandArchive?: (options?: { target?: 'hero' | 'vault' }) => void;
   authToken?: string | null;
   wardrobeLoaded?: boolean;
   wardrobeError?: string | null;
@@ -1862,7 +1910,7 @@ export const Wardrobe: React.FC<{
                   {shelfIndex === shelves.length - 1 && shelfItems.length < 4 && (
                     <button
                       type="button"
-                      onClick={() => onExpandArchive?.()}
+                      onClick={() => onExpandArchive?.({ target: 'vault' })}
                       aria-label="Add a fragrance to your vault"
                       title="Add a fragrance to your vault"
                       className={`scent-fragrance-card ${
@@ -1879,26 +1927,31 @@ export const Wardrobe: React.FC<{
               </div>
             ))
           ) : !searchQuery && (
-            <div className="py-20 sm:py-24 px-6 text-center border border-dashed border-scent-accent/18 rounded-scent flex flex-col items-center gap-5 bg-white/[0.015]">
-              <div className="flex h-16 w-16 items-center justify-center rounded-full border border-scent-accent/25 bg-scent-accent/[0.06]" aria-hidden>
-                <Sparkles size={26} strokeWidth={1.75} className="text-scent-accent" />
+            <div className="relative overflow-hidden rounded-[var(--radius-scent)] border border-scent-accent/24 bg-[linear-gradient(180deg,rgba(255,247,236,0.035),rgba(255,247,236,0.012)_42%,rgba(0,0,0,0.28))] px-6 py-[4.5rem] text-center shadow-[inset_0_1px_0_rgba(255,236,183,0.08),0_28px_70px_-54px_rgba(212,175,55,0.5)] sm:px-10 sm:py-24">
+              <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-scent-accent/45 to-transparent" />
+              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(212,175,55,0.1),transparent_36%)]" />
+              <div className="relative z-[1] mx-auto flex max-w-xl flex-col items-center gap-6">
+                <div className="flex h-24 w-24 items-center justify-center rounded-full border border-scent-accent/22 bg-black/35 shadow-[inset_0_1px_0_rgba(255,236,183,0.1),0_22px_50px_-34px_rgba(212,175,55,0.62)] sm:h-28 sm:w-28">
+                  <VaultEmptyEmblem />
+                </div>
+                <div className="flex flex-col items-center gap-3">
+                  <p className="scent-type-label text-scent-accent/85">Collection Vault</p>
+                  <h3 className="font-serif italic text-3xl leading-none text-[#fff7ec] sm:text-4xl">Your vault is empty</h3>
+                  <p className="max-w-[34rem] text-[15px] leading-relaxed text-scent-text-muted sm:text-base">
+                    Add the fragrances you own or love to build your collection and unlock personalized scent discovery.
+                  </p>
+                </div>
+                {onExpandArchive && (
+                  <button
+                    type="button"
+                    onClick={() => onExpandArchive({ target: 'vault' })}
+                    className="scent-vault-outline-button mt-1 inline-flex min-h-[52px] items-center gap-2.5 px-7 py-3.5 transition-transform hover:scale-[1.02] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55"
+                  >
+                    <Search size={16} strokeWidth={1.75} className="text-scent-accent" aria-hidden />
+                    <span className="scent-vault-outline-button-label font-serif italic text-lg">Add your first fragrance</span>
+                  </button>
+                )}
               </div>
-              <div className="flex max-w-md flex-col items-center gap-2.5">
-                <h3 className="font-serif italic text-3xl sm:text-4xl text-[#fff7ec]">Your vault is empty</h3>
-                <p className="text-[15px] leading-relaxed text-scent-text-muted">
-                  Add the fragrances you own or love to build your collection and unlock personalized scent discovery.
-                </p>
-              </div>
-              {onExpandArchive && (
-                <button
-                  type="button"
-                  onClick={onExpandArchive}
-                  className="scent-vault-outline-button mt-1 inline-flex items-center gap-2.5 px-7 py-3.5 transition-transform hover:scale-[1.02] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55"
-                >
-                  <Search size={16} strokeWidth={1.75} className="text-scent-accent" aria-hidden />
-                  <span className="scent-vault-outline-button-label font-serif italic text-lg">Add your first fragrance</span>
-                </button>
-              )}
             </div>
           )}
         </div>
