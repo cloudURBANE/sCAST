@@ -25,6 +25,7 @@ const DEFAULT_FEED_LIMIT = 12;
 const MAX_FEED_LIMIT = 24;
 const MAX_TAGS = 8;
 const MAX_FRAGRANCES = 3;
+const MAX_BATTLE_OPTION_LENGTH = 120;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type TenantUser = {
@@ -62,7 +63,7 @@ type CommentRow = {
 type FragranceSnapshot = {
   name: string;
   brand: string;
-  imageUrl: string;
+  imageUrl?: string;
   family?: string;
 };
 
@@ -195,20 +196,20 @@ function normalizeFragrances(raw: unknown): { fragrances: FragranceSnapshot[] } 
     if (!isPlainObject(value)) return { error: "fragrances must contain catalog snapshot objects" };
     const name = cleanRequiredText(value.name, 120);
     const brand = cleanRequiredText(value.brand, 120);
-    const imageUrl = cleanRequiredText(value.imageUrl, 500);
+    const imageUrl = cleanOptionalText(value.imageUrl, 500);
     const family = cleanOptionalText(value.family, 80);
 
-    if (!name || !brand || !imageUrl) {
-      return { error: "each fragrance requires name, brand, and imageUrl" };
+    if (!name || !brand) {
+      return { error: "each fragrance requires name and brand" };
     }
-    if (!isAllowedCatalogImageUrl(imageUrl)) {
+    if (imageUrl && !isAllowedCatalogImageUrl(imageUrl)) {
       return { error: "fragrance imageUrl must be an existing http(s) or image-object URL" };
     }
 
     fragrances.push({
       name,
       brand,
-      imageUrl,
+      ...(imageUrl ? { imageUrl } : {}),
       ...(family ? { family } : {}),
     });
   }
@@ -242,9 +243,13 @@ function normalizeMetadata(
     if (!Array.isArray(options) || options.length !== 2) {
       return { error: "battle metadata requires exactly two options" };
     }
-    const cleanOptions = options.map((option) => cleanRequiredText(option, 80));
+    const cleanOptions = options.map((option) => cleanRequiredText(option, MAX_BATTLE_OPTION_LENGTH));
     if (cleanOptions.some((option) => !option)) {
-      return { error: "battle options must be non-empty strings under 80 characters" };
+      return { error: `battle options must be non-empty strings under ${MAX_BATTLE_OPTION_LENGTH} characters` };
+    }
+    const normalizedOptions = cleanOptions.map((option) => option!.toLowerCase());
+    if (new Set(normalizedOptions).size !== cleanOptions.length) {
+      return { error: "battle options must be distinct" };
     }
     return { metadata: { options: cleanOptions } };
   }
@@ -985,7 +990,7 @@ router.post("/community/posts/:id/votes", requireAuth, async (req: AuthRequest, 
     }
 
     const body = isPlainObject(req.body) ? req.body : {};
-    const choice = cleanRequiredText(body.choice, 80);
+    const choice = cleanRequiredText(body.choice, MAX_BATTLE_OPTION_LENGTH);
     if (!choice) {
       sendBadRequest(res, "choice is required");
       return;
@@ -1012,8 +1017,18 @@ router.post("/community/posts/:id/votes", requireAuth, async (req: AuthRequest, 
 
     const metadata = isPlainObject(post.metadata) ? post.metadata : {};
     const rawOptions = Array.isArray(metadata.options) ? metadata.options : [];
-    const options = rawOptions.filter((option: unknown): option is string => typeof option === "string");
-    if (options.length === 2 && !options.includes(choice)) {
+    const options = rawOptions.map((option: unknown) =>
+      typeof option === "string" ? option.trim() : "",
+    );
+    if (options.length !== 2 || options.some((option) => !option)) {
+      sendBadRequest(res, "battle metadata requires exactly two valid options");
+      return;
+    }
+    if (new Set(options.map((option) => option.toLowerCase())).size !== options.length) {
+      sendBadRequest(res, "battle metadata requires two distinct options");
+      return;
+    }
+    if (!options.includes(choice)) {
       sendBadRequest(res, "choice must match one of the battle options");
       return;
     }

@@ -25,7 +25,7 @@ export interface CommunityAuthor {
 export interface CommunityFragranceSnapshot {
   name: string;
   brand: string;
-  imageUrl: string;
+  imageUrl?: string;
   family?: string;
 }
 

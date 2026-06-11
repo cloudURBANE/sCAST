@@ -26,6 +26,7 @@ import { SEO } from './components/SEO';
 import { loadRouteChunk } from '@/lib/routeChunkRecovery';
 
 const CommunityPage = React.lazy(() => loadRouteChunk(() => import('@/pages/community')));
+const ArenaPage = React.lazy(() => loadRouteChunk(() => import('@/pages/arena')));
 const IpadFreezeLab = React.lazy(() => loadRouteChunk(() => import('@/pages/ipad-freeze-lab')));
 const SharePage = React.lazy(() =>
   loadRouteChunk(() => import('./components/SharePage').then((module) => ({ default: module.SharePage }))),
@@ -805,6 +806,26 @@ function CommunityPageView() {
   );
 }
 
+function ArenaPageView() {
+  const { authToken, authEmail, authPictureUrl, authUsername, handleSignOut, setIsAuthModalOpen, setIsProfileModalOpen } = useAuth();
+  const { setIsShareModalOpen } = useWardrobeShareModalActions();
+  return (
+    <>
+      <SEO title="Arena | ScentBeam" description="Vote on head-to-head fragrance battles." url="https://scentbeam.com/arena" />
+      <ArenaPage
+        authToken={authToken}
+        authEmail={authEmail}
+        authPictureUrl={authPictureUrl}
+        authUsername={authUsername}
+        onSignIn={() => setIsAuthModalOpen(true)}
+        onShare={() => setIsShareModalOpen(true)}
+        onSignOut={handleSignOut}
+        onEditProfile={() => setIsProfileModalOpen(true)}
+      />
+    </>
+  );
+}
+
 function SharePageView() {
   const { userId } = useParams<{ userId: string }>();
   return (
@@ -929,6 +950,7 @@ const AppContent = React.memo(function AppContent({ location }: { location: Loca
         <Routes location={location}>
           <Route path="/" element={<DashboardView />} />
           <Route path="/community" element={<CommunityPageView />} />
+          <Route path="/arena" element={<ArenaPageView />} />
           <Route path="/debug/ipad-freeze" element={<IpadFreezeLab />} />
           <Route path="/share/:userId" element={<SharePageView />} />
           <Route path="*" element={<NotFound />} />
