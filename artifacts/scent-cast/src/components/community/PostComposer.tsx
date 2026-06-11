@@ -145,6 +145,10 @@ function snapshotIdentityKey(snapshot: Pick<CommunityFragranceSnapshot, 'brand' 
   return `${snapshot.brand.trim().toLowerCase()}::${snapshot.name.trim().toLowerCase()}`;
 }
 
+function battleOptionKey(snapshot: Pick<CommunityFragranceSnapshot, 'name'>): string {
+  return snapshot.name.trim();
+}
+
 function snapshotFromWardrobeItem(item: Record<string, unknown>, index: number): BattleFragranceCandidate | null {
   const name = firstString(item.name, objectRecord(item.product).name);
   const brand = firstString(item.brand, item.house, objectRecord(item.product).brand);
@@ -625,9 +629,11 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
     if (postType === 'battle') {
       if (!battleASelection || !battleBSelection) return null;
       if (snapshotIdentityKey(battleASelection) === snapshotIdentityKey(battleBSelection)) return null;
-      const options = [battleASelection.name.trim(), battleBSelection.name.trim()].filter(Boolean);
+      const options = [battleOptionKey(battleASelection), battleOptionKey(battleBSelection)].filter(Boolean);
       if (options.length !== 2) return null;
-      return { options };
+      const [leftOption = '', rightOption = ''] = options;
+      if (leftOption.toLowerCase() === rightOption.toLowerCase()) return null;
+      return { options: [leftOption, rightOption] };
     }
     return priceContext.trim() ? { price_context: priceContext.trim() } : {};
   };

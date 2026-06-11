@@ -38,3 +38,10 @@ test('rejects battle posts without exactly two string options', () => {
   assert.equal(mapCommunityPostToArenaBattle({ ...basePost, metadata: { options: ['Only one'] } }), null);
   assert.equal(mapCommunityPostToArenaBattle({ ...basePost, metadata: { options: ['A', 2] } }), null);
 });
+
+test('rejects battle posts whose options collapse to the same vote key', () => {
+  assert.equal(
+    mapCommunityPostToArenaBattle({ ...basePost, metadata: { options: ['Aventus', ' aventus '] } }),
+    null,
+  );
+});

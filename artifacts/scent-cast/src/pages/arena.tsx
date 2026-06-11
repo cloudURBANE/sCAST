@@ -4,7 +4,7 @@ import { AppTopNav } from '@/components/AppTopNav';
 import { ArenaBattleStage } from '@/components/arena/ArenaBattleStage';
 import { ArenaNextRail } from '@/components/arena/ArenaNextRail';
 import { mapCommunityPostToArenaBattle } from '@/components/arena/arenaBattleMapper';
-import { useCommunityPosts } from '@/components/community/communityPosts';
+import { useCommunityBattleVote, useCommunityPosts } from '@/components/community/communityPosts';
 
 interface ArenaPageProps {
   authToken: string | null;
@@ -28,6 +28,10 @@ export const ArenaPage: React.FC<ArenaPageProps> = ({
   onEditProfile,
 }) => {
   const [activeIndex, setActiveIndex] = useState(0);
+  const [pendingGuestVote, setPendingGuestVote] = useState<{ postId: string; choice: string } | null>(null);
+  const [savingGuestVotePostId, setSavingGuestVotePostId] = useState<string | null>(null);
+  const [guestVoteSaveError, setGuestVoteSaveError] = useState<{ postId: string; message: string } | null>(null);
+  const guestVoteMutation = useCommunityBattleVote(authToken);
   const { data, isLoading, isError, error, refetch } = useCommunityPosts(
     { type: 'battle', limit: 6 },
     authToken,
@@ -54,6 +58,24 @@ export const ArenaPage: React.FC<ArenaPageProps> = ({
   useEffect(() => {
     if (activeIndex >= battles.length) setActiveIndex(0);
   }, [activeIndex, battles.length]);
+
+  useEffect(() => {
+    if (!authToken || !pendingGuestVote) return;
+
+    const vote = pendingGuestVote;
+    setPendingGuestVote(null);
+    setSavingGuestVotePostId(vote.postId);
+    setGuestVoteSaveError(null);
+    guestVoteMutation.mutate(vote, {
+      onError: (err) => {
+        setGuestVoteSaveError({
+          postId: vote.postId,
+          message: err instanceof Error ? err.message : 'Vote could not be saved.',
+        });
+      },
+      onSettled: () => setSavingGuestVotePostId(null),
+    });
+  }, [authToken, guestVoteMutation, pendingGuestVote]);
 
   const nextBattle = () => {
     if (battles.length <= 1) return;
@@ -108,6 +130,11 @@ export const ArenaPage: React.FC<ArenaPageProps> = ({
               authToken={authToken}
               onSignIn={onSignIn}
               onNext={nextBattle}
+              onGuestVoteQueued={setPendingGuestVote}
+              externalVotePending={savingGuestVotePostId === activeBattle.id}
+              externalErrorMessage={
+                guestVoteSaveError?.postId === activeBattle.id ? guestVoteSaveError.message : null
+              }
             />
             <ArenaNextRail battles={battles} activeId={activeBattle.id} onSelect={setActiveIndex} />
           </>

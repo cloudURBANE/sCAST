@@ -10,6 +10,7 @@ interface ArenaResultRevealProps {
   viewerChoice: string;
   reason: ArenaReasonKey | null;
   guestLocalOnly: boolean;
+  votePending: boolean;
   onReasonChange: (reason: ArenaReasonKey) => void;
   onNext: () => void;
 }
@@ -19,6 +20,7 @@ export const ArenaResultReveal: React.FC<ArenaResultRevealProps> = ({
   viewerChoice,
   reason,
   guestLocalOnly,
+  votePending,
   onReasonChange,
   onNext,
 }) => {
@@ -42,7 +44,11 @@ export const ArenaResultReveal: React.FC<ArenaResultRevealProps> = ({
         <div className="sm:text-right">
           <p className="scent-type-label text-scent-accent/82">Vote status</p>
           <p className="mt-1 text-sm font-medium leading-6 text-scent-text-muted">
-            {guestLocalOnly ? 'Local reveal only. Sign in to save it.' : 'Saved to the room tally.'}
+            {guestLocalOnly
+              ? 'Local reveal only. Sign in to save it.'
+              : votePending
+                ? 'Saving to the room tally.'
+                : 'Saved to the room tally.'}
           </p>
         </div>
       </div>

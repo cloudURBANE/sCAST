@@ -25,6 +25,7 @@ const DEFAULT_FEED_LIMIT = 12;
 const MAX_FEED_LIMIT = 24;
 const MAX_TAGS = 8;
 const MAX_FRAGRANCES = 3;
+const MAX_BATTLE_OPTION_LENGTH = 120;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type TenantUser = {
@@ -242,9 +243,13 @@ function normalizeMetadata(
     if (!Array.isArray(options) || options.length !== 2) {
       return { error: "battle metadata requires exactly two options" };
     }
-    const cleanOptions = options.map((option) => cleanRequiredText(option, 80));
+    const cleanOptions = options.map((option) => cleanRequiredText(option, MAX_BATTLE_OPTION_LENGTH));
     if (cleanOptions.some((option) => !option)) {
-      return { error: "battle options must be non-empty strings under 80 characters" };
+      return { error: `battle options must be non-empty strings under ${MAX_BATTLE_OPTION_LENGTH} characters` };
+    }
+    const normalizedOptions = cleanOptions.map((option) => option!.toLowerCase());
+    if (new Set(normalizedOptions).size !== cleanOptions.length) {
+      return { error: "battle options must be distinct" };
     }
     return { metadata: { options: cleanOptions } };
   }
@@ -985,7 +990,7 @@ router.post("/community/posts/:id/votes", requireAuth, async (req: AuthRequest, 
     }
 
     const body = isPlainObject(req.body) ? req.body : {};
-    const choice = cleanRequiredText(body.choice, 80);
+    const choice = cleanRequiredText(body.choice, MAX_BATTLE_OPTION_LENGTH);
     if (!choice) {
       sendBadRequest(res, "choice is required");
       return;
@@ -1017,6 +1022,10 @@ router.post("/community/posts/:id/votes", requireAuth, async (req: AuthRequest, 
     );
     if (options.length !== 2 || options.some((option) => !option)) {
       sendBadRequest(res, "battle metadata requires exactly two valid options");
+      return;
+    }
+    if (new Set(options.map((option) => option.toLowerCase())).size !== options.length) {
+      sendBadRequest(res, "battle metadata requires two distinct options");
       return;
     }
     if (!options.includes(choice)) {

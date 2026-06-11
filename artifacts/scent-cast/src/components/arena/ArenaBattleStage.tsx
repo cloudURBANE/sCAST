@@ -12,6 +12,9 @@ interface ArenaBattleStageProps {
   authToken: string | null;
   onSignIn: () => void;
   onNext: () => void;
+  onGuestVoteQueued: (vote: { postId: string; choice: string }) => void;
+  externalVotePending?: boolean;
+  externalErrorMessage?: string | null;
 }
 
 export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
@@ -19,6 +22,9 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
   authToken,
   onSignIn,
   onNext,
+  onGuestVoteQueued,
+  externalVotePending = false,
+  externalErrorMessage = null,
 }) => {
   const voteMutation = useCommunityBattleVote(authToken);
   const [localVote, setLocalVote] = useState<string | null>(battle.viewerVote);
@@ -34,6 +40,8 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
   const revealed = Boolean(localVote);
   const guestLocalOnly = Boolean(localVote && !authToken);
   const selectedKey = localVote;
+  const votePending = voteMutation.isPending || externalVotePending;
+  const displayedErrorMessage = errorMessage ?? externalErrorMessage;
   const sides = useMemo(() => [battle.left, battle.right], [battle.left, battle.right]);
 
   const submitVote = (choice: string) => {
@@ -41,6 +49,7 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
     setErrorMessage(null);
 
     if (!authToken) {
+      onGuestVoteQueued({ postId: battle.id, choice });
       return;
     }
 
@@ -74,7 +83,7 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
           revealed={revealed}
           percent={arenaPercentFor(battle, battle.left.key)}
           count={battle.votes[battle.left.key] ?? 0}
-          disabled={voteMutation.isPending}
+          disabled={votePending}
           onVote={() => submitVote(battle.left.key)}
         />
 
@@ -96,12 +105,12 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
           revealed={revealed}
           percent={arenaPercentFor(battle, battle.right.key)}
           count={battle.votes[battle.right.key] ?? 0}
-          disabled={voteMutation.isPending}
+          disabled={votePending}
           onVote={() => submitVote(battle.right.key)}
         />
       </div>
 
-      {voteMutation.isPending ? (
+      {votePending ? (
         <p className="mt-4 flex items-center justify-center gap-2 text-sm text-scent-text-muted" aria-live="polite">
           <LoaderCircle size={14} className="animate-spin text-scent-accent" aria-hidden="true" />
           Saving vote
@@ -123,9 +132,9 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
         </div>
       ) : null}
 
-      {errorMessage ? (
+      {displayedErrorMessage ? (
         <p role="alert" className="mx-auto mt-4 max-w-2xl text-center text-sm text-red-100">
-          {errorMessage}
+          {displayedErrorMessage}
         </p>
       ) : null}
 
@@ -135,6 +144,7 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
           viewerChoice={localVote}
           reason={reason}
           guestLocalOnly={guestLocalOnly}
+          votePending={votePending}
           onReasonChange={setReason}
           onNext={onNext}
         />

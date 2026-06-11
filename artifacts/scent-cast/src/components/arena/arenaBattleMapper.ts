@@ -24,6 +24,7 @@ function battleOptions(post: CommunityPost): [string, string] | null {
   const left = typeof options[0] === 'string' ? options[0].trim() : '';
   const right = typeof options[1] === 'string' ? options[1].trim() : '';
   if (!left || !right) return null;
+  if (left.toLowerCase() === right.toLowerCase()) return null;
   return [left, right];
 }
 
