@@ -70,6 +70,9 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
   const locationButtonLabel = locationStatus === 'granted'
     ? 'Refresh current location'
     : 'Use current location';
+  const locationSourceLabel = locating
+    ? 'Awaiting permission'
+    : LOCATION_SOURCE_COPY[locationSource];
   const weatherLocation = typeof weather?.location === 'string' && weather.location.trim()
     ? weather.location.trim()
     : 'Not set';
@@ -114,6 +117,7 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
   };
 
   const handleLocationRequest = () => {
+    if (locating) return;
     void requestLocation();
   };
 
@@ -234,18 +238,22 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                     </span>
                     <div className="min-w-0">
                       <h3 className="text-[10px] font-bold uppercase tracking-[0.34em] text-[#fff7ec]">Atmosphere</h3>
-                      <p className="mt-0.5 text-[11px] text-white/35">{LOCATION_SOURCE_COPY[locationSource]}</p>
+                      <p className="mt-0.5 text-[11px] text-white/35">{locationSourceLabel}</p>
                     </div>
                   </div>
 
                   <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div className="rounded-[10px] border border-white/10 bg-black/25 px-3.5 py-3">
                       <dt className="text-[9px] font-bold uppercase tracking-[0.28em] text-white/30">Location</dt>
-                      <dd className="mt-1 truncate text-sm text-[#fff7ec]">{weatherLoading ? 'Loading' : weatherLocation}</dd>
+                      <dd className="mt-1 min-w-0 truncate text-sm text-[#fff7ec]" title={weatherLoading ? 'Loading' : weatherLocation}>
+                        {weatherLoading ? 'Loading' : weatherLocation}
+                      </dd>
                     </div>
                     <div className="rounded-[10px] border border-white/10 bg-black/25 px-3.5 py-3">
                       <dt className="text-[9px] font-bold uppercase tracking-[0.28em] text-white/30">Status</dt>
-                      <dd className="mt-1 truncate text-sm text-[#fff7ec]">{LOCATION_STATUS_COPY[locationStatus]}</dd>
+                      <dd className="mt-1 min-w-0 truncate text-sm text-[#fff7ec]" title={LOCATION_STATUS_COPY[locationStatus]}>
+                        {LOCATION_STATUS_COPY[locationStatus]}
+                      </dd>
                     </div>
                   </dl>
 
