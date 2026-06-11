@@ -107,6 +107,9 @@ const GUIDE_TRACE_DURATION_S = 1.9;
 // traced before it gracefully fades, so the hint always reads as a finished
 // outline rather than a stroke that vanishes mid-draw.
 const GUIDE_TRACE_TIMES = [0, 0.46, 0.72, 1] as const;
+// The path string rounds coordinates, while hitPathLength uses source geometry.
+// Keep the guide dash a hair longer so renderer rounding cannot leave an end gap.
+const GUIDE_DASH_OVERSCAN_UNITS = 3;
 const GUIDE_INTERSECTION_RATIO = 0.22;
 const NO_ACTIVE_NOTES: string[] = [];
 const LAYER_CENTER_Y: Record<ActiveLayer, number> = {
@@ -1065,6 +1068,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
 
         <svg
           viewBox="0 0 360 420"
+          overflow="visible"
           className={`relative z-10 h-full w-full overflow-visible${lowRenderBudget ? '' : ' drop-shadow-[0_24px_44px_rgba(0,0,0,0.48)]'}`}
           role="img"
           aria-label="Interactive fragrance note pyramid"
@@ -1407,7 +1411,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
             const targetScale = layerMotion.scale + (isEngaged && !isActive && !isGuided ? 0.003 : 0);
             const targetOpacity = isEngaged && !isActive ? Math.min(layerMotion.opacity + 0.08, 1) : layerMotion.opacity;
             const channelPath = linePath(layer.channel.start, layer.channel.end);
-            const guideDashLength = layer.hitPathLength;
+            const guideDashLength = layer.hitPathLength + GUIDE_DASH_OVERSCAN_UNITS;
             const guideDashPattern = `${guideDashLength} ${guideDashLength}`;
             const guideDashTrace = [guideDashLength, 0, 0, 0];
 
