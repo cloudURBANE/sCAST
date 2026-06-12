@@ -12,9 +12,17 @@ const MAX_RANDOM_PERCENT = 92;
 const MIN_SPEED_FACTOR = 0.75;
 const MAX_SPEED_FACTOR = 1.35;
 const MAX_START_DELAY = 2200;
+const IPAD_CSS_LANE_SPREAD = 1.08;
+const IPAD_CSS_BASE_DURATION_SECONDS = 36;
+const MIN_IPAD_CSS_DURATION_SECONDS = 14;
+const MAX_IPAD_CSS_DURATION_SECONDS = 84;
 
 function randomBetween(min: number, max: number): number {
   return min + Math.random() * (max - min);
+}
+
+function clamp(min: number, value: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
 }
 
 function randomizeThreadLane(): number {
@@ -115,17 +123,30 @@ export type ThreadBackgroundFrameMetrics = {
 
 type ThreadBackgroundProps = {
   onFrame?: (metrics: ThreadBackgroundFrameMetrics) => void;
+  mode?: ThreadBackgroundMode;
 };
+
+export type ThreadBackgroundMode = 'raf' | 'css-animated';
 
 type ThreadLineStyle = React.CSSProperties & {
   '--thread-core': string;
   '--thread-filter': string;
+  '--thread-lane-offset'?: string;
+  '--thread-travel-size'?: string;
+  '--thread-duration'?: string;
+  '--thread-delay'?: string;
+  '--thread-presence'?: string;
+  '--thread-static-opacity'?: string;
+  '--thread-static-x'?: string;
+  '--thread-static-y'?: string;
 };
 
-function getThreadClassName(thread: ThreadLine): string {
+function getThreadClassName(thread: ThreadLine, mode: ThreadBackgroundMode): string {
   return [
     'scent-thread-line',
+    `scent-thread-line--mode-${mode}`,
     `scent-thread-line--axis-${thread.axis}`,
+    `scent-thread-line--direction-${thread.direction === 1 ? 'forward' : 'reverse'}`,
     `scent-thread-line--tone-${thread.tone}`,
     `scent-thread-line--depth-${thread.depth}`,
   ].join(' ');
@@ -137,6 +158,45 @@ function getThreadStyle(thread: ThreadLine): ThreadLineStyle {
     height: `${thread.height}px`,
     '--thread-core': threadGradientToCss(thread.axis, thread.coreStops),
     '--thread-filter': thread.filter ?? 'none',
+  };
+}
+
+function getCssAnimationDuration(thread: ThreadLine): number {
+  return clamp(
+    MIN_IPAD_CSS_DURATION_SECONDS,
+    IPAD_CSS_BASE_DURATION_SECONDS / thread.speed,
+    MAX_IPAD_CSS_DURATION_SECONDS,
+  );
+}
+
+function getCssLanePercent(thread: ThreadLine): number {
+  return clamp(5, 50 + (thread.stillLanePercent - 50) * IPAD_CSS_LANE_SPREAD, 95);
+}
+
+function getCssPresence(thread: ThreadLine): number {
+  const toneBoost = thread.tone === 'gold' || thread.tone === 'champagne' ? 1.08 : 1;
+  return clamp(0, thread.presence * toneBoost, 0.86);
+}
+
+function getCssAnimatedThreadStyle(thread: ThreadLine, index: number): ThreadLineStyle {
+  const duration = getCssAnimationDuration(thread);
+  const delay = -((index * 3.7) % duration);
+  const lanePercent = getCssLanePercent(thread);
+  const laneUnit = thread.axis === 'x' ? 'vh' : 'vw';
+  const positionUnit = thread.axis === 'x' ? 'vw' : 'vh';
+  const presence = getCssPresence(thread);
+  const travelSize = getThreadTravelSize(thread);
+
+  return {
+    ...getThreadStyle(thread),
+    '--thread-lane-offset': `${lanePercent}${laneUnit}`,
+    '--thread-travel-size': `${travelSize}px`,
+    '--thread-duration': `${duration.toFixed(2)}s`,
+    '--thread-delay': `${delay.toFixed(2)}s`,
+    '--thread-presence': presence.toFixed(3),
+    '--thread-static-opacity': (presence * 0.64).toFixed(3),
+    '--thread-static-x': thread.axis === 'x' ? `${thread.stillPositionPercent}${positionUnit}` : `${lanePercent}${laneUnit}`,
+    '--thread-static-y': thread.axis === 'x' ? `${lanePercent}${laneUnit}` : `${thread.stillPositionPercent}${positionUnit}`,
   };
 }
 
@@ -197,7 +257,7 @@ function applyThreadStyle(state: ThreadState): ThreadBackgroundFrameMetrics['sam
  * mode did present correctly on the same device, so production uses that
  * measured path and keeps an optional frame callback for the lab.
  */
-export const ThreadBackground: React.FC<ThreadBackgroundProps> = React.memo(({ onFrame }) => {
+export const ThreadBackground: React.FC<ThreadBackgroundProps> = React.memo(({ onFrame, mode = 'raf' }) => {
   const elementRefs = useRef(new Map<string, HTMLDivElement>());
   const onFrameRef = useRef(onFrame);
 
@@ -206,6 +266,8 @@ export const ThreadBackground: React.FC<ThreadBackgroundProps> = React.memo(({ o
   }, [onFrame]);
 
   useEffect(() => {
+    if (mode !== 'raf') return;
+
     const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
     const states = THREAD_LINES.map((thread) => createThreadState(thread, performance.now()));
     states.forEach((state) => {
@@ -331,19 +393,19 @@ export const ThreadBackground: React.FC<ThreadBackgroundProps> = React.memo(({ o
         motionQuery.removeListener(handleMotionPreferenceChange);
       }
     };
-  }, []);
+  }, [mode]);
 
   return (
-    <div className="scent-thread-field" aria-hidden="true">
-      {THREAD_LINES.map((thread) => (
+    <div className={`scent-thread-field scent-thread-field--mode-${mode}`} aria-hidden="true">
+      {THREAD_LINES.map((thread, index) => (
         <div
           key={thread.id}
-          className={getThreadClassName(thread)}
+          className={getThreadClassName(thread, mode)}
           ref={(node) => {
             if (node) elementRefs.current.set(thread.id, node);
             else elementRefs.current.delete(thread.id);
           }}
-          style={getThreadStyle(thread)}
+          style={mode === 'css-animated' ? getCssAnimatedThreadStyle(thread, index) : getThreadStyle(thread)}
         />
       ))}
     </div>

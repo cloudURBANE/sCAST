@@ -6,7 +6,7 @@ import { Play, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ScentIntentModal } from './components/ScentIntentModal';
 import { ScentNotesInfographic } from './components/ScentNotesInfographic';
-import { ThreadBackground } from './components/threads/ThreadBackground';
+import { ThreadBackground, type ThreadBackgroundMode } from './components/threads/ThreadBackground';
 import { AppTopNav } from './components/AppTopNav';
 import { AuthModal } from './components/AuthModal';
 import { GuestSaveBanner, GuestModeBanner } from './components/GuestSaveBanner';
@@ -964,16 +964,18 @@ const AppContent = React.memo(function AppContent({ location }: { location: Loca
 const AppShell = React.memo(function AppShell({
   renderedLocation,
   showThreadBackground,
+  threadBackgroundMode,
 }: {
   renderedLocation: Location;
   showThreadBackground: boolean;
+  threadBackgroundMode: ThreadBackgroundMode;
 }) {
   return (
     <AuthProvider>
       <WeatherProvider>
         <WardrobeProvider>
           <div className="scent-app-shell min-h-[100svh] bg-scent-bg selection:bg-scent-accent selection:text-black text-white relative overflow-x-hidden">
-            {showThreadBackground ? <ThreadBackground /> : null}
+            {showThreadBackground ? <ThreadBackground mode={threadBackgroundMode} /> : null}
             <AppContent location={renderedLocation} />
             <Toaster />
           </div>
@@ -995,14 +997,12 @@ export default function App() {
   const pendingRevealRouteRef = useRef<string | null>(null);
   const transitionStartedAtRef = useRef(0);
   const isFreezeLab = renderedLocation.pathname === '/debug/ipad-freeze';
-  // The thread background's per-frame rAF transform loop presents smoothly on
-  // iPhone/desktop, but on iPad's large retina viewport it contends with
-  // Safari's compositor during fast scroll and image decode (janky scroll, late
-  // image paint, laggy card taps). Render it everywhere except iPad and the
-  // freeze lab. It still composes a static (no rAF loop) arrangement under
-  // prefers-reduced-motion — that branch lives inside ThreadBackground itself.
   const { lowMotionRenderMode, isIpad } = useRenderBudget();
-  const showThreadBackground = !isFreezeLab && !isIpad;
+  // iPad uses a CSS-only thread renderer so Safari can schedule motion on the
+  // compositor without the production rAF transform loop competing with scroll
+  // and image decode. Desktop and iPhone keep the existing rAF renderer.
+  const threadBackgroundMode: ThreadBackgroundMode = isIpad ? 'css-animated' : 'raf';
+  const showThreadBackground = !isFreezeLab;
   const transitionTiming = useMemo(
     () => (lowMotionRenderMode ? PAGE_TRANSITION_TIMING.lowMotion : PAGE_TRANSITION_TIMING.standard),
     [lowMotionRenderMode],
@@ -1073,7 +1073,11 @@ export default function App() {
 
   return (
     <>
-      <AppShell renderedLocation={renderedLocation} showThreadBackground={showThreadBackground} />
+      <AppShell
+        renderedLocation={renderedLocation}
+        showThreadBackground={showThreadBackground}
+        threadBackgroundMode={threadBackgroundMode}
+      />
       <PageTransitionOverlay visible={transitionVisible} animationKey={transitionKey} />
     </>
   );

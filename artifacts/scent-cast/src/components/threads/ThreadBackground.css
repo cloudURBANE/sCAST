@@ -49,6 +49,20 @@
   opacity: 0.82;
 }
 
+.scent-thread-field--mode-css-animated {
+  --thread-gold: 236 190 72;
+  --thread-cream: 255 250 240;
+  contain: layout paint style;
+}
+
+.scent-thread-field--mode-css-animated::before {
+  opacity: 0.82;
+}
+
+.scent-thread-field--mode-css-animated::after {
+  opacity: 0.88;
+}
+
 .scent-thread-line {
   --thread-angle: 90deg;
   --thread-aura-inset: -5px -12px;
@@ -73,6 +87,62 @@
   transform-origin: center;
   backface-visibility: hidden;
   will-change: transform, opacity;
+}
+
+.scent-thread-line--mode-css-animated {
+  --thread-lane-offset: 50vh;
+  --thread-travel-size: 120px;
+  --thread-duration: 32s;
+  --thread-delay: 0s;
+  --thread-presence: 0.5;
+  --thread-static-opacity: 0.28;
+  --thread-static-x: 50vw;
+  --thread-static-y: 50vh;
+  animation-delay: var(--thread-delay);
+  animation-duration: var(--thread-duration);
+  animation-fill-mode: both;
+  animation-iteration-count: infinite;
+  animation-timing-function: linear;
+  opacity: 0;
+  will-change: transform;
+}
+
+.scent-thread-line--mode-css-animated.scent-thread-line--axis-x.scent-thread-line--direction-forward {
+  animation-name: scent-thread-travel-x-forward;
+}
+
+.scent-thread-line--mode-css-animated.scent-thread-line--axis-x.scent-thread-line--direction-reverse {
+  animation-name: scent-thread-travel-x-reverse;
+}
+
+.scent-thread-line--mode-css-animated.scent-thread-line--axis-y.scent-thread-line--direction-forward {
+  animation-name: scent-thread-travel-y-forward;
+}
+
+.scent-thread-line--mode-css-animated.scent-thread-line--axis-y.scent-thread-line--direction-reverse {
+  animation-name: scent-thread-travel-y-reverse;
+}
+
+.scent-thread-field--mode-css-animated .scent-thread-line--depth-far {
+  will-change: auto;
+}
+
+.scent-thread-field--mode-css-animated .scent-thread-line--depth-far::before {
+  display: none;
+}
+
+.scent-thread-field--mode-css-animated .scent-thread-line--depth-far::after {
+  filter: blur(0.45px);
+}
+
+.scent-thread-field--mode-css-animated .scent-thread-line--tone-gold {
+  --thread-tone-aura-opacity: 1.04;
+  --thread-tone-core-opacity: 1.08;
+}
+
+.scent-thread-field--mode-css-animated .scent-thread-line--tone-champagne {
+  --thread-tone-aura-opacity: 0.88;
+  --thread-tone-core-opacity: 0.98;
 }
 
 .scent-thread-line::before,
@@ -154,6 +224,74 @@
   --thread-tone-core-opacity: 0.72;
 }
 
+@keyframes scent-thread-travel-x-forward {
+  0% {
+    transform: translate3d(calc(-1 * var(--thread-travel-size)), var(--thread-lane-offset), 0);
+    opacity: 0;
+  }
+
+  8%,
+  92% {
+    opacity: var(--thread-presence);
+  }
+
+  100% {
+    transform: translate3d(calc(100vw + var(--thread-travel-size)), var(--thread-lane-offset), 0);
+    opacity: 0;
+  }
+}
+
+@keyframes scent-thread-travel-x-reverse {
+  0% {
+    transform: translate3d(calc(100vw + var(--thread-travel-size)), var(--thread-lane-offset), 0);
+    opacity: 0;
+  }
+
+  8%,
+  92% {
+    opacity: var(--thread-presence);
+  }
+
+  100% {
+    transform: translate3d(calc(-1 * var(--thread-travel-size)), var(--thread-lane-offset), 0);
+    opacity: 0;
+  }
+}
+
+@keyframes scent-thread-travel-y-forward {
+  0% {
+    transform: translate3d(var(--thread-lane-offset), calc(-1 * var(--thread-travel-size)), 0);
+    opacity: 0;
+  }
+
+  8%,
+  92% {
+    opacity: var(--thread-presence);
+  }
+
+  100% {
+    transform: translate3d(var(--thread-lane-offset), calc(100vh + var(--thread-travel-size)), 0);
+    opacity: 0;
+  }
+}
+
+@keyframes scent-thread-travel-y-reverse {
+  0% {
+    transform: translate3d(var(--thread-lane-offset), calc(100vh + var(--thread-travel-size)), 0);
+    opacity: 0;
+  }
+
+  8%,
+  92% {
+    opacity: var(--thread-presence);
+  }
+
+  100% {
+    transform: translate3d(var(--thread-lane-offset), calc(-1 * var(--thread-travel-size)), 0);
+    opacity: 0;
+  }
+}
+
 @media (max-width: 640px) {
   .scent-thread-field::before {
     opacity: 0.72;
@@ -201,5 +339,11 @@
 
   .scent-thread-line {
     will-change: auto;
+  }
+
+  .scent-thread-line--mode-css-animated {
+    animation: none;
+    opacity: var(--thread-static-opacity);
+    transform: translate3d(var(--thread-static-x), var(--thread-static-y), 0);
   }
 }
