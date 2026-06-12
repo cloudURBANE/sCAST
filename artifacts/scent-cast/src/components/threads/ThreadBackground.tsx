@@ -16,6 +16,33 @@ const IPAD_CSS_LANE_SPREAD = 1.08;
 const IPAD_CSS_BASE_DURATION_SECONDS = 36;
 const MIN_IPAD_CSS_DURATION_SECONDS = 14;
 const MAX_IPAD_CSS_DURATION_SECONDS = 84;
+const IPAD_OPTIMIZED_LANE_SPREAD = 1.02;
+const IPAD_OPTIMIZED_BASE_DURATION_SECONDS = 48;
+const MIN_IPAD_OPTIMIZED_DURATION_SECONDS = 26;
+const MAX_IPAD_OPTIMIZED_DURATION_SECONDS = 104;
+const IPAD_OPTIMIZED_THREAD_IDS = new Set([
+  'shadow-warp-01',
+  'gold-filament-01',
+  'smoke-weft-01',
+  'champagne-needle-01',
+  'ember-low-01',
+  'gold-filament-02',
+  'champagne-needle-02',
+  'gold-filament-03',
+  'shadow-warp-03',
+  'ember-low-02',
+  'gold-vertical-01',
+  'champagne-vertical-01',
+  'ember-vertical-01',
+  'gold-vertical-02',
+  'champagne-vertical-02',
+  'gold-vertical-03',
+  'champagne-spark-01',
+  'gold-spark-01',
+  'ember-spark-01',
+  'champagne-spark-02',
+]);
+const IPAD_OPTIMIZED_THREAD_LINES = THREAD_LINES.filter((thread) => IPAD_OPTIMIZED_THREAD_IDS.has(thread.id));
 
 function randomBetween(min: number, max: number): number {
   return min + Math.random() * (max - min);
@@ -126,7 +153,7 @@ type ThreadBackgroundProps = {
   mode?: ThreadBackgroundMode;
 };
 
-export type ThreadBackgroundMode = 'raf' | 'css-animated' | 'static';
+export type ThreadBackgroundMode = 'raf' | 'css-animated' | 'ipad-optimized' | 'static';
 
 type ThreadLineStyle = React.CSSProperties & {
   '--thread-core': string;
@@ -200,6 +227,37 @@ function getCssAnimatedThreadStyle(thread: ThreadLine, index: number): ThreadLin
   };
 }
 
+function getIpadOptimizedAnimationDuration(thread: ThreadLine): number {
+  return clamp(
+    MIN_IPAD_OPTIMIZED_DURATION_SECONDS,
+    IPAD_OPTIMIZED_BASE_DURATION_SECONDS / thread.speed,
+    MAX_IPAD_OPTIMIZED_DURATION_SECONDS,
+  );
+}
+
+function getIpadOptimizedThreadStyle(thread: ThreadLine, index: number): ThreadLineStyle {
+  const duration = getIpadOptimizedAnimationDuration(thread);
+  const delay = -((index * 4.9) % duration);
+  const lanePercent = clamp(6, 50 + (thread.stillLanePercent - 50) * IPAD_OPTIMIZED_LANE_SPREAD, 94);
+  const laneUnit = thread.axis === 'x' ? 'vh' : 'vw';
+  const positionUnit = thread.axis === 'x' ? 'vw' : 'vh';
+  const presence = clamp(0, thread.presence * (thread.depth === 'near' ? 0.86 : 0.76), 0.66);
+  const travelSize = getThreadTravelSize(thread);
+
+  return {
+    ...getThreadStyle(thread),
+    '--thread-filter': 'none',
+    '--thread-lane-offset': `${lanePercent}${laneUnit}`,
+    '--thread-travel-size': `${travelSize}px`,
+    '--thread-duration': `${duration.toFixed(2)}s`,
+    '--thread-delay': `${delay.toFixed(2)}s`,
+    '--thread-presence': presence.toFixed(3),
+    '--thread-static-opacity': (presence * 0.72).toFixed(3),
+    '--thread-static-x': thread.axis === 'x' ? `${thread.stillPositionPercent}${positionUnit}` : `${lanePercent}${laneUnit}`,
+    '--thread-static-y': thread.axis === 'x' ? `${lanePercent}${laneUnit}` : `${thread.stillPositionPercent}${positionUnit}`,
+  };
+}
+
 function createThreadState(thread: ThreadLine, now: number): ThreadState {
   return {
     thread,
@@ -260,6 +318,7 @@ function applyThreadStyle(state: ThreadState): ThreadBackgroundFrameMetrics['sam
 export const ThreadBackground: React.FC<ThreadBackgroundProps> = React.memo(({ onFrame, mode = 'raf' }) => {
   const elementRefs = useRef(new Map<string, HTMLDivElement>());
   const onFrameRef = useRef(onFrame);
+  const renderedThreads = mode === 'ipad-optimized' ? IPAD_OPTIMIZED_THREAD_LINES : THREAD_LINES;
 
   useEffect(() => {
     onFrameRef.current = onFrame;
@@ -397,7 +456,7 @@ export const ThreadBackground: React.FC<ThreadBackgroundProps> = React.memo(({ o
 
   return (
     <div className={`scent-thread-field scent-thread-field--mode-${mode}`} aria-hidden="true">
-      {THREAD_LINES.map((thread, index) => (
+      {renderedThreads.map((thread, index) => (
         <div
           key={thread.id}
           className={getThreadClassName(thread, mode)}
@@ -405,9 +464,11 @@ export const ThreadBackground: React.FC<ThreadBackgroundProps> = React.memo(({ o
             if (node) elementRefs.current.set(thread.id, node);
             else elementRefs.current.delete(thread.id);
           }}
-          style={mode === 'css-animated' || mode === 'static'
-            ? getCssAnimatedThreadStyle(thread, index)
-            : getThreadStyle(thread)}
+          style={mode === 'ipad-optimized'
+            ? getIpadOptimizedThreadStyle(thread, index)
+            : mode === 'css-animated' || mode === 'static'
+              ? getCssAnimatedThreadStyle(thread, index)
+              : getThreadStyle(thread)}
         />
       ))}
     </div>
