@@ -209,7 +209,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                 <div className="w-1.5 h-1.5 rounded-full bg-scent-accent animate-pulse shrink-0" />
                 <div className="min-w-0">
                   <p id="share-modal-title" className="text-[9px] uppercase tracking-[0.5em] text-scent-accent font-bold">Share Vault</p>
-                  <p className="text-[9px] text-white/25 mt-0.5 font-sans">
+                  <p className="text-[9px] text-white/40 mt-0.5 font-sans">
                     {visibleCount} of {items.length} visible
                   </p>
                 </div>
@@ -218,7 +218,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                 type="button"
                 onClick={onClose}
                 aria-label="Close share options"
-                className="p-2 bg-white/5 hover:bg-white/10 transition-all rounded-full border border-white/10 text-white group shrink-0 ml-3"
+                className="inline-flex min-h-11 min-w-11 items-center justify-center bg-white/5 hover:bg-white/10 transition-colors rounded-full border border-white/10 text-white group shrink-0 ml-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
               >
                 <X size={16} strokeWidth={1.75} className="group-hover:rotate-90 transition-transform duration-300" />
               </button>
@@ -231,6 +231,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                   {shareUrl || '—'}
                 </div>
                 <button
+                  type="button"
                   onClick={handleCopy}
                   className="px-4 py-3 bg-white text-black text-[9px] uppercase tracking-[0.3em] font-bold flex items-center gap-2 hover:bg-white/90 active:scale-[0.97] transition-all shrink-0"
                 >
@@ -241,7 +242,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                 href={shareUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2 w-full py-2.5 border border-white/8 text-white/30 hover:text-white hover:border-white/20 transition-all text-[9px] uppercase tracking-[0.35em] font-bold"
+                className="flex items-center justify-center gap-2 w-full py-2.5 border border-white/8 text-white/50 hover:text-white hover:border-white/20 transition-colors text-[9px] uppercase tracking-[0.35em] font-bold"
               >
                 <ExternalLink size={10} strokeWidth={1.75} />
                 Preview Shared Page
@@ -262,18 +263,20 @@ export const ShareModal: React.FC<ShareModalProps> = ({
               {/* Section header + search */}
               <div className="px-6 py-4 shrink-0 space-y-3">
                 <div className="flex items-center justify-between">
-                  <p className="text-[9px] uppercase tracking-[0.4em] text-white/30 font-bold">Cologne Visibility</p>
-                  <div className="flex items-center gap-3">
+                  <p className="text-[9px] uppercase tracking-[0.4em] text-white/45 font-bold">Cologne Visibility</p>
+                  <div className="flex items-center gap-2">
                     <button
+                      type="button"
                       onClick={handleShowAll}
-                      className="text-[8px] uppercase tracking-[0.3em] text-white/25 hover:text-white/60 transition-colors font-bold"
+                      className="-my-2 inline-flex min-h-11 items-center px-1 text-[9px] uppercase tracking-[0.3em] text-white/45 hover:text-white/80 transition-colors font-bold"
                     >
                       Show All
                     </button>
-                    <span className="text-white/10">·</span>
+                    <span className="text-white/15" aria-hidden="true">·</span>
                     <button
+                      type="button"
                       onClick={handleHideAll}
-                      className="text-[8px] uppercase tracking-[0.3em] text-white/25 hover:text-white/60 transition-colors font-bold"
+                      className="-my-2 inline-flex min-h-11 items-center px-1 text-[9px] uppercase tracking-[0.3em] text-white/45 hover:text-white/80 transition-colors font-bold"
                     >
                       Hide All
                     </button>
@@ -289,7 +292,8 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                       value={search}
                       onChange={e => setSearch(e.target.value)}
                       placeholder="Search fragrances..."
-                      className="w-full bg-white/[0.03] border border-white/10 pl-8 pr-4 py-2.5 text-[11px] text-white placeholder:text-white/15 focus:border-white/20 outline-none transition-all font-sans"
+                      aria-label="Search fragrances"
+                      className="w-full bg-white/[0.03] border border-white/10 pl-8 pr-4 py-2.5 text-[11px] text-white placeholder:text-white/35 focus:border-white/20 outline-none transition-colors font-sans"
                     />
                   </div>
                 )}
@@ -298,7 +302,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
               {/* Scrollable cologne list */}
               <div className="overflow-y-auto flex-1 px-6 pb-6 space-y-1.5 scrollbar-hide">
                 {filtered.length === 0 && (
-                  <p className="text-center text-white/20 font-serif italic text-sm py-8">No fragrances found</p>
+                  <p className="text-center text-white/45 font-serif italic text-sm py-8">No fragrances found</p>
                 )}
                 {filtered.map((item) => {
                   const rowOrItemId = item._dbId ?? item.id;
@@ -309,6 +313,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                     <motion.button
                       key={rowOrItemId}
                       layout
+                      type="button"
                       onClick={() => !isPending && handleToggle(item)}
                       disabled={isPending}
                       className={`w-full flex items-center gap-3 px-4 py-3 border transition-all duration-200 text-left group ${

@@ -150,14 +150,14 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                   <p id="profile-modal-title" className="text-[9px] font-bold uppercase tracking-[0.5em] text-scent-accent">
                     Settings
                   </p>
-                  <p className="mt-0.5 font-sans text-[9px] text-white/25">Account and atmosphere</p>
+                  <p className="mt-0.5 font-sans text-[9px] text-white/40">Account and atmosphere</p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={onClose}
                 aria-label="Close"
-                className="group ml-3 shrink-0 rounded-full border border-white/10 bg-white/5 p-2 text-white transition-all hover:bg-white/10"
+                className="group ml-3 inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
               >
                 <X size={16} className="transition-transform duration-300 group-hover:rotate-90" />
               </button>
@@ -199,12 +199,12 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                         autoCapitalize="none"
                         autoCorrect="off"
                         spellCheck={false}
-                        className="mt-2 w-full rounded-[10px] border border-white/10 bg-black/30 px-4 py-3 font-sans text-base text-white outline-none transition-all placeholder:text-white/20 focus:border-scent-accent/45 focus:ring-2 focus:ring-scent-accent/10"
+                        className="mt-2 w-full rounded-[10px] border border-white/10 bg-black/30 px-4 py-3 font-sans text-base text-white outline-none transition-all placeholder:text-white/35 focus:border-scent-accent/45 focus:ring-2 focus:ring-scent-accent/10"
                       />
                     </label>
 
                     <div className="flex items-center justify-between gap-3">
-                      <p className="text-[11px] leading-snug text-white/35">
+                      <p className="text-[11px] leading-snug text-white/35" aria-live="polite">
                         {error ? (
                           <span className="text-red-300">{error}</span>
                         ) : (

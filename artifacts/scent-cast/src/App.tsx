@@ -716,7 +716,7 @@ function DashboardView() {
               style={{ paddingTop: 'max(1.25rem, env(safe-area-inset-top))' }}
             >
               <p className="scent-type-label text-scent-accent">Strategic Alignment Found</p>
-              <button ref={recommendationCloseRef} onClick={closeRecommendationOverlay} className="-m-1 inline-flex min-h-11 min-w-11 items-center justify-center rounded-full text-scent-text-subtle hover:text-white hover:bg-white/10 transition-all active:scale-95" aria-label="Close recommendation">
+              <button ref={recommendationCloseRef} type="button" onClick={closeRecommendationOverlay} className="-m-1 inline-flex min-h-11 min-w-11 items-center justify-center rounded-full text-scent-text-subtle hover:text-white hover:bg-white/10 transition-all active:scale-95" aria-label="Close recommendation">
                 <X size={20} strokeWidth={1.75} />
               </button>
             </div>
