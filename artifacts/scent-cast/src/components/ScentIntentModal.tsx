@@ -79,7 +79,7 @@ export const ScentIntentModal: React.FC<ScentIntentModalProps> = ({ isOpen, onCl
         >
           <div className="flex items-center gap-3">
             <div className="w-1.5 h-1.5 rounded-full bg-white/40 animate-pulse" />
-            <p className="text-[10px] uppercase tracking-[0.4em] text-white/30 font-bold">
+            <p className="text-[10px] uppercase tracking-[0.4em] text-white/45 font-bold">
               Discovery Engine // Step 0{step} of 02
             </p>
           </div>
@@ -120,7 +120,7 @@ export const ScentIntentModal: React.FC<ScentIntentModalProps> = ({ isOpen, onCl
                   <h2 id="scent-intent-title" className="font-serif italic text-2xl sm:text-4xl text-white tracking-tighter">
                     What is your destination?
                   </h2>
-                  <p className="text-sm text-white/30 font-sans mt-1">
+                  <p className="text-sm text-white/55 font-sans mt-1">
                     Select the context for your day.
                   </p>
                 </header>
@@ -150,7 +150,7 @@ export const ScentIntentModal: React.FC<ScentIntentModalProps> = ({ isOpen, onCl
                           <p className={`font-serif italic text-base leading-tight ${selected ? 'text-black' : 'text-white'}`}>
                             {d.type}
                           </p>
-                          <p className={`text-[9px] uppercase tracking-[0.15em] mt-0.5 ${selected ? 'text-black/50' : 'text-white/30'}`}>
+                          <p className={`text-[9px] uppercase tracking-[0.15em] mt-0.5 ${selected ? 'text-black/60' : 'text-white/45'}`}>
                             {d.desc}
                           </p>
                         </div>
@@ -172,7 +172,7 @@ export const ScentIntentModal: React.FC<ScentIntentModalProps> = ({ isOpen, onCl
                   <h2 id="scent-intent-title" className="font-serif italic text-2xl sm:text-4xl text-white tracking-tighter">
                     Define your energy state
                   </h2>
-                  <p className="text-sm text-white/30 font-sans mt-1">
+                  <p className="text-sm text-white/55 font-sans mt-1">
                     How do you want to be perceived today?
                   </p>
                 </header>
@@ -202,7 +202,7 @@ export const ScentIntentModal: React.FC<ScentIntentModalProps> = ({ isOpen, onCl
                           <p className={`font-serif italic text-base leading-tight ${selected ? 'text-black' : 'text-white'}`}>
                             {e.type}
                           </p>
-                          <p className={`text-[9px] uppercase tracking-[0.15em] mt-0.5 ${selected ? 'text-black/50' : 'text-white/30'}`}>
+                          <p className={`text-[9px] uppercase tracking-[0.15em] mt-0.5 ${selected ? 'text-black/60' : 'text-white/45'}`}>
                             {e.desc}
                           </p>
                         </div>
@@ -224,7 +224,7 @@ export const ScentIntentModal: React.FC<ScentIntentModalProps> = ({ isOpen, onCl
             <button
               type="button"
               onClick={() => setStep(step - 1)}
-              className="text-[10px] uppercase tracking-[0.3em] text-white/30 hover:text-white transition-colors"
+              className="-mx-2 inline-flex min-h-11 items-center px-2 text-[10px] uppercase tracking-[0.3em] text-white/55 hover:text-white transition-colors"
             >
               Back
             </button>
@@ -236,7 +236,7 @@ export const ScentIntentModal: React.FC<ScentIntentModalProps> = ({ isOpen, onCl
             type="button"
             onClick={handleNext}
             disabled={(step === 1 && !destination) || (step === 2 && !energy)}
-            className="px-6 sm:px-8 py-3 sm:py-4 bg-white text-black uppercase tracking-[0.3em] text-[10px] font-bold disabled:opacity-20 disabled:cursor-not-allowed flex items-center gap-3 hover:bg-white/90 active:scale-[0.97] transition-all duration-200"
+            className="px-6 sm:px-8 py-3 sm:py-4 bg-white text-black uppercase tracking-[0.3em] text-[10px] font-bold disabled:opacity-35 disabled:cursor-not-allowed flex items-center gap-3 hover:bg-white/90 active:scale-[0.97] transition-all duration-200"
           >
             {step === 2 ? 'Find My Match' : 'Proceed'}
             <ArrowRight size={13} strokeWidth={1.75} />

@@ -719,7 +719,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
       <main className="relative z-10 px-4 sm:px-8 max-w-[1760px] mx-auto py-16 sm:py-20">
         {loading && (
           <div className="flex items-center justify-center py-40">
-            <p className="font-serif italic text-white/30 text-3xl animate-pulse">Loading vault...</p>
+            <p className="font-serif italic text-white/40 text-3xl animate-pulse">Loading vault...</p>
           </div>
         )}
 
@@ -807,7 +807,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                         ) : (
                           <div className="absolute inset-0 flex items-center justify-center px-6 text-center">
                             <div>
-                              <p className="text-[9px] uppercase tracking-[0.5em] text-white/20 font-bold">{brand}</p>
+                              <p className="text-[9px] uppercase tracking-[0.5em] text-white/40 font-bold">{brand}</p>
                               <p className="font-serif italic text-2xl text-white leading-tight">{name}</p>
                             </div>
                           </div>
@@ -823,13 +823,14 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
               })}
             </div>
             ) : (
-              <div className="py-40 text-center border border-dashed border-white/5 rounded-scent">
-                <p className="font-serif italic text-4xl text-white/10">Your fragrance vault is empty</p>
+              <div className="py-40 text-center border border-dashed border-white/10 rounded-scent">
+                <p className="font-serif italic text-4xl text-white/45">This vault is empty</p>
+                <p className="mt-3 text-sm text-white/40 font-sans">No fragrances have been shared yet.</p>
               </div>
             )}
 
             <div className="text-center pt-16 border-t border-white/5">
-              <p className="text-[9px] uppercase tracking-[0.4em] text-white/20 font-bold mb-3">Powered by</p>
+              <p className="text-[9px] uppercase tracking-[0.4em] text-white/35 font-bold mb-3">Powered by</p>
               <div className="flex items-center justify-center opacity-30">
                 <img
                   src="/nav/scentbeam-nav-logo.png"
@@ -890,6 +891,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                   />
                 </div>
                 <button
+                  type="button"
                   onClick={closeSelectedDetail}
                   aria-label="Close profile"
                   className="shrink-0 inline-flex min-h-11 min-w-11 items-center justify-center bg-white/5 hover:bg-white/10 transition-all rounded-full border border-white/10 text-white group"

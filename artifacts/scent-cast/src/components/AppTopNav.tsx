@@ -27,7 +27,7 @@ interface AppTopNavProps {
 const navBaseClassName =
   'text-[13px] sm:text-[14px] font-semibold uppercase tracking-[0.12em] min-[430px]:tracking-[0.16em] whitespace-nowrap';
 
-const inactiveNavClassName = `${navBaseClassName} text-[#f4debd]/85 hover:text-white transition-colors`;
+const inactiveNavClassName = `${navBaseClassName} inline-flex min-h-[44px] items-center text-[#f4debd]/85 hover:text-white transition-colors`;
 const activeNavClassName = `${navBaseClassName} text-[#fff7ec]`;
 
 const ActiveDot: React.FC = () => (
@@ -169,7 +169,7 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
               <span className="hidden sm:block w-px h-3 bg-scent-accent/20 shrink-0" aria-hidden="true" />
               <Link
                 to="/"
-                className={`${inactiveNavClassName} relative z-10 inline-flex min-h-[44px] items-center`}
+                className={`${inactiveNavClassName} relative z-10`}
               >
                 Home
               </Link>
