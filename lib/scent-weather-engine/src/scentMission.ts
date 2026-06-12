@@ -211,19 +211,49 @@ export function sanitizeScentMissionState(input: unknown): ScentMissionState {
   if (typeof input !== "object" || input === null) return fresh;
   const record = input as { nodes?: unknown; calibration?: unknown };
 
-  const nodes = { ...fresh.nodes };
-  if (typeof record.nodes === "object" && record.nodes !== null) {
-    for (const nodeId of SCENT_MISSION_NODE_ORDER) {
-      const status = (record.nodes as Record<string, unknown>)[nodeId];
-      if (isScentMissionNodeStatus(status)) nodes[nodeId] = status;
-    }
-  }
-
   const calibration: ScentMissionCalibration = {};
   if (typeof record.calibration === "object" && record.calibration !== null) {
     const cal = record.calibration as { destination?: unknown; energy?: unknown };
     if (isScentMissionDestination(cal.destination)) calibration.destination = cal.destination;
     if (isScentMissionEnergy(cal.energy)) calibration.energy = cal.energy;
+  }
+
+  const rawNodes =
+    typeof record.nodes === "object" && record.nodes !== null
+      ? (record.nodes as Record<string, unknown>)
+      : {};
+  const nodes: Record<ScentMissionNodeId, ScentMissionNodeStatus> = { ...fresh.nodes };
+  let stoppedAtIncomplete = false;
+
+  for (const nodeId of SCENT_MISSION_NODE_ORDER) {
+    if (stoppedAtIncomplete) {
+      nodes[nodeId] = "locked";
+      continue;
+    }
+
+    if (nodeId === "resolution-premium") {
+      nodes[nodeId] = nodes["resolution-standard"] === "complete" ? "blocked" : "locked";
+      stoppedAtIncomplete = true;
+      continue;
+    }
+
+    const rawStatus = rawNodes[nodeId];
+    const status = isScentMissionNodeStatus(rawStatus) ? rawStatus : undefined;
+    if (status === "complete") {
+      nodes[nodeId] = "complete";
+      continue;
+    }
+    if (status === "running" || status === "blocked") {
+      nodes[nodeId] = status;
+      stoppedAtIncomplete = true;
+      continue;
+    }
+
+    // The first incomplete standard node is always the active frontier. This
+    // repairs hostile/stale states that mark downstream nodes active or the
+    // current frontier locked.
+    nodes[nodeId] = "active";
+    stoppedAtIncomplete = true;
   }
 
   return { nodes, calibration, premiumUnlocked: false };
@@ -240,7 +270,13 @@ export function completeScentMissionNode(
   nodeId: ScentMissionNodeId,
 ): ScentMissionState {
   const current = state.nodes[nodeId];
-  if (current !== "active" && current !== "running") return state;
+  if (
+    current !== "active" &&
+    current !== "running" &&
+    !(current === "blocked" && nodeId !== "resolution-premium")
+  ) {
+    return state;
+  }
 
   const nodes: Record<ScentMissionNodeId, ScentMissionNodeStatus> = {
     ...state.nodes,
@@ -254,6 +290,14 @@ export function completeScentMissionNode(
   }
 
   return { ...state, nodes };
+}
+
+export function isScentMissionNodeExecutable(
+  state: ScentMissionState,
+  nodeId: ScentMissionNodeId,
+): boolean {
+  const status = state.nodes[nodeId];
+  return status === "active" || status === "running" || status === "blocked";
 }
 
 /** Diff two mission states into the wire-format node updates. */

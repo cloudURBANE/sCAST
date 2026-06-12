@@ -119,11 +119,15 @@ export function findWardrobeMatch<T extends MissionSourceItem>(
 
 /** The node the user can currently act on, if any. */
 export function activeMissionNode(state: ScentMissionState): ScentMissionNodeId | null {
+  let retryableBlocked: ScentMissionNodeId | null = null;
   for (const nodeId of SCENT_MISSION_NODE_ORDER) {
     const status = state.nodes[nodeId];
     if (status === "active" || status === "running") return nodeId;
+    if (status === "blocked" && nodeId !== "resolution-premium" && !retryableBlocked) {
+      retryableBlocked = nodeId;
+    }
   }
-  return null;
+  return retryableBlocked;
 }
 
 /** Fraction of completed nodes (0..1) — drives the SVG trunk path progress. */

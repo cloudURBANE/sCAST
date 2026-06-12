@@ -2,11 +2,17 @@ import { randomUUID } from "node:crypto";
 import {
   completeScentMissionNode,
   diffScentMissionNodes,
+  isScentMissionDestination,
+  isScentMissionEnergy,
   isScentMissionNodeId,
+  isScentMissionNodeExecutable,
   sanitizeScentMissionState,
   sanitizeScentMissionWardrobe,
   sanitizeScentMissionWeather,
   selectScentMissionRecommendation,
+  type ScentMissionCalibration,
+  type ScentMissionDestination,
+  type ScentMissionEnergy,
   type ScentMissionNodeId,
   type ScentMissionPremiumLock,
   type ScentMissionRequest,
@@ -29,6 +35,14 @@ import {
 
 const MAX_USER_MESSAGE_LENGTH = 2_000;
 const SESSION_ID_RE = /^[0-9a-zA-Z_-]{8,64}$/;
+
+const NODE_LABELS: Record<ScentMissionNodeId, string> = {
+  onboarding: "Calibration",
+  "wardrobe-sync": "Vault Sync",
+  "environment-scan": "Environment Scan",
+  "resolution-standard": "Resolution",
+  "resolution-premium": "Molecular Intelligence",
+};
 
 export type ScentMissionChatContext = {
   mission: ScentMissionState;
@@ -220,6 +234,11 @@ function deterministicChatReply(context: ScentMissionChatContext): string {
   const message = context.userMessage.toLowerCase();
   const { mission, wardrobe, weather } = context;
 
+  const calibration = inferCalibrationFromMessage(context.userMessage, mission.calibration);
+  if (calibration.changed) {
+    return calibrationUpdatedReply(calibration.calibration);
+  }
+
   if (/(weather|humidity|temperature|uv|rain|outside)/.test(message)) {
     return `Current atmosphere: ${describeWeather(weather)}. Run the environment scan node to fold this into your mission calibration.`;
   }
@@ -246,6 +265,63 @@ function deterministicChatReply(context: ScentMissionChatContext): string {
     return `Mission status: ${activeNode.replace(/-/g, " ")} is ready. Hit Execute Analysis to advance, or ask me about your vault or today's conditions.`;
   }
   return "Mission complete on the standard track. Ask me about your match, your vault, or today's conditions.";
+}
+
+const DESTINATION_PATTERNS: Array<[ScentMissionDestination, RegExp]> = [
+  ["Staying In", /\b(staying in|stay in|home|inside|indoors?)\b/i],
+  ["Going Out", /\b(going out|out and about|errands?|day out)\b/i],
+  ["Work", /\b(work|office|meeting|client|presentation)\b/i],
+  ["Night Out", /\b(night out|club|bar|party|evening)\b/i],
+  ["Date", /\b(date|romantic|dinner date)\b/i],
+  ["Gym", /\b(gym|workout|training|run|fitness)\b/i],
+];
+
+const ENERGY_PATTERNS: Array<[ScentMissionEnergy, RegExp]> = [
+  ["Calm", /\b(calm|quiet|soft|subtle)\b/i],
+  ["Focused", /\b(focused|focus|productive|sharp)\b/i],
+  ["Confident", /\b(confident|confidence|bold|commanding)\b/i],
+  ["Social", /\b(social|friendly|approachable|chatty)\b/i],
+  ["Relaxed", /\b(relaxed|relaxing|casual|easy)\b/i],
+];
+
+function inferCalibrationFromMessage(
+  userMessage: string,
+  current: ScentMissionCalibration,
+): { changed: boolean; calibration: ScentMissionCalibration } {
+  const next: ScentMissionCalibration = { ...current };
+  for (const [destination, pattern] of DESTINATION_PATTERNS) {
+    if (pattern.test(userMessage) && isScentMissionDestination(destination)) {
+      next.destination = destination;
+      break;
+    }
+  }
+  for (const [energy, pattern] of ENERGY_PATTERNS) {
+    if (pattern.test(userMessage) && isScentMissionEnergy(energy)) {
+      next.energy = energy;
+      break;
+    }
+  }
+
+  return {
+    changed: next.destination !== current.destination || next.energy !== current.energy,
+    calibration: next,
+  };
+}
+
+function calibrationUpdatedReply(calibration: ScentMissionCalibration): string {
+  const parts = [
+    calibration.destination ? `destination: ${calibration.destination}` : null,
+    calibration.energy ? `energy: ${calibration.energy}` : null,
+  ].filter(Boolean);
+  return `Calibration updated (${parts.join(", ")}). When both destination and energy are set, lock calibration to begin the mission tree.`;
+}
+
+function lockedNodeMessage(nodeId: ScentMissionNodeId, status: string): string {
+  const label = NODE_LABELS[nodeId];
+  if (status === "complete") {
+    return `${label} is already complete. Continue with the next available mission node.`;
+  }
+  return `${label} is locked right now. Complete the current mission node first.`;
 }
 
 /* ------------------------------------------------------------------ */
@@ -379,12 +455,24 @@ export async function executeScentMission(
   const weather = request.context.weather ?? {};
 
   if (request.action === "execute_node") {
-    const result = await executeNode(request.nodeId!, request.mission, wardrobe, weather, deps);
+    const nodeId = request.nodeId!;
+    if (!isScentMissionNodeExecutable(request.mission, nodeId)) {
+      return {
+        sessionId,
+        assistantMessage: lockedNodeMessage(nodeId, request.mission.nodes[nodeId]),
+      };
+    }
+    const result = await executeNode(nodeId, request.mission, wardrobe, weather, deps);
     return { sessionId, ...result };
   }
 
+  const inferred = inferCalibrationFromMessage(request.userMessage ?? "", request.mission.calibration);
+  const missionForChat = inferred.changed
+    ? { ...request.mission, calibration: inferred.calibration }
+    : request.mission;
+  const missionPatch = inferred.changed ? { calibration: inferred.calibration } : undefined;
   const chatContext: ScentMissionChatContext = {
-    mission: request.mission,
+    mission: missionForChat,
     wardrobe,
     weather,
     userMessage: request.userMessage ?? "",
@@ -394,11 +482,19 @@ export async function executeScentMission(
     try {
       const reply = await deps.llmChat(chatContext);
       const trimmed = reply.trim();
-      if (trimmed) return { sessionId, assistantMessage: trimmed };
+      if (trimmed) {
+        return { sessionId, assistantMessage: trimmed, ...(missionPatch ? { missionPatch } : {}) };
+      }
     } catch {
       // Fall through to the deterministic reply — local dev and outages stay functional.
     }
   }
 
-  return { sessionId, assistantMessage: deterministicChatReply(chatContext) };
+  return {
+    sessionId,
+    assistantMessage: inferred.changed
+      ? calibrationUpdatedReply(inferred.calibration)
+      : deterministicChatReply(chatContext),
+    ...(missionPatch ? { missionPatch } : {}),
+  };
 }

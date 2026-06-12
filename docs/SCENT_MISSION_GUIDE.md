@@ -69,11 +69,20 @@ Statuses: `locked | active | running | complete | blocked`.
 Rules (all in `scentMission.ts`, fully unit-tested):
 
 - A fresh mission has `onboarding: active`, everything else `locked`.
-- `completeScentMissionNode` only acts on `active`/`running` nodes (idempotent
-  replays) and activates the next node — **except** `resolution-premium`,
-  which becomes `blocked` while `premiumUnlocked` is false. `blocked` on the
-  premium node means "reachable but premium-gated"; on other nodes it means
-  "cannot proceed" (e.g. empty vault during wardrobe-sync).
+- `sanitizeScentMissionState` repairs impossible client state instead of
+  trusting arbitrary node statuses: the graph is rebuilt around the first
+  incomplete standard node, downstream nodes are locked, and premium can only
+  become `blocked` after standard resolution completes.
+- `completeScentMissionNode` acts on `active`/`running` nodes and can also retry
+  a non-premium `blocked` node once the blocking condition clears (for example,
+  after the user adds vault items following an empty-vault block). It activates
+  the next node — **except** `resolution-premium`, which becomes `blocked`
+  while `premiumUnlocked` is false. `blocked` on the premium node means
+  "reachable but premium-gated"; on other nodes it means "retryable once inputs
+  change".
+- `execute_node` requests are rejected unless the requested node is the current
+  executable frontier (`active`, `running`, or `blocked`). This prevents crafted
+  clients from jumping straight to standard resolution and leaking a match.
 - `premiumUnlocked` is **always false** in the MVP. `sanitizeScentMissionState`
   and `applyScentMissionUpdates` both force it false, so neither a hostile
   client nor a server patch can unlock it.
@@ -136,6 +145,10 @@ route can fan out to an LLM and to research), then `optionalAuth`.
   calls the LLM with a short fragrance-scoped prompt (vault summary + weather +
   user message, 20s timeout). **Without keys, or on any LLM failure, a
   deterministic fallback reply is produced** — local dev always works.
+  Chat also performs deterministic calibration extraction: phrases like "work
+  meeting" or "date night" can fill `missionPatch.calibration.destination`, and
+  "focused" / "confident" / "relaxed" can fill energy before the user clicks the
+  calibration chips.
 - `execute_node onboarding`: requires both calibration fields in
   `mission.calibration`; completes onboarding and echoes the calibration in
   `missionPatch`.
@@ -179,6 +192,10 @@ Errors: 400 with `{ error }` for invalid envelopes, 429 from the rate limiter,
 - The premium node renders as a locked card with conversion copy; "Preview
   Premium" calls `execute_node resolution-premium` and surfaces the lock
   message in chat.
+- If a standard node blocks (for example, empty vault during Vault Sync), the
+  same node remains actionable after the user changes inputs; the panel treats
+  non-premium `blocked` nodes as retryable and keeps premium locked-card
+  handling separate.
 - Styling rides the existing `scent-*` design system (`scent-vault-panel`,
   `scent-type-label`, `scent-type-chip`, `scent-primary-button`,
   `scent-lux-input`) so the panel reads native to the black/gold ScentBeam UI.
@@ -239,6 +256,13 @@ each request. Remember: schema pushes are manual in this repo
   scoring for the legacy overlay path. The mission selection in the shared
   package mirrors its weights (8 / −14). If you tune one, tune both — or
   finish migrating the context onto the package helpers.
+- **Collection creation gap**: the mission agent does not yet create or persist
+  a durable user collection from chat. It can infer calibration from messages
+  and rank the current vault; adding/saving bottles still goes through
+  `FragranceCapture` + `/api/wardrobe`. To support chat-built collections,
+  add a scoped data model (or explicit wardrobe save action), a search/detail
+  pipeline for candidate fragrances, user confirmation before persistence, and
+  tests that signed-in writes stay tenant+user scoped while guests remain local.
 
 ## Test checklist
 

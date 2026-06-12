@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { userFragrancesTable } from "@workspace/db/schema";
 import {
@@ -50,14 +50,22 @@ function chatPrompt(context: ScentMissionChatContext): string {
   ]
     .filter(Boolean)
     .join(", ");
+  const calibrationLine = [
+    context.mission.calibration.destination ? `destination ${context.mission.calibration.destination}` : null,
+    context.mission.calibration.energy ? `energy ${context.mission.calibration.energy}` : null,
+  ]
+    .filter(Boolean)
+    .join(", ");
 
   return `
 You are the Scent Mission agent for ScentBeam, a fragrance wardrobe app.
 Answer the user's message in 1-3 short sentences. Be precise and concrete.
 Only discuss fragrances, the user's vault, weather suitability, and the mission flow.
 Never invent fragrances the user does not own. Do not use markdown.
+If the user asks you to create or save a new collection, explain that this agent can calibrate taste and rank the current vault, but adding or saving new bottles still happens through the app's search and vault controls.
 
 Today's conditions: ${weatherLine || "unknown"}.
+Current calibration: ${calibrationLine || "not set"}.
 User's vault:
 ${wardrobeLines || "(empty)"}
 
@@ -134,7 +142,8 @@ async function loadServerWardrobe(
     .where(and(
       eq(userFragrancesTable.tenantId, tenantId),
       eq(userFragrancesTable.userId, userId),
-    ));
+    ))
+    .orderBy(asc(userFragrancesTable.createdAt), asc(userFragrancesTable.id));
 
   return sanitizeScentMissionWardrobe(
     rows

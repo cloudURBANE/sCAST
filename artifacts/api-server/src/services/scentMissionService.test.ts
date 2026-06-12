@@ -73,11 +73,31 @@ test("parseScentMissionRequest sanitizes mission state, wardrobe, weather, and s
   assert.notEqual(request.sessionId, "###invalid###");
   assert.ok(request.userMessage!.length <= 2000);
   assert.equal(request.mission.nodes.onboarding, "active");
+  assert.equal(request.mission.nodes["wardrobe-sync"], "locked");
   assert.equal(request.mission.premiumUnlocked, false);
   assert.equal(request.context.weather.temperature_f, 80);
   assert.equal(request.context.weather.uv_index, null);
   assert.equal(request.context.wardrobe!.length, 1);
   assert.deepEqual(request.context.wardrobe![0]!.families, ["woody"]);
+});
+
+test("parseScentMissionRequest repairs impossible downstream active nodes", () => {
+  const parsed = parseScentMissionRequest(baseBody({
+    action: "execute_node",
+    nodeId: "resolution-standard",
+    mission: {
+      nodes: {
+        onboarding: "active",
+        "wardrobe-sync": "complete",
+        "environment-scan": "complete",
+        "resolution-standard": "active",
+      },
+    },
+  }));
+  assert.equal(parsed.ok, true);
+  if (!parsed.ok) return;
+  assert.equal(parsed.request.mission.nodes.onboarding, "active");
+  assert.equal(parsed.request.mission.nodes["resolution-standard"], "locked");
 });
 
 test("parseScentMissionRequest keeps a well-formed session id", () => {
@@ -149,6 +169,21 @@ test("chat uses the injected LLM and falls back when it throws", async () => {
   assert.doesNotMatch(fallback.assistantMessage!, /LLM says hi/);
 });
 
+test("chat can fill calibration from natural language", async () => {
+  const parsed = parseScentMissionRequest(baseBody({
+    userMessage: "I have a client meeting at work and want to feel focused.",
+  }));
+  assert.equal(parsed.ok, true);
+  if (!parsed.ok) return;
+
+  const response = await executeScentMission(parsed.request, { deps: {} });
+  assert.deepEqual(response.missionPatch?.calibration, {
+    destination: "Work",
+    energy: "Focused",
+  });
+  assert.match(response.assistantMessage!, /Calibration updated/);
+});
+
 /* ---------------------------- node execution --------------------------- */
 
 async function runNode(
@@ -194,12 +229,38 @@ test("wardrobe-sync blocks on an empty vault and completes with a summary otherw
   const blocked = await runNode("wardrobe-sync", mission, []);
   assert.deepEqual(blocked.nodeUpdates, [{ nodeId: "wardrobe-sync", status: "blocked" }]);
 
+  const retryMission = {
+    ...mission,
+    nodes: { ...mission.nodes, "wardrobe-sync": "blocked" as const },
+  };
+  const retried = await runNode("wardrobe-sync", retryMission);
+  assert.deepEqual(retried.nodeUpdates, [
+    { nodeId: "wardrobe-sync", status: "complete" },
+    { nodeId: "environment-scan", status: "active" },
+  ]);
+
   const synced = await runNode("wardrobe-sync", mission);
   assert.match(synced.assistantMessage!, /2 fragrances/);
   assert.deepEqual(synced.nodeUpdates, [
     { nodeId: "wardrobe-sync", status: "complete" },
     { nodeId: "environment-scan", status: "active" },
   ]);
+});
+
+test("execute_node refuses locked nodes without leaking a recommendation", async () => {
+  const parsed = parseScentMissionRequest({
+    action: "execute_node",
+    nodeId: "resolution-standard",
+    mission: createScentMissionState(),
+    context: { weather: HOT_HUMID, wardrobe: WARDROBE },
+  });
+  assert.equal(parsed.ok, true);
+  if (!parsed.ok) return;
+
+  const response = await executeScentMission(parsed.request, { deps: {} });
+  assert.match(response.assistantMessage!, /locked/);
+  assert.equal(response.recommendation, undefined);
+  assert.equal(response.nodeUpdates, undefined);
 });
 
 test("environment-scan reports UV availability honestly", async () => {
