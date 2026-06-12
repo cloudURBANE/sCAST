@@ -37,9 +37,14 @@ export function isIpadSafariBrowser(): boolean {
 /**
  * iPad Safari keeps the tablet/desktop layout, but gets a lower WebKit
  * compositor budget for blur/filter/layer-heavy surfaces.
+ *
+ * Installed iPad PWAs run the same WebKit compositor but drop the `Safari/`
+ * user-agent token in standalone mode, so they must be included explicitly —
+ * otherwise the performance mode silently turns off in exactly the
+ * home-screen context it was built for.
  */
 export function isIpadSafariPerformanceMode(): boolean {
-  return isIpadSafariBrowser();
+  return isIpadSafariBrowser() || isIpadStandalone();
 }
 
 /** True when the page is running as an installed/standalone PWA. */
