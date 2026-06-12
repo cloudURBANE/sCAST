@@ -34,7 +34,7 @@ const COMMUNITY_BODY_WAKE_DELAY_MS = 640;
 function CommunityPanelFallback() {
   return (
     <div className="mx-auto w-full max-w-[940px] overflow-hidden rounded-[calc(var(--radius-scent)-2px)] border border-scent-accent/18 bg-black/46">
-      <div className="min-h-[12rem] animate-pulse" />
+      <div className="min-h-[20rem] animate-pulse" />
     </div>
   );
 }
@@ -42,10 +42,26 @@ function CommunityPanelFallback() {
 function CommunityFeedFallback() {
   return (
     <div className="mx-auto grid w-full max-w-[940px] gap-4" aria-label="Loading community posts">
-      {[0, 1, 2].map((item) => (
-        <div key={item} className="min-h-[12rem] rounded-[calc(var(--radius-scent)+2px)] border border-scent-accent/18 bg-black/46" />
+      {Array.from({ length: 12 }, (_, item) => (
+        <div key={item} className="min-h-[15rem] rounded-[calc(var(--radius-scent)+2px)] border border-scent-accent/18 bg-black/46" />
       ))}
     </div>
+  );
+}
+
+function CommunityMarqueeFallback() {
+  return (
+    <section className="scent-community-marquee" aria-hidden="true">
+      <div className="scent-community-marquee-track opacity-0" data-marquee-ready="false">
+        {Array.from({ length: 3 }, (_, copyIndex) => (
+          <div className="scent-community-marquee-group" key={copyIndex}>
+            {Array.from({ length: 8 }, (_, cellIndex) => (
+              <div className="scent-community-marquee-cell" key={cellIndex} />
+            ))}
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -148,19 +164,16 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
           <CommunityHero />
           <div className="scent-full-bleed">
             {communityBodyReady ? (
-              <React.Suspense fallback={null}>
+              <React.Suspense fallback={<CommunityMarqueeFallback />}>
                 <BottleMarquee items={data ?? []} loading={isLoading} isError={isError} />
               </React.Suspense>
             ) : (
-              <section className="scent-community-marquee" aria-hidden="true">
-                <div className="scent-community-marquee-group opacity-0">
-                  <div className="scent-community-marquee-cell" />
-                </div>
-              </section>
+              <CommunityMarqueeFallback />
             )}
           </div>
-          {communityBodyReady ? (
-            <section className="scent-deferred-section w-full space-y-5 sm:space-y-7" aria-label="Community forum">
+          <section className="scent-deferred-section w-full space-y-5 sm:space-y-7" aria-label="Community forum">
+            {communityBodyReady ? (
+              <>
               <React.Suspense fallback={<CommunityPanelFallback />}>
                 <div className="mx-auto w-full max-w-[940px] overflow-hidden rounded-[calc(var(--radius-scent)-2px)] border border-scent-accent/18 bg-[linear-gradient(180deg,rgba(10,9,7,0.82),rgba(0,0,0,0.94))] shadow-[0_18px_44px_-34px_rgba(0,0,0,0.95),0_0_0_1px_rgba(212,175,55,0.045),inset_0_1px_0_rgba(255,236,183,0.05)]">
                   <PostComposer ref={composerRef} authToken={authToken} onSignIn={onSignIn} />
@@ -183,8 +196,14 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
                   onClearFilters={clearCommunityFilters}
                 />
               </React.Suspense>
-            </section>
-          ) : null}
+              </>
+            ) : (
+              <>
+                <CommunityPanelFallback />
+                <CommunityFeedFallback />
+              </>
+            )}
+          </section>
         </div>
       </main>
 
@@ -195,6 +214,8 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
               src="/nav/scentbeam-nav-logo.png"
               srcSet="/nav/scentbeam-nav-logo.png 1x, /nav/scentbeam-nav-logo@2x.png 2x"
               alt="ScentBeam"
+              width={69}
+              height={20}
               className="h-5 w-auto"
               draggable={false}
             />
