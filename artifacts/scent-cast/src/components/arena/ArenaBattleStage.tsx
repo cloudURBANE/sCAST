@@ -64,7 +64,7 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
   };
 
   return (
-    <section aria-labelledby="arena-battle-title" className="relative animate-in fade-in duration-300">
+    <section aria-labelledby="arena-battle-title" className="relative min-h-[62svh] animate-in fade-in duration-300">
       <header className="mx-auto max-w-4xl px-2 text-center">
         <p className="scent-type-label text-scent-accent">ScentBeam Arena</p>
         <h1 id="arena-battle-title" className="mt-3 text-pretty text-balance font-serif text-3xl italic leading-[0.98] text-foreground sm:text-4xl md:text-5xl lg:text-6xl">

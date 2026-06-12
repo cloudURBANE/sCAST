@@ -1,5 +1,4 @@
 import React, { createContext, useCallback, useContext, useState, useEffect, useMemo, useRef } from 'react';
-import axios from 'axios';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from './AuthContext';
 
@@ -148,13 +147,19 @@ export const WeatherProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     try {
       const hasCoords = Number.isFinite(lat) && Number.isFinite(lon);
-      const url = hasCoords ? `/api/weather?lat=${lat}&lon=${lon}` : '/api/weather';
-      const response = await axios.get(url, { signal });
+      const url = hasCoords
+        ? `/api/weather?lat=${encodeURIComponent(String(lat))}&lon=${encodeURIComponent(String(lon))}`
+        : '/api/weather';
+      const response = await fetch(url, { signal });
+      if (!response.ok) {
+        throw new Error(`Weather request failed with ${response.status}`);
+      }
+      const data = (await response.json()) as WeatherData;
       if (fetchSeqRef.current !== seq) return;
       setLocationSource(source ?? (hasCoords ? 'preferred' : 'fallback'));
-      setWeather(response.data);
+      setWeather(data);
     } catch (err) {
-      if (!axios.isCancel(err) && fetchSeqRef.current === seq) {
+      if (!(err instanceof DOMException && err.name === 'AbortError') && fetchSeqRef.current === seq) {
         console.error("Failed to fetch weather", err);
         toast({
           title: "Weather Unreachable",
