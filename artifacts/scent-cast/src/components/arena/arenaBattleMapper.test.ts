@@ -30,6 +30,7 @@ test('maps a community battle post into a two-side arena battle', () => {
   assert.equal(mapped?.scenario, 'Which one wins Monday morning?');
   assert.equal(mapped?.left.brand, 'Chanel');
   assert.equal(mapped?.left.descriptor, 'Woody Aromatic');
+  assert.equal(mapped?.right.descriptor, 'Classic fragrance');
   assert.deepEqual(mapped?.votes, { 'Bleu de Chanel': 3, Aventus: 2 });
   assert.equal(mapped?.viewerVote, 'Aventus');
 });

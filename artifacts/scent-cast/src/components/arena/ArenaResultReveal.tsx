@@ -1,5 +1,5 @@
-import React from 'react';
-import { ArrowRight, Share2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { ArrowRight, Check, Share2 } from 'lucide-react';
 import type { ArenaBattle } from '@/components/arena/arenaBattleMapper';
 import type { ArenaReasonKey } from '@/components/arena/arenaTwists';
 import { arenaPercentFor, arenaVoteTotal, buildArenaTwist } from '@/components/arena/arenaTwists';
@@ -27,21 +27,43 @@ export const ArenaResultReveal: React.FC<ArenaResultRevealProps> = ({
   const twist = buildArenaTwist(battle, viewerChoice, reason);
   const total = arenaVoteTotal(battle);
   const pickedSide = viewerChoice === battle.left.key ? battle.left : battle.right;
+  const [shareCopied, setShareCopied] = useState(false);
+
+  const handleShare = async () => {
+    const shareText = `${battle.left.name} vs ${battle.right.name}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: battle.title,
+          text: shareText,
+          url: window.location.href,
+        });
+        return;
+      }
+
+      if (!navigator.clipboard) return;
+      await navigator.clipboard.writeText(`${battle.title} - ${shareText} ${window.location.href}`);
+      setShareCopied(true);
+      window.setTimeout(() => setShareCopied(false), 1800);
+    } catch {
+      // Share cancellation or clipboard denial should not disrupt the reveal flow.
+    }
+  };
 
   return (
-    <section className="mx-auto mt-8 w-full max-w-5xl space-y-6" aria-live="polite">
-      <div className="grid gap-3 rounded-[var(--radius-scent)] border border-scent-accent/22 bg-black/54 p-4 text-center shadow-[inset_0_1px_0_rgba(255,236,183,0.06)] sm:grid-cols-3 sm:items-center sm:text-left">
-        <div>
+    <section className="arena-reveal-stagger mx-auto mt-8 w-full max-w-5xl space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500" aria-live="polite">
+      <div className="grid gap-4 divide-y divide-scent-accent/12 rounded-[var(--radius-scent)] border border-scent-accent/22 bg-black/72 p-5 text-center shadow-[inset_0_1px_0_rgba(255,236,183,0.06)] sm:grid-cols-3 sm:items-center sm:gap-6 sm:divide-x sm:divide-y-0 sm:p-6 sm:text-left">
+        <div className="pt-4 first:pt-0 sm:pt-0 sm:first:pl-0 sm:pl-6">
           <p className="scent-type-label text-scent-accent/82">Your pick</p>
-          <p className="mt-1 truncate font-serif text-xl italic text-[#fff7ec]">{pickedSide.name}</p>
+          <p className="mt-1 truncate font-serif text-xl italic text-foreground">{pickedSide.name}</p>
         </div>
-        <div className="text-center">
+        <div className="pt-4 text-center first:pt-0 sm:pt-0 sm:first:pl-0 sm:pl-6">
           <p className="font-mono text-2xl text-scent-accent">
             {arenaPercentFor(battle, viewerChoice)}%
           </p>
           <p className="mt-1 scent-type-meta uppercase">{total} saved {total === 1 ? 'vote' : 'votes'}</p>
         </div>
-        <div className="sm:text-right">
+        <div className="pt-4 first:pt-0 sm:pt-0 sm:first:pl-0 sm:pl-6 sm:text-right">
           <p className="scent-type-label text-scent-accent/82">Vote status</p>
           <p className="mt-1 text-sm font-medium leading-6 text-scent-text-muted">
             {guestLocalOnly
@@ -55,17 +77,19 @@ export const ArenaResultReveal: React.FC<ArenaResultRevealProps> = ({
 
       <ArenaReasonPicker value={reason} onChange={onReasonChange} />
 
-      <div className="mx-auto max-w-3xl rounded-[var(--radius-scent)] border border-scent-accent/24 bg-[linear-gradient(180deg,rgba(255,247,236,0.045),rgba(0,0,0,0.52))] px-5 py-6 text-center">
+      <div className="mx-auto max-w-3xl rounded-[var(--radius-scent)] border border-scent-accent/24 bg-black/68 px-5 py-6 text-center transition-all duration-300">
         <p className="scent-type-label text-scent-accent">Twist</p>
-        <h3 className="mt-2 font-serif text-2xl italic text-[#fff7ec]">{twist.title}</h3>
-        <p className="mx-auto mt-3 max-w-2xl text-base leading-7 text-scent-text-muted">{twist.body}</p>
+        <div key={reason ?? 'default'} className="arena-fade-in">
+          <h3 className="mt-2 font-serif text-2xl italic text-foreground">{twist.title}</h3>
+          <p className="mx-auto mt-3 max-w-2xl text-base leading-7 text-scent-text-muted">{twist.body}</p>
+        </div>
       </div>
 
       <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
         <button
           type="button"
           onClick={onNext}
-          className="scent-primary-button inline-flex min-h-12 w-full max-w-xs items-center justify-center gap-2 rounded-[var(--radius-scent)] px-6 py-3 text-sm font-bold uppercase tracking-[0.16em] sm:w-auto"
+          className="scent-primary-button inline-flex min-h-12 w-full max-w-xs items-center justify-center gap-2 px-6 py-3 text-sm font-bold uppercase tracking-[0.16em] sm:w-auto"
         >
           <span>Next battle</span>
           <ArrowRight size={16} strokeWidth={1.8} aria-hidden="true" />
@@ -73,18 +97,16 @@ export const ArenaResultReveal: React.FC<ArenaResultRevealProps> = ({
         <button
           type="button"
           onClick={() => {
-            if (navigator.share) {
-              void navigator.share({
-                title: battle.title,
-                text: `${battle.left.name} vs ${battle.right.name}`,
-                url: window.location.href,
-              });
-            }
+            void handleShare();
           }}
-          className="inline-flex min-h-12 w-full max-w-xs items-center justify-center gap-2 rounded-[var(--radius-scent)] border border-scent-accent/22 bg-black/50 px-6 py-3 text-sm font-bold uppercase tracking-[0.16em] text-scent-text-muted transition-colors hover:border-scent-accent/42 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55 sm:w-auto"
+          className="inline-flex min-h-12 w-full max-w-xs items-center justify-center gap-2 rounded-[var(--radius-scent)] border border-scent-accent/22 bg-black/68 px-6 py-3 text-sm font-bold uppercase tracking-[0.16em] text-scent-text-muted transition-all hover:border-scent-accent/42 hover:text-foreground active:scale-[0.98] active:border-scent-accent/52 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55 sm:w-auto"
         >
-          <Share2 size={16} strokeWidth={1.8} aria-hidden="true" />
-          <span>Share</span>
+          {shareCopied ? (
+            <Check size={16} strokeWidth={1.8} aria-hidden="true" />
+          ) : (
+            <Share2 size={16} strokeWidth={1.8} aria-hidden="true" />
+          )}
+          <span>{shareCopied ? 'Copied' : 'Share'}</span>
         </button>
       </div>
     </section>

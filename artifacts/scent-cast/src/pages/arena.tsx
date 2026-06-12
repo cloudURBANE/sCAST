@@ -77,6 +77,11 @@ export const ArenaPage: React.FC<ArenaPageProps> = ({
     });
   }, [authToken, guestVoteMutation, pendingGuestVote]);
 
+  const selectBattle = (index: number) => {
+    setActiveIndex(index);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const nextBattle = () => {
     if (battles.length <= 1) return;
     setActiveIndex((index) => (index + 1) % battles.length);
@@ -85,6 +90,7 @@ export const ArenaPage: React.FC<ArenaPageProps> = ({
 
   return (
     <div className="min-h-[100svh] overflow-x-hidden">
+      <div className="fixed inset-0 z-0 bg-[radial-gradient(ellipse_at_50%_0%,rgba(212,175,55,0.04),transparent_60%)]" aria-hidden="true" />
       <AppTopNav
         authToken={authToken}
         authEmail={authEmail}
@@ -126,6 +132,7 @@ export const ArenaPage: React.FC<ArenaPageProps> = ({
         ) : activeBattle ? (
           <>
             <ArenaBattleStage
+              key={activeBattle.id}
               battle={activeBattle}
               authToken={authToken}
               onSignIn={onSignIn}
@@ -136,13 +143,13 @@ export const ArenaPage: React.FC<ArenaPageProps> = ({
                 guestVoteSaveError?.postId === activeBattle.id ? guestVoteSaveError.message : null
               }
             />
-            <ArenaNextRail battles={battles} activeId={activeBattle.id} onSelect={setActiveIndex} />
+            <ArenaNextRail battles={battles} activeId={activeBattle.id} onSelect={selectBattle} />
           </>
         ) : (
           <div className="mx-auto grid min-h-[62svh] max-w-2xl place-items-center text-center">
-            <div className="rounded-[var(--radius-scent)] border border-scent-accent/24 bg-black/58 px-6 py-12">
-              <Swords className="mx-auto h-8 w-8 text-scent-accent" aria-hidden="true" />
-              <p className="mt-5 font-serif text-3xl italic text-[#fff7ec]">No battles are ready yet.</p>
+            <div className="rounded-[var(--radius-scent)] border border-scent-accent/24 bg-black/68 px-6 py-8 shadow-[inset_0_1px_0_rgba(255,236,183,0.06),0_18px_44px_-34px_rgba(0,0,0,0.9)] sm:py-10">
+              <Swords className="mx-auto h-10 w-10 text-scent-accent" aria-hidden="true" />
+              <p className="mt-5 font-serif text-3xl italic text-foreground">No battles are ready yet.</p>
               <p className="mx-auto mt-4 max-w-md text-base leading-7 text-scent-text-muted">
                 Start a battle from Community with two catalog-backed fragrances and it will appear here.
               </p>
@@ -151,7 +158,7 @@ export const ArenaPage: React.FC<ArenaPageProps> = ({
         )}
       </main>
 
-      <footer className="relative z-10 border-t border-scent-accent/10 px-8 py-16">
+      <footer className="relative z-10 border-t border-scent-accent/10 px-8 py-10 sm:py-12">
         <div className="mx-auto max-w-[1400px] space-y-4 text-center">
           <div className="flex items-center justify-center opacity-30">
             <img

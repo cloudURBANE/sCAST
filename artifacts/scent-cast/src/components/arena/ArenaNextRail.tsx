@@ -9,24 +9,23 @@ interface ArenaNextRailProps {
 
 export const ArenaNextRail: React.FC<ArenaNextRailProps> = ({ battles, activeId, onSelect }) => {
   if (battles.length <= 1) return null;
+  const upcomingBattles = battles
+    .map((battle, index) => ({ battle, index }))
+    .filter(({ battle }) => battle.id !== activeId);
+  if (upcomingBattles.length === 0) return null;
 
   return (
     <aside className="mx-auto mt-12 w-full max-w-[1320px]" aria-label="Upcoming arena battles">
       <p className="mb-3 scent-type-label text-scent-accent/80">Next in arena</p>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {battles.map((battle, index) => {
-          const active = battle.id === activeId;
+        {upcomingBattles.map(({ battle, index }) => {
           return (
             <button
               key={battle.id}
               type="button"
               onClick={() => onSelect(index)}
-              aria-pressed={active}
               className={[
-                'min-h-24 rounded-[18px] border bg-black/46 px-4 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55',
-                active
-                  ? 'border-scent-accent/48 text-[#fff7ec]'
-                  : 'border-scent-accent/16 text-scent-text-muted hover:border-scent-accent/36 hover:text-[#fff7ec]',
+                'min-h-24 rounded-[var(--radius-scent)] border border-scent-accent/16 bg-black/62 px-4 py-3 text-left text-scent-text-muted shadow-[inset_0_1px_0_rgba(255,236,183,0.04),0_16px_36px_-28px_rgba(0,0,0,0.8)] transition-all duration-200 hover:border-scent-accent/36 hover:bg-scent-accent/[0.06] hover:text-foreground hover:shadow-[inset_0_1px_0_rgba(255,236,183,0.07),0_18px_42px_-28px_rgba(212,175,55,0.22)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55',
               ].join(' ')}
             >
               <span className="block scent-type-meta uppercase text-scent-accent/78">

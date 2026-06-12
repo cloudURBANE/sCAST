@@ -34,7 +34,7 @@ function sideFromOption(option: string, fragrance: CommunityFragranceSnapshot | 
     name: fragrance?.name?.trim() || option,
     ...(fragrance?.brand?.trim() ? { brand: fragrance.brand.trim() } : {}),
     ...(fragrance?.imageUrl?.trim() ? { imageUrl: fragrance.imageUrl.trim() } : {}),
-    descriptor: fragrance?.family?.trim() || (fragrance ? 'Catalog-backed fragrance' : 'Community option'),
+    descriptor: fragrance?.family?.trim() || (fragrance ? 'Classic fragrance' : 'Community option'),
   };
 }
 
