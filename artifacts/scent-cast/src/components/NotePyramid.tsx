@@ -2,7 +2,7 @@ import React from 'react';
 import { AnimatePresence, motion, useReducedMotion, type Transition } from 'framer-motion';
 import { type MainAccordDisplayRow } from '@/lib/fragranceApi';
 import { resolveNoteAccordLinks, type NoteAccordLink } from '@/lib/noteAccordLinks';
-import { isIpadSafariPerformanceMode, isLowRenderBudget } from '@/lib/platform';
+import { isLowRenderBudget } from '@/lib/platform';
 
 type ActiveLayer = 'top' | 'heart' | 'base';
 type Point = readonly [number, number];
@@ -733,17 +733,16 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
   // atmosphere / starfield / glow run ~10 infinite animations. Re-creating and
   // compositing all of that on every detail-modal open exhausts a phone's small
   // GPU/memory budget — WebKit then kills the page ("A problem repeatedly
-  // occurred"). iPad Safari gets the same filter-less path while preserving the
-  // desktop/tablet layout around it: no
+  // occurred"). On a low render budget, render the flat, static path: no
   // filters, no blend (gated below via filterRef / className), and treat the
   // session as reduced-motion so every infinite animation collapses to its
-  // resting frame instead of stacking across opens. Other desktop-class
-  // browsers keep the full treatment.
+  // resting frame instead of stacking across opens. Desktop and iPad
+  // (desktop-class hardware) keep the full treatment.
   // Device class is stable, so sample once.
-  const lowRenderBudget = React.useRef(isLowRenderBudget() || isIpadSafariPerformanceMode()).current;
+  const lowRenderBudget = React.useRef(isLowRenderBudget()).current;
   const osPrefersReducedMotion = useReducedMotion();
   const prefersReducedMotion = osPrefersReducedMotion === true || lowRenderBudget;
-  const shouldPlayGuide = osPrefersReducedMotion !== true && !lowRenderBudget;
+  const shouldPlayGuide = osPrefersReducedMotion !== true;
   const idPrefix = React.useId().replace(/:/g, '');
   const state = activeLayer ?? 'idle';
   const engagedLayer = hoveredLayer ?? focusedLayer ?? (activeLayer ? null : guidedLayer);
@@ -1473,24 +1472,16 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                 aria-disabled={isEmpty || undefined}
                 className={`outline-none [&:focus-visible_.focus-ring]:opacity-100 ${isEmpty ? 'cursor-default' : 'cursor-pointer'}`}
                 initial={false}
-                animate={
-                  lowRenderBudget
-                    ? {
-                        y: targetY,
-                        opacity: targetOpacity,
-                        scale: targetScale,
-                      }
-                    : {
-                        y: targetY,
-                        opacity: targetOpacity,
-                        scale: targetScale,
-                        filter: isEmpty
-                          ? 'saturate(1.05) brightness(0.88)'
-                          : isMuted
-                            ? 'saturate(0.85) brightness(0.92)'
-                            : 'saturate(1) brightness(1)',
-                      }
-                }
+                animate={{
+                  y: targetY,
+                  opacity: targetOpacity,
+                  scale: targetScale,
+                  filter: isEmpty
+                    ? 'saturate(1.05) brightness(0.88)'
+                    : isMuted
+                      ? 'saturate(0.85) brightness(0.92)'
+                      : 'saturate(1) brightness(1)',
+                }}
                 transition={
                   prefersReducedMotion
                     ? reducedTransition
@@ -1501,7 +1492,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                   transformOrigin: `${PYRAMID_CENTER_X}px ${LAYER_CENTER_Y[layer.key]}px`,
                   WebkitTapHighlightColor: 'transparent',
                   touchAction: 'manipulation',
-                  willChange: activeLayer !== null || isEngaged ? 'transform, opacity' : 'auto',
+                  willChange: activeLayer !== null || isEngaged ? 'transform, opacity, filter' : 'auto',
                 }}
                 onPointerEnter={isEmpty ? undefined : (event) => {
                   if (event.pointerType !== 'mouse') return;
@@ -2073,9 +2064,9 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
           {selectedLayer ? (
             <motion.div
               key={selectedLayer.key}
-              initial={prefersReducedMotion ? { opacity: 0, y: 8, scale: 0.985 } : { opacity: 0, y: 8, scale: 0.985, filter: 'blur(3px)' }}
-              animate={prefersReducedMotion ? { opacity: 1, y: 0, scale: 1 } : { opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
-              exit={prefersReducedMotion ? { opacity: 0, y: -5, scale: 0.99 } : { opacity: 0, y: -5, scale: 0.99, filter: 'blur(2px)' }}
+              initial={{ opacity: 0, y: 8, scale: 0.985, filter: 'blur(3px)' }}
+              animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
+              exit={{ opacity: 0, y: -5, scale: 0.99, filter: 'blur(2px)' }}
               transition={prefersReducedMotion ? reducedTransition : { duration: 0.32, ease: CALM_EASE }}
               className={`pointer-events-none absolute left-1/2 z-50 w-[84%] max-w-[15rem] -translate-x-1/2 overflow-hidden rounded-lg border border-white/10 bg-[#060608]/92 px-2 py-2 shadow-[0_10px_30px_-8px_rgba(0,0,0,0.78),inset_0_1px_1px_rgba(255,255,255,0.13),0_0_0_1px_rgba(252,157,25,0.09),0_0_28px_-10px_rgba(252,157,25,0.34)] sm:max-w-[18.5rem] sm:px-3.5 sm:py-3.5 ${selectedLayer.revealClass}`}
             >
