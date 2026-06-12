@@ -8,10 +8,10 @@ import {
 
 export interface RenderBudget {
   /**
-   * The session is a constrained surface (phone-class touch device or
-   * reduced-motion): drop per-frame backgrounds, use cheaper route-transition
-   * motion, and avoid duplicated image surfaces. iPads are desktop-class and
-   * never set this on their own.
+   * The session is a constrained surface (touch WebKit or reduced-motion):
+   * drop per-frame backgrounds, use cheaper route-transition motion, and avoid
+   * duplicated image surfaces. iPads are included because iPadOS WebKit is the
+   * constrained part even on fast hardware.
    */
   lowMotionRenderMode: boolean;
   /** Any iPadOS device (browser or installed PWA). */

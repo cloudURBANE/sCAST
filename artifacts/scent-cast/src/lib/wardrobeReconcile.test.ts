@@ -58,6 +58,66 @@ test("reconcileWardrobeItems accepts a new cache version when the image hash cha
   assert.equal(reconciled[0]?.imageHash, "new");
 });
 
+test("reconcileWardrobeItems keeps a current image when an incoming refresh is imageless", () => {
+  const current = [
+    {
+      id: "oud",
+      _dbId: "row-1",
+      name: "Oud Wood",
+      brand: "Tom Ford",
+      imageUrl: "/images/oud.webp?v=stable",
+      imageHash: "stable",
+    },
+  ];
+  const incoming = [
+    {
+      id: "oud",
+      _dbId: "row-1",
+      name: "Oud Wood",
+      brand: "Tom Ford",
+      imageUrl: "",
+    },
+  ];
+
+  const reconciled = reconcileWardrobeItems(current, incoming);
+
+  assert.equal(reconciled, current);
+  assert.equal(reconciled[0], current[0]);
+  assert.equal(reconciled[0]?.imageUrl, "/images/oud.webp?v=stable");
+  assert.equal(reconciled[0]?.imageHash, "stable");
+});
+
+test("reconcileWardrobeItems preserves the current hash when keeping a current image", () => {
+  const current = [
+    {
+      id: "oud",
+      _dbId: "row-1",
+      name: "Oud Wood",
+      brand: "Tom Ford",
+      imageUrl: "/images/oud.webp?v=stable",
+      imageHash: "stable",
+      season: "Winter",
+    },
+  ];
+  const incoming = [
+    {
+      id: "oud",
+      _dbId: "row-1",
+      name: "Oud Wood",
+      brand: "Tom Ford",
+      imageUrl: "/images/oud.webp?v=poll",
+      season: "Evening",
+    },
+  ];
+
+  const reconciled = reconcileWardrobeItems(current, incoming);
+
+  assert.notEqual(reconciled, current);
+  assert.equal(reconciled[0]?.imageUrl, "/images/oud.webp?v=stable");
+  assert.equal(reconciled[0]?.imageHash, "stable");
+  assert.equal((reconciled[0] as { season?: string })?.season, "Evening");
+});
+
 test("reconcileWardrobeItems keeps incoming order while reusing unchanged rows", () => {
   const first = { id: "one", name: "One", brand: "A", imageUrl: "/one.webp" };
   const second = { id: "two", name: "Two", brand: "B", imageUrl: "/two.webp" };

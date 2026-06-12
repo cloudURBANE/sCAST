@@ -54,7 +54,8 @@ function shouldKeepCurrentImageUrl(
 ): boolean {
   const currentUrl = cleanString(current.imageUrl);
   const incomingUrl = cleanString(incoming.imageUrl);
-  if (!currentUrl || !incomingUrl) return false;
+  if (!currentUrl) return false;
+  if (!incomingUrl) return true;
   if (currentUrl === incomingUrl) return true;
   if (imageUrlWithoutCacheVersion(currentUrl) !== imageUrlWithoutCacheVersion(incomingUrl)) {
     return false;
@@ -63,6 +64,16 @@ function shouldKeepCurrentImageUrl(
   const currentHash = cleanString(current.imageHash);
   const incomingHash = cleanString(incoming.imageHash);
   return !incomingHash || incomingHash === currentHash;
+}
+
+function keepCurrentImageFields<T extends WardrobeReconcileItem>(current: T, incoming: T): T {
+  return {
+    ...incoming,
+    imageUrl: current.imageUrl,
+    ...(!cleanString(incoming.imageHash) && cleanString(current.imageHash)
+      ? { imageHash: current.imageHash }
+      : {}),
+  } as T;
 }
 
 export function reconcileWardrobeItems<T extends WardrobeReconcileItem>(
@@ -83,7 +94,7 @@ export function reconcileWardrobeItems<T extends WardrobeReconcileItem>(
     if (!currentItem) return incomingItem;
 
     const mergedItem = shouldKeepCurrentImageUrl(currentItem, incomingItem)
-      ? ({ ...incomingItem, imageUrl: currentItem.imageUrl } as T)
+      ? keepCurrentImageFields(currentItem, incomingItem)
       : incomingItem;
 
     return sameMeaningfulItem(currentItem, mergedItem) ? currentItem : mergedItem;

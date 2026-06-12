@@ -109,7 +109,7 @@ export const BottleImage: React.FC<BottleImageProps> = ({
   const trimmedSrc = (src ?? '').trim();
   const hasDirectCdnSrc =
     proxy && /^https?:\/\//i.test(trimmedSrc) && isProcessedStorageImageUrl(trimmedSrc);
-  const proxyFallbackUrl = hasDirectCdnSrc ? proxiedImageUrl(src, { forceProxy: true }) : '';
+  const proxyFallbackUrl = hasDirectCdnSrc ? proxiedImageUrl(src, { forceProxy: true, packshot: true }) : '';
   const mediaKey = `${url}\u0000${videoSrc ?? ''}`;
 
   const imgRef = React.useRef<HTMLImageElement | null>(null);
