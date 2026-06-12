@@ -1,4 +1,5 @@
 import type { Metric } from 'web-vitals';
+import { isIpadDevice } from './platform';
 
 export type WebVitalContext = {
   route: string;
@@ -29,6 +30,7 @@ const IS_DEV = Boolean(import.meta.env?.DEV);
 
 function currentDeviceClass(): WebVitalContext['deviceClass'] {
   if (typeof window === 'undefined') return 'desktop';
+  if (isIpadDevice()) return 'tablet';
   const coarse = window.matchMedia?.('(pointer: coarse)').matches;
   const shortSide = Math.min(window.innerWidth, window.innerHeight);
   if (coarse && shortSide < 768) return 'mobile';

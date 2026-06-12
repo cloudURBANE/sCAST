@@ -1,4 +1,5 @@
 import * as React from "react";
+import { isIpadSafariPerformanceMode } from "@/lib/platform";
 
 type ElementRef = React.RefObject<HTMLElement | null>;
 
@@ -25,9 +26,27 @@ const modalStack: string[] = [];
 let scrollLockCount = 0;
 let lockedScrollX = 0;
 let lockedScrollY = 0;
-let previousBodyStyles: Partial<
-  Pick<CSSStyleDeclaration, "overflow" | "position" | "top" | "left" | "right" | "width">
-> = {};
+let scrollLockMode: "fixed-body" | "root-overflow" = "fixed-body";
+let previousBodyStyles: (
+  Pick<CSSStyleDeclaration, "overflow" | "position" | "top" | "left" | "right" | "width"> & {
+    overscrollBehavior: string;
+  }
+) | null = null;
+let previousRootStyles: Pick<CSSStyleDeclaration, "overflow"> & {
+  overscrollBehavior: string;
+} | null = null;
+
+function readOverscrollBehavior(element: HTMLElement): string {
+  return element.style.getPropertyValue("overscroll-behavior");
+}
+
+function writeOverscrollBehavior(element: HTMLElement, value: string) {
+  if (value) {
+    element.style.setProperty("overscroll-behavior", value);
+  } else {
+    element.style.removeProperty("overscroll-behavior");
+  }
+}
 
 function isVisibleFocusable(element: HTMLElement): boolean {
   if (element.hasAttribute("disabled")) return false;
@@ -45,38 +64,71 @@ function getFocusableElements(container: HTMLElement): HTMLElement[] {
 
 function lockBodyScroll(): () => void {
   if (scrollLockCount === 0) {
+    const root = document.documentElement;
+    const body = document.body;
     lockedScrollX = window.scrollX || window.pageXOffset || 0;
     lockedScrollY = window.scrollY || window.pageYOffset || 0;
+    scrollLockMode = isIpadSafariPerformanceMode() ? "root-overflow" : "fixed-body";
     previousBodyStyles = {
-      overflow: document.body.style.overflow,
-      position: document.body.style.position,
-      top: document.body.style.top,
-      left: document.body.style.left,
-      right: document.body.style.right,
-      width: document.body.style.width,
+      overflow: body.style.overflow,
+      position: body.style.position,
+      top: body.style.top,
+      left: body.style.left,
+      right: body.style.right,
+      width: body.style.width,
+      overscrollBehavior: readOverscrollBehavior(body),
+    };
+    previousRootStyles = {
+      overflow: root.style.overflow,
+      overscrollBehavior: readOverscrollBehavior(root),
     };
 
-    document.body.style.overflow = "hidden";
-    document.body.style.position = "fixed";
-    document.body.style.top = `-${lockedScrollY}px`;
-    document.body.style.left = `-${lockedScrollX}px`;
-    document.body.style.right = "0";
-    document.body.style.width = "100%";
+    body.style.overflow = "hidden";
+
+    if (scrollLockMode === "root-overflow") {
+      root.style.overflow = "hidden";
+      writeOverscrollBehavior(root, "none");
+      writeOverscrollBehavior(body, "none");
+    } else {
+      body.style.position = "fixed";
+      body.style.top = `-${lockedScrollY}px`;
+      body.style.left = `-${lockedScrollX}px`;
+      body.style.right = "0";
+      body.style.width = "100%";
+    }
   }
 
   scrollLockCount += 1;
 
   return () => {
-    scrollLockCount = Math.max(0, scrollLockCount - 1);
+    if (scrollLockCount <= 0) return;
+    scrollLockCount -= 1;
     if (scrollLockCount === 0) {
-      document.body.style.overflow = previousBodyStyles.overflow ?? "";
-      document.body.style.position = previousBodyStyles.position ?? "";
-      document.body.style.top = previousBodyStyles.top ?? "";
-      document.body.style.left = previousBodyStyles.left ?? "";
-      document.body.style.right = previousBodyStyles.right ?? "";
-      document.body.style.width = previousBodyStyles.width ?? "";
-      window.scrollTo(lockedScrollX, lockedScrollY);
-      previousBodyStyles = {};
+      const root = document.documentElement;
+      const body = document.body;
+      if (previousBodyStyles) {
+        body.style.overflow = previousBodyStyles.overflow;
+        body.style.position = previousBodyStyles.position;
+        body.style.top = previousBodyStyles.top;
+        body.style.left = previousBodyStyles.left;
+        body.style.right = previousBodyStyles.right;
+        body.style.width = previousBodyStyles.width;
+        writeOverscrollBehavior(body, previousBodyStyles.overscrollBehavior);
+      }
+      if (previousRootStyles) {
+        root.style.overflow = previousRootStyles.overflow;
+        writeOverscrollBehavior(root, previousRootStyles.overscrollBehavior);
+      }
+      if (
+        scrollLockMode === "fixed-body" ||
+        window.scrollX !== lockedScrollX ||
+        window.scrollY !== lockedScrollY
+      ) {
+        window.scrollTo(lockedScrollX, lockedScrollY);
+      }
+      previousBodyStyles = null;
+      previousRootStyles = null;
+      scrollLockMode = "fixed-body";
       lockedScrollX = 0;
       lockedScrollY = 0;
     }
