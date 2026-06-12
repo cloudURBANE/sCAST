@@ -25,10 +25,12 @@ interface AppTopNavProps {
 }
 
 const navBaseClassName =
-  'text-[13px] sm:text-[14px] font-semibold uppercase tracking-[0.12em] min-[430px]:tracking-[0.16em] whitespace-nowrap';
+  'text-[11px] min-[390px]:text-[11.5px] sm:text-[14px] font-semibold uppercase tracking-[0.055em] min-[430px]:tracking-[0.09em] sm:tracking-[0.16em] whitespace-nowrap';
 
-const inactiveNavClassName = `${navBaseClassName} inline-flex min-h-[44px] items-center text-[#f4debd]/85 hover:text-white transition-colors`;
-const activeNavClassName = `${navBaseClassName} text-[#fff7ec]`;
+const topLevelNavClassName =
+  'inline-flex min-h-[44px] items-center justify-center rounded-full px-1.5 min-[390px]:px-2 sm:px-0';
+const inactiveNavClassName = `${navBaseClassName} ${topLevelNavClassName} text-[#f4debd]/85 hover:text-white transition-colors`;
+const activeNavClassName = `${navBaseClassName} ${topLevelNavClassName} text-[#fff7ec]`;
 
 const ActiveDot: React.FC = () => (
   <span
@@ -160,12 +162,12 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
   );
 
   return (
-    <nav className="scent-topbar fixed top-0 left-0 right-0 z-50 px-3 sm:px-8">
-      <div className="max-w-[1760px] mx-auto h-full grid grid-cols-[minmax(84px,1fr)_auto_minmax(84px,1fr)] sm:grid-cols-[1fr_auto_1fr] items-center">
-        <div className="flex min-w-0 items-center gap-4 sm:gap-6 justify-self-start">
+    <nav className="scent-topbar fixed top-0 left-0 right-0 z-50 px-2.5 sm:px-8">
+      <div className="max-w-[1760px] mx-auto h-full grid grid-cols-[minmax(76px,1fr)_auto_minmax(76px,1fr)] sm:grid-cols-[1fr_auto_1fr] items-center">
+        <div className="flex min-w-0 items-center gap-2.5 min-[390px]:gap-3 sm:gap-6 justify-self-start">
           {authControl}
           {!isHomeRoute ? (
-            <div className="flex items-center gap-3 sm:gap-6">
+            <div className="flex items-center gap-1.5 min-[390px]:gap-2.5 sm:gap-6">
               <span className="hidden sm:block w-px h-3 bg-scent-accent/20 shrink-0" aria-hidden="true" />
               <Link
                 to="/"
@@ -177,14 +179,14 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
           ) : null}
         </div>
 
-        <div className="flex items-center justify-center px-2 sm:px-10">
+        <div className="flex items-center justify-center px-1 sm:px-10">
           <h1 className="leading-none">
             <Link to="/" aria-label="Go to home" className="block">
               <img
                 src="/nav/scentbeam-nav-logo.png"
                 srcSet="/nav/scentbeam-nav-logo.png 1x, /nav/scentbeam-nav-logo@2x.png 2x"
                 alt="ScentBeam"
-                className="h-8 w-auto max-w-[118px] object-contain min-[430px]:h-9 min-[430px]:max-w-[138px] sm:h-12 sm:max-w-none"
+                className="h-8 w-auto max-w-[106px] object-contain min-[430px]:h-9 min-[430px]:max-w-[128px] sm:h-12 sm:max-w-none"
                 decoding="async"
                 draggable={false}
               />
@@ -192,12 +194,12 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
           </h1>
         </div>
 
-        <div className="flex min-w-0 items-center gap-4 sm:gap-6 justify-self-end">
+        <div className="flex min-w-0 items-center gap-1.5 min-[390px]:gap-2.5 sm:gap-6 justify-self-end">
           <NavLink
             to="/arena"
             className={({ isActive }) =>
               isActive
-                ? `${activeNavClassName} hidden min-h-[44px] items-center gap-2 sm:inline-flex`
+                ? `${activeNavClassName} gap-2`
                 : inactiveNavClassName
             }
           >
@@ -212,7 +214,7 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
             to="/community"
             className={({ isActive }) =>
               isActive
-                ? `${activeNavClassName} hidden min-h-[44px] items-center gap-2 sm:inline-flex`
+                ? `${activeNavClassName} gap-2`
                 : inactiveNavClassName
             }
           >
