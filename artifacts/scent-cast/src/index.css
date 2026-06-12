@@ -1019,37 +1019,42 @@ a {
 }
 
 .scent-arena-brand {
-  --brand-size: clamp(1rem, 5.4vw, 1.42rem);
-  line-height: 1.16;
+  --brand-size: clamp(0.68rem, 2.6vw, 0.82rem);
+  color: #f1d88d;
+  font-family: var(--font-sans);
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  line-height: 1.18;
+  text-transform: uppercase;
 }
 
 .scent-arena-brand[data-len="medium"] {
-  --brand-size: clamp(0.94rem, 4.9vw, 1.28rem);
+  --brand-size: clamp(0.64rem, 2.35vw, 0.76rem);
 }
 
 .scent-arena-brand[data-len="long"],
 .scent-arena-brand[data-len="xlong"] {
-  --brand-size: clamp(0.82rem, 4.2vw, 1.08rem);
-  line-height: 1.18;
+  --brand-size: clamp(0.58rem, 2.1vw, 0.7rem);
+  line-height: 1.22;
 }
 
 @media (min-width: 640px) {
   .scent-arena-brand {
-    --brand-size: clamp(1.71rem, 2.565vw, 2.25rem);
-    line-height: 1.28;
+    --brand-size: clamp(0.82rem, 1.35vw, 1rem);
+    line-height: 1.18;
   }
 
   .scent-arena-brand[data-len="medium"] {
-    --brand-size: clamp(1.575rem, 2.295vw, 2.025rem);
+    --brand-size: clamp(0.76rem, 1.16vw, 0.92rem);
   }
 
   .scent-arena-brand[data-len="long"] {
-    --brand-size: clamp(1.44rem, 2.07vw, 1.89rem);
+    --brand-size: clamp(0.7rem, 1vw, 0.84rem);
   }
 
   .scent-arena-brand[data-len="xlong"] {
-    --brand-size: clamp(1.125rem, 1.575vw, 1.485rem);
-    line-height: 1.32;
+    --brand-size: clamp(0.64rem, 0.9vw, 0.76rem);
+    line-height: 1.24;
   }
 }
 

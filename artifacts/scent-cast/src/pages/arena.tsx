@@ -105,7 +105,7 @@ export const ArenaPage: React.FC<ArenaPageProps> = ({
 
       <div style={{ height: 'var(--topbar-h)' }} />
 
-      <main className="relative z-10 px-4 pb-24 pt-8 sm:px-8 sm:pt-12">
+      <main className="relative z-10 px-4 pb-28 pt-8 sm:px-8 sm:pt-12 md:pb-24">
         {isLoading ? (
           <div className="grid min-h-[62svh] place-items-center text-center">
             <div>
@@ -116,7 +116,7 @@ export const ArenaPage: React.FC<ArenaPageProps> = ({
         ) : isError ? (
           <div role="alert" className="mx-auto grid min-h-[62svh] max-w-xl place-items-center text-center">
             <div className="rounded-[var(--radius-scent)] border border-red-500/24 bg-red-500/[0.055] p-6">
-              <p className="font-serif text-2xl italic text-red-100">Arena could not load.</p>
+              <p className="font-serif text-2xl text-red-100">Arena could not load.</p>
               <p className="mt-3 text-sm leading-6 text-red-100/82">
                 {error instanceof Error ? error.message : 'Battle data is unavailable.'}
               </p>
@@ -149,7 +149,7 @@ export const ArenaPage: React.FC<ArenaPageProps> = ({
           <div className="mx-auto grid min-h-[62svh] max-w-2xl place-items-center text-center">
             <div className="rounded-[var(--radius-scent)] border border-scent-accent/24 bg-black/68 px-6 py-8 shadow-[inset_0_1px_0_rgba(255,236,183,0.06),0_18px_44px_-34px_rgba(0,0,0,0.9)] sm:py-10">
               <Swords className="mx-auto h-10 w-10 text-scent-accent" aria-hidden="true" />
-              <p className="mt-5 font-serif text-3xl italic text-foreground">No battles are ready yet.</p>
+              <p className="mt-5 font-serif text-3xl text-foreground">No battles are ready yet.</p>
               <p className="mx-auto mt-4 max-w-md text-base leading-7 text-scent-text-muted">
                 Start a battle from Community with two catalog-backed fragrances and it will appear here.
               </p>
@@ -159,7 +159,7 @@ export const ArenaPage: React.FC<ArenaPageProps> = ({
       </main>
 
       <footer className="relative z-10 border-t border-scent-accent/10 px-8 py-10 sm:py-12">
-        <div className="mx-auto max-w-[1400px] space-y-4 text-center">
+        <div className="mx-auto max-w-4xl space-y-4 text-center">
           <div className="flex items-center justify-center opacity-30">
             <img
               src="/nav/scentbeam-nav-logo.png"
