@@ -118,6 +118,18 @@ test("brand-only searches expand into actual dataset fragrance candidates", () =
   assert.equal(results[0]?.name, "Sauvage");
 });
 
+test("known brand acronyms expand for dataset and external source search", () => {
+  assert.equal(shouldSearchExternalFragranceSources("MFK"), true);
+
+  const brandResults = searchFragranceDatasetByBrand("MFK");
+  assert.ok(brandResults.length >= 1);
+  assert.equal(brandResults[0]?.brand, "Maison Francis Kurkdjian");
+
+  const resolved = resolveFragranceQuery("MFK Baccarat Rouge 540");
+  assert.equal(resolved?.brand, "Maison Francis Kurkdjian");
+  assert.equal(resolved?.name, "Baccarat Rouge 540");
+});
+
 test("known brand-only queries are eligible for external source expansion", () => {
   assert.equal(shouldSearchExternalFragranceSources("Dior"), true);
   assert.equal(shouldSearchExternalFragranceSources("Creed"), true);

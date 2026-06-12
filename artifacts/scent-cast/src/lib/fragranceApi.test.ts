@@ -718,6 +718,112 @@ test("searchFragrances uses the fragrance engine API instead of the app API", as
   assert.equal(response.results[0]?.origin, "srt");
 });
 
+test("searchFragrances expands known brand acronyms before engine lookup", async (t) => {
+  const previousFetch = globalThis.fetch;
+  const previousApiUrl = process.env.VITE_FRAGRANCE_API_URL;
+  const previousAppApiUrl = process.env.VITE_API_BASE_URL;
+  const requests: string[] = [];
+
+  process.env.VITE_FRAGRANCE_API_URL = "https://engine.example.test";
+  process.env.VITE_API_BASE_URL = "https://app-api.example.test";
+  Object.defineProperty(globalThis, "fetch", {
+    configurable: true,
+    value: async (url: string) => {
+      requests.push(url);
+      return new Response(
+        JSON.stringify({
+          query: "Maison Francis Kurkdjian",
+          results: [
+            {
+              id: "mfk-br540",
+              name: "Baccarat Rouge 540",
+              house: "Maison Francis Kurkdjian",
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    },
+  });
+
+  t.after(() => {
+    Object.defineProperty(globalThis, "fetch", {
+      configurable: true,
+      value: previousFetch,
+    });
+    if (previousApiUrl === undefined) {
+      delete process.env.VITE_FRAGRANCE_API_URL;
+    } else {
+      process.env.VITE_FRAGRANCE_API_URL = previousApiUrl;
+    }
+    if (previousAppApiUrl === undefined) {
+      delete process.env.VITE_API_BASE_URL;
+    } else {
+      process.env.VITE_API_BASE_URL = previousAppApiUrl;
+    }
+  });
+
+  const response = await searchFragrances("MFK");
+
+  assert.deepEqual(requests, [
+    "https://engine.example.test/api/fragrances/search?q=Maison%20Francis%20Kurkdjian",
+    "https://app-api.example.test/api/fragrances/search?q=Maison%20Francis%20Kurkdjian",
+  ]);
+  assert.equal(response.query, "MFK");
+  assert.equal(response.results[0]?.house, "Maison Francis Kurkdjian");
+});
+
+test("searchFragrances ranks exact scent-name hits above brand dumps", async (t) => {
+  const previousFetch = globalThis.fetch;
+  const previousApiUrl = process.env.VITE_FRAGRANCE_API_URL;
+  const previousAppApiUrl = process.env.VITE_API_BASE_URL;
+
+  process.env.VITE_FRAGRANCE_API_URL = "https://engine.example.test";
+  process.env.VITE_API_BASE_URL = "https://app-api.example.test";
+  Object.defineProperty(globalThis, "fetch", {
+    configurable: true,
+    value: async () =>
+      new Response(
+        JSON.stringify({
+          query: "Tom Ford Lost Cherry",
+          results: [
+            { id: "oud-wood", name: "Oud Wood", house: "Tom Ford" },
+            { id: "lost-cherry", name: "Lost Cherry", house: "Tom Ford" },
+            { id: "tobacco-vanille", name: "Tobacco Vanille", house: "Tom Ford" },
+          ],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+  });
+
+  t.after(() => {
+    Object.defineProperty(globalThis, "fetch", {
+      configurable: true,
+      value: previousFetch,
+    });
+    if (previousApiUrl === undefined) {
+      delete process.env.VITE_FRAGRANCE_API_URL;
+    } else {
+      process.env.VITE_FRAGRANCE_API_URL = previousApiUrl;
+    }
+    if (previousAppApiUrl === undefined) {
+      delete process.env.VITE_API_BASE_URL;
+    } else {
+      process.env.VITE_API_BASE_URL = previousAppApiUrl;
+    }
+  });
+
+  const response = await searchFragrances("Tom Ford Lost Cherry");
+
+  assert.deepEqual(
+    response.results.map((result) => result.name),
+    ["Lost Cherry", "Oud Wood", "Tobacco Vanille"],
+  );
+});
+
 test("searchFragrances supplements degraded SRT breadth with app API results", async (t) => {
   const previousFetch = globalThis.fetch;
   const previousApiUrl = process.env.VITE_FRAGRANCE_API_URL;

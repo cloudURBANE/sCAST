@@ -2,6 +2,23 @@ const FRAGRANCE_SEARCH_CACHE_STORAGE_KEY = "scentcast.fragranceSearchCache.v4";
 const FRAGRANCE_SEARCH_CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const FRAGRANCE_SEARCH_CACHE_MAX_ENTRIES = 100;
 const SUPPLEMENTAL_SEARCH_MIN_RESULTS = 8;
+const SEARCH_QUERY_BRAND_ALIASES: ReadonlyArray<readonly [string, string]> = [
+  ["mfk", "Maison Francis Kurkdjian"],
+  ["ysl", "Yves Saint Laurent"],
+];
+const SEARCH_RANK_IGNORED_TOKENS = new Set([
+  "cologne",
+  "de",
+  "eau",
+  "edc",
+  "edp",
+  "edt",
+  "extrait",
+  "fragrance",
+  "parfum",
+  "perfume",
+  "toilette",
+]);
 
 export type FragranceSearchOrigin = "srt" | "app";
 
@@ -1062,6 +1079,35 @@ function normalizeForDedupe(value: unknown): string {
     .replace(/\s+/g, " ") ?? "";
 }
 
+function expandKnownSearchBrandAlias(query: string): string {
+  const normalized = normalizeForDedupe(query);
+  if (!normalized) return query.trim();
+  const queryTokens = normalized.split(" ").filter(Boolean);
+
+  for (const [alias, expandedBrand] of SEARCH_QUERY_BRAND_ALIASES) {
+    const aliasTokens = alias.split(" ");
+    const matchesAliasPrefix = aliasTokens.every((token, index) => queryTokens[index] === token);
+    if (!matchesAliasPrefix) continue;
+
+    const remainder = queryTokens.slice(aliasTokens.length).join(" ");
+    return [expandedBrand, remainder].filter(Boolean).join(" ");
+  }
+
+  return query.trim();
+}
+
+function searchRankTokens(value: unknown): string[] {
+  return normalizeForDedupe(value)
+    .split(" ")
+    .filter((token) => token.length > 1 && !SEARCH_RANK_IGNORED_TOKENS.has(token));
+}
+
+function tokenCoverage(wanted: string[], candidate: Set<string>): number {
+  if (wanted.length === 0) return 0;
+  const matched = wanted.filter((token) => candidate.has(token)).length;
+  return matched / wanted.length;
+}
+
 function fragranceIdentityKey(result: FragranceSearchResult): string {
   const house = normalizeForDedupe(result.house ?? result.brand);
   const name = normalizeForDedupe(result.name);
@@ -1153,6 +1199,57 @@ function mergeSearchResults(
   return merged;
 }
 
+function scoreSearchResultForQuery(query: string, result: FragranceSearchResult): number {
+  const expandedQuery = expandKnownSearchBrandAlias(query);
+  const queryTokens = searchRankTokens(expandedQuery);
+  if (queryTokens.length === 0) return 0;
+
+  const houseTokens = searchRankTokens(result.house ?? result.brand);
+  const nameTokens = searchRankTokens(result.name);
+  const fullTokenList = [...houseTokens, ...nameTokens];
+  const houseInitials = normalizedInitials(result.house ?? result.brand);
+  if (houseInitials) fullTokenList.push(houseInitials);
+  const fullTokens = new Set(fullTokenList);
+  const houseTokenSet = new Set(houseTokens);
+  const nameTokenSet = new Set(nameTokens);
+  const queryTokenSet = new Set(queryTokens);
+  const nameIntentTokens = queryTokens.filter((token) => !houseTokenSet.has(token));
+
+  const normalizedQuery = normalizeForDedupe(expandedQuery);
+  const normalizedName = normalizeForDedupe(result.name);
+  const normalizedFull = normalizeForDedupe([result.house ?? result.brand, result.name].filter(Boolean).join(" "));
+  const nameCoverage = tokenCoverage(nameIntentTokens.length > 0 ? nameIntentTokens : queryTokens, nameTokenSet);
+  const overallCoverage = tokenCoverage(queryTokens, fullTokens);
+  const brandCoverage = tokenCoverage(queryTokens, houseTokenSet);
+
+  let score = overallCoverage * 40 + nameCoverage * 55 + brandCoverage * 15;
+  if (normalizedFull && normalizedFull === normalizedQuery) score += 100;
+  if (normalizedName && normalizedName === normalizedQuery) score += 70;
+  if (normalizedName && normalizedQuery.includes(normalizedName)) score += 40;
+  if (normalizedFull && normalizedFull.includes(normalizedQuery)) score += 30;
+
+  if (nameIntentTokens.length > 0) {
+    const extraNameTokens = nameTokens.filter((token) => !queryTokenSet.has(token)).length;
+    score -= extraNameTokens * 7;
+  }
+
+  return score;
+}
+
+function rankSearchResultsByQuery(
+  query: string,
+  results: FragranceSearchResult[],
+): FragranceSearchResult[] {
+  return results
+    .map((result, index) => ({
+      result,
+      index,
+      score: scoreSearchResultForQuery(query, result),
+    }))
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .map(({ result }) => result);
+}
+
 function hasDegradedBreadth(diagnostics: FragranceSearchDiagnostics | undefined): boolean {
   if (!diagnostics || !("fallback_source" in diagnostics)) return false;
   return diagnostics.fallback_source !== null && diagnostics.fallback_source !== undefined;
@@ -1240,17 +1337,18 @@ export async function searchFragrances(
 ): Promise<FragranceSearchResponse> {
   const cached = getCachedFragranceSearch(query);
   if (cached) return cached;
+  const requestQuery = expandKnownSearchBrandAlias(query);
 
   let data: unknown;
   try {
     const res = await fetchFragranceEngine(
-      `/fragrances/search?q=${encodeURIComponent(query)}`,
+      `/fragrances/search?q=${encodeURIComponent(requestQuery)}`,
       { signal: options?.signal },
       { retryBackoffMs: [] },
     );
 
     if (res.status >= 500) {
-      return await searchAppFragrances(query, options);
+      return await searchAppFragrances(requestQuery, options, query);
     }
 
     if (!res.ok) {
@@ -1265,7 +1363,7 @@ export async function searchFragrances(
     // usable — try the Express app search before surfacing the error.
     if (isFragranceEngineTransportError(err) || isResponseBodyError(err)) {
       try {
-        return await searchAppFragrances(query, options);
+        return await searchAppFragrances(requestQuery, options, query);
       } catch (fallbackErr) {
         if (fallbackErr instanceof Error && fallbackErr.name === "AbortError") throw fallbackErr;
       }
@@ -1280,18 +1378,18 @@ export async function searchFragrances(
       : [];
 
   const response: FragranceSearchResponse = {
-    query: typeof (data as { query?: unknown })?.query === "string" ? (data as { query: string }).query : query,
+    query,
     results: rawResults
-      .map((result) => normalizeFragranceSearchResult(result, query, "srt"))
+      .map((result) => normalizeFragranceSearchResult(result, requestQuery, "srt"))
       .filter((result): result is FragranceSearchResult => {
         return result !== null && hasDisplayableSearchIdentity(query, result);
       }),
     diagnostics: normalizeSearchDiagnostics((data as { diagnostics?: unknown })?.diagnostics),
   };
 
-  if (shouldSupplementWithAppSearch(query, response)) {
+  if (shouldSupplementWithAppSearch(requestQuery, response)) {
     try {
-      const supplemental = await searchAppFragrances(query, { signal: options?.signal });
+      const supplemental = await searchAppFragrances(requestQuery, { signal: options?.signal }, query);
       response.results = mergeSearchResults(
         response.results,
         supplemental.results.filter(hasResolvedSearchHouse),
@@ -1304,6 +1402,7 @@ export async function searchFragrances(
     }
   }
 
+  response.results = rankSearchResultsByQuery(query, response.results);
   cacheFragranceSearch(query, response);
   return response;
 }
@@ -1311,6 +1410,7 @@ export async function searchFragrances(
 async function searchAppFragrances(
   query: string,
   options?: { signal?: AbortSignal },
+  originalQuery = query,
 ): Promise<FragranceSearchResponse> {
   const res = await fetch(
     appApiUrl(`/api/fragrances/search?q=${encodeURIComponent(query)}`),
@@ -1329,13 +1429,15 @@ async function searchAppFragrances(
       ? (payload.results as unknown[])
       : [];
 
+  const results = rawResults
+    .map((result) => normalizeFragranceSearchResult(result, query, "app"))
+    .filter((result): result is FragranceSearchResult => {
+      return result !== null && hasDisplayableSearchIdentity(originalQuery, result);
+    });
+
   return {
-    query: typeof payload.query === "string" ? payload.query : query,
-    results: rawResults
-      .map((result) => normalizeFragranceSearchResult(result, query, "app"))
-      .filter((result): result is FragranceSearchResult => {
-        return result !== null && hasDisplayableSearchIdentity(query, result);
-      }),
+    query: originalQuery,
+    results: rankSearchResultsByQuery(originalQuery, results),
     diagnostics: normalizeSearchDiagnostics(payload.diagnostics),
   };
 }
