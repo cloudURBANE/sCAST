@@ -8,10 +8,10 @@ import {
 
 export interface RenderBudget {
   /**
-   * The session is a constrained surface (touch WebKit or reduced-motion):
-   * drop per-frame backgrounds, use cheaper route-transition motion, and avoid
-   * duplicated image surfaces. iPads are included because iPadOS WebKit is the
-   * constrained part even on fast hardware.
+   * The session is a constrained surface (phone-class touch device or
+   * reduced-motion): drop per-frame backgrounds, use cheaper route-transition
+   * motion, and avoid duplicated image surfaces. iPads are desktop-class and
+   * stay out of this path unless the user enables reduced motion.
    */
   lowMotionRenderMode: boolean;
   /** Any iPadOS device (browser or installed PWA). */
@@ -29,6 +29,15 @@ function readBudget(): RenderBudget {
     isIpadStandalone: isIpadStandalone(),
     reducedMotion: prefersReducedMotion(),
   };
+}
+
+function sameBudget(a: RenderBudget, b: RenderBudget): boolean {
+  return (
+    a.lowMotionRenderMode === b.lowMotionRenderMode &&
+    a.isIpad === b.isIpad &&
+    a.isIpadStandalone === b.isIpadStandalone &&
+    a.reducedMotion === b.reducedMotion
+  );
 }
 
 /**
@@ -50,7 +59,10 @@ export function useRenderBudget(): RenderBudget {
       window.matchMedia("(display-mode: standalone)"),
       window.matchMedia("(pointer: coarse)"),
     ];
-    const update = () => setBudget(readBudget());
+    const update = () => {
+      const nextBudget = readBudget();
+      setBudget((current) => (sameBudget(current, nextBudget) ? current : nextBudget));
+    };
     update();
 
     for (const query of queries) {

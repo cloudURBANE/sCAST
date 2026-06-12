@@ -1,11 +1,11 @@
 // Runtime platform / device-class detection.
 //
-// Touch WebKit browsers are the proven bottleneck for the heavy thread
-// background, full route transition overlay, and duplicated bottle-image
-// surfaces. Modern iPads have desktop-class CPUs, but they still run iPadOS
-// WebKit with tighter compositor/image-decode scheduling than desktop Safari.
-// Treat iPad as render-budget constrained while preserving iPad-specific layout
-// choices in component code.
+// Phone-class coarse-pointer browsers are the low-render-budget class. iPads
+// carry desktop-grade silicon and should not be downgraded into the phone
+// experience just because they run iPadOS WebKit. iPad-specific WebKit quirks
+// are handled through explicit `isIpadDevice()` paths that change the
+// implementation (for example CSS-scheduled background motion) without dropping
+// feature richness.
 
 function hasWindow(): boolean {
   return typeof window !== "undefined" && typeof navigator !== "undefined";
@@ -48,7 +48,7 @@ export function isIpadStandalone(): boolean {
  */
 export function isConstrainedTouchDevice(): boolean {
   if (!hasWindow()) return false;
-  if (isIpadDevice()) return true;
+  if (isIpadDevice()) return false;
 
   const coarsePointer =
     typeof window.matchMedia === "function" &&
