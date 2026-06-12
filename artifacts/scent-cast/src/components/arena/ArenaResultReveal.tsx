@@ -79,19 +79,19 @@ export const ArenaResultReveal: React.FC<ArenaResultRevealProps> = ({
 
   return (
     <section
-      className="arena-reveal-stagger mx-auto mt-6 w-full max-w-[1320px] space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500 sm:mt-8"
+      className="arena-reveal-stagger mx-auto mt-6 w-full max-w-4xl space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500 sm:mt-8"
       aria-live="polite"
     >
       <div
-        className="rounded-[calc(var(--radius-scent)+6px)] border border-scent-accent/24 bg-[rgba(5,4,3,0.86)] p-4 shadow-[0_28px_80px_-56px_rgba(212,175,55,0.36),inset_0_1px_0_rgba(255,236,183,0.08)] sm:p-6"
+        className="rounded-lg border border-scent-accent/24 bg-[rgba(5,4,3,0.86)] p-4 shadow-[0_28px_80px_-56px_rgba(212,175,55,0.36),inset_0_1px_0_rgba(255,236,183,0.08)] sm:p-6"
         aria-label={`${pickedSide.name} is your pick at ${pickedPercent} percent. ${battle.left.name} has ${leftPercent} percent from ${leftCount} saved votes. ${battle.right.name} has ${rightPercent} percent from ${rightCount} saved votes. ${voteStatus}`}
       >
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1.05fr)_minmax(18rem,0.7fr)] lg:items-start">
+        <div className="grid gap-5 md:grid-cols-[minmax(0,2fr)_minmax(15rem,1fr)] md:items-start">
           <div className="min-w-0">
             <p className="scent-type-label text-scent-accent/82">Your pick</p>
-            <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
               <div className="min-w-0">
-                <h2 className="truncate font-serif text-2xl italic leading-tight text-foreground sm:text-4xl">
+                <h2 className="text-pretty text-xl font-bold leading-tight text-foreground sm:text-2xl md:text-3xl">
                   {pickedSide.name}
                 </h2>
                 <p className="mt-1 text-sm font-medium text-scent-text-muted">
@@ -99,23 +99,23 @@ export const ArenaResultReveal: React.FC<ArenaResultRevealProps> = ({
                   {total === 1 ? "vote" : "votes"}
                 </p>
               </div>
-              <p className="font-mono text-3xl leading-none text-scent-accent sm:text-4xl">
+              <p className="font-mono text-2xl leading-none text-scent-accent sm:text-3xl">
                 {pickedPercent}%
               </p>
             </div>
 
             <div className="mt-5">
-              <div className="flex items-center justify-between gap-3 text-xs font-bold uppercase tracking-[0.12em] text-scent-text-muted">
-                <span className="min-w-0 truncate">{battle.left.name}</span>
-                <span className="shrink-0 text-scent-accent">
+              <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-2 text-[11px] font-bold uppercase leading-4 tracking-[0.1em] text-scent-text-muted sm:gap-3 sm:text-xs sm:tracking-[0.12em]">
+                <span className="min-w-0 whitespace-normal text-left">{battle.left.name}</span>
+                <span className="shrink-0 text-center text-scent-accent">
                   {total} saved {total === 1 ? "vote" : "votes"}
                 </span>
-                <span className="min-w-0 truncate text-right">
+                <span className="min-w-0 whitespace-normal text-right">
                   {battle.right.name}
                 </span>
               </div>
               <div
-                className="mt-2 flex h-4 overflow-hidden rounded-full border border-scent-accent/14 bg-scent-accent/8"
+                className="mt-3 flex h-4 overflow-hidden rounded-full border border-scent-accent/14 bg-scent-accent/8"
                 aria-hidden="true"
               >
                 <span
@@ -127,7 +127,7 @@ export const ArenaResultReveal: React.FC<ArenaResultRevealProps> = ({
                   style={{ width: `${100 - leftShare}%` }}
                 />
               </div>
-              <div className="mt-2 grid grid-cols-2 gap-3 text-xs font-semibold text-scent-text-muted">
+              <div className="mt-3 grid grid-cols-2 gap-3 text-xs font-semibold leading-5 text-scent-text-muted">
                 <span>
                   {leftPercent}% - {leftCount}{" "}
                   {leftCount === 1 ? "vote" : "votes"}
@@ -140,7 +140,7 @@ export const ArenaResultReveal: React.FC<ArenaResultRevealProps> = ({
             </div>
           </div>
 
-          <div className="rounded-[calc(var(--radius-scent)-2px)] border border-scent-accent/14 bg-black/42 p-4">
+          <div className="rounded-lg border border-scent-accent/14 bg-black/42 p-4">
             <div className="flex items-start gap-3">
               <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full border border-scent-accent/24 bg-scent-accent/[0.09] text-scent-accent">
                 {guestLocalOnly ? (
@@ -186,7 +186,7 @@ export const ArenaResultReveal: React.FC<ArenaResultRevealProps> = ({
         </div>
       </div>
 
-      <div className="rounded-[calc(var(--radius-scent)+2px)] border border-scent-accent/20 bg-black/70 p-4 shadow-[inset_0_1px_0_rgba(255,236,183,0.06)] sm:p-5 lg:flex lg:items-center lg:justify-between lg:gap-6">
+      <div className="rounded-lg border border-scent-accent/20 bg-black/70 p-4 shadow-[inset_0_1px_0_rgba(255,236,183,0.06)] sm:p-5 lg:flex lg:items-center lg:justify-between lg:gap-6">
         <div key={reason ?? "default"} className="arena-fade-in min-w-0">
           <p className="scent-type-label text-scent-accent">{twist.title}</p>
           <p className="mt-1 line-clamp-2 text-sm font-medium leading-6 text-scent-text-muted sm:text-base sm:leading-7">
@@ -194,7 +194,7 @@ export const ArenaResultReveal: React.FC<ArenaResultRevealProps> = ({
           </p>
         </div>
 
-        <div className="mt-4 flex flex-col gap-3 sm:flex-row lg:mt-0 lg:shrink-0">
+        <div className="mt-4 flex flex-col gap-3 bg-transparent p-0 shadow-none sm:flex-row lg:mt-0 lg:shrink-0">
           <button
             type="button"
             onClick={(event) => {

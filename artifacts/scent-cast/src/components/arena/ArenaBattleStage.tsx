@@ -69,13 +69,13 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
   return (
     <section
       aria-labelledby="arena-battle-title"
-      className="relative min-h-[62svh] animate-in fade-in duration-300"
+      className="relative animate-in fade-in duration-300"
     >
       <header className="mx-auto max-w-4xl px-2 text-center">
         <p className="scent-type-label text-scent-accent">ScentBeam Arena</p>
         <h1
           id="arena-battle-title"
-          className="mt-3 text-pretty text-balance font-serif text-2xl italic leading-[1.02] text-foreground sm:text-4xl md:text-5xl lg:text-6xl"
+          className="mt-3 text-pretty text-balance font-serif text-2xl leading-[1.05] text-foreground sm:text-4xl md:text-5xl"
         >
           {battle.title}
         </h1>
@@ -84,7 +84,7 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
         </p>
       </header>
 
-      <div className="relative mx-auto mt-6 grid w-full max-w-[1320px] grid-cols-[minmax(0,1fr)_2.25rem_minmax(0,1fr)] items-stretch gap-2 sm:mt-8 sm:grid-cols-[minmax(0,1fr)_3rem_minmax(0,1fr)] sm:gap-4 lg:grid-cols-[minmax(0,1fr)_4rem_minmax(0,1fr)] lg:gap-6">
+      <div className="relative mx-auto mt-6 grid w-full max-w-4xl grid-cols-[minmax(0,1fr)_2rem_minmax(0,1fr)] items-start gap-2 sm:mt-8 sm:grid-cols-[minmax(0,1fr)_2.75rem_minmax(0,1fr)] sm:gap-4 md:gap-5">
         <ArenaBattleSide
           side={battle.left}
           align="left"
@@ -96,7 +96,7 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
 
         <div className="grid place-items-center">
           <div
-            className="sticky top-[calc(var(--topbar-h)+1rem)] grid h-9 w-9 place-items-center rounded-full border border-scent-accent/42 bg-black/88 font-serif text-sm italic text-scent-accent shadow-[0_0_0_1px_rgba(0,0,0,0.6),0_0_22px_rgba(212,175,55,0.18),inset_0_1px_0_rgba(255,255,255,0.08)] sm:h-12 sm:w-12 sm:text-lg lg:h-16 lg:w-16 lg:text-2xl"
+            className="sticky top-[calc(var(--topbar-h)+1rem)] grid h-8 w-8 place-items-center rounded-full border border-scent-accent/42 bg-black/88 text-[11px] font-bold tracking-[0.12em] text-scent-accent shadow-[0_0_0_1px_rgba(0,0,0,0.6),0_0_22px_rgba(212,175,55,0.18),inset_0_1px_0_rgba(255,255,255,0.08)] sm:h-11 sm:w-11 sm:text-sm"
             aria-hidden="true"
           >
             VS

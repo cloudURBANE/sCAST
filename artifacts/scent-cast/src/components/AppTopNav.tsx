@@ -1,6 +1,6 @@
 import React from 'react';
-import { LogOut, Settings, Share2 } from 'lucide-react';
-import { Link, NavLink, useLocation } from 'react-router-dom';
+import { Home, LogOut, Settings, Share2, Swords, UsersRound } from 'lucide-react';
+import { Link, NavLink } from 'react-router-dom';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
@@ -25,19 +25,25 @@ interface AppTopNavProps {
 }
 
 const navBaseClassName =
-  'text-[11px] min-[390px]:text-[11.5px] sm:text-[14px] font-semibold uppercase tracking-[0.055em] min-[430px]:tracking-[0.09em] sm:tracking-[0.16em] whitespace-nowrap';
+  'text-[13px] font-semibold uppercase tracking-[0.16em] whitespace-nowrap';
 
 const topLevelNavClassName =
-  'inline-flex min-h-[44px] items-center justify-center rounded-full px-1.5 min-[390px]:px-2 sm:px-0';
+  'relative inline-flex min-h-[44px] items-center justify-center rounded-full px-2';
 const inactiveNavClassName = `${navBaseClassName} ${topLevelNavClassName} text-[#f4debd]/85 hover:text-white transition-colors`;
 const activeNavClassName = `${navBaseClassName} ${topLevelNavClassName} text-[#fff7ec]`;
 
 const ActiveDot: React.FC = () => (
   <span
     aria-hidden="true"
-    className="hidden h-1.5 w-1.5 shrink-0 rounded-full bg-scent-accent/75 shadow-[0_0_10px_rgba(212,175,55,0.34)] sm:block"
+    className="h-1.5 w-1.5 shrink-0 rounded-full bg-scent-accent/75 shadow-[0_0_10px_rgba(212,175,55,0.34)]"
   />
 );
+
+const navItems = [
+  { to: '/', label: 'Home', icon: Home },
+  { to: '/arena', label: 'Arena', icon: Swords },
+  { to: '/community', label: 'Community', icon: UsersRound },
+];
 
 const getAvatarFallback = (username?: string | null, email?: string | null): string => {
   const source = username?.trim() || email?.trim();
@@ -137,15 +143,11 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
   authEmail,
   authPictureUrl,
   authUsername,
-  renderedRoute,
   onSignIn,
   onShare,
   onSignOut,
   onEditProfile,
 }) => {
-  const { pathname } = useLocation();
-  const isHomeRoute = renderedRoute ? renderedRoute === 'home' : pathname === '/';
-
   const authControl = authToken ? (
     <AccountMenu
       authEmail={authEmail}
@@ -162,71 +164,95 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
   );
 
   return (
-    <nav className="scent-topbar fixed top-0 left-0 right-0 z-50 px-2.5 sm:px-8">
-      <div className="max-w-[1760px] mx-auto h-full grid grid-cols-[minmax(76px,1fr)_auto_minmax(76px,1fr)] sm:grid-cols-[1fr_auto_1fr] items-center">
-        <div className="flex min-w-0 items-center gap-2.5 min-[390px]:gap-3 sm:gap-6 justify-self-start">
-          {authControl}
-          {!isHomeRoute ? (
-            <div className="flex items-center gap-1.5 min-[390px]:gap-2.5 sm:gap-6">
-              <span className="hidden sm:block w-px h-3 bg-scent-accent/20 shrink-0" aria-hidden="true" />
-              <Link
-                to="/"
-                className={`${inactiveNavClassName} relative z-10`}
-              >
-                Home
-              </Link>
-            </div>
-          ) : null}
-        </div>
-
-        <div className="flex items-center justify-center px-1 sm:px-10">
-          <h1 className="leading-none">
+    <>
+      <nav className="scent-topbar fixed top-0 left-0 right-0 z-50 px-4 md:px-8">
+        <div className="mx-auto grid h-full max-w-4xl grid-cols-[1fr_auto_1fr] items-center md:grid-cols-[auto_1fr_auto] md:gap-8">
+          <div className="hidden min-w-0 items-center justify-self-start md:flex">
             <Link to="/" aria-label="Go to home" className="block">
               <img
                 src="/nav/scentbeam-nav-logo.png"
                 srcSet="/nav/scentbeam-nav-logo.png 1x, /nav/scentbeam-nav-logo@2x.png 2x"
                 alt="ScentBeam"
-                className="h-8 w-auto max-w-[106px] object-contain min-[430px]:h-9 min-[430px]:max-w-[128px] sm:h-12 sm:max-w-none"
+                className="h-11 w-auto max-w-none object-contain"
                 decoding="async"
                 draggable={false}
               />
             </Link>
-          </h1>
-        </div>
+          </div>
 
-        <div className="flex min-w-0 items-center gap-1.5 min-[390px]:gap-2.5 sm:gap-6 justify-self-end">
-          <NavLink
-            to="/arena"
-            className={({ isActive }) =>
-              isActive
-                ? `${activeNavClassName} gap-2`
-                : inactiveNavClassName
-            }
-          >
-            {({ isActive }) => (
-              <>
-                {isActive ? <ActiveDot /> : null}
-                Arena
-              </>
-            )}
-          </NavLink>
-          <NavLink
-            to="/community"
-            className={({ isActive }) =>
-              isActive
-                ? `${activeNavClassName} gap-2`
-                : inactiveNavClassName
-            }
-          >
-            {({ isActive }) => (
-              <>
-                {isActive ? <ActiveDot /> : null}
-                Community
-              </>
-            )}
-          </NavLink>
+          <div className="md:hidden" aria-hidden="true" />
+
+          <div className="flex items-center justify-center md:justify-self-center">
+            <h1 className="leading-none md:hidden">
+              <Link to="/" aria-label="Go to home" className="block">
+                <img
+                  src="/nav/scentbeam-nav-logo.png"
+                  srcSet="/nav/scentbeam-nav-logo.png 1x, /nav/scentbeam-nav-logo@2x.png 2x"
+                  alt="ScentBeam"
+                  className="h-9 w-auto max-w-[126px] object-contain"
+                  decoding="async"
+                  draggable={false}
+                />
+              </Link>
+            </h1>
+
+            <div className="hidden items-center gap-6 md:flex">
+              {navItems.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.to === '/'}
+                  className={({ isActive }) =>
+                    isActive
+                      ? `${activeNavClassName} gap-2 after:absolute after:bottom-1 after:left-3 after:right-3 after:h-px after:bg-scent-accent/70`
+                      : inactiveNavClassName
+                  }
+                >
+                  {({ isActive }) => (
+                    <span className="relative inline-flex items-center gap-2">
+                      {isActive ? <ActiveDot /> : null}
+                      {item.label}
+                    </span>
+                  )}
+                </NavLink>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-self-end">
+            {authControl}
+          </div>
         </div>
-      </div>
-    </nav>
+      </nav>
+
+      <nav
+        className="fixed bottom-[calc(0.75rem+env(safe-area-inset-bottom,0px))] left-3 right-3 z-50 md:hidden"
+        aria-label="Primary navigation"
+      >
+        <div className="mx-auto grid max-w-sm grid-cols-3 rounded-full border border-scent-accent/18 bg-black/72 p-1 shadow-[0_18px_48px_rgba(0,0,0,0.58),inset_0_1px_0_rgba(255,236,183,0.08)] backdrop-blur-md">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.to === '/'}
+                className={({ isActive }) =>
+                  [
+                    'inline-flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-full px-2 text-[10px] font-bold uppercase tracking-[0.12em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55',
+                    isActive
+                      ? 'bg-scent-accent text-black shadow-[0_0_18px_rgba(212,175,55,0.18)]'
+                      : 'text-scent-text-muted hover:text-foreground',
+                  ].join(' ')
+                }
+              >
+                <Icon size={16} strokeWidth={1.9} aria-hidden="true" />
+                <span>{item.label}</span>
+              </NavLink>
+            );
+          })}
+        </div>
+      </nav>
+    </>
   );
 };
