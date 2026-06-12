@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {
   isConstrainedTouchDevice,
   isIpadDevice,
+  isIpadSafariBrowser,
+  isIpadSafariPerformanceMode,
   isLowRenderBudget,
 } from './platform.ts';
 
@@ -63,7 +65,7 @@ afterEach(() => {
   });
 });
 
-test('iPadOS is detected but is not downgraded into the phone render budget', () => {
+test('iPadOS Safari is detected but is not downgraded into the phone render budget', () => {
   setClientEnvironment({
     userAgent:
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1',
@@ -74,8 +76,25 @@ test('iPadOS is detected but is not downgraded into the phone render budget', ()
   });
 
   assert.equal(isIpadDevice(), true);
+  assert.equal(isIpadSafariBrowser(), true);
+  assert.equal(isIpadSafariPerformanceMode(), true);
   assert.equal(isConstrainedTouchDevice(), false);
   assert.equal(isLowRenderBudget(), false);
+});
+
+test('iPad Chrome does not enter Safari-specific performance mode', () => {
+  setClientEnvironment({
+    userAgent:
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/126.0.0.0 Mobile/15E148 Safari/604.1',
+    maxTouchPoints: 5,
+    width: 1194,
+    height: 834,
+    coarsePointer: true,
+  });
+
+  assert.equal(isIpadDevice(), true);
+  assert.equal(isIpadSafariBrowser(), false);
+  assert.equal(isIpadSafariPerformanceMode(), false);
 });
 
 test('phone-class coarse pointer devices keep the constrained render budget', () => {
@@ -89,6 +108,7 @@ test('phone-class coarse pointer devices keep the constrained render budget', ()
   });
 
   assert.equal(isIpadDevice(), false);
+  assert.equal(isIpadSafariPerformanceMode(), false);
   assert.equal(isConstrainedTouchDevice(), true);
   assert.equal(isLowRenderBudget(), true);
 });
@@ -105,5 +125,6 @@ test('reduced motion constrains even desktop-class devices', () => {
   });
 
   assert.equal(isConstrainedTouchDevice(), false);
+  assert.equal(isIpadSafariPerformanceMode(), false);
   assert.equal(isLowRenderBudget(), true);
 });

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   isIpadDevice,
+  isIpadSafariPerformanceMode,
   isIpadStandalone,
   isLowRenderBudget,
   prefersReducedMotion,
@@ -18,6 +19,8 @@ export interface RenderBudget {
   isIpad: boolean;
   /** Specifically an installed iPad PWA. */
   isIpadStandalone: boolean;
+  /** iPad Safari/WebKit-specific compositor pressure guard. */
+  ipadSafariPerformanceMode: boolean;
   /** OS-level reduced-motion preference. */
   reducedMotion: boolean;
 }
@@ -27,6 +30,7 @@ function readBudget(): RenderBudget {
     lowMotionRenderMode: isLowRenderBudget(),
     isIpad: isIpadDevice(),
     isIpadStandalone: isIpadStandalone(),
+    ipadSafariPerformanceMode: isIpadSafariPerformanceMode(),
     reducedMotion: prefersReducedMotion(),
   };
 }
@@ -36,6 +40,7 @@ function sameBudget(a: RenderBudget, b: RenderBudget): boolean {
     a.lowMotionRenderMode === b.lowMotionRenderMode &&
     a.isIpad === b.isIpad &&
     a.isIpadStandalone === b.isIpadStandalone &&
+    a.ipadSafariPerformanceMode === b.ipadSafariPerformanceMode &&
     a.reducedMotion === b.reducedMotion
   );
 }

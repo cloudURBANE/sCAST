@@ -20,6 +20,7 @@ import {
   hasTieredPyramidNotes,
   normalizePyramidNotes as normalizePyramidInput,
 } from '@/lib/fragranceNotes';
+import { isIpadSafariPerformanceMode } from '@/lib/platform';
 
 /**
  * Generate a stable, collision-resistant id for newly added wardrobe items.
@@ -411,6 +412,8 @@ export const FragranceCapture: React.FC<{
   const [syncComplete, setSyncComplete] = useState(false);
   const [loadingSurface, setLoadingSurface] = useState<LoadingSurface>(null);
   const reduceMotion = useReducedMotion();
+  const ipadSafariPerformanceMode = useRef(isIpadSafariPerformanceMode()).current;
+  const reducedAddMotion = reduceMotion || ipadSafariPerformanceMode;
 
   const searchAbortController = useRef<AbortController | null>(null);
   const syncAbortController = useRef<AbortController | null>(null);
@@ -1231,11 +1234,11 @@ export const FragranceCapture: React.FC<{
               <motion.p
                 key="search-enter-hint"
                 id="scent-vault-search-hint"
-                initial={reduceMotion ? false : { opacity: 0, height: 0, marginTop: 0 }}
-                animate={{ opacity: 1, height: 'auto', marginTop: '0.75rem' }}
-                exit={reduceMotion ? { opacity: 0 } : { opacity: 0, height: 0, marginTop: 0 }}
+                initial={reducedAddMotion ? false : { opacity: 0, height: 0, marginTop: 0 }}
+                animate={reducedAddMotion ? { opacity: 1 } : { opacity: 1, height: 'auto', marginTop: '0.75rem' }}
+                exit={reducedAddMotion ? { opacity: 0 } : { opacity: 0, height: 0, marginTop: 0 }}
                 transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-                style={{ overflow: 'hidden' }}
+                style={{ overflow: 'hidden', marginTop: reducedAddMotion ? '0.75rem' : undefined }}
                 className="scent-type-chip text-scent-text-subtle"
               >
                 Press Enter to search
@@ -1471,7 +1474,7 @@ export const FragranceCapture: React.FC<{
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            exit={{ opacity: 0, height: 0 }}
+            exit={reducedAddMotion ? { opacity: 0 } : { opacity: 0, height: 0 }}
             transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
             aria-hidden
             style={{ pointerEvents: 'none', minHeight: SEARCH_LOADER_MIN_H }}

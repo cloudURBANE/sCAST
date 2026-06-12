@@ -52,6 +52,7 @@ import { useModalBehavior } from '@/hooks/use-modal-behavior';
 import { useRenderBudget } from '@/hooks/useRenderBudget';
 import { useVaultGridPreference } from '@/hooks/useVaultGridPreference';
 import { crumb, domSnapshot } from '@/lib/crashTrace';
+import { isIpadSafariPerformanceMode } from '@/lib/platform';
 import {
   WARDROBE_CLARIFY_SOLVERS,
   WARDROBE_REFRESH_COUNT_STORAGE_KEY,
@@ -433,12 +434,13 @@ function PriceValueSignal({
   tone?: PriceSignalTone;
 }) {
   const reduceMotion = useReducedMotion();
+  const iPadSafariPerformanceMode = React.useRef(isIpadSafariPerformanceMode()).current;
   const intensity = symbols.length;
   const baseClass =
     tone === "accent"
       ? "inline-flex font-serif italic text-scent-accent font-bold drop-shadow-[0_0_10px_rgba(212,175,55,0.7)] whitespace-nowrap"
       : "inline-flex font-serif italic text-white/90 whitespace-nowrap";
-  const animate = reduceMotion
+  const animate = reduceMotion || iPadSafariPerformanceMode
     ? undefined
     : intensity >= 4
       ? { y: [0, -2, 1, 0], opacity: [0.82, 1, 0.9, 0.82] }
@@ -458,9 +460,9 @@ function PriceValueSignal({
           className="inline-block"
           animate={animate}
           transition={
-            reduceMotion
-              ? undefined
-              : {
+              reduceMotion || iPadSafariPerformanceMode
+                ? undefined
+                : {
                   duration,
                   delay: index * 0.11,
                   repeat: PRICE_SIGNAL_REPEAT_COUNT,
@@ -995,11 +997,12 @@ export const Wardrobe: React.FC<{
 }) => {
   const [selectedItem, setSelectedItem] = React.useState<Fragrance | null>(null);
   const { gridMode, setGridMode, isCompactGrid } = useVaultGridPreference();
-  const { lowMotionRenderMode, isIpad } = useRenderBudget();
+  const { lowMotionRenderMode, isIpad, ipadSafariPerformanceMode } = useRenderBudget();
   // iPad stays in the tablet/desktop experience. Only phone-class constrained
   // surfaces collapse the panel; an iPad reduced-motion session keeps the
   // wider layout while honoring reduced motion.
   const constrainedDetailMode = lowMotionRenderMode && !isIpad;
+  const reducedDetailMotion = constrainedDetailMode || ipadSafariPerformanceMode;
   const stackedDetailMode = constrainedDetailMode;
   const [detailDeferredContentReady, setDetailDeferredContentReady] = React.useState(false);
   const [detailExitInProgress, setDetailExitInProgress] = React.useState(false);
@@ -1184,7 +1187,7 @@ export const Wardrobe: React.FC<{
     // lock is stranded, and across repeat open/close cycles that strands layers
     // the content process can't reclaim — the documented "A problem repeatedly
     // occurred" crash. On phones release the lock immediately instead.
-    if (selectedItem && !stackedDetailMode) {
+    if (selectedItem && !stackedDetailMode && !ipadSafariPerformanceMode) {
       setDetailExitInProgress(true);
     }
     setRefreshError(null);
@@ -1194,7 +1197,7 @@ export const Wardrobe: React.FC<{
     setBottleImageToolsOpen(false);
     setDeleteConfirming(false);
     setFrameDraft(DEFAULT_BOTTLE_IMAGE_ADJUSTMENT);
-  }, [selectedItem, stackedDetailMode]);
+  }, [ipadSafariPerformanceMode, selectedItem, stackedDetailMode]);
 
   const closeEnlargedBottle = React.useCallback(() => {
     setEnlargeOpen(false);
@@ -1233,8 +1236,9 @@ export const Wardrobe: React.FC<{
     // entire wardrobe grid every cycle. The crash trail shows the WebContent
     // kill lands right after close, idle on the grid (not in the modal), which
     // is exactly that per-cycle grid re-tile compounding until iOS reclaims the
-    // tab. iPad/desktop keep the lock (panel is not full-screen there).
-    lockScroll: !stackedDetailMode,
+    // tab. iPad Safari also avoids this body fixed lock; the opaque fixed
+    // portal owns its scroll container without re-tiling the page behind it.
+    lockScroll: !stackedDetailMode && !ipadSafariPerformanceMode,
   });
 
   useModalBehavior({
@@ -1598,6 +1602,8 @@ export const Wardrobe: React.FC<{
     // crash. Desktop keeps the floating panel (h-[94dvh], mx-4) where the
     // shadow is actually seen.
     ? "relative w-full h-full bg-[#030303] overflow-hidden flex flex-col border-0"
+    : ipadSafariPerformanceMode
+      ? "relative w-full h-full sm:h-[94dvh] sm:max-w-[100rem] sm:mx-4 bg-[#030303] overflow-hidden flex flex-col border-0 sm:border border-white/8"
     : "relative w-full h-full sm:h-[94dvh] sm:max-w-[100rem] sm:mx-4 bg-[#030303] shadow-2xl overflow-hidden flex flex-col border-0 sm:border border-white/8";
   const detailScrollClassName = constrainedDetailMode
     ? "flex-1 overflow-y-auto scrollbar-hide px-4 sm:px-5 pb-4"
@@ -1940,10 +1946,10 @@ export const Wardrobe: React.FC<{
                     return (
                       <motion.div
                         key={item.id}
-                        initial={lowMotionRenderMode ? false : { opacity: 0, y: 10 }}
-                        whileInView={lowMotionRenderMode ? undefined : { opacity: 1, y: 0 }}
-                        viewport={lowMotionRenderMode ? undefined : { once: true, margin: '0px 0px 15% 0px' }}
-                        transition={lowMotionRenderMode ? undefined : { duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+                        initial={lowMotionRenderMode || ipadSafariPerformanceMode ? false : { opacity: 0, y: 10 }}
+                        whileInView={lowMotionRenderMode || ipadSafariPerformanceMode ? undefined : { opacity: 1, y: 0 }}
+                        viewport={lowMotionRenderMode || ipadSafariPerformanceMode ? undefined : { once: true, margin: '0px 0px 15% 0px' }}
+                        transition={lowMotionRenderMode || ipadSafariPerformanceMode ? undefined : { duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
                         className="group cursor-pointer relative h-full min-w-0"
                         onClick={() => openDetail(item)}
                         onMouseEnter={() => prefetchReviews(item)}
@@ -2085,18 +2091,18 @@ export const Wardrobe: React.FC<{
             aria-labelledby="fragrance-detail-title"
           >
             <motion.div
-              initial={constrainedDetailMode ? false : { opacity: 0 }}
+              initial={reducedDetailMotion ? false : { opacity: 0 }}
               animate={{ opacity: 1 }}
-              exit={constrainedDetailMode ? { opacity: 0 } : { opacity: 0 }}
-              transition={{ duration: stackedDetailMode ? 0 : constrainedDetailMode ? 0.08 : 0.2 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: stackedDetailMode ? 0 : reducedDetailMotion ? 0.08 : 0.2 }}
               onClick={closeDetail}
               className="absolute inset-0 bg-black/95"
             />
             <motion.div
-              initial={constrainedDetailMode ? false : { opacity: 0, scale: 0.985 }}
+              initial={reducedDetailMotion ? false : { opacity: 0, scale: 0.985 }}
               animate={{ opacity: 1, scale: 1 }}
-              exit={constrainedDetailMode ? { opacity: 0 } : { opacity: 0, scale: 0.99 }}
-              transition={{ duration: stackedDetailMode ? 0 : constrainedDetailMode ? 0.08 : 0.24, ease: [0.22, 1, 0.36, 1] }}
+              exit={reducedDetailMotion ? { opacity: 0 } : { opacity: 0, scale: 0.99 }}
+              transition={{ duration: stackedDetailMode ? 0 : reducedDetailMotion ? 0.08 : 0.24, ease: [0.22, 1, 0.36, 1] }}
               className={detailPanelClassName}
             >
               <div
@@ -2195,7 +2201,7 @@ export const Wardrobe: React.FC<{
                               showFrameGuide={bottleImageToolsOpen}
                               isSyncing={isImageSyncing?.(selectedItem)}
                               className="absolute inset-0"
-                              imgClassName={constrainedDetailMode ? "" : "transition-all duration-300"}
+                              imgClassName={reducedDetailMotion ? "" : "transition-all duration-300"}
                             />
                           </div>
 

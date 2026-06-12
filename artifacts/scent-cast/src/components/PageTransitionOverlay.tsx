@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, type CSSProperties } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { isLowRenderBudget } from '@/lib/platform';
+import { isIpadSafariPerformanceMode, isLowRenderBudget } from '@/lib/platform';
 
 const EMBLEM = '/icons/transparent-emblem/scentbeam-emblem-192x192.png';
 const GOLD = '212, 175, 55';
@@ -137,7 +137,8 @@ export const PageTransitionOverlay: React.FC<PageTransitionOverlayProps> = ({
   animationKey,
 }) => {
   const reduceMotion = useReducedMotion();
-  const lowRenderBudget = useRef(isLowRenderBudget()).current;
+  const iPadSafariPerformanceMode = useRef(isIpadSafariPerformanceMode()).current;
+  const lowRenderBudget = useRef(isLowRenderBudget() || iPadSafariPerformanceMode).current;
   const profile = lowRenderBudget ? compactMotionProfile : fullMotionProfile;
 
   useEffect(() => {
@@ -309,7 +310,7 @@ export const PageTransitionOverlay: React.FC<PageTransitionOverlayProps> = ({
 
   return (
     <AnimatePresence>
-      {visible ? (reduceMotion ? reducedContent : fullContent) : null}
+      {visible ? (reduceMotion || iPadSafariPerformanceMode ? reducedContent : fullContent) : null}
     </AnimatePresence>
   );
 };
