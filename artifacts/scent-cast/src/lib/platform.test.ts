@@ -18,6 +18,7 @@ function setClientEnvironment({
   height,
   coarsePointer,
   reducedMotion = false,
+  standaloneDisplayMode = false,
 }: {
   userAgent: string;
   maxTouchPoints: number;
@@ -25,11 +26,13 @@ function setClientEnvironment({
   height: number;
   coarsePointer: boolean;
   reducedMotion?: boolean;
+  standaloneDisplayMode?: boolean;
 }) {
   const matchMedia = (query: string) => ({
     matches:
       (query === '(pointer: coarse)' && coarsePointer) ||
       (query === '(prefers-reduced-motion: reduce)' && reducedMotion) ||
+      (query === '(display-mode: standalone)' && standaloneDisplayMode) ||
       false,
     addEventListener() {},
     removeEventListener() {},
@@ -79,6 +82,24 @@ test('iPadOS Safari is detected but is not downgraded into the phone render budg
   assert.equal(isIpadSafariBrowser(), true);
   assert.equal(isIpadSafariPerformanceMode(), true);
   assert.equal(isConstrainedTouchDevice(), false);
+  assert.equal(isLowRenderBudget(), false);
+});
+
+test('installed iPad PWA (no Safari UA token) still enters performance mode', () => {
+  // Standalone home-screen web apps on iPadOS drop the `Safari/` token.
+  setClientEnvironment({
+    userAgent:
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148',
+    maxTouchPoints: 5,
+    width: 1366,
+    height: 1024,
+    coarsePointer: true,
+    standaloneDisplayMode: true,
+  });
+
+  assert.equal(isIpadDevice(), true);
+  assert.equal(isIpadSafariBrowser(), false);
+  assert.equal(isIpadSafariPerformanceMode(), true);
   assert.equal(isLowRenderBudget(), false);
 });
 
