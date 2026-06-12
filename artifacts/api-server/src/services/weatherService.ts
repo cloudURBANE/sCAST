@@ -4,7 +4,7 @@ export async function getWeather(params?: { lat?: number | string; lon?: number 
   const apiKey = process.env.WEATHER_API_KEY;
 
   if (!apiKey) {
-    return { temp: 72, humidity: 45, condition: "Clear Sky (Demo)", icon: "01d" };
+    return { temp: 72, humidity: 45, condition: "Clear Sky (Demo)", icon: "01d", uv_index: null };
   }
 
   try {
@@ -23,6 +23,9 @@ export async function getWeather(params?: { lat?: number | string; lon?: number 
         humidity: response.data.current.humidity,
         condition: response.data.current.weather[0].description,
         icon: response.data.current.weather[0].icon,
+        // One Call 3.0 carries live UV (`current.uvi`); null = no UV data, so
+        // consumers must show "unavailable" rather than pretending UV is live.
+        uv_index: typeof response.data.current.uvi === "number" ? response.data.current.uvi : null,
         location: response.data.timezone.split('/')[1]?.replace('_', ' ') || "Current Location",
         isLive: true
       };
@@ -34,6 +37,8 @@ export async function getWeather(params?: { lat?: number | string; lon?: number 
           humidity: fallbackRes.data.main.humidity,
           condition: fallbackRes.data.weather[0].description,
           icon: fallbackRes.data.weather[0].icon,
+          // The 2.5 endpoint has no UV field — surfaced as unavailable.
+          uv_index: null,
           location: fallbackRes.data.name,
           isLive: true
         };
@@ -45,6 +50,6 @@ export async function getWeather(params?: { lat?: number | string; lon?: number 
     let errorDisplay = "Weather Service Interrupted";
     if (status === 401) errorDisplay = "Invalid API Key";
     else if (status === 429) errorDisplay = "API Quota Exceeded";
-    return { temp: 65, humidity: 50, condition: "Partly Cloudy (Simulated)", icon: "02d", isLive: false, error: errorDisplay };
+    return { temp: 65, humidity: 50, condition: "Partly Cloudy (Simulated)", icon: "02d", uv_index: null, isLive: false, error: errorDisplay };
   }
 }

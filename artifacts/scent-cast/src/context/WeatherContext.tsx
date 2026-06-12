@@ -13,6 +13,8 @@ export interface WeatherData {
   icon?: string;
   windSpeed?: number;
   wind_speed_mph?: number;
+  /** Live UV index from One Call 3.0; null when the provider/fallback has no UV data. */
+  uv_index?: number | null;
   location?: string;
   isLive?: boolean;
   error?: string;

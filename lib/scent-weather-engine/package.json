@@ -1,0 +1,15 @@
+{
+  "name": "@workspace/scent-weather-engine",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "node --experimental-strip-types --test src/scentWeatherEngine.test.ts src/scentMission.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:"
+  }
+}

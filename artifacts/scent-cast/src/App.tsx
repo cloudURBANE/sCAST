@@ -27,8 +27,8 @@ const FragranceCapture = React.lazy(() =>
 const Wardrobe = React.lazy(() =>
   loadRouteChunk(() => import('./components/Wardrobe').then((module) => ({ default: module.Wardrobe }))),
 );
-const ScentIntentModal = React.lazy(() =>
-  loadRouteChunk(() => import('./components/ScentIntentModal').then((module) => ({ default: module.ScentIntentModal }))),
+const ScentMissionPanel = React.lazy(() =>
+  loadRouteChunk(() => import('./components/ScentMissionPanel').then((module) => ({ default: module.ScentMissionPanel }))),
 );
 const ScentNotesInfographic = React.lazy(() =>
   loadRouteChunk(() => import('./components/ScentNotesInfographic').then((module) => ({ default: module.ScentNotesInfographic }))),
@@ -502,6 +502,7 @@ function WardrobeFallback() {
 
 function DashboardView() {
   const { authToken, authEmail, authPictureUrl, authUsername, handleSignOut, setIsAuthModalOpen, setIsProfileModalOpen } = useAuth();
+  const { weather } = useWeather();
   const {
     items,
     wardrobeLoaded,
@@ -509,7 +510,6 @@ function DashboardView() {
     onboardingResolved,
     wardrobeError,
     retryLoadWardrobe,
-    isIntentModalOpen,
     activeRecommendation,
     activeEngineRecommendation,
     recommendationReason,
@@ -519,20 +519,33 @@ function DashboardView() {
     vaultSearchUiActive,
     isImageSyncing,
     isAdmin,
-    setIsIntentModalOpen,
     setIsShareModalOpen,
+    setActiveRecommendation,
+    setActiveEngineRecommendation,
+    setRecommendationReason,
     handleAddItem,
     handlePersistWardrobeImage,
     uploadAdminBottleImage,
     handleRevertWardrobe,
     handleDeleteItem,
-    handleIntentComplete,
     closeRecommendationOverlay,
     handleVaultSearchStateChange,
     handleExpandArchive,
   } = useWardrobe();
+  // Mission mode swaps the hero search panel for the embedded Scent Mission
+  // agent (replaces the old full-screen ScentIntentModal flow).
+  const [missionActive, setMissionActive] = useState(false);
   const recommendationOverlayRef = useRef<HTMLDivElement | null>(null);
   const recommendationCloseRef = useRef<HTMLButtonElement | null>(null);
+
+  const handleMissionReveal = useCallback(
+    (item: Fragrance, engine: ScentWeatherRecommendation, reason: string) => {
+      setActiveEngineRecommendation(engine);
+      setRecommendationReason(reason);
+      setActiveRecommendation(item);
+    },
+    [setActiveEngineRecommendation, setActiveRecommendation, setRecommendationReason],
+  );
 
   useModalBehavior({
     isOpen: Boolean(activeRecommendation),
@@ -593,15 +606,27 @@ function DashboardView() {
           <HomepageHeroMarquee />
 
           <section className="mx-auto w-full max-w-[60rem] min-w-0 space-y-7 text-center">
-            <React.Suspense fallback={<FragranceCaptureFallback />}>
-              <FragranceCapture
-                onAdd={handleAddItem}
-                onVaultSearchStateChange={handleVaultSearchStateChange}
-                existingVaultKeys={vaultIdentityKeys}
-                onViewVault={handleViewVault}
-              />
-            </React.Suspense>
-            {showOnboardingSteps ? (
+            {missionActive ? (
+              <React.Suspense fallback={<FragranceCaptureFallback />}>
+                <ScentMissionPanel
+                  items={items}
+                  weather={weather}
+                  authToken={authToken}
+                  onExit={() => setMissionActive(false)}
+                  onRevealMatch={handleMissionReveal}
+                />
+              </React.Suspense>
+            ) : (
+              <React.Suspense fallback={<FragranceCaptureFallback />}>
+                <FragranceCapture
+                  onAdd={handleAddItem}
+                  onVaultSearchStateChange={handleVaultSearchStateChange}
+                  existingVaultKeys={vaultIdentityKeys}
+                  onViewVault={handleViewVault}
+                />
+              </React.Suspense>
+            )}
+            {showOnboardingSteps && !missionActive ? (
               <div className="mt-7 overflow-hidden">
                 <div className="relative overflow-hidden rounded-[var(--radius-scent)] border border-scent-accent/22 bg-[linear-gradient(180deg,rgba(255,247,236,0.045),rgba(0,0,0,0.36))] p-3 shadow-[inset_0_1px_0_rgba(255,236,183,0.08),0_18px_46px_-38px_rgba(212,175,55,0.52)] sm:p-4">
                   <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-scent-accent/45 to-transparent" aria-hidden />
@@ -624,12 +649,12 @@ function DashboardView() {
                 </div>
               </div>
             ) : null}
-            {!vaultSearchUiActive && stateSettled ? (
+            {!vaultSearchUiActive && stateSettled && !missionActive ? (
               <div className="mt-7 overflow-hidden">
                   {discoveryReady ? (
                     <button
                       type="button"
-                      onClick={() => setIsIntentModalOpen(true)}
+                      onClick={() => setMissionActive(true)}
                       className="scent-primary-button w-full min-h-[60px] sm:h-16 flex items-center justify-center gap-2.5 sm:gap-4 px-4 transition-all group rounded-[var(--radius-scent)]"
                     >
                       <Play size={19} className="fill-current shrink-0 group-hover:scale-110 transition-transform" aria-hidden />
@@ -690,16 +715,6 @@ function DashboardView() {
           </div>
         </div>
       </main>
-
-      {isIntentModalOpen ? (
-        <React.Suspense fallback={null}>
-          <ScentIntentModal
-            isOpen={isIntentModalOpen}
-            onClose={() => setIsIntentModalOpen(false)}
-            onComplete={handleIntentComplete}
-          />
-        </React.Suspense>
-      ) : null}
 
       {activeRecommendation ? (
           <div

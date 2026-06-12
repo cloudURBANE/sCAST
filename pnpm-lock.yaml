@@ -89,6 +89,9 @@ importers:
       '@workspace/db':
         specifier: workspace:*
         version: link:../../lib/db
+      '@workspace/scent-weather-engine':
+        specifier: workspace:*
+        version: link:../../lib/scent-weather-engine
       axios:
         specifier: ^1.9.0
         version: 1.15.2
@@ -469,6 +472,9 @@ importers:
       '@workspace/api-client-react':
         specifier: workspace:*
         version: link:../../lib/api-client-react
+      '@workspace/scent-weather-engine':
+        specifier: workspace:*
+        version: link:../../lib/scent-weather-engine
       class-variance-authority:
         specifier: 'catalog:'
         version: 0.7.1
@@ -587,6 +593,12 @@ importers:
       p-retry:
         specifier: ^7.1.1
         version: 7.1.1
+
+  lib/scent-weather-engine:
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 25.3.5
 
   scripts:
     dependencies:
