@@ -1,11 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { LoaderCircle } from 'lucide-react';
-import { ArenaBattleSide } from '@/components/arena/ArenaBattleSide';
-import { ArenaResultReveal } from '@/components/arena/ArenaResultReveal';
-import { ArenaVoteBar } from '@/components/arena/ArenaVoteBar';
-import type { ArenaBattle } from '@/components/arena/arenaBattleMapper';
-import type { ArenaReasonKey } from '@/components/arena/arenaTwists';
-import { useCommunityBattleVote } from '@/components/community/communityPosts';
+import React, { useEffect, useMemo, useState } from "react";
+import { ArenaBattleSide } from "@/components/arena/ArenaBattleSide";
+import { ArenaResultReveal } from "@/components/arena/ArenaResultReveal";
+import type { ArenaBattle } from "@/components/arena/arenaBattleMapper";
+import type { ArenaReasonKey } from "@/components/arena/arenaTwists";
+import { useCommunityBattleVote } from "@/components/community/communityPosts";
 
 interface ArenaBattleStageProps {
   battle: ArenaBattle;
@@ -42,7 +40,10 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
   const selectedKey = localVote;
   const votePending = voteMutation.isPending || externalVotePending;
   const displayedErrorMessage = errorMessage ?? externalErrorMessage;
-  const sides = useMemo(() => [battle.left, battle.right], [battle.left, battle.right]);
+  const sides = useMemo(
+    () => [battle.left, battle.right],
+    [battle.left, battle.right],
+  );
 
   const submitVote = (choice: string) => {
     setLocalVote(choice);
@@ -57,27 +58,31 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
       { postId: battle.id, choice },
       {
         onError: (err) => {
-          setErrorMessage(err instanceof Error ? err.message : 'Vote could not be saved.');
+          setErrorMessage(
+            err instanceof Error ? err.message : "Vote could not be saved.",
+          );
         },
       },
     );
   };
 
   return (
-    <section aria-labelledby="arena-battle-title" className="relative min-h-[62svh] animate-in fade-in duration-300">
+    <section
+      aria-labelledby="arena-battle-title"
+      className="relative min-h-[62svh] animate-in fade-in duration-300"
+    >
       <header className="mx-auto max-w-4xl px-2 text-center">
         <p className="scent-type-label text-scent-accent">ScentBeam Arena</p>
-        <h1 id="arena-battle-title" className="mt-3 text-pretty text-balance font-serif text-2xl italic leading-[1.02] text-foreground sm:text-4xl md:text-5xl lg:text-6xl">
+        <h1
+          id="arena-battle-title"
+          className="mt-3 text-pretty text-balance font-serif text-2xl italic leading-[1.02] text-foreground sm:text-4xl md:text-5xl lg:text-6xl"
+        >
           {battle.title}
         </h1>
         <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-scent-text-muted sm:mt-4 sm:text-lg sm:leading-7">
           {battle.scenario}
         </p>
       </header>
-
-      {revealed ? (
-        <ArenaVoteBar battle={battle} guestLocalOnly={guestLocalOnly} votePending={votePending} />
-      ) : null}
 
       <div className="relative mx-auto mt-6 grid w-full max-w-[1320px] grid-cols-[minmax(0,1fr)_2.25rem_minmax(0,1fr)] items-stretch gap-2 sm:mt-8 sm:grid-cols-[minmax(0,1fr)_3rem_minmax(0,1fr)] sm:gap-4 lg:grid-cols-[minmax(0,1fr)_4rem_minmax(0,1fr)] lg:gap-6">
         <ArenaBattleSide
@@ -90,7 +95,10 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
         />
 
         <div className="grid place-items-center">
-          <div className="sticky top-[calc(var(--topbar-h)+1rem)] grid h-9 w-9 place-items-center rounded-full border border-scent-accent/42 bg-black/88 font-serif text-sm italic text-scent-accent shadow-[0_0_0_1px_rgba(0,0,0,0.6),0_0_22px_rgba(212,175,55,0.18),inset_0_1px_0_rgba(255,255,255,0.08)] sm:h-12 sm:w-12 sm:text-lg lg:h-16 lg:w-16 lg:text-2xl" aria-hidden="true">
+          <div
+            className="sticky top-[calc(var(--topbar-h)+1rem)] grid h-9 w-9 place-items-center rounded-full border border-scent-accent/42 bg-black/88 font-serif text-sm italic text-scent-accent shadow-[0_0_0_1px_rgba(0,0,0,0.6),0_0_22px_rgba(212,175,55,0.18),inset_0_1px_0_rgba(255,255,255,0.08)] sm:h-12 sm:w-12 sm:text-lg lg:h-16 lg:w-16 lg:text-2xl"
+            aria-hidden="true"
+          >
             VS
           </div>
         </div>
@@ -105,30 +113,11 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
         />
       </div>
 
-      {votePending ? (
-        <p className="mt-4 flex items-center justify-center gap-2 text-sm text-scent-text-muted" aria-live="polite">
-          <LoaderCircle size={14} className="animate-spin text-scent-accent" aria-hidden="true" />
-          Saving vote
-        </p>
-      ) : null}
-
-      {guestLocalOnly ? (
-        <div className="mx-auto mt-5 flex max-w-2xl flex-col items-center gap-3 rounded-[calc(var(--radius-scent)+4px)] border border-scent-accent/18 bg-black/68 px-4 py-4 text-center sm:flex-row sm:justify-between sm:text-left">
-          <p className="text-sm font-medium leading-6 text-scent-text-muted">
-            Guests can reveal instantly. This pick is not added to global totals unless you sign in.
-          </p>
-          <button
-            type="button"
-            onClick={onSignIn}
-            className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-full border border-scent-accent/28 px-4 py-2 scent-type-chip text-scent-accent transition-colors hover:border-scent-accent/52 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55"
-          >
-            Save vote
-          </button>
-        </div>
-      ) : null}
-
       {displayedErrorMessage ? (
-        <p role="alert" className="mx-auto mt-4 max-w-2xl text-center text-sm text-red-100">
+        <p
+          role="alert"
+          className="mx-auto mt-4 max-w-2xl text-center text-sm text-red-100"
+        >
           {displayedErrorMessage}
         </p>
       ) : null}
@@ -141,6 +130,7 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
           guestLocalOnly={guestLocalOnly}
           votePending={votePending}
           onReasonChange={setReason}
+          onSignIn={onSignIn}
           onNext={onNext}
         />
       ) : (
