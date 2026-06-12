@@ -53,6 +53,16 @@ test("completing a locked or already-complete node is a no-op", () => {
   assert.equal(completeScentMissionNode(completed, "onboarding"), completed);
 });
 
+test("a blocked standard node can be retried when the blocking condition clears", () => {
+  let state = createScentMissionState();
+  state = completeScentMissionNode(state, "onboarding");
+  state = { ...state, nodes: { ...state.nodes, "wardrobe-sync": "blocked" } };
+
+  const retried = completeScentMissionNode(state, "wardrobe-sync");
+  assert.equal(retried.nodes["wardrobe-sync"], "complete");
+  assert.equal(retried.nodes["environment-scan"], "active");
+});
+
 test("diffScentMissionNodes reports only changed nodes in graph order", () => {
   const prev = createScentMissionState();
   const next = completeScentMissionNode(prev, "onboarding");
@@ -89,10 +99,28 @@ test("sanitizeScentMissionState rejects garbage and clamps invalid values", () =
     premiumUnlocked: true,
   });
   assert.equal(sanitized.nodes.onboarding, "complete");
-  assert.equal(sanitized.nodes["wardrobe-sync"], "locked");
+  assert.equal(sanitized.nodes["wardrobe-sync"], "active");
   assert.equal(sanitized.calibration.destination, undefined);
   assert.equal(sanitized.calibration.energy, "Confident");
   assert.equal(sanitized.premiumUnlocked, false);
+});
+
+test("sanitizeScentMissionState repairs impossible downstream active nodes", () => {
+  const sanitized = sanitizeScentMissionState({
+    nodes: {
+      onboarding: "active",
+      "wardrobe-sync": "complete",
+      "environment-scan": "complete",
+      "resolution-standard": "active",
+      "resolution-premium": "active",
+    },
+  });
+
+  assert.equal(sanitized.nodes.onboarding, "active");
+  assert.equal(sanitized.nodes["wardrobe-sync"], "locked");
+  assert.equal(sanitized.nodes["environment-scan"], "locked");
+  assert.equal(sanitized.nodes["resolution-standard"], "locked");
+  assert.equal(sanitized.nodes["resolution-premium"], "locked");
 });
 
 test("sanitizeScentMissionWardrobe drops invalid rows, dedupes traits, and bounds sizes", () => {

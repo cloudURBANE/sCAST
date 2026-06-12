@@ -101,6 +101,26 @@ test("activeMissionNode and missionProgress track node progression", () => {
   assert.equal(missionProgress(state), 4 / 5);
 });
 
+test("activeMissionNode lets retryable blocked standard nodes run again", () => {
+  let state = createScentMissionState();
+  state = completeScentMissionNode(state, "onboarding");
+  state = { ...state, nodes: { ...state.nodes, "wardrobe-sync": "blocked" } };
+
+  assert.equal(activeMissionNode(state), "wardrobe-sync");
+
+  state = {
+    ...state,
+    nodes: {
+      ...state.nodes,
+      "wardrobe-sync": "complete",
+      "environment-scan": "complete",
+      "resolution-standard": "complete",
+      "resolution-premium": "blocked",
+    },
+  };
+  assert.equal(activeMissionNode(state), null);
+});
+
 test("server node updates round-trip through applyScentMissionUpdates into UI state", () => {
   let state = createScentMissionState();
   state = applyScentMissionUpdates(
