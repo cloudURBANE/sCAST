@@ -190,6 +190,12 @@ a {
   contain-intrinsic-size: 3200px;
 }
 
+.scent-ipad-safari-perf .scent-deferred-section {
+  content-visibility: visible;
+  contain: none;
+  contain-intrinsic-size: none;
+}
+
 @supports not (content-visibility: auto) {
   .scent-deferred-section {
     contain: layout paint;
@@ -353,6 +359,11 @@ a {
   background: radial-gradient(ellipse at center, rgba(212, 175, 55, 0.22) 0%, transparent 70%);
   filter: blur(20px);
   pointer-events: none;
+}
+
+.scent-ipad-safari-perf .pedestal::before {
+  filter: none;
+  opacity: 0.62;
 }
 
 .scent-topbar {
@@ -1225,12 +1236,28 @@ a {
   transform: translate3d(0, 0, 0);
 }
 
+.scent-ipad-safari-perf .scent-marquee-track-row,
+.scent-ipad-safari-perf .scent-atmosphere-marquee-track,
+.scent-ipad-safari-perf .scent-community-marquee-track,
+.scent-ipad-safari-perf .scent-note-marquee-track,
+.scent-ipad-safari-perf .animate-infinite-scroll,
+.scent-ipad-safari-perf .animate-infinite-scroll-slow {
+  will-change: auto;
+  backface-visibility: visible;
+}
+
 /* Set by useMarqueeSwipe while a pointer is scrubbing a marquee track. */
 .scent-marquee-track-row[data-marquee-dragging="true"],
 .scent-atmosphere-marquee-track[data-marquee-dragging="true"],
 .scent-community-marquee-track[data-marquee-dragging="true"] {
   cursor: grabbing;
   animation: none;
+  will-change: transform;
+}
+
+.scent-ipad-safari-perf .backdrop-blur-sm {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
 }
 
 .scent-marquee-phrase-group {

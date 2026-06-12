@@ -25,6 +25,23 @@ export function isIpadDevice(): boolean {
   return /Macintosh/i.test(ua) && maxTouchPoints > 1;
 }
 
+/** True for Safari/WebKit on iPadOS, excluding iPad Chrome/Firefox/Edge shells. */
+export function isIpadSafariBrowser(): boolean {
+  if (!hasWindow() || !isIpadDevice()) return false;
+  const ua = navigator.userAgent || "";
+  const isWebKitSafari = /AppleWebKit/i.test(ua) && /Safari/i.test(ua);
+  const isAlternativeIosShell = /(CriOS|FxiOS|EdgiOS|OPiOS|DuckDuckGo|YaBrowser)/i.test(ua);
+  return isWebKitSafari && !isAlternativeIosShell;
+}
+
+/**
+ * iPad Safari keeps the tablet/desktop layout, but gets a lower WebKit
+ * compositor budget for blur/filter/layer-heavy surfaces.
+ */
+export function isIpadSafariPerformanceMode(): boolean {
+  return isIpadSafariBrowser();
+}
+
 /** True when the page is running as an installed/standalone PWA. */
 export function isStandalonePwa(): boolean {
   if (!hasWindow()) return false;

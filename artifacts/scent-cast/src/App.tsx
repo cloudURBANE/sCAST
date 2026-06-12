@@ -1050,16 +1050,18 @@ const AppShell = React.memo(function AppShell({
   renderedLocation,
   showThreadBackground,
   threadBackgroundMode,
+  ipadSafariPerformanceMode,
 }: {
   renderedLocation: Location;
   showThreadBackground: boolean;
   threadBackgroundMode: ThreadBackgroundMode;
+  ipadSafariPerformanceMode: boolean;
 }) {
   return (
     <AuthProvider>
       <WeatherProvider>
         <WardrobeProvider>
-          <div className="scent-app-shell min-h-[100svh] bg-scent-bg selection:bg-scent-accent selection:text-black text-white relative overflow-x-hidden">
+          <div className={`scent-app-shell min-h-[100svh] bg-scent-bg selection:bg-scent-accent selection:text-black text-white relative overflow-x-hidden${ipadSafariPerformanceMode ? ' scent-ipad-safari-perf' : ''}`}>
             {showThreadBackground ? <ThreadBackground mode={threadBackgroundMode} /> : null}
             <WebVitalsReporter />
             <AppContent location={renderedLocation} />
@@ -1083,19 +1085,22 @@ export default function App() {
   const pendingRevealRouteRef = useRef<string | null>(null);
   const transitionStartedAtRef = useRef(0);
   const isFreezeLab = renderedLocation.pathname === '/debug/ipad-freeze';
-  const { lowMotionRenderMode, isIpad } = useRenderBudget();
+  const { lowMotionRenderMode, isIpad, ipadSafariPerformanceMode } = useRenderBudget();
   const [threadBackgroundReady, setThreadBackgroundReady] = useState(false);
-  // iPad keeps the full animated experience, but uses CSS keyframes so WebKit
-  // schedules the ambient threads on the compositor instead of our rAF DOM loop.
-  const threadBackgroundMode: ThreadBackgroundMode = isIpad
-    ? 'css-animated'
+  // iPad Safari keeps the full tablet layout, but the animated fixed backdrop is
+  // the largest always-on layer stack in the app. Freeze it there to avoid
+  // WebKit re-compositing over every modal/card interaction.
+  const threadBackgroundMode: ThreadBackgroundMode = ipadSafariPerformanceMode
+    ? 'static'
+    : isIpad
+      ? 'css-animated'
     : lowMotionRenderMode
       ? 'static'
       : 'raf';
   const showThreadBackground = !isFreezeLab && threadBackgroundReady;
   const transitionTiming = useMemo(
-    () => (lowMotionRenderMode ? PAGE_TRANSITION_TIMING.lowMotion : PAGE_TRANSITION_TIMING.standard),
-    [lowMotionRenderMode],
+    () => (lowMotionRenderMode || ipadSafariPerformanceMode ? PAGE_TRANSITION_TIMING.lowMotion : PAGE_TRANSITION_TIMING.standard),
+    [ipadSafariPerformanceMode, lowMotionRenderMode],
   );
 
   const clearTransitionWork = useCallback(() => {
@@ -1204,6 +1209,7 @@ export default function App() {
         renderedLocation={renderedLocation}
         showThreadBackground={showThreadBackground}
         threadBackgroundMode={threadBackgroundMode}
+        ipadSafariPerformanceMode={ipadSafariPerformanceMode}
       />
       <PageTransitionOverlay visible={transitionVisible} animationKey={transitionKey} />
     </>

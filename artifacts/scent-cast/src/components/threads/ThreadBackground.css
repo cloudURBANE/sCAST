@@ -113,6 +113,22 @@
   will-change: auto;
 }
 
+.scent-ipad-safari-perf .scent-thread-line {
+  backface-visibility: visible;
+  filter: none;
+  will-change: auto;
+}
+
+.scent-ipad-safari-perf .scent-thread-line::before,
+.scent-ipad-safari-perf .scent-thread-line::after {
+  filter: none;
+  transform: none;
+}
+
+.scent-ipad-safari-perf .scent-thread-line::before {
+  opacity: calc(var(--thread-aura-opacity) * var(--thread-tone-aura-opacity) * 0.38);
+}
+
 .scent-thread-line--mode-css-animated.scent-thread-line--axis-x.scent-thread-line--direction-forward {
   animation-name: scent-thread-travel-x-forward;
 }

@@ -74,6 +74,9 @@ export function useMarqueeSwipe(
     let offset = 0; // px the loop has advanced; track sits at translateX(-offset)
     let velocity = 0; // px/s in the loop's forward direction
     let frame = 0;
+    let dragFrame = 0;
+    let pendingDragX: number | null = null;
+    let pendingDragT = 0;
     const iPadHandoff = isIpadDevice();
 
     const applyTransform = () => {
@@ -130,6 +133,25 @@ export function useMarqueeSwipe(
         return;
       }
       frame = requestAnimationFrame(stepMomentum);
+    };
+
+    const flushDragMove = () => {
+      dragFrame = 0;
+      if (pendingDragX === null) return;
+      const distance = readVar(distanceVar);
+      if (distance <= 0) {
+        pendingDragX = null;
+        return;
+      }
+      const delta = pendingDragX - lastX;
+      const dt = Math.max((pendingDragT - lastMoveT) / 1000, 1 / 240);
+      // Finger right moves the loop backwards, so the forward velocity is -delta.
+      velocity = velocity * 0.7 + (-delta / dt) * 0.3;
+      offset = normalizeLoop(offset - delta, distance);
+      applyTransform();
+      lastX = pendingDragX;
+      lastMoveT = pendingDragT;
+      pendingDragX = null;
     };
 
     const onPointerDown = (event: PointerEvent) => {
@@ -191,16 +213,9 @@ export function useMarqueeSwipe(
         lastMoveT = event.timeStamp;
         return;
       }
-      const distance = readVar(distanceVar);
-      if (distance <= 0) return;
-      const delta = event.clientX - lastX;
-      const dt = Math.max((event.timeStamp - lastMoveT) / 1000, 1 / 240);
-      // Finger right moves the loop backwards, so the forward velocity is -delta.
-      velocity = velocity * 0.7 + (-delta / dt) * 0.3;
-      offset = normalizeLoop(offset - delta, distance);
-      applyTransform();
-      lastX = event.clientX;
-      lastMoveT = event.timeStamp;
+      pendingDragX = event.clientX;
+      pendingDragT = event.timeStamp;
+      if (!dragFrame) dragFrame = requestAnimationFrame(flushDragMove);
     };
 
     const finishPointer = (event: PointerEvent) => {
@@ -208,6 +223,10 @@ export function useMarqueeSwipe(
       pointerId = null;
       pending = false;
       if (!dragging) return;
+      if (dragFrame) {
+        cancelAnimationFrame(dragFrame);
+        flushDragMove();
+      }
       dragging = false;
       velocity = Math.max(-MAX_FLING_PX_PER_S, Math.min(MAX_FLING_PX_PER_S, velocity));
       momentumStartT = performance.now();
@@ -246,16 +265,17 @@ export function useMarqueeSwipe(
       event.preventDefault();
     };
 
-    track.addEventListener('pointerdown', onPointerDown);
-    track.addEventListener('pointermove', onPointerMove);
-    track.addEventListener('pointerup', finishPointer);
-    track.addEventListener('pointercancel', finishPointer);
+    track.addEventListener('pointerdown', onPointerDown, { passive: true });
+    track.addEventListener('pointermove', onPointerMove, { passive: true });
+    track.addEventListener('pointerup', finishPointer, { passive: true });
+    track.addEventListener('pointercancel', finishPointer, { passive: true });
     track.addEventListener('touchmove', onTouchMove, { passive: false });
     track.addEventListener('click', onClickCapture, true);
     track.addEventListener('dragstart', onDragStart);
 
     return () => {
       if (frame) cancelAnimationFrame(frame);
+      if (dragFrame) cancelAnimationFrame(dragFrame);
       resumeCss();
       track.removeEventListener('pointerdown', onPointerDown);
       track.removeEventListener('pointermove', onPointerMove);
