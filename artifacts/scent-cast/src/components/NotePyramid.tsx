@@ -2,7 +2,7 @@ import React from 'react';
 import { AnimatePresence, motion, useReducedMotion, type Transition } from 'framer-motion';
 import { type MainAccordDisplayRow } from '@/lib/fragranceApi';
 import { resolveNoteAccordLinks, type NoteAccordLink } from '@/lib/noteAccordLinks';
-import { isLowRenderBudget } from '@/lib/platform';
+import { isIpadSafariPerformanceMode, isLowRenderBudget } from '@/lib/platform';
 
 type ActiveLayer = 'top' | 'heart' | 'base';
 type Point = readonly [number, number];
@@ -733,16 +733,17 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
   // atmosphere / starfield / glow run ~10 infinite animations. Re-creating and
   // compositing all of that on every detail-modal open exhausts a phone's small
   // GPU/memory budget — WebKit then kills the page ("A problem repeatedly
-  // occurred"). On a low render budget, render the flat, static path: no
-  // filters, no blend (gated below via filterRef / className), and treat the
-  // session as reduced-motion so every infinite animation collapses to its
-  // resting frame instead of stacking across opens. Desktop and iPad
-  // (desktop-class hardware) keep the full treatment.
+  // occurred"). iPad Safari keeps tablet layout and interaction motion, but it
+  // gets the same no-filter/no-blend compositor path because WebKit repeatedly
+  // re-rasterizes those surfaces during modal and PWA transitions.
   // Device class is stable, so sample once.
   const lowRenderBudget = React.useRef(isLowRenderBudget()).current;
+  const ipadSafariBlendMode = React.useRef(isIpadSafariPerformanceMode()).current;
+  const lightweightEffects = lowRenderBudget || ipadSafariBlendMode;
   const osPrefersReducedMotion = useReducedMotion();
   const prefersReducedMotion = osPrefersReducedMotion === true || lowRenderBudget;
-  const shouldPlayGuide = osPrefersReducedMotion !== true;
+  const atmosphereReducedMotion = prefersReducedMotion || ipadSafariBlendMode;
+  const shouldPlayGuide = osPrefersReducedMotion !== true && !lowRenderBudget;
   const idPrefix = React.useId().replace(/:/g, '');
   const state = activeLayer ?? 'idle';
   const engagedLayer = hoveredLayer ?? focusedLayer ?? (activeLayer ? null : guidedLayer);
@@ -757,8 +758,10 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
   const guideVisualsMounted = guideCanPlay && isGuideSequencing;
   // Soft outer halo + crisp core. Slightly heavier on low-render-budget
   // devices, where the bevel/halo paint without the gold-soft bloom filter.
-  const guideHaloStrokeWidth = lowRenderBudget ? 6.4 : 4.2;
-  const guideCoreStrokeWidth = lowRenderBudget ? 2.4 : 1.4;
+  const guideHaloStrokeWidth = lightweightEffects ? 6.4 : 4.2;
+  const guideCoreStrokeWidth = lightweightEffects ? 2.4 : 1.4;
+  const guideStartDelayMs = ipadSafariBlendMode ? 1350 : GUIDE_START_DELAY_MS;
+  const guideLayerDurationMs = ipadSafariBlendMode ? 1900 : GUIDE_LAYER_DURATION_MS;
 
   const allLinks = React.useMemo(
     () => resolveNoteAccordLinks([...topNotes, ...heartNotes, ...baseNotes], accordRows ?? []),
@@ -767,11 +770,11 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
 
   const id = React.useCallback((name: string) => `${idPrefix}-${name}`, [idPrefix]);
   const fill = React.useCallback((name: string) => `url(#${id(name)})`, [id]);
-  // Filter reference that collapses to `undefined` on low-render-budget devices,
+  // Filter reference that collapses to `undefined` on constrained/iPad WebKit devices,
   // so the element paints without allocating an offscreen filter surface.
   const filterRef = React.useCallback(
-    (name: string) => (lowRenderBudget ? undefined : `url(#${id(name)})`),
-    [id, lowRenderBudget],
+    (name: string) => (lightweightEffects ? undefined : `url(#${id(name)})`),
+    [id, lightweightEffects],
   );
 
   const clearGuideTimers = React.useCallback(() => {
@@ -803,14 +806,14 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
       guideLayerSequence.forEach((layer, index) => {
         const timer = window.setTimeout(() => {
           setGuidedLayer(layer);
-        }, GUIDE_START_DELAY_MS + index * GUIDE_LAYER_DURATION_MS);
+        }, guideStartDelayMs + index * guideLayerDurationMs);
         guideTimersRef.current.push(timer);
       });
 
       const endTimer = window.setTimeout(() => {
         setGuidedLayer(null);
         setIsGuideSequencing(false);
-      }, GUIDE_START_DELAY_MS + guideLayerSequence.length * GUIDE_LAYER_DURATION_MS);
+      }, guideStartDelayMs + guideLayerSequence.length * guideLayerDurationMs);
       guideTimersRef.current.push(endTimer);
     };
 
@@ -845,7 +848,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
       setGuidedLayer(null);
       setIsGuideSequencing(false);
     };
-  }, [clearGuideTimers, guideCanPlay, guideLayerSequence]);
+  }, [clearGuideTimers, guideCanPlay, guideLayerDurationMs, guideLayerSequence, guideStartDelayMs]);
 
   React.useEffect(() => {
     if (!activeLayer) return;
@@ -1066,12 +1069,12 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={prefersReducedMotion ? reducedTransition : { duration: 1.1, ease: CALM_EASE }}
       >
-        <AtmosphereCanvas reducedMotion={prefersReducedMotion} lowRenderBudget={lowRenderBudget} />
+        <AtmosphereCanvas reducedMotion={atmosphereReducedMotion} lowRenderBudget={lightweightEffects} />
 
         <svg
           viewBox="0 0 360 420"
           overflow="visible"
-          className={`relative z-10 h-full w-full overflow-visible${lowRenderBudget ? '' : ' drop-shadow-[0_24px_44px_rgba(0,0,0,0.48)]'}`}
+          className={`relative z-10 h-full w-full overflow-visible${lightweightEffects ? '' : ' drop-shadow-[0_24px_44px_rgba(0,0,0,0.48)]'}`}
           role="img"
           aria-label="Interactive fragrance note pyramid"
         >
@@ -1401,7 +1404,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
           </defs>
 
           {/* Ambient depth field — soft gold air + slow-drifting starfield. No grid, no reticles. */}
-          <g aria-hidden pointerEvents="none" className={lowRenderBudget ? '' : 'mix-blend-screen'}>
+          <g aria-hidden pointerEvents="none" className={lightweightEffects ? '' : 'mix-blend-screen'}>
             <motion.circle
               cx="180"
               cy="210"
@@ -1419,7 +1422,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
 
           {/* Mirror floor — the base tier reflected into the glossy black surface beneath the pyramid.
               Pure geometry + a gradient mask (no filters), but still skipped on low render budgets. */}
-          {!lowRenderBudget && (
+          {!lightweightEffects && (
             <g aria-hidden pointerEvents="none" mask={`url(#${id('mirror-mask')})`} opacity="0.32">
               <g transform={`translate(0 ${(PYRAMID_Y.baseBottom + 10) * 2}) scale(1 -1)`}>
                 <path d={layerGeometry.base.faces[0]} fill={fill('base-left')} />
@@ -1472,27 +1475,37 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                 aria-disabled={isEmpty || undefined}
                 className={`outline-none [&:focus-visible_.focus-ring]:opacity-100 ${isEmpty ? 'cursor-default' : 'cursor-pointer'}`}
                 initial={false}
-                animate={{
-                  y: targetY,
-                  opacity: targetOpacity,
-                  scale: targetScale,
-                  filter: isEmpty
-                    ? 'saturate(1.05) brightness(0.88)'
-                    : isMuted
-                      ? 'saturate(0.85) brightness(0.92)'
-                      : 'saturate(1) brightness(1)',
-                }}
+                animate={
+                  lightweightEffects
+                    ? {
+                        y: targetY,
+                        opacity: targetOpacity,
+                        scale: targetScale,
+                      }
+                    : {
+                        y: targetY,
+                        opacity: targetOpacity,
+                        scale: targetScale,
+                        filter: isEmpty
+                          ? 'saturate(1.05) brightness(0.88)'
+                          : isMuted
+                            ? 'saturate(0.85) brightness(0.92)'
+                            : 'saturate(1) brightness(1)',
+                      }
+                }
                 transition={
                   prefersReducedMotion
                     ? reducedTransition
-                    : { ...layerTransition, filter: { duration: 0.44, ease: CALM_EASE }, opacity: { duration: 0.46, ease: CALM_EASE } }
+                    : lightweightEffects
+                      ? { ...layerTransition, opacity: { duration: 0.46, ease: CALM_EASE } }
+                      : { ...layerTransition, filter: { duration: 0.44, ease: CALM_EASE }, opacity: { duration: 0.46, ease: CALM_EASE } }
                 }
                 style={{
                   transformBox: 'view-box',
                   transformOrigin: `${PYRAMID_CENTER_X}px ${LAYER_CENTER_Y[layer.key]}px`,
                   WebkitTapHighlightColor: 'transparent',
                   touchAction: 'manipulation',
-                  willChange: activeLayer !== null || isEngaged ? 'transform, opacity, filter' : 'auto',
+                  willChange: activeLayer !== null || isEngaged ? (lightweightEffects ? 'transform, opacity' : 'transform, opacity, filter') : 'auto',
                 }}
                 onPointerEnter={isEmpty ? undefined : (event) => {
                   if (event.pointerType !== 'mouse') return;
@@ -1642,7 +1655,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                   initial={false}
                   animate={
                     prefersReducedMotion
-                      ? { opacity: isActive ? 0.4 : isGuided && lowRenderBudget ? 0.38 : isEngaged ? 0.22 : 0 }
+                      ? { opacity: isActive ? 0.4 : isGuided && lightweightEffects ? 0.38 : isEngaged ? 0.22 : 0 }
                       : {
                           opacity: isActive
                             ? [0.28, 0.42, 0.28]
@@ -1668,7 +1681,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                     vectorEffect="non-scaling-stroke"
                     initial={false}
                     animate={{ opacity: isActive ? 0.95 : isEngaged ? 0.8 : 0.58 }}
-                    transition={{ duration: 0.6, ease: CALM_EASE }}
+                    transition={prefersReducedMotion ? reducedTransition : { duration: 0.6, ease: CALM_EASE }}
                   />
                 )}
 
@@ -1695,7 +1708,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                       isGuided
                         ? {
                             strokeDashoffset: guideDashTrace,
-                            opacity: lowRenderBudget ? [0, 0.62, 0.62, 0] : [0, 0.46, 0.46, 0],
+                            opacity: lightweightEffects ? [0, 0.62, 0.62, 0] : [0, 0.46, 0.46, 0],
                           }
                         : { strokeDashoffset: guideDashLength, opacity: 0 }
                     }
@@ -1761,7 +1774,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                 {layer.key === 'top' && (
                   <motion.g
                     pointerEvents="none"
-                    className={lowRenderBudget ? '' : 'mix-blend-screen'}
+                    className={lightweightEffects ? '' : 'mix-blend-screen'}
                     initial={false}
                     animate={
                       prefersReducedMotion
@@ -2064,9 +2077,9 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
           {selectedLayer ? (
             <motion.div
               key={selectedLayer.key}
-              initial={{ opacity: 0, y: 8, scale: 0.985, filter: 'blur(3px)' }}
-              animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
-              exit={{ opacity: 0, y: -5, scale: 0.99, filter: 'blur(2px)' }}
+              initial={lightweightEffects ? { opacity: 0, y: 8, scale: 0.985 } : { opacity: 0, y: 8, scale: 0.985, filter: 'blur(3px)' }}
+              animate={lightweightEffects ? { opacity: 1, y: 0, scale: 1 } : { opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
+              exit={lightweightEffects ? { opacity: 0, y: -5, scale: 0.99 } : { opacity: 0, y: -5, scale: 0.99, filter: 'blur(2px)' }}
               transition={prefersReducedMotion ? reducedTransition : { duration: 0.32, ease: CALM_EASE }}
               className={`pointer-events-none absolute left-1/2 z-50 w-[84%] max-w-[15rem] -translate-x-1/2 overflow-hidden rounded-lg border border-white/10 bg-[#060608]/92 px-2 py-2 shadow-[0_10px_30px_-8px_rgba(0,0,0,0.78),inset_0_1px_1px_rgba(255,255,255,0.13),0_0_0_1px_rgba(252,157,25,0.09),0_0_28px_-10px_rgba(252,157,25,0.34)] sm:max-w-[18.5rem] sm:px-3.5 sm:py-3.5 ${selectedLayer.revealClass}`}
             >
