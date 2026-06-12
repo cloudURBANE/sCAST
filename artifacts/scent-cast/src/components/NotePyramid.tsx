@@ -727,16 +727,17 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
   const ignoreClickActivationRef = React.useRef(false);
   const guideHasPlayedRef = React.useRef(false);
   const guideTimersRef = React.useRef<number[]>([]);
-  // Constrained touch devices (iPad / coarse-pointer iPhones) cannot afford the
-  // pyramid's heavy paint. Each feGaussianBlur / feDropShadow, the full-surface
-  // drop-shadow, and the screen-blend layer allocates a large offscreen IOSurface,
-  // and the decorative atmosphere / starfield / glow run ~10 infinite animations.
-  // Re-creating and compositing all of that on every detail-modal open exhausts
-  // the device's small GPU/memory budget — WebKit then kills the page ("A problem
-  // repeatedly occurred"). On a low render budget, render the flat, static path:
-  // no filters, no blend (gated below via filterRef / className), and treat the
-  // session as reduced-motion so every infinite animation collapses to its resting
-  // frame instead of stacking across opens. Desktop keeps the full treatment.
+  // Phone-class coarse-pointer devices cannot afford the pyramid's heavy paint.
+  // Each feGaussianBlur / feDropShadow, the full-surface drop-shadow, and the
+  // screen-blend layer allocates a large offscreen IOSurface, and the decorative
+  // atmosphere / starfield / glow run ~10 infinite animations. Re-creating and
+  // compositing all of that on every detail-modal open exhausts a phone's small
+  // GPU/memory budget — WebKit then kills the page ("A problem repeatedly
+  // occurred"). On a low render budget, render the flat, static path: no
+  // filters, no blend (gated below via filterRef / className), and treat the
+  // session as reduced-motion so every infinite animation collapses to its
+  // resting frame instead of stacking across opens. Desktop and iPad
+  // (desktop-class hardware) keep the full treatment.
   // Device class is stable, so sample once.
   const lowRenderBudget = React.useRef(isLowRenderBudget()).current;
   const osPrefersReducedMotion = useReducedMotion();
