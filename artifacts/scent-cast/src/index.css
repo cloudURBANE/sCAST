@@ -185,6 +185,17 @@ a {
   z-index: 1;
 }
 
+.scent-deferred-section {
+  content-visibility: auto;
+  contain-intrinsic-size: 900px;
+}
+
+@supports not (content-visibility: auto) {
+  .scent-deferred-section {
+    contain: layout paint;
+  }
+}
+
 .glass-shelf::after {
   content: '';
   position: absolute;

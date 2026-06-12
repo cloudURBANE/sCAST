@@ -25,3 +25,7 @@ jobs:
       - run: pnpm run typecheck
 
       - run: pnpm run test
+
+      - run: pnpm --filter @workspace/scent-cast run build
+
+      - run: pnpm --filter @workspace/scent-cast run perf:lhci

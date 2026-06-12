@@ -1,5 +1,4 @@
 import React, { useEffect, useRef } from 'react';
-import { motion } from 'framer-motion';
 import { X } from 'lucide-react';
 
 // How long the gentle nudge lingers before it bows out on its own.
@@ -34,11 +33,7 @@ export const GuestModeBanner: React.FC<GuestModeBannerProps> = ({
   onDismiss,
 }) => {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: -16 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -16 }}
-      transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+    <div
       className="fixed inset-x-0 z-[110] px-3"
       style={{ top: 'var(--topbar-h, 4rem)' }}
       role="status"
@@ -64,7 +59,7 @@ export const GuestModeBanner: React.FC<GuestModeBannerProps> = ({
           <X size={15} strokeWidth={2} aria-hidden />
         </button>
       </div>
-    </motion.div>
+    </div>
   );
 };
 
@@ -87,11 +82,7 @@ export const GuestSaveBanner: React.FC<GuestSaveBannerProps> = ({
   }, []);
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: -16 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -16 }}
-      transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+    <div
       className="fixed inset-x-0 z-[110] px-3"
       style={{ top: 'var(--topbar-h, 4rem)' }}
       role="status"
@@ -117,6 +108,6 @@ export const GuestSaveBanner: React.FC<GuestSaveBannerProps> = ({
           <X size={15} strokeWidth={2} aria-hidden />
         </button>
       </div>
-    </motion.div>
+    </div>
   );
 };

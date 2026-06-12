@@ -87,6 +87,21 @@ export default defineConfig(async () => {
     build: {
       outDir: path.resolve(import.meta.dirname, "dist/public"),
       emptyOutDir: true,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (!id.includes("node_modules")) return undefined;
+            const normalizedId = id.replace(/\\/g, "/");
+            if (normalizedId.includes("framer-motion") || normalizedId.includes("motion-dom")) {
+              return "vendor-motion";
+            }
+            if (normalizedId.includes("web-vitals")) {
+              return "vendor-vitals";
+            }
+            return undefined;
+          },
+        },
+      },
     },
     server: {
       port,

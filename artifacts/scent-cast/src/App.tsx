@@ -1,17 +1,12 @@
 import React, { useState, useEffect, useRef, useLayoutEffect, useMemo, useCallback } from 'react';
 import { Routes, Route, useLocation, useParams, type Location } from 'react-router-dom';
-import { FragranceCapture, vaultIdentityKey } from './components/FragranceCapture';
-import { Wardrobe, Fragrance, DestinationType, EnergyState } from './components/Wardrobe';
+import type { Fragrance } from './components/Wardrobe';
+import { vaultIdentityKey } from './lib/vaultIdentity';
 import { Play, X } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { ScentIntentModal } from './components/ScentIntentModal';
-import { ScentNotesInfographic } from './components/ScentNotesInfographic';
 import { ThreadBackground, type ThreadBackgroundMode } from './components/threads/ThreadBackground';
 import { AppTopNav } from './components/AppTopNav';
 import { AuthModal } from './components/AuthModal';
 import { GuestSaveBanner, GuestModeBanner } from './components/GuestSaveBanner';
-import { ShareModal } from './components/ShareModal';
-import { ProfileSettingsModal } from './components/ProfileSettingsModal';
 import type { ScentFamily, ScentWeatherRecommendation } from './lib/scentWeatherEngine';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { WeatherProvider, useWeather } from './context/WeatherContext';
@@ -24,7 +19,26 @@ import { useMarqueeSwipe } from '@/hooks/useMarqueeSwipe';
 import NotFound from '@/pages/not-found';
 import { SEO } from './components/SEO';
 import { loadRouteChunk } from '@/lib/routeChunkRecovery';
+import { initWebVitals, vaultSizeBucket } from '@/lib/webVitalsTelemetry';
 
+const FragranceCapture = React.lazy(() =>
+  loadRouteChunk(() => import('./components/FragranceCapture').then((module) => ({ default: module.FragranceCapture }))),
+);
+const Wardrobe = React.lazy(() =>
+  loadRouteChunk(() => import('./components/Wardrobe').then((module) => ({ default: module.Wardrobe }))),
+);
+const ScentIntentModal = React.lazy(() =>
+  loadRouteChunk(() => import('./components/ScentIntentModal').then((module) => ({ default: module.ScentIntentModal }))),
+);
+const ScentNotesInfographic = React.lazy(() =>
+  loadRouteChunk(() => import('./components/ScentNotesInfographic').then((module) => ({ default: module.ScentNotesInfographic }))),
+);
+const ShareModal = React.lazy(() =>
+  loadRouteChunk(() => import('./components/ShareModal').then((module) => ({ default: module.ShareModal }))),
+);
+const ProfileSettingsModal = React.lazy(() =>
+  loadRouteChunk(() => import('./components/ProfileSettingsModal').then((module) => ({ default: module.ProfileSettingsModal }))),
+);
 const CommunityPage = React.lazy(() => loadRouteChunk(() => import('@/pages/community')));
 const ArenaPage = React.lazy(() => loadRouteChunk(() => import('@/pages/arena')));
 const IpadFreezeLab = React.lazy(() => loadRouteChunk(() => import('@/pages/ipad-freeze-lab')));
@@ -356,7 +370,7 @@ const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({
     { label: 'Coordinate', subtitle: 'Location', value: location },
   ];
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     const track = trackRef.current;
     const group = groupRef.current;
     if (!track || !group) return;
@@ -458,6 +472,34 @@ const HomepageAtmosphereChrome: React.FC = React.memo(() => {
   );
 });
 
+function FragranceCaptureFallback() {
+  return (
+    <div
+      className="scent-vault-panel w-full min-w-0 relative overflow-hidden"
+      aria-label="Loading fragrance search"
+    >
+      <div className="scent-vault-panel-inner min-w-0">
+        <div className="scent-lux-input h-[60px] w-full animate-pulse rounded-[var(--radius-scent)] sm:h-[68px]" />
+      </div>
+    </div>
+  );
+}
+
+function WardrobeFallback() {
+  return (
+    <section className="mx-auto w-full max-w-[1400px] py-10" aria-label="Loading vault">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {[0, 1, 2].map((item) => (
+          <div
+            key={item}
+            className="min-h-[24rem] rounded-[var(--radius-scent)] border border-scent-accent/12 bg-black/32"
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function DashboardView() {
   const { authToken, authEmail, authPictureUrl, authUsername, handleSignOut, setIsAuthModalOpen, setIsProfileModalOpen } = useAuth();
   const {
@@ -551,63 +593,48 @@ function DashboardView() {
           <HomepageHeroMarquee />
 
           <section className="mx-auto w-full max-w-[60rem] min-w-0 space-y-7 text-center">
-            <FragranceCapture
-              onAdd={handleAddItem}
-              onVaultSearchStateChange={handleVaultSearchStateChange}
-              existingVaultKeys={vaultIdentityKeys}
-              onViewVault={handleViewVault}
-            />
-            <AnimatePresence initial={false}>
-              {showOnboardingSteps ? (
-                <motion.div
-                  key="how-it-works"
-                  initial={{ opacity: 0, height: 0, marginTop: 0 }}
-                  animate={{ opacity: 1, height: 'auto', marginTop: '1.75rem' }}
-                  exit={{ opacity: 0, height: 0, marginTop: 0 }}
-                  transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
-                  style={{ overflow: 'hidden' }}
-                >
-                  <div className="relative overflow-hidden rounded-[var(--radius-scent)] border border-scent-accent/22 bg-[linear-gradient(180deg,rgba(255,247,236,0.045),rgba(0,0,0,0.36))] p-3 shadow-[inset_0_1px_0_rgba(255,236,183,0.08),0_18px_46px_-38px_rgba(212,175,55,0.52)] sm:p-4">
-                    <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-scent-accent/45 to-transparent" aria-hidden />
-                    <div className="relative grid gap-2 text-left sm:grid-cols-3 sm:text-center">
-                      <div className="pointer-events-none absolute left-[16.666%] right-[16.666%] top-4 hidden h-px bg-gradient-to-r from-scent-accent/18 via-scent-accent/42 to-scent-accent/18 sm:block" aria-hidden />
-                      {([
-                        { step: '1', title: 'Search', text: 'Find a fragrance you own or love' },
-                        { step: '2', title: 'Vault', text: 'Add three bottles for a useful profile' },
-                        { step: '3', title: 'Match', text: 'Unlock a weather-aware recommendation' },
-                      ] as const).map(({ step, title, text }) => (
-                        <div key={step} className="relative flex min-w-0 items-center gap-3 rounded-[calc(var(--radius-scent)-10px)] border border-white/8 bg-black/28 px-3 py-3 sm:flex-col sm:gap-2 sm:px-3 sm:py-4">
-                          <span className="relative z-[1] flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-scent-accent/68 bg-[#080604] text-[12px] font-bold tabular-nums text-scent-accent shadow-[0_0_0_4px_rgba(0,0,0,0.72),0_8px_20px_-14px_rgba(212,175,55,0.9)] sm:h-7 sm:w-7">{step}</span>
-                          <div className="min-w-0">
-                            <p className="scent-type-label text-scent-accent/88 sm:mb-1">{title}</p>
-                            <p className="text-[12px] leading-snug text-scent-text-muted sm:mx-auto sm:max-w-[10.5rem]">{text}</p>
-                          </div>
+            <React.Suspense fallback={<FragranceCaptureFallback />}>
+              <FragranceCapture
+                onAdd={handleAddItem}
+                onVaultSearchStateChange={handleVaultSearchStateChange}
+                existingVaultKeys={vaultIdentityKeys}
+                onViewVault={handleViewVault}
+              />
+            </React.Suspense>
+            {showOnboardingSteps ? (
+              <div className="mt-7 overflow-hidden">
+                <div className="relative overflow-hidden rounded-[var(--radius-scent)] border border-scent-accent/22 bg-[linear-gradient(180deg,rgba(255,247,236,0.045),rgba(0,0,0,0.36))] p-3 shadow-[inset_0_1px_0_rgba(255,236,183,0.08),0_18px_46px_-38px_rgba(212,175,55,0.52)] sm:p-4">
+                  <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-scent-accent/45 to-transparent" aria-hidden />
+                  <div className="relative grid gap-2 text-left sm:grid-cols-3 sm:text-center">
+                    <div className="pointer-events-none absolute left-[16.666%] right-[16.666%] top-4 hidden h-px bg-gradient-to-r from-scent-accent/18 via-scent-accent/42 to-scent-accent/18 sm:block" aria-hidden />
+                    {([
+                      { step: '1', title: 'Search', text: 'Find a fragrance you own or love' },
+                      { step: '2', title: 'Vault', text: 'Add three bottles for a useful profile' },
+                      { step: '3', title: 'Match', text: 'Unlock a weather-aware recommendation' },
+                    ] as const).map(({ step, title, text }) => (
+                      <div key={step} className="relative flex min-w-0 items-center gap-3 rounded-[calc(var(--radius-scent)-10px)] border border-white/8 bg-black/28 px-3 py-3 sm:flex-col sm:gap-2 sm:px-3 sm:py-4">
+                        <span className="relative z-[1] flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-scent-accent/68 bg-[#080604] text-[12px] font-bold tabular-nums text-scent-accent shadow-[0_0_0_4px_rgba(0,0,0,0.72),0_8px_20px_-14px_rgba(212,175,55,0.9)] sm:h-7 sm:w-7">{step}</span>
+                        <div className="min-w-0">
+                          <p className="scent-type-label text-scent-accent/88 sm:mb-1">{title}</p>
+                          <p className="text-[12px] leading-snug text-scent-text-muted sm:mx-auto sm:max-w-[10.5rem]">{text}</p>
                         </div>
-                      ))}
-                    </div>
+                      </div>
+                    ))}
                   </div>
-                </motion.div>
-              ) : null}
-            </AnimatePresence>
-            <AnimatePresence initial={false}>
-              {!vaultSearchUiActive && stateSettled ? (
-                <motion.div
-                  key="discover-cta"
-                  initial={{ opacity: 0, height: 0, marginTop: 0 }}
-                  animate={{ opacity: 1, height: 'auto', marginTop: '1.75rem' }}
-                  exit={{ opacity: 0, height: 0, marginTop: 0 }}
-                  transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
-                  style={{ overflow: 'hidden' }}
-                >
+                </div>
+              </div>
+            ) : null}
+            {!vaultSearchUiActive && stateSettled ? (
+              <div className="mt-7 overflow-hidden">
                   {discoveryReady ? (
-                    <motion.button
+                    <button
                       type="button"
                       onClick={() => setIsIntentModalOpen(true)}
                       className="scent-primary-button w-full min-h-[60px] sm:h-16 flex items-center justify-center gap-2.5 sm:gap-4 px-4 transition-all group rounded-[var(--radius-scent)]"
                     >
                       <Play size={19} className="fill-current shrink-0 group-hover:scale-110 transition-transform" aria-hidden />
                       <span className="font-serif italic text-lg sm:text-2xl leading-tight text-center">Discover Your Signature Scent</span>
-                    </motion.button>
+                    </button>
                   ) : (
                     <div className="flex w-full min-h-[84px] flex-col items-center justify-center rounded-[var(--radius-scent)] border border-scent-accent/22 bg-[linear-gradient(180deg,rgba(255,247,236,0.04),rgba(0,0,0,0.34))] px-4 py-4 shadow-[inset_0_1px_0_rgba(255,236,183,0.08),0_18px_46px_-40px_rgba(212,175,55,0.48)] sm:min-h-24 sm:px-6">
                       <div className="flex w-full max-w-[34rem] flex-col items-center gap-3.5">
@@ -633,45 +660,51 @@ function DashboardView() {
                       </div>
                     </div>
                   )}
-                </motion.div>
-              ) : null}
-            </AnimatePresence>
+              </div>
+            ) : null}
           </section>
 
           <HomepageAtmosphereChrome />
 
-          <div id="scent-vault-section" style={{ scrollMarginTop: 'var(--topbar-h)' }}>
-            <Wardrobe
-              items={items}
-              onDelete={handleDeleteItem}
-              onPersistWardrobeImage={handlePersistWardrobeImage}
-              isAdmin={isAdmin}
-              onUploadBottleImage={authToken && isAdmin ? uploadAdminBottleImage : undefined}
-              featuredItem={activeRecommendation}
-              onRevertWardrobe={handleRevertWardrobe}
-              fixWardrobeBusy={wardrobeFixBusy}
-              revertAvailable={!!wardrobeRevertSnapshot}
-              wardrobeFixHint={wardrobeFixHint}
-              onExpandArchive={handleExpandArchive}
-              authToken={authToken}
-              wardrobeLoaded={wardrobeLoaded}
-              wardrobeError={wardrobeError}
-              onRetryLoadWardrobe={retryLoadWardrobe}
-              isImageSyncing={isImageSyncing}
-            />
+          <div id="scent-vault-section" className="scent-deferred-section" style={{ scrollMarginTop: 'var(--topbar-h)' }}>
+            <React.Suspense fallback={<WardrobeFallback />}>
+              <Wardrobe
+                items={items}
+                onDelete={handleDeleteItem}
+                onPersistWardrobeImage={handlePersistWardrobeImage}
+                isAdmin={isAdmin}
+                onUploadBottleImage={authToken && isAdmin ? uploadAdminBottleImage : undefined}
+                featuredItem={activeRecommendation}
+                onRevertWardrobe={handleRevertWardrobe}
+                fixWardrobeBusy={wardrobeFixBusy}
+                revertAvailable={!!wardrobeRevertSnapshot}
+                wardrobeFixHint={wardrobeFixHint}
+                onExpandArchive={handleExpandArchive}
+                authToken={authToken}
+                wardrobeLoaded={wardrobeLoaded}
+                wardrobeError={wardrobeError}
+                onRetryLoadWardrobe={retryLoadWardrobe}
+                isImageSyncing={isImageSyncing}
+              />
+            </React.Suspense>
           </div>
         </div>
       </main>
 
-      <ScentIntentModal isOpen={isIntentModalOpen} onClose={() => setIsIntentModalOpen(false)} onComplete={handleIntentComplete} />
+      {isIntentModalOpen ? (
+        <React.Suspense fallback={null}>
+          <ScentIntentModal
+            isOpen={isIntentModalOpen}
+            onClose={() => setIsIntentModalOpen(false)}
+            onComplete={handleIntentComplete}
+          />
+        </React.Suspense>
+      ) : null}
 
-      <AnimatePresence mode="wait">
-        {activeRecommendation && (
-          <motion.div
+      {activeRecommendation ? (
+          <div
             ref={recommendationOverlayRef}
             key="recommendation-overlay"
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            transition={{ duration: 0.35, ease: 'easeInOut' }}
             className="fixed inset-0 z-[110] bg-black/95 flex flex-col"
             role="dialog"
             aria-modal="true"
@@ -716,15 +749,17 @@ function DashboardView() {
                     </div>
                     )}
                     <div className="sm:col-span-2">
-                      <ScentNotesInfographic
-                        derivedMetrics={
-                          activeRecommendation.derived_metrics ??
-                          activeRecommendation.raw_engine_detail?.derived_metrics ??
-                          null
-                        }
-                        legacyPyramid={activeRecommendation.pyramid}
-                        scentAxesFallback={activeRecommendation.scent_vector ?? null}
-                      />
+                      <React.Suspense fallback={<div className="min-h-32 rounded-[18px] border border-scent-accent/12 bg-white/[0.03]" />}>
+                        <ScentNotesInfographic
+                          derivedMetrics={
+                            activeRecommendation.derived_metrics ??
+                            activeRecommendation.raw_engine_detail?.derived_metrics ??
+                            null
+                          }
+                          legacyPyramid={activeRecommendation.pyramid}
+                          scentAxesFallback={activeRecommendation.scent_vector ?? null}
+                        />
+                      </React.Suspense>
                     </div>
                     {activeEngineRecommendation ? (
                       <>
@@ -764,9 +799,8 @@ function DashboardView() {
                 Confirm Alignment
               </button>
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          </div>
+      ) : null}
 
       <footer className="relative z-10 border-t border-scent-accent/10 py-16 px-8 mt-24">
         <div className="max-w-[1400px] mx-auto text-center space-y-4">
@@ -864,22 +898,18 @@ function GlobalModals() {
   // save nudge takes priority so the two never stack in the same anchor slot.
   const showGuestModeBanner =
     !authToken && !isAuthModalOpen && guestModeActive && !guestModeAcknowledged && !showGuestBanner;
-  const guestBanner = (
-    <AnimatePresence>
-      {showGuestBanner ? (
-        <GuestSaveBanner
-          itemCount={items.length}
-          onSignIn={() => setIsAuthModalOpen(true)}
-          onDismiss={() => setGuestPromptDismissed(true)}
-        />
-      ) : showGuestModeBanner ? (
-        <GuestModeBanner
-          onSignIn={() => setIsAuthModalOpen(true)}
-          onDismiss={() => setGuestModeAcknowledged(true)}
-        />
-      ) : null}
-    </AnimatePresence>
-  );
+  const guestBanner = showGuestBanner ? (
+    <GuestSaveBanner
+      itemCount={items.length}
+      onSignIn={() => setIsAuthModalOpen(true)}
+      onDismiss={() => setGuestPromptDismissed(true)}
+    />
+  ) : showGuestModeBanner ? (
+    <GuestModeBanner
+      onSignIn={() => setIsAuthModalOpen(true)}
+      onDismiss={() => setGuestModeAcknowledged(true)}
+    />
+  ) : null;
 
   const authModal = isAuthModalOpen ? (
     <AuthModal
@@ -898,32 +928,36 @@ function GlobalModals() {
     />
   ) : null;
 
-  const shareModal = (
-    <ShareModal
-      isOpen={isShareModalOpen}
-      onClose={() => setIsShareModalOpen(false)}
-      userId={userId}
-      authToken={authToken}
-      items={items}
-      onToggleVisibility={(id, hidden) => {
-        setItems(prev =>
-          prev.map(item =>
-            (item._dbId ?? item.id) === id ? { ...item, shareHidden: hidden } : item,
-          ),
-        );
-      }}
-    />
-  );
+  const shareModal = isShareModalOpen ? (
+    <React.Suspense fallback={null}>
+      <ShareModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+        userId={userId}
+        authToken={authToken}
+        items={items}
+        onToggleVisibility={(id, hidden) => {
+          setItems(prev =>
+            prev.map(item =>
+              (item._dbId ?? item.id) === id ? { ...item, shareHidden: hidden } : item,
+            ),
+          );
+        }}
+      />
+    </React.Suspense>
+  ) : null;
 
-  const profileModal = (
-    <ProfileSettingsModal
-      isOpen={isProfileModalOpen}
-      onClose={() => setIsProfileModalOpen(false)}
-      authToken={authToken}
-      currentUsername={authUsername}
-      onSaved={setAuthUsername}
-    />
-  );
+  const profileModal = isProfileModalOpen ? (
+    <React.Suspense fallback={null}>
+      <ProfileSettingsModal
+        isOpen={isProfileModalOpen}
+        onClose={() => setIsProfileModalOpen(false)}
+        authToken={authToken}
+        currentUsername={authUsername}
+        onSaved={setAuthUsername}
+      />
+    </React.Suspense>
+  ) : null;
 
   return (
     <>
@@ -941,6 +975,57 @@ function RouteChunkFallback() {
       <div className="h-8 w-8 rounded-full border border-white/15 border-t-scent-accent animate-spin" />
     </div>
   );
+}
+
+function WebVitalsReporter() {
+  const location = useLocation();
+  const { authToken } = useAuth();
+  const items = useWardrobeItems();
+  const contextRef = useRef({
+    route: routeSignature(location),
+    authState: authToken ? 'authenticated' as const : 'guest' as const,
+    vaultSizeBucket: vaultSizeBucket(items.length),
+  });
+
+  useEffect(() => {
+    contextRef.current = {
+      route: routeSignature(location),
+      authState: authToken ? 'authenticated' : 'guest',
+      vaultSizeBucket: vaultSizeBucket(items.length),
+    };
+  }, [authToken, items.length, location]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let idleHandle: number | null = null;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const start = () => {
+      void initWebVitals(() => contextRef.current).catch((err) => {
+        if (!cancelled && import.meta.env.DEV) {
+          console.debug('[web-vital] init failed', err);
+        }
+      });
+    };
+
+    const scheduleIdle = window.requestIdleCallback as
+      | ((callback: IdleRequestCallback, options?: IdleRequestOptions) => number)
+      | undefined;
+
+    if (scheduleIdle) {
+      idleHandle = scheduleIdle(start, { timeout: 2000 });
+    } else {
+      timer = setTimeout(start, 1000);
+    }
+
+    return () => {
+      cancelled = true;
+      if (idleHandle !== null && window.cancelIdleCallback) window.cancelIdleCallback(idleHandle);
+      if (timer) clearTimeout(timer);
+    };
+  }, []);
+
+  return null;
 }
 
 const AppContent = React.memo(function AppContent({ location }: { location: Location }) {
@@ -976,6 +1061,7 @@ const AppShell = React.memo(function AppShell({
         <WardrobeProvider>
           <div className="scent-app-shell min-h-[100svh] bg-scent-bg selection:bg-scent-accent selection:text-black text-white relative overflow-x-hidden">
             {showThreadBackground ? <ThreadBackground mode={threadBackgroundMode} /> : null}
+            <WebVitalsReporter />
             <AppContent location={renderedLocation} />
             <Toaster />
           </div>
@@ -998,11 +1084,12 @@ export default function App() {
   const transitionStartedAtRef = useRef(0);
   const isFreezeLab = renderedLocation.pathname === '/debug/ipad-freeze';
   const { lowMotionRenderMode, isIpad } = useRenderBudget();
+  const [threadBackgroundReady, setThreadBackgroundReady] = useState(false);
   // iPad uses a CSS-only thread renderer so Safari can schedule motion on the
   // compositor without the production rAF transform loop competing with scroll
   // and image decode. Desktop and iPhone keep the existing rAF renderer.
   const threadBackgroundMode: ThreadBackgroundMode = isIpad ? 'css-animated' : 'raf';
-  const showThreadBackground = !isFreezeLab;
+  const showThreadBackground = !isFreezeLab && threadBackgroundReady;
   const transitionTiming = useMemo(
     () => (lowMotionRenderMode ? PAGE_TRANSITION_TIMING.lowMotion : PAGE_TRANSITION_TIMING.standard),
     [lowMotionRenderMode],
@@ -1040,7 +1127,7 @@ export default function App() {
     });
   }, [transitionTiming]);
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     const renderedRoute = routeSignature(renderedLocation);
     if (!transitionVisible || pendingRevealRouteRef.current !== renderedRoute) return;
 
@@ -1070,6 +1157,43 @@ export default function App() {
   useEffect(() => () => {
     clearTransitionWork();
   }, [clearTransitionWork]);
+
+  useEffect(() => {
+    if (isFreezeLab) {
+      setThreadBackgroundReady(false);
+      return undefined;
+    }
+
+    let cancelled = false;
+    let frame = 0;
+    let settleTimer: ReturnType<typeof setTimeout> | null = null;
+    let idleHandle: number | null = null;
+
+    frame = requestAnimationFrame(() => {
+      settleTimer = setTimeout(() => {
+        const scheduleIdle = window.requestIdleCallback as
+          | ((callback: IdleRequestCallback, options?: IdleRequestOptions) => number)
+          | undefined;
+
+        const reveal = () => {
+          if (!cancelled) setThreadBackgroundReady(true);
+        };
+
+        if (scheduleIdle) {
+          idleHandle = scheduleIdle(reveal, { timeout: 1600 });
+        } else {
+          reveal();
+        }
+      }, lowMotionRenderMode ? 1200 : 700);
+    });
+
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(frame);
+      if (settleTimer) clearTimeout(settleTimer);
+      if (idleHandle !== null && window.cancelIdleCallback) window.cancelIdleCallback(idleHandle);
+    };
+  }, [isFreezeLab, lowMotionRenderMode]);
 
   return (
     <>
