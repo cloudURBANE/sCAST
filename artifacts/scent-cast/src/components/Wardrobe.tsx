@@ -1074,6 +1074,8 @@ export const Wardrobe: React.FC<{
 
   const [searchQuery, setSearchQuery] = React.useState("");
   const deferredSearchQuery = React.useDeferredValue(searchQuery);
+  const vaultSearchUnlocked = items.length >= 3;
+  const activeSearchQuery = vaultSearchUnlocked ? deferredSearchQuery : "";
   
   const [refreshingId, setRefreshingId] = React.useState<string | null>(null);
   const [refreshError, setRefreshError] = React.useState<string | null>(null);
@@ -1492,7 +1494,7 @@ export const Wardrobe: React.FC<{
 
   // Performance Optimization: Memoize computationally heavy filter operations
   const filteredItems = React.useMemo(() => {
-    const q = deferredSearchQuery.trim();
+    const q = activeSearchQuery.trim();
     if (!q) return items;
     return items.filter(item => {
       const name = entryName(item);
@@ -1501,12 +1503,18 @@ export const Wardrobe: React.FC<{
 
       return matchesWardrobeQuery(item, q);
     });
-  }, [items, deferredSearchQuery]);
+  }, [items, activeSearchQuery]);
 
   const searchSuggestions = React.useMemo(
-    () => buildWardrobeSearchSuggestions(items, deferredSearchQuery),
-    [items, deferredSearchQuery],
+    () => (vaultSearchUnlocked ? buildWardrobeSearchSuggestions(items, activeSearchQuery) : []),
+    [items, activeSearchQuery, vaultSearchUnlocked],
   );
+
+  React.useEffect(() => {
+    if (vaultSearchUnlocked) return;
+    setSearchFocused(false);
+    if (searchQuery) setSearchQuery('');
+  }, [searchQuery, vaultSearchUnlocked]);
 
   React.useEffect(() => {
     setSearchHighlightIndex(0);
@@ -1623,7 +1631,7 @@ export const Wardrobe: React.FC<{
   }, [hasPendingPreview]);
 
   const searchDropdownOpen =
-    searchFocused && searchQuery.trim().length > 0 && searchSuggestions.length > 0;
+    vaultSearchUnlocked && searchFocused && activeSearchQuery.trim().length > 0 && searchSuggestions.length > 0;
 
   const cancelSearchBlur = () => {
     if (searchBlurTimerRef.current !== null) {
@@ -1676,6 +1684,7 @@ export const Wardrobe: React.FC<{
                 ) : null}
               </div>
             )}
+            {vaultSearchUnlocked && (
             <div className="relative w-full max-w-[56rem] z-20">
               <label htmlFor="wardrobe-vault-search" className="sr-only">
                 Search vault fragrances and image hints
@@ -1807,6 +1816,7 @@ export const Wardrobe: React.FC<{
               </AnimatePresence>
 
             </div>
+            )}
             <VaultGridModeToggle
               mode={gridMode}
               onChange={setGridMode}
@@ -1825,7 +1835,7 @@ export const Wardrobe: React.FC<{
           </div>
         </div>
 
-        {!searchQuery && items.length >= 10 && featuredItem && (
+        {!activeSearchQuery && items.length >= 10 && featuredItem && (
           <section className="space-y-16 py-24 bg-gradient-to-b from-white/[0.03] to-transparent border-y border-white/5 relative overflow-hidden">
             <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
             <div className="flex items-center gap-4 px-4 relative z-10">
@@ -1991,7 +2001,7 @@ export const Wardrobe: React.FC<{
                 </div>
               </div>
             ))
-          ) : !searchQuery && (
+          ) : !activeSearchQuery && (
             <div className="relative overflow-hidden rounded-[var(--radius-scent)] border border-scent-accent/26 bg-[linear-gradient(180deg,rgba(255,247,236,0.05),rgba(255,247,236,0.014)_38%,rgba(0,0,0,0.34))] px-5 py-10 text-center shadow-[inset_0_1px_0_rgba(255,236,183,0.1),0_30px_78px_-56px_rgba(212,175,55,0.55)] sm:px-8 sm:py-14 lg:px-12">
               <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-scent-accent/50 to-transparent" aria-hidden />
               <div className="pointer-events-none absolute inset-x-10 bottom-0 h-px bg-gradient-to-r from-transparent via-white/12 to-transparent" aria-hidden />
