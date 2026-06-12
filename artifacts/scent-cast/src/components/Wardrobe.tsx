@@ -997,10 +997,11 @@ export const Wardrobe: React.FC<{
   const { gridMode, setGridMode, isCompactGrid } = useVaultGridPreference();
   const { lowMotionRenderMode, isIpad } = useRenderBudget();
   const constrainedDetailMode = lowMotionRenderMode;
-  // iPad keeps the constrained-mode performance optimizations (deferred render,
-  // lighter motion, full-screen modal) but must retain the original three-column
-  // detail layout (accords | note pyramid | bottle). Only true mobile/phone
-  // surfaces collapse into the stacked, reordered single column.
+  // iPad is desktop-class: it gets the full floating detail panel, full motion,
+  // and the three-column layout (accords | note pyramid | bottle). Only true
+  // mobile/phone surfaces collapse into the stacked, reordered single column.
+  // The `!isIpad` guard is belt-and-braces for a user-enabled reduced-motion
+  // iPad session, which should still keep the desktop layout.
   const stackedDetailMode = constrainedDetailMode && !isIpad;
   const [detailDeferredContentReady, setDetailDeferredContentReady] = React.useState(false);
   const [detailExitInProgress, setDetailExitInProgress] = React.useState(false);
@@ -1534,7 +1535,7 @@ export const Wardrobe: React.FC<{
     }
     return chunked;
   }, [filteredItems]);
-  const prioritizedGridImageCount = isIpad ? 2 : 4;
+  const prioritizedGridImageCount = 4;
 
   const detailNeedsClarify =
     selectedItem !== null && (refreshCounts[selectedItem.id] ?? 0) > 2;
@@ -1931,10 +1932,10 @@ export const Wardrobe: React.FC<{
                     return (
                       <motion.div
                         key={item.id}
-                        initial={isIpad ? false : { opacity: 0, y: 10 }}
-                        whileInView={isIpad ? undefined : { opacity: 1, y: 0 }}
-                        viewport={isIpad ? undefined : { once: true, margin: '0px 0px 15% 0px' }}
-                        transition={isIpad ? undefined : { duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+                        initial={{ opacity: 0, y: 10 }}
+                        whileInView={{ opacity: 1, y: 0 }}
+                        viewport={{ once: true, margin: '0px 0px 15% 0px' }}
+                        transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
                         className="group cursor-pointer relative h-full min-w-0"
                         onClick={() => openDetail(item)}
                         onMouseEnter={() => prefetchReviews(item)}
