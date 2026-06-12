@@ -1085,10 +1085,14 @@ export default function App() {
   const isFreezeLab = renderedLocation.pathname === '/debug/ipad-freeze';
   const { lowMotionRenderMode, isIpad } = useRenderBudget();
   const [threadBackgroundReady, setThreadBackgroundReady] = useState(false);
-  // iPad uses a CSS-only thread renderer so Safari can schedule motion on the
-  // compositor without the production rAF transform loop competing with scroll
-  // and image decode. Desktop and iPhone keep the existing rAF renderer.
-  const threadBackgroundMode: ThreadBackgroundMode = isIpad ? 'css-animated' : 'raf';
+  // Touch WebKit runs the background as a static composition so scroll and image
+  // decode keep priority. Desktop keeps the rAF renderer; unconstrained iPad
+  // variants can still use the CSS compositor path.
+  const threadBackgroundMode: ThreadBackgroundMode = lowMotionRenderMode
+    ? 'static'
+    : isIpad
+      ? 'css-animated'
+      : 'raf';
   const showThreadBackground = !isFreezeLab && threadBackgroundReady;
   const transitionTiming = useMemo(
     () => (lowMotionRenderMode ? PAGE_TRANSITION_TIMING.lowMotion : PAGE_TRANSITION_TIMING.standard),

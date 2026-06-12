@@ -126,7 +126,7 @@ type ThreadBackgroundProps = {
   mode?: ThreadBackgroundMode;
 };
 
-export type ThreadBackgroundMode = 'raf' | 'css-animated';
+export type ThreadBackgroundMode = 'raf' | 'css-animated' | 'static';
 
 type ThreadLineStyle = React.CSSProperties & {
   '--thread-core': string;
@@ -405,7 +405,9 @@ export const ThreadBackground: React.FC<ThreadBackgroundProps> = React.memo(({ o
             if (node) elementRefs.current.set(thread.id, node);
             else elementRefs.current.delete(thread.id);
           }}
-          style={mode === 'css-animated' ? getCssAnimatedThreadStyle(thread, index) : getThreadStyle(thread)}
+          style={mode === 'css-animated' || mode === 'static'
+            ? getCssAnimatedThreadStyle(thread, index)
+            : getThreadStyle(thread)}
         />
       ))}
     </div>

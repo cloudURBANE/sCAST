@@ -107,6 +107,12 @@
   will-change: transform;
 }
 
+.scent-thread-line--mode-static {
+  opacity: var(--thread-static-opacity);
+  transform: translate3d(var(--thread-static-x), var(--thread-static-y), 0);
+  will-change: auto;
+}
+
 .scent-thread-line--mode-css-animated.scent-thread-line--axis-x.scent-thread-line--direction-forward {
   animation-name: scent-thread-travel-x-forward;
 }

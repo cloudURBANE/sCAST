@@ -996,13 +996,10 @@ export const Wardrobe: React.FC<{
   const [selectedItem, setSelectedItem] = React.useState<Fragrance | null>(null);
   const { gridMode, setGridMode, isCompactGrid } = useVaultGridPreference();
   const { lowMotionRenderMode, isIpad } = useRenderBudget();
-  const constrainedDetailMode = lowMotionRenderMode;
-  // iPad is desktop-class: it gets the full floating detail panel, full motion,
-  // and the three-column layout (accords | note pyramid | bottle). Only true
-  // mobile/phone surfaces collapse into the stacked, reordered single column.
-  // The `!isIpad` guard is belt-and-braces for a user-enabled reduced-motion
-  // iPad session, which should still keep the desktop layout.
-  const stackedDetailMode = constrainedDetailMode && !isIpad;
+  // iPad gets the cheaper render/media budget, but keeps the tablet/desktop
+  // detail layout. Only phone-class constrained surfaces collapse the panel.
+  const constrainedDetailMode = lowMotionRenderMode && !isIpad;
+  const stackedDetailMode = constrainedDetailMode;
   const [detailDeferredContentReady, setDetailDeferredContentReady] = React.useState(false);
   const [detailExitInProgress, setDetailExitInProgress] = React.useState(false);
 
@@ -1932,10 +1929,10 @@ export const Wardrobe: React.FC<{
                     return (
                       <motion.div
                         key={item.id}
-                        initial={{ opacity: 0, y: 10 }}
-                        whileInView={{ opacity: 1, y: 0 }}
-                        viewport={{ once: true, margin: '0px 0px 15% 0px' }}
-                        transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+                        initial={lowMotionRenderMode ? false : { opacity: 0, y: 10 }}
+                        whileInView={lowMotionRenderMode ? undefined : { opacity: 1, y: 0 }}
+                        viewport={lowMotionRenderMode ? undefined : { once: true, margin: '0px 0px 15% 0px' }}
+                        transition={lowMotionRenderMode ? undefined : { duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
                         className="group cursor-pointer relative h-full min-w-0"
                         onClick={() => openDetail(item)}
                         onMouseEnter={() => prefetchReviews(item)}
