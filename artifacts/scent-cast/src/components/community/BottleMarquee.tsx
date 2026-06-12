@@ -8,7 +8,7 @@ import {
   COMMUNITY_IMAGE_LAYOUT_TRANSITION,
   COMMUNITY_IMAGE_LAYOUT_TRANSITION_LOW_RENDER,
 } from '@/components/community/communityMotion';
-import { isLowRenderBudget } from '@/lib/platform';
+import { isIpadSafariPerformanceMode, isLowRenderBudget } from '@/lib/platform';
 import { useMarqueeSwipe } from '@/hooks/useMarqueeSwipe';
 
 interface BottleMarqueeProps {
@@ -18,8 +18,8 @@ interface BottleMarqueeProps {
 }
 
 // A seamless marquee loop needs at least two copies of the track. Desktop uses a
-// third copy for extra slack on ultra-wide viewports; a constrained iPad PWA
-// renders the minimum so a route tap doesn't triple the bottle-image surfaces.
+// third copy for extra slack on ultra-wide viewports; constrained devices and
+// iPad Safari render the minimum so a route tap does not triple image surfaces.
 const COMMUNITY_TRACK_COPIES_DEFAULT = 3;
 const COMMUNITY_TRACK_COPIES_LOW = 2;
 const COMMUNITY_SCROLL_PIXELS_PER_SECOND = 6;
@@ -44,7 +44,7 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
   const [activeItem, setActiveItem] = useState<CommunityFragranceEntry | null>(null);
   const [activeImageLayoutId, setActiveImageLayoutId] = useState<string | null>(null);
   const [overlayClosing, setOverlayClosing] = useState(false);
-  const lowRenderBudget = useRef(isLowRenderBudget()).current;
+  const lowRenderBudget = useRef(isLowRenderBudget() || isIpadSafariPerformanceMode()).current;
   const trackCopies = useRef(
     lowRenderBudget ? COMMUNITY_TRACK_COPIES_LOW : COMMUNITY_TRACK_COPIES_DEFAULT,
   ).current;

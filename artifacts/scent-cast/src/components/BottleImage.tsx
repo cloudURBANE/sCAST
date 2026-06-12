@@ -7,7 +7,7 @@ import {
   type BottleImageAdjustment,
 } from '@/lib/bottleImageAdjustment';
 import { isProcessedStorageImageUrl, proxiedImageUrl } from '@/lib/imageProxy';
-import { isLowRenderBudget } from '@/lib/platform';
+import { isIpadSafariPerformanceMode, isLowRenderBudget } from '@/lib/platform';
 import { reportImageMetric } from '@/lib/imageTelemetry';
 import { Spinner } from '@/components/ui/spinner';
 
@@ -96,7 +96,7 @@ export const BottleImage: React.FC<BottleImageProps> = ({
   isSyncing = false,
 }) => {
   const reduceMotion = useReducedMotion();
-  const lowRenderBudget = React.useRef(isLowRenderBudget()).current;
+  const lowRenderBudget = React.useRef(isLowRenderBudget() || isIpadSafariPerformanceMode()).current;
   // Direct URL the SPA would normally render (proxy-bypassed for our own
   // processed CDN objects per Phase 1).
   const url = proxy ? proxiedImageUrl(src, { packshot: true }) : (src ?? '');

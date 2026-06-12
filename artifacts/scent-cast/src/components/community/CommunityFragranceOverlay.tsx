@@ -107,7 +107,7 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
 
   useEffect(() => {
     if (!item) return;
-    closeButtonRef.current?.focus();
+    closeButtonRef.current?.focus({ preventScroll: true });
   }, [item]);
 
   useEffect(() => {
@@ -153,11 +153,11 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
       if (event.shiftKey) {
         if (!activeInDialog || active === first) {
           event.preventDefault();
-          last.focus();
+          last.focus({ preventScroll: true });
         }
       } else if (!activeInDialog || active === last) {
         event.preventDefault();
-        first.focus();
+        first.focus({ preventScroll: true });
       }
     };
 
