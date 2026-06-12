@@ -996,8 +996,9 @@ export const Wardrobe: React.FC<{
   const [selectedItem, setSelectedItem] = React.useState<Fragrance | null>(null);
   const { gridMode, setGridMode, isCompactGrid } = useVaultGridPreference();
   const { lowMotionRenderMode, isIpad } = useRenderBudget();
-  // iPad gets the cheaper render/media budget, but keeps the tablet/desktop
-  // detail layout. Only phone-class constrained surfaces collapse the panel.
+  // iPad stays in the tablet/desktop experience. Only phone-class constrained
+  // surfaces collapse the panel; an iPad reduced-motion session keeps the
+  // wider layout while honoring reduced motion.
   const constrainedDetailMode = lowMotionRenderMode && !isIpad;
   const stackedDetailMode = constrainedDetailMode;
   const [detailDeferredContentReady, setDetailDeferredContentReady] = React.useState(false);
