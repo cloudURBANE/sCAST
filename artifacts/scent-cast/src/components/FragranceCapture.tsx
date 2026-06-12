@@ -401,11 +401,6 @@ export const FragranceCapture: React.FC<{
   const [genderFilter, setGenderFilter] = useState<'Men' | 'Women' | 'Unisex' | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
-  // Raw DOM focus on the search input, including the on-load autofocus. Drives
-  // the "Press Enter to search" hint only — `searchFocused` is reserved for
-  // *user-initiated* engagement because it activates the distraction-free
-  // search mode that hides the onboarding steps and discovery CTA below.
-  const [inputFocused, setInputFocused] = useState(false);
   const [errorStatus, setErrorStatus] = useState<string | null>(null);
   const [errorPhase, setErrorPhase] = useState<ErrorPhase>(null);
   const [hasSearched, setHasSearched] = useState(false);
@@ -1188,24 +1183,29 @@ export const FragranceCapture: React.FC<{
               ref={searchInputRef}
               id="scent-add-to-vault-search"
               type="search"
+              inputMode="search"
               enterKeyHint="search"
+              autoComplete="off"
               autoCapitalize="none"
               autoCorrect="off"
               spellCheck={false}
               value={searchQuery}
               onChange={(e) => { setSearchQuery(e.target.value); setSearchFocused(true); setErrorStatus(null); setErrorPhase(null); }}
+              onPointerDown={(e) => {
+                if (document.activeElement !== e.currentTarget) {
+                  e.currentTarget.focus({ preventScroll: true });
+                }
+              }}
               onFocus={() => {
-                setInputFocused(true);
                 if (autoFocusPendingRef.current) {
                   autoFocusPendingRef.current = false;
                   return;
                 }
                 setSearchFocused(true);
               }}
-              onBlur={() => { setInputFocused(false); setSearchFocused(false); autoFocusPendingRef.current = false; }}
+              onBlur={() => { setSearchFocused(false); autoFocusPendingRef.current = false; }}
               placeholder="Search by house or fragrance..."
               aria-label="Look up a brand or fragrance"
-              aria-describedby="scent-vault-search-hint"
               className="scent-lux-input scent-vault-search-input relative z-0 w-full h-[60px] px-16 text-center text-[#fff7ec] font-sans text-base font-medium outline-none transition-colors placeholder:text-scent-text-subtle placeholder:font-medium sm:h-[68px] sm:px-[4.35rem] scroll-mt-28"
             />
             <motion.button
@@ -1227,24 +1227,6 @@ export const FragranceCapture: React.FC<{
               </motion.span>
             </motion.button>
           </form>
-          {/* Inline guidance: visible while the field is focused and idle, so a
-              first-time visitor knows how to submit. */}
-          <AnimatePresence initial={false}>
-            {inputFocused && !uploading && matches.length === 0 && !hasSearched ? (
-              <motion.p
-                key="search-enter-hint"
-                id="scent-vault-search-hint"
-                initial={reducedAddMotion ? false : { opacity: 0, height: 0, marginTop: 0 }}
-                animate={reducedAddMotion ? { opacity: 1 } : { opacity: 1, height: 'auto', marginTop: '0.75rem' }}
-                exit={reducedAddMotion ? { opacity: 0 } : { opacity: 0, height: 0, marginTop: 0 }}
-                transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-                style={{ overflow: 'hidden', marginTop: reducedAddMotion ? '0.75rem' : undefined }}
-                className="scent-type-chip text-scent-text-subtle"
-              >
-                Press Enter to search
-              </motion.p>
-            ) : null}
-          </AnimatePresence>
         </div>
 
         {/* Screen-reader announcement for dynamic search results */}

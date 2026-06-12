@@ -1018,6 +1018,41 @@ a {
   line-height: 1.32;
 }
 
+.scent-arena-brand {
+  --brand-size: clamp(1rem, 5.4vw, 1.42rem);
+  line-height: 1.16;
+}
+
+.scent-arena-brand[data-len="medium"] {
+  --brand-size: clamp(0.94rem, 4.9vw, 1.28rem);
+}
+
+.scent-arena-brand[data-len="long"],
+.scent-arena-brand[data-len="xlong"] {
+  --brand-size: clamp(0.82rem, 4.2vw, 1.08rem);
+  line-height: 1.18;
+}
+
+@media (min-width: 640px) {
+  .scent-arena-brand {
+    --brand-size: clamp(1.71rem, 2.565vw, 2.25rem);
+    line-height: 1.28;
+  }
+
+  .scent-arena-brand[data-len="medium"] {
+    --brand-size: clamp(1.575rem, 2.295vw, 2.025rem);
+  }
+
+  .scent-arena-brand[data-len="long"] {
+    --brand-size: clamp(1.44rem, 2.07vw, 1.89rem);
+  }
+
+  .scent-arena-brand[data-len="xlong"] {
+    --brand-size: clamp(1.125rem, 1.575vw, 1.485rem);
+    line-height: 1.32;
+  }
+}
+
 .scent-card-title-row {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
@@ -2200,4 +2235,12 @@ textarea:focus-visible,
   box-shadow:
     0 0 0 5px rgba(212, 175, 55, 0.24),
     0 0 22px rgba(255, 232, 172, 0.22);
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .scent-no-mobile-focus-ring:focus,
+  .scent-no-mobile-focus-ring:focus-visible {
+    outline: none;
+    box-shadow: none;
+  }
 }

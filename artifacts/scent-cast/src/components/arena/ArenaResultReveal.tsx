@@ -88,8 +88,11 @@ export const ArenaResultReveal: React.FC<ArenaResultRevealProps> = ({
       <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
         <button
           type="button"
-          onClick={onNext}
-          className="scent-primary-button inline-flex min-h-12 w-full max-w-xs items-center justify-center gap-2 px-6 py-3 text-sm font-bold uppercase tracking-[0.16em] sm:w-auto"
+          onClick={(event) => {
+            event.currentTarget.blur();
+            onNext();
+          }}
+          className="scent-primary-button scent-no-mobile-focus-ring inline-flex min-h-12 w-full max-w-xs items-center justify-center gap-2 px-6 py-3 text-sm font-bold uppercase tracking-[0.16em] sm:w-auto"
         >
           <span>Next battle</span>
           <ArrowRight size={16} strokeWidth={1.8} aria-hidden="true" />

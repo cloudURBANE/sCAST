@@ -2818,6 +2818,7 @@ export const Wardrobe: React.FC<{
                   <button
                     ref={detailCloseButtonRef}
                     type="button"
+                    onPointerUp={(event) => event.currentTarget.blur()}
                     onClick={() => {
                       if (deleteConfirming) {
                         setDeleteConfirming(false);
@@ -2826,12 +2827,13 @@ export const Wardrobe: React.FC<{
                       closeDetail();
                     }}
                     disabled={deleteBusy}
-                    className="min-h-[46px] border-r border-white/10 px-3 py-3 scent-type-chip text-scent-text-muted transition-colors hover:bg-white/[0.05] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                    className="scent-no-mobile-focus-ring min-h-[46px] border-r border-white/10 px-3 py-3 scent-type-chip text-scent-text-muted transition-colors hover:bg-white/[0.05] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     {deleteConfirming ? 'Go back' : 'Close'}
                   </button>
                   <button
                     type="button"
+                    onPointerUp={(event) => event.currentTarget.blur()}
                     onClick={() => {
                       if (!deleteConfirming) {
                         setDeleteConfirming(true);
@@ -2858,7 +2860,7 @@ export const Wardrobe: React.FC<{
                     disabled={imageToolbarBusy || deleteBusy}
                     aria-busy={deleteBusy}
                     aria-label={deleteBusy ? "Deleting from vault" : deleteConfirming ? "Confirm delete from vault" : "Delete from vault"}
-                    className={`group flex min-h-[46px] items-center justify-center gap-2 px-3 py-3 scent-type-chip transition-all disabled:cursor-not-allowed ${
+                    className={`scent-no-mobile-focus-ring group flex min-h-[46px] items-center justify-center gap-2 px-3 py-3 scent-type-chip transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 disabled:cursor-not-allowed ${
                       deleteBusy ? 'disabled:opacity-80' : 'disabled:opacity-25'
                     } ${
                       deleteConfirming || deleteBusy

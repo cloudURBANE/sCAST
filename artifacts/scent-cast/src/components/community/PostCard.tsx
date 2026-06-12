@@ -1,6 +1,7 @@
 import React, { useEffect, useId, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
+  ArrowRight,
   BadgeDollarSign,
   ChevronDown,
   ChevronUp,
@@ -138,6 +139,130 @@ const FragranceShowcase: React.FC<{ post: CommunityPost }> = ({ post }) => {
         </div>
       ))}
     </div>
+  );
+};
+
+const CompactBattlePostCard: React.FC<PostCardProps> = ({
+  post,
+  authToken,
+  onSignIn,
+}) => {
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  const headingId = useId();
+  const authorName = displayCommunityAuthor(post.author);
+  const heading = post.title?.trim() || 'Battle';
+  const options = battleOptions(post);
+
+  return (
+    <article
+      aria-labelledby={headingId}
+      className="mx-auto w-full max-w-[760px] overflow-hidden rounded-[calc(var(--radius-scent)-2px)] border border-scent-accent/20 bg-[radial-gradient(78%_64%_at_50%_0%,rgba(255,247,236,0.026),transparent_62%),linear-gradient(180deg,rgba(10,9,7,0.88),rgba(0,0,0,0.97))] p-4 text-left shadow-[0_18px_44px_-36px_rgba(212,175,55,0.26),0_22px_46px_-34px_rgba(0,0,0,0.96),inset_0_1px_0_rgba(255,236,183,0.055)] sm:p-5"
+    >
+      <header className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <Link
+            to={communitySharePath(post.author)}
+            aria-label={`View ${authorName}'s vault`}
+            className="shrink-0 rounded-full transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/70"
+          >
+            <CommunityAuthorAvatar author={post.author} size="md" />
+          </Link>
+          <div className="min-w-0">
+            <Link
+              to={communitySharePath(post.author)}
+              className="block min-w-0 max-w-full truncate scent-type-chip text-[12px] text-[#fff7ec] transition-colors hover:text-scent-accent"
+            >
+              {authorName}
+            </Link>
+            <p className="mt-1 scent-type-meta text-[11px] uppercase text-scent-muted">
+              {formatCommunityTime(post.createdAt)}
+            </p>
+          </div>
+        </div>
+        <span className="inline-flex min-h-9 shrink-0 items-center justify-center gap-2 rounded-full bg-scent-accent/[0.075] px-3 py-1.5 scent-type-chip text-[11px] text-scent-accent shadow-[inset_0_0_0_1px_rgba(212,175,55,0.18)]">
+          <Swords size={15} strokeWidth={1.75} aria-hidden="true" />
+          Battle
+        </span>
+      </header>
+
+      <div className="mt-4 grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+        <div className="min-w-0">
+          <h3
+            id={headingId}
+            className="break-words text-balance font-serif text-2xl italic leading-tight text-[#fff7ec] sm:text-3xl"
+          >
+            {heading}
+          </h3>
+          {post.body ? (
+            <p className="mt-2 line-clamp-2 max-w-2xl whitespace-pre-line break-words text-sm leading-6 text-[#fff7ec]/76 sm:text-[15px]">
+              {post.body}
+            </p>
+          ) : null}
+        </div>
+        <Link
+          to="/arena"
+          className="scent-primary-button scent-no-mobile-focus-ring inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-[var(--radius-scent)] px-4 py-2 text-[12px] font-bold uppercase tracking-[0.13em] sm:w-auto"
+        >
+          Open arena
+          <ArrowRight size={15} strokeWidth={1.8} aria-hidden="true" />
+        </Link>
+      </div>
+
+      {options.length === 2 ? (
+        <div className="mt-4 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
+          <div className="min-w-0 rounded-[14px] border border-scent-accent/14 bg-black/48 px-3 py-2 text-center">
+            <p className="truncate font-serif text-lg italic text-[#fff7ec]">{options[0]}</p>
+          </div>
+          <span className="font-serif text-lg italic text-scent-accent/84" aria-hidden="true">
+            vs
+          </span>
+          <div className="min-w-0 rounded-[14px] border border-scent-accent/14 bg-black/48 px-3 py-2 text-center">
+            <p className="truncate font-serif text-lg italic text-[#fff7ec]">{options[1]}</p>
+          </div>
+        </div>
+      ) : null}
+
+      <footer className="mt-5 space-y-4 border-t border-scent-accent/10 pt-4">
+        <h4 className="sr-only">Post actions</h4>
+        <ReactionBar
+          targetType="post"
+          targetId={post.id}
+          counts={post.counts.reactions}
+          viewerReactions={post.viewerReactions}
+          authToken={authToken}
+          onSignIn={onSignIn}
+        />
+        <button
+          type="button"
+          onClick={() => setCommentsOpen((open) => !open)}
+          className="scent-no-mobile-focus-ring mx-auto flex min-h-10 w-fit min-w-[9rem] items-center justify-center gap-2 rounded-full px-4 py-2 scent-type-chip text-scent-text-muted transition-colors hover:bg-white/[0.045] hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/60"
+          aria-expanded={commentsOpen}
+          aria-label={
+            commentsOpen
+              ? 'Hide comments'
+              : `View ${post.counts.comments} comments`
+          }
+        >
+          <MessageCircle size={17} strokeWidth={1.75} aria-hidden="true" />
+          {post.counts.comments > 0
+            ? `${post.counts.comments} comments`
+            : 'Comment'}
+          {commentsOpen ? (
+            <ChevronUp size={15} strokeWidth={1.8} aria-hidden="true" />
+          ) : (
+            <ChevronDown size={15} strokeWidth={1.8} aria-hidden="true" />
+          )}
+        </button>
+      </footer>
+
+      {commentsOpen ? (
+        <CommentThread
+          postId={post.id}
+          authToken={authToken}
+          onSignIn={onSignIn}
+        />
+      ) : null}
+    </article>
   );
 };
 
@@ -300,7 +425,7 @@ const BattleVotes: React.FC<{
   );
 };
 
-export const PostCard: React.FC<PostCardProps> = ({
+const StandardPostCard: React.FC<PostCardProps> = ({
   post,
   authToken,
   onSignIn,
@@ -422,4 +547,12 @@ export const PostCard: React.FC<PostCardProps> = ({
       ) : null}
     </article>
   );
+};
+
+export const PostCard: React.FC<PostCardProps> = (props) => {
+  if (props.post.postType === 'battle') {
+    return <CompactBattlePostCard {...props} />;
+  }
+
+  return <StandardPostCard {...props} />;
 };
