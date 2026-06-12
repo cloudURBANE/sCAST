@@ -111,6 +111,8 @@ function foldAscii(value: string): string {
 
 function applyKnownFragranceAliases(value: string): string {
   return value
+    .replace(/\bmfk\b/gi, "Maison Francis Kurkdjian")
+    .replace(/\bysl\b/gi, "Yves Saint Laurent")
     .replace(/\bcentel\s*33\b/gi, "Santal 33")
     .replace(/\binito\b/gi, "Initio")
     .replace(/\bfood\s*wood\b/gi, "Oud Wood")
