@@ -1,4 +1,5 @@
 import { useEffect, type RefObject } from 'react';
+import { isIpadDevice } from '@/lib/platform';
 
 /**
  * Adds swipe/drag control to a CSS-keyframe marquee track.
@@ -30,6 +31,7 @@ const SCROLL_CANCEL_PX = 12; // vertical slop that hands the gesture to page scr
 const MAX_FLING_PX_PER_S = 3200;
 const CRUISE_BLEND_TAU_S = 0.55; // momentum eases toward cruise speed on this time constant
 const CRUISE_RESUME_EPSILON_PX_PER_S = 14; // close enough to hand back to CSS
+const IPAD_MIN_MOMENTUM_MS = 420;
 
 const normalizeLoop = (value: number, distance: number): number =>
   distance > 0 ? ((value % distance) + distance) % distance : 0;
@@ -68,9 +70,11 @@ export function useMarqueeSwipe(
     let lastX = 0;
     let lastMoveT = 0;
     let lastFrameT = 0;
+    let momentumStartT = 0;
     let offset = 0; // px the loop has advanced; track sits at translateX(-offset)
     let velocity = 0; // px/s in the loop's forward direction
     let frame = 0;
+    const iPadHandoff = isIpadDevice();
 
     const applyTransform = () => {
       track.style.transform = `translate3d(${-offset}px, 0, 0)`;
@@ -94,6 +98,12 @@ export function useMarqueeSwipe(
       // Put the resume offset in place before the CSS animation is restored.
       // WebKit can otherwise paint one frame at the default keyframe position.
       track.style.animationDelay = duration > 0 ? `-${(progress * duration).toFixed(3)}s` : '';
+      if (iPadHandoff) {
+        // iPadOS WebKit sometimes applies the negative animation delay a frame
+        // late after fast alternating swipes. Force style resolution before the
+        // manual transform is removed so the resumed keyframe starts in-place.
+        void track.offsetWidth;
+      }
       track.style.transform = '';
       delete track.dataset.marqueeDragging;
     };
@@ -112,7 +122,10 @@ export function useMarqueeSwipe(
       offset = normalizeLoop(offset + velocity * dt, distance);
       applyTransform();
       velocity = cruise + (velocity - cruise) * Math.exp(-dt / CRUISE_BLEND_TAU_S);
-      if (Math.abs(velocity - cruise) <= CRUISE_RESUME_EPSILON_PX_PER_S) {
+      if (
+        Math.abs(velocity - cruise) <= CRUISE_RESUME_EPSILON_PX_PER_S &&
+        (!iPadHandoff || now - momentumStartT >= IPAD_MIN_MOMENTUM_MS)
+      ) {
         resumeCss();
         return;
       }
@@ -197,7 +210,8 @@ export function useMarqueeSwipe(
       if (!dragging) return;
       dragging = false;
       velocity = Math.max(-MAX_FLING_PX_PER_S, Math.min(MAX_FLING_PX_PER_S, velocity));
-      lastFrameT = performance.now();
+      momentumStartT = performance.now();
+      lastFrameT = momentumStartT;
       frame = requestAnimationFrame(stepMomentum);
     };
 

@@ -1534,6 +1534,7 @@ export const Wardrobe: React.FC<{
     }
     return chunked;
   }, [filteredItems]);
+  const prioritizedGridImageCount = isIpad ? 2 : 4;
 
   const detailNeedsClarify =
     selectedItem !== null && (refreshCounts[selectedItem.id] ?? 0) > 2;
@@ -1923,49 +1924,56 @@ export const Wardrobe: React.FC<{
                   } sm:grid-cols-2 sm:gap-4 lg:gap-5 xl:grid-cols-4 mb-1`}
                   data-compact={isCompactGrid ? 'true' : 'false'}
                 >
-                  {shelfItems.map((item) => (
-                    <motion.div
-                      key={item.id}
-                      initial={{ opacity: 0, y: 10 }} whileInView={{ opacity: 1, y: 0 }}
-                      viewport={{ once: true, margin: '0px 0px 15% 0px' }} transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
-                      className="group cursor-pointer relative h-full min-w-0"
-                      onClick={() => openDetail(item)}
-                      onMouseEnter={() => prefetchReviews(item)}
-                    >
-                      <div className={`scent-fragrance-card scent-hover-lift w-full h-full ${
-                        isCompactGrid ? 'min-h-[17.5rem]' : 'min-h-[26rem]'
-                      } sm:min-h-[26rem] transition-[transform,border-color,box-shadow] duration-500 motion-reduce:transition-none relative overflow-hidden flex flex-col`}>
-                        <div className="scent-card-frame" aria-hidden />
-                        <div className={`relative z-[1] flex h-full flex-col items-center ${
-                          isCompactGrid ? 'px-3 py-4' : 'px-6 py-5'
-                        } sm:px-8 sm:py-6`}>
-                          <BrandGoldLabel
-                            brand={entryBrand(item)}
-                            className="scent-card-brand w-full mt-1 sm:mt-1.5"
-                          />
-                          <div className={`relative flex-1 w-full ${
-                            isCompactGrid ? 'mt-2 mb-2' : 'mt-3 mb-3'
-                          } min-h-0 sm:mt-4 sm:mb-4`}>
-                            <BottleImage
-                              variant="grid"
-                              src={item.imageUrl}
-                              videoSrc={betaVideoUrlForFragrance(item)}
-                              alt={entryName(item)}
-                              adjustment={item.imageAdjustment}
-                              isSyncing={isImageSyncing?.(item)}
-                              className="absolute inset-0 z-10"
-                              imgClassName="scent-hover-scale brightness-[1.1] transition-transform duration-[900ms] motion-reduce:transition-none"
-                              loading={shelfIndex === 0 ? 'eager' : 'lazy'}
-                              fetchPriority={shelfIndex === 0 ? 'high' : undefined}
+                  {shelfItems.map((item, itemIndex) => {
+                    const gridItemIndex = shelfIndex * 4 + itemIndex;
+                    const prioritizeImage = gridItemIndex < prioritizedGridImageCount;
+
+                    return (
+                      <motion.div
+                        key={item.id}
+                        initial={isIpad ? false : { opacity: 0, y: 10 }}
+                        whileInView={isIpad ? undefined : { opacity: 1, y: 0 }}
+                        viewport={isIpad ? undefined : { once: true, margin: '0px 0px 15% 0px' }}
+                        transition={isIpad ? undefined : { duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+                        className="group cursor-pointer relative h-full min-w-0"
+                        onClick={() => openDetail(item)}
+                        onMouseEnter={() => prefetchReviews(item)}
+                      >
+                        <div className={`scent-fragrance-card scent-hover-lift w-full h-full ${
+                          isCompactGrid ? 'min-h-[17.5rem]' : 'min-h-[26rem]'
+                        } sm:min-h-[26rem] transition-[transform,border-color,box-shadow] duration-500 motion-reduce:transition-none relative overflow-hidden flex flex-col`}>
+                          <div className="scent-card-frame" aria-hidden />
+                          <div className={`relative z-[1] flex h-full flex-col items-center ${
+                            isCompactGrid ? 'px-3 py-4' : 'px-6 py-5'
+                          } sm:px-8 sm:py-6`}>
+                            <BrandGoldLabel
+                              brand={entryBrand(item)}
+                              className="scent-card-brand w-full mt-1 sm:mt-1.5"
                             />
-                          </div>
-                          <div className="scent-card-title-row shrink-0">
-                            <h3 className="scent-card-title" title={entryName(item)}>{entryName(item)}</h3>
+                            <div className={`relative flex-1 w-full ${
+                              isCompactGrid ? 'mt-2 mb-2' : 'mt-3 mb-3'
+                            } min-h-0 sm:mt-4 sm:mb-4`}>
+                              <BottleImage
+                                variant="grid"
+                                src={item.imageUrl}
+                                videoSrc={betaVideoUrlForFragrance(item)}
+                                alt={entryName(item)}
+                                adjustment={item.imageAdjustment}
+                                isSyncing={isImageSyncing?.(item)}
+                                className="absolute inset-0 z-10"
+                                imgClassName="scent-hover-scale brightness-[1.1] transition-transform duration-[900ms] motion-reduce:transition-none"
+                                loading={prioritizeImage ? 'eager' : 'lazy'}
+                                fetchPriority={prioritizeImage ? 'high' : undefined}
+                              />
+                            </div>
+                            <div className="scent-card-title-row shrink-0">
+                              <h3 className="scent-card-title" title={entryName(item)}>{entryName(item)}</h3>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </motion.div>
-                  ))}
+                      </motion.div>
+                    );
+                  })}
                   {shelfIndex === shelves.length - 1 && shelfItems.length < 4 && (
                     <button
                       type="button"

@@ -60,6 +60,18 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
   const imageLayoutTransition = lowRenderBudget
     ? COMMUNITY_IMAGE_LAYOUT_TRANSITION_LOW_RENDER
     : COMMUNITY_IMAGE_LAYOUT_TRANSITION;
+  const sharedImageLayoutId = lowRenderBudget ? undefined : imageLayoutId ?? undefined;
+  const detailRevealVariants = lowRenderBudget
+    ? undefined
+    : {
+        hidden: {},
+        visible: {
+          transition: {
+            delayChildren: 0.12,
+            staggerChildren: 0.08,
+          },
+        },
+      };
   const activeItemKey = item ? wardrobeIdentityKey(item.brand, item.name) : '';
   const alreadyInWardrobe = Boolean(
     activeItemKey &&
@@ -249,7 +261,7 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
                     </span>
                   </div>
                   <motion.div
-                    layoutId={imageLayoutId ?? undefined}
+                    layoutId={sharedImageLayoutId}
                     transition={imageLayoutTransition}
                     className="relative z-10 my-3 min-h-0 flex-1"
                   >
@@ -275,17 +287,9 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
 
                 <motion.div
                   className="space-y-8 text-left"
-                  initial="hidden"
-                  animate="visible"
-                  variants={{
-                    hidden: {},
-                    visible: {
-                      transition: {
-                        delayChildren: 0.12,
-                        staggerChildren: 0.08,
-                      },
-                    },
-                  }}
+                  initial={lowRenderBudget ? false : 'hidden'}
+                  animate={lowRenderBudget ? undefined : 'visible'}
+                  variants={detailRevealVariants}
                 >
                   <motion.header className="space-y-5">
                     <motion.p
