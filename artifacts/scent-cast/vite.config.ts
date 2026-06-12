@@ -92,6 +92,19 @@ export default defineConfig(async () => {
           manualChunks(id) {
             if (!id.includes("node_modules")) return undefined;
             const normalizedId = id.replace(/\\/g, "/");
+            if (
+              normalizedId.includes("/react/") ||
+              normalizedId.includes("/react-dom/") ||
+              normalizedId.includes("/scheduler/")
+            ) {
+              return "vendor-react";
+            }
+            if (normalizedId.includes("/react-router/") || normalizedId.includes("/react-router-dom/")) {
+              return "vendor-router";
+            }
+            if (normalizedId.includes("/@tanstack/")) {
+              return "vendor-query";
+            }
             if (normalizedId.includes("framer-motion") || normalizedId.includes("motion-dom")) {
               return "vendor-motion";
             }

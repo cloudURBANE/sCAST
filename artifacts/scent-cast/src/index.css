@@ -187,7 +187,7 @@ a {
 
 .scent-deferred-section {
   content-visibility: auto;
-  contain-intrinsic-size: 900px;
+  contain-intrinsic-size: 3200px;
 }
 
 @supports not (content-visibility: auto) {
