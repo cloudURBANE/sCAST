@@ -149,40 +149,70 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
   onEditProfile,
 }) => {
   const location = useLocation();
+  // Show-on-scroll-up bottom nav.
+  //
+  // The bar hides ONLY while the user is actively scrolling down (an
+  // immersive gesture); it returns the instant they scroll up, tap, or the
+  // scroll settles. This is deliberate: the old behavior auto-hid the bar
+  // after a fixed idle timeout, which left it `pointer-events-none` and
+  // off-screen exactly when a resting user reached for it — so their first
+  // tap only re-revealed the bar and a second tap was needed to navigate
+  // (the "double-tap" bug). Keeping the bar visible whenever the user is at
+  // rest guarantees a single tap always activates navigation.
   const [navVisible, setNavVisible] = React.useState(true);
-  const navTimeoutRef = React.useRef<number | null>(null);
-
-  const showNavTemporarily = React.useCallback(() => {
-    setNavVisible(true);
-    if (navTimeoutRef.current !== null) {
-      window.clearTimeout(navTimeoutRef.current);
-    }
-    navTimeoutRef.current = window.setTimeout(() => {
-      setNavVisible(false);
-      navTimeoutRef.current = null;
-    }, 2000);
-  }, []);
+  const lastScrollYRef = React.useRef(0);
+  const idleTimerRef = React.useRef<number | null>(null);
 
   React.useEffect(() => {
-    const handleActivity = () => showNavTemporarily();
+    lastScrollYRef.current = window.scrollY;
 
-    window.addEventListener('scroll', handleActivity, { passive: true });
-    window.addEventListener('touchstart', handleActivity, { passive: true });
-    window.addEventListener('touchmove', handleActivity, { passive: true });
-    window.addEventListener('pointerdown', handleActivity, { passive: true });
-    showNavTemporarily();
+    // Whenever scrolling stops, bring the bar back so an idle user — the one
+    // about to navigate — always has a live, tappable target.
+    const revealAfterIdle = () => {
+      if (idleTimerRef.current !== null) window.clearTimeout(idleTimerRef.current);
+      idleTimerRef.current = window.setTimeout(() => {
+        setNavVisible(true);
+        idleTimerRef.current = null;
+      }, 220);
+    };
+
+    const handleScroll = () => {
+      const y = window.scrollY;
+      const delta = y - lastScrollYRef.current;
+      // Ignore sub-pixel jitter and iOS rubber-band so a still page never
+      // toggles the bar.
+      if (Math.abs(delta) > 6) {
+        // Hide only on a real downward scroll past the top region; scrolling
+        // up (or sitting near the top) always brings it back immediately.
+        setNavVisible(!(delta > 0 && y > 56));
+        lastScrollYRef.current = y;
+      }
+      revealAfterIdle();
+    };
+
+    // Any direct interaction reveals the bar (covers the case where the user
+    // taps after a downward fling, before the idle timer fires).
+    const reveal = () => setNavVisible(true);
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('touchstart', reveal, { passive: true });
+    window.addEventListener('pointerdown', reveal, { passive: true });
 
     return () => {
-      window.removeEventListener('scroll', handleActivity);
-      window.removeEventListener('touchstart', handleActivity);
-      window.removeEventListener('touchmove', handleActivity);
-      window.removeEventListener('pointerdown', handleActivity);
-      if (navTimeoutRef.current !== null) {
-        window.clearTimeout(navTimeoutRef.current);
-        navTimeoutRef.current = null;
+      window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('touchstart', reveal);
+      window.removeEventListener('pointerdown', reveal);
+      if (idleTimerRef.current !== null) {
+        window.clearTimeout(idleTimerRef.current);
+        idleTimerRef.current = null;
       }
     };
-  }, [showNavTemporarily, location.pathname]);
+  }, []);
+
+  // Navigating to a new route must never land the user on a hidden bar.
+  React.useEffect(() => {
+    setNavVisible(true);
+  }, [location.pathname]);
 
   const authControl = authToken ? (
     <AccountMenu
@@ -269,7 +299,7 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
             : 'translate-y-[110%] opacity-0 pointer-events-none',
         ].join(' ')}
         aria-label="Primary navigation"
-        onFocusCapture={showNavTemporarily}
+        onFocusCapture={() => setNavVisible(true)}
       >
         <div className="mx-auto grid max-w-sm grid-cols-3 rounded-full border border-scent-accent/22 bg-black/66 p-1 shadow-[0_18px_48px_rgba(0,0,0,0.58),inset_0_1px_0_rgba(255,236,183,0.12)] backdrop-blur-md">
           {navItems.map((item) => {

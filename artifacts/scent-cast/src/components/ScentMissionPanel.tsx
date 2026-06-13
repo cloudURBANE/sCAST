@@ -1077,53 +1077,76 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         aria-live="polite"
         aria-label="Beam Agent conversation"
       >
-        {/* Intro typing → first line crossfade: the dots fade out as the
-            greeting fades in, so the panel never hard-cuts between the two. */}
-        <AnimatePresence initial={false}>
-          {!introReady ? (
+        {/* Intro: the greeting bubble mounts immediately at its FINAL size and
+            position, with the typing dots overlaid on top. When the line is
+            ready the dots fade out and the text fades in within that same
+            bubble. Previously the dots lived in a separate, smaller pill that
+            then unmounted while a differently-sized greeting bubble animated in
+            from below — so the panel appeared to "pop out" and re-settle. Here
+            nothing reflows: the box never changes shape or position, it just
+            crossfades its contents. */}
+        {messages.map((message, index) => {
+          const isIntroGreeting = index === 0 && message.role === 'agent';
+          const typing = isIntroGreeting && !introReady;
+          return (
             <motion.div
-              key="intro-typing"
-              initial={{ opacity: 0, y: 8 }}
+              key={message.id}
+              initial={calmMotion ? false : { opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
               transition={{ duration: 0.24, ease: SCENT_EASE }}
-              className="inline-flex max-w-[90%] items-center gap-1.5 self-start rounded-[calc(var(--radius-scent)-12px)] border border-scent-accent/22 bg-[linear-gradient(180deg,rgba(212,175,55,0.045),rgba(0,0,0,0.16))] px-4 py-3"
-              aria-label="Beam Agent is typing"
+              className={`relative max-w-[90%] rounded-[calc(var(--radius-scent)-12px)] border px-3.5 py-2.5 text-[13px] leading-relaxed sm:text-sm ${
+                message.role === 'user'
+                  ? 'self-end border-white/14 bg-white/[0.07] text-[#fff7ec]'
+                  : message.role === 'system'
+                    ? 'self-start border-red-400/25 bg-red-500/10 text-red-100'
+                    : 'self-start border-scent-accent/22 bg-[linear-gradient(180deg,rgba(212,175,55,0.045),rgba(0,0,0,0.16))] text-scent-text-muted'
+              }`}
+              aria-label={typing ? 'Beam Agent is typing' : undefined}
             >
-              {[0, 1, 2].map((dot) => (
-                <motion.span
-                  key={dot}
-                  className="h-1.5 w-1.5 rounded-full bg-scent-accent/70"
-                  animate={{ opacity: [0.3, 1, 0.3], y: [0, -2, 0] }}
-                  transition={{ duration: 1, repeat: Infinity, ease: 'easeInOut', delay: dot * 0.18 }}
-                />
-              ))}
+              {message.role === 'system' ? (
+                <AlertTriangle size={13} className="mr-1.5 inline align-[-2px]" aria-hidden />
+              ) : null}
+              {isIntroGreeting ? (
+                <>
+                  {/* Dots overlay — absolutely placed so it never affects the
+                      bubble's size; the text below already reserves it. */}
+                  <AnimatePresence initial={false}>
+                    {typing ? (
+                      <motion.span
+                        key="intro-dots"
+                        className="absolute left-3.5 top-1/2 inline-flex -translate-y-1/2 items-center gap-1.5"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.2, ease: SCENT_EASE }}
+                        aria-hidden
+                      >
+                        {[0, 1, 2].map((dot) => (
+                          <motion.span
+                            key={dot}
+                            className="h-1.5 w-1.5 rounded-full bg-scent-accent/70"
+                            animate={{ opacity: [0.3, 1, 0.3], y: [0, -2, 0] }}
+                            transition={{ duration: 1, repeat: Infinity, ease: 'easeInOut', delay: dot * 0.18 }}
+                          />
+                        ))}
+                      </motion.span>
+                    ) : null}
+                  </AnimatePresence>
+                  <motion.span
+                    initial={false}
+                    animate={{ opacity: typing ? 0 : 1 }}
+                    transition={{ duration: 0.28, ease: SCENT_EASE }}
+                    aria-hidden={typing}
+                  >
+                    {message.text}
+                  </motion.span>
+                </>
+              ) : (
+                message.text
+              )}
             </motion.div>
-          ) : null}
-        </AnimatePresence>
-
-        {introReady
-          ? messages.map((message) => (
-              <motion.div
-                key={message.id}
-                initial={calmMotion ? false : { opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.24, ease: SCENT_EASE }}
-                className={`max-w-[90%] rounded-[calc(var(--radius-scent)-12px)] border px-3.5 py-2.5 text-[13px] leading-relaxed sm:text-sm ${
-                  message.role === 'user'
-                    ? 'self-end border-white/14 bg-white/[0.07] text-[#fff7ec]'
-                    : message.role === 'system'
-                      ? 'self-start border-red-400/25 bg-red-500/10 text-red-100'
-                      : 'self-start border-scent-accent/22 bg-[linear-gradient(180deg,rgba(212,175,55,0.045),rgba(0,0,0,0.16))] text-scent-text-muted'
-                }`}
-              >
-                {message.role === 'system' ? (
-                  <AlertTriangle size={13} className="mr-1.5 inline align-[-2px]" aria-hidden />
-                ) : null}
-                {message.text}
-              </motion.div>
-            ))
-          : null}
+          );
+        })}
 
         <AnimatePresence initial={false}>
           {resolved ? (
