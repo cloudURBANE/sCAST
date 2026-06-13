@@ -203,7 +203,7 @@ const CompactBattlePostCard: React.FC<PostCardProps> = ({
           to="/arena"
           className="scent-primary-button scent-no-mobile-focus-ring inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-[var(--radius-scent)] px-4 py-2 text-[12px] font-bold uppercase tracking-[0.13em] sm:w-auto"
         >
-          Open arena
+          <span>Open arena</span>
           <ArrowRight size={15} strokeWidth={1.8} aria-hidden="true" />
         </Link>
       </div>
@@ -222,20 +222,23 @@ const CompactBattlePostCard: React.FC<PostCardProps> = ({
         </div>
       ) : null}
 
-      <footer className="mt-5 space-y-4 border-t border-scent-accent/10 pt-4">
+      <footer className="mt-4 flex flex-row items-center justify-between gap-4 border-t border-scent-accent/10 pt-3">
         <h4 className="sr-only">Post actions</h4>
-        <ReactionBar
-          targetType="post"
-          targetId={post.id}
-          counts={post.counts.reactions}
-          viewerReactions={post.viewerReactions}
-          authToken={authToken}
-          onSignIn={onSignIn}
-        />
+        <div className="flex flex-1 justify-start">
+          <ReactionBar
+            targetType="post"
+            targetId={post.id}
+            counts={post.counts.reactions}
+            viewerReactions={post.viewerReactions}
+            authToken={authToken}
+            onSignIn={onSignIn}
+            compact={true}
+          />
+        </div>
         <button
           type="button"
           onClick={() => setCommentsOpen((open) => !open)}
-          className="scent-no-mobile-focus-ring mx-auto flex min-h-10 w-fit min-w-[9rem] items-center justify-center gap-2 rounded-full px-4 py-2 scent-type-chip text-scent-text-muted transition-colors hover:bg-white/[0.045] hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/60"
+          className="scent-no-mobile-focus-ring flex min-h-9 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 scent-type-chip text-scent-text-muted transition-colors hover:bg-white/[0.045] hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/60"
           aria-expanded={commentsOpen}
           aria-label={
             commentsOpen
@@ -243,14 +246,14 @@ const CompactBattlePostCard: React.FC<PostCardProps> = ({
               : `View ${post.counts.comments} comments`
           }
         >
-          <MessageCircle size={17} strokeWidth={1.75} aria-hidden="true" />
-          {post.counts.comments > 0
-            ? `${post.counts.comments} comments`
-            : 'Comment'}
+          <MessageCircle size={15} strokeWidth={1.75} aria-hidden="true" />
+          <span className="text-[10px] font-bold uppercase tracking-[0.12em] sm:text-xs">
+            {post.counts.comments > 0 ? `${post.counts.comments}` : 'Comment'}
+          </span>
           {commentsOpen ? (
-            <ChevronUp size={15} strokeWidth={1.8} aria-hidden="true" />
+            <ChevronUp size={13} strokeWidth={1.8} aria-hidden="true" />
           ) : (
-            <ChevronDown size={15} strokeWidth={1.8} aria-hidden="true" />
+            <ChevronDown size={13} strokeWidth={1.8} aria-hidden="true" />
           )}
         </button>
       </footer>
