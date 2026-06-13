@@ -4,6 +4,16 @@ import { ArenaResultReveal } from "@/components/arena/ArenaResultReveal";
 import type { ArenaBattle } from "@/components/arena/arenaBattleMapper";
 import type { ArenaReasonKey } from "@/components/arena/arenaTwists";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   readArenaReason,
   writeArenaReason,
 } from "@/components/arena/arenaReasonStore";
@@ -45,6 +55,9 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
   // animation + reveal entrance; stays null when the resolved state is merely
   // restored from the server, so revisiting never replays the animation.
   const [justVotedChoice, setJustVotedChoice] = useState<string | null>(null);
+  const [pendingSwitchChoice, setPendingSwitchChoice] = useState<string | null>(
+    null,
+  );
   const revealRef = useRef<HTMLDivElement>(null);
 
   // Battle identity changed → adopt that battle's resolved state from scratch.
@@ -55,6 +68,7 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
     setReasonDeclinedState(stored.declined);
     setErrorMessage(null);
     setJustVotedChoice(null);
+    setPendingSwitchChoice(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [battle.id]);
 
@@ -111,6 +125,7 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
   const submitVote = (choice: string) => {
     setJustVotedChoice(choice);
     setLocalVote(choice);
+    setPendingSwitchChoice(null);
     setErrorMessage(null);
 
     if (!authToken) {
@@ -129,6 +144,33 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
         },
       },
     );
+  };
+
+  const requestVote = (choice: string) => {
+    if (choice === localVote) return;
+    if (localVote) {
+      setPendingSwitchChoice(choice);
+      return;
+    }
+    submitVote(choice);
+  };
+
+  const pendingSwitchSide =
+    pendingSwitchChoice === battle.left.key
+      ? battle.left
+      : pendingSwitchChoice === battle.right.key
+        ? battle.right
+        : null;
+  const currentPickSide =
+    localVote === battle.left.key
+      ? battle.left
+      : localVote === battle.right.key
+        ? battle.right
+        : null;
+
+  const confirmPendingSwitch = () => {
+    if (!pendingSwitchChoice) return;
+    submitVote(pendingSwitchChoice);
   };
 
   return (
@@ -158,7 +200,7 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
           disabled={votePending}
           isSaving={votePending && selectedKey === battle.left.key}
           justVoted={justVotedChoice === battle.left.key}
-          onVote={() => submitVote(battle.left.key)}
+          onVote={() => requestVote(battle.left.key)}
         />
 
         <div className="grid place-items-center">
@@ -178,9 +220,47 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
           disabled={votePending}
           isSaving={votePending && selectedKey === battle.right.key}
           justVoted={justVotedChoice === battle.right.key}
-          onVote={() => submitVote(battle.right.key)}
+          onVote={() => requestVote(battle.right.key)}
         />
       </div>
+
+      <AlertDialog
+        open={Boolean(pendingSwitchSide)}
+        onOpenChange={(open) => {
+          if (!open) setPendingSwitchChoice(null);
+        }}
+      >
+        <AlertDialogContent className="w-[calc(100vw-2rem)] max-w-md rounded-lg border border-scent-accent/18 bg-[rgba(5,4,3,0.96)] p-0 text-foreground shadow-[0_28px_90px_-48px_rgba(212,175,55,0.34),inset_0_1px_0_rgba(255,236,183,0.08)]">
+          <div className="p-5 sm:p-6">
+            <AlertDialogHeader className="space-y-3 text-center">
+              <p className="scent-type-label text-scent-accent">
+                Switch your pick?
+              </p>
+              <AlertDialogTitle className="text-pretty text-xl font-bold leading-tight text-foreground sm:text-2xl">
+                Confirm Contender{" "}
+                {pendingSwitchChoice === battle.left.key ? "A" : "B"}
+              </AlertDialogTitle>
+              <AlertDialogDescription className="mx-auto max-w-sm text-sm font-medium leading-6 text-scent-text-muted">
+                {currentPickSide && pendingSwitchSide
+                  ? `Your current pick is ${currentPickSide.name}. Switch your saved vote to ${pendingSwitchSide.name}?`
+                  : "Switch your saved vote to the other contender?"}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+
+            <AlertDialogFooter className="mt-6 grid grid-cols-2 gap-2 space-x-0 sm:grid-cols-2 sm:space-x-0">
+              <AlertDialogCancel className="mt-0 min-h-11 rounded-md border border-scent-accent/16 bg-white/[0.035] px-3 py-2 text-xs font-bold uppercase tracking-[0.1em] text-scent-text-muted shadow-none transition-colors hover:bg-white/[0.07] hover:text-foreground focus-visible:ring-scent-accent/55">
+                Keep pick
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={confirmPendingSwitch}
+                className="min-h-11 rounded-md bg-scent-accent px-3 py-2 text-xs font-bold uppercase tracking-[0.1em] text-black shadow-[0_14px_30px_-24px_rgba(212,175,55,0.9)] transition-colors hover:bg-[#f0cf70] active:bg-[#d7ad32] focus-visible:ring-scent-accent/70"
+              >
+                Confirm switch
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {displayedErrorMessage ? (
         <p
