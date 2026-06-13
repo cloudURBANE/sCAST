@@ -142,6 +142,10 @@ const PROGRESS_COPY: Record<ScentMissionNodeId, string> = {
   'resolution-premium': 'Previewing premium depth',
 };
 
+// Shared "settle" easing for the panel's motion — a gentle decel that reads as
+// expensive rather than springy. Matches the curve used across the Beam Agent.
+const SCENT_EASE = [0.22, 1, 0.36, 1] as const;
+
 function newMessageId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
@@ -438,21 +442,24 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
 
   useEffect(() => {
     const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [messages, resolved, busy]);
+    if (!el) return;
+    // Glide to the latest turn rather than snapping, so a new line or the match
+    // reveal slides into view as one continuous motion. Instant under calm mode.
+    el.scrollTo({ top: el.scrollHeight, behavior: calmMotion ? 'auto' : 'smooth' });
+  }, [messages, resolved, busy, calmMotion]);
 
   useEffect(() => {
     if (introReady) return;
-    // Let the surrounding view (card resize, header strip, weather context)
-    // settle for a beat longer before the agent's first line lands.
-    const id = window.setTimeout(() => setIntroReady(true), 1650);
+    // Hold just long enough for the open crossfade (~0.42s) to settle, then a
+    // brief typing beat, so the greeting lands deliberately without feeling slow.
+    const id = window.setTimeout(() => setIntroReady(true), 920);
     return () => window.clearTimeout(id);
   }, [introReady]);
 
   // Reveal the impressions lane a short beat after the greeting settles.
   useEffect(() => {
     if (cuesReady || !introReady) return;
-    const id = window.setTimeout(() => setCuesReady(true), 480);
+    const id = window.setTimeout(() => setCuesReady(true), 320);
     return () => window.clearTimeout(id);
   }, [cuesReady, introReady]);
 
@@ -918,6 +925,34 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
     </button>
   );
 
+  // The curated-match reveal is the payoff of the whole flow, so it does not
+  // simply pop in: the card eases up while its lines stagger in beneath it.
+  const revealContainer = useMemo(
+    () => ({
+      hidden: calmMotion ? {} : { opacity: 0, y: 12, scale: 0.985 },
+      show: {
+        opacity: 1,
+        y: 0,
+        scale: 1,
+        transition: calmMotion
+          ? { duration: 0 }
+          : { duration: 0.46, ease: SCENT_EASE, staggerChildren: 0.07, delayChildren: 0.1 },
+      },
+    }),
+    [calmMotion],
+  );
+  const revealItem = useMemo(
+    () => ({
+      hidden: calmMotion ? {} : { opacity: 0, y: 8 },
+      show: {
+        opacity: 1,
+        y: 0,
+        transition: calmMotion ? { duration: 0 } : { duration: 0.36, ease: SCENT_EASE },
+      },
+    }),
+    [calmMotion],
+  );
+
   const hasActionRow = enoughContext || agentMode === 'fast' || agentMode === 'premium';
   // Hold the whole lane back until the greeting has settled, so the panel never
   // opens with a row of cues already sitting there.
@@ -1028,24 +1063,30 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         aria-live="polite"
         aria-label="Beam Agent conversation"
       >
-        {!introReady ? (
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-            className="inline-flex max-w-[90%] items-center gap-1.5 self-start rounded-[calc(var(--radius-scent)-12px)] border border-scent-accent/22 bg-[linear-gradient(180deg,rgba(212,175,55,0.045),rgba(0,0,0,0.16))] px-4 py-3"
-            aria-label="Beam Agent is typing"
-          >
-            {[0, 1, 2].map((dot) => (
-              <motion.span
-                key={dot}
-                className="h-1.5 w-1.5 rounded-full bg-scent-accent/70"
-                animate={{ opacity: [0.3, 1, 0.3], y: [0, -2, 0] }}
-                transition={{ duration: 1, repeat: Infinity, ease: 'easeInOut', delay: dot * 0.18 }}
-              />
-            ))}
-          </motion.div>
-        ) : null}
+        {/* Intro typing → first line crossfade: the dots fade out as the
+            greeting fades in, so the panel never hard-cuts between the two. */}
+        <AnimatePresence initial={false}>
+          {!introReady ? (
+            <motion.div
+              key="intro-typing"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.24, ease: SCENT_EASE }}
+              className="inline-flex max-w-[90%] items-center gap-1.5 self-start rounded-[calc(var(--radius-scent)-12px)] border border-scent-accent/22 bg-[linear-gradient(180deg,rgba(212,175,55,0.045),rgba(0,0,0,0.16))] px-4 py-3"
+              aria-label="Beam Agent is typing"
+            >
+              {[0, 1, 2].map((dot) => (
+                <motion.span
+                  key={dot}
+                  className="h-1.5 w-1.5 rounded-full bg-scent-accent/70"
+                  animate={{ opacity: [0.3, 1, 0.3], y: [0, -2, 0] }}
+                  transition={{ duration: 1, repeat: Infinity, ease: 'easeInOut', delay: dot * 0.18 }}
+                />
+              ))}
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
 
         {introReady
           ? messages.map((message) => (
@@ -1053,7 +1094,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                 key={message.id}
                 initial={calmMotion ? false : { opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                transition={{ duration: 0.24, ease: SCENT_EASE }}
                 className={`max-w-[90%] rounded-[calc(var(--radius-scent)-12px)] border px-3.5 py-2.5 text-[13px] leading-relaxed sm:text-sm ${
                   message.role === 'user'
                     ? 'self-end border-white/14 bg-white/[0.07] text-[#fff7ec]'
@@ -1070,49 +1111,69 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
             ))
           : null}
 
-        {busy ? (
-          <div
-            className="scent-beam-thinking inline-flex max-w-[90%] items-center gap-2.5 self-start rounded-full border border-scent-accent/24 bg-black/36 px-4 py-2"
-            data-calm={calmMotion ? 'true' : undefined}
-            aria-label={progressNote || 'The Beam Agent is working'}
-          >
-            <span className="scent-beam-orb" aria-hidden />
-            <span className="scent-beam-label text-[12px] font-semibold uppercase tracking-[0.12em]">
-              {progressNote || 'Beaming'}
-            </span>
-          </div>
-        ) : null}
+        {/* Working state fades in, then hands off to the match reveal: the
+            "Beaming" pill exits as the curated card eases up in its place. */}
+        <AnimatePresence initial={false}>
+          {busy ? (
+            <motion.div
+              key="thinking"
+              initial={calmMotion ? false : { opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={calmMotion ? { opacity: 0 } : { opacity: 0, y: -4 }}
+              transition={{ duration: 0.22, ease: SCENT_EASE }}
+              className="scent-beam-thinking inline-flex max-w-[90%] items-center gap-2.5 self-start rounded-full border border-scent-accent/24 bg-black/36 px-4 py-2"
+              data-calm={calmMotion ? 'true' : undefined}
+              aria-label={progressNote || 'The Beam Agent is working'}
+            >
+              <span className="scent-beam-orb" aria-hidden />
+              <span className="scent-beam-label text-[12px] font-semibold uppercase tracking-[0.12em]">
+                {progressNote || 'Beaming'}
+              </span>
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
 
-        {resolved ? (
-          <div className="max-w-[92%] self-start rounded-[calc(var(--radius-scent)-10px)] border border-scent-accent/32 bg-[linear-gradient(180deg,rgba(212,175,55,0.07),rgba(0,0,0,0.28))] p-4 text-left">
-            <p className="scent-type-label text-scent-accent">Curated match</p>
-            {resolved.recommendation.brand ? (
-              <p className="mt-2 font-serif text-xs uppercase tracking-[0.2em] text-scent-text-muted">
-                {resolved.recommendation.brand}
-              </p>
-            ) : null}
-            <p className="font-serif italic text-2xl leading-tight text-[#fff7ec]">
-              {resolved.recommendation.name}
-            </p>
-            <p className="mt-2 text-sm italic leading-relaxed text-scent-text-muted">
-              {resolved.recommendation.reason}
-            </p>
-            {resolved.item ? (
-              <button
-                type="button"
-                onClick={handleReveal}
-                className="scent-primary-button mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-[var(--radius-scent)] px-5 py-2.5"
-              >
-                <Sparkles size={15} aria-hidden />
-                <span className="font-serif italic text-base">Reveal Match</span>
-              </button>
-            ) : (
-              <p className="mt-3 text-[12px] text-scent-text-subtle">
-                This pick is no longer in your local vault, so the full overlay is unavailable.
-              </p>
-            )}
-          </div>
-        ) : null}
+        <AnimatePresence initial={false}>
+          {resolved ? (
+            <motion.div
+              key="resolved"
+              variants={revealContainer}
+              initial={calmMotion ? false : 'hidden'}
+              animate="show"
+              exit={calmMotion ? { opacity: 0 } : { opacity: 0, y: 6 }}
+              className="scent-match-reveal max-w-[92%] self-start rounded-[calc(var(--radius-scent)-10px)] border border-scent-accent/32 bg-[linear-gradient(180deg,rgba(212,175,55,0.07),rgba(0,0,0,0.28))] p-4 text-left"
+              data-calm={calmMotion ? 'true' : undefined}
+            >
+              <motion.p variants={revealItem} className="scent-type-label text-scent-accent">Curated match</motion.p>
+              {resolved.recommendation.brand ? (
+                <motion.p variants={revealItem} className="mt-2 font-serif text-xs uppercase tracking-[0.2em] text-scent-text-muted">
+                  {resolved.recommendation.brand}
+                </motion.p>
+              ) : null}
+              <motion.p variants={revealItem} className="font-serif italic text-2xl leading-tight text-[#fff7ec]">
+                {resolved.recommendation.name}
+              </motion.p>
+              <motion.p variants={revealItem} className="mt-2 text-sm italic leading-relaxed text-scent-text-muted">
+                {resolved.recommendation.reason}
+              </motion.p>
+              {resolved.item ? (
+                <motion.button
+                  variants={revealItem}
+                  type="button"
+                  onClick={handleReveal}
+                  className="scent-primary-button mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-[var(--radius-scent)] px-5 py-2.5"
+                >
+                  <Sparkles size={15} aria-hidden />
+                  <span className="font-serif italic text-base">Reveal Match</span>
+                </motion.button>
+              ) : (
+                <motion.p variants={revealItem} className="mt-3 text-[12px] text-scent-text-subtle">
+                  This pick is no longer in your local vault, so the full overlay is unavailable.
+                </motion.p>
+              )}
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
       </div>
 
       <p className="sr-only">

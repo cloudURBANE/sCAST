@@ -2278,6 +2278,58 @@ a {
   transition: none;
 }
 
+/* ─── Curated match reveal sheen ──────────────────────────────────────────────
+   A single soft gold sweep crosses the curated-match card the moment it lands,
+   so the payoff reads as lit rather than simply shown. One-shot (no loop) and
+   fully fades out at the end so nothing lingers. Skipped under calm / iPad
+   performance / reduced-motion. */
+.scent-match-reveal {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.scent-match-reveal::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 30%,
+    rgba(255, 246, 214, 0.16) 48%,
+    rgba(255, 246, 214, 0.05) 56%,
+    transparent 72%
+  );
+  background-size: 220% 100%;
+  background-position: 160% 0;
+  animation: scent-match-sheen 1.1s var(--scent-ease-out) 0.18s 1 forwards;
+}
+
+@keyframes scent-match-sheen {
+  0% { background-position: 160% 0; opacity: 0; }
+  18% { opacity: 1; }
+  82% { opacity: 1; }
+  100% { background-position: -60% 0; opacity: 0; }
+}
+
+.scent-match-reveal[data-calm="true"]::after {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scent-match-reveal::after {
+    animation: none;
+    display: none;
+  }
+}
+
+.scent-ipad-safari-perf .scent-match-reveal::after {
+  display: none;
+}
+
 @keyframes brand-gold-sheen {
   0%,
   12% {
