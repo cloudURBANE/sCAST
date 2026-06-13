@@ -145,23 +145,40 @@ function AtmospherePlaceholder({ label, active }: { label: string; active: boole
   );
 }
 
-function getHeroTickerPhrases(items: Fragrance[]): string[] {
+// A hero ticker line, split into segments so the single "key" word or number
+// in each line can be highlighted on its own as it crosses the marquee center.
+// Plain lines are a single keyless segment.
+interface HeroPhraseSegment {
+  text: string;
+  /** Exactly one segment per phrase carries the gold center-sheen highlight. */
+  key?: boolean;
+}
+type HeroPhrase = HeroPhraseSegment[];
+
+/** Flat text of a phrase — used for React keys, aria text, and the swipe-loop reset key. */
+const heroPhraseText = (phrase: HeroPhrase): string => phrase.map((segment) => segment.text).join('');
+
+function getHeroTickerPhrases(items: Fragrance[]): HeroPhrase[] {
   if (!items.length) {
     return [
-      'Add scents to your vault and unlock deeper discovery',
-      'Atmospheric nuance is analyzed to guide each wear',
-      'Your signature profile is syncing with the current environment',
+      [{ text: 'Add scents to your vault and unlock deeper discovery' }],
+      [{ text: 'Atmospheric nuance is analyzed to guide each wear' }],
+      [{ text: 'Your signature profile is syncing with the current environment' }],
     ];
   }
 
-  const phrases: string[] = [];
+  const phrases: HeroPhrase[] = [];
 
   const families = items.map(i => i.family).filter(Boolean) as string[];
   if (families.length > 0) {
     const fc: Record<string, number> = {};
     families.forEach(f => { fc[f] = (fc[f] || 0) + 1; });
     const topFamily = Object.entries(fc).sort((a, b) => b[1] - a[1])[0][0];
-    phrases.push(`Predominantly ${topFamily.toLowerCase()} olfactory signature`);
+    phrases.push([
+      { text: 'Predominantly ' },
+      { text: topFamily.toLowerCase(), key: true },
+      { text: ' olfactory signature' },
+    ]);
   }
 
   const allNotes = items.flatMap(i => i.notes || []);
@@ -169,7 +186,10 @@ function getHeroTickerPhrases(items: Fragrance[]): string[] {
     const nc: Record<string, number> = {};
     allNotes.forEach(n => { const k = n.toLowerCase(); nc[k] = (nc[k] || 0) + 1; });
     const [topNote, topCount] = Object.entries(nc).sort((a, b) => b[1] - a[1])[0];
-    if (topCount > 1) phrases.push(`Recurring molecule detected: ${topNote}`);
+    if (topCount > 1) phrases.push([
+      { text: 'Recurring molecule detected: ' },
+      { text: topNote, key: true },
+    ]);
   }
 
   const vectors = items.map(i => i.scent_vector).filter(Boolean) as NonNullable<Fragrance['scent_vector']>[];
@@ -183,7 +203,10 @@ function getHeroTickerPhrases(items: Fragrance[]): string[] {
     const top = dims
       .map(d => ({ d, avg: vectors.reduce((s, v) => s + v[d], 0) / vectors.length }))
       .sort((a, b) => b.avg - a.avg)[0];
-    if (top.avg >= 4.5) phrases.push(`Your vault reads ${labels[top.d]}`);
+    if (top.avg >= 4.5) phrases.push([
+      { text: 'Your vault reads ' },
+      { text: labels[top.d], key: true },
+    ]);
   }
 
   const seasons = items.map(i => i.season).filter(Boolean) as string[];
@@ -191,31 +214,86 @@ function getHeroTickerPhrases(items: Fragrance[]): string[] {
     const sc: Record<string, number> = {};
     seasons.forEach(s => { sc[s] = (sc[s] || 0) + 1; });
     const [topSeason, topSeasonCount] = Object.entries(sc).sort((a, b) => b[1] - a[1])[0];
-    if (topSeasonCount > 1) phrases.push(`Calibrated for ${topSeason.toLowerCase()} conditions`);
+    if (topSeasonCount > 1) phrases.push([
+      { text: 'Calibrated for ' },
+      { text: topSeason.toLowerCase(), key: true },
+      { text: ' conditions' },
+    ]);
   }
 
   const brands = new Set(items.map(i => i.brand).filter(Boolean));
-  if (brands.size > 1) phrases.push(`${brands.size} houses represented in your collection`);
+  if (brands.size > 1) phrases.push([
+    { text: String(brands.size), key: true },
+    { text: ' houses represented in your collection' },
+  ]);
 
-  if (phrases.length < 3) phrases.push('Olfactory intelligence active', 'Atmospheric pairing in progress');
+  if (phrases.length < 3) phrases.push(
+    [{ text: 'Olfactory intelligence active' }],
+    [{ text: 'Atmospheric pairing in progress' }],
+  );
 
   return phrases;
 }
 
 interface HeroMarqueeProps {
-  phrases: string[];
+  phrases: HeroPhrase[];
 }
 
 const HeroMarquee: React.FC<HeroMarqueeProps> = React.memo(({ phrases }) => {
   const trackRef = useRef<HTMLDivElement>(null);
   const groupRef = useRef<HTMLSpanElement>(null);
-  const phraseKey = useMemo(() => phrases.join('|'), [phrases]);
+  const phraseKey = useMemo(() => phrases.map(heroPhraseText).join('|'), [phrases]);
 
   useMarqueeSwipe(trackRef, {
     distanceVar: '--hero-marquee-distance',
     durationVar: '--hero-marquee-duration',
     resetKey: phraseKey,
   });
+
+  // Center-crossing sheen.
+  //
+  // Each phrase's key word/number (`.scent-marquee-key`) gets the gold sheen
+  // sweep — the same treatment the brand labels use — but only at the moment
+  // it passes the horizontal center of the screen (where the bottom-nav pill
+  // sits). We detect that with an IntersectionObserver whose root is shrunk to
+  // a thin vertical strip at viewport center via a negative left/right
+  // rootMargin. This is event-driven (no per-frame getBoundingClientRect), so
+  // it stays cheap even with several key words and the four looped track
+  // copies.
+  //
+  // Per-device notes — this must keep working identically everywhere:
+  //   • All engines: IntersectionObserver reports CSS-transform motion (the
+  //     marquee scroll), so the strip-crossing fires reliably. The strip is a
+  //     non-zero ~2% width (a true 0-width root never reports isIntersecting).
+  //   • The marquee cruises at ~14px/s, so a key word dwells in the strip for
+  //     well over the 1.9s sweep on every viewport size — no missed frames.
+  //   • iOS/iPadOS Safari: WebKit fires IO callbacks on its compositor cadence;
+  //     the class toggle below only flips a CSS animation, never reads layout,
+  //     so it cannot stall the scroll or fight useMarqueeSwipe's transforms.
+  //   • Reduced motion: skipped entirely (the sheen keyframes are also gated by
+  //     `prefers-reduced-motion` in CSS), matching the brand-label behavior.
+  // Re-runs whenever the phrase set changes (the key nodes are recreated).
+  useEffect(() => {
+    const track = trackRef.current;
+    if (!track || typeof window === 'undefined' || !('IntersectionObserver' in window)) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    const keyNodes = Array.from(track.querySelectorAll<HTMLElement>('.scent-marquee-key'));
+    if (!keyNodes.length) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          // Toggle a one-shot animation class as the word enters/leaves the
+          // center strip, so it re-sheens cleanly on every loop pass.
+          entry.target.classList.toggle('scent-marquee-key--lit', entry.isIntersecting);
+        }
+      },
+      { root: null, rootMargin: '0px -49% 0px -49%', threshold: 0 },
+    );
+    keyNodes.forEach((node) => observer.observe(node));
+    return () => observer.disconnect();
+  }, [phraseKey]);
 
   useLayoutEffect(() => {
     const track = trackRef.current;
@@ -282,8 +360,24 @@ const HeroMarquee: React.FC<HeroMarqueeProps> = React.memo(({ phrases }) => {
             aria-hidden={copyIndex > 0}
           >
             {phrases.map((phrase, phraseIndex) => (
-              <React.Fragment key={`${phraseIndex}:${phrase}`}>
-                <span className="scent-marquee-phrase whitespace-nowrap">{phrase}</span>
+              <React.Fragment key={`${phraseIndex}:${heroPhraseText(phrase)}`}>
+                <span className="scent-marquee-phrase whitespace-nowrap">
+                  {phrase.map((segment, segmentIndex) =>
+                    segment.key ? (
+                      // The center-sheen target; data-text drives the gold
+                      // gradient overlay (see .scent-marquee-key in index.css).
+                      <span
+                        key={segmentIndex}
+                        className="scent-marquee-key"
+                        data-text={segment.text}
+                      >
+                        {segment.text}
+                      </span>
+                    ) : (
+                      <React.Fragment key={segmentIndex}>{segment.text}</React.Fragment>
+                    ),
+                  )}
+                </span>
                 {phraseIndex < phrases.length - 1 ? (
                   <span className="scent-marquee-divider shrink-0" aria-hidden="true" />
                 ) : null}

@@ -5,6 +5,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, viewport-fit=cover" />
     <title>ScentBeam</title>
     <meta name="description" content="Your scent. Perfected." />
+    <!--
+      Standalone / full-screen behavior.
+
+      In a normal in-browser tab the OS owns the address bar and bottom
+      toolbar; a web page cannot force those away (mobile Safari only
+      auto-collapses them on scroll). The reliable way to drop that chrome
+      is to run as an installed web app, so we declare full-screen web-app
+      capability here. Combined with `display: standalone` in
+      site.webmanifest this gives:
+        - iOS Safari ("Add to Home Screen"): launches chrome-free.
+        - Android Chrome (manifest): installed PWA launches standalone.
+      `black-translucent` lets our black UI extend under the status bar
+      (paired with `viewport-fit=cover` + safe-area insets already used in
+      the layout) for an edge-to-edge canvas.
+    -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="ScentBeam" />
     <link rel="canonical" href="https://scentbeam.com/" />
     <meta property="og:site_name" content="ScentBeam" />
     <meta property="og:type" content="website" />
