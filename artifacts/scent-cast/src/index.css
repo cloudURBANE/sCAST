@@ -185,6 +185,28 @@ a {
   z-index: 1;
 }
 
+/* Signature-scent section: a full-width sibling of the search card. It reuses
+   the card's border and alignment but runs a lighter, shorter padding so it
+   reads as a related section rather than a second flagship card. */
+.scent-signature-panel {
+  padding: clamp(1.5rem, 3.2vw, 2.4rem) clamp(1rem, 5vw, 5.25rem) clamp(1.5rem, 3.2vw, 2.25rem);
+}
+
+/* Full-width "Discover Your Signature Scent" trigger. Matches the card's outer
+   edges, with a stronger height and a soft accent wash so it reads as a primary
+   feature rather than a small secondary pill. */
+.scent-signature-cta {
+  background:
+    radial-gradient(120% 140% at 50% 0%, rgba(212, 175, 55, 0.06), transparent 60%),
+    linear-gradient(180deg, rgba(212, 175, 55, 0.05), rgba(0, 0, 0, 0.55));
+}
+
+.scent-signature-cta:hover {
+  background:
+    radial-gradient(120% 140% at 50% 0%, rgba(212, 175, 55, 0.12), transparent 62%),
+    linear-gradient(180deg, rgba(212, 175, 55, 0.1), rgba(0, 0, 0, 0.5));
+}
+
 .scent-deferred-section {
   content-visibility: auto;
   contain-intrinsic-size: 3200px;
