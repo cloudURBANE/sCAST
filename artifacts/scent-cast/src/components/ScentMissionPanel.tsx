@@ -731,7 +731,6 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       } finally {
         setBusy(false);
         setProgressNote('');
-        composerRef.current?.focus({ preventScroll: true });
       }
     },
     [
@@ -783,16 +782,26 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   const actionControls = (
     <div className="mx-auto mt-4 w-full max-w-[42.75rem] sm:mt-5">
       <div className="mb-2 flex items-center justify-end gap-2 pr-1">
-        <span className="scent-type-label text-scent-accent/70">Beam Agent</span>
-        <img
-          src="/scent-concierge-avatar.png"
-          alt="ScentCast Beam Agent"
-          width={36}
-          height={36}
-          loading="lazy"
-          decoding="async"
-          className="h-9 w-9 rounded-full border border-scent-accent/35 object-cover shadow-[0_2px_10px_rgba(0,0,0,0.45)]"
-        />
+        <motion.span
+          key={busy ? 'beam-agent-thinking' : 'beam-agent-idle'}
+          initial={calmMotion ? false : { opacity: 0, y: 3 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.18, ease: SCENT_EASE }}
+          className="scent-type-label text-scent-accent/70"
+        >
+          {busy ? progressNote || 'Thinking' : 'Beam Agent'}
+        </motion.span>
+        <span className="scent-beam-avatar" data-thinking={busy ? 'true' : undefined}>
+          <img
+            src="/scent-concierge-avatar.png"
+            alt="ScentCast Beam Agent"
+            width={36}
+            height={36}
+            loading="lazy"
+            decoding="async"
+            className="h-9 w-9 rounded-full border border-scent-accent/35 object-cover shadow-[0_2px_10px_rgba(0,0,0,0.45)]"
+          />
+        </span>
       </div>
       <form
         onSubmit={handleSubmit}
@@ -953,30 +962,35 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
     [calmMotion],
   );
 
-  const hasActionRow = enoughContext || agentMode === 'fast' || agentMode === 'premium';
+  const hasConfirmAction = items.length > 0 && (enoughContext || agentMode === 'fast');
+  const hasPreviewAction = agentMode === 'premium';
+  const hasActionRow = hasConfirmAction || hasPreviewAction;
   // Hold the whole lane back until the greeting has settled, so the panel never
   // opens with a row of cues already sitting there.
   const cueBar =
     !cuesReady || (visibleQuickReplies.length === 0 && !hasActionRow) ? null : (
-      <div
+      <motion.div
+        initial={calmMotion ? false : { opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={calmMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
+        transition={{ duration: 0.34, ease: SCENT_EASE }}
         className="mx-auto w-full max-w-[42.75rem]"
         aria-label="Beam Agent quick replies"
         data-testid="scent-mission-cue-bar"
       >
         {hasActionRow ? (
           <div className="flex flex-wrap items-center justify-center gap-1.5">
-            {enoughContext || agentMode === 'fast' ? (
+            {hasConfirmAction ? (
               <button
                 type="button"
                 onClick={() => void runResolution(agentMode === 'fast' ? 'fast' : 'curate')}
-                disabled={busy || items.length === 0}
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-scent-accent/68 bg-scent-accent/12 px-3 py-1.5 scent-type-chip text-[#fff7ec] transition-colors hover:bg-scent-accent/18 disabled:opacity-45"
+                disabled={busy}
+                className="scent-primary-button scent-beam-confirm-button inline-flex min-h-11 shrink-0 items-center justify-center rounded-[var(--radius-scent)] px-7 py-2.5 text-[12px] font-bold uppercase tracking-[0.18em] disabled:opacity-55"
               >
-                <Sparkles size={12} aria-hidden />
-                Confirm
+                <span>Confirm</span>
               </button>
             ) : null}
-            {agentMode === 'premium' ? (
+            {hasPreviewAction ? (
               <button
                 type="button"
                 onClick={() => void handlePremiumPreview()}
@@ -996,7 +1010,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         {visibleQuickReplies.length > 0 ? (
           <>
           <p className={`scent-type-label text-center text-scent-text-subtle ${hasActionRow ? 'mt-2.5' : ''}`}>
-            Tap one to fill the box, then send
+            Choose a cue or type your own
           </p>
           {showCueMarquee ? (
             <div
@@ -1049,7 +1063,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
           )}
           </>
         ) : null}
-      </div>
+      </motion.div>
     );
 
   return (
@@ -1111,28 +1125,6 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
             ))
           : null}
 
-        {/* Working state fades in, then hands off to the match reveal: the
-            "Beaming" pill exits as the curated card eases up in its place. */}
-        <AnimatePresence initial={false}>
-          {busy ? (
-            <motion.div
-              key="thinking"
-              initial={calmMotion ? false : { opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={calmMotion ? { opacity: 0 } : { opacity: 0, y: -4 }}
-              transition={{ duration: 0.22, ease: SCENT_EASE }}
-              className="scent-beam-thinking inline-flex max-w-[90%] items-center gap-2.5 self-start rounded-full border border-scent-accent/24 bg-black/36 px-4 py-2"
-              data-calm={calmMotion ? 'true' : undefined}
-              aria-label={progressNote || 'The Beam Agent is working'}
-            >
-              <span className="scent-beam-orb" aria-hidden />
-              <span className="scent-beam-label text-[12px] font-semibold uppercase tracking-[0.12em]">
-                {progressNote || 'Beaming'}
-              </span>
-            </motion.div>
-          ) : null}
-        </AnimatePresence>
-
         <AnimatePresence initial={false}>
           {resolved ? (
             <motion.div
@@ -1183,9 +1175,9 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       {/* Impressions lane: portaled below the card when the host provides a
           container, otherwise rendered inline as a graceful fallback. */}
       {cueBarContainer
-        ? createPortal(cueBar, cueBarContainer)
+        ? createPortal(<AnimatePresence initial={false}>{cueBar}</AnimatePresence>, cueBarContainer)
         : cueBar
-          ? <div className="mt-3">{cueBar}</div>
+          ? <div className="mt-3"><AnimatePresence initial={false}>{cueBar}</AnimatePresence></div>
           : null}
     </div>
   );

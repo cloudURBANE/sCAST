@@ -443,7 +443,7 @@ const StandardPostCard: React.FC<PostCardProps> = ({
   return (
     <article
       aria-labelledby={headingId}
-      className="mx-auto w-full max-w-[940px] overflow-hidden rounded-[calc(var(--radius-scent)+2px)] border border-scent-accent/24 bg-[radial-gradient(88%_68%_at_50%_0%,rgba(255,255,255,0.022),transparent_64%),linear-gradient(180deg,rgba(10,9,7,0.92),rgba(0,0,0,0.982))] p-5 text-left shadow-[0_22px_56px_-42px_rgba(212,175,55,0.30),0_28px_60px_-38px_rgba(0,0,0,0.98),inset_0_1px_0_rgba(255,236,183,0.065)] sm:p-7"
+      className="mx-auto w-full max-w-[940px] overflow-hidden rounded-[calc(var(--radius-scent)+2px)] border border-scent-accent/24 bg-[radial-gradient(88%_68%_at_50%_0%,rgba(255,255,255,0.022),transparent_64%),linear-gradient(180deg,rgba(10,9,7,0.92),rgba(0,0,0,0.982))] p-4 text-left shadow-[0_22px_56px_-42px_rgba(212,175,55,0.30),0_28px_60px_-38px_rgba(0,0,0,0.98),inset_0_1px_0_rgba(255,236,183,0.065)] sm:p-7"
     >
       <header className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
         <div className="flex min-w-0 items-center gap-4 sm:gap-5">
@@ -472,20 +472,20 @@ const StandardPostCard: React.FC<PostCardProps> = ({
         </span>
       </header>
 
-      <OrnamentalDivider className="my-5 sm:my-6" />
+      <OrnamentalDivider className="my-4 sm:my-6" />
 
-      <div className="space-y-4">
+      <div className="space-y-3 sm:space-y-4">
         <h3
           id={headingId}
-          className="break-words text-balance text-center font-serif text-3xl italic leading-tight text-[#fff7ec] sm:text-5xl"
+          className="break-words text-balance text-left font-serif text-2xl italic leading-tight text-[#fff7ec] sm:text-center sm:text-5xl"
         >
           {heading}
         </h3>
         <div
-          className="mx-auto h-px w-28 max-w-full bg-gradient-to-r from-transparent via-scent-accent/68 to-transparent"
+          className="h-px w-28 max-w-full bg-gradient-to-r from-scent-accent/68 to-transparent sm:mx-auto sm:bg-gradient-to-r sm:from-transparent sm:via-scent-accent/68 sm:to-transparent"
           aria-hidden="true"
         />
-        <p className="mx-auto max-w-3xl whitespace-pre-line break-words text-center text-lg leading-8 text-[#fff7ec]/88 sm:text-xl sm:leading-9">
+        <p className="mx-auto max-w-3xl whitespace-pre-line break-words text-left text-sm leading-6 text-[#fff7ec]/78 sm:text-center sm:text-xl sm:leading-9">
           {post.body}
         </p>
         <MetadataLine post={post} />
@@ -508,20 +508,23 @@ const StandardPostCard: React.FC<PostCardProps> = ({
         </div>
       ) : null}
 
-      <footer className="mt-7 space-y-5">
+      <footer className="mt-4 flex flex-row items-center justify-between gap-4 border-t border-scent-accent/10 pt-3">
         <h4 className="sr-only">Post actions</h4>
-        <ReactionBar
-          targetType="post"
-          targetId={post.id}
-          counts={post.counts.reactions}
-          viewerReactions={post.viewerReactions}
-          authToken={authToken}
-          onSignIn={onSignIn}
-        />
+        <div className="flex flex-1 justify-start">
+          <ReactionBar
+            targetType="post"
+            targetId={post.id}
+            counts={post.counts.reactions}
+            viewerReactions={post.viewerReactions}
+            authToken={authToken}
+            onSignIn={onSignIn}
+            compact={true}
+          />
+        </div>
         <button
           type="button"
           onClick={() => setCommentsOpen((open) => !open)}
-          className="mx-auto flex min-h-11 w-fit min-w-[10rem] items-center justify-center gap-2.5 rounded-full px-4 py-2 scent-type-chip text-scent-text-muted transition-colors hover:bg-white/[0.045] hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/60"
+          className="scent-no-mobile-focus-ring flex min-h-9 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 scent-type-chip text-scent-text-muted transition-colors hover:bg-white/[0.045] hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/60"
           aria-expanded={commentsOpen}
           aria-label={
             commentsOpen
@@ -529,14 +532,14 @@ const StandardPostCard: React.FC<PostCardProps> = ({
               : `View ${post.counts.comments} comments`
           }
         >
-          <MessageCircle size={18} strokeWidth={1.75} aria-hidden="true" />
-          {post.counts.comments > 0
-            ? `${post.counts.comments} comments`
-            : 'Comment'}
+          <MessageCircle size={15} strokeWidth={1.75} aria-hidden="true" />
+          <span className="text-[10px] font-bold uppercase tracking-[0.12em] sm:text-xs">
+            {post.counts.comments > 0 ? `${post.counts.comments}` : 'Comment'}
+          </span>
           {commentsOpen ? (
-            <ChevronUp size={16} strokeWidth={1.8} aria-hidden="true" />
+            <ChevronUp size={13} strokeWidth={1.8} aria-hidden="true" />
           ) : (
-            <ChevronDown size={16} strokeWidth={1.8} aria-hidden="true" />
+            <ChevronDown size={13} strokeWidth={1.8} aria-hidden="true" />
           )}
         </button>
       </footer>

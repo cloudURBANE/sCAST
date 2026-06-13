@@ -769,45 +769,47 @@ function DashboardView() {
               </div>
             </motion.div>
 
-            {/* Impressions lane host: the Beam Agent portals its cue / Confirm
-                lane here, BELOW the card, so the impressions never crowd or
-                shrink the conversation inside the card. Wrapped in its own
-                AnimatePresence so on close the host (and the cues portaled into
-                it) fade out in step with the panel instead of vanishing the
-                instant the panel begins its exit. */}
-            <AnimatePresence initial={false}>
-              {agentActive ? (
-                <motion.div
-                  ref={setMissionCueHost}
-                  key="mission-cue-host"
-                  initial={reduceMotion ? false : { opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 6 }}
-                  transition={vaultContentTransition}
-                  className="mt-3 sm:mt-3.5"
-                />
-              ) : null}
-            </AnimatePresence>
-
-            {/* Discover trigger sits below the search card and opens the Beam
-                Agent in the card above. Hidden once open (the header carries the
-                close) and while the vault search overlay is active. */}
-            {!agentActive && discoveryReady && stateSettled && !vaultSearchUiActive ? (
-              <div ref={signatureSectionRef} className="mt-4 flex justify-center sm:mt-5">
-                <motion.button
-                  type="button"
-                  onClick={handleOpenMission}
-                  initial={reduceMotion ? false : { opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={vaultContentTransition}
-                  className="scent-signature-cta group flex h-[60px] w-full max-w-[42.75rem] items-center justify-center gap-2.5 rounded-full border border-scent-accent/45 px-6 text-[12px] font-bold uppercase tracking-[0.14em] text-scent-accent shadow-[inset_0_1px_0_rgba(255,236,183,0.08)] transition-colors hover:border-scent-accent/70 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 sm:h-[68px] sm:text-[13px]"
-                  aria-label="Discover your signature scent"
-                  title="Discover your signature scent"
-                >
-                  <Sparkles size={16} strokeWidth={1.9} aria-hidden />
-                  <span>Discover Your Signature Scent</span>
-                </motion.button>
-              </div>
+            {/* One stable lower action slot owns both states: search mode shows
+                the Discover CTA, agent mode hosts the portaled cue / Confirm
+                lane. Keeping the slot mounted prevents the CTA and card from
+                visibly reattaching on close. */}
+            {(agentActive || (discoveryReady && stateSettled && !vaultSearchUiActive)) ? (
+              <motion.div
+                ref={signatureSectionRef}
+                layout={!reduceMotion}
+                transition={vaultContentTransition}
+                className="scent-mission-action-slot mt-4 flex min-h-[60px] justify-center sm:mt-5 sm:min-h-[68px]"
+              >
+                <AnimatePresence initial={false} mode="popLayout">
+                  {agentActive ? (
+                    <motion.div
+                      ref={setMissionCueHost}
+                      key="mission-cue-host"
+                      initial={reduceMotion ? false : { opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 6 }}
+                      transition={vaultContentTransition}
+                      className="w-full"
+                    />
+                  ) : (
+                    <motion.button
+                      key="signature-cta"
+                      type="button"
+                      onClick={handleOpenMission}
+                      initial={reduceMotion ? false : { opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -4 }}
+                      transition={vaultContentTransition}
+                      className="scent-signature-cta group flex h-[60px] w-full max-w-[42.75rem] items-center justify-center gap-2.5 rounded-full border border-scent-accent/45 px-6 text-[12px] font-bold uppercase tracking-[0.14em] text-scent-accent shadow-[inset_0_1px_0_rgba(255,236,183,0.08)] transition-colors hover:border-scent-accent/70 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 sm:h-[68px] sm:text-[13px]"
+                      aria-label="Discover your signature scent"
+                      title="Discover your signature scent"
+                    >
+                      <Sparkles size={16} strokeWidth={1.9} aria-hidden />
+                      <span>Discover Your Signature Scent</span>
+                    </motion.button>
+                  )}
+                </AnimatePresence>
+              </motion.div>
             ) : null}
           </section>
 
