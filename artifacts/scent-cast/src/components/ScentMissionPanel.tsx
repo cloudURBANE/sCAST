@@ -1,38 +1,34 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { motion, useReducedMotion } from 'framer-motion';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import {
   AlertTriangle,
-  Archive,
   Check,
-  CloudSun,
-  Compass,
   Loader2,
   Lock,
   Send,
+  SlidersHorizontal,
   Sparkles,
   X,
-  type LucideIcon,
+  Zap,
 } from 'lucide-react';
 import {
   applyScentMissionUpdates,
   createScentMissionState,
   isScentMissionDestination,
   isScentMissionEnergy,
-  SCENT_MISSION_NODE_ORDER,
+  type ScentMissionDestination,
+  type ScentMissionEnergy,
   type ScentMissionNodeId,
-  type ScentMissionNodeStatus,
   type ScentMissionRecommendation,
   type ScentMissionResponse,
   type ScentMissionState,
   type ScentWeatherRecommendation,
 } from '@workspace/scent-weather-engine';
 import {
-  activeMissionNode,
   buildMissionWardrobe,
   buildMissionWeather,
   findWardrobeMatch,
   missionProgress,
-  suggestedMissionChips,
 } from '@/lib/scentMissionClient';
 import type { Fragrance } from '@/components/Wardrobe';
 import type { WeatherData } from '@/context/WeatherContext';
@@ -51,6 +47,101 @@ type PanelMessage = {
   text: string;
 };
 
+type AgentMode = 'fast' | 'research' | 'premium';
+type ToneMode = 'playful' | 'balanced' | 'premium';
+
+type FacetId =
+  | 'mood'
+  | 'occasion'
+  | 'season'
+  | 'projection'
+  | 'budget'
+  | 'genderExpression'
+  | 'personality'
+  | 'impression'
+  | 'creativeDirection';
+
+type FacetState = Partial<Record<FacetId, string>>;
+
+type QuickReply = {
+  facet: FacetId;
+  label: string;
+  value: string;
+  destination?: ScentMissionDestination;
+  energy?: ScentMissionEnergy;
+};
+
+const MODE_OPTIONS: Array<{ id: AgentMode; label: string; icon: React.ComponentType<{ size?: number; strokeWidth?: number; className?: string }> }> = [
+  { id: 'fast', label: 'Fast', icon: Zap },
+  { id: 'research', label: 'Research', icon: Sparkles },
+  { id: 'premium', label: 'Premium', icon: Lock },
+];
+
+const TONE_OPTIONS: Array<{ id: ToneMode; label: string }> = [
+  { id: 'playful', label: 'Playful' },
+  { id: 'balanced', label: 'Balanced' },
+  { id: 'premium', label: 'Premium' },
+];
+
+const FACET_LABELS: Record<FacetId, string> = {
+  mood: 'Mood',
+  occasion: 'Occasion',
+  season: 'Season',
+  projection: 'Projection',
+  budget: 'Budget',
+  genderExpression: 'Expression',
+  personality: 'Personality',
+  impression: 'Impression',
+  creativeDirection: 'Direction',
+};
+
+const QUICK_REPLIES: QuickReply[] = [
+  { facet: 'occasion', label: 'Work meeting', value: 'Work', destination: 'Work' },
+  { facet: 'occasion', label: 'Date night', value: 'Date', destination: 'Date' },
+  { facet: 'occasion', label: 'Night out', value: 'Night Out', destination: 'Night Out' },
+  { facet: 'occasion', label: 'Staying in', value: 'Staying In', destination: 'Staying In' },
+  { facet: 'mood', label: 'Calm', value: 'Calm', energy: 'Calm' },
+  { facet: 'mood', label: 'Focused', value: 'Focused', energy: 'Focused' },
+  { facet: 'mood', label: 'Confident', value: 'Confident', energy: 'Confident' },
+  { facet: 'mood', label: 'Social', value: 'Social', energy: 'Social' },
+  { facet: 'season', label: 'Summer heat', value: 'Summer heat' },
+  { facet: 'season', label: 'Cool weather', value: 'Cool weather' },
+  { facet: 'season', label: 'Rainy day', value: 'Rainy day' },
+  { facet: 'projection', label: 'Skin-close', value: 'Skin-close' },
+  { facet: 'projection', label: 'Moderate trail', value: 'Moderate trail' },
+  { facet: 'projection', label: 'Statement', value: 'Statement' },
+  { facet: 'budget', label: 'Use my vault', value: 'Use my vault' },
+  { facet: 'budget', label: 'Under $150', value: 'Under $150' },
+  { facet: 'budget', label: 'No budget cap', value: 'No budget cap' },
+  { facet: 'genderExpression', label: 'Feminine leaning', value: 'Feminine leaning' },
+  { facet: 'genderExpression', label: 'Masculine leaning', value: 'Masculine leaning' },
+  { facet: 'genderExpression', label: 'Fluid', value: 'Fluid' },
+  { facet: 'personality', label: 'Minimal', value: 'Minimal' },
+  { facet: 'personality', label: 'Romantic', value: 'Romantic' },
+  { facet: 'personality', label: 'Sharp', value: 'Sharp' },
+  { facet: 'impression', label: 'Clean', value: 'Clean' },
+  { facet: 'impression', label: 'Memorable', value: 'Memorable' },
+  { facet: 'impression', label: 'Soft power', value: 'Soft power' },
+  { facet: 'creativeDirection', label: 'Modern classic', value: 'Modern classic' },
+  { facet: 'creativeDirection', label: 'Niche texture', value: 'Niche and textured' },
+  { facet: 'creativeDirection', label: 'Dark elegant', value: 'Dark elegant' },
+];
+
+const RESOLUTION_SEQUENCE: ScentMissionNodeId[] = [
+  'onboarding',
+  'wardrobe-sync',
+  'environment-scan',
+  'resolution-standard',
+];
+
+const PROGRESS_COPY: Record<ScentMissionNodeId, string> = {
+  onboarding: 'Locking your intent',
+  'wardrobe-sync': 'Reading your vault',
+  'environment-scan': 'Checking today air',
+  'resolution-standard': 'Choosing the strongest match',
+  'resolution-premium': 'Previewing premium depth',
+};
+
 function newMessageId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
@@ -58,68 +149,186 @@ function newMessageId(): string {
   return `msg-${Date.now()}-${Math.floor(Math.random() * 1e9).toString(36)}`;
 }
 
-const NODE_META: Record<
-  ScentMissionNodeId,
-  { label: string; sublabel: string; icon: LucideIcon; execute: string }
-> = {
-  onboarding: {
-    label: 'Calibration',
-    sublabel: 'Destination + energy',
-    icon: Compass,
-    execute: 'Lock Calibration',
-  },
-  'wardrobe-sync': {
-    label: 'Vault Sync',
-    sublabel: 'Profile your collection',
-    icon: Archive,
-    execute: 'Sync Vault',
-  },
-  'environment-scan': {
-    label: 'Environment Scan',
-    sublabel: 'Live atmosphere + UV',
-    icon: CloudSun,
-    execute: 'Scan Environment',
-  },
-  'resolution-standard': {
-    label: 'Resolution',
-    sublabel: 'Weather-aligned match',
-    icon: Sparkles,
-    execute: 'Execute Analysis',
-  },
-  'resolution-premium': {
-    label: 'Molecular Intelligence',
-    sublabel: 'Premium resolution',
-    icon: Lock,
-    execute: 'Unlock Premium',
-  },
-};
-
-const DESTINATION_OPTIONS = ['Staying In', 'Going Out', 'Work', 'Night Out', 'Date', 'Gym'] as const;
-const ENERGY_OPTIONS = ['Calm', 'Focused', 'Confident', 'Social', 'Relaxed'] as const;
-
-/* Vertical placement of the 5 nodes inside the 100×420 tree viewBox. */
-const NODE_Y = [36, 124, 212, 300, 388];
-const TRUNK_X = 30;
-
-function nodeStatusRing(status: ScentMissionNodeStatus): string {
-  switch (status) {
-    case 'complete':
-      return 'border-scent-accent/80 bg-scent-accent/15 text-scent-accent';
-    case 'active':
-    case 'running':
-      return 'border-scent-accent bg-black/60 text-[#fff7ec] shadow-[0_0_18px_rgba(212,175,55,0.35)]';
-    case 'blocked':
-      return 'border-scent-accent/45 bg-black/50 text-scent-accent/75';
-    default:
-      return 'border-white/15 bg-black/40 text-white/30';
+function initialAgentMessage(itemCount: number): string {
+  if (itemCount > 0) {
+    return `I will work from the ${itemCount} fragrance${itemCount === 1 ? '' : 's'} in your vault and today's conditions. Tell me the occasion, mood, or impression you want; I will ask only what matters.`;
   }
+  return 'I can shape a signature direction, but I need fragrances in your vault before I can rank a real match. Add a few scents from search, then come back here.';
+}
+
+function formatFacetLine(facets: FacetState): string {
+  const entries = (Object.entries(facets) as Array<[FacetId, string]>)
+    .filter(([, value]) => value.trim().length > 0)
+    .slice(0, 5);
+  if (entries.length === 0) return 'No cues captured yet';
+  return entries.map(([facet, value]) => `${FACET_LABELS[facet]}: ${value}`).join(' / ');
+}
+
+function firstMissingPrompt(
+  facets: FacetState,
+  mission: ScentMissionState,
+  mode: AgentMode,
+  itemCount: number,
+): string {
+  if (itemCount === 0) {
+    return 'Add fragrances to your vault first, then I can make this specific instead of generic.';
+  }
+  if (!mission.calibration.destination) {
+    return 'What setting should this serve: work, date, staying in, night out, or something else?';
+  }
+  if (!mission.calibration.energy) {
+    return 'What should it make you feel: calm, focused, confident, social, or relaxed?';
+  }
+  if (!facets.projection) {
+    return 'How much trail should it leave: skin-close, moderate, or a statement?';
+  }
+  if (mode === 'premium' && !facets.creativeDirection) {
+    return 'Give me a creative direction, like modern classic, textured niche, fresh signature, or dark elegance.';
+  }
+  if (mode === 'research' && !facets.impression && !facets.creativeDirection) {
+    return 'What impression should linger after you leave: clean, memorable, soft power, or something more personal?';
+  }
+  return 'I have enough context to curate from your vault. Add one final detail or tap Curate.';
+}
+
+function hasEnoughContext(facets: FacetState, mission: ScentMissionState, mode: AgentMode): boolean {
+  if (mode === 'fast') return Boolean(mission.calibration.destination || mission.calibration.energy || Object.keys(facets).length > 0);
+  if (!mission.calibration.destination || !mission.calibration.energy) return false;
+  if (mode === 'premium') return Boolean(facets.projection && (facets.creativeDirection || facets.impression));
+  return Boolean(facets.projection || facets.impression || facets.creativeDirection || facets.season);
+}
+
+function isRecommendationIntent(text: string): boolean {
+  return /\b(recommend|wear|pick|curate|choose|signature|match)\b/i.test(text);
+}
+
+function safeAssistantText(text: string | undefined, fallback: string): string {
+  const value = text?.trim();
+  if (!value) return fallback;
+  if (/(mission tree|execute analysis|resolution node|sync node|hit execute|work through the mission)/i.test(value)) {
+    return fallback;
+  }
+  return value;
+}
+
+function recommendationMessage(recommendation: ScentMissionRecommendation): string {
+  const house = recommendation.brand ? ` by ${recommendation.brand}` : '';
+  return `I would start with ${recommendation.name}${house}. ${recommendation.reason}`;
+}
+
+function modeInstruction(mode: AgentMode, tone: ToneMode, userMessage: string): string {
+  const modeLine =
+    mode === 'fast'
+      ? 'Fast mode: answer briefly and curate as soon as enough context exists.'
+      : mode === 'premium'
+        ? 'Premium mode: keep the answer understated and prepare deeper scent architecture, without claiming premium is unlocked.'
+        : 'Research mode: ask only the next high-value question before recommending.';
+  return `${modeLine} Tone: ${tone}. User: ${userMessage}`;
+}
+
+function inferTextFacets(text: string): {
+  facets: FacetState;
+  destination?: ScentMissionDestination;
+  energy?: ScentMissionEnergy;
+} {
+  const lower = text.toLowerCase();
+  const facets: FacetState = {};
+  let destination: ScentMissionDestination | undefined;
+  let energy: ScentMissionEnergy | undefined;
+
+  if (/\b(work|office|meeting|client|presentation)\b/.test(lower)) {
+    facets.occasion = 'Work';
+    destination = 'Work';
+  } else if (/\b(date|romantic|dinner)\b/.test(lower)) {
+    facets.occasion = 'Date';
+    destination = 'Date';
+  } else if (/\b(gym|workout|training|run)\b/.test(lower)) {
+    facets.occasion = 'Gym';
+    destination = 'Gym';
+  } else if (/\b(night|bar|party|club|evening)\b/.test(lower)) {
+    facets.occasion = 'Night Out';
+    destination = 'Night Out';
+  } else if (/\b(home|staying in|inside|indoors)\b/.test(lower)) {
+    facets.occasion = 'Staying In';
+    destination = 'Staying In';
+  } else if (/\b(errands|day out|weekend|brunch)\b/.test(lower)) {
+    facets.occasion = 'Going Out';
+    destination = 'Going Out';
+  }
+
+  if (/\b(calm|quiet|soft|subtle)\b/.test(lower)) {
+    facets.mood = 'Calm';
+    energy = 'Calm';
+  } else if (/\b(focused|focus|productive|sharp)\b/.test(lower)) {
+    facets.mood = 'Focused';
+    energy = 'Focused';
+  } else if (/\b(confident|confidence|bold|commanding)\b/.test(lower)) {
+    facets.mood = 'Confident';
+    energy = 'Confident';
+  } else if (/\b(social|approachable|friendly|chatty)\b/.test(lower)) {
+    facets.mood = 'Social';
+    energy = 'Social';
+  } else if (/\b(relaxed|casual|easy)\b/.test(lower)) {
+    facets.mood = 'Relaxed';
+    energy = 'Relaxed';
+  }
+
+  if (/\b(summer|heat|hot)\b/.test(lower)) facets.season = 'Summer heat';
+  if (/\b(winter|cold|cool)\b/.test(lower)) facets.season = 'Cool weather';
+  if (/\b(rain|rainy|humid|humidity)\b/.test(lower)) facets.season = 'Rainy day';
+  if (/\b(skin.?close|close to skin|intimate|subtle)\b/.test(lower)) facets.projection = 'Skin-close';
+  if (/\b(moderate|balanced trail|office safe)\b/.test(lower)) facets.projection = 'Moderate trail';
+  if (/\b(statement|strong|project|beast)\b/.test(lower)) facets.projection = 'Statement';
+  if (/\b(feminine|femme)\b/.test(lower)) facets.genderExpression = 'Feminine leaning';
+  if (/\b(masculine|masc)\b/.test(lower)) facets.genderExpression = 'Masculine leaning';
+  if (/\b(unisex|fluid|androgynous)\b/.test(lower)) facets.genderExpression = 'Fluid';
+  if (/\b(clean|fresh)\b/.test(lower)) facets.impression = 'Clean';
+  if (/\b(memorable|notice|remembered)\b/.test(lower)) facets.impression = 'Memorable';
+  if (/\b(soft power|polished|elegant)\b/.test(lower)) facets.impression = 'Soft power';
+  if (/\b(modern classic|classic)\b/.test(lower)) facets.creativeDirection = 'Modern classic';
+  if (/\b(niche|textured|artful)\b/.test(lower)) facets.creativeDirection = 'Niche and textured';
+  if (/\b(dark|smoky|evening elegant)\b/.test(lower)) facets.creativeDirection = 'Dark elegant';
+
+  return { facets, destination, energy };
+}
+
+function mergeCalibration(
+  mission: ScentMissionState,
+  destination?: ScentMissionDestination,
+  energy?: ScentMissionEnergy,
+): ScentMissionState {
+  const nextDestination = destination && isScentMissionDestination(destination)
+    ? destination
+    : mission.calibration.destination;
+  const nextEnergy = energy && isScentMissionEnergy(energy)
+    ? energy
+    : mission.calibration.energy;
+  if (nextDestination === mission.calibration.destination && nextEnergy === mission.calibration.energy) {
+    return mission;
+  }
+  return {
+    ...mission,
+    calibration: {
+      ...mission.calibration,
+      ...(nextDestination ? { destination: nextDestination } : {}),
+      ...(nextEnergy ? { energy: nextEnergy } : {}),
+    },
+  };
+}
+
+function missionWithDefaultsForFast(mission: ScentMissionState): ScentMissionState {
+  return mergeCalibration(
+    mission,
+    mission.calibration.destination ?? 'Going Out',
+    mission.calibration.energy ?? 'Confident',
+  );
 }
 
 interface ScentMissionPanelProps {
   items: Fragrance[];
   weather: WeatherData | null;
   authToken: string | null;
-  /** Leave mission mode and restore the search/vault panel. */
+  /** Leave concierge mode and restore the search interior. */
   onExit: () => void;
   /** Open the existing recommendation overlay with the resolved match. */
   onRevealMatch: (item: Fragrance, engine: ScentWeatherRecommendation, reason: string) => void;
@@ -134,18 +343,23 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
 }) => {
   const reduceMotion = useReducedMotion();
   const ipadPerformanceMode = useRef(isIpadSafariPerformanceMode()).current;
-  const calmMode = Boolean(reduceMotion) || ipadPerformanceMode;
+  const calmMotion = Boolean(reduceMotion) || ipadPerformanceMode;
 
   const [mission, setMission] = useState<ScentMissionState>(() => createScentMissionState());
   const [messages, setMessages] = useState<PanelMessage[]>(() => [
     {
       id: newMessageId(),
       role: 'agent',
-      text: 'Mission online. I match a fragrance from your vault to today’s air and your plans. Lock your calibration to begin — or ask me anything.',
+      text: initialAgentMessage(items.length),
     },
   ]);
+  const [facets, setFacets] = useState<FacetState>({});
+  const [agentMode, setAgentMode] = useState<AgentMode>('research');
+  const [tone, setTone] = useState<ToneMode>('balanced');
   const [composer, setComposer] = useState('');
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [progressNote, setProgressNote] = useState('');
   const [sessionId, setSessionId] = useState<string | undefined>(undefined);
   const [resolved, setResolved] = useState<{
     recommendation: ScentMissionRecommendation;
@@ -154,18 +368,65 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
 
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const composerRef = useRef<HTMLInputElement | null>(null);
+  const sessionIdRef = useRef<string | undefined>(undefined);
 
   useEffect(() => () => abortRef.current?.abort(), []);
 
-  // Keep the latest message in view inside the chat scroller (never the page).
+  useEffect(() => {
+    sessionIdRef.current = sessionId;
+  }, [sessionId]);
+
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [messages, resolved]);
+  }, [messages, resolved, busy]);
 
-  const activeNode = activeMissionNode(mission);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const id = window.requestAnimationFrame(() => {
+      composerRef.current?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, []);
+
   const progress = missionProgress(mission);
-  const chips = useMemo(() => suggestedMissionChips(mission), [mission]);
+  const enoughContext = hasEnoughContext(facets, mission, agentMode);
+  const capturedCount = Object.keys(facets).length;
+
+  const progressText = useMemo(() => {
+    if (progressNote) return progressNote;
+    if (resolved) return 'Match ready';
+    const modeText =
+      agentMode === 'fast'
+        ? 'Fast curation'
+        : agentMode === 'premium'
+          ? 'Premium architecture queued'
+          : 'Research path';
+    return `${modeText} / ${capturedCount} cue${capturedCount === 1 ? '' : 's'} / ${items.length} in vault`;
+  }, [agentMode, capturedCount, items.length, progressNote, resolved]);
+
+  const contextLine = useMemo(() => {
+    const weatherParts = [
+      typeof weather?.temperature === 'number' ? `${Math.round(weather.temperature)}F` : null,
+      typeof weather?.humidity === 'number' ? `${Math.round(weather.humidity)}% humidity` : null,
+      typeof weather?.condition === 'string' ? weather.condition : null,
+    ].filter(Boolean);
+    return weatherParts.length > 0 ? weatherParts.join(' / ') : 'Weather context ready when available';
+  }, [weather]);
+
+  const visibleQuickReplies = useMemo(() => {
+    const selected = new Set(Object.keys(facets));
+    const priority: FacetId[] = mission.calibration.destination
+      ? mission.calibration.energy
+        ? ['projection', 'impression', 'creativeDirection', 'season', 'genderExpression', 'personality', 'budget']
+        : ['mood', 'projection', 'impression', 'creativeDirection', 'season', 'genderExpression', 'personality', 'budget']
+      : ['occasion', 'mood', 'projection', 'impression', 'creativeDirection', 'season', 'genderExpression', 'personality', 'budget'];
+    return QUICK_REPLIES
+      .filter((reply) => !selected.has(reply.facet) || reply.facet === 'occasion' || reply.facet === 'mood')
+      .sort((a, b) => priority.indexOf(a.facet) - priority.indexOf(b.facet))
+      .slice(0, 16);
+  }, [facets, mission.calibration.destination, mission.calibration.energy]);
 
   const appendMessage = useCallback((role: PanelMessage['role'], text: string) => {
     setMessages((prev) => [...prev, { id: newMessageId(), role, text }]);
@@ -193,7 +454,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         signal: controller.signal,
         body: JSON.stringify({
           ...body,
-          sessionId,
+          sessionId: sessionIdRef.current,
           mission: missionState,
           context: {
             weather: buildMissionWeather(weather),
@@ -210,410 +471,498 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       }
       return data;
     },
-    [authToken, items, sessionId, weather],
+    [authToken, items, weather],
   );
 
   const applyResponse = useCallback(
-    (response: ScentMissionResponse, base: ScentMissionState) => {
+    (
+      response: ScentMissionResponse,
+      base: ScentMissionState,
+      options?: { appendAssistant?: boolean },
+    ) => {
+      sessionIdRef.current = response.sessionId;
       setSessionId(response.sessionId);
       const nextMission = applyScentMissionUpdates(base, response.nodeUpdates, response.missionPatch);
       setMission(nextMission);
-      if (response.assistantMessage) appendMessage('agent', response.assistantMessage);
+
+      const patchedCalibration = response.missionPatch?.calibration;
+      if (patchedCalibration?.destination || patchedCalibration?.energy) {
+        setFacets((prev) => ({
+          ...prev,
+          ...(patchedCalibration.destination ? { occasion: patchedCalibration.destination } : {}),
+          ...(patchedCalibration.energy ? { mood: patchedCalibration.energy } : {}),
+        }));
+      }
+
       if (response.recommendation) {
         setResolved({
           recommendation: response.recommendation,
           item: findWardrobeMatch(items, response.recommendation),
         });
       }
+
+      if (options?.appendAssistant) {
+        const text = response.recommendation
+          ? recommendationMessage(response.recommendation)
+          : response.premiumLock
+            ? 'Premium mode is staged for deeper note architecture. Standard curation remains ready here.'
+            : response.assistantMessage;
+        if (text) appendMessage('agent', text);
+      }
       return nextMission;
     },
     [appendMessage, items],
   );
 
-  const handleExecuteNode = useCallback(
-    async (nodeId: ScentMissionNodeId) => {
+  const updateFacetsAndMission = useCallback(
+    (
+      nextFacetPatch: FacetState,
+      calibration?: { destination?: ScentMissionDestination; energy?: ScentMissionEnergy },
+      baseMission = mission,
+    ) => {
+      const nextFacets = { ...facets, ...nextFacetPatch };
+      const nextMission = mergeCalibration(baseMission, calibration?.destination, calibration?.energy);
+      setFacets(nextFacets);
+      setMission(nextMission);
+      return { nextFacets, nextMission };
+    },
+    [facets, mission],
+  );
+
+  const runResolution = useCallback(
+    async (
+      trigger: 'fast' | 'curate',
+      startingMission = mission,
+      startingFacets = facets,
+    ) => {
       if (busy) return;
+      if (items.length === 0) {
+        appendMessage('agent', firstMissingPrompt(startingFacets, startingMission, agentMode, items.length));
+        return;
+      }
+
+      let currentMission = trigger === 'fast'
+        ? missionWithDefaultsForFast(startingMission)
+        : startingMission;
+
+      if (!currentMission.calibration.destination || !currentMission.calibration.energy) {
+        appendMessage('agent', firstMissingPrompt(startingFacets, currentMission, agentMode, items.length));
+        setMission(currentMission);
+        return;
+      }
+
       setBusy(true);
-      // Premium stays blocked server-side; only real nodes flip to "running".
-      const runningMission: ScentMissionState =
-        nodeId === 'resolution-premium'
-          ? mission
-          : { ...mission, nodes: { ...mission.nodes, [nodeId]: 'running' } };
-      setMission(runningMission);
+      setResolved(null);
+      setMission(currentMission);
+      setProgressNote(trigger === 'fast' ? 'Fast curation in progress' : 'Curating from your vault');
+
       try {
-        const response = await callMission({ action: 'execute_node', nodeId }, runningMission);
-        if (response) applyResponse(response, runningMission);
+        for (const nodeId of RESOLUTION_SEQUENCE) {
+          const nodeStatus = currentMission.nodes[nodeId];
+          if (nodeStatus === 'complete') continue;
+          if (nodeStatus === 'locked') {
+            appendMessage('system', 'The concierge needs one more cue before it can continue.');
+            break;
+          }
+
+          const runningMission: ScentMissionState = {
+            ...currentMission,
+            nodes: { ...currentMission.nodes, [nodeId]: 'running' },
+          };
+          setMission(runningMission);
+          setProgressNote(PROGRESS_COPY[nodeId]);
+          const response = await callMission({ action: 'execute_node', nodeId }, runningMission);
+          if (!response) continue;
+          currentMission = applyResponse(response, runningMission, {
+            appendAssistant: nodeId === 'resolution-standard',
+          });
+          if (response.recommendation) break;
+        }
       } catch (err) {
         if (!(err instanceof Error && err.name === 'AbortError')) {
-          setMission(mission); // restore pre-run statuses
           appendMessage(
             'system',
-            err instanceof Error ? err.message : 'Mission step failed. Try again.',
+            err instanceof Error ? err.message : 'The concierge could not complete that turn. Try again.',
           );
         }
       } finally {
         setBusy(false);
+        setProgressNote('');
       }
     },
-    [appendMessage, applyResponse, busy, callMission, mission],
+    [agentMode, appendMessage, applyResponse, busy, callMission, facets, items.length, mission],
   );
 
-  const handleSendChat = useCallback(
-    async (text: string) => {
-      const trimmed = text.trim();
+  const handleQuickReply = useCallback(
+    (reply: QuickReply) => {
+      if (busy) return;
+      const { nextFacets, nextMission } = updateFacetsAndMission(
+        { [reply.facet]: reply.value },
+        { destination: reply.destination, energy: reply.energy },
+      );
+      appendMessage('user', `${FACET_LABELS[reply.facet]}: ${reply.label}`);
+      const prompt = firstMissingPrompt(nextFacets, nextMission, agentMode, items.length);
+      appendMessage('agent', prompt);
+      if (agentMode === 'fast') {
+        void runResolution('fast', nextMission, nextFacets);
+      } else {
+        composerRef.current?.focus({ preventScroll: true });
+      }
+    },
+    [agentMode, appendMessage, busy, items.length, runResolution, updateFacetsAndMission],
+  );
+
+  const handleSubmit = useCallback(
+    async (event: React.FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      const trimmed = composer.trim();
       if (!trimmed || busy) return;
       setComposer('');
       appendMessage('user', trimmed);
+
+      const inferred = inferTextFacets(trimmed);
+      const { nextFacets, nextMission } = updateFacetsAndMission(
+        inferred.facets,
+        { destination: inferred.destination, energy: inferred.energy },
+      );
+      const wantsRecommendation = isRecommendationIntent(trimmed);
+      const canCurate = hasEnoughContext(nextFacets, nextMission, agentMode);
+
+      if (agentMode === 'fast' || (wantsRecommendation && canCurate)) {
+        await runResolution(agentMode === 'fast' ? 'fast' : 'curate', nextMission, nextFacets);
+        return;
+      }
+
       setBusy(true);
+      setProgressNote('Listening');
       try {
-        const response = await callMission({ action: 'chat', userMessage: trimmed }, mission);
-        if (response) applyResponse(response, mission);
+        const response = await callMission(
+          { action: 'chat', userMessage: modeInstruction(agentMode, tone, trimmed) },
+          nextMission,
+        );
+        if (response) {
+          applyResponse(response, nextMission, { appendAssistant: false });
+        }
+        const fallback = firstMissingPrompt(nextFacets, nextMission, agentMode, items.length);
+        const assistantText = canCurate
+          ? 'I have enough context to curate from your vault. Add one final detail or tap Curate.'
+          : fallback;
+        appendMessage('agent', safeAssistantText(response?.assistantMessage, assistantText));
       } catch (err) {
         if (!(err instanceof Error && err.name === 'AbortError')) {
-          appendMessage(
-            'system',
-            err instanceof Error ? err.message : 'The mission agent is unreachable. Try again.',
-          );
+          appendMessage('system', err instanceof Error ? err.message : 'The concierge is unreachable. Try again.');
+          appendMessage('agent', firstMissingPrompt(nextFacets, nextMission, agentMode, items.length));
         }
       } finally {
         setBusy(false);
+        setProgressNote('');
+        composerRef.current?.focus({ preventScroll: true });
       }
     },
-    [appendMessage, applyResponse, busy, callMission, mission],
+    [
+      agentMode,
+      appendMessage,
+      applyResponse,
+      busy,
+      callMission,
+      composer,
+      items.length,
+      runResolution,
+      tone,
+      updateFacetsAndMission,
+    ],
   );
 
-  const setCalibration = useCallback((patch: { destination?: string; energy?: string }) => {
-    setMission((prev) => ({
-      ...prev,
-      calibration: {
-        ...prev.calibration,
-        ...(isScentMissionDestination(patch.destination) ? { destination: patch.destination } : {}),
-        ...(isScentMissionEnergy(patch.energy) ? { energy: patch.energy } : {}),
-      },
-    }));
-  }, []);
+  const handlePremiumPreview = useCallback(async () => {
+    if (busy) return;
+    setAgentMode('premium');
+    setBusy(true);
+    setProgressNote(PROGRESS_COPY['resolution-premium']);
+    try {
+      const response = await callMission({ action: 'execute_node', nodeId: 'resolution-premium' }, mission);
+      if (response) applyResponse(response, mission, { appendAssistant: true });
+    } catch (err) {
+      if (!(err instanceof Error && err.name === 'AbortError')) {
+        appendMessage('system', err instanceof Error ? err.message : 'Premium preview is unavailable.');
+      }
+    } finally {
+      setBusy(false);
+      setProgressNote('');
+    }
+  }, [appendMessage, applyResponse, busy, callMission, mission]);
 
   const handleReveal = useCallback(() => {
     if (!resolved?.item) return;
     onRevealMatch(resolved.item, resolved.recommendation.engine, resolved.recommendation.reason);
   }, [onRevealMatch, resolved]);
 
-  const onboardingActive = mission.nodes.onboarding === 'active' || mission.nodes.onboarding === 'running';
-  const calibrationReady = Boolean(mission.calibration.destination && mission.calibration.energy);
-  const executeDisabled =
-    busy || (activeNode === 'onboarding' && !calibrationReady);
-
-  /* ---------------------------------------------------------------- */
-
-  const tree = (
-    <div className="relative flex shrink-0 sm:w-[15.5rem]">
-      <svg
-        viewBox="0 0 100 420"
-        className="absolute left-0 top-0 h-full w-[3.75rem]"
-        aria-hidden
-        preserveAspectRatio="none"
-      >
-        <path
-          d={`M ${TRUNK_X} ${NODE_Y[0]} V ${NODE_Y[4]}`}
-          fill="none"
-          stroke="rgba(255,255,255,0.12)"
-          strokeWidth="2"
-        />
-        {calmMode ? (
-          <path
-            d={`M ${TRUNK_X} ${NODE_Y[0]} V ${NODE_Y[0] + (NODE_Y[4] - NODE_Y[0]) * progress}`}
-            fill="none"
-            stroke="rgba(212,175,55,0.85)"
-            strokeWidth="2"
-          />
-        ) : (
-          <motion.path
-            d={`M ${TRUNK_X} ${NODE_Y[0]} V ${NODE_Y[4]}`}
-            fill="none"
-            stroke="rgba(212,175,55,0.85)"
-            strokeWidth="2"
-            strokeLinecap="round"
-            initial={false}
-            animate={{ pathLength: progress }}
-            transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-          />
-        )}
-      </svg>
-
-      <ol className="relative z-[1] flex w-full flex-col gap-4" aria-label="Mission progress">
-        {SCENT_MISSION_NODE_ORDER.map((nodeId) => {
-          const status = mission.nodes[nodeId];
-          const meta = NODE_META[nodeId];
-          const Icon = status === 'complete' ? Check : status === 'running' ? Loader2 : meta.icon;
-          const isCurrent = nodeId === activeNode;
-          return (
-            <li key={nodeId} className="flex min-w-0 items-center gap-3">
-              <span
-                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full border transition-colors ${nodeStatusRing(status)}`}
-                aria-hidden
-              >
-                <Icon
-                  size={17}
-                  strokeWidth={1.75}
-                  className={status === 'running' ? 'animate-spin' : undefined}
-                />
-              </span>
-              <div className="min-w-0 text-left">
-                <p
-                  className={`scent-type-label truncate ${
-                    isCurrent
-                      ? 'text-scent-accent'
-                      : status === 'complete'
-                        ? 'text-[#fff7ec]/85'
-                        : 'text-white/45'
-                  }`}
-                >
-                  {meta.label}
-                </p>
-                <p className="truncate text-[11px] leading-snug text-scent-text-muted">
-                  {nodeId === 'resolution-premium' ? 'Premium · locked' : meta.sublabel}
-                </p>
-              </div>
-              <span className="sr-only">{`${meta.label}: ${status}`}</span>
-            </li>
-          );
-        })}
-      </ol>
-    </div>
-  );
-
-  const calibrationChips = onboardingActive ? (
-    <div className="space-y-3 rounded-[calc(var(--radius-scent)-10px)] border border-white/10 bg-black/30 p-3 text-left">
-      <div>
-        <p className="scent-type-label mb-1.5 text-scent-accent/85">Destination</p>
-        <div className="flex flex-wrap gap-1.5">
-          {DESTINATION_OPTIONS.map((destination) => {
-            const selected = mission.calibration.destination === destination;
-            return (
-              <button
-                key={destination}
-                type="button"
-                onClick={() => setCalibration({ destination })}
-                aria-pressed={selected}
-                className={`rounded-full border px-3 py-1.5 scent-type-chip transition-colors ${
-                  selected
-                    ? 'border-scent-accent/80 bg-scent-accent/15 text-[#fff7ec]'
-                    : 'border-white/25 text-scent-text-muted hover:border-scent-accent/45 hover:text-[#fff7ec]'
-                }`}
-              >
-                {destination}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-      <div>
-        <p className="scent-type-label mb-1.5 text-scent-accent/85">Energy</p>
-        <div className="flex flex-wrap gap-1.5">
-          {ENERGY_OPTIONS.map((energy) => {
-            const selected = mission.calibration.energy === energy;
-            return (
-              <button
-                key={energy}
-                type="button"
-                onClick={() => setCalibration({ energy })}
-                aria-pressed={selected}
-                className={`rounded-full border px-3 py-1.5 scent-type-chip transition-colors ${
-                  selected
-                    ? 'border-scent-accent/80 bg-scent-accent/15 text-[#fff7ec]'
-                    : 'border-white/25 text-scent-text-muted hover:border-scent-accent/45 hover:text-[#fff7ec]'
-                }`}
-              >
-                {energy}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  ) : null;
-
-  const resultCard = resolved ? (
-    <div className="rounded-[calc(var(--radius-scent)-10px)] border border-scent-accent/35 bg-[linear-gradient(180deg,rgba(212,175,55,0.08),rgba(0,0,0,0.4))] p-4 text-left">
-      <p className="scent-type-label mb-1 text-scent-accent">Mission resolution</p>
-      {resolved.recommendation.brand ? (
-        <p className="font-serif text-xs uppercase tracking-[0.2em] text-scent-text-muted">
-          {resolved.recommendation.brand}
-        </p>
-      ) : null}
-      <p className="font-serif italic text-2xl leading-tight text-[#fff7ec]">
-        {resolved.recommendation.name}
-      </p>
-      <p className="mt-2 text-[13px] italic leading-relaxed text-scent-text-muted">
-        {resolved.recommendation.reason}
-      </p>
-      {resolved.item ? (
-        <button
-          type="button"
-          onClick={handleReveal}
-          className="scent-primary-button mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-[calc(var(--radius-scent)-12px)] px-4"
-        >
-          <Sparkles size={15} aria-hidden />
-          <span className="font-serif italic text-base">Reveal Match</span>
-        </button>
-      ) : (
-        <p className="mt-3 text-[12px] text-scent-text-subtle">
-          This pick is no longer in your local vault, so the full overlay is unavailable.
-        </p>
-      )}
-    </div>
-  ) : null;
-
-  const premiumBlocked = mission.nodes['resolution-premium'] === 'blocked';
-  const premiumCard = premiumBlocked ? (
-    <div className="relative overflow-hidden rounded-[calc(var(--radius-scent)-10px)] border border-scent-accent/30 bg-black/45 p-4 text-left">
-      <div
-        className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-scent-accent/55 to-transparent"
-        aria-hidden
-      />
-      <div className="flex items-start gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-scent-accent/55 bg-black/60 text-scent-accent">
-          <Lock size={15} strokeWidth={1.75} aria-hidden />
-        </span>
-        <div className="min-w-0">
-          <p className="scent-type-label text-scent-accent">Molecular Intelligence · Premium</p>
-          <p className="mt-1 text-[12px] leading-relaxed text-scent-text-muted">
-            Note volatility curves, projection modelling, and a layering protocol tuned to today's
-            air.
-          </p>
-          <button
-            type="button"
-            onClick={() => void handleExecuteNode('resolution-premium')}
-            disabled={busy}
-            className="mt-2.5 inline-flex min-h-10 items-center gap-2 rounded-full border border-scent-accent/55 px-4 scent-type-chip text-scent-accent transition-colors hover:bg-scent-accent/10 disabled:opacity-50"
-          >
-            <Lock size={12} aria-hidden />
-            Preview Premium
-          </button>
-        </div>
-      </div>
-    </div>
-  ) : null;
+  const composerPlaceholder =
+    agentMode === 'fast'
+      ? 'Give me one cue, or type what you need...'
+      : agentMode === 'premium'
+        ? 'Describe the architecture of the impression...'
+        : 'Tell me the occasion, mood, or impression...';
+  const compactQuickReplies = visibleQuickReplies.slice(0, 6);
 
   return (
-    <div className="scent-vault-panel relative w-full min-w-0 overflow-hidden" data-testid="scent-mission-panel">
-      <div className="scent-vault-panel-inner min-w-0">
-        <header className="mb-5 flex items-start justify-between gap-3">
-          <div className="text-left">
-            <p className="scent-type-label text-scent-accent">Scent Mission</p>
-            <h2 className="mt-1 font-serif italic text-[clamp(1.6rem,4vw,2.4rem)] leading-tight text-[#fff7ec]">
-              Discover your signature scent.
-            </h2>
-          </div>
+    <div className="relative flex min-h-0 w-full min-w-0 flex-col text-center" data-testid="scent-mission-panel">
+      <button
+        type="button"
+        onClick={onExit}
+        className="absolute right-0 top-0 z-10 inline-flex min-h-11 min-w-11 items-center justify-center rounded-full text-scent-text-subtle transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
+        aria-label="Return to fragrance search"
+      >
+        <X size={20} strokeWidth={1.75} />
+      </button>
+
+      <header className="mx-auto mb-5 max-w-[43rem] px-3 pt-1 text-center sm:mb-6">
+        <p className="scent-type-label text-scent-accent">AI Fragrance Concierge</p>
+        <h2 className="mx-auto mt-1 max-w-[38rem] text-balance font-serif italic text-[clamp(2.15rem,6vw,4rem)] leading-[1.01] tracking-normal text-[#fff7ec] drop-shadow-[0_4px_14px_rgba(0,0,0,0.72)]">
+          Discover your signature scent.
+        </h2>
+        <p className="mt-3 scent-type-label text-scent-accent/82">{progressText}</p>
+        <p className="mx-auto mt-2 hidden max-w-xl text-sm leading-6 text-scent-text-muted sm:block">
+          {contextLine}
+        </p>
+        <div
+          className="mx-auto mt-3 h-1 max-w-[22rem] overflow-hidden rounded-full bg-white/10"
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(progress * 100)}
+          aria-label="Concierge progress"
+        >
+          <motion.div
+            className="h-full rounded-full bg-scent-accent/80"
+            initial={false}
+            animate={{ width: `${Math.max(progress * 100, capturedCount > 0 ? 18 : 8)}%` }}
+            transition={calmMotion ? { duration: 0.01 } : { duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+          />
+        </div>
+      </header>
+
+      <div className="mx-auto w-full max-w-[42.75rem]">
+        <form
+          onSubmit={handleSubmit}
+          className="scent-lux-input scent-vault-search-input flex h-[60px] w-full items-center gap-2 rounded-full px-2.5 transition-colors focus-within:ring-2 focus-within:ring-scent-accent/12 sm:h-[68px] sm:px-3.5"
+        >
           <button
             type="button"
-            onClick={onExit}
-            className="-m-1 inline-flex min-h-11 min-w-11 items-center justify-center rounded-full text-scent-text-subtle transition-all hover:bg-white/10 hover:text-white active:scale-95"
-            aria-label="Exit mission and return to search"
+            onClick={() => setSettingsOpen((open) => !open)}
+            aria-expanded={settingsOpen}
+            aria-controls="scent-mission-settings"
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-scent-accent/35 bg-black/35 text-scent-accent transition-colors hover:bg-scent-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
+            aria-label="Adjust concierge settings"
+            title="Adjust settings"
           >
-            <X size={20} strokeWidth={1.75} />
+            <SlidersHorizontal size={17} strokeWidth={1.8} aria-hidden />
           </button>
-        </header>
+          <input
+            ref={composerRef}
+            type="text"
+            value={composer}
+            onChange={(event) => setComposer(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter' || event.shiftKey || event.metaKey || event.ctrlKey || event.altKey) return;
+              event.preventDefault();
+              event.currentTarget.form?.requestSubmit();
+            }}
+            placeholder={composerPlaceholder}
+            aria-label="Message the fragrance concierge"
+            autoComplete="off"
+            className="min-w-0 flex-1 bg-transparent px-1 text-center text-sm font-medium text-[#fff7ec] outline-none placeholder:text-scent-text-subtle sm:text-base"
+          />
+          <button
+            type="submit"
+            disabled={busy || !composer.trim()}
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-scent-accent/42 bg-black/35 text-scent-accent transition-colors hover:bg-scent-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:opacity-40"
+            aria-label="Send message"
+          >
+            {busy ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Send size={16} aria-hidden />}
+          </button>
+        </form>
 
-        <div className="flex flex-col gap-6 sm:flex-row">
-          {tree}
-
-          <div className="flex min-w-0 flex-1 flex-col rounded-[calc(var(--radius-scent)-8px)] border border-white/10 bg-black/30">
-            <div
-              ref={scrollRef}
-              className="flex max-h-[22rem] min-h-[14rem] flex-col gap-3 overflow-y-auto p-4"
-              role="log"
-              aria-label="Mission conversation"
-              aria-live="polite"
+        <AnimatePresence initial={false}>
+          {settingsOpen ? (
+            <motion.div
+              id="scent-mission-settings"
+              initial={calmMotion ? false : { opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={calmMotion ? { opacity: 0 } : { opacity: 0, y: -6 }}
+              transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+              className="mt-3 rounded-[calc(var(--radius-scent)-8px)] border border-scent-accent/18 bg-black/36 p-3 text-left shadow-[inset_0_1px_0_rgba(255,236,183,0.06)]"
             >
-              {messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`max-w-[88%] rounded-[14px] border px-3.5 py-2.5 text-left text-[13px] leading-relaxed ${
-                    message.role === 'user'
-                      ? 'self-end border-white/15 bg-white/[0.07] text-[#fff7ec]'
-                      : message.role === 'system'
-                        ? 'self-start border-red-500/25 bg-red-500/10 text-red-200'
-                        : 'self-start border-scent-accent/25 bg-[linear-gradient(180deg,rgba(212,175,55,0.06),rgba(0,0,0,0.25))] text-scent-text-muted'
-                  }`}
-                >
-                  {message.role === 'system' ? (
-                    <span className="mr-1.5 inline-flex align-[-2px]" aria-hidden>
-                      <AlertTriangle size={13} />
-                    </span>
-                  ) : null}
-                  {message.text}
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <p className="scent-type-label mb-1.5 text-scent-accent/80">Response mode</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {MODE_OPTIONS.map(({ id, label, icon: Icon }) => {
+                      const selected = agentMode === id;
+                      return (
+                        <button
+                          key={id}
+                          type="button"
+                          onClick={() => setAgentMode(id)}
+                          aria-pressed={selected}
+                          className={`inline-flex min-h-8 items-center gap-1.5 rounded-full border px-3 py-1 scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40 ${
+                            selected
+                              ? 'border-scent-accent/78 bg-scent-accent/13 text-[#fff7ec]'
+                              : 'border-white/20 text-scent-text-muted hover:border-scent-accent/45 hover:text-[#fff7ec]'
+                          }`}
+                        >
+                          <Icon size={12} strokeWidth={2} aria-hidden />
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              ))}
-              {calibrationChips}
-              {resultCard}
-              {premiumCard}
-            </div>
-
-            <div className="border-t border-white/10 p-3">
-              {activeNode ? (
-                <button
-                  type="button"
-                  onClick={() => void handleExecuteNode(activeNode)}
-                  disabled={executeDisabled}
-                  className="scent-primary-button mb-2.5 flex min-h-12 w-full items-center justify-center gap-2.5 rounded-[calc(var(--radius-scent)-12px)] px-4 disabled:cursor-not-allowed disabled:opacity-45"
-                >
-                  {busy ? (
-                    <Loader2 size={16} className="animate-spin" aria-hidden />
-                  ) : (
-                    <Sparkles size={16} aria-hidden />
-                  )}
-                  <span className="font-serif italic text-lg leading-tight">
-                    {NODE_META[activeNode].execute}
-                  </span>
-                </button>
-              ) : null}
-
-              {chips.length > 0 ? (
-                <div className="mb-2.5 flex flex-wrap gap-1.5">
-                  {chips.map((chip) => (
-                    <button
-                      key={chip}
-                      type="button"
-                      onClick={() => void handleSendChat(chip)}
-                      disabled={busy}
-                      className="rounded-full border border-white/20 px-3 py-1.5 scent-type-chip text-scent-text-muted transition-colors hover:border-scent-accent/45 hover:text-[#fff7ec] disabled:opacity-45"
-                    >
-                      {chip}
-                    </button>
-                  ))}
+                <div>
+                  <p className="scent-type-label mb-1.5 text-scent-accent/80">Tone</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {TONE_OPTIONS.map(({ id, label }) => {
+                      const selected = tone === id;
+                      return (
+                        <button
+                          key={id}
+                          type="button"
+                          onClick={() => setTone(id)}
+                          aria-pressed={selected}
+                          className={`min-h-8 rounded-full border px-3 py-1 scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40 ${
+                            selected
+                              ? 'border-scent-accent/70 text-[#fff7ec]'
+                              : 'border-white/18 text-scent-text-muted hover:border-scent-accent/42 hover:text-[#fff7ec]'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              ) : null}
+              </div>
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
 
-              <form
-                className="flex items-center gap-2"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  void handleSendChat(composer);
-                }}
+        <div className="mt-3 flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide" aria-label="Concierge quick replies">
+          {enoughContext || agentMode === 'fast' ? (
+            <button
+              type="button"
+              onClick={() => void runResolution(agentMode === 'fast' ? 'fast' : 'curate')}
+              disabled={busy || items.length === 0}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-scent-accent/68 bg-scent-accent/12 px-3 py-1.5 scent-type-chip text-[#fff7ec] transition-colors hover:bg-scent-accent/18 disabled:opacity-45"
+            >
+              <Sparkles size={12} aria-hidden />
+              Curate
+            </button>
+          ) : null}
+          {agentMode === 'premium' ? (
+            <button
+              type="button"
+              onClick={() => void handlePremiumPreview()}
+              disabled={busy}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-scent-accent/42 px-3 py-1.5 scent-type-chip text-scent-accent transition-colors hover:bg-scent-accent/10 disabled:opacity-45"
+            >
+              <Lock size={12} aria-hidden />
+              Preview
+            </button>
+          ) : null}
+          {compactQuickReplies.map((reply) => {
+            const selected = facets[reply.facet] === reply.value;
+            return (
+              <button
+                key={`${reply.facet}-${reply.value}`}
+                type="button"
+                onClick={() => handleQuickReply(reply)}
+                disabled={busy}
+                data-facet={reply.facet}
+                aria-pressed={selected}
+                className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40 disabled:opacity-45 ${
+                  selected
+                    ? 'border-scent-accent/72 bg-scent-accent/12 text-[#fff7ec]'
+                    : 'border-white/20 text-scent-text-muted hover:border-scent-accent/42 hover:text-[#fff7ec]'
+                }`}
+                title={`${FACET_LABELS[reply.facet]}: ${reply.value}`}
               >
-                <input
-                  type="text"
-                  value={composer}
-                  onChange={(e) => setComposer(e.target.value)}
-                  placeholder="Ask the mission agent…"
-                  aria-label="Message the mission agent"
-                  autoComplete="off"
-                  className="scent-lux-input h-12 min-w-0 flex-1 px-4 text-[13px] text-[#fff7ec] outline-none placeholder:text-scent-text-subtle"
-                />
-                <button
-                  type="submit"
-                  disabled={busy || !composer.trim()}
-                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-scent-accent/45 text-scent-accent transition-colors hover:bg-scent-accent/10 disabled:opacity-40"
-                  aria-label="Send message"
-                >
-                  {busy ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-                </button>
-              </form>
-            </div>
-          </div>
+                {selected ? <Check size={12} aria-hidden /> : null}
+                {reply.label}
+              </button>
+            );
+          })}
         </div>
       </div>
+
+      <div
+        ref={scrollRef}
+        className="mx-auto mt-4 flex w-full max-w-[42.75rem] max-h-[min(30dvh,15rem)] flex-col gap-2.5 overflow-y-auto pr-1 text-left scrollbar-hide sm:mt-5 sm:max-h-[min(32dvh,18rem)]"
+        role="log"
+        aria-live="polite"
+        aria-label="Signature scent concierge conversation"
+      >
+        {messages.map((message) => (
+          <motion.div
+            key={message.id}
+            initial={calmMotion ? false : { opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            className={`max-w-[90%] rounded-[calc(var(--radius-scent)-12px)] border px-3.5 py-2.5 text-[13px] leading-relaxed sm:text-sm ${
+              message.role === 'user'
+                ? 'self-end border-white/14 bg-white/[0.07] text-[#fff7ec]'
+                : message.role === 'system'
+                  ? 'self-start border-red-400/25 bg-red-500/10 text-red-100'
+                  : 'self-start border-scent-accent/22 bg-[linear-gradient(180deg,rgba(212,175,55,0.045),rgba(0,0,0,0.16))] text-scent-text-muted'
+            }`}
+          >
+            {message.role === 'system' ? (
+              <AlertTriangle size={13} className="mr-1.5 inline align-[-2px]" aria-hidden />
+            ) : null}
+            {message.text}
+          </motion.div>
+        ))}
+
+        {busy ? (
+          <div className="inline-flex max-w-[90%] items-center gap-2 self-start rounded-full border border-scent-accent/24 bg-black/36 px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.12em] text-scent-accent/86">
+            <Loader2 size={14} className="animate-spin" aria-hidden />
+            {progressNote || 'Thinking'}
+          </div>
+        ) : null}
+
+        {resolved ? (
+          <div className="max-w-[92%] self-start rounded-[calc(var(--radius-scent)-10px)] border border-scent-accent/32 bg-[linear-gradient(180deg,rgba(212,175,55,0.07),rgba(0,0,0,0.28))] p-4 text-left">
+            <p className="scent-type-label text-scent-accent">Curated match</p>
+            {resolved.recommendation.brand ? (
+              <p className="mt-2 font-serif text-xs uppercase tracking-[0.2em] text-scent-text-muted">
+                {resolved.recommendation.brand}
+              </p>
+            ) : null}
+            <p className="font-serif italic text-2xl leading-tight text-[#fff7ec]">
+              {resolved.recommendation.name}
+            </p>
+            <p className="mt-2 text-sm italic leading-relaxed text-scent-text-muted">
+              {resolved.recommendation.reason}
+            </p>
+            {resolved.item ? (
+              <button
+                type="button"
+                onClick={handleReveal}
+                className="scent-primary-button mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-[var(--radius-scent)] px-5 py-2.5"
+              >
+                <Sparkles size={15} aria-hidden />
+                <span className="font-serif italic text-base">Reveal Match</span>
+              </button>
+            ) : (
+              <p className="mt-3 text-[12px] text-scent-text-subtle">
+                This pick is no longer in your local vault, so the full overlay is unavailable.
+              </p>
+            )}
+          </div>
+        ) : null}
+      </div>
+
+      <p className="sr-only">
+        {formatFacetLine(facets)}
+      </p>
     </div>
   );
 };
