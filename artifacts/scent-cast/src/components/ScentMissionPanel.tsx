@@ -31,6 +31,7 @@ import {
 } from '@/lib/scentMissionClient';
 import type { Fragrance } from '@/components/Wardrobe';
 import type { WeatherData } from '@/context/WeatherContext';
+import { useDragToScroll } from '@/hooks/useDragToScroll';
 import { isIpadSafariPerformanceMode } from '@/lib/platform';
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)
@@ -376,6 +377,9 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   const composerRef = useRef<HTMLInputElement | null>(null);
   const sessionIdRef = useRef<string | undefined>(undefined);
 
+  // Desktop click-drag for the cue strip; touch keeps native momentum scroll.
+  useDragToScroll(quickReplyScrollRef);
+
   useEffect(() => () => abortRef.current?.abort(), []);
 
   useEffect(() => {
@@ -701,8 +705,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       : agentMode === 'premium'
         ? 'Describe the impression you want...'
         : 'Describe your desired aura...';
-  const compactQuickReplies = visibleQuickReplies.slice(0, 6);
-  const showQuickReplyHint = !quickReplyHintDismissed && compactQuickReplies.length > 3 && capturedCount === 0;
+  const showQuickReplyHint = !quickReplyHintDismissed && visibleQuickReplies.length > 3 && capturedCount === 0;
 
   const actionControls = (
     <div className="mx-auto mt-4 w-full max-w-[42.75rem] sm:mt-5">
@@ -829,7 +832,8 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         <div
           ref={quickReplyScrollRef}
           onScroll={() => setQuickReplyHintDismissed(true)}
-          className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide"
+          className="flex flex-nowrap gap-1.5 overflow-x-auto pb-1 scrollbar-hide select-none"
+          style={{ touchAction: 'pan-x', overscrollBehaviorX: 'contain' }}
           aria-label="Concierge quick replies"
         >
           {enoughContext || agentMode === 'fast' ? (
@@ -854,7 +858,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
               Preview
             </button>
           ) : null}
-          {compactQuickReplies.map((reply) => (
+          {visibleQuickReplies.map((reply) => (
             <button
               key={`${reply.facet}-${reply.value}`}
               type="button"
