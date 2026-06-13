@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useLayoutEffect, useMemo, useCallba
 import { Routes, Route, useLocation, useParams, type Location } from 'react-router-dom';
 import type { Fragrance } from './components/Wardrobe';
 import { vaultIdentityKey } from './lib/vaultIdentity';
-import { Play, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { ThreadBackground, type ThreadBackgroundMode } from './components/threads/ThreadBackground';
 import { AppTopNav } from './components/AppTopNav';
@@ -560,8 +560,6 @@ function DashboardView() {
   // returning completed user on a fresh device never flashes the add-3 ordeal.
   const stateSettled = !authToken || onboardingResolved;
   const discoveryReady = onboardingCompleted || items.length >= 3;
-  const showOnboardingSteps =
-    stateSettled && !onboardingCompleted && items.length === 0 && !vaultSearchUiActive;
   const agentActive = viewState === 'agent';
   const vaultContentTransition = reduceMotion
     ? { duration: 0.01 }
@@ -583,6 +581,10 @@ function DashboardView() {
     });
     return () => window.cancelAnimationFrame(id);
   }, [reduceMotion, viewState]);
+
+  const handleOpenMission = useCallback(() => {
+    setViewState('agent');
+  }, []);
 
   // Brand+name identities of saved fragrances, so the search overlay can flag
   // results that are already in the vault and offer "View in vault" instead of a
@@ -667,69 +669,9 @@ function DashboardView() {
                           existingVaultKeys={vaultIdentityKeys}
                           onViewVault={handleViewVault}
                           embeddedInVaultPanel
+                          onDiscoverSignatureScent={discoveryReady && stateSettled && !vaultSearchUiActive ? handleOpenMission : undefined}
                         />
                       </React.Suspense>
-                      {showOnboardingSteps ? (
-                        <div className="mt-7 overflow-hidden">
-                          <div className="relative overflow-hidden rounded-[var(--radius-scent)] border border-scent-accent/22 bg-[linear-gradient(180deg,rgba(255,247,236,0.045),rgba(0,0,0,0.36))] p-3 shadow-[inset_0_1px_0_rgba(255,236,183,0.08),0_18px_46px_-38px_rgba(212,175,55,0.52)] sm:p-4">
-                            <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-scent-accent/45 to-transparent" aria-hidden />
-                            <div className="relative grid gap-2 text-left sm:grid-cols-3 sm:text-center">
-                              <div className="pointer-events-none absolute left-[16.666%] right-[16.666%] top-4 hidden h-px bg-gradient-to-r from-scent-accent/18 via-scent-accent/42 to-scent-accent/18 sm:block" aria-hidden />
-                              {([
-                                { step: '1', title: 'Search', text: 'Find a fragrance you own or love' },
-                                { step: '2', title: 'Vault', text: 'Add three bottles for a useful profile' },
-                                { step: '3', title: 'Match', text: 'Unlock a weather-aware recommendation' },
-                              ] as const).map(({ step, title, text }) => (
-                                <div key={step} className="relative flex min-w-0 items-center gap-3 rounded-[calc(var(--radius-scent)-10px)] border border-white/8 bg-black/28 px-3 py-3 sm:flex-col sm:gap-2 sm:px-3 sm:py-4">
-                                  <span className="relative z-[1] flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-scent-accent/68 bg-[#080604] text-[12px] font-bold tabular-nums text-scent-accent shadow-[0_0_0_4px_rgba(0,0,0,0.72),0_8px_20px_-14px_rgba(212,175,55,0.9)] sm:h-7 sm:w-7">{step}</span>
-                                  <div className="min-w-0">
-                                    <p className="scent-type-label text-scent-accent/88 sm:mb-1">{title}</p>
-                                    <p className="text-[12px] leading-snug text-scent-text-muted sm:mx-auto sm:max-w-[10.5rem]">{text}</p>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      ) : null}
-                      {!vaultSearchUiActive && stateSettled ? (
-                        <div className="mt-7 overflow-hidden">
-                            {discoveryReady ? (
-                              <button
-                                type="button"
-                                onClick={() => setViewState('agent')}
-                                className="scent-primary-button w-full min-h-[60px] sm:h-16 flex items-center justify-center gap-2.5 sm:gap-4 px-4 transition-all group rounded-[var(--radius-scent)]"
-                              >
-                                <Play size={19} className="fill-current shrink-0 group-hover:scale-110 transition-transform" aria-hidden />
-                                <span className="font-serif italic text-lg sm:text-2xl leading-tight text-center">Discover Your Signature Scent</span>
-                              </button>
-                            ) : (
-                              <div className="flex w-full min-h-[84px] flex-col items-center justify-center rounded-[var(--radius-scent)] border border-scent-accent/22 bg-[linear-gradient(180deg,rgba(255,247,236,0.04),rgba(0,0,0,0.34))] px-4 py-4 shadow-[inset_0_1px_0_rgba(255,236,183,0.08),0_18px_46px_-40px_rgba(212,175,55,0.48)] sm:min-h-24 sm:px-6">
-                                <div className="flex w-full max-w-[34rem] flex-col items-center gap-3.5">
-                                  <div className="flex w-full items-center justify-between gap-4">
-                                    <span className="scent-type-label text-scent-accent/85">Discovery readiness</span>
-                                    <span className="font-mono text-[11px] font-semibold tabular-nums text-scent-accent">{Math.min(items.length, 3)}/3</span>
-                                  </div>
-                                  <div className="grid w-full grid-cols-3 gap-2" role="progressbar" aria-valuemin={0} aria-valuemax={3} aria-valuenow={Math.min(items.length, 3)} aria-label="Fragrances added toward discovery">
-                                    {[0, 1, 2].map((i) => (
-                                      <span
-                                        key={i}
-                                        className={`h-2 rounded-full transition-colors duration-300 ${
-                                          i < items.length ? 'bg-scent-accent/85 shadow-[0_0_10px_rgba(212,175,55,0.35)]' : 'bg-white/12'
-                                        }`}
-                                      />
-                                    ))}
-                                  </div>
-                                  <span className="text-center font-serif italic text-base leading-tight text-white/58 sm:text-lg">
-                                    {items.length === 0
-                                      ? 'Add 3 fragrances to unlock discovery'
-                                      : `${3 - items.length} more to unlock discovery`}
-                                  </span>
-                                </div>
-                              </div>
-                            )}
-                        </div>
-                      ) : null}
                     </motion.div>
                   )}
                 </AnimatePresence>

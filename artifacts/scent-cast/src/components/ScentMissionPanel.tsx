@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { motion, useReducedMotion } from 'framer-motion';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import {
   AlertTriangle,
   Check,
   Loader2,
   Lock,
   Send,
+  SlidersHorizontal,
   Sparkles,
   X,
   Zap,
@@ -356,6 +357,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   const [agentMode, setAgentMode] = useState<AgentMode>('research');
   const [tone, setTone] = useState<ToneMode>('balanced');
   const [composer, setComposer] = useState('');
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [progressNote, setProgressNote] = useState('');
   const [sessionId, setSessionId] = useState<string | undefined>(undefined);
@@ -700,37 +702,36 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       : agentMode === 'premium'
         ? 'Describe the architecture of the impression...'
         : 'Tell me the occasion, mood, or impression...';
+  const compactQuickReplies = visibleQuickReplies.slice(0, 6);
 
   return (
-    <div className="flex min-h-0 w-full min-w-0 flex-col text-left" data-testid="scent-mission-panel">
-      <header className="flex items-start justify-between gap-4 text-left">
-        <div className="min-w-0">
-          <p className="scent-type-label text-scent-accent">AI Fragrance Concierge</p>
-          <h2 className="mt-1 font-serif italic text-[clamp(1.95rem,5vw,3.45rem)] leading-[1.02] tracking-normal text-[#fff7ec] drop-shadow-[0_4px_14px_rgba(0,0,0,0.72)]">
-            Discover your signature scent.
-          </h2>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-scent-text-muted sm:text-base">
-            {contextLine}
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={onExit}
-          className="-m-1 inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full text-scent-text-subtle transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
-          aria-label="Return to fragrance search"
-        >
-          <X size={20} strokeWidth={1.75} />
-        </button>
-      </header>
+    <div className="relative flex min-h-0 w-full min-w-0 flex-col text-center" data-testid="scent-mission-panel">
+      <button
+        type="button"
+        onClick={onExit}
+        className="absolute right-0 top-0 z-10 inline-flex min-h-11 min-w-11 items-center justify-center rounded-full text-scent-text-subtle transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
+        aria-label="Return to fragrance search"
+      >
+        <X size={20} strokeWidth={1.75} />
+      </button>
 
-      <div className="mt-5">
-        <div className="mb-2 flex items-center justify-between gap-3">
-          <p className="scent-type-label text-scent-accent/86">{progressText}</p>
-          <p className="hidden font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-scent-accent/78 sm:block">
-            {Math.round(progress * 100)}%
-          </p>
-        </div>
-        <div className="h-1 w-full overflow-hidden rounded-full bg-white/10" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress * 100)} aria-label="Concierge progress">
+      <header className="mx-auto mb-5 max-w-[43rem] px-3 pt-1 text-center sm:mb-6">
+        <p className="scent-type-label text-scent-accent">AI Fragrance Concierge</p>
+        <h2 className="mx-auto mt-1 max-w-[38rem] text-balance font-serif italic text-[clamp(2.15rem,6vw,4rem)] leading-[1.01] tracking-normal text-[#fff7ec] drop-shadow-[0_4px_14px_rgba(0,0,0,0.72)]">
+          Discover your signature scent.
+        </h2>
+        <p className="mt-3 scent-type-label text-scent-accent/82">{progressText}</p>
+        <p className="mx-auto mt-2 hidden max-w-xl text-sm leading-6 text-scent-text-muted sm:block">
+          {contextLine}
+        </p>
+        <div
+          className="mx-auto mt-3 h-1 max-w-[22rem] overflow-hidden rounded-full bg-white/10"
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(progress * 100)}
+          aria-label="Concierge progress"
+        >
           <motion.div
             className="h-full rounded-full bg-scent-accent/80"
             initial={false}
@@ -738,11 +739,163 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
             transition={calmMotion ? { duration: 0.01 } : { duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
           />
         </div>
+      </header>
+
+      <div className="mx-auto w-full max-w-[42.75rem]">
+        <form
+          onSubmit={handleSubmit}
+          className="scent-lux-input scent-vault-search-input flex h-[60px] w-full items-center gap-2 rounded-full px-2.5 transition-colors focus-within:ring-2 focus-within:ring-scent-accent/12 sm:h-[68px] sm:px-3.5"
+        >
+          <button
+            type="button"
+            onClick={() => setSettingsOpen((open) => !open)}
+            aria-expanded={settingsOpen}
+            aria-controls="scent-mission-settings"
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-scent-accent/35 bg-black/35 text-scent-accent transition-colors hover:bg-scent-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
+            aria-label="Adjust concierge settings"
+            title="Adjust settings"
+          >
+            <SlidersHorizontal size={17} strokeWidth={1.8} aria-hidden />
+          </button>
+          <input
+            ref={composerRef}
+            type="text"
+            value={composer}
+            onChange={(event) => setComposer(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter' || event.shiftKey || event.metaKey || event.ctrlKey || event.altKey) return;
+              event.preventDefault();
+              event.currentTarget.form?.requestSubmit();
+            }}
+            placeholder={composerPlaceholder}
+            aria-label="Message the fragrance concierge"
+            autoComplete="off"
+            className="min-w-0 flex-1 bg-transparent px-1 text-center text-sm font-medium text-[#fff7ec] outline-none placeholder:text-scent-text-subtle sm:text-base"
+          />
+          <button
+            type="submit"
+            disabled={busy || !composer.trim()}
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-scent-accent/42 bg-black/35 text-scent-accent transition-colors hover:bg-scent-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:opacity-40"
+            aria-label="Send message"
+          >
+            {busy ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Send size={16} aria-hidden />}
+          </button>
+        </form>
+
+        <AnimatePresence initial={false}>
+          {settingsOpen ? (
+            <motion.div
+              id="scent-mission-settings"
+              initial={calmMotion ? false : { opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={calmMotion ? { opacity: 0 } : { opacity: 0, y: -6 }}
+              transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+              className="mt-3 rounded-[calc(var(--radius-scent)-8px)] border border-scent-accent/18 bg-black/36 p-3 text-left shadow-[inset_0_1px_0_rgba(255,236,183,0.06)]"
+            >
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <p className="scent-type-label mb-1.5 text-scent-accent/80">Response mode</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {MODE_OPTIONS.map(({ id, label, icon: Icon }) => {
+                      const selected = agentMode === id;
+                      return (
+                        <button
+                          key={id}
+                          type="button"
+                          onClick={() => setAgentMode(id)}
+                          aria-pressed={selected}
+                          className={`inline-flex min-h-8 items-center gap-1.5 rounded-full border px-3 py-1 scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40 ${
+                            selected
+                              ? 'border-scent-accent/78 bg-scent-accent/13 text-[#fff7ec]'
+                              : 'border-white/20 text-scent-text-muted hover:border-scent-accent/45 hover:text-[#fff7ec]'
+                          }`}
+                        >
+                          <Icon size={12} strokeWidth={2} aria-hidden />
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div>
+                  <p className="scent-type-label mb-1.5 text-scent-accent/80">Tone</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {TONE_OPTIONS.map(({ id, label }) => {
+                      const selected = tone === id;
+                      return (
+                        <button
+                          key={id}
+                          type="button"
+                          onClick={() => setTone(id)}
+                          aria-pressed={selected}
+                          className={`min-h-8 rounded-full border px-3 py-1 scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40 ${
+                            selected
+                              ? 'border-scent-accent/70 text-[#fff7ec]'
+                              : 'border-white/18 text-scent-text-muted hover:border-scent-accent/42 hover:text-[#fff7ec]'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+
+        <div className="mt-3 flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide" aria-label="Concierge quick replies">
+          {enoughContext || agentMode === 'fast' ? (
+            <button
+              type="button"
+              onClick={() => void runResolution(agentMode === 'fast' ? 'fast' : 'curate')}
+              disabled={busy || items.length === 0}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-scent-accent/68 bg-scent-accent/12 px-3 py-1.5 scent-type-chip text-[#fff7ec] transition-colors hover:bg-scent-accent/18 disabled:opacity-45"
+            >
+              <Sparkles size={12} aria-hidden />
+              Curate
+            </button>
+          ) : null}
+          {agentMode === 'premium' ? (
+            <button
+              type="button"
+              onClick={() => void handlePremiumPreview()}
+              disabled={busy}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-scent-accent/42 px-3 py-1.5 scent-type-chip text-scent-accent transition-colors hover:bg-scent-accent/10 disabled:opacity-45"
+            >
+              <Lock size={12} aria-hidden />
+              Preview
+            </button>
+          ) : null}
+          {compactQuickReplies.map((reply) => {
+            const selected = facets[reply.facet] === reply.value;
+            return (
+              <button
+                key={`${reply.facet}-${reply.value}`}
+                type="button"
+                onClick={() => handleQuickReply(reply)}
+                disabled={busy}
+                data-facet={reply.facet}
+                aria-pressed={selected}
+                className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40 disabled:opacity-45 ${
+                  selected
+                    ? 'border-scent-accent/72 bg-scent-accent/12 text-[#fff7ec]'
+                    : 'border-white/20 text-scent-text-muted hover:border-scent-accent/42 hover:text-[#fff7ec]'
+                }`}
+                title={`${FACET_LABELS[reply.facet]}: ${reply.value}`}
+              >
+                {selected ? <Check size={12} aria-hidden /> : null}
+                {reply.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div
         ref={scrollRef}
-        className="mt-4 flex min-h-[8.5rem] max-h-[min(34dvh,18rem)] flex-col gap-3 overflow-y-auto pr-1 scrollbar-hide sm:mt-5 sm:min-h-[10rem] sm:max-h-[min(36dvh,22rem)] lg:min-h-[10.5rem] lg:max-h-[min(38dvh,24rem)]"
+        className="mx-auto mt-4 flex w-full max-w-[42.75rem] max-h-[min(30dvh,15rem)] flex-col gap-2.5 overflow-y-auto pr-1 text-left scrollbar-hide sm:mt-5 sm:max-h-[min(32dvh,18rem)]"
         role="log"
         aria-live="polite"
         aria-label="Signature scent concierge conversation"
@@ -753,12 +906,12 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
             initial={calmMotion ? false : { opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-            className={`max-w-[88%] rounded-[calc(var(--radius-scent)-10px)] border px-4 py-3 text-[13px] leading-relaxed sm:text-sm ${
+            className={`max-w-[90%] rounded-[calc(var(--radius-scent)-12px)] border px-3.5 py-2.5 text-[13px] leading-relaxed sm:text-sm ${
               message.role === 'user'
                 ? 'self-end border-white/14 bg-white/[0.07] text-[#fff7ec]'
                 : message.role === 'system'
                   ? 'self-start border-red-400/25 bg-red-500/10 text-red-100'
-                  : 'self-start border-scent-accent/24 bg-[linear-gradient(180deg,rgba(212,175,55,0.055),rgba(0,0,0,0.20))] text-scent-text-muted'
+                  : 'self-start border-scent-accent/22 bg-[linear-gradient(180deg,rgba(212,175,55,0.045),rgba(0,0,0,0.16))] text-scent-text-muted'
             }`}
           >
             {message.role === 'system' ? (
@@ -769,14 +922,14 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         ))}
 
         {busy ? (
-          <div className="inline-flex max-w-[88%] items-center gap-2 self-start rounded-full border border-scent-accent/24 bg-black/36 px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.12em] text-scent-accent/86">
+          <div className="inline-flex max-w-[90%] items-center gap-2 self-start rounded-full border border-scent-accent/24 bg-black/36 px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.12em] text-scent-accent/86">
             <Loader2 size={14} className="animate-spin" aria-hidden />
             {progressNote || 'Thinking'}
           </div>
         ) : null}
 
         {resolved ? (
-          <div className="max-w-[92%] self-start rounded-[calc(var(--radius-scent)-8px)] border border-scent-accent/32 bg-[linear-gradient(180deg,rgba(212,175,55,0.07),rgba(0,0,0,0.28))] p-4 text-left">
+          <div className="max-w-[92%] self-start rounded-[calc(var(--radius-scent)-10px)] border border-scent-accent/32 bg-[linear-gradient(180deg,rgba(212,175,55,0.07),rgba(0,0,0,0.28))] p-4 text-left">
             <p className="scent-type-label text-scent-accent">Curated match</p>
             {resolved.recommendation.brand ? (
               <p className="mt-2 font-serif text-xs uppercase tracking-[0.2em] text-scent-text-muted">
@@ -807,131 +960,9 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         ) : null}
       </div>
 
-      <div className="mt-4 space-y-2.5">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex min-w-0 flex-wrap items-center gap-1.5" aria-label="Concierge mode">
-            {MODE_OPTIONS.map(({ id, label, icon: Icon }) => {
-              const selected = agentMode === id;
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => setAgentMode(id)}
-                  aria-pressed={selected}
-                  className={`inline-flex min-h-8 items-center gap-1.5 rounded-full border px-3 py-1 scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40 ${
-                    selected
-                      ? 'border-scent-accent/78 bg-scent-accent/13 text-[#fff7ec]'
-                      : 'border-white/20 text-scent-text-muted hover:border-scent-accent/45 hover:text-[#fff7ec]'
-                  }`}
-                >
-                  <Icon size={12} strokeWidth={2} aria-hidden />
-                  {label}
-                </button>
-              );
-            })}
-          </div>
-          <div className="flex min-w-0 flex-wrap items-center gap-1.5" aria-label="Concierge tone">
-            {TONE_OPTIONS.map(({ id, label }) => {
-              const selected = tone === id;
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => setTone(id)}
-                  aria-pressed={selected}
-                  className={`min-h-8 rounded-full border px-3 py-1 scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40 ${
-                    selected
-                      ? 'border-scent-accent/70 text-[#fff7ec]'
-                      : 'border-white/18 text-scent-text-muted hover:border-scent-accent/42 hover:text-[#fff7ec]'
-                  }`}
-                >
-                  {label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide" aria-label="Concierge quick replies">
-          {enoughContext || agentMode === 'fast' ? (
-            <button
-              type="button"
-              onClick={() => void runResolution(agentMode === 'fast' ? 'fast' : 'curate')}
-              disabled={busy || items.length === 0}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-scent-accent/68 bg-scent-accent/12 px-3 py-1.5 scent-type-chip text-[#fff7ec] transition-colors hover:bg-scent-accent/18 disabled:opacity-45"
-            >
-              <Sparkles size={12} aria-hidden />
-              Curate
-            </button>
-          ) : null}
-          {agentMode === 'premium' ? (
-            <button
-              type="button"
-              onClick={() => void handlePremiumPreview()}
-              disabled={busy}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-scent-accent/42 px-3 py-1.5 scent-type-chip text-scent-accent transition-colors hover:bg-scent-accent/10 disabled:opacity-45"
-            >
-              <Lock size={12} aria-hidden />
-              Preview
-            </button>
-          ) : null}
-          {visibleQuickReplies.map((reply) => {
-            const selected = facets[reply.facet] === reply.value;
-            return (
-              <button
-                key={`${reply.facet}-${reply.value}`}
-                type="button"
-                onClick={() => handleQuickReply(reply)}
-                disabled={busy}
-                data-facet={reply.facet}
-                aria-pressed={selected}
-                className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40 disabled:opacity-45 ${
-                  selected
-                    ? 'border-scent-accent/72 bg-scent-accent/12 text-[#fff7ec]'
-                    : 'border-white/20 text-scent-text-muted hover:border-scent-accent/42 hover:text-[#fff7ec]'
-                }`}
-                title={`${FACET_LABELS[reply.facet]}: ${reply.value}`}
-              >
-                {selected ? <Check size={12} aria-hidden /> : null}
-                {reply.label}
-              </button>
-            );
-          })}
-        </div>
-
-        <form
-          onSubmit={handleSubmit}
-          className="scent-primary-button flex min-h-[60px] w-full items-center gap-2 rounded-[var(--radius-scent)] px-3 py-2 sm:h-16 sm:px-4"
-        >
-          <input
-            ref={composerRef}
-            type="text"
-            value={composer}
-            onChange={(event) => setComposer(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key !== 'Enter' || event.shiftKey || event.metaKey || event.ctrlKey || event.altKey) return;
-              event.preventDefault();
-              event.currentTarget.form?.requestSubmit();
-            }}
-            placeholder={composerPlaceholder}
-            aria-label="Message the fragrance concierge"
-            autoComplete="off"
-            className="scent-lux-input !h-auto min-w-0 flex-1 !border-0 !bg-transparent !px-2 !py-0 text-sm font-medium text-[#fff7ec] !shadow-none outline-none placeholder:text-scent-text-subtle focus:!shadow-none sm:text-base"
-          />
-          <button
-            type="submit"
-            disabled={busy || !composer.trim()}
-            className="relative z-[2] inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-scent-accent/42 bg-black/35 text-scent-accent transition-colors hover:bg-scent-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:opacity-40"
-            aria-label="Send message"
-          >
-            {busy ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Send size={16} aria-hidden />}
-          </button>
-        </form>
-
-        <p className="sr-only">
-          {formatFacetLine(facets)}
-        </p>
-      </div>
+      <p className="sr-only">
+        {formatFacetLine(facets)}
+      </p>
     </div>
   );
 };

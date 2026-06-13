@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, Search, X } from 'lucide-react';
+import { Check, Search, Sparkles, X } from 'lucide-react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { ScentIntelligenceLoader } from './ScentIntelligenceLoader';
 import {
@@ -394,7 +394,16 @@ export const FragranceCapture: React.FC<{
   onViewVault?: () => void;
   /** Render only the search interior when the stable vault panel is owned by the parent. */
   embeddedInVaultPanel?: boolean;
-}> = ({ onAdd, onVaultSearchStateChange, existingVaultKeys, onViewVault, embeddedInVaultPanel = false }) => {
+  /** Optional hero-search launcher for the signature scent concierge. */
+  onDiscoverSignatureScent?: () => void;
+}> = ({
+  onAdd,
+  onVaultSearchStateChange,
+  existingVaultKeys,
+  onViewVault,
+  embeddedInVaultPanel = false,
+  onDiscoverSignatureScent,
+}) => {
   const [uploading, setUploading] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState("");
   const [matches, setMatches] = useState<FragranceMatch[]>([]);
@@ -480,6 +489,8 @@ export const FragranceCapture: React.FC<{
 
   const vaultSearchActive = searchFocused || searchQuery.trim().length > 0;
   const hasSelectedMatch = selectedMatch !== null;
+  const showSignatureScentAction =
+    Boolean(onDiscoverSignatureScent) && !vaultSearchActive && !uploading && matches.length === 0;
 
   // A result is "already in vault" when its brand+name identity is in the saved
   // set. Used to badge rows and to convert the primary CTA into "View in vault"
@@ -1181,6 +1192,19 @@ export const FragranceCapture: React.FC<{
 
         <div className="mx-auto max-w-[42.75rem] text-center">
           <form onSubmit={handleSearch} aria-busy={uploading} className="relative group">
+            {showSignatureScentAction ? (
+              <button
+                type="button"
+                onClick={onDiscoverSignatureScent}
+                className="absolute left-2.5 top-1/2 z-10 inline-flex h-10 max-w-[7.4rem] -translate-y-1/2 items-center justify-center gap-1.5 rounded-full border border-scent-accent/40 bg-black/42 px-3 text-[10px] font-bold uppercase tracking-[0.12em] text-scent-accent shadow-[inset_0_1px_0_rgba(255,236,183,0.08)] transition-colors hover:border-scent-accent/68 hover:bg-scent-accent/10 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 sm:left-3.5 sm:max-w-[13rem] sm:px-4 sm:text-[11px]"
+                aria-label="Discover your signature scent"
+                title="Discover your signature scent"
+              >
+                <Sparkles size={13} strokeWidth={1.9} aria-hidden />
+                <span>Discover</span>
+                <span className="hidden sm:inline">scent</span>
+              </button>
+            ) : null}
             <input
               ref={searchInputRef}
               id="scent-add-to-vault-search"
@@ -1208,7 +1232,9 @@ export const FragranceCapture: React.FC<{
               onBlur={() => { setSearchFocused(false); autoFocusPendingRef.current = false; }}
               placeholder="Search by house or fragrance..."
               aria-label="Look up a brand or fragrance"
-              className="scent-lux-input scent-vault-search-input relative z-0 w-full h-[60px] px-16 text-center text-[#fff7ec] font-sans text-base font-medium outline-none transition-colors placeholder:text-scent-text-subtle placeholder:font-medium sm:h-[68px] sm:px-[4.35rem] scroll-mt-28"
+              className={`scent-lux-input scent-vault-search-input relative z-0 h-[60px] w-full text-center font-sans text-base font-medium text-[#fff7ec] outline-none transition-colors placeholder:text-scent-text-subtle placeholder:font-medium sm:h-[68px] scroll-mt-28 ${
+                showSignatureScentAction ? 'pl-[8.35rem] pr-16 sm:pl-[11.5rem] sm:pr-[4.35rem]' : 'px-16 sm:px-[4.35rem]'
+              }`}
             />
             <motion.button
               type="submit"
