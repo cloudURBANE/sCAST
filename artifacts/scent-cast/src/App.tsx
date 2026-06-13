@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useLayoutEffect, useMemo, useCallba
 import { Routes, Route, useLocation, useParams, type Location } from 'react-router-dom';
 import type { Fragrance } from './components/Wardrobe';
 import { vaultIdentityKey } from './lib/vaultIdentity';
-import { X } from 'lucide-react';
+import { Sparkles, X } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { ThreadBackground, type ThreadBackgroundMode } from './components/threads/ThreadBackground';
 import { AppTopNav } from './components/AppTopNav';
@@ -649,7 +649,6 @@ function DashboardView() {
                           items={items}
                           weather={weather}
                           authToken={authToken}
-                          actionSlotId="scent-mission-action-slot"
                           onExit={() => setViewState('search')}
                           onRevealMatch={handleMissionReveal}
                         />
@@ -670,7 +669,6 @@ function DashboardView() {
                           existingVaultKeys={vaultIdentityKeys}
                           onViewVault={handleViewVault}
                           embeddedInVaultPanel
-                          onDiscoverSignatureScent={discoveryReady && stateSettled && !vaultSearchUiActive ? handleOpenMission : undefined}
                         />
                       </React.Suspense>
                     </motion.div>
@@ -678,12 +676,19 @@ function DashboardView() {
                 </AnimatePresence>
               </div>
             </motion.div>
-            {agentActive ? (
-              <div
-                id="scent-mission-action-slot"
-                className="mx-auto mt-4 w-full max-w-[42.75rem] px-0 sm:mt-5"
-                aria-label="Signature scent message controls"
-              />
+            {!agentActive && discoveryReady && stateSettled && !vaultSearchUiActive ? (
+              <div className="mt-5 flex justify-center sm:mt-6">
+                <button
+                  type="button"
+                  onClick={handleOpenMission}
+                  className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-full border border-scent-accent/40 bg-black/42 px-5 py-2.5 text-[11px] font-bold uppercase tracking-[0.12em] text-scent-accent shadow-[inset_0_1px_0_rgba(255,236,183,0.08)] transition-colors hover:border-scent-accent/68 hover:bg-scent-accent/10 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
+                  aria-label="Discover your signature scent"
+                  title="Discover your signature scent"
+                >
+                  <Sparkles size={13} strokeWidth={1.9} aria-hidden />
+                  <span>Discover your signature scent</span>
+                </button>
+              </div>
             ) : null}
           </section>
 

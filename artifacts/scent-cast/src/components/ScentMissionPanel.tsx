@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import {
   AlertTriangle,
@@ -151,9 +150,9 @@ function newMessageId(): string {
 
 function initialAgentMessage(itemCount: number): string {
   if (itemCount > 0) {
-    return 'Welcome to ScentCast Concierge. I’ll review your wardrobe and read today’s atmospheric conditions. Describe the mood, occasion, or impression you want to leave today.';
+    return 'Welcome. Tell me the mood, occasion, or impression you want to leave today.';
   }
-  return 'I can shape a signature direction, but I need fragrances in your vault before I can rank a real match. Add a few scents from search, then come back here.';
+  return 'Add a few fragrances from search first, then I can curate a real match for you here.';
 }
 
 function formatFacetLine(facets: FacetState): string {
@@ -328,8 +327,6 @@ interface ScentMissionPanelProps {
   items: Fragrance[];
   weather: WeatherData | null;
   authToken: string | null;
-  /** Optional DOM id for rendering the composer outside of the card shell. */
-  actionSlotId?: string;
   /** Leave concierge mode and restore the search interior. */
   onExit: () => void;
   /** Open the existing recommendation overlay with the resolved match. */
@@ -340,7 +337,6 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   items,
   weather,
   authToken,
-  actionSlotId,
   onExit,
   onRevealMatch,
 }) => {
@@ -366,7 +362,6 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   // the panel greets the user instead of snapping in a wall of copy. Skipped
   // entirely under reduced-motion / iPad performance mode (calmMotion).
   const [introReady, setIntroReady] = useState(() => calmMotion);
-  const [actionSlot, setActionSlot] = useState<HTMLElement | null>(null);
   const [busy, setBusy] = useState(false);
   const [progressNote, setProgressNote] = useState('');
   const [sessionId, setSessionId] = useState<string | undefined>(undefined);
@@ -393,26 +388,10 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   }, [messages, resolved, busy]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const id = window.requestAnimationFrame(() => {
-      composerRef.current?.focus({ preventScroll: true });
-    });
-    return () => window.cancelAnimationFrame(id);
-  }, []);
-
-  useEffect(() => {
     if (introReady) return;
     const id = window.setTimeout(() => setIntroReady(true), 1200);
     return () => window.clearTimeout(id);
   }, [introReady]);
-
-  useEffect(() => {
-    if (!actionSlotId || typeof document === 'undefined') {
-      setActionSlot(null);
-      return;
-    }
-    setActionSlot(document.getElementById(actionSlotId));
-  }, [actionSlotId]);
 
   const progress = missionProgress(mission);
   const enoughContext = hasEnoughContext(facets, mission, agentMode);
@@ -726,7 +705,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   const showQuickReplyHint = !quickReplyHintDismissed && compactQuickReplies.length > 3 && capturedCount === 0;
 
   const actionControls = (
-    <div className="mx-auto w-full max-w-[42.75rem]">
+    <div className="mx-auto mt-4 w-full max-w-[42.75rem] sm:mt-5">
       <div className="mb-2 flex items-center justify-end gap-2 pr-1">
         <span className="scent-type-label text-scent-accent/70">Concierge</span>
         <img
@@ -908,36 +887,40 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
 
   return (
     <div className="relative flex min-h-0 w-full min-w-0 flex-col text-center" data-testid="scent-mission-panel">
-      <div
-        className="mx-auto mt-1 h-1 w-full max-w-[12rem] overflow-hidden rounded-full bg-white/10"
-        role="progressbar"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={Math.round(progress * 100)}
-        aria-label="Concierge progress"
-      >
-        <motion.div
-          className="h-full rounded-full bg-scent-accent/80"
-          initial={false}
-          animate={{ width: `${Math.max(progress * 100, capturedCount > 0 ? 18 : 8)}%` }}
-          transition={calmMotion ? { duration: 0.01 } : { duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-        />
+      {/* Top row: the progress bar is centered and the close control is aligned
+          to it, so the X reads as a deliberate part of the layout rather than a
+          chip stuck in the card corner. */}
+      <div className="relative mb-4 flex items-center justify-center sm:mb-5">
+        <div
+          className="h-1 w-full max-w-[11rem] overflow-hidden rounded-full bg-white/10"
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(progress * 100)}
+          aria-label="Concierge progress"
+        >
+          <motion.div
+            className="h-full rounded-full bg-scent-accent/80"
+            initial={false}
+            animate={{ width: `${Math.max(progress * 100, capturedCount > 0 ? 18 : 8)}%` }}
+            transition={calmMotion ? { duration: 0.01 } : { duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+          />
+        </div>
+        <button
+          type="button"
+          onClick={onExit}
+          className="absolute right-0 top-1/2 inline-flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center rounded-full text-scent-text-subtle transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
+          aria-label="Return to fragrance search"
+        >
+          <X size={20} strokeWidth={1.75} />
+        </button>
       </div>
 
-      <button
-        type="button"
-        onClick={onExit}
-        className="absolute right-1 top-1 z-10 inline-flex min-h-11 min-w-11 items-center justify-center rounded-full text-scent-text-subtle transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
-        aria-label="Return to fragrance search"
-      >
-        <X size={20} strokeWidth={1.75} />
-      </button>
-
-      <header className="mx-auto mb-3 max-w-[43rem] px-3 pt-2 text-center sm:mb-4">
-        <h2 className="mx-auto mt-0 max-w-[34rem] text-balance font-serif italic text-[clamp(1.75rem,4.5vw,2.5rem)] leading-[1.04] tracking-normal text-[#fff7ec] drop-shadow-[0_4px_14px_rgba(0,0,0,0.72)]">
-          Discover your signature scent.
+      <header className="mx-auto max-w-[43rem] px-3 text-center">
+        <h2 className="mx-auto max-w-[32rem] text-balance font-serif italic text-[clamp(1.45rem,3.6vw,2rem)] leading-[1.08] tracking-normal text-[#fff7ec] drop-shadow-[0_4px_14px_rgba(0,0,0,0.72)]">
+          A scent for today.
         </h2>
-        <p className="mt-2 scent-type-label text-scent-accent/82">{progressText}</p>
+        <p className="mt-2.5 scent-type-label text-scent-accent/55">{progressText}</p>
         <p className="mx-auto mt-1.5 hidden max-w-xl text-sm leading-6 text-scent-text-muted sm:block">
           {contextLine}
         </p>
@@ -1034,7 +1017,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       <p className="sr-only">
         {formatFacetLine(facets)}
       </p>
-      {actionSlot ? createPortal(actionControls, actionSlot) : actionSlotId ? null : actionControls}
+      {actionControls}
     </div>
   );
 };
