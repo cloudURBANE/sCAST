@@ -2114,6 +2114,63 @@ a {
   }
 }
 
+/* --- Beam Agent cue marquee ---------------------------------------------- */
+/* Contextual impression cues scroll continuously whenever there are more than
+   two of them, so the lane reads as a living "the agent is waiting on you"
+   prompt. Two duplicated groups translate by exactly -50% for a seamless loop;
+   the lane pauses on hover (desktop) or while pressed (touch) so a moving chip
+   stays tappable. */
+.scent-cue-marquee {
+  position: relative;
+  overflow: hidden;
+  --cue-edge-fade: clamp(1.25rem, 6vw, 3rem);
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 var(--cue-edge-fade), #000 calc(100% - var(--cue-edge-fade)), transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0, #000 var(--cue-edge-fade), #000 calc(100% - var(--cue-edge-fade)), transparent 100%);
+}
+
+.scent-cue-marquee-track {
+  display: flex;
+  width: max-content;
+  --cue-marquee-duration: 16s;
+  will-change: transform;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  animation: scent-cue-marquee-scroll var(--cue-marquee-duration) linear infinite;
+}
+
+.scent-cue-marquee[data-marquee-paused="true"] .scent-cue-marquee-track {
+  animation-play-state: paused;
+}
+
+@media (hover: hover) {
+  .scent-cue-marquee:hover .scent-cue-marquee-track {
+    animation-play-state: paused;
+  }
+}
+
+.scent-cue-marquee-group {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.375rem;
+  padding-right: 0.375rem;
+}
+
+@keyframes scent-cue-marquee-scroll {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-50%, 0, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scent-cue-marquee-track {
+    animation: none;
+  }
+}
+
+.scent-ipad-safari-perf .scent-cue-marquee-track {
+  animation: none;
+}
+
 @keyframes brand-gold-sheen {
   0%,
   12% {

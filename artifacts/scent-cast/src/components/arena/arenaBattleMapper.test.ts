@@ -21,6 +21,7 @@ const basePost: CommunityPost = {
   votes: { 'Bleu de Chanel': 3, Aventus: 2, Other: 10 },
   viewerReactions: [],
   viewerVote: 'Aventus',
+  viewerVoteReason: null,
 };
 
 test('maps a community battle post into a two-side arena battle', () => {
@@ -33,6 +34,23 @@ test('maps a community battle post into a two-side arena battle', () => {
   assert.equal(mapped?.right.descriptor, 'Classic fragrance');
   assert.deepEqual(mapped?.votes, { 'Bleu de Chanel': 3, Aventus: 2 });
   assert.equal(mapped?.viewerVote, 'Aventus');
+  assert.equal(mapped?.viewerReason, null);
+});
+
+test('maps a valid server reason onto the battle and ignores invalid keys', () => {
+  assert.equal(
+    mapCommunityPostToArenaBattle({ ...basePost, viewerVoteReason: 'better_value' })?.viewerReason,
+    'better_value',
+  );
+  assert.equal(
+    mapCommunityPostToArenaBattle({ ...basePost, viewerVoteReason: 'not_a_real_key' })?.viewerReason,
+    null,
+  );
+  // A reason without a recorded pick is dropped.
+  assert.equal(
+    mapCommunityPostToArenaBattle({ ...basePost, viewerVote: null, viewerVoteReason: 'better_value' })?.viewerReason,
+    null,
+  );
 });
 
 test('rejects battle posts without exactly two string options', () => {

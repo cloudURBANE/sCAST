@@ -17,6 +17,10 @@ export const communityVotesTable = pgTable(
       .notNull()
       .references(() => usersTable.id, { onDelete: "cascade" }),
     choice: text("choice").notNull(),
+    // Optional "why it won" reason key chosen after the vote. Persisted here (not
+    // just client localStorage) so the resolved arena state — pick + reason —
+    // syncs across every device the same account signs in on.
+    reason: text("reason"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

@@ -49,6 +49,9 @@ export interface CommunityPost {
   // reactions and the picked battle option without a second request.
   viewerReactions: string[];
   viewerVote: string | null;
+  // Viewer's own "why it won" reason for a battle pick (null when unset/anon).
+  // Server-persisted so the resolved arena state syncs across devices.
+  viewerVoteReason: string | null;
 }
 
 export interface CommunityComment {
@@ -111,11 +114,15 @@ export interface ToggleCommunityReactionResult {
 export interface CreateCommunityVoteInput {
   postId: string;
   choice: string;
+  // Optional "why it won" reason key. Omit to leave any existing reason intact
+  // (a plain pick switch); pass a value to record/update it; pass null to clear.
+  reason?: string | null;
 }
 
 export interface CreateCommunityVoteResult {
   postId: string;
   choice: string;
+  reason: string | null;
   votes: Record<string, number>;
 }
 
@@ -383,8 +390,17 @@ function reconcileReactionOn<T extends ReactableTarget>(
 }
 
 /** Optimistic battle vote: move the tally from the previous pick (if any) to `choice`. */
-function applyVoteToPost(post: CommunityPost, choice: string): CommunityPost {
-  if (post.viewerVote === choice) return post;
+function applyVoteToPost(
+  post: CommunityPost,
+  choice: string,
+  reason?: string | null,
+): CommunityPost {
+  // `reason` is only patched when the caller passed the field (reason !== undefined),
+  // so a plain pick switch never wipes an existing reason locally.
+  const nextReason = reason !== undefined ? reason : post.viewerVoteReason;
+  if (post.viewerVote === choice) {
+    return nextReason === post.viewerVoteReason ? post : { ...post, viewerVoteReason: nextReason };
+  }
   const votes = { ...post.votes };
   if (post.viewerVote) {
     const prev = (votes[post.viewerVote] ?? 0) - 1;
@@ -392,7 +408,7 @@ function applyVoteToPost(post: CommunityPost, choice: string): CommunityPost {
     else delete votes[post.viewerVote];
   }
   votes[choice] = (votes[choice] ?? 0) + 1;
-  return { ...post, viewerVote: choice, votes };
+  return { ...post, viewerVote: choice, viewerVoteReason: nextReason, votes };
 }
 
 export function useCreateCommunityPost(authToken: string | null) {
@@ -504,30 +520,37 @@ export function useCommunityBattleVote(authToken: string | null) {
       const res = await fetch(appApiUrl(`/api/community/posts/${encodeURIComponent(input.postId)}/votes`), {
         method: 'POST',
         headers: authHeaders(token),
-        body: JSON.stringify({ choice: input.choice }),
+        // Only forward `reason` when the caller set the field, so the server
+        // leaves an existing reason untouched on a plain pick switch.
+        body: JSON.stringify(
+          'reason' in input ? { choice: input.choice, reason: input.reason ?? null } : { choice: input.choice },
+        ),
       });
       return readJson<CreateCommunityVoteResult>(res, `Community vote failed with HTTP ${res.status}`);
     },
-    onMutate: async ({ postId, choice }) => {
+    onMutate: async ({ postId, choice, reason }) => {
       await Promise.all([
         queryClient.cancelQueries({ queryKey: COMMUNITY_POSTS_ROOT_KEY }),
         queryClient.cancelQueries({ queryKey: COMMUNITY_POST_DETAIL_ROOT_KEY }),
       ]);
       const previousFeeds = queryClient.getQueriesData<InfiniteFeedData>({ queryKey: COMMUNITY_POSTS_ROOT_KEY });
       const previousDetails = queryClient.getQueriesData<CommunityPostDetail>({ queryKey: COMMUNITY_POST_DETAIL_ROOT_KEY });
-      patchPostEverywhere(queryClient, postId, (post) => applyVoteToPost(post, choice));
+      patchPostEverywhere(queryClient, postId, (post) => applyVoteToPost(post, choice, reason));
       return { previousFeeds, previousDetails };
     },
     onError: (_err, _variables, context) => {
       context?.previousFeeds?.forEach(([key, data]) => queryClient.setQueryData(key, data));
       context?.previousDetails?.forEach(([key, data]) => queryClient.setQueryData(key, data));
     },
-    // Reconcile to the server's authoritative tally + the recorded choice.
-    onSuccess: (data) => {
+    // Reconcile to the server's authoritative tally + the recorded choice/reason.
+    onSuccess: (data, variables) => {
       patchPostEverywhere(queryClient, data.postId, (post) => ({
         ...post,
         votes: data.votes,
         viewerVote: data.choice,
+        // The server only echoes a reason when the request carried one; otherwise
+        // keep whatever reason the post already had.
+        viewerVoteReason: 'reason' in variables ? data.reason : post.viewerVoteReason,
       }));
     },
   });

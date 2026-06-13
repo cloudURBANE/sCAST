@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import {
   AlertTriangle,
@@ -362,6 +363,13 @@ interface ScentMissionPanelProps {
   onRevealMatch: (item: Fragrance, engine: ScentWeatherRecommendation, reason: string) => void;
   /** Report progress so the host can render the header strip above the card. */
   onStatusChange?: (status: ScentMissionStatus) => void;
+  /**
+   * Host-provided element, rendered BELOW the bordered card, into which the cue
+   * (quick-reply / Confirm) lane is portaled. This keeps the impressions out of
+   * the card interior so the conversation never shrinks to make room for them.
+   * Falls back to inline rendering when absent.
+   */
+  cueBarContainer?: HTMLElement | null;
 }
 
 export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
@@ -371,6 +379,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   onExit,
   onRevealMatch,
   onStatusChange,
+  cueBarContainer,
 }) => {
   const reduceMotion = useReducedMotion();
   const ipadPerformanceMode = useRef(isIpadSafariPerformanceMode()).current;
@@ -389,6 +398,9 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   const [tone, setTone] = useState<ToneMode>('balanced');
   const [composer, setComposer] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Pause the cue marquee while the user is pressing it, so a moving chip is
+  // still easy to tap. Hover-pause (desktop) is handled in CSS.
+  const [marqueePaused, setMarqueePaused] = useState(false);
   // Briefly show a typing indicator before the concierge's first line lands, so
   // the panel greets the user instead of snapping in a wall of copy. Skipped
   // entirely under reduced-motion / iPad performance mode (calmMotion).
@@ -640,9 +652,9 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       appendMessage('agent', prompt);
       if (agentMode === 'fast') {
         void runResolution('fast', nextMission, nextFacets);
-      } else {
-        composerRef.current?.focus({ preventScroll: true });
       }
+      // Tapping a cue must not summon the mobile keyboard, so we deliberately do
+      // not focus the composer here — the user keeps tapping cues hands-free.
     },
     [agentMode, appendMessage, busy, items.length, runResolution, updateFacetsAndMission],
   );
@@ -856,61 +868,123 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
           </motion.div>
         ) : null}
       </AnimatePresence>
-
-      <div className="relative mt-3">
-        <div
-          ref={quickReplyScrollRef}
-          className="flex flex-nowrap items-center justify-center gap-1.5 overflow-x-auto pb-1 scrollbar-hide select-none"
-          style={{ touchAction: 'pan-x', overscrollBehaviorX: 'contain' }}
-          aria-label="Beam Agent quick replies"
-        >
-          {enoughContext || agentMode === 'fast' ? (
-            <button
-              type="button"
-              onClick={() => void runResolution(agentMode === 'fast' ? 'fast' : 'curate')}
-              disabled={busy || items.length === 0}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-scent-accent/68 bg-scent-accent/12 px-3 py-1.5 scent-type-chip text-[#fff7ec] transition-colors hover:bg-scent-accent/18 disabled:opacity-45"
-            >
-              <Sparkles size={12} aria-hidden />
-              Confirm
-            </button>
-          ) : null}
-          {agentMode === 'premium' ? (
-            <button
-              type="button"
-              onClick={() => void handlePremiumPreview()}
-              disabled={busy}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-scent-accent/42 px-3 py-1.5 scent-type-chip text-scent-accent transition-colors hover:bg-scent-accent/10 disabled:opacity-45"
-            >
-              <Lock size={12} aria-hidden />
-              Preview
-            </button>
-          ) : null}
-          {/* Contextual cues for the agent's current question. They fade in and
-              out as the conversation advances rather than lingering. */}
-          <AnimatePresence initial={false} mode="popLayout">
-            {visibleQuickReplies.map((reply) => (
-              <motion.button
-                key={`${reply.facet}-${reply.value}`}
-                type="button"
-                onClick={() => handleQuickReply(reply)}
-                disabled={busy}
-                data-facet={reply.facet}
-                initial={calmMotion ? false : { opacity: 0, scale: 0.94 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={calmMotion ? { opacity: 0 } : { opacity: 0, scale: 0.94 }}
-                transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/20 px-3 py-1.5 scent-type-chip text-scent-text-muted transition-colors hover:border-scent-accent/42 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40 disabled:opacity-45"
-                title={`${FACET_LABELS[reply.facet]}: ${reply.value}`}
-              >
-                {reply.label}
-              </motion.button>
-            ))}
-          </AnimatePresence>
-        </div>
-      </div>
     </div>
   );
+
+  // The impressions / Confirm lane lives BELOW the card (portaled into the host
+  // container) so it never crowds or shrinks the conversation. When there are
+  // more than two contextual cues they scroll as a marquee any time the agent is
+  // waiting on input; two or fewer stay centered and static.
+  const showCueMarquee = !calmMotion && visibleQuickReplies.length > 2;
+  const cueChipClass =
+    'inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/20 px-3 py-1.5 scent-type-chip text-scent-text-muted transition-colors hover:border-scent-accent/42 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40 disabled:opacity-45';
+
+  const renderCueChip = (reply: QuickReply, key: string) => (
+    <button
+      key={key}
+      type="button"
+      onClick={() => handleQuickReply(reply)}
+      disabled={busy}
+      data-facet={reply.facet}
+      className={cueChipClass}
+      title={`${FACET_LABELS[reply.facet]}: ${reply.value}`}
+    >
+      {reply.label}
+    </button>
+  );
+
+  const hasActionRow = enoughContext || agentMode === 'fast' || agentMode === 'premium';
+  const cueBar =
+    visibleQuickReplies.length === 0 && !hasActionRow ? null : (
+      <div
+        className="mx-auto w-full max-w-[42.75rem]"
+        aria-label="Beam Agent quick replies"
+        data-testid="scent-mission-cue-bar"
+      >
+        {hasActionRow ? (
+          <div className="flex flex-wrap items-center justify-center gap-1.5">
+            {enoughContext || agentMode === 'fast' ? (
+              <button
+                type="button"
+                onClick={() => void runResolution(agentMode === 'fast' ? 'fast' : 'curate')}
+                disabled={busy || items.length === 0}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-scent-accent/68 bg-scent-accent/12 px-3 py-1.5 scent-type-chip text-[#fff7ec] transition-colors hover:bg-scent-accent/18 disabled:opacity-45"
+              >
+                <Sparkles size={12} aria-hidden />
+                Confirm
+              </button>
+            ) : null}
+            {agentMode === 'premium' ? (
+              <button
+                type="button"
+                onClick={() => void handlePremiumPreview()}
+                disabled={busy}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-scent-accent/42 px-3 py-1.5 scent-type-chip text-scent-accent transition-colors hover:bg-scent-accent/10 disabled:opacity-45"
+              >
+                <Lock size={12} aria-hidden />
+                Preview
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+
+        {/* Contextual cues for the agent's current question. */}
+        {visibleQuickReplies.length > 0 ? (
+          showCueMarquee ? (
+            <div
+              className={hasActionRow ? 'scent-cue-marquee mt-2' : 'scent-cue-marquee'}
+              data-marquee-paused={marqueePaused || busy ? 'true' : undefined}
+              onPointerDown={() => setMarqueePaused(true)}
+              onPointerUp={() => setMarqueePaused(false)}
+              onPointerCancel={() => setMarqueePaused(false)}
+              onPointerLeave={() => setMarqueePaused(false)}
+            >
+              <div
+                className="scent-cue-marquee-track"
+                style={{ '--cue-marquee-duration': `${Math.max(visibleQuickReplies.length * 3.2, 9)}s` } as React.CSSProperties}
+              >
+                {[0, 1].map((copy) => (
+                  <div className="scent-cue-marquee-group" key={copy} aria-hidden={copy === 1}>
+                    {visibleQuickReplies.map((reply) =>
+                      renderCueChip(reply, `${copy}-${reply.facet}-${reply.value}`),
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div
+              ref={quickReplyScrollRef}
+              className={[
+                'flex flex-nowrap items-center justify-center gap-1.5 overflow-x-auto pb-1 scrollbar-hide select-none',
+                hasActionRow ? 'mt-2' : '',
+              ].join(' ')}
+              style={{ touchAction: 'pan-x', overscrollBehaviorX: 'contain' }}
+            >
+              <AnimatePresence initial={false} mode="popLayout">
+                {visibleQuickReplies.map((reply) => (
+                  <motion.button
+                    key={`${reply.facet}-${reply.value}`}
+                    type="button"
+                    onClick={() => handleQuickReply(reply)}
+                    disabled={busy}
+                    data-facet={reply.facet}
+                    initial={calmMotion ? false : { opacity: 0, scale: 0.94 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={calmMotion ? { opacity: 0 } : { opacity: 0, scale: 0.94 }}
+                    transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                    className={cueChipClass}
+                    title={`${FACET_LABELS[reply.facet]}: ${reply.value}`}
+                  >
+                    {reply.label}
+                  </motion.button>
+                ))}
+              </AnimatePresence>
+            </div>
+          )
+        ) : null}
+      </div>
+    );
 
   return (
     <div className="relative flex min-h-0 w-full min-w-0 flex-col text-center" data-testid="scent-mission-panel">
@@ -918,7 +992,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
           the card (see App.tsx) so this surface is just the conversation. */}
       <div
         ref={scrollRef}
-        className="mx-auto flex w-full max-w-[42.75rem] max-h-[min(30dvh,15rem)] flex-col gap-2.5 overflow-y-auto pr-1 text-left scrollbar-hide sm:max-h-[min(32dvh,18rem)]"
+        className="mx-auto flex w-full max-w-[42.75rem] h-[min(30dvh,15rem)] flex-col gap-2.5 overflow-y-auto pr-1 text-left scrollbar-hide sm:h-[min(32dvh,18rem)]"
         role="log"
         aria-live="polite"
         aria-label="Beam Agent conversation"
@@ -1008,6 +1082,13 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         {formatFacetLine(facets)}
       </p>
       {actionControls}
+      {/* Impressions lane: portaled below the card when the host provides a
+          container, otherwise rendered inline as a graceful fallback. */}
+      {cueBarContainer
+        ? createPortal(cueBar, cueBarContainer)
+        : cueBar
+          ? <div className="mt-3">{cueBar}</div>
+          : null}
     </div>
   );
 };
