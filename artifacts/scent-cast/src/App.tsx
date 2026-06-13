@@ -649,6 +649,7 @@ function DashboardView() {
                           items={items}
                           weather={weather}
                           authToken={authToken}
+                          actionSlotId="scent-mission-action-slot"
                           onExit={() => setViewState('search')}
                           onRevealMatch={handleMissionReveal}
                         />
@@ -677,6 +678,13 @@ function DashboardView() {
                 </AnimatePresence>
               </div>
             </motion.div>
+            {agentActive ? (
+              <div
+                id="scent-mission-action-slot"
+                className="mx-auto mt-4 w-full max-w-[42.75rem] px-0 sm:mt-5"
+                aria-label="Signature scent message controls"
+              />
+            ) : null}
           </section>
 
           <HomepageAtmosphereChrome />
