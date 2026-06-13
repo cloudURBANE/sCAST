@@ -665,7 +665,9 @@ function DashboardView() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 6 }}
                   transition={vaultContentTransition}
-                  className="mx-auto mb-2.5 w-full max-w-[42.75rem] px-1 sm:mb-3"
+                  // Pull the header up toward the hero marquee so the agent does
+                  // not open with a large dead gap above "A scent for today."
+                  className="mx-auto -mt-10 mb-2.5 w-full max-w-[42.75rem] px-1 sm:-mt-14 sm:mb-3"
                 >
                   <div className="relative mb-2 flex items-center justify-center">
                     <div
@@ -719,13 +721,17 @@ function DashboardView() {
               data-view-state={viewState}
             >
               <div className="scent-vault-panel-inner min-w-0">
-                <AnimatePresence initial={false} mode="wait">
+                {/* popLayout pops the outgoing surface out of flow so the panel
+                    resizes in a single smooth stage while the two views
+                    crossfade — instead of the old wait-mode swap, which let the
+                    card visibly grow/bounce after the fade completed. */}
+                <AnimatePresence initial={false} mode="popLayout">
                   {agentActive ? (
                     <motion.div
                       key="agent"
-                      initial={reduceMotion ? false : { opacity: 0, y: 12 }}
+                      initial={reduceMotion ? false : { opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
-                      exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -10 }}
+                      exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -6 }}
                       transition={vaultContentTransition}
                     >
                       <React.Suspense fallback={<SignaturePanelFallback />}>
@@ -743,9 +749,9 @@ function DashboardView() {
                   ) : (
                     <motion.div
                       key="search"
-                      initial={reduceMotion ? false : { opacity: 0, y: -10 }}
+                      initial={reduceMotion ? false : { opacity: 0, y: -6 }}
                       animate={{ opacity: 1, y: 0 }}
-                      exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 10 }}
+                      exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 6 }}
                       transition={vaultContentTransition}
                     >
                       <React.Suspense fallback={<HeroVaultContentFallback />}>
@@ -765,17 +771,23 @@ function DashboardView() {
 
             {/* Impressions lane host: the Beam Agent portals its cue / Confirm
                 lane here, BELOW the card, so the impressions never crowd or
-                shrink the conversation inside the card. */}
-            {agentActive ? (
-              <motion.div
-                ref={setMissionCueHost}
-                key="mission-cue-host"
-                initial={reduceMotion ? false : { opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={vaultContentTransition}
-                className="mt-3 sm:mt-3.5"
-              />
-            ) : null}
+                shrink the conversation inside the card. Wrapped in its own
+                AnimatePresence so on close the host (and the cues portaled into
+                it) fade out in step with the panel instead of vanishing the
+                instant the panel begins its exit. */}
+            <AnimatePresence initial={false}>
+              {agentActive ? (
+                <motion.div
+                  ref={setMissionCueHost}
+                  key="mission-cue-host"
+                  initial={reduceMotion ? false : { opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 6 }}
+                  transition={vaultContentTransition}
+                  className="mt-3 sm:mt-3.5"
+                />
+              ) : null}
+            </AnimatePresence>
 
             {/* Discover trigger sits below the search card and opens the Beam
                 Agent in the card above. Hidden once open (the header carries the

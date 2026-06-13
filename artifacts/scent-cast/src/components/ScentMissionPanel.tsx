@@ -405,6 +405,14 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   // the panel greets the user instead of snapping in a wall of copy. Skipped
   // entirely under reduced-motion / iPad performance mode (calmMotion).
   const [introReady, setIntroReady] = useState(() => calmMotion);
+  // The impressions lane is held back until the greeting has settled, so the
+  // panel never opens with a wall of cues — they fade in only once the agent
+  // has actually asked for them.
+  const [cuesReady, setCuesReady] = useState(() => calmMotion);
+  // When a cue is tapped its value is staged into the composer (never sent as a
+  // chat message). We hide the rest of that question's cues while a choice sits
+  // in the box, so the lane reads as "you picked one — send or refine it".
+  const [pendingCueFacet, setPendingCueFacet] = useState<FacetId | null>(null);
   const [busy, setBusy] = useState(false);
   const [progressNote, setProgressNote] = useState('');
   const [sessionId, setSessionId] = useState<string | undefined>(undefined);
@@ -435,9 +443,26 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
 
   useEffect(() => {
     if (introReady) return;
-    const id = window.setTimeout(() => setIntroReady(true), 1200);
+    // Let the surrounding view (card resize, header strip, weather context)
+    // settle for a beat longer before the agent's first line lands.
+    const id = window.setTimeout(() => setIntroReady(true), 1650);
     return () => window.clearTimeout(id);
   }, [introReady]);
+
+  // Reveal the impressions lane a short beat after the greeting settles.
+  useEffect(() => {
+    if (cuesReady || !introReady) return;
+    const id = window.setTimeout(() => setCuesReady(true), 480);
+    return () => window.clearTimeout(id);
+  }, [cuesReady, introReady]);
+
+  // Re-arm the cue lane once the staged choice leaves the composer (sent or
+  // cleared), so the next question's impressions can surface.
+  useEffect(() => {
+    if (pendingCueFacet && composer.trim().length === 0) {
+      setPendingCueFacet(null);
+    }
+  }, [composer, pendingCueFacet]);
 
   const progress = missionProgress(mission);
   const enoughContext = hasEnoughContext(facets, mission, agentMode);
@@ -472,8 +497,11 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   const neededFacet = nextNeededFacet(facets, mission, agentMode, items.length);
   const visibleQuickReplies = useMemo(() => {
     if (!neededFacet) return [];
+    // A choice for the current question is already staged in the composer; keep
+    // the lane clear until it is sent or cleared.
+    if (pendingCueFacet === neededFacet) return [];
     return QUICK_REPLIES.filter((reply) => reply.facet === neededFacet);
-  }, [neededFacet]);
+  }, [neededFacet, pendingCueFacet]);
 
   const appendMessage = useCallback((role: PanelMessage['role'], text: string) => {
     setMessages((prev) => [...prev, { id: newMessageId(), role, text }]);
@@ -643,20 +671,15 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   const handleQuickReply = useCallback(
     (reply: QuickReply) => {
       if (busy) return;
-      const { nextFacets, nextMission } = updateFacetsAndMission(
-        { [reply.facet]: reply.value },
-        { destination: reply.destination, energy: reply.energy },
-      );
-      appendMessage('user', `${FACET_LABELS[reply.facet]}: ${reply.label}`);
-      const prompt = firstMissingPrompt(nextFacets, nextMission, agentMode, items.length);
-      appendMessage('agent', prompt);
-      if (agentMode === 'fast') {
-        void runResolution('fast', nextMission, nextFacets);
-      }
-      // Tapping a cue must not summon the mobile keyboard, so we deliberately do
-      // not focus the composer here — the user keeps tapping cues hands-free.
+      // A cue is a shortcut for typing — it drops the option straight into the
+      // composer instead of firing a chat message. The user reviews it and hits
+      // send (or refines it) so nothing is committed behind their back, and the
+      // conversation stays clean. We deliberately do not focus the field, so the
+      // mobile keyboard stays down and the next cue is a tap away.
+      setComposer(reply.label);
+      setPendingCueFacet(reply.facet);
     },
-    [agentMode, appendMessage, busy, items.length, runResolution, updateFacetsAndMission],
+    [busy],
   );
 
   const handleSubmit = useCallback(
@@ -741,12 +764,14 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
     onRevealMatch(resolved.item, resolved.recommendation.engine, resolved.recommendation.reason);
   }, [onRevealMatch, resolved]);
 
+  // The placeholder doubles as the instructions: tap a cue below to fill this
+  // field, or type — then send. Keeps the flow self-evident with no extra chrome.
   const composerPlaceholder =
     agentMode === 'fast'
-      ? 'One cue, or what you need...'
+      ? 'Tap a cue below or type, then send'
       : agentMode === 'premium'
-        ? 'Describe the impression you want...'
-        : 'Describe your desired aura...';
+        ? 'Tap a cue or describe the impression'
+        : 'Tap a cue below, or describe your day';
 
   const actionControls = (
     <div className="mx-auto mt-4 w-full max-w-[42.75rem] sm:mt-5">
@@ -764,7 +789,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       </div>
       <form
         onSubmit={handleSubmit}
-        className="scent-lux-input scent-vault-search-input flex h-[60px] w-full items-center gap-2 rounded-full px-2.5 transition-colors focus-within:ring-2 focus-within:ring-scent-accent/12 sm:h-[68px] sm:px-3.5"
+        className="scent-lux-input scent-vault-search-input scent-beam-composer flex h-[60px] w-full items-center gap-2 rounded-full px-2.5 transition-colors focus-within:ring-2 focus-within:ring-scent-accent/12 sm:h-[68px] sm:px-3.5"
       >
         <button
           type="button"
@@ -894,8 +919,10 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   );
 
   const hasActionRow = enoughContext || agentMode === 'fast' || agentMode === 'premium';
+  // Hold the whole lane back until the greeting has settled, so the panel never
+  // opens with a row of cues already sitting there.
   const cueBar =
-    visibleQuickReplies.length === 0 && !hasActionRow ? null : (
+    !cuesReady || (visibleQuickReplies.length === 0 && !hasActionRow) ? null : (
       <div
         className="mx-auto w-full max-w-[42.75rem]"
         aria-label="Beam Agent quick replies"
@@ -928,11 +955,17 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
           </div>
         ) : null}
 
-        {/* Contextual cues for the agent's current question. */}
+        {/* Contextual cues for the agent's current question. A single quiet line
+            spells out the flow so the lane needs no thinking: tap → it fills the
+            box → send. */}
         {visibleQuickReplies.length > 0 ? (
-          showCueMarquee ? (
+          <>
+          <p className={`scent-type-label text-center text-scent-text-subtle ${hasActionRow ? 'mt-2.5' : ''}`}>
+            Tap one to fill the box, then send
+          </p>
+          {showCueMarquee ? (
             <div
-              className={hasActionRow ? 'scent-cue-marquee mt-2' : 'scent-cue-marquee'}
+              className="scent-cue-marquee mt-1.5"
               data-marquee-paused={marqueePaused || busy ? 'true' : undefined}
               onPointerDown={() => setMarqueePaused(true)}
               onPointerUp={() => setMarqueePaused(false)}
@@ -955,10 +988,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
           ) : (
             <div
               ref={quickReplyScrollRef}
-              className={[
-                'flex flex-nowrap items-center justify-center gap-1.5 overflow-x-auto pb-1 scrollbar-hide select-none',
-                hasActionRow ? 'mt-2' : '',
-              ].join(' ')}
+              className="mt-1.5 flex flex-nowrap items-center justify-center gap-1.5 overflow-x-auto pb-1 scrollbar-hide select-none"
               style={{ touchAction: 'pan-x', overscrollBehaviorX: 'contain' }}
             >
               <AnimatePresence initial={false} mode="popLayout">
@@ -981,7 +1011,8 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                 ))}
               </AnimatePresence>
             </div>
-          )
+          )}
+          </>
         ) : null}
       </div>
     );
@@ -1040,9 +1071,15 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
           : null}
 
         {busy ? (
-          <div className="inline-flex max-w-[90%] items-center gap-2 self-start rounded-full border border-scent-accent/24 bg-black/36 px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.12em] text-scent-accent/86">
-            <Loader2 size={14} className="animate-spin" aria-hidden />
-            {progressNote || 'Thinking'}
+          <div
+            className="scent-beam-thinking inline-flex max-w-[90%] items-center gap-2.5 self-start rounded-full border border-scent-accent/24 bg-black/36 px-4 py-2"
+            data-calm={calmMotion ? 'true' : undefined}
+            aria-label={progressNote || 'The Beam Agent is working'}
+          >
+            <span className="scent-beam-orb" aria-hidden />
+            <span className="scent-beam-label text-[12px] font-semibold uppercase tracking-[0.12em]">
+              {progressNote || 'Beaming'}
+            </span>
           </div>
         ) : null}
 
