@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import {
   AlertTriangle,
-  Check,
   Loader2,
   Lock,
   Send,
@@ -151,7 +151,7 @@ function newMessageId(): string {
 
 function initialAgentMessage(itemCount: number): string {
   if (itemCount > 0) {
-    return `I will work from the ${itemCount} fragrance${itemCount === 1 ? '' : 's'} in your vault and today's conditions. Tell me the occasion, mood, or impression you want; I will ask only what matters.`;
+    return "I'll use your vault and today's conditions. Tell me the setting, mood, or impression you want.";
   }
   return 'I can shape a signature direction, but I need fragrances in your vault before I can rank a real match. Add a few scents from search, then come back here.';
 }
@@ -188,7 +188,7 @@ function firstMissingPrompt(
   if (mode === 'research' && !facets.impression && !facets.creativeDirection) {
     return 'What impression should linger after you leave: clean, memorable, soft power, or something more personal?';
   }
-  return 'I have enough context to curate from your vault. Add one final detail or tap Curate.';
+  return 'I have enough context to curate from your vault. Add one final detail or tap Confirm.';
 }
 
 function hasEnoughContext(facets: FacetState, mission: ScentMissionState, mode: AgentMode): boolean {
@@ -328,6 +328,8 @@ interface ScentMissionPanelProps {
   items: Fragrance[];
   weather: WeatherData | null;
   authToken: string | null;
+  /** Optional DOM id for rendering the composer outside of the card shell. */
+  actionSlotId?: string;
   /** Leave concierge mode and restore the search interior. */
   onExit: () => void;
   /** Open the existing recommendation overlay with the resolved match. */
@@ -338,6 +340,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   items,
   weather,
   authToken,
+  actionSlotId,
   onExit,
   onRevealMatch,
 }) => {
@@ -358,6 +361,8 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   const [tone, setTone] = useState<ToneMode>('balanced');
   const [composer, setComposer] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [quickReplyHintDismissed, setQuickReplyHintDismissed] = useState(false);
+  const [actionSlot, setActionSlot] = useState<HTMLElement | null>(null);
   const [busy, setBusy] = useState(false);
   const [progressNote, setProgressNote] = useState('');
   const [sessionId, setSessionId] = useState<string | undefined>(undefined);
@@ -368,6 +373,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
 
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const quickReplyScrollRef = useRef<HTMLDivElement | null>(null);
   const composerRef = useRef<HTMLInputElement | null>(null);
   const sessionIdRef = useRef<string | undefined>(undefined);
 
@@ -390,6 +396,14 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
     return () => window.cancelAnimationFrame(id);
   }, []);
 
+  useEffect(() => {
+    if (!actionSlotId || typeof document === 'undefined') {
+      setActionSlot(null);
+      return;
+    }
+    setActionSlot(document.getElementById(actionSlotId));
+  }, [actionSlotId]);
+
   const progress = missionProgress(mission);
   const enoughContext = hasEnoughContext(facets, mission, agentMode);
   const capturedCount = Object.keys(facets).length;
@@ -397,14 +411,9 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   const progressText = useMemo(() => {
     if (progressNote) return progressNote;
     if (resolved) return 'Match ready';
-    const modeText =
-      agentMode === 'fast'
-        ? 'Fast curation'
-        : agentMode === 'premium'
-          ? 'Premium architecture queued'
-          : 'Research path';
-    return `${modeText} / ${capturedCount} cue${capturedCount === 1 ? '' : 's'} / ${items.length} in vault`;
-  }, [agentMode, capturedCount, items.length, progressNote, resolved]);
+    if (capturedCount === 0) return 'Ready for your cues';
+    return `${capturedCount} cue${capturedCount === 1 ? '' : 's'} captured`;
+  }, [capturedCount, progressNote, resolved]);
 
   const contextLine = useMemo(() => {
     const weatherParts = [
@@ -423,7 +432,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         : ['mood', 'projection', 'impression', 'creativeDirection', 'season', 'genderExpression', 'personality', 'budget']
       : ['occasion', 'mood', 'projection', 'impression', 'creativeDirection', 'season', 'genderExpression', 'personality', 'budget'];
     return QUICK_REPLIES
-      .filter((reply) => !selected.has(reply.facet) || reply.facet === 'occasion' || reply.facet === 'mood')
+      .filter((reply) => !selected.has(reply.facet))
       .sort((a, b) => priority.indexOf(a.facet) - priority.indexOf(b.facet))
       .slice(0, 16);
   }, [facets, mission.calibration.destination, mission.calibration.energy]);
@@ -596,6 +605,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   const handleQuickReply = useCallback(
     (reply: QuickReply) => {
       if (busy) return;
+      setQuickReplyHintDismissed(true);
       const { nextFacets, nextMission } = updateFacetsAndMission(
         { [reply.facet]: reply.value },
         { destination: reply.destination, energy: reply.energy },
@@ -645,7 +655,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         }
         const fallback = firstMissingPrompt(nextFacets, nextMission, agentMode, items.length);
         const assistantText = canCurate
-          ? 'I have enough context to curate from your vault. Add one final detail or tap Curate.'
+          ? 'I have enough context to curate from your vault. Add one final detail or tap Confirm.'
           : fallback;
         appendMessage('agent', safeAssistantText(response?.assistantMessage, assistantText));
       } catch (err) {
@@ -703,6 +713,172 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         ? 'Describe the architecture of the impression...'
         : 'Tell me the occasion, mood, or impression...';
   const compactQuickReplies = visibleQuickReplies.slice(0, 6);
+  const showQuickReplyHint = !quickReplyHintDismissed && compactQuickReplies.length > 3 && capturedCount === 0;
+
+  const actionControls = (
+    <div className="mx-auto w-full max-w-[42.75rem]">
+      <form
+        onSubmit={handleSubmit}
+        className="scent-lux-input scent-vault-search-input flex h-[60px] w-full items-center gap-2 rounded-full px-2.5 transition-colors focus-within:ring-2 focus-within:ring-scent-accent/12 sm:h-[68px] sm:px-3.5"
+      >
+        <button
+          type="button"
+          onClick={() => setSettingsOpen((open) => !open)}
+          aria-expanded={settingsOpen}
+          aria-controls="scent-mission-settings"
+          className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-scent-accent/35 bg-black/35 text-scent-accent transition-colors hover:bg-scent-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
+          aria-label="Adjust concierge settings"
+          title="Adjust settings"
+        >
+          <SlidersHorizontal size={17} strokeWidth={1.8} aria-hidden />
+        </button>
+        <input
+          ref={composerRef}
+          type="text"
+          value={composer}
+          onChange={(event) => setComposer(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key !== 'Enter' || event.shiftKey || event.metaKey || event.ctrlKey || event.altKey) return;
+            event.preventDefault();
+            event.currentTarget.form?.requestSubmit();
+          }}
+          placeholder={composerPlaceholder}
+          aria-label="Message the fragrance concierge"
+          autoComplete="off"
+          className="min-w-0 flex-1 bg-transparent px-1 text-center text-sm font-medium text-[#fff7ec] outline-none placeholder:text-scent-text-subtle sm:text-base"
+        />
+        <button
+          type="submit"
+          disabled={busy || !composer.trim()}
+          className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-scent-accent/42 bg-black/35 text-scent-accent transition-colors hover:bg-scent-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:opacity-40"
+          aria-label="Send message"
+        >
+          {busy ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Send size={16} aria-hidden />}
+        </button>
+      </form>
+
+      <AnimatePresence initial={false}>
+        {settingsOpen ? (
+          <motion.div
+            id="scent-mission-settings"
+            initial={calmMotion ? false : { opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={calmMotion ? { opacity: 0 } : { opacity: 0, y: -6 }}
+            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+            className="mt-3 rounded-[calc(var(--radius-scent)-8px)] border border-scent-accent/18 bg-black/58 p-3 text-left shadow-[inset_0_1px_0_rgba(255,236,183,0.06)]"
+          >
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <p className="scent-type-label mb-1.5 text-scent-accent/80">Response mode</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {MODE_OPTIONS.map(({ id, label, icon: Icon }) => {
+                    const selected = agentMode === id;
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => setAgentMode(id)}
+                        aria-pressed={selected}
+                        className={`inline-flex min-h-8 items-center gap-1.5 rounded-full border px-3 py-1 scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40 ${
+                          selected
+                            ? 'border-scent-accent/78 bg-scent-accent/13 text-[#fff7ec]'
+                            : 'border-white/20 text-scent-text-muted hover:border-scent-accent/45 hover:text-[#fff7ec]'
+                        }`}
+                      >
+                        <Icon size={12} strokeWidth={2} aria-hidden />
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div>
+                <p className="scent-type-label mb-1.5 text-scent-accent/80">Tone</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {TONE_OPTIONS.map(({ id, label }) => {
+                    const selected = tone === id;
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => setTone(id)}
+                        aria-pressed={selected}
+                        className={`min-h-8 rounded-full border px-3 py-1 scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40 ${
+                          selected
+                            ? 'border-scent-accent/70 text-[#fff7ec]'
+                            : 'border-white/18 text-scent-text-muted hover:border-scent-accent/42 hover:text-[#fff7ec]'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+
+      <div className="relative mt-3">
+        <div
+          ref={quickReplyScrollRef}
+          onScroll={() => setQuickReplyHintDismissed(true)}
+          className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide"
+          aria-label="Concierge quick replies"
+        >
+          {enoughContext || agentMode === 'fast' ? (
+            <button
+              type="button"
+              onClick={() => void runResolution(agentMode === 'fast' ? 'fast' : 'curate')}
+              disabled={busy || items.length === 0}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-scent-accent/68 bg-scent-accent/12 px-3 py-1.5 scent-type-chip text-[#fff7ec] transition-colors hover:bg-scent-accent/18 disabled:opacity-45"
+            >
+              <Sparkles size={12} aria-hidden />
+              Confirm
+            </button>
+          ) : null}
+          {agentMode === 'premium' ? (
+            <button
+              type="button"
+              onClick={() => void handlePremiumPreview()}
+              disabled={busy}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-scent-accent/42 px-3 py-1.5 scent-type-chip text-scent-accent transition-colors hover:bg-scent-accent/10 disabled:opacity-45"
+            >
+              <Lock size={12} aria-hidden />
+              Preview
+            </button>
+          ) : null}
+          {compactQuickReplies.map((reply) => (
+            <button
+              key={`${reply.facet}-${reply.value}`}
+              type="button"
+              onClick={() => handleQuickReply(reply)}
+              disabled={busy}
+              data-facet={reply.facet}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/20 px-3 py-1.5 scent-type-chip text-scent-text-muted transition-colors hover:border-scent-accent/42 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40 disabled:opacity-45"
+              title={`${FACET_LABELS[reply.facet]}: ${reply.value}`}
+            >
+              {reply.label}
+            </button>
+          ))}
+        </div>
+        <AnimatePresence>
+          {showQuickReplyHint ? (
+            <motion.div
+              initial={calmMotion ? false : { opacity: 0, x: 4 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="pointer-events-none absolute right-0 top-0 flex h-8 items-center bg-gradient-to-l from-scent-bg via-scent-bg/90 to-transparent pl-8 pr-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-scent-accent/72"
+            >
+              Swipe
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+      </div>
+    </div>
+  );
 
   return (
     <div className="relative flex min-h-0 w-full min-w-0 flex-col text-center" data-testid="scent-mission-panel">
@@ -715,8 +891,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         <X size={20} strokeWidth={1.75} />
       </button>
 
-      <header className="mx-auto mb-5 max-w-[43rem] px-3 pt-1 text-center sm:mb-6">
-        <p className="scent-type-label text-scent-accent">AI Fragrance Concierge</p>
+      <header className="mx-auto mb-4 max-w-[43rem] px-3 pt-1 text-center sm:mb-5">
         <h2 className="mx-auto mt-1 max-w-[38rem] text-balance font-serif italic text-[clamp(2.15rem,6vw,4rem)] leading-[1.01] tracking-normal text-[#fff7ec] drop-shadow-[0_4px_14px_rgba(0,0,0,0.72)]">
           Discover your signature scent.
         </h2>
@@ -740,158 +915,6 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
           />
         </div>
       </header>
-
-      <div className="mx-auto w-full max-w-[42.75rem]">
-        <form
-          onSubmit={handleSubmit}
-          className="scent-lux-input scent-vault-search-input flex h-[60px] w-full items-center gap-2 rounded-full px-2.5 transition-colors focus-within:ring-2 focus-within:ring-scent-accent/12 sm:h-[68px] sm:px-3.5"
-        >
-          <button
-            type="button"
-            onClick={() => setSettingsOpen((open) => !open)}
-            aria-expanded={settingsOpen}
-            aria-controls="scent-mission-settings"
-            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-scent-accent/35 bg-black/35 text-scent-accent transition-colors hover:bg-scent-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
-            aria-label="Adjust concierge settings"
-            title="Adjust settings"
-          >
-            <SlidersHorizontal size={17} strokeWidth={1.8} aria-hidden />
-          </button>
-          <input
-            ref={composerRef}
-            type="text"
-            value={composer}
-            onChange={(event) => setComposer(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key !== 'Enter' || event.shiftKey || event.metaKey || event.ctrlKey || event.altKey) return;
-              event.preventDefault();
-              event.currentTarget.form?.requestSubmit();
-            }}
-            placeholder={composerPlaceholder}
-            aria-label="Message the fragrance concierge"
-            autoComplete="off"
-            className="min-w-0 flex-1 bg-transparent px-1 text-center text-sm font-medium text-[#fff7ec] outline-none placeholder:text-scent-text-subtle sm:text-base"
-          />
-          <button
-            type="submit"
-            disabled={busy || !composer.trim()}
-            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-scent-accent/42 bg-black/35 text-scent-accent transition-colors hover:bg-scent-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:opacity-40"
-            aria-label="Send message"
-          >
-            {busy ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Send size={16} aria-hidden />}
-          </button>
-        </form>
-
-        <AnimatePresence initial={false}>
-          {settingsOpen ? (
-            <motion.div
-              id="scent-mission-settings"
-              initial={calmMotion ? false : { opacity: 0, y: -6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={calmMotion ? { opacity: 0 } : { opacity: 0, y: -6 }}
-              transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-              className="mt-3 rounded-[calc(var(--radius-scent)-8px)] border border-scent-accent/18 bg-black/36 p-3 text-left shadow-[inset_0_1px_0_rgba(255,236,183,0.06)]"
-            >
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div>
-                  <p className="scent-type-label mb-1.5 text-scent-accent/80">Response mode</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {MODE_OPTIONS.map(({ id, label, icon: Icon }) => {
-                      const selected = agentMode === id;
-                      return (
-                        <button
-                          key={id}
-                          type="button"
-                          onClick={() => setAgentMode(id)}
-                          aria-pressed={selected}
-                          className={`inline-flex min-h-8 items-center gap-1.5 rounded-full border px-3 py-1 scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40 ${
-                            selected
-                              ? 'border-scent-accent/78 bg-scent-accent/13 text-[#fff7ec]'
-                              : 'border-white/20 text-scent-text-muted hover:border-scent-accent/45 hover:text-[#fff7ec]'
-                          }`}
-                        >
-                          <Icon size={12} strokeWidth={2} aria-hidden />
-                          {label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-                <div>
-                  <p className="scent-type-label mb-1.5 text-scent-accent/80">Tone</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {TONE_OPTIONS.map(({ id, label }) => {
-                      const selected = tone === id;
-                      return (
-                        <button
-                          key={id}
-                          type="button"
-                          onClick={() => setTone(id)}
-                          aria-pressed={selected}
-                          className={`min-h-8 rounded-full border px-3 py-1 scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40 ${
-                            selected
-                              ? 'border-scent-accent/70 text-[#fff7ec]'
-                              : 'border-white/18 text-scent-text-muted hover:border-scent-accent/42 hover:text-[#fff7ec]'
-                          }`}
-                        >
-                          {label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          ) : null}
-        </AnimatePresence>
-
-        <div className="mt-3 flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide" aria-label="Concierge quick replies">
-          {enoughContext || agentMode === 'fast' ? (
-            <button
-              type="button"
-              onClick={() => void runResolution(agentMode === 'fast' ? 'fast' : 'curate')}
-              disabled={busy || items.length === 0}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-scent-accent/68 bg-scent-accent/12 px-3 py-1.5 scent-type-chip text-[#fff7ec] transition-colors hover:bg-scent-accent/18 disabled:opacity-45"
-            >
-              <Sparkles size={12} aria-hidden />
-              Curate
-            </button>
-          ) : null}
-          {agentMode === 'premium' ? (
-            <button
-              type="button"
-              onClick={() => void handlePremiumPreview()}
-              disabled={busy}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-scent-accent/42 px-3 py-1.5 scent-type-chip text-scent-accent transition-colors hover:bg-scent-accent/10 disabled:opacity-45"
-            >
-              <Lock size={12} aria-hidden />
-              Preview
-            </button>
-          ) : null}
-          {compactQuickReplies.map((reply) => {
-            const selected = facets[reply.facet] === reply.value;
-            return (
-              <button
-                key={`${reply.facet}-${reply.value}`}
-                type="button"
-                onClick={() => handleQuickReply(reply)}
-                disabled={busy}
-                data-facet={reply.facet}
-                aria-pressed={selected}
-                className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40 disabled:opacity-45 ${
-                  selected
-                    ? 'border-scent-accent/72 bg-scent-accent/12 text-[#fff7ec]'
-                    : 'border-white/20 text-scent-text-muted hover:border-scent-accent/42 hover:text-[#fff7ec]'
-                }`}
-                title={`${FACET_LABELS[reply.facet]}: ${reply.value}`}
-              >
-                {selected ? <Check size={12} aria-hidden /> : null}
-                {reply.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
 
       <div
         ref={scrollRef}
@@ -963,6 +986,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       <p className="sr-only">
         {formatFacetLine(facets)}
       </p>
+      {actionSlot ? createPortal(actionControls, actionSlot) : actionSlotId ? null : actionControls}
     </div>
   );
 };
