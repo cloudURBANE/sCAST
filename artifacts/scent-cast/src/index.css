@@ -2122,7 +2122,10 @@ a {
 
 .scent-community-tag-marquee {
   position: relative;
+  min-width: 0;
+  max-width: 100%;
   overflow: hidden;
+  contain: layout paint;
   -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 2rem, #000 calc(100% - 2rem), transparent 100%);
   mask-image: linear-gradient(90deg, transparent 0, #000 2rem, #000 calc(100% - 2rem), transparent 100%);
 }
@@ -2130,8 +2133,11 @@ a {
 .scent-community-tag-marquee-track {
   display: flex;
   width: max-content;
+  max-width: none;
   animation: scent-community-tag-marquee-scroll 34s linear infinite;
   will-change: transform;
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
 .scent-community-tag-marquee-group {
