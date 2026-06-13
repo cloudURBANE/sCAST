@@ -26,6 +26,7 @@ const COMMUNITY_SCROLL_PIXELS_PER_SECOND = 6;
 const COMMUNITY_SCROLL_MIN_SECONDS = 140;
 const COMMUNITY_SCROLL_MAX_SECONDS = 320;
 const COMMUNITY_SCROLL_REDUCED_MOTION_SECONDS = 640;
+const COMMUNITY_LOW_BUDGET_EAGER_IMAGES = 8;
 
 const placeholderItems: CommunityFragranceEntry[] = [...Array(8)].map((_, index) => ({
   id: `placeholder:${index}`,
@@ -48,15 +49,19 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
   const trackCopies = useRef(
     lowRenderBudget ? COMMUNITY_TRACK_COPIES_LOW : COMMUNITY_TRACK_COPIES_DEFAULT,
   ).current;
+  const renderedItems = loading ? placeholderItems : items;
+  const visibleItems = useMemo(
+    () => (lowRenderBudget ? renderedItems.slice(0, COMMUNITY_LOW_BUDGET_EAGER_IMAGES) : renderedItems),
+    [lowRenderBudget, renderedItems],
+  );
   const imageLayoutTransition = lowRenderBudget
     ? COMMUNITY_IMAGE_LAYOUT_TRANSITION_LOW_RENDER
     : COMMUNITY_IMAGE_LAYOUT_TRANSITION;
   const cardHoverMotion = lowRenderBudget ? undefined : { y: -8, scale: 1.04 };
   const cardTapMotion = lowRenderBudget ? undefined : { scale: 0.985 };
-  const renderedItems = loading ? placeholderItems : items;
   const trackKey = useMemo(
-    () => renderedItems.map((item) => `${item.id}:${item.imageUrl}`).join('|'),
-    [renderedItems],
+    () => visibleItems.map((item) => `${item.id}:${item.imageUrl}`).join('|'),
+    [visibleItems],
   );
 
   // The track element is keyed by trackKey, so the swipe listeners must
@@ -219,7 +224,7 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
               ref={copyIndex === 0 ? groupRef : undefined}
               aria-hidden={copyIndex > 0}
             >
-              {renderedItems.map((item) => (
+              {visibleItems.map((item) => (
                 <div key={`${copyIndex}:${item.id}`} className="scent-community-marquee-cell">
                   <motion.button
                     type="button"
@@ -252,6 +257,8 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
                         src={item.imageUrl}
                         alt={`${item.name} by ${item.brand}`}
                         variant="card"
+                        loading={lowRenderBudget ? 'eager' : 'lazy'}
+                        fetchPriority={lowRenderBudget && copyIndex === 0 ? 'high' : 'auto'}
                         className="absolute inset-0"
                         imgClassName="scent-hover-scale brightness-[1.1] transition-transform duration-[900ms] motion-reduce:transition-none"
                         adjustment={item.imageAdjustment}

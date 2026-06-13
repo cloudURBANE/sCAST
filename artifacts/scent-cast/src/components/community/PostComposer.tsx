@@ -31,14 +31,16 @@ import { useWardrobeItems } from '@/context/WardrobeContext';
 interface ComposerRoom {
   type: CommunityPostType;
   label: string;
+  shortLabel: string;
+  hint: string;
   Icon: LucideIcon;
 }
 
 const ROOMS: ComposerRoom[] = [
-  { type: 'question', label: 'Ask a question', Icon: MessageCircleQuestion },
-  { type: 'sotd', label: 'SOTD', Icon: Sun },
-  { type: 'battle', label: 'Battle', Icon: Swords },
-  { type: 'worth_it', label: 'Price Check', Icon: BadgeDollarSign },
+  { type: 'question', label: 'Ask a question', shortLabel: 'Ask', hint: 'Start with the question. Title, tags, and fragrance are optional.', Icon: MessageCircleQuestion },
+  { type: 'sotd', label: 'SOTD', shortLabel: 'SOTD', hint: 'Share the wear. Weather, mood, and occasion can stay blank.', Icon: Sun },
+  { type: 'battle', label: 'Battle', shortLabel: 'Battle', hint: 'Pick two fragrances from your vault or the catalog, then add the prompt.', Icon: Swords },
+  { type: 'worth_it', label: 'Price check', shortLabel: 'Price', hint: 'Add the price only if it helps. The room can still start from the discussion.', Icon: BadgeDollarSign },
 ];
 
 // Each post type gets a direct, action-oriented submit label.
@@ -378,6 +380,14 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
         .filter((candidate): candidate is BattleFragranceCandidate => candidate !== null),
     [wardrobeItems],
   );
+  const activeRoom = ROOMS.find((room) => room.type === postType) ?? ROOMS[0]!;
+  const bodyPlaceholder = postType === 'question'
+    ? 'What are you trying to figure out?'
+    : postType === 'sotd'
+      ? 'What are you wearing today, and how is it working?'
+      : postType === 'battle'
+        ? 'What should people judge between these two?'
+        : 'What bottle, size, condition, and price are you checking?';
 
   useEffect(() => {
     return () => {
@@ -735,10 +745,10 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
           <p className="scent-type-label text-scent-accent">
             Community forum
           </p>
-          <h2 className="mt-4 text-balance font-serif text-3xl italic leading-tight text-[#fff7ec] sm:text-4xl">
+          <h2 className="mt-3 text-balance font-serif text-2xl italic leading-tight text-[#fff7ec] sm:mt-4 sm:text-4xl">
             Rooms already moving through the lounge.
           </h2>
-          <p className="mt-4 max-w-xl text-base leading-7 text-scent-text-muted">
+          <p className="mt-3 max-w-xl text-sm leading-6 text-scent-text-muted sm:mt-4 sm:text-base sm:leading-7">
             Ask a question, share your SOTD, run a battle, or check if a bottle is worth it.
           </p>
         </div>
@@ -755,60 +765,67 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
   return (
     <section
       ref={sectionRef}
-      className="w-full border-b border-scent-accent/14 p-5 sm:p-6"
+      className="w-full border-b border-scent-accent/14 p-4 sm:p-6"
     >
-      <form onSubmit={submitPost} className="space-y-6">
-        <div className="relative flex flex-col items-center gap-4 text-center">
+      <form onSubmit={submitPost} className="space-y-4 sm:space-y-5">
+        <div className="relative flex flex-col items-center gap-2 text-center">
           <div className="min-w-0 px-10 sm:px-14">
             <p className="scent-type-label text-scent-accent">
               Community forum
             </p>
-            <h2 className="mt-2 font-serif text-3xl italic leading-tight text-[#fff7ec]">
+            <h2 className="mt-1 font-serif text-2xl italic leading-tight text-[#fff7ec] sm:text-3xl">
               Start a room
             </h2>
-            <p className="mt-4 max-w-2xl text-base leading-7 text-scent-text-muted">
-              Ask a question, share your SOTD, run a battle, or check if a bottle is worth it.
+            <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-scent-text-muted sm:text-base sm:leading-7">
+              {activeRoom.hint}
             </p>
           </div>
           <button
             type="button"
             onClick={() => setComposerOpen(false)}
             aria-expanded="true"
-            className="absolute right-0 top-0 inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 rounded-full border border-scent-accent/18 bg-black/70 px-4 py-2 scent-type-chip text-scent-text-muted transition-colors hover:border-scent-accent/36 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
+            aria-label="Close composer"
+            className="absolute right-0 top-0 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-scent-accent/18 bg-black/70 text-scent-text-muted transition-colors hover:border-scent-accent/36 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
           >
-            <X size={13} strokeWidth={1.8} aria-hidden="true" />
-            Close
+            <X size={16} strokeWidth={1.9} aria-hidden="true" />
           </button>
         </div>
 
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          {ROOMS.map(({ type, label, Icon }) => (
+        <div
+          className="-mx-4 flex snap-x gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0"
+          role="listbox"
+          aria-label="Room type"
+        >
+          {ROOMS.map(({ type, label, shortLabel, Icon }) => (
             <button
               key={type}
               type="button"
               onClick={() => setPostType(type)}
+              role="option"
+              aria-label={label}
+              aria-selected={postType === type}
               aria-pressed={postType === type}
               className={[
-                'inline-flex min-h-11 items-center justify-center gap-2 rounded-full border px-3 py-2 text-center scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35',
+                'inline-flex min-h-11 min-w-[7rem] snap-start items-center justify-center gap-2 rounded-full border px-3 py-2 text-center scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35',
                 postType === type
                   ? 'border-scent-accent/48 bg-scent-accent/[0.08] text-[#fff7ec]'
                   : 'border-scent-accent/16 bg-black/54 text-scent-text-muted hover:border-scent-accent/34 hover:text-[#fff7ec]',
               ].join(' ')}
             >
               <Icon size={14} strokeWidth={1.8} aria-hidden="true" />
-              {label}
+              {shortLabel}
             </button>
           ))}
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)]">
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)]">
           <input
             ref={titleInputRef}
             type="text"
             value={title}
             onChange={(event) => setTitle(event.target.value)}
             maxLength={140}
-            placeholder="Name the room"
+            placeholder="Optional room title"
             aria-label="Room name"
             className="scent-lux-input h-12 w-full rounded-[var(--radius-scent)] px-4 text-base text-[#fff7ec] placeholder:text-scent-text-subtle"
           />
@@ -818,7 +835,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
             onChange={(event) => setTagInput(event.target.value)}
             onKeyDown={submitTagKey}
             onBlur={() => addTagsFromInput(tagInput)}
-            placeholder="Add vibe tags"
+            placeholder="Optional tags, comma separated"
             aria-label="Room tags"
             className="scent-lux-input h-12 w-full rounded-[var(--radius-scent)] px-4 text-base text-[#fff7ec] placeholder:text-scent-text-subtle"
           />
@@ -847,7 +864,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
               value={weather}
               onChange={(event) => setWeather(event.target.value)}
               maxLength={80}
-              placeholder="Weather"
+              placeholder="Weather (optional)"
               aria-label="Weather"
               className="scent-lux-input h-11 rounded-full px-4 text-base text-[#fff7ec] placeholder:text-scent-text-subtle"
             />
@@ -856,7 +873,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
               value={occasion}
               onChange={(event) => setOccasion(event.target.value)}
               maxLength={80}
-              placeholder="Occasion"
+              placeholder="Occasion (optional)"
               aria-label="Occasion"
               className="scent-lux-input h-11 rounded-full px-4 text-base text-[#fff7ec] placeholder:text-scent-text-subtle"
             />
@@ -865,7 +882,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
               value={mood}
               onChange={(event) => setMood(event.target.value)}
               maxLength={80}
-              placeholder="Mood"
+              placeholder="Mood (optional)"
               aria-label="Mood"
               className="scent-lux-input h-11 rounded-full px-4 text-base text-[#fff7ec] placeholder:text-scent-text-subtle"
             />
@@ -911,7 +928,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
             value={priceContext}
             onChange={(event) => setPriceContext(event.target.value)}
             maxLength={120}
-            placeholder="Price context"
+            placeholder="Price context (optional)"
             aria-label="Price context"
             className="scent-lux-input h-11 w-full rounded-full px-4 text-base text-[#fff7ec] placeholder:text-scent-text-subtle"
           />
@@ -922,7 +939,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
           onChange={(event) => setBody(event.target.value)}
           rows={5}
           maxLength={4000}
-          placeholder="What should the room discuss?"
+          placeholder={bodyPlaceholder}
           aria-label="Room discussion"
           className="scent-lux-input min-h-40 w-full resize-y rounded-[var(--radius-scent)] px-4 py-3 text-base leading-7 text-[#fff7ec] placeholder:text-scent-text-subtle"
         />
