@@ -546,6 +546,9 @@ function DashboardView() {
   // Beam Agent progress surfaced by the panel so its header (title + progress +
   // close) can render in a strip ABOVE the bordered card instead of inside it.
   const [missionStatus, setMissionStatus] = useState<ScentMissionStatus | null>(null);
+  // Host element rendered BELOW the card; the Beam Agent portals its impressions
+  // lane here so the cues sit under the card instead of crowding it.
+  const [missionCueHost, setMissionCueHost] = useState<HTMLDivElement | null>(null);
   const handleMissionStatus = useCallback((status: ScentMissionStatus) => {
     setMissionStatus(status);
   }, []);
@@ -662,9 +665,9 @@ function DashboardView() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 6 }}
                   transition={vaultContentTransition}
-                  className="mx-auto mb-4 w-full max-w-[42.75rem] px-1 sm:mb-5"
+                  className="mx-auto mb-2.5 w-full max-w-[42.75rem] px-1 sm:mb-3"
                 >
-                  <div className="relative mb-3 flex items-center justify-center">
+                  <div className="relative mb-2 flex items-center justify-center">
                     <div
                       className="h-1 w-full max-w-[11rem] overflow-hidden rounded-full bg-white/10"
                       role="progressbar"
@@ -689,13 +692,13 @@ function DashboardView() {
                       <X size={20} strokeWidth={1.75} />
                     </button>
                   </div>
-                  <h2 className="mx-auto max-w-[32rem] text-balance font-serif italic text-[clamp(1.45rem,3.6vw,2rem)] leading-[1.08] tracking-normal text-[#fff7ec] drop-shadow-[0_4px_14px_rgba(0,0,0,0.72)]">
+                  <h2 className="mx-auto max-w-[32rem] text-balance font-serif italic text-[clamp(1.4rem,3.4vw,1.9rem)] leading-[1.05] tracking-normal text-[#fff7ec] drop-shadow-[0_4px_14px_rgba(0,0,0,0.72)]">
                     A scent for today.
                   </h2>
-                  <p className="mt-2.5 scent-type-label text-scent-accent/55">
+                  <p className="mt-1.5 scent-type-label text-scent-accent/55">
                     {missionStatus?.progressText ?? 'Ready for your cues'}
                   </p>
-                  <p className="mx-auto mt-1.5 hidden max-w-xl text-sm leading-6 text-scent-text-muted sm:block">
+                  <p className="mx-auto mt-1 hidden max-w-xl text-sm leading-6 text-scent-text-muted sm:block">
                     {missionStatus?.contextLine ?? 'Weather context ready when available'}
                   </p>
                 </motion.div>
@@ -733,6 +736,7 @@ function DashboardView() {
                           onExit={handleExitMission}
                           onRevealMatch={handleMissionReveal}
                           onStatusChange={handleMissionStatus}
+                          cueBarContainer={missionCueHost}
                         />
                       </React.Suspense>
                     </motion.div>
@@ -758,6 +762,20 @@ function DashboardView() {
                 </AnimatePresence>
               </div>
             </motion.div>
+
+            {/* Impressions lane host: the Beam Agent portals its cue / Confirm
+                lane here, BELOW the card, so the impressions never crowd or
+                shrink the conversation inside the card. */}
+            {agentActive ? (
+              <motion.div
+                ref={setMissionCueHost}
+                key="mission-cue-host"
+                initial={reduceMotion ? false : { opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={vaultContentTransition}
+                className="mt-3 sm:mt-3.5"
+              />
+            ) : null}
 
             {/* Discover trigger sits below the search card and opens the Beam
                 Agent in the card above. Hidden once open (the header carries the

@@ -1,4 +1,5 @@
 import type { CommunityFragranceSnapshot, CommunityPost } from '@/components/community/communityPosts';
+import { isArenaReasonKey, type ArenaReasonKey } from './arenaTwists.ts';
 
 export interface ArenaBattleSide {
   key: string;
@@ -16,6 +17,8 @@ export interface ArenaBattle {
   right: ArenaBattleSide;
   votes: Record<string, number>;
   viewerVote: string | null;
+  // Server-synced "why it won" reason for this viewer's pick (cross-device).
+  viewerReason: ArenaReasonKey | null;
 }
 
 function battleOptions(post: CommunityPost): [string, string] | null {
@@ -54,6 +57,10 @@ export function mapCommunityPostToArenaBattle(post: CommunityPost): ArenaBattle 
   };
   const viewerVote =
     post.viewerVote === left.key || post.viewerVote === right.key ? post.viewerVote : null;
+  const viewerReason =
+    viewerVote && typeof post.viewerVoteReason === 'string' && isArenaReasonKey(post.viewerVoteReason)
+      ? post.viewerVoteReason
+      : null;
 
   return {
     id: post.id,
@@ -63,5 +70,6 @@ export function mapCommunityPostToArenaBattle(post: CommunityPost): ArenaBattle 
     right,
     votes,
     viewerVote,
+    viewerReason,
   };
 }

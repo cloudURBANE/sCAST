@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { ArenaBattleSide } from "@/components/arena/ArenaBattleSide";
 import { ArenaResultReveal } from "@/components/arena/ArenaResultReveal";
 import type { ArenaBattle } from "@/components/arena/arenaBattleMapper";
@@ -30,31 +30,61 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
 }) => {
   const voteMutation = useCommunityBattleVote(authToken);
   const [localVote, setLocalVote] = useState<string | null>(battle.viewerVote);
+  // Server-synced reason wins; localStorage is the offline / guest fallback so a
+  // revisited battle restores the resolved "why it won" state without re-prompting.
   const [reason, setReasonState] = useState<ArenaReasonKey | null>(
-    () => readArenaReason(battle.id).reason,
+    () => battle.viewerReason ?? readArenaReason(battle.id).reason,
   );
-  // Whether the viewer explicitly skipped the reason for this battle. Persisted
-  // alongside the reason so a revisited battle doesn't re-prompt "why it won".
+  // Whether the viewer explicitly skipped the reason for this battle. Client-only
+  // (localStorage) — a skip just suppresses the prompt and carries no server state.
   const [reasonDeclined, setReasonDeclinedState] = useState<boolean>(
     () => readArenaReason(battle.id).declined,
   );
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // The choice the viewer just picked *this mount*. Drives the one-shot save
+  // animation + reveal entrance; stays null when the resolved state is merely
+  // restored from the server, so revisiting never replays the animation.
+  const [justVotedChoice, setJustVotedChoice] = useState<string | null>(null);
   const revealRef = useRef<HTMLDivElement>(null);
-  const justVotedRef = useRef(false);
 
+  // Battle identity changed → adopt that battle's resolved state from scratch.
   useEffect(() => {
-    setLocalVote(battle.viewerVote);
     const stored = readArenaReason(battle.id);
-    setReasonState(stored.reason);
+    setLocalVote(battle.viewerVote);
+    setReasonState(battle.viewerReason ?? stored.reason);
     setReasonDeclinedState(stored.declined);
     setErrorMessage(null);
-    justVotedRef.current = false;
-  }, [battle.id, battle.viewerVote]);
+    setJustVotedChoice(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [battle.id]);
+
+  // The viewer's saved pick can arrive after mount (async feed load / refetch).
+  // Adopt it without a fresh-vote animation when we don't already have one.
+  useEffect(() => {
+    if (battle.viewerVote && !localVote) setLocalVote(battle.viewerVote);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [battle.viewerVote]);
+
+  // Likewise adopt a server-synced reason (cross-device) until the viewer edits
+  // it locally this session.
+  useEffect(() => {
+    if (battle.viewerReason && !reason) setReasonState(battle.viewerReason);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [battle.viewerReason]);
+
+  const persistReason = (next: ArenaReasonKey | null) => {
+    // Push the reason to the server (cross-device) alongside the current pick.
+    // Guests have no server row yet — localStorage already holds their choice.
+    if (authToken && localVote) {
+      voteMutation.mutate({ postId: battle.id, choice: localVote, reason: next });
+    }
+  };
 
   const handleReasonChange = (next: ArenaReasonKey) => {
     setReasonState(next);
     setReasonDeclinedState(false);
     writeArenaReason(battle.id, { reason: next, declined: false });
+    persistReason(next);
   };
 
   const handleReasonDeclinedChange = (declined: boolean) => {
@@ -63,26 +93,23 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
   };
 
   const revealed = Boolean(localVote);
+  const freshVote = justVotedChoice !== null;
 
   // Bring the result + reason picker into view once a fresh vote reveals it,
   // so mobile users aren't left staring at the cards with results below the fold.
   useEffect(() => {
-    if (revealed && justVotedRef.current && revealRef.current) {
+    if (revealed && freshVote && revealRef.current) {
       revealRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
-      justVotedRef.current = false;
     }
-  }, [revealed]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [revealed, freshVote]);
   const guestLocalOnly = Boolean(localVote && !authToken);
   const selectedKey = localVote;
   const votePending = voteMutation.isPending || externalVotePending;
   const displayedErrorMessage = errorMessage ?? externalErrorMessage;
-  const sides = useMemo(
-    () => [battle.left, battle.right],
-    [battle.left, battle.right],
-  );
 
   const submitVote = (choice: string) => {
-    justVotedRef.current = true;
+    setJustVotedChoice(choice);
     setLocalVote(choice);
     setErrorMessage(null);
 
@@ -91,8 +118,9 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
       return;
     }
 
+    // Carry the current reason so switching picks keeps a chosen reason in sync.
     voteMutation.mutate(
-      { postId: battle.id, choice },
+      { postId: battle.id, choice, reason },
       {
         onError: (err) => {
           setErrorMessage(
@@ -129,6 +157,7 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
           revealed={revealed}
           disabled={votePending}
           isSaving={votePending && selectedKey === battle.left.key}
+          justVoted={justVotedChoice === battle.left.key}
           onVote={() => submitVote(battle.left.key)}
         />
 
@@ -148,6 +177,7 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
           revealed={revealed}
           disabled={votePending}
           isSaving={votePending && selectedKey === battle.right.key}
+          justVoted={justVotedChoice === battle.right.key}
           onVote={() => submitVote(battle.right.key)}
         />
       </div>
@@ -170,6 +200,7 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
             reasonDeclined={reasonDeclined}
             guestLocalOnly={guestLocalOnly}
             votePending={votePending}
+            animateReveal={freshVote}
             onReasonChange={handleReasonChange}
             onReasonDeclinedChange={handleReasonDeclinedChange}
             onSignIn={onSignIn}

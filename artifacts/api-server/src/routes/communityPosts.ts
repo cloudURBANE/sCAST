@@ -26,6 +26,7 @@ const MAX_FEED_LIMIT = 24;
 const MAX_TAGS = 8;
 const MAX_FRAGRANCES = 3;
 const MAX_BATTLE_OPTION_LENGTH = 120;
+const MAX_REASON_LENGTH = 40;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type TenantUser = {
@@ -368,10 +369,15 @@ async function viewerPostState(
   tenantId: string,
   postIds: string[],
   viewerId?: string,
-): Promise<{ reactionsByTarget: Map<string, string[]>; voteByPost: Map<string, string> }> {
+): Promise<{
+  reactionsByTarget: Map<string, string[]>;
+  voteByPost: Map<string, string>;
+  voteReasonByPost: Map<string, string>;
+}> {
   const voteByPost = new Map<string, string>();
+  const voteReasonByPost = new Map<string, string>();
   if (!viewerId || postIds.length === 0) {
-    return { reactionsByTarget: new Map(), voteByPost };
+    return { reactionsByTarget: new Map(), voteByPost, voteReasonByPost };
   }
 
   const [{ reactionsByTarget }, voteRows] = await Promise.all([
@@ -380,6 +386,7 @@ async function viewerPostState(
       .select({
         postId: communityVotesTable.postId,
         choice: communityVotesTable.choice,
+        reason: communityVotesTable.reason,
       })
       .from(communityVotesTable)
       .where(and(
@@ -389,8 +396,11 @@ async function viewerPostState(
       )),
   ]);
 
-  for (const row of voteRows) voteByPost.set(row.postId, row.choice);
-  return { reactionsByTarget, voteByPost };
+  for (const row of voteRows) {
+    voteByPost.set(row.postId, row.choice);
+    if (typeof row.reason === "string" && row.reason) voteReasonByPost.set(row.postId, row.reason);
+  }
+  return { reactionsByTarget, voteByPost, voteReasonByPost };
 }
 
 async function buildPostDtos(tenantId: string, posts: PostRow[], viewerId?: string) {
@@ -477,11 +487,13 @@ async function buildPostDtos(tenantId: string, posts: PostRow[], viewerId?: stri
   const voteTallies = voteTalliesFromRows(voteTallyRows);
   const tenantUsers = tenantUsersResult.users;
   const usersById = tenantUsersResult.byId;
-  const [{ reactionsByTarget: viewerReactionsByPost, voteByPost: viewerVoteByPost }, usernames] =
-    await Promise.all([
-      viewerPostState(tenantId, postIds, viewerId),
-      usernamesByUserId(tenantId, posts.map((post) => post.userId)),
-    ]);
+  const [
+    { reactionsByTarget: viewerReactionsByPost, voteByPost: viewerVoteByPost, voteReasonByPost: viewerVoteReasonByPost },
+    usernames,
+  ] = await Promise.all([
+    viewerPostState(tenantId, postIds, viewerId),
+    usernamesByUserId(tenantId, posts.map((post) => post.userId)),
+  ]);
 
   return posts.map((post) => {
     const fallbackAuthor = { id: post.userId, email: post.authorEmail, pictureUrl: post.authorPictureUrl };
@@ -506,6 +518,7 @@ async function buildPostDtos(tenantId: string, posts: PostRow[], viewerId?: stri
       votes: voteTallies.get(post.id) ?? {},
       viewerReactions: viewerReactionsByPost.get(post.id) ?? [],
       viewerVote: viewerVoteByPost.get(post.id) ?? null,
+      viewerVoteReason: viewerVoteReasonByPost.get(post.id) ?? null,
     };
   });
 }
@@ -1025,6 +1038,11 @@ router.post("/community/posts/:id/votes", requireAuth, async (req: AuthRequest, 
       return;
     }
 
+    // Optional "why it won" reason key. Only touched when the client explicitly
+    // sends the field, so a plain pick switch never wipes an existing reason.
+    const reasonProvided = Object.prototype.hasOwnProperty.call(body, "reason");
+    const reason = reasonProvided ? cleanOptionalText(body.reason, MAX_REASON_LENGTH) : null;
+
     const rows = await db
       .select({
         id: communityPostsTable.id,
@@ -1069,6 +1087,7 @@ router.post("/community/posts/:id/votes", requireAuth, async (req: AuthRequest, 
         postId,
         userId: user.id,
         choice,
+        ...(reasonProvided ? { reason } : {}),
       })
       .onConflictDoUpdate({
         target: [communityVotesTable.userId, communityVotesTable.postId],
@@ -1076,11 +1095,14 @@ router.post("/community/posts/:id/votes", requireAuth, async (req: AuthRequest, 
           tenantId,
           choice,
           updatedAt: new Date(),
+          // Preserve an existing reason on a plain pick switch; only overwrite it
+          // when the client actually sends a reason field.
+          ...(reasonProvided ? { reason } : {}),
         },
       });
 
     const votes = await voteTallyForPost(tenantId, postId);
-    res.json({ postId, choice, votes });
+    res.json({ postId, choice, reason: reasonProvided ? reason : null, votes });
   } catch (err) {
     next(err);
   }

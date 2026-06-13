@@ -12,6 +12,12 @@ interface ArenaBattleSideProps {
   disabled: boolean;
   /** True while this card's vote is being persisted to the room tally. */
   isSaving?: boolean;
+  /**
+   * True only for the side the viewer just picked *this mount*. Gates the
+   * one-shot "Saving → Saved to tally" badge animation so a restored pick shows
+   * the settled checkmark immediately instead of replaying the animation.
+   */
+  justVoted?: boolean;
   onVote: () => void;
 }
 
@@ -22,14 +28,16 @@ export const ArenaBattleSide: React.FC<ArenaBattleSideProps> = ({
   revealed,
   disabled,
   isSaving = false,
+  justVoted = false,
   onVote,
 }) => {
-  // Inline tally feedback: show the status text immediately on selection, then
-  // collapse it away once the save settles so only the checkmark icon remains.
+  // Inline tally feedback: show the status text immediately on a fresh pick, then
+  // collapse it away once the save settles so only the checkmark remains. A pick
+  // restored on revisit skips this entirely (justVoted is false).
   const [showTallyText, setShowTallyText] = useState(false);
 
   useEffect(() => {
-    if (!selected) {
+    if (!selected || !justVoted) {
       setShowTallyText(false);
       return;
     }
@@ -37,13 +45,14 @@ export const ArenaBattleSide: React.FC<ArenaBattleSideProps> = ({
     if (isSaving) return;
     const timer = window.setTimeout(() => setShowTallyText(false), 1800);
     return () => window.clearTimeout(timer);
-  }, [selected, isSaving]);
+  }, [selected, isSaving, justVoted]);
 
   const contenderLabel = align === "left" ? "A" : "B";
   // While the "Saving / Saved to tally" badge is animating we swap it in for the
   // centered "Contender" label so the two never collide. Once the save settles
-  // and the badge collapses to the bare check, the label fades back in cleanly.
-  const badgeActive = selected && (isSaving || showTallyText);
+  // and the badge collapses, the label — now carrying a persistent checkmark for
+  // the chosen side — fades back in cleanly.
+  const badgeActive = selected && justVoted && (isSaving || showTallyText);
 
   const handleCardKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
     if (!revealed || disabled) return;
@@ -80,13 +89,26 @@ export const ArenaBattleSide: React.FC<ArenaBattleSideProps> = ({
         <div className="relative mb-2 flex min-h-7 items-center justify-center sm:mb-3">
           <span
             className={[
-              "scent-type-label text-[10px] tracking-[0.1em] text-scent-accent/78 transition-opacity duration-300 sm:text-[12px] sm:tracking-[0.14em]",
+              "inline-flex items-center gap-1 scent-type-label text-[10px] tracking-[0.1em] text-scent-accent/78 transition-opacity duration-300 sm:gap-1.5 sm:text-[12px] sm:tracking-[0.14em]",
               badgeActive ? "opacity-0" : "opacity-100",
             ].join(" ")}
           >
             {`Contender ${contenderLabel}`}
+            {/* Persistent checkmark beside the chosen contender once the save
+                settles — the durable "this is your pick" marker. */}
+            {selected ? (
+              <span
+                className="inline-grid h-4 w-4 place-items-center rounded-full bg-scent-accent text-black shadow-[0_0_10px_rgba(212,175,55,0.28)] sm:h-[1.05rem] sm:w-[1.05rem]"
+                aria-hidden="true"
+              >
+                <Check size={10} strokeWidth={2.6} aria-hidden="true" />
+              </span>
+            ) : null}
+            {selected ? <span className="sr-only">your pick</span> : null}
           </span>
-          {selected ? (
+          {/* One-shot "Saving → Saved to tally" badge: only mounts for a fresh
+              vote, and cross-fades over the label so the two never collide. */}
+          {selected && justVoted ? (
             <span
               className={[
                 "absolute left-1/2 top-1/2 inline-flex min-h-6 -translate-x-1/2 -translate-y-1/2 items-center rounded-full bg-scent-accent px-1.5 py-1 text-[8px] font-bold uppercase tracking-[0.06em] text-black shadow-[0_0_14px_rgba(212,175,55,0.16)] transition-opacity duration-300 sm:min-h-7 sm:px-2.5 sm:text-[10px] sm:tracking-[0.1em]",

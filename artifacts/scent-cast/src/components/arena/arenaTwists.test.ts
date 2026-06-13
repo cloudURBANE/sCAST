@@ -11,6 +11,7 @@ const battle: ArenaBattle = {
   right: { key: 'B', name: 'Oud Wood', brand: 'Tom Ford', descriptor: 'Woody Oriental' },
   votes: { A: 7, B: 3 },
   viewerVote: null,
+  viewerReason: null,
 };
 
 test('computes winner and rounded percentages from saved votes', () => {

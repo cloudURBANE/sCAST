@@ -17,6 +17,8 @@ interface ArenaResultRevealProps {
   reasonDeclined: boolean;
   guestLocalOnly: boolean;
   votePending: boolean;
+  /** Play the entrance animation only for a fresh vote, not a restored state. */
+  animateReveal: boolean;
   onReasonChange: (reason: ArenaReasonKey) => void;
   onReasonDeclinedChange: (declined: boolean) => void;
   onSignIn: () => void;
@@ -30,6 +32,7 @@ export const ArenaResultReveal: React.FC<ArenaResultRevealProps> = ({
   reasonDeclined,
   guestLocalOnly,
   votePending,
+  animateReveal,
   onReasonChange,
   onReasonDeclinedChange,
   onSignIn,
@@ -77,7 +80,12 @@ export const ArenaResultReveal: React.FC<ArenaResultRevealProps> = ({
 
   return (
     <section
-      className="arena-reveal-stagger mx-auto mt-6 w-full max-w-4xl space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500 sm:mt-8"
+      className={[
+        "mx-auto mt-6 w-full max-w-4xl space-y-4 sm:mt-8",
+        animateReveal
+          ? "arena-reveal-stagger animate-in fade-in slide-in-from-bottom-4 duration-500"
+          : "",
+      ].join(" ")}
       aria-live="polite"
     >
       <div
@@ -138,11 +146,17 @@ export const ArenaResultReveal: React.FC<ArenaResultRevealProps> = ({
               aria-hidden="true"
             >
               <span
-                className="arena-bar-segment block h-full rounded-l-full bg-gradient-to-r from-scent-accent/95 to-scent-accent/72"
+                className={[
+                  "block h-full rounded-l-full bg-gradient-to-r from-scent-accent/95 to-scent-accent/72",
+                  animateReveal ? "arena-bar-segment" : "",
+                ].join(" ")}
                 style={{ width: `${leftShare}%` }}
               />
               <span
-                className="arena-bar-segment block h-full rounded-r-full bg-gradient-to-r from-scent-accent/30 to-scent-accent/48"
+                className={[
+                  "block h-full rounded-r-full bg-gradient-to-r from-scent-accent/30 to-scent-accent/48",
+                  animateReveal ? "arena-bar-segment" : "",
+                ].join(" ")}
                 style={{ width: `${100 - leftShare}%` }}
               />
             </div>
