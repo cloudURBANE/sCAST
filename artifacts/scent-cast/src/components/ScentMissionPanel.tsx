@@ -682,10 +682,14 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   const compactQuickReplies = visibleQuickReplies.slice(0, 8);
 
   const actionControls = (
-    <div className="mx-auto w-full max-w-[42.75rem]">
+    <div className="w-full">
+      {/* Row 1 occupies the exact box the trigger button held, so opening reads
+          as that single element updating in place. The input fills the width;
+          the close sits where the button's right edge was. */}
+      <div className="flex items-center gap-2">
       <form
         onSubmit={handleSubmit}
-        className="scent-lux-input scent-vault-search-input flex h-[60px] w-full items-center gap-2 rounded-full px-2.5 transition-colors focus-within:ring-2 focus-within:ring-scent-accent/12 sm:h-[68px] sm:px-3.5"
+        className="scent-lux-input scent-vault-search-input flex h-[60px] flex-1 items-center gap-2 rounded-full px-2.5 transition-colors focus-within:ring-2 focus-within:ring-scent-accent/12 sm:h-[68px] sm:px-3.5"
       >
         <button
           type="button"
@@ -726,6 +730,16 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
           {busy ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Send size={16} aria-hidden />}
         </button>
       </form>
+        <button
+          type="button"
+          onClick={onExit}
+          className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-scent-text-subtle transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
+          aria-label="Close signature scent section"
+          title="Close"
+        >
+          <X size={18} strokeWidth={1.75} aria-hidden />
+        </button>
+      </div>
 
       <AnimatePresence initial={false}>
         {settingsOpen ? (
@@ -835,34 +849,15 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
 
   return (
     <div className="relative flex min-h-0 w-full min-w-0 flex-col text-left" data-testid="scent-mission-panel">
-      {/* Section header: a small heading and a line of intro copy, with a single
-          collapse control. No oversized title or progress chrome competing with
-          the search card above — one clear hierarchy. */}
-      <div className="mb-4 flex items-start justify-between gap-3 sm:mb-5">
-        <div className="min-w-0">
-          <h2 className="font-serif italic text-[clamp(1.3rem,3.2vw,1.75rem)] leading-tight text-[#fff7ec]">
-            Discover your signature scent
-          </h2>
-          <p className="mt-1.5 max-w-xl text-sm leading-6 text-scent-text-muted">
-            Describe the mood, occasion, or impression you want — I&rsquo;ll curate a match from your vault.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={onExit}
-          className="-mr-1 -mt-1 inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full text-scent-text-subtle transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
-          aria-label="Close signature scent section"
-        >
-          <X size={20} strokeWidth={1.75} />
-        </button>
-      </div>
-
+      {/* The input row is first so it lands exactly where the trigger button was.
+          Nothing is stacked above it, so opening never pushes the input down —
+          the supporting tags and conversation simply grow downward below. */}
       {actionControls}
 
       {/* Conversation + resolved match grow downward beneath the input. */}
       <div
         ref={scrollRef}
-        className="mx-auto mt-4 flex w-full max-w-[42.75rem] max-h-[min(30dvh,15rem)] flex-col gap-2.5 overflow-y-auto pr-1 text-left scrollbar-hide sm:mt-5 sm:max-h-[min(32dvh,18rem)]"
+        className="mt-4 flex w-full max-h-[min(30dvh,15rem)] flex-col gap-2.5 overflow-y-auto pr-1 text-left scrollbar-hide sm:mt-5 sm:max-h-[min(32dvh,18rem)]"
         role="log"
         aria-live="polite"
         aria-label="Signature scent concierge conversation"

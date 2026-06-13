@@ -482,6 +482,17 @@ function HeroVaultContentFallback() {
   );
 }
 
+// Matches the opened signature section's first row (input capsule + close) so a
+// first-time chunk load swaps in without shifting the input's position.
+function SignaturePanelFallback() {
+  return (
+    <div className="flex w-full items-center gap-2" aria-label="Loading signature scent">
+      <div className="scent-lux-input h-[60px] flex-1 animate-pulse rounded-full sm:h-[68px]" />
+      <div className="h-11 w-11 shrink-0 animate-pulse rounded-full bg-white/[0.05]" />
+    </div>
+  );
+}
+
 function WardrobeFallback() {
   return (
     <section className="mx-auto w-full max-w-[1400px] py-10" aria-label="Loading vault">
@@ -650,9 +661,11 @@ function DashboardView() {
               </div>
             </div>
 
-            {/* Signature-scent section — its own full-width structure that
-                expands downward from the button's location. It is structurally
-                separate from the search card and aligns to the same edges. */}
+            {/* Signature-scent section. The closed trigger and the opened input
+                occupy the exact same box, so opening updates that one element in
+                place — the input replaces the button at its precise position —
+                while the tags and conversation grow downward beneath it. There is
+                no second card; the search card above never moves. */}
             {discoveryReady && stateSettled && !vaultSearchUiActive ? (
               <motion.div
                 ref={signatureSectionRef}
@@ -665,23 +678,21 @@ function DashboardView() {
                   {agentActive ? (
                     <motion.div
                       key="signature-open"
-                      initial={reduceMotion ? false : { opacity: 0, y: -8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -8 }}
+                      initial={reduceMotion ? false : { opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
                       transition={vaultContentTransition}
-                      className="scent-vault-panel scent-signature-panel w-full min-w-0 relative overflow-hidden"
+                      className="w-full min-w-0"
                     >
-                      <div className="scent-vault-panel-inner min-w-0">
-                        <React.Suspense fallback={<HeroVaultContentFallback />}>
-                          <ScentMissionPanel
-                            items={items}
-                            weather={weather}
-                            authToken={authToken}
-                            onExit={() => setViewState('search')}
-                            onRevealMatch={handleMissionReveal}
-                          />
-                        </React.Suspense>
-                      </div>
+                      <React.Suspense fallback={<SignaturePanelFallback />}>
+                        <ScentMissionPanel
+                          items={items}
+                          weather={weather}
+                          authToken={authToken}
+                          onExit={() => setViewState('search')}
+                          onRevealMatch={handleMissionReveal}
+                        />
+                      </React.Suspense>
                     </motion.div>
                   ) : (
                     <motion.button
@@ -692,7 +703,7 @@ function DashboardView() {
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
                       transition={vaultContentTransition}
-                      className="scent-signature-cta group flex w-full items-center justify-center gap-2.5 rounded-[calc(var(--radius-scent)+12px)] border border-scent-accent/45 px-6 py-4 text-[12px] font-bold uppercase tracking-[0.14em] text-scent-accent shadow-[inset_0_1px_0_rgba(255,236,183,0.08)] transition-colors hover:border-scent-accent/70 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 sm:py-5 sm:text-[13px]"
+                      className="scent-signature-cta group flex h-[60px] w-full items-center justify-center gap-2.5 rounded-full border border-scent-accent/45 px-6 text-[12px] font-bold uppercase tracking-[0.14em] text-scent-accent shadow-[inset_0_1px_0_rgba(255,236,183,0.08)] transition-colors hover:border-scent-accent/70 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 sm:h-[68px] sm:text-[13px]"
                       aria-label="Discover your signature scent"
                       title="Discover your signature scent"
                     >
