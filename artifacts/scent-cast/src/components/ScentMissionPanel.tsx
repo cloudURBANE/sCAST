@@ -27,9 +27,11 @@ import {
   buildMissionWardrobe,
   buildMissionWeather,
   findWardrobeMatch,
+  missionProgress,
 } from '@/lib/scentMissionClient';
 import type { Fragrance } from '@/components/Wardrobe';
 import type { WeatherData } from '@/context/WeatherContext';
+import { useDragToScroll } from '@/hooks/useDragToScroll';
 import { isIpadSafariPerformanceMode } from '@/lib/platform';
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)
@@ -356,6 +358,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   const [tone, setTone] = useState<ToneMode>('balanced');
   const [composer, setComposer] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [quickReplyHintDismissed, setQuickReplyHintDismissed] = useState(false);
   // Briefly show a typing indicator before the concierge's first line lands, so
   // the panel greets the user instead of snapping in a wall of copy. Skipped
   // entirely under reduced-motion / iPad performance mode (calmMotion).
@@ -370,8 +373,12 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
 
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const quickReplyScrollRef = useRef<HTMLDivElement | null>(null);
   const composerRef = useRef<HTMLInputElement | null>(null);
   const sessionIdRef = useRef<string | undefined>(undefined);
+
+  // Desktop click-drag for the cue strip; touch keeps native momentum scroll.
+  useDragToScroll(quickReplyScrollRef);
 
   useEffect(() => () => abortRef.current?.abort(), []);
 
@@ -390,7 +397,25 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
     return () => window.clearTimeout(id);
   }, [introReady]);
 
+  const progress = missionProgress(mission);
   const enoughContext = hasEnoughContext(facets, mission, agentMode);
+  const capturedCount = Object.keys(facets).length;
+
+  const progressText = useMemo(() => {
+    if (progressNote) return progressNote;
+    if (resolved) return 'Match ready';
+    if (capturedCount === 0) return 'Ready for your cues';
+    return `${capturedCount} cue${capturedCount === 1 ? '' : 's'} captured`;
+  }, [capturedCount, progressNote, resolved]);
+
+  const contextLine = useMemo(() => {
+    const weatherParts = [
+      typeof weather?.temperature === 'number' ? `${Math.round(weather.temperature)}F` : null,
+      typeof weather?.humidity === 'number' ? `${Math.round(weather.humidity)}% humidity` : null,
+      typeof weather?.condition === 'string' ? weather.condition : null,
+    ].filter(Boolean);
+    return weatherParts.length > 0 ? weatherParts.join(' / ') : 'Weather context ready when available';
+  }, [weather]);
 
   const visibleQuickReplies = useMemo(() => {
     const selected = new Set(Object.keys(facets));
@@ -573,6 +598,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   const handleQuickReply = useCallback(
     (reply: QuickReply) => {
       if (busy) return;
+      setQuickReplyHintDismissed(true);
       const { nextFacets, nextMission } = updateFacetsAndMission(
         { [reply.facet]: reply.value },
         { destination: reply.destination, energy: reply.energy },
@@ -679,17 +705,25 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       : agentMode === 'premium'
         ? 'Describe the impression you want...'
         : 'Describe your desired aura...';
-  const compactQuickReplies = visibleQuickReplies.slice(0, 8);
+  const showQuickReplyHint = !quickReplyHintDismissed && visibleQuickReplies.length > 3 && capturedCount === 0;
 
   const actionControls = (
-    <div className="w-full">
-      {/* Row 1 occupies the exact box the trigger button held, so opening reads
-          as that single element updating in place. The input fills the width;
-          the close sits where the button's right edge was. */}
-      <div className="flex items-center gap-2">
+    <div className="mx-auto mt-4 w-full max-w-[42.75rem] sm:mt-5">
+      <div className="mb-2 flex items-center justify-end gap-2 pr-1">
+        <span className="scent-type-label text-scent-accent/70">Concierge</span>
+        <img
+          src="/scent-concierge-avatar.png"
+          alt="ScentCast Concierge"
+          width={36}
+          height={36}
+          loading="lazy"
+          decoding="async"
+          className="h-9 w-9 rounded-full border border-scent-accent/35 object-cover shadow-[0_2px_10px_rgba(0,0,0,0.45)]"
+        />
+      </div>
       <form
         onSubmit={handleSubmit}
-        className="scent-lux-input scent-vault-search-input flex h-[60px] flex-1 items-center gap-2 rounded-full px-2.5 transition-colors focus-within:ring-2 focus-within:ring-scent-accent/12 sm:h-[68px] sm:px-3.5"
+        className="scent-lux-input scent-vault-search-input flex h-[60px] w-full items-center gap-2 rounded-full px-2.5 transition-colors focus-within:ring-2 focus-within:ring-scent-accent/12 sm:h-[68px] sm:px-3.5"
       >
         <button
           type="button"
@@ -730,16 +764,6 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
           {busy ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Send size={16} aria-hidden />}
         </button>
       </form>
-        <button
-          type="button"
-          onClick={onExit}
-          className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-scent-text-subtle transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
-          aria-label="Close signature scent section"
-          title="Close"
-        >
-          <X size={18} strokeWidth={1.75} aria-hidden />
-        </button>
-      </div>
 
       <AnimatePresence initial={false}>
         {settingsOpen ? (
@@ -804,60 +828,111 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         ) : null}
       </AnimatePresence>
 
-      <div
-        className="mt-3 flex flex-wrap justify-center gap-1.5"
-        aria-label="Concierge quick replies"
-      >
-        {enoughContext || agentMode === 'fast' ? (
-          <button
-            type="button"
-            onClick={() => void runResolution(agentMode === 'fast' ? 'fast' : 'curate')}
-            disabled={busy || items.length === 0}
-            className="inline-flex items-center gap-1.5 rounded-full border border-scent-accent/68 bg-scent-accent/12 px-3 py-1.5 scent-type-chip text-[#fff7ec] transition-colors hover:bg-scent-accent/18 disabled:opacity-45"
-          >
-            <Sparkles size={12} aria-hidden />
-            Confirm
-          </button>
-        ) : null}
-        {agentMode === 'premium' ? (
-          <button
-            type="button"
-            onClick={() => void handlePremiumPreview()}
-            disabled={busy}
-            className="inline-flex items-center gap-1.5 rounded-full border border-scent-accent/42 px-3 py-1.5 scent-type-chip text-scent-accent transition-colors hover:bg-scent-accent/10 disabled:opacity-45"
-          >
-            <Lock size={12} aria-hidden />
-            Preview
-          </button>
-        ) : null}
-        {compactQuickReplies.map((reply) => (
-          <button
-            key={`${reply.facet}-${reply.value}`}
-            type="button"
-            onClick={() => handleQuickReply(reply)}
-            disabled={busy}
-            data-facet={reply.facet}
-            className="inline-flex items-center gap-1.5 rounded-full border border-white/20 px-3 py-1.5 scent-type-chip text-scent-text-muted transition-colors hover:border-scent-accent/42 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40 disabled:opacity-45"
-            title={`${FACET_LABELS[reply.facet]}: ${reply.value}`}
-          >
-            {reply.label}
-          </button>
-        ))}
+      <div className="relative mt-3">
+        <div
+          ref={quickReplyScrollRef}
+          onScroll={() => setQuickReplyHintDismissed(true)}
+          className="flex flex-nowrap gap-1.5 overflow-x-auto pb-1 scrollbar-hide select-none"
+          style={{ touchAction: 'pan-x', overscrollBehaviorX: 'contain' }}
+          aria-label="Concierge quick replies"
+        >
+          {enoughContext || agentMode === 'fast' ? (
+            <button
+              type="button"
+              onClick={() => void runResolution(agentMode === 'fast' ? 'fast' : 'curate')}
+              disabled={busy || items.length === 0}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-scent-accent/68 bg-scent-accent/12 px-3 py-1.5 scent-type-chip text-[#fff7ec] transition-colors hover:bg-scent-accent/18 disabled:opacity-45"
+            >
+              <Sparkles size={12} aria-hidden />
+              Confirm
+            </button>
+          ) : null}
+          {agentMode === 'premium' ? (
+            <button
+              type="button"
+              onClick={() => void handlePremiumPreview()}
+              disabled={busy}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-scent-accent/42 px-3 py-1.5 scent-type-chip text-scent-accent transition-colors hover:bg-scent-accent/10 disabled:opacity-45"
+            >
+              <Lock size={12} aria-hidden />
+              Preview
+            </button>
+          ) : null}
+          {visibleQuickReplies.map((reply) => (
+            <button
+              key={`${reply.facet}-${reply.value}`}
+              type="button"
+              onClick={() => handleQuickReply(reply)}
+              disabled={busy}
+              data-facet={reply.facet}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/20 px-3 py-1.5 scent-type-chip text-scent-text-muted transition-colors hover:border-scent-accent/42 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40 disabled:opacity-45"
+              title={`${FACET_LABELS[reply.facet]}: ${reply.value}`}
+            >
+              {reply.label}
+            </button>
+          ))}
+        </div>
+        <AnimatePresence>
+          {showQuickReplyHint ? (
+            <motion.p
+              initial={calmMotion ? false : { opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="pointer-events-none mt-2 text-center text-[10px] font-semibold uppercase tracking-[0.16em] text-scent-accent/60"
+            >
+              Swipe to explore more cues
+            </motion.p>
+          ) : null}
+        </AnimatePresence>
       </div>
     </div>
   );
 
   return (
-    <div className="relative flex min-h-0 w-full min-w-0 flex-col text-left" data-testid="scent-mission-panel">
-      {/* The input row is first so it lands exactly where the trigger button was.
-          Nothing is stacked above it, so opening never pushes the input down —
-          the supporting tags and conversation simply grow downward below. */}
-      {actionControls}
+    <div className="relative flex min-h-0 w-full min-w-0 flex-col text-center" data-testid="scent-mission-panel">
+      {/* Top row: the progress bar is centered and the close control is aligned
+          to it, so the X reads as a deliberate part of the layout rather than a
+          chip stuck in the card corner. */}
+      <div className="relative mb-4 flex items-center justify-center sm:mb-5">
+        <div
+          className="h-1 w-full max-w-[11rem] overflow-hidden rounded-full bg-white/10"
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(progress * 100)}
+          aria-label="Concierge progress"
+        >
+          <motion.div
+            className="h-full rounded-full bg-scent-accent/80"
+            initial={false}
+            animate={{ width: `${Math.max(progress * 100, capturedCount > 0 ? 18 : 8)}%` }}
+            transition={calmMotion ? { duration: 0.01 } : { duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+          />
+        </div>
+        <button
+          type="button"
+          onClick={onExit}
+          className="absolute right-0 top-1/2 inline-flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center rounded-full text-scent-text-subtle transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
+          aria-label="Return to fragrance search"
+        >
+          <X size={20} strokeWidth={1.75} />
+        </button>
+      </div>
 
-      {/* Conversation + resolved match grow downward beneath the input. */}
+      <header className="mx-auto max-w-[43rem] px-3 text-center">
+        <h2 className="mx-auto max-w-[32rem] text-balance font-serif italic text-[clamp(1.45rem,3.6vw,2rem)] leading-[1.08] tracking-normal text-[#fff7ec] drop-shadow-[0_4px_14px_rgba(0,0,0,0.72)]">
+          A scent for today.
+        </h2>
+        <p className="mt-2.5 scent-type-label text-scent-accent/55">{progressText}</p>
+        <p className="mx-auto mt-1.5 hidden max-w-xl text-sm leading-6 text-scent-text-muted sm:block">
+          {contextLine}
+        </p>
+      </header>
+
       <div
         ref={scrollRef}
-        className="mt-4 flex w-full max-h-[min(30dvh,15rem)] flex-col gap-2.5 overflow-y-auto pr-1 text-left scrollbar-hide sm:mt-5 sm:max-h-[min(32dvh,18rem)]"
+        className="mx-auto mt-4 flex w-full max-w-[42.75rem] max-h-[min(30dvh,15rem)] flex-col gap-2.5 overflow-y-auto pr-1 text-left scrollbar-hide sm:mt-5 sm:max-h-[min(32dvh,18rem)]"
         role="log"
         aria-live="polite"
         aria-label="Signature scent concierge conversation"
@@ -946,6 +1021,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       <p className="sr-only">
         {formatFacetLine(facets)}
       </p>
+      {actionControls}
     </div>
   );
 };
