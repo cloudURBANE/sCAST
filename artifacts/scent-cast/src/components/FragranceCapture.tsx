@@ -392,7 +392,9 @@ export const FragranceCapture: React.FC<{
   existingVaultKeys?: Set<string>;
   /** Scroll the user to their vault — used by the "View in vault" action on duplicates. */
   onViewVault?: () => void;
-}> = ({ onAdd, onVaultSearchStateChange, existingVaultKeys, onViewVault }) => {
+  /** Render only the search interior when the stable vault panel is owned by the parent. */
+  embeddedInVaultPanel?: boolean;
+}> = ({ onAdd, onVaultSearchStateChange, existingVaultKeys, onViewVault, embeddedInVaultPanel = false }) => {
   const [uploading, setUploading] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState("");
   const [matches, setMatches] = useState<FragranceMatch[]>([]);
@@ -1134,7 +1136,7 @@ export const FragranceCapture: React.FC<{
   ) : null;
 
   return (
-    <div className="scent-vault-panel w-full min-w-0 relative overflow-hidden">
+    <div className={embeddedInVaultPanel ? "relative w-full min-w-0" : "scent-vault-panel w-full min-w-0 relative overflow-hidden"}>
       <AnimatePresence>
         {searchVeil}
       </AnimatePresence>
