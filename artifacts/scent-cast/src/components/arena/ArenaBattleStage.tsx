@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ArenaBattleSide } from "@/components/arena/ArenaBattleSide";
 import { ArenaResultReveal } from "@/components/arena/ArenaResultReveal";
 import type { ArenaBattle } from "@/components/arena/arenaBattleMapper";
@@ -28,14 +28,26 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
   const [localVote, setLocalVote] = useState<string | null>(battle.viewerVote);
   const [reason, setReason] = useState<ArenaReasonKey | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const revealRef = useRef<HTMLDivElement>(null);
+  const justVotedRef = useRef(false);
 
   useEffect(() => {
     setLocalVote(battle.viewerVote);
     setReason(null);
     setErrorMessage(null);
+    justVotedRef.current = false;
   }, [battle.id, battle.viewerVote]);
 
   const revealed = Boolean(localVote);
+
+  // Bring the result + reason picker into view once a fresh vote reveals it,
+  // so mobile users aren't left staring at the cards with results below the fold.
+  useEffect(() => {
+    if (revealed && justVotedRef.current && revealRef.current) {
+      revealRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+      justVotedRef.current = false;
+    }
+  }, [revealed]);
   const guestLocalOnly = Boolean(localVote && !authToken);
   const selectedKey = localVote;
   const votePending = voteMutation.isPending || externalVotePending;
@@ -46,6 +58,7 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
   );
 
   const submitVote = (choice: string) => {
+    justVotedRef.current = true;
     setLocalVote(choice);
     setErrorMessage(null);
 
@@ -91,6 +104,7 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
           selected={selectedKey === battle.left.key}
           revealed={revealed}
           disabled={votePending}
+          isSaving={votePending && selectedKey === battle.left.key}
           onVote={() => submitVote(battle.left.key)}
         />
 
@@ -109,6 +123,7 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
           selected={selectedKey === battle.right.key}
           revealed={revealed}
           disabled={votePending}
+          isSaving={votePending && selectedKey === battle.right.key}
           onVote={() => submitVote(battle.right.key)}
         />
       </div>
@@ -122,22 +137,24 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
         </p>
       ) : null}
 
-      {revealed && localVote ? (
-        <ArenaResultReveal
-          battle={battle}
-          viewerChoice={localVote}
-          reason={reason}
-          guestLocalOnly={guestLocalOnly}
-          votePending={votePending}
-          onReasonChange={setReason}
-          onSignIn={onSignIn}
-          onNext={onNext}
-        />
-      ) : (
-        <p className="mx-auto mt-8 max-w-xl text-center text-sm leading-6 text-scent-text-subtle">
-          Pick one side to reveal the current saved tally.
-        </p>
-      )}
+      <div ref={revealRef}>
+        {revealed && localVote ? (
+          <ArenaResultReveal
+            battle={battle}
+            viewerChoice={localVote}
+            reason={reason}
+            guestLocalOnly={guestLocalOnly}
+            votePending={votePending}
+            onReasonChange={setReason}
+            onSignIn={onSignIn}
+            onNext={onNext}
+          />
+        ) : (
+          <p className="mx-auto mt-8 max-w-xl text-center text-sm leading-6 text-scent-text-subtle">
+            Pick one side to reveal the current saved tally.
+          </p>
+        )}
+      </div>
     </section>
   );
 };

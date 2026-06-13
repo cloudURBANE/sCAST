@@ -1,12 +1,5 @@
-import React, { useState } from "react";
-import {
-  ArrowRight,
-  Check,
-  CheckCircle2,
-  LoaderCircle,
-  LockKeyhole,
-  Share2,
-} from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { ArrowRight, Check, LockKeyhole, Share2 } from "lucide-react";
 import type { ArenaBattle } from "@/components/arena/arenaBattleMapper";
 import type { ArenaReasonKey } from "@/components/arena/arenaTwists";
 import {
@@ -48,6 +41,12 @@ export const ArenaResultReveal: React.FC<ArenaResultRevealProps> = ({
     viewerChoice === battle.left.key ? battle.left : battle.right;
   const pickedPercent = arenaPercentFor(battle, viewerChoice);
   const [shareCopied, setShareCopied] = useState(false);
+  const [reasonDeclined, setReasonDeclined] = useState(false);
+
+  // Clear the "skip reasons" choice when the viewer moves to a new battle.
+  useEffect(() => {
+    setReasonDeclined(false);
+  }, [battle.id]);
   const voteStatus = guestLocalOnly
     ? "Local reveal only. Sign in to save this pick."
     : votePending
@@ -83,29 +82,21 @@ export const ArenaResultReveal: React.FC<ArenaResultRevealProps> = ({
       aria-live="polite"
     >
       <div
-        className="relative rounded-lg border border-scent-accent/18 bg-[rgba(5,4,3,0.86)] p-4 pt-14 text-center shadow-[0_28px_80px_-56px_rgba(212,175,55,0.28),inset_0_1px_0_rgba(255,236,183,0.08)] sm:p-6 sm:pt-14"
+        className={[
+          "relative rounded-lg border border-scent-accent/18 bg-[rgba(5,4,3,0.86)] p-4 text-center shadow-[0_28px_80px_-56px_rgba(212,175,55,0.28),inset_0_1px_0_rgba(255,236,183,0.08)] sm:p-6",
+          guestLocalOnly ? "pt-14 sm:pt-14" : "",
+        ].join(" ")}
         aria-label={`${pickedSide.name} is your pick at ${pickedPercent} percent. ${battle.left.name} has ${leftPercent} percent from ${leftCount} saved votes. ${battle.right.name} has ${rightPercent} percent from ${rightCount} saved votes. ${voteStatus}`}
       >
-        <div className="absolute right-3 top-3 z-20 flex max-w-[calc(100%-1.5rem)] justify-end sm:right-4 sm:top-4">
-          <div className="inline-flex min-h-8 items-center gap-2 rounded-full bg-black/54 px-2.5 py-1 text-left shadow-[inset_0_0_0_1px_rgba(212,175,55,0.14)] backdrop-blur">
-            <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-scent-accent/[0.12] text-scent-accent">
-              {guestLocalOnly ? (
+        {guestLocalOnly ? (
+          <div className="absolute right-3 top-3 z-20 flex max-w-[calc(100%-1.5rem)] justify-end sm:right-4 sm:top-4">
+            <div className="inline-flex min-h-8 items-center gap-2 rounded-full bg-black/54 px-2.5 py-1 text-left shadow-[inset_0_0_0_1px_rgba(212,175,55,0.14)] backdrop-blur">
+              <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-scent-accent/[0.12] text-scent-accent">
                 <LockKeyhole size={12} strokeWidth={1.9} aria-hidden="true" />
-              ) : votePending ? (
-                <LoaderCircle
-                  size={12}
-                  strokeWidth={1.9}
-                  className="animate-spin"
-                  aria-hidden="true"
-                />
-              ) : (
-                <CheckCircle2 size={12} strokeWidth={1.9} aria-hidden="true" />
-              )}
-            </span>
-            <span className="min-w-0 truncate text-[10px] font-semibold uppercase leading-none tracking-[0.08em] text-scent-text-muted sm:max-w-[15rem]">
-              {voteStatus}
-            </span>
-            {guestLocalOnly ? (
+              </span>
+              <span className="min-w-0 truncate text-[10px] font-semibold uppercase leading-none tracking-[0.08em] text-scent-text-muted sm:max-w-[15rem]">
+                {voteStatus}
+              </span>
               <button
                 type="button"
                 onClick={onSignIn}
@@ -113,9 +104,9 @@ export const ArenaResultReveal: React.FC<ArenaResultRevealProps> = ({
               >
                 Save
               </button>
-            ) : null}
+            </div>
           </div>
-        </div>
+        ) : null}
 
         <div className="mx-auto max-w-2xl">
           <p className="scent-type-label text-scent-accent/82">Your pick</p>
@@ -175,7 +166,35 @@ export const ArenaResultReveal: React.FC<ArenaResultRevealProps> = ({
             reason ? "border-t-0 pt-4" : "border-t border-scent-accent/10",
           ].join(" ")}
         >
-          <ArenaReasonPicker value={reason} onChange={onReasonChange} />
+          {reasonDeclined && !reason ? (
+            <div className="flex flex-col items-center gap-2">
+              <p className="text-xs font-medium leading-5 text-scent-text-subtle">
+                Reason skipped — your vote still counts in the tally.
+              </p>
+              <button
+                type="button"
+                onClick={() => setReasonDeclined(false)}
+                className="inline-flex min-h-9 items-center justify-center rounded-full bg-white/[0.035] px-4 py-2 scent-type-chip text-scent-text-muted transition-colors hover:bg-white/[0.06] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/50"
+              >
+                Add a reason
+              </button>
+            </div>
+          ) : (
+            <>
+              <ArenaReasonPicker value={reason} onChange={onReasonChange} />
+              {!reason ? (
+                <div className="mt-3 flex justify-center">
+                  <button
+                    type="button"
+                    onClick={() => setReasonDeclined(true)}
+                    className="inline-flex min-h-9 items-center justify-center rounded-full px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-scent-text-subtle transition-colors hover:text-scent-text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40"
+                  >
+                    Skip reasons
+                  </button>
+                </div>
+              ) : null}
+            </>
+          )}
         </div>
       </div>
 

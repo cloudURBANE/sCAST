@@ -1192,19 +1192,6 @@ export const FragranceCapture: React.FC<{
 
         <div className="mx-auto max-w-[42.75rem] text-center">
           <form onSubmit={handleSearch} aria-busy={uploading} className="relative group">
-            {showSignatureScentAction ? (
-              <button
-                type="button"
-                onClick={onDiscoverSignatureScent}
-                className="absolute left-2.5 top-1/2 z-10 inline-flex h-10 max-w-[7.4rem] -translate-y-1/2 items-center justify-center gap-1.5 rounded-full border border-scent-accent/40 bg-black/42 px-3 text-[10px] font-bold uppercase tracking-[0.12em] text-scent-accent shadow-[inset_0_1px_0_rgba(255,236,183,0.08)] transition-colors hover:border-scent-accent/68 hover:bg-scent-accent/10 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 sm:left-3.5 sm:max-w-[13rem] sm:px-4 sm:text-[11px]"
-                aria-label="Discover your signature scent"
-                title="Discover your signature scent"
-              >
-                <Sparkles size={13} strokeWidth={1.9} aria-hidden />
-                <span>Discover</span>
-                <span className="hidden sm:inline">scent</span>
-              </button>
-            ) : null}
             <input
               ref={searchInputRef}
               id="scent-add-to-vault-search"
@@ -1229,12 +1216,17 @@ export const FragranceCapture: React.FC<{
                 }
                 setSearchFocused(true);
               }}
-              onBlur={() => { setSearchFocused(false); autoFocusPendingRef.current = false; }}
+              onBlur={() => {
+                setSearchFocused(false);
+                autoFocusPendingRef.current = false;
+                // Recover the iOS Safari viewport after the soft keyboard dismisses;
+                // the hero is a top-anchored view, so settling back to the top
+                // restores the centered layout instead of a half-scrolled gap.
+                window.setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 90);
+              }}
               placeholder="Search by house or fragrance..."
               aria-label="Look up a brand or fragrance"
-              className={`scent-lux-input scent-vault-search-input relative z-0 h-[60px] w-full text-center font-sans text-base font-medium text-[#fff7ec] outline-none transition-colors placeholder:text-scent-text-subtle placeholder:font-medium sm:h-[68px] scroll-mt-28 ${
-                showSignatureScentAction ? 'pl-[8.35rem] pr-16 sm:pl-[11.5rem] sm:pr-[4.35rem]' : 'px-16 sm:px-[4.35rem]'
-              }`}
+              className="scent-lux-input scent-vault-search-input relative z-0 h-[60px] w-full text-center font-sans text-base font-medium text-[#fff7ec] outline-none transition-colors placeholder:text-scent-text-subtle placeholder:font-medium sm:h-[68px] scroll-mt-28 px-16 sm:px-[4.35rem]"
             />
             <motion.button
               type="submit"
@@ -1255,6 +1247,18 @@ export const FragranceCapture: React.FC<{
               </motion.span>
             </motion.button>
           </form>
+          {showSignatureScentAction ? (
+            <button
+              type="button"
+              onClick={onDiscoverSignatureScent}
+              className="mx-auto mt-4 inline-flex min-h-11 items-center justify-center gap-1.5 rounded-full border border-scent-accent/40 bg-black/42 px-5 py-2.5 text-[11px] font-bold uppercase tracking-[0.12em] text-scent-accent shadow-[inset_0_1px_0_rgba(255,236,183,0.08)] transition-colors hover:border-scent-accent/68 hover:bg-scent-accent/10 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
+              aria-label="Discover your signature scent"
+              title="Discover your signature scent"
+            >
+              <Sparkles size={13} strokeWidth={1.9} aria-hidden />
+              <span>Discover your signature scent</span>
+            </button>
+          ) : null}
         </div>
 
         {/* Screen-reader announcement for dynamic search results */}

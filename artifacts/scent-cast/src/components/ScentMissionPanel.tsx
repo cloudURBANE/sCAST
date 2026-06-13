@@ -151,7 +151,7 @@ function newMessageId(): string {
 
 function initialAgentMessage(itemCount: number): string {
   if (itemCount > 0) {
-    return "I'll use your vault and today's conditions. Tell me the setting, mood, or impression you want.";
+    return 'Welcome to ScentCast Concierge. I’ll review your wardrobe and read today’s atmospheric conditions. Describe the mood, occasion, or impression you want to leave today.';
   }
   return 'I can shape a signature direction, but I need fragrances in your vault before I can rank a real match. Add a few scents from search, then come back here.';
 }
@@ -362,6 +362,10 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   const [composer, setComposer] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [quickReplyHintDismissed, setQuickReplyHintDismissed] = useState(false);
+  // Briefly show a typing indicator before the concierge's first line lands, so
+  // the panel greets the user instead of snapping in a wall of copy. Skipped
+  // entirely under reduced-motion / iPad performance mode (calmMotion).
+  const [introReady, setIntroReady] = useState(() => calmMotion);
   const [actionSlot, setActionSlot] = useState<HTMLElement | null>(null);
   const [busy, setBusy] = useState(false);
   const [progressNote, setProgressNote] = useState('');
@@ -395,6 +399,12 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
     });
     return () => window.cancelAnimationFrame(id);
   }, []);
+
+  useEffect(() => {
+    if (introReady) return;
+    const id = window.setTimeout(() => setIntroReady(true), 1200);
+    return () => window.clearTimeout(id);
+  }, [introReady]);
 
   useEffect(() => {
     if (!actionSlotId || typeof document === 'undefined') {
@@ -708,15 +718,27 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
 
   const composerPlaceholder =
     agentMode === 'fast'
-      ? 'Give me one cue, or type what you need...'
+      ? 'One cue, or what you need...'
       : agentMode === 'premium'
-        ? 'Describe the architecture of the impression...'
-        : 'Tell me the occasion, mood, or impression...';
+        ? 'Describe the impression you want...'
+        : 'Describe your desired aura...';
   const compactQuickReplies = visibleQuickReplies.slice(0, 6);
   const showQuickReplyHint = !quickReplyHintDismissed && compactQuickReplies.length > 3 && capturedCount === 0;
 
   const actionControls = (
     <div className="mx-auto w-full max-w-[42.75rem]">
+      <div className="mb-2 flex items-center justify-end gap-2 pr-1">
+        <span className="scent-type-label text-scent-accent/70">Concierge</span>
+        <img
+          src="/scent-concierge-avatar.png"
+          alt="ScentCast Concierge"
+          width={36}
+          height={36}
+          loading="lazy"
+          decoding="async"
+          className="h-9 w-9 rounded-full border border-scent-accent/35 object-cover shadow-[0_2px_10px_rgba(0,0,0,0.45)]"
+        />
+      </div>
       <form
         onSubmit={handleSubmit}
         className="scent-lux-input scent-vault-search-input flex h-[60px] w-full items-center gap-2 rounded-full px-2.5 transition-colors focus-within:ring-2 focus-within:ring-scent-accent/12 sm:h-[68px] sm:px-3.5"
@@ -741,6 +763,10 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
             if (event.key !== 'Enter' || event.shiftKey || event.metaKey || event.ctrlKey || event.altKey) return;
             event.preventDefault();
             event.currentTarget.form?.requestSubmit();
+          }}
+          onBlur={() => {
+            // Recover the iOS Safari viewport once the soft keyboard dismisses.
+            window.setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 90);
           }}
           placeholder={composerPlaceholder}
           aria-label="Message the fragrance concierge"
@@ -865,15 +891,15 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         </div>
         <AnimatePresence>
           {showQuickReplyHint ? (
-            <motion.div
-              initial={calmMotion ? false : { opacity: 0, x: 4 }}
-              animate={{ opacity: 1, x: 0 }}
+            <motion.p
+              initial={calmMotion ? false : { opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
-              className="pointer-events-none absolute right-0 top-0 flex h-8 items-center bg-gradient-to-l from-scent-bg via-scent-bg/90 to-transparent pl-8 pr-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-scent-accent/72"
+              className="pointer-events-none mt-2 text-center text-[10px] font-semibold uppercase tracking-[0.16em] text-scent-accent/60"
             >
-              Swipe
-            </motion.div>
+              Swipe to explore more cues
+            </motion.p>
           ) : null}
         </AnimatePresence>
       </div>
@@ -882,38 +908,39 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
 
   return (
     <div className="relative flex min-h-0 w-full min-w-0 flex-col text-center" data-testid="scent-mission-panel">
+      <div
+        className="mx-auto mt-1 h-1 w-full max-w-[12rem] overflow-hidden rounded-full bg-white/10"
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(progress * 100)}
+        aria-label="Concierge progress"
+      >
+        <motion.div
+          className="h-full rounded-full bg-scent-accent/80"
+          initial={false}
+          animate={{ width: `${Math.max(progress * 100, capturedCount > 0 ? 18 : 8)}%` }}
+          transition={calmMotion ? { duration: 0.01 } : { duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+        />
+      </div>
+
       <button
         type="button"
         onClick={onExit}
-        className="absolute right-0 top-0 z-10 inline-flex min-h-11 min-w-11 items-center justify-center rounded-full text-scent-text-subtle transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
+        className="absolute right-1 top-1 z-10 inline-flex min-h-11 min-w-11 items-center justify-center rounded-full text-scent-text-subtle transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
         aria-label="Return to fragrance search"
       >
         <X size={20} strokeWidth={1.75} />
       </button>
 
-      <header className="mx-auto mb-4 max-w-[43rem] px-3 pt-1 text-center sm:mb-5">
-        <h2 className="mx-auto mt-1 max-w-[38rem] text-balance font-serif italic text-[clamp(2.15rem,6vw,4rem)] leading-[1.01] tracking-normal text-[#fff7ec] drop-shadow-[0_4px_14px_rgba(0,0,0,0.72)]">
+      <header className="mx-auto mb-3 max-w-[43rem] px-3 pt-2 text-center sm:mb-4">
+        <h2 className="mx-auto mt-0 max-w-[34rem] text-balance font-serif italic text-[clamp(1.75rem,4.5vw,2.5rem)] leading-[1.04] tracking-normal text-[#fff7ec] drop-shadow-[0_4px_14px_rgba(0,0,0,0.72)]">
           Discover your signature scent.
         </h2>
-        <p className="mt-3 scent-type-label text-scent-accent/82">{progressText}</p>
-        <p className="mx-auto mt-2 hidden max-w-xl text-sm leading-6 text-scent-text-muted sm:block">
+        <p className="mt-2 scent-type-label text-scent-accent/82">{progressText}</p>
+        <p className="mx-auto mt-1.5 hidden max-w-xl text-sm leading-6 text-scent-text-muted sm:block">
           {contextLine}
         </p>
-        <div
-          className="mx-auto mt-3 h-1 max-w-[22rem] overflow-hidden rounded-full bg-white/10"
-          role="progressbar"
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={Math.round(progress * 100)}
-          aria-label="Concierge progress"
-        >
-          <motion.div
-            className="h-full rounded-full bg-scent-accent/80"
-            initial={false}
-            animate={{ width: `${Math.max(progress * 100, capturedCount > 0 ? 18 : 8)}%` }}
-            transition={calmMotion ? { duration: 0.01 } : { duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-          />
-        </div>
       </header>
 
       <div
@@ -923,26 +950,47 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         aria-live="polite"
         aria-label="Signature scent concierge conversation"
       >
-        {messages.map((message) => (
+        {!introReady ? (
           <motion.div
-            key={message.id}
-            initial={calmMotion ? false : { opacity: 0, y: 8 }}
+            initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-            className={`max-w-[90%] rounded-[calc(var(--radius-scent)-12px)] border px-3.5 py-2.5 text-[13px] leading-relaxed sm:text-sm ${
-              message.role === 'user'
-                ? 'self-end border-white/14 bg-white/[0.07] text-[#fff7ec]'
-                : message.role === 'system'
-                  ? 'self-start border-red-400/25 bg-red-500/10 text-red-100'
-                  : 'self-start border-scent-accent/22 bg-[linear-gradient(180deg,rgba(212,175,55,0.045),rgba(0,0,0,0.16))] text-scent-text-muted'
-            }`}
+            className="inline-flex max-w-[90%] items-center gap-1.5 self-start rounded-[calc(var(--radius-scent)-12px)] border border-scent-accent/22 bg-[linear-gradient(180deg,rgba(212,175,55,0.045),rgba(0,0,0,0.16))] px-4 py-3"
+            aria-label="Concierge is typing"
           >
-            {message.role === 'system' ? (
-              <AlertTriangle size={13} className="mr-1.5 inline align-[-2px]" aria-hidden />
-            ) : null}
-            {message.text}
+            {[0, 1, 2].map((dot) => (
+              <motion.span
+                key={dot}
+                className="h-1.5 w-1.5 rounded-full bg-scent-accent/70"
+                animate={{ opacity: [0.3, 1, 0.3], y: [0, -2, 0] }}
+                transition={{ duration: 1, repeat: Infinity, ease: 'easeInOut', delay: dot * 0.18 }}
+              />
+            ))}
           </motion.div>
-        ))}
+        ) : null}
+
+        {introReady
+          ? messages.map((message) => (
+              <motion.div
+                key={message.id}
+                initial={calmMotion ? false : { opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                className={`max-w-[90%] rounded-[calc(var(--radius-scent)-12px)] border px-3.5 py-2.5 text-[13px] leading-relaxed sm:text-sm ${
+                  message.role === 'user'
+                    ? 'self-end border-white/14 bg-white/[0.07] text-[#fff7ec]'
+                    : message.role === 'system'
+                      ? 'self-start border-red-400/25 bg-red-500/10 text-red-100'
+                      : 'self-start border-scent-accent/22 bg-[linear-gradient(180deg,rgba(212,175,55,0.045),rgba(0,0,0,0.16))] text-scent-text-muted'
+                }`}
+              >
+                {message.role === 'system' ? (
+                  <AlertTriangle size={13} className="mr-1.5 inline align-[-2px]" aria-hidden />
+                ) : null}
+                {message.text}
+              </motion.div>
+            ))
+          : null}
 
         {busy ? (
           <div className="inline-flex max-w-[90%] items-center gap-2 self-start rounded-full border border-scent-accent/24 bg-black/36 px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.12em] text-scent-accent/86">
