@@ -3,20 +3,25 @@ import { Link } from 'react-router-dom';
 import {
   ArrowRight,
   BadgeDollarSign,
+  Bot,
   ChevronDown,
   ChevronUp,
   FlaskConical,
   MessageCircle,
   MessageCircleQuestion,
+  Sparkles,
   Sun,
   Swords,
   type LucideIcon,
 } from 'lucide-react';
+import { BottleImage } from '@/components/BottleImage';
+import { BrandGoldLabel } from '@/components/BrandGoldLabel';
 import { CommentThread } from '@/components/community/CommentThread';
 import { CommunityAuthorAvatar } from '@/components/community/CommunityAuthorAvatar';
 import { ReactionBar } from '@/components/community/ReactionBar';
 import {
   type CommunityPost,
+  type CommunityFragranceSnapshot,
   type CommunityPostType,
   useCommunityBattleVote,
 } from '@/components/community/communityPosts';
@@ -142,6 +147,50 @@ const FragranceShowcase: React.FC<{ post: CommunityPost }> = ({ post }) => {
   );
 };
 
+const PostActionsFooter: React.FC<{
+  post: CommunityPost;
+  authToken: string | null;
+  onSignIn: () => void;
+  commentsOpen: boolean;
+  onToggleComments: () => void;
+}> = ({ post, authToken, onSignIn, commentsOpen, onToggleComments }) => (
+  <footer className="mt-4 flex flex-row items-center justify-between gap-4 border-t border-scent-accent/10 pt-3">
+    <h4 className="sr-only">Post actions</h4>
+    <div className="flex flex-1 justify-start">
+      <ReactionBar
+        targetType="post"
+        targetId={post.id}
+        counts={post.counts.reactions}
+        viewerReactions={post.viewerReactions}
+        authToken={authToken}
+        onSignIn={onSignIn}
+        compact={true}
+      />
+    </div>
+    <button
+      type="button"
+      onClick={onToggleComments}
+      className="scent-no-mobile-focus-ring flex min-h-9 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 scent-type-chip text-scent-text-muted transition-colors hover:bg-white/[0.045] hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/60"
+      aria-expanded={commentsOpen}
+      aria-label={
+        commentsOpen
+          ? 'Hide comments'
+          : `View ${post.counts.comments} comments`
+      }
+    >
+      <MessageCircle size={15} strokeWidth={1.75} aria-hidden="true" />
+      <span className="text-[10px] font-bold uppercase tracking-[0.12em] sm:text-xs">
+        {post.counts.comments > 0 ? `${post.counts.comments}` : 'Comment'}
+      </span>
+      {commentsOpen ? (
+        <ChevronUp size={13} strokeWidth={1.8} aria-hidden="true" />
+      ) : (
+        <ChevronDown size={13} strokeWidth={1.8} aria-hidden="true" />
+      )}
+    </button>
+  </footer>
+);
+
 const CompactBattlePostCard: React.FC<PostCardProps> = ({
   post,
   authToken,
@@ -222,41 +271,101 @@ const CompactBattlePostCard: React.FC<PostCardProps> = ({
         </div>
       ) : null}
 
-      <footer className="mt-4 flex flex-row items-center justify-between gap-4 border-t border-scent-accent/10 pt-3">
-        <h4 className="sr-only">Post actions</h4>
-        <div className="flex flex-1 justify-start">
-          <ReactionBar
-            targetType="post"
-            targetId={post.id}
-            counts={post.counts.reactions}
-            viewerReactions={post.viewerReactions}
-            authToken={authToken}
-            onSignIn={onSignIn}
-            compact={true}
-          />
+      <PostActionsFooter
+        post={post}
+        authToken={authToken}
+        onSignIn={onSignIn}
+        commentsOpen={commentsOpen}
+        onToggleComments={() => setCommentsOpen((open) => !open)}
+      />
+
+      {commentsOpen ? (
+        <CommentThread
+          postId={post.id}
+          authToken={authToken}
+          onSignIn={onSignIn}
+        />
+      ) : null}
+    </article>
+  );
+};
+
+const CompactQuestionPostCard: React.FC<PostCardProps> = ({
+  post,
+  authToken,
+  onSignIn,
+}) => {
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  const headingId = useId();
+  const authorName = displayCommunityAuthor(post.author);
+  const heading = post.title?.trim() || 'Question';
+
+  return (
+    <article
+      aria-labelledby={headingId}
+      className="mx-auto w-full max-w-[760px] overflow-hidden rounded-[calc(var(--radius-scent)-2px)] border border-scent-accent/20 bg-[radial-gradient(78%_64%_at_50%_0%,rgba(255,247,236,0.026),transparent_62%),linear-gradient(180deg,rgba(10,9,7,0.88),rgba(0,0,0,0.97))] p-4 text-left shadow-[0_18px_44px_-36px_rgba(212,175,55,0.26),0_22px_46px_-34px_rgba(0,0,0,0.96),inset_0_1px_0_rgba(255,236,183,0.055)] sm:p-5"
+    >
+      <header className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <Link
+            to={communitySharePath(post.author)}
+            aria-label={`View ${authorName}'s vault`}
+            className="shrink-0 rounded-full transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/70"
+          >
+            <CommunityAuthorAvatar author={post.author} size="md" />
+          </Link>
+          <div className="min-w-0">
+            <Link
+              to={communitySharePath(post.author)}
+              className="block min-w-0 max-w-full truncate scent-type-chip text-[12px] text-[#fff7ec] transition-colors hover:text-scent-accent"
+            >
+              {authorName}
+            </Link>
+            <p className="mt-1 scent-type-meta text-[11px] uppercase text-scent-muted">
+              {formatCommunityTime(post.createdAt)}
+            </p>
+          </div>
         </div>
-        <button
-          type="button"
-          onClick={() => setCommentsOpen((open) => !open)}
-          className="scent-no-mobile-focus-ring flex min-h-9 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 scent-type-chip text-scent-text-muted transition-colors hover:bg-white/[0.045] hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/60"
-          aria-expanded={commentsOpen}
-          aria-label={
-            commentsOpen
-              ? 'Hide comments'
-              : `View ${post.counts.comments} comments`
-          }
+        <span className="inline-flex min-h-9 shrink-0 items-center justify-center gap-2 rounded-full bg-scent-accent/[0.075] px-3 py-1.5 scent-type-chip text-[11px] text-scent-accent shadow-[inset_0_0_0_1px_rgba(212,175,55,0.18)]">
+          <MessageCircleQuestion size={15} strokeWidth={1.75} aria-hidden="true" />
+          Question
+        </span>
+      </header>
+
+      <div className="mt-4 min-w-0">
+        <h3
+          id={headingId}
+          className="break-words text-balance font-serif text-2xl italic leading-tight text-[#fff7ec] sm:text-3xl"
         >
-          <MessageCircle size={15} strokeWidth={1.75} aria-hidden="true" />
-          <span className="text-[10px] font-bold uppercase tracking-[0.12em] sm:text-xs">
-            {post.counts.comments > 0 ? `${post.counts.comments}` : 'Comment'}
-          </span>
-          {commentsOpen ? (
-            <ChevronUp size={13} strokeWidth={1.8} aria-hidden="true" />
-          ) : (
-            <ChevronDown size={13} strokeWidth={1.8} aria-hidden="true" />
-          )}
-        </button>
-      </footer>
+          {heading}
+        </h3>
+        {post.body ? (
+          <p className="mt-2 max-w-2xl whitespace-pre-line break-words text-sm leading-6 text-[#fff7ec]/76 sm:text-[15px]">
+            {post.body}
+          </p>
+        ) : null}
+      </div>
+
+      {post.tags.length > 0 ? (
+        <div className="mt-4 flex min-w-0 flex-wrap gap-2">
+          {post.tags.slice(0, 4).map((tag) => (
+            <span
+              key={tag}
+              className="max-w-full rounded-full border border-scent-accent/14 bg-black/48 px-2.5 py-1 scent-type-chip text-[10px] text-scent-text-muted"
+            >
+              #{tag}
+            </span>
+          ))}
+        </div>
+      ) : null}
+
+      <PostActionsFooter
+        post={post}
+        authToken={authToken}
+        onSignIn={onSignIn}
+        commentsOpen={commentsOpen}
+        onToggleComments={() => setCommentsOpen((open) => !open)}
+      />
 
       {commentsOpen ? (
         <CommentThread
@@ -428,6 +537,194 @@ const BattleVotes: React.FC<{
   );
 };
 
+const TOM_FORD_OUD_WOOD_VIDEO = '/beta/tom-ford-oud-wood.mp4';
+
+function featuredSotdFragrance(post: CommunityPost): CommunityFragranceSnapshot | null {
+  return (
+    post.fragrances.find((fragrance) =>
+      isAllowedSnapshotImage(fragrance.imageUrl),
+    ) ??
+    post.fragrances[0] ??
+    null
+  );
+}
+
+function isTomFordOudWood(fragrance: CommunityFragranceSnapshot | null): boolean {
+  if (!fragrance) return false;
+  const brand = fragrance.brand.trim().toLowerCase();
+  const name = fragrance.name.trim().toLowerCase();
+  return brand === 'tom ford' && name.includes('oud wood');
+}
+
+function sotdFragments(post: CommunityPost, fragrance: CommunityFragranceSnapshot | null): string[] {
+  const metadataFragments = post.metadata.fragments;
+  if (Array.isArray(metadataFragments)) {
+    const fragments = metadataFragments
+      .map((item) => (typeof item === 'string' ? item.trim() : ''))
+      .filter(Boolean)
+      .slice(0, 4);
+    if (fragments.length > 0) return fragments;
+  }
+
+  if (isTomFordOudWood(fragrance)) {
+    return ['polished oud', 'cardamom', 'sandalwood', 'amber'];
+  }
+
+  return [
+    fragrance?.family,
+    metadataString(post, 'mood'),
+    metadataString(post, 'occasion'),
+    post.tags[0],
+  ]
+    .filter((item): item is string => Boolean(item))
+    .slice(0, 4);
+}
+
+const ScentOfDayPostCard: React.FC<PostCardProps> = ({
+  post,
+  authToken,
+  onSignIn,
+}) => {
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  const headingId = useId();
+  const authorName = displayCommunityAuthor(post.author);
+  const fragrance = featuredSotdFragrance(post);
+  const heading = fragrance?.name || post.title?.trim() || 'Scent of the day';
+  const brand = fragrance?.brand || 'Beam Agent';
+  const fragments = sotdFragments(post, fragrance);
+  const videoSrc = isTomFordOudWood(fragrance) ? TOM_FORD_OUD_WOOD_VIDEO : null;
+
+  return (
+    <article
+      aria-labelledby={headingId}
+      className="mx-auto w-full max-w-[940px] overflow-hidden rounded-[calc(var(--radius-scent)+2px)] border border-scent-accent/22 bg-[radial-gradient(76%_62%_at_18%_0%,rgba(255,247,236,0.035),transparent_64%),radial-gradient(70%_72%_at_88%_20%,rgba(212,175,55,0.075),transparent_66%),linear-gradient(180deg,rgba(10,9,7,0.92),rgba(0,0,0,0.982))] p-4 text-left shadow-[0_24px_64px_-46px_rgba(212,175,55,0.34),0_28px_60px_-38px_rgba(0,0,0,0.98),inset_0_1px_0_rgba(255,236,183,0.065)] sm:p-5"
+    >
+      <header className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <Link
+            to={communitySharePath(post.author)}
+            aria-label={`View ${authorName}'s vault`}
+            className="shrink-0 rounded-full transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/70"
+          >
+            <CommunityAuthorAvatar author={post.author} size="md" />
+          </Link>
+          <div className="min-w-0">
+            <Link
+              to={communitySharePath(post.author)}
+              className="block min-w-0 max-w-full truncate scent-type-chip text-[12px] text-[#fff7ec] transition-colors hover:text-scent-accent"
+            >
+              {authorName}
+            </Link>
+            <p className="mt-1 scent-type-meta text-[11px] uppercase text-scent-muted">
+              {formatCommunityTime(post.createdAt)}
+            </p>
+          </div>
+        </div>
+        <span className="inline-flex min-h-9 shrink-0 items-center justify-center gap-2 rounded-full bg-scent-accent/[0.075] px-3 py-1.5 scent-type-chip text-[11px] text-scent-accent shadow-[inset_0_0_0_1px_rgba(212,175,55,0.18)]">
+          <Sun size={15} strokeWidth={1.75} aria-hidden="true" />
+          SOTD
+        </span>
+      </header>
+
+      <div className="mt-5 grid min-w-0 gap-5 sm:grid-cols-[minmax(13rem,0.82fr)_minmax(0,1fr)] sm:items-stretch">
+        <div className="min-w-0">
+          <div className="scent-fragrance-card scent-community-marquee-card relative mx-auto flex aspect-[3/4.4] w-full max-w-[18rem] flex-col overflow-hidden p-5">
+            <div className="scent-card-frame" aria-hidden="true" />
+            <div className="relative z-10 flex justify-between gap-3">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-scent-accent/22 bg-black/54 px-2.5 py-1 scent-type-label text-scent-accent">
+                <Sparkles size={12} strokeWidth={1.8} aria-hidden="true" />
+                Today
+              </span>
+              <span className="rounded-full border border-white/10 bg-white/[0.035] px-2.5 py-1 font-mono text-[9px] uppercase text-[#fff7ec]/52">
+                Beam
+              </span>
+            </div>
+            <div className="relative z-10 my-3 min-h-0 flex-1">
+              {fragrance?.imageUrl ? (
+                <BottleImage
+                  src={fragrance.imageUrl}
+                  alt={`${fragrance.name} by ${fragrance.brand}`}
+                  variant="card"
+                  className="absolute inset-0"
+                  imgClassName="scent-hover-scale brightness-[1.08] transition-transform duration-[900ms] motion-reduce:transition-none"
+                  videoSrc={videoSrc}
+                  loading="lazy"
+                />
+              ) : (
+                <div className="absolute inset-0 flex items-center justify-center rounded-sm border border-dashed border-white/15 bg-white/[0.03]">
+                  <span className="scent-type-placeholder">No image</span>
+                </div>
+              )}
+            </div>
+            <BrandGoldLabel as="span" brand={brand} className="scent-card-brand relative z-10 block" />
+            <div className="scent-card-title-row relative z-10 mt-2">
+              <h3 className="scent-card-title" title={heading}>
+                {heading}
+              </h3>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex min-w-0 flex-col justify-center py-1 text-center sm:text-left">
+          <div className="inline-flex w-fit items-center gap-2 self-center rounded-full border border-scent-accent/18 bg-black/46 px-3 py-1.5 text-scent-accent sm:self-start">
+            <Bot size={15} strokeWidth={1.75} aria-hidden="true" />
+            <span className="scent-type-chip text-[10px] uppercase">
+              Beam Agent generated
+            </span>
+          </div>
+          <p className="mt-4 scent-type-label text-scent-accent/88">
+            Scent of the day
+          </p>
+          <h3
+            id={headingId}
+            className="mt-2 break-words text-balance font-serif text-4xl italic leading-[0.98] text-[#fff7ec] sm:text-5xl"
+          >
+            {heading}
+          </h3>
+          <BrandGoldLabel
+            as="p"
+            brand={brand}
+            className="mt-3 font-serif text-xl uppercase tracking-[0.18em]"
+          />
+          {fragrance?.family ? (
+            <p className="mx-auto mt-4 max-w-lg text-sm leading-6 text-[#fff7ec]/68 sm:mx-0">
+              {fragrance.family}
+            </p>
+          ) : null}
+          {fragments.length > 0 ? (
+            <div className="mt-5 flex min-w-0 flex-wrap justify-center gap-2 sm:justify-start">
+              {fragments.map((fragment) => (
+                <span
+                  key={fragment}
+                  className="rounded-full border border-scent-accent/16 bg-black/52 px-3 py-1 scent-type-chip text-[10px] text-scent-text-muted"
+                >
+                  {fragment}
+                </span>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      <PostActionsFooter
+        post={post}
+        authToken={authToken}
+        onSignIn={onSignIn}
+        commentsOpen={commentsOpen}
+        onToggleComments={() => setCommentsOpen((open) => !open)}
+      />
+
+      {commentsOpen ? (
+        <CommentThread
+          postId={post.id}
+          authToken={authToken}
+          onSignIn={onSignIn}
+        />
+      ) : null}
+    </article>
+  );
+};
+
 const StandardPostCard: React.FC<PostCardProps> = ({
   post,
   authToken,
@@ -508,41 +805,13 @@ const StandardPostCard: React.FC<PostCardProps> = ({
         </div>
       ) : null}
 
-      <footer className="mt-4 flex flex-row items-center justify-between gap-4 border-t border-scent-accent/10 pt-3">
-        <h4 className="sr-only">Post actions</h4>
-        <div className="flex flex-1 justify-start">
-          <ReactionBar
-            targetType="post"
-            targetId={post.id}
-            counts={post.counts.reactions}
-            viewerReactions={post.viewerReactions}
-            authToken={authToken}
-            onSignIn={onSignIn}
-            compact={true}
-          />
-        </div>
-        <button
-          type="button"
-          onClick={() => setCommentsOpen((open) => !open)}
-          className="scent-no-mobile-focus-ring flex min-h-9 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 scent-type-chip text-scent-text-muted transition-colors hover:bg-white/[0.045] hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/60"
-          aria-expanded={commentsOpen}
-          aria-label={
-            commentsOpen
-              ? 'Hide comments'
-              : `View ${post.counts.comments} comments`
-          }
-        >
-          <MessageCircle size={15} strokeWidth={1.75} aria-hidden="true" />
-          <span className="text-[10px] font-bold uppercase tracking-[0.12em] sm:text-xs">
-            {post.counts.comments > 0 ? `${post.counts.comments}` : 'Comment'}
-          </span>
-          {commentsOpen ? (
-            <ChevronUp size={13} strokeWidth={1.8} aria-hidden="true" />
-          ) : (
-            <ChevronDown size={13} strokeWidth={1.8} aria-hidden="true" />
-          )}
-        </button>
-      </footer>
+      <PostActionsFooter
+        post={post}
+        authToken={authToken}
+        onSignIn={onSignIn}
+        commentsOpen={commentsOpen}
+        onToggleComments={() => setCommentsOpen((open) => !open)}
+      />
 
       {commentsOpen ? (
         <CommentThread
@@ -558,6 +827,14 @@ const StandardPostCard: React.FC<PostCardProps> = ({
 export const PostCard: React.FC<PostCardProps> = (props) => {
   if (props.post.postType === 'battle') {
     return <CompactBattlePostCard {...props} />;
+  }
+
+  if (props.post.postType === 'question') {
+    return <CompactQuestionPostCard {...props} />;
+  }
+
+  if (props.post.postType === 'sotd') {
+    return <ScentOfDayPostCard {...props} />;
   }
 
   return <StandardPostCard {...props} />;

@@ -58,6 +58,19 @@ function normalizeBackendOrigin(raw) {
   return "";
 }
 
+function applyApiCacheSafetyHeaders(headers) {
+  if (headers.has("set-cookie")) {
+    headers.set("cache-control", "private, no-store");
+    headers.delete("cdn-cache-control");
+    headers.delete("vercel-cdn-cache-control");
+    return;
+  }
+
+  if (!headers.has("cache-control")) {
+    headers.set("cache-control", "private, no-store");
+  }
+}
+
 /** @param {Request} request @returns {Promise<Response>} */
 export default async function middleware(request) {
   const backend = normalizeBackendOrigin(process.env.BACKEND_ORIGIN);
@@ -114,6 +127,7 @@ export default async function middleware(request) {
     // the response headers match the decoded body we actually stream back.
     passthrough.delete("content-encoding");
     passthrough.delete("content-length");
+    applyApiCacheSafetyHeaders(passthrough);
     return new Response(upstream.body, {
       status: upstream.status,
       statusText: upstream.statusText,

@@ -4,6 +4,208 @@
   "installCommand": "corepack enable && NODE_ENV=development pnpm install --frozen-lockfile",
   "buildCommand": "pnpm run build:web",
   "outputDirectory": "artifacts/scent-cast/dist/public",
+  "headers": [
+    {
+      "source": "/assets/:path*",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/nav/:path*",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400, stale-while-revalidate=604800"
+        },
+        {
+          "key": "Vercel-CDN-Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/icons/:path*",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400, stale-while-revalidate=604800"
+        },
+        {
+          "key": "Vercel-CDN-Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/social/:path*",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400, stale-while-revalidate=604800"
+        },
+        {
+          "key": "Vercel-CDN-Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/beta/:path*",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400, stale-while-revalidate=604800"
+        },
+        {
+          "key": "Vercel-CDN-Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/opengraph-scentbeam-v2.png",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400, stale-while-revalidate=604800"
+        },
+        {
+          "key": "Vercel-CDN-Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/opengraph.jpg",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400, stale-while-revalidate=604800"
+        },
+        {
+          "key": "Vercel-CDN-Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/scent-concierge-avatar.png",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400, stale-while-revalidate=604800"
+        },
+        {
+          "key": "Vercel-CDN-Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/favicon.svg",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400, stale-while-revalidate=604800"
+        }
+      ]
+    },
+    {
+      "source": "/site.webmanifest",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, max-age=0, must-revalidate"
+        },
+        {
+          "key": "Vercel-CDN-Cache-Control",
+          "value": "max-age=0, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/index.html",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, max-age=0, must-revalidate"
+        },
+        {
+          "key": "Vercel-CDN-Cache-Control",
+          "value": "max-age=0, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, max-age=0, must-revalidate"
+        },
+        {
+          "key": "Vercel-CDN-Cache-Control",
+          "value": "max-age=0, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/community",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, max-age=0, must-revalidate"
+        },
+        {
+          "key": "Vercel-CDN-Cache-Control",
+          "value": "max-age=0, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/arena",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, max-age=0, must-revalidate"
+        },
+        {
+          "key": "Vercel-CDN-Cache-Control",
+          "value": "max-age=0, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/debug/:path*",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, max-age=0, must-revalidate"
+        },
+        {
+          "key": "Vercel-CDN-Cache-Control",
+          "value": "max-age=0, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/share/:path*",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, max-age=0, must-revalidate"
+        },
+        {
+          "key": "Vercel-CDN-Cache-Control",
+          "value": "max-age=0, must-revalidate"
+        }
+      ]
+    }
+  ],
   "rewrites": [
     {
       "source": "/(.*)",

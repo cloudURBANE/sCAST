@@ -1,6 +1,6 @@
 import path from "node:path";
 import { existsSync } from "node:fs";
-import express, { type ErrorRequestHandler, type Express, type RequestHandler } from "express";
+import express, { type ErrorRequestHandler, type Express, type RequestHandler, type Response } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
 import router from "./routes";
@@ -11,6 +11,9 @@ import { frontendStaticDir } from "./paths";
 
 const app: Express = express();
 const frontendIndexPath = path.join(frontendStaticDir, "index.html");
+const HASHED_STATIC_CACHE = "public, max-age=31536000, immutable";
+const PUBLIC_MEDIA_CACHE = "public, max-age=86400, stale-while-revalidate=604800";
+const SPA_SHELL_CACHE = "no-cache, max-age=0, must-revalidate";
 
 app.set("trust proxy", true);
 
@@ -53,10 +56,31 @@ const serveFrontendUnavailable: RequestHandler = (req, res, next) => {
   res.status(503).type("text/plain").send("Frontend build is unavailable. Please try again later.");
 };
 
+function setFrontendStaticCacheHeaders(res: Response, filePath: string): void {
+  const rel = path.relative(frontendStaticDir, filePath).split(path.sep).join("/");
+  if (rel === "index.html" || rel === "site.webmanifest") {
+    res.setHeader("Cache-Control", SPA_SHELL_CACHE);
+    return;
+  }
+
+  if (rel.startsWith("assets/")) {
+    res.setHeader("Cache-Control", HASHED_STATIC_CACHE);
+    return;
+  }
+
+  if (
+    /^(nav|icons|social|beta)\//.test(rel) ||
+    /^(opengraph-scentbeam-v2\.png|opengraph\.jpg|scent-concierge-avatar\.png|favicon\.svg)$/.test(rel)
+  ) {
+    res.setHeader("Cache-Control", PUBLIC_MEDIA_CACHE);
+  }
+}
+
 if (existsSync(frontendStaticDir) && existsSync(frontendIndexPath)) {
   app.use(
     express.static(frontendStaticDir, {
       fallthrough: true,
+      setHeaders: setFrontendStaticCacheHeaders,
     }),
   );
   app.use((req, res, next) => {
@@ -64,6 +88,7 @@ if (existsSync(frontendStaticDir) && existsSync(frontendIndexPath)) {
       next();
       return;
     }
+    res.setHeader("Cache-Control", SPA_SHELL_CACHE);
     res.sendFile(frontendIndexPath, (err) => {
       if (err) next(err);
     });

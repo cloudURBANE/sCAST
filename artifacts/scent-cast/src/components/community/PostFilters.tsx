@@ -114,7 +114,7 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
       className="w-full border-t border-scent-accent/10 bg-black/30 p-4 sm:p-5"
       aria-label="Community post filters"
     >
-      <div className="mx-auto grid w-full max-w-[850px] gap-4">
+      <div className="mx-auto grid w-full min-w-0 max-w-[850px] gap-4">
         <div className="relative w-full">
           <Search
             size={16}
@@ -142,8 +142,8 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
           ) : null}
         </div>
 
-        <div className="grid w-full gap-2.5">
-          <div className="grid w-full grid-cols-2 gap-2.5 sm:grid-cols-5">
+        <div className="grid w-full min-w-0 gap-2.5">
+          <div className="grid w-full min-w-0 grid-cols-2 gap-2.5 sm:grid-cols-5">
             <button
               type="button"
               onClick={() => onTypeChange(null)}
@@ -170,14 +170,14 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
           </div>
         </div>
 
-        <div className="border-t border-scent-accent/10 pt-3.5">
+        <div className="min-w-0 border-t border-scent-accent/10 pt-3.5">
           <button
             type="button"
             onClick={() => setTagMenuOpen((open) => !open)}
             aria-expanded={tagMenuOpen}
             className="flex min-h-11 w-full items-center justify-between gap-3 rounded-full border border-scent-accent/16 bg-black/30 px-4 py-2 text-left transition-colors hover:border-scent-accent/42 hover:bg-scent-accent/[0.055] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80"
           >
-            <span className="min-w-0">
+            <span className="min-w-0 overflow-hidden">
               <span className="block scent-type-label text-scent-accent">Popular tags</span>
               {tag ? (
                 <span className="mt-0.5 block truncate text-xs font-bold uppercase tracking-[0.12em] text-[#fff7ec]">
@@ -194,7 +194,7 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
           </button>
 
           {tagMenuOpen && hasTags ? (
-            <div className="scent-community-tag-marquee mt-3" aria-label="Popular tag filters">
+            <div className="scent-community-tag-marquee mt-3 w-full min-w-0 max-w-full" aria-label="Popular tag filters">
               <div className="scent-community-tag-marquee-track">
                 {[0, 1].map((copyIndex) => (
                   <div className="scent-community-tag-marquee-group" key={copyIndex} aria-hidden={copyIndex > 0}>
