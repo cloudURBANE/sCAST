@@ -7,7 +7,6 @@ import {
   Send,
   SlidersHorizontal,
   Sparkles,
-  X,
   Zap,
 } from 'lucide-react';
 import {
@@ -164,6 +163,39 @@ function formatFacetLine(facets: FacetState): string {
   return entries.map(([facet, value]) => `${FACET_LABELS[facet]}: ${value}`).join(' / ');
 }
 
+const ENOUGH_CONTEXT_PROMPT =
+  'That is enough for me to curate from your vault — tap Confirm whenever you are ready, or add one more detail.';
+
+function hasEnoughContext(facets: FacetState, mission: ScentMissionState, mode: AgentMode): boolean {
+  if (mode === 'fast') return Boolean(mission.calibration.destination || mission.calibration.energy || Object.keys(facets).length > 0);
+  if (!mission.calibration.destination || !mission.calibration.energy) return false;
+  // Premium keeps one extra layer of depth; standard/research curate as soon as
+  // destination + energy are set so the agent stops interrogating the user.
+  if (mode === 'premium') return Boolean(facets.projection && (facets.creativeDirection || facets.impression));
+  return true;
+}
+
+/**
+ * The single facet the agent still needs before it can curate, or null when it
+ * has enough context. Drives both the next question and the contextual quick
+ * replies, so the two never drift out of sync (and the agent never loops on a
+ * question it has already answered).
+ */
+function nextNeededFacet(
+  facets: FacetState,
+  mission: ScentMissionState,
+  mode: AgentMode,
+  itemCount: number,
+): FacetId | null {
+  if (itemCount === 0) return null;
+  if (!mission.calibration.destination) return 'occasion';
+  if (!mission.calibration.energy) return 'mood';
+  if (hasEnoughContext(facets, mission, mode)) return null;
+  if (!facets.projection) return 'projection';
+  if (mode === 'premium' && !facets.creativeDirection) return 'creativeDirection';
+  return null;
+}
+
 function firstMissingPrompt(
   facets: FacetState,
   mission: ScentMissionState,
@@ -173,29 +205,18 @@ function firstMissingPrompt(
   if (itemCount === 0) {
     return 'Add fragrances to your vault first, then I can make this specific instead of generic.';
   }
-  if (!mission.calibration.destination) {
-    return 'What setting should this serve: work, date, staying in, night out, or something else?';
+  switch (nextNeededFacet(facets, mission, mode, itemCount)) {
+    case 'occasion':
+      return 'What setting should this serve: work, date, staying in, night out, or something else?';
+    case 'mood':
+      return 'What should it make you feel: calm, focused, confident, social, or relaxed?';
+    case 'projection':
+      return 'How much trail should it leave: skin-close, moderate, or a statement?';
+    case 'creativeDirection':
+      return 'Give me a creative direction, like modern classic, textured niche, fresh signature, or dark elegance.';
+    default:
+      return ENOUGH_CONTEXT_PROMPT;
   }
-  if (!mission.calibration.energy) {
-    return 'What should it make you feel: calm, focused, confident, social, or relaxed?';
-  }
-  if (!facets.projection) {
-    return 'How much trail should it leave: skin-close, moderate, or a statement?';
-  }
-  if (mode === 'premium' && !facets.creativeDirection) {
-    return 'Give me a creative direction, like modern classic, textured niche, fresh signature, or dark elegance.';
-  }
-  if (mode === 'research' && !facets.impression && !facets.creativeDirection) {
-    return 'What impression should linger after you leave: clean, memorable, soft power, or something more personal?';
-  }
-  return 'I have enough context to curate from your vault. Add one final detail or tap Confirm.';
-}
-
-function hasEnoughContext(facets: FacetState, mission: ScentMissionState, mode: AgentMode): boolean {
-  if (mode === 'fast') return Boolean(mission.calibration.destination || mission.calibration.energy || Object.keys(facets).length > 0);
-  if (!mission.calibration.destination || !mission.calibration.energy) return false;
-  if (mode === 'premium') return Boolean(facets.projection && (facets.creativeDirection || facets.impression));
-  return Boolean(facets.projection || facets.impression || facets.creativeDirection || facets.season);
 }
 
 function isRecommendationIntent(text: string): boolean {
@@ -324,14 +345,23 @@ function missionWithDefaultsForFast(mission: ScentMissionState): ScentMissionSta
   );
 }
 
+/** Live progress surfaced to the host so the header can render outside the card. */
+export interface ScentMissionStatus {
+  progress: number;
+  progressText: string;
+  contextLine: string;
+}
+
 interface ScentMissionPanelProps {
   items: Fragrance[];
   weather: WeatherData | null;
   authToken: string | null;
-  /** Leave concierge mode and restore the search interior. */
+  /** Leave Beam Agent mode and restore the search interior. */
   onExit: () => void;
   /** Open the existing recommendation overlay with the resolved match. */
   onRevealMatch: (item: Fragrance, engine: ScentWeatherRecommendation, reason: string) => void;
+  /** Report progress so the host can render the header strip above the card. */
+  onStatusChange?: (status: ScentMissionStatus) => void;
 }
 
 export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
@@ -340,6 +370,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   authToken,
   onExit,
   onRevealMatch,
+  onStatusChange,
 }) => {
   const reduceMotion = useReducedMotion();
   const ipadPerformanceMode = useRef(isIpadSafariPerformanceMode()).current;
@@ -358,7 +389,6 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   const [tone, setTone] = useState<ToneMode>('balanced');
   const [composer, setComposer] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [quickReplyHintDismissed, setQuickReplyHintDismissed] = useState(false);
   // Briefly show a typing indicator before the concierge's first line lands, so
   // the panel greets the user instead of snapping in a wall of copy. Skipped
   // entirely under reduced-motion / iPad performance mode (calmMotion).
@@ -417,18 +447,21 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
     return weatherParts.length > 0 ? weatherParts.join(' / ') : 'Weather context ready when available';
   }, [weather]);
 
+  // Surface progress to the host so the title + progress + close can render in a
+  // header strip above the bordered card rather than crowding the panel interior.
+  useEffect(() => {
+    onStatusChange?.({ progress, progressText, contextLine });
+  }, [onStatusChange, progress, progressText, contextLine]);
+
+  // The agent surfaces quick replies only for the cue it is currently asking
+  // about, so they appear and disappear with the conversation instead of always
+  // crowding the panel. Once there is enough context the lane is empty and the
+  // Confirm action takes over.
+  const neededFacet = nextNeededFacet(facets, mission, agentMode, items.length);
   const visibleQuickReplies = useMemo(() => {
-    const selected = new Set(Object.keys(facets));
-    const priority: FacetId[] = mission.calibration.destination
-      ? mission.calibration.energy
-        ? ['projection', 'impression', 'creativeDirection', 'season', 'genderExpression', 'personality', 'budget']
-        : ['mood', 'projection', 'impression', 'creativeDirection', 'season', 'genderExpression', 'personality', 'budget']
-      : ['occasion', 'mood', 'projection', 'impression', 'creativeDirection', 'season', 'genderExpression', 'personality', 'budget'];
-    return QUICK_REPLIES
-      .filter((reply) => !selected.has(reply.facet))
-      .sort((a, b) => priority.indexOf(a.facet) - priority.indexOf(b.facet))
-      .slice(0, 16);
-  }, [facets, mission.calibration.destination, mission.calibration.energy]);
+    if (!neededFacet) return [];
+    return QUICK_REPLIES.filter((reply) => reply.facet === neededFacet);
+  }, [neededFacet]);
 
   const appendMessage = useCallback((role: PanelMessage['role'], text: string) => {
     setMessages((prev) => [...prev, { id: newMessageId(), role, text }]);
@@ -563,7 +596,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
           const nodeStatus = currentMission.nodes[nodeId];
           if (nodeStatus === 'complete') continue;
           if (nodeStatus === 'locked') {
-            appendMessage('system', 'The concierge needs one more cue before it can continue.');
+            appendMessage('system', 'The Beam Agent needs one more cue before it can continue.');
             break;
           }
 
@@ -584,7 +617,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         if (!(err instanceof Error && err.name === 'AbortError')) {
           appendMessage(
             'system',
-            err instanceof Error ? err.message : 'The concierge could not complete that turn. Try again.',
+            err instanceof Error ? err.message : 'The Beam Agent could not complete that turn. Try again.',
           );
         }
       } finally {
@@ -598,7 +631,6 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   const handleQuickReply = useCallback(
     (reply: QuickReply) => {
       if (busy) return;
-      setQuickReplyHintDismissed(true);
       const { nextFacets, nextMission } = updateFacetsAndMission(
         { [reply.facet]: reply.value },
         { destination: reply.destination, energy: reply.energy },
@@ -647,13 +679,11 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
           applyResponse(response, nextMission, { appendAssistant: false });
         }
         const fallback = firstMissingPrompt(nextFacets, nextMission, agentMode, items.length);
-        const assistantText = canCurate
-          ? 'I have enough context to curate from your vault. Add one final detail or tap Confirm.'
-          : fallback;
+        const assistantText = canCurate ? ENOUGH_CONTEXT_PROMPT : fallback;
         appendMessage('agent', safeAssistantText(response?.assistantMessage, assistantText));
       } catch (err) {
         if (!(err instanceof Error && err.name === 'AbortError')) {
-          appendMessage('system', err instanceof Error ? err.message : 'The concierge is unreachable. Try again.');
+          appendMessage('system', err instanceof Error ? err.message : 'The Beam Agent is unreachable. Try again.');
           appendMessage('agent', firstMissingPrompt(nextFacets, nextMission, agentMode, items.length));
         }
       } finally {
@@ -705,15 +735,14 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       : agentMode === 'premium'
         ? 'Describe the impression you want...'
         : 'Describe your desired aura...';
-  const showQuickReplyHint = !quickReplyHintDismissed && visibleQuickReplies.length > 3 && capturedCount === 0;
 
   const actionControls = (
     <div className="mx-auto mt-4 w-full max-w-[42.75rem] sm:mt-5">
       <div className="mb-2 flex items-center justify-end gap-2 pr-1">
-        <span className="scent-type-label text-scent-accent/70">Concierge</span>
+        <span className="scent-type-label text-scent-accent/70">Beam Agent</span>
         <img
           src="/scent-concierge-avatar.png"
-          alt="ScentCast Concierge"
+          alt="ScentCast Beam Agent"
           width={36}
           height={36}
           loading="lazy"
@@ -731,7 +760,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
           aria-expanded={settingsOpen}
           aria-controls="scent-mission-settings"
           className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-scent-accent/35 bg-black/35 text-scent-accent transition-colors hover:bg-scent-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
-          aria-label="Adjust concierge settings"
+          aria-label="Adjust Beam Agent settings"
           title="Adjust settings"
         >
           <SlidersHorizontal size={17} strokeWidth={1.8} aria-hidden />
@@ -751,7 +780,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
             window.setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 90);
           }}
           placeholder={composerPlaceholder}
-          aria-label="Message the fragrance concierge"
+          aria-label="Message the Beam Agent"
           autoComplete="off"
           className="min-w-0 flex-1 bg-transparent px-1 text-center text-sm font-medium text-[#fff7ec] outline-none placeholder:text-scent-text-subtle sm:text-base"
         />
@@ -831,10 +860,9 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       <div className="relative mt-3">
         <div
           ref={quickReplyScrollRef}
-          onScroll={() => setQuickReplyHintDismissed(true)}
-          className="flex flex-nowrap gap-1.5 overflow-x-auto pb-1 scrollbar-hide select-none"
+          className="flex flex-nowrap items-center justify-center gap-1.5 overflow-x-auto pb-1 scrollbar-hide select-none"
           style={{ touchAction: 'pan-x', overscrollBehaviorX: 'contain' }}
-          aria-label="Concierge quick replies"
+          aria-label="Beam Agent quick replies"
         >
           {enoughContext || agentMode === 'fast' ? (
             <button
@@ -858,84 +886,42 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
               Preview
             </button>
           ) : null}
-          {visibleQuickReplies.map((reply) => (
-            <button
-              key={`${reply.facet}-${reply.value}`}
-              type="button"
-              onClick={() => handleQuickReply(reply)}
-              disabled={busy}
-              data-facet={reply.facet}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/20 px-3 py-1.5 scent-type-chip text-scent-text-muted transition-colors hover:border-scent-accent/42 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40 disabled:opacity-45"
-              title={`${FACET_LABELS[reply.facet]}: ${reply.value}`}
-            >
-              {reply.label}
-            </button>
-          ))}
+          {/* Contextual cues for the agent's current question. They fade in and
+              out as the conversation advances rather than lingering. */}
+          <AnimatePresence initial={false} mode="popLayout">
+            {visibleQuickReplies.map((reply) => (
+              <motion.button
+                key={`${reply.facet}-${reply.value}`}
+                type="button"
+                onClick={() => handleQuickReply(reply)}
+                disabled={busy}
+                data-facet={reply.facet}
+                initial={calmMotion ? false : { opacity: 0, scale: 0.94 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={calmMotion ? { opacity: 0 } : { opacity: 0, scale: 0.94 }}
+                transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/20 px-3 py-1.5 scent-type-chip text-scent-text-muted transition-colors hover:border-scent-accent/42 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40 disabled:opacity-45"
+                title={`${FACET_LABELS[reply.facet]}: ${reply.value}`}
+              >
+                {reply.label}
+              </motion.button>
+            ))}
+          </AnimatePresence>
         </div>
-        <AnimatePresence>
-          {showQuickReplyHint ? (
-            <motion.p
-              initial={calmMotion ? false : { opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="pointer-events-none mt-2 text-center text-[10px] font-semibold uppercase tracking-[0.16em] text-scent-accent/60"
-            >
-              Swipe to explore more cues
-            </motion.p>
-          ) : null}
-        </AnimatePresence>
       </div>
     </div>
   );
 
   return (
     <div className="relative flex min-h-0 w-full min-w-0 flex-col text-center" data-testid="scent-mission-panel">
-      {/* Top row: the progress bar is centered and the close control is aligned
-          to it, so the X reads as a deliberate part of the layout rather than a
-          chip stuck in the card corner. */}
-      <div className="relative mb-4 flex items-center justify-center sm:mb-5">
-        <div
-          className="h-1 w-full max-w-[11rem] overflow-hidden rounded-full bg-white/10"
-          role="progressbar"
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={Math.round(progress * 100)}
-          aria-label="Concierge progress"
-        >
-          <motion.div
-            className="h-full rounded-full bg-scent-accent/80"
-            initial={false}
-            animate={{ width: `${Math.max(progress * 100, capturedCount > 0 ? 18 : 8)}%` }}
-            transition={calmMotion ? { duration: 0.01 } : { duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-          />
-        </div>
-        <button
-          type="button"
-          onClick={onExit}
-          className="absolute right-0 top-1/2 inline-flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center rounded-full text-scent-text-subtle transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
-          aria-label="Return to fragrance search"
-        >
-          <X size={20} strokeWidth={1.75} />
-        </button>
-      </div>
-
-      <header className="mx-auto max-w-[43rem] px-3 text-center">
-        <h2 className="mx-auto max-w-[32rem] text-balance font-serif italic text-[clamp(1.45rem,3.6vw,2rem)] leading-[1.08] tracking-normal text-[#fff7ec] drop-shadow-[0_4px_14px_rgba(0,0,0,0.72)]">
-          A scent for today.
-        </h2>
-        <p className="mt-2.5 scent-type-label text-scent-accent/55">{progressText}</p>
-        <p className="mx-auto mt-1.5 hidden max-w-xl text-sm leading-6 text-scent-text-muted sm:block">
-          {contextLine}
-        </p>
-      </header>
-
+      {/* The title, progress, and close control now live in a header strip above
+          the card (see App.tsx) so this surface is just the conversation. */}
       <div
         ref={scrollRef}
-        className="mx-auto mt-4 flex w-full max-w-[42.75rem] max-h-[min(30dvh,15rem)] flex-col gap-2.5 overflow-y-auto pr-1 text-left scrollbar-hide sm:mt-5 sm:max-h-[min(32dvh,18rem)]"
+        className="mx-auto flex w-full max-w-[42.75rem] max-h-[min(30dvh,15rem)] flex-col gap-2.5 overflow-y-auto pr-1 text-left scrollbar-hide sm:max-h-[min(32dvh,18rem)]"
         role="log"
         aria-live="polite"
-        aria-label="Signature scent concierge conversation"
+        aria-label="Beam Agent conversation"
       >
         {!introReady ? (
           <motion.div
@@ -943,7 +929,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
             className="inline-flex max-w-[90%] items-center gap-1.5 self-start rounded-[calc(var(--radius-scent)-12px)] border border-scent-accent/22 bg-[linear-gradient(180deg,rgba(212,175,55,0.045),rgba(0,0,0,0.16))] px-4 py-3"
-            aria-label="Concierge is typing"
+            aria-label="Beam Agent is typing"
           >
             {[0, 1, 2].map((dot) => (
               <motion.span

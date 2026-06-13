@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { ArrowRight, Check, LockKeyhole, Share2 } from "lucide-react";
 import type { ArenaBattle } from "@/components/arena/arenaBattleMapper";
 import type { ArenaReasonKey } from "@/components/arena/arenaTwists";
@@ -13,9 +13,12 @@ interface ArenaResultRevealProps {
   battle: ArenaBattle;
   viewerChoice: string;
   reason: ArenaReasonKey | null;
+  /** Persisted "skip reasons" choice for this battle (lifted to the stage). */
+  reasonDeclined: boolean;
   guestLocalOnly: boolean;
   votePending: boolean;
   onReasonChange: (reason: ArenaReasonKey) => void;
+  onReasonDeclinedChange: (declined: boolean) => void;
   onSignIn: () => void;
   onNext: () => void;
 }
@@ -24,9 +27,11 @@ export const ArenaResultReveal: React.FC<ArenaResultRevealProps> = ({
   battle,
   viewerChoice,
   reason,
+  reasonDeclined,
   guestLocalOnly,
   votePending,
   onReasonChange,
+  onReasonDeclinedChange,
   onSignIn,
   onNext,
 }) => {
@@ -41,12 +46,6 @@ export const ArenaResultReveal: React.FC<ArenaResultRevealProps> = ({
     viewerChoice === battle.left.key ? battle.left : battle.right;
   const pickedPercent = arenaPercentFor(battle, viewerChoice);
   const [shareCopied, setShareCopied] = useState(false);
-  const [reasonDeclined, setReasonDeclined] = useState(false);
-
-  // Clear the "skip reasons" choice when the viewer moves to a new battle.
-  useEffect(() => {
-    setReasonDeclined(false);
-  }, [battle.id]);
   const voteStatus = guestLocalOnly
     ? "Local reveal only. Sign in to save this pick."
     : votePending
@@ -173,7 +172,7 @@ export const ArenaResultReveal: React.FC<ArenaResultRevealProps> = ({
               </p>
               <button
                 type="button"
-                onClick={() => setReasonDeclined(false)}
+                onClick={() => onReasonDeclinedChange(false)}
                 className="inline-flex min-h-9 items-center justify-center rounded-full bg-white/[0.035] px-4 py-2 scent-type-chip text-scent-text-muted transition-colors hover:bg-white/[0.06] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/50"
               >
                 Add a reason
@@ -186,7 +185,7 @@ export const ArenaResultReveal: React.FC<ArenaResultRevealProps> = ({
                 <div className="mt-3 flex justify-center">
                   <button
                     type="button"
-                    onClick={() => setReasonDeclined(true)}
+                    onClick={() => onReasonDeclinedChange(true)}
                     className="inline-flex min-h-9 items-center justify-center rounded-full px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-scent-text-subtle transition-colors hover:text-scent-text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40"
                   >
                     Skip reasons

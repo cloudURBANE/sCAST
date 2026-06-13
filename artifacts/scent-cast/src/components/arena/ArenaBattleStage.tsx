@@ -3,6 +3,10 @@ import { ArenaBattleSide } from "@/components/arena/ArenaBattleSide";
 import { ArenaResultReveal } from "@/components/arena/ArenaResultReveal";
 import type { ArenaBattle } from "@/components/arena/arenaBattleMapper";
 import type { ArenaReasonKey } from "@/components/arena/arenaTwists";
+import {
+  readArenaReason,
+  writeArenaReason,
+} from "@/components/arena/arenaReasonStore";
 import { useCommunityBattleVote } from "@/components/community/communityPosts";
 
 interface ArenaBattleStageProps {
@@ -26,17 +30,37 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
 }) => {
   const voteMutation = useCommunityBattleVote(authToken);
   const [localVote, setLocalVote] = useState<string | null>(battle.viewerVote);
-  const [reason, setReason] = useState<ArenaReasonKey | null>(null);
+  const [reason, setReasonState] = useState<ArenaReasonKey | null>(
+    () => readArenaReason(battle.id).reason,
+  );
+  // Whether the viewer explicitly skipped the reason for this battle. Persisted
+  // alongside the reason so a revisited battle doesn't re-prompt "why it won".
+  const [reasonDeclined, setReasonDeclinedState] = useState<boolean>(
+    () => readArenaReason(battle.id).declined,
+  );
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const revealRef = useRef<HTMLDivElement>(null);
   const justVotedRef = useRef(false);
 
   useEffect(() => {
     setLocalVote(battle.viewerVote);
-    setReason(null);
+    const stored = readArenaReason(battle.id);
+    setReasonState(stored.reason);
+    setReasonDeclinedState(stored.declined);
     setErrorMessage(null);
     justVotedRef.current = false;
   }, [battle.id, battle.viewerVote]);
+
+  const handleReasonChange = (next: ArenaReasonKey) => {
+    setReasonState(next);
+    setReasonDeclinedState(false);
+    writeArenaReason(battle.id, { reason: next, declined: false });
+  };
+
+  const handleReasonDeclinedChange = (declined: boolean) => {
+    setReasonDeclinedState(declined);
+    writeArenaReason(battle.id, { reason, declined });
+  };
 
   const revealed = Boolean(localVote);
 
@@ -108,9 +132,9 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
           onVote={() => submitVote(battle.left.key)}
         />
 
-        <div className="grid place-items-center self-start">
+        <div className="grid place-items-center">
           <div
-            className="sticky top-[calc(var(--topbar-h)+1rem)] grid h-6 w-6 place-items-center rounded-full bg-black/88 text-[9px] font-bold tracking-[0.08em] text-scent-accent shadow-[0_0_0_1px_rgba(212,175,55,0.18),0_0_18px_rgba(212,175,55,0.14),inset_0_1px_0_rgba(255,255,255,0.08)] sm:h-11 sm:w-11 sm:text-sm sm:tracking-[0.12em]"
+            className="grid h-6 w-6 place-items-center rounded-full bg-black/88 text-[9px] font-bold tracking-[0.08em] text-scent-accent shadow-[0_0_0_1px_rgba(212,175,55,0.18),0_0_18px_rgba(212,175,55,0.14),inset_0_1px_0_rgba(255,255,255,0.08)] sm:sticky sm:top-[calc(var(--topbar-h)+1rem)] sm:h-11 sm:w-11 sm:text-sm sm:tracking-[0.12em]"
             aria-hidden="true"
           >
             VS
@@ -143,9 +167,11 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
             battle={battle}
             viewerChoice={localVote}
             reason={reason}
+            reasonDeclined={reasonDeclined}
             guestLocalOnly={guestLocalOnly}
             votePending={votePending}
-            onReasonChange={setReason}
+            onReasonChange={handleReasonChange}
+            onReasonDeclinedChange={handleReasonDeclinedChange}
             onSignIn={onSignIn}
             onNext={onNext}
           />

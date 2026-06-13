@@ -31,6 +31,7 @@ const Wardrobe = React.lazy(() =>
 const ScentMissionPanel = React.lazy(() =>
   loadRouteChunk(() => import('./components/ScentMissionPanel').then((module) => ({ default: module.ScentMissionPanel }))),
 );
+type ScentMissionStatus = import('./components/ScentMissionPanel').ScentMissionStatus;
 const ScentNotesInfographic = React.lazy(() =>
   loadRouteChunk(() => import('./components/ScentNotesInfographic').then((module) => ({ default: module.ScentNotesInfographic }))),
 );
@@ -542,6 +543,16 @@ function DashboardView() {
   } = useWardrobe();
   const reduceMotion = useReducedMotion();
   const [viewState, setViewState] = useState<'search' | 'agent'>('search');
+  // Beam Agent progress surfaced by the panel so its header (title + progress +
+  // close) can render in a strip ABOVE the bordered card instead of inside it.
+  const [missionStatus, setMissionStatus] = useState<ScentMissionStatus | null>(null);
+  const handleMissionStatus = useCallback((status: ScentMissionStatus) => {
+    setMissionStatus(status);
+  }, []);
+  const handleExitMission = useCallback(() => {
+    setViewState('search');
+    setMissionStatus(null);
+  }, []);
   const heroVaultRef = useRef<HTMLDivElement | null>(null);
   const signatureSectionRef = useRef<HTMLDivElement | null>(null);
   const recommendationOverlayRef = useRef<HTMLDivElement | null>(null);
@@ -585,7 +596,7 @@ function DashboardView() {
 
   useEffect(() => {
     if (viewState !== 'agent') return;
-    // The concierge replaces the search card inside the hero box, so bring that
+    // The Beam Agent replaces the search card inside the hero box, so bring that
     // box into view on open. `block: 'nearest'` avoids a hard page jump.
     const id = window.requestAnimationFrame(() => {
       heroVaultRef.current?.scrollIntoView({
@@ -640,11 +651,62 @@ function DashboardView() {
           <HomepageHeroMarquee />
 
           <section className="mx-auto w-full max-w-[60rem] min-w-0 text-center">
+            {/* Beam Agent header strip — title, progress, and close live ABOVE
+                the bordered card so the card itself only holds the conversation
+                and composer. Mounted only in agent mode. */}
+            <AnimatePresence initial={false}>
+              {agentActive ? (
+                <motion.div
+                  key="mission-header"
+                  initial={reduceMotion ? false : { opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 6 }}
+                  transition={vaultContentTransition}
+                  className="mx-auto mb-4 w-full max-w-[42.75rem] px-1 sm:mb-5"
+                >
+                  <div className="relative mb-3 flex items-center justify-center">
+                    <div
+                      className="h-1 w-full max-w-[11rem] overflow-hidden rounded-full bg-white/10"
+                      role="progressbar"
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={Math.round((missionStatus?.progress ?? 0) * 100)}
+                      aria-label="Beam Agent progress"
+                    >
+                      <motion.div
+                        className="h-full rounded-full bg-scent-accent/80"
+                        initial={false}
+                        animate={{ width: `${Math.max((missionStatus?.progress ?? 0) * 100, 8)}%` }}
+                        transition={reduceMotion ? { duration: 0.01 } : { duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleExitMission}
+                      className="absolute right-0 top-1/2 inline-flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center rounded-full text-scent-text-subtle transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
+                      aria-label="Return to fragrance search"
+                    >
+                      <X size={20} strokeWidth={1.75} />
+                    </button>
+                  </div>
+                  <h2 className="mx-auto max-w-[32rem] text-balance font-serif italic text-[clamp(1.45rem,3.6vw,2rem)] leading-[1.08] tracking-normal text-[#fff7ec] drop-shadow-[0_4px_14px_rgba(0,0,0,0.72)]">
+                    A scent for today.
+                  </h2>
+                  <p className="mt-2.5 scent-type-label text-scent-accent/55">
+                    {missionStatus?.progressText ?? 'Ready for your cues'}
+                  </p>
+                  <p className="mx-auto mt-1.5 hidden max-w-xl text-sm leading-6 text-scent-text-muted sm:block">
+                    {missionStatus?.contextLine ?? 'Weather context ready when available'}
+                  </p>
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
+
             {/* The hero box holds EITHER the fragrance-search card OR the
-                signature-scent concierge — never both. Opening the concierge
+                signature-scent Beam Agent — never both. Opening the agent
                 replaces the search card in place, so the card's details are not
-                duplicated above the panel; closing (the panel's own X) returns
-                the search card. */}
+                duplicated above the panel; closing (the header X) returns the
+                search card. */}
             <motion.div
               ref={heroVaultRef}
               layout={!reduceMotion}
@@ -668,8 +730,9 @@ function DashboardView() {
                           items={items}
                           weather={weather}
                           authToken={authToken}
-                          onExit={() => setViewState('search')}
+                          onExit={handleExitMission}
                           onRevealMatch={handleMissionReveal}
+                          onStatusChange={handleMissionStatus}
                         />
                       </React.Suspense>
                     </motion.div>
@@ -696,9 +759,9 @@ function DashboardView() {
               </div>
             </motion.div>
 
-            {/* Discover trigger sits below the search card and opens the
-                concierge in the card above. Hidden once open (the panel carries
-                its own close) and while the vault search overlay is active. */}
+            {/* Discover trigger sits below the search card and opens the Beam
+                Agent in the card above. Hidden once open (the header carries the
+                close) and while the vault search overlay is active. */}
             {!agentActive && discoveryReady && stateSettled && !vaultSearchUiActive ? (
               <div ref={signatureSectionRef} className="mt-4 flex justify-center sm:mt-5">
                 <motion.button
