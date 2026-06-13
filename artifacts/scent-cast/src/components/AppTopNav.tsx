@@ -1,6 +1,6 @@
 import React from 'react';
 import { Home, LogOut, Settings, Share2, Swords, UsersRound } from 'lucide-react';
-import { Link, NavLink } from 'react-router-dom';
+import { Link, NavLink, useLocation } from 'react-router-dom';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
@@ -148,6 +148,42 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
   onSignOut,
   onEditProfile,
 }) => {
+  const location = useLocation();
+  const [navVisible, setNavVisible] = React.useState(true);
+  const navTimeoutRef = React.useRef<number | null>(null);
+
+  const showNavTemporarily = React.useCallback(() => {
+    setNavVisible(true);
+    if (navTimeoutRef.current !== null) {
+      window.clearTimeout(navTimeoutRef.current);
+    }
+    navTimeoutRef.current = window.setTimeout(() => {
+      setNavVisible(false);
+      navTimeoutRef.current = null;
+    }, 2000);
+  }, []);
+
+  React.useEffect(() => {
+    const handleActivity = () => showNavTemporarily();
+
+    window.addEventListener('scroll', handleActivity, { passive: true });
+    window.addEventListener('touchstart', handleActivity, { passive: true });
+    window.addEventListener('touchmove', handleActivity, { passive: true });
+    window.addEventListener('pointerdown', handleActivity, { passive: true });
+    showNavTemporarily();
+
+    return () => {
+      window.removeEventListener('scroll', handleActivity);
+      window.removeEventListener('touchstart', handleActivity);
+      window.removeEventListener('touchmove', handleActivity);
+      window.removeEventListener('pointerdown', handleActivity);
+      if (navTimeoutRef.current !== null) {
+        window.clearTimeout(navTimeoutRef.current);
+        navTimeoutRef.current = null;
+      }
+    };
+  }, [showNavTemporarily, location.pathname]);
+
   const authControl = authToken ? (
     <AccountMenu
       authEmail={authEmail}
@@ -226,8 +262,14 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
       </nav>
 
       <nav
-        className="fixed bottom-[calc(0.75rem+env(safe-area-inset-bottom,0px))] left-3 right-3 z-50 md:hidden"
+        className={[
+          'fixed bottom-[calc(0.75rem+env(safe-area-inset-bottom,0px))] left-3 right-3 z-50 md:hidden transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-[transform,opacity]',
+          navVisible
+            ? 'translate-y-0 opacity-100 pointer-events-auto'
+            : 'translate-y-[110%] opacity-0 pointer-events-none',
+        ].join(' ')}
         aria-label="Primary navigation"
+        onFocusCapture={showNavTemporarily}
       >
         <div className="mx-auto grid max-w-sm grid-cols-3 rounded-full border border-scent-accent/22 bg-black/66 p-1 shadow-[0_18px_48px_rgba(0,0,0,0.58),inset_0_1px_0_rgba(255,236,183,0.12)] backdrop-blur-md">
           {navItems.map((item) => {
