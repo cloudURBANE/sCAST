@@ -563,7 +563,7 @@ function DashboardView() {
   const agentActive = viewState === 'agent';
   const vaultContentTransition = reduceMotion
     ? { duration: 0.01 }
-    : { duration: 0.28, ease: [0.22, 1, 0.36, 1] as const };
+    : { duration: 0.42, ease: [0.16, 1, 0.3, 1] as const };
 
   useEffect(() => {
     if (!discoveryReady && viewState === 'agent') {
