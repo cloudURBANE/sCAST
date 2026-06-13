@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   BadgeDollarSign,
-  ChevronLeft,
-  ChevronRight,
+  ChevronDown,
   Grid2X2,
   MessageCircleQuestion,
   Search,
@@ -53,7 +52,7 @@ function roomButtonClass(active: boolean, extra = '') {
 
 function tagButtonClass(active: boolean) {
   return [
-    'flex h-10 w-full min-w-0 items-center justify-center rounded-full border px-2 text-center text-xs font-bold uppercase tracking-[0.12em] transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80',
+    'inline-flex h-10 min-w-max items-center justify-center rounded-full border px-3 text-center text-xs font-bold uppercase tracking-[0.12em] transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80',
     active
       ? 'border-scent-accent/76 bg-scent-accent/[0.18] text-[#fff7ec] shadow-[inset_0_1px_0_rgba(255,244,210,0.14)]'
       : 'border-scent-accent/16 bg-black/30 text-[#d9c099] hover:border-scent-accent/46 hover:bg-scent-accent/[0.065] hover:text-[#fff7ec]',
@@ -70,7 +69,7 @@ interface PostFiltersProps {
   onQueryChange: (query: string) => void;
 }
 
-const TAGS_PER_PAGE = 4;
+const TAG_LIMIT = 8;
 
 export const PostFilters: React.FC<PostFiltersProps> = ({
   type,
@@ -82,21 +81,14 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
   onQueryChange,
 }) => {
   const [draftQuery, setDraftQuery] = useState(q);
-  const [tagPage, setTagPage] = useState(0);
+  const [tagMenuOpen, setTagMenuOpen] = useState(false);
 
   // Popular tags come from the tenant aggregate; fall back to the curated
   // defaults while loading or when the community has no tagged posts yet.
   const { data: popularTags } = usePopularCommunityTags(authToken);
-  const tags = popularTags && popularTags.length > 0 ? popularTags : TAGS;
+  const tags = (popularTags && popularTags.length > 0 ? popularTags : TAGS).slice(0, TAG_LIMIT);
 
-  const pageCount = Math.max(1, Math.ceil(tags.length / TAGS_PER_PAGE));
-  const safePage = Math.min(tagPage, pageCount - 1);
-  const visibleTags = tags.slice(safePage * TAGS_PER_PAGE, safePage * TAGS_PER_PAGE + TAGS_PER_PAGE);
-
-  // Snap back into range whenever the tag set shrinks (e.g. defaults → server list).
-  useEffect(() => {
-    if (tagPage > pageCount - 1) setTagPage(pageCount - 1);
-  }, [tagPage, pageCount]);
+  const hasTags = tags.length > 0;
 
   useEffect(() => {
     setDraftQuery(q);
@@ -123,34 +115,6 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
       aria-label="Community post filters"
     >
       <div className="mx-auto grid w-full max-w-[850px] gap-4">
-        <div className="grid w-full gap-2.5">
-          <div className="grid w-full grid-cols-2 gap-2.5 sm:grid-cols-5">
-          <button
-            type="button"
-            onClick={() => onTypeChange(null)}
-            aria-pressed={type === null}
-            className={roomButtonClass(type === null)}
-          >
-            <Grid2X2 size={17} strokeWidth={1.65} aria-hidden="true" />
-            <span className="min-w-0 [overflow-wrap:anywhere]">All rooms</span>
-          </button>
-            {ROOMS.map(({ type: roomType, label, Icon }) => (
-              <button
-                key={roomType}
-                type="button"
-                onClick={() => onTypeChange(roomType)}
-                aria-pressed={type === roomType}
-                className={roomButtonClass(type === roomType)}
-              >
-                <Icon size={17} strokeWidth={1.65} aria-hidden="true" />
-                <span className="min-w-0 [overflow-wrap:anywhere]">
-                  {label}
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
-
         <div className="relative w-full">
           <Search
             size={16}
@@ -178,66 +142,88 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
           ) : null}
         </div>
 
+        <div className="grid w-full gap-2.5">
+          <div className="grid w-full grid-cols-2 gap-2.5 sm:grid-cols-5">
+            <button
+              type="button"
+              onClick={() => onTypeChange(null)}
+              aria-pressed={type === null}
+              className={roomButtonClass(type === null)}
+            >
+              <Grid2X2 size={17} strokeWidth={1.65} aria-hidden="true" />
+              <span className="min-w-0 [overflow-wrap:anywhere]">All rooms</span>
+            </button>
+            {ROOMS.map(({ type: roomType, label, Icon }) => (
+              <button
+                key={roomType}
+                type="button"
+                onClick={() => onTypeChange(roomType)}
+                aria-pressed={type === roomType}
+                className={roomButtonClass(type === roomType)}
+              >
+                <Icon size={17} strokeWidth={1.65} aria-hidden="true" />
+                <span className="min-w-0 [overflow-wrap:anywhere]">
+                  {label}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div className="border-t border-scent-accent/10 pt-3.5">
-          <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-4">
-            <span
-              className="h-px min-w-0 bg-gradient-to-r from-transparent to-scent-accent/38"
+          <button
+            type="button"
+            onClick={() => setTagMenuOpen((open) => !open)}
+            aria-expanded={tagMenuOpen}
+            className="flex min-h-11 w-full items-center justify-between gap-3 rounded-full border border-scent-accent/16 bg-black/30 px-4 py-2 text-left transition-colors hover:border-scent-accent/42 hover:bg-scent-accent/[0.055] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80"
+          >
+            <span className="min-w-0">
+              <span className="block scent-type-label text-scent-accent">Popular tags</span>
+              {tag ? (
+                <span className="mt-0.5 block truncate text-xs font-bold uppercase tracking-[0.12em] text-[#fff7ec]">
+                  #{tag}
+                </span>
+              ) : null}
+            </span>
+            <ChevronDown
+              size={17}
+              strokeWidth={1.8}
               aria-hidden="true"
+              className={`shrink-0 text-scent-accent transition-transform ${tagMenuOpen ? 'rotate-180' : ''}`}
             />
-            <p className="scent-type-label text-center text-scent-accent">
-              Popular tags
-            </p>
-            <span
-              className="h-px min-w-0 bg-gradient-to-l from-transparent to-scent-accent/38"
-              aria-hidden="true"
-            />
-          </div>
-          <div className="mt-3 flex items-center gap-2.5">
-            {pageCount > 1 ? (
-              <button
-                type="button"
-                onClick={() => setTagPage((page) => Math.max(0, page - 1))}
-                disabled={safePage === 0}
-                aria-label="Previous popular tags"
-                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-scent-accent/16 bg-black/30 text-scent-accent transition-all duration-200 hover:border-scent-accent/46 hover:bg-scent-accent/[0.065] hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:border-scent-accent/16 disabled:hover:bg-black/30 disabled:hover:text-scent-accent"
-              >
-                <ChevronLeft size={16} strokeWidth={1.8} aria-hidden="true" />
-              </button>
-            ) : null}
-            <div className="grid min-w-0 flex-1 grid-cols-2 gap-2.5">
-              {visibleTags.map((candidate) => {
-                const normalized = sanitizeCommunityTag(candidate);
-                const active = tag === normalized;
-                return (
-                  <button
-                    key={candidate}
-                    type="button"
-                    onClick={() => onTagChange(active ? null : normalized)}
-                    aria-label={
-                      active
-                        ? `Clear #${candidate} tag filter`
-                        : `Filter by #${candidate}`
-                    }
-                    aria-pressed={active}
-                    className={tagButtonClass(active)}
-                  >
-                    #{candidate}
-                  </button>
-                );
-              })}
+          </button>
+
+          {tagMenuOpen && hasTags ? (
+            <div className="scent-community-tag-marquee mt-3" aria-label="Popular tag filters">
+              <div className="scent-community-tag-marquee-track">
+                {[0, 1].map((copyIndex) => (
+                  <div className="scent-community-tag-marquee-group" key={copyIndex} aria-hidden={copyIndex > 0}>
+                    {tags.map((candidate) => {
+                      const normalized = sanitizeCommunityTag(candidate);
+                      const active = tag === normalized;
+                      return (
+                        <button
+                          key={`${copyIndex}:${candidate}`}
+                          type="button"
+                          tabIndex={copyIndex > 0 ? -1 : 0}
+                          onClick={() => onTagChange(active ? null : normalized)}
+                          aria-label={
+                            active
+                              ? `Clear #${candidate} tag filter`
+                              : `Filter by #${candidate}`
+                          }
+                          aria-pressed={active}
+                          className={tagButtonClass(active)}
+                        >
+                          #{candidate}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
             </div>
-            {pageCount > 1 ? (
-              <button
-                type="button"
-                onClick={() => setTagPage((page) => Math.min(pageCount - 1, page + 1))}
-                disabled={safePage >= pageCount - 1}
-                aria-label="More popular tags"
-                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-scent-accent/16 bg-black/30 text-scent-accent transition-all duration-200 hover:border-scent-accent/46 hover:bg-scent-accent/[0.065] hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:border-scent-accent/16 disabled:hover:bg-black/30 disabled:hover:text-scent-accent"
-              >
-                <ChevronRight size={16} strokeWidth={1.8} aria-hidden="true" />
-              </button>
-            ) : null}
-          </div>
+          ) : null}
           {hasFilters ? (
             <div className="mt-3 flex justify-center">
               <button
