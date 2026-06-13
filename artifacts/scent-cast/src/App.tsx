@@ -532,6 +532,7 @@ function DashboardView() {
   const reduceMotion = useReducedMotion();
   const [viewState, setViewState] = useState<'search' | 'agent'>('search');
   const heroVaultRef = useRef<HTMLDivElement | null>(null);
+  const signatureSectionRef = useRef<HTMLDivElement | null>(null);
   const recommendationOverlayRef = useRef<HTMLDivElement | null>(null);
   const recommendationCloseRef = useRef<HTMLButtonElement | null>(null);
 
@@ -573,10 +574,13 @@ function DashboardView() {
 
   useEffect(() => {
     if (viewState !== 'agent') return;
+    // Bring the expanded signature section into view as it grows below the
+    // search card. `block: 'nearest'` keeps the card anchored and avoids a hard
+    // page jump — the section simply reveals downward from the button position.
     const id = window.requestAnimationFrame(() => {
-      heroVaultRef.current?.scrollIntoView({
+      signatureSectionRef.current?.scrollIntoView({
         behavior: reduceMotion ? 'auto' : 'smooth',
-        block: 'start',
+        block: 'nearest',
       });
     });
     return () => window.cancelAnimationFrame(id);
@@ -626,69 +630,78 @@ function DashboardView() {
           <HomepageHeroMarquee />
 
           <section className="mx-auto w-full max-w-[60rem] min-w-0 text-center">
-            <motion.div
+            {/* Main fragrance-search card — always visible, never replaced or
+                overlaid by the signature-scent experience below it. */}
+            <div
               ref={heroVaultRef}
-              layout={!reduceMotion}
-              transition={vaultContentTransition}
               className="scent-vault-panel w-full min-w-0 relative overflow-hidden"
               style={{ scrollMarginTop: 'calc(var(--topbar-h) + 1rem)' }}
-              data-view-state={viewState}
             >
               <div className="scent-vault-panel-inner min-w-0">
+                <React.Suspense fallback={<HeroVaultContentFallback />}>
+                  <FragranceCapture
+                    onAdd={handleAddItem}
+                    onVaultSearchStateChange={handleVaultSearchStateChange}
+                    existingVaultKeys={vaultIdentityKeys}
+                    onViewVault={handleViewVault}
+                    embeddedInVaultPanel
+                  />
+                </React.Suspense>
+              </div>
+            </div>
+
+            {/* Signature-scent section — its own full-width structure that
+                expands downward from the button's location. It is structurally
+                separate from the search card and aligns to the same edges. */}
+            {discoveryReady && stateSettled && !vaultSearchUiActive ? (
+              <motion.div
+                ref={signatureSectionRef}
+                layout={!reduceMotion}
+                transition={vaultContentTransition}
+                className="mt-4 w-full min-w-0 sm:mt-5"
+                style={{ scrollMarginTop: 'calc(var(--topbar-h) + 1rem)' }}
+              >
                 <AnimatePresence initial={false} mode="wait">
                   {agentActive ? (
                     <motion.div
-                      key="agent"
-                      initial={reduceMotion ? false : { opacity: 0, y: 12 }}
+                      key="signature-open"
+                      initial={reduceMotion ? false : { opacity: 0, y: -8 }}
                       animate={{ opacity: 1, y: 0 }}
-                      exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -10 }}
+                      exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -8 }}
                       transition={vaultContentTransition}
+                      className="scent-vault-panel scent-signature-panel w-full min-w-0 relative overflow-hidden"
                     >
-                      <React.Suspense fallback={<HeroVaultContentFallback />}>
-                        <ScentMissionPanel
-                          items={items}
-                          weather={weather}
-                          authToken={authToken}
-                          onExit={() => setViewState('search')}
-                          onRevealMatch={handleMissionReveal}
-                        />
-                      </React.Suspense>
+                      <div className="scent-vault-panel-inner min-w-0">
+                        <React.Suspense fallback={<HeroVaultContentFallback />}>
+                          <ScentMissionPanel
+                            items={items}
+                            weather={weather}
+                            authToken={authToken}
+                            onExit={() => setViewState('search')}
+                            onRevealMatch={handleMissionReveal}
+                          />
+                        </React.Suspense>
+                      </div>
                     </motion.div>
                   ) : (
-                    <motion.div
-                      key="search"
-                      initial={reduceMotion ? false : { opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 10 }}
+                    <motion.button
+                      key="signature-closed"
+                      type="button"
+                      onClick={handleOpenMission}
+                      initial={reduceMotion ? false : { opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
                       transition={vaultContentTransition}
+                      className="scent-signature-cta group flex w-full items-center justify-center gap-2.5 rounded-[calc(var(--radius-scent)+12px)] border border-scent-accent/45 px-6 py-4 text-[12px] font-bold uppercase tracking-[0.14em] text-scent-accent shadow-[inset_0_1px_0_rgba(255,236,183,0.08)] transition-colors hover:border-scent-accent/70 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 sm:py-5 sm:text-[13px]"
+                      aria-label="Discover your signature scent"
+                      title="Discover your signature scent"
                     >
-                      <React.Suspense fallback={<HeroVaultContentFallback />}>
-                        <FragranceCapture
-                          onAdd={handleAddItem}
-                          onVaultSearchStateChange={handleVaultSearchStateChange}
-                          existingVaultKeys={vaultIdentityKeys}
-                          onViewVault={handleViewVault}
-                          embeddedInVaultPanel
-                        />
-                      </React.Suspense>
-                    </motion.div>
+                      <Sparkles size={16} strokeWidth={1.9} aria-hidden />
+                      <span>Discover Your Signature Scent</span>
+                    </motion.button>
                   )}
                 </AnimatePresence>
-              </div>
-            </motion.div>
-            {!agentActive && discoveryReady && stateSettled && !vaultSearchUiActive ? (
-              <div className="mt-5 flex justify-center sm:mt-6">
-                <button
-                  type="button"
-                  onClick={handleOpenMission}
-                  className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-full border border-scent-accent/40 bg-black/42 px-5 py-2.5 text-[11px] font-bold uppercase tracking-[0.12em] text-scent-accent shadow-[inset_0_1px_0_rgba(255,236,183,0.08)] transition-colors hover:border-scent-accent/68 hover:bg-scent-accent/10 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
-                  aria-label="Discover your signature scent"
-                  title="Discover your signature scent"
-                >
-                  <Sparkles size={13} strokeWidth={1.9} aria-hidden />
-                  <span>Discover your signature scent</span>
-                </button>
-              </div>
+              </motion.div>
             ) : null}
           </section>
 
