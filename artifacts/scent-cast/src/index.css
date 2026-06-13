@@ -2171,6 +2171,113 @@ a {
   animation: none;
 }
 
+/* ─── Beam Agent "thinking" indicator ─────────────────────────────────────────
+   A signature working state for the agent: a gold beam-orb that pulses out a
+   soft ring while the label text shimmers left-to-right. Pure transform/opacity
+   + background-position, so it stays smooth on phones and tablets. Falls back to
+   a calm static glow under reduced-motion / iPad performance mode. */
+.scent-beam-orb {
+  position: relative;
+  display: inline-block;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 999px;
+  background: radial-gradient(circle at 32% 30%, #fff6da 0%, #e9c66c 46%, #b8902f 100%);
+  box-shadow: 0 0 10px rgba(212, 175, 55, 0.55), inset 0 0 3px rgba(255, 246, 214, 0.7);
+  animation: scent-beam-orb-pulse 1.4s var(--scent-ease-out) infinite;
+}
+
+.scent-beam-orb::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 999px;
+  border: 1px solid rgba(212, 175, 55, 0.55);
+  animation: scent-beam-orb-ring 1.6s var(--scent-ease-out) infinite;
+}
+
+.scent-beam-label {
+  background-image: linear-gradient(
+    90deg,
+    rgba(212, 175, 55, 0.42) 0%,
+    rgba(212, 175, 55, 0.42) 30%,
+    #fff7ec 50%,
+    rgba(212, 175, 55, 0.42) 70%,
+    rgba(212, 175, 55, 0.42) 100%
+  );
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: scent-beam-shimmer 1.9s linear infinite;
+}
+
+@keyframes scent-beam-orb-pulse {
+  0%, 100% { transform: scale(0.82); opacity: 0.78; }
+  50% { transform: scale(1.06); opacity: 1; }
+}
+
+@keyframes scent-beam-orb-ring {
+  0% { transform: scale(0.55); opacity: 0.85; }
+  100% { transform: scale(1.7); opacity: 0; }
+}
+
+@keyframes scent-beam-shimmer {
+  from { background-position: 220% 0; }
+  to { background-position: -220% 0; }
+}
+
+/* Calm fallback: no motion, but keep the gold orb glowing and the label legible
+   in a steady accent tone so the working state is still obvious. */
+.scent-beam-thinking[data-calm="true"] .scent-beam-orb,
+.scent-beam-thinking[data-calm="true"] .scent-beam-orb::after,
+.scent-beam-thinking[data-calm="true"] .scent-beam-label {
+  animation: none;
+}
+
+.scent-beam-thinking[data-calm="true"] .scent-beam-label {
+  background: none;
+  -webkit-text-fill-color: rgba(232, 200, 120, 0.92);
+  color: rgba(232, 200, 120, 0.92);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scent-beam-orb,
+  .scent-beam-orb::after,
+  .scent-beam-label {
+    animation: none;
+  }
+}
+
+.scent-ipad-safari-perf .scent-beam-orb,
+.scent-ipad-safari-perf .scent-beam-orb::after {
+  animation: none;
+}
+
+/* ─── Beam Agent composer stability (iOS / iPadOS WebKit) ──────────────────────
+   On iOS Safari (incl. older iPhones and iPads), transitioning box-shadow /
+   backdrop on focus can micro-jitter a rounded input capsule. Promote the field
+   to its own compositing layer and drop the focus transition so it stays
+   perfectly still while the keyboard animates in. */
+.scent-beam-composer {
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+@supports (-webkit-touch-callout: none) {
+  .scent-beam-composer,
+  .scent-beam-composer.scent-lux-input {
+    transition: none;
+  }
+}
+
+.scent-ipad-safari-perf .scent-beam-composer,
+.scent-ipad-safari-perf .scent-beam-composer.scent-lux-input {
+  transition: none;
+}
+
 @keyframes brand-gold-sheen {
   0%,
   12% {
