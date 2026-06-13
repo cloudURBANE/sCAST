@@ -1,5 +1,5 @@
-import React from "react";
-import { Check, Sparkles } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { Check, LoaderCircle, Sparkles } from "lucide-react";
 import { BottleImage } from "@/components/BottleImage";
 import { BrandGoldLabel } from "@/components/BrandGoldLabel";
 import type { ArenaBattleSide as ArenaBattleSideData } from "@/components/arena/arenaBattleMapper";
@@ -10,6 +10,8 @@ interface ArenaBattleSideProps {
   selected: boolean;
   revealed: boolean;
   disabled: boolean;
+  /** True while this card's vote is being persisted to the room tally. */
+  isSaving?: boolean;
   onVote: () => void;
 }
 
@@ -19,8 +21,26 @@ export const ArenaBattleSide: React.FC<ArenaBattleSideProps> = ({
   selected,
   revealed,
   disabled,
+  isSaving = false,
   onVote,
 }) => {
+  // Inline tally feedback: show the status text immediately on selection, then
+  // collapse it away once the save settles so only the checkmark icon remains.
+  const [showTallyText, setShowTallyText] = useState(false);
+
+  useEffect(() => {
+    if (!selected) {
+      setShowTallyText(false);
+      return;
+    }
+    setShowTallyText(true);
+    if (isSaving) return;
+    const timer = window.setTimeout(() => setShowTallyText(false), 1800);
+    return () => window.clearTimeout(timer);
+  }, [selected, isSaving]);
+
+  const contenderLabel = align === "left" ? "A" : "B";
+
   const handleCardKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
     if (!revealed || disabled) return;
     if (event.key !== "Enter" && event.key !== " ") return;
@@ -55,13 +75,30 @@ export const ArenaBattleSide: React.FC<ArenaBattleSideProps> = ({
       <div className="relative z-10 flex w-full flex-col">
         <div className="mb-2 flex min-h-7 items-center justify-between gap-1.5 sm:mb-3">
           <span className="scent-type-label text-[10px] tracking-[0.1em] text-scent-accent/78 sm:text-[12px] sm:tracking-[0.14em]">
-            {align === "left" ? "Option A" : "Option B"}
+            {`Contender ${contenderLabel}`}
           </span>
           {selected ? (
-            <span className="arena-badge-pop inline-flex min-h-6 shrink-0 items-center gap-1 rounded-full bg-scent-accent px-1.5 py-1 text-[8px] font-bold uppercase tracking-[0.06em] text-black shadow-[0_0_14px_rgba(212,175,55,0.16)] sm:min-h-7 sm:gap-1.5 sm:px-2.5 sm:text-[10px] sm:tracking-[0.1em]">
-              <Check size={11} strokeWidth={2} aria-hidden="true" />
-              <span className="hidden min-[390px]:inline">Your pick</span>
-              <span className="min-[390px]:hidden">Pick</span>
+            <span className="arena-badge-pop inline-flex min-h-6 shrink-0 items-center rounded-full bg-scent-accent px-1.5 py-1 text-[8px] font-bold uppercase tracking-[0.06em] text-black shadow-[0_0_14px_rgba(212,175,55,0.16)] sm:min-h-7 sm:px-2.5 sm:text-[10px] sm:tracking-[0.1em]">
+              {isSaving ? (
+                <LoaderCircle
+                  size={11}
+                  strokeWidth={2}
+                  className="animate-spin"
+                  aria-hidden="true"
+                />
+              ) : (
+                <Check size={11} strokeWidth={2} aria-hidden="true" />
+              )}
+              <span
+                className={[
+                  "inline-block overflow-hidden whitespace-nowrap transition-all duration-500",
+                  showTallyText
+                    ? "ml-1 max-w-[8rem] opacity-100 sm:ml-1.5"
+                    : "ml-0 max-w-0 opacity-0",
+                ].join(" ")}
+              >
+                {isSaving ? "Saving to tally" : "Saved to tally"}
+              </span>
             </span>
           ) : null}
         </div>
@@ -95,10 +132,12 @@ export const ArenaBattleSide: React.FC<ArenaBattleSideProps> = ({
               Community option
             </p>
           )}
-          <h2 className="mt-1 line-clamp-2 text-pretty text-balance text-sm font-bold leading-tight text-foreground sm:text-xl md:text-2xl">
-            {side.name}
-          </h2>
-          <p className="mx-auto mt-1.5 line-clamp-2 max-w-sm text-[11px] font-medium leading-4 text-scent-text-muted sm:mt-2 sm:text-sm sm:leading-5">
+          <div className="mt-1 flex min-h-[2.5rem] items-center justify-center sm:min-h-[3.75rem]">
+            <h2 className="line-clamp-2 text-pretty text-balance text-sm font-bold leading-tight text-foreground sm:text-xl md:text-2xl">
+              {side.name}
+            </h2>
+          </div>
+          <p className="mx-auto mt-1.5 line-clamp-2 min-h-[2rem] max-w-sm text-[11px] font-medium leading-4 text-scent-text-muted sm:mt-2 sm:min-h-[2.5rem] sm:text-sm sm:leading-5">
             {side.descriptor}
           </p>
         </div>
@@ -111,7 +150,7 @@ export const ArenaBattleSide: React.FC<ArenaBattleSideProps> = ({
             className="scent-no-mobile-focus-ring mt-3 inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-md bg-scent-accent px-2 py-2 text-[11px] font-bold uppercase tracking-[0.1em] text-black shadow-[0_14px_30px_-24px_rgba(212,175,55,0.9)] transition-colors duration-300 hover:bg-[#f0cf70] active:bg-[#d7ad32] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/70 disabled:pointer-events-none disabled:opacity-60 sm:min-h-12 sm:gap-2 sm:px-5 sm:py-3 sm:text-sm sm:tracking-[0.16em]"
           >
             <Sparkles size={16} strokeWidth={1.8} aria-hidden="true" />
-            <span>{`Vote ${align === "left" ? "A" : "B"}`}</span>
+            <span>{`Vote Contender ${contenderLabel}`}</span>
           </button>
         ) : null}
       </div>
