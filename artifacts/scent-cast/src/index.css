@@ -217,6 +217,10 @@ a {
     0 0 0 1px rgba(212, 175, 55, 0.12);
 }
 
+.scent-mission-action-slot {
+  align-items: flex-start;
+}
+
 /* iPad Safari performance mode drops the blur to avoid compositing jank, the
    same trade-off the rest of the chrome makes. */
 .scent-ipad-safari-perf .scent-signature-cta {
@@ -777,6 +781,14 @@ a {
 
 .scent-primary-button[disabled]:hover {
   filter: saturate(0.74);
+}
+
+.scent-beam-confirm-button {
+  min-width: min(11rem, 100%);
+}
+
+.scent-beam-confirm-button:active {
+  transform: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2176,82 +2188,65 @@ a {
    soft ring while the label text shimmers left-to-right. Pure transform/opacity
    + background-position, so it stays smooth on phones and tablets. Falls back to
    a calm static glow under reduced-motion / iPad performance mode. */
-.scent-beam-orb {
+.scent-beam-avatar {
   position: relative;
-  display: inline-block;
-  width: 0.7rem;
-  height: 0.7rem;
+  display: inline-flex;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex: 0 0 auto;
   border-radius: 999px;
-  background: radial-gradient(circle at 32% 30%, #fff6da 0%, #e9c66c 46%, #b8902f 100%);
-  box-shadow: 0 0 10px rgba(212, 175, 55, 0.55), inset 0 0 3px rgba(255, 246, 214, 0.7);
-  animation: scent-beam-orb-pulse 1.4s var(--scent-ease-out) infinite;
+  isolation: isolate;
 }
 
-.scent-beam-orb::after {
+.scent-beam-avatar::before,
+.scent-beam-avatar::after {
   content: "";
   position: absolute;
   inset: -3px;
-  border-radius: 999px;
-  border: 1px solid rgba(212, 175, 55, 0.55);
-  animation: scent-beam-orb-ring 1.6s var(--scent-ease-out) infinite;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
 }
 
-.scent-beam-label {
-  background-image: linear-gradient(
-    90deg,
-    rgba(212, 175, 55, 0.42) 0%,
-    rgba(212, 175, 55, 0.42) 30%,
-    #fff7ec 50%,
-    rgba(212, 175, 55, 0.42) 70%,
-    rgba(212, 175, 55, 0.42) 100%
-  );
-  background-size: 220% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  animation: scent-beam-shimmer 1.9s linear infinite;
+.scent-beam-avatar::before {
+  border: 1px solid rgba(232, 190, 96, 0.58);
 }
 
-@keyframes scent-beam-orb-pulse {
-  0%, 100% { transform: scale(0.82); opacity: 0.78; }
-  50% { transform: scale(1.06); opacity: 1; }
+.scent-beam-avatar::after {
+  background: radial-gradient(circle, rgba(212, 175, 55, 0.28), transparent 62%);
 }
 
-@keyframes scent-beam-orb-ring {
-  0% { transform: scale(0.55); opacity: 0.85; }
-  100% { transform: scale(1.7); opacity: 0; }
+.scent-beam-avatar[data-thinking="true"]::before {
+  animation: scent-beam-avatar-ring 1.45s var(--scent-ease-out) infinite;
 }
 
-@keyframes scent-beam-shimmer {
-  from { background-position: 220% 0; }
-  to { background-position: -220% 0; }
+.scent-beam-avatar[data-thinking="true"]::after {
+  animation: scent-beam-avatar-glow 1.3s ease-in-out infinite;
 }
 
-/* Calm fallback: no motion, but keep the gold orb glowing and the label legible
-   in a steady accent tone so the working state is still obvious. */
-.scent-beam-thinking[data-calm="true"] .scent-beam-orb,
-.scent-beam-thinking[data-calm="true"] .scent-beam-orb::after,
-.scent-beam-thinking[data-calm="true"] .scent-beam-label {
-  animation: none;
+@keyframes scent-beam-avatar-ring {
+  0% { transform: scale(0.88); opacity: 0.82; }
+  100% { transform: scale(1.42); opacity: 0; }
 }
 
-.scent-beam-thinking[data-calm="true"] .scent-beam-label {
-  background: none;
-  -webkit-text-fill-color: rgba(232, 200, 120, 0.92);
-  color: rgba(232, 200, 120, 0.92);
+@keyframes scent-beam-avatar-glow {
+  0%, 100% { opacity: 0.32; transform: scale(0.92); }
+  50% { opacity: 0.74; transform: scale(1.08); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .scent-beam-orb,
-  .scent-beam-orb::after,
-  .scent-beam-label {
+  .scent-beam-avatar[data-thinking="true"]::before,
+  .scent-beam-avatar[data-thinking="true"]::after {
     animation: none;
+    opacity: 0.46;
   }
 }
 
-.scent-ipad-safari-perf .scent-beam-orb,
-.scent-ipad-safari-perf .scent-beam-orb::after {
+.scent-ipad-safari-perf .scent-beam-avatar[data-thinking="true"]::before,
+.scent-ipad-safari-perf .scent-beam-avatar[data-thinking="true"]::after {
   animation: none;
+  opacity: 0.42;
 }
 
 /* ─── Beam Agent composer stability (iOS / iPadOS WebKit) ──────────────────────
