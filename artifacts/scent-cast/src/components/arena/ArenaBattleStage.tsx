@@ -84,7 +84,7 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
         </p>
       </header>
 
-      <div className="relative mx-auto mt-6 grid w-full max-w-4xl grid-cols-[minmax(0,1fr)_2rem_minmax(0,1fr)] items-start gap-2 sm:mt-8 sm:grid-cols-[minmax(0,1fr)_2.75rem_minmax(0,1fr)] sm:gap-4 md:gap-5">
+      <div className="relative mx-auto mt-6 grid w-full max-w-4xl grid-cols-[minmax(0,1fr)_1.5rem_minmax(0,1fr)] items-stretch gap-1.5 sm:mt-8 sm:grid-cols-[minmax(0,1fr)_2.75rem_minmax(0,1fr)] sm:gap-4 md:gap-5">
         <ArenaBattleSide
           side={battle.left}
           align="left"
@@ -94,9 +94,9 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
           onVote={() => submitVote(battle.left.key)}
         />
 
-        <div className="grid place-items-center">
+        <div className="grid place-items-center self-start">
           <div
-            className="sticky top-[calc(var(--topbar-h)+1rem)] grid h-8 w-8 place-items-center rounded-full border border-scent-accent/42 bg-black/88 text-[11px] font-bold tracking-[0.12em] text-scent-accent shadow-[0_0_0_1px_rgba(0,0,0,0.6),0_0_22px_rgba(212,175,55,0.18),inset_0_1px_0_rgba(255,255,255,0.08)] sm:h-11 sm:w-11 sm:text-sm"
+            className="sticky top-[calc(var(--topbar-h)+1rem)] grid h-6 w-6 place-items-center rounded-full bg-black/88 text-[9px] font-bold tracking-[0.08em] text-scent-accent shadow-[0_0_0_1px_rgba(212,175,55,0.18),0_0_18px_rgba(212,175,55,0.14),inset_0_1px_0_rgba(255,255,255,0.08)] sm:h-11 sm:w-11 sm:text-sm sm:tracking-[0.12em]"
             aria-hidden="true"
           >
             VS
