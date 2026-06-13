@@ -229,7 +229,7 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
         className="fixed bottom-[calc(0.75rem+env(safe-area-inset-bottom,0px))] left-3 right-3 z-50 md:hidden"
         aria-label="Primary navigation"
       >
-        <div className="mx-auto grid max-w-sm grid-cols-3 rounded-full border border-scent-accent/18 bg-black/72 p-1 shadow-[0_18px_48px_rgba(0,0,0,0.58),inset_0_1px_0_rgba(255,236,183,0.08)] backdrop-blur-md">
+        <div className="mx-auto grid max-w-sm grid-cols-3 rounded-full border border-scent-accent/22 bg-black/66 p-1 shadow-[0_18px_48px_rgba(0,0,0,0.58),inset_0_1px_0_rgba(255,236,183,0.12)] backdrop-blur-md">
           {navItems.map((item) => {
             const Icon = item.icon;
             return (
