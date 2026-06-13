@@ -186,18 +186,45 @@ a {
 }
 
 /* Full-width "Discover Your Signature Scent" trigger. Shares the exact box of
-   the opened input that replaces it (same width, height, and radius), with a
-   soft accent wash so it reads as a primary feature rather than a small pill. */
+   the opened input that replaces it (same width, height, and radius). Tuned to
+   read as glass — like the lower navigation bar — with a soft gold wash and a
+   blurred translucent base so it sits in the theme rather than as a flat pill. */
 .scent-signature-cta {
   background:
-    radial-gradient(120% 140% at 50% 0%, rgba(212, 175, 55, 0.06), transparent 60%),
-    linear-gradient(180deg, rgba(212, 175, 55, 0.05), rgba(0, 0, 0, 0.55));
+    radial-gradient(120% 150% at 50% 0%, rgba(212, 175, 55, 0.1), transparent 60%),
+    linear-gradient(180deg, rgba(255, 236, 183, 0.06), rgba(0, 0, 0, 0.42));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 236, 183, 0.12),
+    inset 0 0 24px rgba(212, 175, 55, 0.03),
+    0 18px 48px rgba(0, 0, 0, 0.5);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  transition:
+    border-color var(--scent-transition-base) var(--scent-ease-out),
+    box-shadow var(--scent-transition-base) var(--scent-ease-out),
+    background var(--scent-transition-base) var(--scent-ease-out),
+    color var(--scent-transition-base) var(--scent-ease-out);
 }
 
 .scent-signature-cta:hover {
   background:
-    radial-gradient(120% 140% at 50% 0%, rgba(212, 175, 55, 0.12), transparent 62%),
-    linear-gradient(180deg, rgba(212, 175, 55, 0.1), rgba(0, 0, 0, 0.5));
+    radial-gradient(120% 150% at 50% 0%, rgba(212, 175, 55, 0.18), transparent 62%),
+    linear-gradient(180deg, rgba(255, 236, 183, 0.12), rgba(0, 0, 0, 0.36));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 236, 183, 0.2),
+    inset 0 0 28px rgba(212, 175, 55, 0.06),
+    0 22px 56px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(212, 175, 55, 0.12);
+}
+
+/* iPad Safari performance mode drops the blur to avoid compositing jank, the
+   same trade-off the rest of the chrome makes. */
+.scent-ipad-safari-perf .scent-signature-cta {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  background:
+    radial-gradient(120% 150% at 50% 0%, rgba(212, 175, 55, 0.1), transparent 60%),
+    linear-gradient(180deg, rgba(20, 16, 8, 0.92), rgba(0, 0, 0, 0.92));
 }
 
 .scent-deferred-section {

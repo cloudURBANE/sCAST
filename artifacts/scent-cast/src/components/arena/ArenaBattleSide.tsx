@@ -40,6 +40,10 @@ export const ArenaBattleSide: React.FC<ArenaBattleSideProps> = ({
   }, [selected, isSaving]);
 
   const contenderLabel = align === "left" ? "A" : "B";
+  // While the "Saving / Saved to tally" badge is animating we swap it in for the
+  // centered "Contender" label so the two never collide. Once the save settles
+  // and the badge collapses to the bare check, the label fades back in cleanly.
+  const badgeActive = selected && (isSaving || showTallyText);
 
   const handleCardKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
     if (!revealed || disabled) return;
@@ -73,12 +77,25 @@ export const ArenaBattleSide: React.FC<ArenaBattleSideProps> = ({
         aria-hidden="true"
       />
       <div className="relative z-10 flex w-full flex-col">
-        <div className="mb-2 flex min-h-7 items-center justify-between gap-1.5 sm:mb-3">
-          <span className="scent-type-label text-[10px] tracking-[0.1em] text-scent-accent/78 sm:text-[12px] sm:tracking-[0.14em]">
+        <div className="relative mb-2 flex min-h-7 items-center justify-center sm:mb-3">
+          <span
+            className={[
+              "scent-type-label text-[10px] tracking-[0.1em] text-scent-accent/78 transition-opacity duration-300 sm:text-[12px] sm:tracking-[0.14em]",
+              badgeActive ? "opacity-0" : "opacity-100",
+            ].join(" ")}
+          >
             {`Contender ${contenderLabel}`}
           </span>
           {selected ? (
-            <span className="arena-badge-pop inline-flex min-h-6 shrink-0 items-center rounded-full bg-scent-accent px-1.5 py-1 text-[8px] font-bold uppercase tracking-[0.06em] text-black shadow-[0_0_14px_rgba(212,175,55,0.16)] sm:min-h-7 sm:px-2.5 sm:text-[10px] sm:tracking-[0.1em]">
+            <span
+              className={[
+                "absolute left-1/2 top-1/2 inline-flex min-h-6 -translate-x-1/2 -translate-y-1/2 items-center rounded-full bg-scent-accent px-1.5 py-1 text-[8px] font-bold uppercase tracking-[0.06em] text-black shadow-[0_0_14px_rgba(212,175,55,0.16)] transition-opacity duration-300 sm:min-h-7 sm:px-2.5 sm:text-[10px] sm:tracking-[0.1em]",
+                badgeActive
+                  ? "arena-badge-pop opacity-100"
+                  : "pointer-events-none opacity-0",
+              ].join(" ")}
+              aria-hidden={!badgeActive}
+            >
               {isSaving ? (
                 <LoaderCircle
                   size={11}
