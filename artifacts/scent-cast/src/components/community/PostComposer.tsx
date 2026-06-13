@@ -726,9 +726,10 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
             setStatusMessage(null);
           }}
           aria-expanded="false"
-          className="absolute right-4 top-4 z-10 inline-flex min-h-11 items-center justify-center rounded-full border border-scent-accent/28 bg-black/78 px-4 py-2 scent-type-chip text-[#fff7ec] shadow-[0_14px_28px_-18px_rgba(212,175,55,0.38)] transition-colors hover:border-scent-accent/48 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 sm:right-5 sm:top-5"
+          aria-label="Start a community room"
+          className="absolute right-4 top-4 z-10 flex h-10 w-10 items-center justify-center rounded-full border border-scent-accent/28 bg-black/78 text-[#fff7ec] shadow-[0_4px_12px_rgba(212,175,55,0.15)] transition-all duration-200 hover:border-scent-accent/78 hover:bg-scent-accent/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 sm:right-5 sm:top-5"
         >
-          Start
+          <Plus size={18} strokeWidth={2.2} className="text-[#fff7ec]" aria-hidden="true" />
         </button>
         <div className="mx-auto flex max-w-2xl flex-col items-center px-9 text-center sm:px-12">
           <p className="scent-type-label text-scent-accent">

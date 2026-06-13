@@ -734,6 +734,35 @@ router.get("/community/posts", optionalAuth, async (req: AuthRequest, res, next)
   }
 });
 
+// Popular tags, aggregated from every post's tags within the tenant and ranked
+// by frequency. Public read (optionally authenticated). Degrades to an empty
+// list on any DB error so the client can fall back to its static defaults
+// rather than surface an error in the filter bar.
+router.get("/community/tags/popular", optionalAuth, async (req: AuthRequest, res, next) => {
+  try {
+    const tenantId = getTenantId(req);
+    try {
+      const rows = await db
+        .select({
+          tag: communityTagsTable.tag,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(communityTagsTable)
+        .where(eq(communityTagsTable.tenantId, tenantId))
+        .groupBy(communityTagsTable.tag)
+        .orderBy(desc(sql`count(*)`), asc(communityTagsTable.tag))
+        .limit(24);
+      res.json({ tags: rows.map((r) => r.tag) });
+    } catch (err) {
+      // Missing table/column during migration lag, etc. — don't 500 the filter bar.
+      if (!isUndefinedColumnError(err) && (err as { code?: string })?.code !== "42P01") throw err;
+      res.json({ tags: [] });
+    }
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get("/community/posts/:id", optionalAuth, async (req: AuthRequest, res, next) => {
   try {
     const tenantId = getTenantId(req);

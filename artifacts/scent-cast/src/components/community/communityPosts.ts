@@ -122,6 +122,7 @@ export interface CreateCommunityVoteResult {
 const API_BASE_URL = normalizeApiBaseUrl(import.meta.env?.VITE_API_BASE_URL as string | undefined);
 const COMMUNITY_POSTS_ROOT_KEY = ['community', 'posts'] as const;
 const COMMUNITY_POST_DETAIL_ROOT_KEY = ['community', 'post-detail'] as const;
+const COMMUNITY_POPULAR_TAGS_ROOT_KEY = ['community', 'popular-tags'] as const;
 
 function appApiUrl(path: string): string {
   return API_BASE_URL ? `${API_BASE_URL}${path}` : path;
@@ -260,6 +261,32 @@ export function useCommunityPostDetail(postId: string, enabled: boolean, authTok
     queryFn: () => fetchCommunityPostDetail(postId, authToken),
     enabled,
     staleTime: 15 * 1000,
+    refetchOnWindowFocus: false,
+  });
+}
+
+export async function fetchPopularCommunityTags(authToken?: string | null): Promise<string[]> {
+  const res = await fetchPublicCommunityRead(appApiUrl('/api/community/tags/popular'), authToken);
+  const data = await readJson<{ tags?: unknown }>(res, `Popular tags failed with HTTP ${res.status}`);
+  if (!Array.isArray(data.tags)) return [];
+  // Normalize + dedupe so the filter chips always match the canonical tag form.
+  const seen = new Set<string>();
+  const tags: string[] = [];
+  for (const raw of data.tags) {
+    if (typeof raw !== 'string') continue;
+    const tag = sanitizeCommunityTag(raw);
+    if (!tag || seen.has(tag)) continue;
+    seen.add(tag);
+    tags.push(tag);
+  }
+  return tags;
+}
+
+export function usePopularCommunityTags(authToken: string | null) {
+  return useQuery({
+    queryKey: [...COMMUNITY_POPULAR_TAGS_ROOT_KEY, authToken ?? null],
+    queryFn: () => fetchPopularCommunityTags(authToken),
+    staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false,
   });
 }

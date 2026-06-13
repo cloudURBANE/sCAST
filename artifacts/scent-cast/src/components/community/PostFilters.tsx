@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import {
   BadgeDollarSign,
+  ChevronLeft,
+  ChevronRight,
   Grid2X2,
   MessageCircleQuestion,
   Search,
@@ -12,6 +14,7 @@ import {
 import {
   type CommunityPostType,
   sanitizeCommunityTag,
+  usePopularCommunityTags,
 } from '@/components/community/communityPosts';
 
 interface RoomDefinition {
@@ -61,20 +64,39 @@ interface PostFiltersProps {
   type: CommunityPostType | null;
   tag: string | null;
   q: string;
+  authToken?: string | null;
   onTypeChange: (type: CommunityPostType | null) => void;
   onTagChange: (tag: string | null) => void;
   onQueryChange: (query: string) => void;
 }
 
+const TAGS_PER_PAGE = 4;
+
 export const PostFilters: React.FC<PostFiltersProps> = ({
   type,
   tag,
   q,
+  authToken = null,
   onTypeChange,
   onTagChange,
   onQueryChange,
 }) => {
   const [draftQuery, setDraftQuery] = useState(q);
+  const [tagPage, setTagPage] = useState(0);
+
+  // Popular tags come from the tenant aggregate; fall back to the curated
+  // defaults while loading or when the community has no tagged posts yet.
+  const { data: popularTags } = usePopularCommunityTags(authToken);
+  const tags = popularTags && popularTags.length > 0 ? popularTags : TAGS;
+
+  const pageCount = Math.max(1, Math.ceil(tags.length / TAGS_PER_PAGE));
+  const safePage = Math.min(tagPage, pageCount - 1);
+  const visibleTags = tags.slice(safePage * TAGS_PER_PAGE, safePage * TAGS_PER_PAGE + TAGS_PER_PAGE);
+
+  // Snap back into range whenever the tag set shrinks (e.g. defaults → server list).
+  useEffect(() => {
+    if (tagPage > pageCount - 1) setTagPage(pageCount - 1);
+  }, [tagPage, pageCount]);
 
   useEffect(() => {
     setDraftQuery(q);
@@ -170,27 +192,51 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
               aria-hidden="true"
             />
           </div>
-          <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-            {TAGS.map((candidate) => {
-              const normalized = sanitizeCommunityTag(candidate);
-              const active = tag === normalized;
-              return (
-                <button
-                  key={candidate}
-                  type="button"
-                  onClick={() => onTagChange(active ? null : normalized)}
-                  aria-label={
-                    active
-                      ? `Clear #${candidate} tag filter`
-                      : `Filter by #${candidate}`
-                  }
-                  aria-pressed={active}
-                  className={tagButtonClass(active)}
-                >
-                  #{candidate}
-                </button>
-              );
-            })}
+          <div className="mt-3 flex items-center gap-2.5">
+            {pageCount > 1 ? (
+              <button
+                type="button"
+                onClick={() => setTagPage((page) => Math.max(0, page - 1))}
+                disabled={safePage === 0}
+                aria-label="Previous popular tags"
+                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-scent-accent/16 bg-black/30 text-scent-accent transition-all duration-200 hover:border-scent-accent/46 hover:bg-scent-accent/[0.065] hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:border-scent-accent/16 disabled:hover:bg-black/30 disabled:hover:text-scent-accent"
+              >
+                <ChevronLeft size={16} strokeWidth={1.8} aria-hidden="true" />
+              </button>
+            ) : null}
+            <div className="grid min-w-0 flex-1 grid-cols-2 gap-2.5">
+              {visibleTags.map((candidate) => {
+                const normalized = sanitizeCommunityTag(candidate);
+                const active = tag === normalized;
+                return (
+                  <button
+                    key={candidate}
+                    type="button"
+                    onClick={() => onTagChange(active ? null : normalized)}
+                    aria-label={
+                      active
+                        ? `Clear #${candidate} tag filter`
+                        : `Filter by #${candidate}`
+                    }
+                    aria-pressed={active}
+                    className={tagButtonClass(active)}
+                  >
+                    #{candidate}
+                  </button>
+                );
+              })}
+            </div>
+            {pageCount > 1 ? (
+              <button
+                type="button"
+                onClick={() => setTagPage((page) => Math.min(pageCount - 1, page + 1))}
+                disabled={safePage >= pageCount - 1}
+                aria-label="More popular tags"
+                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-scent-accent/16 bg-black/30 text-scent-accent transition-all duration-200 hover:border-scent-accent/46 hover:bg-scent-accent/[0.065] hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:border-scent-accent/16 disabled:hover:bg-black/30 disabled:hover:text-scent-accent"
+              >
+                <ChevronRight size={16} strokeWidth={1.8} aria-hidden="true" />
+              </button>
+            ) : null}
           </div>
           {hasFilters ? (
             <div className="mt-3 flex justify-center">

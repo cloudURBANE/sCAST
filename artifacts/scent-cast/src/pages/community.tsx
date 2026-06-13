@@ -181,6 +181,7 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
                     type={postType}
                     tag={postTag}
                     q={postQuery}
+                    authToken={authToken}
                     onTypeChange={setPostType}
                     onTagChange={setPostTag}
                     onQueryChange={setPostQuery}
