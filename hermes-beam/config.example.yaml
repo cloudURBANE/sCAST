@@ -1,0 +1,33 @@
+# Beam — excerpt to MERGE into ~/.hermes/config.yaml (not a standalone file).
+# Verify keys against your installed Hermes: `hermes doctor`, `hermes model`.
+
+# --- Reasoning model: pin Claude --------------------------------------------
+# Alias format is "anthropic/<model>". Choose/confirm interactively with
+# `hermes model` (aliases can change across Hermes releases). Examples:
+model: "anthropic/claude-opus-4-8"        # strong tier for synthesis/collections
+# model: "anthropic/claude-haiku-4-5"     # cheaper tier for routing/chat
+
+# --- Beam MCP tool server (HTTP, private/localhost) -------------------------
+mcp_servers:
+  beam:
+    url: "http://127.0.0.1:8848/mcp"
+    headers:
+      # Resolved at connect time from ~/.hermes/.env (see dot-hermes-env.example).
+      Authorization: "Bearer ${BEAM_AGENT_TOKEN}"
+    tools:
+      # Expose ONLY the Beam read tools. No write/terminal/browser tools here.
+      include:
+        - beam_get_user_context
+        - beam_get_wardrobe
+        - beam_search_catalog
+        - beam_get_fragrance_details
+        - beam_score_candidates
+      prompts: false
+      resources: false
+    timeout: 60
+    connect_timeout: 15
+    # Read-only tools are safe to run concurrently:
+    supports_parallel_tool_calls: true
+
+# Also strip Hermes' powerful built-in tools from the consumer Beam profile
+# (terminal, browser, file write, etc.) with `hermes tools` — see the runbook §6.

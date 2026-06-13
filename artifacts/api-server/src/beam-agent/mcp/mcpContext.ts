@@ -1,0 +1,68 @@
+/**
+ * Beam Agent — MCP request context + scope→tool mapping (plan §14).
+ *
+ * Pure (no SDK / DB / HTTP imports) so the security-relevant pieces — which tools
+ * a token may see, and how a run context is derived — are unit-testable. The MCP
+ * adapter (`beamMcpServer.ts`) calls into here; it never reimplements scope logic.
+ */
+import { randomUUID } from "node:crypto";
+import type { BeamRunContext } from "../types.ts";
+import type { BeamScope, DelegationClaims } from "./delegationToken.ts";
+
+/** Every read scope a Phase-1 owner token should carry. */
+export const ALL_READ_SCOPES: BeamScope[] = [
+  "beam:user-context:read",
+  "beam:wardrobe:read",
+  "beam:catalog:read",
+  "beam:details:read",
+  "beam:score:read",
+];
+
+/**
+ * Which tool names each scope unlocks. The MCP server lists/forwards ONLY tools
+ * whose name is unlocked by the presented token, so a narrower token (e.g. a
+ * future per-run token without `details:read`) automatically hides that tool.
+ */
+export const SCOPE_TOOL_MAP: Record<BeamScope, readonly string[]> = {
+  "beam:user-context:read": ["beam_get_user_context"],
+  "beam:wardrobe:read": ["beam_get_wardrobe"],
+  "beam:catalog:read": ["beam_search_catalog"],
+  "beam:details:read": ["beam_get_fragrance_details"],
+  "beam:score:read": ["beam_score_candidates"],
+};
+
+/** Resolve the set of tool names a set of scopes is allowed to use. */
+export function allowedToolNames(scopes: readonly BeamScope[]): Set<string> {
+  const names = new Set<string>();
+  for (const scope of scopes) {
+    const tools = SCOPE_TOOL_MAP[scope];
+    if (tools) for (const name of tools) names.add(name);
+  }
+  return names;
+}
+
+/**
+ * Extract a bearer token from an Authorization header value. Returns null when
+ * the header is absent or not a well-formed `Bearer <token>`.
+ */
+export function parseBearer(authHeader: string | undefined | null): string | null {
+  if (typeof authHeader !== "string") return null;
+  const match = /^Bearer[ \t]+(.+)$/i.exec(authHeader.trim());
+  if (!match) return null;
+  const token = match[1].trim();
+  return token.length > 0 ? token : null;
+}
+
+/**
+ * Derive the per-call run context from verified claims. tenant/user come ONLY
+ * from the signed token — never from tool arguments. A fresh runId/sessionId is
+ * generated when the token doesn't carry one (owner/dev mode).
+ */
+export function deriveRunContext(claims: DelegationClaims): BeamRunContext {
+  return {
+    runId: claims.runId ?? `run_${randomUUID()}`,
+    sessionId: claims.jti ? `beam_${claims.jti}` : `beam_${randomUUID()}`,
+    tenantId: claims.tenantId,
+    userId: claims.sub,
+  };
+}

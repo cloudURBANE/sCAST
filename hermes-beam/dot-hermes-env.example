@@ -1,0 +1,17 @@
+# Beam — excerpt to MERGE into ~/.hermes/.env  (secrets; never commit)
+
+# Delegation token that authorizes Hermes to call the Beam MCP server.
+# Mint it (owner/dev mode) with, from the repo:
+#   pnpm --filter @workspace/api-server run beam:mint-token --user <USER_ID> --tenant <TENANT_ID>
+# The minter and the MCP server must share the SAME BEAM_AGENT_TOKEN_SECRET.
+BEAM_AGENT_TOKEN=paste-the-minted-token-here
+
+# --- Anthropic provider credential (pick ONE path) --------------------------
+# A) Production / multi-user — Claude Platform API key (pay-per-token). Recommended
+#    for anything beyond owner-only use (see runbook caveats).
+ANTHROPIC_API_KEY=sk-ant-...
+
+# B) Owner-only — Claude subscription via `hermes model` -> Anthropic OAuth.
+#    Requires Claude **Max + extra usage credits**; Pro cannot use this path, and it
+#    is NOT a basis for serving multiple customers. No token pasted here — Hermes
+#    stores the OAuth credential itself.
