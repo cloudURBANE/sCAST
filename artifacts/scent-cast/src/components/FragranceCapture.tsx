@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, Search, Sparkles, X } from 'lucide-react';
+import { Check, Search, X } from 'lucide-react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { ScentIntelligenceLoader } from './ScentIntelligenceLoader';
 import {
@@ -394,15 +394,12 @@ export const FragranceCapture: React.FC<{
   onViewVault?: () => void;
   /** Render only the search interior when the stable vault panel is owned by the parent. */
   embeddedInVaultPanel?: boolean;
-  /** Optional hero-search launcher for the signature scent concierge. */
-  onDiscoverSignatureScent?: () => void;
 }> = ({
   onAdd,
   onVaultSearchStateChange,
   existingVaultKeys,
   onViewVault,
   embeddedInVaultPanel = false,
-  onDiscoverSignatureScent,
 }) => {
   const [uploading, setUploading] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState("");
@@ -489,8 +486,6 @@ export const FragranceCapture: React.FC<{
 
   const vaultSearchActive = searchFocused || searchQuery.trim().length > 0;
   const hasSelectedMatch = selectedMatch !== null;
-  const showSignatureScentAction =
-    Boolean(onDiscoverSignatureScent) && !vaultSearchActive && !uploading && matches.length === 0;
 
   // A result is "already in vault" when its brand+name identity is in the saved
   // set. Used to badge rows and to convert the primary CTA into "View in vault"
@@ -1247,18 +1242,6 @@ export const FragranceCapture: React.FC<{
               </motion.span>
             </motion.button>
           </form>
-          {showSignatureScentAction ? (
-            <button
-              type="button"
-              onClick={onDiscoverSignatureScent}
-              className="mx-auto mt-4 inline-flex min-h-11 items-center justify-center gap-1.5 rounded-full border border-scent-accent/40 bg-black/42 px-5 py-2.5 text-[11px] font-bold uppercase tracking-[0.12em] text-scent-accent shadow-[inset_0_1px_0_rgba(255,236,183,0.08)] transition-colors hover:border-scent-accent/68 hover:bg-scent-accent/10 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
-              aria-label="Discover your signature scent"
-              title="Discover your signature scent"
-            >
-              <Sparkles size={13} strokeWidth={1.9} aria-hidden />
-              <span>Discover your signature scent</span>
-            </button>
-          ) : null}
         </div>
 
         {/* Screen-reader announcement for dynamic search results */}

@@ -2046,6 +2046,14 @@ a {
   justify-content: center;
 }
 
+@media (max-width: 480px) {
+  .scent-community-marquee-cell {
+    flex: 0 0 clamp(11.5rem, 40vw, 14rem);
+    width: clamp(11.5rem, 40vw, 14rem);
+    height: clamp(15.5rem, 50vw, 19rem);
+  }
+}
+
 .scent-community-marquee-card {
   box-shadow:
     0 34px 78px -40px rgba(0, 0, 0, 0.98),
@@ -2078,7 +2086,9 @@ a {
 
 .scent-brand-gold-shimmer {
   position: relative;
-  display: inline-block;
+  display: block;
+  width: 100%;
+  text-align: center;
   color: #f7f3ec;
   -webkit-text-fill-color: currentColor;
   filter:
@@ -2098,6 +2108,7 @@ a {
   z-index: 1;
   pointer-events: none;
   color: transparent;
+  text-align: center;
   background: linear-gradient(
     105deg,
     rgba(255, 247, 201, 0) 0%,
