@@ -1204,49 +1204,84 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         aria-live="polite"
         aria-label="Beam Agent conversation"
       >
-        {/* Intro: the stage stays empty for a beat after open, then a "thinking"
-            dots bubble lands, then it crossfades into the greeting and the rest
-            of the conversation. The dots fade out as the first line fades in, so
-            the panel never hard-cuts between the two — and, critically, every
-            real message renders its TEXT (not a permanent dots placeholder). */}
-        <AnimatePresence initial={false}>
-          {greetingMounted && !introReady ? (
+        {/* Intro: the greeting opens as a compact pill holding just the typing
+            dots — the agent visibly "thinking" — then the pill GROWS into its
+            full first line (`layout="size"`, ~0.52s) while the welcome text
+            fades up inside it. The dots are popped out of flow the instant the
+            line is ready, so the bubble measures straight to its final size and
+            the box morph carries that growth in one smooth pass. This morph is
+            the open's "appeal" beat; only the greeting runs it — every other
+            turn (and the greeting itself, once introReady) renders real TEXT,
+            never a permanent dots placeholder. */}
+        {messages.map((message, index) => {
+          const isIntroGreeting = index === 0 && message.role === 'agent';
+          // Keep the stage empty until the greeting beat — the bubble (and its
+          // dots) only mount once the open transition has settled (420ms).
+          if (isIntroGreeting && !greetingMounted) return null;
+          // The greeting shows dots until the compose hold elapses (introReady),
+          // then morphs into its line. No other message is ever in "typing".
+          const typing = isIntroGreeting && !introReady;
+          return (
             <motion.div
-              key="intro-typing"
-              initial={{ opacity: 0, y: 8 }}
+              key={message.id}
+              // Only the greeting morphs its box: `layout="size"` animates the
+              // grow from thinking-pill to welcome-line without sliding the
+              // bubble when later turns push it down. Other bubbles keep the
+              // simple fade/rise and never run a layout pass.
+              layout={isIntroGreeting && !calmMotion ? 'size' : false}
+              initial={calmMotion ? false : { opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
-              transition={{ duration: 0.24, ease: SCENT_EASE }}
-              className={BEAM_TYPING_BUBBLE_CLASS}
-              aria-label="Beam Agent is typing"
+              transition={{
+                duration: 0.24,
+                ease: SCENT_EASE,
+                layout: { duration: 0.52, ease: SCENT_EASE },
+              }}
+              className={`relative max-w-[90%] rounded-[calc(var(--radius-scent)-12px)] border px-3.5 py-2.5 text-[13px] leading-relaxed sm:text-sm ${
+                message.role === 'user'
+                  ? 'self-end border-white/14 bg-white/[0.07] text-[#fff7ec]'
+                  : message.role === 'system'
+                    ? 'self-start border-red-400/25 bg-red-500/10 text-red-100'
+                    : 'self-start border-scent-accent/22 bg-[linear-gradient(180deg,rgba(212,175,55,0.045),rgba(0,0,0,0.16))] text-scent-text-muted'
+              }`}
+              aria-label={typing ? 'Beam Agent is typing' : undefined}
             >
-              <BeamTypingDots />
+              {message.role === 'system' ? (
+                <AlertTriangle size={13} className="mr-1.5 inline align-[-2px]" aria-hidden />
+              ) : null}
+              {isIntroGreeting ? (
+                <AnimatePresence mode="popLayout" initial={false}>
+                  {typing ? (
+                    <motion.span
+                      key="intro-dots"
+                      className="inline-flex items-center gap-1.5 py-0.5"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.18, ease: SCENT_EASE }}
+                      aria-hidden
+                    >
+                      <BeamTypingDots />
+                    </motion.span>
+                  ) : (
+                    // Fades up a beat into the box growth, so the text resolves as
+                    // the bubble settles rather than appearing before it expands.
+                    <motion.span
+                      key="intro-text"
+                      className="block"
+                      initial={calmMotion ? false : { opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ duration: 0.36, ease: SCENT_EASE, delay: 0.08 }}
+                    >
+                      {message.text}
+                    </motion.span>
+                  )}
+                </AnimatePresence>
+              ) : (
+                message.text
+              )}
             </motion.div>
-          ) : null}
-        </AnimatePresence>
-
-        {introReady
-          ? messages.map((message) => (
-              <motion.div
-                key={message.id}
-                initial={calmMotion ? false : { opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.24, ease: SCENT_EASE }}
-                className={`max-w-[90%] rounded-[calc(var(--radius-scent)-12px)] border px-3.5 py-2.5 text-[13px] leading-relaxed sm:text-sm ${
-                  message.role === 'user'
-                    ? 'self-end border-white/14 bg-white/[0.07] text-[#fff7ec]'
-                    : message.role === 'system'
-                      ? 'self-start border-red-400/25 bg-red-500/10 text-red-100'
-                      : 'self-start border-scent-accent/22 bg-[linear-gradient(180deg,rgba(212,175,55,0.045),rgba(0,0,0,0.16))] text-scent-text-muted'
-                }`}
-              >
-                {message.role === 'system' ? (
-                  <AlertTriangle size={13} className="mr-1.5 inline align-[-2px]" aria-hidden />
-                ) : null}
-                {message.text}
-              </motion.div>
-            ))
-          : null}
+          );
+        })}
 
         {/* Live "thinking" bubble while the agent works a turn, so the wait
             reads as a real chat exchange instead of a frozen panel. Calm modes
