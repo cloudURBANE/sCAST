@@ -2238,7 +2238,23 @@ a {
   will-change: transform;
   transform: translateZ(0);
   backface-visibility: hidden;
-  animation: scent-cue-marquee-scroll var(--cue-marquee-duration) linear infinite;
+  /* Materialize, then glide: a one-shot fade eases the lane in while the scroll
+     holds for a beat (delay) before it begins to move — so the marquee settles
+     into place and then starts gliding, rather than snapping in already
+     mid-scroll. The fade touches only opacity, so it never fights the scroll's
+     transform. */
+  animation:
+    scent-cue-marquee-fade-in 0.5s var(--scent-ease-out) both,
+    scent-cue-marquee-scroll var(--cue-marquee-duration) linear 0.5s infinite;
+}
+
+@keyframes scent-cue-marquee-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .scent-cue-marquee[data-marquee-paused="true"] .scent-cue-marquee-track {

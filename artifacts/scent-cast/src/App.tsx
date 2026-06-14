@@ -747,14 +747,20 @@ function DashboardView() {
         <div className="space-y-20 sm:space-y-28 pt-10 sm:pt-14">
           <HomepageHeroMarquee />
 
-          <section className="mx-auto w-full max-w-[60rem] min-w-0 text-center">
+          <section className="relative mx-auto w-full max-w-[60rem] min-w-0 text-center">
             {/* Beam Agent header strip — title, progress, and close live ABOVE
                 the bordered card so the card itself only holds the conversation
                 and composer. Mounted only in agent mode. */}
-            <AnimatePresence initial={false}>
+            {/* popLayout pops the header out of flow the instant it closes, so
+                the search card + lower actions (both layout-tracked) slide up to
+                fill the gap in the SAME pass the header fades — instead of the
+                header holding its full height through the fade and then snapping
+                everything upward once it finally unmounts. */}
+            <AnimatePresence initial={false} mode="popLayout">
               {agentActive ? (
                 <motion.div
                   key="mission-header"
+                  layout={!reduceMotion}
                   initial={reduceMotion ? false : { opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 6 }}
@@ -792,7 +798,7 @@ function DashboardView() {
                     A scent for today.
                   </h2>
                   <p className="mt-1.5 scent-type-label text-scent-accent/55">
-                    {missionStatus?.progressText ?? 'Ready for your cues'}
+                    {missionStatus?.progressText ?? 'Tell me about your day'}
                   </p>
                   <p className="mx-auto mt-1 hidden max-w-xl text-sm leading-6 text-scent-text-muted sm:block">
                     {missionStatus?.contextLine ?? 'Weather context ready when available'}
