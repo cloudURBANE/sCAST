@@ -26,6 +26,11 @@ mcp_servers:
         - beam_search_catalog
         - beam_get_fragrance_details
         - beam_score_candidates
+        # Cost-capped live web research (freshness-gated, cached). The server
+        # only advertises this tool when BEAM_RESEARCH_ENABLED + OPENROUTER_API_KEY
+        # are set in the MCP server's env (see dot-hermes-env.example); until then
+        # it simply won't appear, so listing it here is safe.
+        - beam_research_web
       prompts: false
       resources: false
     timeout: 60
