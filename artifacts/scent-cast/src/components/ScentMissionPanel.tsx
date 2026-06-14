@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import {
@@ -32,6 +32,7 @@ import {
 import type { Fragrance } from '@/components/Wardrobe';
 import type { WeatherData } from '@/context/WeatherContext';
 import { useDragToScroll } from '@/hooks/useDragToScroll';
+import { useMarqueeSwipe } from '@/hooks/useMarqueeSwipe';
 import { isIpadSafariPerformanceMode } from '@/lib/platform';
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)
@@ -470,6 +471,8 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const quickReplyScrollRef = useRef<HTMLDivElement | null>(null);
+  const cueTrackRef = useRef<HTMLDivElement | null>(null);
+  const cueGroupRef = useRef<HTMLDivElement | null>(null);
   const composerRef = useRef<HTMLInputElement | null>(null);
   const composerFormRef = useRef<HTMLFormElement | null>(null);
   const sessionIdRef = useRef<string | undefined>(undefined);
@@ -1008,6 +1011,62 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   // more than two contextual cues they scroll as a marquee any time the agent is
   // waiting on input; two or fewer stay centered and static.
   const showCueMarquee = !calmMotion && visibleQuickReplies.length > 2;
+
+  // Changes whenever the cue set changes (the track keeps its DOM node; only the
+  // chips inside swap), so the swipe listeners re-attach against fresh contents.
+  const cueMarqueeKey = visibleQuickReplies.map((reply) => `${reply.facet}-${reply.value}`).join('|');
+
+  // Make the cue marquee swipeable like every other marquee in the app (hero,
+  // atmosphere, community) instead of a pause-only CSS ticker — and, critically,
+  // give it the iOS pan-y/touchmove contract the shared hook owns so horizontal
+  // drags survive Safari's pointercancel.
+  useMarqueeSwipe(cueTrackRef, {
+    distanceVar: '--cue-marquee-distance',
+    durationVar: '--cue-marquee-duration',
+    resetKey: cueMarqueeKey,
+  });
+
+  // Feed the hook the live loop distance: the `-50%` keyframe advances by exactly
+  // one group's width per loop, so the measured group width is the px distance.
+  useLayoutEffect(() => {
+    if (!showCueMarquee) return;
+    const track = cueTrackRef.current;
+    const group = cueGroupRef.current;
+    if (!track || !group) return;
+    let cancelled = false;
+    let raf = 0;
+
+    const measure = () => {
+      if (cancelled) return;
+      const distance = group.getBoundingClientRect().width;
+      if (distance <= 0) return;
+      track.style.setProperty('--cue-marquee-distance', `${distance}px`);
+      track.dataset.marqueeReady = 'true';
+    };
+
+    track.dataset.marqueeReady = 'false';
+    const start = () => {
+      raf = window.requestAnimationFrame(measure);
+    };
+    // Fonts changing width after load would desync the loop; measure once they settle.
+    if (document.fonts?.ready) {
+      void document.fonts.ready.then(start);
+    } else {
+      start();
+    }
+
+    const resizeObserver = new ResizeObserver(() => measure());
+    resizeObserver.observe(group);
+    window.addEventListener('resize', measure);
+
+    return () => {
+      cancelled = true;
+      if (raf) window.cancelAnimationFrame(raf);
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [showCueMarquee, cueMarqueeKey]);
+
   const cueChipClass =
     'inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/20 px-3 py-1.5 scent-type-chip text-scent-text-muted transition-colors hover:border-scent-accent/42 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40 disabled:opacity-45';
 
@@ -1118,11 +1177,17 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
               onPointerLeave={() => setMarqueePaused(false)}
             >
               <div
+                ref={cueTrackRef}
                 className="scent-cue-marquee-track"
                 style={{ '--cue-marquee-duration': `${Math.max(visibleQuickReplies.length * 3.2, 9)}s` } as React.CSSProperties}
               >
                 {[0, 1].map((copy) => (
-                  <div className="scent-cue-marquee-group" key={copy} aria-hidden={copy === 1}>
+                  <div
+                    className="scent-cue-marquee-group"
+                    key={copy}
+                    ref={copy === 0 ? cueGroupRef : undefined}
+                    aria-hidden={copy === 1}
+                  >
                     {visibleQuickReplies.map((reply) =>
                       renderCueChip(reply, `${copy}-${reply.facet}-${reply.value}`),
                     )}
