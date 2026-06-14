@@ -2,6 +2,7 @@
 
 # compiled output
 dist
+dist-beam
 tmp
 out-tsc
 *.tsbuildinfo
