@@ -230,7 +230,7 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
                     type="button"
                     aria-label={`${item.name} by ${item.brand}, curated by ${item.curator}`}
                     tabIndex={copyIndex > 0 ? -1 : 0}
-                    className="scent-fragrance-card scent-community-marquee-card group relative flex h-full w-full cursor-pointer flex-col p-5 sm:p-6 text-left outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
+                    className="scent-fragrance-card scent-community-marquee-card group relative flex h-full w-full cursor-pointer flex-col p-3 sm:p-6 text-left outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
                     whileHover={cardHoverMotion}
                     whileTap={cardTapMotion}
                     transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
@@ -243,7 +243,7 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
                     }}
                   >
                     <div className="scent-card-frame" aria-hidden="true" />
-                    <div className="relative z-10 flex justify-end">
+                    <div className="relative z-10 hidden justify-end sm:flex">
                       <span className="font-mono scent-type-label text-scent-accent">
                         {item.curator}
                       </span>
@@ -251,7 +251,7 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
                     <motion.div
                       layoutId={`bottle-image-${copyIndex}-${item.id}`}
                       transition={imageLayoutTransition}
-                      className="relative z-10 my-3 min-h-0 flex-1"
+                      className="relative z-10 my-1 min-h-0 flex-1 sm:my-3"
                     >
                       <BottleImage
                         src={item.imageUrl}
@@ -268,10 +268,10 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
                         onError={copyIndex === 0 ? requestMarqueeMeasure : undefined}
                       />
                     </motion.div>
-                    <div className="relative z-10 mt-2 text-center">
+                    <div className="relative z-10 mt-2 hidden text-center sm:block">
                       <BrandGoldLabel as="span" brand={item.brand} className="scent-card-brand block" />
                     </div>
-                    <div className="scent-card-title-row relative z-10 mt-2">
+                    <div className="scent-card-title-row relative z-10 mt-1 sm:mt-2">
                       <h3 className="scent-card-title" title={item.name}>{item.name}</h3>
                     </div>
                   </motion.button>

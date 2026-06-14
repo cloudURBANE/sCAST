@@ -50,6 +50,16 @@ function roomButtonClass(active: boolean, extra = '') {
     .join(' ');
 }
 
+// Row style for the mobile room dropdown options (icon + label, left aligned).
+function roomMenuItemClass(active: boolean) {
+  return [
+    'flex min-h-11 w-full items-center gap-2.5 rounded-[12px] border px-3 py-2 text-left text-xs font-bold uppercase tracking-[0.12em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80',
+    active
+      ? 'border-scent-accent/55 bg-scent-accent/[0.16] text-[#fff7ec]'
+      : 'border-scent-accent/14 bg-black/30 text-scent-text-muted hover:border-scent-accent/42 hover:bg-scent-accent/[0.055] hover:text-[#fff7ec]',
+  ].join(' ');
+}
+
 function tagButtonClass(active: boolean) {
   return [
     'inline-flex h-10 min-w-max items-center justify-center rounded-full border px-3 text-center text-xs font-bold uppercase tracking-[0.12em] transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80',
@@ -82,6 +92,31 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
 }) => {
   const [draftQuery, setDraftQuery] = useState(q);
   const [tagMenuOpen, setTagMenuOpen] = useState(false);
+  // Mobile-only room selector menu. Below sm the five room chips collapse into
+  // two centered glassmorphic dropdowns (rooms + tags) sitting side by side, so
+  // opening one closes the other and a tap-out backdrop dismisses both.
+  const [roomMenuOpen, setRoomMenuOpen] = useState(false);
+
+  const activeRoom = ROOMS.find((room) => room.type === type) ?? null;
+  const ActiveRoomIcon = activeRoom?.Icon ?? Grid2X2;
+  const activeRoomLabel = activeRoom?.label ?? 'All rooms';
+
+  const toggleRoomMenu = () => {
+    setRoomMenuOpen((open) => !open);
+    setTagMenuOpen(false);
+  };
+  const toggleTagMenu = () => {
+    setTagMenuOpen((open) => !open);
+    setRoomMenuOpen(false);
+  };
+  const closeMenus = () => {
+    setRoomMenuOpen(false);
+    setTagMenuOpen(false);
+  };
+  const selectRoom = (roomType: CommunityPostType | null) => {
+    onTypeChange(roomType);
+    setRoomMenuOpen(false);
+  };
 
   // Popular tags come from the tenant aggregate; fall back to the curated
   // defaults while loading or when the community has no tagged posts yet.
@@ -142,8 +177,9 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
           ) : null}
         </div>
 
-        <div className="grid w-full min-w-0 gap-2.5">
-          <div className="grid w-full min-w-0 grid-cols-2 gap-2.5 sm:grid-cols-5">
+        {/* Desktop: the full five-room grid stays a single horizontal bar. */}
+        <div className="hidden w-full min-w-0 gap-2.5 sm:grid">
+          <div className="grid w-full min-w-0 grid-cols-5 gap-2.5">
             <button
               type="button"
               onClick={() => onTypeChange(null)}
@@ -151,7 +187,7 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
               className={roomButtonClass(type === null)}
             >
               <Grid2X2 size={17} strokeWidth={1.65} aria-hidden="true" />
-              <span className="min-w-0 [overflow-wrap:anywhere]">All rooms</span>
+              <span className="min-w-0 whitespace-nowrap">All rooms</span>
             </button>
             {ROOMS.map(({ type: roomType, label, Icon }) => (
               <button
@@ -162,18 +198,17 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
                 className={roomButtonClass(type === roomType)}
               >
                 <Icon size={17} strokeWidth={1.65} aria-hidden="true" />
-                <span className="min-w-0 [overflow-wrap:anywhere]">
-                  {label}
-                </span>
+                <span className="min-w-0 whitespace-nowrap">{label}</span>
               </button>
             ))}
           </div>
         </div>
 
-        <div className="min-w-0 border-t border-scent-accent/10 pt-3.5">
+        {/* Desktop: popular tags expand into the scrolling marquee. */}
+        <div className="hidden min-w-0 border-t border-scent-accent/10 pt-3.5 sm:block">
           <button
             type="button"
-            onClick={() => setTagMenuOpen((open) => !open)}
+            onClick={toggleTagMenu}
             aria-expanded={tagMenuOpen}
             className="flex min-h-11 w-full items-center justify-between gap-3 rounded-full border border-scent-accent/16 bg-black/30 px-4 py-2 text-left transition-colors hover:border-scent-accent/42 hover:bg-scent-accent/[0.055] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80"
           >
@@ -224,19 +259,133 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
               </div>
             </div>
           ) : null}
-          {hasFilters ? (
-            <div className="mt-3 flex justify-center">
-              <button
-                type="button"
-                onClick={clearFilters}
-                className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-full px-3 py-2 scent-type-chip text-scent-text-muted transition-colors hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80"
+        </div>
+
+        {/* Mobile: two centered glassmorphic dropdowns sitting side by side. Each
+            sits in its own relative cell so an open panel can stretch across both
+            columns (200% of the half-width cell + the 0.75rem grid gap). */}
+        <div className="grid grid-cols-2 gap-3 sm:hidden">
+          <div className="relative z-30 min-w-0">
+            <button
+              type="button"
+              onClick={toggleRoomMenu}
+              aria-expanded={roomMenuOpen}
+              aria-haspopup="listbox"
+              className="flex h-11 w-full min-w-0 items-center justify-between gap-2 rounded-full border border-scent-accent/24 bg-black/40 px-4 text-left transition-colors hover:border-scent-accent/46 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80"
+            >
+              <span className="flex min-w-0 items-center gap-2 text-[#fff7ec]">
+                <ActiveRoomIcon size={16} strokeWidth={1.65} className="shrink-0 text-scent-accent" aria-hidden="true" />
+                <span className="truncate text-xs font-bold uppercase tracking-[0.12em]">{activeRoomLabel}</span>
+              </span>
+              <ChevronDown
+                size={16}
+                strokeWidth={1.8}
+                aria-hidden="true"
+                className={`shrink-0 text-scent-accent transition-transform ${roomMenuOpen ? 'rotate-180' : ''}`}
+              />
+            </button>
+
+            {roomMenuOpen ? (
+              <div
+                className="absolute left-0 top-full z-30 mt-2 grid w-[calc(200%+0.75rem)] gap-1.5 rounded-[16px] border border-scent-accent/30 bg-[#0a0805]/95 p-2 shadow-[0_24px_48px_rgba(0,0,0,0.7)] backdrop-blur-md"
+                role="listbox"
+                aria-label="Room filters"
               >
-                <X size={13} strokeWidth={1.8} aria-hidden="true" />
-                Clear
-              </button>
-            </div>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={type === null}
+                  onClick={() => selectRoom(null)}
+                  className={roomMenuItemClass(type === null)}
+                >
+                  <Grid2X2 size={17} strokeWidth={1.65} aria-hidden="true" />
+                  <span className="whitespace-nowrap">All rooms</span>
+                </button>
+                {ROOMS.map(({ type: roomType, label, Icon }) => (
+                  <button
+                    key={roomType}
+                    type="button"
+                    role="option"
+                    aria-selected={type === roomType}
+                    onClick={() => selectRoom(roomType)}
+                    className={roomMenuItemClass(type === roomType)}
+                  >
+                    <Icon size={17} strokeWidth={1.65} aria-hidden="true" />
+                    <span className="whitespace-nowrap">{label}</span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+
+          <div className="relative z-30 min-w-0">
+            <button
+              type="button"
+              onClick={toggleTagMenu}
+              aria-expanded={tagMenuOpen}
+              aria-haspopup="listbox"
+              className="flex h-11 w-full min-w-0 items-center justify-between gap-2 rounded-full border border-scent-accent/24 bg-black/40 px-4 text-left transition-colors hover:border-scent-accent/46 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80"
+            >
+              <span className="truncate text-xs font-bold uppercase tracking-[0.12em] text-[#fff7ec]">
+                {tag ? `#${tag}` : 'Popular tags'}
+              </span>
+              <ChevronDown
+                size={16}
+                strokeWidth={1.8}
+                aria-hidden="true"
+                className={`shrink-0 text-scent-accent transition-transform ${tagMenuOpen ? 'rotate-180' : ''}`}
+              />
+            </button>
+
+            {tagMenuOpen && hasTags ? (
+              <div
+                className="absolute right-0 top-full z-30 mt-2 flex w-[calc(200%+0.75rem)] flex-wrap justify-center gap-2 rounded-[16px] border border-scent-accent/30 bg-[#0a0805]/95 p-3 shadow-[0_24px_48px_rgba(0,0,0,0.7)] backdrop-blur-md"
+                role="listbox"
+                aria-label="Popular tag filters"
+              >
+                {tags.map((candidate) => {
+                  const normalized = sanitizeCommunityTag(candidate);
+                  const active = tag === normalized;
+                  return (
+                    <button
+                      key={candidate}
+                      type="button"
+                      role="option"
+                      aria-selected={active}
+                      onClick={() => {
+                        onTagChange(active ? null : normalized);
+                        setTagMenuOpen(false);
+                      }}
+                      aria-label={active ? `Clear #${candidate} tag filter` : `Filter by #${candidate}`}
+                      className={tagButtonClass(active)}
+                    >
+                      #{candidate}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
+
+          {/* Tap-out backdrop; lives inside the sm:hidden grid so it never
+              intercepts taps on desktop where the marquee owns tagMenuOpen. */}
+          {roomMenuOpen || tagMenuOpen ? (
+            <div className="fixed inset-0 z-20 bg-transparent" aria-hidden="true" onClick={closeMenus} />
           ) : null}
         </div>
+
+        {hasFilters ? (
+          <div className="flex justify-center">
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-full px-3 py-2 scent-type-chip text-scent-text-muted transition-colors hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80"
+            >
+              <X size={13} strokeWidth={1.8} aria-hidden="true" />
+              Clear
+            </button>
+          </div>
+        ) : null}
       </div>
     </section>
   );
