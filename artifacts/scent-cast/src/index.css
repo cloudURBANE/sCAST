@@ -242,9 +242,28 @@ a {
   contain-intrinsic-size: none;
 }
 
+/* On phones the community forum's filters wrap into extra rows and the
+   "Popular tags" marquee mounts on demand. Layout/paint containment locks the
+   section to its intrinsic-size estimate, so those height changes get clipped
+   (the scrolling tag marquee and trailing rows vanish under the fold). Drop
+   containment here so the section measures its real, expanded height. */
+@media (max-width: 640px) {
+  .scent-deferred-section {
+    content-visibility: visible;
+    contain: none;
+    contain-intrinsic-size: none;
+  }
+}
+
 @supports not (content-visibility: auto) {
   .scent-deferred-section {
     contain: layout paint;
+  }
+
+  @media (max-width: 640px) {
+    .scent-deferred-section {
+      contain: none;
+    }
   }
 }
 
@@ -1734,6 +1753,34 @@ a {
   text-transform: uppercase;
 }
 
+/* While the Beam Agent is working, the status label gently shimmers so the
+   "Thinking" state reads as alive rather than a frozen caption. */
+.scent-type-label[data-thinking='true'] {
+  background: linear-gradient(
+    90deg,
+    var(--color-scent-text-secondary) 30%,
+    var(--color-scent-accent) 50%,
+    var(--color-scent-text-secondary) 70%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: scent-type-label-shimmer 1.8s linear infinite;
+}
+
+@keyframes scent-type-label-shimmer {
+  0% { background-position: 120% 0; }
+  100% { background-position: -20% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scent-type-label[data-thinking='true'] {
+    animation: none;
+  }
+}
+
 .scent-type-meta {
   color: var(--color-scent-text-muted);
   font-size: 0.8125rem;
@@ -2125,7 +2172,9 @@ a {
   min-width: 0;
   max-width: 100%;
   overflow: hidden;
-  contain: layout paint;
+  /* No layout/paint containment: this marquee mounts inside the community
+     filters and must let its height bubble up so the deferred section can grow
+     for it on mobile (otherwise the scrolling tags get clipped under the fold). */
   -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 2rem, #000 calc(100% - 2rem), transparent 100%);
   mask-image: linear-gradient(90deg, transparent 0, #000 2rem, #000 calc(100% - 2rem), transparent 100%);
 }

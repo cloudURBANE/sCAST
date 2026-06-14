@@ -146,6 +146,32 @@ const PROGRESS_COPY: Record<ScentMissionNodeId, string> = {
 // expensive rather than springy. Matches the curve used across the Beam Agent.
 const SCENT_EASE = [0.22, 1, 0.36, 1] as const;
 
+// Minimum time the agent's typing bubble stays up on a chat turn. The API can
+// answer in well under a second, which made the reply + cues snap in before the
+// user had read anything; holding a short, deliberate "thinking" beat gives the
+// turn the rhythm of a real concierge instead of an instant pop.
+const MIN_THINKING_MS = 700;
+
+// Shared chat-bubble shell for the agent's typing indicator (used both on first
+// open and while the agent is working a turn).
+const BEAM_TYPING_BUBBLE_CLASS =
+  'inline-flex max-w-[90%] items-center gap-1.5 self-start rounded-[calc(var(--radius-scent)-12px)] border border-scent-accent/22 bg-[linear-gradient(180deg,rgba(212,175,55,0.045),rgba(0,0,0,0.16))] px-4 py-3';
+
+// Three dots with an organic, staggered shimmer so the agent reads as genuinely
+// "thinking" rather than mechanically blinking.
+const BeamTypingDots: React.FC = () => (
+  <>
+    {[0, 1, 2].map((dot) => (
+      <motion.span
+        key={dot}
+        className="h-1.5 w-1.5 rounded-full bg-scent-accent/70"
+        animate={{ opacity: [0.3, 1, 0.3], y: [0, -3, 0], scale: [1, 1.18, 1] }}
+        transition={{ duration: 1.2, repeat: Infinity, ease: 'easeInOut', delay: dot * 0.22 }}
+      />
+    ))}
+  </>
+);
+
 function newMessageId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
@@ -429,6 +455,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const quickReplyScrollRef = useRef<HTMLDivElement | null>(null);
   const composerRef = useRef<HTMLInputElement | null>(null);
+  const composerFormRef = useRef<HTMLFormElement | null>(null);
   const sessionIdRef = useRef<string | undefined>(undefined);
 
   // Desktop click-drag for the cue strip; touch keeps native momentum scroll.
@@ -711,12 +738,19 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       }
 
       setBusy(true);
-      setProgressNote('Listening');
+      setProgressNote('Thinking');
+      const thinkingStartedAt = Date.now();
       try {
         const response = await callMission(
           { action: 'chat', userMessage: modeInstruction(agentMode, tone, trimmed) },
           nextMission,
         );
+        // Hold the typing beat for a deliberate minimum so the reply (and the
+        // next set of cues) never snaps in before the user can read it.
+        const elapsed = Date.now() - thinkingStartedAt;
+        if (!calmMotion && elapsed < MIN_THINKING_MS) {
+          await new Promise((resolve) => setTimeout(resolve, MIN_THINKING_MS - elapsed));
+        }
         if (response) {
           applyResponse(response, nextMission, { appendAssistant: false });
         }
@@ -738,6 +772,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       appendMessage,
       applyResponse,
       busy,
+      calmMotion,
       callMission,
       composer,
       items.length,
@@ -788,6 +823,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.18, ease: SCENT_EASE }}
           className="scent-type-label text-scent-accent/70"
+          data-thinking={busy ? 'true' : undefined}
         >
           {busy ? progressNote || 'Thinking' : 'Beam Agent'}
         </motion.span>
@@ -804,6 +840,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         </span>
       </div>
       <form
+        ref={composerFormRef}
         onSubmit={handleSubmit}
         className="scent-lux-input scent-vault-search-input scent-beam-composer flex h-[60px] w-full items-center gap-2 rounded-full px-2.5 transition-colors focus-within:ring-2 focus-within:ring-scent-accent/12 sm:h-[68px] sm:px-3.5"
       >
@@ -965,10 +1002,15 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   const hasConfirmAction = items.length > 0 && (enoughContext || agentMode === 'fast');
   const hasPreviewAction = agentMode === 'premium';
   const hasActionRow = hasConfirmAction || hasPreviewAction;
+  // A cue has been tapped into the composer but not sent yet. Tapping a cue used
+  // to blank the lane entirely, forcing the user to hunt for the small send
+  // arrow; instead we surface an explicit Confirm / Cancel pair right where the
+  // cues were.
+  const hasStagedCue = Boolean(pendingCueFacet) && composer.trim().length > 0;
   // Hold the whole lane back until the greeting has settled, so the panel never
   // opens with a row of cues already sitting there.
   const cueBar =
-    !cuesReady || (visibleQuickReplies.length === 0 && !hasActionRow) ? null : (
+    !cuesReady || (visibleQuickReplies.length === 0 && !hasActionRow && !hasStagedCue) ? null : (
       <motion.div
         initial={calmMotion ? false : { opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -1063,6 +1105,37 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
           )}
           </>
         ) : null}
+
+        {/* Staged choice: a cue is sitting in the composer waiting to be sent.
+            Give it an explicit Confirm / Cancel pair instead of a blank lane. */}
+        {visibleQuickReplies.length === 0 && !hasActionRow && hasStagedCue ? (
+          <div className="flex flex-col items-center">
+            <p className="scent-type-label mb-2 text-center text-scent-text-subtle">
+              Send this, or edit it above
+            </p>
+            <div className="flex items-center justify-center gap-2">
+              <button
+                type="button"
+                onClick={() => composerFormRef.current?.requestSubmit()}
+                disabled={busy}
+                className="scent-primary-button inline-flex min-h-11 items-center justify-center rounded-[var(--radius-scent)] px-6 py-2.5 text-[12px] font-bold uppercase tracking-[0.16em] disabled:opacity-55"
+              >
+                <span>Confirm</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setComposer('');
+                  setPendingCueFacet(null);
+                }}
+                disabled={busy}
+                className="inline-flex min-h-11 items-center justify-center rounded-full border border-white/20 px-5 py-2 scent-type-chip text-scent-text-muted transition-colors hover:border-scent-accent/42 hover:text-[#fff7ec] disabled:opacity-45"
+              >
+                <span>Cancel</span>
+              </button>
+            </div>
+          </div>
+        ) : null}
       </motion.div>
     );
 
@@ -1087,17 +1160,10 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -4 }}
               transition={{ duration: 0.24, ease: SCENT_EASE }}
-              className="inline-flex max-w-[90%] items-center gap-1.5 self-start rounded-[calc(var(--radius-scent)-12px)] border border-scent-accent/22 bg-[linear-gradient(180deg,rgba(212,175,55,0.045),rgba(0,0,0,0.16))] px-4 py-3"
+              className={BEAM_TYPING_BUBBLE_CLASS}
               aria-label="Beam Agent is typing"
             >
-              {[0, 1, 2].map((dot) => (
-                <motion.span
-                  key={dot}
-                  className="h-1.5 w-1.5 rounded-full bg-scent-accent/70"
-                  animate={{ opacity: [0.3, 1, 0.3], y: [0, -2, 0] }}
-                  transition={{ duration: 1, repeat: Infinity, ease: 'easeInOut', delay: dot * 0.18 }}
-                />
-              ))}
+              <BeamTypingDots />
             </motion.div>
           ) : null}
         </AnimatePresence>
@@ -1124,6 +1190,25 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
               </motion.div>
             ))
           : null}
+
+        {/* Live "thinking" bubble while the agent works a turn, so the wait
+            reads as a real chat exchange instead of a frozen panel. Calm modes
+            keep the quiet "Thinking" label above the composer instead. */}
+        <AnimatePresence initial={false}>
+          {introReady && busy && !resolved && !calmMotion ? (
+            <motion.div
+              key="agent-typing"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.24, ease: SCENT_EASE }}
+              className={BEAM_TYPING_BUBBLE_CLASS}
+              aria-label="Beam Agent is typing"
+            >
+              <BeamTypingDots />
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
 
         <AnimatePresence initial={false}>
           {resolved ? (
