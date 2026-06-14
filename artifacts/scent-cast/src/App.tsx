@@ -447,7 +447,7 @@ const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({
     : `${Math.round(tempValue)}°F`;
   const condition = pendingWeather || !conditionText
     ? <AtmospherePlaceholder label="conditions" active={pendingWeather} />
-    : conditionText;
+    : titleCaseToken(conditionText);
   const humidity = pendingWeather || humidityMissing
     ? <AtmospherePlaceholder label="humidity" active={pendingWeather} />
     : `${humidityValue}%`;
