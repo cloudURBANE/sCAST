@@ -84,10 +84,10 @@ const AccountMenu: React.FC<AccountMenuProps> = ({
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className="flex h-10 w-10 items-center justify-center rounded-full border border-scent-accent/35 bg-black/35 shadow-[0_0_18px_rgba(212,175,55,0.12)] transition-colors hover:border-scent-accent/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55"
+          className="flex h-11 w-11 items-center justify-center rounded-full border border-scent-accent/35 bg-black/35 shadow-[0_0_18px_rgba(212,175,55,0.12)] transition-colors hover:border-scent-accent/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55"
           aria-label="Open account menu"
         >
-          <Avatar className="h-9 w-9 border border-white/10 bg-scent-surface">
+          <Avatar className="h-10 w-10 border border-white/10 bg-scent-surface">
             {authPictureUrl ? (
               <AvatarImage src={authPictureUrl} alt="" referrerPolicy="no-referrer" />
             ) : null}
