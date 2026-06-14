@@ -44,6 +44,7 @@ import {
   type NormalizedBottleImageAdjustment,
 } from '@/lib/bottleImageAdjustment';
 import { BottleImage } from '@/components/BottleImage';
+import { VaultCard } from '@/components/VaultCard';
 import { betaVideoUrlForFragrance } from '@/lib/bottleVideoBeta';
 import { BrandGoldLabel } from '@/components/BrandGoldLabel';
 import { VaultGridModeToggle } from '@/components/VaultGridModeToggle';
@@ -1954,38 +1955,25 @@ export const Wardrobe: React.FC<{
                         onClick={() => openDetail(item)}
                         onMouseEnter={() => prefetchReviews(item)}
                       >
-                        <div className={`scent-fragrance-card scent-hover-lift w-full h-full ${
-                          isCompactGrid ? 'min-h-[17.5rem]' : 'min-h-[26rem]'
-                        } sm:min-h-[26rem] transition-[transform,border-color,box-shadow] duration-500 motion-reduce:transition-none relative overflow-hidden flex flex-col`}>
-                          <div className="scent-card-frame" aria-hidden />
-                          <div className={`relative z-[1] flex h-full flex-col items-center ${
-                            isCompactGrid ? 'px-3 py-4' : 'px-6 py-5'
-                          } sm:px-8 sm:py-6`}>
-                            <BrandGoldLabel
-                              brand={entryBrand(item)}
-                              className="scent-card-brand w-full mt-1 sm:mt-1.5"
-                            />
-                            <div className={`relative flex-1 w-full ${
-                              isCompactGrid ? 'mt-2 mb-2' : 'mt-3 mb-3'
-                            } min-h-0 sm:mt-4 sm:mb-4`}>
-                              <BottleImage
-                                variant="grid"
-                                src={item.imageUrl}
-                                videoSrc={betaVideoUrlForFragrance(item)}
-                                alt={entryName(item)}
-                                adjustment={item.imageAdjustment}
-                                isSyncing={isImageSyncing?.(item)}
-                                className="absolute inset-0 z-10"
-                                imgClassName="scent-hover-scale brightness-[1.1] transition-transform duration-[900ms] motion-reduce:transition-none"
-                                loading={prioritizeImage ? 'eager' : 'lazy'}
-                                fetchPriority={prioritizeImage ? 'high' : undefined}
-                              />
-                            </div>
-                            <div className="scent-card-title-row shrink-0">
-                              <h3 className="scent-card-title" title={entryName(item)}>{entryName(item)}</h3>
-                            </div>
-                          </div>
-                        </div>
+                        <VaultCard
+                          tone="wardrobe"
+                          compact={isCompactGrid}
+                          brand={entryBrand(item)}
+                          name={entryName(item)}
+                        >
+                          <BottleImage
+                            variant="grid"
+                            src={item.imageUrl}
+                            videoSrc={betaVideoUrlForFragrance(item)}
+                            alt={entryName(item)}
+                            adjustment={item.imageAdjustment}
+                            isSyncing={isImageSyncing?.(item)}
+                            className="absolute inset-0 z-10"
+                            imgClassName="scent-hover-scale brightness-[1.1] transition-transform duration-[900ms] motion-reduce:transition-none"
+                            loading={prioritizeImage ? 'eager' : 'lazy'}
+                            fetchPriority={prioritizeImage ? 'high' : undefined}
+                          />
+                        </VaultCard>
                       </motion.div>
                     );
                   })}
