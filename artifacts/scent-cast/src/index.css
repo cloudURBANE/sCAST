@@ -520,11 +520,13 @@ a {
 }
 
 .scent-topbar {
-  /* Bumped opacity to compensate for the removed backdrop-filter below. The bar
-     was already ~76% opaque, so the blur contributed almost nothing visually
-     while forcing a full-width re-blur on every scroll/animation frame (the
-     dominant scroll-jank source over the animated nexus background). */
-  background: rgba(5, 3, 2, 0.86);
+  /* Near-opaque so content scrolling beneath the fixed bar doesn't ghost
+     through (the logo/title used to read as a faint stacked layer at 0.86).
+     Kept as a flat fill rather than restoring backdrop-filter: the blur added
+     almost nothing visually while forcing a full-width re-blur on every
+     scroll/animation frame — the dominant scroll-jank source over the animated
+     nexus background. */
+  background: rgba(5, 3, 2, 0.97);
   border-bottom: 1px solid rgba(255, 215, 160, 0.1);
   box-shadow: 0 1px 0 rgba(255, 224, 174, 0.03), 0 12px 34px rgba(0, 0, 0, 0.42);
   transition: background var(--scent-transition-base) var(--scent-ease-out), box-shadow var(--scent-transition-base) var(--scent-ease-out);

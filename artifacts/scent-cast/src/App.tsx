@@ -773,7 +773,7 @@ function DashboardView() {
       <div style={{ height: 'var(--topbar-h)' }} />
 
       <main className="relative z-10 pb-24 px-4 sm:px-8 max-w-[1760px] mx-auto">
-        <div className="space-y-20 sm:space-y-28 pt-10 sm:pt-14">
+        <div className="space-y-12 sm:space-y-28 pt-6 sm:pt-14">
           <HomepageHeroMarquee />
 
           <section className="relative mx-auto w-full max-w-[60rem] min-w-0 text-center">
