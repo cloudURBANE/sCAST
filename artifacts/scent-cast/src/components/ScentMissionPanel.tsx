@@ -1012,9 +1012,10 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   // waiting on input; two or fewer stay centered and static.
   const showCueMarquee = !calmMotion && visibleQuickReplies.length > 2;
 
-  // Changes whenever the cue set changes (the track keeps its DOM node; only the
-  // chips inside swap), so the swipe listeners re-attach against fresh contents.
-  const cueMarqueeKey = visibleQuickReplies.map((reply) => `${reply.facet}-${reply.value}`).join('|');
+  // Changes whenever the cue set changes, the cue bar becomes ready, or the portal
+  // container is resolved. This ensures the swipe listeners attach against the live DOM node.
+  const cueMarqueeKey = `${cuesReady}-${Boolean(cueBarContainer)}|` +
+    visibleQuickReplies.map((reply) => `${reply.facet}-${reply.value}`).join('|');
 
   // Make the cue marquee swipeable like every other marquee in the app (hero,
   // atmosphere, community) instead of a pause-only CSS ticker — and, critically,
