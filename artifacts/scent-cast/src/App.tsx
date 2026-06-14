@@ -749,7 +749,7 @@ function DashboardView() {
   }, []);
 
   return (
-    <div className="min-h-[100svh] relative overflow-x-hidden">
+    <div className="min-h-[100svh] relative overflow-x-hidden pb-[calc(var(--bottomnav-h)+1.5rem)] md:pb-0">
       <SEO />
       <AppTopNav
         authToken={authToken}
