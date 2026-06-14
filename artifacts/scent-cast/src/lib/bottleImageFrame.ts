@@ -49,8 +49,10 @@ const ARTBOARD_INSET: Record<BottleImageVariant, string> = {
     "absolute inset-[6%] sm:inset-[7%] overflow-hidden min-h-0 min-w-0 rounded-[0.125rem]",
   share:
     "absolute inset-[6%] sm:inset-[7%] overflow-hidden min-h-0 min-w-0 rounded-[0.125rem]",
+  // Tighter mobile inset (3.5% vs 6%) draws the packshot ~5.7% larger on phone
+  // community cards; desktop keeps its 7% breathing room.
   card:
-    "absolute inset-[6%] sm:inset-[7%] overflow-hidden min-h-0 min-w-0 rounded-[0.125rem]",
+    "absolute inset-[3.5%] sm:inset-[7%] overflow-hidden min-h-0 min-w-0 rounded-[0.125rem]",
   display:
     "absolute inset-[6%] sm:inset-[7%] overflow-hidden min-h-0 min-w-0 rounded-[0.125rem]",
   detail: "absolute inset-3 sm:inset-4 overflow-hidden min-h-0 min-w-0 rounded-sm",

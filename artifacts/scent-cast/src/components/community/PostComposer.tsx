@@ -783,69 +783,71 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
 
   if (!composerOpen) {
     return (
-      <>
-        {/* The inline banner eats ~180px before the feed on phones, so it is
-            desktop-only; mobile gets a floating "+" that sits just above the
-            bottom tab bar and expands the composer in place. */}
-        <section
-          ref={sectionRef}
-          className="relative hidden w-full overflow-hidden border-b border-scent-accent/14 p-5 sm:p-6 md:block"
-        >
+      <section
+        ref={sectionRef}
+        className="relative w-full overflow-hidden border-b border-scent-accent/14 p-3 sm:p-6"
+      >
+        {/* Mobile: a compact "start a room" bar instead of the full marketing
+            block, so the forum's starting point stays present without eating the
+            viewport on small screens. */}
+        <div className="flex items-center gap-2.5 sm:hidden">
+          <button
+            type="button"
+            onClick={() => {
+              setComposerOpen(true);
+              setStatusMessage(null);
+            }}
+            aria-expanded="false"
+            aria-label="Start a community room"
+            className="scent-lux-input flex h-11 flex-1 items-center rounded-full px-4 text-left text-sm text-scent-text-subtle"
+          >
+            Start a room&hellip;
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setComposerOpen(true);
+              setStatusMessage(null);
+            }}
+            aria-hidden="true"
+            tabIndex={-1}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-scent-accent/28 bg-black/78 text-[#fff7ec] shadow-[0_4px_12px_rgba(212,175,55,0.15)] transition-all duration-200 hover:border-scent-accent/78 hover:bg-scent-accent/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
+          >
+            <Plus size={18} strokeWidth={2.2} className="text-[#fff7ec]" aria-hidden="true" />
+          </button>
+        </div>
+
+        {/* Desktop: full forum hero with the floating + control. */}
         <button
           type="button"
-          onClick={openComposer}
+          onClick={() => {
+            setComposerOpen(true);
+            setStatusMessage(null);
+          }}
           aria-expanded="false"
           aria-label="Start a community room"
-          className="absolute right-4 top-4 z-10 flex h-10 w-10 items-center justify-center rounded-full border border-scent-accent/28 bg-black/78 text-[#fff7ec] shadow-[0_4px_12px_rgba(212,175,55,0.15)] transition-all duration-200 hover:border-scent-accent/78 hover:bg-scent-accent/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 sm:right-5 sm:top-5"
+          className="absolute right-5 top-5 z-10 hidden h-10 w-10 items-center justify-center rounded-full border border-scent-accent/28 bg-black/78 text-[#fff7ec] shadow-[0_4px_12px_rgba(212,175,55,0.15)] transition-all duration-200 hover:border-scent-accent/78 hover:bg-scent-accent/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 sm:flex"
         >
           <Plus size={18} strokeWidth={2.2} className="text-[#fff7ec]" aria-hidden="true" />
         </button>
-        <div className="mx-auto flex max-w-2xl flex-col items-center px-9 text-center sm:px-12">
+        <div className="mx-auto hidden max-w-2xl flex-col items-center px-12 text-center sm:flex">
           <p className="scent-type-label text-scent-accent">
             Community forum
           </p>
-          <h2 className="mt-3 text-balance font-serif text-2xl italic leading-tight text-[#fff7ec] sm:mt-4 sm:text-4xl">
+          <h2 className="mt-4 text-balance font-serif text-2xl italic leading-tight text-[#fff7ec] sm:text-4xl">
             Rooms already moving through the lounge.
           </h2>
-          <p className="mt-3 max-w-xl text-sm leading-6 text-scent-text-muted sm:mt-4 sm:text-base sm:leading-7">
+          <p className="mt-4 max-w-xl text-base leading-7 text-scent-text-muted">
             Ask a question, share your SOTD, run a battle, or check if a bottle is worth it.
           </p>
         </div>
 
         {statusMessage ? (
-          <p
-            role="status"
-            aria-live="polite"
-            className={`mx-auto mt-6 max-w-2xl rounded-[14px] border px-4 py-3 text-center text-base ${STATUS_TONE_CLASSES[statusTone]}`}
-          >
+          <p className="mx-auto mt-4 max-w-2xl rounded-[14px] border border-scent-accent/12 bg-black/58 px-4 py-3 text-center text-sm text-scent-text-muted sm:mt-6 sm:text-base">
             {statusMessage}
           </p>
         ) : null}
-        </section>
-
-        {/* Mobile-only status notice (e.g. "Room opened") — the inline banner
-            that normally carries it is hidden below md. */}
-        {statusMessage ? (
-          <p
-            role="status"
-            aria-live="polite"
-            className={`mx-4 mt-4 rounded-[14px] border px-4 py-3 text-center text-base md:hidden ${STATUS_TONE_CLASSES[statusTone]}`}
-          >
-            {statusMessage}
-          </p>
-        ) : null}
-
-        {/* Floating composer trigger, aligned above the mobile tab bar. */}
-        <button
-          type="button"
-          onClick={openComposer}
-          aria-expanded="false"
-          aria-label="Start a community room"
-          className="fixed bottom-[calc(5.25rem+env(safe-area-inset-bottom,0px))] right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full border border-scent-accent/28 bg-black/88 text-[#fff7ec] shadow-[0_4px_16px_rgba(212,175,55,0.25)] transition-all duration-200 hover:border-scent-accent hover:bg-scent-accent/20 active:scale-95 md:hidden"
-        >
-          <Plus size={20} strokeWidth={2.4} className="text-[#fff7ec]" aria-hidden="true" />
-        </button>
-      </>
+      </section>
     );
   }
 

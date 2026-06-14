@@ -141,33 +141,44 @@ export const ScentIntelligenceLoader: React.FC<ScentIntelligenceLoaderProps> = (
           )}
         </AnimatePresence>
 
-        {/* Center emblem — gentle breathing, soft settle on complete */}
-        <motion.img
-          src={EMBLEM}
-          alt=""
-          aria-hidden
-          draggable={false}
+        {/* Center emblem — gentle breathing, soft settle on complete.
+            The mount scale-in lives on an OUTER wrapper so it doesn't fight the
+            inner breathing keyframes: Framer evaluates a keyframe array from
+            index 0, so putting `scale: [1, 1.05, 1]` directly on the element
+            with `initial={{ scale: 0.72 }}` made it jump 0.72 -> 1 instantly
+            instead of easing in. Splitting the two motions keeps the reveal
+            smooth. */}
+        <motion.div
+          className="absolute flex items-center justify-center"
           initial={{ opacity: 0, scale: 0.72 }}
-          animate={
-            reduceMotion
-              ? { opacity: 1, scale: 1, filter: emblemFilter(complete) }
-              : complete
-                ? { opacity: 1, scale: [1, 1.14, 1.0], filter: emblemFilter(true) }
-                : { opacity: 1, scale: [1, 1.05, 1], filter: emblemFilter(false) }
-          }
-          transition={
-            reduceMotion
-              ? { duration: 0.3, ease: EASE_OUT }
-              : complete
-                ? { duration: 0.5, ease: EASE_OUT }
-                : {
-                    scale: { duration: 3.6, repeat: Infinity, ease: 'easeInOut' },
-                    opacity: { duration: 0.4 },
-                    filter: { duration: 0.4 },
-                  }
-          }
-          style={{ width: 46, height: 46, userSelect: 'none', pointerEvents: 'none', willChange: 'transform' }}
-        />
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: reduceMotion ? 0.3 : 0.7, ease: EASE_OUT }}
+        >
+          <motion.img
+            src={EMBLEM}
+            alt=""
+            aria-hidden
+            draggable={false}
+            animate={
+              reduceMotion
+                ? { scale: 1, filter: emblemFilter(complete) }
+                : complete
+                  ? { scale: [1, 1.14, 1.0], filter: emblemFilter(true) }
+                  : { scale: [1, 1.05, 1], filter: emblemFilter(false) }
+            }
+            transition={
+              reduceMotion
+                ? { duration: 0.3, ease: EASE_OUT }
+                : complete
+                  ? { duration: 0.5, ease: EASE_OUT }
+                  : {
+                      scale: { duration: 3.6, repeat: Infinity, ease: 'easeInOut' },
+                      filter: { duration: 0.4 },
+                    }
+            }
+            style={{ width: 46, height: 46, userSelect: 'none', pointerEvents: 'none', willChange: 'transform' }}
+          />
+        </motion.div>
       </div>
 
       {/* Status — cross-fades, fixed min-height kills the width/height jolt.
