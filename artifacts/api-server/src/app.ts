@@ -5,6 +5,7 @@ import cors from "cors";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import cjRedirectRouter from "./routes/cjRedirect";
+import { mountBeamAgent } from "./beam-agent";
 import { resolveTenant } from "./middlewares/tenant";
 import { logger } from "./lib/logger";
 import { frontendStaticDir } from "./paths";
@@ -46,6 +47,12 @@ app.use(resolveTenant);
 
 app.use("/api", router);
 app.use(cjRedirectRouter);
+
+// Beam Agent (read-only, Phase 1). Mounted at /api/beam-agent. Routes require
+// auth + rate-limit and stay inert until a model provider is configured
+// (OPENROUTER_API_KEY in production, or ANTHROPIC_API_KEY) — an unconfigured run
+// just emits a graceful `model_unavailable` event. See docs/beam-agent/.
+mountBeamAgent(app);
 
 const serveFrontendUnavailable: RequestHandler = (req, res, next) => {
   if ((req.method !== "GET" && req.method !== "HEAD") || req.path.startsWith("/api")) {

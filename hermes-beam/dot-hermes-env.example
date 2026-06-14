@@ -1,0 +1,18 @@
+# Beam — excerpt to MERGE into ~/.hermes/.env  (secrets; never commit)
+
+# Delegation token that authorizes Hermes to call the Beam MCP server.
+# Mint it (owner/dev mode) with, from the repo:
+#   pnpm --filter @workspace/api-server run beam:mint-token --user <USER_ID> --tenant <TENANT_ID>
+# The minter and the MCP server must share the SAME BEAM_AGENT_TOKEN_SECRET.
+BEAM_AGENT_TOKEN=paste-the-minted-token-here
+
+# --- OpenRouter provider credential -----------------------------------------
+# Beam routes its reasoning model through OpenRouter (pay-per-token, one key for
+# many models — and the SAME provider the production in-process loop uses). Get a
+# key at https://openrouter.ai/keys.
+OPENROUTER_API_KEY=sk-or-...
+
+# Legacy: Anthropic-direct still works if you prefer to pin Claude without
+# OpenRouter (set provider: anthropic in config.yaml and uncomment). Not the
+# default for Beam anymore.
+# ANTHROPIC_API_KEY=sk-ant-...
