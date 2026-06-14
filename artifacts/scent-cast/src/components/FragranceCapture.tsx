@@ -198,6 +198,21 @@ function truncateMatchLine(text: string, max: number): string {
   return `${t.slice(0, Math.max(0, max - 1)).trimEnd()}…`;
 }
 
+/**
+ * Strip diacritics and non-alphanumeric symbols (®, accents, punctuation) from
+ * a query, collapsing to single-spaced words. Powers the empty-state "Remove
+ * symbols" recovery chip so inputs like accented or trademarked names can be
+ * retried in a plainer form.
+ */
+function stripAccentsAndSymbols(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function matchMonogram(m: FragranceMatch): string {
   const brand = firstString(m.brand, m.house);
   const source = brand || firstString(m.name) || "";
@@ -1027,6 +1042,20 @@ export const FragranceCapture: React.FC<{
   const filtersActive = houseFilter !== null || genderFilter !== null;
   const showFilterBar = availableHouses.length > 1 || availableGenders.length > 1;
 
+  // Empty-state recovery suggestions, derived from the (still-present) query so a
+  // failed search offers a concrete next step instead of a dead end.
+  const trimmedQuery = searchQuery.trim();
+  const sanitizedQuery = stripAccentsAndSymbols(trimmedQuery);
+  const brandOnlyQuery = sanitizedQuery.split(' ')[0] ?? '';
+  const canSanitizeQuery =
+    sanitizedQuery.length > 0 && sanitizedQuery.toLowerCase() !== trimmedQuery.toLowerCase();
+  const canBrandOnlyQuery =
+    brandOnlyQuery.length >= 2 && brandOnlyQuery.toLowerCase() !== sanitizedQuery.toLowerCase();
+  const runRecoverySearch = (query: string) => {
+    setSearchQuery(query);
+    void handleSearch(undefined, query);
+  };
+
   /* Sync overlay — full-screen portal, separate from the search overlay. */
   const syncVeil = uploading && loadingSurface === 'sync' ? (
     <motion.div
@@ -1114,14 +1143,14 @@ export const FragranceCapture: React.FC<{
       animate={{ opacity: 1, y: 0 }}
       exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 24 }}
       transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
-      className="fixed inset-x-0 bottom-0 z-[120] bg-gradient-to-t from-scent-bg via-scent-bg/95 to-transparent px-4 pb-[max(0.7rem,env(safe-area-inset-bottom))] pt-8 sm:hidden"
+      className="fixed inset-x-0 bottom-[calc(var(--bottomnav-h)+0.4rem)] z-[120] bg-gradient-to-t from-scent-bg via-scent-bg/95 to-transparent px-4 pb-2 pt-8 sm:hidden"
     >
       <div className="mx-auto w-full max-w-[39.75rem]">
         <div className="mb-2 flex justify-center">
           <button
             type="button"
             onClick={scrollToSearch}
-            className="inline-flex items-center gap-1.5 rounded-full border border-white/30 bg-scent-bg/70 px-3.5 py-1.5 scent-type-chip text-scent-accent transition-colors hover:border-scent-accent/55 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
+            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full border border-white/30 bg-scent-bg/70 px-3.5 py-1.5 scent-type-chip text-scent-accent transition-colors hover:border-scent-accent/55 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
           >
             <Search size={12} strokeWidth={2.2} aria-hidden />
             Back to search
@@ -1168,16 +1197,17 @@ export const FragranceCapture: React.FC<{
           {errorStatus && (
             <motion.div
               initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
-              className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-scent text-center"
+              className="mb-4 rounded-scent border border-scent-accent/40 bg-scent-accent/[0.07] p-3 text-center"
+              role="status"
             >
               <div className="flex flex-col items-center gap-2 mb-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shrink-0" />
-                <p className="max-w-md text-sm font-medium leading-relaxed text-red-200">{errorStatus}</p>
+                <div className="h-1.5 w-1.5 shrink-0 rounded-full bg-scent-accent/90" />
+                <p className="max-w-md text-sm font-medium leading-relaxed text-scent-text-secondary">{errorStatus}</p>
               </div>
               <button
                 type="button"
                 onClick={handleRetry}
-                className="scent-type-chip text-red-200 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200/70"
+                className="scent-type-chip text-scent-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
               >
                 Try Again
               </button>
@@ -1262,9 +1292,32 @@ export const FragranceCapture: React.FC<{
               className="mt-10 py-10 border-t border-white/10 flex flex-col items-center text-center"
             >
               <p className="mb-2 font-serif text-lg italic text-scent-text-muted">No Olfactory Matches Found</p>
-              <p className="max-w-[200px] scent-type-label leading-relaxed">
-                Try a different fragrance name or brand.
+              <p className="max-w-[19rem] scent-type-label leading-relaxed">
+                Try removing accents, symbols, or extra words. Search by brand,
+                fragrance name, or a simpler spelling.
               </p>
+              {(canSanitizeQuery || canBrandOnlyQuery) && (
+                <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+                  {canSanitizeQuery && (
+                    <button
+                      type="button"
+                      onClick={() => runRecoverySearch(sanitizedQuery)}
+                      className="inline-flex min-h-[44px] items-center rounded-full border border-scent-accent/45 bg-scent-accent/10 px-4 py-1.5 scent-type-chip text-scent-accent transition-colors hover:border-scent-accent/70 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
+                    >
+                      Remove symbols
+                    </button>
+                  )}
+                  {canBrandOnlyQuery && (
+                    <button
+                      type="button"
+                      onClick={() => runRecoverySearch(brandOnlyQuery)}
+                      className="inline-flex min-h-[44px] items-center rounded-full border border-scent-accent/45 bg-scent-accent/10 px-4 py-1.5 scent-type-chip text-scent-accent transition-colors hover:border-scent-accent/70 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
+                    >
+                      Brand only
+                    </button>
+                  )}
+                </div>
+              )}
             </motion.div>
           )}
 
@@ -1275,7 +1328,7 @@ export const FragranceCapture: React.FC<{
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.34, ease: [0.22, 1, 0.36, 1] }}
-              className="mx-auto mt-6 w-full scroll-mt-24 pb-24 sm:mt-7 sm:pb-0"
+              className="mx-auto mt-6 w-full scroll-mt-24 pb-[10.5rem] sm:mt-7 sm:pb-0"
             >
               <div className="flex min-h-0 flex-col">
                 <div className="scent-vault-results-panel mx-auto w-full max-w-[50.5rem] px-4 py-7 sm:px-9 sm:py-9">
@@ -1283,26 +1336,27 @@ export const FragranceCapture: React.FC<{
                       right. Lives outside the scroll area below, so it stays put
                       while the list scrolls. */}
                   <div className="mb-4 flex shrink-0 items-center justify-between gap-3 px-1">
-                    <p className="scent-type-label text-scent-accent">
-                      Search Results{' '}
+                    <p className="min-w-0 truncate whitespace-nowrap scent-type-label text-scent-accent">
+                      Search Results
+                      <span className="mx-1.5 text-scent-accent/60" aria-hidden>·</span>
                       <span className="tabular-nums tracking-[0.12em] text-scent-accent">
                         {filtersActive
                           ? `${visibleMatches.length} of ${matches.length}`
                           : matches.length}
                       </span>
                     </p>
-                    <div className="flex shrink-0 items-center gap-2">
+                    <div className="flex shrink-0 items-center gap-3">
                       <button
                         type="button"
                         onClick={scrollToSearch}
-                        className="hidden shrink-0 items-center gap-1.5 rounded-full border border-white/30 px-3 py-1.5 scent-type-chip text-scent-text-muted transition-colors hover:border-scent-accent/45 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 sm:inline-flex"
+                        className="hidden min-h-[44px] shrink-0 items-center gap-1.5 rounded-full border border-white/30 px-3.5 py-1.5 scent-type-chip text-scent-text-muted transition-colors hover:border-scent-accent/45 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 sm:inline-flex"
                       >
                         ↑ Back to top
                       </button>
                       <button
                         type="button"
                         onClick={handleNewSearch}
-                        className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/30 px-3 py-1.5 scent-type-chip text-scent-text-muted transition-colors hover:border-scent-accent/45 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
+                        className="inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-full border border-white/30 px-3.5 py-1.5 scent-type-chip text-scent-text-muted transition-colors hover:border-scent-accent/45 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
                       >
                         <Search size={12} strokeWidth={2} aria-hidden />
                         New search
@@ -1312,9 +1366,9 @@ export const FragranceCapture: React.FC<{
                         onClick={handleDismissResults}
                         aria-label="Close results"
                         title="Close (Esc)"
-                        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/30 text-scent-text-muted transition-colors hover:border-scent-accent/45 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
+                        className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/30 text-scent-text-muted transition-colors hover:border-scent-accent/45 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
                       >
-                        <X size={15} strokeWidth={2} aria-hidden />
+                        <X size={16} strokeWidth={2} aria-hidden />
                       </button>
                     </div>
                   </div>
@@ -1408,10 +1462,10 @@ export const FragranceCapture: React.FC<{
                                 {matchMonogram(m)}
                               </span>
                               <span
-                                className="mx-auto block max-w-full truncate font-serif text-[1.05rem] italic leading-none text-[#fff7ec] sm:text-[1.22rem]"
+                                className="mx-auto block max-w-full font-serif text-[1.05rem] italic leading-snug text-[#fff7ec] line-clamp-2 [overflow-wrap:anywhere] sm:text-[1.22rem]"
                                 title={m.name}
                               >
-                                {truncateMatchLine(m.name, MATCH_LINE_MAX_CHARS)}
+                                {m.name}
                               </span>
                               <span
                                 className="mx-auto mt-1 block max-w-full truncate font-sans text-[10.5px] font-bold uppercase tracking-[0.24em] text-[#f3dca6] sm:mt-1.5 sm:text-[11px]"
