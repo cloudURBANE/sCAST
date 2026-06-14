@@ -1,4 +1,5 @@
 import {
+  keepPreviousData,
   useInfiniteQuery,
   useMutation,
   useQuery,
@@ -259,6 +260,9 @@ export function useCommunityPosts(filters: CommunityPostFilters, authToken: stri
     getNextPageParam: (lastPage) => lastPage.nextCursor,
     staleTime: 30 * 1000,
     refetchOnWindowFocus: false,
+    // Keep the current feed on screen while a new filter/tag/search loads instead
+    // of flashing the skeleton on every change; the list updates in place.
+    placeholderData: keepPreviousData,
   });
 }
 

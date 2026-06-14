@@ -819,7 +819,21 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
       ref={sectionRef}
       className="w-full border-b border-scent-accent/14 p-4 sm:p-6"
     >
-      <form ref={formRef} onSubmit={submitPost} className="space-y-4 sm:space-y-5">
+      <form
+        ref={formRef}
+        onSubmit={submitPost}
+        onKeyDown={(event) => {
+          // Single-line inputs implicitly submit the form on Enter, which would
+          // post the room prematurely (or trip validation) while the user is
+          // still moving between fields. Only the body textarea (Cmd/Ctrl+Enter)
+          // and the submit button commit the post. Inputs with their own Enter
+          // handling (tags, fragrance search) already preventDefault upstream.
+          if (event.key === 'Enter' && event.target instanceof HTMLInputElement) {
+            event.preventDefault();
+          }
+        }}
+        className="space-y-4 sm:space-y-5"
+      >
         <div className="relative flex flex-col items-center gap-2 text-center">
           <div className="min-w-0 px-10 sm:px-14">
             <p className="scent-type-label text-scent-accent">
@@ -1138,9 +1152,14 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
         ) : null}
 
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <p className={`scent-type-meta uppercase ${bodyNearLimit ? 'text-scent-accent' : ''}`}>
-            {bodyLength}/{MAX_BODY_LENGTH}
-          </p>
+          <div className="flex items-center gap-3">
+            <p className={`scent-type-meta uppercase ${bodyNearLimit ? 'text-scent-accent' : ''}`}>
+              {bodyLength}/{MAX_BODY_LENGTH}
+            </p>
+            <span aria-hidden="true" className="hidden scent-type-meta uppercase text-scent-text-subtle sm:inline">
+              Ctrl/⌘ + Enter to post
+            </span>
+          </div>
           <button
             type="submit"
             disabled={createPost.isPending || (authToken ? !canSubmit : false)}

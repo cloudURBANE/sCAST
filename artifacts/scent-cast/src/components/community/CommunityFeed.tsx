@@ -129,6 +129,7 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
     fetchNextPage,
     isFetchingNextPage,
     isRefetching,
+    isPlaceholderData,
     refetch,
   } = useCommunityPosts(filters, authToken);
 
@@ -245,10 +246,21 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
   const endCopy = roomActionCopy(filters.type);
 
   return (
-    <div className="mx-auto w-full max-w-[940px] space-y-5 sm:space-y-6" aria-busy={isRefetching || isFetchingNextPage}>
-      {posts.map((post) => (
-        <PostCard key={post.id} post={post} authToken={authToken} onSignIn={onSignIn} />
-      ))}
+    <div
+      className="mx-auto w-full max-w-[940px] space-y-5 sm:space-y-6"
+      aria-busy={isRefetching || isFetchingNextPage || isPlaceholderData}
+    >
+      <div
+        className={`transition-opacity duration-200 motion-reduce:transition-none ${
+          isPlaceholderData ? 'opacity-55' : 'opacity-100'
+        }`}
+      >
+        <div className="space-y-5 sm:space-y-6">
+          {posts.map((post) => (
+            <PostCard key={post.id} post={post} authToken={authToken} onSignIn={onSignIn} />
+          ))}
+        </div>
+      </div>
 
       <div ref={loadMoreRef} className="flex min-h-16 items-center justify-center">
         {hasNextPage ? (
