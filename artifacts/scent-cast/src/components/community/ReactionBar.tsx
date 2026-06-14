@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { BadgeCheck, Heart, Sparkles, type LucideIcon } from 'lucide-react';
+import { Heart, type LucideIcon } from 'lucide-react';
 import {
   type CommunityReactionTargetType,
   useToggleCommunityReaction,
@@ -11,10 +11,10 @@ interface ReactionDefinition {
   Icon: LucideIcon;
 }
 
+// A single, universally understood action. The heart needs no legend — earlier
+// "Would wear"/"Helpful" icons read as mystery glyphs, so we keep just the like.
 const REACTIONS: ReactionDefinition[] = [
   { key: 'like', label: 'Like', Icon: Heart },
-  { key: 'wear', label: 'Would wear', Icon: Sparkles },
-  { key: 'helpful', label: 'Helpful', Icon: BadgeCheck },
 ];
 
 interface ReactionBarProps {
@@ -95,10 +95,11 @@ export const ReactionBar: React.FC<ReactionBarProps> = ({
             title={authToken ? undefined : 'Sign in to react'}
             aria-pressed={active}
             className={[
-              'inline-flex items-center justify-center rounded-full scent-type-chip transition-all duration-200 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:pointer-events-none disabled:opacity-55',
-              active
-                ? 'bg-scent-accent/[0.16] text-[#fff7ec] shadow-[inset_0_0_0_1px_rgba(212,175,55,0.48)]'
-                : 'text-scent-text-muted hover:bg-white/[0.045]',
+              // No pill/oval overlay on the active state: liking simply tints the
+              // heart gold (see the Icon below). Keep the rounded focus ring +
+              // tap target sizing only.
+              'inline-flex items-center justify-center rounded-full scent-type-chip transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:pointer-events-none disabled:opacity-55',
+              active ? 'text-scent-accent' : 'text-scent-text-muted hover:text-[#fff7ec]',
               compact ? 'min-h-9 gap-1.5 px-2.5 py-1.5' : 'min-h-11 gap-2 px-3.5 py-2.5',
             ].join(' ')}
           >
@@ -106,7 +107,7 @@ export const ReactionBar: React.FC<ReactionBarProps> = ({
               size={compact ? 15 : 18}
               strokeWidth={active ? 2.1 : 1.8}
               aria-hidden="true"
-              className={active ? 'fill-current text-scent-accent opacity-100 drop-shadow-[0_0_8px_rgba(212,175,55,0.45)]' : undefined}
+              className={active ? 'fill-current' : undefined}
             />
             <span className={compact ? 'sr-only' : 'not-sr-only text-[10px] font-bold uppercase tracking-[0.12em] sm:text-xs'}>
               {label}
