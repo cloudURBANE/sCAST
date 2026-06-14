@@ -456,10 +456,12 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
     return () => window.clearTimeout(id);
   }, [introReady]);
 
-  // Reveal the impressions lane a short beat after the greeting settles.
+  // Reveal the impressions lane a beat after the greeting finishes expanding
+  // (introReady kicks off the ~0.52s pill→welcome morph), so the cues glide in
+  // once the bubble has settled instead of arriving over the top of its growth.
   useEffect(() => {
     if (cuesReady || !introReady) return;
-    const id = window.setTimeout(() => setCuesReady(true), 320);
+    const id = window.setTimeout(() => setCuesReady(true), 480);
     return () => window.clearTimeout(id);
   }, [cuesReady, introReady]);
 
@@ -478,7 +480,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   const progressText = useMemo(() => {
     if (progressNote) return progressNote;
     if (resolved) return 'Match ready';
-    if (capturedCount === 0) return 'Ready for your cues';
+    if (capturedCount === 0) return 'Tell me about your day';
     return `${capturedCount} cue${capturedCount === 1 ? '' : 's'} captured`;
   }, [capturedCount, progressNote, resolved]);
 
@@ -970,10 +972,10 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   const cueBar =
     !cuesReady || (visibleQuickReplies.length === 0 && !hasActionRow) ? null : (
       <motion.div
-        initial={calmMotion ? false : { opacity: 0, y: 10 }}
+        initial={calmMotion ? false : { opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
-        exit={calmMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
-        transition={{ duration: 0.34, ease: SCENT_EASE }}
+        exit={calmMotion ? { opacity: 0 } : { opacity: 0, y: 6 }}
+        transition={{ duration: 0.42, ease: SCENT_EASE }}
         className="mx-auto w-full max-w-[42.75rem]"
         aria-label="Beam Agent quick replies"
         data-testid="scent-mission-cue-bar"
@@ -1077,23 +1079,30 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         aria-live="polite"
         aria-label="Beam Agent conversation"
       >
-        {/* Intro: the greeting bubble mounts immediately at its FINAL size and
-            position, with the typing dots overlaid on top. When the line is
-            ready the dots fade out and the text fades in within that same
-            bubble. Previously the dots lived in a separate, smaller pill that
-            then unmounted while a differently-sized greeting bubble animated in
-            from below — so the panel appeared to "pop out" and re-settle. Here
-            nothing reflows: the box never changes shape or position, it just
-            crossfades its contents. */}
+        {/* Intro: the greeting opens as a compact pill holding just the typing
+            dots — the agent visibly "thinking" — then expands into its full
+            first line. The dots are popped out of flow (popLayout) the instant
+            the line is ready, so the bubble measures straight to its final size
+            and the parent's `layout="size"` animation carries that growth in one
+            smooth pass while the welcome text fades up inside it. */}
         {messages.map((message, index) => {
           const isIntroGreeting = index === 0 && message.role === 'agent';
           const typing = isIntroGreeting && !introReady;
           return (
             <motion.div
               key={message.id}
+              // Only the greeting morphs its box: `layout="size"` animates the
+              // grow from thinking-pill to welcome-line without sliding the
+              // bubble when later turns push it down. Other bubbles keep the
+              // simple fade/rise and never run a layout pass.
+              layout={isIntroGreeting && !calmMotion ? 'size' : false}
               initial={calmMotion ? false : { opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.24, ease: SCENT_EASE }}
+              transition={{
+                duration: 0.24,
+                ease: SCENT_EASE,
+                layout: { duration: 0.52, ease: SCENT_EASE },
+              }}
               className={`relative max-w-[90%] rounded-[calc(var(--radius-scent)-12px)] border px-3.5 py-2.5 text-[13px] leading-relaxed sm:text-sm ${
                 message.role === 'user'
                   ? 'self-end border-white/14 bg-white/[0.07] text-[#fff7ec]'
@@ -1107,40 +1116,40 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                 <AlertTriangle size={13} className="mr-1.5 inline align-[-2px]" aria-hidden />
               ) : null}
               {isIntroGreeting ? (
-                <>
-                  {/* Dots overlay — absolutely placed so it never affects the
-                      bubble's size; the text below already reserves it. */}
-                  <AnimatePresence initial={false}>
-                    {typing ? (
-                      <motion.span
-                        key="intro-dots"
-                        className="absolute left-3.5 top-1/2 inline-flex -translate-y-1/2 items-center gap-1.5"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        transition={{ duration: 0.2, ease: SCENT_EASE }}
-                        aria-hidden
-                      >
-                        {[0, 1, 2].map((dot) => (
-                          <motion.span
-                            key={dot}
-                            className="h-1.5 w-1.5 rounded-full bg-scent-accent/70"
-                            animate={{ opacity: [0.3, 1, 0.3], y: [0, -2, 0] }}
-                            transition={{ duration: 1, repeat: Infinity, ease: 'easeInOut', delay: dot * 0.18 }}
-                          />
-                        ))}
-                      </motion.span>
-                    ) : null}
-                  </AnimatePresence>
-                  <motion.span
-                    initial={false}
-                    animate={{ opacity: typing ? 0 : 1 }}
-                    transition={{ duration: 0.28, ease: SCENT_EASE }}
-                    aria-hidden={typing}
-                  >
-                    {message.text}
-                  </motion.span>
-                </>
+                <AnimatePresence mode="popLayout" initial={false}>
+                  {typing ? (
+                    <motion.span
+                      key="intro-dots"
+                      className="inline-flex items-center gap-1.5 py-0.5"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.18, ease: SCENT_EASE }}
+                      aria-hidden
+                    >
+                      {[0, 1, 2].map((dot) => (
+                        <motion.span
+                          key={dot}
+                          className="h-1.5 w-1.5 rounded-full bg-scent-accent/70"
+                          animate={{ opacity: [0.3, 1, 0.3], y: [0, -2, 0] }}
+                          transition={{ duration: 1, repeat: Infinity, ease: 'easeInOut', delay: dot * 0.18 }}
+                        />
+                      ))}
+                    </motion.span>
+                  ) : (
+                    // Fades up a beat into the box growth, so the text resolves as
+                    // the bubble settles rather than appearing before it expands.
+                    <motion.span
+                      key="intro-text"
+                      className="block"
+                      initial={calmMotion ? false : { opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ duration: 0.36, ease: SCENT_EASE, delay: 0.08 }}
+                    >
+                      {message.text}
+                    </motion.span>
+                  )}
+                </AnimatePresence>
               ) : (
                 message.text
               )}
