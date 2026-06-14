@@ -186,19 +186,26 @@ a {
 }
 
 /* Full-width "Discover Your Signature Scent" trigger. Shares the exact box of
-   the opened input that replaces it (same width, height, and radius). Tuned to
-   read as glass — like the lower navigation bar — with a soft gold wash and a
-   blurred translucent base so it sits in the theme rather than as a flat pill. */
+   the opened input that replaces it (same width, height, and radius). Built to
+   read as premium glass in the same language as the lower navigation pill
+   (translucent black base, blur, gold hairline, inset top highlight, deep drop
+   shadow) — then lifted for its primary-CTA role with a richer gold wash and a
+   one-shot light sheen on appear. All visuals live here (not inline) so
+   framer-motion can own transform/opacity for the enter/exit + morph-to-input
+   animation without fighting the cascade. */
 .scent-signature-cta {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(212, 175, 55, 0.34);
   background:
-    radial-gradient(120% 150% at 50% 0%, rgba(212, 175, 55, 0.1), transparent 60%),
-    linear-gradient(180deg, rgba(255, 236, 183, 0.06), rgba(0, 0, 0, 0.42));
+    radial-gradient(135% 165% at 50% -12%, rgba(212, 175, 55, 0.15), transparent 60%),
+    linear-gradient(180deg, rgba(255, 236, 183, 0.08), rgba(0, 0, 0, 0.64) 78%);
   box-shadow:
-    inset 0 1px 0 rgba(255, 236, 183, 0.12),
-    inset 0 0 24px rgba(212, 175, 55, 0.03),
-    0 18px 48px rgba(0, 0, 0, 0.5);
-  -webkit-backdrop-filter: blur(14px);
-  backdrop-filter: blur(14px);
+    inset 0 1px 0 rgba(255, 236, 183, 0.14),
+    inset 0 0 26px rgba(212, 175, 55, 0.045),
+    0 18px 48px rgba(0, 0, 0, 0.58);
+  -webkit-backdrop-filter: blur(14px) saturate(135%);
+  backdrop-filter: blur(14px) saturate(135%);
   transition:
     border-color var(--scent-transition-base) var(--scent-ease-out),
     box-shadow var(--scent-transition-base) var(--scent-ease-out),
@@ -206,29 +213,109 @@ a {
     color var(--scent-transition-base) var(--scent-ease-out);
 }
 
+/* One-shot gold light sweep that plays each time the CTA mounts (i.e. when the
+   discover state appears), echoing the brand/marquee gold-sheen. Animates the
+   pseudo-element's own transform only — never the button's — so it can't
+   collide with the framer-motion enter/exit. Clipped to the pill by
+   overflow:hidden above. */
+.scent-signature-cta::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    105deg,
+    transparent 32%,
+    rgba(255, 247, 201, 0.14) 46%,
+    rgba(255, 247, 201, 0.34) 50%,
+    rgba(255, 247, 201, 0.14) 54%,
+    transparent 68%
+  );
+  transform: translateX(-130%);
+  opacity: 0;
+}
+
+/* Keep the icon + label above the sheen layer. */
+.scent-signature-cta > * {
+  position: relative;
+  z-index: 1;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .scent-signature-cta::after {
+    animation: scent-cta-sheen 2.4s var(--scent-ease-out) 0.18s 1 both;
+  }
+}
+
 .scent-signature-cta:hover {
+  border-color: rgba(212, 175, 55, 0.6);
+  color: #fff7ec;
   background:
-    radial-gradient(120% 150% at 50% 0%, rgba(212, 175, 55, 0.18), transparent 62%),
-    linear-gradient(180deg, rgba(255, 236, 183, 0.12), rgba(0, 0, 0, 0.36));
+    radial-gradient(135% 165% at 50% -12%, rgba(212, 175, 55, 0.24), transparent 62%),
+    linear-gradient(180deg, rgba(255, 236, 183, 0.14), rgba(0, 0, 0, 0.58) 78%);
   box-shadow:
-    inset 0 1px 0 rgba(255, 236, 183, 0.2),
-    inset 0 0 28px rgba(212, 175, 55, 0.06),
-    0 22px 56px rgba(0, 0, 0, 0.55),
-    0 0 0 1px rgba(212, 175, 55, 0.12);
+    inset 0 1px 0 rgba(255, 236, 183, 0.22),
+    inset 0 0 30px rgba(212, 175, 55, 0.08),
+    0 22px 56px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(212, 175, 55, 0.14);
+}
+
+/* Press: settle the glass a touch. Shadow-only so framer-motion keeps sole
+   ownership of transform during the press. */
+.scent-signature-cta:active {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 236, 183, 0.16),
+    inset 0 0 22px rgba(212, 175, 55, 0.05),
+    0 12px 30px rgba(0, 0, 0, 0.55);
+}
+
+/* The CTA carries its own (unlayered) box-shadow, which would otherwise swallow
+   Tailwind's ring utility — so compose the focus ring into the stack here to
+   keep it keyboard-accessible. */
+.scent-signature-cta:focus-visible {
+  border-color: rgba(212, 175, 55, 0.6);
+  box-shadow:
+    0 0 0 2px rgba(255, 230, 163, 0.6),
+    inset 0 1px 0 rgba(255, 236, 183, 0.18),
+    inset 0 0 26px rgba(212, 175, 55, 0.05),
+    0 18px 48px rgba(0, 0, 0, 0.58);
+}
+
+@keyframes scent-cta-sheen {
+  0% {
+    transform: translateX(-130%);
+    opacity: 0;
+  }
+  16% {
+    opacity: 1;
+  }
+  84% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(130%);
+    opacity: 0;
+  }
 }
 
 .scent-mission-action-slot {
   align-items: flex-start;
 }
 
-/* iPad Safari performance mode drops the blur to avoid compositing jank, the
-   same trade-off the rest of the chrome makes. */
+/* iPad Safari performance mode drops the blur and the sheen to avoid
+   compositing jank, the same trade-off the rest of the chrome makes — the
+   premium gold-glass read is preserved with an opaque gradient. */
 .scent-ipad-safari-perf .scent-signature-cta {
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
   background:
-    radial-gradient(120% 150% at 50% 0%, rgba(212, 175, 55, 0.1), transparent 60%),
-    linear-gradient(180deg, rgba(20, 16, 8, 0.92), rgba(0, 0, 0, 0.92));
+    radial-gradient(135% 165% at 50% -12%, rgba(212, 175, 55, 0.12), transparent 60%),
+    linear-gradient(180deg, rgba(26, 20, 10, 0.94), rgba(0, 0, 0, 0.94));
+}
+
+.scent-ipad-safari-perf .scent-signature-cta::after {
+  display: none;
 }
 
 .scent-deferred-section {

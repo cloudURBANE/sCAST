@@ -223,8 +223,11 @@ function getHeroTickerPhrases(items: Fragrance[]): HeroPhrase[] {
 
   const brands = new Set(items.map(i => i.brand).filter(Boolean));
   if (brands.size > 1) phrases.push([
-    { text: String(brands.size), key: true },
-    { text: ' houses represented in your collection' },
+    // Highlight the full key detail ("43 houses"), not just the bare count, so
+    // the gold sheen lands on a self-contained, meaningful tell as it crosses
+    // center — matching how every other phrase highlights its whole variable.
+    { text: `${brands.size} houses`, key: true },
+    { text: ' represented in your collection' },
   ]);
 
   if (phrases.length < 3) phrases.push(
@@ -894,7 +897,7 @@ function DashboardView() {
                       animate={{ opacity: 1, y: 0 }}
                       exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -4 }}
                       transition={vaultContentTransition}
-                      className="scent-signature-cta group flex h-[60px] w-full max-w-[42.75rem] items-center justify-center gap-2.5 rounded-full border border-scent-accent/45 px-6 text-[12px] font-bold uppercase tracking-[0.14em] text-scent-accent shadow-[inset_0_1px_0_rgba(255,236,183,0.08)] transition-colors hover:border-scent-accent/70 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 sm:h-[68px] sm:text-[13px]"
+                      className="scent-signature-cta group flex h-[60px] w-full max-w-[42.75rem] items-center justify-center gap-2.5 rounded-full px-6 text-[12px] font-bold uppercase tracking-[0.14em] text-scent-accent focus-visible:outline-none sm:h-[68px] sm:text-[13px]"
                       aria-label="Discover your signature scent"
                       title="Discover your signature scent"
                     >
