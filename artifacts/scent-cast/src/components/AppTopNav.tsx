@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { isIpadSafariPerformanceMode } from '@/lib/platform';
+import { isIpadSafariPerformanceMode, isLowRenderBudget } from '@/lib/platform';
 
 interface AppTopNavProps {
   authToken: string | null;
@@ -165,6 +165,11 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
   const [navVisible, setNavVisible] = React.useState(true);
   const lastScrollYRef = React.useRef(0);
   const idleTimerRef = React.useRef<number | null>(null);
+  // The fixed bottom nav is a standing backdrop layer on phone-class devices and
+  // stays mounted while a dynamic detail modal opens — exactly the WebKit
+  // memory-pressure crash profile. Drop the backdrop blur on low-budget devices
+  // (the solid bg already carries the contrast); iPad never renders it (md:hidden).
+  const lowRenderBudget = React.useRef(isLowRenderBudget() || isIpadSafariPerformanceMode()).current;
 
   React.useEffect(() => {
     lastScrollYRef.current = window.scrollY;
@@ -304,7 +309,7 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
         aria-label="Primary navigation"
         onFocusCapture={() => setNavVisible(true)}
       >
-        <div className="mx-auto grid max-w-sm grid-cols-3 rounded-full border border-scent-accent/22 bg-black/66 p-1 shadow-[0_18px_48px_rgba(0,0,0,0.58),inset_0_1px_0_rgba(255,236,183,0.12)] backdrop-blur-md">
+        <div className={`mx-auto grid max-w-sm grid-cols-3 rounded-full border border-scent-accent/22 bg-black/66 p-1 shadow-[0_18px_48px_rgba(0,0,0,0.58),inset_0_1px_0_rgba(255,236,183,0.12)]${lowRenderBudget ? '' : ' backdrop-blur-md'}`}>
           {navItems.map((item) => {
             const Icon = item.icon;
             return (

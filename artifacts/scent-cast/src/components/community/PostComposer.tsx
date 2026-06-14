@@ -27,6 +27,7 @@ import {
   useCreateCommunityPost,
 } from '@/components/community/communityPosts';
 import { useWardrobeItems } from '@/context/WardrobeContext';
+import { BottleImage } from '@/components/BottleImage';
 
 interface ComposerRoom {
   type: CommunityPostType;
@@ -1144,16 +1145,16 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
                   key={`${fragrance.brand}:${fragrance.name}:${fragrance.imageUrl}`}
                   className="grid w-full max-w-[18rem] grid-cols-[3.25rem_1fr_auto] items-center gap-3 rounded-[14px] border border-scent-accent/14 bg-black/62 p-2 sm:w-auto"
                 >
-                  <div className="flex h-16 w-[3.25rem] items-center justify-center overflow-hidden rounded-[10px] bg-white/[0.035]">
-                    {fragrance.imageUrl ? (
-                      <img
-                        src={fragrance.imageUrl}
-                        alt={`${fragrance.name} by ${fragrance.brand}`}
-                        className="h-full w-full object-contain"
-                      />
-                    ) : (
-                      <span className="px-1 text-center scent-type-placeholder">No image</span>
-                    )}
+                  <div className="relative h-16 w-[3.25rem] overflow-hidden rounded-[10px] bg-white/[0.035]">
+                    {/* Render-budget-aware thumbnail (BottleImage handles its own
+                        missing-image placeholder) instead of a raw <img>. */}
+                    <BottleImage
+                      src={fragrance.imageUrl}
+                      alt={`${fragrance.name} by ${fragrance.brand}`}
+                      variant="thumb"
+                      className="absolute inset-0"
+                      loading="lazy"
+                    />
                   </div>
                   <div className="min-w-0">
                     <p className="truncate font-serif text-base italic leading-tight text-[#fff7ec]">

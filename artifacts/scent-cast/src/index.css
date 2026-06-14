@@ -1478,7 +1478,18 @@ a {
   will-change: transform;
 }
 
-.scent-ipad-safari-perf .backdrop-blur-sm {
+/* iPad Safari/WebKit compositor relief: strip every backdrop-filter strength,
+   not just `-sm`. The rule used to match only `.backdrop-blur-sm`, so any
+   `.backdrop-blur` / `-md` / `-lg`+ surface (e.g. the mobile bottom nav, arena
+   reveal overlay) silently kept its blur under perf mode. Keep this list in
+   sync with the Tailwind backdrop-blur utilities actually used in the app. */
+.scent-ipad-safari-perf .backdrop-blur,
+.scent-ipad-safari-perf .backdrop-blur-sm,
+.scent-ipad-safari-perf .backdrop-blur-md,
+.scent-ipad-safari-perf .backdrop-blur-lg,
+.scent-ipad-safari-perf .backdrop-blur-xl,
+.scent-ipad-safari-perf .backdrop-blur-2xl,
+.scent-ipad-safari-perf .backdrop-blur-3xl {
   -webkit-backdrop-filter: none !important;
   backdrop-filter: none !important;
 }

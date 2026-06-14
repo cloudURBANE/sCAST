@@ -13,6 +13,7 @@ import {
   resolveNoteAccordLinks,
 } from '@/lib/noteAccordLinks';
 import { resolveDisplayPyramid } from '@/lib/fragranceNotes';
+import { isIpadSafariPerformanceMode, isLowRenderBudget } from '@/lib/platform';
 import { NotePyramid } from './NotePyramid';
 
 interface ScentNotesInfographicProps {
@@ -311,6 +312,15 @@ function AccordPanel({
 
   const { containerRef, revealed, reduced } = useAccordPanelReveal(accordContentKey);
 
+  // Render-budget gate: phone-class / iPad-Safari WebKit can't afford the
+  // per-bar animated filter + stacked match glow on up to 10 bars while a
+  // dynamic detail modal is open (memory-pressure crash context). Drop the
+  // incremental match effects (and the many-node will-change promotion) on
+  // those surfaces; the track ring + label text-shadow still signal the match.
+  const lowRenderBudget = React.useRef(isLowRenderBudget()).current;
+  const ipadSafariBlendMode = React.useRef(isIpadSafariPerformanceMode()).current;
+  const lightweightEffects = lowRenderBudget || ipadSafariBlendMode;
+
   const displayRows = rows.slice(0, 10);
   const density = resolveAccordDensity(displayRows.length);
   const densityStyle = DENSITY[density];
@@ -350,8 +360,12 @@ function AccordPanel({
             const rowDelay = ACCORD_ROW_DELAY_START + index * ACCORD_STAGGER_S;
             const intensity = rankIntensity(index, displayRows.length);
             const isPyramidMatch = activeAccordLabels.has(normalizeAccordLabel(row.label));
+            // The animated brightness filter + stacked match glow are the heavy
+            // bits; gate them on the render budget while keeping cheap match cues
+            // (track ring color, label text-shadow) for low-budget devices.
+            const barMatchEffects = isPyramidMatch && !lightweightEffects;
             const activeGlow = `0 0 ${Math.round(16 + fillPct * 0.06)}px rgba(252,157,25,0.62)`;
-            const restingGlow = isPyramidMatch
+            const restingGlow = barMatchEffects
               ? `${intensity.glow}, 0 0 0 1px rgba(252,157,25,0.34)`
               : intensity.glow;
 
@@ -394,13 +408,19 @@ function AccordPanel({
                     // instead of `width` so up to 10 bars don't trigger per-frame
                     // layout on reveal. The track's overflow-hidden rounded-full
                     // clips the scaled fill, so no corner/edge distortion shows.
-                    style={{ width: `${fillPct}%`, boxShadow: restingGlow, willChange: "transform" }}
+                    style={{
+                      width: `${fillPct}%`,
+                      boxShadow: restingGlow,
+                      // Don't keep up to 10 bars permanently promoted on
+                      // low-budget WebKit (too many layers → blank renders).
+                      willChange: lightweightEffects ? undefined : "transform",
+                    }}
                     initial={false}
                     animate={{
                       scaleX: reduced || revealed ? 1 : 0.06,
                       opacity: reduced || revealed ? intensity.barOpacity : 0.32,
-                      boxShadow: isPyramidMatch ? `${restingGlow}, ${activeGlow}` : restingGlow,
-                      filter: isPyramidMatch && !reduced ? "brightness(1.16)" : "brightness(1)",
+                      boxShadow: barMatchEffects ? `${restingGlow}, ${activeGlow}` : restingGlow,
+                      filter: barMatchEffects && !reduced ? "brightness(1.16)" : "brightness(1)",
                     }}
                     transition={{
                       scaleX: {
