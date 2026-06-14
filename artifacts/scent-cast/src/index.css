@@ -1469,10 +1469,13 @@ a {
   backface-visibility: visible;
 }
 
-/* Set by useMarqueeSwipe while a pointer is scrubbing a marquee track. */
+/* Set by useMarqueeSwipe while a pointer is scrubbing a marquee track. The
+   manual JS transform only wins if the CSS keyframe animation is stopped here —
+   a running transform animation would otherwise override the inline transform. */
 .scent-marquee-track-row[data-marquee-dragging="true"],
 .scent-atmosphere-marquee-track[data-marquee-dragging="true"],
-.scent-community-marquee-track[data-marquee-dragging="true"] {
+.scent-community-marquee-track[data-marquee-dragging="true"],
+.scent-cue-marquee-track[data-marquee-dragging="true"] {
   cursor: grabbing;
   animation: none;
   will-change: transform;
@@ -2428,6 +2431,8 @@ a {
   will-change: transform;
   transform: translateZ(0);
   backface-visibility: hidden;
+  /* Horizontal swipe is owned by useMarqueeSwipe; leave vertical to page scroll. */
+  touch-action: pan-y;
   /* Materialize, then glide: a one-shot fade eases the lane in while the scroll
      holds for a beat (delay) before it begins to move — so the marquee settles
      into place and then starts gliding, rather than snapping in already
