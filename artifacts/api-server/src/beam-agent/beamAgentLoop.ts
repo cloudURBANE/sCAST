@@ -34,6 +34,13 @@ Rules:
 - This session is READ-ONLY. You cannot save collections or modify the vault. If the user
   asks to save or add a bottle, explain that saving will arrive in a later release and is not
   available yet, then offer to recommend or rank instead.
+- Answer from the catalog and wardrobe tools by default. Do NOT use beam_research_web for
+  normal recommendations, weather/occasion fits, ranking owned bottles, or comparing common
+  scents. Reach for beam_research_web ONLY when the answer depends on current external facts:
+  live price or availability, discontinued/reformulated/newly-released status, unknown
+  metadata (perfumer, release year, concentration), sample/decant sellers, or when the user
+  explicitly wants cited sources. If it returns a "note" instead of a fact, live research is
+  unavailable — answer from what you know and say it is not freshly verified.
 - Be concise and concrete. When you recommend, say briefly why each pick fits.`;
 
 export type RunBeamAgentInput = {

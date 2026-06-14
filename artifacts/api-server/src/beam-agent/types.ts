@@ -18,7 +18,8 @@ export type BeamReadToolName =
   | "beam_get_wardrobe"
   | "beam_search_catalog"
   | "beam_get_fragrance_details"
-  | "beam_score_candidates";
+  | "beam_score_candidates"
+  | "beam_research_web";
 
 export type BeamToolName = BeamReadToolName;
 
