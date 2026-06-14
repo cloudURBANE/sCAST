@@ -191,6 +191,32 @@ const PostActionsFooter: React.FC<{
   </footer>
 );
 
+// One side of the compact battle card. The gold fill behind the name is a
+// showcase of that option's live share of the vote (server-authoritative
+// `post.votes`), so the card reads the current standing at a glance.
+const BattleRatingOption: React.FC<{
+  label: string;
+  count: number;
+  total: number;
+}> = ({ label, count, total }) => {
+  const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+  return (
+    <div className="relative w-full min-w-0 overflow-hidden rounded-[14px] border border-scent-accent/14 bg-black/48 px-3 py-2 text-center">
+      <span
+        className="absolute inset-y-0 left-0 bg-scent-accent/[0.16] transition-[width] duration-500 ease-out motion-reduce:transition-none"
+        style={{ width: `${pct}%` }}
+        aria-hidden="true"
+      />
+      <p className="relative z-10 truncate font-serif text-lg italic text-[#fff7ec]">
+        {label}
+      </p>
+      <p className="relative z-10 mt-0.5 font-mono text-[11px] leading-none text-scent-accent/90">
+        {total > 0 ? `${pct}% · ${count} ${count === 1 ? 'vote' : 'votes'}` : 'No votes yet'}
+      </p>
+    </div>
+  );
+};
+
 const CompactBattlePostCard: React.FC<PostCardProps> = ({
   post,
   authToken,
@@ -201,6 +227,10 @@ const CompactBattlePostCard: React.FC<PostCardProps> = ({
   const authorName = displayCommunityAuthor(post.author);
   const heading = post.title?.trim() || 'Battle';
   const options = battleOptions(post);
+  const totalVotes = options.reduce(
+    (sum, option) => sum + (post.votes[option] ?? 0),
+    0,
+  );
 
   return (
     <article
@@ -259,15 +289,19 @@ const CompactBattlePostCard: React.FC<PostCardProps> = ({
 
       {options.length === 2 ? (
         <div className="mt-4 flex w-full flex-col items-center gap-2 sm:grid sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center">
-          <div className="w-full min-w-0 rounded-[14px] border border-scent-accent/14 bg-black/48 px-3 py-2 text-center">
-            <p className="truncate font-serif text-lg italic text-[#fff7ec]">{options[0]}</p>
-          </div>
+          <BattleRatingOption
+            label={options[0]}
+            count={post.votes[options[0]] ?? 0}
+            total={totalVotes}
+          />
           <span className="font-serif text-lg italic text-scent-accent/84" aria-hidden="true">
             vs
           </span>
-          <div className="w-full min-w-0 rounded-[14px] border border-scent-accent/14 bg-black/48 px-3 py-2 text-center">
-            <p className="truncate font-serif text-lg italic text-[#fff7ec]">{options[1]}</p>
-          </div>
+          <BattleRatingOption
+            label={options[1]}
+            count={post.votes[options[1]] ?? 0}
+            total={totalVotes}
+          />
         </div>
       ) : null}
 
