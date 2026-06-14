@@ -155,7 +155,9 @@ function newMessageId(): string {
 
 function initialAgentMessage(itemCount: number): string {
   if (itemCount > 0) {
-    return 'Welcome. Tell me the mood, occasion, or impression you want to leave today.';
+    // Foreshadow the cue lane so it never feels like the chips "pop up" on the
+    // user — the agent says it will offer taps, then they appear just beneath.
+    return 'Welcome. Tell me about your day — the mood, the moment, the impression you want to leave. I will line up a few cues you can tap below, or just type.';
   }
   return 'Add a few fragrances from search first, then I can curate a real match for you here.';
 }
@@ -405,6 +407,11 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   // Pause the cue marquee while the user is pressing it, so a moving chip is
   // still easy to tap. Hover-pause (desktop) is handled in CSS.
   const [marqueePaused, setMarqueePaused] = useState(false);
+  // The greeting bubble is held off the stage for a short beat after open, so
+  // the panel never snaps in with the typing dots "already there." The agent
+  // then arrives as a deliberate thinking pill once the open crossfade settles.
+  // Skipped under reduced-motion / iPad performance mode (calmMotion).
+  const [greetingMounted, setGreetingMounted] = useState(() => calmMotion);
   // Briefly show a typing indicator before the concierge's first line lands, so
   // the panel greets the user instead of snapping in a wall of copy. Skipped
   // entirely under reduced-motion / iPad performance mode (calmMotion).
@@ -449,12 +456,21 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   }, [messages, resolved, busy, calmMotion]);
 
   useEffect(() => {
-    if (introReady) return;
-    // Hold just long enough for the open crossfade (~0.42s) to settle, then a
-    // brief typing beat, so the greeting lands deliberately without feeling slow.
-    const id = window.setTimeout(() => setIntroReady(true), 920);
+    if (greetingMounted) return;
+    // Let the open crossfade settle on an empty stage first, then bring the
+    // agent in. This is the fix for the dots showing "from the jump": the
+    // conversation opens clean and the thinking pill arrives as its own beat.
+    const id = window.setTimeout(() => setGreetingMounted(true), 420);
     return () => window.clearTimeout(id);
-  }, [introReady]);
+  }, [greetingMounted]);
+
+  useEffect(() => {
+    if (introReady || !greetingMounted) return;
+    // Once the thinking pill has landed, hold it just long enough to read as the
+    // agent composing, then expand it into the welcome line.
+    const id = window.setTimeout(() => setIntroReady(true), 760);
+    return () => window.clearTimeout(id);
+  }, [introReady, greetingMounted]);
 
   // Reveal the impressions lane a beat after the greeting finishes expanding
   // (introReady kicks off the ~0.52s pill→welcome morph), so the cues glide in
@@ -793,7 +809,13 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         >
           {busy ? progressNote || 'Thinking' : 'Beam Agent'}
         </motion.span>
-        <span className="scent-beam-avatar" data-thinking={busy ? 'true' : undefined}>
+        {/* Pulse the avatar while the agent is busy OR composing its opening
+            greeting, so the open reads as the agent coming alive and writing —
+            not a static panel that suddenly drops dots into an empty box. */}
+        <span
+          className="scent-beam-avatar"
+          data-thinking={busy || !introReady ? 'true' : undefined}
+        >
           <img
             src="/scent-concierge-avatar.png"
             alt="ScentCast Beam Agent"
@@ -1087,6 +1109,9 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
             smooth pass while the welcome text fades up inside it. */}
         {messages.map((message, index) => {
           const isIntroGreeting = index === 0 && message.role === 'agent';
+          // Keep the stage empty until the greeting beat — the bubble (and its
+          // dots) only mount once the open transition has settled.
+          if (isIntroGreeting && !greetingMounted) return null;
           const typing = isIntroGreeting && !introReady;
           return (
             <motion.div
