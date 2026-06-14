@@ -152,6 +152,12 @@ const SCENT_EASE = [0.22, 1, 0.36, 1] as const;
 // turn the rhythm of a real concierge instead of an instant pop.
 const MIN_THINKING_MS = 700;
 
+// Hard ceiling on a single mission request. The Beam Agent backend is not always
+// reachable (or can stall), and without this the typing dots would spin forever
+// with no reply ever landing. On timeout we abort the fetch and surface a real
+// message so the turn always resolves.
+const MISSION_TIMEOUT_MS = 20000;
+
 // Shared chat-bubble shell for the agent's typing indicator (used both on first
 // open and while the agent is working a turn).
 const BEAM_TYPING_BUBBLE_CLASS =
@@ -429,6 +435,9 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   const [agentMode, setAgentMode] = useState<AgentMode>('research');
   const [tone, setTone] = useState<ToneMode>('balanced');
   const [composer, setComposer] = useState('');
+  // Clear the placeholder the instant the field is tapped (native text-field
+  // behavior) rather than holding the prompt copy under the caret.
+  const [composerFocused, setComposerFocused] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   // Pause the cue marquee while the user is pressing it, so a moving chip is
   // still easy to tap. Hover-pause (desktop) is handled in CSS.
@@ -572,31 +581,50 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       const controller = new AbortController();
       abortRef.current = controller;
 
-      const res = await fetch(SCENT_MISSION_ENDPOINT, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-        },
-        signal: controller.signal,
-        body: JSON.stringify({
-          ...body,
-          sessionId: sessionIdRef.current,
-          mission: missionState,
-          context: {
-            weather: buildMissionWeather(weather),
-            wardrobe: buildMissionWardrobe(items),
-          },
-        }),
-      });
+      // Distinguish a timeout-abort (surface a real message) from a
+      // supersede-abort (a newer request replaced this one — stay silent).
+      let didTimeout = false;
+      const timeoutId = window.setTimeout(() => {
+        didTimeout = true;
+        controller.abort();
+      }, MISSION_TIMEOUT_MS);
 
-      const data = (await res.json().catch(() => null)) as
-        | (ScentMissionResponse & { error?: string })
-        | null;
-      if (!res.ok || !data) {
-        throw new Error(data?.error || `Mission request failed (${res.status}).`);
+      try {
+        const res = await fetch(SCENT_MISSION_ENDPOINT, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+          },
+          signal: controller.signal,
+          body: JSON.stringify({
+            ...body,
+            sessionId: sessionIdRef.current,
+            mission: missionState,
+            context: {
+              weather: buildMissionWeather(weather),
+              wardrobe: buildMissionWardrobe(items),
+            },
+          }),
+        });
+
+        const data = (await res.json().catch(() => null)) as
+          | (ScentMissionResponse & { error?: string })
+          | null;
+        if (!res.ok || !data) {
+          throw new Error(data?.error || `Mission request failed (${res.status}).`);
+        }
+        return data;
+      } catch (err) {
+        // A timeout reads as a normal failure (not an AbortError), so the turn's
+        // catch handler shows a "try again" line instead of silently hanging.
+        if (didTimeout) {
+          throw new Error('The Beam Agent took too long to respond. Try again.');
+        }
+        throw err;
+      } finally {
+        window.clearTimeout(timeoutId);
       }
-      return data;
     },
     [authToken, items, weather],
   );
@@ -866,7 +894,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       <form
         ref={composerFormRef}
         onSubmit={handleSubmit}
-        className="scent-lux-input scent-vault-search-input scent-beam-composer flex h-[60px] w-full items-center gap-2 rounded-full px-2.5 transition-colors focus-within:ring-2 focus-within:ring-scent-accent/12 sm:h-[68px] sm:px-3.5"
+        className="scent-lux-input scent-vault-search-input scent-beam-composer flex h-[60px] w-full items-center gap-2 rounded-full px-2.5 transition-colors sm:h-[68px] sm:px-3.5"
       >
         <button
           type="button"
@@ -889,11 +917,13 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
             event.preventDefault();
             event.currentTarget.form?.requestSubmit();
           }}
+          onFocus={() => setComposerFocused(true)}
           onBlur={() => {
+            setComposerFocused(false);
             // Recover the iOS Safari viewport once the soft keyboard dismisses.
             window.setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 90);
           }}
-          placeholder={composerPlaceholder}
+          placeholder={composerFocused ? '' : composerPlaceholder}
           aria-label="Message the Beam Agent"
           autoComplete="off"
           className="min-w-0 flex-1 bg-transparent px-1 text-center text-sm font-medium text-[#fff7ec] outline-none placeholder:text-scent-text-subtle sm:text-base"
@@ -916,12 +946,12 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
             animate={{ opacity: 1, y: 0 }}
             exit={calmMotion ? { opacity: 0 } : { opacity: 0, y: -6 }}
             transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-            className="mt-3 rounded-[calc(var(--radius-scent)-8px)] border border-scent-accent/18 bg-black/58 p-3 text-left shadow-[inset_0_1px_0_rgba(255,236,183,0.06)]"
+            className="mt-3 rounded-[calc(var(--radius-scent)-8px)] border border-scent-accent/18 bg-black/58 p-3 text-center shadow-[inset_0_1px_0_rgba(255,236,183,0.06)]"
           >
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
-                <p className="scent-type-label mb-1.5 text-scent-accent/80">Response mode</p>
-                <div className="flex flex-wrap gap-1.5">
+                <p className="scent-type-label mb-1.5 text-center text-scent-accent/80">Response mode</p>
+                <div className="flex flex-wrap justify-center gap-1.5">
                   {MODE_OPTIONS.map(({ id, label, icon: Icon }) => {
                     const selected = agentMode === id;
                     return (
@@ -944,8 +974,8 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                 </div>
               </div>
               <div>
-                <p className="scent-type-label mb-1.5 text-scent-accent/80">Tone</p>
-                <div className="flex flex-wrap gap-1.5">
+                <p className="scent-type-label mb-1.5 text-center text-scent-accent/80">Tone</p>
+                <div className="flex flex-wrap justify-center gap-1.5">
                   {TONE_OPTIONS.map(({ id, label }) => {
                     const selected = tone === id;
                     return (
@@ -1133,8 +1163,8 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         {/* Staged choice: a cue is sitting in the composer waiting to be sent.
             Give it an explicit Confirm / Cancel pair instead of a blank lane. */}
         {visibleQuickReplies.length === 0 && !hasActionRow && hasStagedCue ? (
-          <div className="flex flex-col items-center">
-            <p className="scent-type-label mb-2 text-center text-scent-text-subtle">
+          <div className="-mt-2 flex flex-col items-center">
+            <p className="scent-type-label mb-1.5 text-center text-scent-text-subtle">
               Send this, or edit it above
             </p>
             <div className="flex items-center justify-center gap-2">
@@ -1142,7 +1172,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                 type="button"
                 onClick={() => composerFormRef.current?.requestSubmit()}
                 disabled={busy}
-                className="scent-primary-button inline-flex min-h-11 items-center justify-center rounded-[var(--radius-scent)] px-6 py-2.5 text-[12px] font-bold uppercase tracking-[0.16em] disabled:opacity-55"
+                className="scent-primary-button inline-flex min-h-10 items-center justify-center rounded-[var(--radius-scent)] px-5 py-2 text-[11px] font-bold uppercase tracking-[0.16em] disabled:opacity-55"
               >
                 <span>Confirm</span>
               </button>
@@ -1153,7 +1183,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                   setPendingCueFacet(null);
                 }}
                 disabled={busy}
-                className="inline-flex min-h-11 items-center justify-center rounded-full border border-white/20 px-5 py-2 scent-type-chip text-scent-text-muted transition-colors hover:border-scent-accent/42 hover:text-[#fff7ec] disabled:opacity-45"
+                className="inline-flex min-h-10 items-center justify-center rounded-full border border-white/20 px-4 py-1.5 scent-type-chip text-[11px] text-scent-text-muted transition-colors hover:border-scent-accent/42 hover:text-[#fff7ec] disabled:opacity-45"
               >
                 <span>Cancel</span>
               </button>
@@ -1174,27 +1204,16 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         aria-live="polite"
         aria-label="Beam Agent conversation"
       >
-        {/* Intro: the greeting opens as a compact pill holding just the typing
-            dots — the agent visibly "thinking" — then expands into its full
-            first line. The dots are popped out of flow (popLayout) the instant
-            the line is ready, so the bubble measures straight to its final size
-            and the parent's `layout="size"` animation carries that growth in one
-            smooth pass while the welcome text fades up inside it. */}
-        {messages.map((message, index) => {
-          const isIntroGreeting = index === 0 && message.role === 'agent';
-          // Keep the stage empty until the greeting beat — the bubble (and its
-          // dots) only mount once the open transition has settled.
-          if (isIntroGreeting && !greetingMounted) return null;
-          const typing = isIntroGreeting && !introReady;
-          return (
+        {/* Intro: the stage stays empty for a beat after open, then a "thinking"
+            dots bubble lands, then it crossfades into the greeting and the rest
+            of the conversation. The dots fade out as the first line fades in, so
+            the panel never hard-cuts between the two — and, critically, every
+            real message renders its TEXT (not a permanent dots placeholder). */}
+        <AnimatePresence initial={false}>
+          {greetingMounted && !introReady ? (
             <motion.div
-              key={message.id}
-              // Only the greeting morphs its box: `layout="size"` animates the
-              // grow from thinking-pill to welcome-line without sliding the
-              // bubble when later turns push it down. Other bubbles keep the
-              // simple fade/rise and never run a layout pass.
-              layout={isIntroGreeting && !calmMotion ? 'size' : false}
-              initial={calmMotion ? false : { opacity: 0, y: 8 }}
+              key="intro-typing"
+              initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -4 }}
               transition={{ duration: 0.24, ease: SCENT_EASE }}
@@ -1203,8 +1222,31 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
             >
               <BeamTypingDots />
             </motion.div>
-          );
-        })}
+          ) : null}
+        </AnimatePresence>
+
+        {introReady
+          ? messages.map((message) => (
+              <motion.div
+                key={message.id}
+                initial={calmMotion ? false : { opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.24, ease: SCENT_EASE }}
+                className={`max-w-[90%] rounded-[calc(var(--radius-scent)-12px)] border px-3.5 py-2.5 text-[13px] leading-relaxed sm:text-sm ${
+                  message.role === 'user'
+                    ? 'self-end border-white/14 bg-white/[0.07] text-[#fff7ec]'
+                    : message.role === 'system'
+                      ? 'self-start border-red-400/25 bg-red-500/10 text-red-100'
+                      : 'self-start border-scent-accent/22 bg-[linear-gradient(180deg,rgba(212,175,55,0.045),rgba(0,0,0,0.16))] text-scent-text-muted'
+                }`}
+              >
+                {message.role === 'system' ? (
+                  <AlertTriangle size={13} className="mr-1.5 inline align-[-2px]" aria-hidden />
+                ) : null}
+                {message.text}
+              </motion.div>
+            ))
+          : null}
 
         {/* Live "thinking" bubble while the agent works a turn, so the wait
             reads as a real chat exchange instead of a frozen panel. Calm modes

@@ -797,7 +797,10 @@ function DashboardView() {
                   style={{ overflow: 'hidden' }}
                   className="mx-auto w-full max-w-[42.75rem] px-1"
                 >
-                  <div className="relative mb-2 flex items-center justify-center">
+                  {/* min-h holds the absolutely-positioned close button fully
+                      inside the header's clipped (overflow-hidden) box, so the
+                      top of the X is not shaved off. */}
+                  <div className="relative mb-2 flex min-h-11 items-center justify-center">
                     <div
                       className="h-1 w-full max-w-[11rem] overflow-hidden rounded-full bg-white/10"
                       role="progressbar"
