@@ -129,6 +129,12 @@ export const CommentThread: React.FC<CommentThreadProps> = ({ postId, authToken,
         <textarea
           value={body}
           onChange={(event) => setBody(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+              event.preventDefault();
+              event.currentTarget.form?.requestSubmit();
+            }
+          }}
           rows={3}
           maxLength={2000}
           placeholder={authToken ? 'Add a comment' : 'Sign in to comment'}
@@ -136,11 +142,11 @@ export const CommentThread: React.FC<CommentThreadProps> = ({ postId, authToken,
           className="scent-lux-input min-h-24 w-full resize-y rounded-[var(--radius-scent)] px-4 py-3 text-base leading-7 text-[#fff7ec] placeholder:text-scent-text-subtle"
         />
         {errorMessage ? (
-          <p className="text-sm text-red-100">{errorMessage}</p>
+          <p role="status" aria-live="polite" className="text-sm text-red-100">{errorMessage}</p>
         ) : null}
         <div className="flex items-center justify-between gap-4">
           <p className="scent-type-meta uppercase">
-            {body.trim().length}/2000
+            {body.length}/2000
           </p>
           <button
             type="submit"
