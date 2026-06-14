@@ -28,6 +28,16 @@ import type { BeamCatalogHit, BeamToolDeps } from "../beamTools.ts";
 import { missionItemFromWardrobeRow } from "../../services/scentMissionService";
 import { searchCatalogCandidates, flattenProfile } from "../../services/catalogService";
 import { getScentFacts } from "../../lib/scent-facts/engine";
+import { createBeamResearcher } from "../research/beamResearch.ts";
+import { loadResearchCache, saveResearchCache } from "../research/researchCache.ts";
+import { runWebResearch } from "../research/researchProvider.ts";
+import {
+  degradedResearchModel,
+  isResearchEnabled,
+  researchEngine,
+  researchIncludeDomains,
+  researchModelFor,
+} from "../research/researchConfig.ts";
 
 async function loadVault(ctx: BeamRunContext): Promise<ScentMissionWardrobeItem[]> {
   const rows = await db
@@ -63,6 +73,20 @@ async function researchForBeam(name: string): Promise<Record<string, unknown> | 
   }
 }
 
+// Cost-capped live research, shared with the in-process route. No-ops to a
+// `note` unless BEAM_RESEARCH_ENABLED + OPENROUTER_API_KEY are set, so Hermes
+// gets the tool but it stays inert until the lane is turned on server-side.
+const beamResearchWeb = createBeamResearcher({
+  loadCache: loadResearchCache,
+  saveCache: saveResearchCache,
+  runWebResearch,
+  modelFor: researchModelFor,
+  degradedModel: degradedResearchModel,
+  engine: researchEngine,
+  includeDomains: researchIncludeDomains,
+  isEnabled: isResearchEnabled,
+});
+
 /**
  * Build the concrete tool dependencies for the MCP server. Stateless: safe to
  * construct once at startup and reuse across requests (per-request scope comes
@@ -73,6 +97,7 @@ export function createBeamServiceDeps(): BeamToolDeps {
     loadVault,
     searchCatalog: searchCatalogForBeam,
     research: researchForBeam,
+    researchWeb: beamResearchWeb,
     scoreVault: (items, calibration, weather) =>
       selectScentMissionRecommendation(items, calibration, weather),
     getWeather: async () => sanitizeScentMissionWeather(undefined),

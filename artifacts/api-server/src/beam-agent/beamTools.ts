@@ -42,6 +42,16 @@ export type BeamToolDeps = {
   searchCatalog: (query: string, limit: number) => Promise<BeamCatalogHit[]>;
   /** Best-effort research for one fragrance name (read-only; never persists). */
   research: (name: string) => Promise<Record<string, unknown> | null>;
+  /**
+   * Cost-capped live web research (freshness-gated, cached). OPTIONAL: when
+   * absent, the `beam_research_web` tool is not exposed at all — keeping Phase-1
+   * deploys (and the tool tests) on the original 5-tool surface. Returns a
+   * synthesized fact + sources, or a `{ note }` when live research is off/failed.
+   */
+  researchWeb?: (
+    query: string,
+    opts?: { entityType?: string; depth?: string },
+  ) => Promise<unknown>;
   /** Deterministic weather scoring over the vault (kept in code, not the LLM). */
   scoreVault: (
     items: ScentMissionWardrobeItem[],
@@ -88,7 +98,7 @@ function topFamilies(items: ScentMissionWardrobeItem[], limit = 4): string[] {
 
 /** Build the Phase-1 read-only tool definitions from injected deps. */
 export function createBeamTools(deps: BeamToolDeps): BeamToolDefinition[] {
-  return [
+  const tools: BeamToolDefinition[] = [
     {
       name: "beam_get_user_context",
       description:
@@ -223,4 +233,53 @@ export function createBeamTools(deps: BeamToolDeps): BeamToolDefinition[] {
       },
     },
   ];
+
+  // Live web research is additive and opt-in: only exposed when the route wires
+  // a `researchWeb` dep (which itself no-ops unless BEAM_RESEARCH_ENABLED +
+  // OPENROUTER_API_KEY are set). Absent it, the surface is the original 5 tools.
+  const { researchWeb } = deps;
+  if (researchWeb) {
+    tools.push({
+      name: "beam_research_web",
+      description:
+        "Look up CURRENT external facts via a cost-capped web search: live price, " +
+        "availability, discontinued / reformulated / newly-released status, unknown " +
+        "metadata (perfumer, release year, concentration), sample/decant sellers, or " +
+        "when the user explicitly asks for cited sources. Do NOT use it for normal " +
+        "recommendations, weather/occasion fits, ranking owned bottles, or comparing " +
+        "common scents — answer those from the catalog and wardrobe tools. Returns a " +
+        "short synthesized fact plus its sources; if it returns a `note` instead, live " +
+        "research is unavailable, so answer from cached knowledge and say it is not " +
+        "freshly verified.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          query: {
+            type: "string",
+            description: "The specific fact to look up, e.g. 'current price of Creed Aventus 100ml'.",
+          },
+          entityType: {
+            type: "string",
+            enum: ["fragrance", "brand", "seller", "price", "availability", "note_claim", "general"],
+            description: "Optional hint that scopes the cache key and its freshness TTL.",
+          },
+          depth: {
+            type: "string",
+            enum: ["auto", "single", "standard", "premium"],
+            description: "Optional research depth; default 'auto' lets the server pick the cheapest lane that fits.",
+          },
+        },
+        required: ["query"],
+        additionalProperties: false,
+      },
+      handler: async (input) => {
+        const record = (typeof input === "object" && input !== null ? input : {}) as Record<string, unknown>;
+        const query = asString(record.query);
+        if (!query) return { note: "query is required", synthesizedFact: "", sources: [] };
+        return researchWeb(query, { entityType: asString(record.entityType), depth: asString(record.depth) });
+      },
+    });
+  }
+
+  return tools;
 }

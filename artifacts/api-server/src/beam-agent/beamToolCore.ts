@@ -108,6 +108,10 @@ export function redactEventForClient(event: BeamRunEvent): BeamRunEvent {
 export function summarizeToolResult(_name: string, result: unknown): string {
   if (result && typeof result === "object") {
     const record = result as Record<string, unknown>;
+    if (Array.isArray(record.sources)) {
+      const n = record.sources.length;
+      return record.synthesizedFact ? `researched (${n} source(s))` : "no live result";
+    }
     if (Array.isArray(record.items)) return `${record.items.length} result(s)`;
     if (Array.isArray(record.candidates)) return `${record.candidates.length} candidate(s)`;
     if (record.recommendation && typeof record.recommendation === "object") {

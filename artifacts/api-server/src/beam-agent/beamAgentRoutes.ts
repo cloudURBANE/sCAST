@@ -36,6 +36,16 @@ import { createBeamTools, type BeamCatalogHit, type BeamToolDeps } from "./beamT
 import { runBeamAgent } from "./beamAgentLoop.ts";
 import { redactEventForClient } from "./beamToolCore.ts";
 import type { BeamEmit, BeamRunContext, BeamRunEvent } from "./types.ts";
+import { createBeamResearcher } from "./research/beamResearch.ts";
+import { loadResearchCache, saveResearchCache } from "./research/researchCache.ts";
+import { runWebResearch } from "./research/researchProvider.ts";
+import {
+  degradedResearchModel,
+  isResearchEnabled,
+  researchEngine,
+  researchIncludeDomains,
+  researchModelFor,
+} from "./research/researchConfig.ts";
 
 const router = Router();
 
@@ -121,11 +131,26 @@ async function researchForBeam(name: string): Promise<Record<string, unknown> | 
   }
 }
 
+// Stateless across runs, so build the researcher once. Internally it no-ops
+// (returns a `note`) unless BEAM_RESEARCH_ENABLED + OPENROUTER_API_KEY are set,
+// so wiring it here is safe before the lane is turned on in any environment.
+const beamResearchWeb = createBeamResearcher({
+  loadCache: loadResearchCache,
+  saveCache: saveResearchCache,
+  runWebResearch,
+  modelFor: researchModelFor,
+  degradedModel: degradedResearchModel,
+  engine: researchEngine,
+  includeDomains: researchIncludeDomains,
+  isEnabled: isResearchEnabled,
+});
+
 function buildDeps(weather: ScentMissionWeather): BeamToolDeps {
   return {
     loadVault,
     searchCatalog: searchCatalogForBeam,
     research: researchForBeam,
+    researchWeb: beamResearchWeb,
     scoreVault: (items, calibration, currentWeather) =>
       selectScentMissionRecommendation(items, calibration, currentWeather),
     getWeather: async () => weather,

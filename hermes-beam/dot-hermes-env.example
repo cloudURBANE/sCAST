@@ -16,3 +16,25 @@ OPENROUTER_API_KEY=sk-or-...
 # OpenRouter (set provider: anthropic in config.yaml and uncomment). Not the
 # default for Beam anymore.
 # ANTHROPIC_API_KEY=sk-ant-...
+
+# --- Live web research lane (server-side; OFF by default) --------------------
+# These belong in the BEAM MCP SERVER's environment, not Hermes — the research
+# tool runs on the server the MCP exposes, so the agent (Hermes or the in-app
+# loop) never sees these keys. The lane stays inert until BOTH the flag below and
+# OPENROUTER_API_KEY are set. Full guide: docs/beam-agent/08-live-research-lane.md
+BEAM_RESEARCH_ENABLED=false
+
+# Per-lane OpenRouter model slugs. Defaults shown; VERIFY each against the live
+# OpenRouter catalog before enabling (slugs drift — e.g. the catalog lists
+# "Step 3.5 Flash", not "3.7"). Never use *:online / openrouter/auto /
+# openrouter/fusion — they are rejected (cost-opaque) and fall back to defaults.
+# BEAM_RESEARCH_MODEL_SINGLE=minimax/minimax-m3
+# BEAM_RESEARCH_MODEL_STANDARD=minimax/minimax-m3
+# BEAM_RESEARCH_MODEL_PREMIUM=moonshotai/kimi-k2.7-code
+# BEAM_RESEARCH_MODEL_DEGRADED=stepfun/step-3.5-flash
+
+# Web-search engine for the OpenRouter `web` plugin: exa | parallel | native.
+# BEAM_RESEARCH_ENGINE=exa
+# Comma-separated domain allowlist (tight = cheaper + higher quality). Empty env
+# uses the built-in fragrance defaults (fragrantica, parfumo, basenotes, luckyscent).
+# BEAM_RESEARCH_INCLUDE_DOMAINS=fragrantica.com,parfumo.com,basenotes.com,luckyscent.com
