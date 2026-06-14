@@ -98,17 +98,21 @@ const FragranceShowcase: React.FC<{ post: CommunityPost }> = ({ post }) => {
           key={`${fragrance.brand}:${fragrance.name}:${fragrance.imageUrl}`}
           className="grid min-h-[14rem] overflow-hidden rounded-[20px] border border-scent-accent/24 bg-[radial-gradient(80%_90%_at_26%_86%,rgba(212,175,55,0.13),transparent_58%),linear-gradient(180deg,rgba(12,10,7,0.9),rgba(0,0,0,0.96))] shadow-[inset_0_1px_0_rgba(255,236,183,0.08),0_18px_38px_-30px_rgba(0,0,0,0.95)] sm:grid-cols-[minmax(10rem,0.95fr)_1px_minmax(0,1.05fr)]"
         >
-          <div className="relative flex min-h-[13rem] items-end justify-center p-5 sm:min-h-[14rem]">
+          <div className="relative min-h-[13rem] sm:min-h-[14rem]">
             <span
-              className="absolute bottom-4 left-1/2 h-16 w-32 -translate-x-1/2 rounded-full bg-scent-accent/12 blur-2xl"
+              className="pointer-events-none absolute bottom-4 left-1/2 h-16 w-32 -translate-x-1/2 rounded-full bg-scent-accent/12 blur-2xl"
               aria-hidden="true"
             />
-            <img
+            {/* Route bottle imagery through BottleImage so this scrolling
+                community surface honors the render budget (no high-DPI video on
+                low-budget devices) and gets retry / proxy-fallback / shelf-line
+                framing — instead of a bare <img> with fixed pixel heights. */}
+            <BottleImage
               src={fragrance.imageUrl}
               alt={`${fragrance.name} by ${fragrance.brand}`}
+              variant="featured"
+              className="absolute inset-0 z-10"
               loading="lazy"
-              decoding="async"
-              className="relative z-10 h-40 max-w-full object-contain sm:h-44"
             />
           </div>
           <span

@@ -43,7 +43,14 @@ const ProfileSettingsModal = React.lazy(() =>
 );
 const CommunityPage = React.lazy(() => loadRouteChunk(() => import('@/pages/community')));
 const ArenaPage = React.lazy(() => loadRouteChunk(() => import('@/pages/arena')));
-const IpadFreezeLab = React.lazy(() => loadRouteChunk(() => import('@/pages/ipad-freeze-lab')));
+// Dev-only iPad-freeze diagnostic lab. Gated on import.meta.env.DEV so it is
+// neither routable nor shipped in production: Vite statically replaces
+// import.meta.env.DEV with `false` in prod, so this import() is dead-code-
+// eliminated and the chunk never enters the bundle. Keeps the "diagnose
+// off-prod, no debug overlays in prod" guidance without deleting the tool.
+const IpadFreezeLab = import.meta.env.DEV
+  ? React.lazy(() => loadRouteChunk(() => import('@/pages/ipad-freeze-lab')))
+  : null;
 const SharePage = React.lazy(() =>
   loadRouteChunk(() => import('./components/SharePage').then((module) => ({ default: module.SharePage }))),
 );
@@ -1306,7 +1313,9 @@ const AppContent = React.memo(function AppContent({ location }: { location: Loca
           <Route path="/" element={<DashboardView />} />
           <Route path="/community" element={<CommunityPageView />} />
           <Route path="/arena" element={<ArenaPageView />} />
-          <Route path="/debug/ipad-freeze" element={<IpadFreezeLab />} />
+          {import.meta.env.DEV && IpadFreezeLab ? (
+            <Route path="/debug/ipad-freeze" element={<IpadFreezeLab />} />
+          ) : null}
           <Route path="/share/:userId" element={<SharePageView />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
@@ -1354,7 +1363,7 @@ export default function App() {
   const paintFrameRef = useRef<number | null>(null);
   const pendingRevealRouteRef = useRef<string | null>(null);
   const transitionStartedAtRef = useRef(0);
-  const isFreezeLab = renderedLocation.pathname === '/debug/ipad-freeze';
+  const isFreezeLab = import.meta.env.DEV && renderedLocation.pathname === '/debug/ipad-freeze';
   const { lowMotionRenderMode, isIpad, isIpadStandalone, ipadSafariPerformanceMode } = useRenderBudget();
   const [threadBackgroundReady, setThreadBackgroundReady] = useState(false);
   // iPad keeps the full tablet layout, but gets its own CSS-scheduled backdrop:
