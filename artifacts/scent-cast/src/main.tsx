@@ -2,6 +2,7 @@ import { createRoot } from "react-dom/client";
 import { HelmetProvider } from "react-helmet-async";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter } from "react-router-dom";
+import { SpeedInsights } from "@vercel/speed-insights/react";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { CrashDiag } from "./components/CrashDiag";
 import { initCrashTrace } from "./lib/crashTrace";
@@ -24,5 +25,6 @@ createRoot(document.getElementById("root")!).render(
       </QueryClientProvider>
     </HelmetProvider>
     <CrashDiag />
+    <SpeedInsights />
   </ErrorBoundary>,
 );
