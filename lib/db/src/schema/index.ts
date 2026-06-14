@@ -7,6 +7,7 @@ export * from "./userSettings";
 export * from "./affiliateLinks";
 export * from "./enrichmentJobs";
 export * from "./apiUsageLedger";
+export * from "./researchCache";
 export * from "./fragranceReviewSummaries";
 export * from "./communityPosts";
 export * from "./communityComments";
