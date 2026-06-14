@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { BottleImage } from '@/components/BottleImage';
 import { BrandGoldLabel } from '@/components/BrandGoldLabel';
+import { VaultCard } from '@/components/VaultCard';
 import { VaultGridModeToggle } from '@/components/VaultGridModeToggle';
 import type { BottleImageAdjustment } from '@/lib/bottleImageAdjustment';
 import { APP_BRAND_MARK } from '@/lib/appBrand';
@@ -781,43 +782,25 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                     className="group cursor-pointer relative h-full min-w-0"
                     onClick={() => setSelectedItemId(fragranceId)}
                   >
-                    <div className={`scent-fragrance-card scent-hover-lift w-full h-full ${
-                      isCompactGrid ? 'min-h-[18rem]' : 'min-h-[32rem]'
-                    } sm:min-h-[32rem] transition-[transform,border-color,box-shadow] duration-500 motion-reduce:transition-none relative overflow-hidden flex flex-col`}>
-                      <div className="scent-card-frame" aria-hidden />
-                      <div className={`relative z-[1] flex h-full flex-col items-center ${
-                        isCompactGrid ? 'px-3 py-4' : 'px-6 py-7'
-                      } sm:px-8 sm:py-9`}>
-                        <BrandGoldLabel
-                          brand={brand}
-                          className="scent-card-brand w-full"
+                    <VaultCard tone="share" compact={isCompactGrid} brand={brand} name={name}>
+                      {!data.hideImages ? (
+                        <BottleImage
+                          variant="grid"
+                          src={item.imageUrl}
+                          alt={name}
+                          adjustment={item.imageAdjustment}
+                          className="absolute inset-0 z-10"
+                          imgClassName="scent-hover-scale brightness-[1.1] transition-transform duration-[900ms] motion-reduce:transition-none"
                         />
-                        <div className={`relative flex-1 w-full ${
-                          isCompactGrid ? 'my-3' : 'my-5'
-                        } sm:my-6 min-h-0`}>
-                          {!data.hideImages ? (
-                          <BottleImage
-                            variant="grid"
-                            src={item.imageUrl}
-                            alt={name}
-                            adjustment={item.imageAdjustment}
-                            className="absolute inset-0 z-10"
-                            imgClassName="scent-hover-scale brightness-[1.1] transition-transform duration-[900ms] motion-reduce:transition-none"
-                          />
-                        ) : (
-                          <div className="absolute inset-0 flex items-center justify-center px-6 text-center">
-                            <div>
-                              <p className="text-[9px] uppercase tracking-[0.5em] text-white/40 font-bold">{brand}</p>
-                              <p className="font-serif italic text-2xl text-white leading-tight">{name}</p>
-                            </div>
+                      ) : (
+                        <div className="absolute inset-0 flex items-center justify-center px-6 text-center">
+                          <div>
+                            <p className="text-[9px] uppercase tracking-[0.5em] text-white/40 font-bold">{brand}</p>
+                            <p className="font-serif italic text-2xl text-white leading-tight">{name}</p>
                           </div>
-                        )}
                         </div>
-                        <div className="scent-card-title-row shrink-0">
-                          <h3 className="scent-card-title" title={name}>{name}</h3>
-                        </div>
-                      </div>
-                    </div>
+                      )}
+                    </VaultCard>
                   </motion.div>
                 );
               })}
