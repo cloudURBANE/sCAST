@@ -1219,7 +1219,7 @@ export const FragranceCapture: React.FC<{
                 // restores the centered layout instead of a half-scrolled gap.
                 window.setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 90);
               }}
-              placeholder="Search by house or fragrance..."
+              placeholder={searchFocused ? '' : 'Search by house or fragrance...'}
               aria-label="Look up a brand or fragrance"
               className="scent-lux-input scent-vault-search-input relative z-0 h-[60px] w-full text-center font-sans text-base font-medium text-[#fff7ec] outline-none transition-colors placeholder:text-scent-text-subtle placeholder:font-medium sm:h-[68px] scroll-mt-28 px-16 sm:px-[4.35rem]"
             />
