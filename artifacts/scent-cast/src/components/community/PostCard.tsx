@@ -116,10 +116,10 @@ const FragranceShowcase: React.FC<{ post: CommunityPost }> = ({ post }) => {
             aria-hidden="true"
           />
           <div className="flex min-w-0 flex-col justify-center border-t border-scent-accent/16 p-5 text-center sm:border-t-0 sm:p-7 sm:text-left">
-            <p className="break-words font-serif text-3xl italic leading-tight text-[#fff7ec]">
+            <p className="break-words font-serif text-xl italic leading-tight text-[#fff7ec] sm:text-3xl">
               {fragrance.name}
             </p>
-            <p className="mt-4 break-words text-2xl font-black uppercase leading-tight tracking-[0.12em] text-[#fff7ec] sm:text-3xl">
+            <p className="mt-2 break-words text-lg font-black uppercase leading-tight tracking-[0.12em] text-[#fff7ec] sm:mt-4 sm:text-3xl">
               {fragrance.brand}
             </p>
             <div
@@ -258,14 +258,14 @@ const CompactBattlePostCard: React.FC<PostCardProps> = ({
       </div>
 
       {options.length === 2 ? (
-        <div className="mt-4 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
-          <div className="min-w-0 rounded-[14px] border border-scent-accent/14 bg-black/48 px-3 py-2 text-center">
+        <div className="mt-4 flex w-full flex-col items-center gap-2 sm:grid sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center">
+          <div className="w-full min-w-0 rounded-[14px] border border-scent-accent/14 bg-black/48 px-3 py-2 text-center">
             <p className="truncate font-serif text-lg italic text-[#fff7ec]">{options[0]}</p>
           </div>
           <span className="font-serif text-lg italic text-scent-accent/84" aria-hidden="true">
             vs
           </span>
-          <div className="min-w-0 rounded-[14px] border border-scent-accent/14 bg-black/48 px-3 py-2 text-center">
+          <div className="w-full min-w-0 rounded-[14px] border border-scent-accent/14 bg-black/48 px-3 py-2 text-center">
             <p className="truncate font-serif text-lg italic text-[#fff7ec]">{options[1]}</p>
           </div>
         </div>
@@ -628,7 +628,7 @@ const ScentOfDayPostCard: React.FC<PostCardProps> = ({
 
       <div className="mt-5 grid min-w-0 gap-5 sm:grid-cols-[minmax(13rem,0.82fr)_minmax(0,1fr)] sm:items-stretch">
         <div className="min-w-0">
-          <div className="scent-fragrance-card scent-community-marquee-card relative mx-auto flex aspect-[3/4.4] w-full max-w-[18rem] flex-col overflow-hidden p-5">
+          <div className="scent-fragrance-card scent-community-marquee-card relative mx-auto flex aspect-[3/4.4] w-full max-w-[13rem] flex-col overflow-hidden p-5 sm:max-w-[18rem]">
             <div className="scent-card-frame" aria-hidden="true" />
             <div className="relative z-10 flex justify-between gap-3">
               <span className="inline-flex items-center gap-1.5 rounded-full border border-scent-accent/22 bg-black/54 px-2.5 py-1 scent-type-label text-scent-accent">

@@ -24,8 +24,11 @@ interface AppTopNavProps {
   onEditProfile: () => void;
 }
 
+// Below 360px (iPhone SE class) the logo + "Sign In" share a tight grid track,
+// so the label scales down a notch and loosens its tracking only there; from
+// 360px up it returns to the standard treatment used on every other breakpoint.
 const navBaseClassName =
-  'text-[13px] font-semibold uppercase tracking-[0.16em] whitespace-nowrap';
+  'text-[11px] tracking-[0.10em] min-[360px]:text-[13px] min-[360px]:tracking-[0.16em] font-semibold uppercase whitespace-nowrap';
 
 const topLevelNavClassName =
   'relative inline-flex min-h-[44px] items-center justify-center rounded-full px-2';
@@ -255,7 +258,7 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
                   src="/nav/scentbeam-nav-logo.png"
                   srcSet="/nav/scentbeam-nav-logo.png 1x, /nav/scentbeam-nav-logo@2x.png 2x"
                   alt="ScentBeam"
-                  className="h-9 w-auto max-w-[126px] object-contain"
+                  className="h-9 w-auto max-w-[105px] min-[360px]:max-w-[126px] object-contain"
                   decoding="async"
                   draggable={false}
                 />

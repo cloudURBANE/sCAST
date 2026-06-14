@@ -771,18 +771,29 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
     }
   };
 
+  const openComposer = () => {
+    setComposerOpen(true);
+    setStatusMessage(null);
+    // Wait for the expanded form to mount, then bring it into view and focus it.
+    requestAnimationFrame(() => {
+      sectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      requestAnimationFrame(() => titleInputRef.current?.focus());
+    });
+  };
+
   if (!composerOpen) {
     return (
-      <section
-        ref={sectionRef}
-        className="relative w-full overflow-hidden border-b border-scent-accent/14 p-5 sm:p-6"
-      >
+      <>
+        {/* The inline banner eats ~180px before the feed on phones, so it is
+            desktop-only; mobile gets a floating "+" that sits just above the
+            bottom tab bar and expands the composer in place. */}
+        <section
+          ref={sectionRef}
+          className="relative hidden w-full overflow-hidden border-b border-scent-accent/14 p-5 sm:p-6 md:block"
+        >
         <button
           type="button"
-          onClick={() => {
-            setComposerOpen(true);
-            setStatusMessage(null);
-          }}
+          onClick={openComposer}
           aria-expanded="false"
           aria-label="Start a community room"
           className="absolute right-4 top-4 z-10 flex h-10 w-10 items-center justify-center rounded-full border border-scent-accent/28 bg-black/78 text-[#fff7ec] shadow-[0_4px_12px_rgba(212,175,55,0.15)] transition-all duration-200 hover:border-scent-accent/78 hover:bg-scent-accent/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 sm:right-5 sm:top-5"
@@ -810,7 +821,31 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
             {statusMessage}
           </p>
         ) : null}
-      </section>
+        </section>
+
+        {/* Mobile-only status notice (e.g. "Room opened") — the inline banner
+            that normally carries it is hidden below md. */}
+        {statusMessage ? (
+          <p
+            role="status"
+            aria-live="polite"
+            className={`mx-4 mt-4 rounded-[14px] border px-4 py-3 text-center text-base md:hidden ${STATUS_TONE_CLASSES[statusTone]}`}
+          >
+            {statusMessage}
+          </p>
+        ) : null}
+
+        {/* Floating composer trigger, aligned above the mobile tab bar. */}
+        <button
+          type="button"
+          onClick={openComposer}
+          aria-expanded="false"
+          aria-label="Start a community room"
+          className="fixed bottom-[calc(5.25rem+env(safe-area-inset-bottom,0px))] right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full border border-scent-accent/28 bg-black/88 text-[#fff7ec] shadow-[0_4px_16px_rgba(212,175,55,0.25)] transition-all duration-200 hover:border-scent-accent hover:bg-scent-accent/20 active:scale-95 md:hidden"
+        >
+          <Plus size={20} strokeWidth={2.4} className="text-[#fff7ec]" aria-hidden="true" />
+        </button>
+      </>
     );
   }
 
@@ -931,7 +966,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
         ) : null}
 
         {postType === 'sotd' ? (
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid grid-cols-3 gap-2 md:gap-4">
             <input
               type="text"
               value={weather}
@@ -1030,7 +1065,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
 
         {postType !== 'battle' ? (
         <div className="space-y-4 rounded-[18px] border border-scent-accent/12 bg-black/72 p-4">
-          <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
+          <div className="grid grid-cols-[1fr_auto] gap-2 sm:gap-4">
             <div className="relative min-w-0">
               <Search
                 size={16}
