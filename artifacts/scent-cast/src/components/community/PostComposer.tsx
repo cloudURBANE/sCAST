@@ -51,6 +51,20 @@ const SUBMIT_LABELS: Record<CommunityPostType, string> = {
   worth_it: 'Post price check',
 };
 
+// Status messages double as validation errors, neutral notices, and success
+// confirmations. Distinct tones let people (and screen readers, via aria-live)
+// tell a rejected post from an opened room at a glance.
+type StatusTone = 'info' | 'success' | 'error';
+
+const STATUS_TONE_CLASSES: Record<StatusTone, string> = {
+  info: 'border-scent-accent/12 bg-black/58 text-scent-text-muted',
+  success: 'border-emerald-400/30 bg-emerald-400/[0.08] text-emerald-100',
+  error: 'border-red-500/35 bg-red-500/[0.08] text-red-100',
+};
+
+const MAX_TAGS = 8;
+const MAX_BODY_LENGTH = 4000;
+
 interface PostComposerProps {
   authToken: string | null;
   onSignIn: () => void;
@@ -366,10 +380,12 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
   const [selectingFragranceId, setSelectingFragranceId] = useState<string | null>(null);
   const [selectedFragrances, setSelectedFragrances] = useState<CommunityFragranceSnapshot[]>([]);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [statusTone, setStatusTone] = useState<StatusTone>('info');
   const fragranceAbortRef = useRef<AbortController | null>(null);
   const battleAAbortRef = useRef<AbortController | null>(null);
   const battleBAbortRef = useRef<AbortController | null>(null);
   const sectionRef = useRef<HTMLElement | null>(null);
+  const formRef = useRef<HTMLFormElement | null>(null);
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const createPost = useCreateCommunityPost(authToken);
   const wardrobeItems = useWardrobeItems();
@@ -388,6 +404,34 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
       : postType === 'battle'
         ? 'What should people judge between these two?'
         : 'What bottle, size, condition, and price are you checking?';
+
+  const notify = (message: string, tone: StatusTone = 'info') => {
+    setStatusMessage(message);
+    setStatusTone(tone);
+  };
+  const clearStatus = () => setStatusMessage(null);
+
+  // Live battle validation so the submit button and an inline hint reflect what's
+  // missing instead of letting the user fill the whole form and bounce on submit.
+  const battleMissing = !battleASelection || !battleBSelection;
+  const battleDuplicate =
+    !battleMissing && snapshotIdentityKey(battleASelection) === snapshotIdentityKey(battleBSelection);
+  const battleReady = !battleMissing && !battleDuplicate;
+  const battleHint = postType === 'battle' && !battleReady
+    ? battleDuplicate
+      ? 'Pick two different fragrances to start the battle.'
+      : 'Pick two fragrances from your vault or the catalog to start the battle.'
+    : null;
+
+  const hasBody = body.trim().length > 0;
+  const meetsTypeRequirements = postType !== 'battle' || battleReady;
+  const canSubmit = hasBody && meetsTypeRequirements;
+  const bodyLength = body.length;
+  const bodyNearLimit = bodyLength >= MAX_BODY_LENGTH - 200;
+
+  const requestSubmit = () => {
+    formRef.current?.requestSubmit();
+  };
 
   useEffect(() => {
     return () => {
@@ -499,15 +543,18 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
       .filter(Boolean);
     if (nextTags.length === 0) return;
 
-    setTags((current) => {
-      const merged = [...current];
-      for (const nextTag of nextTags) {
-        if (!merged.includes(nextTag)) merged.push(nextTag);
-        if (merged.length >= 8) break;
+    const merged = [...tags];
+    let limitHit = false;
+    for (const nextTag of nextTags) {
+      if (merged.length >= MAX_TAGS) {
+        limitHit = true;
+        break;
       }
-      return merged;
-    });
+      if (!merged.includes(nextTag)) merged.push(nextTag);
+    }
+    setTags(merged);
     setTagInput('');
+    if (limitHit) notify(`You can add up to ${MAX_TAGS} tags.`, 'info');
   };
 
   const submitTagKey = (event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -524,17 +571,17 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
     const controller = new AbortController();
     fragranceAbortRef.current = controller;
     setSearchingFragrance(true);
-    setStatusMessage(null);
+    clearStatus();
 
     try {
       const response = await searchFragrances(query, { signal: controller.signal });
       setFragranceResults(response.results.slice(0, 6));
       if (response.results.length === 0) {
-        setStatusMessage('No catalog matches found.');
+        notify('No catalog matches found.', 'info');
       }
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') return;
-      setStatusMessage(err instanceof Error ? err.message : 'Catalog search failed.');
+      notify(err instanceof Error ? err.message : 'Catalog search failed.', 'error');
     } finally {
       if (fragranceAbortRef.current === controller) {
         fragranceAbortRef.current = null;
@@ -545,13 +592,13 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
 
   const attachFragrance = async (result: FragranceSearchResult) => {
     if (selectedFragrances.length >= 3) {
-      setStatusMessage('Attach up to three catalog fragrances.');
+      notify('Attach up to three catalog fragrances.', 'info');
       return;
     }
 
     const key = firstString(result.id, result.source_url, `${result.brand ?? result.house}:${result.name}`) ?? result.name;
     setSelectingFragranceId(key);
-    setStatusMessage(null);
+    clearStatus();
 
     try {
       const snapshot = await snapshotFromSearchResult(result);
@@ -564,7 +611,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
         return exists ? current : [...current, snapshot].slice(0, 3);
       });
     } catch (err) {
-      setStatusMessage(err instanceof Error ? err.message : 'Fragrance could not be attached.');
+      notify(err instanceof Error ? err.message : 'Fragrance could not be attached.', 'error');
     } finally {
       setSelectingFragranceId(null);
     }
@@ -583,7 +630,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
 
   const selectBattleCandidate = async (side: 'a' | 'b', candidate: BattleFragranceCandidate) => {
     setSelectingBattleSide(side);
-    setStatusMessage(null);
+    clearStatus();
     try {
       const fallbackSnapshot: CommunityFragranceSnapshot = {
         name: candidate.name,
@@ -609,7 +656,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
         setBattleBResults([]);
       }
     } catch (err) {
-      setStatusMessage(err instanceof Error ? err.message : 'Fragrance could not be selected.');
+      notify(err instanceof Error ? err.message : 'Fragrance could not be selected.', 'error');
     } finally {
       setSelectingBattleSide(null);
     }
@@ -671,23 +718,24 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
   const submitPost = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!authToken) {
-      setStatusMessage('Sign in to open a room.');
+      notify('Sign in to open a room.', 'info');
       onSignIn();
       return;
     }
 
     const trimmedBody = body.trim();
     if (!trimmedBody) {
-      setStatusMessage('Tell the room what to discuss before opening.');
+      notify('Tell the room what to discuss before opening.', 'error');
       return;
     }
 
     const metadata = buildMetadata();
     if (!metadata) {
-      setStatusMessage(
-        postType === 'battle'
+      notify(
+        battleDuplicate
           ? 'Pick two different fragrances from your vault or the catalog.'
-          : 'Battle rooms need two options.',
+          : 'Pick two fragrances from your vault or the catalog to start the battle.',
+        'error',
       );
       return;
     }
@@ -699,7 +747,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
           )
         : selectedFragrances;
 
-    setStatusMessage(null);
+    clearStatus();
     try {
       await createPost.mutateAsync({
         type: postType,
@@ -711,7 +759,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
       });
       resetComposer();
       setComposerOpen(false);
-      setStatusMessage('Room opened in the community.');
+      notify('Room opened in the community.', 'success');
       // Bring the composer/feed back into view so the freshly created room is
       // visible right after the form collapses, instead of leaving the user
       // scrolled down inside the (now closed) editor.
@@ -719,7 +767,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
         sectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       });
     } catch (err) {
-      setStatusMessage(err instanceof Error ? err.message : 'Post could not be created.');
+      notify(err instanceof Error ? err.message : 'Post could not be created.', 'error');
     }
   };
 
@@ -754,7 +802,11 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
         </div>
 
         {statusMessage ? (
-          <p className="mx-auto mt-6 max-w-2xl rounded-[14px] border border-scent-accent/12 bg-black/58 px-4 py-3 text-center text-base text-scent-text-muted">
+          <p
+            role="status"
+            aria-live="polite"
+            className={`mx-auto mt-6 max-w-2xl rounded-[14px] border px-4 py-3 text-center text-base ${STATUS_TONE_CLASSES[statusTone]}`}
+          >
             {statusMessage}
           </p>
         ) : null}
@@ -767,7 +819,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
       ref={sectionRef}
       className="w-full border-b border-scent-accent/14 p-4 sm:p-6"
     >
-      <form onSubmit={submitPost} className="space-y-4 sm:space-y-5">
+      <form ref={formRef} onSubmit={submitPost} className="space-y-4 sm:space-y-5">
         <div className="relative flex flex-col items-center gap-2 text-center">
           <div className="min-w-0 px-10 sm:px-14">
             <p className="scent-type-label text-scent-accent">
@@ -800,7 +852,12 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
             <button
               key={type}
               type="button"
-              onClick={() => setPostType(type)}
+              onClick={() => {
+                setPostType(type);
+                // Requirements change with the room type; drop any stale notice
+                // (e.g. a battle validation error) so it doesn't linger.
+                clearStatus();
+              }}
               role="option"
               aria-label={label}
               aria-selected={postType === type}
@@ -842,18 +899,20 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
         </div>
 
         {tags.length > 0 ? (
-          <div className="flex flex-wrap justify-center gap-2">
+          <div className="flex flex-wrap items-center justify-center gap-2">
             {tags.map((tag) => (
               <button
                 key={tag}
                 type="button"
                 onClick={() => setTags((current) => current.filter((item) => item !== tag))}
+                aria-label={`Remove tag ${tag}`}
                 className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/54 px-3 py-1.5 scent-type-chip text-scent-text-muted transition-colors hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
               >
                 #{tag}
                 <X size={12} strokeWidth={1.8} aria-hidden="true" />
               </button>
             ))}
+            <span className="scent-type-meta uppercase text-scent-text-subtle">{tags.length}/{MAX_TAGS}</span>
           </div>
         ) : null}
 
@@ -922,6 +981,10 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
           </div>
         ) : null}
 
+        {battleHint ? (
+          <p className="text-center scent-type-meta uppercase text-scent-accent/82">{battleHint}</p>
+        ) : null}
+
         {postType === 'worth_it' ? (
           <input
             type="text"
@@ -937,8 +1000,15 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
         <textarea
           value={body}
           onChange={(event) => setBody(event.target.value)}
+          onKeyDown={(event) => {
+            // Power-user affordance: submit without reaching for the mouse.
+            if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+              event.preventDefault();
+              requestSubmit();
+            }
+          }}
           rows={5}
-          maxLength={4000}
+          maxLength={MAX_BODY_LENGTH}
           placeholder={bodyPlaceholder}
           aria-label="Room discussion"
           className="scent-lux-input min-h-40 w-full resize-y rounded-[var(--radius-scent)] px-4 py-3 text-base leading-7 text-[#fff7ec] placeholder:text-scent-text-subtle"
@@ -1058,18 +1128,22 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
         ) : null}
 
         {statusMessage ? (
-          <p className="rounded-[14px] border border-scent-accent/12 bg-black/58 px-4 py-3 text-center text-base text-scent-text-muted">
+          <p
+            role="status"
+            aria-live="polite"
+            className={`rounded-[14px] border px-4 py-3 text-center text-base ${STATUS_TONE_CLASSES[statusTone]}`}
+          >
             {statusMessage}
           </p>
         ) : null}
 
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <p className="scent-type-meta uppercase">
-            {body.trim().length}/4000
+          <p className={`scent-type-meta uppercase ${bodyNearLimit ? 'text-scent-accent' : ''}`}>
+            {bodyLength}/{MAX_BODY_LENGTH}
           </p>
           <button
             type="submit"
-            disabled={createPost.isPending || (authToken ? !body.trim() : false)}
+            disabled={createPost.isPending || (authToken ? !canSubmit : false)}
             className="scent-primary-button inline-flex min-h-12 items-center justify-center gap-2 rounded-[var(--radius-scent)] px-6 py-3 text-sm font-bold uppercase tracking-[0.18em] disabled:pointer-events-none disabled:opacity-60"
           >
             {createPost.isPending ? (
