@@ -639,6 +639,25 @@ function DashboardView() {
     handleExpandArchive,
   } = useWardrobe();
   const reduceMotion = useReducedMotion();
+  // Track Tailwind's `sm` breakpoint so the Beam Agent header can animate its
+  // exact pull-up margins to zero on close. framer needs the explicit
+  // (responsive) margin values to collapse the header's height + margins in step
+  // with the card crossfade — otherwise the header keeps its space during the
+  // fade and the search card / cues / CTA snap upward afterward (the old
+  // "push up at the end" on close).
+  const [isSmUp, setIsSmUp] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(min-width: 640px)').matches,
+  );
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mq = window.matchMedia('(min-width: 640px)');
+    const onChange = (event: MediaQueryListEvent) => setIsSmUp(event.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  const missionHeaderMargins = isSmUp
+    ? { marginTop: '-3.5rem', marginBottom: '0.75rem' }
+    : { marginTop: '-2.5rem', marginBottom: '0.625rem' };
   const [viewState, setViewState] = useState<'search' | 'agent'>('search');
   // Beam Agent progress surfaced by the panel so its header (title + progress +
   // close) can render in a strip ABOVE the bordered card instead of inside it.
@@ -763,14 +782,20 @@ function DashboardView() {
               {agentActive ? (
                 <motion.div
                   key="mission-header"
-                  layout={!reduceMotion}
-                  initial={reduceMotion ? false : { opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 6 }}
+                  initial={reduceMotion ? false : { opacity: 0, y: 6, ...missionHeaderMargins }}
+                  animate={{ opacity: 1, y: 0, ...missionHeaderMargins }}
+                  exit={reduceMotion ? { opacity: 0 } : { opacity: 0, height: 0, marginTop: 0, marginBottom: 0 }}
                   transition={vaultContentTransition}
-                  // Pull the header up toward the hero marquee so the agent does
-                  // not open with a large dead gap above "A scent for today."
-                  className="mx-auto -mt-10 mb-2.5 w-full max-w-[42.75rem] px-1 sm:-mt-14 sm:mb-3"
+                  // The pull-up margins (toward the hero marquee, so the agent
+                  // does not open with a dead gap above "A scent for today.")
+                  // live in framer values rather than classes so that on close
+                  // the header collapses its own height AND margins to zero in
+                  // step with the card crossfade. overflow-hidden clips the
+                  // content as it collapses, so the search card, cues, and CTA
+                  // rise in a single continuous motion instead of snapping up
+                  // after the fade completes.
+                  style={{ overflow: 'hidden' }}
+                  className="mx-auto w-full max-w-[42.75rem] px-1"
                 >
                   <div className="relative mb-2 flex items-center justify-center">
                     <div
