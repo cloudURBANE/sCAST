@@ -5,6 +5,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
   AlertTriangle,
   Check,
+  ChevronDown,
   Loader2,
   Lock,
   RefreshCw,
@@ -60,6 +61,13 @@ type PanelMessage = {
   id: string;
   role: 'agent' | 'user' | 'system';
   text: string;
+  // Per-turn "thinking" trail, frozen onto the agent reply it produced. Rendered
+  // as a collapsible "Thought for Ns · N steps" recap ABOVE this answer (the
+  // ChatGPT / Claude pattern), so each turn keeps its own steps instead of one
+  // floating trail under the whole log. Absent on user/system rows and on
+  // scripted replies that ran no tools.
+  activity?: BeamActivityStep[];
+  elapsedMs?: number | null;
 };
 
 type AgentMode = 'fast' | 'research' | 'premium';
@@ -305,54 +313,165 @@ function completeToolStep(
   ];
 }
 
-const BeamActivityTrail: React.FC<{ steps: BeamActivityStep[]; calmMotion: boolean }> = ({
-  steps,
+const BeamActivityStepRow: React.FC<{ step: BeamActivityStep; calmMotion: boolean }> = ({
+  step,
   calmMotion,
 }) => (
-  <motion.div
-    layout={calmMotion ? false : 'position'}
-    initial={calmMotion ? false : { opacity: 0, y: 8 }}
-    animate={{ opacity: 1, y: 0 }}
-    exit={calmMotion ? { opacity: 0 } : { opacity: 0, y: -4 }}
-    transition={{ duration: 0.24, ease: SCENT_EASE }}
-    className={BEAM_ACTIVITY_BUBBLE_CLASS}
-    role="status"
-    aria-label="Beam Agent progress"
-  >
-    {steps.map((step) => (
-      <motion.div
-        key={step.id}
-        layout={calmMotion ? false : 'position'}
-        initial={calmMotion ? false : { opacity: 0, x: -4 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ duration: 0.22, ease: SCENT_EASE }}
-        className="flex items-start gap-2"
+  <div className="flex items-start gap-2">
+    <span className="mt-[2px] flex h-4 w-4 shrink-0 items-center justify-center">
+      {step.state === 'active' ? (
+        <Loader2 size={13} className={calmMotion ? '' : 'animate-spin'} aria-hidden />
+      ) : step.tone === 'error' ? (
+        <AlertTriangle size={12} className="text-scent-accent/55" aria-hidden />
+      ) : (
+        <Check size={13} className="text-scent-accent" aria-hidden />
+      )}
+    </span>
+    <span className="min-w-0 flex-1 leading-snug">
+      <span
+        className={`text-[12px] ${
+          step.state === 'active' ? 'text-[#fff7ec]' : 'text-scent-text-muted'
+        }`}
       >
-        <span className="mt-[2px] flex h-4 w-4 shrink-0 items-center justify-center">
-          {step.state === 'active' ? (
-            <Loader2 size={13} className={calmMotion ? '' : 'animate-spin'} aria-hidden />
-          ) : step.tone === 'error' ? (
-            <AlertTriangle size={12} className="text-scent-accent/55" aria-hidden />
+        {/* Drop the trailing "…" once the step has settled — an ellipsis next to a
+            check reads as still-in-progress. */}
+        {step.state === 'active' ? step.label : step.label.replace(/[.…]+$/, '')}
+      </span>
+      {step.detail ? (
+        <span className="ml-1 text-[11.5px] text-scent-accent/75">· {step.detail}</span>
+      ) : null}
+    </span>
+  </div>
+);
+
+/**
+ * Condensed "thinking" trail. While the run is live it shows a single summary
+ * line (the most recent step) with a Details toggle; once the run settles it
+ * collapses to a quiet "Thought for Ns · N steps" recap the user can reopen —
+ * the ChatGPT / Claude pattern. The full tool-by-tool list only renders when the
+ * user expands it, so the conversation never gets buried under the trail.
+ */
+const ACTIVITY_TRAIL_BODY_ID = 'beam-activity-steps';
+
+const BeamActivityTrail: React.FC<{
+  steps: BeamActivityStep[];
+  calmMotion: boolean;
+  running: boolean;
+  expanded: boolean;
+  elapsedMs: number | null;
+  onToggleExpand: () => void;
+}> = ({ steps, calmMotion, running, expanded, elapsedMs, onToggleExpand }) => {
+  if (steps.length === 0) return null;
+
+  const activeCount = steps.filter((s) => s.state === 'active').length;
+  const currentStep = [...steps].reverse().find((s) => s.state === 'active') ?? steps[steps.length - 1];
+  const showSpinner = running && activeCount > 0;
+  const elapsedSeconds = elapsedMs != null ? Math.max(1, Math.round(elapsedMs / 1000)) : null;
+  const summaryLabel = showSpinner
+    ? currentStep.label
+    : elapsedSeconds != null
+      ? `Thought for ${elapsedSeconds}s · ${steps.length} step${steps.length === 1 ? '' : 's'}`
+      : `${steps.length} step${steps.length === 1 ? '' : 's'}`;
+
+  const body = (
+    <div className="mt-2.5 flex flex-col gap-2 border-t border-white/10 pt-2.5">
+      {steps.map((step) => (
+        <BeamActivityStepRow key={step.id} step={step} calmMotion={calmMotion} />
+      ))}
+    </div>
+  );
+
+  return (
+    <motion.div
+      layout={calmMotion ? false : 'position'}
+      initial={calmMotion ? false : { opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={calmMotion ? { opacity: 0 } : { opacity: 0, y: -4 }}
+      transition={{ duration: 0.24, ease: SCENT_EASE }}
+      className={BEAM_ACTIVITY_BUBBLE_CLASS}
+      role="status"
+      aria-label="Beam Agent progress"
+    >
+      <div className="flex items-center gap-2">
+        <span className="flex h-4 w-4 shrink-0 items-center justify-center">
+          {showSpinner ? (
+            <Loader2 size={13} className={calmMotion ? 'text-scent-accent' : 'animate-spin text-scent-accent'} aria-hidden />
           ) : (
             <Check size={13} className="text-scent-accent" aria-hidden />
           )}
         </span>
-        <span className="min-w-0 flex-1 leading-snug">
-          <span
-            className={`text-[12.5px] ${
-              step.state === 'active' ? 'text-[#fff7ec]' : 'text-scent-text-muted'
-            }`}
-          >
-            {step.label}
-          </span>
-          {step.detail ? (
-            <span className="ml-1 text-[12px] text-scent-accent/75">· {step.detail}</span>
-          ) : null}
+        <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium leading-snug text-[#fff7ec]">
+          {summaryLabel}
         </span>
-      </motion.div>
-    ))}
-  </motion.div>
-);
+        <button
+          type="button"
+          onClick={onToggleExpand}
+          aria-expanded={expanded}
+          aria-controls={ACTIVITY_TRAIL_BODY_ID}
+          className="-mr-1 flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-scent-accent/80 transition-colors hover:text-scent-accent focus:outline-none focus-visible:ring-1 focus-visible:ring-scent-accent/50"
+        >
+          <span>{expanded ? 'Hide' : 'Details'}</span>
+          <ChevronDown
+            size={13}
+            className={`transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
+            aria-hidden
+          />
+        </button>
+      </div>
+
+      <AnimatePresence initial={false}>
+        {expanded ? (
+          calmMotion ? (
+            <div id={ACTIVITY_TRAIL_BODY_ID}>{body}</div>
+          ) : (
+            <motion.div
+              id={ACTIVITY_TRAIL_BODY_ID}
+              key="activity-body"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.24, ease: SCENT_EASE }}
+              className="overflow-hidden"
+            >
+              {body}
+            </motion.div>
+          )
+        ) : null}
+      </AnimatePresence>
+    </motion.div>
+  );
+};
+
+/**
+ * Recover the page viewport after the iOS soft keyboard dismisses. WebKit
+ * usually restores scroll itself, but when it leaves the page scrolled up we
+ * correct it — only once the keyboard-driven `visualViewport` resize has settled
+ * and only if still offset, using an instant scroll. A forced `behavior:'smooth'`
+ * scroll fired immediately on blur fights the native dismissal and makes the page
+ * shudder, so we deliberately avoid both.
+ */
+function recoverViewportAfterKeyboard(): void {
+  if (typeof window === 'undefined') return;
+  const correct = () => {
+    if (window.scrollY > 0) window.scrollTo({ top: 0 });
+  };
+  const vv = window.visualViewport;
+  if (!vv) {
+    window.setTimeout(correct, 280);
+    return;
+  }
+  let settled = false;
+  const finish = () => {
+    if (settled) return;
+    settled = true;
+    vv.removeEventListener('resize', onResize);
+    correct();
+  };
+  const onResize = () => finish();
+  vv.addEventListener('resize', onResize);
+  // Fallback when no resize fires (desktop, or keyboard already gone).
+  window.setTimeout(finish, 320);
+}
 
 function newMessageId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -665,6 +784,24 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   // Ordered live-progress trail for a Beam agent run (status + tool steps).
   // Empty for the scripted `/api/scent-mission` path, which keeps the plain dots.
   const [activity, setActivity] = useState<BeamActivityStep[]>([]);
+  // The thinking trail is condensed to a single summary line; the user taps to
+  // expand the full tool-by-tool breakdown (ChatGPT / Claude pattern). Each new
+  // run starts collapsed.
+  const [activityExpanded, setActivityExpanded] = useState(false);
+  // When the current run started, so a completed agent turn can freeze its
+  // elapsed "Thought for Ns" onto the reply it produced.
+  const runStartedAtRef = useRef<number | null>(null);
+  // Latest snapshot of the live trail, so an agent reply can freeze its own steps
+  // onto the message it produced (the per-turn recap) without threading state
+  // through the async run. Synced from `activity` below.
+  const activityListRef = useRef<BeamActivityStep[]>([]);
+  // Expand state for each turn's frozen "Thought for Ns" recap, keyed by message
+  // id. Each recap opens independently and defaults collapsed.
+  const [expandedRecaps, setExpandedRecaps] = useState<Record<string, boolean>>({});
+  const toggleRecap = useCallback(
+    (id: string) => setExpandedRecaps((prev) => ({ ...prev, [id]: !prev[id] })),
+    [],
+  );
   // Tap-to-answer chips the agent offered with its last reply (e.g. trip-vibe
   // follow-ups). When set, these replace the static facet cues.
   const [agentSuggestions, setAgentSuggestions] = useState<BeamSuggestion[]>([]);
@@ -717,6 +854,22 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   }, []);
 
   useEffect(() => () => abortRef.current?.abort(), []);
+
+  // Time each run (so a completed turn can freeze "Thought for Ns" onto its
+  // reply) and reset the live trail to its collapsed summary whenever a fresh
+  // run begins. Watching `busy` keeps this correct across every run path (agent
+  // / scripted / resolution) without threading a start time through each one. The
+  // elapsed value is read from `runStartedAtRef` at the moment the reply lands.
+  useEffect(() => {
+    if (busy) {
+      runStartedAtRef.current = Date.now();
+      setActivityExpanded(false);
+    }
+  }, [busy]);
+
+  useEffect(() => {
+    activityListRef.current = activity;
+  }, [activity]);
 
   useEffect(() => {
     sessionIdRef.current = sessionId;
@@ -817,19 +970,39 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
     return QUICK_REPLIES.filter((reply) => reply.facet === neededFacet);
   }, [neededFacet, pendingCueFacet]);
 
-  const appendMessage = useCallback((role: PanelMessage['role'], text: string) => {
-    setMessages((prev) => [...prev, { id: newMessageId(), role, text }]);
-  }, []);
+  const appendMessage = useCallback(
+    (
+      role: PanelMessage['role'],
+      text: string,
+      meta?: { activity?: BeamActivityStep[]; elapsedMs?: number | null },
+    ) => {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: newMessageId(),
+          role,
+          text,
+          ...(meta?.activity && meta.activity.length > 0
+            ? { activity: meta.activity, elapsedMs: meta.elapsedMs ?? null }
+            : {}),
+        },
+      ]);
+    },
+    [],
+  );
 
   // Append an agent line after running it through the formatter: strips internal
   // tool/debug wording, collapses repeated catalog status rows, and fronts a
   // catalog-unavailable answer with polished, user-facing copy. Flips the
   // catalog-failure flag so the cue lane can surface recovery actions.
   const pushAgentText = useCallback(
-    (raw: string): { catalogUnavailable: boolean } => {
+    (
+      raw: string,
+      meta?: { activity?: BeamActivityStep[]; elapsedMs?: number | null },
+    ): { catalogUnavailable: boolean } => {
       const { text, catalogUnavailable } = formatAgentResponse(raw);
       if (catalogUnavailable) setCatalogFailure(true);
-      if (text) appendMessage('agent', text);
+      if (text) appendMessage('agent', text, meta);
       return { catalogUnavailable };
     },
     [appendMessage],
@@ -964,7 +1137,15 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         if (result.status === 'completed') {
           sessionIdRef.current = result.sessionId;
           setSessionId(result.sessionId);
-          pushAgentText(result.response);
+          // Freeze this run's trail onto the reply: seal any still-active row (the
+          // run is over) and capture the elapsed time, so the answer carries its
+          // own collapsible "Thought for Ns" recap above it.
+          const frozenSteps = activityListRef.current.map((step) =>
+            step.state === 'active' ? { ...step, state: 'done' as const } : step,
+          );
+          const elapsedMs =
+            runStartedAtRef.current != null ? Date.now() - runStartedAtRef.current : null;
+          pushAgentText(result.response, { activity: frozenSteps, elapsedMs });
           return { handled: true };
         }
         // status === 'failed' (model_unavailable, max_turns, agent_error, …):
@@ -1338,7 +1519,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         : 'Tap a cue below, or describe your day';
 
   const actionControls = (
-    <div className="mx-auto mt-4 w-full max-w-[42.75rem] sm:mt-5">
+    <div className="relative mx-auto mt-4 w-full max-w-[42.75rem] sm:mt-5">
       <div className="mb-2 flex min-h-[1.25rem] items-center justify-end gap-2 pr-1">
         {/* The large persistent "BEAM AGENT" caption used to sit here and eat
             vertical space while labeling nothing. We now show ONLY the live
@@ -1406,8 +1587,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
           onFocus={() => setComposerFocused(true)}
           onBlur={() => {
             setComposerFocused(false);
-            // Recover the iOS Safari viewport once the soft keyboard dismisses.
-            window.setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 90);
+            recoverViewportAfterKeyboard();
           }}
           placeholder={composerFocused ? '' : composerPlaceholder}
           aria-label="Message the Beam Agent"
@@ -1428,11 +1608,11 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         {settingsOpen ? (
           <motion.div
             id="scent-mission-settings"
-            initial={calmMotion ? false : { opacity: 0, y: -6 }}
+            initial={calmMotion ? false : { opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={calmMotion ? { opacity: 0 } : { opacity: 0, y: -6 }}
+            exit={calmMotion ? { opacity: 0 } : { opacity: 0, y: 6 }}
             transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-            className="mt-3 rounded-[calc(var(--radius-scent)-8px)] border border-scent-accent/18 bg-black/58 p-3 text-center shadow-[inset_0_1px_0_rgba(255,236,183,0.06)]"
+            className="absolute bottom-full left-0 right-0 z-20 mb-3 rounded-[calc(var(--radius-scent)-8px)] border border-scent-accent/22 bg-[#0c0a07]/95 p-3 text-center shadow-[0_-10px_34px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,236,183,0.06)]"
           >
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
@@ -1878,13 +2058,27 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
           // The greeting shows dots until the compose hold elapses (introReady),
           // then morphs into its line. No other message is ever in "typing".
           const typing = isIntroGreeting && !introReady;
-          return (
+          const isLatestAgent = message.id === latestAgentId;
+          // A completed agent turn carries its own frozen "thinking" steps; we
+          // render them as a collapsible recap directly ABOVE this answer (the
+          // ChatGPT / Claude pattern). While the newest run is still settling
+          // (busy) the live trail below is animating out, so hold this recap one
+          // beat to keep the two from stacking for a frame.
+          // `hasRecap` is a fixed property of the message (its frozen steps), so
+          // the wrapper structure never changes across a busy→settled flip and the
+          // answer bubble never remounts. `showRecap` only gates the recap's
+          // visibility — held one beat on the newest turn while the live trail
+          // below animates out, so the two never stack.
+          const recapSteps = message.role === 'agent' ? message.activity : undefined;
+          const hasRecap = !!recapSteps && recapSteps.length > 0;
+          const showRecap = hasRecap && (!busy || !isLatestAgent);
+          const bubble = (
             <motion.div
               key={message.id}
-              // The newest agent reply carries the scroll-to-top anchor, so a
-              // long answer lands at its FIRST line rather than dropping the
-              // user mid-response (see the scroll effect above).
-              data-scroll-anchor={message.id === latestAgentId ? 'latest-agent' : undefined}
+              // The newest agent reply carries the scroll-to-top anchor — unless a
+              // recap wrapper above takes it — so a long answer lands at its FIRST
+              // line rather than dropping the user mid-response (scroll effect).
+              data-scroll-anchor={isLatestAgent && !hasRecap ? 'latest-agent' : undefined}
               // Only the greeting morphs its box: `layout="size"` animates the
               // grow from thinking-pill to welcome-line without sliding the
               // bubble when later turns push it down. Other bubbles keep the
@@ -1947,18 +2141,53 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
               )}
             </motion.div>
           );
+          if (!hasRecap) return bubble;
+          // Per-turn recap sits ABOVE its answer, both left-aligned in a column.
+          // The wrapper carries the scroll anchor so a fresh reply lands on the
+          // "Thought for Ns" line, then the answer — not buried beneath it. The
+          // recap child is held back (showRecap) for one beat on the newest turn.
+          return (
+            <div
+              key={`${message.id}-turn`}
+              className="flex w-full flex-col gap-1.5"
+              data-scroll-anchor={isLatestAgent ? 'latest-agent' : undefined}
+            >
+              {showRecap ? (
+                <BeamActivityTrail
+                  steps={recapSteps ?? []}
+                  calmMotion={calmMotion}
+                  running={false}
+                  expanded={!!expandedRecaps[message.id]}
+                  elapsedMs={message.elapsedMs ?? null}
+                  onToggleExpand={() => toggleRecap(message.id)}
+                />
+              ) : null}
+              {bubble}
+            </div>
+          );
         })}
 
-        {/* Live progress while the agent works a turn. When the run is streaming
-            real steps we show the grounded activity trail (tool-by-tool, with
-            results); otherwise — the scripted path, or before the first event —
-            we fall back to the quiet typing dots. Calm motion keeps the trail
-            (it's content) but drops the animation. */}
+        {/* Live progress WHILE the agent works the current turn. When a run
+            streams real steps we show the condensed thinking trail (one summary
+            line, tap to expand the tool-by-tool breakdown); before the first
+            event (or on the scripted path) we fall back to the quiet typing dots.
+            Once the run settles this unmounts and the steps live on as a
+            collapsible "Thought for Ns" recap ABOVE the answer they produced
+            (rendered per-message above). Calm motion keeps the trail but drops
+            the animation. */}
         <AnimatePresence initial={false}>
-          {introReady && busy && !resolved ? (
+          {introReady && !resolved && busy ? (
             activity.length > 0 ? (
-              <BeamActivityTrail key="agent-activity" steps={activity} calmMotion={calmMotion} />
-            ) : !calmMotion ? (
+              <BeamActivityTrail
+                key="agent-activity"
+                steps={activity}
+                calmMotion={calmMotion}
+                running={busy}
+                expanded={activityExpanded}
+                elapsedMs={null}
+                onToggleExpand={() => setActivityExpanded((v) => !v)}
+              />
+            ) : busy && !calmMotion ? (
               <motion.div
                 key="agent-typing"
                 initial={{ opacity: 0, y: 8 }}
@@ -1990,7 +2219,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
               <p className="scent-type-label text-scent-accent">
                 Proposed for your vault · {proposal.items.length}
               </p>
-              <ul className="mt-2 flex flex-col gap-1.5">
+              <ul className="mt-2 flex max-h-[7.5rem] flex-col gap-1.5 overflow-y-auto pr-1 scrollbar-hide">
                 {proposal.items.map((item) => (
                   <li key={`${item.brand}-${item.name}`} className="flex items-baseline justify-between gap-3">
                     <span className="font-serif italic text-[13px] text-[#fff7ec] sm:text-sm">{item.name}</span>
@@ -2108,13 +2337,19 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         {formatFacetLine(facets)}
       </p>
       {actionControls}
-      {/* Impressions lane: portaled below the card when the host provides a
-          container, otherwise rendered inline as a graceful fallback. */}
+      {/* Impressions lane: portaled below the card into the host container. A
+          host passes the prop (as `null` for one frame until its ref attaches),
+          so when it's `null` we render nothing and let the host's reserved slot
+          hold the space — rendering the inline fallback here first would yank the
+          lane down into the portal on the next frame. Only a consumer that omits
+          the prop entirely (`undefined`) gets the inline fallback. */}
       {cueBarContainer
         ? createPortal(<AnimatePresence initial={false}>{cueBar}</AnimatePresence>, cueBarContainer)
-        : cueBar
-          ? <div className="mt-3"><AnimatePresence initial={false}>{cueBar}</AnimatePresence></div>
-          : null}
+        : cueBarContainer === null
+          ? null
+          : cueBar
+            ? <div className="mt-3"><AnimatePresence initial={false}>{cueBar}</AnimatePresence></div>
+            : null}
     </div>
   );
 };
