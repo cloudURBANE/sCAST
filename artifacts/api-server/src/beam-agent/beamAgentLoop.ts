@@ -19,10 +19,12 @@ import {
   BEAM_LIMITS,
   extractText,
   extractToolUses,
+  readInvalidArgs,
   summarizeToolResult,
   toClaudeTools,
 } from "./beamToolCore.ts";
-import { callModel, isModelConfigured } from "./provider.ts";
+import type { ClaudeCallInput, ClaudeResponse } from "./types.ts";
+import { callModel as defaultCallModel, isModelConfigured as defaultIsModelConfigured } from "./provider.ts";
 
 /** Token budgets. Tool-orchestration turns are short; the closing synthesis is long. */
 const ORCHESTRATION_MAX_TOKENS = 2048;
@@ -89,9 +91,39 @@ export type RunBeamAgentInput = {
   history?: ClaudeMessage[];
   /** Called with the final assistant text on success, so the caller can persist the turn. */
   onComplete?: (assistantText: string) => void;
+  /**
+   * Called exactly once when the run ends (any outcome) with a structured
+   * summary the route logs for observability + cost accounting.
+   */
+  onSummary?: (summary: BeamRunSummary) => void;
   maxTurns?: number;
   /** Cooperative cancellation, checked between turns/tool calls. */
   shouldStop?: () => boolean;
+  /**
+   * Provider seam. Defaults to the real provider; injected by tests so the loop
+   * can be driven deterministically without a network call.
+   */
+  callModel?: (input: ClaudeCallInput) => Promise<ClaudeResponse>;
+  isModelConfigured?: () => boolean;
+};
+
+/**
+ * One-line-per-run structured record. `outcome` is the coarse result and
+ * `failureCode` distinguishes the failure kinds the route counts (model_unavailable,
+ * stopped, max_turns, agent_error). Token counts are best-effort provider sums.
+ */
+export type BeamRunSummary = {
+  runId: string;
+  outcome: "completed" | "failed";
+  failureCode?: string;
+  turns: number;
+  tools: string[];
+  modelCalls: number;
+  inputTokens: number;
+  outputTokens: number;
+  usedSynthesis: boolean;
+  synthesisFailed: boolean;
+  ms: number;
 };
 
 /** Keep at most this many prior text turns when seeding, to bound the token cost. */
@@ -135,71 +167,102 @@ function withSynthesisInstruction(messages: ClaudeMessage[]): ClaudeMessage[] {
  */
 export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
   const { ctx, tools, emit } = input;
+  const callModel = input.callModel ?? defaultCallModel;
+  const isModelConfigured = input.isModelConfigured ?? defaultIsModelConfigured;
 
-  if (!isModelConfigured()) {
-    emit({
-      type: "failed",
-      code: "model_unavailable",
-      message:
-        "The agent model is not configured yet. Set OPENROUTER_API_KEY (or ANTHROPIC_API_KEY) to enable Beam Agent.",
-    });
-    return;
-  }
+  // Run-scoped accounting, emitted once at the end for observability + cost.
+  const startedAt = Date.now();
+  const toolsUsed: string[] = [];
+  let outcome: BeamRunSummary["outcome"] = "failed";
+  let failureCode: string | undefined;
+  let turnCount = 0;
+  let modelCalls = 0;
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let usedSynthesis = false;
+  let synthesisFailed = false;
 
-  const maxTurns = Math.min(input.maxTurns ?? BEAM_LIMITS.maxAgentTurns, BEAM_LIMITS.maxAgentTurns);
-  const toolByName = new Map<BeamToolName, BeamToolDefinition>(tools.map((tool) => [tool.name, tool]));
-  const claudeTools = toClaudeTools(tools);
-
-  const messages: ClaudeMessage[] = [
-    ...seedHistory(input.history),
-    { role: "user", content: input.userMessage.slice(0, BEAM_LIMITS.maxUserMessageLength) },
-  ];
-
-  let usedTools = false;
-  let retrievalNudged = false;
-
-  /**
-   * Finish the run: write the closing answer and persist it. When tools produced
-   * evidence, run a dedicated tool-free synthesis turn (stronger model, larger
-   * budget, streamed) instead of shipping the orchestration model's clipped
-   * inline draft. `draft` is that inline text, used as a fallback.
-   */
-  const finish = async (draft: string): Promise<void> => {
-    let finalText = draft;
-    if (usedTools) {
-      emit({ type: "status", label: "Writing your recommendation" });
-      const synthMessages = withSynthesisInstruction(messages);
-      try {
-        const synth = await callModel({
-          system: SYSTEM_PROMPT,
-          messages: synthMessages,
-          tools: [],
-          model: input.synthesisModel ?? input.model,
-          maxTokens: SYNTHESIS_MAX_TOKENS,
-          onDelta: (chunk) => emit({ type: "message_delta", text: chunk }),
-        });
-        const synthText = extractText(synth.content);
-        if (synthText) finalText = synthText;
-      } catch {
-        // Streaming/synthesis failed — keep the orchestration draft so the user
-        // still gets an answer rather than a failed run.
-      }
+  const recordUsage = (response: ClaudeResponse): void => {
+    modelCalls++;
+    if (response.usage) {
+      inputTokens += response.usage.inputTokens;
+      outputTokens += response.usage.outputTokens;
     }
-    const response = finalText || "Done.";
-    messages.push({ role: "assistant", content: response });
-    input.onComplete?.(response);
-    emit({ type: "completed", response });
+  };
+  const fail = (code: string, message: string): void => {
+    failureCode = code;
+    emit({ type: "failed", code, message });
   };
 
-  emit({ type: "status", label: "Understanding your request" });
-
   try {
+    if (!isModelConfigured()) {
+      fail(
+        "model_unavailable",
+        "The agent model is not configured yet. Set OPENROUTER_API_KEY (or ANTHROPIC_API_KEY) to enable Beam Agent.",
+      );
+      return;
+    }
+
+    const maxTurns = Math.min(input.maxTurns ?? BEAM_LIMITS.maxAgentTurns, BEAM_LIMITS.maxAgentTurns);
+    const toolByName = new Map<BeamToolName, BeamToolDefinition>(tools.map((tool) => [tool.name, tool]));
+    const claudeTools = toClaudeTools(tools);
+
+    const messages: ClaudeMessage[] = [
+      ...seedHistory(input.history),
+      { role: "user", content: input.userMessage.slice(0, BEAM_LIMITS.maxUserMessageLength) },
+    ];
+
+    let usedTools = false;
+    let retrievalNudged = false;
+
+    /**
+     * Finish the run: write the closing answer and persist it. When tools produced
+     * evidence, run a dedicated tool-free synthesis turn (stronger model, larger
+     * budget, streamed) instead of shipping the orchestration model's clipped
+     * inline draft. `draft` is that inline text, used as a fallback.
+     */
+    const finish = async (draft: string): Promise<void> => {
+      let finalText = draft;
+      if (usedTools) {
+        usedSynthesis = true;
+        emit({ type: "status", label: "Writing your recommendation" });
+        const synthMessages = withSynthesisInstruction(messages);
+        try {
+          const synth = await callModel({
+            system: SYSTEM_PROMPT,
+            messages: synthMessages,
+            tools: [],
+            model: input.synthesisModel ?? input.model,
+            maxTokens: SYNTHESIS_MAX_TOKENS,
+            onDelta: (chunk) => emit({ type: "message_delta", text: chunk }),
+          });
+          recordUsage(synth);
+          const synthText = extractText(synth.content);
+          if (synthText) finalText = synthText;
+          else synthesisFailed = true;
+        } catch {
+          // Streaming/synthesis failed — keep the orchestration draft so the user
+          // still gets an answer rather than a failed run. Flagged in the summary
+          // so a high synthesis-failure rate is visible, not silent.
+          synthesisFailed = true;
+        }
+      }
+      const response = finalText || "Done.";
+      messages.push({ role: "assistant", content: response });
+      outcome = "completed";
+      input.onComplete?.(response);
+      emit({ type: "completed", response });
+    };
+
+    emit({ type: "status", label: "Understanding your request" });
+
     for (let turn = 0; turn < maxTurns; turn++) {
       if (input.shouldStop?.()) {
-        emit({ type: "failed", code: "stopped", message: "Run stopped." });
+        fail("stopped", "Run stopped.");
         return;
       }
 
+      turnCount++;
       const response = await callModel({
         system: SYSTEM_PROMPT,
         messages,
@@ -207,6 +270,7 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
         model: input.model,
         maxTokens: ORCHESTRATION_MAX_TOKENS,
       });
+      recordUsage(response);
 
       const toolUses = extractToolUses(response.content);
       const text = extractText(response.content);
@@ -232,7 +296,7 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
       const results: ClaudeToolResultBlock[] = [];
       for (const use of toolUses) {
         if (input.shouldStop?.()) {
-          emit({ type: "failed", code: "stopped", message: "Run stopped." });
+          fail("stopped", "Run stopped.");
           return;
         }
         const def = toolByName.get(use.name as BeamToolName);
@@ -247,6 +311,22 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
           continue;
         }
 
+        // The provider couldn't parse the model's arguments. Tell it explicitly so
+        // it retries with valid JSON instead of running the tool on coerced-empty
+        // args and reading the empty result as "nothing exists."
+        const invalidArgs = readInvalidArgs(use.input);
+        if (invalidArgs !== null) {
+          results.push({
+            type: "tool_result",
+            tool_use_id: use.id,
+            content: `Your arguments for ${def.name} were not valid JSON. Re-call ${def.name} with a single valid JSON object.`,
+            is_error: true,
+          });
+          emit({ type: "tool_completed", tool: def.name, summary: "invalid arguments" });
+          continue;
+        }
+
+        toolsUsed.push(def.name);
         emit({ type: "tool_started", tool: def.name });
         try {
           const result = await def.handler(use.input, ctx);
@@ -263,9 +343,23 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
       messages.push({ role: "user", content: results });
     }
 
-    emit({ type: "failed", code: "max_turns", message: "Reached the tool-call budget before finishing." });
+    fail("max_turns", "Reached the tool-call budget before finishing.");
   } catch (err) {
     const message = err instanceof Error ? err.message : "agent error";
-    emit({ type: "failed", code: "agent_error", message });
+    fail("agent_error", message);
+  } finally {
+    input.onSummary?.({
+      runId: ctx.runId,
+      outcome,
+      failureCode,
+      turns: turnCount,
+      tools: toolsUsed,
+      modelCalls,
+      inputTokens,
+      outputTokens,
+      usedSynthesis,
+      synthesisFailed,
+      ms: Date.now() - startedAt,
+    });
   }
 }

@@ -5,9 +5,9 @@
  *   GET  /api/beam-agent/runs/:id/events   Server-Sent Events progress stream
  *   POST /api/beam-agent/runs/:id/stop     cooperatively stop a run
  *
- * This router is ADDITIVE and NOT mounted anywhere by default — see
- * `mountBeamAgent` and docs/beam-agent/. Mounting is a deliberate, one-line
- * opt-in so the existing app is untouched until you choose to enable it.
+ * This router is mounted by `mountBeamAgent(app)` in app.ts. With no model key
+ * configured the loop emits a graceful `model_unavailable` event and the SPA
+ * falls back to the scripted /api/scent-mission path.
  *
  * Run state is in-memory (one process). `POST /runs` and the follow-up
  * `GET /runs/:id/events` MUST land on the same instance, so the deploy is pinned
@@ -20,7 +20,7 @@
  */
 import { Router } from "express";
 import type { Express } from "express";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { and, asc, eq } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { userFragrancesTable } from "@workspace/db/schema";
@@ -100,6 +100,11 @@ const MAX_SESSION_TURNS = 16;
 
 function sessionKey(ctx: BeamRunContext): string {
   return `${ctx.tenantId}:${ctx.userId}:${ctx.sessionId}`;
+}
+
+/** Short, stable, non-reversible user tag for logs — never log the raw user id. */
+function hashUser(userId: string): string {
+  return createHash("sha256").update(userId).digest("hex").slice(0, 12);
 }
 
 function pruneSessions(): void {
@@ -265,15 +270,39 @@ router.post("/runs", runRateLimit, requireAuth, async (req: AuthRequest, res) =>
 
   // Fire-and-forget: the client consumes progress over SSE. runBeamAgent never
   // throws, but we guard anyway so a registry record can't be left half-open.
+  // The model is chosen server-side (cheap orchestration tier + strong synthesis
+  // tier); a client-supplied `body.model` is intentionally NOT honored so a caller
+  // can't pin an expensive or unprovisioned slug.
   void runBeamAgent({
     ctx,
     userMessage: message,
     tools,
     emit,
-    model: typeof body.model === "string" ? body.model : undefined,
+    model: models?.model,
     synthesisModel: models?.synthesisModel,
     history,
     onComplete: (assistantText) => appendSessionTurn(ctx, message, assistantText),
+    onSummary: (summary) => {
+      logger.info(
+        {
+          beam: {
+            runId: summary.runId,
+            user: hashUser(ctx.userId),
+            outcome: summary.outcome,
+            failureCode: summary.failureCode,
+            turns: summary.turns,
+            tools: summary.tools,
+            modelCalls: summary.modelCalls,
+            inputTokens: summary.inputTokens,
+            outputTokens: summary.outputTokens,
+            usedSynthesis: summary.usedSynthesis,
+            synthesisFailed: summary.synthesisFailed,
+            ms: summary.ms,
+          },
+        },
+        "beam agent run finished",
+      );
+    },
     shouldStop: () => record.stopped,
   }).catch((err) => {
     logger.error({ err }, "beam agent run crashed");
@@ -315,13 +344,31 @@ router.get("/runs/:runId/events", requireAuth, (req: AuthRequest, res) => {
   res.write(": beam-agent stream open\n\n");
 
   let ended = false;
+  // Heartbeat: idle proxies (Railway/Vercel/Cloudflare) can drop a connection
+  // with no traffic, and an agent run can go many seconds between events. A
+  // comment frame every 15s keeps the stream alive without affecting the client.
+  const heartbeat = setInterval(() => {
+    if (ended) return;
+    try {
+      res.write(": ping\n\n");
+    } catch {
+      // Write after close — let the close handler clean up.
+    }
+  }, 15_000);
+  if (typeof heartbeat.unref === "function") heartbeat.unref();
+
+  const finish = (): void => {
+    if (ended) return;
+    ended = true;
+    clearInterval(heartbeat);
+    record.listeners.delete(send);
+  };
   const send = (event: BeamRunEvent): void => {
     if (ended) return;
     const safe = redactEventForClient(event);
     res.write(`data: ${JSON.stringify(safe)}\n\n`);
     if (safe.type === "completed" || safe.type === "failed") {
-      ended = true;
-      record.listeners.delete(send);
+      finish();
       res.end();
     }
   };
@@ -332,12 +379,12 @@ router.get("/runs/:runId/events", requireAuth, (req: AuthRequest, res) => {
     if (ended) break;
   }
   if (!ended && !record.done) record.listeners.add(send);
-  else if (!ended) res.end();
+  else if (!ended) {
+    finish();
+    res.end();
+  }
 
-  req.on("close", () => {
-    ended = true;
-    record.listeners.delete(send);
-  });
+  req.on("close", finish);
 });
 
 router.post("/runs/:runId/stop", requireAuth, (req: AuthRequest, res) => {

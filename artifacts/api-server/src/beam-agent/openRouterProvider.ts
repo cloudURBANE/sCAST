@@ -19,6 +19,7 @@ import type {
   ClaudeToolResultBlock,
   ClaudeToolUseBlock,
 } from "./types.ts";
+import { invalidArgsMarker } from "./beamToolCore.ts";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const OPENROUTER_TIMEOUT_MS = 45_000;
@@ -66,11 +67,14 @@ type OpenAiTool = {
   function: { name: string; description: string; parameters: unknown };
 };
 
+type OpenAiUsage = { prompt_tokens?: number; completion_tokens?: number };
+
 type OpenAiResponse = {
   choices?: Array<{
     finish_reason?: string | null;
     message?: { content?: string | null; tool_calls?: OpenAiToolCall[] };
   }>;
+  usage?: OpenAiUsage;
 };
 
 /* ------------------------------------------------------------------ */
@@ -154,9 +158,10 @@ function safeParseArgs(raw: string): unknown {
   try {
     return JSON.parse(trimmed);
   } catch {
-    // A model occasionally emits non-JSON args; surface an empty object rather
-    // than throwing so the loop can still execute the tool deterministically.
-    return {};
+    // A model occasionally emits non-JSON args. Don't silently coerce to `{}` —
+    // that becomes an empty tool result the model reads as "nothing exists."
+    // Mark it so the loop returns an explicit tool error and the model retries.
+    return invalidArgsMarker(trimmed);
   }
 }
 
@@ -183,7 +188,18 @@ export function openAiResponseToClaude(data: OpenAiResponse): ClaudeResponse {
     } satisfies ClaudeToolUseBlock);
   }
 
-  return { stop_reason: mapFinishReason(choice?.finish_reason), content };
+  return {
+    stop_reason: mapFinishReason(choice?.finish_reason),
+    content,
+    usage: usageFromOpenAi(data.usage),
+  };
+}
+
+function usageFromOpenAi(usage: OpenAiUsage | undefined): ClaudeResponse["usage"] {
+  return {
+    inputTokens: usage?.prompt_tokens ?? 0,
+    outputTokens: usage?.completion_tokens ?? 0,
+  };
 }
 
 /* ------------------------------------------------------------------ */
@@ -217,7 +233,8 @@ export async function callOpenRouter(input: ClaudeCallInput): Promise<ClaudeResp
       max_tokens: input.maxTokens ?? 1024,
       messages: toOpenAiMessages(input.system, input.messages),
       ...(hasTools ? { tools: toOpenAiTools(input.tools), tool_choice: "auto" } : {}),
-      ...(stream ? { stream: true } : {}),
+      // include_usage adds a final usage-only chunk to the stream for cost accounting.
+      ...(stream ? { stream: true, stream_options: { include_usage: true } } : {}),
     }),
   });
 
@@ -252,6 +269,7 @@ async function streamOpenAiText(
   let buffer = "";
   let text = "";
   let finishReason: string | null = null;
+  let usage: OpenAiUsage | undefined;
 
   const handleData = (payload: string): void => {
     if (payload === "[DONE]") return;
@@ -261,6 +279,8 @@ async function streamOpenAiText(
     } catch {
       return; // tolerate keep-alive / partial frames
     }
+    // The include_usage final frame carries usage with an empty choices array.
+    if (parsed.usage) usage = parsed.usage;
     const choice = parsed.choices?.[0] as
       | { finish_reason?: string | null; delta?: { content?: string | null } }
       | undefined;
@@ -292,7 +312,11 @@ async function streamOpenAiText(
     reader.cancel().catch(() => {});
   }
 
-  return { stop_reason: mapFinishReason(finishReason), content: text ? [{ type: "text", text }] : [] };
+  return {
+    stop_reason: mapFinishReason(finishReason),
+    content: text ? [{ type: "text", text }] : [],
+    usage: usageFromOpenAi(usage),
+  };
 }
 
 /** Exposed for unit tests — translate without performing a network call. */

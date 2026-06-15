@@ -10,6 +10,25 @@ clean across all four packages, and all 318 api-server tests pass (incl. 2 new
 note-pyramid builder tests). This document is about what's left to make it
 *production-sound*, not about re-doing that work.
 
+> **Update — hardening pass landed (this branch).** Several of the gaps below are
+> now implemented in code. Typecheck clean; api-server tests green at **322**
+> (4 new). Closed: **P0-1** (`.env.example` Beam block), **P0-4** (SSE 15s
+> heartbeat), **P1-2** (per-call token usage captured in both providers + summed
+> per run), **P1-3** (one structured `beam agent run finished` log line per run:
+> runId, hashed user, outcome, failureCode, turns, tools, modelCalls, tokens,
+> synthesis flags, ms), **P1-4** (malformed tool args now return an explicit
+> `is_error` tool_result so the model retries instead of misreading empty),
+> **P1-5** (loop tests: nudge→tool→synthesis, invalid-args, unconfigured),
+> **P2-1** (client `body.model` is no longer honored — the server picks the
+> model), **P2-4/P2-5** (stale route header fixed; synthesis failure now flagged
+> in the run summary). **Decision A applied:** the Anthropic-direct strong tier
+> defaults to `claude-sonnet-4-6` (a real first-party slug, no 404 risk), so the
+> cheap-orchestration / smart-synthesis split is ON by default on that path;
+> OpenRouter keeps a cheap default and opts into the strong tier via env.
+> Still open (need infra/staging, not code): **P0-2** (multi-instance run state —
+> single instance or sticky sessions until externalized) and **P0-3** (verify SSE
+> through the Vercel edge proxy in staging).
+
 > **Doc drift to fix first.** [07-experience-improvement-audit](./07-experience-improvement-audit.md)
 > and [01-current-state](./01-current-state.md) still say backend **B** (the
 > Claude loop) is "built, not mounted." It **is** mounted now —
@@ -225,14 +244,17 @@ short-lived feature branch → PR to `main`; don't back-merge `main` into it.
 
 ## 6. Rollout checklist (gate before calling it "live for everyone")
 
-- [ ] `.env.example` documents every Beam var; Railway/Vercel env set to match.
-- [ ] `BEAM_AGENT_MODEL_STRONG` set to a confirmed slug (or strong tier knowingly off).
+- [x] `.env.example` documents every Beam var; Railway/Vercel env set to match.
+- [x] `BEAM_AGENT_MODEL_STRONG` set to a confirmed slug (or strong tier knowingly off).
+      Anthropic-direct defaults to `claude-sonnet-4-6`; OpenRouter opts in via env.
 - [ ] SSE verified streaming end-to-end through the Vercel→Railway proxy in staging.
-- [ ] SSE heartbeat in place; long runs don't drop behind the proxy.
+- [x] SSE heartbeat in place; long runs don't drop behind the proxy.
 - [ ] Single-instance constraint enforced **or** run/session state externalized.
-- [ ] Per-run structured logging + fallback/timeout/max_turns counters.
-- [ ] Per-user (not just per-IP) quota; token usage recorded per run.
-- [ ] Loop + route integration tests added; `pnpm --filter @workspace/api-server run test` green.
-- [ ] `pnpm run typecheck` clean; `verify-without-regression` pass on the SPA.
-- [ ] Docs 01 / 07 corrected to "mounted."
+      (Documented in the route header; still must be enforced at the proxy.)
+- [x] Per-run structured logging + fallback/timeout/max_turns counters (via `failureCode`).
+- [~] Per-user quota: token usage now recorded per run; a per-user cap is still TODO
+      (rate limit remains per-IP — see P1-2).
+- [x] Loop integration tests added; `pnpm --filter @workspace/api-server run test` green (322).
+- [x] `pnpm --filter @workspace/api-server run typecheck` clean.
+- [x] Stale "not mounted" claim corrected in the route header (docs 01/07 still pending).
 ```

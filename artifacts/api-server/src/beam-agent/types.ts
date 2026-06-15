@@ -108,9 +108,14 @@ export type ClaudeMessage = {
   content: string | ClaudeContentBlock[];
 };
 
+/** Token usage for one model call, normalized across providers (best-effort). */
+export type ClaudeUsage = { inputTokens: number; outputTokens: number };
+
 export type ClaudeResponse = {
   stop_reason: string | null;
   content: ClaudeContentBlock[];
+  /** Present when the provider reported token counts; used for cost accounting. */
+  usage?: ClaudeUsage;
 };
 
 /**
