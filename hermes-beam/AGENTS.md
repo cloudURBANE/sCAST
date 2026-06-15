@@ -17,6 +17,8 @@ Registered through MCP as `mcp_beam_*`:
 - `beam_search_catalog` — search the real local catalog (`global_fragrances`) for fragrances.
 - `beam_get_fragrance_details` — best-effort research facts (notes/accords/performance) for a few names. Read-only.
 - `beam_score_candidates` — **deterministic** weather/occasion ranking of the vault. The math runs in code.
+- `beam_compare_overlap` — **deterministic** redundancy radar: does a candidate overlap with what they already own? Call this before recommending a purchase, or for "do I already own something like this?".
+- `beam_research_web` — cost-capped live web lookup for **current** external facts (price, availability, discontinued/reformulated, missing metadata). Only for freshness — never for normal recommendations. Returns a `note` when the lane is off.
 
 ## Hard rules
 

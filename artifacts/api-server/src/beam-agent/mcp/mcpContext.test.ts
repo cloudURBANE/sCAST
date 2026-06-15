@@ -12,18 +12,25 @@ import {
 } from "./mcpContext.ts";
 import type { DelegationClaims } from "./delegationToken.ts";
 
-test("a full owner token unlocks exactly the five read tools", () => {
+test("a full owner token unlocks exactly the Phase-1 read tools", () => {
   const names = allowedToolNames(ALL_READ_SCOPES);
   assert.deepEqual(
     [...names].sort(),
     [
+      "beam_compare_overlap",
       "beam_get_fragrance_details",
       "beam_get_user_context",
       "beam_get_wardrobe",
+      "beam_research_web",
       "beam_score_candidates",
       "beam_search_catalog",
     ],
   );
+});
+
+test("the overlap and research scopes each unlock only their tool", () => {
+  assert.deepEqual([...allowedToolNames(["beam:overlap:read"])], ["beam_compare_overlap"]);
+  assert.deepEqual([...allowedToolNames(["beam:research:read"])], ["beam_research_web"]);
 });
 
 test("a narrow token only unlocks its scope's tools", () => {

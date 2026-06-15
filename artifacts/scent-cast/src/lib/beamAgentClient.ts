@@ -108,7 +108,9 @@ const TOOL_LABELS: Record<string, string> = {
   beam_search_catalog: 'Considering more fragrances for you…',
   beam_get_fragrance_details: 'Studying the composition…',
   beam_score_candidates: 'Scoring your vault against tonight…',
+  beam_compare_overlap: 'Seeing what already lives in your vault…',
   beam_research_web: 'Cross-checking the notes…',
+  beam_propose_collection: 'Lining up your picks…',
 };
 
 /** Humanize a `beam_*` tool name into a progress-note phrase. */

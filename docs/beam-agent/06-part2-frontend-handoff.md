@@ -62,9 +62,11 @@ Replays any buffered events, then streams live; **ownership is enforced**
 filtered through `redactEventForClient` — these are the ONLY shapes you'll receive):
 ```ts
 | { type: "status";         label: string }            // "Understanding your request", …
-| { type: "message_delta";  text: string }             // (loop does not emit this yet)
+| { type: "message_delta";  text: string }             // streamed synthesis text (loop now emits this)
 | { type: "tool_started";   tool: BeamToolName }        // e.g. "beam_search_catalog"
 | { type: "tool_completed"; tool: BeamToolName; summary: string } // e.g. "12 candidate(s)"
+| { type: "suggestions";    items: string[] }           // follow-up chips
+| { type: "proposal";       proposalId: string; items: BeamProposalItem[] } // signature-pick reveal
 | { type: "completed";      response: string }          // FINAL free-text answer
 | { type: "failed";         code: string; message: string }
 ```

@@ -16,6 +16,8 @@ export const ALL_READ_SCOPES: BeamScope[] = [
   "beam:catalog:read",
   "beam:details:read",
   "beam:score:read",
+  "beam:overlap:read",
+  "beam:research:read",
 ];
 
 /**
@@ -29,6 +31,13 @@ export const SCOPE_TOOL_MAP: Record<BeamScope, readonly string[]> = {
   "beam:catalog:read": ["beam_search_catalog"],
   "beam:details:read": ["beam_get_fragrance_details"],
   "beam:score:read": ["beam_score_candidates"],
+  // The MCP service wires `searchCatalog` (always) and `researchWeb` (see
+  // beamServiceDeps), so createBeamTools builds these two tools on every request.
+  // They must be scope-mapped here or the server filters them out as
+  // "not permitted" even though they exist. beam_research_web stays inert
+  // (returns a `note`) until BEAM_RESEARCH_ENABLED + OPENROUTER_API_KEY are set.
+  "beam:overlap:read": ["beam_compare_overlap"],
+  "beam:research:read": ["beam_research_web"],
 };
 
 /** Resolve the set of tool names a set of scopes is allowed to use. */

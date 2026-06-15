@@ -33,10 +33,31 @@ name with a `found` flag. Read-only; nothing is saved. Missing facts → lower
 confidence, not invention.
 
 ### `beam_score_candidates` — deterministic
-Input: optional `destination` (Staying In | Going Out | Work | Night Out | Date | Gym)
-and `energy` (Calm | Focused | Confident | Social | Relaxed). Returns the engine's
-single best vault pick with a numeric `score` and a `reason`. **Never** compute or
-adjust scores yourself — report what the tool returns.
+Input: optional `destination` (Staying In | Going Out | Work | Night Out | Date | Gym),
+`energy` (Calm | Focused | Confident | Social | Relaxed), `limit` (how many ranked
+picks — server caps at 3), and a trip override `locationLabel` (e.g. `'Tokyo, June'`)
+plus `weatherOverride` ({ temperature_f, humidity_percent, wind_speed_mph, is_raining,
+condition }) to score against a destination's climate instead of today's local
+weather. Returns `{ recommendation, picks[], scoredFor }`: `recommendation` is the top
+pick, `picks` the ranked set (each with `score` + `reason`). **Never** compute or
+adjust scores yourself — report what the tool returns. (Note: over the Hermes/MCP path
+the vault is scored single-best, so `limit > 1` still returns one pick for now.)
+
+### `beam_compare_overlap` — deterministic redundancy radar
+Input: `query` (the candidate brand/name), optional `limit` (owned bottles to return,
+ranked by overlap). Resolves the query to a REAL catalog fragrance, then compares its
+note pyramid (base notes weighted most) and accords against every bottle in the vault.
+Returns `{ resolved, candidate, vaultCount, closestMatch{band}, items[] }`. Call this
+**before** recommending a purchase, or for "do I already own something like this?" —
+do not estimate overlap yourself.
+
+### `beam_research_web` — live freshness only
+Input: `query` (the specific fact), optional `entityType` and `depth`. Cost-capped,
+cached web lookup for CURRENT external facts: live price, availability,
+discontinued/reformulated/newly-released status, missing metadata, sample sellers.
+Returns a synthesized fact + sources, or a `note` when live research is unavailable
+(then answer from cached knowledge and say it is not freshly verified). Do NOT use it
+for normal recommendations, weather/occasion fits, ranking, or comparing common scents.
 
 ## Discipline
 

@@ -26,7 +26,9 @@ export type BeamScope =
   | "beam:wardrobe:read"
   | "beam:catalog:read"
   | "beam:details:read"
-  | "beam:score:read";
+  | "beam:score:read"
+  | "beam:overlap:read"
+  | "beam:research:read";
 
 export type DelegationClaims = {
   iss: string;

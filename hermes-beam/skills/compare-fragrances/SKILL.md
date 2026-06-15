@@ -22,6 +22,10 @@ recommendation tied to the user's context.
    wins instead ("the warmer one for cold-weather evenings"). Acknowledge that taste
    is subjective.
 
+If the comparison is really "do I already own something like this?" (one candidate vs
+the whole vault), use `beam_compare_overlap` instead of hand-rolling it from details —
+it returns deterministic per-bottle overlap scores and the closest owned match.
+
 ## Guardrails
 - Only state attributes a tool returned; if data is missing for one fragrance, say the
   comparison is partial rather than filling gaps.
