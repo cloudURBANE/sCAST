@@ -142,6 +142,9 @@ function makeDeps(over: Partial<ScentEngineDeps> = {}): { deps: ScentEngineDeps;
       calls.reportNonFatalError.push({ area, error, context });
       over.reportNonFatalError?.(area, error, context);
     },
+    // Optional: only wired when a test supplies it, so the default deps leave
+    // the hybrid server-side resolve disabled (mirrors production opt-in).
+    resolveProfileViaEngine: over.resolveProfileViaEngine,
   };
 
   return { deps, calls };
@@ -640,6 +643,117 @@ test("deferred image resolution returns profile before background pipeline finis
 
   assert.equal(calls.saveCatalogEntry.length, 2);
   assert.equal(calls.saveCatalogEntry[1].profile.imageUrl, "https://cdn.example.com/background.webp");
+});
+
+test("serverSideResolve hit: engine notes build a full profile instead of a pending card", async () => {
+  const engineCalls: Array<[string, string]> = [];
+  const { deps, calls } = makeDeps({
+    resolveProfileViaEngine: async (brand, name) => {
+      engineCalls.push([brand, name]);
+      return {
+        notes: ["bergamot", "ambroxan", "pepper"],
+        family: "Fresh Spicy",
+        description: "resolved via engine",
+        pyramid: { top: ["bergamot"], heart: ["pepper"], base: ["ambroxan"] },
+      };
+    },
+  });
+
+  const result = await buildProfileWithDeps(deps, "Bleu Electrique", "Yves Saint Laurent", undefined, {
+    allowMinimalFallback: true,
+    serverSideResolve: true,
+  });
+  ok(result);
+
+  assert.deepEqual(engineCalls, [["Yves Saint Laurent", "Bleu Electrique"]]);
+  // Real notes from the engine, not the empty minimal-fallback profile.
+  assert.deepEqual(result.notes, ["bergamot", "ambroxan", "pepper"]);
+  assert.deepEqual(result.pyramid, { top: ["bergamot"], heart: ["pepper"], base: ["ambroxan"] });
+  assert.equal(result.family, "Fresh Spicy");
+  assert.equal(calls.vectorize, 1);
+});
+
+test("serverSideResolve miss: falls through to minimal pending profile when allowed", async () => {
+  let engineCalled = 0;
+  const { deps, calls } = makeDeps({
+    resolveProfileViaEngine: async () => {
+      engineCalled++;
+      return null; // engine could not resolve real notes
+    },
+  });
+
+  const result = await buildProfileWithDeps(deps, "Bleu Electrique", "Yves Saint Laurent", undefined, {
+    allowMinimalFallback: true,
+    serverSideResolve: true,
+  });
+  ok(result);
+
+  assert.equal(engineCalled, 1, "engine resolve must have been attempted");
+  // Graceful pending behavior is preserved on a miss.
+  assert.deepEqual(result.notes, []);
+  assert.equal(result.product.name, "Bleu Electrique");
+  assert.equal(calls.vectorize, 1);
+});
+
+test("serverSideResolve is not consulted without the opt-in flag", async () => {
+  let engineCalled = 0;
+  const { deps } = makeDeps({
+    resolveProfileViaEngine: async () => {
+      engineCalled++;
+      return { notes: ["should-not-be-used"] };
+    },
+  });
+
+  const result = await buildProfileWithDeps(deps, "Nonexistent Fragrance", "No Brand");
+  err(result);
+  assert.equal(engineCalled, 0, "engine resolve must stay off unless serverSideResolve is set");
+  assert.match(result.error, /Could not identify/);
+});
+
+test("serverSideResolve is skipped when a dataset match already exists (no wasted engine call)", async () => {
+  let engineCalled = 0;
+  const { deps } = makeDeps({
+    findDatasetFragrance: () => ({
+      name: "Sauvage",
+      brand: "Dior",
+      family: "Fresh Spicy",
+      notes: ["bergamot"],
+      description: "",
+    }),
+    resolveProfileViaEngine: async () => {
+      engineCalled++;
+      return { notes: ["engine"] };
+    },
+  });
+
+  const result = await buildProfileWithDeps(deps, "Sauvage", "Dior", undefined, {
+    serverSideResolve: true,
+  });
+  ok(result);
+  assert.equal(engineCalled, 0, "local dataset match must short-circuit the engine resolve");
+  assert.deepEqual(result.notes, ["bergamot"]);
+});
+
+test("serverSideResolve rejection is reported and remains non-fatal (falls through to pending)", async () => {
+  const { deps, calls } = makeDeps({
+    resolveProfileViaEngine: async () => {
+      throw new Error("engine unreachable");
+    },
+  });
+
+  const result = await buildProfileWithDeps(deps, "Bleu Electrique", "Yves Saint Laurent", undefined, {
+    allowMinimalFallback: true,
+    serverSideResolve: true,
+  });
+  ok(result);
+
+  assert.deepEqual(result.notes, []);
+  assert.equal(calls.reportNonFatalError.length, 1);
+  assert.equal(calls.reportNonFatalError[0].area, "scentEngine.serverSideResolve");
+  assert.deepEqual(calls.reportNonFatalError[0].context, {
+    brand: "Yves Saint Laurent",
+    name: "Bleu Electrique",
+  });
 });
 
 test("identity normalization: uses resolveFragranceIdentity output for catalog lookup and search query", async () => {

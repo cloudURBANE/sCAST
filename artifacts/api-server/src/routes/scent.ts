@@ -169,6 +169,10 @@ router.post("/scent-profile", async (req, res) => {
       // card (background enrichment fills the pyramid), rather than hard-failing
       // with "Could not identify this fragrance".
       allowMinimalFallback: true,
+      // Hybrid resolve: before landing a pending card, try a synchronous
+      // server-side resolve through the engine (Decodo egress) so the freshly
+      // added fragrance renders real notes/family immediately when reachable.
+      serverSideResolve: true,
       ...(concentrationOverride ? { concentrationOverride } : {}),
     },
   );
