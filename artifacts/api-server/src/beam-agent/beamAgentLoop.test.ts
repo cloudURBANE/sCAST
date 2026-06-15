@@ -206,6 +206,72 @@ test("malformed tool arguments produce an explicit tool error, not a silent empt
   assert.equal(summary?.outcome, "completed");
 });
 
+test("an unserializable tool result yields exactly one error result, not a duplicate tool_use_id", async () => {
+  let summary: BeamRunSummary | undefined;
+  // For each model call, record how many tool_result blocks carry the circular
+  // tool's id. A real double-push would put two with the SAME id in one
+  // transcript (which the API rejects); we assert no single call ever sees more
+  // than one, and that the one present is an error.
+  let maxPerCall = 0;
+  let sawError = false;
+
+  // A tool whose result is circular -> JSON.stringify throws AFTER the handler
+  // succeeds. The loop must record one is_error result and continue, never a
+  // second result for the same id.
+  const circularTool: BeamToolDefinition = {
+    name: "beam_get_wardrobe",
+    description: "List the user's wardrobe",
+    inputSchema: { type: "object", properties: {} },
+    handler: async () => {
+      const obj: Record<string, unknown> = { id: "f1" };
+      obj.self = obj; // circular
+      return obj;
+    },
+  };
+
+  const { callModel } = scriptedModel([
+    {
+      stop_reason: "tool_use",
+      content: [{ type: "tool_use", id: "tu_circ", name: "beam_get_wardrobe", input: {} }],
+    },
+    text("ok, moving on"),
+    text("Final answer."),
+  ]);
+
+  const capturing = async (input: ClaudeCallInput): Promise<ClaudeResponse> => {
+    let perCall = 0;
+    for (const m of input.messages) {
+      if (Array.isArray(m.content)) {
+        for (const b of m.content) {
+          if (b.type === "tool_result") {
+            const block = b as { tool_use_id: string; is_error?: boolean };
+            if (block.tool_use_id === "tu_circ") {
+              perCall++;
+              if (block.is_error === true) sawError = true;
+            }
+          }
+        }
+      }
+    }
+    maxPerCall = Math.max(maxPerCall, perCall);
+    return callModel(input);
+  };
+
+  await runBeamAgent({
+    ctx,
+    userMessage: "show my vault",
+    tools: [circularTool],
+    emit: () => {},
+    isModelConfigured: () => true,
+    callModel: capturing,
+    onSummary: (s) => (summary = s),
+  });
+
+  assert.equal(maxPerCall, 1, "no single transcript should carry a duplicate tool_use_id");
+  assert.ok(sawError, "the unserializable result should be reported as a tool error");
+  assert.equal(summary?.outcome, "completed");
+});
+
 test("an unconfigured model fails gracefully with a summary", async () => {
   const events: BeamRunEvent[] = [];
   let summary: BeamRunSummary | undefined;

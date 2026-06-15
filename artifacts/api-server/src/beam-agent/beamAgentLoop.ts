@@ -328,7 +328,11 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
      */
     const finish = async (draft: string, opts?: { skipSynthesis?: boolean }): Promise<void> => {
       let finalText = draft;
-      if (usedTools && !opts?.skipSynthesis) {
+      // Don't open a fresh synthesis call once we're already out of wall-clock
+      // budget — that extra round could push the response past the client's 60s
+      // timeout. Ship the grounded draft instead.
+      const outOfTime = Date.now() >= deadline;
+      if (usedTools && !opts?.skipSynthesis && !outOfTime) {
         usedSynthesis = true;
         emit({ type: "status", label: "Writing your recommendation" });
         const synthMessages = withSynthesisInstruction(messages);
@@ -486,25 +490,50 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
 
         toolsUsed.push(def.name);
         emit({ type: "tool_started", tool: def.name });
+
+        // Run the handler. A failure (including the per-tool timeout) becomes a
+        // single is_error tool_result and we move on.
+        let result: unknown;
         try {
-          const result = await raceTimeout(def.handler(use.input, ctx), TOOL_TIMEOUT_MS, def.name);
-          const serialized = JSON.stringify(result).slice(0, BEAM_LIMITS.maxToolResultChars);
-          results.push({ type: "tool_result", tool_use_id: use.id, content: serialized });
-          emit({ type: "tool_completed", tool: def.name, summary: summarizeToolResult(def.name, result) });
-          // Some tools surface a structured card to the UI (e.g. a collection
-          // proposal). Guarded so a UI-event builder can never break the run.
-          if (def.clientEvent) {
-            try {
-              const extra = def.clientEvent(result);
-              if (extra) emit(extra);
-            } catch {
-              /* a malformed client event is non-fatal — the run continues */
-            }
-          }
+          result = await raceTimeout(def.handler(use.input, ctx), TOOL_TIMEOUT_MS, def.name);
         } catch (err) {
           const message = err instanceof Error ? err.message : "tool error";
           results.push({ type: "tool_result", tool_use_id: use.id, content: `Tool failed: ${message}`, is_error: true });
           emit({ type: "tool_completed", tool: def.name, summary: "failed" });
+          continue;
+        }
+
+        // Serialize the success. JSON.stringify can throw (circular refs, BigInt);
+        // treat that as a tool error so the model knows it got no usable data,
+        // rather than silently dropping the result.
+        let serialized: string;
+        try {
+          serialized = JSON.stringify(result).slice(0, BEAM_LIMITS.maxToolResultChars);
+        } catch {
+          results.push({
+            type: "tool_result",
+            tool_use_id: use.id,
+            content: `Tool ${def.name} returned a result that could not be serialized.`,
+            is_error: true,
+          });
+          emit({ type: "tool_completed", tool: def.name, summary: "failed" });
+          continue;
+        }
+        results.push({ type: "tool_result", tool_use_id: use.id, content: serialized });
+
+        // Reporting + UI side-effects happen AFTER the result is recorded and are
+        // fully isolated: a throw here must never fall through to the failure path
+        // above, which would push a SECOND tool_result for this same tool_use_id
+        // and make the next model call reject the transcript.
+        try {
+          emit({ type: "tool_completed", tool: def.name, summary: summarizeToolResult(def.name, result) });
+          // Some tools surface a structured card to the UI (e.g. a collection proposal).
+          if (def.clientEvent) {
+            const extra = def.clientEvent(result);
+            if (extra) emit(extra);
+          }
+        } catch {
+          /* summary/client-event failures are non-fatal — the run continues */
         }
       }
 
