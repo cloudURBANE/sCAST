@@ -164,6 +164,11 @@ router.post("/scent-profile", async (req, res) => {
     {
       preferEngineData: preferEngineData === true,
       imageResolution: "deferred",
+      // Capture/add flow: a real selected fragrance that is not in the curated
+      // dataset and has not been scraped yet must still be addable as a pending
+      // card (background enrichment fills the pyramid), rather than hard-failing
+      // with "Could not identify this fragrance".
+      allowMinimalFallback: true,
       ...(concentrationOverride ? { concentrationOverride } : {}),
     },
   );

@@ -151,6 +151,18 @@ export interface BuildProfileOpts {
    * `skip` builds a text-only profile and does not enqueue image work.
    */
   imageResolution?: "inline" | "deferred" | "skip";
+  /**
+   * When true, a real-but-unenriched identity (no curated dataset match and no
+   * notes yet — e.g. a freshly-clicked search result whose Fragrantica page has
+   * not been scraped) yields a *minimal* neutral profile (family "Unknown
+   * Family", neutral vector, concentration from the fast resolver) instead of
+   * the hard `{ error: "Could not identify this fragrance" }`. This lets the
+   * capture/add flow land the fragrance as a pending card while background
+   * enrichment fills in the pyramid, rather than blocking the add outright.
+   * The destructive-rebuild path deliberately leaves this off so a partial
+   * match can never overwrite a user's stored fragrance with an empty profile.
+   */
+  allowMinimalFallback?: boolean;
 }
 
 export async function buildProfileWithDeps(
@@ -163,6 +175,7 @@ export async function buildProfileWithDeps(
   const allowCatalogFuzzy = opts?.allowCatalogFuzzy ?? true;
   const preferEngineData = opts?.preferEngineData ?? false;
   const imageResolution = opts?.imageResolution ?? "inline";
+  const allowMinimalFallback = opts?.allowMinimalFallback ?? false;
   const inputConcentration = resolveConcentrationFast(name, "", "");
   const concentrationOverride =
     opts?.concentrationOverride ??
@@ -310,7 +323,11 @@ export async function buildProfileWithDeps(
       : match?.perfumer || effectiveFallback?.perfumer;
 
   const hasUsableNotes = Array.isArray(finalNotes) && finalNotes.length > 0;
-  if (!match && !hasUsableNotes) {
+  const hasResolvedIdentity = profileName.trim().length > 0;
+  if (!match && !hasUsableNotes && !(allowMinimalFallback && hasResolvedIdentity)) {
+    // No curated match and no notes. The capture/add flow opts into a minimal
+    // neutral profile (so a real, not-yet-scraped fragrance still lands in the
+    // vault as a pending card); every other caller still gets the hard error.
     return { error: "Could not identify this fragrance. Try a more specific name." };
   }
 
