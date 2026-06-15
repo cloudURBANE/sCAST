@@ -7,7 +7,18 @@
 export { beamAgentRouter, mountBeamAgent } from "./beamAgentRoutes.ts";
 export { createBeamTools, type BeamToolDeps, type BeamCatalogHit } from "./beamTools.ts";
 export { runBeamAgent, type RunBeamAgentInput } from "./beamAgentLoop.ts";
-export { callModel, isModelConfigured, resolveProvider, type BeamProvider } from "./provider.ts";
+export {
+  callModel,
+  isModelConfigured,
+  resolveProvider,
+  resolveBeamModels,
+  resolveDeepModel,
+  type BeamProvider,
+  type BeamLane,
+} from "./provider.ts";
+export { selectConciergeLane, type ConciergeLane } from "./laneSelector.ts";
+export { runAnswerQualityGates, type QualityGateResult } from "./answerQualityGates.ts";
+export { estimateRunCostUsd, estimateCallCostUsd } from "./costLedger.ts";
 export { callClaude, isClaudeConfigured, DEFAULT_BEAM_MODEL } from "./claudeProvider.ts";
 export {
   callOpenRouter,

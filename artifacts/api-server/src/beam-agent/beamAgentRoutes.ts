@@ -43,6 +43,7 @@ import { createBeamTools, type BeamCatalogHit, type BeamToolDeps } from "./beamT
 import { runBeamAgent } from "./beamAgentLoop.ts";
 import { packetFromWardrobeRow, redactEventForClient } from "./beamToolCore.ts";
 import { resolveBeamModels } from "./provider.ts";
+import { selectConciergeLane } from "./laneSelector.ts";
 import type { BeamEmit, BeamRunContext, BeamRunEvent, CandidatePacket, ClaudeMessage } from "./types.ts";
 import { createBeamResearcher } from "./research/beamResearch.ts";
 import { loadResearchCache, saveResearchCache } from "./research/researchCache.ts";
@@ -289,7 +290,11 @@ router.post("/runs", runRateLimit, requireAuth, async (req: AuthRequest, res) =>
   const tools = createBeamTools(buildDeps(weather));
   const emit = makeEmit(record);
   const history = loadSessionHistory(ctx);
-  const models = resolveBeamModels();
+  // Pick the cost lane deterministically (brief §03.2) from the message + how much
+  // context the session already carries — no extra router LLM call. The premium
+  // lane runs MiniMax M3 end-to-end; the default lane runs cheap M2.5 orchestration.
+  const lane = selectConciergeLane({ message, historyTurns: history.length });
+  const models = resolveBeamModels(lane);
 
   // Fire-and-forget: the client consumes progress over SSE. runBeamAgent never
   // throws, but we guard anyway so a registry record can't be left half-open.
@@ -311,6 +316,7 @@ router.post("/runs", runRateLimit, requireAuth, async (req: AuthRequest, res) =>
           beam: {
             runId: summary.runId,
             user: hashUser(ctx.userId),
+            lane,
             outcome: summary.outcome,
             failureCode: summary.failureCode,
             turns: summary.turns,
@@ -321,6 +327,9 @@ router.post("/runs", runRateLimit, requireAuth, async (req: AuthRequest, res) =>
             usedSynthesis: summary.usedSynthesis,
             synthesisFailed: summary.synthesisFailed,
             groundedNames: summary.groundedNames,
+            estimatedCostUsd: summary.estimatedCostUsd,
+            qualityGatePassed: summary.qualityGatePassed,
+            qualityViolations: summary.qualityViolations,
             ms: summary.ms,
           },
         },

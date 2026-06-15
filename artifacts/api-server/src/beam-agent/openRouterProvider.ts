@@ -25,21 +25,43 @@ const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const OPENROUTER_TIMEOUT_MS = 45_000;
 
 /**
- * Cheap tier by default, as an OpenRouter slug. Override per-deployment with
- * BEAM_AGENT_MODEL. Confirm the exact slug in the OpenRouter dashboard — model
- * ids are provider-namespaced (`vendor/model`) and not interchangeable with the
- * Anthropic-direct ids used by `claudeProvider.ts`.
+ * Default hot-path (concierge) tier, as an OpenRouter slug. Per the cost-optimized
+ * model stack (beam_model_stack_optimized_no_verifier.md §02/§16) this is MiniMax
+ * M2.5 — the cheaper lane for normal fragrance chat. Override per-deployment with
+ * BEAM_AGENT_MODEL. Confirm the exact slug in the OpenRouter dashboard — model ids
+ * are provider-namespaced (`vendor/model`), drift over time (recheck before
+ * production, brief §15), and are not interchangeable with the Anthropic-direct ids
+ * used by `claudeProvider.ts`.
  */
-export const DEFAULT_OPENROUTER_MODEL =
-  process.env.BEAM_AGENT_MODEL?.trim() || "anthropic/claude-haiku-4.5";
+export function defaultOpenRouterModel(): string {
+  return process.env.BEAM_AGENT_MODEL?.trim() || "minimax/minimax-m2.5";
+}
 
 /**
- * Strong tier, reserved for the (later, Phase 4) collection-synthesis step.
- * Defined here so the env contract exists now; the read-only Phase 1 loop does
- * not yet branch on it. Falls back to the cheap default when unset.
+ * Premium / long-context tier (brief §02.1 premium_concierge): MiniMax M3, used
+ * for the richer synthesis turn and the premium lane. Falls back to the cheap
+ * default when unset.
  */
-export const STRONG_OPENROUTER_MODEL =
-  process.env.BEAM_AGENT_MODEL_STRONG?.trim() || DEFAULT_OPENROUTER_MODEL;
+export function strongOpenRouterModel(): string {
+  return process.env.BEAM_AGENT_MODEL_STRONG?.trim() || "minimax/minimax-m3";
+}
+
+/**
+ * Deep-strategy tier (brief §02.1 deep_strategy): Kimi K2 Thinking. Defined so the
+ * env contract exists; reserved for gated deep workflows (the hot-path loop does
+ * NOT auto-route here — brief §14.2 "do not call Kimi for normal fragrance chat").
+ */
+export function deepOpenRouterModel(): string {
+  return process.env.BEAM_AGENT_MODEL_DEEP?.trim() || "moonshotai/kimi-k2-thinking";
+}
+
+/**
+ * Back-compat constants. Some callers/tests import the eager slug; these resolve
+ * the env once at module load. Prefer the functions above where call-time env
+ * flipping matters (mirrors researchConfig.ts).
+ */
+export const DEFAULT_OPENROUTER_MODEL = defaultOpenRouterModel();
+export const STRONG_OPENROUTER_MODEL = strongOpenRouterModel();
 
 /** True when an OpenRouter credential is configured. */
 export function isOpenRouterConfigured(): boolean {
@@ -229,7 +251,7 @@ export async function callOpenRouter(input: ClaudeCallInput): Promise<ClaudeResp
     headers,
     signal: input.signal ?? AbortSignal.timeout(OPENROUTER_TIMEOUT_MS),
     body: JSON.stringify({
-      model: input.model ?? DEFAULT_OPENROUTER_MODEL,
+      model: input.model ?? defaultOpenRouterModel(),
       max_tokens: input.maxTokens ?? 1024,
       messages: toOpenAiMessages(input.system, input.messages),
       ...(hasTools ? { tools: toOpenAiTools(input.tools), tool_choice: "auto" } : {}),

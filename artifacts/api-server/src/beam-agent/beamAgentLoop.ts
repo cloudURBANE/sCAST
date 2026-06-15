@@ -27,6 +27,8 @@ import {
 } from "./beamToolCore.ts";
 import type { ClaudeCallInput, ClaudeResponse } from "./types.ts";
 import { callModel as defaultCallModel, isModelConfigured as defaultIsModelConfigured } from "./provider.ts";
+import { repairInstructionFor, runAnswerQualityGates } from "./answerQualityGates.ts";
+import { estimateRunCostUsd, type ModelUsage } from "./costLedger.ts";
 
 /** Token budgets. Tool-orchestration turns are short; the closing synthesis is long. */
 const ORCHESTRATION_MAX_TOKENS = 2048;
@@ -141,6 +143,26 @@ const SYNTHESIS_NUDGE =
 const MAX_GROUNDED_ALLOWLIST = 40;
 
 /**
+ * Don't open the single quality-gate repair pass (brief §08.1 if_fail) unless this
+ * much wall-clock budget remains — a repair is a full synthesis round, so attempting
+ * it near the deadline would risk overrunning the client's 60s timeout.
+ */
+const REPAIR_MIN_BUDGET_MS = 8_000;
+
+/**
+ * Did a tool result carry a fresh EXTERNAL fact (the research lane returned a real
+ * synthesized fact / sources, not a "note")? Used to gate price/availability/review
+ * claims in the answer (brief §01.3): such claims are only allowed when this is true.
+ */
+function resultCarriesExternalFact(result: unknown): boolean {
+  if (!result || typeof result !== "object") return false;
+  const r = result as Record<string, unknown>;
+  if (typeof r.synthesizedFact === "string" && r.synthesizedFact.trim().length > 0) return true;
+  if (Array.isArray(r.sources) && r.sources.length > 0) return true;
+  return false;
+}
+
+/**
  * Build the closing-turn allowlist clause from the fragrances actually retrieved
  * this run. Pinning the synthesis to this exact set is the mechanical guard
  * against hallucinated picks (the prompt rule alone was unenforced). Empty when
@@ -212,6 +234,12 @@ export type BeamRunSummary = {
   synthesisFailed: boolean;
   /** Distinct fragrances retrieved this run and pinned into the answer allowlist. */
   groundedNames: number;
+  /** Estimated USD spent on model calls this run (brief §11.3 estimated_llm_cost_usd). */
+  estimatedCostUsd: number;
+  /** Whether the final answer passed the deterministic quality gates (brief §11.3). */
+  qualityGatePassed: boolean;
+  /** Gate names the final answer violated (empty when it passed). */
+  qualityViolations: string[];
   ms: number;
 };
 
@@ -309,6 +337,14 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
   let outputTokens = 0;
   let usedSynthesis = false;
   let synthesisFailed = false;
+  // Whether any tool returned a fresh external fact this run; gates price/etc. claims.
+  let hadExternalEvidence = false;
+  // Deterministic answer-gate outcome, filled in finish(). Defaults to a pass so a
+  // greeting / failed run reads as "nothing to reject".
+  let qualityGatePassed = true;
+  let qualityViolations: string[] = [];
+  // Per-model token tallies so the cost ledger can price each lane separately.
+  const usageByModel = new Map<string, ModelUsage>();
   // Fragrances actually returned by tools this run, keyed lowercased for dedupe
   // (value preserves display casing). The closing answer is pinned to this set.
   const groundedNames = new Map<string, string>();
@@ -320,11 +356,19 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
     }
   };
 
-  const recordUsage = (response: ClaudeResponse): void => {
+  const recordUsage = (response: ClaudeResponse, modelSlug?: string): void => {
     modelCalls++;
     if (response.usage) {
       inputTokens += response.usage.inputTokens;
       outputTokens += response.usage.outputTokens;
+      // Tally per-model so the cost ledger prices each lane (cheap orchestration
+      // vs. strong synthesis) at its own rate. Unknown slug falls into a "" bucket
+      // the ledger prices at the conservative default.
+      const key = modelSlug ?? "";
+      const prev = usageByModel.get(key) ?? { model: key, inputTokens: 0, outputTokens: 0 };
+      prev.inputTokens += response.usage.inputTokens;
+      prev.outputTokens += response.usage.outputTokens;
+      usageByModel.set(key, prev);
     }
   };
   const fail = (code: string, message: string): void => {
@@ -376,6 +420,7 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
       if (usedTools && !opts?.skipSynthesis && !outOfTime) {
         usedSynthesis = true;
         emit({ type: "status", label: "Writing your recommendation" });
+        const synthModel = input.synthesisModel ?? input.model;
         const instruction = SYNTHESIS_NUDGE + groundingAllowlistClause([...groundedNames.values()]);
         const synthMessages = withSynthesisInstruction(messages, instruction);
         try {
@@ -383,12 +428,12 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
             system: SYSTEM_PROMPT,
             messages: synthMessages,
             tools: [],
-            model: input.synthesisModel ?? input.model,
+            model: synthModel,
             maxTokens: SYNTHESIS_MAX_TOKENS,
             signal: callBudgetSignal(),
             onDelta: (chunk) => emit({ type: "message_delta", text: chunk }),
           });
-          recordUsage(synth);
+          recordUsage(synth, synthModel);
           const synthText = extractText(synth.content);
           if (synthText) finalText = synthText;
           else synthesisFailed = true;
@@ -399,6 +444,50 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
           synthesisFailed = true;
         }
       }
+
+      // Deterministic answer quality gates (brief §08 — the verifier replacement).
+      // Reject unsupported price/availability/review claims and instruction leaks.
+      // On a hard violation, attempt ONE constrained re-synthesis that feeds the
+      // broken rules back (brief §08.1 if_fail), and keep whichever draft has fewer
+      // violations. Bounded by budget + a single attempt so it can never loop.
+      let gate = runAnswerQualityGates(finalText, { hadExternalEvidence });
+      if (
+        !gate.passed &&
+        usedTools &&
+        !opts?.skipSynthesis &&
+        Date.now() < deadline - REPAIR_MIN_BUDGET_MS
+      ) {
+        const repairModel = input.synthesisModel ?? input.model;
+        const repairInstruction =
+          SYNTHESIS_NUDGE +
+          groundingAllowlistClause([...groundedNames.values()]) +
+          " " +
+          repairInstructionFor(gate.violations);
+        try {
+          const repair = await callModel({
+            system: SYSTEM_PROMPT,
+            messages: withSynthesisInstruction(messages, repairInstruction),
+            tools: [],
+            model: repairModel,
+            maxTokens: SYNTHESIS_MAX_TOKENS,
+            signal: callBudgetSignal(),
+          });
+          recordUsage(repair, repairModel);
+          const repairText = extractText(repair.content);
+          if (repairText) {
+            const repairGate = runAnswerQualityGates(repairText, { hadExternalEvidence });
+            if (repairGate.violations.length < gate.violations.length) {
+              finalText = repairText;
+              gate = repairGate;
+            }
+          }
+        } catch {
+          // Repair is best-effort; keep the original draft (still flagged below).
+        }
+      }
+      qualityGatePassed = gate.passed;
+      qualityViolations = gate.violations;
+
       // Split off any trailing ```cues block so the visible answer stays clean
       // and the chips ride their own event the UI can render as tap buttons.
       const { text: parsed, cues } = extractAgentCues(finalText || "Done.");
@@ -450,7 +539,7 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
         }
         throw err;
       }
-      recordUsage(response);
+      recordUsage(response, input.model);
 
       const toolUses = extractToolUses(response.content);
       const text = extractText(response.content);
@@ -565,6 +654,9 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
         // Register the fragrances this result actually grounds, so the closing
         // synthesis can be pinned to only naming fragrances we retrieved.
         addGroundedNames(collectGroundedFragranceNames(result));
+        // Note any fresh external fact so the answer gates can allow (only then) a
+        // price/availability/review claim grounded in it.
+        if (resultCarriesExternalFact(result)) hadExternalEvidence = true;
 
         // Reporting + UI side-effects happen AFTER the result is recorded and are
         // fully isolated: a throw here must never fall through to the failure path
@@ -602,6 +694,9 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
       usedSynthesis,
       synthesisFailed,
       groundedNames: groundedNames.size,
+      estimatedCostUsd: estimateRunCostUsd(usageByModel.values()),
+      qualityGatePassed,
+      qualityViolations,
       ms: Date.now() - startedAt,
     });
   }
