@@ -5,6 +5,7 @@ import { getCatalogEntry, saveCatalogEntry, searchCatalog } from "./catalogServi
 import { backfillUserFragranceImages } from "./userImageBackfill";
 import { resolveCachedFragranceImage, resolveProcessedFragranceImage } from "./imagePipeline";
 import { usableImageUrlForResponse } from "./imageHydration";
+import { resolveProfileViaEngine } from "./engineResolve";
 import { logger } from "../lib/logger";
 import {
   findDatasetFragrance,
@@ -35,6 +36,7 @@ const DEPS: ScentEngineDeps = {
   resolveProcessedFragranceImage,
   usableImageUrlForResponse,
   backfillUserFragranceImages,
+  resolveProfileViaEngine,
   reportNonFatalError: (area, error, context) => {
     logger.warn(
       {

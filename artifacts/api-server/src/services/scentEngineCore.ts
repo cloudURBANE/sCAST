@@ -115,6 +115,18 @@ export interface ScentEngineDeps {
     error: unknown,
     context?: Record<string, unknown>,
   ) => void;
+  /**
+   * Hybrid server-side resolve: fetch a not-yet-curated fragrance's real
+   * notes/family/pyramid through the Python engine (which reaches Fragrantica
+   * over Decodo's unblocked egress), so on-demand views render immediately
+   * instead of sitting "pending" until the offline worker reaches the job.
+   * Returns null on any miss/timeout; only consulted when `serverSideResolve`
+   * is set and there is no local match/notes. See services/engineResolve.ts.
+   */
+  resolveProfileViaEngine?: (
+    brand: string,
+    name: string,
+  ) => Promise<BuildProfileFallback | null>;
 }
 
 export interface BuildProfileFallback {
@@ -163,15 +175,26 @@ export interface BuildProfileOpts {
    * match can never overwrite a user's stored fragrance with an empty profile.
    */
   allowMinimalFallback?: boolean;
+  /**
+   * When true, a real identity with no local (catalog/dataset/provided) notes
+   * first attempts a synchronous server-side resolve through the Python engine
+   * (Decodo egress) before falling back to the minimal pending profile. Opt-in
+   * for the on-demand capture/search paths; the destructive-rebuild path leaves
+   * it off so a transient engine result can never overwrite stored data.
+   */
+  serverSideResolve?: boolean;
 }
 
 export async function buildProfileWithDeps(
   deps: ScentEngineDeps,
   name: string,
   brand: string,
-  fallback?: BuildProfileFallback,
+  fallbackInput?: BuildProfileFallback,
   opts?: BuildProfileOpts,
 ): Promise<ScentProfile | { error: string }> {
+  // Mutable so the hybrid server-side resolve can fold engine-fetched notes in
+  // before the rest of the function treats them like a provided fallback.
+  let fallback = fallbackInput;
   const allowCatalogFuzzy = opts?.allowCatalogFuzzy ?? true;
   const preferEngineData = opts?.preferEngineData ?? false;
   const imageResolution = opts?.imageResolution ?? "inline";
@@ -201,6 +224,46 @@ export async function buildProfileWithDeps(
       const fuzzyImageUrl = await deps.usableImageUrlForResponse(fuzzy.imageUrl);
       if (fuzzyImageUrl && !concentrationOverride) return { ...fuzzy, imageUrl: fuzzyImageUrl };
       catalogBase = fuzzyImageUrl ? { ...fuzzy, imageUrl: fuzzyImageUrl } : fuzzy;
+    }
+  }
+
+  // Dataset match is hoisted here (reused below) so the hybrid resolve only
+  // fires when there is genuinely no local data to build from.
+  const match = deps.findDatasetFragrance(profileBrand, profileName);
+
+  // Hybrid server-side resolve: a real, not-yet-curated identity with no local
+  // notes (no dataset match, no catalog base, no provided notes) is resolved
+  // synchronously through the Python engine, which fetches Fragrantica over
+  // Decodo's unblocked egress. On a hit we fold the engine's notes/family/
+  // pyramid into `fallback` and the rest of the function builds a full profile;
+  // on any miss/timeout we leave `fallback` untouched and fall through to the
+  // existing minimal-pending behavior. Opt-in via `serverSideResolve`.
+  if (
+    opts?.serverSideResolve &&
+    deps.resolveProfileViaEngine &&
+    !match &&
+    !catalogBase &&
+    !(fallback?.notes && fallback.notes.length > 0) &&
+    profileName.trim().length > 0
+  ) {
+    const resolved = await deps
+      .resolveProfileViaEngine(profileBrand, profileName)
+      .catch((error) => {
+        deps.reportNonFatalError?.("scentEngine.serverSideResolve", error, {
+          brand: profileBrand,
+          name: profileName,
+        });
+        return null;
+      });
+    if (resolved && Array.isArray(resolved.notes) && resolved.notes.length > 0) {
+      fallback = {
+        notes: resolved.notes,
+        family: resolved.family ?? fallback?.family,
+        description: resolved.description ?? fallback?.description,
+        imageUrl: fallback?.imageUrl ?? resolved.imageUrl,
+        pyramid: resolved.pyramid ?? fallback?.pyramid,
+        perfumer: resolved.perfumer ?? fallback?.perfumer,
+      };
     }
   }
 
@@ -300,7 +363,6 @@ export async function buildProfileWithDeps(
 
   const cleanImageUrl = processedImage?.imageUrl ?? null;
 
-  const match = deps.findDatasetFragrance(profileBrand, profileName);
   const finalName = match?.name || catalogBase?.product.name || profileName;
   const finalBrand = match?.brand || catalogBase?.product.brand || profileBrand;
   const finalNotes: string[] = engineFallbackComplete
