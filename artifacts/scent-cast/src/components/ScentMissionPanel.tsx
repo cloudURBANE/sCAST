@@ -1603,7 +1603,10 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
           onFocus={() => setComposerFocused(true)}
           onBlur={() => {
             setComposerFocused(false);
-            recoverViewportAfterKeyboard();
+            // Skip viewport recovery when the blur was forced by the field
+            // disabling itself as generation starts (busy) — that would yank the
+            // page to the top mid-turn. Only recover on a genuine user dismiss.
+            if (!busy) recoverViewportAfterKeyboard();
           }}
           // While the concierge is composing, lock the field and swap the
           // placeholder to a calm status line so it never looks like the user is

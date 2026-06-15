@@ -164,6 +164,10 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
   // rest guarantees a single tap always activates navigation.
   const [navVisible, setNavVisible] = React.useState(true);
   const lastScrollYRef = React.useRef(0);
+  // Reveals the bar a beat after scrolling SETTLES (not an idle-hide). The old
+  // timer hid the bar at rest — the inverse of the intent — which is what caused
+  // the double-tap bug. This one brings it back so the resting state is visible.
+  const settleTimerRef = React.useRef<number | null>(null);
   // The fixed bottom nav is a standing backdrop layer on phone-class devices and
   // stays mounted while a dynamic detail modal opens — exactly the WebKit
   // memory-pressure crash profile. Drop the backdrop blur on low-budget devices
@@ -195,11 +199,16 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
         }
         lastScrollYRef.current = y;
       }
-      // Deliberately NO idle-hide timer: the bar must stay visible whenever the
-      // user is at rest. An idle timeout left it pointer-events-none and
-      // off-screen exactly when a resting user reached for it, so their first tap
-      // only re-revealed the bar and a second was needed to navigate (the
-      // "double-tap" bug). It hides only during an active downward scroll.
+      // Reveal the bar once the scroll SETTLES, so the resting state is always
+      // visible and reachable in a single tap. Each scroll event resets the
+      // timer, so the bar stays hidden only while a downward scroll is actively
+      // in motion — never while the user is at rest (the double-tap bug came from
+      // the old timer doing the opposite and hiding the bar on settle).
+      if (settleTimerRef.current !== null) window.clearTimeout(settleTimerRef.current);
+      settleTimerRef.current = window.setTimeout(() => {
+        setNavVisible(true);
+        settleTimerRef.current = null;
+      }, 320);
     };
 
     // Any direct interaction reveals the bar (covers the case where the user
@@ -214,6 +223,7 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
       window.removeEventListener('scroll', handleScroll);
       window.removeEventListener('touchstart', reveal);
       window.removeEventListener('pointerdown', reveal);
+      if (settleTimerRef.current !== null) window.clearTimeout(settleTimerRef.current);
     };
   }, []);
 
