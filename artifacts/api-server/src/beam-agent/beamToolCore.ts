@@ -6,6 +6,7 @@
  * DB/service-coupled tool bodies live in `beamTools.ts` and build on these.
  */
 import type {
+  BeamProposalItem,
   BeamRunEvent,
   BeamToolDefinition,
   CandidatePacket,
@@ -23,6 +24,11 @@ export const BEAM_LIMITS = {
   maxAgentTurns: 8,
   maxUserMessageLength: 2000,
   maxToolResultChars: 100_000,
+  /** Agent-offered tap chips: how many, and the max label length. */
+  maxSuggestions: 4,
+  maxSuggestionLabel: 48,
+  /** Fragrances the agent may propose to add to the vault in one collection. */
+  maxProposalItems: 5,
 } as const;
 
 export function clampLimit(value: unknown, max: number, fallback = max): number {
@@ -119,11 +125,69 @@ export function redactEventForClient(event: BeamRunEvent): BeamRunEvent {
     case "tool_completed":
     case "completed":
       return event;
+    case "suggestions":
+      // Model-authored chips — re-clamp at the client boundary defensively.
+      return { type: "suggestions", items: sanitizeSuggestions(event.items) };
+    case "proposal":
+      // Items are server-resolved catalog data (safe), just clamp the count.
+      return {
+        type: "proposal",
+        proposalId: event.proposalId,
+        items: event.items.slice(0, BEAM_LIMITS.maxProposalItems),
+      };
     case "failed":
       return { type: "failed", code: event.code, message: event.message };
     default:
       return { type: "status", label: "Working" };
   }
+}
+
+/** Clamp model-authored chips to safe count/length and drop empties + dupes. */
+export function sanitizeSuggestions(
+  items: ReadonlyArray<{ label?: unknown; value?: unknown }>,
+): Array<{ label: string; value: string }> {
+  const out: Array<{ label: string; value: string }> = [];
+  const seen = new Set<string>();
+  for (const item of items) {
+    const label = asString(item?.label)?.slice(0, BEAM_LIMITS.maxSuggestionLabel);
+    if (!label) continue;
+    const key = label.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const value = asString(item?.value)?.slice(0, BEAM_LIMITS.maxSuggestionLabel) ?? label;
+    out.push({ label, value });
+    if (out.length >= BEAM_LIMITS.maxSuggestions) break;
+  }
+  return out;
+}
+
+/**
+ * Pull a trailing tap-chip block out of the agent's final answer. The model is
+ * told to optionally end with a fenced ```cues block (one chip per line, or a
+ * JSON array of strings) when its reply invites the user to choose. We strip
+ * that block from the visible text and return the chips separately so the UI can
+ * render them as buttons. Tolerant: a malformed/absent block yields no chips and
+ * leaves the text untouched.
+ */
+export function extractAgentCues(text: string): { text: string; cues: string[] } {
+  const fence = /\n*```+\s*cues\b[^\n]*\n([\s\S]*?)```+\s*$/i.exec(text);
+  if (!fence) return { text: text.trim(), cues: [] };
+  const inner = fence[1].trim();
+  let raw: string[] = [];
+  if (inner.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(inner) as unknown;
+      if (Array.isArray(parsed)) raw = parsed.map((v) => (typeof v === "string" ? v : String(v)));
+    } catch {
+      raw = [];
+    }
+  }
+  if (raw.length === 0) {
+    raw = inner.split(/\r?\n/).map((line) => line.replace(/^\s*[-*•]\s*/, "").trim());
+  }
+  const cues = sanitizeSuggestions(raw.map((label) => ({ label, value: label }))).map((c) => c.label);
+  const cleaned = text.slice(0, fence.index).trim();
+  return { text: cleaned, cues };
 }
 
 /** One-line human summary of a tool result for the `tool_completed` event. */
@@ -158,6 +222,74 @@ export function summarizeToolResult(_name: string, result: unknown): string {
     if (typeof record.count === "number") return `${record.count} item(s)`;
   }
   return "done";
+}
+
+/**
+ * Build an add-ready proposal item from a flattened catalog profile. Defensive:
+ * pulls only known fields, normalizes lists, and returns null when there is no
+ * usable name (so an unresolved/garbage record is dropped, never proposed).
+ */
+export function buildProposalItem(flat: Record<string, unknown>): BeamProposalItem | null {
+  const name = asString(flat.name) ?? asString((flat.product as { name?: unknown })?.name);
+  if (!name) return null;
+  const brand =
+    asString(flat.brand) ?? asString((flat.product as { brand?: unknown })?.brand) ?? "";
+
+  const item: BeamProposalItem = {
+    name,
+    brand,
+    notes: cleanStringList(flat.notes),
+    accords: cleanStringList(flat.accords),
+  };
+
+  const family = asString(flat.family);
+  if (family) item.family = family;
+
+  if (flat.pyramid && typeof flat.pyramid === "object") {
+    const p = flat.pyramid as Record<string, unknown>;
+    item.pyramid = {
+      top: cleanStringList(p.top),
+      heart: cleanStringList(p.heart),
+      base: cleanStringList(p.base),
+    };
+  }
+
+  if (flat.scent_vector && typeof flat.scent_vector === "object") {
+    const v = flat.scent_vector as Record<string, unknown>;
+    const axis = (key: string): number => (typeof v[key] === "number" && Number.isFinite(v[key]) ? (v[key] as number) : 0);
+    item.scentVector = {
+      freshness: axis("freshness"),
+      sweetness: axis("sweetness"),
+      woodiness: axis("woodiness"),
+      spice: axis("spice"),
+      warmth: axis("warmth"),
+      musk: axis("musk"),
+    };
+  }
+
+  if (flat.performance && typeof flat.performance === "object") {
+    const perf = flat.performance as Record<string, unknown>;
+    const sillage = numOrStr(perf.sillage);
+    const longevity = numOrStr(perf.longevity);
+    if (sillage !== undefined || longevity !== undefined) item.performance = { sillage, longevity };
+  }
+
+  const concentration = asString(flat.concentration);
+  if (concentration) item.concentration = concentration;
+  const imageUrl = asString(flat.imageUrl);
+  if (imageUrl) item.imageUrl = imageUrl;
+  const storagePath = asString(flat.storagePath);
+  if (storagePath) item.storagePath = storagePath;
+  const imageHash = asString(flat.imageHash);
+  if (imageHash) item.imageHash = imageHash;
+  const storageProvider = asString(flat.storageProvider);
+  if (storageProvider) item.storageProvider = storageProvider;
+  const sourceProvider = asString(flat.sourceProvider);
+  if (sourceProvider) item.sourceProvider = sourceProvider;
+  const description = asString(flat.description);
+  if (description) item.description = description.slice(0, 600);
+
+  return item;
 }
 
 /* ------------------------------------------------------------------ */

@@ -21,7 +21,14 @@ export type BeamReadToolName =
   | "beam_score_candidates"
   | "beam_research_web";
 
-export type BeamToolName = BeamReadToolName;
+/**
+ * `beam_propose_collection` resolves catalog fragrances into add-ready payloads
+ * and emits a `proposal` event. It writes NOTHING server-side: the actual vault
+ * write is the user tapping Confirm in the app, which goes through the existing
+ * authenticated `/api/wardrobe` path. So "confirm before write" holds without a
+ * model-constructed token.
+ */
+export type BeamToolName = BeamReadToolName | "beam_propose_collection";
 
 /**
  * Run context derived from the authenticated app session — NEVER from model
@@ -50,6 +57,12 @@ export type BeamToolDefinition = {
   inputSchema: BeamJsonSchema;
   /** Read-only in Phase 1. Returns a JSON-serializable result. */
   handler: (input: unknown, ctx: BeamRunContext) => Promise<unknown>;
+  /**
+   * OPTIONAL: derive a client-facing event from a successful tool result (e.g.
+   * `beam_propose_collection` → a `proposal` card). The loop emits it right after
+   * `tool_completed`. Must never throw on the loop's behalf — the loop guards it.
+   */
+  clientEvent?: (result: unknown) => BeamRunEvent | null;
 };
 
 /**
@@ -70,6 +83,45 @@ export type CandidatePacket = {
 };
 
 /**
+ * A tap-to-continue chip the agent offers with its reply (e.g. after asking a
+ * follow-up question). Model-authored, so it is length/count-clamped before it
+ * reaches the client. `value` is what gets sent/typed when tapped; `label` is
+ * what's shown (they're usually identical).
+ */
+export type BeamSuggestion = { label: string; value: string };
+
+/**
+ * An add-ready fragrance the agent proposes for the user's vault, resolved from
+ * the catalog (NOT model-authored free text). Shaped to drop straight into the
+ * app's normal wardrobe-add path. `scentVector` is the server-built 6-axis
+ * profile; `imageUrl`/storage fields let the add hydrate an image immediately.
+ */
+export type BeamProposalItem = {
+  name: string;
+  brand: string;
+  family?: string;
+  notes: string[];
+  pyramid?: { top: string[]; heart: string[]; base: string[] };
+  accords: string[];
+  scentVector?: {
+    freshness: number;
+    sweetness: number;
+    woodiness: number;
+    spice: number;
+    warmth: number;
+    musk: number;
+  };
+  performance?: { sillage?: number | string; longevity?: number | string };
+  concentration?: string;
+  imageUrl?: string;
+  storagePath?: string;
+  imageHash?: string;
+  storageProvider?: string;
+  sourceProvider?: string;
+  description?: string;
+};
+
+/**
  * Client-safe event stream. Raw tool arguments, DB ids, stack traces, provider
  * credentials, and system prompts must NEVER reach the browser — see
  * `redactEventForClient`.
@@ -79,6 +131,8 @@ export type BeamRunEvent =
   | { type: "message_delta"; text: string }
   | { type: "tool_started"; tool: BeamToolName }
   | { type: "tool_completed"; tool: BeamToolName; summary: string }
+  | { type: "suggestions"; items: BeamSuggestion[] }
+  | { type: "proposal"; proposalId: string; items: BeamProposalItem[] }
   | { type: "completed"; response: string }
   | { type: "failed"; code: string; message: string };
 

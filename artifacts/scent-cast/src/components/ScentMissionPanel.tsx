@@ -30,7 +30,12 @@ import {
   findWardrobeMatch,
   missionProgress,
 } from '@/lib/scentMissionClient';
-import { humanizeBeamTool, runBeamAgentMission } from '@/lib/beamAgentClient';
+import {
+  humanizeBeamTool,
+  runBeamAgentMission,
+  type BeamProposalItem,
+  type BeamSuggestion,
+} from '@/lib/beamAgentClient';
 import type { Fragrance } from '@/components/Wardrobe';
 import type { WeatherData } from '@/context/WeatherContext';
 import { useDragToScroll } from '@/hooks/useDragToScroll';
@@ -210,6 +215,14 @@ type BeamActivityStep = {
 
 const BEAM_ACTIVITY_BUBBLE_CLASS =
   'flex max-w-[92%] flex-col gap-1.5 self-start rounded-[calc(var(--radius-scent)-12px)] border border-scent-accent/22 bg-[linear-gradient(180deg,rgba(212,175,55,0.05),rgba(0,0,0,0.18))] px-3.5 py-3';
+
+/** Human copy for each per-fragrance curate phase. */
+const CURATE_STATUS_COPY: Record<'adding' | 'curating' | 'ready' | 'failed', string> = {
+  adding: 'Adding',
+  curating: 'Curating',
+  ready: 'Ready ·',
+  failed: 'Skipped',
+};
 
 /**
  * Turn a terse server summary into premium, tool-aware copy. The server keeps
@@ -547,6 +560,24 @@ export interface ScentMissionStatus {
   contextLine: string;
 }
 
+/** Per-fragrance progress reported while a confirmed collection is being added. */
+export type CollectionCurateProgress = {
+  index: number;
+  total: number;
+  name: string;
+  status: 'adding' | 'curating' | 'ready' | 'failed';
+};
+
+/**
+ * Host-provided action that adds a confirmed set of proposed fragrances to the
+ * vault through the app's NORMAL wardrobe path, reporting per-item progress so
+ * the panel can hold a "curating" state until each is image+profile ready.
+ */
+export type CurateCollectionFn = (
+  items: BeamProposalItem[],
+  onProgress: (progress: CollectionCurateProgress) => void,
+) => Promise<{ added: number; total: number }>;
+
 interface ScentMissionPanelProps {
   items: Fragrance[];
   weather: WeatherData | null;
@@ -564,6 +595,12 @@ interface ScentMissionPanelProps {
    * Falls back to inline rendering when absent.
    */
   cueBarContainer?: HTMLElement | null;
+  /**
+   * Add a confirmed collection of proposed fragrances to the vault. Provided by
+   * the host (which owns the wardrobe add/sync). Absent → the proposal card's
+   * Confirm is disabled with a sign-in hint.
+   */
+  onCurateCollection?: CurateCollectionFn;
 }
 
 export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
@@ -574,6 +611,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   onRevealMatch,
   onStatusChange,
   cueBarContainer,
+  onCurateCollection,
 }) => {
   const reduceMotion = useReducedMotion();
   const ipadPerformanceMode = useRef(isIpadSafariPerformanceMode()).current;
@@ -620,6 +658,18 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   // Ordered live-progress trail for a Beam agent run (status + tool steps).
   // Empty for the scripted `/api/scent-mission` path, which keeps the plain dots.
   const [activity, setActivity] = useState<BeamActivityStep[]>([]);
+  // Tap-to-answer chips the agent offered with its last reply (e.g. trip-vibe
+  // follow-ups). When set, these replace the static facet cues.
+  const [agentSuggestions, setAgentSuggestions] = useState<BeamSuggestion[]>([]);
+  // A collection the agent proposed adding to the vault, awaiting the user's
+  // explicit Confirm. `curating` holds the per-item add/enrich progress; once it
+  // finishes it becomes a short completion summary.
+  const [proposal, setProposal] = useState<{ proposalId: string; items: BeamProposalItem[] } | null>(null);
+  const [curating, setCurating] = useState<{
+    total: number;
+    progress: CollectionCurateProgress | null;
+    done: { added: number; total: number } | null;
+  } | null>(null);
   const [sessionId, setSessionId] = useState<string | undefined>(undefined);
   const [resolved, setResolved] = useState<{
     recommendation: ScentMissionRecommendation;
@@ -805,9 +855,13 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       const controller = new AbortController();
       abortRef.current = controller;
 
-      // Fresh trail per run — each turn tells its own story of steps.
+      // Fresh trail per run — each turn tells its own story of steps. Any cues
+      // or proposal from the previous reply are now stale (the user just answered).
       activityIdRef.current = 0;
       setActivity([]);
+      setAgentSuggestions([]);
+      setProposal(null);
+      setCurating(null);
 
       let didTimeout = false;
       const timeoutId = window.setTimeout(() => {
@@ -837,6 +891,13 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
             } else if (event.type === 'tool_completed') {
               const id = (activityIdRef.current += 1);
               setActivity((prev) => completeToolStep(prev, id, event.tool, event.summary));
+            } else if (event.type === 'suggestions') {
+              // Stored now; rendered as cue chips once the run settles (!busy).
+              setAgentSuggestions(event.items);
+            } else if (event.type === 'proposal') {
+              // The agent lined up a collection — surface a confirmation card
+              // once the run settles. Nothing is added until the user taps Confirm.
+              if (event.items.length > 0) setProposal({ proposalId: event.proposalId, items: event.items });
             } else if (event.type === 'message_delta') {
               // Synthesis is streaming the answer — hold a stable phase note
               // rather than flashing raw partial text.
@@ -949,6 +1010,9 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       setBusy(true);
       setResolved(null);
       setActivity([]);
+      setAgentSuggestions([]);
+      setProposal(null);
+      setCurating(null);
       setMission(currentMission);
       setProgressNote(trigger === 'fast' ? 'Fast curation in progress' : 'Curating from your vault');
 
@@ -1003,11 +1067,56 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
     [busy],
   );
 
+  // An agent-offered chip (follow-up question answer). Same low-friction pattern
+  // as a facet cue — it fills the composer so the user reviews + sends — but it
+  // carries no facet, so the staged-cue Confirm/Cancel pair is not implied.
+  const handleAgentSuggestion = useCallback(
+    (suggestion: BeamSuggestion) => {
+      if (busy) return;
+      setComposer(suggestion.value || suggestion.label);
+      setPendingCueFacet(null);
+    },
+    [busy],
+  );
+
+  // The user approved the proposed collection. Add each through the host's
+  // normal wardrobe path, holding a "curating" state until they're ready, then
+  // report back. This is the only place the flow writes to the vault.
+  const handleConfirmProposal = useCallback(async () => {
+    if (!proposal || !onCurateCollection || curating) return;
+    const collection = proposal.items;
+    setProposal(null);
+    setCurating({ total: collection.length, progress: null, done: null });
+    try {
+      const result = await onCurateCollection(collection, (p) => {
+        setCurating((prev) => ({ total: collection.length, done: prev?.done ?? null, progress: p }));
+      });
+      setCurating({ total: collection.length, progress: null, done: result });
+      const names = collection.map((item) => item.name);
+      const summary =
+        result.added === 0
+          ? "I couldn't add those to your vault just now — want me to try again?"
+          : result.added === result.total
+            ? `Done — all ${result.total} are in your vault and curated: ${names.join(', ')}. Ready to wear.`
+            : `Added ${result.added} of ${result.total} to your vault — the rest are still curating and will appear shortly.`;
+      appendMessage('agent', summary);
+    } catch {
+      setCurating(null);
+      appendMessage('system', 'Adding the collection ran into a problem. Please try again.');
+    }
+  }, [proposal, onCurateCollection, curating, appendMessage]);
+
+  const handleDeclineProposal = useCallback(() => {
+    if (curating && !curating.done) return;
+    setProposal(null);
+    appendMessage('agent', "No problem — I'll hold off. Tell me what to change and I'll line up a different set.");
+  }, [curating, appendMessage]);
+
   const handleSubmit = useCallback(
     async (event: React.FormEvent<HTMLFormElement>) => {
       event.preventDefault();
       const trimmed = composer.trim();
-      if (!trimmed || busy) return;
+      if (!trimmed || busy || (curating !== null && curating.done === null)) return;
       setComposer('');
       appendMessage('user', trimmed);
 
@@ -1072,6 +1181,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       calmMotion,
       callMission,
       composer,
+      curating,
       items.length,
       runAgentTurn,
       runResolution,
@@ -1182,7 +1292,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         />
         <button
           type="submit"
-          disabled={busy || !composer.trim()}
+          disabled={busy || !composer.trim() || (curating !== null && curating.done === null)}
           className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-scent-accent/42 bg-black/35 text-scent-accent transition-colors hover:bg-scent-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:opacity-40"
           aria-label="Send message"
         >
@@ -1370,10 +1480,15 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   // arrow; instead we surface an explicit Confirm / Cancel pair right where the
   // cues were.
   const hasStagedCue = Boolean(pendingCueFacet) && composer.trim().length > 0;
+  // The agent asked a follow-up and offered tap chips. While they're showing
+  // they own the lane — they ARE the answer to its question — so they take
+  // precedence over the static facet cues until the user taps or types.
+  const showAgentSuggestions = agentSuggestions.length > 0 && !busy;
   // Hold the whole lane back until the greeting has settled, so the panel never
   // opens with a row of cues already sitting there.
   const cueBar =
-    !cuesReady || (visibleQuickReplies.length === 0 && !hasActionRow && !hasStagedCue) ? null : (
+    !cuesReady ||
+    (!showAgentSuggestions && visibleQuickReplies.length === 0 && !hasActionRow && !hasStagedCue) ? null : (
       <motion.div
         initial={calmMotion ? false : { opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
@@ -1383,6 +1498,31 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         aria-label="Beam Agent quick replies"
         data-testid="scent-mission-cue-bar"
       >
+        {showAgentSuggestions ? (
+          <div className="flex flex-col items-center" data-testid="beam-agent-suggestions">
+            <p className="scent-type-label text-center text-scent-text-subtle">
+              Tap to answer, or type your own
+            </p>
+            <div className="mt-1.5 flex flex-wrap items-center justify-center gap-1.5">
+              {agentSuggestions.map((suggestion, index) => (
+                <motion.button
+                  key={`${suggestion.label}-${index}`}
+                  type="button"
+                  onClick={() => handleAgentSuggestion(suggestion)}
+                  disabled={busy}
+                  initial={calmMotion ? false : { opacity: 0, scale: 0.94 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.18, ease: SCENT_EASE, delay: calmMotion ? 0 : index * 0.045 }}
+                  className={cueChipClass}
+                  title={suggestion.label}
+                >
+                  {suggestion.label}
+                </motion.button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <>
         {hasActionRow ? (
           <div className="flex flex-wrap items-center justify-center gap-1.5">
             {hasConfirmAction ? (
@@ -1505,6 +1645,8 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
             </div>
           </div>
         ) : null}
+          </>
+        )}
       </motion.div>
     );
 
@@ -1620,6 +1762,89 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                 <BeamTypingDots />
               </motion.div>
             ) : null
+          ) : null}
+        </AnimatePresence>
+
+        {/* The agent lined up a collection: an explicit confirmation card. The
+            vault is only written when the user taps "Add to vault" here. */}
+        <AnimatePresence initial={false}>
+          {proposal && !busy && !curating ? (
+            <motion.div
+              key="beam-proposal"
+              initial={calmMotion ? false : { opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={calmMotion ? { opacity: 0 } : { opacity: 0, y: -4 }}
+              transition={{ duration: 0.26, ease: SCENT_EASE }}
+              className="max-w-[92%] self-start rounded-[calc(var(--radius-scent)-10px)] border border-scent-accent/32 bg-[linear-gradient(180deg,rgba(212,175,55,0.07),rgba(0,0,0,0.22))] p-3.5 text-left"
+              data-testid="beam-proposal-card"
+            >
+              <p className="scent-type-label text-scent-accent">
+                Proposed for your vault · {proposal.items.length}
+              </p>
+              <ul className="mt-2 flex flex-col gap-1.5">
+                {proposal.items.map((item) => (
+                  <li key={`${item.brand}-${item.name}`} className="flex items-baseline justify-between gap-3">
+                    <span className="font-serif italic text-[13px] text-[#fff7ec] sm:text-sm">{item.name}</span>
+                    <span className="scent-type-label shrink-0 text-scent-text-subtle">{item.brand}</span>
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-3 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void handleConfirmProposal()}
+                  disabled={!onCurateCollection}
+                  className="scent-primary-button inline-flex min-h-10 items-center justify-center rounded-[var(--radius-scent)] px-5 py-2 text-[11px] font-bold uppercase tracking-[0.16em] disabled:opacity-55"
+                >
+                  Add {proposal.items.length} to vault
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeclineProposal}
+                  className="inline-flex min-h-10 items-center justify-center rounded-full border border-white/20 px-4 py-1.5 scent-type-chip text-[11px] text-scent-text-muted transition-colors hover:border-scent-accent/42 hover:text-[#fff7ec]"
+                >
+                  Not now
+                </button>
+              </div>
+              {!onCurateCollection ? (
+                <p className="mt-2 scent-type-label text-scent-text-subtle">Sign in to save to your vault.</p>
+              ) : null}
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+
+        {/* Curating hold: each pick is added through the normal wardrobe path and
+            we wait until it's image + profile ready before reporting back. */}
+        <AnimatePresence initial={false}>
+          {curating ? (
+            <motion.div
+              key="beam-curating"
+              initial={calmMotion ? false : { opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={calmMotion ? { opacity: 0 } : { opacity: 0, y: -4 }}
+              transition={{ duration: 0.24, ease: SCENT_EASE }}
+              className="max-w-[92%] self-start rounded-[calc(var(--radius-scent)-10px)] border border-scent-accent/24 bg-[linear-gradient(180deg,rgba(212,175,55,0.05),rgba(0,0,0,0.2))] px-3.5 py-3 text-left"
+              role="status"
+              aria-label="Curating your collection"
+            >
+              <div className="flex items-center gap-2">
+                {curating.done ? (
+                  <Check size={14} className="text-scent-accent" aria-hidden />
+                ) : (
+                  <Loader2 size={14} className={calmMotion ? 'text-scent-accent' : 'animate-spin text-scent-accent'} aria-hidden />
+                )}
+                <span className="scent-type-label text-scent-accent">
+                  {curating.done ? 'Collection curated' : 'Curating your collection…'}
+                </span>
+              </div>
+              <p className="mt-1.5 text-[12.5px] text-scent-text-muted">
+                {curating.done
+                  ? `Added ${curating.done.added} of ${curating.done.total} to your vault.`
+                  : curating.progress
+                    ? `${CURATE_STATUS_COPY[curating.progress.status]} ${curating.progress.name} (${Math.min(curating.progress.index + 1, curating.total)}/${curating.total})`
+                    : 'Preparing your collection…'}
+              </p>
+            </motion.div>
           ) : null}
         </AnimatePresence>
 

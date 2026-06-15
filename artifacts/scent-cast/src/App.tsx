@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useLayoutEffect, useMemo, useCallback } from 'react';
 import { Routes, Route, useLocation, useParams, type Location } from 'react-router-dom';
 import type { Fragrance } from './components/Wardrobe';
+import type { BeamProposalItem } from '@/lib/beamAgentClient';
 import { vaultIdentityKey } from './lib/vaultIdentity';
 import { Sparkles, X } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
@@ -693,6 +694,71 @@ function DashboardView() {
     [setActiveEngineRecommendation, setActiveRecommendation, setRecommendationReason],
   );
 
+  // Add a Beam-proposed collection to the vault through the NORMAL wardrobe path
+  // (same handleAddItem a search-result add uses), then actively sync each image
+  // so the agent can hold a "curating" state until the bottle is ready. Reports
+  // per-item progress back to the panel. The agent never writes — this runs only
+  // after the user taps Confirm in the proposal card.
+  const handleCurateCollection = useCallback(
+    async (
+      collectionItems: BeamProposalItem[],
+      onProgress: (progress: {
+        index: number;
+        total: number;
+        name: string;
+        status: 'adding' | 'curating' | 'ready' | 'failed';
+      }) => void,
+    ): Promise<{ added: number; total: number }> => {
+      const total = collectionItems.length;
+      let added = 0;
+      for (let index = 0; index < total; index++) {
+        const item = collectionItems[index];
+        const generatedId =
+          typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+            ? crypto.randomUUID()
+            : `frag-${Date.now()}-${index}`;
+        const built: Record<string, unknown> = {
+          id: generatedId,
+          name: item.name,
+          brand: item.brand,
+          imageUrl: item.imageUrl ?? '',
+          season: 'Universal',
+        };
+        if (item.family) built.family = item.family;
+        if (item.notes?.length) built.notes = item.notes;
+        if (item.pyramid) built.pyramid = item.pyramid;
+        if (item.accords?.length) built.accords = item.accords;
+        if (item.scentVector) built.scent_vector = item.scentVector;
+        if (item.performance) built.performance = item.performance;
+        if (item.concentration) built.concentration = item.concentration;
+        if (item.storagePath) built.storagePath = item.storagePath;
+        if (item.imageHash) built.imageHash = item.imageHash;
+        if (item.storageProvider) built.storageProvider = item.storageProvider;
+        if (item.sourceProvider) built.sourceProvider = item.sourceProvider;
+        if (item.description) built.description = item.description;
+
+        onProgress({ index, total, name: item.name, status: 'adding' });
+        const result = await handleAddItem(built).catch(() => ({ persisted: false }));
+        if (!result.persisted) {
+          onProgress({ index, total, name: item.name, status: 'failed' });
+          continue;
+        }
+        added++;
+        const hasImage =
+          typeof built.imageUrl === 'string' && (built.imageUrl as string).trim().length > 0;
+        if (!hasImage) {
+          // No catalog image rode along — actively trigger the image pipeline and
+          // wait for it (this is the "curating" hold the user sees).
+          onProgress({ index, total, name: item.name, status: 'curating' });
+          await handlePersistWardrobeImage(built as unknown as Fragrance).catch(() => null);
+        }
+        onProgress({ index, total, name: item.name, status: 'ready' });
+      }
+      return { added, total };
+    },
+    [handleAddItem, handlePersistWardrobeImage],
+  );
+
   useModalBehavior({
     isOpen: Boolean(activeRecommendation),
     containerRef: recommendationOverlayRef,
@@ -881,6 +947,7 @@ function DashboardView() {
                           onRevealMatch={handleMissionReveal}
                           onStatusChange={handleMissionStatus}
                           cueBarContainer={missionCueHost}
+                          onCurateCollection={handleCurateCollection}
                         />
                       </React.Suspense>
                     </motion.div>

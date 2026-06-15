@@ -53,6 +53,34 @@ test("exposes exactly the Phase 1 read-only tools", () => {
   ]);
 });
 
+test("beam_propose_collection appears only with resolveCatalogEntry and builds a proposal", async () => {
+  assert.equal(toolMap(makeDeps()).has("beam_propose_collection"), false);
+
+  const tools = toolMap(
+    makeDeps({
+      resolveCatalogEntry: async (name, brand) =>
+        name.toLowerCase().includes("unknown")
+          ? null
+          : { name, brand: brand ?? "Creed", notes: ["bergamot"], accords: ["fresh"], imageUrl: "https://img/x.webp" },
+    }),
+  );
+  const propose = tools.get("beam_propose_collection")!;
+  const result = (await propose.handler(
+    { fragrances: [{ name: "Silver Mountain Water", brand: "Creed" }, { name: "Unknown Juice" }] },
+    CTX,
+  )) as { proposalId: string; count: number; items: unknown[]; unresolved: string[] };
+
+  assert.equal(result.count, 1);
+  assert.equal(result.unresolved.length, 1);
+  assert.match(result.proposalId, /^prop_/);
+
+  const event = propose.clientEvent?.(result);
+  assert.equal(event?.type, "proposal");
+  assert.equal(event && event.type === "proposal" ? event.items.length : -1, 1);
+  // A failed/empty proposal yields no card.
+  assert.equal(propose.clientEvent?.({ proposalId: "p", items: [] }), null);
+});
+
 test("beam_get_wardrobe maps the vault to owned packets", async () => {
   const tools = toolMap(makeDeps());
   const result = (await tools.get("beam_get_wardrobe")!.handler({}, CTX)) as {

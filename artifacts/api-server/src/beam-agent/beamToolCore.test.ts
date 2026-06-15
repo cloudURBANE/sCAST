@@ -9,14 +9,17 @@ import assert from "node:assert/strict";
 import {
   BEAM_LIMITS,
   asString,
+  buildProposalItem,
   clampLimit,
   cleanStringList,
+  extractAgentCues,
   extractText,
   extractToolUses,
   packetFromFlatProfile,
   packetFromOwnedItem,
   packetFromWardrobeRow,
   redactEventForClient,
+  sanitizeSuggestions,
   summarizeToolResult,
   toClaudeTools,
 } from "./beamToolCore.ts";
@@ -89,6 +92,75 @@ test("summarizeToolResult produces safe one-liners", () => {
     "vault is empty",
   );
   assert.equal(summarizeToolResult("x", "whatever"), "done");
+});
+
+test("extractAgentCues splits a trailing cues block from the answer", () => {
+  const text =
+    "Tell me the vibe and I'll line up your Tokyo picks.\n\n```cues\nTemple mornings\nShibuya nights\nBusiness meetings\n```";
+  const { text: clean, cues } = extractAgentCues(text);
+  assert.equal(clean, "Tell me the vibe and I'll line up your Tokyo picks.");
+  assert.deepEqual(cues, ["Temple mornings", "Shibuya nights", "Business meetings"]);
+});
+
+test("extractAgentCues accepts a JSON-array cues block", () => {
+  const { cues } = extractAgentCues('Pick one.\n```cues\n["Day", "Night"]\n```');
+  assert.deepEqual(cues, ["Day", "Night"]);
+});
+
+test("extractAgentCues leaves plain answers untouched", () => {
+  const { text, cues } = extractAgentCues("Wear Aventus today.");
+  assert.equal(text, "Wear Aventus today.");
+  assert.deepEqual(cues, []);
+});
+
+test("buildProposalItem maps a flattened catalog profile to an add-ready item", () => {
+  const item = buildProposalItem({
+    name: "Silver Mountain Water",
+    brand: "Creed",
+    family: "fresh",
+    notes: ["bergamot", "green tea", "black currant"],
+    pyramid: { top: ["bergamot"], heart: ["green tea"], base: ["musk"] },
+    accords: ["fresh", "green"],
+    scent_vector: { freshness: 8, sweetness: 2, woodiness: 4, spice: 1, warmth: 3, musk: 5 },
+    performance: { sillage: 5, longevity: 6 },
+    concentration: "EDP",
+    imageUrl: "https://img/smw.webp",
+    storagePath: "catalog/smw.webp",
+  });
+  assert.ok(item);
+  assert.equal(item?.name, "Silver Mountain Water");
+  assert.equal(item?.brand, "Creed");
+  assert.equal(item?.scentVector?.freshness, 8);
+  assert.deepEqual(item?.pyramid?.top, ["bergamot"]);
+  assert.equal(item?.performance?.longevity, 6);
+  assert.equal(item?.imageUrl, "https://img/smw.webp");
+});
+
+test("buildProposalItem returns null without a usable name", () => {
+  assert.equal(buildProposalItem({ brand: "Creed" }), null);
+});
+
+test("redactEventForClient clamps a proposal to the item cap", () => {
+  const items = Array.from({ length: 9 }, (_, i) => ({ name: `F${i}`, brand: "B", notes: [], accords: [] }));
+  const out = redactEventForClient({ type: "proposal", proposalId: "prop_1", items });
+  assert.equal(out.type, "proposal");
+  assert.equal(out.type === "proposal" ? out.items.length : -1, BEAM_LIMITS.maxProposalItems);
+});
+
+test("sanitizeSuggestions clamps count, length, empties, and dupes", () => {
+  const items = [
+    { label: "  Keep  ", value: "keep-it" },
+    { label: "Keep" }, // dupe (case-insensitive), dropped
+    { label: "" }, // empty, dropped
+    { label: "B" },
+    { label: "C" },
+    { label: "D" },
+    { label: "E" }, // beyond maxSuggestions (4), dropped
+  ];
+  const out = sanitizeSuggestions(items);
+  assert.equal(out.length, BEAM_LIMITS.maxSuggestions);
+  assert.deepEqual(out[0], { label: "Keep", value: "keep-it" });
+  assert.equal(out[1].value, "B"); // value defaults to label
 });
 
 test("packetFromOwnedItem marks ownership and merges traits", () => {
