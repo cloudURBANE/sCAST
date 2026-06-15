@@ -1143,7 +1143,7 @@ export const FragranceCapture: React.FC<{
       animate={{ opacity: 1, y: 0 }}
       exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 24 }}
       transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
-      className="fixed inset-x-0 bottom-[calc(var(--bottomnav-h)+0.4rem)] z-[120] bg-gradient-to-t from-scent-bg via-scent-bg/95 to-transparent px-4 pb-2 pt-8 sm:hidden"
+      className="fixed inset-x-0 bottom-[calc(var(--mobile-nav-offset,var(--bottomnav-h))+0.4rem)] z-[120] bg-gradient-to-t from-scent-bg via-scent-bg/95 to-transparent px-4 pb-2 pt-8 sm:hidden transition-[bottom] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]"
     >
       <div className="mx-auto w-full max-w-[39.75rem]">
         <div className="mb-2 flex justify-center">
