@@ -14,13 +14,22 @@
 import type { ClaudeCallInput, ClaudeResponse } from "./types.ts";
 import { DEFAULT_BEAM_MODEL, STRONG_BEAM_MODEL, callClaude, isClaudeConfigured } from "./claudeProvider.ts";
 import {
-  DEFAULT_OPENROUTER_MODEL,
-  STRONG_OPENROUTER_MODEL,
   callOpenRouter,
+  deepOpenRouterModel,
+  defaultOpenRouterModel,
   isOpenRouterConfigured,
+  strongOpenRouterModel,
 } from "./openRouterProvider.ts";
 
 export type BeamProvider = "openrouter" | "anthropic";
+
+/**
+ * Concierge lane (brief §03.2). The cheap `default` lane (MiniMax M2.5) handles
+ * normal fragrance chat; the `premium` lane (MiniMax M3) is reserved for long /
+ * multi-turn / nuanced work. The lane is chosen deterministically at the route
+ * (see laneSelector.ts) — no extra router LLM call.
+ */
+export type BeamLane = "default" | "premium";
 
 /** The provider that will actually serve a call, or null if none is configured. */
 export function resolveProvider(): BeamProvider | null {
@@ -40,18 +49,45 @@ export function isModelConfigured(): boolean {
 
 /**
  * The orchestration (`model`) and final-synthesis (`synthesisModel`) slugs for
- * the provider that will actually serve the run, resolved from env. Both fall
- * back to the cheap default when the strong env var is unset, so callers can
- * always branch on a defined slug. Returns null when no provider is configured.
+ * the provider that will actually serve the run, resolved from env at call time.
+ * Returns null when no provider is configured.
+ *
+ * `lane` selects the cost lane (brief §03.2): the `premium` lane runs the strong
+ * (MiniMax M3 / Sonnet) slug for BOTH orchestration and synthesis so long /
+ * nuanced sessions get the better model end-to-end; the `default` lane runs the
+ * cheap concierge slug for orchestration and the strong slug only for the closing
+ * synthesis turn. A no-arg call keeps the historical default-lane behavior.
  */
-export function resolveBeamModels(): { model: string; synthesisModel: string } | null {
+export function resolveBeamModels(
+  lane: BeamLane = "default",
+): { model: string; synthesisModel: string } | null {
   const provider = resolveProvider();
   if (provider === "anthropic") {
-    return { model: DEFAULT_BEAM_MODEL, synthesisModel: STRONG_BEAM_MODEL };
+    const strong = STRONG_BEAM_MODEL;
+    return {
+      model: lane === "premium" ? strong : DEFAULT_BEAM_MODEL,
+      synthesisModel: strong,
+    };
   }
   if (provider === "openrouter") {
-    return { model: DEFAULT_OPENROUTER_MODEL, synthesisModel: STRONG_OPENROUTER_MODEL };
+    const strong = strongOpenRouterModel();
+    return {
+      model: lane === "premium" ? strong : defaultOpenRouterModel(),
+      synthesisModel: strong,
+    };
   }
+  return null;
+}
+
+/**
+ * The deep-strategy slug (brief §02.1 deep_strategy / §03.2 use_kimi_if) for the
+ * active provider, exposed for telemetry and future gated deep workflows. The
+ * hot-path loop does NOT auto-route here. Returns null when no provider is set.
+ */
+export function resolveDeepModel(): string | null {
+  const provider = resolveProvider();
+  if (provider === "anthropic") return STRONG_BEAM_MODEL;
+  if (provider === "openrouter") return deepOpenRouterModel();
   return null;
 }
 

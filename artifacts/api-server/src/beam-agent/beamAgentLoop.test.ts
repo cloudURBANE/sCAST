@@ -310,6 +310,60 @@ test("an unserializable tool result yields exactly one error result, not a dupli
   assert.equal(summary?.outcome, "completed");
 });
 
+test("a synthesis answer with an unsupported price is repaired once and the clean answer ships", async () => {
+  const toolCalls: { input: unknown }[] = [];
+  let completed: string | undefined;
+  let summary: BeamRunSummary | undefined;
+
+  const { callModel, seen } = scriptedModel([
+    // 1) call a tool (grounds the run; no external fact -> price claims are unsupported)
+    {
+      stop_reason: "tool_use",
+      content: [{ type: "tool_use", id: "tu_1", name: "beam_get_wardrobe", input: {} }],
+      usage: { inputTokens: 100, outputTokens: 20 },
+    },
+    // 2) orchestration done -> hand to synthesis
+    text("draft"),
+    // 3) synthesis invents a price with no external evidence -> gate fails
+    { ...text("Aventus is $300 at most retailers."), usage: { inputTokens: 200, outputTokens: 30 } },
+    // 4) the single constrained repair pass writes a clean answer
+    { ...text("Wear Aventus tonight — a confident, smoky-fruity pick."), usage: { inputTokens: 80, outputTokens: 20 } },
+  ]);
+
+  await runBeamAgent({
+    ctx,
+    userMessage: "what should I wear?",
+    tools: [wardrobeTool(toolCalls)],
+    emit: () => {},
+    isModelConfigured: () => true,
+    callModel,
+    model: "cheap-model",
+    synthesisModel: "strong-model",
+    onComplete: (t) => (completed = t),
+    onSummary: (s) => (summary = s),
+  });
+
+  // The clean repaired answer shipped, not the one with the invented price.
+  assert.equal(completed, "Wear Aventus tonight — a confident, smoky-fruity pick.");
+  // tool turn + draft turn + synthesis + ONE repair.
+  assert.equal(summary?.modelCalls, 4);
+  // The repair call (last) was tool-free, used the synthesis model, and fed the
+  // broken price rule back to the model.
+  const repairCall = seen[seen.length - 1];
+  assert.equal(repairCall.model, "strong-model");
+  assert.equal(repairCall.tools.length, 0);
+  const folded = repairCall.messages
+    .flatMap((m) => (Array.isArray(m.content) ? m.content : [{ type: "text", text: m.content }]))
+    .map((b) => (b && typeof b === "object" && "text" in b ? String((b as { text: unknown }).text) : ""))
+    .join("\n");
+  assert.match(folded, /Do NOT state any price/i);
+
+  // Telemetry reflects a passing gate and a non-zero estimated cost.
+  assert.equal(summary?.qualityGatePassed, true);
+  assert.deepEqual(summary?.qualityViolations, []);
+  assert.ok((summary?.estimatedCostUsd ?? 0) > 0, "expected a non-zero cost estimate");
+});
+
 test("an unconfigured model fails gracefully with a summary", async () => {
   const events: BeamRunEvent[] = [];
   let summary: BeamRunSummary | undefined;
