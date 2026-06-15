@@ -7,10 +7,12 @@ import {
 } from "@workspace/scent-weather-engine";
 import {
   activeMissionNode,
+  buildAgentReveal,
   buildMissionWardrobe,
   buildMissionWeather,
   findWardrobeMatch,
   missionProgress,
+  proposalItemToFragrance,
   suggestedMissionChips,
 } from "./scentMissionClient.ts";
 
@@ -82,6 +84,78 @@ test("findWardrobeMatch prefers dbId, then client id, then brand+name", () => {
     "c",
   );
   assert.equal(findWardrobeMatch(items, { fragranceId: "zzz", name: "Unknown" }), null);
+});
+
+test("proposalItemToFragrance projects a Beam pick into the Fragrance overlay shape", () => {
+  const frag = proposalItemToFragrance({
+    name: "Layton",
+    brand: "Parfums de Marly",
+    family: "Amber",
+    notes: ["apple", "vanilla", "lavender"],
+    accords: ["sweet", "vanilla", "spicy"],
+    pyramid: { top: ["apple"], heart: ["lavender"], base: ["vanilla"] },
+    scentVector: { freshness: 3, sweetness: 8, woodiness: 4, spice: 5, warmth: 7, musk: 4 },
+    concentration: "EDP",
+    imageUrl: "https://example.test/layton.webp",
+  });
+
+  assert.equal(frag.name, "Layton");
+  assert.equal(frag.brand, "Parfums de Marly");
+  assert.equal(frag.concentration, "EDP");
+  assert.equal(frag.imageUrl, "https://example.test/layton.webp");
+  assert.equal(frag.family, "Amber");
+  assert.deepEqual(frag.scent_vector, {
+    freshness: 3,
+    sweetness: 8,
+    woodiness: 4,
+    spice: 5,
+    warmth: 7,
+    musk: 4,
+  });
+  assert.deepEqual(frag.pyramid, { top: ["apple"], heart: ["lavender"], base: ["vanilla"] });
+  // A client id is always present so the overlay can key the (vault-less) pick.
+  assert.ok(frag.id.startsWith("beam-"));
+  // Image-less proposals still yield a renderable (empty-string) Fragrance.
+  assert.equal(proposalItemToFragrance({ name: "X", brand: "Y", notes: [], accords: [] }).imageUrl, "");
+});
+
+test("buildAgentReveal scores a Beam pick client-side and carries a reason", () => {
+  const item = {
+    name: "Spicebomb Extreme",
+    brand: "Viktor & Rolf",
+    family: "Amber",
+    notes: ["tobacco", "vanilla", "cinnamon"],
+    accords: ["warm spicy", "sweet", "tobacco"],
+    scentVector: { freshness: 1, sweetness: 7, woodiness: 5, spice: 9, warmth: 9, musk: 3 },
+    performance: { sillage: 9, longevity: 9 },
+    concentration: "EDP",
+    description: "A warm, spicy tobacco signature for cold-weather nights.",
+  };
+  const calibration = { destination: "Night Out" as const, energy: "Confident" as const };
+
+  const reveal = buildAgentReveal(item, calibration, {
+    temperature_f: 41,
+    humidity_percent: 55,
+    wind_speed_mph: 6,
+    condition: "clear",
+  });
+
+  // Fragrance projection survives the round-trip.
+  assert.equal(reveal.fragrance.name, "Spicebomb Extreme");
+  assert.equal(reveal.fragrance.brand, "Viktor & Rolf");
+  // The weather engine produced a real recommendation (not a stub).
+  assert.ok(Array.isArray(reveal.engine.best_scent_families));
+  assert.ok(["low", "medium", "high", "overpowering_risk"].includes(reveal.engine.projection_risk));
+  assert.ok(reveal.engine.spray_count.recommended >= reveal.engine.spray_count.min);
+  // Reason prefers the proposal's own description when present.
+  assert.equal(reveal.reason, "A warm, spicy tobacco signature for cold-weather nights.");
+
+  // With no description, it falls back to the engine's explanation.
+  const noDesc = buildAgentReveal({ ...item, description: undefined }, calibration, {
+    temperature_f: 41,
+  });
+  assert.equal(noDesc.reason, noDesc.engine.explanation);
+  assert.ok(noDesc.reason.length > 0);
 });
 
 test("activeMissionNode and missionProgress track node progression", () => {
