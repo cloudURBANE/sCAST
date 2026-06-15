@@ -1398,11 +1398,32 @@ export const FragranceCapture: React.FC<{
                             <button
                               key={key}
                               type="button"
-                              onClick={() => setSelectedId(key)}
+                              // First tap selects; a second tap on the already-selected
+                              // card commits via the SAME handlePrimaryAction → handleConfirm
+                              // path as the bottom action bar (so error surfacing + the
+                              // Express detail-fetch fallback stay identical). This keeps the
+                              // add affordance on the card itself — no travel to the distant
+                              // bar — without adding pointer handlers: a native button's click
+                              // never fires on scroll momentum, so it can't auto-add mid-scroll.
+                              onClick={() => {
+                                if (key !== selectedId) {
+                                  setSelectedId(key);
+                                  return;
+                                }
+                                if (uploading) return;
+                                handlePrimaryAction();
+                              }}
                               className={`scent-vault-result-card group mx-auto w-full max-w-[39.75rem] min-h-[60px] px-3.5 py-2 text-center transition-[border-color,box-shadow] duration-200 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55 sm:min-h-[70px] sm:px-4 sm:py-2.5 ${
                                 isSelected ? 'is-selected' : ''
                               }`}
                               aria-pressed={isSelected}
+                              aria-label={
+                                inVault
+                                  ? `${m.name} — already in your vault, tap to view`
+                                  : isSelected
+                                    ? `Add ${m.name} to your vault`
+                                    : `Select ${m.name}`
+                              }
                             >
                               {inVault && (
                                 <span className="pointer-events-none absolute left-3 top-2.5 z-10 inline-flex items-center gap-1.5 rounded-full border border-scent-accent/35 bg-scent-bg/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-scent-accent sm:left-4 sm:top-3">

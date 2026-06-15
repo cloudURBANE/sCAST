@@ -323,9 +323,13 @@ export function isImmutableImageTarget(target: URL): boolean {
 }
 
 export function cacheControlForImageTarget(target: URL): string {
+  // `s-maxage` mirrors `max-age` per tier so shared CDNs (Vercel edge / Railway
+  // proxy) cache the proxied image as long as the browser does, instead of
+  // treating it as private. Image responses carry no Set-Cookie, so the
+  // middleware's cookie-stripping safety net leaves these directives intact.
   return isImmutableImageTarget(target)
-    ? "public, max-age=31536000, immutable"
-    : "public, max-age=86400, stale-while-revalidate=86400";
+    ? "public, max-age=31536000, s-maxage=31536000, immutable"
+    : "public, max-age=86400, s-maxage=86400, stale-while-revalidate=86400";
 }
 
 /** Process-wide singleton used by the route. */

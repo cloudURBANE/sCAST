@@ -5,6 +5,12 @@ const SUPPLEMENTAL_SEARCH_MIN_RESULTS = 8;
 const SEARCH_QUERY_BRAND_ALIASES: ReadonlyArray<readonly [string, string]> = [
   ["mfk", "Maison Francis Kurkdjian"],
   ["ysl", "Yves Saint Laurent"],
+  ["tf", "Tom Ford"],
+  ["jpg", "Jean Paul Gaultier"],
+  ["pdm", "Parfums de Marly"],
+  ["eldo", "Etat Libre d'Orange"],
+  ["adp", "Acqua di Parma"],
+  ["atg", "Aaron Terence Hughes"],
 ];
 const SEARCH_RANK_IGNORED_TOKENS = new Set([
   "cologne",
