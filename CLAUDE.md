@@ -18,6 +18,12 @@ pnpm --filter @workspace/api-server run dev
 pnpm --filter @workspace/scent-cast run dev
 
 # Push DB schema changes (requires DATABASE_URL env var)
+# GUARDED: refuses a non-local DATABASE_URL unless ALLOW_PROD_DB_PUSH=yes, because
+# our DB may be a SHARED Supabase project holding another app's tables. push is
+# also scoped to our own tables via tablesFilter (drizzle.config.ts), so foreign
+# tables are never dropped. Deliberate prod push:
+#   ALLOW_PROD_DB_PUSH=yes pnpm --filter @workspace/db run push   # bash
+#   $env:ALLOW_PROD_DB_PUSH='yes'; pnpm --filter @workspace/db run push   # PowerShell
 pnpm --filter @workspace/db run push
 
 # Regenerate API React Query hooks and Zod schemas from OpenAPI spec
