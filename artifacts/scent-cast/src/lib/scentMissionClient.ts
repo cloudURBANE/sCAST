@@ -1,13 +1,20 @@
 import {
+  buildScentMissionEngineInput,
+  calculateScentWeatherRecommendation,
   sanitizeScentMissionWardrobe,
   sanitizeScentMissionWeather,
   SCENT_MISSION_NODE_ORDER,
+  type ScentMissionCalibration,
   type ScentMissionNodeId,
   type ScentMissionRecommendation,
   type ScentMissionState,
   type ScentMissionWardrobeItem,
   type ScentMissionWeather,
+  type ScentWeatherEngineInput,
+  type ScentWeatherRecommendation,
 } from "@workspace/scent-weather-engine";
+import type { BeamProposalItem } from "@/lib/beamAgentClient";
+import type { Fragrance } from "@/components/Wardrobe";
 
 /**
  * Pure client-side helpers for the Scent Mission panel: building the sanitized
@@ -115,6 +122,88 @@ export function findWardrobeMatch<T extends MissionSourceItem>(
       return !brand || brand === wantedBrand;
     }) ?? null
   );
+}
+
+/**
+ * Map the agent's proposed bottle into the app's `Fragrance` shape so the
+ * immersive recommendation overlay can render it — even when the bottle is not
+ * (yet) in the vault. The proposal already carries the catalog-resolved profile
+ * (notes, pyramid, accords, the 6-axis vector, image), so this is a faithful
+ * projection, not a guess. A throwaway client id is generated for the overlay's
+ * keying; nothing is written to the vault here.
+ */
+export function proposalItemToFragrance(item: BeamProposalItem): Fragrance {
+  const id =
+    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+      ? `beam-${crypto.randomUUID()}`
+      : `beam-${Date.now()}`;
+  return {
+    id,
+    name: item.name,
+    brand: item.brand,
+    imageUrl: item.imageUrl ?? "",
+    season: "",
+    notes: item.notes,
+    concentration: item.concentration,
+    scent_vector: item.scentVector,
+    family: item.family,
+    pyramid: item.pyramid,
+  };
+}
+
+/**
+ * Build the weather-engine input for an agent proposal item, reusing the exact
+ * mapping the scripted resolver uses (`buildScentMissionEngineInput`) so the
+ * score is consistent across both engines, then layering the proposal's 6-axis
+ * vector in as `profile_vector` for a sharper read when present.
+ */
+export function buildProposalEngineInput(
+  item: BeamProposalItem,
+  calibration: ScentMissionCalibration,
+  weather: ScentMissionWeather,
+): ScentWeatherEngineInput {
+  const wardrobeShape: ScentMissionWardrobeItem = {
+    id: "beam-hero",
+    name: item.name,
+    brand: item.brand,
+    concentration: item.concentration,
+    families: stringList(item.family),
+    accords: stringList(item.accords, item.notes),
+    sillage:
+      typeof item.performance?.sillage === "string"
+        ? item.performance.sillage
+        : sillageLabel(item.performance?.sillage),
+    longevity: item.performance?.longevity,
+  };
+  const base = buildScentMissionEngineInput(wardrobeShape, calibration, weather);
+  if (!item.scentVector) return base;
+  return { ...base, fragrance: { ...base.fragrance, profile_vector: item.scentVector } };
+}
+
+/** Everything the immersive reveal overlay needs, derived from an agent pick. */
+export type AgentReveal = {
+  fragrance: Fragrance;
+  engine: ScentWeatherRecommendation;
+  reason: string;
+};
+
+/**
+ * Turn the agent's hero proposal item into a reveal payload: a `Fragrance`, a
+ * client-computed weather recommendation, and a concise reason. This is the
+ * bridge that lets a live-agent pick open the same cinematic overlay the
+ * scripted resolver produces — no second server round-trip. Pure, so it runs
+ * under the node test runner.
+ */
+export function buildAgentReveal(
+  item: BeamProposalItem,
+  calibration: ScentMissionCalibration,
+  weather: ScentMissionWeather,
+): AgentReveal {
+  const engine = calculateScentWeatherRecommendation(
+    buildProposalEngineInput(item, calibration, weather),
+  );
+  const reason = item.description?.trim() || engine.explanation;
+  return { fragrance: proposalItemToFragrance(item), engine, reason };
 }
 
 /** The node the user can currently act on, if any. */

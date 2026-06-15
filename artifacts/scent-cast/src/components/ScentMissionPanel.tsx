@@ -31,6 +31,7 @@ import {
   type ScentWeatherRecommendation,
 } from '@workspace/scent-weather-engine';
 import {
+  buildAgentReveal,
   buildMissionWardrobe,
   buildMissionWeather,
   findWardrobeMatch,
@@ -893,7 +894,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
     // Re-measure the fade hints once the (possibly smooth) scroll has settled.
     const id = window.setTimeout(updateScrollEdges, calmMotion ? 0 : 280);
     return () => window.clearTimeout(id);
-  }, [messages, resolved, busy, calmMotion, updateScrollEdges]);
+  }, [messages, resolved, proposal, busy, calmMotion, updateScrollEdges]);
 
   useEffect(() => {
     if (greetingMounted) return;
@@ -1518,6 +1519,24 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
     if (!resolved?.item) return;
     onRevealMatch(resolved.item, resolved.recommendation.engine, resolved.recommendation.reason);
   }, [onRevealMatch, resolved]);
+
+  // Bridge the live agent's structured pick to the SAME immersive overlay the
+  // scripted resolver opens. The agent's proposal already carries the catalog
+  // profile, so we score the hero (item[0]) client-side against the current
+  // weather + calibration and project it into the reveal — no second server
+  // round-trip, and it stays coherent with the chat (it's this turn's own pick).
+  const proposalReveal = useMemo(
+    () =>
+      proposal && proposal.items.length > 0
+        ? buildAgentReveal(proposal.items[0], mission.calibration, buildMissionWeather(weather))
+        : null,
+    [proposal, mission.calibration, weather],
+  );
+
+  const handleRevealProposalHero = useCallback(() => {
+    if (!proposalReveal) return;
+    onRevealMatch(proposalReveal.fragrance, proposalReveal.engine, proposalReveal.reason);
+  }, [onRevealMatch, proposalReveal]);
 
   // The placeholder doubles as the instructions: tap a cue below to fill this
   // field, or type — then send. Keeps the flow self-evident with no extra chrome.
@@ -2213,38 +2232,70 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
           ) : null}
         </AnimatePresence>
 
-        {/* The agent lined up a collection: an explicit confirmation card. The
-            vault is only written when the user taps "Add to vault" here. */}
+        {/* The agent's pick, rendered as the cinematic payoff — not a flat list.
+            "Reveal Match" opens the SAME immersive overlay the scripted resolver
+            uses, seeded client-side from this turn's hero pick. "Add to vault"
+            still curates the full collection; nothing is written until tapped. */}
         <AnimatePresence initial={false}>
-          {proposal && !busy && !curating ? (
+          {proposal && proposalReveal && !busy && !curating ? (
             <motion.div
               key="beam-proposal"
-              initial={calmMotion ? false : { opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={calmMotion ? { opacity: 0 } : { opacity: 0, y: -4 }}
-              transition={{ duration: 0.26, ease: SCENT_EASE }}
-              className="max-w-[92%] self-start rounded-[calc(var(--radius-scent)-10px)] border border-scent-accent/32 bg-[linear-gradient(180deg,rgba(212,175,55,0.07),rgba(0,0,0,0.22))] p-3.5 text-left"
+              data-scroll-anchor="resolved"
+              variants={revealContainer}
+              initial={calmMotion ? false : 'hidden'}
+              animate="show"
+              exit={calmMotion ? { opacity: 0 } : { opacity: 0, y: 6 }}
+              className="scent-match-reveal max-w-[92%] self-start rounded-[calc(var(--radius-scent)-10px)] border border-scent-accent/32 bg-[linear-gradient(180deg,rgba(212,175,55,0.07),rgba(0,0,0,0.28))] p-4 text-left"
               data-testid="beam-proposal-card"
+              data-calm={calmMotion ? 'true' : undefined}
             >
-              <p className="scent-type-label text-scent-accent">
-                Proposed for your vault · {proposal.items.length}
-              </p>
-              <ul className="mt-2 flex max-h-[7.5rem] flex-col gap-1.5 overflow-y-auto pr-1 scrollbar-hide">
-                {proposal.items.map((item) => (
-                  <li key={`${item.brand}-${item.name}`} className="flex items-baseline justify-between gap-3">
-                    <span className="font-serif italic text-[13px] text-[#fff7ec] sm:text-sm">{item.name}</span>
-                    <span className="scent-type-label shrink-0 text-scent-text-subtle">{item.brand}</span>
-                  </li>
-                ))}
-              </ul>
-              <div className="mt-3 flex items-center gap-2">
+              <motion.p variants={revealItem} className="scent-type-label text-scent-accent">
+                {proposal.items.length > 1 ? 'Signature pick' : 'Your match'}
+              </motion.p>
+              {proposalReveal.fragrance.brand ? (
+                <motion.p variants={revealItem} className="mt-2 font-serif text-xs uppercase tracking-[0.2em] text-scent-text-muted">
+                  {proposalReveal.fragrance.brand}
+                </motion.p>
+              ) : null}
+              <motion.p variants={revealItem} className="font-serif italic text-2xl leading-tight text-[#fff7ec]">
+                {proposalReveal.fragrance.name}
+              </motion.p>
+              <motion.p variants={revealItem} className="mt-2 text-sm italic leading-relaxed text-scent-text-muted">
+                {proposalReveal.reason}
+              </motion.p>
+
+              <motion.button
+                variants={revealItem}
+                type="button"
+                onClick={handleRevealProposalHero}
+                className="scent-primary-button mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-[var(--radius-scent)] px-5 py-2.5"
+              >
+                <Sparkles size={15} aria-hidden />
+                <span className="font-serif italic text-base">Reveal Match</span>
+              </motion.button>
+
+              {proposal.items.length > 1 ? (
+                <motion.div variants={revealItem} className="mt-4">
+                  <p className="scent-type-label text-scent-text-subtle">Also lined up</p>
+                  <ul className="mt-1.5 flex max-h-[6rem] flex-col gap-1.5 overflow-y-auto pr-1 scrollbar-hide">
+                    {proposal.items.slice(1).map((item) => (
+                      <li key={`${item.brand}-${item.name}`} className="flex items-baseline justify-between gap-3">
+                        <span className="font-serif italic text-[13px] text-[#fff7ec] sm:text-sm">{item.name}</span>
+                        <span className="scent-type-label shrink-0 text-scent-text-subtle">{item.brand}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </motion.div>
+              ) : null}
+
+              <motion.div variants={revealItem} className="mt-4 flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => void handleConfirmProposal()}
                   disabled={!onCurateCollection}
-                  className="scent-primary-button inline-flex min-h-10 items-center justify-center rounded-[var(--radius-scent)] px-5 py-2 text-[11px] font-bold uppercase tracking-[0.16em] disabled:opacity-55"
+                  className="inline-flex min-h-10 items-center justify-center rounded-full border border-scent-accent/42 px-4 py-1.5 scent-type-chip text-[11px] text-[#fff7ec] transition-colors hover:bg-scent-accent/12 disabled:opacity-55"
                 >
-                  Add {proposal.items.length} to vault
+                  {proposal.items.length > 1 ? `Add ${proposal.items.length} to vault` : 'Add to vault'}
                 </button>
                 <button
                   type="button"
@@ -2253,9 +2304,9 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                 >
                   Not now
                 </button>
-              </div>
+              </motion.div>
               {!onCurateCollection ? (
-                <p className="mt-2 scent-type-label text-scent-text-subtle">Sign in to save to your vault.</p>
+                <motion.p variants={revealItem} className="mt-2 scent-type-label text-scent-text-subtle">Sign in to save to your vault.</motion.p>
               ) : null}
             </motion.div>
           ) : null}
