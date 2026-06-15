@@ -18,6 +18,7 @@ import enrichmentRouter from "./enrichment";
 import usageRouter from "./usage";
 import reviewsRouter from "./reviews";
 import fragranceEngineProxyRouter from "./fragranceEngineProxy";
+import pushRouter from "./push";
 
 const router: IRouter = Router();
 
@@ -40,5 +41,6 @@ router.use(enrichmentRouter);
 router.use(usageRouter);
 router.use(reviewsRouter);
 router.use(fragranceEngineProxyRouter);
+router.use(pushRouter);
 
 export default router;

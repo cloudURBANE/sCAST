@@ -31,6 +31,7 @@
     "pino": "^9",
     "pino-http": "^10",
     "sharp": "^0.33.5",
+    "web-push": "^3.6.7",
     "zod": "catalog:"
   },
   "devDependencies": {
@@ -38,6 +39,7 @@
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "catalog:",
+    "@types/web-push": "^3.6.4",
     "esbuild": "^0.27.3",
     "esbuild-plugin-pino": "^2.3.3",
     "pino-pretty": "^13",

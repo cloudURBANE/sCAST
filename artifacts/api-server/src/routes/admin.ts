@@ -7,6 +7,7 @@ import { rebuildWardrobeForUser } from "../services/wardrobeRebuild";
 import { getBuyLinkFreshnessStats } from "../services/buyLinks";
 import { getDefaultTenantId } from "../services/tenants";
 import { getKeyPool, listKeyPools, parseKeyList } from "../lib/keyPool";
+import { isPushConfigured, sendPushToAll, sendPushToUser } from "../services/pushService";
 import { logger } from "../lib/logger";
 
 const router = Router();
@@ -70,6 +71,49 @@ router.post("/admin/wardrobe/rebuild", requireAdminSecret, async (req, res) => {
   const tenantId = existing[0].tenantId ?? (await getDefaultTenantId());
   const summary = await rebuildWardrobeForUser(tenantId, existing[0].id);
   res.json(summary);
+});
+
+// Ops-only trigger to send a Web Push notification — to one user (by email) or
+// to every subscriber when no email is given. This is the manual delivery path
+// (e.g. a "scent of the day" nudge); automated scheduling would need a worker,
+// which this codebase does not yet run. Body: { email?, title, body, url? }.
+router.post("/admin/push/broadcast", requireAdminSecret, async (req, res) => {
+  if (!isPushConfigured()) {
+    res.status(503).json({ error: "Push notifications are not configured on this server." });
+    return;
+  }
+  const { email, title, body, url } = req.body as {
+    email?: string;
+    title?: string;
+    body?: string;
+    url?: string;
+  };
+  if (!title?.trim() || !body?.trim()) {
+    res.status(400).json({ error: "title and body are required" });
+    return;
+  }
+  const payload = { title: title.trim(), body: body.trim(), url: url?.trim() || "/" };
+
+  if (email?.trim()) {
+    const normalizedEmail = email.trim().toLowerCase();
+    const existing = await db
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(eq(usersTable.email, normalizedEmail))
+      .limit(1);
+    if (existing.length === 0) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+    const result = await sendPushToUser(existing[0].id, payload);
+    logger.info({ email: normalizedEmail, ...result }, "[admin] push sent to user");
+    res.json(result);
+    return;
+  }
+
+  const result = await sendPushToAll(payload);
+  logger.info(result, "[admin] push broadcast to all subscribers");
+  res.json(result);
 });
 
 export default router;
