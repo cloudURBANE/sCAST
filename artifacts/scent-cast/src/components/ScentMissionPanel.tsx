@@ -385,11 +385,15 @@ const BeamActivityTrail: React.FC<{
   const currentStep = [...steps].reverse().find((s) => s.state === 'active') ?? steps[steps.length - 1];
   const showSpinner = running && activeCount > 0;
   const elapsedSeconds = elapsedMs != null ? Math.max(1, Math.round(elapsedMs / 1000)) : null;
+  // Settled recap copy: reads as concierge craftsmanship ("Curated in 8s") rather
+  // than an agent-execution terminal ("Thought for 8s"). The seconds signal real
+  // work was done without exposing raw "N steps run" debug framing as the headline;
+  // the step-by-step tool list stays available behind the Details toggle.
   const summaryLabel = showSpinner
     ? currentStep.label
     : elapsedSeconds != null
-      ? `Thought for ${elapsedSeconds}s · ${steps.length} step${steps.length === 1 ? '' : 's'}`
-      : `${steps.length} step${steps.length === 1 ? '' : 's'}`;
+      ? `Curated in ${elapsedSeconds}s · ${steps.length} step${steps.length === 1 ? '' : 's'}`
+      : `Curated · ${steps.length} step${steps.length === 1 ? '' : 's'}`;
 
   const body = (
     <div className="mt-2.5 flex flex-col gap-2 border-t border-white/10 pt-2.5">
@@ -1575,8 +1579,12 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
 
   // The placeholder doubles as the instructions: tap a cue below to fill this
   // field, or type — then send. Keeps the flow self-evident with no extra chrome.
-  const composerPlaceholder =
-    agentMode === 'fast'
+  // Once a recommendation is on screen the composer is no longer a cold-start
+  // prompt — it's a follow-up line, so the copy advances to invite refinement
+  // instead of repeating "describe your day" beneath an answer.
+  const composerPlaceholder = hasDeliveredAnswer
+    ? 'Ask a follow-up, or refine your match'
+    : agentMode === 'fast'
       ? 'Tap a cue below or type, then send'
       : agentMode === 'premium'
         ? 'Tap a cue or describe the impression'
@@ -2021,7 +2029,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
           ) : (
             <div
               ref={quickReplyScrollRef}
-              className="mt-1.5 flex flex-nowrap items-center justify-center gap-1.5 overflow-x-auto pb-1 scrollbar-hide select-none"
+              className="mt-1.5 flex flex-nowrap items-center justify-center gap-1.5 overflow-x-auto px-3 pb-1 scrollbar-hide select-none"
               style={{ touchAction: 'pan-x', overscrollBehaviorX: 'contain' }}
             >
               <AnimatePresence initial={false} mode="popLayout">
