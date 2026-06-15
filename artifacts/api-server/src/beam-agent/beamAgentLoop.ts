@@ -31,6 +31,25 @@ import { callModel as defaultCallModel, isModelConfigured as defaultIsModelConfi
 const ORCHESTRATION_MAX_TOKENS = 2048;
 const SYNTHESIS_MAX_TOKENS = 4096;
 
+/**
+ * Hard wall-clock budget for an entire run. Kept under the SPA's 60s client
+ * timeout (ScentMissionPanel BEAM_AGENT_TIMEOUT_MS) so the server emits a real
+ * completed/failed result before the client gives up and silently falls back to
+ * the scripted path.
+ */
+const RUN_BUDGET_MS = 52_000;
+/**
+ * Per-tool execution ceiling. Tool handlers have no AbortSignal of their own, so
+ * a slow scrape/DB call could otherwise stall the whole loop until the client
+ * times out. The underlying work may keep running; the loop just stops waiting.
+ */
+const TOOL_TIMEOUT_MS = 20_000;
+/**
+ * Cap on "you narrated a step but didn't call the tool / you got cut off"
+ * re-prompts, so a model that insists on narrating still terminates.
+ */
+const MAX_ACT_NUDGES = 2;
+
 const SYSTEM_PROMPT = `You are the Beam Agent for ScentBeam, a fragrance wardrobe app. You are
 a sharp, confident fragrance concierge: you ground every answer in the user's real vault and
 the real catalog, then give a specific, decisive recommendation.
@@ -62,11 +81,17 @@ Building a collection (e.g. for a trip or an occasion):
    dominant notes/families you actually see.
 2. Confirm the plan BEFORE proposing — tell them your read of their taste and exactly what you'll
    look for (how many new bottles, the direction), and offer cues so they confirm or adjust in a tap.
-3. Once they've agreed, search the catalog for fitting NEW (unowned) fragrances, deepen the best
-   ones with details, then call beam_propose_collection with your final picks.
+3. Once they've agreed to the direction, DO IT in that same turn: call beam_search_catalog for
+   fitting NEW (unowned) fragrances, deepen the best ones with beam_get_fragrance_details, then call
+   beam_propose_collection with your final picks. Do NOT ask a second time ("shall I line these up?")
+   — their agreement to the plan IS the go-ahead. beam_propose_collection renders the confirmation
+   card; after you call it, briefly say you've lined the picks up for their review, then stop.
 The app then shows the user a confirmation card and saves ONLY what they approve.
 
 Hard rules:
+- Act, don't narrate. When you say you're about to search, score, pull details, or look something
+  up, CALL that tool in the SAME turn — never end a message on a promise to act ("now let me…") and
+  wait for the user. Either emit the tool call now or give the final answer.
 - Only mention fragrances that appeared in a tool result. Never invent fragrances, notes,
   accords, ids, or prices. If a tool result is thin, say what you'd need rather than guessing.
 - Weather/scoring math is done by beam_score_candidates — never compute scores yourself.
@@ -83,6 +108,17 @@ const RETRIEVAL_NUDGE =
   "Before answering, if this request is about specific fragrances, the user's vault, " +
   "weather/occasion fits, or a recommendation, call the appropriate tool(s) first and base " +
   "your answer on the results. If it is only a greeting or a clarifying question, answer directly.";
+
+/**
+ * Sent when the model ended a turn without calling tools but clearly wasn't done —
+ * it either announced a next step in prose ("now let me search…") or got cut off at
+ * the token cap. Pushes it to ACT rather than treating the dangling turn as a final
+ * answer (the bug that made the agent stop mid-plan and wait for the user's "Ok").
+ */
+const ACT_NUDGE =
+  "You stopped before finishing. If you still need data, call the tool(s) now — emit the " +
+  "actual tool calls, do not just describe them. If you already have enough evidence, write " +
+  "the final recommendation instead. Do not end your turn on a promise to act.";
 
 /** Last-turn instruction for the dedicated, tool-free synthesis pass. */
 const SYNTHESIS_NUDGE =
@@ -184,6 +220,44 @@ function withSynthesisInstruction(messages: ClaudeMessage[]): ClaudeMessage[] {
 }
 
 /**
+ * Reject if `promise` does not settle within `ms`. The underlying work may keep
+ * running (tool handlers have no cancellation seam yet), but the loop stops
+ * waiting on it so a single slow tool can't stall the whole run.
+ */
+function raceTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      },
+    );
+  });
+}
+
+/**
+ * Heuristic: did the model end a tool-free turn by PROMISING tool work instead of
+ * doing it (e.g. "now let me score your vault and search for two…")? We re-prompt
+ * it to act in that case. Conservative on purpose — requires a first-person future
+ * intent AND a retrieval verb, and never fires when the reply is offering the user
+ * a choice (a fenced ```cues block), which is a deliberate pause for their input.
+ */
+function announcesPendingToolWork(text: string): boolean {
+  if (!text) return false;
+  if (/```+\s*cues\b/i.test(text)) return false;
+  const intent =
+    /\b(let me|i['’]?ll|i will|i['’]?m going to|going to|let['’]?s|now i['’]?ll|hold on|one moment|give me a (?:sec|second|moment))\b/i;
+  const retrieval =
+    /\b(search|searching|score|scoring|look up|looking up|pull|pulling|fetch|check|find|scan|research)\b/i;
+  return intent.test(text) && retrieval.test(text);
+}
+
+/**
  * Drives the read-only Beam agent to completion, emitting client-safe progress
  * events. Never throws: failures are reported as a `failed` event.
  */
@@ -194,6 +268,7 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
 
   // Run-scoped accounting, emitted once at the end for observability + cost.
   const startedAt = Date.now();
+  const deadline = startedAt + RUN_BUDGET_MS;
   const toolsUsed: string[] = [];
   let outcome: BeamRunSummary["outcome"] = "failed";
   let failureCode: string | undefined;
@@ -215,6 +290,10 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
     failureCode = code;
     emit({ type: "failed", code, message });
   };
+  // A per-call abort signal bounded by BOTH the provider's own ceiling and the
+  // remaining run budget, so a single model call can never overrun the whole run.
+  const callBudgetSignal = (): AbortSignal =>
+    AbortSignal.timeout(Math.min(45_000, Math.max(1_000, deadline - Date.now())));
 
   try {
     if (!isModelConfigured()) {
@@ -236,6 +315,10 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
 
     let usedTools = false;
     let retrievalNudged = false;
+    let actNudges = 0;
+    // Most recent non-empty assistant prose; shipped as the answer if we hit the
+    // run budget mid-orchestration (better than a scripted-fallback non-sequitur).
+    let lastText = "";
 
     /**
      * Finish the run: write the closing answer and persist it. When tools produced
@@ -243,9 +326,9 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
      * budget, streamed) instead of shipping the orchestration model's clipped
      * inline draft. `draft` is that inline text, used as a fallback.
      */
-    const finish = async (draft: string): Promise<void> => {
+    const finish = async (draft: string, opts?: { skipSynthesis?: boolean }): Promise<void> => {
       let finalText = draft;
-      if (usedTools) {
+      if (usedTools && !opts?.skipSynthesis) {
         usedSynthesis = true;
         emit({ type: "status", label: "Writing your recommendation" });
         const synthMessages = withSynthesisInstruction(messages);
@@ -256,6 +339,7 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
             tools: [],
             model: input.synthesisModel ?? input.model,
             maxTokens: SYNTHESIS_MAX_TOKENS,
+            signal: callBudgetSignal(),
             onDelta: (chunk) => emit({ type: "message_delta", text: chunk }),
           });
           recordUsage(synth);
@@ -289,19 +373,42 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
         fail("stopped", "Run stopped.");
         return;
       }
+      // Out of wall-clock budget. Ship the best grounded draft we have rather than
+      // dead-spinning until the client's 60s timeout fires and falls back.
+      if (Date.now() >= deadline) {
+        if (usedTools && lastText) await finish(lastText, { skipSynthesis: true });
+        else fail("run_timeout", "The agent ran out of time before finishing.");
+        return;
+      }
 
       turnCount++;
-      const response = await callModel({
-        system: SYSTEM_PROMPT,
-        messages,
-        tools: claudeTools,
-        model: input.model,
-        maxTokens: ORCHESTRATION_MAX_TOKENS,
-      });
+      let response: ClaudeResponse;
+      try {
+        response = await callModel({
+          system: SYSTEM_PROMPT,
+          messages,
+          tools: claudeTools,
+          model: input.model,
+          maxTokens: ORCHESTRATION_MAX_TOKENS,
+          signal: callBudgetSignal(),
+        });
+      } catch (err) {
+        // A budget/abort timeout mid-call: degrade to the best draft we already
+        // have instead of surfacing a raw "operation aborted" error to the user.
+        const aborted =
+          Date.now() >= deadline ||
+          (err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError"));
+        if (aborted && usedTools && lastText) {
+          await finish(lastText, { skipSynthesis: true });
+          return;
+        }
+        throw err;
+      }
       recordUsage(response);
 
       const toolUses = extractToolUses(response.content);
       const text = extractText(response.content);
+      if (text) lastText = text;
 
       if (toolUses.length === 0) {
         // The model wants to answer. If it never retrieved anything, nudge it once
@@ -310,6 +417,17 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
           retrievalNudged = true;
           messages.push({ role: "assistant", content: response.content });
           messages.push({ role: "user", content: RETRIEVAL_NUDGE });
+          continue;
+        }
+        // It didn't call tools but isn't actually done: it narrated a next step
+        // ("let me search…") or was cut off at the token cap. Push it to act rather
+        // than mistaking the dangling turn for a final answer. Bounded by
+        // MAX_ACT_NUDGES so a model that insists on narrating still terminates.
+        const cutOff = response.stop_reason === "max_tokens";
+        if (actNudges < MAX_ACT_NUDGES && (cutOff || announcesPendingToolWork(text))) {
+          actNudges++;
+          messages.push({ role: "assistant", content: response.content });
+          messages.push({ role: "user", content: ACT_NUDGE });
           continue;
         }
         await finish(text);
@@ -326,6 +444,18 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
         if (input.shouldStop?.()) {
           fail("stopped", "Run stopped.");
           return;
+        }
+        if (Date.now() >= deadline) {
+          // Out of time mid-round. Every tool_use id still needs a matching
+          // tool_result or the next model call is rejected, so emit an error
+          // result for the rest; the top-of-loop budget check then finishes.
+          results.push({
+            type: "tool_result",
+            tool_use_id: use.id,
+            content: "Skipped: the agent ran out of time.",
+            is_error: true,
+          });
+          continue;
         }
         const def = toolByName.get(use.name as BeamToolName);
         if (!def) {
@@ -357,7 +487,7 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
         toolsUsed.push(def.name);
         emit({ type: "tool_started", tool: def.name });
         try {
-          const result = await def.handler(use.input, ctx);
+          const result = await raceTimeout(def.handler(use.input, ctx), TOOL_TIMEOUT_MS, def.name);
           const serialized = JSON.stringify(result).slice(0, BEAM_LIMITS.maxToolResultChars);
           results.push({ type: "tool_result", tool_use_id: use.id, content: serialized });
           emit({ type: "tool_completed", tool: def.name, summary: summarizeToolResult(def.name, result) });

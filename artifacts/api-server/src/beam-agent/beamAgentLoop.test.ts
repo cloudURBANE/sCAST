@@ -115,6 +115,53 @@ test("zero-tool opening turn is nudged, then the tool path runs and synthesis wr
   assert.equal(summary.outputTokens, 60);
 });
 
+test("a turn that narrates a next step instead of calling tools is pushed to act, not finished", async () => {
+  const toolCalls: { input: unknown }[] = [];
+  let completed: string | undefined;
+  let summary: BeamRunSummary | undefined;
+
+  const { callModel, seen } = scriptedModel([
+    // 1) calls a tool (so usedTools is set and the retrieval nudge is spent)
+    {
+      stop_reason: "tool_use",
+      content: [{ type: "tool_use", id: "tu_1", name: "beam_get_wardrobe", input: {} }],
+    },
+    // 2) narrates the next step WITHOUT calling tools -> must trigger the act nudge,
+    //    NOT be accepted as the final answer.
+    text("Now let me search the catalog and score your vault for two new bottles."),
+    // 3) after the act nudge -> gives the real answer
+    text("Aventus is your pick."),
+    // 4) synthesis turn
+    text("Final: wear Aventus tonight."),
+  ]);
+
+  await runBeamAgent({
+    ctx,
+    userMessage: "build me a kit",
+    tools: [wardrobeTool(toolCalls)],
+    emit: () => {},
+    isModelConfigured: () => true,
+    callModel,
+    onComplete: (t) => (completed = t),
+    onSummary: (s) => (summary = s),
+  });
+
+  // The dangling "now let me…" turn did NOT become the answer; the run continued.
+  assert.equal(completed, "Final: wear Aventus tonight.");
+  // opening tool turn + narration turn + answer turn + synthesis = 4 model calls.
+  assert.equal(summary?.modelCalls, 4);
+  // The loop sent the ACT nudge back to the model after the narration turn.
+  const sentActNudge = seen.some((call) =>
+    call.messages.some(
+      (m) =>
+        m.role === "user" &&
+        typeof m.content === "string" &&
+        /emit the actual tool calls/i.test(m.content),
+    ),
+  );
+  assert.ok(sentActNudge, "expected the act nudge to be sent after the narration turn");
+});
+
 test("malformed tool arguments produce an explicit tool error, not a silent empty run", async () => {
   const toolCalls: { input: unknown }[] = [];
   let summary: BeamRunSummary | undefined;
