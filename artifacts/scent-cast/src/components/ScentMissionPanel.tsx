@@ -61,6 +61,13 @@ type PanelMessage = {
   id: string;
   role: 'agent' | 'user' | 'system';
   text: string;
+  // Per-turn "thinking" trail, frozen onto the agent reply it produced. Rendered
+  // as a collapsible "Thought for Ns · N steps" recap ABOVE this answer (the
+  // ChatGPT / Claude pattern), so each turn keeps its own steps instead of one
+  // floating trail under the whole log. Absent on user/system rows and on
+  // scripted replies that ran no tools.
+  activity?: BeamActivityStep[];
+  elapsedMs?: number | null;
 };
 
 type AgentMode = 'fast' | 'research' | 'premium';
@@ -781,10 +788,20 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   // expand the full tool-by-tool breakdown (ChatGPT / Claude pattern). Each new
   // run starts collapsed.
   const [activityExpanded, setActivityExpanded] = useState(false);
-  // Frozen run duration, captured when `busy` settles, so the collapsed recap can
-  // read "Thought for Ns". Null while a run is in flight or before the first run.
-  const [runElapsedMs, setRunElapsedMs] = useState<number | null>(null);
+  // When the current run started, so a completed agent turn can freeze its
+  // elapsed "Thought for Ns" onto the reply it produced.
   const runStartedAtRef = useRef<number | null>(null);
+  // Latest snapshot of the live trail, so an agent reply can freeze its own steps
+  // onto the message it produced (the per-turn recap) without threading state
+  // through the async run. Synced from `activity` below.
+  const activityListRef = useRef<BeamActivityStep[]>([]);
+  // Expand state for each turn's frozen "Thought for Ns" recap, keyed by message
+  // id. Each recap opens independently and defaults collapsed.
+  const [expandedRecaps, setExpandedRecaps] = useState<Record<string, boolean>>({});
+  const toggleRecap = useCallback(
+    (id: string) => setExpandedRecaps((prev) => ({ ...prev, [id]: !prev[id] })),
+    [],
+  );
   // Tap-to-answer chips the agent offered with its last reply (e.g. trip-vibe
   // follow-ups). When set, these replace the static facet cues.
   const [agentSuggestions, setAgentSuggestions] = useState<BeamSuggestion[]>([]);
@@ -838,20 +855,21 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
 
   useEffect(() => () => abortRef.current?.abort(), []);
 
-  // Time each run so the collapsed trail can recap "Thought for Ns", and reset
-  // the trail to its summary (collapsed) view whenever a fresh run begins. This
-  // watches `busy` so it stays correct across every run path (agent / scripted /
-  // resolution) without threading a start time through each one.
+  // Time each run (so a completed turn can freeze "Thought for Ns" onto its
+  // reply) and reset the live trail to its collapsed summary whenever a fresh
+  // run begins. Watching `busy` keeps this correct across every run path (agent
+  // / scripted / resolution) without threading a start time through each one. The
+  // elapsed value is read from `runStartedAtRef` at the moment the reply lands.
   useEffect(() => {
     if (busy) {
       runStartedAtRef.current = Date.now();
-      setRunElapsedMs(null);
       setActivityExpanded(false);
-    } else if (runStartedAtRef.current != null) {
-      setRunElapsedMs(Date.now() - runStartedAtRef.current);
-      runStartedAtRef.current = null;
     }
   }, [busy]);
+
+  useEffect(() => {
+    activityListRef.current = activity;
+  }, [activity]);
 
   useEffect(() => {
     sessionIdRef.current = sessionId;
@@ -952,19 +970,39 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
     return QUICK_REPLIES.filter((reply) => reply.facet === neededFacet);
   }, [neededFacet, pendingCueFacet]);
 
-  const appendMessage = useCallback((role: PanelMessage['role'], text: string) => {
-    setMessages((prev) => [...prev, { id: newMessageId(), role, text }]);
-  }, []);
+  const appendMessage = useCallback(
+    (
+      role: PanelMessage['role'],
+      text: string,
+      meta?: { activity?: BeamActivityStep[]; elapsedMs?: number | null },
+    ) => {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: newMessageId(),
+          role,
+          text,
+          ...(meta?.activity && meta.activity.length > 0
+            ? { activity: meta.activity, elapsedMs: meta.elapsedMs ?? null }
+            : {}),
+        },
+      ]);
+    },
+    [],
+  );
 
   // Append an agent line after running it through the formatter: strips internal
   // tool/debug wording, collapses repeated catalog status rows, and fronts a
   // catalog-unavailable answer with polished, user-facing copy. Flips the
   // catalog-failure flag so the cue lane can surface recovery actions.
   const pushAgentText = useCallback(
-    (raw: string): { catalogUnavailable: boolean } => {
+    (
+      raw: string,
+      meta?: { activity?: BeamActivityStep[]; elapsedMs?: number | null },
+    ): { catalogUnavailable: boolean } => {
       const { text, catalogUnavailable } = formatAgentResponse(raw);
       if (catalogUnavailable) setCatalogFailure(true);
-      if (text) appendMessage('agent', text);
+      if (text) appendMessage('agent', text, meta);
       return { catalogUnavailable };
     },
     [appendMessage],
@@ -1099,7 +1137,15 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         if (result.status === 'completed') {
           sessionIdRef.current = result.sessionId;
           setSessionId(result.sessionId);
-          pushAgentText(result.response);
+          // Freeze this run's trail onto the reply: seal any still-active row (the
+          // run is over) and capture the elapsed time, so the answer carries its
+          // own collapsible "Thought for Ns" recap above it.
+          const frozenSteps = activityListRef.current.map((step) =>
+            step.state === 'active' ? { ...step, state: 'done' as const } : step,
+          );
+          const elapsedMs =
+            runStartedAtRef.current != null ? Date.now() - runStartedAtRef.current : null;
+          pushAgentText(result.response, { activity: frozenSteps, elapsedMs });
           return { handled: true };
         }
         // status === 'failed' (model_unavailable, max_turns, agent_error, …):
@@ -2012,13 +2058,27 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
           // The greeting shows dots until the compose hold elapses (introReady),
           // then morphs into its line. No other message is ever in "typing".
           const typing = isIntroGreeting && !introReady;
-          return (
+          const isLatestAgent = message.id === latestAgentId;
+          // A completed agent turn carries its own frozen "thinking" steps; we
+          // render them as a collapsible recap directly ABOVE this answer (the
+          // ChatGPT / Claude pattern). While the newest run is still settling
+          // (busy) the live trail below is animating out, so hold this recap one
+          // beat to keep the two from stacking for a frame.
+          // `hasRecap` is a fixed property of the message (its frozen steps), so
+          // the wrapper structure never changes across a busy→settled flip and the
+          // answer bubble never remounts. `showRecap` only gates the recap's
+          // visibility — held one beat on the newest turn while the live trail
+          // below animates out, so the two never stack.
+          const recapSteps = message.role === 'agent' ? message.activity : undefined;
+          const hasRecap = !!recapSteps && recapSteps.length > 0;
+          const showRecap = hasRecap && (!busy || !isLatestAgent);
+          const bubble = (
             <motion.div
               key={message.id}
-              // The newest agent reply carries the scroll-to-top anchor, so a
-              // long answer lands at its FIRST line rather than dropping the
-              // user mid-response (see the scroll effect above).
-              data-scroll-anchor={message.id === latestAgentId ? 'latest-agent' : undefined}
+              // The newest agent reply carries the scroll-to-top anchor — unless a
+              // recap wrapper above takes it — so a long answer lands at its FIRST
+              // line rather than dropping the user mid-response (scroll effect).
+              data-scroll-anchor={isLatestAgent && !hasRecap ? 'latest-agent' : undefined}
               // Only the greeting morphs its box: `layout="size"` animates the
               // grow from thinking-pill to welcome-line without sliding the
               // bubble when later turns push it down. Other bubbles keep the
@@ -2081,17 +2141,42 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
               )}
             </motion.div>
           );
+          if (!hasRecap) return bubble;
+          // Per-turn recap sits ABOVE its answer, both left-aligned in a column.
+          // The wrapper carries the scroll anchor so a fresh reply lands on the
+          // "Thought for Ns" line, then the answer — not buried beneath it. The
+          // recap child is held back (showRecap) for one beat on the newest turn.
+          return (
+            <div
+              key={`${message.id}-turn`}
+              className="flex w-full flex-col gap-1.5"
+              data-scroll-anchor={isLatestAgent ? 'latest-agent' : undefined}
+            >
+              {showRecap ? (
+                <BeamActivityTrail
+                  steps={recapSteps ?? []}
+                  calmMotion={calmMotion}
+                  running={false}
+                  expanded={!!expandedRecaps[message.id]}
+                  elapsedMs={message.elapsedMs ?? null}
+                  onToggleExpand={() => toggleRecap(message.id)}
+                />
+              ) : null}
+              {bubble}
+            </div>
+          );
         })}
 
-        {/* Live progress while the agent works a turn, then a quiet recap. When a
-            run streams real steps we show the condensed thinking trail (one
-            summary line, tap to expand the tool-by-tool breakdown); once the run
-            settles the trail stays as a "Thought for Ns · N steps" pill the user
-            can reopen — it clears on the next turn. Before the first event (or on
-            the scripted path) we fall back to the quiet typing dots. Calm motion
-            keeps the trail (it's content) but drops the animation. */}
+        {/* Live progress WHILE the agent works the current turn. When a run
+            streams real steps we show the condensed thinking trail (one summary
+            line, tap to expand the tool-by-tool breakdown); before the first
+            event (or on the scripted path) we fall back to the quiet typing dots.
+            Once the run settles this unmounts and the steps live on as a
+            collapsible "Thought for Ns" recap ABOVE the answer they produced
+            (rendered per-message above). Calm motion keeps the trail but drops
+            the animation. */}
         <AnimatePresence initial={false}>
-          {introReady && !resolved && (busy || activity.length > 0) ? (
+          {introReady && !resolved && busy ? (
             activity.length > 0 ? (
               <BeamActivityTrail
                 key="agent-activity"
@@ -2099,7 +2184,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                 calmMotion={calmMotion}
                 running={busy}
                 expanded={activityExpanded}
-                elapsedMs={busy ? null : runElapsedMs}
+                elapsedMs={null}
                 onToggleExpand={() => setActivityExpanded((v) => !v)}
               />
             ) : busy && !calmMotion ? (
