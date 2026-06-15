@@ -335,6 +335,34 @@ test("no catalog + no dataset match + no fallback notes → returns identificati
   assert.equal(calls.saveCatalogEntry.length, 0);
 });
 
+test("allowMinimalFallback: no match + no notes but real identity → minimal pending profile, not error", async () => {
+  const { deps, calls } = makeDeps({});
+
+  const result = await buildProfileWithDeps(deps, "Bleu Electrique", "Yves Saint Laurent", undefined, {
+    allowMinimalFallback: true,
+  });
+  ok(result);
+
+  // The capture flow must land a real-but-unscraped fragrance as a profile
+  // (vectorized + persisted), so background enrichment can fill the pyramid.
+  assert.equal(result.product.name, "Bleu Electrique");
+  assert.equal(result.product.brand, "Yves Saint Laurent");
+  assert.deepEqual(result.notes, []);
+  assert.equal(calls.vectorize, 1);
+});
+
+test("allowMinimalFallback does NOT rescue an empty identity (still errors)", async () => {
+  const { deps } = makeDeps({
+    resolveFragranceIdentity: (brand) => ({ brand, name: "" }),
+  });
+
+  const result = await buildProfileWithDeps(deps, "", "", undefined, {
+    allowMinimalFallback: true,
+  });
+  err(result);
+  assert.match(result.error, /Could not identify/);
+});
+
 test("concentrationOverride is applied to the final profile after parse", async () => {
   const { deps } = makeDeps({
     findDatasetFragrance: () => ({
