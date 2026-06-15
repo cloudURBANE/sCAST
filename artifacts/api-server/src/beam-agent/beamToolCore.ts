@@ -134,6 +134,19 @@ export function summarizeToolResult(_name: string, result: unknown): string {
       const n = record.sources.length;
       return record.synthesizedFact ? `researched (${n} source(s))` : "no live result";
     }
+    // beam_get_user_context returns a nested vault summary. Surface the size +
+    // dominant families so the progress line reads as grounded ("8 bottles ·
+    // woody, amber") instead of a bare "done".
+    if (record.wardrobeSummary && typeof record.wardrobeSummary === "object") {
+      const ws = record.wardrobeSummary as { count?: unknown; topFamilies?: unknown };
+      const count = typeof ws.count === "number" ? ws.count : 0;
+      if (count <= 0) return "vault is empty";
+      const families = Array.isArray(ws.topFamilies)
+        ? ws.topFamilies.filter((f): f is string => typeof f === "string").slice(0, 2)
+        : [];
+      const noun = count === 1 ? "bottle" : "bottles";
+      return families.length > 0 ? `${count} ${noun} · ${families.join(", ")}` : `${count} ${noun}`;
+    }
     if (Array.isArray(record.items)) return `${record.items.length} result(s)`;
     if (Array.isArray(record.candidates)) return `${record.candidates.length} candidate(s)`;
     if (record.recommendation && typeof record.recommendation === "object") {

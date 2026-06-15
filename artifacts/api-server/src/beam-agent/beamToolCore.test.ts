@@ -74,6 +74,20 @@ test("summarizeToolResult produces safe one-liners", () => {
   assert.equal(summarizeToolResult("beam_search_catalog", { items: [1, 2, 3] }), "3 result(s)");
   assert.equal(summarizeToolResult("beam_score_candidates", { recommendation: { canonicalName: "Aventus" } }), "picked Aventus");
   assert.equal(summarizeToolResult("beam_score_candidates", { recommendation: null }), "no match");
+  assert.equal(
+    summarizeToolResult("beam_get_user_context", {
+      wardrobeSummary: { count: 8, topFamilies: ["woody", "amber", "fresh"] },
+    }),
+    "8 bottles · woody, amber",
+  );
+  assert.equal(
+    summarizeToolResult("beam_get_user_context", { wardrobeSummary: { count: 1, topFamilies: [] } }),
+    "1 bottle",
+  );
+  assert.equal(
+    summarizeToolResult("beam_get_user_context", { wardrobeSummary: { count: 0, topFamilies: [] } }),
+    "vault is empty",
+  );
   assert.equal(summarizeToolResult("x", "whatever"), "done");
 });
 
