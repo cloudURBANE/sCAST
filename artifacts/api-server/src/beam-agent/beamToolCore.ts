@@ -456,6 +456,121 @@ export function packetFromFlatProfile(
 }
 
 /* ------------------------------------------------------------------ */
+/* Wardrobe overlap (redundancy radar) — pure, deterministic          */
+/* ------------------------------------------------------------------ */
+
+/** Normalized note/accord sets a candidate or owned bottle exposes for overlap. */
+export type OverlapProfile = {
+  top: string[];
+  middle: string[];
+  base: string[];
+  accords: string[];
+};
+
+export type OverlapBand = "high" | "moderate" | "some" | "low";
+
+export type OverlapBreakdown = {
+  /** 0..1 Jaccard similarity per facet. */
+  base: number;
+  heart: number;
+  top: number;
+  accords: number;
+  /** 0..1 weighted blend; drydown (base) and accords dominate. */
+  combined: number;
+  band: OverlapBand;
+  /** Notes/accords present in BOTH sides (original casing, deduped). */
+  sharedBaseNotes: string[];
+  sharedAccords: string[];
+};
+
+/** Lowercase + trim + dedupe a string list into a set for set math. */
+function normSet(values: string[]): Set<string> {
+  const out = new Set<string>();
+  for (const v of values) {
+    const t = typeof v === "string" ? v.trim().toLowerCase() : "";
+    if (t) out.add(t);
+  }
+  return out;
+}
+
+/**
+ * Jaccard similarity |A∩B| / |A∪B|. Two empty sets return 0 (absence of
+ * evidence is NOT a claim of identity), and an empty vs non-empty set is 0.
+ */
+export function jaccard(a: string[], b: string[]): number {
+  const A = normSet(a);
+  const B = normSet(b);
+  if (A.size === 0 || B.size === 0) return 0;
+  let inter = 0;
+  for (const v of A) if (B.has(v)) inter += 1;
+  const union = A.size + B.size - inter;
+  return union === 0 ? 0 : inter / union;
+}
+
+/** Items appearing in both lists, returned with `a`'s original casing, deduped. */
+function sharedItems(a: string[], b: string[]): string[] {
+  const B = normSet(b);
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of a) {
+    const t = typeof raw === "string" ? raw.trim() : "";
+    if (!t) continue;
+    const key = t.toLowerCase();
+    if (B.has(key) && !seen.has(key)) {
+      seen.add(key);
+      out.push(t);
+    }
+  }
+  return out;
+}
+
+function overlapBand(combined: number): OverlapBand {
+  if (combined >= 0.6) return "high";
+  if (combined >= 0.35) return "moderate";
+  if (combined >= 0.15) return "some";
+  return "low";
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+/**
+ * Deterministic redundancy score between a candidate fragrance and ONE owned
+ * bottle. Weighting reflects fragrance structure: base notes carry the lasting
+ * drydown/trail (what makes two scents "feel the same"), accords capture the
+ * overall family/character, the heart shapes the mid, and volatile top notes
+ * barely matter for redundancy. When neither side carries a note pyramid we
+ * fall back to accords alone rather than inventing a number.
+ *
+ * This is a likelihood that two bottles occupy the same wardrobe slot — NOT a
+ * claim that they share an identical formula.
+ */
+export function computeOverlap(candidate: OverlapProfile, owned: OverlapProfile): OverlapBreakdown {
+  const base = jaccard(candidate.base, owned.base);
+  const heart = jaccard(candidate.middle, owned.middle);
+  const top = jaccard(candidate.top, owned.top);
+  const accords = jaccard(candidate.accords, owned.accords);
+
+  const candidateHasNotes = candidate.base.length + candidate.middle.length + candidate.top.length > 0;
+  const ownedHasNotes = owned.base.length + owned.middle.length + owned.top.length > 0;
+  const hasNotes = candidateHasNotes && ownedHasNotes;
+
+  const combined = hasNotes ? 0.45 * base + 0.2 * heart + 0.05 * top + 0.3 * accords : accords;
+
+  return {
+    base: round2(base),
+    heart: round2(heart),
+    top: round2(top),
+    accords: round2(accords),
+    combined: round2(combined),
+    band: overlapBand(combined),
+    sharedBaseNotes: sharedItems(candidate.base, owned.base),
+    sharedAccords: sharedItems(candidate.accords, owned.accords),
+  };
+}
+
+/* ------------------------------------------------------------------ */
 /* Claude tool-schema adapter                                         */
 /* ------------------------------------------------------------------ */
 

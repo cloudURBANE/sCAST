@@ -45,12 +45,82 @@ function toolMap(deps: BeamToolDeps) {
 test("exposes exactly the Phase 1 read-only tools", () => {
   const names = createBeamTools(makeDeps()).map((tool) => tool.name).sort();
   assert.deepEqual(names, [
+    "beam_compare_overlap",
     "beam_get_fragrance_details",
     "beam_get_user_context",
     "beam_get_wardrobe",
     "beam_score_candidates",
     "beam_search_catalog",
   ]);
+});
+
+test("beam_compare_overlap resolves the query and ranks owned bottles by redundancy", async () => {
+  const tools = toolMap(
+    makeDeps({
+      searchCatalog: async (_q, limit): Promise<BeamCatalogHit[]> =>
+        [
+          {
+            id: "g9",
+            flat: {
+              name: "Aventus Cologne",
+              brand: "Creed",
+              pyramid: { top: ["bergamot"], heart: ["birch"], base: ["musk", "oakmoss"] },
+              accords: ["fruity", "smoky"],
+            },
+            score: 0.9,
+          },
+        ].slice(0, limit),
+      loadWardrobePackets: async () => [
+        {
+          fragranceId: "v1",
+          canonicalName: "Sauvage",
+          brand: "Dior",
+          owned: true,
+          notes: { top: ["pepper"], middle: ["lavender"], base: ["ambroxan"] },
+          accords: ["fresh"],
+          performance: {},
+          sourceConfidence: 0.95,
+          missingFields: [],
+        },
+        {
+          fragranceId: "v2",
+          canonicalName: "Aventus",
+          brand: "Creed",
+          owned: true,
+          notes: { top: ["pineapple"], middle: ["birch"], base: ["musk", "oakmoss"] },
+          accords: ["fruity", "smoky"],
+          performance: {},
+          sourceConfidence: 0.95,
+          missingFields: [],
+        },
+      ],
+    }),
+  );
+
+  const overlap = tools.get("beam_compare_overlap")!;
+  const result = (await overlap.handler({ query: "Aventus Cologne" }, CTX)) as {
+    resolved: boolean;
+    vaultCount: number;
+    closestMatch: { name: string; band: string } | null;
+    items: Array<{ name: string; overlap: { combined: number; band: string; sharedBaseNotes: string[] } }>;
+  };
+
+  assert.equal(result.resolved, true);
+  assert.equal(result.vaultCount, 2);
+  assert.equal(result.items[0].name, "Aventus");
+  assert.equal(result.closestMatch?.name, "Aventus");
+  assert.ok(result.items[0].overlap.combined > result.items[1].overlap.combined);
+  assert.deepEqual(result.items[0].overlap.sharedBaseNotes.sort(), ["musk", "oakmoss"]);
+});
+
+test("beam_compare_overlap reports when the query is not a real catalog fragrance", async () => {
+  const tools = toolMap(makeDeps({ searchCatalog: async () => [] }));
+  const result = (await tools.get("beam_compare_overlap")!.handler({ query: "Made Up Juice" }, CTX)) as {
+    resolved: boolean;
+    items: unknown[];
+  };
+  assert.equal(result.resolved, false);
+  assert.deepEqual(result.items, []);
 });
 
 test("beam_propose_collection appears only with resolveCatalogEntry and builds a proposal", async () => {

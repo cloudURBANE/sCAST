@@ -13,9 +13,11 @@ import {
   clampLimit,
   cleanStringList,
   collectGroundedFragranceNames,
+  computeOverlap,
   extractAgentCues,
   extractText,
   extractToolUses,
+  jaccard,
   packetFromFlatProfile,
   packetFromOwnedItem,
   packetFromWardrobeRow,
@@ -25,6 +27,50 @@ import {
   toClaudeTools,
 } from "./beamToolCore.ts";
 import type { BeamToolDefinition, ClaudeContentBlock } from "./types.ts";
+
+test("jaccard is case/whitespace-insensitive and 0 when either side is empty", () => {
+  assert.equal(jaccard(["Musk", "Amber"], ["amber", "musk"]), 1);
+  assert.equal(jaccard([" Vanilla "], ["vanilla"]), 1);
+  assert.equal(jaccard(["a", "b", "c", "d"], ["a", "b"]), 0.5);
+  assert.equal(jaccard([], ["musk"]), 0);
+  assert.equal(jaccard([], []), 0);
+});
+
+test("computeOverlap weights base notes + accords, bands by drydown similarity", () => {
+  const candidate = {
+    top: ["bergamot"],
+    middle: ["birch"],
+    base: ["musk", "oakmoss", "ambergris"],
+    accords: ["fruity", "smoky"],
+  };
+  const twin = computeOverlap(candidate, {
+    top: ["pineapple"],
+    middle: ["birch"],
+    base: ["musk", "oakmoss", "ambergris"],
+    accords: ["fruity", "smoky"],
+  });
+  assert.equal(twin.band, "high");
+  assert.ok(twin.combined >= 0.6);
+  assert.deepEqual(twin.sharedBaseNotes.sort(), ["ambergris", "musk", "oakmoss"]);
+
+  const unrelated = computeOverlap(candidate, {
+    top: ["lemon"],
+    middle: ["lavender"],
+    base: ["ambroxan"],
+    accords: ["fresh", "aromatic"],
+  });
+  assert.equal(unrelated.band, "low");
+  assert.ok(unrelated.combined < twin.combined);
+  assert.deepEqual(unrelated.sharedBaseNotes, []);
+});
+
+test("computeOverlap falls back to accords-only when note pyramids are absent", () => {
+  const noNotes = { top: [], middle: [], base: [], accords: ["woody", "spicy"] };
+  const result = computeOverlap(noNotes, { top: [], middle: [], base: [], accords: ["woody", "spicy"] });
+  assert.equal(result.accords, 1);
+  assert.equal(result.combined, 1);
+  assert.equal(result.band, "high");
+});
 
 test("clampLimit enforces server ceiling and floor", () => {
   assert.equal(clampLimit(1000, BEAM_LIMITS.maxCatalogResults), BEAM_LIMITS.maxCatalogResults);

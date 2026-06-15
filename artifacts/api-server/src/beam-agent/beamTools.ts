@@ -25,12 +25,24 @@ import {
   asString,
   buildProposalItem,
   clampLimit,
+  computeOverlap,
   packetFromFlatProfile,
   packetFromOwnedItem,
 } from "./beamToolCore.ts";
+import type { OverlapProfile } from "./beamToolCore.ts";
 
 /** A flattened catalog hit the search dep returns (loose by design). */
 export type BeamCatalogHit = { id: string; flat: Record<string, unknown>; score: number };
+
+/** Map a CandidatePacket to the note/accord profile the overlap math consumes. */
+function overlapProfileFromPacket(packet: CandidatePacket): OverlapProfile {
+  return {
+    top: packet.notes.top,
+    middle: packet.notes.middle,
+    base: packet.notes.base,
+    accords: packet.accords,
+  };
+}
 
 /**
  * Everything the tools need from the rest of the app. Each implementation is
@@ -257,6 +269,97 @@ export function createBeamTools(deps: BeamToolDeps): BeamToolDefinition[] {
           }),
         );
         return { count: items.length, items };
+      },
+    },
+
+    {
+      name: "beam_compare_overlap",
+      description:
+        "Redundancy radar. Check whether a fragrance overlaps with what the user already owns " +
+        "BEFORE recommending a purchase, or when they ask 'do I already own something like this?'. " +
+        "Resolves the query to a REAL catalog fragrance, then deterministically compares its note " +
+        "pyramid (base notes weighted most — they drive the lasting drydown) and accords against " +
+        "every bottle in the vault. Returns per-bottle overlap scores, the shared notes/accords, " +
+        "and the single closest match with a band (high/moderate/some/low). Do NOT estimate overlap " +
+        "yourself — always call this tool so the numbers are grounded. The score is a likelihood that " +
+        "two bottles fill the same wardrobe slot, not a claim of identical formula.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          query: {
+            type: "string",
+            description: "Brand and/or fragrance name to evaluate against the vault.",
+          },
+          limit: {
+            type: "number",
+            description: `Max owned bottles to return, ranked by overlap (server caps at ${BEAM_LIMITS.maxCatalogResults}).`,
+          },
+        },
+        required: ["query"],
+        additionalProperties: false,
+      },
+      handler: async (input, ctx) => {
+        const record = (typeof input === "object" && input !== null ? input : {}) as Record<string, unknown>;
+        const query = asString(record.query);
+        if (!query) return { resolved: false, note: "query is required", items: [] };
+
+        const hits = await deps.searchCatalog(query, 1);
+        if (hits.length === 0) {
+          return {
+            resolved: false,
+            note: `No catalog match for "${query}". Cannot compare an unknown fragrance — search the catalog first.`,
+            items: [],
+          };
+        }
+        const candidate = packetFromFlatProfile(hits[0].id, hits[0].flat, false);
+
+        const owned = deps.loadWardrobePackets
+          ? await deps.loadWardrobePackets(ctx)
+          : (await deps.loadVault(ctx)).map((item) => packetFromOwnedItem(item));
+
+        if (owned.length === 0) {
+          return {
+            resolved: true,
+            candidate: { name: candidate.canonicalName, brand: candidate.brand },
+            vaultCount: 0,
+            note: "The vault is empty — nothing to overlap against.",
+            items: [],
+          };
+        }
+
+        const limit = clampLimit(record.limit, BEAM_LIMITS.maxCatalogResults, 5);
+        const candidateProfile = overlapProfileFromPacket(candidate);
+        const scored = owned
+          .map((ownedPacket) => ({
+            fragranceId: ownedPacket.fragranceId,
+            name: ownedPacket.canonicalName,
+            brand: ownedPacket.brand,
+            overlap: computeOverlap(candidateProfile, overlapProfileFromPacket(ownedPacket)),
+          }))
+          .sort((a, b) => b.overlap.combined - a.overlap.combined);
+
+        const closest = scored[0];
+        return {
+          resolved: true,
+          candidate: {
+            fragranceId: candidate.fragranceId,
+            name: candidate.canonicalName,
+            brand: candidate.brand,
+            sourceConfidence: candidate.sourceConfidence,
+            missingFields: candidate.missingFields,
+          },
+          vaultCount: owned.length,
+          closestMatch: closest
+            ? {
+                name: closest.name,
+                brand: closest.brand,
+                band: closest.overlap.band,
+                combined: closest.overlap.combined,
+              }
+            : null,
+          count: Math.min(scored.length, limit),
+          items: scored.slice(0, limit),
+        };
       },
     },
 
