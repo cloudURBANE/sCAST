@@ -10,6 +10,7 @@ import {
 import { getScentFacts } from "../lib/scent-facts/engine";
 import { searchScentSources } from "../lib/scent-facts/jina";
 import { buildProfile, searchFragrances as searchDatasetFragrances } from "../services/scentEngine";
+import { enqueueEnrichmentJob, enrichmentQueueProducerEnabled } from "../services/enrichmentQueue";
 import {
   candidateFromProfile,
   candidateFromSourceUrl,
@@ -184,8 +185,45 @@ function isDetailLocallyComplete(detail: Record<string, unknown>): boolean {
   );
 }
 
+/**
+ * Producer hook for the enrichment queue. Fires a best-effort job for a detail
+ * the backend's own source-coverage predicate (`isDetailLocallyComplete`, the
+ * mirror of the SPA's `isSourceCoverageComplete`) judged INCOMPLETE. Idempotent
+ * at the queue layer (upsert by canonical job key), terminal-status-skipping, and
+ * strictly non-blocking — a queue failure can never affect the detail response.
+ * Env-gated (off by default) so it adds no DB writes until enrichment is enabled.
+ */
+function queueEnrichmentForIncompleteDetail(
+  identity: { name?: unknown; house?: unknown; brand?: unknown; source_url?: unknown },
+  jobType: "identity_and_detail" | "detail_only",
+): void {
+  if (!enrichmentQueueProducerEnabled()) return;
+  const name = typeof identity.name === "string" ? identity.name.trim() : "";
+  const house = typeof identity.house === "string" && identity.house.trim()
+    ? identity.house.trim()
+    : typeof identity.brand === "string" && identity.brand.trim()
+      ? identity.brand.trim()
+      : "";
+  const fgUrl =
+    typeof identity.source_url === "string" && identity.source_url.trim() ? identity.source_url.trim() : null;
+  if (!name && !fgUrl) return; // nothing the queue can key on
+  void enqueueEnrichmentJob({
+    name: name || null,
+    house: house || null,
+    fgUrl,
+    query: [house, name].filter(Boolean).join(" ") || null,
+    jobType,
+  }).catch((err) => {
+    logger.warn(
+      { err: err instanceof Error ? err.message : String(err) },
+      "enrichment enqueue failed (non-fatal)",
+    );
+  });
+}
+
 function markIdentityDetailIncomplete(detail: Record<string, unknown>): Record<string, unknown> {
   if (isDetailLocallyComplete(detail)) return detail;
+  queueEnrichmentForIncompleteDetail(detail, "identity_and_detail");
   return {
     ...detail,
     source_coverage:
@@ -265,6 +303,10 @@ function markSourceDetailPending(
     name: string;
   },
 ): Record<string, unknown> {
+  queueEnrichmentForIncompleteDetail(
+    { name: input.name, house: input.brand, source_url: input.sourceUrl },
+    "detail_only",
+  );
   return {
     ...detail,
     id: input.id,

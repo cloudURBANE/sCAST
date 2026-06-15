@@ -39,6 +39,7 @@ import { logger } from "../lib/logger";
 import { missionItemFromWardrobeRow } from "../services/scentMissionService";
 import { searchCatalogCandidates, flattenProfile, getCatalogEntry } from "../services/catalogService";
 import { getScentFacts } from "../lib/scent-facts/engine";
+import { getBeamUserUsageSince, recordBeamRunUsage } from "../services/apiUsageLedger";
 import { createBeamTools, type BeamCatalogHit, type BeamToolDeps } from "./beamTools.ts";
 import { runBeamAgent } from "./beamAgentLoop.ts";
 import { packetFromWardrobeRow, redactEventForClient } from "./beamToolCore.ts";
@@ -61,6 +62,28 @@ const router = Router();
 // Runs fan out to an LLM plus catalog/research calls, so throttle well below the
 // general API surface. Per-IP fixed window, matching the scent-mission route.
 const runRateLimit = rateLimitMiddleware({ limit: 20, windowMs: 5 * 60_000 });
+
+/* ------------------------------------------------------------------ */
+/* Per-user daily quota (cost guardrail, complements the per-IP limit) */
+/* ------------------------------------------------------------------ */
+
+// The per-IP rate limit above caps burst abuse; this per-USER daily cap is the
+// billing guardrail against a single account (or a runaway client loop) racking
+// up model spend over a day. Both a run-count and a USD cap are enforced off the
+// already-captured ledger usage; whichever trips first blocks the run. Tunable
+// per environment; the defaults are generous for a normal concierge session.
+const BEAM_USER_DAILY_WINDOW_MS = 24 * 60 * 60_000;
+
+function positiveNumberFromEnv(raw: string | undefined, fallback: number): number {
+  const value = Number(raw);
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+const BEAM_USER_DAILY_RUN_CAP = positiveNumberFromEnv(process.env.BEAM_USER_DAILY_RUN_CAP, 60);
+const BEAM_USER_DAILY_SPEND_USD = positiveNumberFromEnv(process.env.BEAM_USER_DAILY_SPEND_USD, 2);
+// Tag stored in the ledger's `provider` column so beam rows are cleanly
+// separable (via the provider/operation index) from the image-generation rows.
+const BEAM_USAGE_PROVIDER = "beam-agent";
 
 /* ------------------------------------------------------------------ */
 /* In-memory run registry                                             */
@@ -265,6 +288,32 @@ router.post("/runs", runRateLimit, requireAuth, async (req: AuthRequest, res) =>
     return;
   }
 
+  // Per-user daily cost guardrail. Read the user's last-24h beam usage off the
+  // ledger and refuse a new run once either the run-count or the spend cap is
+  // hit. Fail-open by construction: getBeamUserUsageSince returns zeros when the
+  // ledger is unavailable, so a DB hiccup never locks users out of the agent.
+  const usageWindow = await getBeamUserUsageSince(req.user.id, Date.now() - BEAM_USER_DAILY_WINDOW_MS);
+  if (
+    usageWindow.runCount >= BEAM_USER_DAILY_RUN_CAP ||
+    usageWindow.totalUsd >= BEAM_USER_DAILY_SPEND_USD
+  ) {
+    logger.warn(
+      {
+        user: hashUser(req.user.id),
+        runCount: usageWindow.runCount,
+        totalUsd: Number(usageWindow.totalUsd.toFixed(4)),
+        runCap: BEAM_USER_DAILY_RUN_CAP,
+        spendCapUsd: BEAM_USER_DAILY_SPEND_USD,
+      },
+      "beam agent per-user daily quota reached",
+    );
+    res.status(429).json({
+      error: "You've reached today's Beam Agent limit. It resets tomorrow — meanwhile the scripted mission still works.",
+      code: "user_daily_quota_exceeded",
+    });
+    return;
+  }
+
   pruneRuns();
   const runId = `run_${randomUUID()}`;
   const sessionId =
@@ -335,6 +384,20 @@ router.post("/runs", runRateLimit, requireAuth, async (req: AuthRequest, res) =>
         },
         "beam agent run finished",
       );
+      // Persist the run to the shared usage ledger so the per-user daily cap and
+      // the daily-spend metric have data to read. Best-effort + non-blocking: a
+      // ledger write must never affect the run or its SSE stream.
+      void recordBeamRunUsage({
+        tenantId: ctx.tenantId,
+        userId: ctx.userId,
+        provider: BEAM_USAGE_PROVIDER,
+        model: models?.synthesisModel ?? models?.model ?? lane,
+        inputTokens: summary.inputTokens,
+        outputTokens: summary.outputTokens,
+        estimatedCostUsd: summary.estimatedCostUsd,
+        status: summary.outcome === "completed" ? "success" : "failure",
+        failureReason: summary.failureCode ?? null,
+      });
     },
     shouldStop: () => record.stopped,
   }).catch((err) => {

@@ -149,6 +149,9 @@ const SYNTHESIS_NUDGE =
   "- Add a runner-up only if it genuinely helps — one sentence.\n" +
   "- Aim for under ~70 words total. Plain sentences (you may bold a bottle name); no headings, " +
   "no long bullet lists.\n" +
+  "- Stay honest about context. Reference ONLY the occasion, place, and weather the user actually " +
+  "gave or a tool returned — never invent a city, climate, season, or scenario (e.g. 'cool London " +
+  "evenings') they did not mention.\n" +
   "- Do NOT narrate your process or restate the plan. Never open with 'I'll', 'I will', 'let me', " +
   "'first I', 'here's what I did', or a description of which tools you ran — just give the " +
   "recommendation itself.\n" +
@@ -192,6 +195,77 @@ function groundingAllowlistClause(names: string[]): string {
     listed.map((n) => `"${n}"`).join(", ") +
     ". Do NOT name any fragrance outside this list — if you feel one is missing, say what you'd " +
     "need to look up rather than naming it from memory."
+  );
+}
+
+/**
+ * The deterministic scorer's verdict, captured from a `beam_score_candidates`
+ * result so the closing synthesis can be held to it. Without this the synthesis
+ * only saw the flat allowlist of grounded names and could headline a different
+ * owned bottle than the one the engine actually ranked first — the "Top match ·
+ * Gabrielle" trail vs. a "Sauvage Elixir" answer inconsistency (W-8).
+ */
+type ScoringContext = {
+  /** Canonical name of the scorer's #1 vault pick. */
+  topPick: string;
+  /** All returned picks, best-first (includes topPick). */
+  rankedNames: string[];
+  /** Destination label the run scored for, or null when it scored local weather. */
+  locationLabel: string | null;
+  /** True when a weatherOverride (a destination climate) was applied. */
+  usedOverride: boolean;
+};
+
+function asScoredName(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+/**
+ * Pull the scorer's ranking out of a `beam_score_candidates` tool result. Shape
+ * (beamTools.ts): `{ recommendation: picks[0], picks: [...], scoredFor: {...} }`.
+ * Returns null for any other tool / an empty-vault result, so callers can ignore
+ * runs that never scored the vault.
+ */
+function extractScoringContext(result: unknown): ScoringContext | null {
+  if (!result || typeof result !== "object") return null;
+  const r = result as Record<string, unknown>;
+  const rec = r.recommendation;
+  if (!rec || typeof rec !== "object") return null;
+  const topPick = asScoredName((rec as Record<string, unknown>).canonicalName ?? (rec as Record<string, unknown>).name);
+  if (!topPick) return null;
+  const picks = Array.isArray(r.picks) ? r.picks : [];
+  const rankedNames = picks
+    .map((p) => asScoredName((p as Record<string, unknown>)?.canonicalName ?? (p as Record<string, unknown>)?.name))
+    .filter((n): n is string => n !== null);
+  const scoredFor = (r.scoredFor && typeof r.scoredFor === "object" ? r.scoredFor : {}) as Record<string, unknown>;
+  return {
+    topPick,
+    rankedNames: rankedNames.length > 0 ? rankedNames : [topPick],
+    locationLabel: asScoredName(scoredFor.locationLabel),
+    usedOverride: scoredFor.usedOverride === true,
+  };
+}
+
+/**
+ * Build the answer-consistency clause for the synthesis turn from the scorer's
+ * verdict. It (a) pins the headline owned-bottle pick to the scorer's top match
+ * unless the model explicitly justifies an override, and (b) reinforces context
+ * honesty about the place/weather that was actually scored. Empty when the run
+ * never scored the vault (e.g. a pure catalog-discovery or greeting turn), so a
+ * new-fragrance recommendation isn't wrongly forced onto a vault pick.
+ */
+function answerConsistencyClause(scoring: ScoringContext | null): string {
+  if (!scoring) return "";
+  const ranked = scoring.rankedNames.map((n) => `"${n}"`).join(" then ");
+  const locationNote = scoring.locationLabel
+    ? ` It scored for ${scoring.locationLabel}; reference only that place and its climate, nothing else.`
+    : " It scored the user's CURRENT local weather; do NOT name any city, country, or climate they did not give.";
+  return (
+    ` The deterministic scorer ranked the user's OWNED vault best-first as: ${ranked}. When you` +
+    ` recommend a bottle they already own, lead with the scorer's top pick ("${scoring.topPick}").` +
+    ` If you deliberately headline a different owned bottle, you MUST name "${scoring.topPick}" and` +
+    ` say in one clause why you overrode it — never silently contradict the scorer's ranking.` +
+    locationNote
   );
 }
 
@@ -361,6 +435,9 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
   let qualityViolations: string[] = [];
   // Per-model token tallies so the cost ledger can price each lane separately.
   const usageByModel = new Map<string, ModelUsage>();
+  // Most recent deterministic scorer verdict this run; the closing synthesis is
+  // held to it so the headline pick can't silently disagree with the trail (W-8).
+  let latestScoring: ScoringContext | null = null;
   // Fragrances actually returned by tools this run, keyed lowercased for dedupe
   // (value preserves display casing). The closing answer is pinned to this set.
   const groundedNames = new Map<string, string>();
@@ -437,7 +514,10 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
         usedSynthesis = true;
         emit({ type: "status", label: "Writing your recommendation" });
         const synthModel = input.synthesisModel ?? input.model;
-        const instruction = SYNTHESIS_NUDGE + groundingAllowlistClause([...groundedNames.values()]);
+        const instruction =
+          SYNTHESIS_NUDGE +
+          groundingAllowlistClause([...groundedNames.values()]) +
+          answerConsistencyClause(latestScoring);
         const synthMessages = withSynthesisInstruction(messages, instruction);
         try {
           const synth = await callModel({
@@ -477,6 +557,7 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
         const repairInstruction =
           SYNTHESIS_NUDGE +
           groundingAllowlistClause([...groundedNames.values()]) +
+          answerConsistencyClause(latestScoring) +
           " " +
           repairInstructionFor(gate.violations);
         try {
@@ -670,6 +751,12 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
         // Register the fragrances this result actually grounds, so the closing
         // synthesis can be pinned to only naming fragrances we retrieved.
         addGroundedNames(collectGroundedFragranceNames(result));
+        // Capture the scorer's ranking (last one wins) so the synthesis headline
+        // must agree with it, or explicitly justify overriding it (W-8).
+        if (def.name === "beam_score_candidates") {
+          const scoring = extractScoringContext(result);
+          if (scoring) latestScoring = scoring;
+        }
         // Note any fresh external fact so the answer gates can allow (only then) a
         // price/availability/review claim grounded in it.
         if (resultCarriesExternalFact(result)) hadExternalEvidence = true;

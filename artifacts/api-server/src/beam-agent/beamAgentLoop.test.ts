@@ -244,6 +244,57 @@ test("the synthesis turn is pinned to an allowlist of the fragrances tools actua
   assert.equal(summary?.groundedNames, 1);
 });
 
+test("the synthesis turn is held to the scorer's top pick and warned off invented locations (W-8)", async () => {
+  let summary: BeamRunSummary | undefined;
+
+  // A scoring tool that ranks Gabrielle first, Aventus second, scored against
+  // local weather (no locationLabel) — the exact shape beam_score_candidates returns.
+  const scoreTool: BeamToolDefinition = {
+    name: "beam_score_candidates",
+    description: "Rank the vault",
+    inputSchema: { type: "object", properties: {} },
+    handler: async () => ({
+      recommendation: { canonicalName: "Gabrielle", brand: "Chanel", score: 91 },
+      picks: [
+        { canonicalName: "Gabrielle", brand: "Chanel", score: 91 },
+        { canonicalName: "Aventus", brand: "Creed", score: 80 },
+      ],
+      scoredFor: { locationLabel: null, usedOverride: false },
+    }),
+  };
+
+  const { callModel, seen } = scriptedModel([
+    {
+      stop_reason: "tool_use",
+      content: [{ type: "tool_use", id: "tu_1", name: "beam_score_candidates", input: {} }],
+    },
+    text("draft"),
+    text("Reach for Gabrielle tonight."),
+  ]);
+
+  await runBeamAgent({
+    ctx,
+    userMessage: "what should I wear for a night out?",
+    tools: [scoreTool],
+    emit: () => {},
+    isModelConfigured: () => true,
+    callModel,
+    onSummary: (s) => (summary = s),
+  });
+
+  const synthesisCall = seen[seen.length - 1];
+  const folded = synthesisCall.messages
+    .flatMap((m) => (Array.isArray(m.content) ? m.content : [{ type: "text", text: m.content }]))
+    .map((b) => (b && typeof b === "object" && "text" in b ? String((b as { text: unknown }).text) : ""))
+    .join("\n");
+  // The scorer's ranking and top-pick rule are pinned into the closing instruction…
+  assert.match(folded, /scorer ranked the user's OWNED vault best-first as: "Gabrielle" then "Aventus"/i);
+  assert.match(folded, /lead with the scorer's top pick \("Gabrielle"\)/i);
+  // …and, since no destination was scored, it is warned off inventing a location.
+  assert.match(folded, /do NOT name any city, country, or climate they did not give/i);
+  assert.equal(summary?.outcome, "completed");
+});
+
 test("an unserializable tool result yields exactly one error result, not a duplicate tool_use_id", async () => {
   let summary: BeamRunSummary | undefined;
   // For each model call, record how many tool_result blocks carry the circular
