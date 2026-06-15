@@ -14,8 +14,23 @@ import {
   requeueFragranceDetails,
   resolveMainAccordChartRows,
   resolveSourceStatus,
+  sanitizeEngineQuery,
   searchFragrances,
 } from "./fragranceApi.ts";
+
+test("sanitizeEngineQuery strips accents and symbols while preserving word boundaries and case", () => {
+  // Accented vowels (NFD-decomposed) collapse to their base letter, not a split word.
+  assert.equal(
+    sanitizeEngineQuery("LANCÔME Idôle Eau de Toilette"),
+    "LANCOME Idole Eau de Toilette",
+  );
+  // Trademark/registered glyphs drop out (NFD keeps "™" intact rather than expanding to "TM").
+  assert.equal(sanitizeEngineQuery("BORNTOSTANDOUT® Cola Addict"), "BORNTOSTANDOUT Cola Addict");
+  assert.equal(sanitizeEngineQuery("Scent™ Number 9"), "Scent Number 9");
+  // Already-plain input is returned unchanged, so the auto-retry never fires needlessly.
+  assert.equal(sanitizeEngineQuery("thom brown"), "thom brown");
+  assert.equal(sanitizeEngineQuery("Yves Saint Laurent Libre"), "Yves Saint Laurent Libre");
+});
 
 test("isFetchNetworkError recognizes WebKit, Chromium, and Firefox network failures", () => {
   // WebKit (Safari, iOS/iPadOS) reports failed fetches as "Load failed".
@@ -822,6 +837,112 @@ test("searchFragrances ranks exact scent-name hits above brand dumps", async (t)
     response.results.map((result) => result.name),
     ["Lost Cherry", "Oud Wood", "Tobacco Vanille"],
   );
+});
+
+test("searchFragrances retries with a sanitized query when the accented query is empty", async (t) => {
+  const previousFetch = globalThis.fetch;
+  const previousApiUrl = process.env.VITE_FRAGRANCE_API_URL;
+  const previousAppApiUrl = process.env.VITE_API_BASE_URL;
+  const sentQueries: string[] = [];
+
+  process.env.VITE_FRAGRANCE_API_URL = "https://engine.example.test";
+  process.env.VITE_API_BASE_URL = "https://app-api.example.test";
+  Object.defineProperty(globalThis, "fetch", {
+    configurable: true,
+    value: async (url: string) => {
+      const decoded = decodeURIComponent(String(url));
+      sentQueries.push(decoded);
+      const isEngine = String(url).startsWith("https://engine.example.test");
+      const hasNonAscii = [...decoded].some((ch) => ch.charCodeAt(0) > 127);
+      // The engine only resolves the plain-ASCII form. The accented raw query
+      // and every app-search supplement come back empty, so the first pass is a
+      // clean zero-result — exactly the condition the sanitized retry recovers.
+      if (isEngine && !hasNonAscii) {
+        return new Response(
+          JSON.stringify({
+            query: "LANCOME Idole Eau de Toilette",
+            results: [{ id: "idole-edt", name: "Idole Eau de Toilette", house: "Lancome" }],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      return new Response(
+        JSON.stringify({ query: "LANCÔME Idôle Eau de Toilette", results: [] }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    },
+  });
+
+  t.after(() => {
+    Object.defineProperty(globalThis, "fetch", {
+      configurable: true,
+      value: previousFetch,
+    });
+    if (previousApiUrl === undefined) {
+      delete process.env.VITE_FRAGRANCE_API_URL;
+    } else {
+      process.env.VITE_FRAGRANCE_API_URL = previousApiUrl;
+    }
+    if (previousAppApiUrl === undefined) {
+      delete process.env.VITE_API_BASE_URL;
+    } else {
+      process.env.VITE_API_BASE_URL = previousAppApiUrl;
+    }
+  });
+
+  const response = await searchFragrances("LANCÔME Idôle Eau de Toilette");
+
+  // The sanitized retry surfaced the result the accented query missed.
+  assert.equal(response.results.length, 1);
+  assert.equal(response.results[0]?.name, "Idole Eau de Toilette");
+  // The caller's original (accented) query is preserved on the response.
+  assert.equal(response.query, "LANCÔME Idôle Eau de Toilette");
+  // The engine was actually asked the sanitized form at least once.
+  assert.ok(sentQueries.some((q) => q.includes("LANCOME Idole")));
+});
+
+test("searchFragrances does not retry when a plain query is genuinely empty", async (t) => {
+  const previousFetch = globalThis.fetch;
+  const previousApiUrl = process.env.VITE_FRAGRANCE_API_URL;
+  const previousAppApiUrl = process.env.VITE_API_BASE_URL;
+  let engineCalls = 0;
+
+  process.env.VITE_FRAGRANCE_API_URL = "https://engine.example.test";
+  process.env.VITE_API_BASE_URL = "https://app-api.example.test";
+  Object.defineProperty(globalThis, "fetch", {
+    configurable: true,
+    value: async (url: string) => {
+      if (String(url).startsWith("https://engine.example.test")) engineCalls += 1;
+      return new Response(
+        JSON.stringify({ query: "zzzzznotathing", results: [] }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    },
+  });
+
+  t.after(() => {
+    Object.defineProperty(globalThis, "fetch", {
+      configurable: true,
+      value: previousFetch,
+    });
+    if (previousApiUrl === undefined) {
+      delete process.env.VITE_FRAGRANCE_API_URL;
+    } else {
+      process.env.VITE_FRAGRANCE_API_URL = previousApiUrl;
+    }
+    if (previousAppApiUrl === undefined) {
+      delete process.env.VITE_API_BASE_URL;
+    } else {
+      process.env.VITE_API_BASE_URL = previousAppApiUrl;
+    }
+  });
+
+  const response = await searchFragrances("zzzzznotathing");
+
+  assert.equal(response.results.length, 0);
+  // Sanitizing a plain query is a no-op, so the engine is hit exactly once — no
+  // wasteful duplicate round-trip for queries with no accents or symbols.
+  assert.equal(engineCalls, 1);
 });
 
 test("searchFragrances supplements degraded SRT breadth with app API results", async (t) => {
