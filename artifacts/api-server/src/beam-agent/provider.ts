@@ -12,8 +12,13 @@
  * making OpenRouter the default whenever its key is present.
  */
 import type { ClaudeCallInput, ClaudeResponse } from "./types.ts";
-import { callClaude, isClaudeConfigured } from "./claudeProvider.ts";
-import { callOpenRouter, isOpenRouterConfigured } from "./openRouterProvider.ts";
+import { DEFAULT_BEAM_MODEL, STRONG_BEAM_MODEL, callClaude, isClaudeConfigured } from "./claudeProvider.ts";
+import {
+  DEFAULT_OPENROUTER_MODEL,
+  STRONG_OPENROUTER_MODEL,
+  callOpenRouter,
+  isOpenRouterConfigured,
+} from "./openRouterProvider.ts";
 
 export type BeamProvider = "openrouter" | "anthropic";
 
@@ -31,6 +36,23 @@ export function resolveProvider(): BeamProvider | null {
 /** True when SOME model provider is usable; the loop checks this up front. */
 export function isModelConfigured(): boolean {
   return resolveProvider() !== null;
+}
+
+/**
+ * The orchestration (`model`) and final-synthesis (`synthesisModel`) slugs for
+ * the provider that will actually serve the run, resolved from env. Both fall
+ * back to the cheap default when the strong env var is unset, so callers can
+ * always branch on a defined slug. Returns null when no provider is configured.
+ */
+export function resolveBeamModels(): { model: string; synthesisModel: string } | null {
+  const provider = resolveProvider();
+  if (provider === "anthropic") {
+    return { model: DEFAULT_BEAM_MODEL, synthesisModel: STRONG_BEAM_MODEL };
+  }
+  if (provider === "openrouter") {
+    return { model: DEFAULT_OPENROUTER_MODEL, synthesisModel: STRONG_OPENROUTER_MODEL };
+  }
+  return null;
 }
 
 export async function callModel(input: ClaudeCallInput): Promise<ClaudeResponse> {

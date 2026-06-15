@@ -38,6 +38,14 @@ export type BeamCatalogHit = { id: string; flat: Record<string, unknown>; score:
 export type BeamToolDeps = {
   /** The user's sanitized vault, scoped to ctx.tenantId + ctx.userId. */
   loadVault: (ctx: BeamRunContext) => Promise<ScentMissionWardrobeItem[]>;
+  /**
+   * OPTIONAL richer wardrobe loader that returns owned bottles as full candidate
+   * packets WITH note pyramids (read from the raw row, not the mission shape). When
+   * present, `beam_get_wardrobe` uses it so the model reasons over real top/middle/
+   * base notes; when absent it falls back to `loadVault` + accord-only packets,
+   * keeping the tool tests and any lean deploy on the original surface.
+   */
+  loadWardrobePackets?: (ctx: BeamRunContext) => Promise<CandidatePacket[]>;
   /** Catalog (global_fragrances) search → flattened profiles. */
   searchCatalog: (query: string, limit: number) => Promise<BeamCatalogHit[]>;
   /** Best-effort research for one fragrance name (read-only; never persists). */
@@ -121,9 +129,13 @@ export function createBeamTools(deps: BeamToolDeps): BeamToolDefinition[] {
     {
       name: "beam_get_wardrobe",
       description:
-        "List the fragrances the signed-in user already owns, as candidate packets (id, name, brand, accords). Use these ids when reasoning about what they own.",
+        "List the fragrances the signed-in user already owns, as candidate packets (id, name, brand, note pyramid, accords, performance). Use these ids when reasoning about what they own.",
       inputSchema: { type: "object", properties: {}, additionalProperties: false },
       handler: async (_input, ctx) => {
+        if (deps.loadWardrobePackets) {
+          const items = await deps.loadWardrobePackets(ctx);
+          return { count: items.length, items };
+        }
         const vault = await deps.loadVault(ctx);
         const items: CandidatePacket[] = vault.map((item) => packetFromOwnedItem(item));
         return { count: items.length, items };
