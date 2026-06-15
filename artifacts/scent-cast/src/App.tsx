@@ -11,6 +11,7 @@ import { AuthModal } from './components/AuthModal';
 import { GuestSaveBanner, GuestModeBanner } from './components/GuestSaveBanner';
 import { InstallPrompt } from './components/pwa/InstallPrompt';
 import { PushPrompt } from './components/pwa/PushPrompt';
+import { BadgeClearer } from './components/pwa/BadgeClearer';
 import type { ScentFamily, ScentWeatherRecommendation } from './lib/scentWeatherEngine';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { WeatherProvider, useWeather } from './context/WeatherContext';
@@ -1416,6 +1417,7 @@ const AppShell = React.memo(function AppShell({
             <Toaster />
             <InstallPrompt />
             <PushPrompt />
+            <BadgeClearer />
           </div>
         </WardrobeProvider>
       </WeatherProvider>

@@ -7,7 +7,7 @@ import { rebuildWardrobeForUser } from "../services/wardrobeRebuild";
 import { getBuyLinkFreshnessStats } from "../services/buyLinks";
 import { getDefaultTenantId } from "../services/tenants";
 import { getKeyPool, listKeyPools, parseKeyList } from "../lib/keyPool";
-import { isPushConfigured, sendPushToAll, sendPushToUser } from "../services/pushService";
+import { clearBadge, isPushConfigured, sendCategoryPushToUser, sendPushToAll, sendPushToUser, type PushPayload } from "../services/pushService";
 import { logger } from "../lib/logger";
 
 const router = Router();
@@ -82,17 +82,26 @@ router.post("/admin/push/broadcast", requireAdminSecret, async (req, res) => {
     res.status(503).json({ error: "Push notifications are not configured on this server." });
     return;
   }
-  const { email, title, body, url } = req.body as {
+  const { email, title, body, url, badgeCount, category, clearBadge: clear } = req.body as {
     email?: string;
     title?: string;
     body?: string;
     url?: string;
+    // Test the app-icon badge directly: a literal number is forwarded to
+    // navigator.setAppBadge in the SW (0 clears). `clearBadge` zeroes the stored
+    // server count too. `category` routes through the per-category opt-in path
+    // (and auto-increments the badge) instead of the raw send.
+    badgeCount?: number;
+    category?: "weather" | "community";
+    clearBadge?: boolean;
   };
   if (!title?.trim() || !body?.trim()) {
     res.status(400).json({ error: "title and body are required" });
     return;
   }
-  const payload = { title: title.trim(), body: body.trim(), url: url?.trim() || "/" };
+  const payload: PushPayload = { title: title.trim(), body: body.trim(), url: url?.trim() || "/" };
+  if (typeof badgeCount === "number" && Number.isFinite(badgeCount)) payload.badgeCount = Math.max(0, Math.trunc(badgeCount));
+  const cat = category === "weather" || category === "community" ? category : null;
 
   if (email?.trim()) {
     const normalizedEmail = email.trim().toLowerCase();
@@ -105,12 +114,17 @@ router.post("/admin/push/broadcast", requireAdminSecret, async (req, res) => {
       res.status(404).json({ error: "User not found" });
       return;
     }
-    const result = await sendPushToUser(existing[0].id, payload);
-    logger.info({ email: normalizedEmail, ...result }, "[admin] push sent to user");
+    if (clear) await clearBadge(existing[0].id);
+    const result = cat
+      ? await sendCategoryPushToUser(existing[0].id, cat, payload)
+      : await sendPushToUser(existing[0].id, payload);
+    logger.info({ email: normalizedEmail, category: cat, ...result }, "[admin] push sent to user");
     res.json(result);
     return;
   }
 
+  // Broadcast: per-category send is per-user only (it reads each user's opt-in),
+  // so the no-email path stays a raw fan-out with whatever literal badge was set.
   const result = await sendPushToAll(payload);
   logger.info(result, "[admin] push broadcast to all subscribers");
   res.json(result);

@@ -1,8 +1,11 @@
 import webpush, { type PushSubscription as WebPushSubscription } from "web-push";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "@workspace/db";
-import { pushSubscriptionsTable } from "@workspace/db/schema";
+import { pushSubscriptionsTable, userSettingsTable } from "@workspace/db/schema";
 import { logger } from "../lib/logger";
+
+/** Notification categories the user can independently opt out of (see user_settings). */
+export type PushCategory = "weather" | "community";
 
 // VAPID keys identify this application server to the push services. Generate a
 // pair once with `npx web-push generate-vapid-keys` and set them in the env.
@@ -47,8 +50,11 @@ export interface PushPayload {
   body?: string;
   url?: string;
   icon?: string;
+  /** Status-bar icon URL (NOT a count). The numeric app-icon badge is `badgeCount`. */
   badge?: string;
   tag?: string;
+  /** App-icon badge number for `navigator.setAppBadge`. 0 clears it. */
+  badgeCount?: number;
 }
 
 interface SaveSubscriptionArgs {
@@ -105,6 +111,36 @@ export async function deleteSubscription(endpoint: string): Promise<void> {
     await db.delete(pushSubscriptionsTable).where(eq(pushSubscriptionsTable.endpoint, endpoint));
   } catch (err) {
     if (!isMissingTableError(err)) throw err;
+  }
+}
+
+/**
+ * Re-point an existing subscription to a rotated endpoint/keys. Used by the
+ * service worker's `pushsubscriptionchange` flow, which has no bearer token —
+ * the *old* endpoint is the unguessable identity that authorizes the swap, so
+ * the row's owning user is preserved. Returns false when the old endpoint is
+ * unknown (already pruned, or never ours) so the caller can fall through.
+ */
+export async function rotateSubscription(
+  oldEndpoint: string,
+  next: { endpoint: string; p256dh: string; auth: string; userAgent?: string | null },
+): Promise<{ rotated: boolean }> {
+  try {
+    const updated = await db
+      .update(pushSubscriptionsTable)
+      .set({
+        endpoint: next.endpoint,
+        p256dh: next.p256dh,
+        auth: next.auth,
+        userAgent: next.userAgent ?? null,
+        updatedAt: new Date(),
+      })
+      .where(eq(pushSubscriptionsTable.endpoint, oldEndpoint))
+      .returning({ id: pushSubscriptionsTable.id });
+    return { rotated: updated.length > 0 };
+  } catch (err) {
+    if (isMissingTableError(err)) return { rotated: false };
+    throw err;
   }
 }
 
@@ -169,4 +205,142 @@ export async function sendPushToAll(payload: PushPayload, limit = 1000): Promise
     throw err;
   }
   return sendToRows(rows, payload);
+}
+
+// ---------------------------------------------------------------------------
+// Per-category preferences + app-icon badge (stored on user_settings)
+// ---------------------------------------------------------------------------
+//
+// Every read tolerates a missing column/table the same way the rest of this
+// module tolerates an unprovisioned push_subscriptions table — so a deploy that
+// hasn't run `drizzle-kit push` yet degrades to "no preferences, badge 0"
+// instead of 500ing the push endpoints.
+
+export interface PushPreferences {
+  weather: boolean;
+  community: boolean;
+}
+
+const DEFAULT_PREFERENCES: PushPreferences = { weather: true, community: true };
+
+function isMissingColumnOrTable(err: unknown): boolean {
+  // 42P01 undefined_table (handled above) or 42703 undefined_column — either
+  // means the migration hasn't landed; fall back to defaults rather than throw.
+  for (let current = err, depth = 0; typeof current === "object" && current !== null && depth < 5; depth++) {
+    const code = (current as { code?: string }).code;
+    if (code === "42P01" || code === "42703") return true;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return false;
+}
+
+export async function getPushPreferences(userId: string): Promise<PushPreferences> {
+  try {
+    const [row] = await db
+      .select({ weather: userSettingsTable.notifyWeather, community: userSettingsTable.notifyCommunity })
+      .from(userSettingsTable)
+      .where(eq(userSettingsTable.userId, userId))
+      .limit(1);
+    if (!row) return { ...DEFAULT_PREFERENCES };
+    return { weather: row.weather, community: row.community };
+  } catch (err) {
+    if (isMissingColumnOrTable(err)) return { ...DEFAULT_PREFERENCES };
+    throw err;
+  }
+}
+
+export async function setPushPreferences(
+  userId: string,
+  prefs: Partial<PushPreferences>,
+): Promise<PushPreferences> {
+  const set: Record<string, unknown> = { updatedAt: new Date() };
+  if (typeof prefs.weather === "boolean") set.notifyWeather = prefs.weather;
+  if (typeof prefs.community === "boolean") set.notifyCommunity = prefs.community;
+  try {
+    // Upsert: a user may not have a settings row yet. tenant_id stays null —
+    // notification prefs aren't tenant-scoped and the column is nullable.
+    await db
+      .insert(userSettingsTable)
+      .values({
+        userId,
+        notifyWeather: prefs.weather ?? DEFAULT_PREFERENCES.weather,
+        notifyCommunity: prefs.community ?? DEFAULT_PREFERENCES.community,
+      })
+      .onConflictDoUpdate({ target: userSettingsTable.userId, set });
+  } catch (err) {
+    if (!isMissingColumnOrTable(err)) throw err;
+  }
+  return getPushPreferences(userId);
+}
+
+export async function getBadgeCount(userId: string): Promise<number> {
+  try {
+    const [row] = await db
+      .select({ count: userSettingsTable.notificationBadgeCount })
+      .from(userSettingsTable)
+      .where(eq(userSettingsTable.userId, userId))
+      .limit(1);
+    return row?.count ?? 0;
+  } catch (err) {
+    if (isMissingColumnOrTable(err)) return 0;
+    throw err;
+  }
+}
+
+export async function clearBadge(userId: string): Promise<void> {
+  try {
+    await db
+      .update(userSettingsTable)
+      .set({ notificationBadgeCount: 0, updatedAt: new Date() })
+      .where(eq(userSettingsTable.userId, userId));
+  } catch (err) {
+    if (!isMissingColumnOrTable(err)) throw err;
+  }
+}
+
+/** Atomically increment and return the new badge count (best-effort; 0 on failure). */
+async function bumpBadge(userId: string): Promise<number> {
+  try {
+    const [row] = await db
+      .update(userSettingsTable)
+      .set({
+        notificationBadgeCount: sql`${userSettingsTable.notificationBadgeCount} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(eq(userSettingsTable.userId, userId))
+      .returning({ count: userSettingsTable.notificationBadgeCount });
+    if (row) return row.count;
+    // No settings row yet — create one already at the incremented value.
+    await db
+      .insert(userSettingsTable)
+      .values({ userId, notificationBadgeCount: 1 })
+      .onConflictDoUpdate({
+        target: userSettingsTable.userId,
+        set: { notificationBadgeCount: sql`${userSettingsTable.notificationBadgeCount} + 1`, updatedAt: new Date() },
+      });
+    return getBadgeCount(userId);
+  } catch (err) {
+    if (isMissingColumnOrTable(err)) return 0;
+    throw err;
+  }
+}
+
+/**
+ * Send a push that respects the user's per-category opt-in and carries the
+ * incremented app-icon badge count. Use this for all product-triggered pushes
+ * (weather nudges, community replies); the raw `sendPushToUser` stays for
+ * category-agnostic ops/admin sends.
+ */
+export async function sendCategoryPushToUser(
+  userId: string,
+  category: PushCategory,
+  payload: PushPayload,
+): Promise<{ sent: number; pruned: number; skipped?: boolean }> {
+  if (!configured) return { sent: 0, pruned: 0 };
+  const prefs = await getPushPreferences(userId);
+  const allowed = category === "weather" ? prefs.weather : prefs.community;
+  if (!allowed) return { sent: 0, pruned: 0, skipped: true };
+
+  const badgeCount = await bumpBadge(userId);
+  return sendPushToUser(userId, { ...payload, badgeCount });
 }

@@ -8,10 +8,14 @@ import { useWeather } from '@/context/WeatherContext';
 import {
   getPushSupport,
   getServerPushConfig,
+  getPushPreferences,
   isPushSubscribed,
+  setPushPreferences,
   subscribeToPush,
   unsubscribeFromPush,
+  type PushPreferences,
 } from '@/lib/pushNotifications';
+import { isIosDevice, isStandalonePwa } from '@/lib/platform';
 
 // Notification toggle states. 'unsupported'/'unconfigured' hide the section
 // (no point offering a control that can't work); the rest render it.
@@ -44,6 +48,42 @@ const LOCATION_SOURCE_COPY = {
   browser: 'Device location',
 } as const;
 
+/** Compact labelled switch used for the per-category notification toggles. */
+const NotificationToggle: React.FC<{
+  label: string;
+  description: string;
+  checked: boolean;
+  busy: boolean;
+  disabled?: boolean;
+  onToggle: () => void;
+}> = ({ label, description, checked, busy, disabled, onToggle }) => (
+  <div className="flex items-center justify-between gap-3 rounded-[10px] border border-white/10 bg-black/20 px-3.5 py-3">
+    <div className="min-w-0 flex-1">
+      <p className="text-[12px] font-semibold leading-snug text-white/80">{label}</p>
+      <p className="mt-0.5 text-[11px] leading-snug text-white/40">{description}</p>
+    </div>
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={busy || disabled}
+      role="switch"
+      aria-checked={checked}
+      aria-label={`Toggle ${label}`}
+      className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40 disabled:cursor-wait disabled:opacity-70 ${
+        checked ? 'border-scent-accent/60 bg-scent-accent/30' : 'border-white/15 bg-white/5'
+      }`}
+    >
+      <span
+        className={`inline-flex h-5 w-5 items-center justify-center rounded-full bg-white shadow transition-transform ${
+          checked ? 'translate-x-6' : 'translate-x-1'
+        }`}
+      >
+        {busy && <LoaderCircle size={11} className="animate-spin text-black/60" aria-hidden="true" />}
+      </span>
+    </button>
+  </div>
+);
+
 export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
   isOpen,
   onClose,
@@ -59,6 +99,8 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [pushState, setPushState] = useState<PushState>('unknown');
   const [pushBusy, setPushBusy] = useState(false);
+  const [pushPrefs, setPushPrefs] = useState<PushPreferences>({ weather: true, community: true });
+  const [prefBusy, setPrefBusy] = useState<null | keyof PushPreferences>(null);
   const modalRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -97,6 +139,19 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
       cancelled = true;
     };
   }, [isOpen, authToken]);
+
+  // Load per-category opt-ins once notifications are actually on for this device.
+  useEffect(() => {
+    if (!isOpen || !authToken || pushState !== 'on') return;
+    let cancelled = false;
+    void (async () => {
+      const data = await getPushPreferences(authToken);
+      if (!cancelled && data) setPushPrefs(data.preferences);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, authToken, pushState]);
 
   useModalBehavior({
     isOpen,
@@ -181,7 +236,10 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
         setPushState('denied');
         toast({
           title: 'Permission blocked',
-          description: 'Enable notifications for ScentBeam in your browser settings, then try again.',
+          description:
+            isIosDevice() && isStandalonePwa()
+              ? 'Open the iOS Settings app ▸ Notifications ▸ ScentBeam to allow them, then try again.'
+              : 'Enable notifications for ScentBeam in your browser settings, then try again.',
         });
       } else if (result.reason === 'not-configured') {
         setPushState('unconfigured');
@@ -193,8 +251,36 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
     }
   };
 
+  const handleToggleCategory = async (category: keyof PushPreferences) => {
+    if (!authToken || prefBusy) return;
+    const nextValue = !pushPrefs[category];
+    setPushPrefs((prev) => ({ ...prev, [category]: nextValue })); // optimistic
+    setPrefBusy(category);
+    try {
+      const saved = await setPushPreferences(authToken, { [category]: nextValue });
+      if (saved) {
+        setPushPrefs(saved);
+      } else {
+        setPushPrefs((prev) => ({ ...prev, [category]: !nextValue })); // revert
+        toast({ title: "Couldn't update", description: 'Please try again in a moment.' });
+      }
+    } finally {
+      setPrefBusy(null);
+    }
+  };
+
+  // iOS only grants Web Push inside an installed PWA. When unsupported there but
+  // not yet installed, show an install nudge instead of silently hiding push.
+  const iosNeedsInstall = pushState === 'unsupported' && isIosDevice() && !isStandalonePwa();
+  // Where a blocked user must go to re-allow: iOS standalone has no browser
+  // chrome, so it's the system Settings app, not "site settings".
+  const deniedHelp =
+    isIosDevice() && isStandalonePwa()
+      ? 'Open the iOS Settings app ▸ Notifications ▸ ScentBeam to allow them, then come back.'
+      : 'Allow notifications for ScentBeam in your browser site settings, then try again.';
   const showPushSection =
-    Boolean(authToken) && (pushState === 'on' || pushState === 'off' || pushState === 'denied');
+    Boolean(authToken) &&
+    (pushState === 'on' || pushState === 'off' || pushState === 'denied' || iosNeedsInstall);
 
   return (
     <AnimatePresence>
@@ -359,40 +445,81 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                       </div>
                     </div>
 
-                    {pushState === 'denied' ? (
+                    {iosNeedsInstall ? (
+                      <div className="rounded-[10px] border border-scent-accent/20 bg-scent-accent/[0.06] px-3.5 py-3">
+                        <p className="text-[11px] font-semibold leading-snug text-[#fff7ec]">
+                          Add ScentBeam to your Home Screen first
+                        </p>
+                        <p className="mt-1 text-[11px] leading-snug text-white/50">
+                          On iPhone &amp; iPad, notifications work only in the installed app. In Safari,
+                          tap the <span className="text-white/75">Share</span> icon, then{' '}
+                          <span className="text-white/75">Add to Home Screen</span> — open ScentBeam from
+                          there and this toggle appears.
+                        </p>
+                      </div>
+                    ) : pushState === 'denied' ? (
                       <p className="text-[11px] leading-snug text-white/45">
-                        Notifications are blocked for ScentBeam. Allow them in your browser site
-                        settings to turn them on here.
+                        Notifications are blocked for ScentBeam. {deniedHelp}
                       </p>
                     ) : (
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="min-w-0 flex-1 text-[11px] leading-snug text-white/45">
-                          {pushState === 'on'
-                            ? "You'll get the occasional scent-of-the-day nudge."
-                            : 'Get the occasional scent-of-the-day nudge.'}
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => void handleTogglePush()}
-                          disabled={pushBusy}
-                          role="switch"
-                          aria-checked={pushState === 'on'}
-                          aria-label="Toggle scent notifications"
-                          className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40 disabled:cursor-wait disabled:opacity-70 ${
-                            pushState === 'on'
-                              ? 'border-scent-accent/60 bg-scent-accent/30'
-                              : 'border-white/15 bg-white/5'
-                          }`}
-                        >
-                          <span
-                            className={`inline-flex h-5 w-5 items-center justify-center rounded-full bg-white shadow transition-transform ${
-                              pushState === 'on' ? 'translate-x-6' : 'translate-x-1'
+                      <>
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="min-w-0 flex-1 text-[11px] leading-snug text-white/45">
+                            {pushState === 'on'
+                              ? "Notifications are on for this device."
+                              : 'Get the occasional scent-of-the-day nudge.'}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => void handleTogglePush()}
+                            disabled={pushBusy}
+                            role="switch"
+                            aria-checked={pushState === 'on'}
+                            aria-label="Toggle scent notifications"
+                            className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40 disabled:cursor-wait disabled:opacity-70 ${
+                              pushState === 'on'
+                                ? 'border-scent-accent/60 bg-scent-accent/30'
+                                : 'border-white/15 bg-white/5'
                             }`}
                           >
-                            {pushBusy && <LoaderCircle size={11} className="animate-spin text-black/60" aria-hidden="true" />}
-                          </span>
-                        </button>
-                      </div>
+                            <span
+                              className={`inline-flex h-5 w-5 items-center justify-center rounded-full bg-white shadow transition-transform ${
+                                pushState === 'on' ? 'translate-x-6' : 'translate-x-1'
+                              }`}
+                            >
+                              {pushBusy && <LoaderCircle size={11} className="animate-spin text-black/60" aria-hidden="true" />}
+                            </span>
+                          </button>
+                        </div>
+
+                        {pushState === 'on' && (
+                          <div className="mt-3 space-y-2">
+                            <p className="text-[9px] font-bold uppercase tracking-[0.28em] text-white/30">
+                              What to send
+                            </p>
+                            <NotificationToggle
+                              label="Scent weather nudges"
+                              description="When the weather shifts your perfect wear."
+                              checked={pushPrefs.weather}
+                              busy={prefBusy === 'weather'}
+                              onToggle={() => void handleToggleCategory('weather')}
+                            />
+                            <NotificationToggle
+                              label="Community replies"
+                              description="When someone replies to your posts or comments."
+                              checked={pushPrefs.community}
+                              busy={prefBusy === 'community'}
+                              onToggle={() => void handleToggleCategory('community')}
+                            />
+                          </div>
+                        )}
+
+                        <p className="mt-3 text-[10px] leading-snug text-white/35">
+                          We only use your saved city and weather to time these — no tracking, no
+                          message content leaves your device. Turn them off anytime here or in your
+                          device settings.
+                        </p>
+                      </>
                     )}
                   </section>
                 )}

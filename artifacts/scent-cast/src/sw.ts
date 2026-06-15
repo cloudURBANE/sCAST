@@ -130,6 +130,26 @@ interface PushPayload {
   icon?: string;
   badge?: string;
   tag?: string;
+  /** App-icon badge number for navigator.setAppBadge. 0 clears it. */
+  badgeCount?: number;
+}
+
+// The App Badge API lives on the SW global in supporting browsers (iOS 16.4+
+// standalone, Chromium). Absent elsewhere — guard every call.
+type BadgeCapableGlobal = typeof self & {
+  setAppBadge?: (count?: number) => Promise<void>;
+  clearAppBadge?: () => Promise<void>;
+};
+
+function applyAppBadge(count: number | undefined): Promise<void> {
+  if (typeof count !== "number" || !Number.isFinite(count)) return Promise.resolve();
+  const nav = self as BadgeCapableGlobal;
+  try {
+    if (count <= 0) return nav.clearAppBadge?.() ?? Promise.resolve();
+    return nav.setAppBadge?.(count) ?? Promise.resolve();
+  } catch {
+    return Promise.resolve();
+  }
 }
 
 self.addEventListener("push", (event: PushEvent) => {
@@ -149,8 +169,60 @@ self.addEventListener("push", (event: PushEvent) => {
     tag: payload.tag,
     data: { url: payload.url || "/" },
   };
-  event.waitUntil(self.registration.showNotification(title, options));
+  event.waitUntil(
+    Promise.all([self.registration.showNotification(title, options), applyAppBadge(payload.badgeCount)]),
+  );
 });
+
+// Subscription rotation. Push services periodically expire/rotate endpoints; if
+// we don't re-register, delivery silently stops. We have no bearer token in the
+// SW, so we fetch the public VAPID key, re-subscribe, and hand the server the
+// OLD endpoint as proof-of-ownership to swap the stored row (POST /api/push/rotate).
+self.addEventListener("pushsubscriptionchange", (event: Event) => {
+  const changeEvent = event as Event & {
+    oldSubscription?: PushSubscription | null;
+    newSubscription?: PushSubscription | null;
+  };
+  event.waitUntil(
+    (async () => {
+      const oldEndpoint = changeEvent.oldSubscription?.endpoint;
+      if (!oldEndpoint) return;
+      try {
+        let next = changeEvent.newSubscription ?? null;
+        if (!next) {
+          // The browser didn't hand us a replacement — re-subscribe ourselves.
+          const res = await fetch("/api/push/public-key");
+          if (!res.ok) return;
+          const { key, configured } = (await res.json()) as { key: string | null; configured: boolean };
+          if (!configured || !key) return;
+          next = await self.registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(key),
+          });
+        }
+        const json = next.toJSON();
+        await fetch("/api/push/rotate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ oldEndpoint, endpoint: json.endpoint, keys: json.keys }),
+        });
+      } catch {
+        /* best-effort — a fresh subscribe happens on next app open */
+      }
+    })(),
+  );
+});
+
+// VAPID public keys are URL-safe base64; PushManager.subscribe wants a
+// BufferSource. (Mirrors lib/pushNotifications.ts.)
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(base64);
+  const output = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i += 1) output[i] = raw.charCodeAt(i);
+  return output;
+}
 
 self.addEventListener("notificationclick", (event: NotificationEvent) => {
   event.notification.close();

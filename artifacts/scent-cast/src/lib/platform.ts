@@ -12,6 +12,19 @@ function hasWindow(): boolean {
 }
 
 /**
+ * True for any iOS/iPadOS device (iPhone, iPod, iPad — including the modern iPad
+ * that masquerades as desktop "Macintosh"). Used to give iOS-specific guidance
+ * such as "open Settings ▸ Notifications" where browser-level controls don't
+ * apply inside an installed PWA.
+ */
+export function isIosDevice(): boolean {
+  if (!hasWindow()) return false;
+  const ua = navigator.userAgent || "";
+  if (/iPhone|iPod/i.test(ua)) return true;
+  return isIpadDevice();
+}
+
+/**
  * True for iPadOS, including modern iPads, which report a desktop "Macintosh"
  * user-agent and must be distinguished by their touch capability.
  */

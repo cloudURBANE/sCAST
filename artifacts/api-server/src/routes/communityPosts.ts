@@ -16,6 +16,8 @@ import { and, asc, desc, eq, inArray, lt, or, sql } from "drizzle-orm";
 import { AuthRequest, isUndefinedColumnError, optionalAuth, requireAuth } from "../middlewares/auth";
 import { getTenantId } from "../middlewares/tenant";
 import { shareIdForUser } from "../services/shareIdentity";
+import { sendCategoryPushToUser } from "../services/pushService";
+import { logger } from "../lib/logger";
 
 const router = Router();
 
@@ -937,9 +939,13 @@ router.post("/community/posts/:id/comments", requireAuth, async (req: AuthReques
       return;
     }
 
+    // Who should be notified of this comment: the parent comment's author for a
+    // threaded reply, otherwise the post author. Resolved here so the validation
+    // query does double duty.
+    let replyTargetUserId: string | null = postRow.userId;
     if (parentCommentId) {
       const [parent] = await db
-        .select({ id: communityCommentsTable.id })
+        .select({ id: communityCommentsTable.id, userId: communityCommentsTable.userId })
         .from(communityCommentsTable)
         .where(and(
           eq(communityCommentsTable.id, parentCommentId),
@@ -951,6 +957,7 @@ router.post("/community/posts/:id/comments", requireAuth, async (req: AuthReques
         sendBadRequest(res, "parentCommentId must reference a comment on this post");
         return;
       }
+      replyTargetUserId = parent.userId;
     }
 
     const [inserted] = await db
@@ -967,6 +974,19 @@ router.post("/community/posts/:id/comments", requireAuth, async (req: AuthReques
 
     const [comment] = await buildCommentDtos(tenantId, [{ ...inserted, authorEmail: user.email, authorPictureUrl: user.pictureUrl }]);
     res.status(201).json({ comment });
+
+    // Fire a "community" push to the reply target — best-effort, after the
+    // response so it never delays or fails the comment write. Skip self-replies.
+    if (replyTargetUserId && replyTargetUserId !== user.id) {
+      const isThreadReply = Boolean(parentCommentId);
+      const excerpt = commentBody.length > 110 ? `${commentBody.slice(0, 109)}…` : commentBody;
+      void sendCategoryPushToUser(replyTargetUserId, "community", {
+        title: isThreadReply ? "New reply" : "New comment on your post",
+        body: excerpt,
+        url: "/community",
+        tag: `community-comment-${postId}`,
+      }).catch((err) => logger.warn({ err, postId }, "[community] reply push failed"));
+    }
   } catch (err) {
     next(err);
   }
