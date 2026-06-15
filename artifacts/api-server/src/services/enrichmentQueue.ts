@@ -14,7 +14,7 @@
  */
 import { db } from "@workspace/db";
 import { enrichmentJobsTable, type EnrichmentJob } from "@workspace/db/schema";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import {
   buildJobKey,
@@ -22,13 +22,19 @@ import {
   computeEnrichmentUpsert,
   EnrichmentQueueError,
   failedJobReopenPatch,
+  runEnrichmentWorkerOnce,
   shouldReopenFailedEnrichmentJob,
   statusMessage,
   TERMINAL_SKIP_STATUSES,
   type EnrichmentJobInput,
   type EnrichmentJobStatus,
+  type EnrichmentWorkerDeps,
+  type EnrichmentWorkerProcessor,
   type ExistingJobRow,
 } from "./enrichmentQueueCore";
+
+export { runEnrichmentWorkerOnce } from "./enrichmentQueueCore";
+export type { EnrichmentWorkerProcessor, EnrichmentWorkerDeps } from "./enrichmentQueueCore";
 
 export { EnrichmentQueueError } from "./enrichmentQueueCore";
 export type { EnrichmentJobInput } from "./enrichmentQueueCore";
@@ -164,6 +170,161 @@ export function startEnrichmentFailedJobRetrySweeper(): void {
     });
   }, sweepMs);
   timer.unref();
+}
+
+/* ------------------------------------------------------------------ */
+/* Worker — claims and processes pending jobs                          */
+/* ------------------------------------------------------------------ */
+//
+// The worker and the failed-job sweeper above CANNOT race the same row: the
+// sweeper only ever touches `failed` rows, while the worker claims `pending`
+// (or lease-expired `processing`) rows atomically and moves them OFF `pending`
+// in the same statement. A claimed job is `processing`, which neither writer
+// reopens until it has terminated (`completed`/`failed`) or its lease lapses.
+
+const DEFAULT_CLAIM_LEASE_MS = 5 * 60 * 1000;
+const DEFAULT_WORKER_POLL_MS = 30 * 1000;
+const DEFAULT_WORKER_BATCH = 3;
+
+// The worker runner + its dep/processor types live in the dependency-free core
+// (enrichmentQueueCore.ts) so the orchestration is unit-testable without a DB;
+// re-exported above. The DB-backed claim/complete/fail primitives stay here.
+
+/** Off by default — opt in per environment so a deploy doesn't start calling the
+ *  engine until enrichment is explicitly enabled. */
+export function enrichmentWorkerEnabled(): boolean {
+  return /^(1|true|yes|on)$/i.test((process.env.ENRICHMENT_WORKER_ENABLED ?? "").trim());
+}
+
+/**
+ * Master switch for the PRODUCER (enqueue-on-incomplete-detail). Off by default
+ * so turning enrichment on is a deliberate, env-gated rollout — with it unset the
+ * detail path behaves exactly as before (no extra DB writes, no regression).
+ */
+export function enrichmentQueueProducerEnabled(): boolean {
+  return /^(1|true|yes|on)$/i.test((process.env.ENRICHMENT_QUEUE_ENABLED ?? "").trim());
+}
+
+function positiveIntEnv(raw: string | undefined, fallback: number): number {
+  const value = Number(raw);
+  return Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback;
+}
+
+function claimLeaseMs(): number {
+  return positiveIntEnv(process.env.ENRICHMENT_CLAIM_LEASE_MS, DEFAULT_CLAIM_LEASE_MS);
+}
+function workerPollMs(): number {
+  return positiveIntEnv(process.env.ENRICHMENT_WORKER_POLL_MS, DEFAULT_WORKER_POLL_MS);
+}
+function workerBatchSize(): number {
+  return positiveIntEnv(process.env.ENRICHMENT_WORKER_BATCH, DEFAULT_WORKER_BATCH);
+}
+
+/**
+ * Atomically claim the next runnable job — the highest-priority `pending` job,
+ * or a `processing` job whose lease has expired (i.e. a worker that crashed mid-
+ * job). The claim is `UPDATE … WHERE id = (SELECT … FOR UPDATE SKIP LOCKED)`, so
+ * concurrent workers never grab the same row, and it flips the row to
+ * `processing` in the same statement (never racing the failed-job sweeper).
+ * Returns the freshly-claimed row (typed), or null when nothing is runnable.
+ */
+export async function claimNextEnrichmentJob(opts?: { now?: Date; leaseMs?: number }): Promise<EnrichmentJob | null> {
+  const now = opts?.now ?? new Date();
+  const claimExpiresAt = new Date(now.getTime() + (opts?.leaseMs ?? claimLeaseMs()));
+
+  // Returning only the id keeps this independent of column-name casing (raw
+  // db.execute rows are snake_case); we re-read the row through the typed query
+  // builder below. The row is already ours (status=processing) so that read can't race.
+  const claimed = await db.execute(sql`
+    update ${enrichmentJobsTable} as j
+       set status = 'processing',
+           claimed_at = ${now},
+           claim_expires_at = ${claimExpiresAt},
+           updated_at = ${now}
+     where j.id = (
+       select c.id from ${enrichmentJobsTable} as c
+        where c.status = 'pending'
+           or (c.status = 'processing' and c.claim_expires_at is not null and c.claim_expires_at < ${now})
+        order by c.priority desc, c.last_requested_at asc
+        limit 1
+        for update skip locked
+     )
+    returning j.id
+  `);
+
+  const rows = (Array.isArray(claimed) ? claimed : (claimed as { rows?: unknown[] }).rows ?? []) as Array<{ id: string }>;
+  const claimedId = rows[0]?.id;
+  if (!claimedId) return null;
+
+  const [job] = await db
+    .select()
+    .from(enrichmentJobsTable)
+    .where(eq(enrichmentJobsTable.id, claimedId))
+    .limit(1);
+  return job ?? null;
+}
+
+/** Mark a claimed job done. `completed` is terminal — the sweeper never reopens it. */
+export async function completeEnrichmentJob(jobKey: string, now: Date = new Date()): Promise<void> {
+  await db
+    .update(enrichmentJobsTable)
+    .set({
+      status: "completed",
+      completedAt: now,
+      updatedAt: now,
+      claimedAt: null,
+      claimExpiresAt: null,
+      lastError: null,
+    })
+    .where(eq(enrichmentJobsTable.jobKey, jobKey));
+}
+
+/** Mark a claimed job failed. The sweeper reopens it to `pending` after backoff. */
+export async function failEnrichmentJob(jobKey: string, error: string, now: Date = new Date()): Promise<void> {
+  await db
+    .update(enrichmentJobsTable)
+    .set({
+      status: "failed",
+      failedAt: now,
+      updatedAt: now,
+      claimedAt: null,
+      claimExpiresAt: null,
+      lastError: error.slice(0, 500),
+    })
+    .where(eq(enrichmentJobsTable.jobKey, jobKey));
+}
+
+function defaultWorkerDeps(process: EnrichmentWorkerProcessor<EnrichmentJob>): EnrichmentWorkerDeps<EnrichmentJob> {
+  return {
+    claim: () => claimNextEnrichmentJob(),
+    complete: (jobKey) => completeEnrichmentJob(jobKey),
+    fail: (jobKey, error) => failEnrichmentJob(jobKey, error),
+    process,
+  };
+}
+
+let enrichmentWorkerStarted = false;
+
+/**
+ * Start the background worker; no-op unless ENRICHMENT_WORKER_ENABLED is set, and
+ * idempotent so a double-call can't spin two loops. The interval is `unref()`d so
+ * it never holds the process open. Pass the concrete processor from app.ts (where
+ * the engine/scent-engine deps are already in scope) to keep this module free of
+ * that heavy import graph.
+ */
+export function startEnrichmentWorker(process: EnrichmentWorkerProcessor<EnrichmentJob>): void {
+  if (enrichmentWorkerStarted) return;
+  if (!enrichmentWorkerEnabled()) return;
+  enrichmentWorkerStarted = true;
+
+  const deps = defaultWorkerDeps(process);
+  const pollMs = workerPollMs();
+  const batch = workerBatchSize();
+  const timer = setInterval(() => {
+    runEnrichmentWorkerOnce(deps, batch).catch((err) => logger.error({ err }, "enrichment worker tick error"));
+  }, pollMs);
+  timer.unref();
+  logger.info({ pollMs, batch }, "enrichment worker started");
 }
 
 export type UpsertEnrichmentJobResult = {

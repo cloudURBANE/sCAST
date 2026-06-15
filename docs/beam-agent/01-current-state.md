@@ -1,5 +1,13 @@
 # 01 — Current state (code-grounded)
 
+> **Status update (2026-06-15):** this page captures the *legacy baseline* — the
+> scripted `/api/scent-mission` node-wizard (backend **A**). The Phase-1 in-process
+> Claude tool-loop it describes as a future "missing piece" has since shipped **and
+> is mounted**: `app.ts` calls `mountBeamAgent(app)` and `ScentMissionPanel` routes
+> conversational turns to `/api/beam-agent` (via `beamAgentClient.ts`) with the
+> scripted path as fallback. Read sections below as the pre-Beam starting point,
+> not as the live agent. See [09-production-readiness-plan.md](./09-production-readiness-plan.md).
+
 What Scent Mission / "Beam Agent" actually is today, read from the source. This
 condenses `docs/SCENT_MISSION_AGENT_ANALYSIS.md` and verifies it against the
 files below.

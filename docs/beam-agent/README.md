@@ -4,8 +4,10 @@ Turning **Scent Mission** (the "Beam Agent") from a scripted, single-turn wizard
 into a real tool-calling agent — accurately, incrementally, and without breaking
 the existing app.
 
-This folder is the single source of truth for that work. Phase 1 code already
-lives in `artifacts/api-server/src/beam-agent/` (additive, **not yet mounted**).
+This folder is the single source of truth for that work. Phase 1 code lives in
+`artifacts/api-server/src/beam-agent/` and is now **mounted** (`app.ts` calls
+`mountBeamAgent(app)`); `ScentMissionPanel` routes conversational turns to it
+with the scripted `/api/scent-mission` path as fallback.
 
 ## Read in this order
 
@@ -30,8 +32,8 @@ lives in `artifacts/api-server/src/beam-agent/` (additive, **not yet mounted**).
   rewriting the tools or the UI. This honors the uploaded Hermes plan's endgame
   while de-risking the near term.
 - **What shipped in Phase 1:** five **read-only** tools + the agent loop + SSE
-  run endpoints, all isolated in one folder and unmounted. No writes, no schema
-  changes, no edits to existing files.
+  run endpoints, isolated in one folder and now mounted at `/api/beam-agent`. No
+  writes and no schema changes — the loop stays read-only.
 
 ## Guardrails carried through every phase
 

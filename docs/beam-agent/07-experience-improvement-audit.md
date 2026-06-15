@@ -27,13 +27,14 @@ the user sees. Understanding this split is the key to fixing anything safely.
 | Layer | Path | Status | Model stack |
 |---|---|---|---|
 | **A. Live backend** (what ships today) | `routes/scentMission.ts` + `services/scentMissionService.ts` + `lib/scent-weather-engine` | **Live, mounted** | OpenAI `gpt-4.1-mini` → Gemini `gemini-2.5-flash` for chat; deterministic engine for the actual pick |
-| **B. In-process Claude loop** | `api-server/src/beam-agent/*` | Built, **not mounted** (`mountBeamAgent` not called) | Anthropic Claude (`claude-haiku-4-5`) via `claudeProvider.ts` |
+| **B. In-process Claude loop** | `api-server/src/beam-agent/*` | Built **and mounted** (`app.ts` calls `mountBeamAgent`); `ScentMissionPanel` routes turns here via `beamAgentClient.ts`, falling back to **A** | Anthropic Claude (`claude-haiku-4-5`) via `claudeProvider.ts` |
 | **C. MCP / Hermes runtime** | `api-server/src/beam-agent/mcp/*` + `hermes-beam/` | Additive runtime path | OpenRouter brain (`gpt-5.4-mini`) + Sonnet / Mistral / deep-research specialists |
 | **D. The UI** | `components/ScentMissionPanel.tsx`, wired in `App.tsx`, loader in `ScentIntelligenceLoader.tsx` | **Live** | Talks only to **A** (`/api/scent-mission`) |
 
-The user-facing panel (**D**) is branded **"Beam Agent"** everywhere but is wired
-to backend **A**, which is the old scripted node-wizard — not an agent. Systems
-**B** and **C** are the *real* agent, still dark. The full file inventory:
+The user-facing panel (**D**) is branded **"Beam Agent"** everywhere. It now
+routes conversational turns to backend **B** (the real tool-loop) and falls back
+to backend **A** — the old scripted node-wizard — when the model is unavailable.
+System **C** (MCP/Hermes) is the additive runtime path. The full file inventory:
 
 ```
 artifacts/scent-cast/src/
@@ -45,7 +46,7 @@ artifacts/scent-cast/src/
 artifacts/api-server/src/
   routes/scentMission.ts                  # POST /api/scent-mission (live), picks OpenAI/Gemini
   services/scentMissionService.ts         # stateless node executor + deterministic chat fallback
-  beam-agent/                             # (B) Claude tool-loop — unmounted
+  beam-agent/                             # (B) Claude tool-loop — mounted via mountBeamAgent(app)
     beamAgentLoop.ts beamTools.ts beamToolCore.ts claudeProvider.ts beamAgentRoutes.ts
     mcp/                                   # (C) MCP server + specialist model tools
       beamMcpServer.ts mcpMain.ts beamModelConfig.ts openRouterProvider.ts specialistTools.ts …

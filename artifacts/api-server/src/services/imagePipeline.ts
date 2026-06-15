@@ -116,6 +116,18 @@ function inFlightKey(sourceUrlHash: string, removeBackground: boolean): string {
   return `${sourceUrlHash}:${removeBackground ? "1" : "0"}`;
 }
 
+// Search-query-level in-flight dedup. `inFlightBySource` only converges AFTER
+// Serper resolves a candidate URL, so two concurrent FIRST-time requests for the
+// same search query both hit Serper before they can share a source hash. This
+// map collapses them one step earlier — at the query+bg granularity — so the
+// duplicate Serper round-trip (and the redundant Poof/sharp work behind it) is
+// avoided. Writes are idempotent, so this is purely a cost optimization.
+const inFlightBySearchQuery = new Map<string, Promise<ProcessedImageResult | null>>();
+
+function searchQueryFlightKey(searchQueryHash: string, removeBackground: boolean): string {
+  return `${searchQueryHash}:${removeBackground ? "1" : "0"}`;
+}
+
 function preview(value: string | undefined, max = 140): string | undefined {
   const trimmed = value?.trim();
   if (!trimmed) return undefined;
@@ -458,10 +470,35 @@ export async function resolveCachedFragranceImage(
 export async function resolveProcessedFragranceImage(
   input: ResolveProcessedFragranceImageInput,
 ): Promise<ProcessedImageResult | null> {
+  // Collapse concurrent first-time requests for the SAME search query (Serper
+  // path only — a manually supplied `sourceUrl` is already deduped by
+  // `inFlightBySource`, and a request with no query can't be keyed here). The
+  // deferred-image build path fires many of these in parallel, so this is where
+  // the duplicate Serper calls originate.
+  const searchQueryHash = input.searchQuery ? hashSearchQuery(input.searchQuery) : null;
+  if (!searchQueryHash || input.sourceUrl) {
+    return resolveProcessedFragranceImageInner(input, searchQueryHash);
+  }
+
+  const removeBackground = input.removeBackground ?? true;
+  const flightKey = searchQueryFlightKey(searchQueryHash, removeBackground);
+  const existing = inFlightBySearchQuery.get(flightKey);
+  if (existing) return existing;
+
+  const promise = resolveProcessedFragranceImageInner(input, searchQueryHash).finally(() => {
+    inFlightBySearchQuery.delete(flightKey);
+  });
+  inFlightBySearchQuery.set(flightKey, promise);
+  return promise;
+}
+
+async function resolveProcessedFragranceImageInner(
+  input: ResolveProcessedFragranceImageInput,
+  searchQueryHash: string | null,
+): Promise<ProcessedImageResult | null> {
   const lookupKey = makeLookupKey(input.brand, input.name);
   const sourceProvider = input.sourceProvider ?? (input.sourceUrl ? "manual" : "serper");
   const removeBackground = input.removeBackground ?? true;
-  const searchQueryHash = input.searchQuery ? hashSearchQuery(input.searchQuery) : null;
   const traceBase = {
     lookupKey,
     sourceProvider,

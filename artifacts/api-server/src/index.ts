@@ -3,7 +3,8 @@
 import "./env-bootstrap";
 import app from "./app";
 import { logger } from "./lib/logger";
-import { startEnrichmentFailedJobRetrySweeper } from "./services/enrichmentQueue";
+import { startEnrichmentFailedJobRetrySweeper, startEnrichmentWorker } from "./services/enrichmentQueue";
+import { enrichJobViaEngine } from "./services/enrichmentProcessor";
 import { ensureTenantBaseline } from "./services/tenants";
 import { getSerperPool } from "./services/serperService";
 import { getRemoveBgPool } from "./services/bgService";
@@ -49,6 +50,9 @@ async function start() {
 
     logger.info({ port }, "Server listening");
     startEnrichmentFailedJobRetrySweeper();
+    // Consumer for the enrichment queue. No-op unless ENRICHMENT_WORKER_ENABLED
+    // is set, so it stays dormant until enrichment is deliberately turned on.
+    startEnrichmentWorker(enrichJobViaEngine);
   });
 }
 

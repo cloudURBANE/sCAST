@@ -39,6 +39,50 @@ note-pyramid builder tests). This document is about what's left to make it
 
 ---
 
+## Remediation pass status — 2026-06-15
+
+Outcomes of the `HANDOFF_NEXT_PASS_WEBAPP.md` Beam-Agent items in this pass:
+
+- **W-5 / P1-2 (per-user quota + spend metric):** ✅ done — see P1-2 below.
+- **W-8 (answer consistency & context honesty):** ✅ done. The synthesis turn is
+  now held to the deterministic scorer's ranking (`beamAgentLoop.ts` captures the
+  latest `beam_score_candidates` verdict and pins the headline owned-bottle pick
+  to the scorer's top match, or forces an explicit one-clause override), and an
+  unconditional context-honesty rule forbids inventing a city/climate/season the
+  user never gave (the "cool London evenings" failure). Covered by a new loop test.
+- **W-6 / P0-3 (SSE through the Vercel edge proxy):** code is **staging-ready**,
+  not yet verified on a live deploy (cannot deploy from the dev box). The proxy
+  streams `upstream.body` directly with no app-level buffering
+  ([middleware.js](../../middleware.js)), and Express's `Cache-Control: no-cache,
+  no-transform` survives the proxy's header logic (it only sets `no-store` when
+  Cache-Control is absent), so `no-transform` reaches the browser. **Remaining =
+  one staging test:** open a real Vercel→Railway run and confirm `message_delta`
+  events arrive incrementally (not dumped at the end). If the Edge runtime buffers,
+  fall back to attaching `GET /runs/:id/events` directly to the Railway origin, or
+  rely on the non-stream `completed` event (already works). Heartbeat (P0-4) is in.
+- **W-7 / P0-2 (externalize run/session state):** interim mitigation **confirmed in
+  place** — `railway.json` pins `numReplicas: 1`, the SSE attach logs a warning +
+  returns `run_not_found` if a run is missing (surfacing a broken single-replica
+  invariant), and the route header documents it. The durable fix (run+session
+  state in Postgres/Redis) remains **Phase 5** and is intentionally NOT built in
+  this pass: it is a large change against the **shared prod Supabase** DB and the
+  handoff scopes it as the deferred "real fix." Keep single-replica until then.
+- **W-11 (conversations/messages tenant-scoping):** **deferred by design.** These
+  two schema files remain off-runtime (not re-exported) and have no `tenantId`/
+  `userId`. No persistence is wired this pass, so no cross-tenant surface is
+  created. Wiring chat persistence MUST first add `tenantId`/`userId` FKs (mirror
+  `pushSubscriptions.ts`), re-export, and confirm both table names are inside
+  `drizzle.config.ts` `tablesFilter` before any `push` — see `b-21`. Not started
+  here to avoid adding unused, security-sensitive schema to a shared prod DB.
+- **W-12 (enrichment producer + worker):** ✅ done — env-gated producer
+  (`ENRICHMENT_QUEUE_ENABLED`) enqueues on the backend's own incomplete-coverage
+  signal (`isDetailLocallyComplete`), and an env-gated worker
+  (`ENRICHMENT_WORKER_ENABLED`) claims jobs with `FOR UPDATE SKIP LOCKED` (never
+  racing the failed-job sweeper) and enriches via the engine `/search`+`/details`
+  contract. Both default OFF (zero behavior change). Worker orchestration unit-tested.
+
+---
+
 ## 1. What the system is now (grounded)
 
 ```
@@ -149,15 +193,18 @@ is set ([claudeProvider.ts:33](../../artifacts/api-server/src/beam-agent/claudeP
 So the headline "quality jump" (weakness #1) is dark in every environment until
 an operator sets it. See §4 for the recommendation.
 
-**P1-2 · No cost / token / quota accounting. (M)**
-The synthesis turn adds **one extra model call per tool-using run**. There's a
-per-IP rate limit (20 / 5 min, [beamAgentRoutes.ts:55](../../artifacts/api-server/src/beam-agent/beamAgentRoutes.ts#L55))
-but it's in-memory (same scaling caveat as P0-2) and IP-based, not per-user.
-There is no token-usage capture, no per-user daily cap, and no spend metric.
-**Fix:** record `usage` from each provider response, log per-run token + model,
-add a per-user (not just per-IP) cap, and surface a daily spend metric. This is
-the guardrail that keeps a runaway loop or abusive user from being a billing
-event.
+**P1-2 · Cost / token / quota accounting. (M) — ✅ Addressed (2026-06-15).**
+The synthesis turn adds one extra model call per tool-using run. Beyond the
+per-IP rate limit (20 / 5 min, [beamAgentRoutes.ts](../../artifacts/api-server/src/beam-agent/beamAgentRoutes.ts)),
+each run is now persisted to the shared `api_usage_ledger`
+(`recordBeamRunUsage`, operation `beam.run`) with its captured tokens + estimated
+cost, and `POST /runs` enforces a **per-user daily cap** off that ledger
+(`getBeamUserUsageSince`): both a run-count cap (`BEAM_USER_DAILY_RUN_CAP`, default
+60) and a spend cap (`BEAM_USER_DAILY_SPEND_USD`, default 2) — whichever trips
+first returns `429 user_daily_quota_exceeded`. The read is fail-open (ledger
+unavailable ⇒ zeros) so a DB hiccup can't lock users out. Daily spend is now a
+queryable metric (beam rows surface in `getUsageTotals`). Per-IP limit remains as
+the burst guard; full multi-instance durability still rides on P0-2.
 
 **P1-3 · No observability on the agent path. (M)**
 `logger.error` fires only on an unexpected crash
@@ -196,7 +243,7 @@ test for SSE replay/forbidden/404.
   three independent magic numbers; document the intended relationship.
 - **P2-3 (S):** `pruneRuns`/`pruneSessions` only run on new requests; an idle
   server holds memory until the next call. Fine at current scale; note it.
-- **P2-4 (S):** Stale docs — fix the "not mounted" claim in 01 and 07 (see top).
+- **P2-4 (S):** ✅ Done — stale "not mounted" claim corrected in 01, 07, and the README.
 - **P2-5 (S):** Synthesis-turn failure silently falls back to the clipped draft
   ([beamAgentLoop.ts:183-186](../../artifacts/api-server/src/beam-agent/beamAgentLoop.ts#L183-L186)) —
   add a debug log so a high synthesis-failure rate is visible, not invisible.
@@ -256,5 +303,5 @@ short-lived feature branch → PR to `main`; don't back-merge `main` into it.
       (rate limit remains per-IP — see P1-2).
 - [x] Loop integration tests added; `pnpm --filter @workspace/api-server run test` green (322).
 - [x] `pnpm --filter @workspace/api-server run typecheck` clean.
-- [x] Stale "not mounted" claim corrected in the route header (docs 01/07 still pending).
+- [x] Stale "not mounted" claim corrected in the route header and docs 01/07/README.
 ```

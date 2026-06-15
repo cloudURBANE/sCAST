@@ -391,3 +391,56 @@ const STATUS_MESSAGES: Record<string, string> = {
 export function statusMessage(status: string): string {
   return STATUS_MESSAGES[status] ?? "Enrichment status unknown.";
 }
+
+// --- worker runner (pure orchestration) --------------------------------------
+//
+// The claim/complete/fail primitives are DB-backed (enrichmentQueue.ts); the
+// loop that sequences them is kept here, dependency-free, so its batch-bounding,
+// complete-vs-fail routing, and per-job isolation are unit-testable with fakes
+// and no database. Generic over the job shape — it only needs `jobKey`.
+
+/** Default number of jobs a single worker pass will claim before yielding. */
+export const DEFAULT_WORKER_BATCH = 3;
+
+export type ClaimableJob = { jobKey: string };
+
+/** Process one claimed job, returning the terminal status to record for it. */
+export type EnrichmentWorkerProcessor<J extends ClaimableJob = ClaimableJob> = (
+  job: J,
+) => Promise<"completed" | "failed">;
+
+/** Injected seams so the runner can be exercised without a DB or the engine. */
+export type EnrichmentWorkerDeps<J extends ClaimableJob = ClaimableJob> = {
+  claim: () => Promise<J | null>;
+  complete: (jobKey: string) => Promise<void>;
+  fail: (jobKey: string, error: string) => Promise<void>;
+  process: EnrichmentWorkerProcessor<J>;
+};
+
+/**
+ * Claim and process up to `batch` jobs once. Each job is isolated: a processor
+ * throw (or a "failed" return) marks just that job failed and the loop continues
+ * to the next. Stops early when the queue is drained. Returns the number of jobs
+ * claimed this pass (0 when idle).
+ */
+export async function runEnrichmentWorkerOnce<J extends ClaimableJob>(
+  deps: EnrichmentWorkerDeps<J>,
+  batch: number = DEFAULT_WORKER_BATCH,
+): Promise<number> {
+  let handled = 0;
+  for (let i = 0; i < Math.max(1, batch); i++) {
+    const job = await deps.claim();
+    if (!job) break;
+    handled++;
+    try {
+      const outcome = await deps.process(job);
+      if (outcome === "completed") await deps.complete(job.jobKey);
+      else await deps.fail(job.jobKey, "processor reported failure");
+    } catch (err) {
+      // If fail() itself throws, the job stays `processing` and its claim lease
+      // will expire and be reclaimed — never wedge the loop on one bad job.
+      await deps.fail(job.jobKey, err instanceof Error ? err.message : "worker error").catch(() => {});
+    }
+  }
+  return handled;
+}

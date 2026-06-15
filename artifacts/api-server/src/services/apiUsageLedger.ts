@@ -1,6 +1,6 @@
 import { db } from "@workspace/db";
 import { apiUsageLedgerTable } from "@workspace/db/schema";
-import { count, eq, sql, sum } from "drizzle-orm";
+import { and, count, eq, gte, sql, sum } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { getCurrentTenantId } from "../lib/tenantContext";
 import { getDefaultTenantId } from "./tenants";
@@ -185,6 +185,95 @@ export async function recordApiUsage(input: RecordApiUsageInput): Promise<void> 
       { err: err instanceof Error ? err.message : String(err) },
       "[apiUsageLedger] failed to record usage row",
     );
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Beam Agent run usage (per-user quota cap + daily spend metric)     */
+/* ------------------------------------------------------------------ */
+
+/** Ledger `operation` tag for a Beam Agent run; the discriminator for the cap. */
+export const BEAM_RUN_OPERATION = "beam.run";
+
+export type RecordBeamRunUsageInput = {
+  tenantId?: string | null;
+  userId: string;
+  /** Vendor/subsystem tag for the (provider, operation) index, e.g. "beam-agent". */
+  provider: string;
+  /** Model slug the run was priced against (lane's strong/orchestration model). */
+  model: string;
+  inputTokens?: number | null;
+  outputTokens?: number | null;
+  /** Run cost already computed by the loop's cost ledger; stored verbatim. */
+  estimatedCostUsd: number;
+  status: "success" | "failure";
+  failureReason?: string | null;
+};
+
+/**
+ * Persist one Beam Agent run to the shared usage ledger. Unlike `recordApiUsage`
+ * (which prices image generation itself), the run's cost is already computed by
+ * the loop's cost ledger, so it is stored verbatim. Best-effort: a ledger write
+ * failure never affects the run, mirroring `recordApiUsage`.
+ */
+export async function recordBeamRunUsage(input: RecordBeamRunUsageInput): Promise<void> {
+  const tenantId = input.tenantId ?? getCurrentTenantId() ?? (await getDefaultTenantId());
+  const cost = Number.isFinite(input.estimatedCostUsd) ? Math.max(0, input.estimatedCostUsd) : 0;
+  try {
+    await db.insert(apiUsageLedgerTable).values({
+      tenantId,
+      userId: input.userId,
+      provider: input.provider,
+      operation: BEAM_RUN_OPERATION,
+      model: input.model,
+      imageCount: 0,
+      inputTokens: input.inputTokens ?? null,
+      outputTokens: input.outputTokens ?? null,
+      estimatedCostUsd: cost.toFixed(6),
+      status: input.status,
+      failureReason: input.failureReason?.slice(0, 500) ?? null,
+    });
+  } catch (err) {
+    if (isLedgerUnavailableError(err)) return;
+    logger.warn(
+      { err: err instanceof Error ? err.message : String(err) },
+      "[apiUsageLedger] failed to record beam run usage",
+    );
+  }
+}
+
+export type BeamUserUsageWindow = { runCount: number; totalUsd: number };
+
+/**
+ * Sum a single user's Beam Agent runs since `sinceMs` (epoch ms). Backs the
+ * per-user daily cap and the daily-spend metric, both read off the already-
+ * captured `estimatedCostUsd`. Fail-open: when the ledger is unavailable it
+ * returns zeros, so a transient DB fault can't lock every user out of the agent.
+ */
+export async function getBeamUserUsageSince(userId: string, sinceMs: number): Promise<BeamUserUsageWindow> {
+  const empty: BeamUserUsageWindow = { runCount: 0, totalUsd: 0 };
+  try {
+    const [row] = await db
+      .select({
+        runCount: count(apiUsageLedgerTable.id),
+        totalUsd: sum(apiUsageLedgerTable.estimatedCostUsd),
+      })
+      .from(apiUsageLedgerTable)
+      .where(
+        and(
+          eq(apiUsageLedgerTable.userId, userId),
+          eq(apiUsageLedgerTable.operation, BEAM_RUN_OPERATION),
+          gte(apiUsageLedgerTable.createdAt, new Date(sinceMs)),
+        ),
+      );
+    return { runCount: Number(row?.runCount ?? 0), totalUsd: Number(row?.totalUsd ?? 0) };
+  } catch (err) {
+    if (isLedgerUnavailableError(err)) return empty;
+    logger.warn(
+      { err: err instanceof Error ? err.message : String(err) },
+      "[apiUsageLedger] failed to read beam user usage",
+    );
+    return empty;
   }
 }
 
