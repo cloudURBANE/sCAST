@@ -2,10 +2,11 @@
  * Beam research lane — deployment configuration (env-driven).
  *
  * Every model slug is read from the environment with a safe default. The default
- * slugs below match the June-2026 OpenRouter catalog *as best confirmed*, but
- * provider slugs drift (the catalog lists "Step 3.5 Flash", not the spec's
- * "3.7"), so treat the defaults as a starting point and pin the exact slugs per
- * deployment via env. A banned/cost-opaque slug (`*:online`, `openrouter/auto`,
+ * slugs below were verified against the live OpenRouter catalog (2026-06-14):
+ * `minimax/minimax-m3`, `moonshotai/kimi-k2.7-code`, and `stepfun/step-3.7-flash`
+ * all resolve. Provider slugs still drift, so treat the defaults as a starting
+ * point and pin the exact slugs per deployment via env. A banned/cost-opaque slug
+ * (`*:online`, `openrouter/auto`,
  * `openrouter/fusion`) falls back to the safe default rather than going to wire.
  *
  * Read at CALL TIME (functions, not module constants) so tests and ops can flip
@@ -19,7 +20,7 @@ const DEFAULTS = {
   single: "minimax/minimax-m3",
   standard: "minimax/minimax-m3",
   premium: "moonshotai/kimi-k2.7-code",
-  degraded: "stepfun/step-3.5-flash",
+  degraded: "stepfun/step-3.7-flash",
 } as const;
 
 function pickModel(envVar: string, fallback: string): string {

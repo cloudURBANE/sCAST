@@ -25,13 +25,13 @@ OPENROUTER_API_KEY=sk-or-...
 BEAM_RESEARCH_ENABLED=false
 
 # Per-lane OpenRouter model slugs. Defaults shown; VERIFY each against the live
-# OpenRouter catalog before enabling (slugs drift — e.g. the catalog lists
-# "Step 3.5 Flash", not "3.7"). Never use *:online / openrouter/auto /
+# OpenRouter catalog before enabling (slugs drift, though all four defaults below
+# were verified live on 2026-06-14). Never use *:online / openrouter/auto /
 # openrouter/fusion — they are rejected (cost-opaque) and fall back to defaults.
 # BEAM_RESEARCH_MODEL_SINGLE=minimax/minimax-m3
 # BEAM_RESEARCH_MODEL_STANDARD=minimax/minimax-m3
 # BEAM_RESEARCH_MODEL_PREMIUM=moonshotai/kimi-k2.7-code
-# BEAM_RESEARCH_MODEL_DEGRADED=stepfun/step-3.5-flash
+# BEAM_RESEARCH_MODEL_DEGRADED=stepfun/step-3.7-flash
 
 # Web-search engine for the OpenRouter `web` plugin: exa | parallel | native.
 # BEAM_RESEARCH_ENGINE=exa
