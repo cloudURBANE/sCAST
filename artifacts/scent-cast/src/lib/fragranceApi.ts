@@ -1079,6 +1079,26 @@ function normalizeForDedupe(value: unknown): string {
     .replace(/\s+/g, " ") ?? "";
 }
 
+/**
+ * Strip diacritics and non-alphanumeric symbols (accents, ®, ™, punctuation)
+ * from a search query, collapsing runs of whitespace to a single space. Case is
+ * preserved — the Google-backed engine is case-insensitive, and the SPA feeds
+ * the result straight back into the visible search input.
+ *
+ * This is the single source of truth shared by two call sites: the automatic
+ * zero-result retry in {@link searchFragrances} below, and the manual "Remove
+ * symbols" recovery chip in FragranceCapture. Mirrors NFD (not NFKD) so a
+ * trademark glyph like "™" is dropped rather than expanded to the letters "TM".
+ */
+export function sanitizeEngineQuery(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function expandKnownSearchBrandAlias(query: string): string {
   const normalized = normalizeForDedupe(query);
   if (!normalized) return query.trim();
@@ -1331,12 +1351,54 @@ async function parseJsonResponse<T>(res: Response, context: string): Promise<T> 
   }
 }
 
+/**
+ * Public search entry point. Runs the live search once, and — when a query
+ * carrying accents or symbols ("LANCÔME Idôle", "BORNTOSTANDOUT®") comes back
+ * empty — automatically retries a single time with a sanitized ASCII form
+ * before the caller surfaces "no matches". The live engine is Google-backed and
+ * those glyphs can sink an otherwise-findable query; this mirrors the manual
+ * "Remove symbols" recovery chip in FragranceCapture so the user no longer has
+ * to trigger it by hand.
+ *
+ * Purely additive: the retry only fires after the raw query already returned
+ * zero results, so it can never change a search that already succeeded. The
+ * caller's original query string is preserved on the returned response, and the
+ * result is cached under that original query.
+ */
 export async function searchFragrances(
   query: string,
   options?: { signal?: AbortSignal },
 ): Promise<FragranceSearchResponse> {
   const cached = getCachedFragranceSearch(query);
   if (cached) return cached;
+
+  let response = await executeFragranceSearch(query, options);
+
+  if (response.results.length === 0) {
+    const sanitized = sanitizeEngineQuery(query);
+    if (sanitized && sanitized.toLowerCase() !== query.trim().toLowerCase()) {
+      try {
+        const retried = await executeFragranceSearch(sanitized, options);
+        if (retried.results.length > 0) {
+          response = { ...retried, query };
+        }
+      } catch (err) {
+        // Re-throw genuine aborts so a cancelled search stays cancelled; swallow
+        // anything else — the sanitized pass is best-effort recovery and must
+        // not turn a clean empty result into a surfaced error.
+        if (err instanceof Error && err.name === "AbortError") throw err;
+      }
+    }
+  }
+
+  cacheFragranceSearch(query, response);
+  return response;
+}
+
+async function executeFragranceSearch(
+  query: string,
+  options?: { signal?: AbortSignal },
+): Promise<FragranceSearchResponse> {
   const requestQuery = expandKnownSearchBrandAlias(query);
 
   let data: unknown;
@@ -1403,7 +1465,6 @@ export async function searchFragrances(
   }
 
   response.results = rankSearchResultsByQuery(query, response.results);
-  cacheFragranceSearch(query, response);
   return response;
 }
 

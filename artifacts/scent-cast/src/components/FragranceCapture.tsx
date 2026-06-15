@@ -10,6 +10,7 @@ import {
   isFetchNetworkError,
   isTransientDetailFetchError,
   normalizeFragranceDetail,
+  sanitizeEngineQuery,
   searchFragrances,
   type FragranceDetail,
   type FragranceDetailRequestPayload,
@@ -196,21 +197,6 @@ function truncateMatchLine(text: string, max: number): string {
   const t = text.trim();
   if (t.length <= max) return t;
   return `${t.slice(0, Math.max(0, max - 1)).trimEnd()}…`;
-}
-
-/**
- * Strip diacritics and non-alphanumeric symbols (®, accents, punctuation) from
- * a query, collapsing to single-spaced words. Powers the empty-state "Remove
- * symbols" recovery chip so inputs like accented or trademarked names can be
- * retried in a plainer form.
- */
-function stripAccentsAndSymbols(value: string): string {
-  return value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-zA-Z0-9\s]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
 }
 
 function matchMonogram(m: FragranceMatch): string {
@@ -1033,7 +1019,7 @@ export const FragranceCapture: React.FC<{
   // Empty-state recovery suggestions, derived from the (still-present) query so a
   // failed search offers a concrete next step instead of a dead end.
   const trimmedQuery = searchQuery.trim();
-  const sanitizedQuery = stripAccentsAndSymbols(trimmedQuery);
+  const sanitizedQuery = sanitizeEngineQuery(trimmedQuery);
   const brandOnlyQuery = sanitizedQuery.split(' ')[0] ?? '';
   const canSanitizeQuery =
     sanitizedQuery.length > 0 && sanitizedQuery.toLowerCase() !== trimmedQuery.toLowerCase();
@@ -1273,7 +1259,12 @@ export const FragranceCapture: React.FC<{
         </div>
 
         <AnimatePresence>
-          {hasSearched && matches.length === 0 && !uploading && (
+          {/* Genuine empty state — only when the search truly returned nothing.
+              Suppressed while `errorStatus` is set so a technical failure shows
+              the single error banner above (with its own retry) instead of also
+              claiming "No Olfactory Matches", which would misattribute an engine
+              outage to an absent fragrance. */}
+          {hasSearched && matches.length === 0 && !uploading && !errorStatus && (
             <motion.div
               initial={{ opacity: 0 }} animate={{ opacity: 1 }}
               className="mt-10 py-10 border-t border-white/10 flex flex-col items-center text-center"
