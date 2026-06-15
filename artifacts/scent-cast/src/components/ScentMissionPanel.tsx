@@ -563,10 +563,6 @@ function firstMissingPrompt(
   }
 }
 
-function isRecommendationIntent(text: string): boolean {
-  return /\b(recommend|wear|pick|curate|choose|signature|match)\b/i.test(text);
-}
-
 function safeAssistantText(text: string | undefined, fallback: string): string {
   const value = text?.trim();
   if (!value) return fallback;
@@ -1101,13 +1097,18 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       const controller = new AbortController();
       abortRef.current = controller;
 
-      // Fresh trail per run — each turn tells its own story of steps. Any cues
-      // or proposal from the previous reply are now stale (the user just answered).
+      // Fresh trail per run — each turn tells its own story of steps. Any cues,
+      // proposal, OR curated-match reveal from a previous reply are now stale (the
+      // user just answered). `resolved` belongs to the scripted resolution path and
+      // is NOT produced by the agent; if a prior scripted turn left one mounted it
+      // would otherwise linger pinned at the bottom of the scroll, decoupled from
+      // the live conversation (the "curated match stuck under the chat" bug).
       activityIdRef.current = 0;
       setActivity([]);
       setAgentSuggestions([]);
       setProposal(null);
       setCurating(null);
+      setResolved(null);
 
       let didTimeout = false;
       const timeoutId = window.setTimeout(() => {
@@ -1385,11 +1386,18 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         inferred.facets,
         { destination: inferred.destination, energy: inferred.energy },
       );
-      const wantsRecommendation = isRecommendationIntent(trimmed);
       const canCurate = hasEnoughContext(nextFacets, nextMission, agentMode);
 
-      if (agentMode === 'fast' || (wantsRecommendation && canCurate)) {
-        await runResolution(agentMode === 'fast' ? 'fast' : 'curate', nextMission, nextFacets);
+      // Routing. Fast mode is the express scripted lane: skip the conversation
+      // and curate straight into the "Curated match" reveal card. Every other
+      // mode sends free text to the live tool-calling agent (the conversational
+      // brain) — it answers in the chat, grounded in the real vault + catalog.
+      // The scripted reveal card is reserved for the EXPLICIT Confirm / Curate
+      // button so the two engines never interleave inside one conversation (the
+      // bug where a typed request surprised the user with a reveal card while
+      // they were mid-chat with the agent).
+      if (agentMode === 'fast') {
+        await runResolution('fast', nextMission, nextFacets);
         return;
       }
 
