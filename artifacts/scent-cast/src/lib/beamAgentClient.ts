@@ -18,11 +18,15 @@ import type { ScentMissionWeather } from '@workspace/scent-weather-engine';
  * The only event shapes the server emits to clients (already passed through
  * `redactEventForClient` on the backend). Mirrors `beam-agent/types.ts`.
  */
+/** A tap-to-answer chip the agent offers with its reply. */
+export type BeamSuggestion = { label: string; value: string };
+
 export type BeamAgentEvent =
   | { type: 'status'; label: string }
   | { type: 'message_delta'; text: string }
   | { type: 'tool_started'; tool: string }
   | { type: 'tool_completed'; tool: string; summary: string }
+  | { type: 'suggestions'; items: BeamSuggestion[] }
   | { type: 'completed'; response: string }
   | { type: 'failed'; code: string; message: string };
 

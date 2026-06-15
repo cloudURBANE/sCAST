@@ -11,12 +11,14 @@ import {
   asString,
   clampLimit,
   cleanStringList,
+  extractAgentCues,
   extractText,
   extractToolUses,
   packetFromFlatProfile,
   packetFromOwnedItem,
   packetFromWardrobeRow,
   redactEventForClient,
+  sanitizeSuggestions,
   summarizeToolResult,
   toClaudeTools,
 } from "./beamToolCore.ts";
@@ -89,6 +91,41 @@ test("summarizeToolResult produces safe one-liners", () => {
     "vault is empty",
   );
   assert.equal(summarizeToolResult("x", "whatever"), "done");
+});
+
+test("extractAgentCues splits a trailing cues block from the answer", () => {
+  const text =
+    "Tell me the vibe and I'll line up your Tokyo picks.\n\n```cues\nTemple mornings\nShibuya nights\nBusiness meetings\n```";
+  const { text: clean, cues } = extractAgentCues(text);
+  assert.equal(clean, "Tell me the vibe and I'll line up your Tokyo picks.");
+  assert.deepEqual(cues, ["Temple mornings", "Shibuya nights", "Business meetings"]);
+});
+
+test("extractAgentCues accepts a JSON-array cues block", () => {
+  const { cues } = extractAgentCues('Pick one.\n```cues\n["Day", "Night"]\n```');
+  assert.deepEqual(cues, ["Day", "Night"]);
+});
+
+test("extractAgentCues leaves plain answers untouched", () => {
+  const { text, cues } = extractAgentCues("Wear Aventus today.");
+  assert.equal(text, "Wear Aventus today.");
+  assert.deepEqual(cues, []);
+});
+
+test("sanitizeSuggestions clamps count, length, empties, and dupes", () => {
+  const items = [
+    { label: "  Keep  ", value: "keep-it" },
+    { label: "Keep" }, // dupe (case-insensitive), dropped
+    { label: "" }, // empty, dropped
+    { label: "B" },
+    { label: "C" },
+    { label: "D" },
+    { label: "E" }, // beyond maxSuggestions (4), dropped
+  ];
+  const out = sanitizeSuggestions(items);
+  assert.equal(out.length, BEAM_LIMITS.maxSuggestions);
+  assert.deepEqual(out[0], { label: "Keep", value: "keep-it" });
+  assert.equal(out[1].value, "B"); // value defaults to label
 });
 
 test("packetFromOwnedItem marks ownership and merges traits", () => {

@@ -70,6 +70,14 @@ export type CandidatePacket = {
 };
 
 /**
+ * A tap-to-continue chip the agent offers with its reply (e.g. after asking a
+ * follow-up question). Model-authored, so it is length/count-clamped before it
+ * reaches the client. `value` is what gets sent/typed when tapped; `label` is
+ * what's shown (they're usually identical).
+ */
+export type BeamSuggestion = { label: string; value: string };
+
+/**
  * Client-safe event stream. Raw tool arguments, DB ids, stack traces, provider
  * credentials, and system prompts must NEVER reach the browser — see
  * `redactEventForClient`.
@@ -79,6 +87,7 @@ export type BeamRunEvent =
   | { type: "message_delta"; text: string }
   | { type: "tool_started"; tool: BeamToolName }
   | { type: "tool_completed"; tool: BeamToolName; summary: string }
+  | { type: "suggestions"; items: BeamSuggestion[] }
   | { type: "completed"; response: string }
   | { type: "failed"; code: string; message: string };
 

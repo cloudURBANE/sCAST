@@ -23,6 +23,9 @@ export const BEAM_LIMITS = {
   maxAgentTurns: 8,
   maxUserMessageLength: 2000,
   maxToolResultChars: 100_000,
+  /** Agent-offered tap chips: how many, and the max label length. */
+  maxSuggestions: 4,
+  maxSuggestionLabel: 48,
 } as const;
 
 export function clampLimit(value: unknown, max: number, fallback = max): number {
@@ -119,11 +122,62 @@ export function redactEventForClient(event: BeamRunEvent): BeamRunEvent {
     case "tool_completed":
     case "completed":
       return event;
+    case "suggestions":
+      // Model-authored chips — re-clamp at the client boundary defensively.
+      return { type: "suggestions", items: sanitizeSuggestions(event.items) };
     case "failed":
       return { type: "failed", code: event.code, message: event.message };
     default:
       return { type: "status", label: "Working" };
   }
+}
+
+/** Clamp model-authored chips to safe count/length and drop empties + dupes. */
+export function sanitizeSuggestions(
+  items: ReadonlyArray<{ label?: unknown; value?: unknown }>,
+): Array<{ label: string; value: string }> {
+  const out: Array<{ label: string; value: string }> = [];
+  const seen = new Set<string>();
+  for (const item of items) {
+    const label = asString(item?.label)?.slice(0, BEAM_LIMITS.maxSuggestionLabel);
+    if (!label) continue;
+    const key = label.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const value = asString(item?.value)?.slice(0, BEAM_LIMITS.maxSuggestionLabel) ?? label;
+    out.push({ label, value });
+    if (out.length >= BEAM_LIMITS.maxSuggestions) break;
+  }
+  return out;
+}
+
+/**
+ * Pull a trailing tap-chip block out of the agent's final answer. The model is
+ * told to optionally end with a fenced ```cues block (one chip per line, or a
+ * JSON array of strings) when its reply invites the user to choose. We strip
+ * that block from the visible text and return the chips separately so the UI can
+ * render them as buttons. Tolerant: a malformed/absent block yields no chips and
+ * leaves the text untouched.
+ */
+export function extractAgentCues(text: string): { text: string; cues: string[] } {
+  const fence = /\n*```+\s*cues\b[^\n]*\n([\s\S]*?)```+\s*$/i.exec(text);
+  if (!fence) return { text: text.trim(), cues: [] };
+  const inner = fence[1].trim();
+  let raw: string[] = [];
+  if (inner.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(inner) as unknown;
+      if (Array.isArray(parsed)) raw = parsed.map((v) => (typeof v === "string" ? v : String(v)));
+    } catch {
+      raw = [];
+    }
+  }
+  if (raw.length === 0) {
+    raw = inner.split(/\r?\n/).map((line) => line.replace(/^\s*[-*•]\s*/, "").trim());
+  }
+  const cues = sanitizeSuggestions(raw.map((label) => ({ label, value: label }))).map((c) => c.label);
+  const cleaned = text.slice(0, fence.index).trim();
+  return { text: cleaned, cues };
 }
 
 /** One-line human summary of a tool result for the `tool_completed` event. */

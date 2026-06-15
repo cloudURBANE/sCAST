@@ -17,6 +17,7 @@ import type {
 } from "./types.ts";
 import {
   BEAM_LIMITS,
+  extractAgentCues,
   extractText,
   extractToolUses,
   readInvalidArgs,
@@ -45,6 +46,16 @@ How to work:
 - Be specific and decisive. Name the pick, then explain in one or two sentences why its notes
   and performance fit the occasion, weather, and the user's taste. Offer a runner-up when it
   helps. Prefer a confident recommendation over a hedge.
+- Offer tap-to-answer choices. When your reply asks the user a question or invites them to
+  choose (occasion, mood, the vibe of a trip, budget, day vs. night), END the message with a
+  fenced block of 2-4 short chips so they can answer in one tap, like:
+  \`\`\`cues
+  Temple mornings
+  Shibuya nights
+  Business meetings
+  \`\`\`
+  Each chip is at most ~6 words, phrased as the user's own answer. Omit the block entirely when
+  you are not offering a choice (e.g. a final recommendation that needs no follow-up).
 
 Hard rules:
 - Only mention fragrances that appeared in a tool result. Never invent fragrances, notes,
@@ -68,7 +79,8 @@ const SYNTHESIS_NUDGE =
   "You now have enough evidence. Write the final answer for the user: a specific, confident " +
   "recommendation grounded ONLY in the fragrances and facts returned by the tools above. Name " +
   "the pick(s), and in one or two sentences each, say why their notes and performance fit. Do " +
-  "not call any more tools.";
+  "not call any more tools. If you are asking the user to choose or clarify, end with the " +
+  "```cues block of 2-4 short tap chips described above; otherwise omit it.";
 
 export type RunBeamAgentInput = {
   ctx: BeamRunContext;
@@ -247,10 +259,16 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
           synthesisFailed = true;
         }
       }
-      const response = finalText || "Done.";
+      // Split off any trailing ```cues block so the visible answer stays clean
+      // and the chips ride their own event the UI can render as tap buttons.
+      const { text: parsed, cues } = extractAgentCues(finalText || "Done.");
+      const response = parsed || "Done.";
       messages.push({ role: "assistant", content: response });
       outcome = "completed";
       input.onComplete?.(response);
+      if (cues.length > 0) {
+        emit({ type: "suggestions", items: cues.map((label) => ({ label, value: label })) });
+      }
       emit({ type: "completed", response });
     };
 

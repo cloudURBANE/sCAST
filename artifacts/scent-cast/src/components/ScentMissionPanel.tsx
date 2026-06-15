@@ -30,7 +30,7 @@ import {
   findWardrobeMatch,
   missionProgress,
 } from '@/lib/scentMissionClient';
-import { humanizeBeamTool, runBeamAgentMission } from '@/lib/beamAgentClient';
+import { humanizeBeamTool, runBeamAgentMission, type BeamSuggestion } from '@/lib/beamAgentClient';
 import type { Fragrance } from '@/components/Wardrobe';
 import type { WeatherData } from '@/context/WeatherContext';
 import { useDragToScroll } from '@/hooks/useDragToScroll';
@@ -620,6 +620,9 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   // Ordered live-progress trail for a Beam agent run (status + tool steps).
   // Empty for the scripted `/api/scent-mission` path, which keeps the plain dots.
   const [activity, setActivity] = useState<BeamActivityStep[]>([]);
+  // Tap-to-answer chips the agent offered with its last reply (e.g. trip-vibe
+  // follow-ups). When set, these replace the static facet cues.
+  const [agentSuggestions, setAgentSuggestions] = useState<BeamSuggestion[]>([]);
   const [sessionId, setSessionId] = useState<string | undefined>(undefined);
   const [resolved, setResolved] = useState<{
     recommendation: ScentMissionRecommendation;
@@ -805,9 +808,11 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       const controller = new AbortController();
       abortRef.current = controller;
 
-      // Fresh trail per run — each turn tells its own story of steps.
+      // Fresh trail per run — each turn tells its own story of steps. Any cues
+      // from the previous reply are now stale (the user just answered).
       activityIdRef.current = 0;
       setActivity([]);
+      setAgentSuggestions([]);
 
       let didTimeout = false;
       const timeoutId = window.setTimeout(() => {
@@ -837,6 +842,9 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
             } else if (event.type === 'tool_completed') {
               const id = (activityIdRef.current += 1);
               setActivity((prev) => completeToolStep(prev, id, event.tool, event.summary));
+            } else if (event.type === 'suggestions') {
+              // Stored now; rendered as cue chips once the run settles (!busy).
+              setAgentSuggestions(event.items);
             } else if (event.type === 'message_delta') {
               // Synthesis is streaming the answer — hold a stable phase note
               // rather than flashing raw partial text.
@@ -949,6 +957,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       setBusy(true);
       setResolved(null);
       setActivity([]);
+      setAgentSuggestions([]);
       setMission(currentMission);
       setProgressNote(trigger === 'fast' ? 'Fast curation in progress' : 'Curating from your vault');
 
@@ -999,6 +1008,18 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       // mobile keyboard stays down and the next cue is a tap away.
       setComposer(reply.label);
       setPendingCueFacet(reply.facet);
+    },
+    [busy],
+  );
+
+  // An agent-offered chip (follow-up question answer). Same low-friction pattern
+  // as a facet cue — it fills the composer so the user reviews + sends — but it
+  // carries no facet, so the staged-cue Confirm/Cancel pair is not implied.
+  const handleAgentSuggestion = useCallback(
+    (suggestion: BeamSuggestion) => {
+      if (busy) return;
+      setComposer(suggestion.value || suggestion.label);
+      setPendingCueFacet(null);
     },
     [busy],
   );
@@ -1370,10 +1391,15 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   // arrow; instead we surface an explicit Confirm / Cancel pair right where the
   // cues were.
   const hasStagedCue = Boolean(pendingCueFacet) && composer.trim().length > 0;
+  // The agent asked a follow-up and offered tap chips. While they're showing
+  // they own the lane — they ARE the answer to its question — so they take
+  // precedence over the static facet cues until the user taps or types.
+  const showAgentSuggestions = agentSuggestions.length > 0 && !busy;
   // Hold the whole lane back until the greeting has settled, so the panel never
   // opens with a row of cues already sitting there.
   const cueBar =
-    !cuesReady || (visibleQuickReplies.length === 0 && !hasActionRow && !hasStagedCue) ? null : (
+    !cuesReady ||
+    (!showAgentSuggestions && visibleQuickReplies.length === 0 && !hasActionRow && !hasStagedCue) ? null : (
       <motion.div
         initial={calmMotion ? false : { opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
@@ -1383,6 +1409,31 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         aria-label="Beam Agent quick replies"
         data-testid="scent-mission-cue-bar"
       >
+        {showAgentSuggestions ? (
+          <div className="flex flex-col items-center" data-testid="beam-agent-suggestions">
+            <p className="scent-type-label text-center text-scent-text-subtle">
+              Tap to answer, or type your own
+            </p>
+            <div className="mt-1.5 flex flex-wrap items-center justify-center gap-1.5">
+              {agentSuggestions.map((suggestion, index) => (
+                <motion.button
+                  key={`${suggestion.label}-${index}`}
+                  type="button"
+                  onClick={() => handleAgentSuggestion(suggestion)}
+                  disabled={busy}
+                  initial={calmMotion ? false : { opacity: 0, scale: 0.94 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.18, ease: SCENT_EASE, delay: calmMotion ? 0 : index * 0.045 }}
+                  className={cueChipClass}
+                  title={suggestion.label}
+                >
+                  {suggestion.label}
+                </motion.button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <>
         {hasActionRow ? (
           <div className="flex flex-wrap items-center justify-center gap-1.5">
             {hasConfirmAction ? (
@@ -1505,6 +1556,8 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
             </div>
           </div>
         ) : null}
+          </>
+        )}
       </motion.div>
     );
 
