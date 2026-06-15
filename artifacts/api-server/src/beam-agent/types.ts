@@ -127,4 +127,13 @@ export type ClaudeCallInput = {
   model?: string;
   maxTokens?: number;
   signal?: AbortSignal;
+  /**
+   * When provided, the provider streams the model's TEXT output and invokes this
+   * with each incremental chunk, then returns the assembled `ClaudeResponse` as
+   * usual. Only the text channel is streamed — callers that stream must pass an
+   * empty `tools` array (the loop only streams the tool-free synthesis turn). A
+   * provider may ignore this and answer non-streamed; the assembled result is
+   * identical either way.
+   */
+  onDelta?: (textChunk: string) => void;
 };

@@ -204,6 +204,10 @@ export async function callOpenRouter(input: ClaudeCallInput): Promise<ClaudeResp
   if (referer) headers["HTTP-Referer"] = referer;
   headers["X-Title"] = title;
 
+  const stream = typeof input.onDelta === "function";
+  // Omit tools/tool_choice entirely on the tool-free synthesis turn — some
+  // OpenAI-compatible backends reject `tool_choice` alongside an empty tools list.
+  const hasTools = input.tools.length > 0;
   const res = await fetch(OPENROUTER_URL, {
     method: "POST",
     headers,
@@ -212,8 +216,8 @@ export async function callOpenRouter(input: ClaudeCallInput): Promise<ClaudeResp
       model: input.model ?? DEFAULT_OPENROUTER_MODEL,
       max_tokens: input.maxTokens ?? 1024,
       messages: toOpenAiMessages(input.system, input.messages),
-      tools: toOpenAiTools(input.tools),
-      tool_choice: "auto",
+      ...(hasTools ? { tools: toOpenAiTools(input.tools), tool_choice: "auto" } : {}),
+      ...(stream ? { stream: true } : {}),
     }),
   });
 
@@ -222,11 +226,73 @@ export async function callOpenRouter(input: ClaudeCallInput): Promise<ClaudeResp
     throw new Error(`OpenRouter request failed: ${res.status} ${detail.slice(0, 200)}`);
   }
 
+  if (stream && res.body) {
+    return streamOpenAiText(res.body, input.onDelta!);
+  }
+
   const data = (await res.json()) as OpenAiResponse;
   if (!data || !Array.isArray(data.choices) || data.choices.length === 0) {
     throw new Error("OpenRouter returned an unexpected response shape.");
   }
   return openAiResponseToClaude(data);
+}
+
+/**
+ * Consume an OpenAI-style streaming completion (`data: {…}` SSE frames, ended by
+ * `data: [DONE]`), forwarding each text delta to `onDelta` and returning the
+ * fully-assembled text as a `ClaudeResponse`. Tool-call deltas are not assembled
+ * here: streaming is only used for the loop's tool-free synthesis turn.
+ */
+async function streamOpenAiText(
+  body: ReadableStream<Uint8Array>,
+  onDelta: (chunk: string) => void,
+): Promise<ClaudeResponse> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let text = "";
+  let finishReason: string | null = null;
+
+  const handleData = (payload: string): void => {
+    if (payload === "[DONE]") return;
+    let parsed: OpenAiResponse | undefined;
+    try {
+      parsed = JSON.parse(payload) as OpenAiResponse;
+    } catch {
+      return; // tolerate keep-alive / partial frames
+    }
+    const choice = parsed.choices?.[0] as
+      | { finish_reason?: string | null; delta?: { content?: string | null } }
+      | undefined;
+    if (!choice) return;
+    if (choice.finish_reason) finishReason = choice.finish_reason;
+    const chunk = choice.delta?.content;
+    if (typeof chunk === "string" && chunk) {
+      text += chunk;
+      onDelta(chunk);
+    }
+  };
+
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let sep: number;
+      while ((sep = buffer.indexOf("\n\n")) !== -1) {
+        const frame = buffer.slice(0, sep);
+        buffer = buffer.slice(sep + 2);
+        for (const rawLine of frame.split("\n")) {
+          const line = rawLine.replace(/\r$/, "");
+          if (line.startsWith("data:")) handleData(line.slice(5).replace(/^ /, ""));
+        }
+      }
+    }
+  } finally {
+    reader.cancel().catch(() => {});
+  }
+
+  return { stop_reason: mapFinishReason(finishReason), content: text ? [{ type: "text", text }] : [] };
 }
 
 /** Exposed for unit tests — translate without performing a network call. */

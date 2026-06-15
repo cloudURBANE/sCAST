@@ -658,6 +658,9 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         controller.abort();
       }, BEAM_AGENT_TIMEOUT_MS);
 
+      // Accumulates streamed synthesis text so the thinking note can show the
+      // answer forming; the authoritative copy still arrives in `completed`.
+      let streamed = '';
       try {
         const result = await runBeamAgentMission({
           message,
@@ -667,8 +670,13 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
           apiBaseUrl: API_BASE_URL,
           signal: controller.signal,
           onEvent: (event) => {
-            if (event.type === 'status') setProgressNote(event.label);
-            else if (event.type === 'tool_started' || event.type === 'tool_completed') {
+            if (event.type === 'message_delta') {
+              streamed += event.text;
+              const preview = streamed.replace(/\s+/g, ' ').trim().slice(-140);
+              if (preview) setProgressNote(preview);
+            } else if (event.type === 'status') {
+              setProgressNote(event.label);
+            } else if (event.type === 'tool_started' || event.type === 'tool_completed') {
               setProgressNote(humanizeBeamTool(event.tool));
             }
           },

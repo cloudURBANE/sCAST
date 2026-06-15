@@ -15,6 +15,7 @@ import {
   extractToolUses,
   packetFromFlatProfile,
   packetFromOwnedItem,
+  packetFromWardrobeRow,
   redactEventForClient,
   summarizeToolResult,
   toClaudeTools,
@@ -110,6 +111,37 @@ test("packetFromFlatProfile defends against thin/untrusted records", () => {
   assert.deepEqual(full.notes.top, ["pineapple"]);
   assert.equal(full.missingFields.length, 0);
   assert.equal(full.sourceConfidence, 0.9);
+});
+
+test("packetFromWardrobeRow preserves the note pyramid from the raw row", () => {
+  const packet = packetFromWardrobeRow("row-9", {
+    id: "frag-9",
+    name: "Aventus",
+    brand: "Creed",
+    accords: ["fruity"],
+    pyramid: { top: ["pineapple"], heart: ["birch"], base: ["musk", "musk"] },
+    longevity: 8,
+    sillage: "strong",
+  });
+  assert.ok(packet);
+  assert.equal(packet!.owned, true);
+  assert.equal(packet!.fragranceId, "frag-9");
+  assert.deepEqual(packet!.notes, { top: ["pineapple"], middle: ["birch"], base: ["musk"] });
+  assert.deepEqual(packet!.accords, ["fruity"]);
+  assert.equal(packet!.performance.longevity, 8);
+  assert.equal(packet!.performance.projection, "strong");
+  assert.deepEqual(packet!.missingFields, []);
+});
+
+test("packetFromWardrobeRow returns null without a name and flags thin rows", () => {
+  assert.equal(packetFromWardrobeRow("row-x", { brand: "Creed" }), null);
+  assert.equal(packetFromWardrobeRow("row-x", null), null);
+
+  const thin = packetFromWardrobeRow("row-y", { name: "Mystery Juice" });
+  assert.ok(thin);
+  assert.equal(thin!.canonicalName, "Mystery Juice");
+  assert.deepEqual(thin!.missingFields.sort(), ["accords", "notes"]);
+  assert.ok(thin!.sourceConfidence < 0.95);
 });
 
 test("toClaudeTools maps name/description/input_schema", () => {

@@ -154,6 +154,52 @@ export function packetFromOwnedItem(item: {
 }
 
 /**
+ * Build an owned-bottle CandidatePacket straight from a `user_fragrances` row's
+ * raw JSONB, preserving the note pyramid (top/middle/base) that the mission
+ * wardrobe shape collapses into a flat accord list. This is the richer evidence
+ * the agent reasons over for owned bottles; falls back to `packetFromOwnedItem`
+ * upstream when the raw row is unavailable. Returns null when the row has no name.
+ */
+export function packetFromWardrobeRow(rowId: string, fragranceData: unknown): CandidatePacket | null {
+  if (typeof fragranceData !== "object" || fragranceData === null) return null;
+  const data = fragranceData as Record<string, any>;
+  const name = asString(data.name) ?? asString(data.product?.name);
+  if (!name) return null;
+
+  const brand = asString(data.brand) ?? asString(data.product?.brand) ?? asString(data.house) ?? "";
+  const pyramid = (typeof data.pyramid === "object" && data.pyramid !== null
+    ? data.pyramid
+    : {}) as Record<string, unknown>;
+  const notes = {
+    top: cleanStringList(pyramid.top),
+    middle: cleanStringList(pyramid.middle ?? pyramid.heart),
+    base: cleanStringList(pyramid.base),
+  };
+  const accords = cleanStringList(
+    data.accords ?? data.family ?? data.families ?? data.scent_families ?? data.notes,
+  );
+  const noteCount = notes.top.length + notes.middle.length + notes.base.length;
+  const missing: string[] = [];
+  if (noteCount === 0) missing.push("notes");
+  if (accords.length === 0) missing.push("accords");
+
+  return {
+    fragranceId: asString(data.id) ?? rowId,
+    canonicalName: name,
+    brand,
+    owned: true,
+    notes,
+    accords,
+    performance: {
+      longevity: numOrStr(data.longevity ?? data.performance?.longevity),
+      projection: numOrStr(data.sillage ?? data.performance?.sillage),
+    },
+    sourceConfidence: missing.length === 0 ? 0.95 : Math.max(0.4, 0.95 - missing.length * 0.15),
+    missingFields: missing,
+  };
+}
+
+/**
  * Build a CandidatePacket from a flattened catalog profile. The shape of a
  * flattened `global_fragrances` profile is loosely typed, so we read every field
  * defensively and record what is missing rather than trusting it.

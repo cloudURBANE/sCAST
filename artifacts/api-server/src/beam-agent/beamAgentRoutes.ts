@@ -34,8 +34,9 @@ import { searchCatalogCandidates, flattenProfile } from "../services/catalogServ
 import { getScentFacts } from "../lib/scent-facts/engine";
 import { createBeamTools, type BeamCatalogHit, type BeamToolDeps } from "./beamTools.ts";
 import { runBeamAgent } from "./beamAgentLoop.ts";
-import { redactEventForClient } from "./beamToolCore.ts";
-import type { BeamEmit, BeamRunContext, BeamRunEvent } from "./types.ts";
+import { packetFromWardrobeRow, redactEventForClient } from "./beamToolCore.ts";
+import { resolveBeamModels } from "./provider.ts";
+import type { BeamEmit, BeamRunContext, BeamRunEvent, CandidatePacket, ClaudeMessage } from "./types.ts";
 import { createBeamResearcher } from "./research/beamResearch.ts";
 import { loadResearchCache, saveResearchCache } from "./research/researchCache.ts";
 import { runWebResearch } from "./research/researchProvider.ts";
@@ -77,6 +78,46 @@ function pruneRuns(): void {
   }
 }
 
+/* ------------------------------------------------------------------ */
+/* In-memory conversation memory (per session, tenant/user scoped)    */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Clean conversational history — only the user/assistant TEXT turns, never the
+ * intermediate tool plumbing — so follow-ups in a session keep context. In-memory
+ * and TTL-bounded, mirroring the run registry; Phase 5 moves this to Postgres.
+ */
+type SessionRecord = { turns: ClaudeMessage[]; updatedAt: number };
+const sessions = new Map<string, SessionRecord>();
+const SESSION_TTL_MS = 60 * 60_000;
+const MAX_SESSION_TURNS = 16;
+
+function sessionKey(ctx: BeamRunContext): string {
+  return `${ctx.tenantId}:${ctx.userId}:${ctx.sessionId}`;
+}
+
+function pruneSessions(): void {
+  const now = Date.now();
+  for (const [key, record] of sessions) {
+    if (now - record.updatedAt > SESSION_TTL_MS) sessions.delete(key);
+  }
+}
+
+function loadSessionHistory(ctx: BeamRunContext): ClaudeMessage[] {
+  pruneSessions();
+  return sessions.get(sessionKey(ctx))?.turns.slice() ?? [];
+}
+
+function appendSessionTurn(ctx: BeamRunContext, userMessage: string, assistantText: string): void {
+  const key = sessionKey(ctx);
+  const record = sessions.get(key) ?? { turns: [], updatedAt: Date.now() };
+  record.turns.push({ role: "user", content: userMessage });
+  record.turns.push({ role: "assistant", content: assistantText });
+  if (record.turns.length > MAX_SESSION_TURNS) record.turns = record.turns.slice(-MAX_SESSION_TURNS);
+  record.updatedAt = Date.now();
+  sessions.set(key, record);
+}
+
 function makeEmit(record: RunRecord): BeamEmit {
   return (event) => {
     record.events.push(event);
@@ -107,6 +148,21 @@ async function loadVault(ctx: BeamRunContext): Promise<ScentMissionWardrobeItem[
       .map((row) => missionItemFromWardrobeRow(row.id, row.fragranceData))
       .filter((item) => item !== null),
   );
+}
+
+async function loadWardrobePackets(ctx: BeamRunContext): Promise<CandidatePacket[]> {
+  const rows = await db
+    .select({ id: userFragrancesTable.id, fragranceData: userFragrancesTable.fragranceData })
+    .from(userFragrancesTable)
+    .where(and(eq(userFragrancesTable.tenantId, ctx.tenantId), eq(userFragrancesTable.userId, ctx.userId)))
+    .orderBy(asc(userFragrancesTable.createdAt), asc(userFragrancesTable.id));
+
+  const packets: CandidatePacket[] = [];
+  for (const row of rows) {
+    const packet = packetFromWardrobeRow(row.id, row.fragranceData);
+    if (packet) packets.push(packet);
+  }
+  return packets;
 }
 
 async function searchCatalogForBeam(query: string, limit: number): Promise<BeamCatalogHit[]> {
@@ -148,6 +204,7 @@ const beamResearchWeb = createBeamResearcher({
 function buildDeps(weather: ScentMissionWeather): BeamToolDeps {
   return {
     loadVault,
+    loadWardrobePackets,
     searchCatalog: searchCatalogForBeam,
     research: researchForBeam,
     researchWeb: beamResearchWeb,
@@ -197,6 +254,8 @@ router.post("/runs", runRateLimit, requireAuth, async (req: AuthRequest, res) =>
 
   const tools = createBeamTools(buildDeps(weather));
   const emit = makeEmit(record);
+  const history = loadSessionHistory(ctx);
+  const models = resolveBeamModels();
 
   // Fire-and-forget: the client consumes progress over SSE. runBeamAgent never
   // throws, but we guard anyway so a registry record can't be left half-open.
@@ -206,6 +265,9 @@ router.post("/runs", runRateLimit, requireAuth, async (req: AuthRequest, res) =>
     tools,
     emit,
     model: typeof body.model === "string" ? body.model : undefined,
+    synthesisModel: models?.synthesisModel,
+    history,
+    onComplete: (assistantText) => appendSessionTurn(ctx, message, assistantText),
     shouldStop: () => record.stopped,
   }).catch((err) => {
     logger.error({ err }, "beam agent run crashed");
