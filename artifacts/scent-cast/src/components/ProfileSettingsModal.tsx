@@ -1,10 +1,21 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, CloudSun, LocateFixed, LoaderCircle, UserRound, X } from 'lucide-react';
+import { BellRing, Check, CloudSun, LocateFixed, LoaderCircle, UserRound, X } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { useModalBehavior } from '@/hooks/use-modal-behavior';
 import { useWeather } from '@/context/WeatherContext';
+import {
+  getPushSupport,
+  getServerPushConfig,
+  isPushSubscribed,
+  subscribeToPush,
+  unsubscribeFromPush,
+} from '@/lib/pushNotifications';
+
+// Notification toggle states. 'unsupported'/'unconfigured' hide the section
+// (no point offering a control that can't work); the rest render it.
+type PushState = 'unknown' | 'unsupported' | 'unconfigured' | 'on' | 'off' | 'denied';
 
 interface ProfileSettingsModalProps {
   isOpen: boolean;
@@ -46,6 +57,8 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
   const [value, setValue] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pushState, setPushState] = useState<PushState>('unknown');
+  const [pushBusy, setPushBusy] = useState(false);
   const modalRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -55,6 +68,35 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
       setError(null);
     }
   }, [isOpen, currentUsername]);
+
+  // Resolve the notification toggle's state when the modal opens: browser
+  // support, then server VAPID config, then this device's current subscription.
+  useEffect(() => {
+    if (!isOpen || !authToken) return;
+    let cancelled = false;
+    void (async () => {
+      const support = getPushSupport();
+      if (!support.supported) {
+        if (!cancelled) setPushState('unsupported');
+        return;
+      }
+      if (support.permission === 'denied') {
+        if (!cancelled) setPushState('denied');
+        return;
+      }
+      const config = await getServerPushConfig();
+      if (cancelled) return;
+      if (!config.configured) {
+        setPushState('unconfigured');
+        return;
+      }
+      const subscribed = await isPushSubscribed();
+      if (!cancelled) setPushState(subscribed ? 'on' : 'off');
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, authToken]);
 
   useModalBehavior({
     isOpen,
@@ -120,6 +162,39 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
     if (locating) return;
     void requestLocation();
   };
+
+  const handleTogglePush = async () => {
+    if (!authToken || pushBusy) return;
+    setPushBusy(true);
+    try {
+      if (pushState === 'on') {
+        await unsubscribeFromPush(authToken);
+        setPushState('off');
+        toast({ title: 'Notifications off', description: "You won't get scent nudges on this device." });
+        return;
+      }
+      const result = await subscribeToPush(authToken);
+      if (result.ok) {
+        setPushState('on');
+        toast({ title: 'Notifications on', description: "We'll send the occasional scent nudge." });
+      } else if (result.reason === 'denied') {
+        setPushState('denied');
+        toast({
+          title: 'Permission blocked',
+          description: 'Enable notifications for ScentBeam in your browser settings, then try again.',
+        });
+      } else if (result.reason === 'not-configured') {
+        setPushState('unconfigured');
+      } else {
+        toast({ title: 'Could not enable notifications', description: 'Please try again in a moment.' });
+      }
+    } finally {
+      setPushBusy(false);
+    }
+  };
+
+  const showPushSection =
+    Boolean(authToken) && (pushState === 'on' || pushState === 'off' || pushState === 'denied');
 
   return (
     <AnimatePresence>
@@ -271,6 +346,56 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                     {locating ? 'Locating' : locationButtonLabel}
                   </button>
                 </section>
+
+                {showPushSection && (
+                  <section className="rounded-[12px] border border-white/10 bg-white/[0.025] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                    <div className="mb-4 flex items-center gap-3">
+                      <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-scent-accent/20 bg-scent-accent/[0.08] text-scent-accent">
+                        <BellRing size={16} aria-hidden="true" />
+                      </span>
+                      <div className="min-w-0">
+                        <h3 className="text-[10px] font-bold uppercase tracking-[0.34em] text-[#fff7ec]">Notifications</h3>
+                        <p className="mt-0.5 text-[11px] text-white/35">Scent nudges on this device</p>
+                      </div>
+                    </div>
+
+                    {pushState === 'denied' ? (
+                      <p className="text-[11px] leading-snug text-white/45">
+                        Notifications are blocked for ScentBeam. Allow them in your browser site
+                        settings to turn them on here.
+                      </p>
+                    ) : (
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="min-w-0 flex-1 text-[11px] leading-snug text-white/45">
+                          {pushState === 'on'
+                            ? "You'll get the occasional scent-of-the-day nudge."
+                            : 'Get the occasional scent-of-the-day nudge.'}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => void handleTogglePush()}
+                          disabled={pushBusy}
+                          role="switch"
+                          aria-checked={pushState === 'on'}
+                          aria-label="Toggle scent notifications"
+                          className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40 disabled:cursor-wait disabled:opacity-70 ${
+                            pushState === 'on'
+                              ? 'border-scent-accent/60 bg-scent-accent/30'
+                              : 'border-white/15 bg-white/5'
+                          }`}
+                        >
+                          <span
+                            className={`inline-flex h-5 w-5 items-center justify-center rounded-full bg-white shadow transition-transform ${
+                              pushState === 'on' ? 'translate-x-6' : 'translate-x-1'
+                            }`}
+                          >
+                            {pushBusy && <LoaderCircle size={11} className="animate-spin text-black/60" aria-hidden="true" />}
+                          </span>
+                        </button>
+                      </div>
+                    )}
+                  </section>
+                )}
               </div>
             </div>
           </motion.div>

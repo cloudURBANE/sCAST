@@ -9,6 +9,7 @@ import { ThreadBackground, type ThreadBackgroundMode } from './components/thread
 import { AppTopNav } from './components/AppTopNav';
 import { AuthModal } from './components/AuthModal';
 import { GuestSaveBanner, GuestModeBanner } from './components/GuestSaveBanner';
+import { InstallPrompt } from './components/pwa/InstallPrompt';
 import type { ScentFamily, ScentWeatherRecommendation } from './lib/scentWeatherEngine';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { WeatherProvider, useWeather } from './context/WeatherContext';
@@ -1412,6 +1413,7 @@ const AppShell = React.memo(function AppShell({
             <WebVitalsReporter />
             <AppContent location={renderedLocation} />
             <Toaster />
+            <InstallPrompt />
           </div>
         </WardrobeProvider>
       </WeatherProvider>

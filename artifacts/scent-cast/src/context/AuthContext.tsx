@@ -1,5 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
+import { clearPwaApiCache } from '@/lib/pwa/registerPwa';
+
 const STORAGE_KEYS = {
   TOKEN: 'scent_token',
   EMAIL: 'scent_email',
@@ -158,6 +160,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setAuthEmail(null);
     setAuthPictureUrl(null);
     setAuthUsernameState(null);
+    // Evict cached authenticated API responses (wardrobe/profile) from the
+    // service worker so the next user on this device never sees them.
+    clearPwaApiCache();
   }, []);
 
   // Reconcile the username with the server whenever the token changes. The

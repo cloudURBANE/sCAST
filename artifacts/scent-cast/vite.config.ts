@@ -5,6 +5,7 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
+import { VitePWA } from "vite-plugin-pwa";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..");
 
@@ -62,6 +63,35 @@ export default defineConfig(async () => {
       react(),
       tailwindcss(),
       runtimeErrorOverlay(),
+      // Progressive Web App: offline-capable service worker.
+      //
+      // `injectManifest` (not `generateSW`) because we hand-author `src/sw.ts` to
+      // add Web Push + notification-click handling alongside Workbox precache and
+      // runtime caching. Workbox injects the precache list at `self.__WB_MANIFEST`.
+      //
+      // We deliberately do NOT let the plugin own the manifest or registration:
+      //   - `manifest: false` — we ship our hand-tuned `public/site.webmanifest`
+      //     (app shortcuts, maskable icons) already linked from `index.html`.
+      //   - `injectRegister: null` — registration + the update prompt live in
+      //     `src/lib/pwa/registerPwa.ts` so the SPA controls UX and timing.
+      VitePWA({
+        strategies: "injectManifest",
+        srcDir: "src",
+        filename: "sw.ts",
+        registerType: "prompt",
+        injectRegister: null,
+        manifest: false,
+        injectManifest: {
+          // Precache the app shell only. The large icon set and bottle imagery
+          // are runtime-cached in the SW instead of bloating the precache.
+          globPatterns: ["**/*.{js,css,html,svg,woff,woff2}"],
+          globIgnores: ["**/icons/**", "**/nav/**", "**/social/**", "**/*.{png,jpg,jpeg,webp,avif,ico}"],
+          maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+        },
+        // Keep the SW out of `vite dev` — it only ships in production builds, so
+        // local HMR is never shadowed by a cached shell.
+        devOptions: { enabled: false },
+      }),
       ...(process.env.NODE_ENV !== "production" &&
       process.env.REPL_ID !== undefined
         ? [

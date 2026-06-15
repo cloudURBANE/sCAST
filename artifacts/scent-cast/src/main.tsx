@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter } from "react-router-dom";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { CrashDiag } from "./components/CrashDiag";
+import { PwaUpdater } from "./components/pwa/PwaUpdater";
 import { initCrashTrace } from "./lib/crashTrace";
 import App from "./App";
 import "./index.css";
@@ -24,5 +25,6 @@ createRoot(document.getElementById("root")!).render(
       </QueryClientProvider>
     </HelmetProvider>
     <CrashDiag />
+    <PwaUpdater />
   </ErrorBoundary>,
 );
