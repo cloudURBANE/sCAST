@@ -1,8 +1,26 @@
 import { defineConfig } from "drizzle-kit";
+import { getTableName, is, Table } from "drizzle-orm";
+import * as schema from "./src/schema/index";
 
 if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL, ensure the database is provisioned");
 }
+
+// SAFETY: our DATABASE_URL can point at a SHARED Supabase project whose `public`
+// schema also holds another app's tables (worker_*, magic_links, mobile_sessions,
+// ...). `drizzle-kit push` diffs the WHOLE schema and would propose DROPping any
+// table it sees in the DB but not in our schema — and `push-force` (--force)
+// would execute those drops with no prompt.
+//
+// `tablesFilter` scopes drizzle-kit to only the tables WE declare, so foreign
+// tables are never introspected and can never be dropped or renamed. The list is
+// derived from the runtime schema barrel (src/schema/index.ts) so it stays in
+// sync automatically: add a table to the barrel and it's covered; tables not in
+// the barrel (foreign apps, or the unwired conversations/messages) are left
+// untouched.
+const appTables = Object.values(schema)
+  .filter((value): value is Table => is(value, Table))
+  .map((table) => getTableName(table));
 
 function parseDatabaseUrl(url: string) {
   const parsed = new URL(url);
@@ -30,5 +48,7 @@ function parseDatabaseUrl(url: string) {
 export default defineConfig({
   schema: "./src/schema/*.ts",
   dialect: "postgresql",
+  // Only ever manage our own tables (see SAFETY note above).
+  tablesFilter: appTables,
   dbCredentials: parseDatabaseUrl(process.env.DATABASE_URL),
 });
