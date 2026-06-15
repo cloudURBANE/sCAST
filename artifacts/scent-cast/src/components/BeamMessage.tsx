@@ -33,7 +33,7 @@ function renderSegments(segments: BeamInlineSegment[]): React.ReactNode {
 const BeamBlockView: React.FC<{ block: BeamBlock; index: number }> = ({ block, index }) => {
   if (block.type === 'heading') {
     return (
-      <p className={`scent-type-label text-scent-accent/90 ${index === 0 ? '' : 'mt-3.5'}`}>
+      <p className={`scent-type-label text-scent-accent/90 ${index === 0 ? '' : 'mt-4'}`}>
         {renderSegments(block.segments)}
       </p>
     );
