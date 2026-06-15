@@ -34,7 +34,15 @@ All implemented in `beamTools.ts`, wired to real services in
 | `beam_get_wardrobe` | `{}` | `{ count, items: CandidatePacket[] }` (owned) | `loadVault` (`user_fragrances`) |
 | `beam_search_catalog` | `{ query, limit?, excludeOwned? }` | `{ count, items: CandidatePacket[] }` (not owned) | `searchCatalogCandidates` over `global_fragrances` |
 | `beam_get_fragrance_details` | `{ names: string[] }` | `{ count, items: [{ name, found, facts }] }` | `getScentFacts` (best-effort, `save:false`) |
-| `beam_score_candidates` | `{ destination?, energy? }` | `{ recommendation: {…} \| null }` | `selectScentMissionRecommendation` (deterministic) |
+| `beam_score_candidates` | `{ destination?, energy?, limit?, locationLabel?, weatherOverride? }` | `{ recommendation, picks[], scoredFor }` | `selectScentMissionRecommendation` / `rankVault` (deterministic) |
+| `beam_compare_overlap` | `{ query, limit? }` | `{ resolved, candidate, vaultCount, closestMatch{band}, items[] }` | `searchCatalogCandidates` + deterministic note/accord overlap vs vault |
+| `beam_research_web` *(opt-in)* | `{ query, entityType?, depth? }` | `{ synthesizedFact, sources[] }` or `{ note }` when inert | cost-capped live research lane (`researchWeb` dep; inert unless `BEAM_RESEARCH_ENABLED` + `OPENROUTER_API_KEY`) |
+| `beam_propose_collection` *(opt-in)* | `{ fragrances: [{ name, brand? }] }` | a `proposal` card (resolves names to catalog records; **writes nothing**) | `resolveCatalogEntry` dep; wired in the in-process route, not the MCP server |
+
+`beam_compare_overlap` ships in both runtimes; `beam_research_web` is wired in both
+the in-process route and the MCP server (inert until the research env is set);
+`beam_propose_collection` is wired **only in the in-process route** (`beamAgentRoutes.ts`),
+because it emits a UI `proposal` card the SPA renders — the MCP/Hermes path omits it.
 
 `CandidatePacket` (see `types.ts`) is the compact, normalized evidence shape:
 `fragranceId, canonicalName, brand, owned, notes{top,middle,base}, accords,
@@ -53,11 +61,11 @@ normalized defensively and flagged via `missingFields` rather than trusted.
 These are specified now so the contract is stable; they are **not** implemented
 yet.
 
-### Phase 3 — proposal (still no writes)
+### Phase 3 — proposal (still no writes) — shipped in the in-process route as `beam_propose_collection`
 
 | Tool | Purpose |
 |---|---|
-| `beam_create_collection_proposal` | Validate a draft of 4–5 fragrances (ids exist, no dupes, price/coverage), return cards + coverage analysis. Writes nothing. |
+| `beam_propose_collection` | Resolve a draft of new (unowned) fragrances against the real catalog and emit a `proposal` card; the user's explicit Confirm performs the write. Writes nothing itself. (Originally specced here as `beam_create_collection_proposal`.) |
 
 ### Phase 4 — confirmation-gated writes
 

@@ -121,8 +121,9 @@ In another shell, with the **same** `BEAM_AGENT_TOKEN_SECRET`:
 pnpm --filter @workspace/api-server run beam:mint-token --user <USER_ID> --tenant <TENANT_ID>
 ```
 
-The token prints on the last line. It is read-only (the five `beam_*` read scopes)
-and long-lived (default 30 days; `--ttl-days N` to change).
+The token prints on the last line. It is read-only (the full set of `beam_*` read
+scopes from `ALL_READ_SCOPES`) and long-lived (default 30 days; `--ttl-days N` to
+change).
 
 ---
 
@@ -148,7 +149,7 @@ mcp_servers:
     headers:
       Authorization: "Bearer ${BEAM_AGENT_TOKEN}"
     tools:
-      include: [beam_get_user_context, beam_get_wardrobe, beam_search_catalog, beam_get_fragrance_details, beam_score_candidates]
+      include: [beam_get_user_context, beam_get_wardrobe, beam_search_catalog, beam_get_fragrance_details, beam_score_candidates, beam_compare_overlap, beam_research_web]
       prompts: false
       resources: false
     timeout: 60

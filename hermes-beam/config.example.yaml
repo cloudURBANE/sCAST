@@ -26,10 +26,14 @@ mcp_servers:
         - beam_search_catalog
         - beam_get_fragrance_details
         - beam_score_candidates
+        # Redundancy radar: does a candidate overlap with what the user already
+        # owns? Deterministic note/accord comparison against the vault.
+        - beam_compare_overlap
         # Cost-capped live web research (freshness-gated, cached). The server
-        # only advertises this tool when BEAM_RESEARCH_ENABLED + OPENROUTER_API_KEY
-        # are set in the MCP server's env (see dot-hermes-env.example); until then
-        # it simply won't appear, so listing it here is safe.
+        # always advertises this tool, but it stays INERT — every call returns a
+        # `note` saying live research is unavailable — until BEAM_RESEARCH_ENABLED
+        # + OPENROUTER_API_KEY are set in the MCP server's env (see
+        # dot-hermes-env.example). Safe to list either way.
         - beam_research_web
       prompts: false
       resources: false
