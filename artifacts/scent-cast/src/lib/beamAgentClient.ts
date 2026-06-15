@@ -97,13 +97,18 @@ export class BeamAgentError extends Error {
 
 type StartRunResponse = { runId: string; sessionId: string; eventsUrl: string };
 
+// Concierge-voiced progress copy. These read as a person curating, not a tool
+// loop — "Reading your calibration" / "Searching the catalog" exposed the
+// machinery underneath the luxury surface and made the wait read like a debug
+// log. We keep the phrasing warm, first-person about *you*, and never imply a
+// raw search that might come back empty.
 const TOOL_LABELS: Record<string, string> = {
-  beam_get_user_context: 'Reading your calibration…',
+  beam_get_user_context: 'Reading your taste profile…',
   beam_get_wardrobe: 'Looking through your vault…',
-  beam_search_catalog: 'Searching the catalog…',
-  beam_get_fragrance_details: 'Pulling fragrance details…',
-  beam_score_candidates: 'Scoring your matches…',
-  beam_research_web: 'Researching the latest notes…',
+  beam_search_catalog: 'Considering more fragrances for you…',
+  beam_get_fragrance_details: 'Studying the composition…',
+  beam_score_candidates: 'Scoring your vault against tonight…',
+  beam_research_web: 'Cross-checking the notes…',
 };
 
 /** Humanize a `beam_*` tool name into a progress-note phrase. */

@@ -250,8 +250,16 @@ function beamActivityDetail(tool: string, summary: string): string | undefined {
   const count = s.match(/^(\d+)\s+(?:result|item|candidate)\(s\)$/);
   if (count) {
     const n = Number(count[1]);
-    if (tool === 'beam_search_catalog') return `${n} ${n === 1 ? 'fragrance' : 'fragrances'} found`;
+    if (tool === 'beam_search_catalog') {
+      // Never surface a bare "0 fragrances found" — a visible zero-result tool
+      // log reads as the system failing and is a trust killer. Reframe the empty
+      // case as the concierge's actual next move: lean on the vault.
+      return n === 0 ? 'Prioritizing your vault' : `${n} ${n === 1 ? 'fragrance' : 'fragrances'} found`;
+    }
     if (tool === 'beam_get_wardrobe') return `${n} ${n === 1 ? 'bottle' : 'bottles'} in your vault`;
+    // A 0-count detail/lookup is internal noise — show only the (settled) label,
+    // not a scary "0 …" tally.
+    if (n === 0) return undefined;
     if (tool === 'beam_get_fragrance_details') return `${n} ${n === 1 ? 'fragrance' : 'fragrances'} detailed`;
     return `${n} ${n === 1 ? 'result' : 'results'}`;
   }
@@ -935,12 +943,20 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   const enoughContext = hasEnoughContext(facets, mission, agentMode);
   const capturedCount = Object.keys(facets).length;
 
+  // The conversation is underway once the user has said anything (typed or tapped
+  // a cue). The live agent path answers in free text and never sets `resolved`, so
+  // without this the header would snap back to the cold-start "Tell me about your
+  // day" prompt even while a full recommendation sits on screen.
+  const conversationStarted = useMemo(() => messages.some((m) => m.role === 'user'), [messages]);
+
   const progressText = useMemo(() => {
     if (progressNote) return progressNote;
     if (resolved) return 'Match ready';
-    if (capturedCount === 0) return 'Tell me about your day';
-    return `${capturedCount} cue${capturedCount === 1 ? '' : 's'} captured`;
-  }, [capturedCount, progressNote, resolved]);
+    if (capturedCount > 0) return `${capturedCount} cue${capturedCount === 1 ? '' : 's'} captured`;
+    // Cold start vs. mid-conversation: never show the opening prompt once the
+    // exchange is live, so the header phase always matches what's on screen.
+    return conversationStarted ? 'Curating with you' : 'Tell me about your day';
+  }, [capturedCount, conversationStarted, progressNote, resolved]);
 
   const contextLine = useMemo(() => {
     const weatherParts = [
@@ -1589,10 +1605,15 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
             setComposerFocused(false);
             recoverViewportAfterKeyboard();
           }}
-          placeholder={composerFocused ? '' : composerPlaceholder}
+          // While the concierge is composing, lock the field and swap the
+          // placeholder to a calm status line so it never looks like the user is
+          // meant to keep typing mid-generation (no ambiguous "can I type / cancel /
+          // wait?" state). The send button shows the spinner alongside.
+          disabled={busy}
+          placeholder={busy ? 'Composing your recommendation…' : composerFocused ? '' : composerPlaceholder}
           aria-label="Message the Beam Agent"
           autoComplete="off"
-          className="min-w-0 flex-1 bg-transparent px-1 text-center text-sm font-medium text-[#fff7ec] outline-none placeholder:text-scent-text-subtle sm:text-base"
+          className="min-w-0 flex-1 bg-transparent px-1 text-center text-sm font-medium text-[#fff7ec] outline-none placeholder:text-scent-text-subtle disabled:cursor-not-allowed disabled:placeholder:text-scent-accent/70 sm:text-base"
         />
         <button
           type="submit"
