@@ -14,10 +14,33 @@ import {
 test('parseInlineSegments marks bold runs and strips other markdown', () => {
   const segs = parseInlineSegments('Start with **Black Afgano** — a `dark` _smoky_ pick');
   assert.deepEqual(segs, [
-    { text: 'Start with' },
+    { text: 'Start with ' },
     { text: 'Black Afgano', bold: true },
-    { text: '— a dark smoky pick' },
+    { text: ' — a dark smoky pick' },
   ]);
+});
+
+test('parseInlineSegments keeps the space between a bold run and adjacent words', () => {
+  // Regression: a bold run must not fuse with the word next to it.
+  assert.equal(
+    parseInlineSegments('**Sauvage Elixir** is your move tonight.')
+      .map((s) => s.text)
+      .join(''),
+    'Sauvage Elixir is your move tonight.',
+  );
+  assert.equal(
+    parseInlineSegments('Runner-up: **Gabrielle** if you want something lighter.')
+      .map((s) => s.text)
+      .join(''),
+    'Runner-up: Gabrielle if you want something lighter.',
+  );
+  // Back-to-back bold runs keep their separating space.
+  assert.equal(
+    parseInlineSegments('**Aventus** **Viking**')
+      .map((s) => s.text)
+      .join(''),
+    'Aventus Viking',
+  );
 });
 
 test('parseInlineSegments resolves markdown links to their text', () => {

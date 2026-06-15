@@ -143,8 +143,19 @@ export function parseInlineSegments(input: string): BeamInlineSegment[] {
   let match: RegExpExecArray | null;
 
   const pushPlain = (chunk: string) => {
+    // `stripResidualMarkdown` trims its chunk, which would fuse the space that
+    // separates a plain run from an adjacent bold run ("**Sauvage Elixir** is" ->
+    // "Sauvage Elixiris", "Runner-up: **Gabrielle** if" -> "Runner-up:Gabrielleif").
+    // Re-add a single boundary space when the original chunk had surrounding
+    // whitespace, and keep one separating space between back-to-back bold runs.
     const cleaned = stripResidualMarkdown(chunk);
-    if (cleaned) segments.push({ text: cleaned });
+    if (!cleaned) {
+      if (/\s/.test(chunk) && segments.length > 0) segments.push({ text: ' ' });
+      return;
+    }
+    const lead = /^\s/.test(chunk) ? ' ' : '';
+    const trail = /\s$/.test(chunk) ? ' ' : '';
+    segments.push({ text: `${lead}${cleaned}${trail}` });
   };
 
   while ((match = boldRe.exec(text)) !== null) {
