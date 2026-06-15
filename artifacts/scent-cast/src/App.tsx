@@ -22,10 +22,8 @@ import NotFound from '@/pages/not-found';
 import { SEO } from './components/SEO';
 import { loadRouteChunk } from '@/lib/routeChunkRecovery';
 import { initWebVitals, vaultSizeBucket } from '@/lib/webVitalsTelemetry';
+import { FragranceCapture } from './components/FragranceCapture';
 
-const FragranceCapture = React.lazy(() =>
-  loadRouteChunk(() => import('./components/FragranceCapture').then((module) => ({ default: module.FragranceCapture }))),
-);
 const Wardrobe = React.lazy(() =>
   loadRouteChunk(() => import('./components/Wardrobe').then((module) => ({ default: module.Wardrobe }))),
 );
@@ -647,6 +645,10 @@ function DashboardView() {
     handleExpandArchive,
   } = useWardrobe();
   const reduceMotion = useReducedMotion();
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
   // Track Tailwind's `sm` breakpoint so the Beam Agent header can animate its
   // exact pull-up margins to zero on close. framer needs the explicit
   // (responsive) margin values to collapse the header's height + margins in step
@@ -918,7 +920,7 @@ function DashboardView() {
                 search card. */}
             <motion.div
               ref={heroVaultRef}
-              layout={!reduceMotion}
+              layout={isMounted ? !reduceMotion : false}
               transition={vaultContentTransition}
               className="scent-vault-panel w-full min-w-0 relative overflow-hidden"
               style={{ scrollMarginTop: 'calc(var(--topbar-h) + 1rem)' }}
@@ -959,15 +961,13 @@ function DashboardView() {
                       exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 6 }}
                       transition={vaultContentTransition}
                     >
-                      <React.Suspense fallback={<HeroVaultContentFallback />}>
-                        <FragranceCapture
-                          onAdd={handleAddItem}
-                          onVaultSearchStateChange={handleVaultSearchStateChange}
-                          existingVaultKeys={vaultIdentityKeys}
-                          onViewVault={handleViewVault}
-                          embeddedInVaultPanel
-                        />
-                      </React.Suspense>
+                      <FragranceCapture
+                        onAdd={handleAddItem}
+                        onVaultSearchStateChange={handleVaultSearchStateChange}
+                        existingVaultKeys={vaultIdentityKeys}
+                        onViewVault={handleViewVault}
+                        embeddedInVaultPanel
+                      />
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -981,7 +981,7 @@ function DashboardView() {
             {(agentActive || (discoveryReady && stateSettled && !vaultSearchUiActive)) ? (
               <motion.div
                 ref={signatureSectionRef}
-                layout={!reduceMotion}
+                layout={isMounted ? !reduceMotion : false}
                 transition={vaultContentTransition}
                 className="scent-mission-action-slot mt-4 flex min-h-[60px] justify-center sm:mt-5 sm:min-h-[68px]"
               >
@@ -1020,7 +1020,7 @@ function DashboardView() {
 
           <HomepageAtmosphereChrome />
 
-          <div id="scent-vault-section" className="scent-deferred-section" style={{ scrollMarginTop: 'var(--topbar-h)' }}>
+          <div id="scent-vault-section" className="scent-deferred-section !mt-36 sm:!mt-60 lg:!mt-80" style={{ scrollMarginTop: 'var(--topbar-h)' }}>
             <React.Suspense fallback={<WardrobeFallback />}>
               <Wardrobe
                 items={items}
