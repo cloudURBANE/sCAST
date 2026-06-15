@@ -246,7 +246,16 @@ const CURATE_STATUS_COPY: Record<'adding' | 'curating' | 'ready' | 'failed', str
  * lives here so it can read naturally per tool without a backend round-trip.
  */
 function beamActivityDetail(tool: string, summary: string): string | undefined {
-  const s = summary.trim();
+  // Drop placeholder "unknown …" dimensions before any branch runs — the server
+  // emits e.g. "4 bottles · unknown family" when it can't infer a fragrance
+  // family yet, and surfacing "unknown family" reads as broken data. Single
+  // segment summaries ("12 result(s)", "picked Aventus") pass through unchanged.
+  const s = summary
+    .split('·')
+    .map((part) => part.trim())
+    .filter((part) => part && !/^unknown\b/i.test(part))
+    .join(' · ')
+    .trim();
   if (!s || s === 'done') return undefined;
   const count = s.match(/^(\d+)\s+(?:result|item|candidate)\(s\)$/);
   if (count) {
@@ -949,14 +958,23 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   // day" prompt even while a full recommendation sits on screen.
   const conversationStarted = useMemo(() => messages.some((m) => m.role === 'user'), [messages]);
 
+  // The live agent path answers in free text and never sets `resolved`, so a
+  // delivered answer is "any agent reply past the intro greeting" (index 0). This
+  // lets the header advance past the stale cue count once a recommendation is on
+  // screen instead of holding "N cues captured" forever.
+  const hasDeliveredAnswer = useMemo(
+    () => messages.some((m, i) => i > 0 && m.role === 'agent'),
+    [messages],
+  );
+
   const progressText = useMemo(() => {
     if (progressNote) return progressNote;
-    if (resolved) return 'Match ready';
+    if (resolved || (hasDeliveredAnswer && conversationStarted && !busy)) return 'Match ready';
     if (capturedCount > 0) return `${capturedCount} cue${capturedCount === 1 ? '' : 's'} captured`;
     // Cold start vs. mid-conversation: never show the opening prompt once the
     // exchange is live, so the header phase always matches what's on screen.
     return conversationStarted ? 'Curating with you' : 'Tell me about your day';
-  }, [capturedCount, conversationStarted, progressNote, resolved]);
+  }, [busy, capturedCount, conversationStarted, hasDeliveredAnswer, progressNote, resolved]);
 
   const contextLine = useMemo(() => {
     const weatherParts = [
@@ -2087,10 +2105,13 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         aria-hidden
         className={`pointer-events-none absolute inset-x-0 bottom-0 z-10 h-7 bg-gradient-to-t from-black to-transparent transition-opacity duration-300 ${scrollEdges.bottom ? 'opacity-100' : 'opacity-0'}`}
       />
+      {/* Cap-and-scroll instead of a fixed height: the box fits short turns (no
+          dead space above the input) and only scrolls once a long answer exceeds
+          the cap (no more cramped clip into a too-short window). */}
       <div
         ref={scrollRef}
         onScroll={updateScrollEdges}
-        className="flex w-full h-[min(34dvh,17rem)] flex-col gap-2.5 overflow-y-auto pr-1 text-left scrollbar-hide sm:h-[min(36dvh,20rem)]"
+        className="flex w-full max-h-[min(46dvh,24rem)] flex-col gap-2.5 overflow-y-auto pr-1 text-left scrollbar-hide sm:max-h-[min(48dvh,28rem)]"
         role="log"
         aria-live="polite"
         aria-label="Beam Agent conversation"
