@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, Search, X } from 'lucide-react';
+import { Check, Search } from 'lucide-react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { ScentIntelligenceLoader } from './ScentIntelligenceLoader';
 import {
@@ -978,18 +978,6 @@ export const FragranceCapture: React.FC<{
     searchInputRef.current?.focus({ preventScroll: true });
   };
 
-  // "New search" — clear the result surface but keep the user on the search
-  // field so they can immediately type again (resetState empties the query too).
-  const handleNewSearch = () => {
-    cancelActiveSearch();
-    resetState();
-    setErrorStatus(null);
-    window.requestAnimationFrame(() => {
-      searchInputRef.current?.focus({ preventScroll: false });
-      searchInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    });
-  };
-
   // Close (×) / Esc — dismiss the results surface entirely and return the user to
   // the search field. Unlike "New search" this does NOT auto-focus the input, so
   // closing on mobile doesn't pop the keyboard back open; it just clears and
@@ -1066,14 +1054,13 @@ export const FragranceCapture: React.FC<{
       className="fixed inset-0 z-[130] flex flex-col items-center justify-center px-6 py-[max(2rem,env(safe-area-inset-top))]"
       style={{
         background:
-          'radial-gradient(ellipse 58% 46% at 50% 36%, rgba(212,175,55,0.08), transparent 64%), radial-gradient(ellipse 88% 62% at 50% 108%, rgba(212,175,55,0.05), transparent 68%), rgba(3,2,1,0.92)',
+          'radial-gradient(ellipse 58% 46% at 50% 36%, rgba(212,175,55,0.08), transparent 64%), radial-gradient(ellipse 88% 62% at 50% 108%, rgba(212,175,55,0.05), transparent 68%), #030201',
         boxShadow:
           'inset 0 1px 0 rgba(255,230,180,0.06), inset 0 0 120px rgba(212,175,55,0.045)',
       }}
     >
       <ScentIntelligenceLoader
         status={loadingStatus}
-        substatus="Adding to your vault…"
         complete={syncComplete}
       />
     </motion.div>
@@ -1097,17 +1084,17 @@ export const FragranceCapture: React.FC<{
         minHeight: SEARCH_LOADER_MIN_H,
         // No backdrop-filter: animating a blur layer in over the card is the
         // documented iOS Safari / iPad-PWA GPU-crash construct. The veil is
-        // instead raised to ~0.9 opacity so the card reads as faintly-present
-        // depth rather than a live frosted surface.
+        // instead a fully opaque solid fill (#030201) so the result cards below
+        // are completely blacked out rather than bleeding through — a clean
+        // loading surface, not a live frosted one.
         background:
-          'radial-gradient(ellipse 70% 60% at 50% 16%, rgba(212,175,55,0.06), transparent 60%), radial-gradient(ellipse 85% 55% at 50% 102%, rgba(212,175,55,0.05), transparent 64%), rgba(3,2,1,0.9)',
+          'radial-gradient(ellipse 70% 60% at 50% 16%, rgba(212,175,55,0.06), transparent 60%), radial-gradient(ellipse 85% 55% at 50% 102%, rgba(212,175,55,0.05), transparent 64%), #030201',
         boxShadow:
           'inset 0 1px 0 rgba(255,230,180,0.08), inset 0 0 90px rgba(212,175,55,0.05)',
       }}
     >
       <ScentIntelligenceLoader
         status={loadingStatus}
-        substatus="Searching fragrances…"
         complete={syncComplete}
       />
       {/* Indeterminate progress bar — a concrete "work in progress" signal beneath
@@ -1332,9 +1319,11 @@ export const FragranceCapture: React.FC<{
             >
               <div className="flex min-h-0 flex-col">
                 <div className="scent-vault-results-panel mx-auto w-full max-w-[50.5rem] px-4 py-7 sm:px-9 sm:py-9">
-                  {/* Results-nav header: count on the left, "New search" on the
-                      right. Lives outside the scroll area below, so it stays put
-                      while the list scrolls. */}
+                  {/* Results-nav header: count on the left, a desktop-only
+                      "Back to top" affordance on the right. Lives outside the
+                      scroll area below, so it stays put while the list scrolls.
+                      Dismissal is handled by Esc and the mobile action bar's
+                      "Back to search", so no redundant New-search/× buttons. */}
                   <div className="mb-4 flex shrink-0 items-center justify-between gap-3 px-1">
                     <p className="min-w-0 truncate whitespace-nowrap scent-type-label text-scent-accent">
                       Search Results
@@ -1352,23 +1341,6 @@ export const FragranceCapture: React.FC<{
                         className="hidden min-h-[44px] shrink-0 items-center gap-1.5 rounded-full border border-white/30 px-3.5 py-1.5 scent-type-chip text-scent-text-muted transition-colors hover:border-scent-accent/45 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 sm:inline-flex"
                       >
                         ↑ Back to top
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleNewSearch}
-                        className="inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-full border border-white/30 px-3.5 py-1.5 scent-type-chip text-scent-text-muted transition-colors hover:border-scent-accent/45 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
-                      >
-                        <Search size={12} strokeWidth={2} aria-hidden />
-                        New search
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleDismissResults}
-                        aria-label="Close results"
-                        title="Close (Esc)"
-                        className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/30 text-scent-text-muted transition-colors hover:border-scent-accent/45 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
-                      >
-                        <X size={16} strokeWidth={2} aria-hidden />
                       </button>
                     </div>
                   </div>
@@ -1436,7 +1408,7 @@ export const FragranceCapture: React.FC<{
                               key={key}
                               type="button"
                               onClick={() => setSelectedId(key)}
-                              className={`scent-vault-result-card group mx-auto w-full max-w-[39.75rem] min-h-[60px] px-3.5 py-2 text-center transition-all duration-200 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55 sm:min-h-[70px] sm:px-4 sm:py-2.5 ${
+                              className={`scent-vault-result-card group mx-auto w-full max-w-[39.75rem] min-h-[60px] px-3.5 py-2 text-center transition-[border-color,box-shadow] duration-200 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55 sm:min-h-[70px] sm:px-4 sm:py-2.5 ${
                                 isSelected ? 'is-selected' : ''
                               }`}
                               aria-pressed={isSelected}
