@@ -390,6 +390,8 @@ const BeamActivityTrail: React.FC<{
       transition={{ duration: 0.24, ease: SCENT_EASE }}
       className={BEAM_ACTIVITY_BUBBLE_CLASS}
       role="status"
+      aria-live="polite"
+      aria-busy={running}
       aria-label="Beam Agent progress"
     >
       <div className="flex items-center gap-2">
@@ -1611,7 +1613,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
             initial={calmMotion ? false : { opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={calmMotion ? { opacity: 0 } : { opacity: 0, y: 6 }}
-            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+            transition={calmMotion ? { duration: 0.18, ease: [0.22, 1, 0.36, 1] } : { type: 'spring', stiffness: 380, damping: 30 }}
             className="absolute bottom-full left-0 right-0 z-20 mb-3 rounded-[calc(var(--radius-scent)-8px)] border border-scent-accent/22 bg-[#0c0a07]/95 p-3 text-center shadow-[0_-10px_34px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,236,183,0.06)]"
           >
             <div className="grid gap-3 sm:grid-cols-2">
