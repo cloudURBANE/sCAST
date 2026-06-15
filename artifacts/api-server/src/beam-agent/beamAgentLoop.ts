@@ -57,12 +57,22 @@ How to work:
   Each chip is at most ~6 words, phrased as the user's own answer. Omit the block entirely when
   you are not offering a choice (e.g. a final recommendation that needs no follow-up).
 
+Building a collection (e.g. for a trip or an occasion):
+1. Ground first — read their vault (beam_get_wardrobe / beam_get_user_context) and name the
+   dominant notes/families you actually see.
+2. Confirm the plan BEFORE proposing — tell them your read of their taste and exactly what you'll
+   look for (how many new bottles, the direction), and offer cues so they confirm or adjust in a tap.
+3. Once they've agreed, search the catalog for fitting NEW (unowned) fragrances, deepen the best
+   ones with details, then call beam_propose_collection with your final picks.
+The app then shows the user a confirmation card and saves ONLY what they approve.
+
 Hard rules:
 - Only mention fragrances that appeared in a tool result. Never invent fragrances, notes,
   accords, ids, or prices. If a tool result is thin, say what you'd need rather than guessing.
 - Weather/scoring math is done by beam_score_candidates — never compute scores yourself.
-- This session is READ-ONLY: you cannot save collections or modify the vault. If asked to save
-  or add a bottle, say saving is coming in a later release, then offer to recommend or rank.
+- You never write to the vault yourself. beam_propose_collection only PROPOSES; the user's Confirm
+  performs the save. So never say you have added, saved, or enshrined anything — say you've lined
+  the picks up for their confirmation.
 - Use beam_research_web ONLY for current external facts (live price/availability,
   discontinued/reformulated/new status, unknown metadata, sample sellers, or when the user
   asks for cited sources) — not for ordinary recommendations or comparisons. If it returns a
@@ -351,6 +361,16 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
           const serialized = JSON.stringify(result).slice(0, BEAM_LIMITS.maxToolResultChars);
           results.push({ type: "tool_result", tool_use_id: use.id, content: serialized });
           emit({ type: "tool_completed", tool: def.name, summary: summarizeToolResult(def.name, result) });
+          // Some tools surface a structured card to the UI (e.g. a collection
+          // proposal). Guarded so a UI-event builder can never break the run.
+          if (def.clientEvent) {
+            try {
+              const extra = def.clientEvent(result);
+              if (extra) emit(extra);
+            } catch {
+              /* a malformed client event is non-fatal — the run continues */
+            }
+          }
         } catch (err) {
           const message = err instanceof Error ? err.message : "tool error";
           results.push({ type: "tool_result", tool_use_id: use.id, content: `Tool failed: ${message}`, is_error: true });

@@ -21,12 +21,43 @@ import type { ScentMissionWeather } from '@workspace/scent-weather-engine';
 /** A tap-to-answer chip the agent offers with its reply. */
 export type BeamSuggestion = { label: string; value: string };
 
+/**
+ * An add-ready fragrance the agent proposes for the vault (resolved from the
+ * catalog server-side). Mirrors `BeamProposalItem` in the api-server types and
+ * is shaped to drop into the app's normal wardrobe-add path.
+ */
+export type BeamProposalItem = {
+  name: string;
+  brand: string;
+  family?: string;
+  notes: string[];
+  pyramid?: { top: string[]; heart: string[]; base: string[] };
+  accords: string[];
+  scentVector?: {
+    freshness: number;
+    sweetness: number;
+    woodiness: number;
+    spice: number;
+    warmth: number;
+    musk: number;
+  };
+  performance?: { sillage?: number | string; longevity?: number | string };
+  concentration?: string;
+  imageUrl?: string;
+  storagePath?: string;
+  imageHash?: string;
+  storageProvider?: string;
+  sourceProvider?: string;
+  description?: string;
+};
+
 export type BeamAgentEvent =
   | { type: 'status'; label: string }
   | { type: 'message_delta'; text: string }
   | { type: 'tool_started'; tool: string }
   | { type: 'tool_completed'; tool: string; summary: string }
   | { type: 'suggestions'; items: BeamSuggestion[] }
+  | { type: 'proposal'; proposalId: string; items: BeamProposalItem[] }
   | { type: 'completed'; response: string }
   | { type: 'failed'; code: string; message: string };
 

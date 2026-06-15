@@ -36,7 +36,7 @@ import { getTenantId } from "../middlewares/tenant";
 import { rateLimitMiddleware } from "../lib/rateLimit";
 import { logger } from "../lib/logger";
 import { missionItemFromWardrobeRow } from "../services/scentMissionService";
-import { searchCatalogCandidates, flattenProfile } from "../services/catalogService";
+import { searchCatalogCandidates, flattenProfile, getCatalogEntry } from "../services/catalogService";
 import { getScentFacts } from "../lib/scent-facts/engine";
 import { createBeamTools, type BeamCatalogHit, type BeamToolDeps } from "./beamTools.ts";
 import { runBeamAgent } from "./beamAgentLoop.ts";
@@ -188,6 +188,25 @@ async function searchCatalogForBeam(query: string, limit: number): Promise<BeamC
   });
 }
 
+/**
+ * Resolve ONE catalog fragrance to its full flattened profile for an add-ready
+ * proposal: exact brand+name lookup first, then a top-hit search fallback so a
+ * brandless or slightly-off name still resolves to a real catalog record.
+ */
+async function resolveCatalogEntryForBeam(
+  name: string,
+  brand?: string,
+): Promise<Record<string, unknown> | null> {
+  if (brand) {
+    const exact = await getCatalogEntry(brand, name).catch(() => null);
+    if (exact) return flattenProfile(exact) as Record<string, unknown>;
+  }
+  const query = `${brand ?? ""} ${name}`.trim();
+  const hits = await searchCatalogCandidates(query, { limit: 1 }).catch(() => []);
+  if (hits.length > 0) return flattenProfile(hits[0].profile) as Record<string, unknown>;
+  return null;
+}
+
 async function researchForBeam(name: string): Promise<Record<string, unknown> | null> {
   try {
     const facts = await getScentFacts({ fragranceName: name, save: false });
@@ -217,6 +236,7 @@ function buildDeps(weather: ScentMissionWeather): BeamToolDeps {
     loadVault,
     loadWardrobePackets,
     searchCatalog: searchCatalogForBeam,
+    resolveCatalogEntry: resolveCatalogEntryForBeam,
     research: researchForBeam,
     researchWeb: beamResearchWeb,
     scoreVault: (items, calibration, currentWeather) =>

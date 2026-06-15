@@ -19,10 +19,11 @@ import type {
   ScentMissionWardrobeItem,
   ScentMissionWeather,
 } from "@workspace/scent-weather-engine";
-import type { BeamRunContext, BeamToolDefinition, CandidatePacket } from "./types.ts";
+import type { BeamProposalItem, BeamRunContext, BeamToolDefinition, CandidatePacket } from "./types.ts";
 import {
   BEAM_LIMITS,
   asString,
+  buildProposalItem,
   clampLimit,
   packetFromFlatProfile,
   packetFromOwnedItem,
@@ -48,6 +49,13 @@ export type BeamToolDeps = {
   loadWardrobePackets?: (ctx: BeamRunContext) => Promise<CandidatePacket[]>;
   /** Catalog (global_fragrances) search → flattened profiles. */
   searchCatalog: (query: string, limit: number) => Promise<BeamCatalogHit[]>;
+  /**
+   * OPTIONAL: resolve ONE catalog fragrance (by name, optionally brand) to its
+   * full flattened profile, for building add-ready collection proposals. When
+   * absent, `beam_propose_collection` is not exposed (keeps the read-only deploys
+   * and the tool tests on the original surface).
+   */
+  resolveCatalogEntry?: (name: string, brand?: string) => Promise<Record<string, unknown> | null>;
   /** Best-effort research for one fragrance name (read-only; never persists). */
   research: (name: string) => Promise<Record<string, unknown> | null>;
   /**
@@ -289,6 +297,83 @@ export function createBeamTools(deps: BeamToolDeps): BeamToolDefinition[] {
         const query = asString(record.query);
         if (!query) return { note: "query is required", synthesizedFact: "", sources: [] };
         return researchWeb(query, { entityType: asString(record.entityType), depth: asString(record.depth) });
+      },
+    });
+  }
+
+  // Collection proposals are additive and opt-in: only exposed when the route
+  // wires `resolveCatalogEntry`. The tool writes NOTHING — it resolves catalog
+  // records into add-ready payloads and emits a `proposal` card via clientEvent;
+  // the user's explicit Confirm in the app performs the actual vault write.
+  const { resolveCatalogEntry } = deps;
+  if (resolveCatalogEntry) {
+    tools.push({
+      name: "beam_propose_collection",
+      description:
+        "Propose a small set of NEW (unowned) fragrances to ADD to the user's vault, after they " +
+        "have agreed to a plan. Pass each fragrance's name (and brand when known); they are " +
+        "resolved against the real catalog server-side and unresolved names are dropped. The app " +
+        "shows the user a confirmation card and ONLY saves what they approve — you never write " +
+        "anything. So never claim you have added or saved bottles; say you've lined them up for " +
+        "their confirmation.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          fragrances: {
+            type: "array",
+            description: `The fragrances to propose (server caps at ${BEAM_LIMITS.maxProposalItems}).`,
+            items: {
+              type: "object",
+              properties: {
+                name: { type: "string", description: "Fragrance name (required)." },
+                brand: { type: "string", description: "House/brand, when known (improves the match)." },
+              },
+              required: ["name"],
+              additionalProperties: false,
+            },
+          },
+        },
+        required: ["fragrances"],
+        additionalProperties: false,
+      },
+      handler: async (input, ctx) => {
+        const record = (typeof input === "object" && input !== null ? input : {}) as Record<string, unknown>;
+        const rawList = Array.isArray(record.fragrances) ? record.fragrances : [];
+        const requested: Array<{ name: string; brand?: string }> = [];
+        for (const entry of rawList) {
+          const e = (typeof entry === "object" && entry !== null ? entry : {}) as Record<string, unknown>;
+          const name = asString(e.name);
+          if (name) requested.push({ name, brand: asString(e.brand) });
+          if (requested.length >= BEAM_LIMITS.maxProposalItems) break;
+        }
+
+        const items: BeamProposalItem[] = [];
+        const unresolved: string[] = [];
+        for (const req of requested) {
+          const flat = await resolveCatalogEntry(req.name, req.brand).catch(() => null);
+          const built = flat ? buildProposalItem(flat) : null;
+          if (built) items.push(built);
+          else unresolved.push(req.brand ? `${req.brand} ${req.name}` : req.name);
+        }
+
+        const proposalId = `prop_${ctx.runId}_${Date.now().toString(36)}`;
+        return {
+          proposalId,
+          count: items.length,
+          // `items` carries the full add-ready payloads (also read by clientEvent);
+          // `proposed` is the compact list the model references in its prose.
+          items,
+          proposed: items.map((i) => ({ name: i.name, brand: i.brand })),
+          unresolved,
+        };
+      },
+      clientEvent: (result) => {
+        const r = (typeof result === "object" && result !== null ? result : {}) as {
+          proposalId?: unknown;
+          items?: unknown;
+        };
+        if (typeof r.proposalId !== "string" || !Array.isArray(r.items) || r.items.length === 0) return null;
+        return { type: "proposal", proposalId: r.proposalId, items: r.items as BeamProposalItem[] };
       },
     });
   }
