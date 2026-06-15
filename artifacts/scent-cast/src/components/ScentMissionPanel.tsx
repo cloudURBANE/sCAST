@@ -883,6 +883,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
     if (!el) return;
     const behavior: ScrollBehavior = calmMotion ? 'auto' : 'smooth';
     const anchor =
+      el.querySelector<HTMLElement>('[data-scroll-anchor="beam-proposal"]') ??
       el.querySelector<HTMLElement>('[data-scroll-anchor="resolved"]') ??
       el.querySelector<HTMLElement>('[data-scroll-anchor="latest-agent"]');
     if (anchor) {
@@ -2240,7 +2241,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
           {proposal && proposalReveal && !busy && !curating ? (
             <motion.div
               key="beam-proposal"
-              data-scroll-anchor="resolved"
+              data-scroll-anchor="beam-proposal"
               variants={revealContainer}
               initial={calmMotion ? false : 'hidden'}
               animate="show"
@@ -2248,9 +2249,11 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
               className="scent-match-reveal max-w-[92%] self-start rounded-[calc(var(--radius-scent)-10px)] border border-scent-accent/32 bg-[linear-gradient(180deg,rgba(212,175,55,0.07),rgba(0,0,0,0.28))] p-4 text-left"
               data-testid="beam-proposal-card"
               data-calm={calmMotion ? 'true' : undefined}
+              role="group"
+              aria-label={`Beam recommends ${proposalReveal.fragrance.name}`}
             >
               <motion.p variants={revealItem} className="scent-type-label text-scent-accent">
-                {proposal.items.length > 1 ? 'Signature pick' : 'Your match'}
+                Your match
               </motion.p>
               {proposalReveal.fragrance.brand ? (
                 <motion.p variants={revealItem} className="mt-2 font-serif text-xs uppercase tracking-[0.2em] text-scent-text-muted">
@@ -2268,6 +2271,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                 variants={revealItem}
                 type="button"
                 onClick={handleRevealProposalHero}
+                aria-label={`Reveal your match: ${proposalReveal.fragrance.name}`}
                 className="scent-primary-button mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-[var(--radius-scent)] px-5 py-2.5"
               >
                 <Sparkles size={15} aria-hidden />
@@ -2276,15 +2280,21 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
 
               {proposal.items.length > 1 ? (
                 <motion.div variants={revealItem} className="mt-4">
+                  <div className="mb-3 h-px bg-gradient-to-r from-transparent via-scent-accent/12 to-transparent" />
                   <p className="scent-type-label text-scent-text-subtle">Also lined up</p>
-                  <ul className="mt-1.5 flex max-h-[6rem] flex-col gap-1.5 overflow-y-auto pr-1 scrollbar-hide">
-                    {proposal.items.slice(1).map((item) => (
-                      <li key={`${item.brand}-${item.name}`} className="flex items-baseline justify-between gap-3">
-                        <span className="font-serif italic text-[13px] text-[#fff7ec] sm:text-sm">{item.name}</span>
+                  <ul className="mt-1.5 flex flex-col gap-1.5">
+                    {proposal.items.slice(1, 4).map((item, index) => (
+                      <li key={`${item.brand}-${item.name}-${index}`} className="flex min-w-0 items-baseline justify-between gap-3">
+                        <span className="min-w-0 flex-1 truncate font-serif italic text-[13px] text-[#fff7ec] sm:text-sm">{item.name}</span>
                         <span className="scent-type-label shrink-0 text-scent-text-subtle">{item.brand}</span>
                       </li>
                     ))}
                   </ul>
+                  {proposal.items.length > 4 ? (
+                    <p className="mt-1.5 scent-type-label text-scent-text-subtle">
+                      +{proposal.items.length - 4} more
+                    </p>
+                  ) : null}
                 </motion.div>
               ) : null}
 
@@ -2300,7 +2310,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                 <button
                   type="button"
                   onClick={handleDeclineProposal}
-                  className="inline-flex min-h-10 items-center justify-center rounded-full border border-white/20 px-4 py-1.5 scent-type-chip text-[11px] text-scent-text-muted transition-colors hover:border-scent-accent/42 hover:text-[#fff7ec]"
+                  className="inline-flex min-h-10 items-center justify-center px-2 py-1.5 scent-type-chip text-[11px] text-scent-text-subtle transition-colors hover:text-[#fff7ec]"
                 >
                   Not now
                 </button>
