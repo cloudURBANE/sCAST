@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import {
   AlertTriangle,
+  Check,
   Loader2,
   Lock,
   Send,
@@ -183,6 +184,154 @@ const BeamTypingDots: React.FC = () => (
       />
     ))}
   </>
+);
+
+/* --------------------------------------------------------------------------
+ * Beam Agent live activity trail
+ *
+ * The Beam run streams `status` / `tool_started` / `tool_completed` events. The
+ * old UI collapsed every event into ONE overwritten line and threw away the
+ * grounded `tool_completed.summary` — so a real, working run read as a generic
+ * spinner that flickered "Searching the catalog…" on a loop. Instead we keep an
+ * ordered trail: each tool/phase is its own row that resolves from a spinner to
+ * a check + the real result ("12 fragrances found", "Top match · Aventus"), so
+ * the wait reads as visible, intelligent progress.
+ * ------------------------------------------------------------------------ */
+
+type BeamActivityStep = {
+  id: number;
+  /** Present when the row is a tool call; absent for phase/status rows. */
+  tool?: string;
+  label: string;
+  detail?: string;
+  state: 'active' | 'done';
+  tone?: 'error';
+};
+
+const BEAM_ACTIVITY_BUBBLE_CLASS =
+  'flex max-w-[92%] flex-col gap-1.5 self-start rounded-[calc(var(--radius-scent)-12px)] border border-scent-accent/22 bg-[linear-gradient(180deg,rgba(212,175,55,0.05),rgba(0,0,0,0.18))] px-3.5 py-3';
+
+/**
+ * Turn a terse server summary into premium, tool-aware copy. The server keeps
+ * summaries stable + terse ("12 result(s)", "picked Aventus"); presentation copy
+ * lives here so it can read naturally per tool without a backend round-trip.
+ */
+function beamActivityDetail(tool: string, summary: string): string | undefined {
+  const s = summary.trim();
+  if (!s || s === 'done') return undefined;
+  const count = s.match(/^(\d+)\s+(?:result|item|candidate)\(s\)$/);
+  if (count) {
+    const n = Number(count[1]);
+    if (tool === 'beam_search_catalog') return `${n} ${n === 1 ? 'fragrance' : 'fragrances'} found`;
+    if (tool === 'beam_get_wardrobe') return `${n} ${n === 1 ? 'bottle' : 'bottles'} in your vault`;
+    if (tool === 'beam_get_fragrance_details') return `${n} ${n === 1 ? 'fragrance' : 'fragrances'} detailed`;
+    return `${n} ${n === 1 ? 'result' : 'results'}`;
+  }
+  if (s.startsWith('picked ')) return `Top match · ${s.slice('picked '.length)}`;
+  if (s === 'no match') return 'No clear match yet';
+  if (s === 'scored vault') return 'Ranked your vault';
+  const sources = s.match(/^researched \((\d+) source\(s\)\)$/);
+  if (sources) {
+    const n = Number(sources[1]);
+    return `Cross-checked ${n} ${n === 1 ? 'source' : 'sources'}`;
+  }
+  if (s === 'no live result') return 'No fresh data — using catalog';
+  // Already-grounded summaries ("8 bottles · woody, amber", "vault is empty").
+  return s;
+}
+
+/** Mark the most recent row done — a new phase/tool implies the prior one finished. */
+function sealLastActiveStep(steps: BeamActivityStep[]): BeamActivityStep[] {
+  if (steps.length === 0) return steps;
+  const last = steps[steps.length - 1];
+  if (last.state !== 'active') return steps;
+  return [...steps.slice(0, -1), { ...last, state: 'done' }];
+}
+
+function pushStatusStep(steps: BeamActivityStep[], id: number, label: string): BeamActivityStep[] {
+  // Collapse a repeated status (e.g. the model re-emits the same phase label).
+  if (steps.length > 0 && steps[steps.length - 1].label === label) return steps;
+  return [...sealLastActiveStep(steps), { id, label, state: 'active' }];
+}
+
+function pushToolStep(steps: BeamActivityStep[], id: number, tool: string): BeamActivityStep[] {
+  return [...sealLastActiveStep(steps), { id, tool, label: humanizeBeamTool(tool), state: 'active' }];
+}
+
+function completeToolStep(
+  steps: BeamActivityStep[],
+  fallbackId: number,
+  tool: string,
+  summary: string,
+): BeamActivityStep[] {
+  const failed = summary === 'failed' || summary === 'invalid arguments';
+  const detail = failed
+    ? summary === 'failed'
+      ? 'Step failed'
+      : 'Retrying that step'
+    : beamActivityDetail(tool, summary);
+  const tone = failed ? ('error' as const) : undefined;
+  // Resolve the most recent in-flight row for this tool.
+  for (let i = steps.length - 1; i >= 0; i--) {
+    if (steps[i].tool === tool && steps[i].state === 'active') {
+      const next = steps.slice();
+      next[i] = { ...next[i], state: 'done', detail, tone };
+      return next;
+    }
+  }
+  return [
+    ...sealLastActiveStep(steps),
+    { id: fallbackId, tool, label: humanizeBeamTool(tool), state: 'done', detail, tone },
+  ];
+}
+
+const BeamActivityTrail: React.FC<{ steps: BeamActivityStep[]; calmMotion: boolean }> = ({
+  steps,
+  calmMotion,
+}) => (
+  <motion.div
+    layout={calmMotion ? false : 'position'}
+    initial={calmMotion ? false : { opacity: 0, y: 8 }}
+    animate={{ opacity: 1, y: 0 }}
+    exit={calmMotion ? { opacity: 0 } : { opacity: 0, y: -4 }}
+    transition={{ duration: 0.24, ease: SCENT_EASE }}
+    className={BEAM_ACTIVITY_BUBBLE_CLASS}
+    role="status"
+    aria-label="Beam Agent progress"
+  >
+    {steps.map((step) => (
+      <motion.div
+        key={step.id}
+        layout={calmMotion ? false : 'position'}
+        initial={calmMotion ? false : { opacity: 0, x: -4 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.22, ease: SCENT_EASE }}
+        className="flex items-start gap-2"
+      >
+        <span className="mt-[2px] flex h-4 w-4 shrink-0 items-center justify-center">
+          {step.state === 'active' ? (
+            <Loader2 size={13} className={calmMotion ? '' : 'animate-spin'} aria-hidden />
+          ) : step.tone === 'error' ? (
+            <AlertTriangle size={12} className="text-scent-accent/55" aria-hidden />
+          ) : (
+            <Check size={13} className="text-scent-accent" aria-hidden />
+          )}
+        </span>
+        <span className="min-w-0 flex-1 leading-snug">
+          <span
+            className={`text-[12.5px] ${
+              step.state === 'active' ? 'text-[#fff7ec]' : 'text-scent-text-muted'
+            }`}
+          >
+            {step.label}
+          </span>
+          {step.detail ? (
+            <span className="ml-1 text-[12px] text-scent-accent/75">· {step.detail}</span>
+          ) : null}
+        </span>
+      </motion.div>
+    ))}
+  </motion.div>
 );
 
 function newMessageId(): string {
@@ -468,6 +617,9 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   const [pendingCueFacet, setPendingCueFacet] = useState<FacetId | null>(null);
   const [busy, setBusy] = useState(false);
   const [progressNote, setProgressNote] = useState('');
+  // Ordered live-progress trail for a Beam agent run (status + tool steps).
+  // Empty for the scripted `/api/scent-mission` path, which keeps the plain dots.
+  const [activity, setActivity] = useState<BeamActivityStep[]>([]);
   const [sessionId, setSessionId] = useState<string | undefined>(undefined);
   const [resolved, setResolved] = useState<{
     recommendation: ScentMissionRecommendation;
@@ -482,6 +634,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   const composerRef = useRef<HTMLInputElement | null>(null);
   const composerFormRef = useRef<HTMLFormElement | null>(null);
   const sessionIdRef = useRef<string | undefined>(undefined);
+  const activityIdRef = useRef(0);
 
   // Desktop click-drag for the cue strip; touch keeps native momentum scroll.
   useDragToScroll(quickReplyScrollRef);
@@ -652,15 +805,16 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       const controller = new AbortController();
       abortRef.current = controller;
 
+      // Fresh trail per run — each turn tells its own story of steps.
+      activityIdRef.current = 0;
+      setActivity([]);
+
       let didTimeout = false;
       const timeoutId = window.setTimeout(() => {
         didTimeout = true;
         controller.abort();
       }, BEAM_AGENT_TIMEOUT_MS);
 
-      // Accumulates streamed synthesis text so the thinking note can show the
-      // answer forming; the authoritative copy still arrives in `completed`.
-      let streamed = '';
       try {
         const result = await runBeamAgentMission({
           message,
@@ -670,14 +824,23 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
           apiBaseUrl: API_BASE_URL,
           signal: controller.signal,
           onEvent: (event) => {
-            if (event.type === 'message_delta') {
-              streamed += event.text;
-              const preview = streamed.replace(/\s+/g, ' ').trim().slice(-140);
-              if (preview) setProgressNote(preview);
-            } else if (event.type === 'status') {
+            // Build the ordered activity trail AND keep the one-line header note
+            // (progressNote) in sync for the host strip above the card.
+            if (event.type === 'status') {
               setProgressNote(event.label);
-            } else if (event.type === 'tool_started' || event.type === 'tool_completed') {
+              const id = (activityIdRef.current += 1);
+              setActivity((prev) => pushStatusStep(prev, id, event.label));
+            } else if (event.type === 'tool_started') {
               setProgressNote(humanizeBeamTool(event.tool));
+              const id = (activityIdRef.current += 1);
+              setActivity((prev) => pushToolStep(prev, id, event.tool));
+            } else if (event.type === 'tool_completed') {
+              const id = (activityIdRef.current += 1);
+              setActivity((prev) => completeToolStep(prev, id, event.tool, event.summary));
+            } else if (event.type === 'message_delta') {
+              // Synthesis is streaming the answer — hold a stable phase note
+              // rather than flashing raw partial text.
+              setProgressNote('Writing your recommendation');
             }
           },
         });
@@ -785,6 +948,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
 
       setBusy(true);
       setResolved(null);
+      setActivity([]);
       setMission(currentMission);
       setProgressNote(trigger === 'fast' ? 'Fast curation in progress' : 'Curating from your vault');
 
@@ -870,6 +1034,9 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         if (agentTurn.handled) {
           return;
         }
+        // Agent declined/failed — drop its trail so the scripted fallback shows
+        // its own plain thinking beat, not a half-built agent timeline.
+        setActivity([]);
 
         const response = await callMission(
           { action: 'chat', userMessage: modeInstruction(agentMode, tone, trimmed) },
@@ -1431,22 +1598,28 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
           );
         })}
 
-        {/* Live "thinking" bubble while the agent works a turn, so the wait
-            reads as a real chat exchange instead of a frozen panel. Calm modes
-            keep the quiet "Thinking" label above the composer instead. */}
+        {/* Live progress while the agent works a turn. When the run is streaming
+            real steps we show the grounded activity trail (tool-by-tool, with
+            results); otherwise — the scripted path, or before the first event —
+            we fall back to the quiet typing dots. Calm motion keeps the trail
+            (it's content) but drops the animation. */}
         <AnimatePresence initial={false}>
-          {introReady && busy && !resolved && !calmMotion ? (
-            <motion.div
-              key="agent-typing"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
-              transition={{ duration: 0.24, ease: SCENT_EASE }}
-              className={BEAM_TYPING_BUBBLE_CLASS}
-              aria-label="Beam Agent is typing"
-            >
-              <BeamTypingDots />
-            </motion.div>
+          {introReady && busy && !resolved ? (
+            activity.length > 0 ? (
+              <BeamActivityTrail key="agent-activity" steps={activity} calmMotion={calmMotion} />
+            ) : !calmMotion ? (
+              <motion.div
+                key="agent-typing"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{ duration: 0.24, ease: SCENT_EASE }}
+                className={BEAM_TYPING_BUBBLE_CLASS}
+                aria-label="Beam Agent is typing"
+              >
+                <BeamTypingDots />
+              </motion.div>
+            ) : null
           ) : null}
         </AnimatePresence>
 
