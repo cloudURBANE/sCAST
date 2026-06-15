@@ -164,7 +164,10 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
   // rest guarantees a single tap always activates navigation.
   const [navVisible, setNavVisible] = React.useState(true);
   const lastScrollYRef = React.useRef(0);
-  const idleTimerRef = React.useRef<number | null>(null);
+  // Reveals the bar a beat after scrolling SETTLES (not an idle-hide). The old
+  // timer hid the bar at rest — the inverse of the intent — which is what caused
+  // the double-tap bug. This one brings it back so the resting state is visible.
+  const settleTimerRef = React.useRef<number | null>(null);
   // The fixed bottom nav is a standing backdrop layer on phone-class devices and
   // stays mounted while a dynamic detail modal opens — exactly the WebKit
   // memory-pressure crash profile. Drop the backdrop blur on low-budget devices
@@ -188,34 +191,29 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
       
       if (Math.abs(delta) > 6) {
         if (delta > 0 && y > 56) {
-          // Scrolling down: hide bottom nav immediately
+          // Scrolling down: hide bottom nav immediately (immersive gesture).
           setNavVisible(false);
         } else if (delta < 0) {
-          // Scrolling up: reveal bottom nav immediately
+          // Scrolling up: reveal bottom nav immediately.
           setNavVisible(true);
         }
         lastScrollYRef.current = y;
       }
-
-      // Hide the nav bar when scrolling stops (user stops moving)
-      if (idleTimerRef.current !== null) {
-        window.clearTimeout(idleTimerRef.current);
-      }
-      idleTimerRef.current = window.setTimeout(() => {
-        setNavVisible(false);
-        idleTimerRef.current = null;
-      }, 1500); // 1.5-second idle delay before hiding
+      // Reveal the bar once the scroll SETTLES, so the resting state is always
+      // visible and reachable in a single tap. Each scroll event resets the
+      // timer, so the bar stays hidden only while a downward scroll is actively
+      // in motion — never while the user is at rest (the double-tap bug came from
+      // the old timer doing the opposite and hiding the bar on settle).
+      if (settleTimerRef.current !== null) window.clearTimeout(settleTimerRef.current);
+      settleTimerRef.current = window.setTimeout(() => {
+        setNavVisible(true);
+        settleTimerRef.current = null;
+      }, 320);
     };
 
     // Any direct interaction reveals the bar (covers the case where the user
-    // taps after a downward fling, before the idle timer fires).
-    const reveal = () => {
-      if (idleTimerRef.current !== null) {
-        window.clearTimeout(idleTimerRef.current);
-        idleTimerRef.current = null;
-      }
-      setNavVisible(true);
-    };
+    // taps right after a downward fling, before the scroll settles).
+    const reveal = () => setNavVisible(true);
 
     window.addEventListener('scroll', handleScroll, { passive: true });
     window.addEventListener('touchstart', reveal, { passive: true });
@@ -225,10 +223,7 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
       window.removeEventListener('scroll', handleScroll);
       window.removeEventListener('touchstart', reveal);
       window.removeEventListener('pointerdown', reveal);
-      if (idleTimerRef.current !== null) {
-        window.clearTimeout(idleTimerRef.current);
-        idleTimerRef.current = null;
-      }
+      if (settleTimerRef.current !== null) window.clearTimeout(settleTimerRef.current);
     };
   }, []);
 
