@@ -29,6 +29,7 @@ import {
   findWardrobeMatch,
   missionProgress,
 } from '@/lib/scentMissionClient';
+import { humanizeBeamTool, runBeamAgentMission } from '@/lib/beamAgentClient';
 import type { Fragrance } from '@/components/Wardrobe';
 import type { WeatherData } from '@/context/WeatherContext';
 import { useDragToScroll } from '@/hooks/useDragToScroll';
@@ -158,6 +159,11 @@ const MIN_THINKING_MS = 700;
 // with no reply ever landing. On timeout we abort the fetch and surface a real
 // message so the turn always resolves.
 const MISSION_TIMEOUT_MS = 20000;
+
+// The live Beam Agent calls an LLM plus catalog/research tools, so a single turn
+// can legitimately run longer than the scripted mission. Cap it well above
+// MISSION_TIMEOUT_MS; on timeout we abort and fall back to the scripted path.
+const BEAM_AGENT_TIMEOUT_MS = 60000;
 
 // Shared chat-bubble shell for the agent's typing indicator (used both on first
 // open and while the agent is working a turn).
@@ -632,6 +638,66 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
     [authToken, items, weather],
   );
 
+  // Conversational turns go to the live Beam Agent (tool-calling, grounded in the
+  // signed-in user's vault). Returns `handled: true` when the agent answered (or
+  // the turn was superseded by a newer one), and `false` when the caller should
+  // fall back to the scripted `/api/scent-mission` path — so a missing
+  // OPENROUTER_API_KEY or any agent error never leaves the user without a reply.
+  const runAgentTurn = useCallback(
+    async (message: string): Promise<{ handled: boolean }> => {
+      // Guests have no token; the agent requires auth, so use the scripted path.
+      if (!authToken) return { handled: false };
+
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      let didTimeout = false;
+      const timeoutId = window.setTimeout(() => {
+        didTimeout = true;
+        controller.abort();
+      }, BEAM_AGENT_TIMEOUT_MS);
+
+      try {
+        const result = await runBeamAgentMission({
+          message,
+          sessionId: sessionIdRef.current,
+          weather: buildMissionWeather(weather),
+          authToken,
+          apiBaseUrl: API_BASE_URL,
+          signal: controller.signal,
+          onEvent: (event) => {
+            if (event.type === 'status') setProgressNote(event.label);
+            else if (event.type === 'tool_started' || event.type === 'tool_completed') {
+              setProgressNote(humanizeBeamTool(event.tool));
+            }
+          },
+        });
+
+        if (result.status === 'completed') {
+          sessionIdRef.current = result.sessionId;
+          setSessionId(result.sessionId);
+          const text = result.response.trim();
+          if (text) appendMessage('agent', text);
+          return { handled: true };
+        }
+        // status === 'failed' (model_unavailable, max_turns, agent_error, …):
+        // fall back to the scripted path so the user still gets an answer.
+        return { handled: false };
+      } catch (err) {
+        // A supersede-abort (newer turn replaced this one) must stay silent and
+        // NOT trigger the fallback. A timeout-abort or network error falls back.
+        if (controller.signal.aborted && !didTimeout) {
+          return { handled: true };
+        }
+        return { handled: false };
+      } finally {
+        window.clearTimeout(timeoutId);
+      }
+    },
+    [authToken, appendMessage, weather],
+  );
+
   const applyResponse = useCallback(
     (
       response: ScentMissionResponse,
@@ -790,6 +856,13 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       setProgressNote('Thinking');
       const thinkingStartedAt = Date.now();
       try {
+        // Try the live tool-calling agent first. If it answers (or is superseded)
+        // we're done; otherwise fall through to the scripted mission path below.
+        const agentTurn = await runAgentTurn(trimmed);
+        if (agentTurn.handled) {
+          return;
+        }
+
         const response = await callMission(
           { action: 'chat', userMessage: modeInstruction(agentMode, tone, trimmed) },
           nextMission,
@@ -825,6 +898,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       callMission,
       composer,
       items.length,
+      runAgentTurn,
       runResolution,
       tone,
       updateFacetsAndMission,
