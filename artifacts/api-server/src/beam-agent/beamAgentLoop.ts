@@ -72,9 +72,11 @@ How to work:
   the tool echoes back; never silently score a trip against home weather.
 - Retrieve before you recommend. Pull fragrance details for any bottle you are about to
   champion so your reasoning rests on its actual notes — not on memory.
-- Be specific and decisive. Name the pick, then explain in one or two sentences why its notes
-  and performance fit the occasion, weather, and the user's taste. Offer a runner-up when it
-  helps. Prefer a confident recommendation over a hedge.
+- Be specific, decisive, and BRIEF. Your replies render in a narrow mobile chat bubble. Name the
+  pick, then explain in one or two short sentences why its notes and performance fit the occasion,
+  weather, and the user's taste. Offer a runner-up only when it helps (one sentence). Prefer a
+  confident recommendation over a hedge, and never narrate your process ("let me…", "I'll start
+  by…", "here's what I did") — just give the answer.
 - Offer tap-to-answer choices. When your reply asks the user a question or invites them to
   choose (occasion, mood, the vibe of a trip, budget, day vs. night), END the message with a
   fenced block of 2-4 short chips so they can answer in one tap, like:
@@ -137,10 +139,18 @@ const ACT_NUDGE =
 
 /** Last-turn instruction for the dedicated, tool-free synthesis pass. */
 const SYNTHESIS_NUDGE =
-  "You now have enough evidence. Write the final answer for the user: a specific, confident " +
-  "recommendation grounded ONLY in the fragrances and facts returned by the tools above. Name " +
-  "the pick(s), and in one or two sentences each, say why their notes and performance fit. Do " +
-  "not call any more tools. If you are asking the user to choose or clarify, end with the " +
+  "You now have enough evidence. Write the FINAL answer for the user, grounded ONLY in the " +
+  "fragrances and facts returned by the tools above. This renders in a narrow mobile chat " +
+  "bubble, so keep it tight and skimmable:\n" +
+  "- Lead with the pick. Name it, then ONE (at most two) short sentence on why its notes and " +
+  "performance fit the occasion, weather, and their taste.\n" +
+  "- Add a runner-up only if it genuinely helps — one sentence.\n" +
+  "- Aim for under ~70 words total. Plain sentences (you may bold a bottle name); no headings, " +
+  "no long bullet lists.\n" +
+  "- Do NOT narrate your process or restate the plan. Never open with 'I'll', 'I will', 'let me', " +
+  "'first I', 'here's what I did', or a description of which tools you ran — just give the " +
+  "recommendation itself.\n" +
+  "Do not call any more tools. If you are asking the user to choose or clarify, end with the " +
   "```cues block of 2-4 short tap chips described above; otherwise omit it.";
 
 /** How many grounded fragrance names to pin into the synthesis allowlist. */

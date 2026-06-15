@@ -1085,13 +1085,18 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       const controller = new AbortController();
       abortRef.current = controller;
 
-      // Fresh trail per run — each turn tells its own story of steps. Any cues
-      // or proposal from the previous reply are now stale (the user just answered).
+      // Fresh trail per run — each turn tells its own story of steps. Any cues,
+      // proposal, OR curated-match reveal from a previous reply are now stale (the
+      // user just answered). `resolved` belongs to the scripted resolution path and
+      // is NOT produced by the agent; if a prior scripted turn left one mounted it
+      // would otherwise linger pinned at the bottom of the scroll, decoupled from
+      // the live conversation (the "curated match stuck under the chat" bug).
       activityIdRef.current = 0;
       setActivity([]);
       setAgentSuggestions([]);
       setProposal(null);
       setCurating(null);
+      setResolved(null);
 
       let didTimeout = false;
       const timeoutId = window.setTimeout(() => {
