@@ -168,3 +168,66 @@ test("beam_score_candidates returns a deterministic pick, null on empty vault", 
     .handler({}, CTX)) as { recommendation: unknown };
   assert.equal(none.recommendation, null);
 });
+
+test("beam_score_candidates returns multiple grounded picks via rankVault + limit", async () => {
+  const tools = toolMap(
+    makeDeps({
+      rankVault: (items) =>
+        items.map((item, i) => ({
+          fragranceId: item.id,
+          name: item.name,
+          brand: item.brand,
+          engine: {} as never,
+          reason: "ranked",
+          score: 90 - i,
+        })),
+    }),
+  );
+  const result = (await tools
+    .get("beam_score_candidates")!
+    .handler({ destination: "Night Out", limit: 2 }, CTX)) as {
+    recommendation: { canonicalName: string };
+    picks: Array<{ canonicalName: string; score: number }>;
+  };
+  // Two grounded picks, top pick mirrored on `recommendation`.
+  assert.equal(result.picks.length, 2);
+  assert.deepEqual(result.picks.map((p) => p.canonicalName), ["Sauvage", "Aventus"]);
+  assert.equal(result.recommendation.canonicalName, "Sauvage");
+});
+
+test("beam_score_candidates scores against a destination weatherOverride and echoes it", async () => {
+  let scoredWeather: { temperature_f?: number; condition?: string } | undefined;
+  const tools = toolMap(
+    makeDeps({
+      // local weather is hot Texas; the override should win.
+      getWeather: async () => ({ temperature_f: 95, condition: "Clear", location: "Forney, TX" }),
+      rankVault: (items, _cal, weather) => {
+        scoredWeather = weather;
+        return items.map((item) => ({
+          fragranceId: item.id,
+          name: item.name,
+          brand: item.brand,
+          engine: {} as never,
+          reason: "ranked",
+          score: 80,
+        }));
+      },
+    }),
+  );
+  const result = (await tools.get("beam_score_candidates")!.handler(
+    {
+      destination: "Going Out",
+      locationLabel: "Tokyo, June",
+      weatherOverride: { temperature_f: 75, humidity_percent: 85, condition: "Rain" },
+    },
+    CTX,
+  )) as { scoredFor: { locationLabel: string; usedOverride: boolean; weather: { temperature_f: number; condition: string } } };
+
+  // The engine was handed the overridden climate, not the local 95°F clear.
+  assert.equal(scoredWeather?.temperature_f, 75);
+  assert.equal(scoredWeather?.condition, "Rain");
+  // ...and the result echoes the climate it scored for, for grounded prose.
+  assert.equal(result.scoredFor.locationLabel, "Tokyo, June");
+  assert.equal(result.scoredFor.usedOverride, true);
+  assert.equal(result.scoredFor.weather.temperature_f, 75);
+});

@@ -10,6 +10,7 @@ import {
   sanitizeScentMissionWardrobe,
   sanitizeScentMissionWeather,
   selectScentMissionRecommendation,
+  rankScentMissionRecommendations,
   SCENT_MISSION_NODE_ORDER,
 } from "./scentMission.ts";
 
@@ -215,6 +216,31 @@ test("selectScentMissionRecommendation prefers weather-aligned fragrances and is
   assert.deepEqual(again, winner);
 
   assert.equal(selectScentMissionRecommendation([], {}, hotHumid), null);
+});
+
+test("rankScentMissionRecommendations returns every bottle best-first and agrees with the single pick", () => {
+  const hotHumid = sanitizeScentMissionWeather({ temperature_f: 92, humidity_percent: 80, condition: "Clear" });
+  const wardrobe = sanitizeScentMissionWardrobe([
+    { id: "heavy", name: "Midnight Oud", brand: "Example", families: ["oud", "amber"], accords: ["oud", "tobacco"], sillage: "strong" },
+    { id: "fresh", name: "Citrus Breeze", brand: "Example", families: ["citrus", "fresh"], accords: ["bergamot", "marine"], sillage: "light" },
+    { id: "mid", name: "Soft Linen", brand: "Example", families: ["aromatic"], accords: ["lavender"], sillage: "moderate" },
+  ]);
+
+  const ranked = rankScentMissionRecommendations(wardrobe, { destination: "Going Out" }, hotHumid);
+  // One entry per bottle, sorted non-increasing by score.
+  assert.equal(ranked.length, 3);
+  for (let i = 1; i < ranked.length; i++) {
+    assert.ok(ranked[i - 1].score >= ranked[i].score, "scores must be non-increasing");
+  }
+  // The fresh scent wins in hot/humid weather and the top of the ranking equals
+  // the single-pick selector.
+  assert.equal(ranked[0].fragranceId, "fresh");
+  assert.deepEqual(
+    selectScentMissionRecommendation(wardrobe, { destination: "Going Out" }, hotHumid),
+    ranked[0],
+  );
+
+  assert.deepEqual(rankScentMissionRecommendations([], {}, hotHumid), []);
 });
 
 test("node order constant matches the documented graph", () => {
