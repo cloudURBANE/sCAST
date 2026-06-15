@@ -5,7 +5,7 @@ import cors from "cors";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import cjRedirectRouter from "./routes/cjRedirect";
-import { mountBeamAgent } from "./beam-agent";
+import { mountBeamAgent, isModelConfigured, resolveProvider } from "./beam-agent";
 import { resolveTenant } from "./middlewares/tenant";
 import { logger } from "./lib/logger";
 import { frontendStaticDir } from "./paths";
@@ -53,6 +53,19 @@ app.use(cjRedirectRouter);
 // (OPENROUTER_API_KEY in production, or ANTHROPIC_API_KEY) — an unconfigured run
 // just emits a graceful `model_unavailable` event. See docs/beam-agent/.
 mountBeamAgent(app);
+
+// Deploy canary: without a model provider every Beam run returns
+// `model_unavailable` and the SPA silently falls back to the scripted
+// /api/scent-mission path — so the agent looks fine but never actually runs.
+// Surface the missing key once at startup. See docs/beam-agent/09-deploy-checklist.md.
+if (isModelConfigured()) {
+  logger.info({ provider: resolveProvider() }, "Beam Agent model provider configured");
+} else {
+  logger.warn(
+    "Beam Agent has no model provider — set OPENROUTER_API_KEY (production) or ANTHROPIC_API_KEY. " +
+      "Until then every concierge turn falls back to the scripted /api/scent-mission path.",
+  );
+}
 
 const serveFrontendUnavailable: RequestHandler = (req, res, next) => {
   if ((req.method !== "GET" && req.method !== "HEAD") || req.path.startsWith("/api")) {

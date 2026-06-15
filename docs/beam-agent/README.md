@@ -15,6 +15,7 @@ lives in `artifacts/api-server/src/beam-agent/` (additive, **not yet mounted**).
 | [01-current-state.md](./01-current-state.md) | Code-grounded read of what Scent Mission is today, with exact file references. |
 | [02-tool-contract.md](./02-tool-contract.md) | The typed tool surface: the read-only set that shipped in Phase 1, and the write tools to come. |
 | [03-migration-plan.md](./03-migration-plan.md) | Phases 0–7 mapped to real files, the no-touch list, security/writes/memory, testing & evals. |
+| [09-deploy-checklist.md](./09-deploy-checklist.md) | The two operator requirements to make the deployed agent actually run: a model provider key + single-replica SSE run-state. |
 
 ## TL;DR
 
