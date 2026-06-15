@@ -171,36 +171,51 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
   // (the solid bg already carries the contrast); iPad never renders it (md:hidden).
   const lowRenderBudget = React.useRef(isLowRenderBudget() || isIpadSafariPerformanceMode()).current;
 
+  // Propagate nav visibility state via CSS variable to keep floating elements synchronized
+  React.useEffect(() => {
+    document.documentElement.style.setProperty(
+      '--mobile-nav-offset',
+      navVisible ? 'var(--bottomnav-h)' : '0px'
+    );
+  }, [navVisible]);
+
   React.useEffect(() => {
     lastScrollYRef.current = window.scrollY;
-
-    // Whenever scrolling stops, bring the bar back so an idle user — the one
-    // about to navigate — always has a live, tappable target.
-    const revealAfterIdle = () => {
-      if (idleTimerRef.current !== null) window.clearTimeout(idleTimerRef.current);
-      idleTimerRef.current = window.setTimeout(() => {
-        setNavVisible(true);
-        idleTimerRef.current = null;
-      }, 220);
-    };
 
     const handleScroll = () => {
       const y = window.scrollY;
       const delta = y - lastScrollYRef.current;
-      // Ignore sub-pixel jitter and iOS rubber-band so a still page never
-      // toggles the bar.
+      
       if (Math.abs(delta) > 6) {
-        // Hide only on a real downward scroll past the top region; scrolling
-        // up (or sitting near the top) always brings it back immediately.
-        setNavVisible(!(delta > 0 && y > 56));
+        if (delta > 0 && y > 56) {
+          // Scrolling down: hide bottom nav immediately
+          setNavVisible(false);
+        } else if (delta < 0) {
+          // Scrolling up: reveal bottom nav immediately
+          setNavVisible(true);
+        }
         lastScrollYRef.current = y;
       }
-      revealAfterIdle();
+
+      // Hide the nav bar when scrolling stops (user stops moving)
+      if (idleTimerRef.current !== null) {
+        window.clearTimeout(idleTimerRef.current);
+      }
+      idleTimerRef.current = window.setTimeout(() => {
+        setNavVisible(false);
+        idleTimerRef.current = null;
+      }, 1500); // 1.5-second idle delay before hiding
     };
 
     // Any direct interaction reveals the bar (covers the case where the user
     // taps after a downward fling, before the idle timer fires).
-    const reveal = () => setNavVisible(true);
+    const reveal = () => {
+      if (idleTimerRef.current !== null) {
+        window.clearTimeout(idleTimerRef.current);
+        idleTimerRef.current = null;
+      }
+      setNavVisible(true);
+    };
 
     window.addEventListener('scroll', handleScroll, { passive: true });
     window.addEventListener('touchstart', reveal, { passive: true });
