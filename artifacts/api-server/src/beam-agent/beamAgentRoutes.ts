@@ -9,8 +9,14 @@
  * `mountBeamAgent` and docs/beam-agent/. Mounting is a deliberate, one-line
  * opt-in so the existing app is untouched until you choose to enable it.
  *
- * Run state is in-memory (one process). That is fine for an owner/beta rollout;
- * Phase 5 moves session/run state into Postgres (see the migration plan).
+ * Run state is in-memory (one process). `POST /runs` and the follow-up
+ * `GET /runs/:id/events` MUST land on the same instance, so the deploy is pinned
+ * to a single replica (`railway.json` → `deploy.numReplicas: 1`; see
+ * docs/beam-agent/09-deploy-checklist.md). If that invariant is ever broken the
+ * SSE attach 404s — so a missing run is logged as a warning here to make the
+ * misconfiguration visible rather than a silent client-side fallback. Phase 5
+ * moves session/run state into Postgres and lifts the single-replica limit (see
+ * the migration plan).
  */
 import { Router } from "express";
 import type { Express } from "express";
@@ -220,9 +226,17 @@ router.get("/runs/:runId/events", requireAuth, (req: AuthRequest, res) => {
     res.status(401).end();
     return;
   }
-  const record = runs.get(String(req.params.runId));
+  const runId = String(req.params.runId);
+  const record = runs.get(runId);
   if (!record) {
-    res.status(404).json({ error: "Run not found." });
+    // The run was created by POST /runs but isn't in THIS process's registry.
+    // Almost always one of: (a) the deploy is running >1 replica and the SSE
+    // attach landed on a different instance than the POST — the single-replica
+    // invariant (railway.json numReplicas:1) is broken; (b) the run aged out of
+    // the TTL window; (c) the process restarted mid-run. Log it so the topology
+    // bug is visible in Railway logs instead of only as a silent client fallback.
+    logger.warn({ runId, knownRuns: runs.size }, "beam agent run not found for SSE attach");
+    res.status(404).json({ error: "Run not found.", code: "run_not_found" });
     return;
   }
   if (record.ctx.userId !== req.user.id || record.ctx.tenantId !== getTenantId(req)) {
@@ -271,7 +285,7 @@ router.post("/runs/:runId/stop", requireAuth, (req: AuthRequest, res) => {
   }
   const record = runs.get(String(req.params.runId));
   if (!record) {
-    res.status(404).json({ error: "Run not found." });
+    res.status(404).json({ error: "Run not found.", code: "run_not_found" });
     return;
   }
   if (record.ctx.userId !== req.user.id) {
