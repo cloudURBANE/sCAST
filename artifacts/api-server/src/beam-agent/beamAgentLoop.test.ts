@@ -206,6 +206,44 @@ test("malformed tool arguments produce an explicit tool error, not a silent empt
   assert.equal(summary?.outcome, "completed");
 });
 
+test("the synthesis turn is pinned to an allowlist of the fragrances tools actually returned", async () => {
+  const toolCalls: { input: unknown }[] = [];
+  let summary: BeamRunSummary | undefined;
+
+  const { callModel, seen } = scriptedModel([
+    // 1) call the wardrobe tool -> grounds "Aventus"
+    {
+      stop_reason: "tool_use",
+      content: [{ type: "tool_use", id: "tu_1", name: "beam_get_wardrobe", input: {} }],
+    },
+    // 2) orchestration done
+    text("draft"),
+    // 3) synthesis
+    text("Wear Aventus."),
+  ]);
+
+  await runBeamAgent({
+    ctx,
+    userMessage: "what should I wear?",
+    tools: [wardrobeTool(toolCalls)],
+    emit: () => {},
+    isModelConfigured: () => true,
+    callModel,
+    onSummary: (s) => (summary = s),
+  });
+
+  // The synthesis call (last) carries the grounding allowlist naming the
+  // retrieved fragrance, so the model can't reach for one from memory.
+  const synthesisCall = seen[seen.length - 1];
+  const folded = synthesisCall.messages
+    .flatMap((m) => (Array.isArray(m.content) ? m.content : [{ type: "text", text: m.content }]))
+    .map((b) => (b && typeof b === "object" && "text" in b ? String((b as { text: unknown }).text) : ""))
+    .join("\n");
+  assert.match(folded, /You may name ONLY these fragrances/i);
+  assert.match(folded, /"Aventus"/);
+  assert.equal(summary?.groundedNames, 1);
+});
+
 test("an unserializable tool result yields exactly one error result, not a duplicate tool_use_id", async () => {
   let summary: BeamRunSummary | undefined;
   // For each model call, record how many tool_result blocks carry the circular

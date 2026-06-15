@@ -25,6 +25,7 @@ import { and, asc, eq } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { userFragrancesTable } from "@workspace/db/schema";
 import {
+  rankScentMissionRecommendations,
   sanitizeScentMissionWardrobe,
   sanitizeScentMissionWeather,
   selectScentMissionRecommendation,
@@ -241,6 +242,8 @@ function buildDeps(weather: ScentMissionWeather): BeamToolDeps {
     researchWeb: beamResearchWeb,
     scoreVault: (items, calibration, currentWeather) =>
       selectScentMissionRecommendation(items, calibration, currentWeather),
+    rankVault: (items, calibration, currentWeather) =>
+      rankScentMissionRecommendations(items, calibration, currentWeather),
     getWeather: async () => weather,
   };
 }
@@ -317,6 +320,7 @@ router.post("/runs", runRateLimit, requireAuth, async (req: AuthRequest, res) =>
             outputTokens: summary.outputTokens,
             usedSynthesis: summary.usedSynthesis,
             synthesisFailed: summary.synthesisFailed,
+            groundedNames: summary.groundedNames,
             ms: summary.ms,
           },
         },

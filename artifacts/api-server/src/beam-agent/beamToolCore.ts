@@ -225,6 +225,53 @@ export function summarizeToolResult(_name: string, result: unknown): string {
 }
 
 /**
+ * Pull the fragrance names a tool result actually GROUNDS — i.e. names that came
+ * from real retrieved data (catalog hits, the user's vault, a deterministic
+ * scoring pick, a resolved proposal), so the loop can constrain the final answer
+ * to only name fragrances it actually retrieved. Conservative: a
+ * `beam_get_fragrance_details` entry only grounds a name when `found !== false`
+ * (the model supplied that name, so an un-found lookup must NOT ground it).
+ * Returns deduped display strings; never throws on odd shapes.
+ */
+export function collectGroundedFragranceNames(result: unknown): string[] {
+  if (!result || typeof result !== "object") return [];
+  const record = result as Record<string, unknown>;
+  const out: string[] = [];
+  const seen = new Set<string>();
+
+  const add = (value: unknown): void => {
+    const name = asString(value);
+    if (!name) return;
+    const key = name.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(name);
+  };
+
+  const fromEntry = (entry: unknown, requireFound: boolean): void => {
+    if (!entry || typeof entry !== "object") return;
+    const e = entry as Record<string, unknown>;
+    // A details entry carries { name, found }; only ground it when found.
+    if (requireFound && e.found === false) return;
+    add(e.canonicalName ?? e.name);
+  };
+
+  // beam_get_fragrance_details echoes the model's queried names — only grounded
+  // when the lookup actually found facts.
+  const detailItems = Array.isArray(record.items) && record.items.some(
+    (it) => it && typeof it === "object" && "found" in (it as object),
+  );
+  for (const key of ["items", "picks", "proposed"] as const) {
+    const arr = record[key];
+    if (Array.isArray(arr)) for (const entry of arr) fromEntry(entry, key === "items" && detailItems);
+  }
+  if (record.recommendation && typeof record.recommendation === "object") {
+    fromEntry(record.recommendation, false);
+  }
+  return out;
+}
+
+/**
  * Build an add-ready proposal item from a flattened catalog profile. Defensive:
  * pulls only known fields, normalizes lists, and returns null when there is no
  * usable name (so an unresolved/garbage record is dropped, never proposed).

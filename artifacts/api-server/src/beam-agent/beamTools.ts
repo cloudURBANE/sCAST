@@ -74,9 +74,49 @@ export type BeamToolDeps = {
     calibration: ScentMissionCalibration,
     weather: ScentMissionWeather,
   ) => ScentMissionRecommendation | null;
+  /**
+   * OPTIONAL deterministic ranking over the vault — the same math as `scoreVault`
+   * but returning every bottle best-first, so `beam_score_candidates` can ground
+   * a multi-bottle pick ("two from your vault") instead of only the single
+   * winner. When absent, the tool falls back to `scoreVault` (one pick), keeping
+   * lean deploys and the tool tests on the original surface.
+   */
+  rankVault?: (
+    items: ScentMissionWardrobeItem[],
+    calibration: ScentMissionCalibration,
+    weather: ScentMissionWeather,
+  ) => ScentMissionRecommendation[];
   /** Current weather context for the run (best-effort; engine has fallbacks). */
   getWeather: (ctx: BeamRunContext) => Promise<ScentMissionWeather>;
 };
+
+/** Largest number of ranked vault picks `beam_score_candidates` will return. */
+const MAX_SCORE_PICKS = 3;
+
+/**
+ * Coerce the model-supplied destination-climate override into a sanitized weather
+ * patch. Lets the agent score a trip kit against where the user is GOING (e.g.
+ * warm, humid Tokyo in June) rather than today's weather at home. Only known,
+ * finite fields survive; anything else is dropped so the engine's own fallbacks
+ * apply. Returns null when nothing usable was supplied.
+ */
+function parseWeatherOverride(input: unknown): Partial<ScentMissionWeather> | null {
+  if (typeof input !== "object" || input === null) return null;
+  const r = input as Record<string, unknown>;
+  const num = (v: unknown): number | undefined =>
+    typeof v === "number" && Number.isFinite(v) ? v : undefined;
+  const patch: Partial<ScentMissionWeather> = {};
+  const temp = num(r.temperature_f);
+  if (temp !== undefined) patch.temperature_f = Math.max(-60, Math.min(140, temp));
+  const humidity = num(r.humidity_percent);
+  if (humidity !== undefined) patch.humidity_percent = Math.max(0, Math.min(100, humidity));
+  const wind = num(r.wind_speed_mph);
+  if (wind !== undefined) patch.wind_speed_mph = Math.max(0, Math.min(120, wind));
+  if (typeof r.is_raining === "boolean") patch.is_raining = r.is_raining;
+  const condition = asString(r.condition);
+  if (condition) patch.condition = condition.slice(0, 120);
+  return Object.keys(patch).length > 0 ? patch : null;
+}
 
 const DESTINATIONS = new Set<ScentMissionDestination>([
   "Staying In",
@@ -223,7 +263,14 @@ export function createBeamTools(deps: BeamToolDeps): BeamToolDefinition[] {
     {
       name: "beam_score_candidates",
       description:
-        "Deterministically rank the user's vault for a given destination/energy and today's weather, returning the single best pick with the engine's reasoning. The scoring math runs in code — do not compute scores yourself.",
+        "Deterministically rank the user's vault for a destination/energy and weather, returning the " +
+        "best picks (up to " + MAX_SCORE_PICKS + ") with the engine's reasoning. Ask for `limit: 2` " +
+        "when you need two bottles from the vault — the second pick is then grounded, not guessed. " +
+        "By default it scores against the user's CURRENT local weather; when you're planning for a " +
+        "trip or a place with a different climate, pass `weatherOverride` (typical temperature/" +
+        "humidity/condition for the destination and travel dates) plus a `locationLabel` like " +
+        "'Tokyo, June' so the scoring reflects where they're going, not where they are. The scoring " +
+        "math runs in code — do not compute scores yourself.",
       inputSchema: {
         type: "object",
         properties: {
@@ -232,22 +279,68 @@ export function createBeamTools(deps: BeamToolDeps): BeamToolDefinition[] {
             enum: ["Staying In", "Going Out", "Work", "Night Out", "Date", "Gym"],
           },
           energy: { type: "string", enum: ["Calm", "Focused", "Confident", "Social", "Relaxed"] },
+          limit: {
+            type: "number",
+            description: `How many ranked picks to return (server caps at ${MAX_SCORE_PICKS}).`,
+          },
+          locationLabel: {
+            type: "string",
+            description: "Human label for the climate being scored, e.g. 'Tokyo, June'. Echoed back for grounding.",
+          },
+          weatherOverride: {
+            type: "object",
+            description: "Destination climate to score against instead of today's local weather.",
+            properties: {
+              temperature_f: { type: "number" },
+              humidity_percent: { type: "number" },
+              wind_speed_mph: { type: "number" },
+              is_raining: { type: "boolean" },
+              condition: { type: "string" },
+            },
+            additionalProperties: false,
+          },
         },
         additionalProperties: false,
       },
       handler: async (input, ctx) => {
-        const [vault, weather] = await Promise.all([deps.loadVault(ctx), deps.getWeather(ctx)]);
-        if (vault.length === 0) return { recommendation: null, note: "vault is empty" };
+        const [vault, localWeather] = await Promise.all([deps.loadVault(ctx), deps.getWeather(ctx)]);
+        if (vault.length === 0) return { recommendation: null, picks: [], note: "vault is empty" };
+        const record = (typeof input === "object" && input !== null ? input : {}) as Record<string, unknown>;
         const calibration = parseCalibration(input);
-        const recommendation = deps.scoreVault(vault, calibration, weather);
-        if (!recommendation) return { recommendation: null };
+
+        // Score against the destination's climate when the agent supplies one,
+        // otherwise the run's local weather. The override only patches the fields
+        // it provides, so partial hints still inherit sane local defaults.
+        const override = parseWeatherOverride(record.weatherOverride);
+        const weather: ScentMissionWeather = override ? { ...localWeather, ...override } : localWeather;
+        const locationLabel = asString(record.locationLabel);
+
+        const limit = clampLimit(record.limit, MAX_SCORE_PICKS, 1);
+        const ranked = deps.rankVault
+          ? deps.rankVault(vault, calibration, weather)
+          : ([deps.scoreVault(vault, calibration, weather)].filter(Boolean) as ScentMissionRecommendation[]);
+        if (ranked.length === 0) return { recommendation: null, picks: [] };
+
+        const picks = ranked.slice(0, limit).map((rec) => ({
+          fragranceId: rec.fragranceId,
+          canonicalName: rec.name,
+          brand: rec.brand ?? "",
+          score: rec.score,
+          reason: rec.reason,
+        }));
         return {
-          recommendation: {
-            fragranceId: recommendation.fragranceId,
-            canonicalName: recommendation.name,
-            brand: recommendation.brand ?? "",
-            score: recommendation.score,
-            reason: recommendation.reason,
+          // `recommendation` stays the single top pick for back-compat; `picks` is
+          // the grounded ranked set the agent draws a multi-bottle kit from.
+          recommendation: picks[0],
+          picks,
+          scoredFor: {
+            locationLabel: locationLabel ?? null,
+            usedOverride: override !== null,
+            weather: {
+              temperature_f: weather.temperature_f ?? null,
+              humidity_percent: weather.humidity_percent ?? null,
+              condition: weather.condition ?? null,
+            },
           },
         };
       },

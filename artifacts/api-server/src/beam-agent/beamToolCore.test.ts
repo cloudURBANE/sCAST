@@ -12,6 +12,7 @@ import {
   buildProposalItem,
   clampLimit,
   cleanStringList,
+  collectGroundedFragranceNames,
   extractAgentCues,
   extractText,
   extractToolUses,
@@ -32,6 +33,43 @@ test("clampLimit enforces server ceiling and floor", () => {
   assert.equal(clampLimit(5, 12), 5);
   assert.equal(clampLimit("nope", 12, 3), 3);
   assert.equal(clampLimit(undefined, 12, 7), 7);
+});
+
+test("collectGroundedFragranceNames pulls names from each tool-result shape", () => {
+  // search / wardrobe — CandidatePacket items
+  assert.deepEqual(
+    collectGroundedFragranceNames({ items: [{ canonicalName: "Aventus" }, { canonicalName: "Bleu de Chanel" }] }),
+    ["Aventus", "Bleu de Chanel"],
+  );
+  // score — recommendation + picks, deduped case-insensitively
+  assert.deepEqual(
+    collectGroundedFragranceNames({
+      recommendation: { canonicalName: "Sauvage" },
+      picks: [{ canonicalName: "Sauvage" }, { canonicalName: "Aventus" }],
+    }),
+    ["Sauvage", "Aventus"],
+  );
+  // propose — proposed[].name
+  assert.deepEqual(
+    collectGroundedFragranceNames({ proposed: [{ name: "Silver Mountain Water" }] }),
+    ["Silver Mountain Water"],
+  );
+});
+
+test("collectGroundedFragranceNames does NOT ground an un-found details lookup", () => {
+  // A details result echoes the model's queried names; only found ones ground.
+  assert.deepEqual(
+    collectGroundedFragranceNames({
+      items: [
+        { name: "Real Juice", found: true },
+        { name: "Made Up Juice", found: false },
+      ],
+    }),
+    ["Real Juice"],
+  );
+  // Odd shapes never throw.
+  assert.deepEqual(collectGroundedFragranceNames(null), []);
+  assert.deepEqual(collectGroundedFragranceNames({ wardrobeSummary: { count: 3 } }), []);
 });
 
 test("asString trims and rejects non-strings/empties", () => {

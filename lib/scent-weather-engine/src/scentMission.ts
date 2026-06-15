@@ -503,19 +503,17 @@ function itemTraitTexts(item: ScentMissionWardrobeItem): string[] {
 }
 
 /**
- * Score every wardrobe item with the shared weather engine and return the
- * winner. Mirrors the frontend's vault alignment scoring: engine display score
- * plus best-family hits, minus avoid-family hits. Deterministic — ties break
- * by wardrobe order.
+ * Score every wardrobe item with the shared weather engine and return them
+ * ranked best-first. Mirrors the frontend's vault alignment scoring: engine
+ * display score plus best-family hits, minus avoid-family hits. Deterministic —
+ * ties break by wardrobe order (a stable sort over the input order).
  */
-export function selectScentMissionRecommendation(
+export function rankScentMissionRecommendations(
   wardrobe: ScentMissionWardrobeItem[],
   calibration: ScentMissionCalibration,
   weather: ScentMissionWeather,
-): ScentMissionRecommendation | null {
-  let winner: ScentMissionRecommendation | null = null;
-
-  for (const item of wardrobe) {
+): ScentMissionRecommendation[] {
+  const ranked: ScentMissionRecommendation[] = wardrobe.map((item) => {
     const engine = calculateScentWeatherRecommendation(
       buildScentMissionEngineInput(item, calibration, weather),
     );
@@ -527,19 +525,31 @@ export function selectScentMissionRecommendation(
       traitsMatchScentFamily(traits, family),
     ).length;
     const score = recommendationDisplayScore(engine) + bestHits * 8 - avoidHits * 14;
+    return {
+      fragranceId: item.id,
+      ...(item.dbId !== undefined ? { dbId: item.dbId } : {}),
+      name: item.name,
+      ...(item.brand !== undefined ? { brand: item.brand } : {}),
+      engine,
+      reason: engine.explanation,
+      score,
+    };
+  });
 
-    if (!winner || score > winner.score) {
-      winner = {
-        fragranceId: item.id,
-        ...(item.dbId !== undefined ? { dbId: item.dbId } : {}),
-        name: item.name,
-        ...(item.brand !== undefined ? { brand: item.brand } : {}),
-        engine,
-        reason: engine.explanation,
-        score,
-      };
-    }
-  }
+  // Stable sort: Array.prototype.sort is stable in modern engines, so equal
+  // scores keep wardrobe order — preserving the original tie-break guarantee.
+  return ranked.sort((a, b) => b.score - a.score);
+}
 
-  return winner;
+/**
+ * Score every wardrobe item and return the single winner. Thin wrapper over
+ * `rankScentMissionRecommendations` so the single-pick callers (the scent-mission
+ * route, the client) keep their existing contract unchanged.
+ */
+export function selectScentMissionRecommendation(
+  wardrobe: ScentMissionWardrobeItem[],
+  calibration: ScentMissionCalibration,
+  weather: ScentMissionWeather,
+): ScentMissionRecommendation | null {
+  return rankScentMissionRecommendations(wardrobe, calibration, weather)[0] ?? null;
 }

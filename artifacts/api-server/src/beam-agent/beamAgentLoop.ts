@@ -17,6 +17,7 @@ import type {
 } from "./types.ts";
 import {
   BEAM_LIMITS,
+  collectGroundedFragranceNames,
   extractAgentCues,
   extractText,
   extractToolUses,
@@ -59,7 +60,15 @@ How to work:
   fetch real data: beam_get_user_context to ground yourself, beam_get_wardrobe for what they
   own, beam_search_catalog to find real fragrances, beam_get_fragrance_details to deepen the
   evidence (notes, accords, performance) before you commit to a pick, and beam_score_candidates
-  to rank the vault for a destination/energy + today's weather.
+  to rank the vault for a destination/energy + weather.
+- Ground EVERY vault pick in the scorer. When you recommend more than one bottle the user owns,
+  ask beam_score_candidates for that many picks (its limit) and name only the ones it returns —
+  never add a second "from the vault" pick the scorer didn't rank.
+- Score for the right place. beam_score_candidates uses the user's CURRENT local weather by
+  default. When the request is about a trip or a destination with a different climate, pass that
+  place's typical weather for the travel dates as weatherOverride plus a locationLabel like
+  "Tokyo, June" so the ranking reflects where they are going. Reference the locationLabel/weather
+  the tool echoes back; never silently score a trip against home weather.
 - Retrieve before you recommend. Pull fragrance details for any bottle you are about to
   champion so your reasoning rests on its actual notes — not on memory.
 - Be specific and decisive. Name the pick, then explain in one or two sentences why its notes
@@ -128,6 +137,26 @@ const SYNTHESIS_NUDGE =
   "not call any more tools. If you are asking the user to choose or clarify, end with the " +
   "```cues block of 2-4 short tap chips described above; otherwise omit it.";
 
+/** How many grounded fragrance names to pin into the synthesis allowlist. */
+const MAX_GROUNDED_ALLOWLIST = 40;
+
+/**
+ * Build the closing-turn allowlist clause from the fragrances actually retrieved
+ * this run. Pinning the synthesis to this exact set is the mechanical guard
+ * against hallucinated picks (the prompt rule alone was unenforced). Empty when
+ * nothing was retrieved (e.g. a greeting), so the clause is simply omitted.
+ */
+function groundingAllowlistClause(names: string[]): string {
+  if (names.length === 0) return "";
+  const listed = names.slice(0, MAX_GROUNDED_ALLOWLIST);
+  return (
+    " You may name ONLY these fragrances, which were actually retrieved by the tools this run: " +
+    listed.map((n) => `"${n}"`).join(", ") +
+    ". Do NOT name any fragrance outside this list — if you feel one is missing, say what you'd " +
+    "need to look up rather than naming it from memory."
+  );
+}
+
 export type RunBeamAgentInput = {
   ctx: BeamRunContext;
   userMessage: string;
@@ -181,6 +210,8 @@ export type BeamRunSummary = {
   outputTokens: number;
   usedSynthesis: boolean;
   synthesisFailed: boolean;
+  /** Distinct fragrances retrieved this run and pinned into the answer allowlist. */
+  groundedNames: number;
   ms: number;
 };
 
@@ -204,17 +235,17 @@ function seedHistory(history: ClaudeMessage[] | undefined): ClaudeMessage[] {
  * turn — it does, on the last tool_result round — fold the instruction into that
  * turn as an extra text block; otherwise add a fresh user turn.
  */
-function withSynthesisInstruction(messages: ClaudeMessage[]): ClaudeMessage[] {
+function withSynthesisInstruction(messages: ClaudeMessage[], instructionText: string): ClaudeMessage[] {
   const out = messages.slice();
   const last = out[out.length - 1];
-  const instruction = { type: "text", text: SYNTHESIS_NUDGE } as const;
+  const instruction = { type: "text", text: instructionText } as const;
   if (last && last.role === "user") {
     const blocks = Array.isArray(last.content)
       ? [...last.content, instruction]
       : [{ type: "text", text: last.content } as const, instruction];
     out[out.length - 1] = { role: "user", content: blocks };
   } else {
-    out.push({ role: "user", content: SYNTHESIS_NUDGE });
+    out.push({ role: "user", content: instructionText });
   }
   return out;
 }
@@ -278,6 +309,16 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
   let outputTokens = 0;
   let usedSynthesis = false;
   let synthesisFailed = false;
+  // Fragrances actually returned by tools this run, keyed lowercased for dedupe
+  // (value preserves display casing). The closing answer is pinned to this set.
+  const groundedNames = new Map<string, string>();
+  const addGroundedNames = (names: string[]): void => {
+    for (const name of names) {
+      if (groundedNames.size >= MAX_GROUNDED_ALLOWLIST) break;
+      const key = name.toLowerCase();
+      if (!groundedNames.has(key)) groundedNames.set(key, name);
+    }
+  };
 
   const recordUsage = (response: ClaudeResponse): void => {
     modelCalls++;
@@ -335,7 +376,8 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
       if (usedTools && !opts?.skipSynthesis && !outOfTime) {
         usedSynthesis = true;
         emit({ type: "status", label: "Writing your recommendation" });
-        const synthMessages = withSynthesisInstruction(messages);
+        const instruction = SYNTHESIS_NUDGE + groundingAllowlistClause([...groundedNames.values()]);
+        const synthMessages = withSynthesisInstruction(messages, instruction);
         try {
           const synth = await callModel({
             system: SYSTEM_PROMPT,
@@ -520,6 +562,9 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
           continue;
         }
         results.push({ type: "tool_result", tool_use_id: use.id, content: serialized });
+        // Register the fragrances this result actually grounds, so the closing
+        // synthesis can be pinned to only naming fragrances we retrieved.
+        addGroundedNames(collectGroundedFragranceNames(result));
 
         // Reporting + UI side-effects happen AFTER the result is recorded and are
         // fully isolated: a throw here must never fall through to the failure path
@@ -556,6 +601,7 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
       outputTokens,
       usedSynthesis,
       synthesisFailed,
+      groundedNames: groundedNames.size,
       ms: Date.now() - startedAt,
     });
   }
