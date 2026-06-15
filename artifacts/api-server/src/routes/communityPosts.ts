@@ -920,10 +920,37 @@ router.post("/community/posts/:id/comments", requireAuth, async (req: AuthReques
       return;
     }
 
+    // Optional thread parent. When present it must be a real comment on THIS post
+    // in THIS tenant — guards against cross-post/cross-tenant reply grafting.
+    let parentCommentId: string | null = null;
+    if (body.parentCommentId !== undefined && body.parentCommentId !== null) {
+      if (typeof body.parentCommentId !== "string" || !UUID_RE.test(body.parentCommentId)) {
+        sendBadRequest(res, "parentCommentId must be a UUID");
+        return;
+      }
+      parentCommentId = body.parentCommentId;
+    }
+
     const postRow = await fetchPostRowById(tenantId, postId);
     if (!postRow) {
       res.status(404).json({ error: "Post not found" });
       return;
+    }
+
+    if (parentCommentId) {
+      const [parent] = await db
+        .select({ id: communityCommentsTable.id })
+        .from(communityCommentsTable)
+        .where(and(
+          eq(communityCommentsTable.id, parentCommentId),
+          eq(communityCommentsTable.tenantId, tenantId),
+          eq(communityCommentsTable.postId, postId),
+        ))
+        .limit(1);
+      if (!parent) {
+        sendBadRequest(res, "parentCommentId must reference a comment on this post");
+        return;
+      }
     }
 
     const [inserted] = await db
@@ -933,6 +960,7 @@ router.post("/community/posts/:id/comments", requireAuth, async (req: AuthReques
         postId,
         userId: user.id,
         body: commentBody,
+        parentCommentId,
       })
       .returning();
     if (!inserted) throw new Error("Failed to create community comment");

@@ -1,11 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { LoaderCircle, Send } from 'lucide-react';
+import { CornerDownRight, LoaderCircle, Send } from 'lucide-react';
 import { CommunityAuthorAvatar } from '@/components/community/CommunityAuthorAvatar';
 import { ReactionBar } from '@/components/community/ReactionBar';
 import {
   useCommunityPostDetail,
   useCreateCommunityComment,
+  type CommunityComment,
 } from '@/components/community/communityPosts';
 import {
   communitySharePath,
@@ -19,6 +20,185 @@ interface CommentThreadProps {
   onSignIn: () => void;
 }
 
+type CommentNode = CommunityComment & { replies: CommentNode[] };
+
+// Cap the *visual* indentation. Replies keep threading past this depth but stop
+// adding left inset so a long reply chain never overflows a 320px iPhone SE.
+const MAX_VISUAL_DEPTH = 3;
+
+/**
+ * Build a reply tree from the flat, time-ordered comment list. A `Map` preserves
+ * the server's ordering for both roots and replies. Any comment whose parent is
+ * missing from the list (deleted/out-of-window) falls back to a root so it can
+ * never disappear.
+ */
+function buildCommentTree(comments: CommunityComment[]): CommentNode[] {
+  const byId = new Map<string, CommentNode>();
+  for (const comment of comments) byId.set(comment.id, { ...comment, replies: [] });
+
+  const roots: CommentNode[] = [];
+  for (const comment of comments) {
+    const node = byId.get(comment.id)!;
+    const parent = comment.parentCommentId ? byId.get(comment.parentCommentId) : null;
+    if (parent && parent !== node) parent.replies.push(node);
+    else roots.push(node);
+  }
+  return roots;
+}
+
+interface CommentNodeViewProps {
+  node: CommentNode;
+  depth: number;
+  authToken: string | null;
+  isPosting: boolean;
+  onSignIn: () => void;
+  onReply: (parentCommentId: string, body: string) => void;
+}
+
+const CommentNodeView: React.FC<CommentNodeViewProps> = ({
+  node,
+  depth,
+  authToken,
+  isPosting,
+  onSignIn,
+  onReply,
+}) => {
+  const [showReply, setShowReply] = useState(false);
+  const [replyBody, setReplyBody] = useState('');
+
+  const submitReply = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const trimmed = replyBody.trim();
+    if (!authToken) {
+      onSignIn();
+      return;
+    }
+    if (!trimmed) return;
+    onReply(node.id, trimmed);
+    setReplyBody('');
+    setShowReply(false);
+  };
+
+  // Indent only while under the visual cap; deeper replies render flush with the
+  // cap so the thread stays legible at 320px.
+  const indented = depth > 0 && depth <= MAX_VISUAL_DEPTH;
+
+  return (
+    <div className={indented ? 'border-l border-white/8 pl-3 sm:pl-4' : undefined}>
+      <article className="rounded-[calc(var(--radius-scent)-8px)] border border-white/8 bg-white/[0.025] px-4 py-4 shadow-[inset_0_1px_0_rgba(255,236,183,0.035)]">
+        <div className="flex items-start gap-3">
+          <Link
+            to={communitySharePath(node.author)}
+            aria-label={`View ${displayCommunityAuthor(node.author)}'s vault`}
+            className="shrink-0 rounded-full transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
+          >
+            <CommunityAuthorAvatar author={node.author} size="sm" />
+          </Link>
+          <div className="min-w-0 flex-1">
+            <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 scent-type-meta uppercase">
+              <Link
+                to={communitySharePath(node.author)}
+                className="min-w-0 max-w-full truncate font-bold text-scent-accent transition-colors hover:text-[#fff7ec]"
+              >
+                {displayCommunityAuthor(node.author)}
+              </Link>
+              <span>{formatCommunityTime(node.createdAt)}</span>
+            </div>
+            <p className="whitespace-pre-line text-base leading-7 text-[#fff7ec]/88">{node.body}</p>
+            <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
+              <ReactionBar
+                targetType="comment"
+                targetId={node.id}
+                counts={node.counts.reactions}
+                viewerReactions={node.viewerReactions}
+                authToken={authToken}
+                onSignIn={onSignIn}
+                compact
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  if (!authToken) {
+                    onSignIn();
+                    return;
+                  }
+                  setShowReply((open) => !open);
+                }}
+                aria-expanded={showReply}
+                className="inline-flex min-h-9 items-center gap-1.5 rounded-full px-2.5 py-1 scent-type-meta uppercase text-scent-muted transition-colors hover:text-scent-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
+              >
+                <CornerDownRight size={13} strokeWidth={1.8} aria-hidden="true" />
+                Reply
+              </button>
+            </div>
+
+            {showReply ? (
+              <form onSubmit={submitReply} className="mt-3 space-y-3">
+                <textarea
+                  value={replyBody}
+                  onChange={(event) => setReplyBody(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+                      event.preventDefault();
+                      event.currentTarget.form?.requestSubmit();
+                    }
+                  }}
+                  rows={2}
+                  maxLength={2000}
+                  autoFocus
+                  placeholder={`Reply to ${displayCommunityAuthor(node.author)}`}
+                  aria-label={`Reply to ${displayCommunityAuthor(node.author)}`}
+                  className="scent-lux-input min-h-16 w-full resize-y rounded-[var(--radius-scent)] px-3.5 py-2.5 text-base leading-7 text-[#fff7ec] placeholder:text-scent-text-subtle"
+                />
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowReply(false);
+                      setReplyBody('');
+                    }}
+                    className="inline-flex min-h-9 items-center rounded-full px-3 py-1.5 scent-type-meta uppercase text-scent-muted transition-colors hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isPosting || !replyBody.trim()}
+                    className="inline-flex min-h-9 items-center gap-2 rounded-full bg-scent-accent/[0.09] px-3.5 py-1.5 scent-type-chip text-[#fff7ec] shadow-[inset_0_0_0_1px_rgba(212,175,55,0.26)] transition-colors hover:bg-scent-accent/[0.14] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:pointer-events-none disabled:opacity-55"
+                  >
+                    {isPosting ? (
+                      <LoaderCircle size={13} className="animate-spin" aria-hidden="true" />
+                    ) : (
+                      <Send size={13} strokeWidth={1.8} aria-hidden="true" />
+                    )}
+                    Reply
+                  </button>
+                </div>
+              </form>
+            ) : null}
+          </div>
+        </div>
+      </article>
+
+      {node.replies.length > 0 ? (
+        <div className="mt-3 space-y-3">
+          {node.replies.map((child) => (
+            <CommentNodeView
+              key={child.id}
+              node={child}
+              depth={depth + 1}
+              authToken={authToken}
+              isPosting={isPosting}
+              onSignIn={onSignIn}
+              onReply={onReply}
+            />
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
 export const CommentThread: React.FC<CommentThreadProps> = ({ postId, authToken, onSignIn }) => {
   const [body, setBody] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -26,15 +206,18 @@ export const CommentThread: React.FC<CommentThreadProps> = ({ postId, authToken,
   const [pendingBody, setPendingBody] = useState<string | null>(null);
   const detail = useCommunityPostDetail(postId, true, authToken);
   const comments = detail.data?.comments ?? [];
+  const commentTree = useMemo(() => buildCommentTree(comments), [comments]);
   const commentMutation = useCreateCommunityComment(authToken);
   const { mutate } = commentMutation;
 
-  const postComment = (text: string) => {
+  const postComment = (text: string, parentCommentId?: string | null) => {
     setErrorMessage(null);
     mutate(
-      { postId, body: text },
+      { postId, body: text, parentCommentId: parentCommentId ?? null },
       {
-        onSuccess: () => setBody(''),
+        onSuccess: () => {
+          if (!parentCommentId) setBody('');
+        },
         onError: (err) => {
           setErrorMessage(err instanceof Error ? err.message : 'Comment could not be posted.');
         },
@@ -77,49 +260,21 @@ export const CommentThread: React.FC<CommentThreadProps> = ({ postId, authToken,
         </p>
       ) : (
         <div className="space-y-3">
-          {comments.length === 0 ? (
+          {commentTree.length === 0 ? (
             <p className="rounded-[calc(var(--radius-scent)-10px)] border border-white/8 bg-white/[0.025] px-4 py-3 text-center scent-type-caption">
               No comments yet.
             </p>
           ) : (
-            comments.map((comment) => (
-              <article
-                key={comment.id}
-                className="rounded-[calc(var(--radius-scent)-8px)] border border-white/8 bg-white/[0.025] px-4 py-4 shadow-[inset_0_1px_0_rgba(255,236,183,0.035)]"
-              >
-                <div className="flex items-start gap-3">
-                  <Link
-                    to={communitySharePath(comment.author)}
-                    aria-label={`View ${displayCommunityAuthor(comment.author)}'s vault`}
-                    className="shrink-0 rounded-full transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
-                  >
-                    <CommunityAuthorAvatar author={comment.author} size="sm" />
-                  </Link>
-                  <div className="min-w-0 flex-1">
-                    <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 scent-type-meta uppercase">
-                      <Link
-                        to={communitySharePath(comment.author)}
-                        className="min-w-0 max-w-full truncate font-bold text-scent-accent transition-colors hover:text-[#fff7ec]"
-                      >
-                        {displayCommunityAuthor(comment.author)}
-                      </Link>
-                      <span>{formatCommunityTime(comment.createdAt)}</span>
-                    </div>
-                    <p className="whitespace-pre-line text-base leading-7 text-[#fff7ec]/88">{comment.body}</p>
-                    <div className="mt-4">
-                      <ReactionBar
-                        targetType="comment"
-                        targetId={comment.id}
-                        counts={comment.counts.reactions}
-                        viewerReactions={comment.viewerReactions}
-                        authToken={authToken}
-                        onSignIn={onSignIn}
-                        compact
-                      />
-                    </div>
-                  </div>
-                </div>
-              </article>
+            commentTree.map((node) => (
+              <CommentNodeView
+                key={node.id}
+                node={node}
+                depth={0}
+                authToken={authToken}
+                isPosting={commentMutation.isPending}
+                onSignIn={onSignIn}
+                onReply={(parentCommentId, text) => postComment(text, parentCommentId)}
+              />
             ))
           )}
         </div>

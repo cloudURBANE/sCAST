@@ -10,6 +10,7 @@ import { AppTopNav } from './components/AppTopNav';
 import { AuthModal } from './components/AuthModal';
 import { GuestSaveBanner, GuestModeBanner } from './components/GuestSaveBanner';
 import { InstallPrompt } from './components/pwa/InstallPrompt';
+import { PushPrompt } from './components/pwa/PushPrompt';
 import type { ScentFamily, ScentWeatherRecommendation } from './lib/scentWeatherEngine';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { WeatherProvider, useWeather } from './context/WeatherContext';
@@ -1414,6 +1415,7 @@ const AppShell = React.memo(function AppShell({
             <AppContent location={renderedLocation} />
             <Toaster />
             <InstallPrompt />
+            <PushPrompt />
           </div>
         </WardrobeProvider>
       </WeatherProvider>

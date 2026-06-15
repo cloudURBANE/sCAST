@@ -110,7 +110,7 @@ export function InstallPrompt() {
 
   return (
     <div
-      className="fixed inset-x-3 bottom-[calc(var(--bottomnav-h,0px)+0.5rem)] z-[100] md:inset-x-auto md:right-4 md:bottom-4 md:w-[22rem]"
+      className="fixed inset-x-3 bottom-[calc(var(--mobile-nav-offset,var(--bottomnav-h))+0.5rem)] z-[100] transition-[bottom] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] md:inset-x-auto md:right-4 md:bottom-4 md:w-[22rem]"
       role="dialog"
       aria-label="Install ScentBeam"
     >

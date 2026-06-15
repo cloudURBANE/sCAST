@@ -97,6 +97,8 @@ export interface CreateCommunityPostInput {
 export interface CreateCommunityCommentInput {
   postId: string;
   body: string;
+  // Set to thread a reply under an existing comment; omit/null for a top-level comment.
+  parentCommentId?: string | null;
 }
 
 export interface ToggleCommunityReactionInput {
@@ -445,7 +447,7 @@ export function useCreateCommunityComment(authToken: string | null) {
       const res = await fetch(appApiUrl(`/api/community/posts/${encodeURIComponent(input.postId)}/comments`), {
         method: 'POST',
         headers: authHeaders(token),
-        body: JSON.stringify({ body: input.body }),
+        body: JSON.stringify({ body: input.body, parentCommentId: input.parentCommentId ?? null }),
       });
       return readJson<{ comment: CommunityComment }>(res, `Community comment failed with HTTP ${res.status}`);
     },
