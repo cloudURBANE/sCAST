@@ -1,14 +1,19 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import type { LucideIcon } from 'lucide-react';
 import {
   AlertTriangle,
   Check,
   Loader2,
   Lock,
+  RefreshCw,
+  RotateCcw,
+  Search,
   Send,
   SlidersHorizontal,
   Sparkles,
+  Wand2,
   Zap,
 } from 'lucide-react';
 import {
@@ -36,6 +41,8 @@ import {
   type BeamProposalItem,
   type BeamSuggestion,
 } from '@/lib/beamAgentClient';
+import { formatAgentResponse } from '@/lib/beamMessageFormat';
+import { BeamMessage } from '@/components/BeamMessage';
 import type { Fragrance } from '@/components/Wardrobe';
 import type { WeatherData } from '@/context/WeatherContext';
 import { useDragToScroll } from '@/hooks/useDragToScroll';
@@ -675,6 +682,16 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
     recommendation: ScentMissionRecommendation;
     item: Fragrance | null;
   } | null>(null);
+  // True once an agent turn reports the external catalog is unreachable/empty, so
+  // the cue lane can offer recovery actions instead of vibe cues. Cleared on the
+  // next user turn / a successful curation.
+  const [catalogFailure, setCatalogFailure] = useState(false);
+  // The last message the user actually sent — lets "Retry catalog search" re-run
+  // the same turn without making them retype it.
+  const [lastUserMessage, setLastUserMessage] = useState('');
+  // Whether the conversation overflows past the top / bottom of its scroll box,
+  // so the fade indicators only show when there is actually more to read.
+  const [scrollEdges, setScrollEdges] = useState({ top: false, bottom: false });
 
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -689,19 +706,43 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   // Desktop click-drag for the cue strip; touch keeps native momentum scroll.
   useDragToScroll(quickReplyScrollRef);
 
+  // Recompute whether the conversation overflows its box, so the top/bottom fade
+  // hints only appear when there is genuinely clipped content above/below.
+  const updateScrollEdges = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const top = el.scrollTop > 6;
+    const bottom = el.scrollTop + el.clientHeight < el.scrollHeight - 6;
+    setScrollEdges((prev) => (prev.top === top && prev.bottom === bottom ? prev : { top, bottom }));
+  }, []);
+
   useEffect(() => () => abortRef.current?.abort(), []);
 
   useEffect(() => {
     sessionIdRef.current = sessionId;
   }, [sessionId]);
 
+  // Land the user at the START of a new answer, not scrolled to its end. When a
+  // fresh agent reply (or the curated-match reveal) arrives we align its top to
+  // the top of the box; for the user's own turn we follow to the bottom. This is
+  // the fix for "dropped mid-response": long answers begin at the beginning.
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    // Glide to the latest turn rather than snapping, so a new line or the match
-    // reveal slides into view as one continuous motion. Instant under calm mode.
-    el.scrollTo({ top: el.scrollHeight, behavior: calmMotion ? 'auto' : 'smooth' });
-  }, [messages, resolved, busy, calmMotion]);
+    const behavior: ScrollBehavior = calmMotion ? 'auto' : 'smooth';
+    const anchor =
+      el.querySelector<HTMLElement>('[data-scroll-anchor="resolved"]') ??
+      el.querySelector<HTMLElement>('[data-scroll-anchor="latest-agent"]');
+    if (anchor) {
+      const top = anchor.getBoundingClientRect().top - el.getBoundingClientRect().top + el.scrollTop;
+      el.scrollTo({ top: Math.max(top - 10, 0), behavior });
+    } else {
+      el.scrollTo({ top: el.scrollHeight, behavior });
+    }
+    // Re-measure the fade hints once the (possibly smooth) scroll has settled.
+    const id = window.setTimeout(updateScrollEdges, calmMotion ? 0 : 280);
+    return () => window.clearTimeout(id);
+  }, [messages, resolved, busy, calmMotion, updateScrollEdges]);
 
   useEffect(() => {
     if (greetingMounted) return;
@@ -779,6 +820,20 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   const appendMessage = useCallback((role: PanelMessage['role'], text: string) => {
     setMessages((prev) => [...prev, { id: newMessageId(), role, text }]);
   }, []);
+
+  // Append an agent line after running it through the formatter: strips internal
+  // tool/debug wording, collapses repeated catalog status rows, and fronts a
+  // catalog-unavailable answer with polished, user-facing copy. Flips the
+  // catalog-failure flag so the cue lane can surface recovery actions.
+  const pushAgentText = useCallback(
+    (raw: string): { catalogUnavailable: boolean } => {
+      const { text, catalogUnavailable } = formatAgentResponse(raw);
+      if (catalogUnavailable) setCatalogFailure(true);
+      if (text) appendMessage('agent', text);
+      return { catalogUnavailable };
+    },
+    [appendMessage],
+  );
 
   const callMission = useCallback(
     async (
@@ -909,8 +964,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         if (result.status === 'completed') {
           sessionIdRef.current = result.sessionId;
           setSessionId(result.sessionId);
-          const text = result.response.trim();
-          if (text) appendMessage('agent', text);
+          pushAgentText(result.response);
           return { handled: true };
         }
         // status === 'failed' (model_unavailable, max_turns, agent_error, …):
@@ -927,7 +981,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         window.clearTimeout(timeoutId);
       }
     },
-    [authToken, appendMessage, weather],
+    [authToken, pushAgentText, weather],
   );
 
   const applyResponse = useCallback(
@@ -1013,6 +1067,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       setAgentSuggestions([]);
       setProposal(null);
       setCurating(null);
+      setCatalogFailure(false);
       setMission(currentMission);
       setProgressNote(trigger === 'fast' ? 'Fast curation in progress' : 'Curating from your vault');
 
@@ -1112,13 +1167,19 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
     appendMessage('agent', "No problem — I'll hold off. Tell me what to change and I'll line up a different set.");
   }, [curating, appendMessage]);
 
-  const handleSubmit = useCallback(
-    async (event: React.FormEvent<HTMLFormElement>) => {
-      event.preventDefault();
-      const trimmed = composer.trim();
+  // The core send path, decoupled from the form event so recovery actions (e.g.
+  // "Retry catalog search") can re-run a turn without retyping. `echoUser` adds
+  // the user bubble (false for an automatic retry of the prior turn).
+  const submitMessage = useCallback(
+    async (rawText: string, opts?: { echoUser?: boolean }) => {
+      const trimmed = rawText.trim();
       if (!trimmed || busy || (curating !== null && curating.done === null)) return;
-      setComposer('');
-      appendMessage('user', trimmed);
+      const echoUser = opts?.echoUser ?? true;
+
+      // A fresh turn clears any prior catalog-failure recovery state.
+      setCatalogFailure(false);
+      setLastUserMessage(trimmed);
+      if (echoUser) appendMessage('user', trimmed);
 
       const inferred = inferTextFacets(trimmed);
       const { nextFacets, nextMission } = updateFacetsAndMission(
@@ -1162,7 +1223,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         }
         const fallback = firstMissingPrompt(nextFacets, nextMission, agentMode, items.length);
         const assistantText = canCurate ? ENOUGH_CONTEXT_PROMPT : fallback;
-        appendMessage('agent', safeAssistantText(response?.assistantMessage, assistantText));
+        pushAgentText(safeAssistantText(response?.assistantMessage, assistantText));
       } catch (err) {
         if (!(err instanceof Error && err.name === 'AbortError')) {
           appendMessage('system', err instanceof Error ? err.message : 'The Beam Agent is unreachable. Try again.');
@@ -1180,15 +1241,69 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       busy,
       calmMotion,
       callMission,
-      composer,
       curating,
       items.length,
+      pushAgentText,
       runAgentTurn,
       runResolution,
       tone,
       updateFacetsAndMission,
     ],
   );
+
+  const handleSubmit = useCallback(
+    async (event: React.FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      const trimmed = composer.trim();
+      if (!trimmed || busy || (curating !== null && curating.done === null)) return;
+      setComposer('');
+      await submitMessage(trimmed, { echoUser: true });
+    },
+    [busy, composer, curating, submitMessage],
+  );
+
+  // ── State-aware recovery / refinement actions ──────────────────────────────
+  // Catalog-failure recovery: re-run the same turn, curate from the vault, or
+  // invite the user to name bottles to search.
+  const retryCatalog = useCallback(() => {
+    if (busy) return;
+    const msg = lastUserMessage.trim();
+    if (msg) void submitMessage(msg, { echoUser: false });
+    else void runResolution('curate');
+  }, [busy, lastUserMessage, runResolution, submitMessage]);
+
+  const promptManualBottles = useCallback(() => {
+    if (busy) return;
+    setCatalogFailure(false);
+    appendMessage(
+      'agent',
+      "Tell me the bottles you'd like me to look at — type a name or two and I'll work them into the rotation.",
+    );
+    composerRef.current?.focus();
+  }, [appendMessage, busy]);
+
+  // Completed-state actions: refine the pick, look at more bottles, or restart.
+  const refinePick = useCallback(() => {
+    if (busy) return;
+    appendMessage(
+      'agent',
+      'Happy to adjust — tell me what to change: lighter, bolder, a different vibe, or a new setting.',
+    );
+    composerRef.current?.focus();
+  }, [appendMessage, busy]);
+
+  const startOver = useCallback(() => {
+    if (busy) return;
+    abortRef.current?.abort();
+    setResolved(null);
+    setCatalogFailure(false);
+    setFacets({});
+    setMission(createScentMissionState());
+    setComposer('');
+    setPendingCueFacet(null);
+    setProgressNote('');
+    appendMessage('agent', 'Fresh start — tell me about your day and I will curate again.');
+  }, [appendMessage, busy]);
 
   const handlePremiumPreview = useCallback(async () => {
     if (busy) return;
@@ -1224,17 +1339,26 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
 
   const actionControls = (
     <div className="mx-auto mt-4 w-full max-w-[42.75rem] sm:mt-5">
-      <div className="mb-2 flex items-center justify-end gap-2 pr-1">
-        <motion.span
-          key={busy ? 'beam-agent-thinking' : 'beam-agent-idle'}
-          initial={calmMotion ? false : { opacity: 0, y: 3 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.18, ease: SCENT_EASE }}
-          className="scent-type-label text-scent-accent/70"
-          data-thinking={busy ? 'true' : undefined}
-        >
-          {busy ? progressNote || 'Thinking' : 'Beam Agent'}
-        </motion.span>
+      <div className="mb-2 flex min-h-[1.25rem] items-center justify-end gap-2 pr-1">
+        {/* The large persistent "BEAM AGENT" caption used to sit here and eat
+            vertical space while labeling nothing. We now show ONLY the live
+            status while the agent is working; at rest the small avatar badge
+            alone signals the concierge. */}
+        <AnimatePresence initial={false}>
+          {busy ? (
+            <motion.span
+              key="beam-agent-thinking"
+              initial={calmMotion ? false : { opacity: 0, y: 3 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={calmMotion ? { opacity: 0 } : { opacity: 0, y: 3 }}
+              transition={{ duration: 0.18, ease: SCENT_EASE }}
+              className="scent-type-label text-scent-accent/70"
+              data-thinking="true"
+            >
+              {progressNote || 'Thinking'}
+            </motion.span>
+          ) : null}
+        </AnimatePresence>
         {/* Pulse the avatar while the agent is busy OR composing its opening
             greeting, so the open reads as the agent coming alive and writing —
             not a static panel that suddenly drops dots into an empty box. */}
@@ -1480,15 +1604,51 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   // arrow; instead we surface an explicit Confirm / Cancel pair right where the
   // cues were.
   const hasStagedCue = Boolean(pendingCueFacet) && composer.trim().length > 0;
+  // ── State-aware cue lane ───────────────────────────────────────────────────
+  // The lane's content tracks the conversation state instead of always showing
+  // vibe cues: after a catalog failure it offers recovery actions; after a
+  // curated match it offers refine / search-more / restart. These take over the
+  // lane (the vibe cues, agent suggestions, and Confirm row are suppressed) so
+  // the chips below the card always match what just happened.
+  type StateAction = { key: string; label: string; icon: LucideIcon; onClick: () => void };
+  const recoveryActions: StateAction[] =
+    catalogFailure && !resolved
+      ? [
+          { key: 'retry', label: 'Retry catalog search', icon: RefreshCw, onClick: retryCatalog },
+          {
+            key: 'vault',
+            label: 'Build from my vault',
+            icon: Sparkles,
+            onClick: () => void runResolution('curate'),
+          },
+          { key: 'manual', label: "I'll name bottles to search", icon: Search, onClick: promptManualBottles },
+        ]
+      : [];
+  const completedActions: StateAction[] = resolved
+    ? [
+        { key: 'refine', label: 'Refine this pick', icon: Wand2, onClick: refinePick },
+        { key: 'more', label: 'Search more bottles', icon: Search, onClick: promptManualBottles },
+        { key: 'restart', label: 'Start over', icon: RotateCcw, onClick: startOver },
+      ]
+    : [];
+  const stateActions = recoveryActions.length ? recoveryActions : completedActions;
+  const hasStateActions = stateActions.length > 0;
+  const stateActionLabel = recoveryActions.length ? 'Catalog unavailable — pick a path' : 'What next?';
+
   // The agent asked a follow-up and offered tap chips. While they're showing
   // they own the lane — they ARE the answer to its question — so they take
-  // precedence over the static facet cues until the user taps or types.
-  const showAgentSuggestions = agentSuggestions.length > 0 && !busy;
+  // precedence over the static facet cues until the user taps or types. A strong
+  // conversation state (catalog failure / resolved match) still outranks them.
+  const showAgentSuggestions = agentSuggestions.length > 0 && !busy && !hasStateActions;
   // Hold the whole lane back until the greeting has settled, so the panel never
   // opens with a row of cues already sitting there.
   const cueBar =
     !cuesReady ||
-    (!showAgentSuggestions && visibleQuickReplies.length === 0 && !hasActionRow && !hasStagedCue) ? null : (
+    (!hasStateActions &&
+      !showAgentSuggestions &&
+      visibleQuickReplies.length === 0 &&
+      !hasActionRow &&
+      !hasStagedCue) ? null : (
       <motion.div
         initial={calmMotion ? false : { opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
@@ -1498,7 +1658,28 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         aria-label="Beam Agent quick replies"
         data-testid="scent-mission-cue-bar"
       >
-        {showAgentSuggestions ? (
+        {hasStateActions ? (
+          <div data-testid="scent-mission-state-actions">
+            <p className="scent-type-label text-center text-scent-text-subtle">{stateActionLabel}</p>
+            <div className="mt-1.5 flex flex-wrap items-center justify-center gap-1.5">
+              {stateActions.map((action) => {
+                const Icon = action.icon;
+                return (
+                  <button
+                    key={action.key}
+                    type="button"
+                    onClick={action.onClick}
+                    disabled={busy}
+                    className={cueChipClass}
+                  >
+                    <Icon size={12} aria-hidden />
+                    {action.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : showAgentSuggestions ? (
           <div className="flex flex-col items-center" data-testid="beam-agent-suggestions">
             <p className="scent-type-label text-center text-scent-text-subtle">
               Tap to answer, or type your own
@@ -1650,13 +1831,32 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       </motion.div>
     );
 
+  // Anchor the scroll-to-top behavior on the newest agent reply (its top is
+  // aligned to the top of the box). Only the LAST message qualifies, so the
+  // user's own turn still follows to the bottom.
+  const lastMessage = messages[messages.length - 1];
+  const latestAgentId = lastMessage && lastMessage.role === 'agent' ? lastMessage.id : null;
+
   return (
     <div className="relative flex min-h-0 w-full min-w-0 flex-col text-center" data-testid="scent-mission-panel">
       {/* The title, progress, and close control now live in a header strip above
           the card (see App.tsx) so this surface is just the conversation. */}
+      <div className="relative mx-auto w-full max-w-[42.75rem]">
+      {/* Subtle top/bottom fade hints — shown only when the conversation actually
+          overflows above/below, so a long answer reads as "more to scroll"
+          rather than a hard clip. Pointer-events-none keeps them non-blocking. */}
+      <div
+        aria-hidden
+        className={`pointer-events-none absolute inset-x-0 top-0 z-10 h-6 bg-gradient-to-b from-black to-transparent transition-opacity duration-300 ${scrollEdges.top ? 'opacity-100' : 'opacity-0'}`}
+      />
+      <div
+        aria-hidden
+        className={`pointer-events-none absolute inset-x-0 bottom-0 z-10 h-7 bg-gradient-to-t from-black to-transparent transition-opacity duration-300 ${scrollEdges.bottom ? 'opacity-100' : 'opacity-0'}`}
+      />
       <div
         ref={scrollRef}
-        className="mx-auto flex w-full max-w-[42.75rem] h-[min(30dvh,15rem)] flex-col gap-2.5 overflow-y-auto pr-1 text-left scrollbar-hide sm:h-[min(32dvh,18rem)]"
+        onScroll={updateScrollEdges}
+        className="flex w-full h-[min(34dvh,17rem)] flex-col gap-2.5 overflow-y-auto pr-1 text-left scrollbar-hide sm:h-[min(36dvh,20rem)]"
         role="log"
         aria-live="polite"
         aria-label="Beam Agent conversation"
@@ -1681,6 +1881,10 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
           return (
             <motion.div
               key={message.id}
+              // The newest agent reply carries the scroll-to-top anchor, so a
+              // long answer lands at its FIRST line rather than dropping the
+              // user mid-response (see the scroll effect above).
+              data-scroll-anchor={message.id === latestAgentId ? 'latest-agent' : undefined}
               // Only the greeting morphs its box: `layout="size"` animates the
               // grow from thinking-pill to welcome-line without sliding the
               // bubble when later turns push it down. Other bubbles keep the
@@ -1733,6 +1937,11 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                     </motion.span>
                   )}
                 </AnimatePresence>
+              ) : message.role === 'agent' ? (
+                // Agent answers arrive as Markdown; render them through the
+                // structured renderer so no raw `**` / `##` / `---` reaches the
+                // screen and a long recommendation reads as a scannable card.
+                <BeamMessage text={message.text} />
               ) : (
                 message.text
               )}
@@ -1852,6 +2061,9 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
           {resolved ? (
             <motion.div
               key="resolved"
+              // The reveal is the payoff; align its top to the box top so the
+              // user reads the curated match from the brand line down.
+              data-scroll-anchor="resolved"
               variants={revealContainer}
               initial={calmMotion ? false : 'hidden'}
               animate="show"
@@ -1889,6 +2101,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
             </motion.div>
           ) : null}
         </AnimatePresence>
+      </div>
       </div>
 
       <p className="sr-only">
