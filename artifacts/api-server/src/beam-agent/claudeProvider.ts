@@ -25,12 +25,19 @@ const CLAUDE_TIMEOUT_MS = 45_000;
 export const DEFAULT_BEAM_MODEL = process.env.BEAM_AGENT_MODEL?.trim() || "claude-haiku-4-5-20251001";
 
 /**
- * Strong tier for the final synthesis turn (Anthropic-direct slug). Set
- * BEAM_AGENT_MODEL_STRONG to a more capable model (e.g. a Sonnet/Opus slug) to
- * write the closing recommendation; falls back to the cheap default when unset,
- * so the synthesis branch is a no-op upgrade until the env var is provided.
+ * Strong tier for the final synthesis turn (Anthropic-direct slug). This is the
+ * "smart when it needs to be" half of the cheap/smart split: cheap Haiku drives
+ * the multi-turn tool orchestration, and a single Sonnet call writes the closing
+ * recommendation where quality matters most.
+ *
+ * The default is a real, always-available first-party Anthropic model
+ * (claude-sonnet-4-6), so on the Anthropic-direct path the quality jump is ON by
+ * default — no extra env required and no risk of an unprovisioned-slug 404.
+ * Override with BEAM_AGENT_MODEL_STRONG to pin a different slug (e.g. an Opus
+ * tier). (OpenRouter slugs are account-provisioned, so that provider keeps a
+ * cheap default and opts in via env — see openRouterProvider.ts.)
  */
-export const STRONG_BEAM_MODEL = process.env.BEAM_AGENT_MODEL_STRONG?.trim() || DEFAULT_BEAM_MODEL;
+export const STRONG_BEAM_MODEL = process.env.BEAM_AGENT_MODEL_STRONG?.trim() || "claude-sonnet-4-6";
 
 export type { ClaudeCallInput } from "./types.ts";
 
@@ -71,11 +78,20 @@ export async function callClaude(input: ClaudeCallInput): Promise<ClaudeResponse
     return streamClaudeText(res.body, input.onDelta!);
   }
 
-  const data = (await res.json()) as ClaudeResponse;
+  const data = (await res.json()) as ClaudeResponse & {
+    usage?: { input_tokens?: number; output_tokens?: number };
+  };
   if (!data || !Array.isArray(data.content)) {
     throw new Error("Claude returned an unexpected response shape.");
   }
-  return data;
+  return {
+    stop_reason: data.stop_reason ?? null,
+    content: data.content,
+    usage: {
+      inputTokens: data.usage?.input_tokens ?? 0,
+      outputTokens: data.usage?.output_tokens ?? 0,
+    },
+  };
 }
 
 /**
@@ -93,10 +109,17 @@ async function streamClaudeText(
   let buffer = "";
   let text = "";
   let stopReason: string | null = null;
+  let inputTokens = 0;
+  let outputTokens = 0;
 
   const handleData = (payload: string): void => {
     let evt:
-      | { type?: string; delta?: { type?: string; text?: string; stop_reason?: string | null } }
+      | {
+          type?: string;
+          message?: { usage?: { input_tokens?: number; output_tokens?: number } };
+          usage?: { output_tokens?: number };
+          delta?: { type?: string; text?: string; stop_reason?: string | null };
+        }
       | undefined;
     try {
       evt = JSON.parse(payload);
@@ -109,8 +132,11 @@ async function streamClaudeText(
         text += chunk;
         onDelta(chunk);
       }
-    } else if (evt?.type === "message_delta" && evt.delta?.stop_reason) {
-      stopReason = evt.delta.stop_reason;
+    } else if (evt?.type === "message_start" && evt.message?.usage) {
+      inputTokens = evt.message.usage.input_tokens ?? inputTokens;
+    } else if (evt?.type === "message_delta") {
+      if (evt.delta?.stop_reason) stopReason = evt.delta.stop_reason;
+      if (typeof evt.usage?.output_tokens === "number") outputTokens = evt.usage.output_tokens;
     }
   };
 
@@ -133,5 +159,9 @@ async function streamClaudeText(
     reader.cancel().catch(() => {});
   }
 
-  return { stop_reason: stopReason, content: text ? [{ type: "text", text }] : [] };
+  return {
+    stop_reason: stopReason,
+    content: text ? [{ type: "text", text }] : [],
+    usage: { inputTokens, outputTokens },
+  };
 }

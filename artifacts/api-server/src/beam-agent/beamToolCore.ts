@@ -68,6 +68,28 @@ export function extractToolUses(content: ClaudeContentBlock[]): ClaudeToolUseBlo
   return content.filter((block): block is ClaudeToolUseBlock => block.type === "tool_use");
 }
 
+/**
+ * Sentinel a provider sets as a tool_use's `input` when the model emitted
+ * arguments that are not valid JSON. The loop detects it and returns an explicit
+ * tool ERROR (is_error) instead of running the handler on `{}` — so the model
+ * retries with corrected args rather than misreading a coerced-empty result as
+ * "nothing exists." Only the OpenRouter adapter parses arg strings; the
+ * Anthropic-direct API already delivers structured tool input.
+ */
+const INVALID_ARGS_KEY = "__beamInvalidArguments";
+
+export function invalidArgsMarker(raw: string): { [INVALID_ARGS_KEY]: string } {
+  return { [INVALID_ARGS_KEY]: raw.slice(0, 200) };
+}
+
+export function readInvalidArgs(input: unknown): string | null {
+  if (input && typeof input === "object" && INVALID_ARGS_KEY in input) {
+    const raw = (input as Record<string, unknown>)[INVALID_ARGS_KEY];
+    return typeof raw === "string" ? raw : "";
+  }
+  return null;
+}
+
 /** Concatenate text blocks into the assistant's prose reply. */
 export function extractText(content: ClaudeContentBlock[]): string {
   let out = "";

@@ -7,6 +7,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { __test } from "./openRouterProvider.ts";
+import { readInvalidArgs } from "./beamToolCore.ts";
 import type { ClaudeCallInput, ClaudeMessage } from "./types.ts";
 
 const { toOpenAiMessages, toOpenAiTools, openAiResponseToClaude } = __test;
@@ -104,7 +105,7 @@ test("openAiResponseToClaude builds text + tool_use content blocks", () => {
   });
 });
 
-test("openAiResponseToClaude tolerates malformed tool-call arguments", () => {
+test("openAiResponseToClaude marks malformed tool-call arguments instead of silently dropping them", () => {
   const claude = openAiResponseToClaude({
     choices: [
       {
@@ -116,9 +117,21 @@ test("openAiResponseToClaude tolerates malformed tool-call arguments", () => {
       },
     ],
   });
-  // No text block when content is null; bad JSON args degrade to {}.
+  // No text block when content is null; bad JSON args carry the invalid-args
+  // marker so the loop returns an explicit tool error and the model retries.
   assert.equal(claude.content.length, 1);
-  assert.deepEqual(claude.content[0], { type: "tool_use", id: "c", name: "beam_get_wardrobe", input: {} });
+  const block = claude.content[0] as { type: string; id: string; name: string; input: Record<string, unknown> };
+  assert.equal(block.type, "tool_use");
+  assert.equal(block.name, "beam_get_wardrobe");
+  assert.equal(readInvalidArgs(block.input), "{not json");
+});
+
+test("openAiResponseToClaude surfaces token usage for cost accounting", () => {
+  const claude = openAiResponseToClaude({
+    choices: [{ finish_reason: "stop", message: { content: "hi" } }],
+    usage: { prompt_tokens: 123, completion_tokens: 45 },
+  });
+  assert.deepEqual(claude.usage, { inputTokens: 123, outputTokens: 45 });
 });
 
 test("openAiResponseToClaude maps finish reasons", () => {
