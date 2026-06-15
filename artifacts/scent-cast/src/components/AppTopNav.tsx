@@ -164,7 +164,6 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
   // rest guarantees a single tap always activates navigation.
   const [navVisible, setNavVisible] = React.useState(true);
   const lastScrollYRef = React.useRef(0);
-  const idleTimerRef = React.useRef<number | null>(null);
   // The fixed bottom nav is a standing backdrop layer on phone-class devices and
   // stays mounted while a dynamic detail modal opens — exactly the WebKit
   // memory-pressure crash profile. Drop the backdrop blur on low-budget devices
@@ -188,34 +187,24 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
       
       if (Math.abs(delta) > 6) {
         if (delta > 0 && y > 56) {
-          // Scrolling down: hide bottom nav immediately
+          // Scrolling down: hide bottom nav immediately (immersive gesture).
           setNavVisible(false);
         } else if (delta < 0) {
-          // Scrolling up: reveal bottom nav immediately
+          // Scrolling up: reveal bottom nav immediately.
           setNavVisible(true);
         }
         lastScrollYRef.current = y;
       }
-
-      // Hide the nav bar when scrolling stops (user stops moving)
-      if (idleTimerRef.current !== null) {
-        window.clearTimeout(idleTimerRef.current);
-      }
-      idleTimerRef.current = window.setTimeout(() => {
-        setNavVisible(false);
-        idleTimerRef.current = null;
-      }, 1500); // 1.5-second idle delay before hiding
+      // Deliberately NO idle-hide timer: the bar must stay visible whenever the
+      // user is at rest. An idle timeout left it pointer-events-none and
+      // off-screen exactly when a resting user reached for it, so their first tap
+      // only re-revealed the bar and a second was needed to navigate (the
+      // "double-tap" bug). It hides only during an active downward scroll.
     };
 
     // Any direct interaction reveals the bar (covers the case where the user
-    // taps after a downward fling, before the idle timer fires).
-    const reveal = () => {
-      if (idleTimerRef.current !== null) {
-        window.clearTimeout(idleTimerRef.current);
-        idleTimerRef.current = null;
-      }
-      setNavVisible(true);
-    };
+    // taps right after a downward fling, before the scroll settles).
+    const reveal = () => setNavVisible(true);
 
     window.addEventListener('scroll', handleScroll, { passive: true });
     window.addEventListener('touchstart', reveal, { passive: true });
@@ -225,10 +214,6 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
       window.removeEventListener('scroll', handleScroll);
       window.removeEventListener('touchstart', reveal);
       window.removeEventListener('pointerdown', reveal);
-      if (idleTimerRef.current !== null) {
-        window.clearTimeout(idleTimerRef.current);
-        idleTimerRef.current = null;
-      }
     };
   }, []);
 
