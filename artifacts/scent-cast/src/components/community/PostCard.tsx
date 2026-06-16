@@ -239,7 +239,7 @@ const CompactBattlePostCard: React.FC<PostCardProps> = ({
   return (
     <article
       aria-labelledby={headingId}
-      className="mx-auto w-full max-w-[760px] overflow-hidden rounded-[calc(var(--radius-scent)-2px)] border border-scent-accent/20 bg-[radial-gradient(78%_64%_at_50%_0%,rgba(255,247,236,0.026),transparent_62%),linear-gradient(180deg,rgba(10,9,7,0.88),rgba(0,0,0,0.97))] p-4 text-left shadow-[0_18px_44px_-36px_rgba(212,175,55,0.26),0_22px_46px_-34px_rgba(0,0,0,0.96),inset_0_1px_0_rgba(255,236,183,0.055)] sm:p-5"
+      className="mx-auto w-full max-w-[940px] overflow-hidden rounded-[calc(var(--radius-scent)-2px)] border border-scent-accent/20 bg-[radial-gradient(78%_64%_at_50%_0%,rgba(255,247,236,0.026),transparent_62%),linear-gradient(180deg,rgba(10,9,7,0.88),rgba(0,0,0,0.97))] p-4 text-left shadow-[0_18px_44px_-36px_rgba(212,175,55,0.26),0_22px_46px_-34px_rgba(0,0,0,0.96),inset_0_1px_0_rgba(255,236,183,0.055)] sm:p-5"
     >
       <header className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
@@ -341,7 +341,7 @@ const CompactQuestionPostCard: React.FC<PostCardProps> = ({
   return (
     <article
       aria-labelledby={headingId}
-      className="mx-auto w-full max-w-[760px] overflow-hidden rounded-[calc(var(--radius-scent)-2px)] border border-scent-accent/20 bg-[radial-gradient(78%_64%_at_50%_0%,rgba(255,247,236,0.026),transparent_62%),linear-gradient(180deg,rgba(10,9,7,0.88),rgba(0,0,0,0.97))] p-4 text-left shadow-[0_18px_44px_-36px_rgba(212,175,55,0.26),0_22px_46px_-34px_rgba(0,0,0,0.96),inset_0_1px_0_rgba(255,236,183,0.055)] sm:p-5"
+      className="mx-auto w-full max-w-[940px] overflow-hidden rounded-[calc(var(--radius-scent)-2px)] border border-scent-accent/20 bg-[radial-gradient(78%_64%_at_50%_0%,rgba(255,247,236,0.026),transparent_62%),linear-gradient(180deg,rgba(10,9,7,0.88),rgba(0,0,0,0.97))] p-4 text-left shadow-[0_18px_44px_-36px_rgba(212,175,55,0.26),0_22px_46px_-34px_rgba(0,0,0,0.96),inset_0_1px_0_rgba(255,236,183,0.055)] sm:p-5"
     >
       <header className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
@@ -666,7 +666,19 @@ const ScentOfDayPostCard: React.FC<PostCardProps> = ({
 
       <div className="mt-5 grid min-w-0 gap-5 sm:grid-cols-[minmax(13rem,0.82fr)_minmax(0,1fr)] sm:items-stretch">
         <div className="min-w-0">
-          <div className="scent-fragrance-card scent-community-marquee-card relative mx-auto flex aspect-[3/4.4] w-full max-w-[13rem] flex-col overflow-hidden p-5 sm:max-w-[18rem]">
+          {/* When a black-mastered packshot video is present, the
+              `sotd-video-card` modifier strips the bezel, sheen, and border so
+              the video's pure-#000 master blends into the card and the bottle
+              reads as floating (see index.css). Gated on videoSrc, so the
+              reduce-motion / low-budget still-poster fallback keeps its frame. */}
+          <div
+            className={[
+              'scent-fragrance-card scent-community-marquee-card relative mx-auto flex aspect-[3/4.4] w-full max-w-[13rem] flex-col overflow-hidden p-5 sm:max-w-[18rem]',
+              videoSrc ? 'sotd-video-card' : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
+          >
             <div className="scent-card-frame" aria-hidden="true" />
             <div className="relative z-10 flex justify-between gap-3">
               <span className="inline-flex items-center gap-1.5 rounded-full border border-scent-accent/22 bg-black/54 px-2.5 py-1 scent-type-label text-scent-accent">

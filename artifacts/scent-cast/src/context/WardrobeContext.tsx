@@ -615,7 +615,7 @@ interface WardrobeContextType {
   setVaultSearchUiActive: (active: boolean) => void;
   loadWardrobe: (token: string, signal?: AbortSignal) => Promise<void>;
   handleAddItem: (item: any) => Promise<{ persisted: boolean; requiresAuth?: boolean; error?: string }>;
-  handlePersistWardrobeImage: (target: Fragrance, imageUrl?: string, imageAdjustment?: BottleImageAdjustment) => Promise<Fragrance | null>;
+  handlePersistWardrobeImage: (target: Fragrance, imageUrl?: string, imageAdjustment?: BottleImageAdjustment, options?: { suppressToast?: boolean }) => Promise<Fragrance | null>;
   /** Admin-only: re-host an uploaded file / URL and return a persistable image URL. */
   uploadAdminBottleImage: (input: {
     brand: string;
@@ -1146,7 +1146,15 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     target: Fragrance,
     imageUrl?: string,
     imageAdjustment?: BottleImageAdjustment,
+    options?: { suppressToast?: boolean },
   ): Promise<Fragrance | null> => {
+    // Background curation (handleCurateCollection) drives this in a loop to
+    // backfill bottle images the user never manually edited. Those passes must
+    // stay silent — otherwise each item stacks a "Portrait Saved" toast, which
+    // on iPad/iOS piles up because a tap's simulated hover pauses Radix's
+    // auto-dismiss timer and the toasts never clear. Only surface toasts for
+    // genuine, user-initiated portrait edits.
+    const suppressToast = options?.suppressToast ?? false;
     if (!authToken) {
       // Guest: there is no server row to PATCH, so persist the chosen image and/or
       // framing onto the local item + localStorage. This is what lets a guest's
@@ -1166,7 +1174,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         if (next) writeGuestWardrobeItems(updated);
         return updated;
       });
-      if (next) {
+      if (next && !suppressToast) {
         toast({ title: "Portrait Saved", description: "Bottle display styling aligned." });
       }
       return next;
@@ -1225,18 +1233,22 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           sameWardrobeEntry(item, target) ? next : item,
         ),
       );
-      toast({
-        title: "Portrait Saved",
-        description: "Bottle display styling aligned."
-      });
+      if (!suppressToast) {
+        toast({
+          title: "Portrait Saved",
+          description: "Bottle display styling aligned."
+        });
+      }
       return next;
     } catch (e) {
       console.error(e);
-      toast({
-        title: "Image Sync Error",
-        description: "Failed to persist portrait changes.",
-        variant: "destructive"
-      });
+      if (!suppressToast) {
+        toast({
+          title: "Image Sync Error",
+          description: "Failed to persist portrait changes.",
+          variant: "destructive"
+        });
+      }
       return null;
     } finally {
       isMutatingRef.current = false;
