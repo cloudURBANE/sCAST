@@ -25,7 +25,7 @@ const router = Router();
 // Mission turns can fan out to an LLM (chat) and the scent-facts research
 // pipeline (resolution), so the route is throttled well below the general API
 // surface. Per-IP fixed window, matching the reimagine route's approach.
-const missionRateLimit = rateLimitMiddleware({ limit: 30, windowMs: 5 * 60_000 });
+const missionRateLimit = rateLimitMiddleware({ name: "scent-mission", limit: 30, windowMs: 5 * 60_000 });
 
 const LLM_TIMEOUT_MS = 20_000;
 const MAX_CHAT_WARDROBE_LINES = 20;

@@ -1,0 +1,158 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { FixedWindowRateLimiter, RedisRateLimiter } from "./rateLimit.ts";
+import type { RedisLike } from "./redisClient.ts";
+
+/**
+ * Minimal in-process fake of the RedisLike slice the limiter uses, with TTL
+ * expiry driven by an explicit clock so the window-reset path is testable
+ * without a real server. Keep `now` in step with the `now` passed to check().
+ */
+class FakeRedis implements RedisLike {
+  now = 0;
+  private store = new Map<string, { value: string; expireAt: number | null }>();
+
+  private live(key: string): { value: string; expireAt: number | null } | undefined {
+    const e = this.store.get(key);
+    if (!e) return undefined;
+    if (e.expireAt !== null && this.now >= e.expireAt) {
+      this.store.delete(key);
+      return undefined;
+    }
+    return e;
+  }
+
+  async incr(key: string): Promise<number> {
+    const e = this.live(key);
+    const next = (e ? Number(e.value) : 0) + 1;
+    this.store.set(key, { value: String(next), expireAt: e?.expireAt ?? null });
+    return next;
+  }
+  async pexpire(key: string, ms: number): Promise<number> {
+    const e = this.live(key);
+    if (!e) return 0;
+    e.expireAt = this.now + ms;
+    return 1;
+  }
+  async pttl(key: string): Promise<number> {
+    const e = this.live(key);
+    if (!e) return -2;
+    if (e.expireAt === null) return -1;
+    return e.expireAt - this.now;
+  }
+  async get(key: string): Promise<string | null> {
+    return this.live(key)?.value ?? null;
+  }
+  async set(key: string, value: string, _mode: "PX", ttlMs: number): Promise<unknown> {
+    this.store.set(key, { value, expireAt: this.now + ttlMs });
+    return "OK";
+  }
+  async del(key: string): Promise<number> {
+    return this.store.delete(key) ? 1 : 0;
+  }
+}
+
+function makeLimiter(opts: {
+  limit: number;
+  windowMs: number;
+  name: string;
+  client: RedisLike | null;
+  fallback?: FixedWindowRateLimiter;
+}) {
+  return new RedisRateLimiter({
+    limit: opts.limit,
+    windowMs: opts.windowMs,
+    name: opts.name,
+    fallback: opts.fallback ?? new FixedWindowRateLimiter(opts.limit, opts.windowMs),
+    getClient: async () => opts.client,
+  });
+}
+
+test("redis limiter: allows up to the limit then denies within the window", async () => {
+  const client = new FakeRedis();
+  const limiter = makeLimiter({ limit: 2, windowMs: 1000, name: "t", client });
+
+  client.now = 1000;
+  const a = await limiter.check("ip", 1000);
+  assert.equal(a.allowed, true);
+  assert.equal(a.remaining, 1);
+  assert.equal(a.resetAt, 2000);
+
+  client.now = 1001;
+  const b = await limiter.check("ip", 1001);
+  assert.equal(b.allowed, true);
+  assert.equal(b.remaining, 0);
+  // resetAt stays anchored to the first request's window.
+  assert.equal(b.resetAt, 2000);
+
+  client.now = 1002;
+  const c = await limiter.check("ip", 1002);
+  assert.equal(c.allowed, false);
+  assert.equal(c.remaining, 0);
+  assert.equal(c.resetAt, 2000);
+});
+
+test("redis limiter: window resets after the TTL elapses", async () => {
+  const client = new FakeRedis();
+  const limiter = makeLimiter({ limit: 1, windowMs: 1000, name: "t", client });
+
+  client.now = 5000;
+  assert.equal((await limiter.check("k", 5000)).allowed, true);
+  client.now = 5999;
+  assert.equal((await limiter.check("k", 5999)).allowed, false);
+  // At/after the TTL a fresh window opens.
+  client.now = 6000;
+  assert.equal((await limiter.check("k", 6000)).allowed, true);
+});
+
+test("redis limiter: names namespace counters so routes don't collide", async () => {
+  const client = new FakeRedis();
+  client.now = 1000;
+  const a = makeLimiter({ limit: 1, windowMs: 1000, name: "route-a", client });
+  const b = makeLimiter({ limit: 1, windowMs: 1000, name: "route-b", client });
+
+  assert.equal((await a.check("ip", 1000)).allowed, true);
+  assert.equal((await a.check("ip", 1000)).allowed, false);
+  // Same IP, different route name => independent budget.
+  assert.equal((await b.check("ip", 1000)).allowed, true);
+});
+
+test("redis limiter: repairs a key that lost its TTL", async () => {
+  const client = new FakeRedis();
+  const limiter = makeLimiter({ limit: 5, windowMs: 1000, name: "t", client });
+  // Simulate a persistent key (INCR ran, PEXPIRE didn't): seed count with no TTL.
+  await client.incr("ratelimit:t:ip"); // value 1, no expiry
+  client.now = 2000;
+  const decision = await limiter.check("ip", 2000);
+  assert.equal(decision.allowed, true);
+  // The limiter saw ttl < 0 and re-armed the window.
+  assert.equal(decision.resetAt, 3000);
+  assert.equal(await client.pttl("ratelimit:t:ip"), 1000);
+});
+
+test("redis limiter: falls back to in-memory when the client errors", async () => {
+  const throwing: RedisLike = {
+    incr: async () => {
+      throw new Error("redis down");
+    },
+    pexpire: async () => 1,
+    pttl: async () => -2,
+    get: async () => null,
+    set: async () => "OK",
+    del: async () => 0,
+  };
+  const fallback = new FixedWindowRateLimiter(1, 1000);
+  const limiter = makeLimiter({ limit: 1, windowMs: 1000, name: "t", client: throwing, fallback });
+
+  // First call served by the in-memory fallback (allowed), second denied — proving
+  // the fallback is actually enforcing, not silently allowing everything.
+  assert.equal((await limiter.check("ip", 1000)).allowed, true);
+  assert.equal((await limiter.check("ip", 1000)).allowed, false);
+});
+
+test("redis limiter: falls back to in-memory when no client is available", async () => {
+  const fallback = new FixedWindowRateLimiter(1, 1000);
+  const limiter = makeLimiter({ limit: 1, windowMs: 1000, name: "t", client: null, fallback });
+  assert.equal((await limiter.check("ip", 1000)).allowed, true);
+  assert.equal((await limiter.check("ip", 1000)).allowed, false);
+});

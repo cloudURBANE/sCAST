@@ -76,6 +76,10 @@ async function buildAll() {
       "ffi-napi",
       "grpc",
       "hiredis",
+      // ioredis is loaded only via a runtime dynamic import (redisClient.ts) when
+      // REDIS_URL is set; keep it external so esbuild needn't resolve it at build
+      // time and Node loads it from node_modules at runtime.
+      "ioredis",
       "kerberos",
       "leveldown",
       "miniflare",

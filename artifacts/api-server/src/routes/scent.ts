@@ -567,6 +567,7 @@ const reimagineRateLimitPerHour = (() => {
   return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 10;
 })();
 const reimagineRateLimit = rateLimitMiddleware({
+  name: "reimagine",
   limit: reimagineRateLimitPerHour,
   windowMs: 60 * 60 * 1000,
 });
