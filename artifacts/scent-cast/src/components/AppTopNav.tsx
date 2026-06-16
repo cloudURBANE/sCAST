@@ -251,21 +251,34 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
     <>
       <nav className="scent-topbar fixed top-0 left-0 right-0 z-50 px-4 md:px-8">
         <div className="mx-auto grid h-full max-w-4xl grid-cols-[1fr_auto_1fr] items-center md:grid-cols-[auto_1fr_auto] md:gap-8">
-          <div className="hidden min-w-0 items-center justify-self-start md:flex">
-            <Link to="/" aria-label="Go to home" className="block">
-              <img
-                src="/nav/scentbeam-nav-logo.png"
-                srcSet="/nav/scentbeam-nav-logo.png 1x, /nav/scentbeam-nav-logo@2x.png 2x"
-                alt="ScentBeam"
-                className="h-11 w-auto max-w-none object-contain"
-                decoding="async"
-                draggable={false}
-              />
-            </Link>
+          {/* Column 1 (desktop): primary nav links, far left. Hidden on mobile,
+              where the bottom tab bar carries navigation. */}
+          <div className="hidden items-center gap-6 md:flex md:justify-self-start">
+            {navItems.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.to === '/'}
+                className={({ isActive }) =>
+                  isActive ? `${activeNavClassName} gap-2` : inactiveNavClassName
+                }
+              >
+                {({ isActive }) => (
+                  <span className="relative inline-flex items-center gap-2">
+                    {isActive ? <ActiveDot /> : null}
+                    {item.label}
+                  </span>
+                )}
+              </NavLink>
+            ))}
           </div>
 
+          {/* Column 1 (mobile only): spacer that balances the centered logo
+              against the right-hand account control. */}
           <div className="md:hidden" aria-hidden="true" />
 
+          {/* Column 2: logo, centered on every breakpoint. Two sizes — the
+              compact mobile lockup and the larger desktop/iPad one. */}
           <div className="flex items-center justify-center md:justify-self-center">
             <h1 className="leading-none md:hidden">
               <Link to="/" aria-label="Go to home" className="block">
@@ -279,28 +292,16 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
                 />
               </Link>
             </h1>
-
-            <div className="hidden items-center gap-6 md:flex">
-              {navItems.map((item) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  end={item.to === '/'}
-                  className={({ isActive }) =>
-                    isActive
-                      ? `${activeNavClassName} gap-2 after:absolute after:bottom-1 after:left-3 after:right-3 after:h-px after:bg-scent-accent/70`
-                      : inactiveNavClassName
-                  }
-                >
-                  {({ isActive }) => (
-                    <span className="relative inline-flex items-center gap-2">
-                      {isActive ? <ActiveDot /> : null}
-                      {item.label}
-                    </span>
-                  )}
-                </NavLink>
-              ))}
-            </div>
+            <Link to="/" aria-label="Go to home" className="hidden md:block">
+              <img
+                src="/nav/scentbeam-nav-logo.png"
+                srcSet="/nav/scentbeam-nav-logo.png 1x, /nav/scentbeam-nav-logo@2x.png 2x"
+                alt="ScentBeam"
+                className="h-11 w-auto max-w-none object-contain"
+                decoding="async"
+                draggable={false}
+              />
+            </Link>
           </div>
 
           <div className="flex items-center justify-self-end">

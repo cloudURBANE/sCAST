@@ -239,7 +239,7 @@ const CompactBattlePostCard: React.FC<PostCardProps> = ({
   return (
     <article
       aria-labelledby={headingId}
-      className="mx-auto w-full max-w-[760px] overflow-hidden rounded-[calc(var(--radius-scent)-2px)] border border-scent-accent/20 bg-[radial-gradient(78%_64%_at_50%_0%,rgba(255,247,236,0.026),transparent_62%),linear-gradient(180deg,rgba(10,9,7,0.88),rgba(0,0,0,0.97))] p-4 text-left shadow-[0_18px_44px_-36px_rgba(212,175,55,0.26),0_22px_46px_-34px_rgba(0,0,0,0.96),inset_0_1px_0_rgba(255,236,183,0.055)] sm:p-5"
+      className="mx-auto w-full max-w-[940px] overflow-hidden rounded-[calc(var(--radius-scent)-2px)] border border-scent-accent/20 bg-[radial-gradient(78%_64%_at_50%_0%,rgba(255,247,236,0.026),transparent_62%),linear-gradient(180deg,rgba(10,9,7,0.88),rgba(0,0,0,0.97))] p-4 text-left shadow-[0_18px_44px_-36px_rgba(212,175,55,0.26),0_22px_46px_-34px_rgba(0,0,0,0.96),inset_0_1px_0_rgba(255,236,183,0.055)] sm:p-5"
     >
       <header className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
@@ -341,7 +341,7 @@ const CompactQuestionPostCard: React.FC<PostCardProps> = ({
   return (
     <article
       aria-labelledby={headingId}
-      className="mx-auto w-full max-w-[760px] overflow-hidden rounded-[calc(var(--radius-scent)-2px)] border border-scent-accent/20 bg-[radial-gradient(78%_64%_at_50%_0%,rgba(255,247,236,0.026),transparent_62%),linear-gradient(180deg,rgba(10,9,7,0.88),rgba(0,0,0,0.97))] p-4 text-left shadow-[0_18px_44px_-36px_rgba(212,175,55,0.26),0_22px_46px_-34px_rgba(0,0,0,0.96),inset_0_1px_0_rgba(255,236,183,0.055)] sm:p-5"
+      className="mx-auto w-full max-w-[940px] overflow-hidden rounded-[calc(var(--radius-scent)-2px)] border border-scent-accent/20 bg-[radial-gradient(78%_64%_at_50%_0%,rgba(255,247,236,0.026),transparent_62%),linear-gradient(180deg,rgba(10,9,7,0.88),rgba(0,0,0,0.97))] p-4 text-left shadow-[0_18px_44px_-36px_rgba(212,175,55,0.26),0_22px_46px_-34px_rgba(0,0,0,0.96),inset_0_1px_0_rgba(255,236,183,0.055)] sm:p-5"
     >
       <header className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">

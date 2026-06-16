@@ -755,7 +755,9 @@ function DashboardView() {
           // No catalog image rode along — actively trigger the image pipeline and
           // wait for it (this is the "curating" hold the user sees).
           onProgress({ index, total, name: item.name, status: 'curating' });
-          await handlePersistWardrobeImage(built as unknown as Fragrance).catch(() => null);
+          await handlePersistWardrobeImage(built as unknown as Fragrance, undefined, undefined, {
+            suppressToast: true,
+          }).catch(() => null);
         }
         onProgress({ index, total, name: item.name, status: 'ready' });
       }
