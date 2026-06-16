@@ -88,6 +88,73 @@ export async function subscribeToPush(authToken: string): Promise<{ ok: boolean;
   return { ok: true };
 }
 
+export interface PushPreferences {
+  weather: boolean;
+  community: boolean;
+}
+
+/** Read the user's per-category opt-ins + current server badge count. */
+export async function getPushPreferences(
+  authToken: string,
+): Promise<{ preferences: PushPreferences; badgeCount: number } | null> {
+  try {
+    const res = await fetch("/api/push/preferences", {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as { preferences: PushPreferences; badgeCount: number };
+  } catch {
+    return null;
+  }
+}
+
+/** Persist one or both category toggles; returns the saved state or null on failure. */
+export async function setPushPreferences(
+  authToken: string,
+  patch: Partial<PushPreferences>,
+): Promise<PushPreferences | null> {
+  try {
+    const res = await fetch("/api/push/preferences", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+      body: JSON.stringify(patch),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { preferences: PushPreferences };
+    return data.preferences;
+  } catch {
+    return null;
+  }
+}
+
+// App Badge API on the window/navigator (separate from the SW's copy).
+type BadgeCapableNavigator = Navigator & {
+  setAppBadge?: (count?: number) => Promise<void>;
+  clearAppBadge?: () => Promise<void>;
+};
+
+/**
+ * Clear the app-icon badge: zero the server's authoritative count AND the local
+ * OS badge. Called when the installed app gains focus — the user has "seen" the
+ * nudges by opening the app. Both halves degrade quietly when unsupported.
+ */
+export async function clearAppBadgeAndServer(authToken: string): Promise<void> {
+  const nav = typeof navigator !== "undefined" ? (navigator as BadgeCapableNavigator) : null;
+  try {
+    await nav?.clearAppBadge?.();
+  } catch {
+    /* unsupported — ignore */
+  }
+  try {
+    await fetch("/api/push/badge/clear", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+  } catch {
+    /* best-effort — next focus retries */
+  }
+}
+
 export async function unsubscribeFromPush(authToken: string): Promise<void> {
   const registration = await getRegistration();
   if (!registration) return;

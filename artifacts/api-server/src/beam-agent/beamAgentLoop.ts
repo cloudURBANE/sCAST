@@ -149,6 +149,9 @@ const SYNTHESIS_NUDGE =
   "- Add a runner-up only if it genuinely helps — one sentence.\n" +
   "- Aim for under ~70 words total. Plain sentences (you may bold a bottle name); no headings, " +
   "no long bullet lists.\n" +
+  "- Describe performance qualitatively, never as raw scores. Say 'long-lasting' or 'exceptional " +
+  "longevity', 'a soft, skin-close trail' or 'a bold projection' — NOT 'longevity of 10', " +
+  "'sillage 8/10', or any bare number/score for longevity, sillage, projection, or a match score.\n" +
   "- Stay honest about context. Reference ONLY the occasion, place, and weather the user actually " +
   "gave or a tool returned — never invent a city, climate, season, or scenario (e.g. 'cool London " +
   "evenings') they did not mention.\n" +

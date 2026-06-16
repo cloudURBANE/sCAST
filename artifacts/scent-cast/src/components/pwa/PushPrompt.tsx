@@ -126,6 +126,9 @@ export function PushPrompt() {
           <p className="mt-0.5 text-[12px] leading-snug text-white/65 font-sans">
             Get the occasional notification when the weather shifts your perfect wear.
           </p>
+          <p className="mt-1 text-[11px] leading-snug text-white/40 font-sans">
+            Weather &amp; your saved city only — no tracking. Manage or turn off anytime in Settings.
+          </p>
           <div className="mt-2.5 flex items-center gap-2">
             <button
               type="button"
