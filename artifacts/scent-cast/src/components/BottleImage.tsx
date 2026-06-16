@@ -45,6 +45,13 @@ type BottleImageProps = {
   imgClassName?: string;
   /** Persistent visual rescue controls: zoom, nudge, and per-edge clip (top/right/bottom/left). */
   adjustment?: BottleImageAdjustment | null;
+  /**
+   * Orientation Engine geometry from the API (`image_cache` / hydration). When a
+   * non-empty `orientationVersion` is present the image is a normalized square,
+   * so we tag the frame `data-normalized` to enable the baseline-anchored CSS.
+   * Absent for legacy images — the tag stays off and rendering is unchanged.
+   */
+  imageProperties?: { orientationVersion?: string | null } | null;
   /** Blueprint overlay for the manual frame editor. Shares the real artboard and shelf line. */
   showFrameGuide?: boolean;
   loading?: 'lazy' | 'eager';
@@ -87,6 +94,7 @@ export const BottleImage: React.FC<BottleImageProps> = ({
   className,
   imgClassName,
   adjustment,
+  imageProperties,
   showFrameGuide = false,
   loading = 'lazy',
   fetchPriority,
@@ -321,6 +329,8 @@ export const BottleImage: React.FC<BottleImageProps> = ({
                 "bottle-packshot-frame transition-opacity duration-300",
                 showSkeleton ? "opacity-0" : "opacity-100"
               )}
+              data-variant={variant}
+              data-normalized={imageProperties?.orientationVersion ? "true" : undefined}
               style={bottleImageAdjustmentStyle(adjustment)}
             >
               {useVideo ? (

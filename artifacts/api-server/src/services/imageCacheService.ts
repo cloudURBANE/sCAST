@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import { imageCacheTable } from "@workspace/db/schema";
 import { logger } from "../lib/logger";
 import type { RemoveBgReason, RemoveBgStatus } from "./bgService";
+import type { OrientationBoundingBox, OrientationMetadata } from "./orientationEngine";
 import {
   isLocalImageObjectUrlPersistable,
   localImageObjectExists,
@@ -50,6 +51,12 @@ export type CachedImageReference = {
   removeBgStatus?: RemoveBgStatus | null;
   removeBgReason?: RemoveBgReason | null;
   /**
+   * Orientation Engine geometry, reconstructed from the persisted columns, when
+   * the stored image was normalized to a uniform square. Null for legacy /
+   * non-normalized rows. The SPA gates baseline-aligned rendering on its presence.
+   */
+  imageProperties?: OrientationMetadata | null;
+  /**
    * True when the reference is backed by a persisted `image_cache` row. False
    * when the DB was unavailable at write-time and the reference was synthesized
    * from the input — callers must treat such references as one-shot and expect
@@ -57,6 +64,28 @@ export type CachedImageReference = {
    */
   isPersisted: boolean;
 };
+
+/**
+ * Reconstruct the Orientation Engine metadata from the flat `image_cache`
+ * columns. Returns null unless the row carries a complete, normalized geometry
+ * (version + dimensions + bounding box) — partial/legacy rows stay un-normalized.
+ */
+function rowToImageProperties(
+  row: typeof imageCacheTable.$inferSelect,
+): OrientationMetadata | null {
+  if (!row.orientationVersion) return null;
+  if (row.originalWidth == null || row.originalHeight == null) return null;
+  const bb = row.boundingBox as OrientationBoundingBox | null;
+  if (!bb || typeof bb.width !== "number" || typeof bb.height !== "number") return null;
+  return {
+    originalWidth: row.originalWidth,
+    originalHeight: row.originalHeight,
+    boundingBox: bb,
+    aspectRatio: row.aspectRatio ?? (bb.height ? bb.width / bb.height : 0),
+    orientationVersion: row.orientationVersion,
+    baselineAlignment: row.baselineAlignment ?? 0,
+  };
+}
 
 let imageCacheMissingWarned = false;
 
@@ -98,6 +127,7 @@ function rowToReference(row: typeof imageCacheTable.$inferSelect, cached: boolea
     backgroundRemoved: row.backgroundRemoved,
     removeBgStatus: row.removeBgStatus as RemoveBgStatus | null,
     removeBgReason: row.removeBgReason as RemoveBgReason | null,
+    imageProperties: rowToImageProperties(row),
     isPersisted: true,
   };
 }
@@ -134,6 +164,7 @@ function readyInputToReference(input: {
   backgroundRemoved: boolean;
   removeBgStatus?: RemoveBgStatus | null;
   removeBgReason?: RemoveBgReason | null;
+  orientation?: OrientationMetadata | null;
 }): CachedImageReference {
   return {
     imageUrl: safeImageUrlForResponse(input.publicUrl),
@@ -151,6 +182,7 @@ function readyInputToReference(input: {
     backgroundRemoved: input.backgroundRemoved,
     removeBgStatus: input.removeBgStatus ?? null,
     removeBgReason: input.removeBgReason ?? null,
+    imageProperties: input.orientation ?? null,
     isPersisted: false,
   };
 }
@@ -362,11 +394,23 @@ export async function recordImageReady(input: {
   backgroundRemoved: boolean;
   removeBgStatus?: RemoveBgStatus | null;
   removeBgReason?: RemoveBgReason | null;
+  orientation?: OrientationMetadata | null;
 }): Promise<CachedImageReference> {
   assertNoPersistedBase64Image(input.publicUrl, "image_cache.public_url");
   assertNoPersistedBase64Image(input.sourceUrl, "image_cache.source_url");
 
   const pipelineVersion = input.pipelineVersion ?? IMAGE_PIPELINE_VERSION;
+  // Flatten the Orientation Engine metadata to columns. Written on both insert
+  // and conflict-update so re-processing a source upgrades a legacy row in place.
+  const o = input.orientation ?? null;
+  const orientationCols = {
+    originalWidth: o?.originalWidth ?? null,
+    originalHeight: o?.originalHeight ?? null,
+    boundingBox: o?.boundingBox ?? null,
+    aspectRatio: o?.aspectRatio ?? null,
+    orientationVersion: o?.orientationVersion ?? null,
+    baselineAlignment: o?.baselineAlignment ?? null,
+  };
   let row: typeof imageCacheTable.$inferSelect | undefined;
   try {
     [row] = await db
@@ -391,6 +435,7 @@ export async function recordImageReady(input: {
         backgroundRemoved: input.backgroundRemoved,
         removeBgStatus: input.removeBgStatus ?? null,
         removeBgReason: input.removeBgReason ?? null,
+        ...orientationCols,
         processingStatus: "ready",
         failureReason: null,
         lastUsedAt: new Date(),
@@ -411,6 +456,7 @@ export async function recordImageReady(input: {
           backgroundRemoved: input.backgroundRemoved,
           removeBgStatus: input.removeBgStatus ?? null,
           removeBgReason: input.removeBgReason ?? null,
+          ...orientationCols,
           processingStatus: "ready",
           failureReason: null,
           lastUsedAt: new Date(),

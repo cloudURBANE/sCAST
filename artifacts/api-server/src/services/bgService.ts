@@ -4,6 +4,7 @@ import { logger } from "../lib/logger";
 import { KeyPool, registerKeyPool } from "../lib/keyPool";
 import { hasOpaqueLightBackground, isEffectivelyTransparent } from "./bgServiceCore";
 import { localWhiteChromaKey } from "./localChromaKey";
+import { orientPackshot, type OrientationMetadata } from "./orientationEngine";
 import { trimPackshotForBgService } from "./packshotTrim";
 import { fetchExternalImage } from "./safeImageFetch";
 
@@ -24,10 +25,10 @@ export function getRemoveBgPool(): KeyPool {
   return removeBgPool;
 }
 
-const NORMALIZED_LONG_EDGE = 768;
-const EDGE_PADDING_X = 30;
-const EDGE_PADDING_TOP = 34;
-const EDGE_PADDING_BOTTOM = 26;
+const NORMALIZED_LONG_EDGE = 1024;
+const EDGE_PADDING_X = 40;
+const EDGE_PADDING_TOP = 45;
+const EDGE_PADDING_BOTTOM = 35;
 const CONTENT_LONG_EDGE =
   NORMALIZED_LONG_EDGE -
   Math.max(EDGE_PADDING_X * 2, EDGE_PADDING_TOP + EDGE_PADDING_BOTTOM);
@@ -97,6 +98,30 @@ async function trimWhiteAndNormalize(buffer: Buffer): Promise<Buffer> {
 
 export async function normalizePackshotBuffer(buffer: Buffer): Promise<Buffer> {
   return trimWhiteAndNormalize(buffer);
+}
+
+/**
+ * Place a genuine background-removed cut-out onto a uniform 1024x1024 baseline-
+ * aligned square via the Orientation Engine. This replaces the legacy fixed-
+ * padding `normalizeToBottleArtwork` for real alpha cut-outs so every bottle
+ * renders at an identical relative size regardless of source aspect ratio.
+ *
+ * Fail-safe: the engine bails (`ok: false`) on anything that isn't a clean
+ * cut-out (no alpha, empty box, bad geometry). On a bail — or any throw — we
+ * fall back to the legacy padded normalize so output is never worse than before.
+ * Orientation metadata is returned only on the engine path so the pipeline can
+ * persist it and a backfill can later upgrade legacy rows in place.
+ */
+async function orientCutout(
+  cutout: Buffer,
+): Promise<{ buffer: Buffer; orientation: OrientationMetadata | null }> {
+  try {
+    const result = await orientPackshot(cutout);
+    if (result.ok) return { buffer: result.buffer, orientation: result.metadata };
+  } catch {
+    /* fall through to legacy padded normalize */
+  }
+  return { buffer: await normalizeToBottleArtwork(cutout), orientation: null };
 }
 
 function baseParams() {
@@ -228,6 +253,8 @@ export type RemoveBgBufferResult = {
   backgroundRemoved: boolean;
   removeBgStatus: RemoveBgStatus;
   removeBgReason: RemoveBgReason;
+  /** Orientation Engine geometry when the cut-out was normalized to a square. */
+  orientation?: OrientationMetadata | null;
 };
 
 // Local, API-free cut-out for sources on a flat near-white plate. Returns a
@@ -239,7 +266,7 @@ async function tryLocalChromaKey(rawInput: Buffer): Promise<RemoveBgBufferResult
     if (!(await hasOpaqueLightBackground(rawInput))) return null;
     const keyed = await localWhiteChromaKey(rawInput);
     if (!keyed) return null;
-    const padded = await normalizeToBottleArtwork(keyed.buffer);
+    const { buffer: padded, orientation } = await orientCutout(keyed.buffer);
     logger.info(
       { removedFraction: Number(keyed.removedFraction.toFixed(3)) },
       "[bgService] local white chroma-key produced a transparent cut-out",
@@ -250,6 +277,7 @@ async function tryLocalChromaKey(rawInput: Buffer): Promise<RemoveBgBufferResult
       backgroundRemoved: true,
       removeBgStatus: "removed",
       removeBgReason: "local_chroma_key",
+      orientation,
     };
   } catch (error) {
     logger.warn(
@@ -295,8 +323,8 @@ export async function removeBgBuffer(
   });
 
   if (outcome.ok) {
-    const padded = await normalizeToBottleArtwork(outcome.value);
-    return { buffer: padded, contentType: "image/png", backgroundRemoved: true, removeBgStatus: "removed", removeBgReason: "removed" };
+    const { buffer: padded, orientation } = await orientCutout(outcome.value);
+    return { buffer: padded, contentType: "image/png", backgroundRemoved: true, removeBgStatus: "removed", removeBgReason: "removed", orientation };
   }
 
   // Poof failed/fell through. Before settling for a border-trimmed image that

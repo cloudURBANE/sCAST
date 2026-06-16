@@ -34,7 +34,7 @@ const DEFAULT_REIMAGINE_MODEL: ReimagineModel = "gpt-image-2";
 const DEFAULT_REIMAGINE_SIZE = "1024x1024";
 const OPENAI_IMAGE_EDITS_ENDPOINT = "https://api.openai.com/v1/images/edits";
 const OPENAI_TIMEOUT_MS = 240_000;
-const MAX_OUTPUT_DIMENSION = 768;
+const MAX_OUTPUT_DIMENSION = 1024;
 const WEBP_QUALITY = 90;
 
 // Quality is the single biggest cost lever on the image-edits endpoint. The
@@ -43,10 +43,10 @@ const WEBP_QUALITY = 90;
 // lets the model pick.
 const REIMAGINE_QUALITIES = ["low", "medium", "high", "auto"] as const;
 type ReimagineQuality = (typeof REIMAGINE_QUALITIES)[number];
-// "medium" is the default: the output is downscaled to MAX_OUTPUT_DIMENSION
-// (768px) WebP before storage, so the extra fidelity of "high" is resolved away
-// on downscale while costing ~4x more in output tokens. Ops can restore "high"
-// via OPENAI_REIMAGINE_QUALITY for a one-off without a deploy.
+// "medium" is the default: the output is encoded to MAX_OUTPUT_DIMENSION
+// (1024px) WebP before storage — matching the 1024² render size 1:1 — so the
+// extra fidelity of "high" still costs ~4x more in output tokens for little
+// visible gain. Ops can restore "high" via OPENAI_REIMAGINE_QUALITY without a deploy.
 const DEFAULT_REIMAGINE_QUALITY: ReimagineQuality = "medium";
 
 function resolveQuality(): ReimagineQuality {

@@ -3,6 +3,7 @@ import { logger } from "../lib/logger";
 import { makeLookupKey } from "./catalogService";
 import { removeBgBuffer, removeBgToBuffer, type RemoveBgOptions, type RemoveBgReason, type RemoveBgStatus } from "./bgService";
 import { isEffectivelyTransparent } from "./bgServiceCore";
+import { type OrientationMetadata } from "./orientationEngine";
 import {
   computeFragranceIdentityCoverage,
   scoreProcessedSerperCandidateBreakdown,
@@ -35,7 +36,7 @@ import { fetchExternalImage, parseAndValidateExternalImageUrl } from "./safeImag
 import { searchSerperImageCandidates, type SerperImageCandidate } from "./serperService";
 export { acceptsImageCacheForRequest, shouldUseImageLookupCaches } from "./imagePipelineCachePolicy";
 
-const MAX_OUTPUT_DIMENSION = 768;
+const MAX_OUTPUT_DIMENSION = 1024;
 const WEBP_QUALITY = 82;
 const MAX_CANDIDATES_PER_ATTEMPT = 5;
 const EARLY_ACCEPT_PROCESSED_SCORE = 17;
@@ -265,6 +266,7 @@ async function processSourceToWebp(
   backgroundRemoved: boolean;
   removeBgStatus: RemoveBgStatus;
   removeBgReason: RemoveBgReason;
+  orientation: OrientationMetadata | null;
 }> {
   const processed = removeBackground
     ? source.localObjectPath
@@ -274,12 +276,13 @@ async function processSourceToWebp(
         // Non-BG path: hand the raw fetched buffer directly to the Sharp finalization
         // chain below. Do NOT call normalizePackshotBuffer here — it pre-resizes and
         // bakes in transparent padding gutters, which then get re-resized by Sharp
-        // (double-resize) and waste the 768px output budget on empty space.
+        // (double-resize) and waste the 1024px output budget on empty space.
         buffer: loaded.buffer,
         backgroundRemoved: loaded.backgroundRemoved,
         contentType: "image/png" as const,
         removeBgStatus: "skipped" as const,
         removeBgReason: "skipped" as const,
+        orientation: null,
       }));
 
   if (!processed) throw new Error("Image processing failed");
@@ -307,6 +310,10 @@ async function processSourceToWebp(
   let backgroundRemoved = processed.backgroundRemoved;
   let removeBgStatus = processed.removeBgStatus;
   let removeBgReason = processed.removeBgReason;
+  // Orientation geometry rides along only on the BG-removed cut-out path. The
+  // engine already emitted a 1024x1024 square, so the resize above is a no-op for
+  // it; the WebP re-encode preserves the canvas and alpha.
+  let orientation = processed.orientation ?? null;
   if (backgroundRemoved && (await isEffectivelyTransparent(optimized))) {
     logger.warn(
       { removeBgReason: "poof_empty_output" },
@@ -324,6 +331,9 @@ async function processSourceToWebp(
     backgroundRemoved = false;
     removeBgStatus = "fallback";
     removeBgReason = "poof_empty_output";
+    // We just discarded the oriented cut-out for a non-BG re-encode, so its
+    // geometry no longer describes the stored bytes.
+    orientation = null;
   }
 
   const metadata = await sharp(optimized).metadata();
@@ -341,6 +351,7 @@ async function processSourceToWebp(
     backgroundRemoved,
     removeBgStatus,
     removeBgReason,
+    orientation,
   };
 }
 
@@ -420,6 +431,7 @@ async function processCandidate(input: {
         backgroundRemoved: optimized.backgroundRemoved,
         removeBgStatus: optimized.removeBgStatus,
         removeBgReason: optimized.removeBgReason,
+        orientation: optimized.orientation,
       });
 
       if (!recorded.isPersisted) {

@@ -155,7 +155,11 @@ export async function hydrateImageUrl(fragrance: Record<string, any>): Promise<R
   if (!name || !brand) return { ...fragrance, imageUrl: chooseHydratedImageUrlWithMetadata(null, currentRef) };
   try {
     const sharedRef = await resolveSharedImageReference(brand, name);
-    return { ...fragrance, imageUrl: chooseHydratedImageUrlWithMetadata(sharedRef, currentRef) };
+    const chosen = chooseHydratedImageUrlWithMetadata(sharedRef, currentRef);
+    // Only carry the normalized geometry when the chosen URL is the cache image
+    // it describes — never tag a saved/legacy row image as normalized.
+    const props = sharedRef && chosen && chosen === sharedRef.imageUrl ? sharedRef.imageProperties : null;
+    return { ...fragrance, imageUrl: chosen, ...(props ? { imageProperties: props } : {}) };
   } catch {
     /* non-fatal */
   }
@@ -218,6 +222,12 @@ export async function batchHydrateImageUrls(
     sourceUrl: string;
     storagePath: string;
     backgroundRemoved: boolean;
+    originalWidth: number | null;
+    originalHeight: number | null;
+    boundingBox: unknown;
+    aspectRatio: number | null;
+    orientationVersion: string | null;
+    baselineAlignment: number | null;
   }[];
   let catalogRows: {
     lookupKey: string;
@@ -235,6 +245,12 @@ export async function batchHydrateImageUrls(
           sourceUrl: imageCacheTable.sourceUrl,
           storagePath: imageCacheTable.storagePath,
           backgroundRemoved: imageCacheTable.backgroundRemoved,
+          originalWidth: imageCacheTable.originalWidth,
+          originalHeight: imageCacheTable.originalHeight,
+          boundingBox: imageCacheTable.boundingBox,
+          aspectRatio: imageCacheTable.aspectRatio,
+          orientationVersion: imageCacheTable.orientationVersion,
+          baselineAlignment: imageCacheTable.baselineAlignment,
         })
         .from(imageCacheTable)
         .where(
@@ -277,11 +293,23 @@ export async function batchHydrateImageUrls(
     if (!row.lookupKey || imageCacheMap.has(row.lookupKey)) continue;
     const url = await usableImageUrlForResponse(row.publicUrl);
     if (url) {
+      const imageProperties =
+        row.orientationVersion && row.originalWidth != null && row.originalHeight != null && row.boundingBox
+          ? {
+              originalWidth: row.originalWidth,
+              originalHeight: row.originalHeight,
+              boundingBox: row.boundingBox,
+              aspectRatio: row.aspectRatio,
+              orientationVersion: row.orientationVersion,
+              baselineAlignment: row.baselineAlignment,
+            }
+          : null;
       imageCacheMap.set(row.lookupKey, {
         imageUrl: url,
         sourceProvider: row.sourceProvider,
         sourceUrl: row.sourceUrl,
         storagePath: row.storagePath,
+        imageProperties,
       });
     }
   }
@@ -312,7 +340,10 @@ export async function batchHydrateImageUrls(
         storagePath: f.storagePath,
       };
       const resolved = key ? (imageCacheMap.get(key) ?? catalogMap.get(key) ?? null) : null;
-      return { ...f, imageUrl: chooseHydratedImageUrlWithMetadata(resolved, currentRef) };
+      const chosen = chooseHydratedImageUrlWithMetadata(resolved, currentRef);
+      const props =
+        resolved && chosen && chosen === resolved.imageUrl ? resolved.imageProperties : null;
+      return { ...f, imageUrl: chosen, ...(props ? { imageProperties: props } : {}) };
     }),
   );
 }

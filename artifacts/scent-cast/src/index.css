@@ -399,6 +399,46 @@ a {
      (otherwise left/right mostly trim empty letterboxing while top/bottom hit the image). */
 }
 
+/*
+ * Orientation Engine output (services/orientationEngine.ts): a uniform 768x768
+ * square with the bottle already scaled to 88% height and seated on a baseline
+ * 26px from the bottom. Because that alignment is baked into the pixels, the
+ * default packshot CSS above ALREADY renders these uniformly — this block is
+ * only the last-bit polish, applied when the API tags the image normalized.
+ *
+ * Anchor hover/zoom at the baked baseline (88.5% down) instead of the bitmap
+ * bottom, so magnification grows the bottle upward off its shelf line rather
+ * than sliding it. Kept additive + attribute-gated so legacy images are
+ * untouched and the rule is inert until `imageProperties` reaches the client.
+ */
+.bottle-packshot-frame[data-normalized="true"] {
+  transform-origin: center 88.5%;
+}
+
+/*
+ * Big single-bottle views (detail modal, enlarge, featured hero) only. The engine
+ * bakes the bottle at 88% canvas height with a 35px (3.42%) baseline pad on a 1024²
+ * canvas, so its top edge sits 1 - (0.88 + 0.0342) = 8.6% below the square's top.
+ * Fitting that square via `object-fit: contain` into a roomy slot therefore renders
+ * the bottle ~12% smaller than a legacy tight crop did (confirmed visually 2026-06-15).
+ *
+ * Cancel exactly that baked padding by scaling the frame up by 1 / 0.9142 ≈ 1.09
+ * (inverse of the baked bottle-top fraction = targetHeightPct + baselineOffset/canvas
+ * from orientationEngineCore.ts — unchanged by the 768→1024 bump since the offset
+ * scaled proportionally), anchored at `center bottom` so the bottle stays
+ * shelf-seated and its cap reaches — without exceeding — the artboard top edge.
+ *
+ * Scoped to detail/featured ONLY: the grid keeps the uniform square (its whole win)
+ * untouched. Composes with the user zoom/nudge via --bottle-frame-* so manual frame
+ * adjustments still apply on top. Specificity (two attrs) beats the hover rule above.
+ */
+.bottle-packshot-frame[data-normalized="true"][data-variant="detail"],
+.bottle-packshot-frame[data-normalized="true"][data-variant="featured"] {
+  transform: translate(var(--bottle-frame-x), var(--bottle-frame-y))
+    scale(calc(var(--bottle-frame-scale) * 1.09));
+  transform-origin: center bottom;
+}
+
 .bottle-packshot-img,
 .bottle-packshot-video {
   display: block;
@@ -1202,6 +1242,31 @@ a {
 .scent-card-brand[data-len="xlong"] {
   --brand-size: clamp(1.125rem, 1.575vw, 1.485rem);
   line-height: 1.32;
+}
+
+/*
+ * Compact 2-up mobile grid only. The brand size above is viewport-relative (vw),
+ * so on a half-width compact card a name that sits on ONE line in the full-width
+ * single-column / iPad grid wraps to two-plus lines — which shifts the image and
+ * title up vs the roomy grid (the reported mobile "text jumps up" on view switch).
+ * Scale the brand to the card here so line counts (and therefore vertical rhythm)
+ * match the roomy grid. Scoped to [data-compact="true"], so the single-column and
+ * iPad (sm+) grids the user is happy with are untouched. data-len variants kept so
+ * longer names still step down proportionally; the extra class beats the base above.
+ */
+.scent-vault-grid[data-compact="true"] .scent-card-brand {
+  --brand-size: clamp(1rem, 4.8vw, 1.35rem);
+  line-height: 1.22;
+}
+.scent-vault-grid[data-compact="true"] .scent-card-brand[data-len="medium"] {
+  --brand-size: clamp(0.92rem, 4.4vw, 1.2rem);
+}
+.scent-vault-grid[data-compact="true"] .scent-card-brand[data-len="long"] {
+  --brand-size: clamp(0.82rem, 3.9vw, 1.05rem);
+}
+.scent-vault-grid[data-compact="true"] .scent-card-brand[data-len="xlong"] {
+  --brand-size: clamp(0.72rem, 3.4vw, 0.95rem);
+  line-height: 1.26;
 }
 
 .scent-arena-brand {

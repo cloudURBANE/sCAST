@@ -14,6 +14,8 @@ export type SharedImageReference = {
   sourceProvider?: string | null;
   sourceUrl?: string | null;
   storagePath?: string | null;
+  /** Orientation Engine geometry when the cache image is a normalized square. */
+  imageProperties?: unknown;
 };
 
 async function catalogProfileImageReference(profile: Record<string, unknown> | null | undefined): Promise<SharedImageReference | null> {
@@ -47,6 +49,7 @@ export async function resolveSharedImageReference(
         sourceProvider: cached.sourceProvider,
         sourceUrl: cached.sourceUrl ?? null,
         storagePath: cached.storagePath,
+        imageProperties: cached.imageProperties ?? null,
       };
     }
   } catch {
