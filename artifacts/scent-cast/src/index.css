@@ -2413,6 +2413,42 @@ a {
     inset 0 1px 0 rgba(255, 255, 255, 0.045);
 }
 
+/* Seamless SOTD video card. The bottle packshot video is mastered against a
+   pure #000 background, so to make it read as a floating bottle we collapse
+   every edge the standard card draws: solid black fill, transparent border,
+   and the carved bezel / specular sheen pseudo-layers faded out. The chips,
+   brand label, and title (z-10) sit above all of this and stay fully visible.
+   Only the outer drop shadow survives, so the card still lifts off the panel
+   behind it. Applied only when a video is actually wired (see PostCard). */
+.scent-fragrance-card.sotd-video-card {
+  background: #000;
+  border-color: transparent;
+  box-shadow:
+    0 34px 78px -40px rgba(0, 0, 0, 0.98),
+    0 16px 34px -22px rgba(0, 0, 0, 0.9);
+}
+
+.scent-fragrance-card.sotd-video-card::before,
+.scent-fragrance-card.sotd-video-card::after,
+.scent-fragrance-card.sotd-video-card .scent-card-frame {
+  opacity: 0;
+}
+
+/* Keep the seam closed on hover — the base card's hover state reintroduces a
+   bright inner lip and visible border, which would crack the illusion. */
+@media (hover: hover) and (pointer: fine) {
+  .scent-fragrance-card.sotd-video-card:hover {
+    border-color: transparent;
+    box-shadow:
+      0 34px 78px -40px rgba(0, 0, 0, 0.98),
+      0 16px 34px -22px rgba(0, 0, 0, 0.9);
+  }
+
+  .scent-fragrance-card.sotd-video-card:hover .scent-card-frame {
+    opacity: 0;
+  }
+}
+
 /* On phones the curator tag and brand label are hidden, so the bottle becomes
    the card's whole story: pull the artboard nearly to the edges (override the
    6% card inset) so the packshot fills the freed space. Scoped to the marquee

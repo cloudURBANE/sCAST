@@ -666,7 +666,19 @@ const ScentOfDayPostCard: React.FC<PostCardProps> = ({
 
       <div className="mt-5 grid min-w-0 gap-5 sm:grid-cols-[minmax(13rem,0.82fr)_minmax(0,1fr)] sm:items-stretch">
         <div className="min-w-0">
-          <div className="scent-fragrance-card scent-community-marquee-card relative mx-auto flex aspect-[3/4.4] w-full max-w-[13rem] flex-col overflow-hidden p-5 sm:max-w-[18rem]">
+          {/* When a black-mastered packshot video is present, the
+              `sotd-video-card` modifier strips the bezel, sheen, and border so
+              the video's pure-#000 master blends into the card and the bottle
+              reads as floating (see index.css). Gated on videoSrc, so the
+              reduce-motion / low-budget still-poster fallback keeps its frame. */}
+          <div
+            className={[
+              'scent-fragrance-card scent-community-marquee-card relative mx-auto flex aspect-[3/4.4] w-full max-w-[13rem] flex-col overflow-hidden p-5 sm:max-w-[18rem]',
+              videoSrc ? 'sotd-video-card' : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
+          >
             <div className="scent-card-frame" aria-hidden="true" />
             <div className="relative z-10 flex justify-between gap-3">
               <span className="inline-flex items-center gap-1.5 rounded-full border border-scent-accent/22 bg-black/54 px-2.5 py-1 scent-type-label text-scent-accent">
