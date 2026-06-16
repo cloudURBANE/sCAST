@@ -2811,6 +2811,21 @@ textarea:focus-visible,
     0 0 22px rgba(255, 232, 172, 0.22);
 }
 
+/* Windows High Contrast / forced-colors strips box-shadow, so the few controls
+   that opt out of the outline (`outline: none`) and render their keyboard-focus
+   ring purely as a gold box-shadow would show NO focus indicator there. Restore
+   a real system-colored outline for just those controls. Scoped entirely to
+   forced-colors mode, so the normal rendered look is completely untouched. */
+@media (forced-colors: active) {
+  .scent-lux-input:focus-visible,
+  .scent-vault-outline-button:focus-visible,
+  .scent-primary-button:focus-visible,
+  [data-testid="scent-mission-cue-bar"] .scent-primary-button:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+}
+
 @media (hover: none) and (pointer: coarse) {
   .scent-no-mobile-focus-ring:focus,
   .scent-no-mobile-focus-ring:focus-visible {

@@ -52,6 +52,17 @@
     <link rel="manifest" href="/site.webmanifest" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <!--
+      Processed bottle packshots are served DIRECT (cross-origin) from Firebase
+      Storage (see imageObjectStorage.ts) — they bypass /api/image-proxy. Warm the
+      DNS+TCP+TLS connection up front so the first/LCP bottle image starts sooner
+      on cold visits. No `crossorigin`: <img> packshots are no-cors requests, so
+      the hint must match their connection to be reused (a crossorigin hint would
+      open a separate, unused connection). dns-prefetch is the harmless fallback
+      for engines that don't act on preconnect.
+    -->
+    <link rel="preconnect" href="https://firebasestorage.googleapis.com">
+    <link rel="dns-prefetch" href="https://firebasestorage.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400;1,600&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&family=Pinyon+Script&display=swap" rel="stylesheet">
   </head>
   <body>
