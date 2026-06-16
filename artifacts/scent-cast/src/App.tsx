@@ -830,7 +830,7 @@ function DashboardView() {
 
   return (
     <div className="min-h-[100svh] relative overflow-x-hidden pb-[calc(var(--bottomnav-h)+1.5rem)] md:pb-0">
-      <SEO />
+      <SEO title="ScentBeam — Your scent, perfected" description="Build your fragrance vault and discover your signature scent, calibrated to the weather around you." url="https://scentbeam.com/" />
       <AppTopNav
         authToken={authToken}
         authEmail={authEmail}
