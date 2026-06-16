@@ -9,6 +9,8 @@ export interface CommunityFragranceEntry {
   imageUrl: string;
   curator: string;
   imageAdjustment?: BottleImageAdjustment | null;
+  /** Orientation Engine geometry; presence of orientationVersion marks a normalized square packshot. */
+  imageProperties?: { orientationVersion?: string | null } | null;
   family?: string;
   topNotes?: string[];
   heartNotes?: string[];
@@ -90,6 +92,9 @@ function normalizeCommunityEntry(value: unknown, index: number): CommunityFragra
     curator: firstString(record.curator) ?? '@community',
     ...(record.imageAdjustment && typeof record.imageAdjustment === 'object' && !Array.isArray(record.imageAdjustment)
       ? { imageAdjustment: record.imageAdjustment as BottleImageAdjustment }
+      : {}),
+    ...(record.imageProperties && typeof record.imageProperties === 'object' && !Array.isArray(record.imageProperties)
+      ? { imageProperties: record.imageProperties as { orientationVersion?: string | null } }
       : {}),
     ...(family ? { family } : {}),
     ...(topNotes ? { topNotes } : {}),

@@ -275,6 +275,7 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
                       className="absolute inset-0"
                       imgClassName="brightness-[1.1]"
                       adjustment={item.imageAdjustment}
+                      imageProperties={item.imageProperties}
                     />
                   </motion.div>
                   <div className="relative z-10 mt-2 text-center">

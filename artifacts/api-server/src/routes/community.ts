@@ -76,6 +76,11 @@ function toCommunityFragrance(row: {
     curator: `@${shareHandleFromEmail(row.userEmail)}`,
     ...(family ? { family } : {}),
     ...(fragrance.imageAdjustment ? { imageAdjustment: fragrance.imageAdjustment } : {}),
+    // Orientation Engine geometry from image hydration. The chosen image is only
+    // tagged with imageProperties when it's our normalized square cache object, so
+    // forwarding it lets the SPA mark the packshot data-normalized (uniform square
+    // framing + the baseline-anchored detail scale). Dropped here previously.
+    ...(fragrance.imageProperties ? { imageProperties: fragrance.imageProperties } : {}),
     ...(topNotes ? { topNotes } : {}),
     ...(heartNotes ? { heartNotes } : {}),
     ...(baseNotes ? { baseNotes } : {}),
