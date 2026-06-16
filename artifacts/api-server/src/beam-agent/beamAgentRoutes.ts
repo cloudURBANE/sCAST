@@ -45,7 +45,8 @@ import { runBeamAgent } from "./beamAgentLoop.ts";
 import { packetFromWardrobeRow, redactEventForClient } from "./beamToolCore.ts";
 import { resolveBeamModels } from "./provider.ts";
 import { selectConciergeLane } from "./laneSelector.ts";
-import type { BeamEmit, BeamRunContext, BeamRunEvent, CandidatePacket, ClaudeMessage } from "./types.ts";
+import { appendSessionTurn, loadSessionHistory } from "./beamSessionStore.ts";
+import type { BeamEmit, BeamRunContext, BeamRunEvent, CandidatePacket } from "./types.ts";
 import { createBeamResearcher } from "./research/beamResearch.ts";
 import { loadResearchCache, saveResearchCache } from "./research/researchCache.ts";
 import { runWebResearch } from "./research/researchProvider.ts";
@@ -61,7 +62,7 @@ const router = Router();
 
 // Runs fan out to an LLM plus catalog/research calls, so throttle well below the
 // general API surface. Per-IP fixed window, matching the scent-mission route.
-const runRateLimit = rateLimitMiddleware({ limit: 20, windowMs: 5 * 60_000 });
+const runRateLimit = rateLimitMiddleware({ name: "beam-runs", limit: 20, windowMs: 5 * 60_000 });
 
 /* ------------------------------------------------------------------ */
 /* Per-user daily quota (cost guardrail, complements the per-IP limit) */
@@ -110,48 +111,12 @@ function pruneRuns(): void {
 }
 
 /* ------------------------------------------------------------------ */
-/* In-memory conversation memory (per session, tenant/user scoped)    */
+/* Conversation memory lives in beamSessionStore (in-memory or Redis). */
 /* ------------------------------------------------------------------ */
-
-/**
- * Clean conversational history — only the user/assistant TEXT turns, never the
- * intermediate tool plumbing — so follow-ups in a session keep context. In-memory
- * and TTL-bounded, mirroring the run registry; Phase 5 moves this to Postgres.
- */
-type SessionRecord = { turns: ClaudeMessage[]; updatedAt: number };
-const sessions = new Map<string, SessionRecord>();
-const SESSION_TTL_MS = 60 * 60_000;
-const MAX_SESSION_TURNS = 16;
-
-function sessionKey(ctx: BeamRunContext): string {
-  return `${ctx.tenantId}:${ctx.userId}:${ctx.sessionId}`;
-}
 
 /** Short, stable, non-reversible user tag for logs — never log the raw user id. */
 function hashUser(userId: string): string {
   return createHash("sha256").update(userId).digest("hex").slice(0, 12);
-}
-
-function pruneSessions(): void {
-  const now = Date.now();
-  for (const [key, record] of sessions) {
-    if (now - record.updatedAt > SESSION_TTL_MS) sessions.delete(key);
-  }
-}
-
-function loadSessionHistory(ctx: BeamRunContext): ClaudeMessage[] {
-  pruneSessions();
-  return sessions.get(sessionKey(ctx))?.turns.slice() ?? [];
-}
-
-function appendSessionTurn(ctx: BeamRunContext, userMessage: string, assistantText: string): void {
-  const key = sessionKey(ctx);
-  const record = sessions.get(key) ?? { turns: [], updatedAt: Date.now() };
-  record.turns.push({ role: "user", content: userMessage });
-  record.turns.push({ role: "assistant", content: assistantText });
-  if (record.turns.length > MAX_SESSION_TURNS) record.turns = record.turns.slice(-MAX_SESSION_TURNS);
-  record.updatedAt = Date.now();
-  sessions.set(key, record);
 }
 
 function makeEmit(record: RunRecord): BeamEmit {
@@ -338,7 +303,7 @@ router.post("/runs", runRateLimit, requireAuth, async (req: AuthRequest, res) =>
 
   const tools = createBeamTools(buildDeps(weather));
   const emit = makeEmit(record);
-  const history = loadSessionHistory(ctx);
+  const history = await loadSessionHistory(ctx);
   // Pick the cost lane deterministically (brief §03.2) from the message + how much
   // context the session already carries — no extra router LLM call. The premium
   // lane runs MiniMax M3 end-to-end; the default lane runs cheap M2.5 orchestration.
@@ -358,7 +323,10 @@ router.post("/runs", runRateLimit, requireAuth, async (req: AuthRequest, res) =>
     model: models?.model,
     synthesisModel: models?.synthesisModel,
     history,
-    onComplete: (assistantText) => appendSessionTurn(ctx, message, assistantText),
+    onComplete: (assistantText) => {
+      // Best-effort, fire-and-forget (like the usage-ledger write below).
+      void appendSessionTurn(ctx, message, assistantText);
+    },
     onSummary: (summary) => {
       logger.info(
         {
