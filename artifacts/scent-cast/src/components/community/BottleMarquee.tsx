@@ -230,7 +230,7 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
                     type="button"
                     aria-label={`${item.name} by ${item.brand}, curated by ${item.curator}`}
                     tabIndex={copyIndex > 0 ? -1 : 0}
-                    className="scent-fragrance-card scent-community-marquee-card group relative flex h-full w-full cursor-pointer flex-col p-3 sm:p-6 text-left outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
+                    className="scent-fragrance-card scent-community-marquee-card group relative flex h-full w-full cursor-pointer flex-col justify-center p-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 sm:justify-start sm:p-6"
                     whileHover={cardHoverMotion}
                     whileTap={cardTapMotion}
                     transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
@@ -248,10 +248,19 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
                         {item.curator}
                       </span>
                     </div>
+                    {/*
+                     * Mobile: a square slot (vs. the old greedy flex-1) so the
+                     * normalized square packshot fills its frame edge-to-edge instead
+                     * of floating width-bound with dead space above in a tall portrait
+                     * card — same lever as the Wardrobe/SharePage grid. min-h-0 lets it
+                     * shrink rather than overflow if the title wraps; the card's
+                     * justify-center balances the remaining slack. Desktop keeps the
+                     * original flex-1 fill (curator + brand are visible there).
+                     */}
                     <motion.div
                       layoutId={`bottle-image-${copyIndex}-${item.id}`}
                       transition={imageLayoutTransition}
-                      className="relative z-10 my-1 min-h-0 flex-1 sm:my-3"
+                      className="relative z-10 my-1 min-h-0 aspect-square sm:my-3 sm:aspect-auto sm:flex-1"
                     >
                       <BottleImage
                         src={item.imageUrl}
@@ -262,6 +271,7 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
                         className="absolute inset-0"
                         imgClassName="scent-hover-scale brightness-[1.1] transition-transform duration-[900ms] motion-reduce:transition-none"
                         adjustment={item.imageAdjustment}
+                        imageProperties={item.imageProperties}
                         showFrameGuide={false}
                         isSyncing={loading}
                         onLoad={copyIndex === 0 ? requestMarqueeMeasure : undefined}

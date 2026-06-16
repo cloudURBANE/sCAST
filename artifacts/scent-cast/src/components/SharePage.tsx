@@ -384,24 +384,30 @@ function PriceValueSignal({
   const duration = intensity >= 4 ? 1.35 : intensity === 3 ? 1.55 : 1.8;
 
   return (
-    <span className={baseClass} aria-label={label}>
-      {symbols.split("").map((symbol, index) => (
-        <motion.span
-          key={`${symbol}-${index}`}
-          aria-hidden="true"
-          className="inline-block"
-          animate={animate}
-          transition={{
-            duration,
-            delay: index * 0.11,
-            repeat: Infinity,
-            repeatType: "mirror",
-            ease: "easeInOut",
-          }}
-        >
-          {symbol}
-        </motion.span>
-      ))}
+    <span className={`${baseClass} flex-col items-center gap-0.5`} aria-label={label}>
+      <span className="inline-flex items-center">
+        {symbols.split("").map((symbol, index) => (
+          <motion.span
+            key={`${symbol}-${index}`}
+            aria-hidden="true"
+            className="inline-block"
+            animate={animate}
+            transition={{
+              duration,
+              delay: index * 0.11,
+              repeat: Infinity,
+              repeatType: "mirror",
+              ease: "easeInOut",
+            }}
+          >
+            {symbol}
+          </motion.span>
+        ))}
+      </span>
+      {/* Make the verdict legible — the dollar glyphs alone are ambiguous. */}
+      <span aria-hidden="true" className="font-sans not-italic font-normal text-[10px] uppercase tracking-[0.14em] opacity-70 whitespace-nowrap">
+        {label}
+      </span>
     </span>
   );
 }
@@ -515,7 +521,7 @@ function ProfileScorePanel({
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-[1.15fr_1.3fr_0.9fr_0.9fr_0.9fr] border-y border-white/[0.04]">
         <div className="col-span-2 sm:col-span-4 lg:col-span-1 flex flex-col items-center justify-center px-4 py-5 border-b lg:border-b-0 lg:border-r border-white/[0.04] text-center">
           <p className="text-[10px] uppercase tracking-[0.28em] text-white/64 font-bold">Profile Score</p>
-          <div className="mt-1 flex items-end justify-center gap-2">
+          <div className="mt-1 flex items-end justify-center gap-2 whitespace-nowrap">
             <span className="font-serif italic text-6xl leading-none text-scent-accent">
               {consensusScore ?? "--"}
             </span>
