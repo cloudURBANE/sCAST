@@ -223,6 +223,49 @@ function writeGuestWardrobeItems(items: Fragrance[]): void {
   }
 }
 
+// One-time accord-heal re-sync.
+//
+// A vault row's accords/derived_metrics are snapshotted at add-time and then
+// frozen: once `fragrantica_metrics_complete` is true the background refresh
+// (`wardrobeNeedsEnrichmentRefresh`) treats the row as done and never re-fetches.
+// That is correct for steady state, but it also means rows captured *before* an
+// upstream data healing keep their stale (pre-heal) accords forever. Bumping
+// this version forces each existing complete row to re-fetch from the (now
+// healed) engine exactly once, persist the clean metrics, and then mark itself
+// done so it never re-syncs again. Bump the integer whenever a catalog/engine
+// data healing needs to land on already-saved vault rows.
+const ACCORD_HEAL_RESYNC_VERSION = 1;
+
+function accordHealResyncStorageKey(token: string): string {
+  return `scent_accord_heal_resync_${token}`;
+}
+
+function readAccordHealResyncDone(token: string): Set<string> {
+  if (typeof localStorage === 'undefined' || !token) return new Set();
+  try {
+    const raw = localStorage.getItem(accordHealResyncStorageKey(token));
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw) as { v?: number; ids?: unknown };
+    // A version mismatch means a new heal needs to run: discard prior progress.
+    if (parsed?.v !== ACCORD_HEAL_RESYNC_VERSION) return new Set();
+    return new Set(Array.isArray(parsed.ids) ? parsed.ids.filter((id): id is string => typeof id === 'string') : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function writeAccordHealResyncDone(token: string, ids: Set<string>): void {
+  if (typeof localStorage === 'undefined' || !token) return;
+  try {
+    localStorage.setItem(
+      accordHealResyncStorageKey(token),
+      JSON.stringify({ v: ACCORD_HEAL_RESYNC_VERSION, ids: [...ids] }),
+    );
+  } catch {
+    /* storage unavailable (private mode / quota) - resync just retries next load */
+  }
+}
+
 const getWeatherNumber = (
   weather: any,
   keys: string[],
@@ -670,6 +713,8 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const detailRefreshBackoffRef = useRef<Map<string, DetailRefreshBackoffMeta>>(new Map());
   const detailRefreshIdleUntilRef = useRef(0);
   const isMutatingRef = useRef(false);
+  // Vault rows already re-synced for the current ACCORD_HEAL_RESYNC_VERSION.
+  const accordHealResyncDoneRef = useRef<Set<string>>(new Set());
   const lastMutationRef = useRef(0);
   const appStateRefreshInFlightRef = useRef(false);
   const imageBackfillTimersRef = useRef<number[]>([]);
@@ -1451,11 +1496,32 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   }, [authToken]);
 
+  // Load (or reset on version bump) the per-token accord-heal re-sync progress.
+  useEffect(() => {
+    accordHealResyncDoneRef.current = readAccordHealResyncDone(authToken ?? '');
+  }, [authToken]);
+
   // Background detail enrichments scheduler
   useEffect(() => {
     if (!authToken || !wardrobeLoaded || items.length === 0) return;
     const abortController = new AbortController();
     let cancelled = false;
+
+    // One-time heal re-sync: a complete row that the normal refresh path would
+    // skip still gets re-fetched once if it hasn't been re-synced for the
+    // current heal version. After a successful persist it is marked done below.
+    const needsAccordHealResync = (item: Fragrance): boolean => {
+      if (accordHealResyncDoneRef.current.has(detailRefreshKeyFor(item))) return false;
+      if (!(fgMetricsComplete(item) || sourceCoverageComplete(item))) return false;
+      return hasFragranticaRefreshTarget(item);
+    };
+
+    const markAccordHealResynced = (item: Fragrance) => {
+      const key = detailRefreshKeyFor(item);
+      if (accordHealResyncDoneRef.current.has(key)) return;
+      accordHealResyncDoneRef.current.add(key);
+      writeAccordHealResyncDone(authToken, accordHealResyncDoneRef.current);
+    };
 
     const noteBackoff = (item: Fragrance, status: string) => {
       const key = detailRefreshKeyFor(item);
@@ -1478,7 +1544,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const now = Date.now();
       if (detailRefreshIdleUntilRef.current > now) return;
       const targets = itemsRef.current
-        .filter(wardrobeNeedsEnrichmentRefresh)
+        .filter((item) => wardrobeNeedsEnrichmentRefresh(item) || needsAccordHealResync(item))
         .filter((item) => {
           const meta = detailRefreshBackoffRef.current.get(detailRefreshKeyFor(item));
           return !meta || meta.nextEligibleAt <= now;
@@ -1543,8 +1609,12 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             const wasPersisted = persisted.some((item) =>
               item.id === update.target.id || sameWardrobeEntry(item, update.target),
             );
-            if (wasPersisted) clearBackoff(update.target);
-            else noteBackoff(update.target, 'persist_failed');
+            if (wasPersisted) {
+              clearBackoff(update.target);
+              markAccordHealResynced(update.target);
+            } else {
+              noteBackoff(update.target, 'persist_failed');
+            }
           }
         }
       } catch (err) {
