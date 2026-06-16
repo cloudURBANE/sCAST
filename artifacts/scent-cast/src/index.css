@@ -37,12 +37,30 @@
   --color-scent-text-subtle: #bfae98;
 
   --font-serif: "Cormorant Garamond", Georgia, serif;
-  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  /* "InterFallback" is a metric-matched alias for Arial (see @font-face below).
+     It sits between Inter and the generic system stack so that while the Google
+     Fonts "Inter" file is still loading (display=swap), the fallback already
+     renders at Inter's glyph metrics. Without it, the swap reflows nav labels —
+     the transient "ARENA"→"ARFNA" glyph-shift flash reported in QA. */
+  --font-sans: "Inter", "InterFallback", system-ui, -apple-system, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
   --font-script: "Pinyon Script", "Cormorant Garamond", cursive;
 
   --radius-scent: 22px;
   --radius-scent-inner: 21px;
+}
+
+/* Metric-matched fallback for Inter, mapped onto Arial. The overrides align the
+   fallback's ascent/descent/line-gap and advance width to Inter so the webfont
+   swap is visually seamless (no layout shift, no glyph-substitution flash on the
+   top nav). Values are the published Inter→Arial adjustments. */
+@font-face {
+  font-family: "InterFallback";
+  src: local("Arial");
+  ascent-override: 90.20%;
+  descent-override: 22.48%;
+  line-gap-override: 0.00%;
+  size-adjust: 107.40%;
 }
 
 /* ─── Core Rendering & Resets ─────────────────────────────────────────────── */
@@ -1856,8 +1874,8 @@ a {
   display: flex;
   flex-direction: column;
   align-items: center;
-  color: rgba(212, 175, 55, 0.82);
-  font-size: 0.68rem;
+  color: rgba(224, 188, 86, 0.95);
+  font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.22em;
   text-transform: uppercase;
@@ -1875,10 +1893,14 @@ a {
 }
 
 .scent-atmosphere-subtitle {
-  opacity: 0.4;
+  /* The plain-language gloss ("Humidity", "Temperature", …) is what makes the
+     stylized metric labels legible. It previously rendered at opacity:0.4 over a
+     dark field — well under the WCAG 4.5:1 floor. Render it in legible parchment
+     instead of a faded gold so the explanation actually reads. */
+  color: rgba(244, 222, 189, 0.84);
   text-transform: none;
   letter-spacing: normal;
-  font-size: 0.7em;
+  font-size: 0.74em;
   margin-top: 0.125rem;
 }
 
