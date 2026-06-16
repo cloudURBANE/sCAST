@@ -1515,6 +1515,24 @@ export default function App() {
     clearTransitionWork();
   }, [clearTransitionWork]);
 
+  // Own scroll position across route changes. React Router does not reset scroll
+  // on navigation, and in a standalone PWA the browser's own scroll restoration
+  // ('auto') is inconsistent — so each route was landing at whatever scroll the
+  // previous page left behind ("a random part of the page"). Take manual control
+  // and reset to the top whenever the *rendered* route commits. Keying on
+  // `renderedLocation.pathname` (not `location`) runs the reset while the page
+  // transition overlay still covers the screen, so the jump is never visible, and
+  // it leaves same-route query/hash changes (e.g. in-page scrollIntoView) alone.
+  useEffect(() => {
+    if ('scrollRestoration' in window.history) {
+      window.history.scrollRestoration = 'manual';
+    }
+  }, []);
+
+  useLayoutEffect(() => {
+    window.scrollTo(0, 0);
+  }, [renderedLocation.pathname]);
+
   useEffect(() => {
     if (isFreezeLab) {
       setThreadBackgroundReady(false);

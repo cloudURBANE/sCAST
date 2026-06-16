@@ -9,7 +9,6 @@ import {
   CircleDollarSign,
   RefreshCw,
   Undo2,
-  HelpCircle,
   AlertCircle,
   Sparkles,
   Check,
@@ -456,28 +455,35 @@ function PriceValueSignal({
   const duration = intensity >= 4 ? 1.35 : intensity === 3 ? 1.55 : 1.8;
 
   return (
-    <span className={baseClass} aria-label={label}>
-      {symbols.split("").map((symbol, index) => (
-        <motion.span
-          key={`${symbol}-${index}`}
-          aria-hidden="true"
-          className="inline-block"
-          animate={animate}
-          transition={
-              reduceMotion || iPadSafariPerformanceMode
-                ? undefined
-                : {
-                  duration,
-                  delay: index * 0.11,
-                  repeat: PRICE_SIGNAL_REPEAT_COUNT,
-                  repeatType: "mirror",
-                  ease: "easeInOut",
-                }
-          }
-        >
-          {symbol}
-        </motion.span>
-      ))}
+    <span className={`${baseClass} flex-col items-center gap-0.5`} aria-label={label}>
+      <span className="inline-flex items-center">
+        {symbols.split("").map((symbol, index) => (
+          <motion.span
+            key={`${symbol}-${index}`}
+            aria-hidden="true"
+            className="inline-block"
+            animate={animate}
+            transition={
+                reduceMotion || iPadSafariPerformanceMode
+                  ? undefined
+                  : {
+                    duration,
+                    delay: index * 0.11,
+                    repeat: PRICE_SIGNAL_REPEAT_COUNT,
+                    repeatType: "mirror",
+                    ease: "easeInOut",
+                  }
+            }
+          >
+            {symbol}
+          </motion.span>
+        ))}
+      </span>
+      {/* The dollar glyphs alone don't say whether the price is good or bad —
+          surface the verdict ("Great Value" / "Way Overpriced") as visible text. */}
+      <span aria-hidden="true" className="font-sans not-italic font-normal text-[10px] uppercase tracking-[0.14em] opacity-70 whitespace-nowrap">
+        {label}
+      </span>
     </span>
   );
 }
@@ -626,7 +632,7 @@ function ProfileScorePanel({
         <div className="flex flex-1 flex-col items-center justify-center w-full">
           {stat.score !== null ? (
             <>
-              <div className={`flex items-end justify-center ${compact ? "gap-1" : "gap-1.5"}`}>
+              <div className={`flex items-end justify-center whitespace-nowrap ${compact ? "gap-1" : "gap-1.5"}`}>
                 <span
                   className={`font-serif italic leading-none text-scent-accent tabular-nums ${
                     compact ? "text-[1.7rem]" : "text-[2.85rem]"
@@ -1621,12 +1627,20 @@ export const Wardrobe: React.FC<{
   const detailVisualPanelClassName = stackedDetailMode
     ? "min-h-[16rem]"
     : "lg:h-full lg:min-h-[21.25rem]";
+  // Drop placeholder values like "Unknown"/"N/A" rather than surfacing them —
+  // an empty-but-honest detail reads more premium than a confident "Unknown",
+  // and detailMetaRows already hides rows whose value is falsy.
+  const cleanMetaValue = (value: string | null | undefined): string | undefined => {
+    if (!value) return undefined;
+    const trimmed = value.trim();
+    return /^(unknown|n\/?a|none|null|undefined)$/i.test(trimmed) ? undefined : trimmed;
+  };
   const detailMetaRows = selectedItem
     ? [
-        { label: 'Year', value: formatYear(selectedItem.year) },
-        { label: 'Gender', value: stringValue(selectedItem.gender) },
-        { label: 'Concentration', value: stringValue(selectedItem.concentration) },
-        { label: 'Environment', value: stringValue(selectedItem.season) },
+        { label: 'Year', value: cleanMetaValue(formatYear(selectedItem.year)) },
+        { label: 'Gender', value: cleanMetaValue(stringValue(selectedItem.gender)) },
+        { label: 'Concentration', value: cleanMetaValue(stringValue(selectedItem.concentration)) },
+        { label: 'Environment', value: cleanMetaValue(stringValue(selectedItem.season)) },
       ].filter((row): row is { label: string; value: string } => Boolean(row.value))
     : [];
 
@@ -1889,7 +1903,7 @@ export const Wardrobe: React.FC<{
           </section>
         )}
 
-        <div className="space-y-8 pb-28 sm:pb-36">
+        <div className="space-y-8 pb-[calc(var(--bottomnav-h)+2rem)] sm:pb-36">
           {wardrobeError ? (
             <div className="py-24 px-4 text-center border border-white/10 bg-white/[0.02] rounded-scent flex flex-col items-center justify-center gap-6">
               <div className="space-y-2">
@@ -2176,7 +2190,7 @@ export const Wardrobe: React.FC<{
                             aria-label="Toggle bottle image controls"
                             aria-expanded={bottleImageToolsOpen}
                           >
-                            <HelpCircle size={13} strokeWidth={1.75} />
+                            <Crop size={13} strokeWidth={1.75} />
                           </button>
                         }
                       >
