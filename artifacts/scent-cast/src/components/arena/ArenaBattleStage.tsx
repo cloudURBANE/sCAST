@@ -22,6 +22,8 @@ import { useCommunityBattleVote } from "@/components/community/communityPosts";
 interface ArenaBattleStageProps {
   battle: ArenaBattle;
   authToken: string | null;
+  /** False when this is the only loaded battle, so the reveal can disable "Next battle". */
+  hasMoreBattles?: boolean;
   onSignIn: () => void;
   onNext: () => void;
   onGuestVoteQueued: (vote: { postId: string; choice: string }) => void;
@@ -32,6 +34,7 @@ interface ArenaBattleStageProps {
 export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
   battle,
   authToken,
+  hasMoreBattles = true,
   onSignIn,
   onNext,
   onGuestVoteQueued,
@@ -280,6 +283,7 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
             reasonDeclined={reasonDeclined}
             guestLocalOnly={guestLocalOnly}
             votePending={votePending}
+            hasMoreBattles={hasMoreBattles}
             animateReveal={freshVote}
             onReasonChange={handleReasonChange}
             onReasonDeclinedChange={handleReasonDeclinedChange}

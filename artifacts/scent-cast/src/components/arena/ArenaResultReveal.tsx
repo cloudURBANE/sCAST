@@ -17,6 +17,8 @@ interface ArenaResultRevealProps {
   reasonDeclined: boolean;
   guestLocalOnly: boolean;
   votePending: boolean;
+  /** False when this is the only loaded battle, so "Next battle" has nowhere to go. */
+  hasMoreBattles?: boolean;
   /** Play the entrance animation only for a fresh vote, not a restored state. */
   animateReveal: boolean;
   onReasonChange: (reason: ArenaReasonKey) => void;
@@ -32,6 +34,7 @@ export const ArenaResultReveal: React.FC<ArenaResultRevealProps> = ({
   reasonDeclined,
   guestLocalOnly,
   votePending,
+  hasMoreBattles = true,
   animateReveal,
   onReasonChange,
   onReasonDeclinedChange,
@@ -225,13 +228,22 @@ export const ArenaResultReveal: React.FC<ArenaResultRevealProps> = ({
         <div className="mx-auto mt-4 grid w-full max-w-md grid-cols-2 overflow-hidden rounded-lg bg-black/62 shadow-[inset_0_0_0_1px_rgba(212,175,55,0.14)] lg:mx-0 lg:mt-0 lg:w-auto lg:min-w-[21rem] lg:shrink-0">
           <button
             type="button"
+            disabled={!hasMoreBattles}
+            aria-disabled={!hasMoreBattles}
+            title={hasMoreBattles ? undefined : "This is the only battle right now."}
             onClick={(event) => {
+              if (!hasMoreBattles) return;
               event.currentTarget.blur();
               onNext();
             }}
-            className="scent-no-mobile-focus-ring inline-flex min-h-12 items-center justify-center gap-2 bg-scent-accent px-4 py-3 text-xs font-bold uppercase tracking-[0.12em] text-black transition-colors hover:bg-[#f0cf70] active:bg-[#d7ad32] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-scent-accent/70 sm:text-sm sm:tracking-[0.16em]"
+            className={[
+              "scent-no-mobile-focus-ring inline-flex min-h-12 items-center justify-center gap-2 px-4 py-3 text-xs font-bold uppercase tracking-[0.12em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-scent-accent/70 sm:text-sm sm:tracking-[0.16em]",
+              hasMoreBattles
+                ? "bg-scent-accent text-black hover:bg-[#f0cf70] active:bg-[#d7ad32]"
+                : "cursor-not-allowed bg-scent-accent/24 text-black/55",
+            ].join(" ")}
           >
-            <span>Next battle</span>
+            <span>{hasMoreBattles ? "Next battle" : "Only battle"}</span>
             <ArrowRight size={16} strokeWidth={1.8} aria-hidden="true" />
           </button>
           <button

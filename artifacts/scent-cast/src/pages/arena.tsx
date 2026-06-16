@@ -135,6 +135,7 @@ export const ArenaPage: React.FC<ArenaPageProps> = ({
               key={activeBattle.id}
               battle={activeBattle}
               authToken={authToken}
+              hasMoreBattles={battles.length > 1}
               onSignIn={onSignIn}
               onNext={nextBattle}
               onGuestVoteQueued={setPendingGuestVote}
