@@ -1,7 +1,9 @@
 import {
   boolean,
+  doublePrecision,
   index,
   integer,
+  jsonb,
   pgTable,
   text,
   timestamp,
@@ -35,6 +37,17 @@ export const imageCacheTable = pgTable(
     width: integer("width"),
     height: integer("height"),
     sizeBytes: integer("size_bytes"),
+
+    // Orientation Engine metadata (services/orientationEngine.ts). All nullable:
+    // legacy rows predate normalization, and the non-normalized passthrough path
+    // leaves them null. `boundingBox` stores the detected bottle box normalized
+    // to the original image as { x, y, width, height } in [0,1].
+    originalWidth: integer("original_width"),
+    originalHeight: integer("original_height"),
+    boundingBox: jsonb("bounding_box"),
+    aspectRatio: doublePrecision("aspect_ratio"),
+    orientationVersion: text("orientation_version"),
+    baselineAlignment: doublePrecision("baseline_alignment"),
 
     backgroundRemoved: boolean("background_removed").notNull().default(false),
     removeBgStatus: text("remove_bg_status"),

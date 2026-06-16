@@ -55,6 +55,9 @@ interface Fragrance {
   gender?: string | null;
   imageUrl: string;
   imageAdjustment?: BottleImageAdjustment | null;
+  /** Orientation Engine geometry from the API; flags a normalized square so
+   *  BottleImage can enable the baseline-anchored / detail-scale CSS. */
+  imageProperties?: { orientationVersion?: string | null } | null;
   season?: string;
   notes?: string[];
   concentration?: string;
@@ -789,6 +792,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                           src={item.imageUrl}
                           alt={name}
                           adjustment={item.imageAdjustment}
+                          imageProperties={item.imageProperties}
                           className="absolute inset-0 z-10"
                           imgClassName="scent-hover-scale brightness-[1.1] transition-transform duration-[900ms] motion-reduce:transition-none"
                         />
@@ -938,6 +942,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                                 src={selectedItem.imageUrl}
                                 alt={entryName(selectedItem)}
                                 adjustment={selectedItem.imageAdjustment}
+                                imageProperties={selectedItem.imageProperties}
                                 className="absolute inset-0"
                                 imgClassName="transition-all duration-300"
                                 loading="eager"
@@ -1051,6 +1056,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                       src={selectedItem.imageUrl}
                       alt={entryName(selectedItem)}
                       adjustment={selectedItem.imageAdjustment}
+                      imageProperties={selectedItem.imageProperties}
                       className="absolute inset-0"
                       imgClassName="brightness-[1.08] scale-[1.02]"
                       loading="eager"

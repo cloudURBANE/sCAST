@@ -117,6 +117,9 @@ export interface Fragrance {
   synthesized?: boolean;
   shareHidden?: boolean;
   imageAdjustment?: BottleImageAdjustment | null;
+  /** Orientation Engine geometry from the API; presence of `orientationVersion`
+   *  flags a normalized square so BottleImage can enable baseline-anchored CSS. */
+  imageProperties?: { orientationVersion?: string | null } | null;
   /** Legacy ScentProfile shape — some old vault rows only have product.name/brand */
   product?: { name?: string; brand?: string; perfumer?: string };
   /** Postgres row UUID — surfaced by GET /wardrobe; preferred for delete/patch (B9). */
@@ -1867,6 +1870,7 @@ export const Wardrobe: React.FC<{
                         src={featuredItem.imageUrl}
                         alt={entryName(featuredItem)}
                         adjustment={featuredItem.imageAdjustment}
+                        imageProperties={featuredItem.imageProperties}
                         isSyncing={isImageSyncing?.(featuredItem)}
                         className="min-h-0 w-full flex-1"
                         imgClassName="scent-hover-scale transition-transform duration-1000 brightness-[1.15]"
@@ -1967,6 +1971,7 @@ export const Wardrobe: React.FC<{
                             videoSrc={betaVideoUrlForFragrance(item)}
                             alt={entryName(item)}
                             adjustment={item.imageAdjustment}
+                            imageProperties={item.imageProperties}
                             isSyncing={isImageSyncing?.(item)}
                             className="absolute inset-0 z-10"
                             imgClassName="scent-hover-scale brightness-[1.1] transition-transform duration-[900ms] motion-reduce:transition-none"
@@ -2186,6 +2191,11 @@ export const Wardrobe: React.FC<{
                               src={detailBottleUrl}
                               alt={entryName(selectedItem)}
                               adjustment={frameDraft}
+                              imageProperties={
+                                pendingPreview?.itemId === selectedItem.id
+                                  ? null
+                                  : selectedItem.imageProperties
+                              }
                               showFrameGuide={bottleImageToolsOpen}
                               isSyncing={isImageSyncing?.(selectedItem)}
                               className="absolute inset-0"
@@ -2902,6 +2912,11 @@ export const Wardrobe: React.FC<{
                       src={detailBottleUrl}
                       alt={entryName(selectedItem)}
                       adjustment={frameDraft}
+                      imageProperties={
+                        pendingPreview?.itemId === selectedItem.id
+                          ? null
+                          : selectedItem.imageProperties
+                      }
                       className="absolute inset-0"
                       imgClassName="brightness-[1.08] scale-[1.02]"
                       loading="eager"

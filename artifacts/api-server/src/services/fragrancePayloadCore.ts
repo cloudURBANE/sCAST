@@ -47,6 +47,8 @@ export type HydratedImageCandidate = {
   sourceProvider?: unknown;
   sourceUrl?: unknown;
   storagePath?: unknown;
+  /** Orientation Engine geometry when this candidate is a normalized square. */
+  imageProperties?: unknown;
 };
 
 function normalizedSourceProvider(value: unknown): string | null {

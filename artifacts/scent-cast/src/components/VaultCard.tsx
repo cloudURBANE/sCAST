@@ -69,10 +69,19 @@ export function VaultCard({ tone, compact, brand, name, children }: VaultCardPro
       <div className="scent-card-frame" aria-hidden />
       <div className={`relative z-[1] flex h-full flex-col items-center ${preset.body}`}>
         <BrandGoldLabel brand={brand} className={preset.brandLabel} />
-        <div className={`relative flex-1 w-full min-h-0 ${preset.imageSlot}`}>
+        {/*
+         * Square image area. The Orientation Engine now emits a uniform square
+         * packshot, so a square slot lets every bottle fill the same box edge-to-edge
+         * on PC / iPad / phone — no aspect mismatch, no "image small inside a tall
+         * card" dead space (the iPad regression). Side == card content width, so the
+         * card grows to contain it (min-h is only a floor); `mt-auto` on the title
+         * then pins it to the bottom and absorbs any grid-stretch slack ABOVE it,
+         * keeping the bottle baseline and title aligned across the whole row.
+         */}
+        <div className={`relative w-full aspect-square min-h-0 ${preset.imageSlot}`}>
           {children}
         </div>
-        <div className="scent-card-title-row shrink-0">
+        <div className="scent-card-title-row shrink-0 mt-auto">
           <h3 className="scent-card-title" title={name}>
             {name}
           </h3>

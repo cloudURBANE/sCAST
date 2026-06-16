@@ -18,7 +18,7 @@ import { safeImageUrlForResponse } from "./persistenceGuards";
 
 // Match the rest of the wardrobe image pipeline so an uploaded packshot frames
 // and weighs the same as a Serper/reimagine result.
-const MAX_OUTPUT_DIMENSION = 768;
+const MAX_OUTPUT_DIMENSION = 1024;
 const WEBP_QUALITY = 90;
 
 /**
