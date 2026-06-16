@@ -19,6 +19,7 @@ import {
   sanitizeFragrance,
 } from "../services/fragrancePayload";
 import { assertNoPersistedBase64Image } from "../services/persistenceGuards";
+import { nonPerfumeSignal } from "../services/nonPerfumeSignal";
 import { persistableImageReference } from "../services/imageReference";
 import {
   detailRefreshPatchFromBody,
@@ -112,6 +113,25 @@ router.post("/wardrobe", requireAuth, async (req: AuthRequest, res) => {
   const clientId = typeof clean.id === "string" ? clean.id.trim() : "";
   if (!clientId) {
     res.status(400).json({ error: "Fragrance data with id is required" });
+    return;
+  }
+
+  // Companion to the engine's non-perfume ingest gate: keep body-care products
+  // (lotions, mists, washes, candles) and test fixtures out of the wardrobe.
+  // The classifier never flags an item that resolved to a real perfume page, so
+  // this is safe to apply to every write. The id is opaque but may embed a
+  // `source:<url>`, so it doubles as a real-perfume-page guard.
+  const signal = nonPerfumeSignal(clean.name, clean.brand, [
+    clean.source_url,
+    clean.sourceUrl,
+    clientId,
+  ]);
+  if (signal.flagged) {
+    logger.info(
+      { reason: signal.reason, name: clean.name, brand: clean.brand },
+      "wardrobe add rejected: non-perfume",
+    );
+    res.status(422).json({ error: "Only fragrances can be added to the wardrobe", reason: signal.reason });
     return;
   }
 
