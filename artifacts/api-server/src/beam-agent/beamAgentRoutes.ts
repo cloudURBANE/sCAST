@@ -323,6 +323,12 @@ router.post("/runs", runRateLimit, requireAuth, async (req: AuthRequest, res) =>
   const history = session.turns;
   const sessionState = deriveBeamSessionState(session.state, message);
   await saveSessionState(ctx, sessionState);
+  // Surface the freshly-merged structured slots/mission to the client up front,
+  // BEFORE the loop runs — so the panel can advance its captured-cue count and
+  // mission-aware header straight from free-text (the agent path never calls the
+  // SPA's setFacets). Emitted ahead of the loop so it lands even on a failed or
+  // timed-out turn, matching the backend's persist-before-run guarantee.
+  emit({ type: "slots", slots: sessionState.slots, mission: sessionState.mission });
   // Pick the cost lane deterministically (brief §03.2) from the message + how much
   // context the session already carries — no extra router LLM call. The premium
   // lane runs MiniMax M3 end-to-end; the default lane runs cheap M2.5 orchestration.

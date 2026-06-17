@@ -42,6 +42,8 @@ import {
 import {
   humanizeBeamTool,
   runBeamAgentMission,
+  type BeamAgentMission,
+  type BeamAgentSlots,
   type BeamCard as BeamCardData,
   type BeamProposalItem,
   type BeamSuggestion,
@@ -521,12 +523,29 @@ function initialAgentMessage(itemCount: number): string {
   return 'Add a few fragrances from search first, then I can curate a real match for you here.';
 }
 
-function formatFacetLine(facets: FacetState): string {
-  const entries = (Object.entries(facets) as Array<[FacetId, string]>)
+/** Capitalize a free-text cue ("tokyo" → "Tokyo", "new york" → "New York"). */
+function titleCaseCue(value: string): string {
+  return value.replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+const CUE_LABELS: Record<string, string> = {
+  ...FACET_LABELS,
+  month: 'Month',
+  destination: 'Destination',
+  vibe: 'Vibe',
+  direction: 'Direction',
+};
+
+// Accepts the merged cue record (tapped facets ∪ backend-extracted slots), so the
+// screen-reader summary reflects free-text cues too, not only tapped chips.
+function formatFacetLine(cues: Record<string, string>): string {
+  const entries = Object.entries(cues)
     .filter(([, value]) => value.trim().length > 0)
     .slice(0, 5);
   if (entries.length === 0) return 'No cues captured yet';
-  return entries.map(([facet, value]) => `${FACET_LABELS[facet]}: ${value}`).join(' / ');
+  return entries
+    .map(([key, value]) => `${CUE_LABELS[key] ?? titleCaseCue(key)}: ${value}`)
+    .join(' / ');
 }
 
 const ENOUGH_CONTEXT_PROMPT =
@@ -712,6 +731,8 @@ export interface ScentMissionStatus {
   progress: number;
   progressText: string;
   contextLine: string;
+  /** Mission-aware header title; falls back to the calm default before any cue lands. */
+  headerTitle: string;
 }
 
 /** Per-fragrance progress reported while a confirmed collection is being added. */
@@ -858,6 +879,13 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
     recommendation: ScentMissionRecommendation;
     item: Fragrance | null;
   } | null>(null);
+  // Free-text cues + mission target the BACKEND extracted from the transcript
+  // (the `slots` SSE event). The agent path never calls setFacets, so without
+  // this a typed "Tokyo, August, artsy" would leave the captured-cue count at 0
+  // and the header stuck on the generic title. The backend re-sends the full
+  // merged state each turn, so we replace (not merge) on every slots event.
+  const [agentCues, setAgentCues] = useState<BeamAgentSlots>({});
+  const [agentMission, setAgentMission] = useState<BeamAgentMission | null>(null);
   // True once an agent turn reports the external catalog is unreachable/empty, so
   // the cue lane can offer recovery actions instead of vibe cues. Cleared on the
   // next user turn / a successful curation.
@@ -995,7 +1023,22 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
 
   const progress = missionProgress(mission);
   const enoughContext = hasEnoughContext(facets, mission, agentMode);
-  const capturedCount = Object.keys(facets).length;
+
+  // Captured cues = tapped chips (`facets`) UNIONED with the backend's free-text
+  // slots (`agentCues`). The agent path never calls setFacets, so before this a
+  // typed-only conversation showed "No cues captured yet" forever. Keyed merge
+  // dedupes the keys the two spaces share (occasion / budget).
+  const capturedCues = useMemo<Record<string, string>>(() => {
+    const out: Record<string, string> = {};
+    for (const [key, value] of Object.entries(agentCues)) {
+      if (typeof value === 'string' && value.trim()) out[key] = value.trim();
+    }
+    for (const [key, value] of Object.entries(facets)) {
+      if (value && value.trim()) out[key] = value.trim();
+    }
+    return out;
+  }, [agentCues, facets]);
+  const capturedCount = Object.keys(capturedCues).length;
 
   // The conversation is underway once the user has said anything (typed or tapped
   // a cue). The live agent path answers in free text and never sets `resolved`, so
@@ -1003,23 +1046,39 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   // day" prompt even while a full recommendation sits on screen.
   const conversationStarted = useMemo(() => messages.some((m) => m.role === 'user'), [messages]);
 
-  // The live agent path answers in free text and never sets `resolved`, so a
-  // delivered answer is "any agent reply past the intro greeting" (index 0). This
-  // lets the header advance past the stale cue count once a recommendation is on
-  // screen instead of holding "N cues captured" forever.
-  const hasDeliveredAnswer = useMemo(
-    () => messages.some((m, i) => i > 0 && m.role === 'agent'),
-    [messages],
-  );
+  // A REAL deliverable is on screen — a scripted resolved match OR the live
+  // agent's proposal/kit. A clarifying question is NOT a match, so the header no
+  // longer flips to "Match ready" the instant the agent replies with a question
+  // (the old `hasDeliveredAnswer` = "any agent reply" bug). Also gates the
+  // composer's "refine your match" placeholder below.
+  const hasMatch = Boolean(resolved) || (proposal != null && proposal.items.length > 0);
 
   const progressText = useMemo(() => {
     if (progressNote) return progressNote;
-    if (resolved || (hasDeliveredAnswer && conversationStarted && !busy)) return 'Match ready';
+    if (hasMatch && !busy) return 'Match ready';
     if (capturedCount > 0) return `${capturedCount} cue${capturedCount === 1 ? '' : 's'} captured`;
     // Cold start vs. mid-conversation: never show the opening prompt once the
     // exchange is live, so the header phase always matches what's on screen.
     return conversationStarted ? 'Curating with you' : 'Tell me about your day';
-  }, [busy, capturedCount, conversationStarted, hasDeliveredAnswer, progressNote, resolved]);
+  }, [busy, capturedCount, conversationStarted, hasMatch, progressNote]);
+
+  // Mission-aware header title. Free-text "Tokyo / August / date night" now drives
+  // the title instead of the static "A scent for today." A travel kit reads as a
+  // named kit; a single destination/occasion reads as a scent-for line. Falls back
+  // to the calm default before any cue lands.
+  const headerTitle = useMemo(() => {
+    const destination = (agentMission?.destination || agentCues.destination || '').trim();
+    const month = (agentMission?.month || agentCues.month || '').trim();
+    if (agentMission?.intent === 'travel_kit' && destination) {
+      return month
+        ? `Your ${titleCaseCue(destination)} · ${titleCaseCue(month)} kit`
+        : `Your ${titleCaseCue(destination)} kit`;
+    }
+    if (destination) return `A scent for ${titleCaseCue(destination)}`;
+    const occasion = (agentCues.occasion || '').trim();
+    if (occasion) return `A scent for ${occasion}`;
+    return 'A scent for today.';
+  }, [agentCues, agentMission]);
 
   const contextLine = useMemo(() => {
     const weatherParts = [
@@ -1033,8 +1092,8 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   // Surface progress to the host so the title + progress + close can render in a
   // header strip above the bordered card rather than crowding the panel interior.
   useEffect(() => {
-    onStatusChange?.({ progress, progressText, contextLine });
-  }, [onStatusChange, progress, progressText, contextLine]);
+    onStatusChange?.({ progress, progressText, contextLine, headerTitle });
+  }, [onStatusChange, progress, progressText, contextLine, headerTitle]);
 
   // The agent surfaces quick replies only for the cue it is currently asking
   // about, so they appear and disappear with the conversation instead of always
@@ -1218,6 +1277,13 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                 ...prev,
                 { id: newMessageId(), role: 'card', text: '', card: event.card },
               ]);
+            } else if (event.type === 'slots') {
+              // The backend extracted structured cues from the user's free text.
+              // Mirror them so the captured-cue count + mission-aware header
+              // advance from typing alone, not just tapped chips. Full merged
+              // state arrives each turn, so replace rather than merge.
+              setAgentCues(event.slots ?? {});
+              setAgentMission(event.mission ?? null);
             } else if (event.type === 'message_delta') {
               // Synthesis is streaming the answer — hold a stable phase note
               // rather than flashing raw partial text.
@@ -1607,8 +1673,14 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
     if (busy) return;
     abortRef.current?.abort();
     setResolved(null);
+    // Clear the live-agent deliverables too, or `hasMatch` (resolved || proposal)
+    // would keep the header on "Match ready" after a cold-start reset.
+    setProposal(null);
+    setCurating(null);
     setCatalogFailure(false);
     setFacets({});
+    setAgentCues({});
+    setAgentMission(null);
     setMission(createScentMissionState());
     setComposer('');
     setPendingCueFacet(null);
@@ -1672,7 +1744,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   // Once a recommendation is on screen the composer is no longer a cold-start
   // prompt — it's a follow-up line, so the copy advances to invite refinement
   // instead of repeating "describe your day" beneath an answer.
-  const composerPlaceholder = hasDeliveredAnswer
+  const composerPlaceholder = hasMatch
     ? 'Ask a follow-up, or refine your match'
     : agentMode === 'fast'
       ? 'Tap a cue below or type, then send'
@@ -2595,7 +2667,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       </div>
 
       <p className="sr-only">
-        {formatFacetLine(facets)}
+        {formatFacetLine(capturedCues)}
       </p>
       {actionControls}
       {/* Impressions lane: portaled below the card into the host container. A

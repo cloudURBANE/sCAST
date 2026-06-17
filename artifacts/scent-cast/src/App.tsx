@@ -944,7 +944,7 @@ function DashboardView() {
                     </button>
                   </div>
                   <h2 className="mx-auto max-w-[32rem] text-balance font-serif italic text-[clamp(1.4rem,3.4vw,1.9rem)] leading-[1.05] tracking-normal text-[#fff7ec] drop-shadow-[0_4px_14px_rgba(0,0,0,0.72)]">
-                    A scent for today.
+                    {missionStatus?.headerTitle ?? 'A scent for today.'}
                   </h2>
                   <p className="mt-1.5 scent-type-label text-scent-accent/55">
                     {missionStatus?.progressText ?? 'Tell me about your day'}
