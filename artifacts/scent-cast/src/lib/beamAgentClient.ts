@@ -109,6 +109,21 @@ export type BeamCard =
       proposalId?: string;
     };
 
+/** Free-text cues the backend extracted deterministically from the transcript. */
+export type BeamAgentSlots = Partial<
+  Record<'month' | 'destination' | 'occasion' | 'vibe' | 'direction' | 'budget', string>
+>;
+
+/** Structured mission target derived from the conversation (e.g. a travel kit). */
+export type BeamAgentMission = {
+  intent?: 'travel_kit' | 'recommendation';
+  ownedCount?: number;
+  newCount?: number;
+  destination?: string;
+  month?: string;
+  userDelegatedChoice?: boolean;
+};
+
 export type BeamAgentEvent =
   | { type: 'status'; label: string }
   | { type: 'message_delta'; text: string }
@@ -117,6 +132,7 @@ export type BeamAgentEvent =
   | { type: 'suggestions'; items: BeamSuggestion[] }
   | { type: 'proposal'; proposalId: string; items: BeamProposalItem[] }
   | { type: 'card'; card: BeamCard }
+  | { type: 'slots'; slots: BeamAgentSlots; mission?: BeamAgentMission }
   | { type: 'completed'; response: string }
   | { type: 'failed'; code: string; message: string };
 

@@ -158,6 +158,27 @@ test("redactEventForClient passes safe events and never leaks unknown types", ()
   assert.deepEqual(redactEventForClient(sneaky), { type: "status", label: "Working" });
 });
 
+test("redactEventForClient sanitizes a slots event through the canonical sanitizer", () => {
+  const out = redactEventForClient({
+    type: "slots",
+    slots: {
+      month: "August",
+      destination: "Tokyo",
+      // An unknown key must be dropped by the sanitizer (whitelist only).
+      ["leaked" as "vibe"]: "DB_PASSWORD",
+    },
+    mission: { intent: "travel_kit", ownedCount: 2, newCount: 2, destination: "Tokyo", month: "August" },
+  });
+  assert.equal(out.type, "slots");
+  if (out.type !== "slots") return;
+  assert.equal(out.slots.month, "August");
+  assert.equal(out.slots.destination, "Tokyo");
+  assert.equal((out.slots as Record<string, unknown>).leaked, undefined);
+  assert.equal(out.mission?.intent, "travel_kit");
+  assert.equal(out.mission?.ownedCount, 2);
+  assert.equal(out.mission?.newCount, 2);
+});
+
 test("summarizeToolResult produces safe one-liners", () => {
   assert.equal(summarizeToolResult("beam_search_catalog", { items: [1, 2, 3] }), "3 result(s)");
   assert.equal(summarizeToolResult("beam_score_candidates", { recommendation: { canonicalName: "Aventus" } }), "picked Aventus");

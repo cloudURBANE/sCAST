@@ -248,6 +248,7 @@ export type BeamRunEvent =
   | { type: "suggestions"; items: BeamSuggestion[] }
   | { type: "proposal"; proposalId: string; items: BeamProposalItem[] }
   | { type: "card"; card: BeamCard }
+  | { type: "slots"; slots: BeamSessionSlots; mission?: BeamMissionState }
   | { type: "completed"; response: string }
   | { type: "failed"; code: string; message: string };
 

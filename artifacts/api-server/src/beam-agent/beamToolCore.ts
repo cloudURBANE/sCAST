@@ -15,6 +15,7 @@ import type {
   ClaudeContentBlock,
   ClaudeToolUseBlock,
 } from "./types.ts";
+import { sanitizeBeamSessionState } from "./missionState.ts";
 
 /**
  * Hard ceilings the SERVER enforces — never trust a model-supplied limit. The
@@ -230,6 +231,13 @@ export function redactEventForClient(event: BeamRunEvent): BeamRunEvent {
       // Card data is server-resolved from real records; clamp the unbounded
       // list/string fields defensively at the client boundary.
       return { type: "card", card: sanitizeCardForClient(event.card) };
+    case "slots": {
+      // Structured slots/mission derived deterministically from the transcript.
+      // Re-run the canonical sanitizer at the client boundary so only the known
+      // slot keys + clamped strings/counts can ever reach the browser.
+      const safe = sanitizeBeamSessionState({ slots: event.slots, mission: event.mission });
+      return { type: "slots", slots: safe.slots, ...(safe.mission ? { mission: safe.mission } : {}) };
+    }
     case "failed":
       return { type: "failed", code: event.code, message: event.message };
     default:
