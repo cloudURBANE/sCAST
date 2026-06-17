@@ -1784,14 +1784,14 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       <form
         ref={composerFormRef}
         onSubmit={handleSubmit}
-        className="scent-lux-input scent-vault-search-input scent-beam-composer flex h-[56px] w-full items-center gap-2 rounded-full !border-scent-accent/44 ![background:radial-gradient(130%_160%_at_50%_0%,rgba(255,255,255,0.018),transparent_44%),rgba(0,0,0,0.9)] px-2.5 transition-colors sm:h-[62px] sm:px-3"
+        className="scent-lux-input scent-vault-search-input scent-beam-composer flex h-[58px] w-full items-center gap-2 rounded-full px-2.5 sm:h-[64px] sm:px-3"
       >
         <button
           type="button"
           onClick={() => setSettingsOpen((open) => !open)}
           aria-expanded={settingsOpen}
           aria-controls="scent-mission-settings"
-          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-scent-accent/22 bg-scent-accent/[0.045] text-scent-accent transition-colors hover:border-scent-accent/40 hover:bg-scent-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 sm:h-11 sm:w-11"
+          className="scent-beam-composer-control inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-scent-accent focus-visible:outline-none sm:h-11 sm:w-11"
           aria-label="Adjust Beam Agent settings"
           title="Adjust settings"
         >
@@ -1823,12 +1823,12 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
           placeholder={busy ? 'Composing your recommendation…' : composerFocused ? '' : composerPlaceholder}
           aria-label="Message the Beam Agent"
           autoComplete="off"
-          className="min-w-0 flex-1 bg-transparent px-1 text-center text-[13px] font-medium text-[#fff7ec] outline-none placeholder:text-scent-text-subtle disabled:cursor-not-allowed disabled:placeholder:text-scent-accent/70 sm:text-[15px]"
+          className="min-w-0 flex-1 bg-transparent px-1 text-center text-[13px] font-medium tracking-[0.015em] text-[#fff7ec] caret-[#f5bd69] outline-none placeholder:text-[#d8c9b5]/72 disabled:cursor-not-allowed disabled:placeholder:text-scent-accent/70 sm:text-[15px]"
         />
         <button
           type="submit"
           disabled={busy || !composer.trim() || (curating !== null && curating.done === null)}
-          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-scent-accent/26 bg-scent-accent/[0.045] text-scent-accent transition-colors hover:border-scent-accent/44 hover:bg-scent-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:opacity-40 sm:h-11 sm:w-11"
+          className="scent-beam-composer-control inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-scent-accent focus-visible:outline-none disabled:opacity-40 sm:h-11 sm:w-11"
           aria-label="Send message"
         >
           {busy ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Send size={16} aria-hidden />}
@@ -1963,7 +1963,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   }, [showCueMarquee, cueMarqueeKey]);
 
   const cueChipClass =
-    'inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/20 px-3 py-1.5 scent-type-chip text-scent-text-muted transition-colors hover:border-scent-accent/42 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40 disabled:opacity-45';
+    'scent-beam-cue inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 scent-type-chip focus-visible:outline-none disabled:opacity-45';
 
   const renderCueChip = (reply: QuickReply, key: string) => (
     <button
