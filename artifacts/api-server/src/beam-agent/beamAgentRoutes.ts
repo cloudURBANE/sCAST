@@ -40,6 +40,7 @@ import { missionItemFromWardrobeRow } from "../services/scentMissionService";
 import { searchCatalogCandidates, flattenProfile, getCatalogEntry } from "../services/catalogService";
 import { getScentFacts } from "../lib/scent-facts/engine";
 import { getBeamUserUsageSince, recordBeamRunUsage } from "../services/apiUsageLedger";
+import { enqueueBeamCuration } from "../services/curationService";
 import { createBeamTools, type BeamCatalogHit, type BeamToolDeps } from "./beamTools.ts";
 import { runBeamAgent } from "./beamAgentLoop.ts";
 import { packetFromWardrobeRow, redactEventForClient } from "./beamToolCore.ts";
@@ -222,7 +223,7 @@ const beamResearchWeb = createBeamResearcher({
   isEnabled: isResearchEnabled,
 });
 
-function buildDeps(weather: ScentMissionWeather): BeamToolDeps {
+function buildDeps(ctx: BeamRunContext, weather: ScentMissionWeather): BeamToolDeps {
   return {
     loadVault,
     loadWardrobePackets,
@@ -230,6 +231,20 @@ function buildDeps(weather: ScentMissionWeather): BeamToolDeps {
     resolveCatalogEntry: resolveCatalogEntryForBeam,
     research: researchForBeam,
     researchWeb: beamResearchWeb,
+    // Curation hook: when a proposed fragrance isn't in our catalog, enqueue it
+    // for enrichment tagged to THIS authenticated user (scope comes from ctx, never
+    // model args). Fire-and-forget — the beam loop must not wait on (or fail from)
+    // a queue write — so we kick the promise and swallow any error.
+    enqueueCuration: (fragrance) => {
+      void enqueueBeamCuration({
+        userId: ctx.userId,
+        tenantId: ctx.tenantId,
+        name: fragrance.name,
+        brand: fragrance.brand,
+      }).catch((err) => {
+        logger.warn({ err, user: hashUser(ctx.userId) }, "beam curation enqueue failed");
+      });
+    },
     scoreVault: (items, calibration, currentWeather) =>
       selectScentMissionRecommendation(items, calibration, currentWeather),
     rankVault: (items, calibration, currentWeather) =>
@@ -302,7 +317,7 @@ router.post("/runs", runRateLimit, requireAuth, async (req: AuthRequest, res) =>
   };
   runs.set(runId, record);
 
-  const tools = createBeamTools(buildDeps(weather));
+  const tools = createBeamTools(buildDeps(ctx, weather));
   const emit = makeEmit(record);
   const session = await loadSession(ctx);
   const history = session.turns;

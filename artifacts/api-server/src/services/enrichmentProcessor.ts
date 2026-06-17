@@ -17,6 +17,7 @@ import type { EnrichmentJob } from "@workspace/db/schema";
 import { logger } from "../lib/logger";
 import { buildProfile } from "./scentEngine";
 import type { BuildProfileFallback } from "./scentEngineCore";
+import { notifyBeamCurationComplete } from "./curationService";
 
 const DEFAULT_ENGINE_ORIGIN = "https://srt-scent-engine-production.up.railway.app";
 
@@ -151,6 +152,19 @@ export async function enrichJobViaEngine(job: EnrichmentJob): Promise<"completed
       "enrichment: buildProfile threw",
     );
     return "failed";
+  }
+
+  // Beam curation hand-off: this job was queued because the agent recommended a
+  // fragrance we didn't have. Now that it's enriched and addable, nudge the user
+  // who asked for it. Best-effort and awaited only inside its own try — a push
+  // failure (or a beam-unrelated job) must NOT change the "completed" result.
+  if ((job.metadataJson as { source?: unknown } | null)?.source === "beam") {
+    await notifyBeamCurationComplete(job).catch((err) => {
+      logger.warn(
+        { jobKey: job.jobKey, err: err instanceof Error ? err.message : String(err) },
+        "enrichment: beam curation completion push failed (ignored)",
+      );
+    });
   }
 
   return "completed";

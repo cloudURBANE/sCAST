@@ -5,7 +5,7 @@ import { pushSubscriptionsTable, userSettingsTable } from "@workspace/db/schema"
 import { logger } from "../lib/logger";
 
 /** Notification categories the user can independently opt out of (see user_settings). */
-export type PushCategory = "weather" | "community";
+export type PushCategory = "weather" | "community" | "curation";
 
 // VAPID keys identify this application server to the push services. Generate a
 // pair once with `npx web-push generate-vapid-keys` and set them in the env.
@@ -219,9 +219,11 @@ export async function sendPushToAll(payload: PushPayload, limit = 1000): Promise
 export interface PushPreferences {
   weather: boolean;
   community: boolean;
+  /** Beam curation: "your recommendation finished enriching, add it now". */
+  curation: boolean;
 }
 
-const DEFAULT_PREFERENCES: PushPreferences = { weather: true, community: true };
+const DEFAULT_PREFERENCES: PushPreferences = { weather: true, community: true, curation: true };
 
 function isMissingColumnOrTable(err: unknown): boolean {
   // 42P01 undefined_table (handled above) or 42703 undefined_column — either
@@ -237,12 +239,16 @@ function isMissingColumnOrTable(err: unknown): boolean {
 export async function getPushPreferences(userId: string): Promise<PushPreferences> {
   try {
     const [row] = await db
-      .select({ weather: userSettingsTable.notifyWeather, community: userSettingsTable.notifyCommunity })
+      .select({
+        weather: userSettingsTable.notifyWeather,
+        community: userSettingsTable.notifyCommunity,
+        curation: userSettingsTable.notifyCuration,
+      })
       .from(userSettingsTable)
       .where(eq(userSettingsTable.userId, userId))
       .limit(1);
     if (!row) return { ...DEFAULT_PREFERENCES };
-    return { weather: row.weather, community: row.community };
+    return { weather: row.weather, community: row.community, curation: row.curation };
   } catch (err) {
     if (isMissingColumnOrTable(err)) return { ...DEFAULT_PREFERENCES };
     throw err;
@@ -256,6 +262,7 @@ export async function setPushPreferences(
   const set: Record<string, unknown> = { updatedAt: new Date() };
   if (typeof prefs.weather === "boolean") set.notifyWeather = prefs.weather;
   if (typeof prefs.community === "boolean") set.notifyCommunity = prefs.community;
+  if (typeof prefs.curation === "boolean") set.notifyCuration = prefs.curation;
   try {
     // Upsert: a user may not have a settings row yet. tenant_id stays null —
     // notification prefs aren't tenant-scoped and the column is nullable.
@@ -265,6 +272,7 @@ export async function setPushPreferences(
         userId,
         notifyWeather: prefs.weather ?? DEFAULT_PREFERENCES.weather,
         notifyCommunity: prefs.community ?? DEFAULT_PREFERENCES.community,
+        notifyCuration: prefs.curation ?? DEFAULT_PREFERENCES.curation,
       })
       .onConflictDoUpdate({ target: userSettingsTable.userId, set });
   } catch (err) {
@@ -338,7 +346,7 @@ export async function sendCategoryPushToUser(
 ): Promise<{ sent: number; pruned: number; skipped?: boolean }> {
   if (!configured) return { sent: 0, pruned: 0 };
   const prefs = await getPushPreferences(userId);
-  const allowed = category === "weather" ? prefs.weather : prefs.community;
+  const allowed = prefs[category];
   if (!allowed) return { sent: 0, pruned: 0, skipped: true };
 
   const badgeCount = await bumpBadge(userId);
