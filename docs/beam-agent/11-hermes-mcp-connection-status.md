@@ -100,3 +100,30 @@ real users, the deploy must run the long-lived `beam:mcp` process, set
 per-run tokens. Railway's current `startCommand` runs only the Express API. Until that
 is provisioned, the in-process loop stays the live runtime and Hermes is a verified,
 parity runtime ready to be promoted.
+
+---
+
+## Update — 2026-06-17 (later): tools/call DB path exercised + delegation backstop
+
+Two follow-ups closing open items from the parity pass above.
+
+- **`tools/call` against the DB-backed surface is now exercised (the gap noted above).**
+  Booted the built `dist-beam/beam-mcp.mjs` with the real `.env` (so `DATABASE_URL`
+  is live), minted an owner token, connected with the MCP SDK Streamable-HTTP client,
+  and confirmed: `GET /healthz` → `{ ok: true }`; unauthenticated `POST /mcp` → `401`;
+  authenticated `tools/list` → all **11** tools (incl. the 3 card tools); and a real
+  `tools/call` of `beam_search_catalog {query:"Creed Aventus"}` returned a grounded
+  catalog hit with `isError:false`. The full token → scope → tool → Postgres path is
+  verified, not just `tools/list`.
+
+- **New deterministic delegation backstop in the in-process brain
+  (`answerQualityGates.ts`).** Handoff acceptance criterion B2 ("'idk you tell me' →
+  next turn commits, no new preference question") previously rested on a prompt rule
+  only; the gates caught re-asking a *known slot* (`redundant_clarification`) but not a
+  *new* preference question after delegation. Added a `delegated_but_questioned` gate:
+  when the user delegated and the answer poses a clarifying question yet names no
+  grounded pick, it fails and the existing single repair pass re-synthesizes a committed
+  recommendation. Naming a real grounded fragrance (even with a trailing rhetorical
+  question) still passes. Covered by 4 new unit tests; full suite 432/432 green. This
+  hardens the **in-process** loop only — if Hermes is promoted, the same rule lives in
+  `hermes-beam/AGENTS.md` for the Hermes-driven loop.

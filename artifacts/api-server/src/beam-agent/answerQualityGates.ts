@@ -70,6 +70,29 @@ function asksForKnownSlot(text: string, state: BeamSessionState | undefined): bo
   return false;
 }
 
+/** A clarifying / preference-seeking question (requires an actual `?`). */
+const PREFERENCE_QUESTION_PATTERN =
+  /\b(?:do|would|are|could|can|have)\s+you\b|\b(?:which|what|when|where|how about)\b|\bprefer(?:ence)?\b|\b(?:fresh|light|warm|day)\s+or\b|\b(?:tell me|let me know)\b/i;
+
+/**
+ * Delegation backstop (handoff B2): once the user hands the choice over ("idk,
+ * you tell me"), the agent must commit — not ask another preference question.
+ * Fires only when the user delegated AND the answer poses a clarifying question
+ * AND it names no grounded pick (a committed answer that names a real fragrance,
+ * even with a trailing rhetorical question, is fine).
+ */
+function delegatedButDeferred(
+  text: string,
+  state: BeamSessionState | undefined,
+  grounded: BeamGroundedFragrance[],
+): boolean {
+  const delegated = Boolean(state?.userDelegatedChoice || state?.mission?.userDelegatedChoice);
+  if (!delegated) return false;
+  if (!text.includes("?")) return false;
+  if (!PREFERENCE_QUESTION_PATTERN.test(text)) return false;
+  return !grounded.some((item) => answerMentionsFragrance(text, item));
+}
+
 function missionReadyForFulfillment(state: BeamSessionState | undefined): boolean {
   const mission = state?.mission;
   if (mission?.intent !== "travel_kit") return false;
@@ -128,6 +151,9 @@ export function runAnswerQualityGates(answerText: string, input: QualityGateInpu
     if (REVIEW_PATTERN.test(text)) violations.push("review_claim_without_evidence");
   }
   if (asksForKnownSlot(text, input.sessionState)) violations.push("redundant_clarification");
+  if (delegatedButDeferred(text, input.sessionState, input.groundedFragrances ?? [])) {
+    violations.push("delegated_but_questioned");
+  }
 
   const mission = input.sessionState?.mission;
   if (
@@ -161,6 +187,8 @@ export function repairInstructionFor(violations: string[]): string {
     fixes.push("Do NOT cite ratings or review scores - you have no fresh source for them.");
   if (violations.includes("redundant_clarification"))
     fixes.push("Do NOT ask for month, destination, vibe, or direction already present in Known so far; use the known value.");
+  if (violations.includes("delegated_but_questioned"))
+    fixes.push("The user delegated the choice - do NOT ask another preference question; commit to a specific grounded recommendation now.");
   if (violations.includes("mission_unfulfilled"))
     fixes.push("Fulfill the travel-kit target: name the required count of owned vault picks and new unowned picks from the grounded tool results.");
   if (violations.includes("leaked_external_instruction"))
