@@ -1,4 +1,4 @@
-import React, { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import {
   BadgeDollarSign,
   Check,
@@ -69,11 +69,16 @@ const MAX_BODY_LENGTH = 4000;
 interface PostComposerProps {
   authToken: string | null;
   onSignIn: () => void;
+  /** Fired whenever the composer's open/closed state changes (expand, collapse,
+      imperative open/close). Lets the page enforce composer/search exclusivity. */
+  onOpenChange?: (open: boolean) => void;
 }
 
 export interface PostComposerHandle {
   /** Expand the composer, scroll it into view, and move focus into the form. */
   open: (preset?: { type?: CommunityPostType | null; tag?: string | null }) => void;
+  /** Collapse the composer back to its starting bar. */
+  close: () => void;
 }
 
 function firstString(...values: unknown[]): string | undefined {
@@ -353,10 +358,21 @@ const BattleFragrancePicker: React.FC<BattleFragrancePickerProps> = ({
 );
 
 export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(function PostComposer(
-  { authToken, onSignIn },
+  { authToken, onSignIn, onOpenChange },
   ref,
 ) {
-  const [composerOpen, setComposerOpen] = useState(false);
+  const [composerOpen, setComposerOpenState] = useState(false);
+  // Centralize composer open/close so every caller (chips, +, imperative
+  // open()/close(), submit) notifies the page, which uses it to keep the
+  // composer and the search panel mutually exclusive.
+  const onOpenChangeRef = useRef(onOpenChange);
+  onOpenChangeRef.current = onOpenChange;
+  const setComposerOpen = useCallback((next: boolean) => {
+    setComposerOpenState((current) => {
+      if (current !== next) onOpenChangeRef.current?.(next);
+      return next;
+    });
+  }, []);
   const [postType, setPostType] = useState<CommunityPostType>('question');
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
@@ -512,6 +528,43 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
     };
   }, [battleA, battleASelection, battleB, battleBSelection, postType, wardrobeBattleCandidates]);
 
+  // Debounced search-as-you-type for the "Attach a fragrance" input, so the
+  // standalone Search button is unnecessary. Mirrors the battle picker: abort
+  // the in-flight request on each keystroke and only fire at >=2 chars.
+  useEffect(() => {
+    if (postType === 'battle') return undefined;
+    const trimmed = fragranceQuery.trim();
+    if (trimmed.length < 2) {
+      fragranceAbortRef.current?.abort();
+      fragranceAbortRef.current = null;
+      setFragranceResults([]);
+      return undefined;
+    }
+
+    const timer = window.setTimeout(() => {
+      fragranceAbortRef.current?.abort();
+      const controller = new AbortController();
+      fragranceAbortRef.current = controller;
+      setSearchingFragrance(true);
+      searchFragrances(trimmed, { signal: controller.signal })
+        .then((response) => {
+          setFragranceResults(response.results.slice(0, 6));
+        })
+        .catch((err) => {
+          if (err instanceof Error && err.name === 'AbortError') return;
+          setFragranceResults([]);
+        })
+        .finally(() => {
+          if (fragranceAbortRef.current === controller) {
+            fragranceAbortRef.current = null;
+            setSearchingFragrance(false);
+          }
+        });
+    }, 280);
+
+    return () => window.clearTimeout(timer);
+  }, [fragranceQuery, postType]);
+
   useImperativeHandle(
     ref,
     () => ({
@@ -533,8 +586,11 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
           requestAnimationFrame(() => titleInputRef.current?.focus());
         });
       },
+      close: () => {
+        setComposerOpen(false);
+      },
     }),
-    [],
+    [setComposerOpen],
   );
 
   const addTagsFromInput = (value: string) => {
@@ -788,34 +844,40 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
         ref={sectionRef}
         className="relative w-full overflow-hidden border-b border-scent-accent/14 p-3 sm:p-6"
       >
-        {/* Mobile: a compact "start a room" bar instead of the full marketing
-            block, so the forum's starting point stays present without eating the
-            viewport on small screens. */}
-        <div className="flex items-center gap-2.5 sm:hidden">
-          <button
-            type="button"
-            onClick={() => {
-              setComposerOpen(true);
-              setStatusMessage(null);
-            }}
-            aria-expanded="false"
-            aria-label="Start a community room"
-            className="scent-lux-input flex h-11 flex-1 items-center rounded-full px-4 text-left text-sm text-scent-text-subtle"
-          >
-            Start a room&hellip;
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setComposerOpen(true);
-              setStatusMessage(null);
-            }}
-            aria-hidden="true"
-            tabIndex={-1}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-scent-accent/28 bg-black/78 text-[#fff7ec] shadow-[0_4px_12px_rgba(212,175,55,0.15)] transition-all duration-200 hover:border-scent-accent/78 hover:bg-scent-accent/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
-          >
-            <Plus size={18} strokeWidth={2.2} className="text-[#fff7ec]" aria-hidden="true" />
-          </button>
+        {/* Mobile: a compact eyebrow + one-line description ABOVE the start-a-room
+            control, so the forum's purpose is clear from the start without
+            tapping in — kept tight so it doesn't eat the small-screen viewport. */}
+        <div className="sm:hidden">
+          <p className="scent-type-label text-scent-accent">Community forum</p>
+          <p className="mt-1.5 text-sm leading-5 text-scent-text-muted">
+            Ask a question, share your SOTD, run a battle, or check if a bottle is worth it.
+          </p>
+          <div className="mt-3 flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => {
+                setComposerOpen(true);
+                setStatusMessage(null);
+              }}
+              aria-expanded="false"
+              aria-label="Start a community room"
+              className="scent-lux-input flex h-11 flex-1 items-center rounded-full px-4 text-left text-sm text-scent-text-subtle"
+            >
+              Start a room&hellip;
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setComposerOpen(true);
+                setStatusMessage(null);
+              }}
+              aria-hidden="true"
+              tabIndex={-1}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-scent-accent/28 bg-black/78 text-[#fff7ec] shadow-[0_4px_12px_rgba(212,175,55,0.15)] transition-all duration-200 hover:border-scent-accent/78 hover:bg-scent-accent/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
+            >
+              <Plus size={18} strokeWidth={2.2} className="text-[#fff7ec]" aria-hidden="true" />
+            </button>
+          </div>
         </div>
 
         {/* Desktop: full forum hero with the floating + control. */}
@@ -896,7 +958,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
         </div>
 
         <div
-          className="-mx-4 flex snap-x gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0"
+          className="grid grid-cols-2 gap-2 sm:grid-cols-4"
           role="listbox"
           aria-label="Room type"
         >
@@ -915,7 +977,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
               aria-selected={postType === type}
               aria-pressed={postType === type}
               className={[
-                'inline-flex min-h-11 min-w-[7rem] snap-start items-center justify-center gap-2 rounded-full border px-3 py-2 text-center scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35',
+                'inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full border px-3 py-2 text-center scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35',
                 postType === type
                   ? 'border-scent-accent/48 bg-scent-accent/[0.08] text-[#fff7ec]'
                   : 'border-scent-accent/16 bg-black/54 text-scent-text-muted hover:border-scent-accent/34 hover:text-[#fff7ec]',
@@ -927,7 +989,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
           ))}
         </div>
 
-        <div className="grid gap-3 lg:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)]">
+        <div className="grid grid-cols-2 gap-3">
           <input
             ref={titleInputRef}
             type="text"
@@ -1049,61 +1111,60 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
           />
         ) : null}
 
-        <textarea
-          value={body}
-          onChange={(event) => setBody(event.target.value)}
-          onKeyDown={(event) => {
-            // Power-user affordance: submit without reaching for the mouse.
-            if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
-              event.preventDefault();
-              requestSubmit();
-            }
-          }}
-          rows={5}
-          maxLength={MAX_BODY_LENGTH}
-          placeholder={bodyPlaceholder}
-          aria-label="Room discussion"
-          className="scent-lux-input min-h-40 w-full resize-y rounded-[var(--radius-scent)] px-4 py-3 text-base leading-7 text-[#fff7ec] placeholder:text-scent-text-subtle"
-        />
+        <div>
+          <textarea
+            value={body}
+            onChange={(event) => setBody(event.target.value)}
+            onKeyDown={(event) => {
+              // Power-user affordance: submit without reaching for the mouse.
+              if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+                event.preventDefault();
+                requestSubmit();
+              }
+            }}
+            rows={5}
+            maxLength={MAX_BODY_LENGTH}
+            placeholder={bodyPlaceholder}
+            aria-label="Room discussion"
+            className="scent-lux-input min-h-40 w-full resize-y rounded-[var(--radius-scent)] px-4 py-3 text-base leading-7 text-[#fff7ec] placeholder:text-scent-text-subtle"
+          />
+          {/* Live character count sits directly under the textarea, right-aligned. */}
+          <p className={`mt-1.5 text-right scent-type-meta uppercase ${bodyNearLimit ? 'text-scent-accent' : 'text-scent-text-subtle'}`}>
+            {bodyLength}/{MAX_BODY_LENGTH}
+          </p>
+        </div>
 
         {postType !== 'battle' ? (
         <div className="space-y-4 rounded-[18px] border border-scent-accent/12 bg-black/72 p-4">
-          <div className="grid grid-cols-[1fr_auto] gap-2 sm:gap-4">
-            <div className="relative min-w-0">
-              <Search
+          <div className="relative w-full min-w-0">
+            <Search
+              size={16}
+              strokeWidth={1.8}
+              className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-scent-accent"
+              aria-hidden="true"
+            />
+            <input
+              type="search"
+              value={fragranceQuery}
+              onChange={(event) => setFragranceQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  void searchCatalog();
+                }
+              }}
+              placeholder="Attach a fragrance"
+              aria-label="Search fragrance to attach"
+              aria-autocomplete="list"
+              className="scent-lux-input h-11 w-full rounded-full pl-11 pr-11 text-base text-[#fff7ec] placeholder:text-scent-text-subtle"
+            />
+            {searchingFragrance ? (
+              <LoaderCircle
                 size={16}
-                strokeWidth={1.8}
-                className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-scent-accent"
+                className="absolute right-4 top-1/2 -translate-y-1/2 animate-spin text-scent-accent"
                 aria-hidden="true"
               />
-              <input
-                type="search"
-                value={fragranceQuery}
-                onChange={(event) => setFragranceQuery(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    event.preventDefault();
-                    void searchCatalog();
-                  }
-                }}
-                placeholder="Attach a fragrance"
-                aria-label="Search fragrance to attach"
-                className="scent-lux-input h-11 w-full rounded-full pl-11 pr-4 text-base text-[#fff7ec] placeholder:text-scent-text-subtle"
-              />
-            </div>
-            <button
-              type="button"
-              onClick={() => void searchCatalog()}
-              disabled={searchingFragrance || !fragranceQuery.trim()}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-scent-accent/24 bg-black/58 px-4 py-2 scent-type-chip text-scent-text-muted transition-colors hover:border-scent-accent/42 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 disabled:pointer-events-none disabled:opacity-55"
-            >
-              {searchingFragrance ? (
-                <LoaderCircle size={14} className="animate-spin" aria-hidden="true" />
-              ) : (
-                <Search size={14} strokeWidth={1.8} aria-hidden="true" />
-              )}
-              Search
-            </button>
+            ) : null}
           </div>
 
           {fragranceResults.length > 0 ? (
@@ -1190,14 +1251,9 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
         ) : null}
 
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <p className={`scent-type-meta uppercase ${bodyNearLimit ? 'text-scent-accent' : ''}`}>
-              {bodyLength}/{MAX_BODY_LENGTH}
-            </p>
-            <span aria-hidden="true" className="hidden scent-type-meta uppercase text-scent-text-subtle sm:inline">
-              Ctrl/⌘ + Enter to post
-            </span>
-          </div>
+          <span aria-hidden="true" className="hidden scent-type-meta uppercase text-scent-text-subtle sm:inline">
+            Ctrl/⌘ + Enter to post
+          </span>
           <button
             type="submit"
             disabled={createPost.isPending || (authToken ? !canSubmit : false)}

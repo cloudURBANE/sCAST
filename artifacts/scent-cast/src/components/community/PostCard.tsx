@@ -268,27 +268,18 @@ const CompactBattlePostCard: React.FC<PostCardProps> = ({
         </span>
       </header>
 
-      <div className="mt-4 grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
-        <div className="min-w-0">
-          <h3
-            id={headingId}
-            className="break-words text-balance font-serif text-2xl italic leading-tight text-[#fff7ec] sm:text-3xl"
-          >
-            {heading}
-          </h3>
-          {post.body ? (
-            <p className="mt-2 line-clamp-2 max-w-2xl whitespace-pre-line break-words text-sm leading-6 text-[#fff7ec]/76 sm:text-[15px]">
-              {post.body}
-            </p>
-          ) : null}
-        </div>
-        <Link
-          to="/arena"
-          className="scent-primary-button scent-no-mobile-focus-ring inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-[var(--radius-scent)] px-4 py-2 text-[12px] font-bold uppercase tracking-[0.13em] sm:w-auto"
+      <div className="mt-4 min-w-0">
+        <h3
+          id={headingId}
+          className="break-words text-balance font-serif text-2xl italic leading-tight text-[#fff7ec] sm:text-3xl"
         >
-          <span>Open arena</span>
-          <ArrowRight size={15} strokeWidth={1.8} aria-hidden="true" />
-        </Link>
+          {heading}
+        </h3>
+        {post.body ? (
+          <p className="mt-2 line-clamp-2 max-w-2xl whitespace-pre-line break-words text-sm leading-6 text-[#fff7ec]/76 sm:text-[15px]">
+            {post.body}
+          </p>
+        ) : null}
       </div>
 
       {options.length === 2 ? (
@@ -308,6 +299,16 @@ const CompactBattlePostCard: React.FC<PostCardProps> = ({
           />
         </div>
       ) : null}
+
+      <div className="mt-4 flex justify-center">
+        <Link
+          to="/arena"
+          className="scent-primary-button scent-no-mobile-focus-ring inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-[var(--radius-scent)] px-5 py-2 text-[12px] font-bold uppercase tracking-[0.13em] sm:w-auto"
+        >
+          <span>Open arena</span>
+          <ArrowRight size={15} strokeWidth={1.8} aria-hidden="true" />
+        </Link>
+      </div>
 
       <PostActionsFooter
         post={post}
