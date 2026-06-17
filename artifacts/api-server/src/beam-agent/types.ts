@@ -29,7 +29,22 @@ export type BeamReadToolName =
  * authenticated `/api/wardrobe` path. So "confirm before write" holds without a
  * model-constructed token.
  */
-export type BeamToolName = BeamReadToolName | "beam_propose_collection";
+/**
+ * `beam_show_scent_profile`, `beam_compare_fragrances`, and
+ * `beam_present_travel_kit` are the agent's UI-card surface: each resolves its
+ * data against the real catalog/vault server-side and emits a `card` event the
+ * SPA renders as a native component (a radar, a side-by-side compare, a kit
+ * board). Like `beam_propose_collection` they write NOTHING — the travel-kit's
+ * "new" lane is add-ready but only saved when the user taps Confirm. They are
+ * additive and gated on the same `resolveCatalogEntry` dep, so lean/read-only
+ * deploys never see them.
+ */
+export type BeamCardToolName =
+  | "beam_show_scent_profile"
+  | "beam_compare_fragrances"
+  | "beam_present_travel_kit";
+
+export type BeamToolName = BeamReadToolName | "beam_propose_collection" | BeamCardToolName;
 
 /**
  * Run context derived from the authenticated app session — NEVER from model
@@ -154,6 +169,72 @@ export type BeamProposalItem = {
   description?: string;
 };
 
+/** The server-built 6-axis scent fingerprint (0..1 per axis). */
+export type BeamScentVector = {
+  freshness: number;
+  sweetness: number;
+  woodiness: number;
+  spice: number;
+  warmth: number;
+  musk: number;
+};
+
+/**
+ * A fragrance as rendered inside an agent-emitted UI card. Always resolved from
+ * a real catalog/vault record server-side (never model free-text), so every
+ * field the card shows is grounded. `owned` marks a bottle the user already has
+ * in their vault (verified against `loadVault`, not claimed by the model).
+ */
+export type BeamCardFragrance = {
+  name: string;
+  brand: string;
+  family?: string;
+  accords: string[];
+  scentVector?: BeamScentVector;
+  owned?: boolean;
+  imageUrl?: string;
+  storagePath?: string;
+  imageHash?: string;
+  storageProvider?: string;
+};
+
+/**
+ * A native UI card the agent chooses to surface mid-conversation. The model
+ * picks the card kind and which (already-retrieved) fragrances to feature; the
+ * server resolves and fills every datum, so the SPA can render a trusted
+ * component instead of parsing prose. Three kinds today — keep this union and
+ * the SPA's `BeamCard` renderer in lockstep.
+ */
+export type BeamCard =
+  | {
+      kind: "scent_profile";
+      fragrance: BeamCardFragrance;
+      pyramid?: { top: string[]; heart: string[]; base: string[] };
+      /** One short, server-passed-through line of model context (≤180 chars). */
+      caption?: string;
+    }
+  | {
+      kind: "compare";
+      a: BeamCardFragrance;
+      b: BeamCardFragrance;
+      /** 0..100 — deterministic overlap likelihood (same wardrobe slot). */
+      overlapPercent: number;
+      band: "high" | "moderate" | "some" | "low";
+      sharedNotes: string[];
+      sharedAccords: string[];
+      verdict?: string;
+    }
+  | {
+      kind: "travel_kit";
+      title?: string;
+      /** Bottles from the user's vault (verified owned). Display-only. */
+      ownedPicks: BeamCardFragrance[];
+      /** Add-ready new picks — saved only on the user's explicit Confirm. */
+      newPicks: BeamProposalItem[];
+      /** Lets the kit's "Add new picks" button reuse the proposal add path. */
+      proposalId?: string;
+    };
+
 /**
  * Client-safe event stream. Raw tool arguments, DB ids, stack traces, provider
  * credentials, and system prompts must NEVER reach the browser — see
@@ -166,6 +247,7 @@ export type BeamRunEvent =
   | { type: "tool_completed"; tool: BeamToolName; summary: string }
   | { type: "suggestions"; items: BeamSuggestion[] }
   | { type: "proposal"; proposalId: string; items: BeamProposalItem[] }
+  | { type: "card"; card: BeamCard }
   | { type: "completed"; response: string }
   | { type: "failed"; code: string; message: string };
 

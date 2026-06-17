@@ -231,6 +231,32 @@ test("redactEventForClient clamps a proposal to the item cap", () => {
   assert.equal(out.type === "proposal" ? out.items.length : -1, BEAM_LIMITS.maxProposalItems);
 });
 
+test("redactEventForClient clamps an over-long card (accords + caption)", () => {
+  const out = redactEventForClient({
+    type: "card",
+    card: {
+      kind: "scent_profile",
+      fragrance: {
+        name: "Aventus",
+        brand: "Creed",
+        accords: Array.from({ length: 20 }, (_, i) => `accord ${i}`),
+        scentVector: { freshness: 5, sweetness: -1, woodiness: 0.7, spice: 0.5, warmth: 0.6, musk: 0.4 },
+      },
+      caption: "x".repeat(400),
+    },
+  });
+  assert.equal(out.type, "card");
+  if (out.type === "card" && out.card.kind === "scent_profile") {
+    assert.ok(out.card.fragrance.accords.length <= BEAM_LIMITS.maxCardAccords);
+    assert.ok((out.card.caption ?? "").length <= BEAM_LIMITS.maxCardCaption);
+    // Axes are clamped into 0..1.
+    assert.equal(out.card.fragrance.scentVector?.freshness, 1);
+    assert.equal(out.card.fragrance.scentVector?.sweetness, 0);
+  } else {
+    assert.fail("expected a scent_profile card");
+  }
+});
+
 test("sanitizeSuggestions clamps count, length, empties, and dupes", () => {
   const items = [
     { label: "  Keep  ", value: "keep-it" },

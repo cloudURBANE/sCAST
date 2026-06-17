@@ -151,6 +151,126 @@ test("beam_propose_collection appears only with resolveCatalogEntry and builds a
   assert.equal(propose.clientEvent?.({ proposalId: "p", items: [] }), null);
 });
 
+/** A catalog resolver that returns a rich, chartable profile for known names. */
+function cardDeps(): BeamToolDeps {
+  return makeDeps({
+    resolveCatalogEntry: async (name, brand) => {
+      if (name.toLowerCase().includes("unknown")) return null;
+      return {
+        name,
+        brand: brand ?? "Creed",
+        notes: ["bergamot", "birch", "musk"],
+        pyramid: { top: ["bergamot"], heart: ["birch"], base: ["musk", "oakmoss"] },
+        accords: ["fruity", "smoky"],
+        scent_vector: { freshness: 0.8, sweetness: 0.3, woodiness: 0.7, spice: 0.5, warmth: 0.6, musk: 0.4 },
+        imageUrl: "https://img/x.webp",
+      };
+    },
+  });
+}
+
+test("card tools appear only with resolveCatalogEntry", () => {
+  const lean = toolMap(makeDeps());
+  for (const name of ["beam_show_scent_profile", "beam_compare_fragrances", "beam_present_travel_kit"]) {
+    assert.equal(lean.has(name), false, `${name} should be gated off without resolveCatalogEntry`);
+  }
+  const rich = toolMap(cardDeps());
+  for (const name of ["beam_show_scent_profile", "beam_compare_fragrances", "beam_present_travel_kit"]) {
+    assert.equal(rich.has(name), true, `${name} should be exposed with resolveCatalogEntry`);
+  }
+});
+
+test("beam_show_scent_profile emits a grounded scent_profile card and marks owned", async () => {
+  const tools = toolMap(cardDeps());
+  const profile = tools.get("beam_show_scent_profile")!;
+  // Aventus/Creed is in the fake vault, so it should be flagged owned.
+  const result = (await profile.handler({ name: "Aventus", brand: "Creed", caption: "Bright & smoky" }, CTX)) as {
+    resolved: boolean;
+    shown: { owned: boolean };
+    hasVector: boolean;
+  };
+  assert.equal(result.resolved, true);
+  assert.equal(result.shown.owned, true);
+  assert.equal(result.hasVector, true);
+
+  const event = profile.clientEvent?.(result);
+  assert.equal(event?.type, "card");
+  assert.ok(event && event.type === "card" && event.card.kind === "scent_profile");
+  if (event && event.type === "card" && event.card.kind === "scent_profile") {
+    assert.equal(event.card.fragrance.name, "Aventus");
+    assert.equal(event.card.fragrance.owned, true);
+    assert.equal(event.card.caption, "Bright & smoky");
+    assert.ok(event.card.fragrance.scentVector);
+  }
+});
+
+test("beam_show_scent_profile refuses an un-resolvable fragrance (no invented card)", async () => {
+  const tools = toolMap(cardDeps());
+  const result = (await tools.get("beam_show_scent_profile")!.handler({ name: "Unknown Juice" }, CTX)) as {
+    resolved: boolean;
+    card?: unknown;
+  };
+  assert.equal(result.resolved, false);
+  assert.equal(result.card, undefined);
+});
+
+test("beam_compare_fragrances emits a compare card with grounded overlap", async () => {
+  const tools = toolMap(cardDeps());
+  const compare = tools.get("beam_compare_fragrances")!;
+  const result = (await compare.handler(
+    { a: { name: "Aventus", brand: "Creed" }, b: { name: "Green Irish Tweed", brand: "Creed" }, verdict: "Close cousins" },
+    CTX,
+  )) as { resolved: boolean; overlapPercent: number; band: string };
+  assert.equal(result.resolved, true);
+  // Both resolve to the same fake profile → identical notes/accords → full overlap.
+  assert.equal(result.overlapPercent, 100);
+  assert.equal(result.band, "high");
+
+  const event = compare.clientEvent?.(result);
+  assert.ok(event && event.type === "card" && event.card.kind === "compare");
+  if (event && event.type === "card" && event.card.kind === "compare") {
+    assert.equal(event.card.a.name, "Aventus");
+    assert.equal(event.card.b.name, "Green Irish Tweed");
+    assert.equal(event.card.verdict, "Close cousins");
+    assert.ok(event.card.sharedAccords.length > 0);
+  }
+
+  // A missing side yields no card.
+  const miss = (await compare.handler({ a: { name: "Aventus" }, b: { name: "Unknown Juice" } }, CTX)) as {
+    resolved: boolean;
+  };
+  assert.equal(miss.resolved, false);
+});
+
+test("beam_present_travel_kit grounds the owned lane and drops un-owned/un-resolvable picks", async () => {
+  const tools = toolMap(cardDeps());
+  const kit = tools.get("beam_present_travel_kit")!;
+  const result = (await kit.handler(
+    {
+      title: "Tokyo · August",
+      // Aventus IS owned; Bleu de Chanel is NOT in the vault → must be dropped from the owned lane.
+      owned: [{ name: "Aventus", brand: "Creed" }, { name: "Bleu de Chanel", brand: "Chanel" }],
+      newPicks: [{ name: "Silver Mountain Water", brand: "Creed" }, { name: "Unknown Juice" }],
+    },
+    CTX,
+  )) as { resolved: boolean; ownedCount: number; newCount: number; unresolved: string[]; card: { kind: string } };
+
+  assert.equal(result.resolved, true);
+  assert.equal(result.ownedCount, 1, "only the genuinely-owned bottle survives the owned lane");
+  assert.equal(result.newCount, 1, "only the resolvable new pick survives");
+  assert.equal(result.unresolved.length, 1);
+
+  const event = kit.clientEvent?.(result);
+  assert.ok(event && event.type === "card" && event.card.kind === "travel_kit");
+  if (event && event.type === "card" && event.card.kind === "travel_kit") {
+    assert.equal(event.card.title, "Tokyo · August");
+    assert.equal(event.card.ownedPicks.length, 1);
+    assert.equal(event.card.ownedPicks[0].owned, true);
+    assert.equal(event.card.newPicks.length, 1);
+    assert.match(event.card.proposalId ?? "", /^prop_/);
+  }
+});
+
 test("beam_get_wardrobe maps the vault to owned packets", async () => {
   const tools = toolMap(makeDeps());
   const result = (await tools.get("beam_get_wardrobe")!.handler({}, CTX)) as {

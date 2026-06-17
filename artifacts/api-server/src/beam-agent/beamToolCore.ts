@@ -6,6 +6,8 @@
  * DB/service-coupled tool bodies live in `beamTools.ts` and build on these.
  */
 import type {
+  BeamCard,
+  BeamCardFragrance,
   BeamProposalItem,
   BeamRunEvent,
   BeamToolDefinition,
@@ -29,6 +31,12 @@ export const BEAM_LIMITS = {
   maxSuggestionLabel: 48,
   /** Fragrances the agent may propose to add to the vault in one collection. */
   maxProposalItems: 5,
+  /** UI-card bounds (notes/accords lists, kit lane sizes, caption length). */
+  maxCardNotes: 8,
+  maxCardAccords: 8,
+  maxCardSharedItems: 8,
+  maxKitPicks: 5,
+  maxCardCaption: 180,
 } as const;
 
 export function clampLimit(value: unknown, max: number, fallback = max): number {
@@ -135,6 +143,10 @@ export function redactEventForClient(event: BeamRunEvent): BeamRunEvent {
         proposalId: event.proposalId,
         items: event.items.slice(0, BEAM_LIMITS.maxProposalItems),
       };
+    case "card":
+      // Card data is server-resolved from real records; clamp the unbounded
+      // list/string fields defensively at the client boundary.
+      return { type: "card", card: sanitizeCardForClient(event.card) };
     case "failed":
       return { type: "failed", code: event.code, message: event.message };
     default:
@@ -337,6 +349,107 @@ export function buildProposalItem(flat: Record<string, unknown>): BeamProposalIt
   if (description) item.description = description.slice(0, 600);
 
   return item;
+}
+
+/* ------------------------------------------------------------------ */
+/* UI card builders + redaction                                       */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Project an add-ready proposal item down to the `BeamCardFragrance` shape a UI
+ * card renders. `owned` is supplied by the caller (verified against the vault),
+ * never inferred here.
+ */
+export function cardFragranceFromProposalItem(item: BeamProposalItem, owned: boolean): BeamCardFragrance {
+  const card: BeamCardFragrance = {
+    name: item.name,
+    brand: item.brand,
+    accords: item.accords.slice(0, BEAM_LIMITS.maxCardAccords),
+    owned,
+  };
+  if (item.family) card.family = item.family;
+  if (item.scentVector) card.scentVector = item.scentVector;
+  if (item.imageUrl) card.imageUrl = item.imageUrl;
+  if (item.storagePath) card.storagePath = item.storagePath;
+  if (item.imageHash) card.imageHash = item.imageHash;
+  if (item.storageProvider) card.storageProvider = item.storageProvider;
+  return card;
+}
+
+/** Clamp each axis of a scent vector into 0..1 (drops NaN/∞, rounds to 2dp). */
+function sanitizeScentVector(v: BeamCardFragrance["scentVector"]): BeamCardFragrance["scentVector"] {
+  if (!v) return undefined;
+  const axis = (n: number): number => (Number.isFinite(n) ? round2(Math.min(1, Math.max(0, n))) : 0);
+  return {
+    freshness: axis(v.freshness),
+    sweetness: axis(v.sweetness),
+    woodiness: axis(v.woodiness),
+    spice: axis(v.spice),
+    warmth: axis(v.warmth),
+    musk: axis(v.musk),
+  };
+}
+
+function sanitizeCardFragrance(f: BeamCardFragrance): BeamCardFragrance {
+  const out: BeamCardFragrance = {
+    name: String(f.name ?? "").slice(0, 120),
+    brand: String(f.brand ?? "").slice(0, 120),
+    accords: cleanStringList(f.accords).slice(0, BEAM_LIMITS.maxCardAccords),
+  };
+  if (f.family) out.family = String(f.family).slice(0, 80);
+  const vector = sanitizeScentVector(f.scentVector);
+  if (vector) out.scentVector = vector;
+  if (f.owned) out.owned = true;
+  if (f.imageUrl) out.imageUrl = f.imageUrl;
+  if (f.storagePath) out.storagePath = f.storagePath;
+  if (f.imageHash) out.imageHash = f.imageHash;
+  if (f.storageProvider) out.storageProvider = f.storageProvider;
+  return out;
+}
+
+/**
+ * Clamp an agent-emitted UI card at the client boundary. The data is already
+ * server-resolved, so this only bounds list/string sizes (defense in depth) and
+ * passes the shape through untouched otherwise.
+ */
+export function sanitizeCardForClient(card: BeamCard): BeamCard {
+  switch (card.kind) {
+    case "scent_profile": {
+      const out: BeamCard = { kind: "scent_profile", fragrance: sanitizeCardFragrance(card.fragrance) };
+      if (card.pyramid) {
+        out.pyramid = {
+          top: cleanStringList(card.pyramid.top).slice(0, BEAM_LIMITS.maxCardNotes),
+          heart: cleanStringList(card.pyramid.heart).slice(0, BEAM_LIMITS.maxCardNotes),
+          base: cleanStringList(card.pyramid.base).slice(0, BEAM_LIMITS.maxCardNotes),
+        };
+      }
+      if (card.caption) out.caption = String(card.caption).slice(0, BEAM_LIMITS.maxCardCaption);
+      return out;
+    }
+    case "compare":
+      return {
+        kind: "compare",
+        a: sanitizeCardFragrance(card.a),
+        b: sanitizeCardFragrance(card.b),
+        overlapPercent: Number.isFinite(card.overlapPercent)
+          ? Math.min(100, Math.max(0, Math.round(card.overlapPercent)))
+          : 0,
+        band: card.band,
+        sharedNotes: cleanStringList(card.sharedNotes).slice(0, BEAM_LIMITS.maxCardSharedItems),
+        sharedAccords: cleanStringList(card.sharedAccords).slice(0, BEAM_LIMITS.maxCardSharedItems),
+        ...(card.verdict ? { verdict: String(card.verdict).slice(0, BEAM_LIMITS.maxCardCaption) } : {}),
+      };
+    case "travel_kit":
+      return {
+        kind: "travel_kit",
+        ...(card.title ? { title: String(card.title).slice(0, 120) } : {}),
+        ownedPicks: card.ownedPicks.slice(0, BEAM_LIMITS.maxKitPicks).map(sanitizeCardFragrance),
+        newPicks: card.newPicks.slice(0, BEAM_LIMITS.maxKitPicks),
+        ...(card.proposalId ? { proposalId: card.proposalId } : {}),
+      };
+    default:
+      return card;
+  }
 }
 
 /* ------------------------------------------------------------------ */
