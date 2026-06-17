@@ -1064,7 +1064,7 @@ function DashboardView() {
 
           <HomepageAtmosphereChrome />
 
-          <div id="scent-vault-section" className="scent-deferred-section !mt-48 sm:!mt-72 lg:!mt-96" style={{ scrollMarginTop: 'var(--topbar-h)' }}>
+          <div id="scent-vault-section" className="scent-deferred-section !mt-64 sm:!mt-72 lg:!mt-96" style={{ scrollMarginTop: 'var(--topbar-h)' }}>
             <React.Suspense fallback={<WardrobeFallback />}>
               <Wardrobe
                 items={items}

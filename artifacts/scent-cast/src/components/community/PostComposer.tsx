@@ -828,88 +828,25 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
     }
   };
 
-  const openComposer = () => {
-    setComposerOpen(true);
-    setStatusMessage(null);
-    // Wait for the expanded form to mount, then bring it into view and focus it.
-    requestAnimationFrame(() => {
-      sectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      requestAnimationFrame(() => titleInputRef.current?.focus());
-    });
-  };
-
   if (!composerOpen) {
+    // Collapsed: the panel toolbar (community.tsx) owns the "Start a room"
+    // trigger and the page hero (CommunityHero) owns the forum's label and
+    // pitch, so the collapsed composer renders no hero of its own — that
+    // duplication is what made this surface read as two competing controls.
+    // The only thing it surfaces here is a post-submit status line (e.g. the
+    // "Room opened in the community" confirmation that fires after collapse),
+    // so it stays out of the layout entirely when there is nothing to say.
+    if (!statusMessage) {
+      return <section ref={sectionRef} aria-hidden="true" />;
+    }
     return (
       <section
         ref={sectionRef}
-        className="relative w-full overflow-hidden border-b border-scent-accent/14 p-3 sm:p-6"
+        className="w-full overflow-hidden border-b border-scent-accent/14 p-3 sm:p-6"
       >
-        {/* Mobile: a compact eyebrow + one-line description ABOVE the start-a-room
-            control, so the forum's purpose is clear from the start without
-            tapping in — kept tight so it doesn't eat the small-screen viewport. */}
-        <div className="sm:hidden">
-          <p className="scent-type-label text-scent-accent">Community forum</p>
-          <p className="mt-1.5 text-sm leading-5 text-scent-text-muted">
-            Ask a question, share your SOTD, run a battle, or check if a bottle is worth it.
-          </p>
-          <div className="mt-3 flex items-center gap-2.5">
-            <button
-              type="button"
-              onClick={() => {
-                setComposerOpen(true);
-                setStatusMessage(null);
-              }}
-              aria-expanded="false"
-              aria-label="Start a community room"
-              className="scent-lux-input flex h-11 flex-1 items-center rounded-full px-4 text-left text-sm text-scent-text-subtle"
-            >
-              Start a room&hellip;
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setComposerOpen(true);
-                setStatusMessage(null);
-              }}
-              aria-hidden="true"
-              tabIndex={-1}
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-scent-accent/28 bg-black/78 text-[#fff7ec] shadow-[0_4px_12px_rgba(212,175,55,0.15)] transition-all duration-200 hover:border-scent-accent/78 hover:bg-scent-accent/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
-            >
-              <Plus size={18} strokeWidth={2.2} className="text-[#fff7ec]" aria-hidden="true" />
-            </button>
-          </div>
-        </div>
-
-        {/* Desktop: full forum hero with the floating + control. */}
-        <button
-          type="button"
-          onClick={() => {
-            setComposerOpen(true);
-            setStatusMessage(null);
-          }}
-          aria-expanded="false"
-          aria-label="Start a community room"
-          className="absolute right-5 top-5 z-10 hidden h-10 w-10 items-center justify-center rounded-full border border-scent-accent/28 bg-black/78 text-[#fff7ec] shadow-[0_4px_12px_rgba(212,175,55,0.15)] transition-all duration-200 hover:border-scent-accent/78 hover:bg-scent-accent/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 sm:flex"
-        >
-          <Plus size={18} strokeWidth={2.2} className="text-[#fff7ec]" aria-hidden="true" />
-        </button>
-        <div className="mx-auto hidden max-w-2xl flex-col items-center px-12 text-center sm:flex">
-          <p className="scent-type-label text-scent-accent">
-            Community forum
-          </p>
-          <h2 className="mt-4 text-balance font-serif text-2xl italic leading-tight text-[#fff7ec] sm:text-4xl">
-            Rooms already moving through the lounge.
-          </h2>
-          <p className="mt-4 max-w-xl text-base leading-7 text-scent-text-muted">
-            Ask a question, share your SOTD, run a battle, or check if a bottle is worth it.
-          </p>
-        </div>
-
-        {statusMessage ? (
-          <p className="mx-auto mt-4 max-w-2xl rounded-[14px] border border-scent-accent/12 bg-black/58 px-4 py-3 text-center text-sm text-scent-text-muted sm:mt-6 sm:text-base">
-            {statusMessage}
-          </p>
-        ) : null}
+        <p className="mx-auto max-w-2xl rounded-[14px] border border-scent-accent/12 bg-black/58 px-4 py-3 text-center text-sm text-scent-text-muted sm:text-base">
+          {statusMessage}
+        </p>
       </section>
     );
   }
@@ -934,27 +871,18 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
         }}
         className="space-y-4 sm:space-y-5"
       >
-        <div className="relative flex flex-col items-center gap-2 text-center">
-          <div className="min-w-0 px-10 sm:px-14">
-            <p className="scent-type-label text-scent-accent">
-              Community forum
-            </p>
-            <h2 className="mt-1 font-serif text-2xl italic leading-tight text-[#fff7ec] sm:text-3xl">
-              Start a room
-            </h2>
-            <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-scent-text-muted sm:text-base sm:leading-7">
-              {activeRoom.hint}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setComposerOpen(false)}
-            aria-expanded="true"
-            aria-label="Close composer"
-            className="absolute right-0 top-0 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-scent-accent/18 bg-black/70 text-scent-text-muted transition-colors hover:border-scent-accent/36 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
-          >
-            <X size={16} strokeWidth={1.9} aria-hidden="true" />
-          </button>
+        {/* No "Community forum" eyebrow and no in-form close button here — the
+            page hero already owns the forum's label, and the panel toolbar
+            (community.tsx) owns the single Start a room / Close toggle. The
+            heading + room hint are the only contextual cue for the open editor,
+            so the surface never reads as duplicate controls. */}
+        <div className="flex flex-col items-center gap-2 px-2 text-center">
+          <h2 className="font-serif text-2xl italic leading-tight text-[#fff7ec] sm:text-3xl">
+            Start a room
+          </h2>
+          <p className="mx-auto max-w-xl text-sm leading-6 text-scent-text-muted sm:text-base sm:leading-7">
+            {activeRoom.hint}
+          </p>
         </div>
 
         <div

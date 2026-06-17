@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { ArenaBattleSide } from "@/components/arena/ArenaBattleSide";
+import { ArenaCompareDialog } from "@/components/arena/ArenaCompareDialog";
 import { ArenaResultReveal } from "@/components/arena/ArenaResultReveal";
 import type { ArenaBattle } from "@/components/arena/arenaBattleMapper";
 import type { ArenaReasonKey } from "@/components/arena/arenaTwists";
@@ -61,6 +62,9 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
   const [pendingSwitchChoice, setPendingSwitchChoice] = useState<string | null>(
     null,
   );
+  // Pre-vote head-to-head compare overlay. Opens from tapping a contender card
+  // before a pick is made; closing it leaves the vote flow untouched.
+  const [compareOpen, setCompareOpen] = useState(false);
   const revealRef = useRef<HTMLDivElement>(null);
 
   // Battle identity changed → adopt that battle's resolved state from scratch.
@@ -72,6 +76,7 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
     setErrorMessage(null);
     setJustVotedChoice(null);
     setPendingSwitchChoice(null);
+    setCompareOpen(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [battle.id]);
 
@@ -202,8 +207,8 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
           revealed={revealed}
           disabled={votePending}
           isSaving={votePending && selectedKey === battle.left.key}
-          justVoted={justVotedChoice === battle.left.key}
           onVote={() => requestVote(battle.left.key)}
+          onCompare={() => setCompareOpen(true)}
         />
 
         <div className="grid place-items-center">
@@ -222,10 +227,20 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
           revealed={revealed}
           disabled={votePending}
           isSaving={votePending && selectedKey === battle.right.key}
-          justVoted={justVotedChoice === battle.right.key}
           onVote={() => requestVote(battle.right.key)}
+          onCompare={() => setCompareOpen(true)}
         />
       </div>
+
+      <ArenaCompareDialog
+        battle={battle}
+        open={compareOpen}
+        onOpenChange={setCompareOpen}
+        onVote={(choice) => {
+          setCompareOpen(false);
+          requestVote(choice);
+        }}
+      />
 
       <AlertDialog
         open={Boolean(pendingSwitchSide)}

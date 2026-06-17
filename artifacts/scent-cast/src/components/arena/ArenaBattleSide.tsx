@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-import { Check, LoaderCircle, Sparkles } from "lucide-react";
+import React, { useRef } from "react";
+import { Check, LoaderCircle, Repeat2, Search, Sparkles } from "lucide-react";
 import { BottleImage } from "@/components/BottleImage";
 import { BrandGoldLabel } from "@/components/BrandGoldLabel";
 import type { ArenaBattleSide as ArenaBattleSideData } from "@/components/arena/arenaBattleMapper";
@@ -12,14 +12,15 @@ interface ArenaBattleSideProps {
   disabled: boolean;
   /** True while this card's vote is being persisted to the room tally. */
   isSaving?: boolean;
-  /**
-   * True only for the side the viewer just picked *this mount*. Gates the
-   * one-shot "Saving → Saved to tally" badge animation so a restored pick shows
-   * the settled checkmark immediately instead of replaying the animation.
-   */
-  justVoted?: boolean;
   onVote: () => void;
+  /** Open the pre-vote head-to-head compare detail for both contenders. */
+  onCompare: () => void;
 }
+
+// Tap-vs-scroll isolation: a pointer that travels farther than this between
+// down and up was a scroll/drag, not a tap, so we suppress activation. Mirrors
+// NotePyramid's TAP_MOVE_TOLERANCE_PX (see isolate-touch-interaction-gestures).
+const TAP_MOVE_TOLERANCE_PX = 10;
 
 export const ArenaBattleSide: React.FC<ArenaBattleSideProps> = ({
   side,
@@ -28,53 +29,94 @@ export const ArenaBattleSide: React.FC<ArenaBattleSideProps> = ({
   revealed,
   disabled,
   isSaving = false,
-  justVoted = false,
   onVote,
+  onCompare,
 }) => {
-  // Inline tally feedback: show the status text immediately on a fresh pick, then
-  // collapse it away once the save settles so only the checkmark remains. A pick
-  // restored on revisit skips this entirely (justVoted is false).
-  const [showTallyText, setShowTallyText] = useState(false);
-
-  useEffect(() => {
-    if (!selected || !justVoted) {
-      setShowTallyText(false);
-      return;
-    }
-    setShowTallyText(true);
-    if (isSaving) return;
-    const timer = window.setTimeout(() => setShowTallyText(false), 1800);
-    return () => window.clearTimeout(timer);
-  }, [selected, isSaving, justVoted]);
-
   const contenderLabel = align === "left" ? "A" : "B";
-  // While the "Saving / Saved to tally" badge is animating we swap it in for the
-  // centered "Contender" label so the two never collide. Once the save settles
-  // and the badge collapses, the label — now carrying a persistent checkmark for
-  // the chosen side — fades back in cleanly.
-  const badgeActive = selected && justVoted && (isSaving || showTallyText);
+
+  // Pre-vote: tapping the card opens the compare detail. Post-vote: tapping the
+  // chosen card starts the change flow (the stage owns the confirm dialog).
+  // Tapping the *other* card post-vote also routes through onVote (switch).
+  const cardActivate = () => {
+    if (disabled) return;
+    if (revealed) {
+      onVote();
+    } else {
+      onCompare();
+    }
+  };
+
+  // Track pointer travel so a scroll doesn't register as a tap on touch.
+  const pointerStartRef = useRef<{
+    id: number;
+    x: number;
+    y: number;
+    moved: boolean;
+  } | null>(null);
+
+  const handlePointerDown = (event: React.PointerEvent<HTMLElement>) => {
+    pointerStartRef.current = {
+      id: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      moved: false,
+    };
+  };
+
+  const handlePointerMove = (event: React.PointerEvent<HTMLElement>) => {
+    const start = pointerStartRef.current;
+    if (!start || start.id !== event.pointerId) return;
+    const distance = Math.hypot(
+      event.clientX - start.x,
+      event.clientY - start.y,
+    );
+    if (distance > TAP_MOVE_TOLERANCE_PX) start.moved = true;
+  };
+
+  const handlePointerCancel = () => {
+    pointerStartRef.current = null;
+  };
+
+  const handleCardClick = (event: React.MouseEvent<HTMLElement>) => {
+    // Buttons inside the card (Vote / Change) handle their own activation.
+    if ((event.target as HTMLElement).closest("button")) return;
+    const start = pointerStartRef.current;
+    pointerStartRef.current = null;
+    // Mouse clicks have no pointer record (or none that moved); only suppress
+    // a touch/pen gesture that actually scrolled.
+    if (start && start.moved) return;
+    cardActivate();
+  };
 
   const handleCardKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
-    if (!revealed || disabled) return;
+    if (disabled) return;
     if (event.key !== "Enter" && event.key !== " ") return;
+    // Let inner buttons own the keyboard activation.
+    if ((event.target as HTMLElement).closest("button")) return;
     event.preventDefault();
-    onVote();
+    cardActivate();
   };
+
+  const cardAriaLabel = revealed
+    ? selected
+      ? `Your pick: ${side.name}. Tap to change.`
+      : `Switch pick to ${side.name}`
+    : `Compare ${side.name} head-to-head`;
 
   return (
     <article
-      role={revealed ? "button" : undefined}
-      tabIndex={revealed && !disabled ? 0 : undefined}
-      aria-label={
-        revealed
-          ? `${selected ? "Current pick" : "Switch pick to"} ${side.name}`
-          : undefined
-      }
-      onClick={revealed && !disabled ? onVote : undefined}
+      role="button"
+      tabIndex={disabled ? undefined : 0}
+      aria-label={cardAriaLabel}
+      onClick={handleCardClick}
       onKeyDown={handleCardKeyDown}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerCancel={handlePointerCancel}
+      style={{ touchAction: "pan-y" }}
       className={[
         "relative flex h-full min-w-0 overflow-hidden rounded-lg bg-[rgba(4,3,2,0.9)] p-2 shadow-[0_22px_58px_-44px_rgba(212,175,55,0.26),inset_0_1px_0_rgba(255,236,183,0.08)] transition-all duration-200 hover:bg-[rgba(8,6,4,0.94)] hover:shadow-[0_34px_88px_-52px_rgba(212,175,55,0.32),inset_0_1px_0_rgba(255,236,183,0.12)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/58 sm:p-3 md:p-4",
-        revealed && !disabled ? "cursor-pointer" : "",
+        disabled ? "" : "cursor-pointer",
         selected ? "bg-scent-accent/[0.045]" : "",
       ].join(" ")}
     >
@@ -85,60 +127,34 @@ export const ArenaBattleSide: React.FC<ArenaBattleSideProps> = ({
         ].join(" ")}
         aria-hidden="true"
       />
+
+      {/* Quiet "you're the pick" badge, pinned top-right of the chosen card.
+          Shows a spinner while the vote persists, then settles to a check. */}
+      {selected ? (
+        <span
+          className="absolute right-1.5 top-1.5 z-20 inline-flex min-h-5 items-center gap-1 rounded-full bg-scent-accent px-1.5 py-0.5 text-[8px] font-bold uppercase leading-none tracking-[0.08em] text-black shadow-[0_0_12px_rgba(212,175,55,0.22)] sm:right-2 sm:top-2 sm:px-2 sm:py-1 sm:text-[10px] sm:tracking-[0.1em]"
+          aria-label={isSaving ? "Saving your pick" : "Your pick"}
+        >
+          {isSaving ? (
+            <LoaderCircle
+              size={10}
+              strokeWidth={2.4}
+              className="animate-spin"
+              aria-hidden="true"
+            />
+          ) : (
+            <Check size={10} strokeWidth={2.8} aria-hidden="true" />
+          )}
+          <span>Picked</span>
+        </span>
+      ) : null}
+
       <div className="relative z-10 flex w-full flex-col">
-        <div className="relative mb-2 flex min-h-7 items-center justify-center sm:mb-3">
-          <span
-            className={[
-              "inline-flex items-center scent-type-label text-[10px] tracking-[0.1em] text-scent-accent/78 transition-opacity duration-300 sm:text-[12px] sm:tracking-[0.14em]",
-              badgeActive ? "opacity-0" : "opacity-100",
-            ].join(" ")}
-          >
+        <div className="mb-2 flex min-h-7 items-center justify-center sm:mb-3">
+          <span className="inline-flex items-center scent-type-label text-[10px] tracking-[0.1em] text-scent-accent/78 sm:text-[12px] sm:tracking-[0.14em]">
             {`Contender ${contenderLabel}`}
             {selected ? <span className="sr-only">your pick</span> : null}
           </span>
-          {/* Durable pick marker, pinned away from the centered contender label. */}
-          {selected && !badgeActive ? (
-            <span
-              className="absolute right-0 top-1/2 inline-grid h-4 w-4 -translate-y-1/2 place-items-center rounded-full bg-scent-accent text-black shadow-[0_0_10px_rgba(212,175,55,0.28)] sm:h-[1.05rem] sm:w-[1.05rem]"
-              aria-hidden="true"
-            >
-              <Check size={10} strokeWidth={2.6} aria-hidden="true" />
-            </span>
-          ) : null}
-          {/* One-shot "Saving → Saved to tally" badge: only mounts for a fresh
-              vote, and cross-fades over the label so the two never collide. */}
-          {selected && justVoted ? (
-            <span
-              className={[
-                "absolute left-1/2 top-1/2 inline-flex min-h-6 -translate-x-1/2 -translate-y-1/2 items-center rounded-full bg-scent-accent px-1.5 py-1 text-[8px] font-bold uppercase tracking-[0.06em] text-black shadow-[0_0_14px_rgba(212,175,55,0.16)] transition-opacity duration-300 sm:min-h-7 sm:px-2.5 sm:text-[10px] sm:tracking-[0.1em]",
-                badgeActive
-                  ? "arena-badge-pop opacity-100"
-                  : "pointer-events-none opacity-0",
-              ].join(" ")}
-              aria-hidden={!badgeActive}
-            >
-              {isSaving ? (
-                <LoaderCircle
-                  size={11}
-                  strokeWidth={2}
-                  className="animate-spin"
-                  aria-hidden="true"
-                />
-              ) : (
-                <Check size={11} strokeWidth={2} aria-hidden="true" />
-              )}
-              <span
-                className={[
-                  "inline-block overflow-hidden whitespace-nowrap transition-all duration-500",
-                  showTallyText
-                    ? "ml-1 max-w-[8rem] opacity-100 sm:ml-1.5"
-                    : "ml-0 max-w-0 opacity-0",
-                ].join(" ")}
-              >
-                {isSaving ? "Saving to tally" : "Saved to tally"}
-              </span>
-            </span>
-          ) : null}
         </div>
 
         <div className="relative aspect-[1/1.08] w-full overflow-hidden rounded-md bg-black/[0.18] shadow-[inset_0_0_0_1px_rgba(212,175,55,0.08)] sm:aspect-[4/5]">
@@ -155,23 +171,40 @@ export const ArenaBattleSide: React.FC<ArenaBattleSideProps> = ({
             loading="eager"
             fetchPriority={align === "left" ? "high" : "auto"}
           />
+          {/* Pre-vote affordance: make "tap to compare" discoverable without
+              stealing the vote button. Hidden once a pick is locked in. */}
+          {!revealed ? (
+            <span
+              className="pointer-events-none absolute bottom-1.5 left-1/2 inline-flex -translate-x-1/2 items-center gap-1 rounded-full bg-black/64 px-2 py-0.5 text-[8px] font-bold uppercase leading-none tracking-[0.08em] text-scent-accent/85 shadow-[inset_0_0_0_1px_rgba(212,175,55,0.18)] backdrop-blur sm:bottom-2 sm:text-[9px]"
+              aria-hidden="true"
+            >
+              <Search size={9} strokeWidth={2.2} aria-hidden="true" />
+              Compare
+            </span>
+          ) : null}
         </div>
 
-        <div className="mt-2.5 min-w-0 text-center sm:mt-3">
-          {side.brand ? (
-            <BrandGoldLabel
-              as="p"
-              brand={side.brand}
-              className="scent-card-brand scent-arena-brand mx-auto block max-w-full"
-              shimmer={false}
-            />
-          ) : (
-            <p className="scent-type-label text-scent-accent/70">
-              Community option
-            </p>
-          )}
+        <div className="mt-2.5 flex min-w-0 flex-col text-center sm:mt-3">
+          {/* Equal-height brand row so a missing brand on one side doesn't
+              shift its name/descriptor relative to the other card. */}
+          <div className="flex min-h-[1.05rem] items-center justify-center sm:min-h-[1.4rem]">
+            {side.brand ? (
+              <BrandGoldLabel
+                as="p"
+                brand={side.brand}
+                className="scent-card-brand scent-arena-brand mx-auto block max-w-full"
+                shimmer={false}
+              />
+            ) : (
+              <p className="scent-type-label text-scent-accent/70">
+                Community option
+              </p>
+            )}
+          </div>
+          {/* Name block: fixed two-line height so a 1-line and a 2-line name
+              occupy identical vertical space across both contender cards. */}
           <div className="mt-1 flex min-h-[2.5rem] items-center justify-center sm:min-h-[3.75rem]">
-            <h2 className="line-clamp-2 text-pretty text-balance text-sm font-bold leading-tight text-foreground sm:text-xl md:text-2xl">
+            <h2 className="line-clamp-2 text-pretty text-balance text-sm font-bold leading-tight text-foreground [overflow-wrap:anywhere] sm:text-xl md:text-2xl">
               {side.name}
             </h2>
           </div>
@@ -190,7 +223,26 @@ export const ArenaBattleSide: React.FC<ArenaBattleSideProps> = ({
             <Sparkles size={16} strokeWidth={1.8} aria-hidden="true" />
             <span>{`Vote Contender ${contenderLabel}`}</span>
           </button>
-        ) : null}
+        ) : (
+          /* Post-vote: a contrasting dark/outline "Change" chip so the
+             tap-to-switch affordance reads against the gold-tinted card frame
+             instead of disappearing into it. The chosen card gets the explicit
+             control; the other card stays tappable as a plain switch target. */
+          <button
+            type="button"
+            onClick={onVote}
+            disabled={disabled}
+            className="scent-no-mobile-focus-ring mt-3 inline-flex min-h-9 w-full items-center justify-center gap-1.5 rounded-md border border-scent-accent/30 bg-black/55 px-2 py-1.5 text-[10px] font-bold uppercase tracking-[0.1em] text-scent-text-muted shadow-[inset_0_1px_0_rgba(255,236,183,0.05)] backdrop-blur transition-colors duration-200 hover:border-scent-accent/45 hover:bg-black/72 hover:text-foreground active:bg-black/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55 disabled:pointer-events-none disabled:opacity-60 sm:min-h-10 sm:text-[11px] sm:tracking-[0.12em]"
+            aria-label={
+              selected
+                ? `Change your pick away from ${side.name}`
+                : `Switch your pick to ${side.name}`
+            }
+          >
+            <Repeat2 size={14} strokeWidth={2} aria-hidden="true" />
+            <span>{selected ? "Change pick" : "Pick this"}</span>
+          </button>
+        )}
       </div>
     </article>
   );

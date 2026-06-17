@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Search, X } from 'lucide-react';
+import { Plus, Search, X } from 'lucide-react';
 import { AppTopNav } from '@/components/AppTopNav';
 import { CommunityHero } from '@/components/community/CommunityHero';
 import { useCommunityFragrances } from '@/components/community/communityData';
@@ -120,17 +120,28 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
   const [postType, setPostType] = useState<CommunityPostType | null>(null);
   const [postTag, setPostTag] = useState<string | null>(null);
   const [postQuery, setPostQuery] = useState('');
-  // The search/filters panel is hidden by default and toggled from the panel's
-  // top-left Search button. It is mutually exclusive with the composer form.
+  // The panel top is ONE toolbar with two mutually exclusive surfaces:
+  // the composer (Start a room) and the search/filters panel. Only one can
+  // own the panel body at a time; the toolbar reflects which is active.
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [composerOpen, setComposerOpen] = useState(false);
   const composerRef = useRef<PostComposerHandle | null>(null);
   const toggleSearch = useCallback(() => {
     setFiltersOpen((open) => {
+      // Opening search retracts the composer; the open()/close() ref drives
+      // PostComposer, which reports back through handleComposerOpenChange.
       if (!open) composerRef.current?.close();
       return !open;
     });
   }, []);
+  const toggleComposer = useCallback(() => {
+    // The compose control drives the same imperative handle the feed CTAs use,
+    // so collapsed/expanded state stays single-sourced inside PostComposer.
+    if (composerOpen) composerRef.current?.close();
+    else composerRef.current?.open();
+  }, [composerOpen]);
   const handleComposerOpenChange = useCallback((open: boolean) => {
+    setComposerOpen(open);
     // When the composer expands, retract the search panel.
     if (open) setFiltersOpen(false);
   }, []);
@@ -190,14 +201,49 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
               <>
               <React.Suspense fallback={<CommunityPanelFallback />}>
                 <div className="mx-auto w-full max-w-[940px] overflow-hidden rounded-[calc(var(--radius-scent)-2px)] border border-scent-accent/18 bg-[linear-gradient(180deg,rgba(10,9,7,0.82),rgba(0,0,0,0.94))] shadow-[0_18px_44px_-34px_rgba(0,0,0,0.95),0_0_0_1px_rgba(212,175,55,0.045),inset_0_1px_0_rgba(255,236,183,0.05)]">
-                  <div className="flex items-center justify-start border-b border-scent-accent/10 px-3 py-2.5 sm:px-4">
+                  {/* ONE deliberate toolbar: compose on the left, search/filter on
+                      the right. The two are mutually exclusive — opening either
+                      retracts the other — so this never reads as duplicate UI. */}
+                  <div
+                    className={[
+                      'flex items-center justify-between gap-2 px-3 py-2.5 sm:px-4',
+                      // Only draw the divider when a surface is expanded beneath
+                      // the toolbar, so the resting state reads as one clean bar.
+                      composerOpen || filtersOpen ? 'border-b border-scent-accent/10' : '',
+                    ].join(' ')}
+                  >
+                    <button
+                      type="button"
+                      onClick={toggleComposer}
+                      aria-expanded={composerOpen}
+                      aria-controls="community-composer-panel"
+                      aria-label={composerOpen ? 'Close the composer' : 'Start a community room'}
+                      className={[
+                        'inline-flex min-h-10 min-w-0 flex-1 items-center gap-2 rounded-full border px-4 py-2 scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 sm:flex-none',
+                        composerOpen
+                          ? 'border-scent-accent/48 bg-scent-accent/[0.08] text-[#fff7ec]'
+                          : 'border-scent-accent/24 bg-black/40 text-scent-text-muted hover:border-scent-accent/46 hover:text-[#fff7ec]',
+                      ].join(' ')}
+                    >
+                      {composerOpen ? (
+                        <X size={15} strokeWidth={1.8} aria-hidden="true" />
+                      ) : (
+                        <Plus size={15} strokeWidth={2} aria-hidden="true" />
+                      )}
+                      <span className="truncate">{composerOpen ? 'Close' : 'Start a room'}</span>
+                    </button>
                     <button
                       type="button"
                       onClick={toggleSearch}
                       aria-expanded={filtersOpen}
                       aria-controls="community-search-panel"
                       aria-label={filtersOpen ? 'Close search and filters' : 'Search rooms and filter'}
-                      className="inline-flex min-h-10 items-center gap-2 rounded-full border border-scent-accent/24 bg-black/40 px-4 py-2 scent-type-chip text-scent-text-muted transition-colors hover:border-scent-accent/46 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
+                      className={[
+                        'inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full border px-4 py-2 scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45',
+                        filtersOpen
+                          ? 'border-scent-accent/48 bg-scent-accent/[0.08] text-[#fff7ec]'
+                          : 'border-scent-accent/24 bg-black/40 text-scent-text-muted hover:border-scent-accent/46 hover:text-[#fff7ec]',
+                      ].join(' ')}
                     >
                       {filtersOpen ? (
                         <X size={15} strokeWidth={1.8} aria-hidden="true" />
@@ -208,9 +254,10 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
                     </button>
                   </div>
                   {/* PostComposer stays mounted so the feed's "start a room"
-                      CTA can drive it via the ref; it is hidden (not unmounted)
-                      while the search panel owns the surface. */}
-                  <div className={filtersOpen ? 'hidden' : undefined}>
+                      CTA can drive it via the ref; it renders nothing in its
+                      collapsed state (the toolbar owns the trigger) and is
+                      hidden while the search panel owns the surface. */}
+                  <div id="community-composer-panel" className={filtersOpen ? 'hidden' : undefined}>
                     <PostComposer
                       ref={composerRef}
                       authToken={authToken}
