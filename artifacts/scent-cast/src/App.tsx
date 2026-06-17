@@ -828,8 +828,10 @@ function DashboardView() {
       ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, []);
 
+  // iOS PWA standalone mode reports viewport/safe-area differently than Safari;
+  // keep this shell padding tied to --bottomnav-h so fixed nav content has space.
   return (
-    <div className="min-h-[100svh] relative overflow-x-hidden pb-[calc(var(--bottomnav-h)+1.5rem)] md:pb-0">
+    <div className="min-h-[100svh] relative overflow-x-hidden pb-[calc(var(--bottomnav-h)+3rem)] md:pb-0">
       <SEO title="ScentBeam — Your scent, perfected" description="Build your fragrance vault and discover your signature scent, calibrated to the weather around you." url="https://scentbeam.com/" />
       <AppTopNav
         authToken={authToken}
@@ -845,8 +847,8 @@ function DashboardView() {
 
       <div style={{ height: 'var(--topbar-h)' }} />
 
-      <main className="relative z-10 pb-24 px-4 sm:px-8 max-w-[1760px] mx-auto">
-        <div className="space-y-12 sm:space-y-28 pt-6 sm:pt-14">
+      <main className="relative z-10 pb-[calc(var(--bottomnav-h)+2rem)] px-4 sm:px-8 sm:pb-24 max-w-[1760px] mx-auto">
+        <div className="space-y-7 pt-3 sm:space-y-28 sm:pt-14">
           <HomepageHeroMarquee />
 
           <section className="relative mx-auto w-full max-w-[60rem] min-w-0 text-center">
