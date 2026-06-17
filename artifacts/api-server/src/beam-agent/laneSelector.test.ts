@@ -19,6 +19,13 @@ test("premium keywords escalate to the premium lane", () => {
   assert.equal(selectConciergeLane({ message: "help me with a date-night layering" }), "premium");
 });
 
+test("everyday one-shot asks no longer escalate (date night / signature scent)", () => {
+  // These were over-broad triggers: routine fragrance chat that doesn't need the
+  // premium orchestration tier. They now fall through to the cheap default lane.
+  assert.equal(selectConciergeLane({ message: "what should I wear on date night?" }), "default");
+  assert.equal(selectConciergeLane({ message: "help me find my signature scent" }), "default");
+});
+
 test("word boundaries avoid false positives", () => {
   // "auditorium" must not trip the \baudit\b rule.
   assert.equal(selectConciergeLane({ message: "what smells good at an auditorium?" }), "default");

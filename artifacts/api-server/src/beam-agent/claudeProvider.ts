@@ -46,6 +46,44 @@ export function isClaudeConfigured(): boolean {
   return Boolean(process.env.ANTHROPIC_API_KEY);
 }
 
+const EPHEMERAL = { type: "ephemeral" as const };
+
+/**
+ * Prompt caching (Anthropic Messages API). The system prompt and tool schemas are
+ * identical across every call in a run (orchestration turns + the synthesis turn),
+ * and the transcript prefix only grows — so we place cache breakpoints at the end
+ * of `system`, the last tool, and the last message block. Calls 2..N then read
+ * that shared prefix at ~10% of input price instead of re-billing ~20k+ tokens of
+ * system+tools+transcript every turn. Breakpoints are silently ignored for blocks
+ * below the model's minimum cacheable size, so this is safe on tiny early turns.
+ * (Anthropic allows up to 4 breakpoints; we use at most 3.)
+ */
+function cachedSystem(system: string): unknown {
+  return [{ type: "text", text: system, cache_control: EPHEMERAL }];
+}
+
+function cachedTools(tools: ClaudeCallInput["tools"]): unknown {
+  if (tools.length === 0) return tools;
+  return tools.map((tool, i) =>
+    i === tools.length - 1 ? { ...tool, cache_control: EPHEMERAL } : tool,
+  );
+}
+
+function cachedMessages(messages: ClaudeCallInput["messages"]): unknown {
+  if (messages.length === 0) return messages;
+  const out: unknown[] = messages.slice();
+  const last = messages[messages.length - 1];
+  const blocks: Array<Record<string, unknown>> =
+    typeof last.content === "string"
+      ? [{ type: "text", text: last.content }]
+      : last.content.map((b) => ({ ...b }));
+  if (blocks.length > 0) {
+    blocks[blocks.length - 1] = { ...blocks[blocks.length - 1], cache_control: EPHEMERAL };
+  }
+  out[out.length - 1] = { ...last, content: blocks };
+  return out;
+}
+
 export async function callClaude(input: ClaudeCallInput): Promise<ClaudeResponse> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not set");
@@ -62,9 +100,9 @@ export async function callClaude(input: ClaudeCallInput): Promise<ClaudeResponse
     body: JSON.stringify({
       model: input.model ?? DEFAULT_BEAM_MODEL,
       max_tokens: input.maxTokens ?? 1024,
-      system: input.system,
-      tools: input.tools,
-      messages: input.messages,
+      system: cachedSystem(input.system),
+      tools: cachedTools(input.tools),
+      messages: cachedMessages(input.messages),
       ...(stream ? { stream: true } : {}),
     }),
   });

@@ -19,6 +19,7 @@ import type {
 } from "./types.ts";
 import {
   BEAM_LIMITS,
+  boundToolResultForTranscript,
   collectGroundedFragranceNames,
   extractAgentCues,
   extractText,
@@ -852,12 +853,19 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
           continue;
         }
 
-        // Serialize the success. JSON.stringify can throw (circular refs, BigInt);
-        // treat that as a tool error so the model knows it got no usable data,
-        // rather than silently dropping the result.
+        // Serialize the success. We FIRST bound the result record-aware (cap array
+        // counts + string lengths) so the transcript copy — re-sent on every later
+        // turn — can't be dominated by one fat payload; the char ceiling is only a
+        // final backstop. The UNTRIMMED `result` is still used for grounding/cards
+        // below, so trimming never weakens the answer-gate allowlist. JSON.stringify
+        // can still throw (circular refs, BigInt); treat that as a tool error so the
+        // model knows it got no usable data rather than silently dropping it.
         let serialized: string;
         try {
-          serialized = JSON.stringify(result).slice(0, BEAM_LIMITS.maxToolResultChars);
+          serialized = JSON.stringify(boundToolResultForTranscript(result)).slice(
+            0,
+            BEAM_LIMITS.maxToolResultChars,
+          );
         } catch {
           results.push({
             type: "tool_result",

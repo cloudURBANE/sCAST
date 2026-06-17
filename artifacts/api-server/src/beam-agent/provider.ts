@@ -18,6 +18,7 @@ import {
   deepOpenRouterModel,
   defaultOpenRouterModel,
   isOpenRouterConfigured,
+  premiumOrchestrationModel,
   strongOpenRouterModel,
 } from "./openRouterProvider.ts";
 
@@ -52,28 +53,35 @@ export function isModelConfigured(): boolean {
  * the provider that will actually serve the run, resolved from env at call time.
  * Returns null when no provider is configured.
  *
- * `lane` selects the cost lane (brief §03.2): the `premium` lane runs the strong
- * (MiniMax M3 / Sonnet) slug for BOTH orchestration and synthesis so long /
- * nuanced sessions get the better model end-to-end; the `default` lane runs the
- * cheap concierge slug for orchestration and the strong slug only for the closing
- * synthesis turn. A no-arg call keeps the historical default-lane behavior.
+ * `lane` selects the cost lane (brief §03.2). BOTH lanes run a cheap tool-router
+ * for orchestration and reserve the strong slug for the closing synthesis turn
+ * only — that "cheap orchestration + smart closer" split is the documented intent.
+ * The lane changes only the *orchestration* tier: `default` runs the cheap
+ * concierge model (M2.5 / Haiku), `premium` steps orchestration up to the premium
+ * tier (M3) for nuanced / multi-item missions. Crucially, premium orchestration is
+ * NOT the synthesis slug — reusing the (often Sonnet-overridden) strong slug for
+ * every premium orchestration turn is what previously made a single "trip/kit"
+ * mission cost ~$0.60 (7+ closer-priced tool turns). A no-arg call keeps the
+ * historical default-lane behavior.
  */
 export function resolveBeamModels(
   lane: BeamLane = "default",
 ): { model: string; synthesisModel: string } | null {
   const provider = resolveProvider();
   if (provider === "anthropic") {
-    const strong = STRONG_BEAM_MODEL;
+    // Anthropic-direct has no mid-tier between Haiku and Sonnet, so premium
+    // orchestration stays on the cheap default unless explicitly pinned. The
+    // closing turn still escalates to the strong (Sonnet) synthesis slug.
+    const premiumOrch = process.env.BEAM_AGENT_MODEL_PREMIUM?.trim() || DEFAULT_BEAM_MODEL;
     return {
-      model: lane === "premium" ? strong : DEFAULT_BEAM_MODEL,
-      synthesisModel: strong,
+      model: lane === "premium" ? premiumOrch : DEFAULT_BEAM_MODEL,
+      synthesisModel: STRONG_BEAM_MODEL,
     };
   }
   if (provider === "openrouter") {
-    const strong = strongOpenRouterModel();
     return {
-      model: lane === "premium" ? strong : defaultOpenRouterModel(),
-      synthesisModel: strong,
+      model: lane === "premium" ? premiumOrchestrationModel() : defaultOpenRouterModel(),
+      synthesisModel: strongOpenRouterModel(),
     };
   }
   return null;

@@ -295,18 +295,21 @@ test("the synthesis turn is held to the scorer's top pick and warned off invente
   assert.equal(summary?.outcome, "completed");
 });
 
-test("an unserializable tool result yields exactly one error result, not a duplicate tool_use_id", async () => {
+test("a circular tool result is bounded to exactly one serializable result, not a duplicate tool_use_id", async () => {
   let summary: BeamRunSummary | undefined;
   // For each model call, record how many tool_result blocks carry the circular
   // tool's id. A real double-push would put two with the SAME id in one
   // transcript (which the API rejects); we assert no single call ever sees more
-  // than one, and that the one present is an error.
+  // than one. The transcript trimmer (`boundToolResultForTranscript`) is
+  // depth-capped, so a self-referential result is now safely bounded into a
+  // serializable shape instead of throwing — the model gets a usable (if
+  // truncated) result and the run still carries exactly one tool_result for the id.
   let maxPerCall = 0;
   let sawError = false;
 
-  // A tool whose result is circular -> JSON.stringify throws AFTER the handler
-  // succeeds. The loop must record one is_error result and continue, never a
-  // second result for the same id.
+  // A tool whose result is circular. Pre-trim this made JSON.stringify throw; the
+  // record-aware trimmer now collapses the cycle at the depth ceiling, so the loop
+  // records one ordinary result and continues — never a second result for the id.
   const circularTool: BeamToolDefinition = {
     name: "beam_get_wardrobe",
     description: "List the user's wardrobe",
@@ -357,7 +360,7 @@ test("an unserializable tool result yields exactly one error result, not a dupli
   });
 
   assert.equal(maxPerCall, 1, "no single transcript should carry a duplicate tool_use_id");
-  assert.ok(sawError, "the unserializable result should be reported as a tool error");
+  assert.equal(sawError, false, "a depth-bounded circular result is usable, not an error");
   assert.equal(summary?.outcome, "completed");
 });
 
