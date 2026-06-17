@@ -144,7 +144,7 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
   }, []);
 
   return (
-    <div className="min-h-[100svh] relative overflow-x-hidden pb-[calc(var(--bottomnav-h)+1.5rem)] md:pb-0">
+    <div className="min-h-[100svh] relative overflow-x-hidden pb-[calc(var(--bottomnav-h)+2rem)] md:pb-0">
       <AppTopNav
         authToken={authToken}
         authEmail={authEmail}
@@ -159,7 +159,7 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
 
       <div style={{ height: 'var(--topbar-h)' }} />
 
-      <main className="relative z-10 mx-auto max-w-[1760px] px-4 pb-24 sm:px-8">
+      <main className="relative z-10 mx-auto max-w-[1760px] px-4 sm:px-8 sm:pb-24">
         <div className="space-y-14 pt-9 sm:space-y-20 sm:pt-12">
           <CommunityHero />
           <div className="scent-full-bleed">

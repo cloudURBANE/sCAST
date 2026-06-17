@@ -89,7 +89,7 @@ export const ArenaPage: React.FC<ArenaPageProps> = ({
   };
 
   return (
-    <div className="min-h-[100svh] overflow-x-hidden pb-[calc(var(--bottomnav-h)+1.5rem)] md:pb-0">
+    <div className="min-h-[100svh] overflow-x-hidden pb-[calc(var(--bottomnav-h)+2rem)] md:pb-0">
       <div className="fixed inset-0 z-0 bg-[radial-gradient(ellipse_at_50%_0%,rgba(212,175,55,0.04),transparent_60%)]" aria-hidden="true" />
       <AppTopNav
         authToken={authToken}
@@ -105,7 +105,7 @@ export const ArenaPage: React.FC<ArenaPageProps> = ({
 
       <div style={{ height: 'var(--topbar-h)' }} />
 
-      <main className="relative z-10 px-4 pb-24 pt-8 sm:px-8 sm:pt-12">
+      <main className="relative z-10 px-4 pt-8 sm:px-8 sm:pb-24 sm:pt-12">
         {isLoading ? (
           <div className="grid min-h-[62svh] place-items-center text-center">
             <div>

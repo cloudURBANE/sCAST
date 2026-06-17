@@ -367,10 +367,6 @@ a {
     padding: 1.35rem 0.75rem 1rem;
   }
 
-  .scent-marquee-band {
-    display: none;
-  }
-
   .scent-vault-results-panel {
     min-height: 0;
     border-radius: calc(var(--radius-scent) - 2px);
