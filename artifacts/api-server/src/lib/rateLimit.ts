@@ -73,12 +73,34 @@ export type RateLimitMiddlewareOptions = {
 };
 
 /**
- * Redis-backed fixed window. Implemented with the canonical INCR + PEXPIRE
- * pattern: the first request in a window sets the TTL, subsequent requests just
- * increment, and the key self-expires at window end. Any Redis error (including
- * "not yet connected") transparently degrades to the shared in-memory limiter,
- * so this is strictly additive — it can only ever make the limit MORE correct,
- * never break a request.
+ * Atomic fixed-window increment, run server-side in one round trip. Mirrors the
+ * canonical INCR + PEXPIRE pattern (first request in a window arms the TTL, the
+ * rest just increment, the key self-expires at window end) plus a self-heal if a
+ * key is ever found without a TTL. Returns `{count, ttlMs}`. Doing this in Lua
+ * collapses the previous 2–3 sequential commands into a single call — the win
+ * that matters against a remote/managed Redis where each command is a network
+ * round trip.
+ */
+const FIXED_WINDOW_LUA = `
+local count = redis.call('INCR', KEYS[1])
+local ttl
+if count == 1 then
+  redis.call('PEXPIRE', KEYS[1], tonumber(ARGV[1]))
+  ttl = tonumber(ARGV[1])
+else
+  ttl = redis.call('PTTL', KEYS[1])
+  if ttl < 0 then
+    redis.call('PEXPIRE', KEYS[1], tonumber(ARGV[1]))
+    ttl = tonumber(ARGV[1])
+  end
+end
+return {count, ttl}
+`;
+
+/**
+ * Redis-backed fixed window. Any Redis error (including "not yet connected")
+ * transparently degrades to the shared in-memory limiter, so this is strictly
+ * additive — it can only ever make the limit MORE correct, never break a request.
  */
 export class RedisRateLimiter {
   private readonly limit: number;
@@ -114,26 +136,16 @@ export class RedisRateLimiter {
 
     const redisKey = this.keyPrefix + key;
     try {
-      const count = await client.incr(redisKey);
-      let resetAt: number;
-      if (count === 1) {
-        await client.pexpire(redisKey, this.windowMs);
-        resetAt = now + this.windowMs;
-      } else {
-        const ttl = await client.pttl(redisKey);
-        if (ttl < 0) {
-          // No TTL (e.g. a crash between INCR and PEXPIRE left a persistent key).
-          // Repair it so the window can't get stuck open forever.
-          await client.pexpire(redisKey, this.windowMs);
-          resetAt = now + this.windowMs;
-        } else {
-          resetAt = now + ttl;
-        }
-      }
+      const res = (await client.eval(FIXED_WINDOW_LUA, 1, redisKey, this.windowMs)) as [
+        number,
+        number,
+      ];
+      const count = Number(res[0]);
+      const ttl = Number(res[1]);
       return {
         allowed: count <= this.limit,
         remaining: Math.max(0, this.limit - count),
-        resetAt,
+        resetAt: now + ttl,
       };
     } catch (err) {
       if (!this.loggedError) {

@@ -19,14 +19,8 @@ function ctx(): BeamRunContext {
 /** Minimal RedisLike fake backed by a Map (only get/set/del are exercised here). */
 class FakeRedis implements RedisLike {
   private store = new Map<string, string>();
-  async incr(): Promise<number> {
+  async eval(): Promise<unknown> {
     throw new Error("unused");
-  }
-  async pexpire(): Promise<number> {
-    return 1;
-  }
-  async pttl(): Promise<number> {
-    return -2;
   }
   async get(key: string): Promise<string | null> {
     return this.store.get(key) ?? null;
@@ -101,9 +95,7 @@ test("redis: corrupt entry is treated as empty, not thrown", async () => {
 
 test("redis: a store error degrades to in-memory (no throw)", async () => {
   const throwing: RedisLike = {
-    incr: async () => 0,
-    pexpire: async () => 1,
-    pttl: async () => -2,
+    eval: async () => 0,
     get: async () => {
       throw new Error("redis down");
     },

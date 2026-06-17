@@ -32,13 +32,17 @@ import { logger } from "./logger.ts";
  * backed stores trivially fakeable in tests.
  */
 export interface RedisLike {
-  incr(key: string): Promise<number>;
-  pexpire(key: string, milliseconds: number): Promise<number>;
-  pttl(key: string): Promise<number>;
   get(key: string): Promise<string | null>;
   /** Mirrors `SET key value PX <ttlMs>`. */
   set(key: string, value: string, mode: "PX", ttlMs: number): Promise<unknown>;
   del(key: string): Promise<number>;
+  /**
+   * Mirrors ioredis `eval(script, numKeys, ...keysAndArgs)`. Used by the rate
+   * limiter to run its fixed-window increment as a single atomic round trip
+   * (INCR + conditional PEXPIRE/PTTL) instead of 2–3 sequential commands — the
+   * latency that matters most against a managed/remote Redis.
+   */
+  eval(script: string, numKeys: number, ...keysAndArgs: (string | number)[]): Promise<unknown>;
 }
 
 /** True when a non-blank REDIS_URL is configured. */
@@ -46,23 +50,41 @@ export function isRedisConfigured(): boolean {
   return Boolean(process.env.REDIS_URL && process.env.REDIS_URL.trim());
 }
 
+/**
+ * Bound the initial connect. With `enableOfflineQueue: false` a command issued
+ * before the socket is ready rejects immediately ("Stream isn't writeable"), so
+ * `getRedis()` waits for the connection before handing the client out — otherwise
+ * the first requests after every cold start race the (TLS) handshake and silently
+ * fall back to in-memory, defeating cross-replica sharing exactly when it matters.
+ */
+const CONNECT_TIMEOUT_MS = 4000;
+/** After a failed connect, serve the in-memory fallback for this long before retrying, so a down/misconfigured Redis can't thrash the connect path on every request. */
+const RETRY_COOLDOWN_MS = 30_000;
+
 let clientPromise: Promise<RedisLike | null> | null = null;
 let loggedConnectError = false;
+let cooldownUntil = 0;
 
 /**
  * Resolve the shared Redis client, or `null` when Redis is not configured or the
- * client could not be constructed. The promise is cached, so repeated calls on
- * the request hot path are cheap. Never rejects — callers can treat a `null`
- * (or a later command rejection) as "use the in-memory fallback".
+ * connection could not be established. The first call awaits the connection
+ * (bounded by CONNECT_TIMEOUT_MS); the result is cached, so subsequent calls on
+ * the request hot path are cheap. Never rejects and never hangs longer than the
+ * connect timeout — callers treat `null` (or a later per-command rejection) as
+ * "use the in-memory fallback".
  */
 export function getRedis(): Promise<RedisLike | null> {
   if (!isRedisConfigured()) return Promise.resolve(null);
-  if (!clientPromise) clientPromise = connect();
+  if (clientPromise) return clientPromise;
+  // Within the post-failure cooldown, don't even try — go straight to fallback.
+  if (Date.now() < cooldownUntil) return Promise.resolve(null);
+  clientPromise = connect();
   return clientPromise;
 }
 
 async function connect(): Promise<RedisLike | null> {
   const url = process.env.REDIS_URL!.trim();
+  let client: RedisLikeWithEvents | null = null;
   try {
     // Dynamic import: only reached when REDIS_URL is set. `ioredis` is external
     // in build.mjs, so this resolves from node_modules at runtime.
@@ -70,13 +92,13 @@ async function connect(): Promise<RedisLike | null> {
       default: new (url: string, opts: Record<string, unknown>) => RedisLikeWithEvents;
     };
     const RedisCtor = mod.default;
-    const client = new RedisCtor(url, {
+    client = new RedisCtor(url, {
       // Fail commands fast when not connected instead of queueing them, so a
-      // Redis outage degrades to the in-memory fallback rather than hanging
-      // requests. Keep reconnecting in the background so it self-heals.
+      // mid-life Redis blip degrades to the in-memory fallback rather than
+      // hanging requests. Keep reconnecting in the background so it self-heals.
       enableOfflineQueue: false,
       maxRetriesPerRequest: 1,
-      connectTimeout: 3000,
+      connectTimeout: CONNECT_TIMEOUT_MS,
       retryStrategy: (times: number) => Math.min(times * 200, 2000),
     });
 
@@ -93,24 +115,68 @@ async function connect(): Promise<RedisLike | null> {
       logger.info("redis: connected — shared state backend active");
     });
 
+    await waitForReady(client, CONNECT_TIMEOUT_MS + 500);
     return client as unknown as RedisLike;
   } catch (err) {
-    // ioredis not installed / failed to load. Stay on the in-memory path.
-    logger.warn({ err }, "redis: client unavailable — using in-memory state");
+    // Couldn't connect in time (or ioredis failed to load). Tear down the
+    // half-open client so it stops reconnecting in the background, arm the
+    // cooldown, and drop the cached promise so a later call can retry.
+    if (!loggedConnectError) {
+      loggedConnectError = true;
+      logger.warn({ err }, "redis: initial connect failed — using in-memory state (will retry)");
+    }
+    try {
+      client?.disconnect?.();
+    } catch {
+      /* ignore */
+    }
+    cooldownUntil = Date.now() + RETRY_COOLDOWN_MS;
+    clientPromise = null;
     return null;
   }
 }
 
-/** ioredis exposes an EventEmitter `on`; typed locally to avoid importing it. */
+/** Resolve once the client reaches `ready`; reject on timeout or a closed connection. */
+function waitForReady(client: RedisLikeWithEvents, timeoutMs: number): Promise<void> {
+  if (client.status === "ready") return Promise.resolve();
+  return new Promise<void>((resolve, reject) => {
+    const cleanup = (): void => {
+      clearTimeout(timer);
+      client.off?.("ready", onReady);
+      client.off?.("end", onEnd);
+    };
+    const onReady = (): void => {
+      cleanup();
+      resolve();
+    };
+    const onEnd = (): void => {
+      cleanup();
+      reject(new Error("redis connection closed before ready"));
+    };
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(new Error("redis connect timeout"));
+    }, timeoutMs);
+    client.once("ready", onReady);
+    client.once("end", onEnd);
+  });
+}
+
+/** ioredis exposes an EventEmitter API + a `status` string; typed locally to avoid importing it. */
 interface RedisLikeWithEvents extends RedisLike {
+  status?: string;
   on(event: string, listener: (...args: unknown[]) => void): unknown;
+  once(event: string, listener: (...args: unknown[]) => void): unknown;
+  off?(event: string, listener: (...args: unknown[]) => void): unknown;
+  disconnect?(): void;
 }
 
 /**
- * Test-only reset hook: drops the cached client promise so a suite can re-derive
- * `getRedis()` after mutating REDIS_URL. Not used in production code paths.
+ * Test-only reset hook: drops the cached client promise and cooldown so a suite
+ * can re-derive `getRedis()` after mutating REDIS_URL. Not used in production.
  */
 export function __resetRedisForTests(): void {
   clientPromise = null;
   loggedConnectError = false;
+  cooldownUntil = 0;
 }

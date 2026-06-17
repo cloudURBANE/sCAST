@@ -22,23 +22,34 @@ class FakeRedis implements RedisLike {
     return e;
   }
 
-  async incr(key: string): Promise<number> {
-    const e = this.live(key);
-    const next = (e ? Number(e.value) : 0) + 1;
-    this.store.set(key, { value: String(next), expireAt: e?.expireAt ?? null });
-    return next;
+  /** Seed a persistent (no-TTL) counter, simulating INCR-without-PEXPIRE. */
+  seedNoTtl(key: string, value: number): void {
+    this.store.set(key, { value: String(value), expireAt: null });
   }
-  async pexpire(key: string, ms: number): Promise<number> {
+
+  /**
+   * Executes the fixed-window script the limiter ships: INCR, arm the TTL on the
+   * first hit, self-heal a missing TTL, and return [count, ttlMs]. (The real Lua
+   * is verified against a live server separately; this mirrors its semantics so
+   * the limiter's decision + fallback logic stays unit-testable offline.)
+   */
+  async eval(_script: string, _numKeys: number, key: string, windowMs: string | number): Promise<unknown> {
+    const ms = Number(windowMs);
     const e = this.live(key);
-    if (!e) return 0;
-    e.expireAt = this.now + ms;
-    return 1;
-  }
-  async pttl(key: string): Promise<number> {
-    const e = this.live(key);
-    if (!e) return -2;
-    if (e.expireAt === null) return -1;
-    return e.expireAt - this.now;
+    const count = (e ? Number(e.value) : 0) + 1;
+    const entry = { value: String(count), expireAt: e?.expireAt ?? null };
+    this.store.set(key, entry);
+    let ttl: number;
+    if (count === 1) {
+      entry.expireAt = this.now + ms;
+      ttl = ms;
+    } else if (entry.expireAt === null) {
+      entry.expireAt = this.now + ms;
+      ttl = ms;
+    } else {
+      ttl = entry.expireAt - this.now;
+    }
+    return [count, ttl];
   }
   async get(key: string): Promise<string | null> {
     return this.live(key)?.value ?? null;
@@ -121,22 +132,19 @@ test("redis limiter: repairs a key that lost its TTL", async () => {
   const client = new FakeRedis();
   const limiter = makeLimiter({ limit: 5, windowMs: 1000, name: "t", client });
   // Simulate a persistent key (INCR ran, PEXPIRE didn't): seed count with no TTL.
-  await client.incr("ratelimit:t:ip"); // value 1, no expiry
+  client.seedNoTtl("ratelimit:t:ip", 1); // value 1, no expiry
   client.now = 2000;
   const decision = await limiter.check("ip", 2000);
   assert.equal(decision.allowed, true);
-  // The limiter saw ttl < 0 and re-armed the window.
+  // The script saw ttl < 0 and re-armed the window.
   assert.equal(decision.resetAt, 3000);
-  assert.equal(await client.pttl("ratelimit:t:ip"), 1000);
 });
 
 test("redis limiter: falls back to in-memory when the client errors", async () => {
   const throwing: RedisLike = {
-    incr: async () => {
+    eval: async () => {
       throw new Error("redis down");
     },
-    pexpire: async () => 1,
-    pttl: async () => -2,
     get: async () => null,
     set: async () => "OK",
     del: async () => 0,
