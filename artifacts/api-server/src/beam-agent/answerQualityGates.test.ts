@@ -96,6 +96,43 @@ test("travel kit fails when ready mission omits required owned or new picks", ()
   assert.ok(r.violations.includes("mission_unfulfilled"));
 });
 
+test("delegation: asking another preference question after the user delegates is rejected", () => {
+  const r = runAnswerQualityGates("Happy to choose! Do you prefer something fresh or warm?", {
+    hadExternalEvidence: false,
+    sessionState: { slots: {}, userDelegatedChoice: true },
+  });
+  assert.ok(r.violations.includes("delegated_but_questioned"), JSON.stringify(r.violations));
+  assert.equal(r.passed, false);
+});
+
+test("delegation: committing to a grounded pick passes even with a trailing rhetorical question", () => {
+  const r = runAnswerQualityGates(
+    "You delegated, so I'll commit: wear Creed Aventus. Why? Its bright pineapple-smoke opening nails it.",
+    {
+      hadExternalEvidence: false,
+      sessionState: { slots: {}, userDelegatedChoice: true },
+      groundedFragrances: [{ canonicalName: "Aventus", brand: "Creed", owned: true }],
+    },
+  );
+  assert.equal(r.passed, true, JSON.stringify(r.violations));
+});
+
+test("delegation: mission-level delegation flag also triggers the backstop", () => {
+  const r = runAnswerQualityGates("Sure — which vibe are you after for the trip?", {
+    hadExternalEvidence: false,
+    sessionState: { slots: { destination: "Tokyo" }, mission: { intent: "travel_kit", userDelegatedChoice: true } },
+  });
+  assert.ok(r.violations.includes("delegated_but_questioned"), JSON.stringify(r.violations));
+});
+
+test("a preference question without delegation does NOT trip the delegation gate", () => {
+  const r = runAnswerQualityGates("To tailor this, do you prefer fresh or warm?", {
+    hadExternalEvidence: false,
+    sessionState: { slots: {} },
+  });
+  assert.ok(!r.violations.includes("delegated_but_questioned"), JSON.stringify(r.violations));
+});
+
 test("repairInstructionFor names the broken rules", () => {
   const msg = repairInstructionFor(["price_without_evidence", "over_length", "mission_unfulfilled"]);
   assert.match(msg, /price/i);
