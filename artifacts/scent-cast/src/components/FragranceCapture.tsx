@@ -1105,38 +1105,27 @@ export const FragranceCapture: React.FC<{
     </motion.div>
   ) : null;
 
-  /* Mobile action bar — a fixed, viewport-pinned CTA so "Add to Vault" is always
-     reachable while browsing a long result list. Portaled to <body> because the
+  /* Mobile action bar — a fixed, viewport-pinned CTA only after the user selects
+     a result, keeping the unselected browsing state compact. Portaled to <body> because the
      panel root is overflow:hidden, which traps a CSS `position: sticky` bar. The
      desktop CTA stays inline (`sm:block`); this is `sm:hidden`. */
-  const mobileActionBar = matches.length > 0 && !uploading ? (
+  const mobileActionBar = matches.length > 0 && hasSelectedMatch && !uploading ? (
     <motion.div
       key="mobile-action-bar"
       initial={reduceMotion ? false : { opacity: 0, y: 24 }}
       animate={{ opacity: 1, y: 0 }}
       exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 24 }}
       transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
-      className="fixed inset-x-0 bottom-[calc(var(--mobile-nav-offset,var(--bottomnav-h))+0.4rem)] z-[120] bg-gradient-to-t from-scent-bg via-scent-bg/95 to-transparent px-4 pb-2 pt-8 sm:hidden transition-[bottom] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]"
+      className="fixed inset-x-0 bottom-[calc(var(--mobile-nav-offset,var(--bottomnav-h))+0.35rem)] z-[120] bg-gradient-to-t from-scent-bg via-scent-bg/95 to-transparent px-4 pb-2 pt-6 sm:hidden transition-[bottom] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]"
     >
       <div className="mx-auto w-full max-w-[39.75rem]">
-        <div className="mb-2 flex justify-center">
-          <button
-            type="button"
-            onClick={scrollToSearch}
-            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full border border-white/30 bg-scent-bg/70 px-3.5 py-1.5 scent-type-chip text-scent-accent transition-colors hover:border-scent-accent/55 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
-          >
-            <Search size={12} strokeWidth={2.2} aria-hidden />
-            Back to search
-          </button>
-        </div>
         <button
           type="button"
           onClick={handlePrimaryAction}
-          disabled={!hasSelectedMatch}
-          className="scent-vault-outline-button flex h-[58px] w-full cursor-pointer items-center justify-center px-4 transition-transform hover:scale-[1.01] active:scale-[0.98] disabled:pointer-events-none disabled:opacity-62"
+          className="scent-vault-outline-button flex h-[54px] w-full cursor-pointer items-center justify-center px-4 transition-transform hover:scale-[1.01] active:scale-[0.98]"
         >
-          <span className="scent-vault-outline-button-label font-serif italic text-[1.3rem] leading-tight text-center">
-            {selectedInVault ? 'View in vault' : hasSelectedMatch ? 'Add to Vault' : 'Select a Result'}
+          <span className="scent-vault-outline-button-label font-serif italic text-[1.22rem] leading-tight text-center">
+            {selectedInVault ? 'View in vault' : 'Add to Vault'}
           </span>
         </button>
       </div>
@@ -1149,14 +1138,14 @@ export const FragranceCapture: React.FC<{
         {searchVeil}
       </AnimatePresence>
       <div className="scent-vault-panel-inner min-w-0">
-        <header className="mx-auto mb-6 max-w-[43rem] px-1 text-center sm:mb-7">
+        <header className="mx-auto mb-4 max-w-[43rem] px-1 text-center sm:mb-7">
           <p className="sr-only">
             Add perfumes to your vault. Example fragrance names rotate above the search field.
           </p>
-          <h2 className="mx-auto max-w-[38rem] text-balance font-serif italic text-[clamp(2.45rem,6vw,4.15rem)] leading-[1.01] tracking-normal text-[#fff7ec] drop-shadow-[0_4px_14px_rgba(0,0,0,0.72)]">
+          <h2 className="mx-auto max-w-[38rem] text-balance font-serif italic text-[clamp(2rem,5.6vw,4.15rem)] leading-[1.01] tracking-normal text-[#fff7ec] drop-shadow-[0_4px_14px_rgba(0,0,0,0.72)]">
             Search any fragrance or brand.
           </h2>
-          <div className="mt-5 space-y-2.5 sm:mt-6">
+          <div className="mt-3 space-y-1.5 sm:mt-6 sm:space-y-2.5">
             <p className="scent-type-label text-scent-accent">
               Recently Added Fragrances
             </p>
@@ -1306,10 +1295,10 @@ export const FragranceCapture: React.FC<{
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.34, ease: [0.22, 1, 0.36, 1] }}
-              className="mx-auto mt-6 w-full scroll-mt-24 pb-[10.5rem] sm:mt-7 sm:pb-0"
+              className={`mx-auto mt-5 w-full scroll-mt-24 sm:mt-7 sm:pb-0 ${hasSelectedMatch ? 'pb-[7rem]' : 'pb-2'}`}
             >
               <div className="flex min-h-0 flex-col">
-                <div className="scent-vault-results-panel mx-auto w-full max-w-[50.5rem] px-4 py-7 sm:px-9 sm:py-9">
+                <div className="scent-vault-results-panel mx-auto w-full max-w-[50.5rem] px-3 py-4 sm:px-9 sm:py-9">
                   {/* Results-nav header: count on the left, a desktop-only
                       "Back to top" affordance on the right. Lives outside the
                       scroll area below, so it stays put while the list scrolls.
@@ -1329,9 +1318,11 @@ export const FragranceCapture: React.FC<{
                       <button
                         type="button"
                         onClick={scrollToSearch}
-                        className="hidden min-h-[44px] shrink-0 items-center gap-1.5 rounded-full border border-white/30 px-3.5 py-1.5 scent-type-chip text-scent-text-muted transition-colors hover:border-scent-accent/45 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 sm:inline-flex"
+                        className="inline-flex min-h-[38px] shrink-0 items-center gap-1.5 rounded-full border border-white/30 px-3 py-1 scent-type-chip text-scent-text-muted transition-colors hover:border-scent-accent/45 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 sm:min-h-[44px] sm:px-3.5 sm:py-1.5"
                       >
-                        ↑ Back to top
+                        <Search size={12} strokeWidth={2.2} aria-hidden className="sm:hidden" />
+                        <span className="hidden sm:inline">↑ Back to top</span>
+                        <span className="sm:hidden">Search</span>
                       </button>
                     </div>
                   </div>
@@ -1376,7 +1367,7 @@ export const FragranceCapture: React.FC<{
                     </div>
                   )}
 
-                  <div className={`flex max-h-[min(54dvh,28rem)] min-h-0 flex-1 overflow-y-auto overscroll-contain scrollbar-hide ${visibleMatches.length === 1 ? 'items-center' : 'items-start'}`}>
+                  <div className={`flex max-h-none min-h-0 flex-1 overflow-visible overscroll-contain sm:max-h-[min(54dvh,28rem)] sm:overflow-y-auto scrollbar-hide ${visibleMatches.length === 1 ? 'items-center' : 'items-start'}`}>
                     {visibleMatches.length === 0 ? (
                       <div className="m-auto flex flex-col items-center gap-3 py-10 text-center">
                         <p className="font-serif italic text-lg text-scent-text-muted">No results match these filters</p>
@@ -1389,7 +1380,7 @@ export const FragranceCapture: React.FC<{
                         </button>
                       </div>
                     ) : (
-                      <div className="grid w-full grid-cols-1 gap-3">
+                      <div className="grid w-full grid-cols-1 gap-2 sm:gap-3">
                         {visibleMatches.map((m) => {
                           const key = matchKey(m);
                           const isSelected = key === selectedId;
@@ -1413,7 +1404,7 @@ export const FragranceCapture: React.FC<{
                                 if (uploading) return;
                                 handlePrimaryAction();
                               }}
-                              className={`scent-vault-result-card group mx-auto w-full max-w-[39.75rem] min-h-[60px] px-3.5 py-2 text-center transition-[border-color,box-shadow] duration-200 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55 sm:min-h-[70px] sm:px-4 sm:py-2.5 ${
+                              className={`scent-vault-result-card group mx-auto w-full max-w-[39.75rem] min-h-[54px] px-3 py-1.5 text-center transition-[border-color,box-shadow] duration-200 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55 sm:min-h-[70px] sm:px-4 sm:py-2.5 ${
                                 isSelected ? 'is-selected' : ''
                               }`}
                               aria-pressed={isSelected}
@@ -1425,12 +1416,6 @@ export const FragranceCapture: React.FC<{
                                     : `Select ${m.name}`
                               }
                             >
-                              {inVault && (
-                                <span className="pointer-events-none absolute left-3 top-2.5 z-10 inline-flex items-center gap-1.5 rounded-full border border-scent-accent/35 bg-scent-bg/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-scent-accent sm:left-4 sm:top-3">
-                                  <Check size={11} strokeWidth={3} aria-hidden />
-                                  In vault
-                                </span>
-                              )}
                               {isSelected && (
                                 <motion.span
                                   initial={reduceMotion ? false : { scale: 0.5, opacity: 0 }}
@@ -1442,20 +1427,28 @@ export const FragranceCapture: React.FC<{
                                   <Check size={16} strokeWidth={3} />
                                 </motion.span>
                               )}
-                              <span className="scent-vault-monogram mx-auto mb-0.5 flex h-6 w-6 items-center justify-center rounded-full font-serif text-[0.82rem] font-semibold leading-none sm:mb-1 sm:h-7 sm:w-7 sm:text-[0.92rem]">
+                              <span className="scent-vault-monogram mx-auto mb-0.5 flex h-5 w-5 items-center justify-center rounded-full font-serif text-[0.72rem] font-semibold leading-none sm:mb-1 sm:h-7 sm:w-7 sm:text-[0.92rem]">
                                 {matchMonogram(m)}
                               </span>
                               <span
-                                className="mx-auto block max-w-full font-serif text-[1.05rem] italic leading-snug text-[#fff7ec] line-clamp-2 [overflow-wrap:anywhere] sm:text-[1.22rem]"
+                                className="mx-auto block max-w-full font-serif text-[1rem] italic leading-tight text-[#fff7ec] line-clamp-2 [overflow-wrap:anywhere] sm:text-[1.22rem] sm:leading-snug"
                                 title={m.name}
                               >
                                 {m.name}
                               </span>
-                              <span
-                                className="mx-auto mt-1 block max-w-full truncate font-sans text-[10.5px] font-bold uppercase tracking-[0.24em] text-[#f3dca6] sm:mt-1.5 sm:text-[11px]"
-                                title={m.brand || 'House unavailable'}
-                              >
-                                {truncateMatchLine(m.brand || 'House unavailable', MATCH_LINE_MAX_CHARS)}
+                              <span className="mx-auto mt-0.5 flex max-w-full items-center justify-center gap-2 sm:mt-1.5">
+                                <span
+                                  className="min-w-0 truncate font-sans text-[10px] font-bold uppercase tracking-[0.2em] text-[#f3dca6] sm:text-[11px] sm:tracking-[0.24em]"
+                                  title={m.brand || 'House unavailable'}
+                                >
+                                  {truncateMatchLine(m.brand || 'House unavailable', MATCH_LINE_MAX_CHARS)}
+                                </span>
+                                {inVault && (
+                                  <span className="pointer-events-none inline-flex shrink-0 items-center gap-1 rounded-full border border-scent-accent/35 bg-scent-bg/70 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em] text-scent-accent sm:px-2 sm:text-[10px]">
+                                    <Check size={9} strokeWidth={3} aria-hidden />
+                                    In vault
+                                  </span>
+                                )}
                               </span>
                             </button>
                           );
