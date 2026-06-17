@@ -1,0 +1,4 @@
+interface:
+  display_name: "Large Repo Investigation"
+  short_description: "Trace ownership before editing large repositories"
+  default_prompt: "Use $large-repo-investigation to investigate and fix this repository issue safely."

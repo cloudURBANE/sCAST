@@ -2,26 +2,62 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Shared issue-fixing doctrine
+
+For unfamiliar fixes, load `large-repo-investigation` and the focused skills it selects.
+
+Do not edit immediately. First identify the user-visible symptom, likely route/page/component, state or data flow, styling/layout layer, and verification method. Trace route → component → state/hook → data layer → styling → tests/runtime, opening only files connected by repository evidence.
+
+Before patching, summarize the canonical owner, caller/consumer, relevant state/data/style boundary, nearest verification target, and remaining uncertainty. Do not patch below 95% confidence in ownership; investigate further or ask for missing information.
+
+Hard rules:
+
+- Never guess ownership from names alone or invent files, functions, routes, or components.
+- Never rewrite unrelated architecture or clean up unrelated code.
+- Preserve current working behavior and visual language unless the issue requires changing them.
+- Never change fonts, font stacks, letter spacing, design tokens, or global styling unless explicitly requested.
+- Map UI symptoms to exact component/layout/style ownership before editing.
+- For mobile UI bugs, inspect responsive classes, viewport constraints, overflow, sticky/fixed elements, and container sizing before changing logic.
+- For conversation or agent bugs, prove where context is captured, transformed, lost, ignored, or overwritten.
+- Prefer surgical patches. Do not introduce dependencies unless necessary and justified.
+- Protect desktop, tablet, mobile, PWA, and existing feature behavior.
+- Treat unrelated working-tree changes as user-owned and leave them untouched.
+- Skip repetitive browser/device scenario suites unless the changed behavior specifically requires them.
+
+Completion reports must state the exact fix, every file changed and why, commands run with outcomes, rendered verification when relevant, and remaining risks.
+
 ## Skills (load proactively)
+
+`repo-map`, `token-efficient-navigation`, `dev-commands`, and
+`verify-without-regression` are thin Claude adapters. Their canonical shared
+instructions live under `.agents/skills/` so Codex and Claude cannot drift.
+The large-repo investigation stack is mirrored in both agent trees with the same
+core logic and tool-native references.
 
 These live in `huge_monorepo/.claude/skills/` and load **only** when you launch Claude
 from this repo (`huge_monorepo/`) — not from the workspace root or `search_engine/`.
 
-| Skill | Use it when |
-|---|---|
-| `repo-map` | START of any task — deciding which file/service to touch; canonical trees vs mirror copies; giant files to never read whole. |
-| `dev-commands` | Build, typecheck, test, or run the web app (pnpm) or Python engine. Windows node/pnpm bootstrap. |
-| `git-guardrails` | Before any git merge/rebase/branch/push — short-lived branches, no back-merge of main. |
-| `cross-service-contract` | Before editing `fragranceApi.ts`, the Python engine endpoints, or `source_coverage` / `derived_metrics` response shapes. |
-| `db-schema-safety` | Before any Drizzle schema / DB-touching change — what's in the runtime schema and how `push` works. |
-| `fix-playbooks` | The recurring "couldn't find fragrance" selection error or "no image" / wrong-image pipeline bugs. |
-| `verify-without-regression` | The check routine before commit/push — typecheck, build, targeted tests, visual/behavior check. |
-| `token-efficient-navigation` | Locate a symbol then read only the slice — keep token use low in this large workspace. |
-| `skill-authoring` | Authoring/revising a skill so it matches house style AND actually loads. |
-| `isolate-touch-interaction-gestures` | Touch/pointer gestures — tap-vs-scroll, swipe/drag, pointer capture in the SPA. |
-| `optimize-layout-for-device-class` | Responsive layout/spacing across PC, iPad, iPhone, iPhone SE (320px). |
-| `optimize-webkit-rendering-budget` | Reduce WebKit/Safari GPU & compositor pressure (filters, blur, blend, layers). |
-| `unify-card-layouts-and-grids` | Standardize card/grid alignment, equal heights, column spans across device classes. |
+| Skill                                | Use it when                                                                                                                  |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| `large-repo-investigation`           | START of unfamiliar fixes — trace ownership, show evidence, patch minimally, and verify.                                     |
+| `repo-navigation`                    | Locate route/component/state/data/style/test ownership without broad repository wandering.                                   |
+| `visual-ui-debug`                    | Screenshots, visual complaints, responsive defects, clipping, overlap, or mobile/PWA UI bugs.                                |
+| `state-agent-debug`                  | Conversation state, memory, context loss, hook/store/API flow, or agent-response failures.                                   |
+| `safe-edit-verify`                   | After ownership is proven — make a surgical patch and run proportional checks.                                               |
+| `commit-discipline`                  | After verification — isolate one logical task, commit only its files, and summarize why.                                     |
+| `repo-map`                           | START of any task — deciding which file/service to touch; canonical trees vs mirror copies; giant files to never read whole. |
+| `dev-commands`                       | Build, typecheck, test, or run the web app (pnpm) or Python engine. Windows node/pnpm bootstrap.                             |
+| `git-guardrails`                     | Before any git merge/rebase/branch/push — short-lived branches, no back-merge of main.                                       |
+| `cross-service-contract`             | Before editing `fragranceApi.ts`, the Python engine endpoints, or `source_coverage` / `derived_metrics` response shapes.     |
+| `db-schema-safety`                   | Before any Drizzle schema / DB-touching change — what's in the runtime schema and how `push` works.                          |
+| `fix-playbooks`                      | The recurring "couldn't find fragrance" selection error or "no image" / wrong-image pipeline bugs.                           |
+| `verify-without-regression`          | The check routine before commit/push — typecheck, build, targeted tests, visual/behavior check.                              |
+| `token-efficient-navigation`         | Locate a symbol then read only the slice — keep token use low in this large workspace.                                       |
+| `skill-authoring`                    | Authoring/revising a skill so it matches house style AND actually loads.                                                     |
+| `isolate-touch-interaction-gestures` | Touch/pointer gestures — tap-vs-scroll, swipe/drag, pointer capture in the SPA.                                              |
+| `optimize-layout-for-device-class`   | Responsive layout/spacing across PC, iPad, iPhone, iPhone SE (320px).                                                        |
+| `optimize-webkit-rendering-budget`   | Reduce WebKit/Safari GPU & compositor pressure (filters, blur, blend, layers).                                               |
+| `unify-card-layouts-and-grids`       | Standardize card/grid alignment, equal heights, column spans across device classes.                                          |
 
 **Cross-repo note:** the Python engine (`search_engine/`) has its OWN skill set
 (`engine-live-verify`, `wardrobe-completeness-heal`) indexed in `search_engine/CLAUDE.md`.
@@ -91,6 +127,7 @@ scripts/             One-off tsx utility scripts           — @workspace/script
 ### API codegen flow
 
 `lib/api-spec/openapi.yaml` → Orval (config: `lib/api-spec/orval.config.ts`) → generates:
+
 - `lib/api-client-react/src/generated/` — TanStack React Query hooks (`client: "react-query"`, `mode: "split"`, `baseUrl: "/api"`, custom `customFetch` mutator) consumed by the frontend
 - `lib/api-zod/src/generated/` — Zod schemas (`client: "zod"`) consumed by the backend for request validation
 
@@ -113,6 +150,7 @@ Drizzle config (`drizzle.config.ts`) declares its schema as the glob `./src/sche
 ### Image pipeline (`artifacts/api-server/src/services/`)
 
 Processing order for every fragrance image request:
+
 1. `imagePipeline.ts:resolveProcessedFragranceImage` — entry point; checks lookup-key and search-query caches first
 2. `serperService.ts` — searches Serper.dev for candidate image URLs (or uses a manually supplied URL)
 3. `bgService.ts` / `bgServiceCore.ts` — calls Poof API for background removal; validates that the result is not fully transparent
@@ -125,6 +163,7 @@ In-flight deduplication is handled by a `Map<string, Promise>` keyed on `` `${so
 ### Scent engine (`artifacts/api-server/src/services/scentEngine.ts`)
 
 `buildProfile(name, brand, fallback?)` orchestration:
+
 1. Look up `global_fragrances` (exact `lookup_key`, then fuzzy `searchCatalog`; fuzzy can be disabled via `opts.allowCatalogFuzzy: false`)
 2. Resolve image through the pipeline above (search-query first, then `fallback.imageUrl` if provided)
 3. Match local fragrance dataset via `findDatasetFragrance` (note: Wikipedia scraping in `fallbackIntelligence.ts` is **not** invoked from here — callers in `routes/scent.ts` may scrape upstream and pass the result in via `fallback`)
@@ -153,10 +192,10 @@ Pure client-side; no API call. `calculateScentWeatherRecommendation(input)` take
 
 ### Deployment topology
 
-| Environment | Frontend | Backend |
-|---|---|---|
-| Production | Vercel SPA | Railway Express server |
-| Self-hosted | Express serves `artifacts/scent-cast/dist/public` as static | Same Express process |
+| Environment | Frontend                                                    | Backend                |
+| ----------- | ----------------------------------------------------------- | ---------------------- |
+| Production  | Vercel SPA                                                  | Railway Express server |
+| Self-hosted | Express serves `artifacts/scent-cast/dist/public` as static | Same Express process   |
 
 The root `middleware.js` is a Vercel Edge middleware (matcher `/api/:path*`) that buffers the request body and proxies `/api/*` to `BACKEND_ORIGIN` (the Railway URL); when `BACKEND_ORIGIN` is unset it returns a 503 with a configuration message. In self-hosted mode `app.ts` checks `frontendStaticDir` (= `artifacts/scent-cast/dist/public`) at startup; if present it mounts `express.static` and a GET/HEAD fallthrough to `index.html` for SPA routing.
 

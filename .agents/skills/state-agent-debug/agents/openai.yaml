@@ -1,0 +1,4 @@
+interface:
+  display_name: "State Agent Debug"
+  short_description: "Trace state, context, and agent response failures"
+  default_prompt: "Use $state-agent-debug to prove where state or context fails."

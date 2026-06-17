@@ -1,0 +1,4 @@
+interface:
+  display_name: "Token-Efficient Navigation"
+  short_description: "Find relevant code with minimal context"
+  default_prompt: "Use $token-efficient-navigation to locate the relevant symbols and read only the necessary code slices."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Repo Navigation"
+  short_description: "Locate canonical owners without broad wandering"
+  default_prompt: "Use $repo-navigation to locate the canonical owner of this issue."

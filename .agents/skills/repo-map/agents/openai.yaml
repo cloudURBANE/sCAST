@@ -1,0 +1,4 @@
+interface:
+  display_name: "Repository Map"
+  short_description: "Route changes to the canonical package"
+  default_prompt: "Use $repo-map to locate the canonical package and files for this task before editing."

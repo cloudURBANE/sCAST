@@ -1,0 +1,4 @@
+interface:
+  display_name: "Safe Edit Verify"
+  short_description: "Patch minimally and verify without regressions"
+  default_prompt: "Use $safe-edit-verify to make and prove a minimal safe change."
