@@ -115,6 +115,44 @@ test("zero-tool opening turn is nudged, then the tool path runs and synthesis wr
   assert.equal(summary.outputTokens, 60);
 });
 
+test("per-run token budgets are forwarded to orchestration and synthesis calls", async () => {
+  const toolCalls: { input: unknown }[] = [];
+
+  const { callModel, seen } = scriptedModel([
+    // 1) tool turn
+    {
+      stop_reason: "tool_use",
+      content: [{ type: "tool_use", id: "tu_1", name: "beam_get_wardrobe", input: {} }],
+    },
+    // 2) orchestration draft (no more tools)
+    text("draft"),
+    // 3) synthesis turn
+    text("Wear Aventus today."),
+  ]);
+
+  await runBeamAgent({
+    ctx,
+    userMessage: "what should I wear?",
+    tools: [wardrobeTool(toolCalls)],
+    emit: () => {},
+    isModelConfigured: () => true,
+    callModel,
+    model: "cheap-model",
+    synthesisModel: "strong-model",
+    orchestrationMaxTokens: 512,
+    synthesisMaxTokens: 1024,
+  });
+
+  // Orchestration (tool-bearing) calls carry the orchestration ceiling; the
+  // tool-free synthesis call carries the larger synthesis ceiling.
+  const orchestrationCalls = seen.filter((c) => c.tools.length > 0);
+  const synthesisCalls = seen.filter((c) => c.tools.length === 0);
+  assert.ok(orchestrationCalls.length > 0);
+  assert.ok(synthesisCalls.length > 0);
+  for (const c of orchestrationCalls) assert.equal(c.maxTokens, 512);
+  for (const c of synthesisCalls) assert.equal(c.maxTokens, 1024);
+});
+
 test("a turn that narrates a next step instead of calling tools is pushed to act, not finished", async () => {
   const toolCalls: { input: unknown }[] = [];
   let completed: string | undefined;

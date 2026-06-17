@@ -217,3 +217,50 @@ most user-visible output) and per §3 it needs a quality A/B before flipping, so
 NOT changed here — both lanes still synthesize on the strong (Sonnet) slug, now with cheap cached +
 trimmed input. The split system-cache fine-tuning (§2) was judged low-value vs. blast radius and
 skipped (system already caches whole; only state-change turns lose it).*
+
+---
+
+## 6. Lane-aware synthesis routing + run budgets (third sitting, 2026-06-17)
+
+Turns #3 from a blind code flip into a **config A/B** and adds the cost guardrails a
+cheaper/reasoning closer needs — all opt-in, **defaults exactly match prior behavior**.
+
+**What changed (code):**
+- `provider.ts` — `resolveBeamModels(lane)` now resolves the synthesis closer **per lane**
+  via `synthesisModelForLane`: `BEAM_AGENT_SYNTH_MODEL_DEFAULT` / `BEAM_AGENT_SYNTH_MODEL_PREMIUM`,
+  each falling back to the provider strong slug (unset ⇒ unchanged on both lanes). New
+  `resolveBeamBudget(lane)` returns `{ maxTurns, orchestrationMaxTokens, synthesisMaxTokens }`
+  from env (`BEAM_AGENT_MAX_TURNS_*`, `BEAM_AGENT_ORCH_MAX_TOKENS`, `BEAM_AGENT_SYNTH_MAX_TOKENS`),
+  defaulting to the `BEAM_LIMITS` values; `maxTurns` is clamped to the hard ceiling (8 — env can
+  only lower it).
+- `beamToolCore.ts` — output-token defaults (`orchestrationMaxTokens: 2048`,
+  `synthesisMaxTokens: 4096`) moved into `BEAM_LIMITS` as the single source of truth.
+- `beamAgentLoop.ts` — accepts `orchestrationMaxTokens` / `synthesisMaxTokens` and uses them for
+  the orchestration, synthesis, and repair calls (was two module constants).
+- `beamAgentRoutes.ts` — resolves `resolveBeamBudget(lane)` and forwards the caps + `maxTurns`.
+
+**DeepSeek V4 is now a drop-in A/B** (no new provider, no first-party PRC data path — it routes
+through the existing OpenRouter seam):
+```
+BEAM_AGENT_SYNTH_MODEL_DEFAULT=deepseek/deepseek-v4-flash   # everyday closer
+BEAM_AGENT_SYNTH_MODEL_PREMIUM=deepseek/deepseek-v4-pro     # nuanced closer
+BEAM_AGENT_SYNTH_MAX_TOKENS=2000                            # cap reasoning-as-output bill
+BEAM_AGENT_MAX_TURNS_DEFAULT=4                              # tighten free-lane tool rounds
+```
+Recommended routing (from the V4 cost analysis): default lane → V4 Flash, premium lane → V4 Pro,
+strong/Sonnet kept as the verification fallback. Caching + record-aware trimming from sittings 1–2
+apply unchanged on top.
+
+**Two risks to weigh before flipping in prod (NOT addressed in code — they're operational):**
+1. *Reasoning-token billing* — reasoning slugs bill their trace as output; the new
+   `BEAM_AGENT_SYNTH_MAX_TOKENS` cap is the rail, set it before enabling V4.
+2. *Data handling* — first-party DeepSeek processes/stores prompts in the PRC. This pass routes
+   via OpenRouter precisely to avoid that direct path; do **not** add a first-party DeepSeek
+   provider without a data-handling decision.
+
+**Still a product call:** which closer actually ships by default. The mechanism is in place and
+defaults are unchanged — run the A/B, then set the env. No code change needed to flip.
+
+*Implemented + verified 2026-06-17 (third sitting): lane-aware synthesis routing + per-lane run
+budgets, DeepSeek V4 enabled as an OpenRouter drop-in. tsc clean; api-server suite green (+budget
+and lane-routing tests).*

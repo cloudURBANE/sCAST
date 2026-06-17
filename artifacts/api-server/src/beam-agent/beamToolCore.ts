@@ -26,6 +26,16 @@ export const BEAM_LIMITS = {
   maxAgentTurns: 8,
   maxUserMessageLength: 2000,
   /**
+   * Output-token budgets per call kind. Tool-orchestration turns are short
+   * (one tool decision); the closing synthesis is long-form prose. These are the
+   * DEFAULTS — the route can lower them per lane via `resolveBeamBudget` (env
+   * `BEAM_AGENT_ORCH_MAX_TOKENS` / `BEAM_AGENT_SYNTH_MAX_TOKENS`). Capping output
+   * matters for reasoning-mode slugs (e.g. DeepSeek V4), where reasoning tokens
+   * bill as output and an uncapped trace can dominate the bill.
+   */
+  orchestrationMaxTokens: 2048,
+  synthesisMaxTokens: 4096,
+  /**
    * Hard backstop on a single tool result's serialized size in the TRANSCRIPT.
    * Lowered from 100_000: a result is re-sent on every subsequent model turn, so
    * one fat `beam_get_fragrance_details`/`beam_research_web` payload (~25k tokens)
