@@ -1367,7 +1367,7 @@ export const FragranceCapture: React.FC<{
                     </div>
                   )}
 
-                  <div className={`flex max-h-none min-h-0 flex-1 overflow-visible overscroll-contain sm:max-h-[min(54dvh,28rem)] sm:overflow-y-auto scrollbar-hide ${visibleMatches.length === 1 ? 'items-center' : 'items-start'}`}>
+                  <div className={`flex max-h-none min-h-0 flex-1 overflow-visible overscroll-contain sm:max-h-[min(57dvh,30rem)] sm:overflow-y-auto scrollbar-hide ${visibleMatches.length === 1 ? 'items-center' : 'items-start'}`}>
                     {visibleMatches.length === 0 ? (
                       <div className="m-auto flex flex-col items-center gap-3 py-10 text-center">
                         <p className="font-serif italic text-lg text-scent-text-muted">No results match these filters</p>

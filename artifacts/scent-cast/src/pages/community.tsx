@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Search, X } from 'lucide-react';
 import { AppTopNav } from '@/components/AppTopNav';
 import { CommunityHero } from '@/components/community/CommunityHero';
 import { useCommunityFragrances } from '@/components/community/communityData';
@@ -119,7 +120,20 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
   const [postType, setPostType] = useState<CommunityPostType | null>(null);
   const [postTag, setPostTag] = useState<string | null>(null);
   const [postQuery, setPostQuery] = useState('');
+  // The search/filters panel is hidden by default and toggled from the panel's
+  // top-left Search button. It is mutually exclusive with the composer form.
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const composerRef = useRef<PostComposerHandle | null>(null);
+  const toggleSearch = useCallback(() => {
+    setFiltersOpen((open) => {
+      if (!open) composerRef.current?.close();
+      return !open;
+    });
+  }, []);
+  const handleComposerOpenChange = useCallback((open: boolean) => {
+    // When the composer expands, retract the search panel.
+    if (open) setFiltersOpen(false);
+  }, []);
   const clearCommunityFilters = useCallback(() => {
     setPostType(null);
     setPostTag(null);
@@ -176,16 +190,47 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
               <>
               <React.Suspense fallback={<CommunityPanelFallback />}>
                 <div className="mx-auto w-full max-w-[940px] overflow-hidden rounded-[calc(var(--radius-scent)-2px)] border border-scent-accent/18 bg-[linear-gradient(180deg,rgba(10,9,7,0.82),rgba(0,0,0,0.94))] shadow-[0_18px_44px_-34px_rgba(0,0,0,0.95),0_0_0_1px_rgba(212,175,55,0.045),inset_0_1px_0_rgba(255,236,183,0.05)]">
-                  <PostComposer ref={composerRef} authToken={authToken} onSignIn={onSignIn} />
-                  <PostFilters
-                    type={postType}
-                    tag={postTag}
-                    q={postQuery}
-                    authToken={authToken}
-                    onTypeChange={setPostType}
-                    onTagChange={setPostTag}
-                    onQueryChange={setPostQuery}
-                  />
+                  <div className="flex items-center justify-start border-b border-scent-accent/10 px-3 py-2.5 sm:px-4">
+                    <button
+                      type="button"
+                      onClick={toggleSearch}
+                      aria-expanded={filtersOpen}
+                      aria-controls="community-search-panel"
+                      aria-label={filtersOpen ? 'Close search and filters' : 'Search rooms and filter'}
+                      className="inline-flex min-h-10 items-center gap-2 rounded-full border border-scent-accent/24 bg-black/40 px-4 py-2 scent-type-chip text-scent-text-muted transition-colors hover:border-scent-accent/46 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
+                    >
+                      {filtersOpen ? (
+                        <X size={15} strokeWidth={1.8} aria-hidden="true" />
+                      ) : (
+                        <Search size={15} strokeWidth={1.8} aria-hidden="true" />
+                      )}
+                      <span>{filtersOpen ? 'Close' : 'Search'}</span>
+                    </button>
+                  </div>
+                  {/* PostComposer stays mounted so the feed's "start a room"
+                      CTA can drive it via the ref; it is hidden (not unmounted)
+                      while the search panel owns the surface. */}
+                  <div className={filtersOpen ? 'hidden' : undefined}>
+                    <PostComposer
+                      ref={composerRef}
+                      authToken={authToken}
+                      onSignIn={onSignIn}
+                      onOpenChange={handleComposerOpenChange}
+                    />
+                  </div>
+                  {filtersOpen ? (
+                    <div id="community-search-panel">
+                      <PostFilters
+                        type={postType}
+                        tag={postTag}
+                        q={postQuery}
+                        authToken={authToken}
+                        onTypeChange={setPostType}
+                        onTagChange={setPostTag}
+                        onQueryChange={setPostQuery}
+                      />
+                    </div>
+                  ) : null}
                 </div>
               </React.Suspense>
               <React.Suspense fallback={<CommunityFeedFallback />}>

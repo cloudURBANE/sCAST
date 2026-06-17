@@ -927,22 +927,13 @@ function DashboardView() {
                   {/* min-h holds the absolutely-positioned close button fully
                       inside the header's clipped (overflow-hidden) box, so the
                       top of the X is not shaved off. */}
+                  {/* The progress bar that used to sit here was driven by the
+                      scripted mission tree, which the live chat agent never
+                      advances — so it sat near-empty and tracked nothing real.
+                      It's been removed; the calm status line below ("A scent for
+                      today." + phase) is the honest progress signal. The wrapper
+                      stays to hold the absolutely-positioned close button. */}
                   <div className="relative mb-2 flex min-h-11 items-center justify-center">
-                    <div
-                      className="h-1 w-full max-w-[11rem] overflow-hidden rounded-full bg-white/10"
-                      role="progressbar"
-                      aria-valuemin={0}
-                      aria-valuemax={100}
-                      aria-valuenow={Math.round((missionStatus?.progress ?? 0) * 100)}
-                      aria-label="Beam Agent progress"
-                    >
-                      <motion.div
-                        className="h-full rounded-full bg-scent-accent/80"
-                        initial={false}
-                        animate={{ width: `${Math.max((missionStatus?.progress ?? 0) * 100, 8)}%` }}
-                        transition={reduceMotion ? { duration: 0.01 } : { duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-                      />
-                    </div>
                     <button
                       type="button"
                       onClick={handleExitMission}
@@ -1073,7 +1064,7 @@ function DashboardView() {
 
           <HomepageAtmosphereChrome />
 
-          <div id="scent-vault-section" className="scent-deferred-section !mt-36 sm:!mt-60 lg:!mt-80" style={{ scrollMarginTop: 'var(--topbar-h)' }}>
+          <div id="scent-vault-section" className="scent-deferred-section !mt-48 sm:!mt-72 lg:!mt-96" style={{ scrollMarginTop: 'var(--topbar-h)' }}>
             <React.Suspense fallback={<WardrobeFallback />}>
               <Wardrobe
                 items={items}
