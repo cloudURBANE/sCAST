@@ -190,7 +190,7 @@ const BEAM_AGENT_TIMEOUT_MS = 60000;
 // Shared chat-bubble shell for the agent's typing indicator (used both on first
 // open and while the agent is working a turn).
 const BEAM_TYPING_BUBBLE_CLASS =
-  'inline-flex max-w-[90%] items-center gap-1.5 self-start rounded-[calc(var(--radius-scent)-12px)] border border-scent-accent/22 bg-[linear-gradient(180deg,rgba(212,175,55,0.045),rgba(0,0,0,0.16))] px-4 py-3';
+  'inline-flex max-w-[90%] items-center gap-1.5 self-start rounded-[calc(var(--radius-scent)-12px)] border border-scent-accent/18 bg-[linear-gradient(180deg,rgba(255,236,183,0.055),rgba(212,175,55,0.028)_42%,rgba(0,0,0,0.2))] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,236,183,0.055),0_10px_24px_rgba(0,0,0,0.22)]';
 
 // Three dots with an organic, staggered shimmer so the agent reads as genuinely
 // "thinking" rather than mechanically blinking.
@@ -230,7 +230,7 @@ type BeamActivityStep = {
 };
 
 const BEAM_ACTIVITY_BUBBLE_CLASS =
-  'flex max-w-[92%] flex-col gap-1.5 self-start rounded-[calc(var(--radius-scent)-12px)] border border-scent-accent/22 bg-[linear-gradient(180deg,rgba(212,175,55,0.05),rgba(0,0,0,0.18))] px-3.5 py-3';
+  'flex max-w-[92%] flex-col gap-1.5 self-start rounded-[calc(var(--radius-scent)-12px)] border border-scent-accent/16 bg-[linear-gradient(180deg,rgba(255,236,183,0.045),rgba(212,175,55,0.024)_44%,rgba(0,0,0,0.2))] px-3.5 py-3 shadow-[inset_0_1px_0_rgba(255,236,183,0.045),0_10px_24px_rgba(0,0,0,0.2)]';
 
 /** Human copy for each per-fragrance curate phase. */
 const CURATE_STATUS_COPY: Record<'adding' | 'curating' | 'ready' | 'failed', string> = {
@@ -396,7 +396,7 @@ const BeamActivityTrail: React.FC<{
       : `Curated · ${steps.length} step${steps.length === 1 ? '' : 's'}`;
 
   const body = (
-    <div className="mt-2.5 flex flex-col gap-2 border-t border-white/10 pt-2.5">
+    <div className="mt-2.5 flex flex-col gap-2 border-t border-scent-accent/10 pt-2.5">
       {steps.map((step) => (
         <BeamActivityStepRow key={step.id} step={step} calmMotion={calmMotion} />
       ))}
@@ -432,7 +432,7 @@ const BeamActivityTrail: React.FC<{
           onClick={onToggleExpand}
           aria-expanded={expanded}
           aria-controls={ACTIVITY_TRAIL_BODY_ID}
-          className="-mr-1 flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-scent-accent/80 transition-colors hover:text-scent-accent focus:outline-none focus-visible:ring-1 focus-visible:ring-scent-accent/50"
+          className="-mr-1 flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-scent-accent/62 transition-colors hover:text-scent-accent focus:outline-none focus-visible:ring-1 focus-visible:ring-scent-accent/50"
         >
           <span>{expanded ? 'Hide' : 'Details'}</span>
           <ChevronDown
@@ -1639,14 +1639,14 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       <form
         ref={composerFormRef}
         onSubmit={handleSubmit}
-        className="scent-lux-input scent-vault-search-input scent-beam-composer flex h-[60px] w-full items-center gap-2 rounded-full px-2.5 transition-colors sm:h-[68px] sm:px-3.5"
+        className="scent-lux-input scent-vault-search-input scent-beam-composer flex h-[56px] w-full items-center gap-2 rounded-full !border-scent-accent/44 ![background:radial-gradient(130%_160%_at_50%_0%,rgba(255,255,255,0.018),transparent_44%),rgba(0,0,0,0.9)] px-2.5 transition-colors sm:h-[62px] sm:px-3"
       >
         <button
           type="button"
           onClick={() => setSettingsOpen((open) => !open)}
           aria-expanded={settingsOpen}
           aria-controls="scent-mission-settings"
-          className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-scent-accent/35 bg-black/35 text-scent-accent transition-colors hover:bg-scent-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
+          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-scent-accent/22 bg-scent-accent/[0.045] text-scent-accent transition-colors hover:border-scent-accent/40 hover:bg-scent-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 sm:h-11 sm:w-11"
           aria-label="Adjust Beam Agent settings"
           title="Adjust settings"
         >
@@ -1678,12 +1678,12 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
           placeholder={busy ? 'Composing your recommendation…' : composerFocused ? '' : composerPlaceholder}
           aria-label="Message the Beam Agent"
           autoComplete="off"
-          className="min-w-0 flex-1 bg-transparent px-1 text-center text-sm font-medium text-[#fff7ec] outline-none placeholder:text-scent-text-subtle disabled:cursor-not-allowed disabled:placeholder:text-scent-accent/70 sm:text-base"
+          className="min-w-0 flex-1 bg-transparent px-1 text-center text-[13px] font-medium text-[#fff7ec] outline-none placeholder:text-scent-text-subtle disabled:cursor-not-allowed disabled:placeholder:text-scent-accent/70 sm:text-[15px]"
         />
         <button
           type="submit"
           disabled={busy || !composer.trim() || (curating !== null && curating.done === null)}
-          className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-scent-accent/42 bg-black/35 text-scent-accent transition-colors hover:bg-scent-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:opacity-40"
+          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-scent-accent/26 bg-scent-accent/[0.045] text-scent-accent transition-colors hover:border-scent-accent/44 hover:bg-scent-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:opacity-40 sm:h-11 sm:w-11"
           aria-label="Send message"
         >
           {busy ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Send size={16} aria-hidden />}
@@ -2107,17 +2107,17 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
     <div className="relative flex min-h-0 w-full min-w-0 flex-col text-center" data-testid="scent-mission-panel">
       {/* The title, progress, and close control now live in a header strip above
           the card (see App.tsx) so this surface is just the conversation. */}
-      <div className="relative mx-auto w-full max-w-[42.75rem]">
+      <div className="relative mx-auto w-full max-w-[42.75rem] overflow-hidden rounded-[calc(var(--radius-scent)-14px)]">
       {/* Subtle top/bottom fade hints — shown only when the conversation actually
           overflows above/below, so a long answer reads as "more to scroll"
           rather than a hard clip. Pointer-events-none keeps them non-blocking. */}
       <div
         aria-hidden
-        className={`pointer-events-none absolute inset-x-0 top-0 z-10 h-6 bg-gradient-to-b from-black to-transparent transition-opacity duration-300 ${scrollEdges.top ? 'opacity-100' : 'opacity-0'}`}
+        className={`pointer-events-none absolute inset-x-0 top-0 z-10 h-10 rounded-t-[calc(var(--radius-scent)-14px)] bg-gradient-to-b from-[#050403] via-[#050403]/80 to-transparent transition-opacity duration-300 ${scrollEdges.top ? 'opacity-100' : 'opacity-0'}`}
       />
       <div
         aria-hidden
-        className={`pointer-events-none absolute inset-x-0 bottom-0 z-10 h-7 bg-gradient-to-t from-black to-transparent transition-opacity duration-300 ${scrollEdges.bottom ? 'opacity-100' : 'opacity-0'}`}
+        className={`pointer-events-none absolute inset-x-0 bottom-0 z-10 h-8 rounded-b-[calc(var(--radius-scent)-14px)] bg-gradient-to-t from-[#050403] via-[#050403]/82 to-transparent transition-opacity duration-300 ${scrollEdges.bottom ? 'opacity-100' : 'opacity-0'}`}
       />
       {/* Cap-and-scroll instead of a fixed height: the box fits short turns (no
           dead space above the input) and only scrolls once a long answer exceeds
@@ -2125,7 +2125,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       <div
         ref={scrollRef}
         onScroll={updateScrollEdges}
-        className="flex w-full max-h-[min(46dvh,24rem)] flex-col gap-2.5 overflow-y-auto pr-1 text-left scrollbar-hide sm:max-h-[min(48dvh,28rem)]"
+        className="flex w-full max-h-[min(46dvh,24rem)] flex-col gap-3 overflow-y-auto px-1.5 pb-2 pt-3 text-left scrollbar-hide sm:max-h-[min(48dvh,28rem)] sm:px-2 sm:pt-4"
         role="log"
         aria-live="polite"
         aria-label="Beam Agent conversation"
@@ -2180,12 +2180,12 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                 ease: SCENT_EASE,
                 layout: { duration: 0.52, ease: SCENT_EASE },
               }}
-              className={`relative max-w-[90%] rounded-[calc(var(--radius-scent)-12px)] border px-3.5 py-2.5 text-[13px] leading-relaxed sm:text-sm ${
+              className={`relative max-w-[90%] rounded-[calc(var(--radius-scent)-12px)] border px-3.5 py-2.5 text-[13px] leading-relaxed shadow-[inset_0_1px_0_rgba(255,236,183,0.04),0_10px_24px_rgba(0,0,0,0.2)] sm:text-sm ${
                 message.role === 'user'
-                  ? 'self-end border-white/14 bg-white/[0.07] text-[#fff7ec]'
+                  ? 'self-end border-scent-accent/18 bg-[linear-gradient(180deg,rgba(255,247,236,0.082),rgba(58,45,30,0.16))] text-[#fff7ec]'
                   : message.role === 'system'
                     ? 'self-start border-red-400/25 bg-red-500/10 text-red-100'
-                    : 'self-start border-scent-accent/22 bg-[linear-gradient(180deg,rgba(212,175,55,0.045),rgba(0,0,0,0.16))] text-scent-text-muted'
+                    : 'self-start border-scent-accent/18 bg-[linear-gradient(180deg,rgba(255,236,183,0.052),rgba(212,175,55,0.025)_42%,rgba(0,0,0,0.22))] text-scent-text-muted'
               }`}
               aria-label={typing ? 'Beam Agent is typing' : undefined}
             >
