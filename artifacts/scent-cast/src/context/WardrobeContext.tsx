@@ -1063,22 +1063,33 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   }, [authToken, items.length, onboardingCompleted, refreshOnboardingCompletionFromServer]);
 
-  // Background polling wardrobe updates
+  // Background polling wardrobe updates.
+  //
+  // Egress note: GET /api/wardrobe returns every row's full `fragranceData`
+  // JSONB (including the heavy `raw_engine_detail` blob), so each tick re-pulls
+  // the entire wardrobe from Postgres → Express → browser. A tight blanket
+  // interval on a tab left open for hours was the dominant Supabase egress
+  // burner during testing. The interval only catches *cross-device* edits
+  // (rare); the user's own edits update optimistically, and freshly-added
+  // imageless rows are filled by the dedicated `scheduleImageBackfillRehydrate`
+  // burst — neither depends on this poll. So we keep a long steady-state
+  // interval and rely on the visibility/focus tick below for prompt freshness
+  // the moment the user actually returns to the tab.
   useEffect(() => {
     if (!authToken) return;
-    const REFRESH_MS = 60_000;
-    
+    const REFRESH_MS = 5 * 60_000;
+
     const tick = () => {
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       loadWardrobe(authToken);
     };
-    
+
     const id = window.setInterval(tick, REFRESH_MS);
-    
+
     const onVisible = () => {
       if (document.visibilityState === 'visible') tick();
     };
-    
+
     document.addEventListener('visibilitychange', onVisible);
     return () => {
       window.clearInterval(id);
