@@ -11,6 +11,13 @@ export const userFragrancesTable = pgTable(
     userId: uuid("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
     fragranceData: jsonb("fragrance_data").notNull(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
+    // Bumped on every write so GET /api/wardrobe can compute a cheap version key
+    // (count + max(updated_at)) and answer the background poll with 304 instead
+    // of re-pulling the full wardrobe. defaultNow() covers inserts; $onUpdate
+    // makes Drizzle inject a fresh timestamp into every ORM .update().set() —
+    // all writes to this table go through the ORM (no raw SQL UPDATE), so the
+    // key is reliable. See routes/wardrobe.ts GET handler.
+    updatedAt: timestamp("updated_at").notNull().defaultNow().$onUpdate(() => new Date()),
   },
   (table) => [
     index("user_fragrances_user_id_idx").on(table.userId),

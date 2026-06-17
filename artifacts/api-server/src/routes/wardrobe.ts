@@ -26,6 +26,7 @@ import {
   detailRefreshPatchFromBody,
   hasDetailRefreshPayload,
 } from "../services/wardrobeDetailFacts";
+import { wardrobeVersionEtag } from "../services/wardrobeVersion";
 
 const router = Router();
 
@@ -83,6 +84,38 @@ async function imageMetadataPatchForUrl(url: string): Promise<Record<string, unk
 router.get("/wardrobe", requireAuth, async (req: AuthRequest, res) => {
   const user = req.user!;
   const tenantId = getTenantId(req);
+
+  // Conditional GET to kill idle-poll egress. The background poll hits this
+  // endpoint every 60s per open tab; when nothing changed, re-running the heavy
+  // select + image hydration below (and shipping it over the metered Supabase ->
+  // Express hop) is pure waste. So first compute a cheap version key from
+  // count(*) + max(updated_at) over just this user's rows and answer 304 when it
+  // matches the client's If-None-Match — before touching fragrance_data.
+  //
+  // The key intentionally covers only user_fragrances changes (add/edit/remove),
+  // not image_cache hydration: the client sends If-None-Match ONLY on the
+  // steady-state interval tick, while focus/visibility and initial loads fetch
+  // unconditionally, so returning to a tab still re-runs hydration and picks up
+  // any opportunistic image improvement. no-store keeps the browser cache out of
+  // our manually managed ETag round-trip.
+  const [version] = await db
+    .select({
+      count: sql<number>`count(*)::int`,
+      maxUpdated: sql<string | null>`max(${userFragrancesTable.updatedAt})`,
+    })
+    .from(userFragrancesTable)
+    .where(and(
+      eq(userFragrancesTable.tenantId, tenantId),
+      eq(userFragrancesTable.userId, user.id),
+    ));
+
+  const etag = wardrobeVersionEtag(version?.count ?? 0, version?.maxUpdated ?? null);
+  res.setHeader("ETag", etag);
+  res.setHeader("Cache-Control", "private, no-store");
+  if (req.headers["if-none-match"] === etag) {
+    res.status(304).end();
+    return;
+  }
 
   // Egress: project away the heavy `raw.reviews`/`raw.description` text in
   // Postgres so the (frequently polled) wardrobe payload stays small over the

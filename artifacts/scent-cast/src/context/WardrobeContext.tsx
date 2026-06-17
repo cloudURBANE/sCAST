@@ -716,6 +716,9 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // Vault rows already re-synced for the current ACCORD_HEAL_RESYNC_VERSION.
   const accordHealResyncDoneRef = useRef<Set<string>>(new Set());
   const lastMutationRef = useRef(0);
+  // Last ETag returned by GET /api/wardrobe; sent as If-None-Match on the
+  // conditional interval poll so the server can answer 304 when nothing changed.
+  const wardrobeEtagRef = useRef<string | null>(null);
   const appStateRefreshInFlightRef = useRef(false);
   const imageBackfillTimersRef = useRef<number[]>([]);
   // The single fragrance whose image is being actively backfilled (one burst runs
@@ -784,17 +787,32 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     });
   }, []);
 
-  const loadWardrobe = useCallback(async (token: string, signal?: AbortSignal) => {
+  const loadWardrobe = useCallback(async (
+    token: string,
+    signal?: AbortSignal,
+    opts?: { conditional?: boolean },
+  ) => {
     if (isMutatingRef.current) return;
     const now = Date.now();
     if (now - lastMutationRef.current < 5000) return;
 
     setWardrobeError(null);
     try {
-      const res = await fetch('/api/wardrobe', {
-        headers: { Authorization: `Bearer ${token}` },
-        signal
-      });
+      const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+      // Conditional poll: let the server short-circuit with 304 when nothing in
+      // user_fragrances changed since our last copy, so an idle tab stops
+      // re-pulling the whole wardrobe. Only the steady-state interval tick is
+      // conditional; focus/visibility and initial loads fetch unconditionally.
+      if (opts?.conditional && wardrobeEtagRef.current) {
+        headers['If-None-Match'] = wardrobeEtagRef.current;
+      }
+      const res = await fetch('/api/wardrobe', { headers, signal });
+      if (res.status === 304) {
+        // Server confirmed our copy is current — leave items untouched.
+        return;
+      }
+      const etag = res.headers.get('ETag');
+      if (etag) wardrobeEtagRef.current = etag;
       if (res.status === 401) {
         // Token is missing/stale (e.g. left over from a DB reset). The backend
         // rejected it, so this is not a network problem; clear the dead token
@@ -1065,29 +1083,29 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   // Background polling wardrobe updates.
   //
-  // Egress note: GET /api/wardrobe returns every row's full `fragranceData`
-  // JSONB (including the heavy `raw_engine_detail` blob), so each tick re-pulls
-  // the entire wardrobe from Postgres → Express → browser. A tight blanket
-  // interval on a tab left open for hours was the dominant Supabase egress
-  // burner during testing. The interval only catches *cross-device* edits
-  // (rare); the user's own edits update optimistically, and freshly-added
-  // imageless rows are filled by the dedicated `scheduleImageBackfillRehydrate`
-  // burst — neither depends on this poll. So we keep a long steady-state
-  // interval and rely on the visibility/focus tick below for prompt freshness
-  // the moment the user actually returns to the tab.
+  // The interval tick is a CONDITIONAL GET (sends If-None-Match): when nothing
+  // in user_fragrances changed, the server answers 304 from a cheap
+  // count+max(updated_at) probe — a few bytes — instead of re-pulling the full
+  // JSONB wardrobe over the metered Supabase → Express hop. That lets us keep a
+  // prompt 60s cadence for cross-device edits at near-zero idle egress (the
+  // 60s × fat-payload poll on long-open tabs was the dominant egress burner).
+  //
+  // The visibility/focus tick fetches UNCONDITIONALLY so returning to a tab
+  // always re-runs image hydration and surfaces any opportunistic image-cache
+  // improvement, which the user_fragrances-scoped ETag deliberately ignores.
   useEffect(() => {
     if (!authToken) return;
-    const REFRESH_MS = 5 * 60_000;
+    const REFRESH_MS = 60_000;
 
-    const tick = () => {
+    const intervalTick = () => {
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
-      loadWardrobe(authToken);
+      void loadWardrobe(authToken, undefined, { conditional: true });
     };
 
-    const id = window.setInterval(tick, REFRESH_MS);
+    const id = window.setInterval(intervalTick, REFRESH_MS);
 
     const onVisible = () => {
-      if (document.visibilityState === 'visible') tick();
+      if (document.visibilityState === 'visible') void loadWardrobe(authToken);
     };
 
     document.addEventListener('visibilitychange', onVisible);
