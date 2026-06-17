@@ -1,0 +1,4 @@
+interface:
+  display_name: "Commit Discipline"
+  short_description: "Create small verified commits with precise summaries"
+  default_prompt: "Use $commit-discipline to scope, verify, and commit one logical change."

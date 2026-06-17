@@ -1,0 +1,4 @@
+interface:
+  display_name: "Repository Development Commands"
+  short_description: "Choose the correct pnpm command"
+  default_prompt: "Use $dev-commands to select the smallest correct build, test, typecheck, or code generation command."

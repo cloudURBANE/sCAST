@@ -1,0 +1,4 @@
+interface:
+  display_name: "Proportional Verification"
+  short_description: "Verify changes with targeted checks"
+  default_prompt: "Use $verify-without-regression to select and run proportionate checks for the files changed."

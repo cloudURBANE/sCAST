@@ -52,6 +52,33 @@ Thumbs.db
 .image-cache/
 .claude/
 
+# Share the cross-agent repository skills with Claude Code while keeping other
+# machine-local Claude state and skills ignored.
+!/.claude/
+/.claude/*
+!/.claude/skills/
+/.claude/skills/*
+!/.claude/skills/repo-map/
+!/.claude/skills/repo-map/SKILL.md
+!/.claude/skills/token-efficient-navigation/
+!/.claude/skills/token-efficient-navigation/SKILL.md
+!/.claude/skills/dev-commands/
+!/.claude/skills/dev-commands/SKILL.md
+!/.claude/skills/verify-without-regression/
+!/.claude/skills/verify-without-regression/SKILL.md
+!/.claude/skills/large-repo-investigation/
+!/.claude/skills/large-repo-investigation/SKILL.md
+!/.claude/skills/repo-navigation/
+!/.claude/skills/repo-navigation/SKILL.md
+!/.claude/skills/visual-ui-debug/
+!/.claude/skills/visual-ui-debug/SKILL.md
+!/.claude/skills/state-agent-debug/
+!/.claude/skills/state-agent-debug/SKILL.md
+!/.claude/skills/safe-edit-verify/
+!/.claude/skills/safe-edit-verify/SKILL.md
+!/.claude/skills/commit-discipline/
+!/.claude/skills/commit-discipline/SKILL.md
+
 # Env (never commit secrets)
 .env
 .env.*

@@ -144,3 +144,17 @@ test("non-string input is safe", () => {
   const r = runAnswerQualityGates(undefined as unknown as string, NO_EVIDENCE);
   assert.equal(r.passed, true);
 });
+
+test("an unanswered active slot cannot be silently abandoned", () => {
+  const abandoned = runAnswerQualityGates("Great, I have work meeting. Let me search.", {
+    hadExternalEvidence: false,
+    sessionState: { slots: { occasion: "work" }, pendingSlot: "direction", pendingSlotUnanswered: true },
+  });
+  assert.ok(abandoned.violations.includes("pending_slot_abandoned"), JSON.stringify(abandoned.violations));
+
+  const clarified = runAnswerQualityGates("Work meeting noted. Citrus, green, or aromatic?", {
+    hadExternalEvidence: false,
+    sessionState: { slots: { occasion: "work" }, pendingSlot: "direction", pendingSlotUnanswered: true },
+  });
+  assert.ok(!clarified.violations.includes("pending_slot_abandoned"), JSON.stringify(clarified.violations));
+});

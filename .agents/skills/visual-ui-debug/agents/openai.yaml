@@ -1,0 +1,4 @@
+interface:
+  display_name: "Visual UI Debug"
+  short_description: "Trace visual symptoms to exact UI ownership"
+  default_prompt: "Use $visual-ui-debug to trace this UI symptom before editing."

@@ -58,7 +58,15 @@ export type BeamRunContext = {
   userId: string;
 };
 
-export type BeamSlotKey = "month" | "destination" | "occasion" | "vibe" | "direction" | "budget";
+export type BeamSlotKey =
+  | "month"
+  | "destination"
+  | "occasion"
+  | "vibe"
+  | "direction"
+  | "projection"
+  | "impression"
+  | "budget";
 
 export type BeamSessionSlots = Partial<Record<BeamSlotKey, string>>;
 
@@ -77,6 +85,10 @@ export type BeamSessionState = {
   slots: BeamSessionSlots;
   mission?: BeamMissionState;
   userDelegatedChoice?: boolean;
+  /** Slot the last assistant question is still collecting. */
+  pendingSlot?: BeamSlotKey;
+  /** The latest turn supplied useful context, but did not answer pendingSlot. */
+  pendingSlotUnanswered?: boolean;
 };
 
 export type BeamSessionRecord = {

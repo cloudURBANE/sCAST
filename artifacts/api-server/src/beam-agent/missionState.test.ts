@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   beamSessionStatePrompt,
   deriveBeamSessionState,
+  inferPendingSlotFromAssistant,
   isDelegationPhrase,
 } from "./missionState.ts";
 
@@ -16,6 +17,48 @@ test("parses a travel kit target with owned and new counts", () => {
   assert.equal(state.mission?.intent, "travel_kit");
   assert.equal(state.mission?.ownedCount, 2);
   assert.equal(state.mission?.newCount, 2);
+});
+
+test("keeps an active scent-direction question unresolved when the user gives an occasion", () => {
+  const pending = inferPendingSlotFromAssistant("Should it feel citrusy, green, or aromatic?");
+  const state = deriveBeamSessionState(undefined, "Work meeting", pending);
+
+  assert.equal(pending, "direction");
+  assert.equal(state.slots.occasion, "work");
+  assert.equal(state.slots.direction, undefined);
+  assert.equal(state.pendingSlot, "direction");
+  assert.equal(state.pendingSlotUnanswered, true);
+  assert.match(beamSessionStatePrompt(state), /active question is still unresolved: expected direction/i);
+});
+
+test("recognizes the reported fresh-versus-warm wording as a direction question", () => {
+  assert.equal(
+    inferPendingSlotFromAssistant("Would you prefer something fresh and subtle, or more presence and warmth?"),
+    "direction",
+  );
+});
+
+test("resolves the active slot only with an answer from the expected category", () => {
+  const state = deriveBeamSessionState(undefined, "Green and aromatic", "direction");
+
+  assert.equal(state.slots.direction, "green, aromatic");
+  assert.equal(state.pendingSlot, undefined);
+  assert.equal(state.pendingSlotUnanswered, undefined);
+});
+
+test("explicit delegation bypasses an unresolved preference slot", () => {
+  const state = deriveBeamSessionState(undefined, "Recommend now with what you know. You decide.", "direction");
+
+  assert.equal(state.userDelegatedChoice, true);
+  assert.equal(state.pendingSlot, undefined);
+  assert.equal(state.pendingSlotUnanswered, undefined);
+});
+
+test("does not double-count scent-family words as both vibe and direction", () => {
+  const state = deriveBeamSessionState(undefined, "Clean, fresh, green citrus");
+
+  assert.equal(state.slots.direction, "citrus, green");
+  assert.equal(state.slots.vibe, undefined);
 });
 
 test("merges later month and vibe into an existing travel mission", () => {
