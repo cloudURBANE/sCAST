@@ -23,9 +23,16 @@ export type LaneSignals = {
 };
 
 /**
- * Premium-lane triggers (brief §03.2 use_minimax_m3_if): nuanced tone, trip /
- * collection kits, redundancy/audit logic, layered or purchase strategy. Kept as
- * word-boundary patterns so "audit" matches but "auditorium" does not.
+ * Premium-lane triggers (brief §03.2 use_minimax_m3_if): genuinely multi-step or
+ * strategic work — trip / collection kits, redundancy/audit logic, wardrobe
+ * optimization, layering and purchase strategy. Kept as word-boundary patterns so
+ * "audit" matches but "auditorium" does not.
+ *
+ * Deliberately NOT triggers: everyday one-shot asks like "date night" and
+ * "signature scent". Those are the bread-and-butter of fragrance chat and don't
+ * need premium orchestration; escalating them just sent routine traffic to the
+ * pricier tier. They fall through to the cheap default lane (and the closing
+ * synthesis turn still runs the strong model regardless of lane).
  */
 const PREMIUM_PATTERNS: RegExp[] = [
   /\bcollection audit\b/i,
@@ -37,9 +44,7 @@ const PREMIUM_PATTERNS: RegExp[] = [
   /\bkit\b/i,
   /\bpacking\b/i,
   /\blayer(?:ing|ed)?\b/i,
-  /\bdate[-\s]?night\b/i,
   /\bpurchase strategy\b/i,
-  /\bsignature scent\b/i,
   /\bcapsule\b/i,
 ];
 

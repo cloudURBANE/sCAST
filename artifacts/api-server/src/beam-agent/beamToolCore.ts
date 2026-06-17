@@ -25,7 +25,34 @@ export const BEAM_LIMITS = {
   maxDetailNames: 10,
   maxAgentTurns: 8,
   maxUserMessageLength: 2000,
-  maxToolResultChars: 100_000,
+  /**
+   * Output-token budgets per call kind. Tool-orchestration turns are short
+   * (one tool decision); the closing synthesis is long-form prose. These are the
+   * DEFAULTS — the route can lower them per lane via `resolveBeamBudget` (env
+   * `BEAM_AGENT_ORCH_MAX_TOKENS` / `BEAM_AGENT_SYNTH_MAX_TOKENS`). Capping output
+   * matters for reasoning-mode slugs (e.g. DeepSeek V4), where reasoning tokens
+   * bill as output and an uncapped trace can dominate the bill.
+   */
+  orchestrationMaxTokens: 2048,
+  synthesisMaxTokens: 4096,
+  /**
+   * Hard backstop on a single tool result's serialized size in the TRANSCRIPT.
+   * Lowered from 100_000: a result is re-sent on every subsequent model turn, so
+   * one fat `beam_get_fragrance_details`/`beam_research_web` payload (~25k tokens)
+   * used to dominate the synthesis call's input — the single biggest cost driver.
+   * `boundToolResultForTranscript` does the record-aware shrinking first; this is
+   * only the final char ceiling so a pathological result can't blow the budget.
+   */
+  maxToolResultChars: 12_000,
+  /** Per-array item cap when bounding a tool result for the transcript. */
+  maxToolResultArrayItems: 16,
+  /**
+   * Per-string char cap when bounding a tool result for the transcript. Set high
+   * enough to keep answer-bearing prose intact (a `beam_research_web`
+   * synthesizedFact, a scent description) while still cutting the multi-KB
+   * Fragrantica detail/review blobs that drove the cost. ~250 tokens.
+   */
+  maxToolResultStringChars: 1000,
   /** Agent-offered tap chips: how many, and the max label length. */
   maxSuggestions: 4,
   maxSuggestionLabel: 48,
@@ -113,6 +140,62 @@ export function extractText(content: ClaudeContentBlock[]): string {
     }
   }
   return out.trim();
+}
+
+/* ------------------------------------------------------------------ */
+/* Tool-result transcript trimming                                    */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Bound a tool result for the TRANSCRIPT before it is serialized and re-sent on
+ * every subsequent model turn. The full, untrimmed result is still used for
+ * grounding, scoring, and UI cards (the loop passes the raw object there); this
+ * only shapes what enters `messages`, so accumulated tool JSON doesn't dominate
+ * the synthesis call's input — the dominant cost driver (a single details /
+ * research payload can be ~25k tokens, re-billed on each turn).
+ *
+ * Record-aware, NOT a blind char slice: arrays are capped by COUNT and strings
+ * by LENGTH, so the output is always structurally valid JSON (the model never
+ * reads a record cut in half) and short identifying fields — names, brands,
+ * accords — always survive intact. A dropped array tail leaves a small
+ * `…+N more` marker so the model knows the list was longer; over-deep nesting
+ * collapses to a placeholder rather than recursing without bound.
+ *
+ * Pure + deterministic; safe to unit test. Returns a fresh structure (never
+ * mutates the input).
+ */
+export function boundToolResultForTranscript(
+  value: unknown,
+  opts?: { maxArrayItems?: number; maxStringChars?: number; maxDepth?: number },
+): unknown {
+  const maxArrayItems = opts?.maxArrayItems ?? BEAM_LIMITS.maxToolResultArrayItems;
+  const maxStringChars = opts?.maxStringChars ?? BEAM_LIMITS.maxToolResultStringChars;
+  const maxDepth = opts?.maxDepth ?? 6;
+
+  const walk = (v: unknown, depth: number): unknown => {
+    if (typeof v === "string") {
+      return v.length > maxStringChars ? `${v.slice(0, maxStringChars)}…` : v;
+    }
+    if (typeof v === "number" || typeof v === "boolean" || v === null) return v;
+    if (Array.isArray(v)) {
+      if (depth >= maxDepth) return `[${v.length} items]`;
+      const capped: unknown[] = v.slice(0, maxArrayItems).map((entry) => walk(entry, depth + 1));
+      if (v.length > maxArrayItems) capped.push(`…+${v.length - maxArrayItems} more`);
+      return capped;
+    }
+    if (v && typeof v === "object") {
+      if (depth >= maxDepth) return "[object]";
+      const out: Record<string, unknown> = {};
+      for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+        out[k] = walk(val, depth + 1);
+      }
+      return out;
+    }
+    // Drop functions/symbols/bigint — JSON.stringify would too (or throw on bigint).
+    return undefined;
+  };
+
+  return walk(value, 0);
 }
 
 /* ------------------------------------------------------------------ */

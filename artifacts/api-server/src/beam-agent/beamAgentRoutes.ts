@@ -44,7 +44,7 @@ import { enqueueBeamCuration } from "../services/curationService";
 import { createBeamTools, type BeamCatalogHit, type BeamToolDeps } from "./beamTools.ts";
 import { runBeamAgent } from "./beamAgentLoop.ts";
 import { packetFromWardrobeRow, redactEventForClient } from "./beamToolCore.ts";
-import { resolveBeamModels } from "./provider.ts";
+import { resolveBeamBudget, resolveBeamModels } from "./provider.ts";
 import { selectConciergeLane } from "./laneSelector.ts";
 import { appendSessionTurn, loadSession, saveSessionState } from "./beamSessionStore.ts";
 import { deriveBeamSessionState } from "./missionState.ts";
@@ -328,6 +328,10 @@ router.post("/runs", runRateLimit, requireAuth, async (req: AuthRequest, res) =>
   // lane runs MiniMax M3 end-to-end; the default lane runs cheap M2.5 orchestration.
   const lane = selectConciergeLane({ message, historyTurns: history.length });
   const models = resolveBeamModels(lane);
+  // Per-lane run guardrails (tool-round + output-token caps). Defaults match the
+  // historical hardcoded limits; env can lower them per lane to bound the bill when
+  // a cheaper/reasoning closer is in play (brief §03.2). See resolveBeamBudget.
+  const budget = resolveBeamBudget(lane);
 
   // Fire-and-forget: the client consumes progress over SSE. runBeamAgent never
   // throws, but we guard anyway so a registry record can't be left half-open.
@@ -341,6 +345,9 @@ router.post("/runs", runRateLimit, requireAuth, async (req: AuthRequest, res) =>
     emit,
     model: models?.model,
     synthesisModel: models?.synthesisModel,
+    maxTurns: budget.maxTurns,
+    orchestrationMaxTokens: budget.orchestrationMaxTokens,
+    synthesisMaxTokens: budget.synthesisMaxTokens,
     history,
     sessionState,
     onComplete: (assistantText) => {

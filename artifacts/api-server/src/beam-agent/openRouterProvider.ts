@@ -38,12 +38,33 @@ export function defaultOpenRouterModel(): string {
 }
 
 /**
- * Premium / long-context tier (brief §02.1 premium_concierge): MiniMax M3, used
- * for the richer synthesis turn and the premium lane. Falls back to the cheap
- * default when unset.
+ * Synthesis / "smart closer" tier. This is the slug that writes the final,
+ * tool-free recommendation where quality matters most. In production this is
+ * commonly overridden (via BEAM_AGENT_MODEL_STRONG) to an Anthropic Sonnet slug
+ * for the closing turn. Falls back to MiniMax M3 when unset.
+ *
+ * IMPORTANT: this slug is for the SYNTHESIS turn only. Do NOT reuse it for the
+ * premium *orchestration* loop — that put every tool-calling turn of a premium
+ * mission on the expensive closer model (a "trip/kit" keyword → 7+ Sonnet turns
+ * at ~28k input each ≈ $0.60/mission). Premium orchestration has its own,
+ * deliberately cheaper tier — see `premiumOrchestrationModel()`.
  */
 export function strongOpenRouterModel(): string {
   return process.env.BEAM_AGENT_MODEL_STRONG?.trim() || "minimax/minimax-m3";
+}
+
+/**
+ * Premium *orchestration* tier (brief §03.2 use_minimax_m3_if): the model that
+ * drives the tool-calling loop on the premium lane. Defaults to MiniMax M3 — a
+ * modest step up from the default M2.5 lane, but still a cheap tool-router, NOT
+ * the synthesis closer. Pinning it to its own env (`BEAM_AGENT_MODEL_PREMIUM`)
+ * is what prevents the premium lane from inheriting a Sonnet `BEAM_AGENT_MODEL_STRONG`
+ * override for every orchestration turn. The closing turn still escalates to the
+ * synthesis tier above, so premium missions keep the quality where it counts
+ * (the final recommendation) without paying closer prices for tool plumbing.
+ */
+export function premiumOrchestrationModel(): string {
+  return process.env.BEAM_AGENT_MODEL_PREMIUM?.trim() || "minimax/minimax-m3";
 }
 
 /**
@@ -78,11 +99,26 @@ type OpenAiToolCall = {
   function: { name: string; arguments: string };
 };
 
+/**
+ * An OpenAI-compatible content part. OpenRouter forwards Anthropic prompt-caching
+ * breakpoints as a `cache_control` field on a text part, so when the active model
+ * is an Anthropic slug we send the (large, run-stable) system prompt as a single
+ * cached text part instead of a bare string. Models that don't support caching
+ * ignore the field; we only emit it for Anthropic slugs to avoid surprising the
+ * cheap concierge lane (MiniMax), which keeps the plain-string shape.
+ */
+type OpenAiTextPart = { type: "text"; text: string; cache_control?: { type: "ephemeral" } };
+
 type OpenAiMessage =
-  | { role: "system"; content: string }
-  | { role: "user"; content: string }
+  | { role: "system"; content: string | OpenAiTextPart[] }
+  | { role: "user"; content: string | OpenAiTextPart[] }
   | { role: "assistant"; content: string | null; tool_calls?: OpenAiToolCall[] }
   | { role: "tool"; tool_call_id: string; content: string };
+
+/** True for slugs that honor Anthropic-style `cache_control` breakpoints. */
+export function modelSupportsCaching(model: string | undefined): boolean {
+  return /claude|anthropic/i.test(model ?? "");
+}
 
 type OpenAiTool = {
   type: "function";
@@ -123,8 +159,19 @@ function blocksOf(content: ClaudeMessage["content"]): ClaudeContentBlock[] {
  * Anthropic packs tool results into a single `user` message of `tool_result`
  * blocks; OpenAI requires one `tool` message per result, so those are expanded.
  */
-function toOpenAiMessages(system: string, messages: ClaudeMessage[]): OpenAiMessage[] {
-  const out: OpenAiMessage[] = [{ role: "system", content: system }];
+function toOpenAiMessages(
+  system: string,
+  messages: ClaudeMessage[],
+  cacheSystem = false,
+): OpenAiMessage[] {
+  // Mark the system prompt as a cache breakpoint for caching-capable (Anthropic)
+  // models: it is identical across every call in a run (orchestration turns +
+  // synthesis), so caching it makes calls 2..N read it at ~10% of input price
+  // instead of re-billing the full prefix each turn.
+  const systemContent: OpenAiMessage = cacheSystem
+    ? { role: "system", content: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }] }
+    : { role: "system", content: system };
+  const out: OpenAiMessage[] = [systemContent];
 
   for (const message of messages) {
     const blocks = blocksOf(message.content);
@@ -167,7 +214,36 @@ function toOpenAiMessages(system: string, messages: ClaudeMessage[]): OpenAiMess
     if (userText) out.push({ role: "user", content: userText });
   }
 
+  // Transcript caching for caching-capable (Anthropic) models. The system prompt
+  // is already a cache breakpoint above; here we also mark the LAST user turn so
+  // the whole prefix before it (system + every tool result + assistant turn) is
+  // read from cache on the next call. This matters most for the closing SYNTHESIS
+  // turn, whose transcript ends on the folded user instruction and carries the
+  // run's full ~25k-token tail — exactly the call where the cache discount pays
+  // off. Restricted to the *user* role (the documented OpenRouter cache surface);
+  // tool-role parts are intentionally left untouched.
+  if (cacheSystem) markLastUserCacheBreakpoint(out);
+
   return out;
+}
+
+/**
+ * Attach an ephemeral cache breakpoint to the most recent user message, rewriting
+ * its string content into a single cached text part. No-op when there is no user
+ * message or it already carries parts. Mutates the array in place (it is local to
+ * the caller).
+ */
+function markLastUserCacheBreakpoint(messages: OpenAiMessage[]): void {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (message.role === "user" && typeof message.content === "string") {
+      messages[i] = {
+        role: "user",
+        content: [{ type: "text", text: message.content, cache_control: { type: "ephemeral" } }],
+      };
+      return;
+    }
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -246,14 +322,16 @@ export async function callOpenRouter(input: ClaudeCallInput): Promise<ClaudeResp
   // Omit tools/tool_choice entirely on the tool-free synthesis turn — some
   // OpenAI-compatible backends reject `tool_choice` alongside an empty tools list.
   const hasTools = input.tools.length > 0;
+  const model = input.model ?? defaultOpenRouterModel();
+  const cacheSystem = modelSupportsCaching(model);
   const res = await fetch(OPENROUTER_URL, {
     method: "POST",
     headers,
     signal: input.signal ?? AbortSignal.timeout(OPENROUTER_TIMEOUT_MS),
     body: JSON.stringify({
-      model: input.model ?? defaultOpenRouterModel(),
+      model,
       max_tokens: input.maxTokens ?? 1024,
-      messages: toOpenAiMessages(input.system, input.messages),
+      messages: toOpenAiMessages(input.system, input.messages, cacheSystem),
       ...(hasTools ? { tools: toOpenAiTools(input.tools), tool_choice: "auto" } : {}),
       // include_usage adds a final usage-only chunk to the stream for cost accounting.
       ...(stream ? { stream: true, stream_options: { include_usage: true } } : {}),

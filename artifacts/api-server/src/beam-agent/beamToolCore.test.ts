@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import {
   BEAM_LIMITS,
   asString,
+  boundToolResultForTranscript,
   buildProposalItem,
   clampLimit,
   cleanStringList,
@@ -353,4 +354,40 @@ test("toClaudeTools maps name/description/input_schema", () => {
   assert.equal(tools[0].name, "beam_get_wardrobe");
   assert.equal(tools[0].description, "List the user's vault.");
   assert.deepEqual(tools[0].input_schema, { type: "object", properties: {} });
+});
+
+test("boundToolResultForTranscript caps array counts and string lengths but keeps valid JSON", () => {
+  const big = {
+    items: Array.from({ length: 50 }, (_, i) => ({
+      name: `Frag ${i}`,
+      description: "x".repeat(5000),
+      accords: ["amber", "musk"],
+    })),
+  };
+  const bounded = boundToolResultForTranscript(big) as { items: unknown[] };
+  // The result must still be serializable (no mid-record truncation -> valid JSON).
+  const serialized = JSON.stringify(bounded);
+  assert.doesNotThrow(() => JSON.parse(serialized));
+  // Array capped to the configured item budget + a single "…more" marker.
+  assert.equal(bounded.items.length, BEAM_LIMITS.maxToolResultArrayItems + 1);
+  const first = bounded.items[0] as { name: string; description: string; accords: string[] };
+  // Short identifying fields survive intact; long prose is bounded.
+  assert.equal(first.name, "Frag 0");
+  assert.deepEqual(first.accords, ["amber", "musk"]);
+  assert.ok(first.description.length <= BEAM_LIMITS.maxToolResultStringChars + 1);
+  // The whole bounded payload is far smaller than the raw one.
+  assert.ok(serialized.length < JSON.stringify(big).length / 10);
+});
+
+test("boundToolResultForTranscript preserves a grounded fragrance name through trimming", () => {
+  const result = {
+    items: Array.from({ length: 30 }, (_, i) => ({ name: `Filler ${i}`, found: true })),
+    recommendation: { canonicalName: "Creed Aventus", brand: "Creed" },
+  };
+  const bounded = boundToolResultForTranscript(result);
+  // The pick that grounds the closing answer must still be present after trimming.
+  assert.ok(JSON.stringify(bounded).includes("Creed Aventus"));
+  // And the grounding extractor (run on the UNTRIMMED result in the loop) is
+  // unaffected — the headline name is collectible either way.
+  assert.ok(collectGroundedFragranceNames(result).includes("Creed Aventus"));
 });

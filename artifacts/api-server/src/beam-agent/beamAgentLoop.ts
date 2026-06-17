@@ -19,6 +19,7 @@ import type {
 } from "./types.ts";
 import {
   BEAM_LIMITS,
+  boundToolResultForTranscript,
   collectGroundedFragranceNames,
   extractAgentCues,
   extractText,
@@ -33,9 +34,9 @@ import { repairInstructionFor, runAnswerQualityGates } from "./answerQualityGate
 import { estimateRunCostUsd, type ModelUsage } from "./costLedger.ts";
 import { beamSessionStatePrompt } from "./missionState.ts";
 
-/** Token budgets. Tool-orchestration turns are short; the closing synthesis is long. */
-const ORCHESTRATION_MAX_TOKENS = 2048;
-const SYNTHESIS_MAX_TOKENS = 4096;
+// Output-token budgets live in BEAM_LIMITS (orchestrationMaxTokens / synthesisMaxTokens)
+// so the route can lower them per lane via resolveBeamBudget; the loop reads the
+// per-run overrides below, falling back to those defaults.
 
 /**
  * Hard wall-clock budget for an entire run. Kept under the SPA's 60s client
@@ -362,6 +363,14 @@ export type RunBeamAgentInput = {
    */
   synthesisModel?: string;
   /**
+   * Per-run output-token ceilings (brief §03.2 cost guardrails). Default to
+   * `BEAM_LIMITS.orchestrationMaxTokens` / `synthesisMaxTokens`. The route lowers
+   * these per lane via `resolveBeamBudget` to bound the worst-case bill — relevant
+   * for reasoning-mode synthesis slugs whose trace bills as output.
+   */
+  orchestrationMaxTokens?: number;
+  synthesisMaxTokens?: number;
+  /**
    * Prior conversation as clean alternating text turns (no tool plumbing). The
    * route loads this from the per-session store so follow-ups keep context.
    */
@@ -576,6 +585,8 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
     }
 
     const maxTurns = Math.min(input.maxTurns ?? BEAM_LIMITS.maxAgentTurns, BEAM_LIMITS.maxAgentTurns);
+    const orchestrationMaxTokens = input.orchestrationMaxTokens ?? BEAM_LIMITS.orchestrationMaxTokens;
+    const synthesisMaxTokens = input.synthesisMaxTokens ?? BEAM_LIMITS.synthesisMaxTokens;
     const toolByName = new Map<BeamToolName, BeamToolDefinition>(tools.map((tool) => [tool.name, tool]));
     const claudeTools = toClaudeTools(tools);
 
@@ -618,7 +629,7 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
             messages: synthMessages,
             tools: [],
             model: synthModel,
-            maxTokens: SYNTHESIS_MAX_TOKENS,
+            maxTokens: synthesisMaxTokens,
             signal: callBudgetSignal(),
             onDelta: (chunk) => emit({ type: "message_delta", text: chunk }),
           });
@@ -663,7 +674,7 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
             messages: withSynthesisInstruction(messages, repairInstruction),
             tools: [],
             model: repairModel,
-            maxTokens: SYNTHESIS_MAX_TOKENS,
+            maxTokens: synthesisMaxTokens,
             signal: callBudgetSignal(),
           });
           recordUsage(repair, repairModel);
@@ -722,7 +733,7 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
           messages,
           tools: claudeTools,
           model: input.model,
-          maxTokens: ORCHESTRATION_MAX_TOKENS,
+          maxTokens: orchestrationMaxTokens,
           signal: callBudgetSignal(),
         });
       } catch (err) {
@@ -852,12 +863,19 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
           continue;
         }
 
-        // Serialize the success. JSON.stringify can throw (circular refs, BigInt);
-        // treat that as a tool error so the model knows it got no usable data,
-        // rather than silently dropping the result.
+        // Serialize the success. We FIRST bound the result record-aware (cap array
+        // counts + string lengths) so the transcript copy — re-sent on every later
+        // turn — can't be dominated by one fat payload; the char ceiling is only a
+        // final backstop. The UNTRIMMED `result` is still used for grounding/cards
+        // below, so trimming never weakens the answer-gate allowlist. JSON.stringify
+        // can still throw (circular refs, BigInt); treat that as a tool error so the
+        // model knows it got no usable data rather than silently dropping it.
         let serialized: string;
         try {
-          serialized = JSON.stringify(result).slice(0, BEAM_LIMITS.maxToolResultChars);
+          serialized = JSON.stringify(boundToolResultForTranscript(result)).slice(
+            0,
+            BEAM_LIMITS.maxToolResultChars,
+          );
         } catch {
           results.push({
             type: "tool_result",

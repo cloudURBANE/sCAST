@@ -6,11 +6,73 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { __test } from "./openRouterProvider.ts";
+import { __test, modelSupportsCaching, premiumOrchestrationModel } from "./openRouterProvider.ts";
 import { readInvalidArgs } from "./beamToolCore.ts";
 import type { ClaudeCallInput, ClaudeMessage } from "./types.ts";
 
 const { toOpenAiMessages, toOpenAiTools, openAiResponseToClaude } = __test;
+
+test("modelSupportsCaching matches Anthropic slugs only", () => {
+  assert.equal(modelSupportsCaching("anthropic/claude-sonnet-4.6"), true);
+  assert.equal(modelSupportsCaching("claude-haiku-4-5"), true);
+  assert.equal(modelSupportsCaching("minimax/minimax-m2.5"), false);
+  assert.equal(modelSupportsCaching(undefined), false);
+});
+
+test("toOpenAiMessages keeps system as a plain string by default", () => {
+  const out = toOpenAiMessages("SYS", [{ role: "user", content: "hi" }]);
+  assert.deepEqual(out[0], { role: "system", content: "SYS" });
+});
+
+test("toOpenAiMessages marks the system prompt as a cache breakpoint when caching", () => {
+  const out = toOpenAiMessages("SYS", [{ role: "user", content: "hi" }], true);
+  assert.deepEqual(out[0], {
+    role: "system",
+    content: [{ type: "text", text: "SYS", cache_control: { type: "ephemeral" } }],
+  });
+});
+
+test("toOpenAiMessages marks the last user turn as a cache breakpoint when caching", () => {
+  const messages: ClaudeMessage[] = [
+    { role: "user", content: "plan a trip kit" },
+    { role: "assistant", content: [{ type: "tool_use", id: "c1", name: "beam_search_catalog", input: {} }] },
+    { role: "user", content: [{ type: "tool_result", tool_use_id: "c1", content: '{"items":[]}' }] },
+    // The folded synthesis instruction lands as a trailing user turn.
+    { role: "user", content: "Write the final recommendation." },
+  ];
+  const out = toOpenAiMessages("SYS", messages, true);
+  const last = out[out.length - 1] as { role: string; content: unknown };
+  assert.equal(last.role, "user");
+  // The whole prefix (system + tool results) caches up to this breakpoint.
+  assert.deepEqual(last.content, [
+    { type: "text", text: "Write the final recommendation.", cache_control: { type: "ephemeral" } },
+  ]);
+});
+
+test("toOpenAiMessages leaves user turns as plain strings when NOT caching", () => {
+  const messages: ClaudeMessage[] = [{ role: "user", content: "Write the final recommendation." }];
+  const out = toOpenAiMessages("SYS", messages, false);
+  const last = out[out.length - 1] as { role: string; content: unknown };
+  assert.equal(last.role, "user");
+  assert.equal(last.content, "Write the final recommendation.");
+});
+
+test("premiumOrchestrationModel never returns the synthesis (strong) slug", () => {
+  const prevPremium = process.env.BEAM_AGENT_MODEL_PREMIUM;
+  const prevStrong = process.env.BEAM_AGENT_MODEL_STRONG;
+  delete process.env.BEAM_AGENT_MODEL_PREMIUM;
+  process.env.BEAM_AGENT_MODEL_STRONG = "anthropic/claude-sonnet-4.6";
+  try {
+    // Premium orchestration must stay on its own cheap tier even when the strong
+    // synthesis slug is overridden to an expensive Anthropic model.
+    assert.equal(premiumOrchestrationModel(), "minimax/minimax-m3");
+  } finally {
+    if (prevPremium === undefined) delete process.env.BEAM_AGENT_MODEL_PREMIUM;
+    else process.env.BEAM_AGENT_MODEL_PREMIUM = prevPremium;
+    if (prevStrong === undefined) delete process.env.BEAM_AGENT_MODEL_STRONG;
+    else process.env.BEAM_AGENT_MODEL_STRONG = prevStrong;
+  }
+});
 
 test("toOpenAiTools maps the Anthropic tool shape to OpenAI function tools", () => {
   const tools: ClaudeCallInput["tools"] = [
