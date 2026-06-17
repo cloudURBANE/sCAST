@@ -1,6 +1,6 @@
 import type { FragranceData } from "./datasetLoader";
 
-export type Concentration = "Parfum" | "Extrait" | "Eau de Parfum" | "Eau de Toilette" | "Eau de Cologne" | "Body Spray" | "Unknown";
+export type Concentration = "Parfum" | "Extrait" | "Elixir" | "Eau de Parfum" | "Eau de Toilette" | "Eau de Cologne" | "Body Spray" | "Unknown";
 
 export interface PyramidNotes {
   top: string[];
@@ -19,6 +19,10 @@ export interface ParsedFragrance {
 }
 
 export const CONCENTRATION_PATTERNS: Array<{ pattern: RegExp; value: Concentration }> = [
+  // "Elixir" is a distinct marketing concentration tier (~parfum strength). It is
+  // matched before the bare "parfum" rule so a name like "Sauvage Elixir" keeps
+  // its own label instead of collapsing to "Parfum".
+  { pattern: /\belixirs?\b/i, value: "Elixir" },
   { pattern: /\b(extrait|extract|pure parfum)\b/i, value: "Extrait" },
   { pattern: /\b(e\.?d\.?p\.?|eau\s+de\s+parfum)\b/i, value: "Eau de Parfum" },
   { pattern: /\b(e\.?d\.?t\.?|eau\s+de\s+toilette)\b/i, value: "Eau de Toilette" },

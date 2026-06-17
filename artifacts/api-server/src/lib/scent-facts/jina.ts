@@ -129,19 +129,6 @@ const NOTE_SIGNAL_HINTS = [
   "fragrance notes",
 ];
 
-// Sites used for targeted Serper queries — covers all three source classes
-const TARGETED_SERPER_SITES = [
-  "sephora.com",
-  "ulta.com",
-  "nordstrom.com",
-  "fragrancenet.com",
-  "fragrancex.com",
-  "macys.com",
-  "parfumo.com",
-  "basenotes.com",
-  "fragrantica.com",
-];
-
 function jinaHeaders(): Record<string, string> {
   const h: Record<string, string> = { Accept: "text/plain" };
   if (process.env.JINA_API_KEY) {
@@ -299,10 +286,19 @@ async function searchWithSerper(fragranceName: string): Promise<string[]> {
   const pool = getSerperPool();
   if (pool.size === 0) return [];
 
+  // Collapsed fan-out (was 11 Serper /search calls: 1 generic + 9 per-site +
+  // 1 official). Each query is a billed Serper call sharing the image pool's
+  // credits, and the per-site variants were largely duplicative — Google already
+  // surfaces these domains for the generic query, and diversifyCandidates() +
+  // the class interleave re-introduce retailer/official URLs found that way. We
+  // keep just two: the highest-yield generic query, and ONE combined site query
+  // over the top-ranked fragrance-DB domains (the `sourceRank`-highest class).
+  // Long-tail recall lost from dropping the retailer `site:` queries is
+  // backstopped by the Layer-3 DuckDuckGo fallback in searchScentSources().
+  const dbSiteFilter = FRAGRANCE_DB_DOMAINS.map((d) => `site:${d}`).join(" OR ");
   const queries = [
     `"${fragranceName}" fragrance notes`,
-    ...TARGETED_SERPER_SITES.map((site) => `"${fragranceName}" fragrance notes site:${site}`),
-    `"${fragranceName}" official fragrance notes`,
+    `"${fragranceName}" fragrance notes ${dbSiteFilter}`,
   ];
 
   const outcome = await pool.run<string[]>(async (apiKey) => {

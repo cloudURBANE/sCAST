@@ -11,6 +11,29 @@ const DEFAULT_SERPER_IMAGES_URL = "https://google.serper.dev/images";
 const REQUEST_TIMEOUT_MS = 12000;
 const MAX_RESULTS = 12;
 
+// Engine (Python fragrance service) base URL for the Decodo-backed image search.
+// Mirrors the resolver order used by routes/fragranceEngineProxy.ts and
+// services/enrichmentProcessor.ts so all server->engine calls share one config.
+const DEFAULT_ENGINE_ORIGIN = "https://srt-scent-engine-production.up.railway.app";
+const ENGINE_BASE = (
+  process.env.FRAGRANCE_ENGINE_URL ??
+  process.env.VITE_FRAGRANCE_API_URL ??
+  DEFAULT_ENGINE_ORIGIN
+)
+  .trim()
+  .replace(/\/+$/, "");
+
+/**
+ * Image candidate provider. `serper` (default) keeps the legacy Serper.dev
+ * `/images` call; `engine` routes to the engine's Decodo-backed
+ * `GET /api/fragrances/image-search`. Default stays `serper` until the engine
+ * route ships (handoff Risk 1) so production behaviour is unchanged; flip to
+ * `engine` via env once the endpoint is live.
+ */
+function imageProvider(): "engine" | "serper" {
+  return (process.env.IMAGE_PROVIDER ?? "serper").trim().toLowerCase() === "engine" ? "engine" : "serper";
+}
+
 type SerperImageResult = {
   imageUrl?: string;
   title?: string;
@@ -27,6 +50,42 @@ export type SerperImageCandidate = SerperImageResult & {
 type SerperResponse = {
   images?: SerperImageResult[];
 };
+
+/**
+ * Engine `GET /api/fragrances/image-search` response. The engine already
+ * normalizes Decodo entries to camelCase (`imageUrl`/`title`/`source`/
+ * `imageWidth`/`imageHeight`), matching the fields our scorer reads. Extra keys
+ * (`thumbnailUrl`/`link`/`position`/`source_provider`) have no consumer here.
+ */
+type EngineImageResult = SerperImageResult & {
+  thumbnailUrl?: string;
+  link?: string;
+  position?: number;
+  source_provider?: string;
+};
+
+type EngineImageResponse = {
+  results?: EngineImageResult[];
+};
+
+/**
+ * Shared candidate adapter: score every raw result, drop unscorable / urlless
+ * entries, and sort best-first. Used identically for Serper `images[]` and the
+ * engine `results[]` — the only difference between the two providers is the
+ * source array, never the scoring. Width/height-absent candidates are tolerated
+ * by the scorer (soft penalty), which matters because Decodo often omits them.
+ */
+function rankImageCandidates(results: SerperImageResult[]): SerperImageCandidate[] {
+  return results
+    .map((candidate) => ({ candidate, score: scoreSerperImageCandidate(candidate) }))
+    .filter((item) => Number.isFinite(item.score))
+    .sort((a, b) => b.score - a.score)
+    .filter(
+      (item): item is { candidate: SerperImageResult & { imageUrl: string }; score: number } =>
+        !!item.candidate.imageUrl,
+    )
+    .map((item) => ({ ...item.candidate, imageUrl: item.candidate.imageUrl, score: item.score }));
+}
 
 /** Full packshot refinement appended for normal refresh paths. */
 const SERPER_SUFFIX_DEFAULT =
@@ -56,7 +115,23 @@ function applySerperRefinement(rawQuery: string, refine: SerperRefineMode): stri
   return `${q} ${SERPER_SUFFIX_DEFAULT}`.trim();
 }
 
+/**
+ * Resolve bottle-image candidates. Dispatches to the configured provider
+ * (`IMAGE_PROVIDER`); both providers return the identical
+ * `SerperImageCandidate[]` shape (the downstream pipeline is provider-agnostic).
+ */
 export async function searchSerperImageCandidates(
+  query: string,
+  options?: { refine?: SerperRefineMode },
+): Promise<SerperImageCandidate[]> {
+  if (imageProvider() === "engine") {
+    return searchEngineImageCandidates(query, options);
+  }
+  return searchSerperImageCandidatesViaSerper(query, options);
+}
+
+/** Legacy Serper.dev `/images` path. Billed against the SERPER_API_KEYS pool. */
+async function searchSerperImageCandidatesViaSerper(
   query: string,
   options?: { refine?: SerperRefineMode },
 ): Promise<SerperImageCandidate[]> {
@@ -88,15 +163,9 @@ export async function searchSerperImageCandidates(
 
       if (response.status === 200) {
         const images = Array.isArray(response.data?.images) ? response.data.images : [];
-        const ranked = images
-          .map((candidate) => ({ candidate, score: scoreSerperImageCandidate(candidate) }))
-          .filter((item) => Number.isFinite(item.score))
-          .sort((a, b) => b.score - a.score)
-          .filter((item): item is { candidate: SerperImageResult & { imageUrl: string }; score: number } => !!item.candidate.imageUrl)
-          .map((item) => ({ ...item.candidate, imageUrl: item.candidate.imageUrl, score: item.score }));
         // A successful call with zero usable candidates still means the key
         // works — return it as success so we don't burn other keys.
-        return { ok: true, value: ranked };
+        return { ok: true, value: rankImageCandidates(images) };
       }
 
       if (response.status === 429) {
@@ -123,6 +192,51 @@ export async function searchSerperImageCandidates(
     return [];
   }
   return outcome.value;
+}
+
+/**
+ * Engine-backed image search (Decodo). 1:1 replacement for the Serper `/images`
+ * call: GET `${ENGINE_BASE}/api/fragrances/image-search?q=&limit=`. The engine
+ * owns Decodo auth + the daily request cap, so no key pool is needed here. The
+ * same packshot suffix is appended (Decodo runs the same Google Images SERP, so
+ * the negative-keyword refinement is still useful), and the same scorer ranks
+ * the results. Soft-fails to `[]` on any non-200/transport error — never throws.
+ */
+export async function searchEngineImageCandidates(
+  query: string,
+  options?: { refine?: SerperRefineMode },
+): Promise<SerperImageCandidate[]> {
+  if (!query.trim()) return [];
+
+  const refinedQuery = applySerperRefinement(query, options?.refine ?? "default");
+  const url = `${ENGINE_BASE}/api/fragrances/image-search?q=${encodeURIComponent(refinedQuery)}&limit=${MAX_RESULTS}`;
+
+  try {
+    const response = await axios.get<EngineImageResponse>(url, {
+      timeout: REQUEST_TIMEOUT_MS,
+      validateStatus: (status) => status >= 200 && status < 500,
+    });
+
+    if (response.status !== 200) {
+      logger.warn({ status: response.status }, "[engine-image] non-200; returning no candidates");
+      return [];
+    }
+
+    const results = Array.isArray(response.data?.results) ? response.data.results : [];
+    // Normalize to the scorer's field set, dropping engine-only keys
+    // (thumbnailUrl/link/position/source_provider) that nothing downstream reads.
+    const normalized: SerperImageResult[] = results.map((r) => ({
+      imageUrl: r.imageUrl,
+      title: r.title,
+      source: r.source,
+      imageWidth: r.imageWidth,
+      imageHeight: r.imageHeight,
+    }));
+    return rankImageCandidates(normalized);
+  } catch (err: any) {
+    logger.warn({ err: err?.message }, "[engine-image] image search failed; returning no candidates");
+    return [];
+  }
 }
 
 export async function searchSerperImageUrl(

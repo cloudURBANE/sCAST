@@ -2,6 +2,33 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Skills (load proactively)
+
+These live in `huge_monorepo/.claude/skills/` and load **only** when you launch Claude
+from this repo (`huge_monorepo/`) — not from the workspace root or `search_engine/`.
+
+| Skill | Use it when |
+|---|---|
+| `repo-map` | START of any task — deciding which file/service to touch; canonical trees vs mirror copies; giant files to never read whole. |
+| `dev-commands` | Build, typecheck, test, or run the web app (pnpm) or Python engine. Windows node/pnpm bootstrap. |
+| `git-guardrails` | Before any git merge/rebase/branch/push — short-lived branches, no back-merge of main. |
+| `cross-service-contract` | Before editing `fragranceApi.ts`, the Python engine endpoints, or `source_coverage` / `derived_metrics` response shapes. |
+| `db-schema-safety` | Before any Drizzle schema / DB-touching change — what's in the runtime schema and how `push` works. |
+| `fix-playbooks` | The recurring "couldn't find fragrance" selection error or "no image" / wrong-image pipeline bugs. |
+| `verify-without-regression` | The check routine before commit/push — typecheck, build, targeted tests, visual/behavior check. |
+| `token-efficient-navigation` | Locate a symbol then read only the slice — keep token use low in this large workspace. |
+| `skill-authoring` | Authoring/revising a skill so it matches house style AND actually loads. |
+| `isolate-touch-interaction-gestures` | Touch/pointer gestures — tap-vs-scroll, swipe/drag, pointer capture in the SPA. |
+| `optimize-layout-for-device-class` | Responsive layout/spacing across PC, iPad, iPhone, iPhone SE (320px). |
+| `optimize-webkit-rendering-budget` | Reduce WebKit/Safari GPU & compositor pressure (filters, blur, blend, layers). |
+| `unify-card-layouts-and-grids` | Standardize card/grid alignment, equal heights, column spans across device classes. |
+
+**Cross-repo note:** the Python engine (`search_engine/`) has its OWN skill set
+(`engine-live-verify`, `wardrobe-completeness-heal`) indexed in `search_engine/CLAUDE.md`.
+Those load only from `search_engine/`, not here — launch Claude in the repo whose skills
+you need. There is no shared/global skills dir; each repo manages its own. (Skills do NOT
+load from the non-repo workspace root, so anything kept there is silently inert.)
+
 ## Commands
 
 ```bash

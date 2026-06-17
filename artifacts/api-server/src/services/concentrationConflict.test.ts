@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { concentrationsConflict, detectConcentration } from "./concentrationConflict.ts";
+import {
+  concentrationsConflict,
+  concentrationsAmbiguouslyAdjacent,
+  detectConcentration,
+} from "./concentrationConflict.ts";
 import {
   shouldSkipSerperCandidateByIdentity,
   scoreProcessedSerperCandidateBreakdown,
@@ -16,6 +20,19 @@ test("detectConcentration reads EDP/EDT/Parfum from free text", () => {
 test("eau de parfum is recognised as EDP, not the looser bare Parfum rule", () => {
   // The ordered table must match the EDP phrase before the bare "parfum" rule.
   assert.equal(detectConcentration("eau de parfum"), "Eau de Parfum");
+});
+
+test("Elixir is a first-class concentration, matched before the bare Parfum rule", () => {
+  assert.equal(detectConcentration("Dior Sauvage Elixir 60ml"), "Elixir");
+  assert.equal(detectConcentration("Sauvage Elixir Parfum"), "Elixir");
+});
+
+test("Elixir is in the parfum family, so it is soft-adjacent to a bare Parfum request", () => {
+  // An Elixir packshot must still satisfy a bare-"Parfum" request (soft, not hard-skip).
+  assert.equal(concentrationsAmbiguouslyAdjacent("Parfum", "Elixir"), true);
+  assert.equal(concentrationsAmbiguouslyAdjacent("Elixir", "Parfum"), true);
+  // ...but a fresh-tier EDT vs Elixir stays a firm conflict.
+  assert.equal(concentrationsAmbiguouslyAdjacent("Eau de Toilette", "Elixir"), false);
 });
 
 test("conflict only when both sides are known and differ", () => {
