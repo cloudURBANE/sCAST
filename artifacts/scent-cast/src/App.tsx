@@ -3,6 +3,7 @@ import { Routes, Route, useLocation, useParams, type Location } from 'react-rout
 import type { Fragrance } from './components/Wardrobe';
 import type { BeamProposalItem } from '@/lib/beamAgentClient';
 import { vaultIdentityKey } from './lib/vaultIdentity';
+import { getPendingCuration, curationItemToFragrance, pickResumeCurationTarget } from './lib/curationClient';
 import { Sparkles, X } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { ThreadBackground, type ThreadBackgroundMode } from './components/threads/ThreadBackground';
@@ -616,6 +617,7 @@ function WardrobeFallback() {
 }
 
 function DashboardView() {
+  const location = useLocation();
   const { authToken, authEmail, authPictureUrl, authUsername, handleSignOut, setIsAuthModalOpen, setIsProfileModalOpen } = useAuth();
   const { weather } = useWeather();
   const {
@@ -646,6 +648,9 @@ function DashboardView() {
     closeRecommendationOverlay,
     handleVaultSearchStateChange,
     handleExpandArchive,
+    pendingDetailOpen,
+    openFragranceDetail,
+    clearPendingDetailOpen,
   } = useWardrobe();
   const reduceMotion = useReducedMotion();
   const [isMounted, setIsMounted] = useState(false);
@@ -828,10 +833,50 @@ function DashboardView() {
       ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, []);
 
+  // Resume-on-return: when a signed-in user opens the app — especially via the
+  // completion push deep-link `/?curation=<jobKey>` (see the SW's notificationclick
+  // → data.url) — fetch their pending/ready beam curations and surface the ready
+  // one by opening its detail card (where "Add to vault" is offered). This runs
+  // once per token; it degrades to a no-op when nothing is ready or the request
+  // fails (the client returns []). We strip the `?curation` param afterward via
+  // history.replaceState so a reload doesn't re-trigger and React Router's page
+  // transition is not disturbed. Guarded by a ref so re-renders don't re-fetch.
+  const resumeCurationToken = location.search;
+  const curationResumeHandledRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!authToken) return;
+    const guardKey = `${authToken}:${resumeCurationToken}`;
+    if (curationResumeHandledRef.current === guardKey) return;
+    curationResumeHandledRef.current = guardKey;
+
+    let cancelled = false;
+    const jobKey = new URLSearchParams(resumeCurationToken).get('curation');
+
+    void (async () => {
+      const items = await getPendingCuration(authToken);
+      if (cancelled) return;
+
+      // Always clear the deep-link param once we've handled this open, so a
+      // refresh is clean whether or not anything was ready.
+      if (jobKey && typeof window !== 'undefined' && window.history?.replaceState) {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('curation');
+        window.history.replaceState(window.history.state, '', url.toString());
+      }
+
+      const target = pickResumeCurationTarget(items, jobKey);
+      if (target) openFragranceDetail(curationItemToFragrance(target));
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authToken, resumeCurationToken, openFragranceDetail]);
+
   // iOS PWA standalone mode reports viewport/safe-area differently than Safari;
   // keep this shell padding tied to --bottomnav-h so fixed nav content has space.
   return (
-    <div className="min-h-[100svh] relative overflow-x-hidden pb-[calc(var(--bottomnav-h)+3rem)] md:pb-0">
+    <div className="min-h-[100svh] relative overflow-x-hidden pb-[calc(var(--bottomnav-h)+2rem)] md:pb-0">
       <SEO title="ScentBeam — Your scent, perfected" description="Build your fragrance vault and discover your signature scent, calibrated to the weather around you." url="https://scentbeam.com/" />
       <AppTopNav
         authToken={authToken}
@@ -847,7 +892,7 @@ function DashboardView() {
 
       <div style={{ height: 'var(--topbar-h)' }} />
 
-      <main className="relative z-10 pb-[calc(var(--bottomnav-h)+2rem)] px-4 sm:px-8 sm:pb-24 max-w-[1760px] mx-auto">
+      <main className="relative z-10 px-4 sm:px-8 sm:pb-24 max-w-[1760px] mx-auto">
         <div className="space-y-7 pt-3 sm:space-y-28 sm:pt-14">
           <HomepageHeroMarquee />
 
@@ -954,6 +999,7 @@ function DashboardView() {
                           authToken={authToken}
                           onExit={handleExitMission}
                           onRevealMatch={handleMissionReveal}
+                          onViewProposalItem={openFragranceDetail}
                           onStatusChange={handleMissionStatus}
                           cueBarContainer={missionCueHost}
                           onCurateCollection={handleCurateCollection}
@@ -1032,6 +1078,9 @@ function DashboardView() {
               <Wardrobe
                 items={items}
                 onDelete={handleDeleteItem}
+                onAdd={handleAddItem}
+                pendingDetailOpen={pendingDetailOpen}
+                onClearPendingDetailOpen={clearPendingDetailOpen}
                 onPersistWardrobeImage={handlePersistWardrobeImage}
                 isAdmin={isAdmin}
                 onUploadBottleImage={authToken && isAdmin ? uploadAdminBottleImage : undefined}

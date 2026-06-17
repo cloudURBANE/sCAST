@@ -43,6 +43,32 @@ export type BeamRunContext = {
   userId: string;
 };
 
+export type BeamSlotKey = "month" | "destination" | "occasion" | "vibe" | "direction" | "budget";
+
+export type BeamSessionSlots = Partial<Record<BeamSlotKey, string>>;
+
+export type BeamMissionIntent = "travel_kit" | "recommendation";
+
+export type BeamMissionState = {
+  intent?: BeamMissionIntent;
+  ownedCount?: number;
+  newCount?: number;
+  destination?: string;
+  month?: string;
+  userDelegatedChoice?: boolean;
+};
+
+export type BeamSessionState = {
+  slots: BeamSessionSlots;
+  mission?: BeamMissionState;
+  userDelegatedChoice?: boolean;
+};
+
+export type BeamSessionRecord = {
+  turns: ClaudeMessage[];
+  state: BeamSessionState;
+};
+
 /** Minimal JSON-schema shape Claude needs to advertise a tool. */
 export type BeamJsonSchema = {
   type: "object";
@@ -81,6 +107,12 @@ export type CandidatePacket = {
   /** 0..1 — how complete/trusted the underlying record is. */
   sourceConfidence: number;
   missingFields: string[];
+};
+
+export type BeamGroundedFragrance = {
+  canonicalName: string;
+  brand?: string;
+  owned: boolean;
 };
 
 /**

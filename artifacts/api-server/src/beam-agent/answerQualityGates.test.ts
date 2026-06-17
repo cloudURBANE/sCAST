@@ -51,10 +51,56 @@ test("over-length answers are flagged", () => {
   assert.ok(r.violations.includes("over_length"));
 });
 
+test("re-asking for a known month is rejected", () => {
+  const r = runAnswerQualityGates("What month are you going to Tokyo?", {
+    hadExternalEvidence: false,
+    sessionState: { slots: { month: "August", destination: "Tokyo" } },
+  });
+  assert.ok(r.violations.includes("redundant_clarification"));
+});
+
+test("fulfilled travel kit passes when required owned and new picks are named", () => {
+  const r = runAnswerQualityGates(
+    "Pack Aventus and Gabrielle from your vault. For new additions, line up Tam Dao and Philosykos.",
+    {
+      hadExternalEvidence: false,
+      sessionState: {
+        slots: { destination: "Tokyo", month: "August", vibe: "artsy" },
+        mission: { intent: "travel_kit", ownedCount: 2, newCount: 2, destination: "Tokyo", month: "August" },
+      },
+      groundedFragrances: [
+        { canonicalName: "Aventus", brand: "Creed", owned: true },
+        { canonicalName: "Gabrielle", brand: "Chanel", owned: true },
+        { canonicalName: "Tam Dao", brand: "Diptyque", owned: false },
+        { canonicalName: "Philosykos", brand: "Diptyque", owned: false },
+      ],
+    },
+  );
+  assert.equal(r.passed, true, JSON.stringify(r.violations));
+});
+
+test("travel kit fails when ready mission omits required owned or new picks", () => {
+  const r = runAnswerQualityGates("Aventus is the one to pack for Tokyo.", {
+    hadExternalEvidence: false,
+    sessionState: {
+      slots: { destination: "Tokyo", month: "August", vibe: "artsy" },
+      mission: { intent: "travel_kit", ownedCount: 2, newCount: 2, destination: "Tokyo", month: "August" },
+    },
+    groundedFragrances: [
+      { canonicalName: "Aventus", brand: "Creed", owned: true },
+      { canonicalName: "Gabrielle", brand: "Chanel", owned: true },
+      { canonicalName: "Tam Dao", brand: "Diptyque", owned: false },
+      { canonicalName: "Philosykos", brand: "Diptyque", owned: false },
+    ],
+  });
+  assert.ok(r.violations.includes("mission_unfulfilled"));
+});
+
 test("repairInstructionFor names the broken rules", () => {
-  const msg = repairInstructionFor(["price_without_evidence", "over_length"]);
+  const msg = repairInstructionFor(["price_without_evidence", "over_length", "mission_unfulfilled"]);
   assert.match(msg, /price/i);
   assert.match(msg, /concise/i);
+  assert.match(msg, /travel-kit/i);
 });
 
 test("non-string input is safe", () => {

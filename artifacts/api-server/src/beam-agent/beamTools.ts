@@ -80,6 +80,17 @@ export type BeamToolDeps = {
     query: string,
     opts?: { entityType?: string; depth?: string },
   ) => Promise<unknown>;
+  /**
+   * OPTIONAL curation hook: enqueue a recommended-but-uncatalogued fragrance for
+   * enrichment, tagged to the signed-in user (the route binds ctx.userId/tenantId).
+   * Called fire-and-forget for each `beam_propose_collection` entry that could NOT
+   * be resolved against the catalog, so the user gets a "ready to add" push once
+   * enrichment lands. Synchronous + void: the route's implementation kicks off the
+   * DB write without awaiting, and this is wrapped so it can NEVER throw into the
+   * tool result. When absent (lean deploys, tool tests), proposals behave exactly
+   * as before — unresolved names are simply dropped.
+   */
+  enqueueCuration?: (fragrance: { name: string; brand?: string }) => void;
   /** Deterministic weather scoring over the vault (kept in code, not the LLM). */
   scoreVault: (
     items: ScentMissionWardrobeItem[],
@@ -548,8 +559,20 @@ export function createBeamTools(deps: BeamToolDeps): BeamToolDefinition[] {
         for (const req of requested) {
           const flat = await resolveCatalogEntry(req.name, req.brand).catch(() => null);
           const built = flat ? buildProposalItem(flat) : null;
-          if (built) items.push(built);
-          else unresolved.push(req.brand ? `${req.brand} ${req.name}` : req.name);
+          if (built) {
+            items.push(built);
+          } else {
+            unresolved.push(req.brand ? `${req.brand} ${req.name}` : req.name);
+            // Curate the miss: enqueue it for enrichment so the user can add it
+            // once it lands in our catalog. Fire-and-forget on the route side; we
+            // still guard here so a wiring slip can NEVER throw into the tool
+            // result (which would surface to the model as a failed proposal).
+            try {
+              deps.enqueueCuration?.({ name: req.name, brand: req.brand });
+            } catch {
+              // Curation is a courtesy; never let it break the proposal.
+            }
+          }
         }
 
         const proposalId = `prop_${ctx.runId}_${Date.now().toString(36)}`;

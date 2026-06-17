@@ -415,6 +415,82 @@ test("a synthesis answer with an unsupported price is repaired once and the clea
   assert.ok((summary?.estimatedCostUsd ?? 0) > 0, "expected a non-zero cost estimate");
 });
 
+test("session state is injected and redundant known-slot clarification is repaired", async () => {
+  const toolCalls: { input: unknown }[] = [];
+  let completed: string | undefined;
+  let summary: BeamRunSummary | undefined;
+
+  const { callModel, seen } = scriptedModel([
+    {
+      stop_reason: "tool_use",
+      content: [{ type: "tool_use", id: "tu_1", name: "beam_get_wardrobe", input: {} }],
+    },
+    text("draft"),
+    text("What month are you going to Tokyo?"),
+    text("Wear Aventus for Tokyo in August."),
+  ]);
+
+  await runBeamAgent({
+    ctx,
+    userMessage: "August and artsy",
+    sessionState: { slots: { month: "August", destination: "Tokyo", vibe: "artsy" } },
+    tools: [wardrobeTool(toolCalls)],
+    emit: () => {},
+    isModelConfigured: () => true,
+    callModel,
+    onComplete: (t) => (completed = t),
+    onSummary: (s) => (summary = s),
+  });
+
+  assert.equal(completed, "Wear Aventus for Tokyo in August.");
+  assert.equal(summary?.qualityGatePassed, true);
+  assert.match(seen[0].system, /Known so far: .*month=August/i);
+
+  const repairCall = seen[seen.length - 1];
+  const folded = repairCall.messages
+    .flatMap((m) => (Array.isArray(m.content) ? m.content : [{ type: "text", text: m.content }]))
+    .map((b) => (b && typeof b === "object" && "text" in b ? String((b as { text: unknown }).text) : ""))
+    .join("\n");
+  assert.match(folded, /Do NOT ask for month/i);
+});
+
+test("pre-tool cue clarification that re-asks known state is nudged instead of completed", async () => {
+  const toolCalls: { input: unknown }[] = [];
+  let completed: string | undefined;
+  const { callModel, seen } = scriptedModel([
+    text("What month are you going?\n```cues\nAugust\nSeptember\n```"),
+    {
+      stop_reason: "tool_use",
+      content: [{ type: "tool_use", id: "tu_1", name: "beam_get_wardrobe", input: {} }],
+    },
+    text("draft"),
+    text("Wear Aventus for Tokyo in August."),
+  ]);
+
+  await runBeamAgent({
+    ctx,
+    userMessage: "August and artsy",
+    sessionState: { slots: { month: "August", destination: "Tokyo", vibe: "artsy" } },
+    tools: [wardrobeTool(toolCalls)],
+    emit: () => {},
+    isModelConfigured: () => true,
+    callModel,
+    onComplete: (t) => (completed = t),
+  });
+
+  assert.equal(completed, "Wear Aventus for Tokyo in August.");
+  assert.equal(toolCalls.length, 1);
+  const sentStateNudge = seen.some((call) =>
+    call.messages.some(
+      (m) =>
+        m.role === "user" &&
+        typeof m.content === "string" &&
+        /structured session state/i.test(m.content),
+    ),
+  );
+  assert.ok(sentStateNudge, "expected a state nudge instead of completing the cue question");
+});
+
 test("an unconfigured model fails gracefully with a summary", async () => {
   const events: BeamRunEvent[] = [];
   let summary: BeamRunSummary | undefined;

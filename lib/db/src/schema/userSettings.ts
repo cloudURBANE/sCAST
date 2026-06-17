@@ -35,6 +35,13 @@ export const userSettingsTable = pgTable(
     // (pushService.sendCategoryPushToUser) reads these before dispatching.
     notifyWeather: boolean("notify_weather").notNull().default(true),
     notifyCommunity: boolean("notify_community").notNull().default(true),
+    // Beam curation: fired when an agent-recommended fragrance that wasn't in our
+    // catalog finishes enriching, so the user can add it on return. Defaults true
+    // like the others. NOTE: this column is additive — a deploy does NOT run
+    // `drizzle-kit push` automatically, so until `pnpm --filter @workspace/db run
+    // push` is applied this column won't exist in the live DB; the push-preference
+    // reads in pushService.ts catch 42703 and degrade to "on" so sends still work.
+    notifyCuration: boolean("notify_curation").notNull().default(true),
     // Server-authoritative app-icon badge count. The App Badge API exposes ONE
     // number per installed icon, so it lives per-user (not per-subscription):
     // each eligible push increments it, opening the app clears it to 0. Source of

@@ -645,6 +645,14 @@ interface WardrobeContextType {
   wardrobeError: string | null;
   /** True when the signed-in user is an admin (server-confirmed via app-state). */
   isAdmin: boolean;
+  /**
+   * A fragrance queued to open in the wardrobe detail modal from OUTSIDE the
+   * wardrobe (the Scent Mission proposal's "View", a curation deep-link). The
+   * detail modal lives in the lazy-mounted Wardrobe, so cross-view opens hand the
+   * target through here instead of lifting the whole modal up to App. Null when
+   * nothing is queued; the modal consumes it via `consumePendingDetailOpen`.
+   */
+  pendingDetailOpen: Fragrance | null;
   /** True while a freshly-added imageless tile is actively backfilling its image. */
   isImageSyncing: (item: Pick<Fragrance, 'id' | '_dbId'>) => boolean;
   retryLoadWardrobe: () => void;
@@ -676,6 +684,15 @@ interface WardrobeContextType {
   closeRecommendationOverlay: () => void;
   handleVaultSearchStateChange: (active: boolean) => void;
   handleExpandArchive: (options?: { target?: 'hero' | 'vault' }) => void;
+  /**
+   * Open a fragrance — which may NOT be in the vault — in the wardrobe detail
+   * modal, app-wide. Queues `pendingDetailOpen` and scrolls the vault section
+   * into view so the lazy Wardrobe mounts/reveals and its modal picks the target
+   * up. Used by the Beam proposal "View" and the curation resume flow.
+   */
+  openFragranceDetail: (fragrance: Fragrance) => void;
+  /** Detail modal: clear the queued fragrance once it has been opened. */
+  clearPendingDetailOpen: () => void;
 }
 
 const WardrobeContext = createContext<WardrobeContextType | undefined>(undefined);
@@ -707,6 +724,9 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // Admin flag from GET /api/me/app-state. UI hint only — the upload route
   // enforces admin access server-side regardless of this value.
   const [isAdmin, setIsAdmin] = useState(false);
+  // A fragrance queued to open in the (lazy-mounted) wardrobe detail modal from
+  // another view. See `openFragranceDetail` / `consumePendingDetailOpen`.
+  const [pendingDetailOpen, setPendingDetailOpen] = useState<Fragrance | null>(null);
 
   const autoWardrobeRebuildAttemptedRef = useRef(false);
   const enrichmentRefreshInFlightRef = useRef(false);
@@ -1798,6 +1818,26 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setActiveEngineRecommendation(null);
   }, []);
 
+  // Cross-view detail open. The wardrobe detail modal is owned by the lazy
+  // Wardrobe component (the vault section), which is far down the page and may
+  // not be mounted/visible when the user taps "View" in the Beam proposal up in
+  // the hero, or follows a curation deep-link. Rather than lift that whole modal
+  // up to App, we queue the target here and scroll the vault section into view;
+  // mounting/revealing the Wardrobe lets its modal consume the pending target.
+  // Scrolling is best-effort (the element may not exist yet on first paint).
+  const openFragranceDetail = useCallback((fragrance: Fragrance) => {
+    setPendingDetailOpen(fragrance);
+    if (typeof document !== 'undefined') {
+      document
+        .getElementById('scent-vault-section')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, []);
+
+  const clearPendingDetailOpen = useCallback(() => {
+    setPendingDetailOpen(null);
+  }, []);
+
   // Hydrate local guest items whenever there is no signed-in wardrobe.
   useEffect(() => {
     if (!authToken) {
@@ -1832,6 +1872,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     wardrobeFixHint,
     vaultSearchUiActive,
     isAdmin,
+    pendingDetailOpen,
     isImageSyncing,
     setItems,
     setIsIntentModalOpen,
@@ -1853,6 +1894,8 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     closeRecommendationOverlay,
     handleVaultSearchStateChange,
     handleExpandArchive,
+    openFragranceDetail,
+    clearPendingDetailOpen,
   }), [
     items,
     wardrobeLoaded,
@@ -1870,6 +1913,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     wardrobeFixHint,
     vaultSearchUiActive,
     isAdmin,
+    pendingDetailOpen,
     isImageSyncing,
     loadWardrobe,
     retryLoadWardrobe,
@@ -1883,6 +1927,8 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     closeRecommendationOverlay,
     handleVaultSearchStateChange,
     handleExpandArchive,
+    openFragranceDetail,
+    clearPendingDetailOpen,
   ]);
 
   const shareModalActions = useMemo<Pick<WardrobeContextType, 'setIsShareModalOpen'>>(() => ({

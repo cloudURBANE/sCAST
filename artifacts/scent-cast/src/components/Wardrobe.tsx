@@ -44,6 +44,7 @@ import {
 } from '@/lib/bottleImageAdjustment';
 import { BottleImage } from '@/components/BottleImage';
 import { VaultCard } from '@/components/VaultCard';
+import { vaultIdentityKey } from '@/lib/vaultIdentity';
 import { betaVideoUrlForFragrance } from '@/lib/bottleVideoBeta';
 import { BrandGoldLabel } from '@/components/BrandGoldLabel';
 import { VaultGridModeToggle } from '@/components/VaultGridModeToggle';
@@ -957,6 +958,21 @@ const VaultEmptyEmblem: React.FC = () => (
 export const Wardrobe: React.FC<{
   items: Fragrance[];
   onDelete: (item: Fragrance) => void | Promise<void>;
+  /**
+   * Add a fragrance to the vault through the normal wardrobe-add path (App's
+   * `handleAddItem`). Used by the detail modal's "Add to vault" CTA, which is
+   * shown — in place of Delete — only when the open fragrance is NOT yet owned
+   * (e.g. opened from a Beam proposal "View" or a curation deep-link).
+   */
+  onAdd?: (item: Fragrance) => void | Promise<{ persisted: boolean; requiresAuth?: boolean; error?: string }>;
+  /**
+   * A fragrance queued (from another view) to open in the detail modal. The
+   * modal mounts here, so cross-view opens flow in through this prop instead of
+   * lifting the modal up to App. Consumed once via `onClearPendingDetailOpen`.
+   */
+  pendingDetailOpen?: Fragrance | null;
+  /** Clear `pendingDetailOpen` after the detail modal has opened it. */
+  onClearPendingDetailOpen?: () => void;
   /** Persist the preview image to the vault row (authenticated). */
   onPersistWardrobeImage?: (
     item: Fragrance,
@@ -992,6 +1008,9 @@ export const Wardrobe: React.FC<{
 }> = ({
   items,
   onDelete,
+  onAdd,
+  pendingDetailOpen,
+  onClearPendingDetailOpen,
   onPersistWardrobeImage,
   isAdmin = false,
   onUploadBottleImage,
@@ -1160,6 +1179,10 @@ export const Wardrobe: React.FC<{
   const [deleteConfirming, setDeleteConfirming] = React.useState(false);
   const [deleteBusy, setDeleteBusy] = React.useState(false);
   const [deleteError, setDeleteError] = React.useState<string | null>(null);
+  // "Add to vault" state, shown in place of Delete when the open fragrance is not
+  // owned (a Beam proposal / curation pick the user is previewing).
+  const [addBusy, setAddBusy] = React.useState(false);
+  const [addError, setAddError] = React.useState<string | null>(null);
   const detailModalRef = React.useRef<HTMLDivElement | null>(null);
   const detailOpenCountRef = React.useRef(0);
   const detailCloseButtonRef = React.useRef<HTMLButtonElement | null>(null);
@@ -1183,6 +1206,8 @@ export const Wardrobe: React.FC<{
     setRefreshError(null);
     setPendingPreview(null);
     setDeleteConfirming(false);
+    setAddBusy(false);
+    setAddError(null);
     setFrameDraft(normalizeBottleImageAdjustment(item.imageAdjustment));
     setSelectedItem(item);
   }, []);
@@ -1212,8 +1237,21 @@ export const Wardrobe: React.FC<{
     setEnlargeOpen(false);
     setBottleImageToolsOpen(false);
     setDeleteConfirming(false);
+    setAddBusy(false);
+    setAddError(null);
     setFrameDraft(DEFAULT_BOTTLE_IMAGE_ADJUSTMENT);
   }, [ipadSafariPerformanceMode, selectedItem, stackedDetailMode]);
+
+  // Cross-view detail open: another view (the Beam proposal "View", a curation
+  // deep-link) queued a fragrance through WardrobeContext; the host hands it down
+  // as `pendingDetailOpen`. Open it in this modal exactly once, then clear the
+  // queue so it doesn't re-open. The fragrance may NOT be in the vault — that is
+  // expected, and drives the "Add to vault" footer below.
+  React.useEffect(() => {
+    if (!pendingDetailOpen) return;
+    openDetail(pendingDetailOpen);
+    onClearPendingDetailOpen?.();
+  }, [pendingDetailOpen, openDetail, onClearPendingDetailOpen]);
 
   const closeEnlargedBottle = React.useCallback(() => {
     setEnlargeOpen(false);
@@ -1655,6 +1693,27 @@ export const Wardrobe: React.FC<{
   const detailScrollClassName = constrainedDetailMode
     ? "flex-1 overflow-y-auto scrollbar-hide px-4 sm:px-5 pb-4"
     : "flex-1 overflow-y-auto scrollbar-hide px-4 sm:px-7 lg:px-10 pb-4";
+  // Is the open fragrance already in the vault? Brand+name identity is the stable
+  // signal (an add swaps the engine id for a fresh local id), so we compare on
+  // `vaultIdentityKey` — the SAME normalization FragranceCapture's duplicate
+  // detection uses. A vault-resident item keeps Delete; a not-yet-owned preview
+  // (opened from a Beam proposal "View" / curation deep-link) shows "Add to vault"
+  // instead. Memoized off the vault keys so it doesn't recompute every render.
+  const vaultIdentityKeys = React.useMemo(() => {
+    const keys = new Set<string>();
+    for (const item of items) {
+      const key = vaultIdentityKey(entryBrand(item), entryName(item));
+      if (key) keys.add(key);
+    }
+    return keys;
+  }, [items]);
+  const selectedItemOwned = selectedItem
+    ? (() => {
+        const key = vaultIdentityKey(entryBrand(selectedItem), entryName(selectedItem));
+        return key.length > 0 && vaultIdentityKeys.has(key);
+      })()
+    : true;
+
   const detailTitleClassName = constrainedDetailMode
     ? "font-serif italic text-4xl sm:text-5xl leading-[0.95] text-[#fff7ec] tracking-normal uppercase"
     : "font-serif italic text-5xl sm:text-7xl lg:text-8xl leading-[0.92] text-[#fff7ec] tracking-normal uppercase";
@@ -2860,6 +2919,9 @@ export const Wardrobe: React.FC<{
                 {deleteError && (
                   <p role="alert" className="text-sm text-red-100 text-center leading-snug px-2 py-1">{deleteError}</p>
                 )}
+                {addError && (
+                  <p role="alert" className="text-sm text-red-100 text-center leading-snug px-2 py-1">{addError}</p>
+                )}
 
 
 
@@ -2880,6 +2942,11 @@ export const Wardrobe: React.FC<{
                   >
                     {deleteConfirming ? 'Go back' : 'Close'}
                   </button>
+                  {/* Owned items keep Delete exactly as before. A not-yet-owned
+                      preview (Beam proposal "View" / curation deep-link) swaps the
+                      right cell for an "Add to vault" CTA that routes through the
+                      normal wardrobe-add path (`onAdd` → App's handleAddItem). */}
+                  {selectedItemOwned ? (
                   <button
                     type="button"
                     onPointerUp={(event) => event.currentTarget.blur()}
@@ -2927,6 +2994,46 @@ export const Wardrobe: React.FC<{
                     </span>
                     <span className="sm:hidden">{deleteBusy ? 'Deleting…' : deleteConfirming ? 'Confirm' : 'Delete'}</span>
                   </button>
+                  ) : (
+                  <button
+                    type="button"
+                    onPointerUp={(event) => event.currentTarget.blur()}
+                    onClick={() => {
+                      if (addBusy || !onAdd) return;
+                      setAddBusy(true);
+                      setAddError(null);
+                      void (async () => {
+                        try {
+                          const result = await onAdd(selectedItem);
+                          // `onAdd` (handleAddItem) returns a status object for the
+                          // signed-in/guest paths; treat a non-persist that needs
+                          // auth as a soft prompt (the auth modal opens), otherwise
+                          // surface the error inline and keep the preview open.
+                          if (result && !result.persisted && !result.requiresAuth) {
+                            setAddError(result.error || 'Could not add to your vault — please try again.');
+                            return;
+                          }
+                          closeDetail();
+                        } catch {
+                          setAddError('Could not add to your vault — please try again.');
+                        } finally {
+                          setAddBusy(false);
+                        }
+                      })();
+                    }}
+                    disabled={imageToolbarBusy || addBusy || !onAdd}
+                    aria-busy={addBusy}
+                    aria-label={addBusy ? 'Adding to vault' : 'Add to vault'}
+                    className="scent-no-mobile-focus-ring group flex min-h-[46px] items-center justify-center gap-2 px-3 py-3 scent-type-chip text-scent-accent transition-all hover:bg-scent-accent/[0.08] hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {addBusy ? (
+                      <RefreshCw size={14} strokeWidth={1.75} className="animate-spin" aria-hidden />
+                    ) : (
+                      <Sparkles size={14} strokeWidth={1.75} aria-hidden />
+                    )}
+                    <span>{addBusy ? 'Adding…' : 'Add to vault'}</span>
+                  </button>
+                  )}
                 </div>
               </div>
             </motion.div>

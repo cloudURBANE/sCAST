@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   Check,
   ChevronDown,
+  Eye,
   Loader2,
   Lock,
   RefreshCw,
@@ -36,6 +37,7 @@ import {
   buildMissionWeather,
   findWardrobeMatch,
   missionProgress,
+  proposalItemToFragrance,
 } from '@/lib/scentMissionClient';
 import {
   humanizeBeamTool,
@@ -732,6 +734,13 @@ interface ScentMissionPanelProps {
   onExit: () => void;
   /** Open the existing recommendation overlay with the resolved match. */
   onRevealMatch: (item: Fragrance, engine: ScentWeatherRecommendation, reason: string) => void;
+  /**
+   * Open a proposed fragrance in the wardrobe detail card (app-wide). Provided by
+   * the host, which bridges to WardrobeContext's `openFragranceDetail`; the detail
+   * modal then offers "Add to vault" since the pick is not yet owned. Absent → the
+   * per-item "View" affordance is hidden.
+   */
+  onViewProposalItem?: (fragrance: Fragrance) => void;
   /** Report progress so the host can render the header strip above the card. */
   onStatusChange?: (status: ScentMissionStatus) => void;
   /**
@@ -755,6 +764,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   authToken,
   onExit,
   onRevealMatch,
+  onViewProposalItem,
   onStatusChange,
   cueBarContainer,
   onCurateCollection,
@@ -1583,6 +1593,16 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
     onRevealMatch(proposalReveal.fragrance, proposalReveal.engine, proposalReveal.reason);
   }, [onRevealMatch, proposalReveal]);
 
+  // Per-item "View": open a proposed (not-yet-owned) fragrance in the wardrobe
+  // detail card, where the user can add it to the vault. Builds a throwaway
+  // `Fragrance` from the proposal item via the same mapping the reveal uses.
+  const handleViewProposalItem = useCallback(
+    (item: BeamProposalItem) => {
+      onViewProposalItem?.(proposalItemToFragrance(item));
+    },
+    [onViewProposalItem],
+  );
+
   // The placeholder doubles as the instructions: tap a cue below to fill this
   // field, or type — then send. Keeps the flow self-evident with no extra chrome.
   // Once a recommendation is on screen the composer is no longer a cold-start
@@ -2326,16 +2346,28 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                 {proposalReveal.reason}
               </motion.p>
 
-              <motion.button
-                variants={revealItem}
-                type="button"
-                onClick={handleRevealProposalHero}
-                aria-label={`Reveal your match: ${proposalReveal.fragrance.name}`}
-                className="scent-primary-button mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-[var(--radius-scent)] px-5 py-2.5"
-              >
-                <Sparkles size={15} aria-hidden />
-                <span className="font-serif italic text-base">Reveal Match</span>
-              </motion.button>
+              <motion.div variants={revealItem} className="mt-4 flex flex-wrap items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={handleRevealProposalHero}
+                  aria-label={`Reveal your match: ${proposalReveal.fragrance.name}`}
+                  className="scent-primary-button inline-flex min-h-11 items-center justify-center gap-2 rounded-[var(--radius-scent)] px-5 py-2.5"
+                >
+                  <Sparkles size={15} aria-hidden />
+                  <span className="font-serif italic text-base">Reveal Match</span>
+                </button>
+                {onViewProposalItem ? (
+                  <button
+                    type="button"
+                    onClick={() => handleViewProposalItem(proposal.items[0])}
+                    aria-label={`View details for ${proposalReveal.fragrance.name}`}
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-[var(--radius-scent)] border border-scent-accent/42 px-4 py-2.5 scent-type-chip text-[12px] text-[#fff7ec] transition-colors hover:bg-scent-accent/12"
+                  >
+                    <Eye size={14} aria-hidden />
+                    <span>View</span>
+                  </button>
+                ) : null}
+              </motion.div>
 
               {proposal.items.length > 1 ? (
                 <motion.div variants={revealItem} className="mt-4">
@@ -2346,6 +2378,17 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                       <li key={`${item.brand}-${item.name}-${index}`} className="flex min-w-0 items-baseline justify-between gap-3">
                         <span className="min-w-0 flex-1 truncate font-serif italic text-[13px] text-[#fff7ec] sm:text-sm">{item.name}</span>
                         <span className="scent-type-label shrink-0 text-scent-text-subtle">{item.brand}</span>
+                        {onViewProposalItem ? (
+                          <button
+                            type="button"
+                            onClick={() => handleViewProposalItem(item)}
+                            aria-label={`View details for ${item.name}`}
+                            className="inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 scent-type-label text-scent-accent transition-colors hover:text-[#fff7ec]"
+                          >
+                            <Eye size={13} aria-hidden />
+                            <span>View</span>
+                          </button>
+                        ) : null}
                       </li>
                     ))}
                   </ul>

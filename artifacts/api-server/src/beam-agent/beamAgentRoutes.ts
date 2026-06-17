@@ -40,12 +40,14 @@ import { missionItemFromWardrobeRow } from "../services/scentMissionService";
 import { searchCatalogCandidates, flattenProfile, getCatalogEntry } from "../services/catalogService";
 import { getScentFacts } from "../lib/scent-facts/engine";
 import { getBeamUserUsageSince, recordBeamRunUsage } from "../services/apiUsageLedger";
+import { enqueueBeamCuration } from "../services/curationService";
 import { createBeamTools, type BeamCatalogHit, type BeamToolDeps } from "./beamTools.ts";
 import { runBeamAgent } from "./beamAgentLoop.ts";
 import { packetFromWardrobeRow, redactEventForClient } from "./beamToolCore.ts";
 import { resolveBeamModels } from "./provider.ts";
 import { selectConciergeLane } from "./laneSelector.ts";
-import { appendSessionTurn, loadSessionHistory } from "./beamSessionStore.ts";
+import { appendSessionTurn, loadSession, saveSessionState } from "./beamSessionStore.ts";
+import { deriveBeamSessionState } from "./missionState.ts";
 import type { BeamEmit, BeamRunContext, BeamRunEvent, CandidatePacket } from "./types.ts";
 import { createBeamResearcher } from "./research/beamResearch.ts";
 import { loadResearchCache, saveResearchCache } from "./research/researchCache.ts";
@@ -221,7 +223,7 @@ const beamResearchWeb = createBeamResearcher({
   isEnabled: isResearchEnabled,
 });
 
-function buildDeps(weather: ScentMissionWeather): BeamToolDeps {
+function buildDeps(ctx: BeamRunContext, weather: ScentMissionWeather): BeamToolDeps {
   return {
     loadVault,
     loadWardrobePackets,
@@ -229,6 +231,20 @@ function buildDeps(weather: ScentMissionWeather): BeamToolDeps {
     resolveCatalogEntry: resolveCatalogEntryForBeam,
     research: researchForBeam,
     researchWeb: beamResearchWeb,
+    // Curation hook: when a proposed fragrance isn't in our catalog, enqueue it
+    // for enrichment tagged to THIS authenticated user (scope comes from ctx, never
+    // model args). Fire-and-forget — the beam loop must not wait on (or fail from)
+    // a queue write — so we kick the promise and swallow any error.
+    enqueueCuration: (fragrance) => {
+      void enqueueBeamCuration({
+        userId: ctx.userId,
+        tenantId: ctx.tenantId,
+        name: fragrance.name,
+        brand: fragrance.brand,
+      }).catch((err) => {
+        logger.warn({ err, user: hashUser(ctx.userId) }, "beam curation enqueue failed");
+      });
+    },
     scoreVault: (items, calibration, currentWeather) =>
       selectScentMissionRecommendation(items, calibration, currentWeather),
     rankVault: (items, calibration, currentWeather) =>
@@ -301,9 +317,12 @@ router.post("/runs", runRateLimit, requireAuth, async (req: AuthRequest, res) =>
   };
   runs.set(runId, record);
 
-  const tools = createBeamTools(buildDeps(weather));
+  const tools = createBeamTools(buildDeps(ctx, weather));
   const emit = makeEmit(record);
-  const history = await loadSessionHistory(ctx);
+  const session = await loadSession(ctx);
+  const history = session.turns;
+  const sessionState = deriveBeamSessionState(session.state, message);
+  await saveSessionState(ctx, sessionState);
   // Pick the cost lane deterministically (brief §03.2) from the message + how much
   // context the session already carries — no extra router LLM call. The premium
   // lane runs MiniMax M3 end-to-end; the default lane runs cheap M2.5 orchestration.
@@ -323,9 +342,10 @@ router.post("/runs", runRateLimit, requireAuth, async (req: AuthRequest, res) =>
     model: models?.model,
     synthesisModel: models?.synthesisModel,
     history,
+    sessionState,
     onComplete: (assistantText) => {
       // Best-effort, fire-and-forget (like the usage-ledger write below).
-      void appendSessionTurn(ctx, message, assistantText);
+      void appendSessionTurn(ctx, message, assistantText, sessionState);
     },
     onSummary: (summary) => {
       logger.info(

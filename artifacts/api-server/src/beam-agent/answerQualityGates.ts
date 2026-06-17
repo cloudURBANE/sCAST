@@ -1,27 +1,25 @@
 /**
- * Beam Agent — deterministic answer quality gates (brief §08.1, §01.3, §08.2).
+ * Beam Agent deterministic answer quality gates.
  *
- * The cost-optimized stack drops the separate verification LLM and moves trust
- * into deterministic checks (brief §00.2). This module is that replacement: a
- * pure, fast pass over the final answer that blocks the specific unsupported
- * claims the brief forbids — inventing prices, availability/stock, or review
- * scores without fresh external evidence — plus a prompt-injection-leak guard and
- * a length budget.
- *
- * It is intentionally SOUND (designed to avoid false positives on a normal,
- * grounded recommendation): fragrance-name grounding is already enforced upstream
- * mechanically by the synthesis allowlist (beamAgentLoop.ts groundingAllowlistClause),
- * so the gates here cover the external-fact surface that allowlist does not.
+ * These checks are pure and fast. The loop already constrains fragrance names to
+ * tool results; this module blocks unsupported external claims, instruction
+ * leaks, overlong answers, redundant clarifications for known slots, and
+ * travel-kit answers that do not fulfill the required owned/new counts.
  */
+import type { BeamGroundedFragrance, BeamSessionState } from "./types.ts";
+
 export type QualityGateInput = {
   /**
-   * True when the run actually gathered a fresh external fact this turn (the
-   * research lane returned a real fact, not a "note"). When false, any price /
-   * availability / review claim in the answer is unsupported and is rejected.
+   * True when the run actually gathered a fresh external fact this turn. When
+   * false, price / availability / review claims are unsupported.
    */
   hadExternalEvidence: boolean;
-  /** Max answer length in characters (brief §08.1 response_under_token_budget). */
+  /** Max answer length in characters. */
   maxChars?: number;
+  /** Structured state extracted from user messages, used for memory/mission gates. */
+  sessionState?: BeamSessionState;
+  /** Tool-grounded fragrance names with ownership, used for mission fulfillment gates. */
+  groundedFragrances?: BeamGroundedFragrance[];
 };
 
 export type QualityGateResult = {
@@ -29,7 +27,7 @@ export type QualityGateResult = {
   violations: string[];
 };
 
-/** ~4k chars ≈ the synthesis token budget; generous so premium answers don't trip it. */
+/** ~4k chars is generous enough for premium answers without tripping normal prose. */
 const DEFAULT_MAX_CHARS = 4000;
 
 /** A price figure: a `$`-prefixed number, or a number followed by a currency word. */
@@ -48,6 +46,73 @@ const REVIEW_PATTERN =
 const LEAKED_INSTRUCTION_PATTERN =
   /\b(?:ignore (?:all|any|the|previous|above) (?:instructions?|prompts?)|disregard (?:all|any|the|previous|above)|you are now (?:a|an)\b|system prompt)\b|<\/?(?:system|instructions?)>|^\s*(?:system|assistant)\s*:/im;
 
+function asksForKnownSlot(text: string, state: BeamSessionState | undefined): boolean {
+  const slots = state?.slots ?? {};
+  if (!/[?]|\b(?:tell me|let me know|which|what|when|where)\b/i.test(text)) return false;
+  if (
+    slots.month &&
+    /\b(?:what|which)\s+month\b|\bwhen\s+(?:are|will|do|is).{0,60}\b(?:go|going|travel|trip|leave)\b|\b(?:travel\s+dates?|what\s+dates?|which\s+season|time\s+of\s+year)\b/i.test(text)
+  ) {
+    return true;
+  }
+  if (
+    slots.destination &&
+    /\bwhere\s+(?:are|will|do|is).{0,60}\b(?:go|going|travel|trip)\b|\b(?:what|which)\s+(?:city|destination)\b/i.test(text)
+  ) {
+    return true;
+  }
+  if (
+    (slots.vibe || slots.direction) &&
+    /\b(?:what|which)\s+(?:vibe|mood|direction|style|feel)\b|\b(?:lighter|fresh|warmer|richer)\b.{0,50}\?/i.test(text)
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function missionReadyForFulfillment(state: BeamSessionState | undefined): boolean {
+  const mission = state?.mission;
+  if (mission?.intent !== "travel_kit") return false;
+  if (state?.userDelegatedChoice || mission.userDelegatedChoice) return true;
+  const slots = state?.slots ?? {};
+  const hasPlace = Boolean(slots.destination || slots.occasion || mission.destination);
+  const hasTiming = Boolean(slots.month || mission.month || slots.occasion);
+  const hasDirection = Boolean(slots.vibe || slots.direction);
+  return hasPlace && hasTiming && hasDirection;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function normalizedNameVariants(item: BeamGroundedFragrance): string[] {
+  const variants = [item.canonicalName];
+  if (item.brand) variants.push(`${item.brand} ${item.canonicalName}`);
+  return variants
+    .map((value) => value.trim())
+    .filter((value, index, arr) => value && arr.findIndex((v) => v.toLowerCase() === value.toLowerCase()) === index);
+}
+
+function answerMentionsFragrance(answerText: string, item: BeamGroundedFragrance): boolean {
+  for (const variant of normalizedNameVariants(item)) {
+    const pattern = new RegExp(`(^|[^a-z0-9])${escapeRegExp(variant)}([^a-z0-9]|$)`, "i");
+    if (pattern.test(answerText)) return true;
+  }
+  return false;
+}
+
+function countMissionPicks(answerText: string, grounded: BeamGroundedFragrance[]): { owned: number; new: number } {
+  const owned = new Set<string>();
+  const fresh = new Set<string>();
+  for (const item of grounded) {
+    if (!answerMentionsFragrance(answerText, item)) continue;
+    const key = `${item.brand ?? ""}::${item.canonicalName}`.toLowerCase();
+    if (item.owned) owned.add(key);
+    else fresh.add(key);
+  }
+  return { owned: owned.size, new: fresh.size };
+}
+
 /**
  * Evaluate the final answer. Returns the list of violated gate names (empty when
  * the answer passes). Pure; never throws.
@@ -62,6 +127,20 @@ export function runAnswerQualityGates(answerText: string, input: QualityGateInpu
     if (AVAILABILITY_PATTERN.test(text)) violations.push("availability_without_evidence");
     if (REVIEW_PATTERN.test(text)) violations.push("review_claim_without_evidence");
   }
+  if (asksForKnownSlot(text, input.sessionState)) violations.push("redundant_clarification");
+
+  const mission = input.sessionState?.mission;
+  if (
+    mission?.intent === "travel_kit" &&
+    missionReadyForFulfillment(input.sessionState) &&
+    ((mission.ownedCount ?? 0) > 0 || (mission.newCount ?? 0) > 0)
+  ) {
+    const counts = countMissionPicks(text, input.groundedFragrances ?? []);
+    if (counts.owned < (mission.ownedCount ?? 0) || counts.new < (mission.newCount ?? 0)) {
+      violations.push("mission_unfulfilled");
+    }
+  }
+
   if (LEAKED_INSTRUCTION_PATTERN.test(text)) violations.push("leaked_external_instruction");
   if (text.length > maxChars) violations.push("over_length");
 
@@ -69,18 +148,21 @@ export function runAnswerQualityGates(answerText: string, input: QualityGateInpu
 }
 
 /**
- * A short instruction appended to a constrained re-synthesis when gates fail
- * (brief §08.1 if_fail → "regenerate once with error feedback"). Maps each gate
- * to a concrete fix the model can act on.
+ * A short instruction appended to a constrained re-synthesis when gates fail.
+ * Maps each gate to a concrete fix the model can act on.
  */
 export function repairInstructionFor(violations: string[]): string {
   const fixes: string[] = [];
   if (violations.includes("price_without_evidence"))
-    fixes.push("Do NOT state any price — you have no fresh price evidence; say the price needs confirmation.");
+    fixes.push("Do NOT state any price - you have no fresh price evidence; say the price needs confirmation.");
   if (violations.includes("availability_without_evidence"))
-    fixes.push("Do NOT claim stock/availability/discontinued status — you have no fresh source for it.");
+    fixes.push("Do NOT claim stock/availability/discontinued status - you have no fresh source for it.");
   if (violations.includes("review_claim_without_evidence"))
-    fixes.push("Do NOT cite ratings or review scores — you have no fresh source for them.");
+    fixes.push("Do NOT cite ratings or review scores - you have no fresh source for them.");
+  if (violations.includes("redundant_clarification"))
+    fixes.push("Do NOT ask for month, destination, vibe, or direction already present in Known so far; use the known value.");
+  if (violations.includes("mission_unfulfilled"))
+    fixes.push("Fulfill the travel-kit target: name the required count of owned vault picks and new unowned picks from the grounded tool results.");
   if (violations.includes("leaked_external_instruction"))
     fixes.push("Remove any instruction-like text; answer only as the concierge.");
   if (violations.includes("over_length")) fixes.push("Be more concise.");
