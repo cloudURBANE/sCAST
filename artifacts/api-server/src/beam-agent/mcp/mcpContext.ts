@@ -9,7 +9,7 @@ import { randomUUID } from "node:crypto";
 import type { BeamRunContext } from "../types.ts";
 import type { BeamScope, DelegationClaims } from "./delegationToken.ts";
 
-/** Every read scope a Phase-1 owner token should carry. */
+/** Every read scope an owner token should carry. */
 export const ALL_READ_SCOPES: BeamScope[] = [
   "beam:user-context:read",
   "beam:wardrobe:read",
@@ -18,6 +18,7 @@ export const ALL_READ_SCOPES: BeamScope[] = [
   "beam:score:read",
   "beam:overlap:read",
   "beam:research:read",
+  "beam:present:read",
 ];
 
 /**
@@ -38,6 +39,15 @@ export const SCOPE_TOOL_MAP: Record<BeamScope, readonly string[]> = {
   // (returns a `note`) until BEAM_RESEARCH_ENABLED + OPENROUTER_API_KEY are set.
   "beam:overlap:read": ["beam_compare_overlap"],
   "beam:research:read": ["beam_research_web"],
+  // Catalog-resolution + presentation tools. Built only when the MCP service
+  // wires `resolveCatalogEntry` (see beamServiceDeps); read-only (the proposal/
+  // kit "new" lane is add-ready but never written without the user's Confirm).
+  "beam:present:read": [
+    "beam_propose_collection",
+    "beam_show_scent_profile",
+    "beam_compare_fragrances",
+    "beam_present_travel_kit",
+  ],
 };
 
 /** Resolve the set of tool names a set of scopes is allowed to use. */

@@ -20,7 +20,12 @@ import { createHmac, timingSafeEqual, randomUUID } from "node:crypto";
 export const BEAM_TOKEN_ISS = "scentbeam-api";
 export const BEAM_TOKEN_AUD = "beam-tools";
 
-/** Read-only scopes for Phase-1 tools. Write scopes are deliberately absent. */
+/**
+ * Read-only scopes for the Beam tool surface. Write scopes are deliberately
+ * absent — even the "present" tools (proposal + UI cards) only resolve catalog/
+ * vault records and emit add-ready payloads; the actual vault write is always the
+ * user's explicit Confirm in the app, never a tool side-effect.
+ */
 export type BeamScope =
   | "beam:user-context:read"
   | "beam:wardrobe:read"
@@ -28,7 +33,8 @@ export type BeamScope =
   | "beam:details:read"
   | "beam:score:read"
   | "beam:overlap:read"
-  | "beam:research:read";
+  | "beam:research:read"
+  | "beam:present:read";
 
 export type DelegationClaims = {
   iss: string;

@@ -42,11 +42,13 @@ import {
 import {
   humanizeBeamTool,
   runBeamAgentMission,
+  type BeamCard as BeamCardData,
   type BeamProposalItem,
   type BeamSuggestion,
 } from '@/lib/beamAgentClient';
 import { formatAgentResponse } from '@/lib/beamMessageFormat';
 import { BeamMessage } from '@/components/BeamMessage';
+import { BeamCard } from '@/components/BeamCard';
 import type { Fragrance } from '@/components/Wardrobe';
 import type { WeatherData } from '@/context/WeatherContext';
 import { useDragToScroll } from '@/hooks/useDragToScroll';
@@ -62,8 +64,12 @@ const SCENT_MISSION_ENDPOINT = API_BASE_URL
 
 type PanelMessage = {
   id: string;
-  role: 'agent' | 'user' | 'system';
+  role: 'agent' | 'user' | 'system' | 'card';
   text: string;
+  // A native UI card the agent surfaced this turn (role 'card'). Rendered as its
+  // own conversation artifact via `BeamCard`, separate from the text answer so it
+  // never affects the agent-answer/recap/scroll-anchor bookkeeping.
+  card?: BeamCardData;
   // Per-turn "thinking" trail, frozen onto the agent reply it produced. Rendered
   // as a collapsible "Thought for Ns · N steps" recap ABOVE this answer (the
   // ChatGPT / Claude pattern), so each turn keeps its own steps instead of one
@@ -839,6 +845,9 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   // explicit Confirm. `curating` holds the per-item add/enrich progress; once it
   // finishes it becomes a short completion summary.
   const [proposal, setProposal] = useState<{ proposalId: string; items: BeamProposalItem[] } | null>(null);
+  // Travel-kit cards whose "new" lane has been curated into the vault, keyed by
+  // the card's proposalId — so a stale kit card flips to "Added" and can't double-write.
+  const [curatedKitIds, setCuratedKitIds] = useState<Set<string>>(() => new Set());
   const [curating, setCurating] = useState<{
     total: number;
     progress: CollectionCurateProgress | null;
@@ -1201,6 +1210,14 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
               // The agent lined up a collection — surface a confirmation card
               // once the run settles. Nothing is added until the user taps Confirm.
               if (event.items.length > 0) setProposal({ proposalId: event.proposalId, items: event.items });
+            } else if (event.type === 'card') {
+              // The agent surfaced a native UI card (radar / compare / kit board).
+              // Drop it into the conversation as its own artifact the moment it
+              // arrives, so it reads as "shown, then explained" before the answer.
+              setMessages((prev) => [
+                ...prev,
+                { id: newMessageId(), role: 'card', text: '', card: event.card },
+              ]);
             } else if (event.type === 'message_delta') {
               // Synthesis is streaming the answer — hold a stable phase note
               // rather than flashing raw partial text.
@@ -1423,6 +1440,36 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
     setProposal(null);
     appendMessage('agent', "No problem — I'll hold off. Tell me what to change and I'll line up a different set.");
   }, [curating, appendMessage]);
+
+  // The user tapped "Add new to vault" on a travel-kit card. Same vault-write
+  // path as confirming a proposal, just sourced from the card's new lane — so a
+  // kit board is fully actionable without a separate proposal card.
+  const handleAddKitPicks = useCallback(
+    async (items: BeamProposalItem[], proposalId?: string) => {
+      if (!onCurateCollection || curating || items.length === 0) return;
+      if (proposalId && curatedKitIds.has(proposalId)) return; // already added — don't double-write
+      setCurating({ total: items.length, progress: null, done: null });
+      try {
+        const result = await onCurateCollection(items, (p) => {
+          setCurating((prev) => ({ total: items.length, done: prev?.done ?? null, progress: p }));
+        });
+        setCurating({ total: items.length, progress: null, done: result });
+        if (proposalId && result.added > 0) setCuratedKitIds((prev) => new Set(prev).add(proposalId));
+        const names = items.map((item) => item.name);
+        const summary =
+          result.added === 0
+            ? "I couldn't add those to your vault just now — want me to try again?"
+            : result.added === result.total
+              ? `Done — all ${result.total} new picks are in your vault and curating: ${names.join(', ')}.`
+              : `Added ${result.added} of ${result.total} — the rest are still curating and will appear shortly.`;
+        appendMessage('agent', summary);
+      } catch {
+        setCurating(null);
+        appendMessage('system', 'Adding those to your vault ran into a problem. Please try again.');
+      }
+    },
+    [onCurateCollection, curating, curatedKitIds, appendMessage],
+  );
 
   // The core send path, decoupled from the form event so recovery actions (e.g.
   // "Retry catalog search") can re-run a turn without retyping. `echoUser` adds
@@ -2176,6 +2223,31 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
             turn (and the greeting itself, once introReady) renders real TEXT,
             never a permanent dots placeholder. */}
         {messages.map((message, index) => {
+          // Native agent UI cards (radar / compare / kit board) render as their
+          // own conversation artifact, outside the text-bubble + recap machinery.
+          if (message.role === 'card' && message.card) {
+            return (
+              <motion.div
+                key={message.id}
+                initial={calmMotion ? false : { opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.28, ease: SCENT_EASE }}
+                className="flex w-full flex-col"
+              >
+                <BeamCard
+                  card={message.card}
+                  calmMotion={calmMotion}
+                  onAddNewPicks={onCurateCollection ? handleAddKitPicks : undefined}
+                  onViewItem={onViewProposalItem ? handleViewProposalItem : undefined}
+                  added={
+                    message.card.kind === 'travel_kit' && message.card.proposalId
+                      ? curatedKitIds.has(message.card.proposalId)
+                      : false
+                  }
+                />
+              </motion.div>
+            );
+          }
           const isIntroGreeting = index === 0 && message.role === 'agent';
           // Keep the stage empty until the greeting beat — the bubble (and its
           // dots) only mount once the open transition has settled (420ms).

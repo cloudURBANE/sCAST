@@ -23,10 +23,11 @@ import {
   selectScentMissionRecommendation,
   type ScentMissionWardrobeItem,
 } from "@workspace/scent-weather-engine";
-import type { BeamRunContext } from "../types.ts";
+import type { BeamRunContext, CandidatePacket } from "../types.ts";
 import type { BeamCatalogHit, BeamToolDeps } from "../beamTools.ts";
+import { packetFromWardrobeRow } from "../beamToolCore.ts";
 import { missionItemFromWardrobeRow } from "../../services/scentMissionService";
-import { searchCatalogCandidates, flattenProfile } from "../../services/catalogService";
+import { searchCatalogCandidates, flattenProfile, getCatalogEntry } from "../../services/catalogService";
 import { getScentFacts } from "../../lib/scent-facts/engine";
 import { createBeamResearcher } from "../research/beamResearch.ts";
 import { loadResearchCache, saveResearchCache } from "../research/researchCache.ts";
@@ -73,6 +74,39 @@ async function researchForBeam(name: string): Promise<Record<string, unknown> | 
   }
 }
 
+/** Owned bottles as full candidate packets WITH note pyramids (richer overlap). */
+async function loadWardrobePackets(ctx: BeamRunContext): Promise<CandidatePacket[]> {
+  const rows = await db
+    .select({ id: userFragrancesTable.id, fragranceData: userFragrancesTable.fragranceData })
+    .from(userFragrancesTable)
+    .where(and(eq(userFragrancesTable.tenantId, ctx.tenantId), eq(userFragrancesTable.userId, ctx.userId)))
+    .orderBy(asc(userFragrancesTable.createdAt), asc(userFragrancesTable.id));
+
+  const packets: CandidatePacket[] = [];
+  for (const row of rows) {
+    const packet = packetFromWardrobeRow(row.id, row.fragranceData);
+    if (packet) packets.push(packet);
+  }
+  return packets;
+}
+
+/**
+ * Resolve ONE catalog fragrance to its flattened profile: exact brand+name first,
+ * then a top-hit search fallback. Mirrors the in-process route so the MCP surface
+ * builds the same proposal + UI-card tools (gated on this dep) instead of staying
+ * a strictly read-only retrieval subset.
+ */
+async function resolveCatalogEntryForBeam(name: string, brand?: string): Promise<Record<string, unknown> | null> {
+  if (brand) {
+    const exact = await getCatalogEntry(brand, name).catch(() => null);
+    if (exact) return flattenProfile(exact) as Record<string, unknown>;
+  }
+  const query = `${brand ?? ""} ${name}`.trim();
+  const hits = await searchCatalogCandidates(query, { limit: 1 }).catch(() => []);
+  if (hits.length > 0) return flattenProfile(hits[0].profile) as Record<string, unknown>;
+  return null;
+}
+
 // Cost-capped live research, shared with the in-process route. No-ops to a
 // `note` unless BEAM_RESEARCH_ENABLED + OPENROUTER_API_KEY are set, so Hermes
 // gets the tool but it stays inert until the lane is turned on server-side.
@@ -95,11 +129,16 @@ const beamResearchWeb = createBeamResearcher({
 export function createBeamServiceDeps(): BeamToolDeps {
   return {
     loadVault,
+    loadWardrobePackets,
     searchCatalog: searchCatalogForBeam,
+    resolveCatalogEntry: resolveCatalogEntryForBeam,
     research: researchForBeam,
     researchWeb: beamResearchWeb,
     scoreVault: (items, calibration, weather) =>
       selectScentMissionRecommendation(items, calibration, weather),
     getWeather: async () => sanitizeScentMissionWeather(undefined),
+    // No `enqueueCuration` here: it must bind the run's tenant/user, but these
+    // deps are built once at startup with no ctx. Unresolved proposal/kit names
+    // are simply dropped on the MCP surface (the in-process route curates them).
   };
 }

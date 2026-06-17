@@ -19,11 +19,19 @@ import type {
   ScentMissionWardrobeItem,
   ScentMissionWeather,
 } from "@workspace/scent-weather-engine";
-import type { BeamProposalItem, BeamRunContext, BeamToolDefinition, CandidatePacket } from "./types.ts";
+import type {
+  BeamCard,
+  BeamCardFragrance,
+  BeamProposalItem,
+  BeamRunContext,
+  BeamToolDefinition,
+  CandidatePacket,
+} from "./types.ts";
 import {
   BEAM_LIMITS,
   asString,
   buildProposalItem,
+  cardFragranceFromProposalItem,
   clampLimit,
   computeOverlap,
   packetFromFlatProfile,
@@ -42,6 +50,32 @@ function overlapProfileFromPacket(packet: CandidatePacket): OverlapProfile {
     base: packet.notes.base,
     accords: packet.accords,
   };
+}
+
+/** Map a resolved add-ready item to the overlap-math profile (heart→middle). */
+function overlapProfileFromItem(item: BeamProposalItem): OverlapProfile {
+  return {
+    top: item.pyramid?.top ?? [],
+    middle: item.pyramid?.heart ?? [],
+    base: item.pyramid?.base ?? [],
+    accords: item.accords,
+  };
+}
+
+/** Normalize a name for owned-vault membership checks (lowercase, single-spaced). */
+function normName(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+/** Build a card fragrance straight from an owned vault row (no catalog vector). */
+function cardFragranceFromVaultItem(item: ScentMissionWardrobeItem): BeamCardFragrance {
+  const accords = [...(item.families ?? []), ...(item.accords ?? [])]
+    .map((a) => (typeof a === "string" ? a.trim() : ""))
+    .filter(Boolean)
+    .slice(0, BEAM_LIMITS.maxCardAccords);
+  const card: BeamCardFragrance = { name: item.name, brand: item.brand ?? "", accords, owned: true };
+  if (item.families?.[0]) card.family = item.families[0];
+  return card;
 }
 
 /**
@@ -593,6 +627,296 @@ export function createBeamTools(deps: BeamToolDeps): BeamToolDefinition[] {
         };
         if (typeof r.proposalId !== "string" || !Array.isArray(r.items) || r.items.length === 0) return null;
         return { type: "proposal", proposalId: r.proposalId, items: r.items as BeamProposalItem[] };
+      },
+    });
+
+    // --- Agent UI cards ---------------------------------------------------
+    // Native cards the agent surfaces mid-conversation. Each resolves its data
+    // from real catalog/vault records server-side (never model free-text) and
+    // emits a `card` event the SPA renders as a component. They write nothing;
+    // the travel-kit's "new" lane is add-ready but only saved on the user's
+    // explicit Confirm (same path as `beam_propose_collection`).
+
+    /** Names the user owns, normalized, for grounding the `owned` flag. */
+    const loadOwnedNames = async (ctx: BeamRunContext): Promise<Set<string>> => {
+      const vault = await deps.loadVault(ctx).catch(() => [] as ScentMissionWardrobeItem[]);
+      const set = new Set<string>();
+      for (const it of vault) {
+        if (it?.name) {
+          set.add(normName(it.name));
+          if (it.brand) set.add(normName(`${it.brand} ${it.name}`));
+        }
+      }
+      return set;
+    };
+
+    /** Resolve ONE requested fragrance to its grounded card shape, or null. */
+    const resolveCardEntry = async (
+      name: string | undefined,
+      brand: string | undefined,
+      ownedNames: Set<string>,
+    ): Promise<{ item: BeamProposalItem; card: BeamCardFragrance } | null> => {
+      if (!name) return null;
+      const flat = await resolveCatalogEntry(name, brand).catch(() => null);
+      const item = flat ? buildProposalItem(flat) : null;
+      if (!item) return null;
+      const owned =
+        ownedNames.has(normName(item.name)) || ownedNames.has(normName(`${item.brand} ${item.name}`));
+      return { item, card: cardFragranceFromProposalItem(item, owned) };
+    };
+
+    tools.push({
+      name: "beam_show_scent_profile",
+      description:
+        "Surface a fragrance's scent fingerprint as a visual card in the chat — a 6-axis radar " +
+        "(fresh, sweet, woody, spice, warm, musk) with its note pyramid and key accords. Use it to " +
+        "SHOW why a pick fits rather than describing axes in prose; reach for it when the user asks " +
+        "what something smells like or why you chose it. The name resolves against the real catalog " +
+        "server-side; if it can't be resolved, no card is shown (say so and offer to search). Pass a " +
+        "short `caption` framing what to notice. Do NOT recite the raw axis numbers in your reply — " +
+        "the card shows them; add the human read instead.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          name: { type: "string", description: "Fragrance name (required)." },
+          brand: { type: "string", description: "House/brand, when known (improves the match)." },
+          caption: { type: "string", description: "One short line framing the profile (≤180 chars)." },
+        },
+        required: ["name"],
+        additionalProperties: false,
+      },
+      handler: async (input, ctx) => {
+        const r = (typeof input === "object" && input !== null ? input : {}) as Record<string, unknown>;
+        const name = asString(r.name);
+        if (!name) return { resolved: false, note: "name is required" };
+        const ownedNames = await loadOwnedNames(ctx);
+        const resolved = await resolveCardEntry(name, asString(r.brand), ownedNames);
+        if (!resolved) {
+          return {
+            resolved: false,
+            note: `No catalog match for "${name}". Search the catalog first, then show a real fragrance.`,
+          };
+        }
+        const { item, card: fragrance } = resolved;
+        const pyramidEmpty =
+          !item.pyramid || item.pyramid.top.length + item.pyramid.heart.length + item.pyramid.base.length === 0;
+        // A present-but-all-zero vector would draw a degenerate radar; treat it as
+        // "no chartable vector" so we only emit a card when there's real signal.
+        const vectorSignal = fragrance.scentVector
+          ? Object.values(fragrance.scentVector).reduce((sum, n) => sum + (Number.isFinite(n) ? n : 0), 0)
+          : 0;
+        const hasVector = vectorSignal > 0.15;
+        if (!hasVector && pyramidEmpty) {
+          return { resolved: false, note: `"${item.name}" has no scent-profile data to chart yet.` };
+        }
+        const caption = asString(r.caption);
+        const card: BeamCard = {
+          kind: "scent_profile",
+          fragrance,
+          ...(item.pyramid ? { pyramid: item.pyramid } : {}),
+          ...(caption ? { caption } : {}),
+        };
+        return {
+          resolved: true,
+          shown: { name: item.name, brand: item.brand, owned: fragrance.owned ?? false },
+          hasVector,
+          card,
+        };
+      },
+      clientEvent: (result) => {
+        const r = (typeof result === "object" && result !== null ? result : {}) as { card?: unknown };
+        const card = r.card as BeamCard | undefined;
+        return card && card.kind === "scent_profile" ? { type: "card", card } : null;
+      },
+    });
+
+    tools.push({
+      name: "beam_compare_fragrances",
+      description:
+        "Show a side-by-side comparison card of TWO specific fragrances: their accords/profiles next " +
+        "to each other, the deterministic overlap likelihood (do they fill the same wardrobe slot?), " +
+        "and the notes/accords they share. Use it for 'X vs Y', 'is this too close to that?', or when " +
+        "helping the user choose between two options. Both names resolve against the real catalog; if " +
+        "either can't be resolved, no card is shown. The overlap number is computed in code — do not " +
+        "estimate it yourself. Pass a one-line `verdict` with the takeaway.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          a: {
+            type: "object",
+            properties: { name: { type: "string" }, brand: { type: "string" } },
+            required: ["name"],
+            additionalProperties: false,
+          },
+          b: {
+            type: "object",
+            properties: { name: { type: "string" }, brand: { type: "string" } },
+            required: ["name"],
+            additionalProperties: false,
+          },
+          verdict: { type: "string", description: "One short line with the takeaway (≤180 chars)." },
+        },
+        required: ["a", "b"],
+        additionalProperties: false,
+      },
+      handler: async (input, ctx) => {
+        const r = (typeof input === "object" && input !== null ? input : {}) as Record<string, unknown>;
+        const ra = (typeof r.a === "object" && r.a !== null ? r.a : {}) as Record<string, unknown>;
+        const rb = (typeof r.b === "object" && r.b !== null ? r.b : {}) as Record<string, unknown>;
+        const nameA = asString(ra.name);
+        const nameB = asString(rb.name);
+        if (!nameA || !nameB) return { resolved: false, note: "two fragrance names are required" };
+        const ownedNames = await loadOwnedNames(ctx);
+        const [ea, eb] = await Promise.all([
+          resolveCardEntry(nameA, asString(ra.brand), ownedNames),
+          resolveCardEntry(nameB, asString(rb.brand), ownedNames),
+        ]);
+        if (!ea || !eb) {
+          const missing = [!ea ? nameA : null, !eb ? nameB : null].filter(Boolean).join(", ");
+          return { resolved: false, note: `No catalog match for ${missing}. Cannot compare an unknown fragrance.` };
+        }
+        const overlap = computeOverlap(overlapProfileFromItem(ea.item), overlapProfileFromItem(eb.item));
+        const overlapPercent = Math.round(overlap.combined * 100);
+        const verdict = asString(r.verdict);
+        const card: BeamCard = {
+          kind: "compare",
+          a: ea.card,
+          b: eb.card,
+          overlapPercent,
+          band: overlap.band,
+          sharedNotes: overlap.sharedBaseNotes,
+          sharedAccords: overlap.sharedAccords,
+          ...(verdict ? { verdict } : {}),
+        };
+        return {
+          resolved: true,
+          a: { name: ea.item.name, brand: ea.item.brand },
+          b: { name: eb.item.name, brand: eb.item.brand },
+          overlapPercent,
+          band: overlap.band,
+          sharedBaseNotes: overlap.sharedBaseNotes,
+          sharedAccords: overlap.sharedAccords,
+          card,
+        };
+      },
+      clientEvent: (result) => {
+        const r = (typeof result === "object" && result !== null ? result : {}) as { card?: unknown };
+        const card = r.card as BeamCard | undefined;
+        return card && card.kind === "compare" ? { type: "card", card } : null;
+      },
+    });
+
+    tools.push({
+      name: "beam_present_travel_kit",
+      description:
+        "Lay out a travel/occasion kit as a visual board with two lanes: bottles FROM the user's vault " +
+        "(grounded against what they actually own) and NEW picks to pack (add-ready, saved only on the " +
+        "user's Confirm). Use it for trip/kit missions once you have the picks — it makes the " +
+        "owned-plus-new structure scannable instead of a prose list. Names resolve against the catalog/" +
+        "vault; owned names not actually in the vault, and new names with no catalog match, are dropped. " +
+        "Give a short `title` like 'Tokyo · August'.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          title: { type: "string", description: "Short kit title, e.g. 'Tokyo · August'." },
+          owned: {
+            type: "array",
+            description: "Vault bottles to feature (by name/brand). Verified owned server-side.",
+            items: {
+              type: "object",
+              properties: { name: { type: "string" }, brand: { type: "string" } },
+              required: ["name"],
+              additionalProperties: false,
+            },
+          },
+          newPicks: {
+            type: "array",
+            description: "New fragrances to pack (resolved against the catalog, add-ready).",
+            items: {
+              type: "object",
+              properties: { name: { type: "string" }, brand: { type: "string" } },
+              required: ["name"],
+              additionalProperties: false,
+            },
+          },
+        },
+        additionalProperties: false,
+      },
+      handler: async (input, ctx) => {
+        const r = (typeof input === "object" && input !== null ? input : {}) as Record<string, unknown>;
+        const ownedReq = Array.isArray(r.owned) ? r.owned : [];
+        const newReq = Array.isArray(r.newPicks) ? r.newPicks : [];
+        const [ownedNames, vault] = await Promise.all([
+          loadOwnedNames(ctx),
+          deps.loadVault(ctx).catch(() => [] as ScentMissionWardrobeItem[]),
+        ]);
+
+        const ownedPicks: BeamCardFragrance[] = [];
+        for (const entry of ownedReq.slice(0, BEAM_LIMITS.maxKitPicks)) {
+          const e = (typeof entry === "object" && entry !== null ? entry : {}) as Record<string, unknown>;
+          const name = asString(e.name);
+          if (!name) continue;
+          const resolved = await resolveCardEntry(name, asString(e.brand), ownedNames);
+          if (resolved?.card.owned) {
+            ownedPicks.push(resolved.card);
+            continue;
+          }
+          // Catalog missed (or matched an unowned record) but the bottle is
+          // genuinely in the vault → show it from the vault row (no vector).
+          const match = vault.find(
+            (v) => v?.name && (normName(v.name) === normName(name) || normName(v.name).includes(normName(name))),
+          );
+          if (match) ownedPicks.push(cardFragranceFromVaultItem(match));
+        }
+
+        const newPicks: BeamProposalItem[] = [];
+        const unresolved: string[] = [];
+        for (const entry of newReq.slice(0, BEAM_LIMITS.maxKitPicks)) {
+          const e = (typeof entry === "object" && entry !== null ? entry : {}) as Record<string, unknown>;
+          const name = asString(e.name);
+          if (!name) continue;
+          const brand = asString(e.brand);
+          const flat = await resolveCatalogEntry(name, brand).catch(() => null);
+          const item = flat ? buildProposalItem(flat) : null;
+          if (item) {
+            newPicks.push(item);
+          } else {
+            unresolved.push(brand ? `${brand} ${name}` : name);
+            try {
+              deps.enqueueCuration?.({ name, brand });
+            } catch {
+              // Curation is a courtesy; never let it break the card.
+            }
+          }
+          if (newPicks.length >= BEAM_LIMITS.maxKitPicks) break;
+        }
+
+        if (ownedPicks.length === 0 && newPicks.length === 0) {
+          return { resolved: false, note: "Could not ground any kit picks against the vault or catalog." };
+        }
+        const title = asString(r.title);
+        const proposalId = newPicks.length > 0 ? `prop_${ctx.runId}_${Date.now().toString(36)}` : undefined;
+        const card: BeamCard = {
+          kind: "travel_kit",
+          ...(title ? { title } : {}),
+          ownedPicks,
+          newPicks,
+          ...(proposalId ? { proposalId } : {}),
+        };
+        return {
+          resolved: true,
+          ownedCount: ownedPicks.length,
+          newCount: newPicks.length,
+          owned: ownedPicks.map((p) => ({ name: p.name, brand: p.brand })),
+          newProposed: newPicks.map((p) => ({ name: p.name, brand: p.brand })),
+          unresolved,
+          card,
+        };
+      },
+      clientEvent: (result) => {
+        const r = (typeof result === "object" && result !== null ? result : {}) as { card?: unknown };
+        const card = r.card as BeamCard | undefined;
+        return card && card.kind === "travel_kit" ? { type: "card", card } : null;
       },
     });
   }

@@ -300,7 +300,7 @@ export function beamSessionStatePrompt(state: BeamSessionState | undefined): str
   );
   if (mission?.intent === "travel_kit") {
     lines.push(
-      "For a travel kit mission, use beam_score_candidates for owned vault picks and beam_search_catalog with excludeOwned=true for new picks. If new picks are recommended, call beam_propose_collection so the app can show add-ready cards for confirmation.",
+      "For a travel kit mission, use beam_score_candidates for owned vault picks and beam_search_catalog with excludeOwned=true for new picks, then call beam_present_travel_kit with both lanes to render the kit board (its new lane is add-ready for confirmation — no separate beam_propose_collection needed).",
     );
     if (mission.ownedCount || mission.newCount) {
       lines.push(

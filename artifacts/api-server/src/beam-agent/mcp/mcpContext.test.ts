@@ -12,19 +12,30 @@ import {
 } from "./mcpContext.ts";
 import type { DelegationClaims } from "./delegationToken.ts";
 
-test("a full owner token unlocks exactly the Phase-1 read tools", () => {
+test("a full owner token unlocks every read + presentation tool", () => {
   const names = allowedToolNames(ALL_READ_SCOPES);
   assert.deepEqual(
     [...names].sort(),
     [
+      "beam_compare_fragrances",
       "beam_compare_overlap",
       "beam_get_fragrance_details",
       "beam_get_user_context",
       "beam_get_wardrobe",
+      "beam_present_travel_kit",
+      "beam_propose_collection",
       "beam_research_web",
       "beam_score_candidates",
       "beam_search_catalog",
+      "beam_show_scent_profile",
     ],
+  );
+});
+
+test("the present scope unlocks the proposal + UI-card tools", () => {
+  assert.deepEqual(
+    [...allowedToolNames(["beam:present:read"])].sort(),
+    ["beam_compare_fragrances", "beam_present_travel_kit", "beam_propose_collection", "beam_show_scent_profile"],
   );
 });
 

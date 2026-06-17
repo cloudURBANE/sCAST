@@ -51,6 +51,64 @@ export type BeamProposalItem = {
   description?: string;
 };
 
+/** The server-built 6-axis scent fingerprint (0..1 per axis). */
+export type BeamScentVector = {
+  freshness: number;
+  sweetness: number;
+  woodiness: number;
+  spice: number;
+  warmth: number;
+  musk: number;
+};
+
+/**
+ * A fragrance as rendered inside an agent-emitted UI card. Always resolved from
+ * a real catalog/vault record server-side. Mirrors `BeamCardFragrance` in the
+ * api-server types.
+ */
+export type BeamCardFragrance = {
+  name: string;
+  brand: string;
+  family?: string;
+  accords: string[];
+  scentVector?: BeamScentVector;
+  owned?: boolean;
+  imageUrl?: string;
+  storagePath?: string;
+  imageHash?: string;
+  storageProvider?: string;
+};
+
+/**
+ * A native UI card the agent surfaces mid-conversation. The SPA renders it with
+ * `BeamCard.tsx`. Keep this union in lockstep with `BeamCard` in the api-server
+ * types.
+ */
+export type BeamCard =
+  | {
+      kind: 'scent_profile';
+      fragrance: BeamCardFragrance;
+      pyramid?: { top: string[]; heart: string[]; base: string[] };
+      caption?: string;
+    }
+  | {
+      kind: 'compare';
+      a: BeamCardFragrance;
+      b: BeamCardFragrance;
+      overlapPercent: number;
+      band: 'high' | 'moderate' | 'some' | 'low';
+      sharedNotes: string[];
+      sharedAccords: string[];
+      verdict?: string;
+    }
+  | {
+      kind: 'travel_kit';
+      title?: string;
+      ownedPicks: BeamCardFragrance[];
+      newPicks: BeamProposalItem[];
+      proposalId?: string;
+    };
+
 export type BeamAgentEvent =
   | { type: 'status'; label: string }
   | { type: 'message_delta'; text: string }
@@ -58,6 +116,7 @@ export type BeamAgentEvent =
   | { type: 'tool_completed'; tool: string; summary: string }
   | { type: 'suggestions'; items: BeamSuggestion[] }
   | { type: 'proposal'; proposalId: string; items: BeamProposalItem[] }
+  | { type: 'card'; card: BeamCard }
   | { type: 'completed'; response: string }
   | { type: 'failed'; code: string; message: string };
 
@@ -111,6 +170,9 @@ const TOOL_LABELS: Record<string, string> = {
   beam_compare_overlap: 'Seeing what already lives in your vault…',
   beam_research_web: 'Cross-checking the notes…',
   beam_propose_collection: 'Lining up your picks…',
+  beam_show_scent_profile: 'Charting the scent profile…',
+  beam_compare_fragrances: 'Setting them side by side…',
+  beam_present_travel_kit: 'Laying out your kit…',
 };
 
 /** Humanize a `beam_*` tool name into a progress-note phrase. */
