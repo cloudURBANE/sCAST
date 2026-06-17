@@ -1717,6 +1717,41 @@ export function extractDetailReviews(detail: FragranceDetail | null | undefined)
 }
 
 /**
+ * Fetch the raw scraped reviews for a single wardrobe row on demand. The
+ * wardrobe list/poll responses strip review text to keep Supabase egress down,
+ * so the detail modal pulls reviews for just the item it's showing. Always
+ * resolves (never throws) — on any failure it returns an empty list so the
+ * review panel degrades quietly to "no reviews yet".
+ */
+export async function getWardrobeReviews(
+  fragranceId: string,
+  options?: { authToken?: string | null; signal?: AbortSignal },
+): Promise<FragranceRawReview[]> {
+  if (!fragranceId) return [];
+  try {
+    const headers: Record<string, string> = { Accept: "application/json" };
+    if (options?.authToken) headers["Authorization"] = `Bearer ${options.authToken}`;
+    const res = await fetch(appApiUrl(`/api/wardrobe/${encodeURIComponent(fragranceId)}/reviews`), {
+      headers,
+      signal: options?.signal,
+    });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { reviews?: unknown };
+    const raw = Array.isArray(data.reviews) ? data.reviews : [];
+    return raw
+      .map((entry) => {
+        const obj = objectRecord(entry);
+        const text = typeof obj.text === "string" ? obj.text.trim() : "";
+        const source = typeof obj.source === "string" ? obj.source.trim() : undefined;
+        return { text, source };
+      })
+      .filter((r) => r.text.length > 0);
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Asks the Express API to distill scraped reviews into short, original display
  * comments. Always resolves (never throws) — on any failure it returns an empty
  * list so the detail view degrades quietly.

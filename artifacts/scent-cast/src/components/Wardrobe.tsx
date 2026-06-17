@@ -67,12 +67,14 @@ import {
 import {
   collectMainAccordDisplayRows,
   extractDetailReviews,
+  getWardrobeReviews,
   normalizeSourceCoverage,
   getCachedReviewSummary,
   reviewSummaryCacheKey,
   summarizeReviews,
   type DerivedMetrics,
   type FragranceDetail,
+  type FragranceRawReview,
   type SourceCoverage,
 } from '@/lib/fragranceApi';
 
@@ -1006,6 +1008,10 @@ export const Wardrobe: React.FC<{
   isImageSyncing,
 }) => {
   const [selectedItem, setSelectedItem] = React.useState<Fragrance | null>(null);
+  // Reviews are no longer shipped inline on every wardrobe row (egress); fetch
+  // them for the one open item. Seeded from any inline reviews still present
+  // (legacy rows / pre-trim responses) so the panel never regresses.
+  const [detailReviews, setDetailReviews] = React.useState<FragranceRawReview[]>([]);
   const { gridMode, setGridMode, isCompactGrid } = useVaultGridPreference();
   const { lowMotionRenderMode, isIpad, ipadSafariPerformanceMode } = useRenderBudget();
   // iPad stays in the tablet/desktop experience. Only phone-class constrained
@@ -1232,6 +1238,37 @@ export const Wardrobe: React.FC<{
     return () => crumb(`detail:unmounted#${detailOpenCountRef.current}`);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedItem?.id]);
+
+  // Load reviews for the open item. Prefer any inline reviews still on the row
+  // (legacy / pre-trim payloads); otherwise fetch them on demand, since the
+  // wardrobe list/poll responses no longer carry per-item review text.
+  React.useEffect(() => {
+    if (!selectedItem) {
+      setDetailReviews([]);
+      return;
+    }
+    const inline = extractDetailReviews(selectedItem.raw_engine_detail);
+    if (inline.length > 0) {
+      setDetailReviews(inline);
+      return;
+    }
+    const rowId = selectedItem._dbId ?? selectedItem.id;
+    if (!rowId) {
+      setDetailReviews([]);
+      return;
+    }
+    setDetailReviews([]);
+    const controller = new AbortController();
+    let cancelled = false;
+    void getWardrobeReviews(rowId, { authToken, signal: controller.signal }).then((reviews) => {
+      if (!cancelled) setDetailReviews(reviews);
+    });
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedItem?.id, selectedItem?._dbId, authToken]);
 
   useModalBehavior({
     isOpen: Boolean(selectedItem) || detailExitInProgress,
@@ -2798,7 +2835,7 @@ export const Wardrobe: React.FC<{
                     <ReviewsPanel
                       name={entryName(selectedItem)}
                       brand={entryBrand(selectedItem)}
-                      reviews={extractDetailReviews(selectedItem.raw_engine_detail)}
+                      reviews={detailReviews}
                     />
                   ) : null}
 

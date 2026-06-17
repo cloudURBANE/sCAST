@@ -91,11 +91,15 @@ Two important consequences:
 - **No UX regression:** the user's own edits are already optimistic; new-item images come from the dedicated `scheduleImageBackfillRehydrate` burst (independent of this poll); and the focus tick still refreshes the instant a user returns to the tab. Only *cross-device* edits made while a tab sits in the foreground wait up to 5 min — and a focus event resolves even that.
 - Pure client change, reversible, typecheck-clean.
 
-### Stage 2 — server payload trim (high impact, medium risk; needs a focused PR + test)
-Stop shipping per-item scraped reviews/notes/description in **list** responses. Two safe sub-steps:
-1. Add a `slimWardrobeRow()` projection used by `GET /api/wardrobe` and `/api/community/fragrances` that keeps display fields + `derived_metrics` + `source_coverage` + `enrichment` + `raw.source_urls`, and **drops `raw.reviews`, `raw.notes`, `raw.description`** (notes already live in `derived_metrics`).
-2. Make the detail modal fetch fresh reviews on open (it already has `getFragranceDetails` + the enrichment-refresh path), so stripping reviews from the list does not blank the modal. **This is the regression-sensitive step** — gate it behind the modal refetch landing first. Respect `cross-service-contract` (do not change `source_coverage`/`derived_metrics` shapes) and `db-schema-safety`.
-- Expected effect: cuts the per-request size in Findings #1–#3 by ~10–100× depending on how review-heavy rows are.
+### ✅ Stage 2 — server payload trim (shipped in this pass)
+Stopped shipping per-item scraped review text in the **list** responses. As implemented:
+1. **`slimListFragranceData(column)`** ([fragrancePayload.ts](artifacts/api-server/src/services/fragrancePayload.ts)) is a **SQL projection** (`fragrance_data #- '{raw_engine_detail,raw,reviews}' #- '{raw_engine_detail,raw,description}'`) applied to `GET /api/wardrobe` and `/api/community/fragrances`. It is a SQL-level trim, **not** a post-fetch object trim, because the metered hop is Postgres → Express (§0): trimming the response body after `db.select()` would not save a byte.
+   - **`raw.reviews`** (the heaviest part) and **`raw.description`** are dropped.
+   - **`raw.notes` is intentionally KEPT** — `normalizeFragrance` derives the note pyramid from it for legacy rows lacking `derived_metrics.notes`, and `normalizeFragrance` runs *after* this projection. Dropping it would risk blanking the pyramid on those rows. (Revisit only with a verified migration that guarantees `derived_metrics.notes` is populated everywhere.)
+2. The detail modal now fetches reviews on open via a dedicated, lightweight **`GET /api/wardrobe/:id/reviews`** (single-row, reviews-only JSON projection) rather than re-scraping through the Python engine — cheaper and with no engine/Cloudflare dependency. Client: `getWardrobeReviews()` in `fragranceApi.ts`; `Wardrobe.tsx` seeds from any inline reviews still present (legacy/pre-trim rows) and otherwise fetches, so the panel never regresses. `ReviewsPanel` reacts to the populated `reviews` prop.
+   - Community renders no reviews and `SharePage` reads `/api/share/:userId` (untrimmed), so neither regresses.
+- No `source_coverage`/`derived_metrics` shapes changed (`cross-service-contract` honored); no schema change (`db-schema-safety` not engaged). Verified: full typecheck + build clean, 383/383 api-server tests pass.
+- Expected effect: cuts the per-request size in Findings #1–#3 by ~10–100× on review-heavy rows.
 
 ### Stage 3 — community SQL projection (medium)
 Replace the full-blob select in [community.ts:96-116](artifacts/api-server/src/routes/community.ts#L96-L116) with `->>'`-projected columns (name, brand, image, family, `imageAdjustment`, `imageProperties`, and the three note paths). Keeps `batchHydrateImageUrls` (needs name+brand only). Removes the `× 3` full-blob fan-out.

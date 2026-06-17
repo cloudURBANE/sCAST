@@ -2,7 +2,7 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { userFragrancesTable, userSettingsTable, usersTable } from "@workspace/db/schema";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { batchHydrateImageUrls, normalizeFragrance } from "../services/fragrancePayload";
+import { batchHydrateImageUrls, normalizeFragrance, slimListFragranceData } from "../services/fragrancePayload";
 import { shareHandleFromEmail } from "../services/shareIdentity";
 import { getTenantId } from "../middlewares/tenant";
 
@@ -96,7 +96,9 @@ router.get("/community/fragrances", async (req, res, next) => {
     const rows = await db
       .select({
         rowId: userFragrancesTable.id,
-        fragranceData: userFragrancesTable.fragranceData,
+        // Community cards never render reviews — strip the heavy scraped text in
+        // Postgres so the feed query stays small (see slimListFragranceData).
+        fragranceData: slimListFragranceData(userFragrancesTable.fragranceData),
         userEmail: usersTable.email,
       })
       .from(userFragrancesTable)
