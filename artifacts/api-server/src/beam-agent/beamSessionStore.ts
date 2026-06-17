@@ -1,23 +1,18 @@
 /**
- * Beam Agent conversation memory — the clean user/assistant TEXT turns that let
- * a follow-up in a session keep context (never the intermediate tool plumbing).
- *
- * Two interchangeable backends behind one async interface:
- *
- *   • In-memory (default): a process-local Map with a 1-hour sliding TTL, exactly
- *     the behavior this used to have inline in beamAgentRoutes. Used whenever
- *     Redis is not configured.
- *
- *   • Redis (when REDIS_URL is set): a per-session JSON string key with a TTL, so
- *     session context survives a redeploy and is shared across replicas. Any
- *     Redis error degrades to the in-memory Map — a cache hiccup never breaks a
- *     run, it just loses cross-replica continuity for that turn.
- *
- * Both paths cap history at MAX_SESSION_TURNS and key by tenant+user+session.
+ * Beam Agent conversation memory: clean user/assistant text turns plus
+ * deterministic session state extracted from user text. Failed model turns may
+ * skip transcript append, but their extracted slots/mission state are persisted
+ * before the run starts.
  */
 import { getRedis, type RedisLike } from "../lib/redisClient.ts";
 import { logger } from "../lib/logger.ts";
-import type { BeamRunContext, ClaudeMessage } from "./types.ts";
+import type {
+  BeamRunContext,
+  BeamSessionRecord as BeamSessionSnapshot,
+  BeamSessionState,
+  ClaudeMessage,
+} from "./types.ts";
+import { cloneBeamSessionState, emptyBeamSessionState, sanitizeBeamSessionState } from "./missionState.ts";
 
 const SESSION_TTL_MS = 60 * 60_000;
 const MAX_SESSION_TURNS = 16;
@@ -40,11 +35,15 @@ function capTurns(turns: ClaudeMessage[]): ClaudeMessage[] {
   return turns.length > MAX_SESSION_TURNS ? turns.slice(-MAX_SESSION_TURNS) : turns;
 }
 
+function snapshot(turns: ClaudeMessage[], state: BeamSessionState): BeamSessionSnapshot {
+  return { turns: turns.slice(), state: cloneBeamSessionState(state) };
+}
+
 /* ------------------------------------------------------------------ */
 /* In-memory backend (default / fallback)                             */
 /* ------------------------------------------------------------------ */
 
-type SessionRecord = { turns: ClaudeMessage[]; updatedAt: number };
+type SessionRecord = { turns: ClaudeMessage[]; state: BeamSessionState; updatedAt: number };
 const sessions = new Map<string, SessionRecord>();
 
 function pruneSessions(now: number): void {
@@ -53,17 +52,27 @@ function pruneSessions(now: number): void {
   }
 }
 
-function memoryLoad(ctx: BeamRunContext): ClaudeMessage[] {
+function memoryLoad(ctx: BeamRunContext): BeamSessionSnapshot {
   pruneSessions(Date.now());
-  return sessions.get(sessionKey(ctx))?.turns.slice() ?? [];
+  const record = sessions.get(sessionKey(ctx));
+  return snapshot(record?.turns ?? [], record?.state ?? emptyBeamSessionState());
 }
 
-function memoryAppend(ctx: BeamRunContext, userMessage: string, assistantText: string): void {
+function memorySaveState(ctx: BeamRunContext, state: BeamSessionState): void {
   const key = sessionKey(ctx);
-  const record = sessions.get(key) ?? { turns: [], updatedAt: Date.now() };
+  const record = sessions.get(key) ?? { turns: [], state: emptyBeamSessionState(), updatedAt: Date.now() };
+  record.state = cloneBeamSessionState(state);
+  record.updatedAt = Date.now();
+  sessions.set(key, record);
+}
+
+function memoryAppend(ctx: BeamRunContext, userMessage: string, assistantText: string, state?: BeamSessionState): void {
+  const key = sessionKey(ctx);
+  const record = sessions.get(key) ?? { turns: [], state: emptyBeamSessionState(), updatedAt: Date.now() };
   record.turns.push({ role: "user", content: userMessage });
   record.turns.push({ role: "assistant", content: assistantText });
   record.turns = capTurns(record.turns);
+  if (state) record.state = cloneBeamSessionState(state);
   record.updatedAt = Date.now();
   sessions.set(key, record);
 }
@@ -76,16 +85,38 @@ function redisKey(ctx: BeamRunContext): string {
   return REDIS_KEY_PREFIX + sessionKey(ctx);
 }
 
-async function redisLoad(client: RedisLike, ctx: BeamRunContext): Promise<ClaudeMessage[]> {
-  const raw = await client.get(redisKey(ctx));
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    return Array.isArray(parsed) ? (parsed as ClaudeMessage[]) : [];
-  } catch {
-    // Corrupt entry — treat as empty rather than throwing into the hot path.
-    return [];
+function normalizeStoredSession(raw: unknown): BeamSessionSnapshot {
+  if (Array.isArray(raw)) {
+    return snapshot(capTurns(raw as ClaudeMessage[]), emptyBeamSessionState());
   }
+  if (!raw || typeof raw !== "object") return snapshot([], emptyBeamSessionState());
+  const record = raw as Record<string, unknown>;
+  const turns = Array.isArray(record.turns) ? capTurns(record.turns as ClaudeMessage[]) : [];
+  return snapshot(turns, sanitizeBeamSessionState(record.state));
+}
+
+async function redisLoad(client: RedisLike, ctx: BeamRunContext): Promise<BeamSessionSnapshot> {
+  const raw = await client.get(redisKey(ctx));
+  if (!raw) return snapshot([], emptyBeamSessionState());
+  try {
+    return normalizeStoredSession(JSON.parse(raw) as unknown);
+  } catch {
+    return snapshot([], emptyBeamSessionState());
+  }
+}
+
+async function redisSave(client: RedisLike, ctx: BeamRunContext, data: BeamSessionSnapshot): Promise<void> {
+  await client.set(
+    redisKey(ctx),
+    JSON.stringify({ turns: capTurns(data.turns), state: sanitizeBeamSessionState(data.state) }),
+    "PX",
+    SESSION_TTL_MS,
+  );
+}
+
+async function redisSaveState(client: RedisLike, ctx: BeamRunContext, state: BeamSessionState): Promise<void> {
+  const existing = await redisLoad(client, ctx);
+  await redisSave(client, ctx, { turns: existing.turns, state });
 }
 
 async function redisAppend(
@@ -93,19 +124,23 @@ async function redisAppend(
   ctx: BeamRunContext,
   userMessage: string,
   assistantText: string,
+  state?: BeamSessionState,
 ): Promise<void> {
   const existing = await redisLoad(client, ctx);
-  existing.push({ role: "user", content: userMessage });
-  existing.push({ role: "assistant", content: assistantText });
-  await client.set(redisKey(ctx), JSON.stringify(capTurns(existing)), "PX", SESSION_TTL_MS);
+  existing.turns.push({ role: "user", content: userMessage });
+  existing.turns.push({ role: "assistant", content: assistantText });
+  await redisSave(client, ctx, {
+    turns: existing.turns,
+    state: state ? cloneBeamSessionState(state) : existing.state,
+  });
 }
 
 /* ------------------------------------------------------------------ */
 /* Public async interface                                             */
 /* ------------------------------------------------------------------ */
 
-/** Prior turns for this session (most recent last), or `[]` for a new session. */
-export async function loadSessionHistory(ctx: BeamRunContext): Promise<ClaudeMessage[]> {
+/** Prior turns and structured state for this session, or empty values for a new session. */
+export async function loadSession(ctx: BeamRunContext): Promise<BeamSessionSnapshot> {
   let client: RedisLike | null = null;
   try {
     client = await getClient();
@@ -116,8 +151,38 @@ export async function loadSessionHistory(ctx: BeamRunContext): Promise<ClaudeMes
   try {
     return await redisLoad(client, ctx);
   } catch (err) {
-    logger.warn({ err }, "beam session: redis load failed — using in-memory history");
+    logger.warn({ err }, "beam session: redis load failed - using in-memory session");
     return memoryLoad(ctx);
+  }
+}
+
+/** Prior turns for this session (most recent last), or `[]` for a new session. */
+export async function loadSessionHistory(ctx: BeamRunContext): Promise<ClaudeMessage[]> {
+  return (await loadSession(ctx)).turns;
+}
+
+/** Structured slots/mission state for this session, or an empty state for a new session. */
+export async function loadSessionState(ctx: BeamRunContext): Promise<BeamSessionState> {
+  return (await loadSession(ctx)).state;
+}
+
+/** Persist slots/mission state without appending a transcript turn. */
+export async function saveSessionState(ctx: BeamRunContext, state: BeamSessionState): Promise<void> {
+  let client: RedisLike | null = null;
+  try {
+    client = await getClient();
+  } catch {
+    client = null;
+  }
+  if (!client) {
+    memorySaveState(ctx, state);
+    return;
+  }
+  try {
+    await redisSaveState(client, ctx, state);
+  } catch (err) {
+    logger.warn({ err }, "beam session: redis state save failed - writing to in-memory session");
+    memorySaveState(ctx, state);
   }
 }
 
@@ -129,6 +194,7 @@ export async function appendSessionTurn(
   ctx: BeamRunContext,
   userMessage: string,
   assistantText: string,
+  state?: BeamSessionState,
 ): Promise<void> {
   let client: RedisLike | null = null;
   try {
@@ -137,13 +203,13 @@ export async function appendSessionTurn(
     client = null;
   }
   if (!client) {
-    memoryAppend(ctx, userMessage, assistantText);
+    memoryAppend(ctx, userMessage, assistantText, state);
     return;
   }
   try {
-    await redisAppend(client, ctx, userMessage, assistantText);
+    await redisAppend(client, ctx, userMessage, assistantText, state);
   } catch (err) {
-    logger.warn({ err }, "beam session: redis append failed — writing to in-memory history");
-    memoryAppend(ctx, userMessage, assistantText);
+    logger.warn({ err }, "beam session: redis append failed - writing to in-memory history");
+    memoryAppend(ctx, userMessage, assistantText, state);
   }
 }

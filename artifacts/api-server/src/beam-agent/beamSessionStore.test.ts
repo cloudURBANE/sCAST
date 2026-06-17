@@ -2,7 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   appendSessionTurn,
+  loadSession,
   loadSessionHistory,
+  loadSessionState,
+  saveSessionState,
   __setSessionRedisForTests,
 } from "./beamSessionStore.ts";
 import type { RedisLike } from "../lib/redisClient.ts";
@@ -47,6 +50,25 @@ test("in-memory: empty history, then round-trips appended turns", async () => {
   ]);
 });
 
+test("in-memory: saves structured state without appending a transcript turn", async () => {
+  __setSessionRedisForTests(async () => null);
+  const c = ctx();
+  await saveSessionState(c, {
+    slots: { destination: "Tokyo", month: "August" },
+    mission: { intent: "travel_kit", ownedCount: 2, newCount: 2, destination: "Tokyo", month: "August" },
+  });
+
+  assert.deepEqual(await loadSessionHistory(c), []);
+  const state = await loadSessionState(c);
+  assert.equal(state.slots.destination, "Tokyo");
+  assert.equal(state.mission?.ownedCount, 2);
+
+  await appendSessionTurn(c, "August and artsy", "Done", state);
+  const session = await loadSession(c);
+  assert.equal(session.turns.length, 2);
+  assert.equal(session.state.slots.month, "August");
+});
+
 test("in-memory: caps history at the most recent 16 turns", async () => {
   __setSessionRedisForTests(async () => null);
   const c = ctx();
@@ -83,6 +105,26 @@ test("redis: round-trips through the shared store", async () => {
     { role: "user", content: "q2" },
     { role: "assistant", content: "r2" },
   ]);
+});
+
+test("redis: preserves state and reads old array-only records", async () => {
+  const client = new FakeRedis();
+  __setSessionRedisForTests(async () => client);
+  const c = ctx();
+  await client.set(
+    "beam:session:t1:u1:" + c.sessionId,
+    JSON.stringify([{ role: "user", content: "old" }]),
+    "PX",
+    1000,
+  );
+  assert.deepEqual(await loadSessionHistory(c), [{ role: "user", content: "old" }]);
+  assert.deepEqual(await loadSessionState(c), { slots: {} });
+
+  await saveSessionState(c, { slots: { month: "August" } });
+  await appendSessionTurn(c, "q1", "r1");
+  const session = await loadSession(c);
+  assert.equal(session.state.slots.month, "August");
+  assert.equal(session.turns.length, 3);
 });
 
 test("redis: corrupt entry is treated as empty, not thrown", async () => {

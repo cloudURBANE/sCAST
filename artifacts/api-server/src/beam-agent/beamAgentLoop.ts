@@ -9,7 +9,9 @@
  */
 import type {
   BeamEmit,
+  BeamGroundedFragrance,
   BeamRunContext,
+  BeamSessionState,
   BeamToolDefinition,
   BeamToolName,
   ClaudeMessage,
@@ -29,6 +31,7 @@ import type { ClaudeCallInput, ClaudeResponse } from "./types.ts";
 import { callModel as defaultCallModel, isModelConfigured as defaultIsModelConfigured } from "./provider.ts";
 import { repairInstructionFor, runAnswerQualityGates } from "./answerQualityGates.ts";
 import { estimateRunCostUsd, type ModelUsage } from "./costLedger.ts";
+import { beamSessionStatePrompt } from "./missionState.ts";
 
 /** Token budgets. Tool-orchestration turns are short; the closing synthesis is long. */
 const ORCHESTRATION_MAX_TOKENS = 2048;
@@ -148,6 +151,9 @@ const ACT_NUDGE =
   "the final recommendation instead. Do not end your turn on a promise to act.";
 
 /** Last-turn instruction for the dedicated, tool-free synthesis pass. */
+const STATE_NUDGE =
+  "You asked for information that is already present in the structured session state, or you ignored a delegated mission target. Re-read Known so far and the Mission target. Do not ask another preference question for known or delegated fields; call the needed tools now or write the grounded answer.";
+
 const SYNTHESIS_NUDGE =
   "You now have enough evidence. Write the FINAL answer for the user, grounded ONLY in the " +
   "fragrances and facts returned by the tools above. This renders in a narrow mobile chat " +
@@ -280,6 +286,52 @@ function answerConsistencyClause(scoring: ScoringContext | null): string {
   );
 }
 
+function stringValue(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function collectGroundedFragrancesForGate(tool: BeamToolName, result: unknown): BeamGroundedFragrance[] {
+  if (!result || typeof result !== "object") return [];
+  const record = result as Record<string, unknown>;
+  const out: BeamGroundedFragrance[] = [];
+  const add = (entry: unknown, owned: boolean): void => {
+    if (!entry || typeof entry !== "object") return;
+    const e = entry as Record<string, unknown>;
+    const canonicalName = stringValue(e.canonicalName ?? e.name);
+    if (!canonicalName) return;
+    out.push({ canonicalName, brand: stringValue(e.brand), owned });
+  };
+  const addArray = (entries: unknown, owned: boolean | "packet"): void => {
+    if (!Array.isArray(entries)) return;
+    for (const entry of entries) {
+      if (owned === "packet") {
+        const packetOwned =
+          entry && typeof entry === "object" && (entry as Record<string, unknown>).owned === true;
+        add(entry, packetOwned);
+      } else {
+        add(entry, owned);
+      }
+    }
+  };
+
+  if (tool === "beam_get_wardrobe") addArray(record.items, true);
+  if (tool === "beam_search_catalog") addArray(record.items, "packet");
+  if (tool === "beam_score_candidates") {
+    add(record.recommendation, true);
+    addArray(record.picks, true);
+  }
+  if (tool === "beam_propose_collection") {
+    addArray(record.items, false);
+    addArray(record.proposed, false);
+  }
+  if (tool === "beam_compare_overlap") {
+    add(record.candidate, false);
+    add(record.closestMatch, true);
+    addArray(record.items, true);
+  }
+  return out;
+}
+
 export type RunBeamAgentInput = {
   ctx: BeamRunContext;
   userMessage: string;
@@ -299,6 +351,8 @@ export type RunBeamAgentInput = {
    * route loads this from the per-session store so follow-ups keep context.
    */
   history?: ClaudeMessage[];
+  /** Structured slots/mission state persisted by the route/session store. */
+  sessionState?: BeamSessionState;
   /** Called with the final assistant text on success, so the caller can persist the turn. */
   onComplete?: (assistantText: string) => void;
   /**
@@ -425,6 +479,7 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
   const { ctx, tools, emit } = input;
   const callModel = input.callModel ?? defaultCallModel;
   const isModelConfigured = input.isModelConfigured ?? defaultIsModelConfigured;
+  const systemPrompt = SYSTEM_PROMPT + beamSessionStatePrompt(input.sessionState);
 
   // Run-scoped accounting, emitted once at the end for observability + cost.
   const startedAt = Date.now();
@@ -452,11 +507,23 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
   // Fragrances actually returned by tools this run, keyed lowercased for dedupe
   // (value preserves display casing). The closing answer is pinned to this set.
   const groundedNames = new Map<string, string>();
+  const groundedFragrances = new Map<string, BeamGroundedFragrance>();
   const addGroundedNames = (names: string[]): void => {
     for (const name of names) {
       if (groundedNames.size >= MAX_GROUNDED_ALLOWLIST) break;
       const key = name.toLowerCase();
       if (!groundedNames.has(key)) groundedNames.set(key, name);
+    }
+  };
+  const addGroundedFragrances = (items: BeamGroundedFragrance[]): void => {
+    for (const item of items) {
+      const key = `${item.brand ?? ""}::${item.canonicalName}`.toLowerCase();
+      const existing = groundedFragrances.get(key);
+      groundedFragrances.set(key, {
+        canonicalName: existing?.canonicalName ?? item.canonicalName,
+        brand: existing?.brand ?? item.brand,
+        owned: Boolean(existing?.owned || item.owned),
+      });
     }
   };
 
@@ -532,7 +599,7 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
         const synthMessages = withSynthesisInstruction(messages, instruction);
         try {
           const synth = await callModel({
-            system: SYSTEM_PROMPT,
+            system: systemPrompt,
             messages: synthMessages,
             tools: [],
             model: synthModel,
@@ -557,7 +624,11 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
       // On a hard violation, attempt ONE constrained re-synthesis that feeds the
       // broken rules back (brief §08.1 if_fail), and keep whichever draft has fewer
       // violations. Bounded by budget + a single attempt so it can never loop.
-      let gate = runAnswerQualityGates(finalText, { hadExternalEvidence });
+      let gate = runAnswerQualityGates(finalText, {
+        hadExternalEvidence,
+        sessionState: input.sessionState,
+        groundedFragrances: [...groundedFragrances.values()],
+      });
       if (
         !gate.passed &&
         usedTools &&
@@ -573,7 +644,7 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
           repairInstructionFor(gate.violations);
         try {
           const repair = await callModel({
-            system: SYSTEM_PROMPT,
+            system: systemPrompt,
             messages: withSynthesisInstruction(messages, repairInstruction),
             tools: [],
             model: repairModel,
@@ -583,7 +654,11 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
           recordUsage(repair, repairModel);
           const repairText = extractText(repair.content);
           if (repairText) {
-            const repairGate = runAnswerQualityGates(repairText, { hadExternalEvidence });
+            const repairGate = runAnswerQualityGates(repairText, {
+              hadExternalEvidence,
+              sessionState: input.sessionState,
+              groundedFragrances: [...groundedFragrances.values()],
+            });
             if (repairGate.violations.length < gate.violations.length) {
               finalText = repairText;
               gate = repairGate;
@@ -628,7 +703,7 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
       let response: ClaudeResponse;
       try {
         response = await callModel({
-          system: SYSTEM_PROMPT,
+          system: systemPrompt,
           messages,
           tools: claudeTools,
           model: input.model,
@@ -660,8 +735,20 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
           // A cues block means the model is deliberately asking the user a clarifying
           // question — nudging it to call tools here would send it into a loop where
           // the tools (vault stats, etc.) don't contain the missing user fact (e.g.
-          // travel month) and it asks the same question again. Accept the question.
+          // travel month) and it asks the same question again. Accept the question
+          // only when it does not conflict with persisted state.
           if (/```+\s*cues\b/i.test(text)) {
+            const cueGate = runAnswerQualityGates(text, {
+              hadExternalEvidence,
+              sessionState: input.sessionState,
+              groundedFragrances: [...groundedFragrances.values()],
+            });
+            if (!cueGate.passed) {
+              retrievalNudged = true;
+              messages.push({ role: "assistant", content: response.content });
+              messages.push({ role: "user", content: STATE_NUDGE });
+              continue;
+            }
             await finish(text);
             return;
           }
@@ -770,6 +857,7 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
         // Register the fragrances this result actually grounds, so the closing
         // synthesis can be pinned to only naming fragrances we retrieved.
         addGroundedNames(collectGroundedFragranceNames(result));
+        addGroundedFragrances(collectGroundedFragrancesForGate(def.name, result));
         // Capture the scorer's ranking (last one wins) so the synthesis headline
         // must agree with it, or explicitly justify overriding it (W-8).
         if (def.name === "beam_score_candidates") {
