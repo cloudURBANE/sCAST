@@ -933,6 +933,23 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
     return () => window.clearTimeout(id);
   }, [messages, resolved, proposal, busy, calmMotion, updateScrollEdges]);
 
+  // Keep the live agent output pinned in frame WHILE a turn is running. The
+  // activity trail (and the typing bubble before it) is the last child of the
+  // box and grows as each step lands; without following it, a long run scrolls
+  // its newest step below the fold and the user watches a static older line.
+  // This only runs while `busy` — the instant the turn settles, the answer-
+  // anchoring effect above takes over and lands the reply at its first line, so
+  // the two never fight. Keyed on the trail length + progress note so it nudges
+  // on every new step, not just on message changes.
+  useEffect(() => {
+    if (!busy) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: calmMotion ? 'auto' : 'smooth' });
+    const id = window.setTimeout(updateScrollEdges, calmMotion ? 0 : 280);
+    return () => window.clearTimeout(id);
+  }, [busy, activity.length, progressNote, calmMotion, updateScrollEdges]);
+
   useEffect(() => {
     if (greetingMounted) return;
     // Let the open crossfade settle on an empty stage first, then bring the
@@ -1619,25 +1636,14 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   const actionControls = (
     <div className="relative mx-auto mt-4 w-full max-w-[42.75rem] sm:mt-5">
       <div className="mb-2 flex min-h-[1.25rem] items-center justify-end gap-2 pr-1">
-        {/* The large persistent "BEAM AGENT" caption used to sit here and eat
-            vertical space while labeling nothing. We now show ONLY the live
-            status while the agent is working; at rest the small avatar badge
-            alone signals the concierge. */}
-        <AnimatePresence initial={false}>
-          {busy ? (
-            <motion.span
-              key="beam-agent-thinking"
-              initial={calmMotion ? false : { opacity: 0, y: 3 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={calmMotion ? { opacity: 0 } : { opacity: 0, y: 3 }}
-              transition={{ duration: 0.18, ease: SCENT_EASE }}
-              className="scent-type-label text-scent-accent/70"
-              data-thinking="true"
-            >
-              {progressNote || 'Thinking'}
-            </motion.span>
-          ) : null}
-        </AnimatePresence>
+        {/* No status text lives next to the avatar anymore. It used to echo the
+            exact live phase ("Reading your vault", "Searching the catalog") that
+            the in-log activity trail already shows step-by-step — so the user saw
+            the same line twice, once in the chat bubble and once beside the icon.
+            The trail is now the single source of granular progress; the avatar's
+            pulse alone signals the concierge is working here, and the calm phase
+            still reads in the header strip above the card (a different register,
+            not adjacent duplication). */}
         {/* Pulse the avatar while the agent is busy OR composing its opening
             greeting, so the open reads as the agent coming alive and writing —
             not a static panel that suddenly drops dots into an empty box. */}
@@ -1997,9 +2003,13 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                 type="button"
                 onClick={() => void runResolution(agentMode === 'fast' ? 'fast' : 'curate')}
                 disabled={busy}
-                className="scent-primary-button scent-beam-confirm-button inline-flex min-h-11 shrink-0 items-center justify-center rounded-[var(--radius-scent)] px-7 py-2.5 text-[12px] font-bold uppercase tracking-[0.18em] disabled:opacity-55"
+                className="scent-primary-button scent-beam-confirm-button inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-[var(--radius-scent)] px-7 py-2.5 text-[12px] font-bold uppercase tracking-[0.18em] disabled:opacity-55"
               >
-                <span>Confirm</span>
+                <Sparkles size={13} strokeWidth={2} aria-hidden />
+                {/* State the action, not a bare "Confirm": the tap visibly
+                    curates a match from the user's vault, so it never reads as
+                    the agent silently switching into an auto mode. */}
+                <span>Curate my match</span>
               </button>
             ) : null}
             {hasPreviewAction ? (
@@ -2094,9 +2104,10 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                 type="button"
                 onClick={() => composerFormRef.current?.requestSubmit()}
                 disabled={busy}
-                className="scent-primary-button inline-flex min-h-10 items-center justify-center rounded-[var(--radius-scent)] px-5 py-2 text-[11px] font-bold uppercase tracking-[0.16em] disabled:opacity-55"
+                className="scent-primary-button inline-flex min-h-10 items-center justify-center gap-1.5 rounded-[var(--radius-scent)] px-5 py-2 text-[11px] font-bold uppercase tracking-[0.16em] disabled:opacity-55"
               >
-                <span>Confirm</span>
+                <Send size={12} aria-hidden />
+                <span>Send</span>
               </button>
               <button
                 type="button"
@@ -2141,11 +2152,16 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       />
       {/* Cap-and-scroll instead of a fixed height: the box fits short turns (no
           dead space above the input) and only scrolls once a long answer exceeds
-          the cap (no more cramped clip into a too-short window). */}
+          the cap (no more cramped clip into a too-short window). The cap is sized
+          so the panel reads as a real chat surface rather than a mini search
+          window — ~20% taller on phones, ~18% on tablet/desktop. The panel's top
+          edge is pinned by the header above it, so this extra height always grows
+          the box DOWNWARD; the framer `layout` on the host animates the delta
+          when crossing between the search and composer states. */}
       <div
         ref={scrollRef}
         onScroll={updateScrollEdges}
-        className="flex w-full max-h-[min(46dvh,24rem)] flex-col gap-3 overflow-y-auto px-1.5 pb-2 pt-3 text-left scrollbar-hide sm:max-h-[min(48dvh,28rem)] sm:px-2 sm:pt-4"
+        className="flex w-full min-h-[13.5rem] max-h-[min(55dvh,29rem)] flex-col gap-3 overflow-y-auto px-1.5 pb-2 pt-3 text-left scrollbar-hide sm:min-h-[15.5rem] sm:max-h-[min(57dvh,33rem)] sm:px-2 sm:pt-4"
         role="log"
         aria-live="polite"
         aria-label="Beam Agent conversation"
