@@ -70,6 +70,23 @@ function asksForKnownSlot(text: string, state: BeamSessionState | undefined): bo
   return false;
 }
 
+function abandonsPendingSlot(text: string, state: BeamSessionState | undefined): boolean {
+  const slot = state?.pendingSlotUnanswered ? state.pendingSlot : undefined;
+  if (!slot) return false;
+  if (!text.includes("?")) return true;
+  const patterns: Partial<Record<NonNullable<BeamSessionState["pendingSlot"]>, RegExp>> = {
+    direction: /\b(?:citrus|green|aromatic|lighter|fresh|warm|rich|direction|family)\b/i,
+    projection: /\b(?:projection|trail|skin[ -]?close|moderate|statement)\b/i,
+    occasion: /\b(?:occasion|setting|work|date|night out|staying in)\b/i,
+    impression: /\b(?:impression|calm|focused|confident|social|come across)\b/i,
+    vibe: /\b(?:vibe|mood|style|feel)\b/i,
+    budget: /\b(?:budget|spend|price)\b/i,
+    month: /\b(?:month|when|season|time of year)\b/i,
+    destination: /\b(?:where|destination|city)\b/i,
+  };
+  return !(patterns[slot]?.test(text) ?? false);
+}
+
 /** A clarifying / preference-seeking question (requires an actual `?`). */
 const PREFERENCE_QUESTION_PATTERN =
   /\b(?:do|would|are|could|can|have)\s+you\b|\b(?:which|what|when|where|how about)\b|\bprefer(?:ence)?\b|\b(?:fresh|light|warm|day)\s+or\b|\b(?:tell me|let me know)\b/i;
@@ -151,6 +168,7 @@ export function runAnswerQualityGates(answerText: string, input: QualityGateInpu
     if (REVIEW_PATTERN.test(text)) violations.push("review_claim_without_evidence");
   }
   if (asksForKnownSlot(text, input.sessionState)) violations.push("redundant_clarification");
+  if (abandonsPendingSlot(text, input.sessionState)) violations.push("pending_slot_abandoned");
   if (delegatedButDeferred(text, input.sessionState, input.groundedFragrances ?? [])) {
     violations.push("delegated_but_questioned");
   }
@@ -187,6 +205,8 @@ export function repairInstructionFor(violations: string[]): string {
     fixes.push("Do NOT cite ratings or review scores - you have no fresh source for them.");
   if (violations.includes("redundant_clarification"))
     fixes.push("Do NOT ask for month, destination, vibe, or direction already present in Known so far; use the known value.");
+  if (violations.includes("pending_slot_abandoned"))
+    fixes.push("The latest user message did not answer the active question. Acknowledge useful context, then re-ask that same slot with choices from its category only.");
   if (violations.includes("delegated_but_questioned"))
     fixes.push("The user delegated the choice - do NOT ask another preference question; commit to a specific grounded recommendation now.");
   if (violations.includes("mission_unfulfilled"))

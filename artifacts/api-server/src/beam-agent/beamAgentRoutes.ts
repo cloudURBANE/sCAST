@@ -47,7 +47,7 @@ import { packetFromWardrobeRow, redactEventForClient } from "./beamToolCore.ts";
 import { resolveBeamBudget, resolveBeamModels } from "./provider.ts";
 import { selectConciergeLane } from "./laneSelector.ts";
 import { appendSessionTurn, loadSession, saveSessionState } from "./beamSessionStore.ts";
-import { deriveBeamSessionState } from "./missionState.ts";
+import { deriveBeamSessionState, inferPendingSlotFromAssistant } from "./missionState.ts";
 import type { BeamEmit, BeamRunContext, BeamRunEvent, CandidatePacket } from "./types.ts";
 import { createBeamResearcher } from "./research/beamResearch.ts";
 import { loadResearchCache, saveResearchCache } from "./research/researchCache.ts";
@@ -321,7 +321,13 @@ router.post("/runs", runRateLimit, requireAuth, async (req: AuthRequest, res) =>
   const emit = makeEmit(record);
   const session = await loadSession(ctx);
   const history = session.turns;
-  const sessionState = deriveBeamSessionState(session.state, message);
+  const lastAssistantText = [...history]
+    .reverse()
+    .find((turn) => turn.role === "assistant" && typeof turn.content === "string")?.content;
+  const pendingSlot = typeof lastAssistantText === "string"
+    ? inferPendingSlotFromAssistant(lastAssistantText)
+    : undefined;
+  const sessionState = deriveBeamSessionState(session.state, message, pendingSlot);
   await saveSessionState(ctx, sessionState);
   // Surface the freshly-merged structured slots/mission to the client up front,
   // BEFORE the loop runs — so the panel can advance its captured-cue count and

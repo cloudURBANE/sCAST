@@ -395,15 +395,13 @@ const BeamActivityTrail: React.FC<{
   const currentStep = [...steps].reverse().find((s) => s.state === 'active') ?? steps[steps.length - 1];
   const showSpinner = running && activeCount > 0;
   const elapsedSeconds = elapsedMs != null ? Math.max(1, Math.round(elapsedMs / 1000)) : null;
-  // Settled recap copy: reads as concierge craftsmanship ("Curated in 8s") rather
-  // than an agent-execution terminal ("Thought for 8s"). The seconds signal real
-  // work was done without exposing raw "N steps run" debug framing as the headline;
-  // the step-by-step tool list stays available behind the Details toggle.
+  // A completed tool trail is not necessarily a completed recommendation. Keep
+  // this factual and leave the actual actions behind a descriptive control.
   const summaryLabel = showSpinner
     ? currentStep.label
     : elapsedSeconds != null
-      ? `Curated in ${elapsedSeconds}s · ${steps.length} step${steps.length === 1 ? '' : 's'}`
-      : `Curated · ${steps.length} step${steps.length === 1 ? '' : 's'}`;
+      ? `Answered in ${elapsedSeconds}s`
+      : 'Response ready';
 
   const body = (
     <div className="mt-2.5 flex flex-col gap-2 border-t border-scent-accent/10 pt-2.5">
@@ -444,7 +442,7 @@ const BeamActivityTrail: React.FC<{
           aria-controls={ACTIVITY_TRAIL_BODY_ID}
           className="-mr-1 flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-scent-accent/62 transition-colors hover:text-scent-accent focus:outline-none focus-visible:ring-1 focus-visible:ring-scent-accent/50"
         >
-          <span>{expanded ? 'Hide' : 'Details'}</span>
+          <span>{expanded ? 'Hide actions' : 'View agent actions'}</span>
           <ChevronDown
             size={13}
             className={`transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
@@ -545,7 +543,7 @@ function formatFacetLine(cues: Record<string, string>): string {
   if (entries.length === 0) return 'No cues captured yet';
   return entries
     .map(([key, value]) => `${CUE_LABELS[key] ?? titleCaseCue(key)}: ${value}`)
-    .join(' / ');
+    .join(' · ');
 }
 
 const ENOUGH_CONTEXT_PROMPT =
@@ -1038,7 +1036,16 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
     }
     return out;
   }, [agentCues, facets]);
-  const capturedCount = Object.keys(capturedCues).length;
+  const capturedCount = useMemo(() => {
+    const signatures: string[][] = [];
+    for (const value of Object.values(capturedCues)) {
+      const tokens = value.toLowerCase().split(/[^a-z]+/).filter((token) => token.length > 3);
+      if (tokens.length > 0 && !signatures.some((prior) => tokens.some((token) => prior.includes(token)))) {
+        signatures.push(tokens);
+      }
+    }
+    return signatures.length;
+  }, [capturedCues]);
 
   // The conversation is underway once the user has said anything (typed or tapped
   // a cue). The live agent path answers in free text and never sets `resolved`, so
@@ -1649,6 +1656,11 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
     else void runResolution('curate');
   }, [busy, lastUserMessage, runResolution, submitMessage]);
 
+  const recommendNow = useCallback(() => {
+    if (busy) return;
+    void submitMessage('Recommend now with what you know. You decide.', { echoUser: true });
+  }, [busy, submitMessage]);
+
   const promptManualBottles = useCallback(() => {
     if (busy) return;
     setCatalogFailure(false);
@@ -1753,7 +1765,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         : 'Tap a cue below, or describe your day';
 
   const actionControls = (
-    <div className="relative mx-auto mt-4 w-full max-w-[42.75rem] sm:mt-5">
+    <div className="relative mx-auto mt-4 w-full max-w-[52rem] sm:mt-5">
       <div className="mb-2 flex min-h-[1.25rem] items-center justify-end gap-2 pr-1">
         {/* No status text lives next to the avatar anymore. It used to echo the
             exact live phase ("Reading your vault", "Searching the catalog") that
@@ -2008,8 +2020,9 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   );
 
   const hasConfirmAction = items.length > 0 && (enoughContext || agentMode === 'fast');
+  const hasRecommendNowAction = items.length > 0 && conversationStarted && !hasMatch;
   const hasPreviewAction = agentMode === 'premium';
-  const hasActionRow = hasConfirmAction || hasPreviewAction;
+  const hasActionRow = hasConfirmAction || hasRecommendNowAction || hasPreviewAction;
   // A cue has been tapped into the composer but not sent yet. Tapping a cue used
   // to blank the lane entirely, forcing the user to hunt for the small send
   // arrow; instead we surface an explicit Confirm / Cancel pair right where the
@@ -2065,7 +2078,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         animate={{ opacity: 1, y: 0 }}
         exit={calmMotion ? { opacity: 0 } : { opacity: 0, y: 6 }}
         transition={{ duration: 0.42, ease: SCENT_EASE }}
-        className="mx-auto w-full max-w-[42.75rem]"
+        className="mx-auto w-full max-w-[52rem]"
         aria-label="Beam Agent quick replies"
         data-testid="scent-mission-cue-bar"
       >
@@ -2093,7 +2106,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         ) : showAgentSuggestions ? (
           <div className="flex flex-col items-center" data-testid="beam-agent-suggestions">
             <p className="scent-type-label text-center text-scent-text-subtle">
-              Tap to answer, or type your own
+              Answer this question, then I will recommend
             </p>
             <div className="mt-1.5 flex flex-wrap items-center justify-center gap-1.5">
               {agentSuggestions.map((suggestion, index) => (
@@ -2129,6 +2142,17 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                     curates a match from the user's vault, so it never reads as
                     the agent silently switching into an auto mode. */}
                 <span>Curate my match</span>
+              </button>
+            ) : null}
+            {hasRecommendNowAction && !hasConfirmAction ? (
+              <button
+                type="button"
+                onClick={recommendNow}
+                disabled={busy}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-scent-accent/42 px-5 py-2.5 text-[12px] font-semibold text-[#fff7ec] transition-colors hover:bg-scent-accent/10 disabled:opacity-45"
+              >
+                <Zap size={13} aria-hidden />
+                Recommend now
               </button>
             ) : null}
             {hasPreviewAction ? (
@@ -2257,7 +2281,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
     <div className="relative flex min-h-0 w-full min-w-0 flex-col text-center" data-testid="scent-mission-panel">
       {/* The title, progress, and close control now live in a header strip above
           the card (see App.tsx) so this surface is just the conversation. */}
-      <div className="relative mx-auto w-full max-w-[42.75rem] overflow-hidden rounded-[calc(var(--radius-scent)-14px)]">
+      <div className="relative mx-auto w-full max-w-[52rem] overflow-hidden rounded-[calc(var(--radius-scent)-14px)]">
       {/* Subtle top/bottom fade hints — shown only when the conversation actually
           overflows above/below, so a long answer reads as "more to scroll"
           rather than a hard clip. Pointer-events-none keeps them non-blocking. */}
@@ -2367,7 +2391,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                     ? 'self-start border-red-400/25 bg-red-500/10 text-red-100'
                     : 'self-start border-scent-accent/18 bg-[linear-gradient(180deg,rgba(255,236,183,0.052),rgba(212,175,55,0.025)_42%,rgba(0,0,0,0.22))] text-scent-text-muted'
               }`}
-              aria-label={typing ? 'Beam Agent is typing' : undefined}
+              aria-label={typing ? 'Beam Agent is typing' : message.role === 'user' ? 'You' : message.role === 'agent' ? 'Beam Agent' : undefined}
             >
               {message.role === 'system' ? (
                 <AlertTriangle size={13} className="mr-1.5 inline align-[-2px]" aria-hidden />

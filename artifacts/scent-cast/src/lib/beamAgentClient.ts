@@ -111,7 +111,7 @@ export type BeamCard =
 
 /** Free-text cues the backend extracted deterministically from the transcript. */
 export type BeamAgentSlots = Partial<
-  Record<'month' | 'destination' | 'occasion' | 'vibe' | 'direction' | 'budget', string>
+  Record<'month' | 'destination' | 'occasion' | 'vibe' | 'direction' | 'projection' | 'impression' | 'budget', string>
 >;
 
 /** Structured mission target derived from the conversation (e.g. a travel kit). */

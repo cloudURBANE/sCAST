@@ -1,4 +1,4 @@
-import type { BeamMissionState, BeamSessionSlots, BeamSessionState } from "./types.ts";
+import type { BeamMissionState, BeamSessionSlots, BeamSessionState, BeamSlotKey } from "./types.ts";
 
 const EMPTY_STATE: BeamSessionState = { slots: {} };
 
@@ -38,10 +38,6 @@ const VIBES = [
   "artsy",
   "bold",
   "quiet",
-  "clean",
-  "fresh",
-  "warm",
-  "rich",
   "romantic",
   "professional",
   "casual",
@@ -51,10 +47,17 @@ const VIBES = [
   "elegant",
   "cozy",
   "beachy",
-  "spicy",
-  "woody",
-  "green",
-  "citrus",
+];
+
+const SLOT_KEYS: BeamSlotKey[] = [
+  "month",
+  "destination",
+  "occasion",
+  "vibe",
+  "direction",
+  "projection",
+  "impression",
+  "budget",
 ];
 
 function cleanCapture(value: string): string {
@@ -98,8 +101,40 @@ function parseVibe(text: string): string | undefined {
 }
 
 function parseDirection(text: string): string | undefined {
-  if (/\b(?:light|lighter|fresh|airy|bright|citrus|green)\b/i.test(text)) return "lighter/fresh";
+  const families = ["citrus", "green", "aromatic"].filter((family) =>
+    new RegExp(`\\b${family}\\b`, "i").test(text),
+  );
+  if (families.length > 0) return families.join(", ");
+  if (/\b(?:light|lighter|fresh|airy|bright)\b/i.test(text)) return "lighter/fresh";
   if (/\b(?:warm|warmer|rich|richer|spicy|amber|vanilla|woody|smoky)\b/i.test(text)) return "warmer/richer";
+  return undefined;
+}
+
+function parseProjection(text: string): string | undefined {
+  if (/\b(?:skin[ -]?close|close to (?:the )?skin|intimate|subtle projection)\b/i.test(text)) return "skin-close";
+  if (/\b(?:moderate (?:trail|projection)|office[- ]safe projection)\b/i.test(text)) return "moderate";
+  if (/\b(?:statement projection|strong projection|project(?:ion)?|beast mode)\b/i.test(text)) return "statement";
+  return undefined;
+}
+
+function parseImpression(text: string): string | undefined {
+  const found = ["calm", "focused", "confident", "social"].filter((value) =>
+    new RegExp(`\\b${value}\\b`, "i").test(text),
+  );
+  return found.length > 0 ? found.join(", ") : undefined;
+}
+
+/** Determine the one category an assistant question is asking the user to fill. */
+export function inferPendingSlotFromAssistant(text: string): BeamSlotKey | undefined {
+  if (!text.includes("?")) return undefined;
+  if (/\b(?:citrus|green|aromatic|scent famil(?:y|ies)|lighter|warmer|fresh direction|scent direction)\b|\bfresh\b.{0,60}\bwarm(?:th)?\b|\bwarm(?:th)?\b.{0,60}\bfresh\b/i.test(text)) return "direction";
+  if (/\b(?:projection|trail|skin[ -]?close|statement)\b/i.test(text)) return "projection";
+  if (/\b(?:occasion|setting|work|date night|night out|staying in)\b/i.test(text)) return "occasion";
+  if (/\b(?:impression|come across|calm|focused|confident|social)\b/i.test(text)) return "impression";
+  if (/\b(?:vibe|mood|style|feel)\b/i.test(text)) return "vibe";
+  if (/\b(?:budget|spend|price range)\b/i.test(text)) return "budget";
+  if (/\b(?:which|what) month|\bwhen\b|time of year|season\b/i.test(text)) return "month";
+  if (/\b(?:where|destination|which city)\b/i.test(text)) return "destination";
   return undefined;
 }
 
@@ -183,6 +218,8 @@ export function cloneBeamSessionState(state: BeamSessionState | undefined): Beam
     slots: { ...state.slots },
     ...(state.mission ? { mission: { ...state.mission } } : {}),
     ...(state.userDelegatedChoice ? { userDelegatedChoice: true } : {}),
+    ...(state.pendingSlot ? { pendingSlot: state.pendingSlot } : {}),
+    ...(state.pendingSlotUnanswered ? { pendingSlotUnanswered: true } : {}),
   };
 }
 
@@ -191,7 +228,7 @@ export function sanitizeBeamSessionState(value: unknown): BeamSessionState {
   const record = value as Record<string, unknown>;
   const rawSlots = record.slots && typeof record.slots === "object" ? (record.slots as Record<string, unknown>) : {};
   const slots: BeamSessionSlots = {};
-  for (const key of ["month", "destination", "occasion", "vibe", "direction", "budget"] as const) {
+  for (const key of SLOT_KEYS) {
     const slot = rawSlots[key];
     if (typeof slot === "string" && slot.trim()) slots[key] = slot.trim().slice(0, 120);
   }
@@ -217,6 +254,10 @@ export function sanitizeBeamSessionState(value: unknown): BeamSessionState {
     slots,
     ...(mission ? { mission } : {}),
     ...(record.userDelegatedChoice === true ? { userDelegatedChoice: true } : {}),
+    ...(typeof record.pendingSlot === "string" && SLOT_KEYS.includes(record.pendingSlot as BeamSlotKey)
+      ? { pendingSlot: record.pendingSlot as BeamSlotKey }
+      : {}),
+    ...(record.pendingSlotUnanswered === true ? { pendingSlotUnanswered: true } : {}),
   };
 }
 
@@ -242,10 +283,16 @@ export function mergeBeamSessionState(previous: BeamSessionState | undefined, pa
     slots,
     ...(mission ? { mission } : {}),
     ...(base.userDelegatedChoice ? { userDelegatedChoice: true } : {}),
+    ...(patch.pendingSlot ? { pendingSlot: patch.pendingSlot } : {}),
+    ...(patch.pendingSlotUnanswered ? { pendingSlotUnanswered: true } : {}),
   };
 }
 
-export function deriveBeamSessionState(previous: BeamSessionState | undefined, userMessage: string): BeamSessionState {
+export function deriveBeamSessionState(
+  previous: BeamSessionState | undefined,
+  userMessage: string,
+  pendingSlot?: BeamSlotKey,
+): BeamSessionState {
   const text = userMessage.slice(0, 2000);
   const slots: BeamSessionSlots = {};
   const month = parseMonth(text);
@@ -258,6 +305,10 @@ export function deriveBeamSessionState(previous: BeamSessionState | undefined, u
   if (vibe) slots.vibe = vibe;
   const direction = parseDirection(text);
   if (direction) slots.direction = direction;
+  const projection = parseProjection(text);
+  if (projection) slots.projection = projection;
+  const impression = parseImpression(text);
+  if (impression) slots.impression = impression;
   const budget = parseBudget(text);
   if (budget) slots.budget = budget;
 
@@ -267,6 +318,9 @@ export function deriveBeamSessionState(previous: BeamSessionState | undefined, u
     slots,
     ...(mission ? { mission } : {}),
     ...(isDelegationPhrase(text) ? { userDelegatedChoice: true } : {}),
+    ...(pendingSlot && !slots[pendingSlot] && !isDelegationPhrase(text)
+      ? { pendingSlot, pendingSlotUnanswered: true }
+      : {}),
   };
   return mergeBeamSessionState(previous ?? EMPTY_STATE, patch);
 }
@@ -294,6 +348,11 @@ export function beamSessionStatePrompt(state: BeamSessionState | undefined): str
   }
   if (safe.userDelegatedChoice || mission?.userDelegatedChoice) {
     lines.push("The user has delegated the choice. Do not ask another preference question; make the best grounded choice now.");
+  }
+  if (safe.pendingSlot && safe.pendingSlotUnanswered) {
+    lines.push(
+      `The active question is still unresolved: expected ${safe.pendingSlot}. The user's latest message belongs to another category. Acknowledge any useful new context, do not treat it as the ${safe.pendingSlot} answer, and briefly re-ask the same ${safe.pendingSlot} question with choices from that category only.`,
+    );
   }
   lines.push(
     "Before asking any clarification, check Known so far. Never ask for a value already listed there.",

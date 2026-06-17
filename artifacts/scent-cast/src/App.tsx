@@ -472,11 +472,11 @@ const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({
     locationText || 'location-missing',
   ].join('|');
   const metrics = [
-    { label: 'Matrix', subtitle: 'Conditions', value: condition },
-    { label: 'Saturation', subtitle: 'Humidity', value: humidity },
-    { label: 'Chronos', subtitle: 'Time', value: <LiveClock /> },
-    { label: 'Atmosphere', subtitle: 'Temperature', value: temp },
-    { label: 'Coordinate', subtitle: 'Location', value: location },
+    { label: 'Conditions', value: condition },
+    { label: 'Humidity', value: humidity },
+    { label: 'Time', value: <LiveClock /> },
+    { label: 'Temperature', value: temp },
+    { label: 'Location', value: location },
   ];
 
   useEffect(() => {
@@ -547,9 +547,6 @@ const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({
               <div key={metric.label} className="scent-atmosphere-marquee-cell">
                 <span className="scent-atmosphere-label">
                   <span className="scent-atmosphere-label-text">{metric.label}</span>
-                  {metric.subtitle && (
-                    <span className="scent-atmosphere-subtitle">({metric.subtitle})</span>
-                  )}
                 </span>
                 <span className="scent-atmosphere-value">{metric.value}</span>
               </div>
@@ -674,8 +671,8 @@ function DashboardView() {
     return () => mq.removeEventListener('change', onChange);
   }, []);
   const missionHeaderMargins = isSmUp
-    ? { marginTop: '-3.5rem', marginBottom: '0.75rem' }
-    : { marginTop: '-2.5rem', marginBottom: '0.625rem' };
+    ? { marginTop: '0', marginBottom: '0.75rem' }
+    : { marginTop: '0', marginBottom: '0.625rem' };
   const [viewState, setViewState] = useState<'search' | 'agent'>('search');
   // Beam Agent progress surfaced by the panel so its header (title + progress +
   // close) can render in a strip ABOVE the bordered card instead of inside it.
@@ -922,7 +919,7 @@ function DashboardView() {
                   // rise in a single continuous motion instead of snapping up
                   // after the fade completes.
                   style={{ overflow: 'hidden' }}
-                  className="mx-auto w-full max-w-[42.75rem] px-1"
+                  className="mx-auto w-full max-w-[52rem] px-1"
                 >
                   {/* min-h holds the absolutely-positioned close button fully
                       inside the header's clipped (overflow-hidden) box, so the
@@ -1049,7 +1046,7 @@ function DashboardView() {
                       animate={{ opacity: 1, y: 0 }}
                       exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -4 }}
                       transition={vaultContentTransition}
-                      className="scent-signature-cta group flex h-[60px] w-full max-w-[42.75rem] items-center justify-center gap-2.5 rounded-full px-6 text-[12px] font-bold uppercase tracking-[0.14em] text-scent-accent focus-visible:outline-none sm:h-[68px] sm:text-[13px]"
+                      className="scent-signature-cta group flex h-[60px] w-full max-w-[52rem] items-center justify-center gap-2.5 rounded-full px-6 text-[12px] font-bold uppercase tracking-[0.14em] text-scent-accent focus-visible:outline-none sm:h-[68px] sm:text-[13px]"
                       aria-label="Discover your signature scent"
                       title="Discover your signature scent"
                     >
@@ -1062,7 +1059,7 @@ function DashboardView() {
             ) : null}
           </section>
 
-          <HomepageAtmosphereChrome />
+          {!agentActive ? <HomepageAtmosphereChrome /> : null}
 
           <div id="scent-vault-section" className="scent-deferred-section !mt-64 sm:!mt-72 lg:!mt-96" style={{ scrollMarginTop: 'var(--topbar-h)' }}>
             <React.Suspense fallback={<WardrobeFallback />}>
