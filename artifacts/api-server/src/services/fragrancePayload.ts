@@ -17,7 +17,7 @@ import {
 } from "./fragrancePayloadCore";
 import { db } from "@workspace/db";
 import { globalFragrancesTable, imageCacheTable } from "@workspace/db/schema";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql, type AnyColumn, type SQL } from "drizzle-orm";
 import { makeLookupKey } from "./catalogService";
 import { IMAGE_PIPELINE_VERSION } from "./imageIdentity";
 
@@ -92,6 +92,26 @@ export function normalizeImageAdjustment(value: unknown): BottleImageAdjustment 
  */
 export function sanitizeFragrance(fragrance: Record<string, any>): Record<string, any> {
   return stampVaultSchemaVersion(stripBase64ImageDataUrls(fragrance) as Record<string, any>);
+}
+
+/**
+ * SQL projection of `fragrance_data` with the heaviest modal-only fields removed
+ * **inside Postgres**, so they never travel Supabase -> Express. That hop is what
+ * Supabase meters as database egress, so a real fix must avoid pulling the bytes
+ * in the query — trimming the response object after `db.select()` would not save
+ * a single metered byte.
+ *
+ * Strips the full scraped `raw.reviews` text (by far the heaviest part) and
+ * `raw.description`. It intentionally **keeps `raw.notes`**, because
+ * {@link normalizeFragrance} derives the note pyramid from it for legacy rows
+ * that lack `derived_metrics.notes`. Reviews for the one item a user opens are
+ * refetched on demand via `GET /api/wardrobe/:id/reviews`.
+ *
+ * Use this in the high-frequency LIST reads (`GET /api/wardrobe` poll and the
+ * community feed) — never on the write path, which must persist the full blob.
+ */
+export function slimListFragranceData(column: AnyColumn): SQL<Record<string, any>> {
+  return sql<Record<string, any>>`${column} #- '{raw_engine_detail,raw,reviews}' #- '{raw_engine_detail,raw,description}'`;
 }
 
 /**

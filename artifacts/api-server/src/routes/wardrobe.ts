@@ -17,6 +17,7 @@ import {
   normalizeFragrance,
   normalizeImageAdjustment,
   sanitizeFragrance,
+  slimListFragranceData,
 } from "../services/fragrancePayload";
 import { assertNoPersistedBase64Image } from "../services/persistenceGuards";
 import { nonPerfumeSignal } from "../services/nonPerfumeSignal";
@@ -25,6 +26,7 @@ import {
   detailRefreshPatchFromBody,
   hasDetailRefreshPayload,
 } from "../services/wardrobeDetailFacts";
+import { wardrobeVersionEtag } from "../services/wardrobeVersion";
 
 const router = Router();
 
@@ -83,8 +85,48 @@ router.get("/wardrobe", requireAuth, async (req: AuthRequest, res) => {
   const user = req.user!;
   const tenantId = getTenantId(req);
 
+  // Conditional GET to kill idle-poll egress. The background poll hits this
+  // endpoint every 60s per open tab; when nothing changed, re-running the heavy
+  // select + image hydration below (and shipping it over the metered Supabase ->
+  // Express hop) is pure waste. So first compute a cheap version key from
+  // count(*) + max(updated_at) over just this user's rows and answer 304 when it
+  // matches the client's If-None-Match — before touching fragrance_data.
+  //
+  // The key intentionally covers only user_fragrances changes (add/edit/remove),
+  // not image_cache hydration: the client sends If-None-Match ONLY on the
+  // steady-state interval tick, while focus/visibility and initial loads fetch
+  // unconditionally, so returning to a tab still re-runs hydration and picks up
+  // any opportunistic image improvement. no-store keeps the browser cache out of
+  // our manually managed ETag round-trip.
+  const [version] = await db
+    .select({
+      count: sql<number>`count(*)::int`,
+      maxUpdated: sql<string | null>`max(${userFragrancesTable.updatedAt})`,
+    })
+    .from(userFragrancesTable)
+    .where(and(
+      eq(userFragrancesTable.tenantId, tenantId),
+      eq(userFragrancesTable.userId, user.id),
+    ));
+
+  const etag = wardrobeVersionEtag(version?.count ?? 0, version?.maxUpdated ?? null);
+  res.setHeader("ETag", etag);
+  res.setHeader("Cache-Control", "private, no-store");
+  if (req.headers["if-none-match"] === etag) {
+    res.status(304).end();
+    return;
+  }
+
+  // Egress: project away the heavy `raw.reviews`/`raw.description` text in
+  // Postgres so the (frequently polled) wardrobe payload stays small over the
+  // Supabase -> Express hop. Reviews are refetched per-item on detail open via
+  // GET /wardrobe/:id/reviews. See slimListFragranceData for why this must be a
+  // SQL projection, not a post-fetch object trim.
   const rows = await db
-    .select()
+    .select({
+      id: userFragrancesTable.id,
+      fragranceData: slimListFragranceData(userFragrancesTable.fragranceData),
+    })
     .from(userFragrancesTable)
     .where(and(
       eq(userFragrancesTable.tenantId, tenantId),
@@ -96,6 +138,44 @@ router.get("/wardrobe", requireAuth, async (req: AuthRequest, res) => {
   const fragrances = hydrated.map((data, i) => ({ ...data, _dbId: rows[i]!.id }));
 
   res.json(fragrances);
+});
+
+/**
+ * Reviews for a single wardrobe row, on demand. The list/poll responses strip
+ * the heavy scraped review text (see slimListFragranceData), so the detail
+ * modal fetches it here only for the one item the user actually opens. Projects
+ * just the reviews JSON path so we never re-pull the whole blob.
+ */
+router.get("/wardrobe/:id/reviews", requireAuth, async (req: AuthRequest, res) => {
+  const user = req.user!;
+  const tenantId = getTenantId(req);
+  const id = String(req.params.id ?? "").trim();
+  if (!id) {
+    res.status(400).json({ error: "id is required" });
+    return;
+  }
+
+  const rows = await db
+    .select({
+      reviews: sql<unknown>`${userFragrancesTable.fragranceData} #> '{raw_engine_detail,raw,reviews}'`,
+    })
+    .from(userFragrancesTable)
+    .where(and(
+      eq(userFragrancesTable.tenantId, tenantId),
+      eq(userFragrancesTable.userId, user.id),
+      isUuidish(id)
+        ? eq(userFragrancesTable.id, id as any)
+        : sql`${userFragrancesTable.fragranceData}->>'id' = ${id}`,
+    ))
+    .limit(1);
+
+  if (rows.length === 0) {
+    res.status(404).json({ error: "Fragrance not found" });
+    return;
+  }
+
+  const raw = rows[0]!.reviews;
+  res.json({ reviews: Array.isArray(raw) ? raw : [] });
 });
 
 router.post("/wardrobe", requireAuth, async (req: AuthRequest, res) => {
