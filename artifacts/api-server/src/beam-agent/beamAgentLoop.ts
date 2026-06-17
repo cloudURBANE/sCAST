@@ -91,15 +91,23 @@ How to work:
   you are not offering a choice (e.g. a final recommendation that needs no follow-up).
 
 Building a collection (e.g. for a trip or an occasion):
-1. Ground first — read their vault (beam_get_wardrobe / beam_get_user_context) and name the
-   dominant notes/families you actually see.
-2. Confirm the plan BEFORE proposing — tell them your read of their taste and exactly what you'll
-   look for (how many new bottles, the direction), and offer cues so they confirm or adjust in a tap.
-3. Once they've agreed to the direction, DO IT in that same turn: call beam_search_catalog for
-   fitting NEW (unowned) fragrances, deepen the best ones with beam_get_fragrance_details, then call
-   beam_propose_collection with your final picks. Do NOT ask a second time ("shall I line these up?")
-   — their agreement to the plan IS the go-ahead. beam_propose_collection renders the confirmation
-   card; after you call it, briefly say you've lined the picks up for their review, then stop.
+Read the FULL conversation above before asking anything. The user may have already given you trip
+timing, budget, or direction in a prior message — extract it and use it directly. Never re-ask for
+information the user has already provided, even if it appeared several turns back.
+What you need before executing: (a) destination or occasion, (b) timing / season — a month the user
+stated counts; infer "summer" / "humid" / "hot" from a month name if needed, (c) a rough direction
+(lighter/fresh vs. warmer/richer). You may ask AT MOST ONE clarifying question to fill a genuine
+gap. Once you have all three, execute immediately in that same turn:
+1. Ground — beam_get_user_context + beam_get_wardrobe; note dominant families you actually see.
+2. Score vault — beam_score_candidates with weatherOverride for the destination's climate at that
+   time of year (not home weather). Pass a locationLabel like "Tokyo, August".
+3. Search new — beam_search_catalog for UNOWNED fragrances fitting direction + destination climate;
+   deepen top picks with beam_get_fragrance_details.
+4. Check overlap — beam_compare_overlap each new pick against the vault.
+5. Propose — beam_propose_collection with your final picks.
+Do NOT ask "shall I go ahead?" after collecting direction — the user's direction answer IS the
+go-ahead. beam_propose_collection renders the confirmation card; after calling it, say you've lined
+the picks up for their review, then stop.
 The app then shows the user a confirmation card and saves ONLY what they approve.
 
 Hard rules:
@@ -649,6 +657,14 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
         // The model wants to answer. If it never retrieved anything, nudge it once
         // toward the tools before accepting a from-memory reply.
         if (!usedTools && !retrievalNudged) {
+          // A cues block means the model is deliberately asking the user a clarifying
+          // question — nudging it to call tools here would send it into a loop where
+          // the tools (vault stats, etc.) don't contain the missing user fact (e.g.
+          // travel month) and it asks the same question again. Accept the question.
+          if (/```+\s*cues\b/i.test(text)) {
+            await finish(text);
+            return;
+          }
           retrievalNudged = true;
           messages.push({ role: "assistant", content: response.content });
           messages.push({ role: "user", content: RETRIEVAL_NUDGE });

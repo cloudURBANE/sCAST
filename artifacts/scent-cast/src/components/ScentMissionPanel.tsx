@@ -858,6 +858,11 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   const composerRef = useRef<HTMLInputElement | null>(null);
   const composerFormRef = useRef<HTMLFormElement | null>(null);
   const sessionIdRef = useRef<string | undefined>(undefined);
+  // Separate ref for the beam agent session — the scripted fallback path updates
+  // sessionIdRef with its own session ID (via applyResponse), which would corrupt
+  // the beam context on the next agent turn. This ref is only written on beam
+  // completions, so the two paths never bleed into each other.
+  const beamSessionIdRef = useRef<string | undefined>(undefined);
   const activityIdRef = useRef(0);
 
   // Desktop click-drag for the cue strip; touch keeps native momentum scroll.
@@ -1143,7 +1148,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       try {
         const result = await runBeamAgentMission({
           message,
-          sessionId: sessionIdRef.current,
+          sessionId: beamSessionIdRef.current,
           weather: buildMissionWeather(weather),
           authToken,
           apiBaseUrl: API_BASE_URL,
@@ -1178,6 +1183,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         });
 
         if (result.status === 'completed') {
+          beamSessionIdRef.current = result.sessionId;
           sessionIdRef.current = result.sessionId;
           setSessionId(result.sessionId);
           // Freeze this run's trail onto the reply: seal any still-active row (the
