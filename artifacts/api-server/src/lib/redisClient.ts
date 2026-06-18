@@ -51,6 +51,28 @@ export function isRedisConfigured(): boolean {
 }
 
 /**
+ * Emit a single boot-time log stating whether shared state is durable (Redis) or
+ * ephemeral (in-memory). Without this, an unset REDIS_URL is *silent*: `getRedis()`
+ * returns null with no log, so Beam conversation memory and rate limits run in
+ * process-local memory and reset on every restart/redeploy with zero signal in the
+ * logs. This makes the degraded mode loud so operators can confirm durability at a
+ * glance instead of inferring it from the absence of a "connected" line. Pure logging
+ * — the eager connection warm-up lives in the server boot path (index.ts) so this
+ * stays side-effect-free and unit-testable.
+ */
+export function announceRedisMode(): void {
+  if (isRedisConfigured()) {
+    logger.info(
+      "redis: REDIS_URL configured — shared state backend enabled; Beam sessions and rate limits persist across restarts/replicas",
+    );
+  } else {
+    logger.warn(
+      "redis: REDIS_URL not set — shared state is in-memory only; Beam conversation memory and rate limits reset on every restart/redeploy",
+    );
+  }
+}
+
+/**
  * Bound the initial connect. With `enableOfflineQueue: false` a command issued
  * before the socket is ready rejects immediately ("Stream isn't writeable"), so
  * `getRedis()` waits for the connection before handing the client out — otherwise

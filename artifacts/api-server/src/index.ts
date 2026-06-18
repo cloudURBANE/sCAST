@@ -8,6 +8,7 @@ import { enrichJobViaEngine } from "./services/enrichmentProcessor";
 import { ensureTenantBaseline } from "./services/tenants";
 import { getSerperPool } from "./services/serperService";
 import { getRemoveBgPool } from "./services/bgService";
+import { announceRedisMode, getRedis, isRedisConfigured } from "./lib/redisClient";
 
 const rawPort = process.env["PORT"];
 
@@ -31,6 +32,13 @@ async function start() {
   const serperKeys = getSerperPool().size;
   const removeBgKeys = getRemoveBgPool().size;
   logger.info({ serperKeys, removeBgKeys }, "API key pools initialized");
+
+  // Announce shared-state durability at boot so an unset REDIS_URL (ephemeral
+  // Beam conversation memory + rate limits) is visible in the logs instead of
+  // silent. When configured, eagerly warm the connection so the ready/error
+  // outcome is logged at boot rather than racing the first request.
+  announceRedisMode();
+  if (isRedisConfigured()) void getRedis();
 
   // Self-heal the tenant baseline before serving: create the default tenant and
   // backfill any pre-tenant rows. This removes the need to hand-run a migration
