@@ -2459,6 +2459,37 @@ a {
     inset 0 1px 0 rgba(255, 255, 255, 0.045);
 }
 
+.scent-community-marquee .scent-community-marquee-card {
+  overflow: hidden;
+  border-color: rgba(212, 175, 55, 0.24);
+  background: #050403;
+  box-shadow: inset 0 1px 0 rgba(255, 236, 183, 0.055);
+}
+
+/* The shared fragrance-card shell adds two inset panels, a carved frame, and
+   several outer shadows. In the moving community row those layers read as
+   duplicate rounded cards trailing behind each bottle. Keep one clean gold
+   edge here; the richer museum frame remains unchanged everywhere else. */
+.scent-community-marquee .scent-community-marquee-card::before,
+.scent-community-marquee .scent-community-marquee-card::after,
+.scent-community-marquee .scent-community-marquee-card .scent-card-frame {
+  display: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .scent-community-marquee .scent-community-marquee-card:hover {
+    border-color: rgba(212, 175, 55, 0.42);
+    box-shadow: inset 0 1px 0 rgba(255, 236, 183, 0.08);
+  }
+}
+
+.scent-community-marquee .scent-community-marquee-card:focus-within {
+  border-color: rgba(212, 175, 55, 0.52);
+  box-shadow:
+    0 0 0 2px rgba(212, 175, 55, 0.12),
+    inset 0 1px 0 rgba(255, 236, 183, 0.08);
+}
+
 .scent-community-marquee-card .scent-card-title-row {
   opacity: 0.78;
   transition: opacity var(--scent-transition-base) var(--scent-ease-out);

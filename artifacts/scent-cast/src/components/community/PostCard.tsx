@@ -201,13 +201,13 @@ const BattleRatingOption: React.FC<{
 }> = ({ label, count, total }) => {
   const pct = total > 0 ? Math.round((count / total) * 100) : 0;
   return (
-    <div className="relative flex min-h-[4.25rem] w-full min-w-0 flex-col justify-center overflow-hidden rounded-[14px] border border-scent-accent/42 bg-black/70 px-2.5 py-2 text-center sm:min-h-[7.5rem] sm:rounded-[22px] sm:px-8 sm:py-5">
+    <div className="relative flex min-h-16 w-full min-w-0 flex-col justify-center overflow-hidden rounded-[14px] border border-scent-accent/42 bg-black/70 px-2.5 py-2 text-center shadow-[inset_0_1px_0_rgba(255,236,183,0.06)] sm:min-h-[5.5rem] sm:rounded-[18px] sm:px-5 sm:py-3">
       <span
         className="absolute inset-y-0 left-0 bg-scent-accent/15 transition-[width] duration-500 ease-out motion-reduce:transition-none"
         style={{ width: `${pct}%` }}
         aria-hidden="true"
       />
-      <p className="relative z-10 break-words font-serif text-base italic leading-tight text-[#fff7ec] sm:text-3xl">
+      <p className="relative z-10 break-words font-serif text-base italic leading-tight text-[#fff7ec] sm:text-2xl">
         {label}
       </p>
       <p className="relative z-10 mt-1 font-mono text-[9px] leading-none text-scent-accent sm:mt-2 sm:text-sm">
@@ -235,7 +235,7 @@ const CompactBattlePostCard: React.FC<PostCardProps> = ({
   return (
     <article
       aria-labelledby={headingId}
-      className="mx-auto w-full max-w-[940px] overflow-hidden rounded-[18px] border border-scent-accent/34 bg-[#050403] p-3.5 text-left sm:rounded-[30px] sm:p-8 lg:p-10"
+      className="mx-auto w-full max-w-[940px] overflow-hidden rounded-[18px] border border-scent-accent/34 bg-[#050403] p-3 text-left shadow-[inset_0_1px_0_rgba(255,236,183,0.06)] sm:rounded-[24px] sm:p-6"
     >
       <header className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
@@ -264,31 +264,29 @@ const CompactBattlePostCard: React.FC<PostCardProps> = ({
         </span>
       </header>
 
-      <div className="mt-4 min-w-0 sm:mt-9">
+      <div className="mx-auto mt-3 min-w-0 max-w-[48rem] text-center sm:mt-6">
         <h3
           id={headingId}
-          className="max-w-[50rem] break-words text-balance font-serif text-xl italic leading-[1.08] text-[#fff7ec] sm:text-5xl"
+          className="mx-auto break-words text-balance font-serif text-xl italic leading-[1.08] text-[#fff7ec] sm:text-3xl"
         >
           {heading}
         </h3>
         {post.body ? (
-          <p className="mt-1.5 line-clamp-1 max-w-[48rem] whitespace-pre-line break-words text-xs leading-4 text-[#fff7ec]/68 sm:mt-4 sm:line-clamp-2 sm:text-xl sm:leading-8">
+          <p className="mx-auto mt-1.5 line-clamp-2 whitespace-pre-line break-words text-xs leading-4 text-[#fff7ec]/68 sm:mt-2 sm:text-base sm:leading-6">
             {post.body}
           </p>
         ) : null}
       </div>
 
       {options.length === 2 ? (
-        <div className="mt-4 grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:mt-9 sm:flex sm:flex-col sm:gap-4">
+        <div className="mt-3 grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:mt-6 sm:gap-3">
           <BattleRatingOption
             label={options[0]}
             count={post.votes[options[0]] ?? 0}
             total={totalVotes}
           />
-          <div className="flex items-center justify-center sm:grid sm:w-full sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:gap-4" aria-hidden="true">
-            <span className="hidden h-px bg-scent-accent/30 sm:block" />
+          <div className="flex items-center justify-center" aria-hidden="true">
             <span className="font-serif text-base italic text-scent-accent sm:text-lg">vs</span>
-            <span className="hidden h-px bg-scent-accent/30 sm:block" />
           </div>
           <BattleRatingOption
             label={options[1]}
@@ -298,10 +296,10 @@ const CompactBattlePostCard: React.FC<PostCardProps> = ({
         </div>
       ) : null}
 
-      <div className="mt-4 flex justify-center sm:mt-9">
+      <div className="mt-3 flex justify-center sm:mt-6">
         <Link
           to="/arena"
-          className="scent-primary-button scent-no-mobile-focus-ring inline-flex min-h-12 w-full items-center justify-center gap-2.5 rounded-full border border-scent-accent/72 px-5 py-2.5 text-[11px] font-bold uppercase tracking-[0.15em] shadow-[inset_0_0_0_2px_rgba(255,236,183,0.16),0_12px_26px_-18px_rgba(212,175,55,0.6)] sm:min-h-16 sm:gap-3 sm:px-6 sm:py-3 sm:text-sm sm:tracking-[0.17em]"
+          className="scent-primary-button scent-no-mobile-focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-scent-accent/72 px-6 py-2 text-[10px] font-bold uppercase tracking-[0.15em] shadow-[inset_0_0_0_2px_rgba(255,236,183,0.12)] sm:min-h-12 sm:gap-2.5 sm:px-8 sm:py-2.5 sm:text-xs sm:tracking-[0.17em]"
         >
           <span>Open arena</span>
           <ArrowRight size={15} strokeWidth={1.8} aria-hidden="true" />
