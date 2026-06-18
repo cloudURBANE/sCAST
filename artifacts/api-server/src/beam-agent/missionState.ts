@@ -392,12 +392,18 @@ export function beamSessionStatePrompt(state: BeamSessionState | undefined): str
     "Before asking any clarification, check Known so far. Never ask for a value already listed there.",
   );
   if (mission?.intent === "travel_kit") {
-    lines.push(
-      "For a travel kit mission, use beam_score_candidates for owned vault picks and beam_search_catalog with excludeOwned=true for new picks, then call beam_present_travel_kit with both lanes to render the kit board (its new lane is add-ready for confirmation — no separate beam_propose_collection needed).",
-    );
+    if ((mission.ownedCount ?? 0) > 0) {
+      lines.push(
+        "For this travel kit, use beam_score_candidates only for the requested owned vault picks, use beam_search_catalog with excludeOwned=true for new picks, then call beam_present_travel_kit with both lanes.",
+      );
+    } else {
+      lines.push(
+        "This is a NEW-ONLY discovery mission. Do not recommend or score an owned vault bottle. Use the vault only as a taste reference, search with excludeOwned=true, check each new pick's vault overlap, and call beam_present_travel_kit with an empty owned lane. For each new pick, explain its destination/timing fit, direction fit, and how it differs from the vault. Any owned bottle mentioned in prose must appear only in a separate, explicit taste-reference label.",
+      );
+    }
     if (mission.ownedCount || mission.newCount) {
       lines.push(
-        `The final answer must name at least ${mission.ownedCount ?? 0} owned vault pick(s) and ${mission.newCount ?? 0} new unowned pick(s), without duplicates, once enough context or delegation exists.`,
+        `The final answer and travel-kit card must contain exactly ${mission.ownedCount ?? 0} owned recommendation(s) and exactly ${mission.newCount ?? 0} new unowned recommendation(s), without duplicates, once enough context or delegation exists. Preserve destination=${mission.destination ?? safe.slots.destination ?? "the user's destination"} and month=${mission.month ?? safe.slots.month ?? "the user's timing"}; never substitute current local weather.`,
       );
     }
   }

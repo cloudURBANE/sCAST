@@ -864,6 +864,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   // explicit Confirm. `curating` holds the per-item add/enrich progress; once it
   // finishes it becomes a short completion summary.
   const [proposal, setProposal] = useState<{ proposalId: string; items: BeamProposalItem[] } | null>(null);
+  const [agentCardDelivered, setAgentCardDelivered] = useState(false);
   // Travel-kit cards whose "new" lane has been curated into the vault, keyed by
   // the card's proposalId — so a stale kit card flips to "Added" and can't double-write.
   const [curatedKitIds, setCuratedKitIds] = useState<Set<string>>(() => new Set());
@@ -1064,7 +1065,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   // longer flips to "Match ready" the instant the agent replies with a question
   // (the old `hasDeliveredAnswer` = "any agent reply" bug). Also gates the
   // composer's "refine your match" placeholder below.
-  const hasMatch = Boolean(resolved) || (proposal != null && proposal.items.length > 0);
+  const hasMatch = Boolean(resolved) || (proposal != null && proposal.items.length > 0) || agentCardDelivered;
 
   const progressText = useMemo(() => {
     if (progressNote) return progressNote;
@@ -1094,13 +1095,20 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   }, [agentCues, agentMission]);
 
   const contextLine = useMemo(() => {
+    const destination = (agentMission?.destination || agentCues.destination || '').trim();
+    const month = (agentMission?.month || agentCues.month || '').trim();
+    if (agentMission?.intent === 'travel_kit' && destination) {
+      return month
+        ? `${titleCaseCue(destination)} / ${titleCaseCue(month)} travel context`
+        : `${titleCaseCue(destination)} travel context`;
+    }
     const weatherParts = [
       typeof weather?.temperature === 'number' ? `${Math.round(weather.temperature)}F` : null,
       typeof weather?.humidity === 'number' ? `${Math.round(weather.humidity)}% humidity` : null,
       typeof weather?.condition === 'string' ? weather.condition : null,
     ].filter(Boolean);
     return weatherParts.length > 0 ? weatherParts.join(' / ') : 'Weather context ready when available';
-  }, [weather]);
+  }, [agentCues.destination, agentMission, weather]);
 
   // Surface progress to the host so the title + progress + close can render in a
   // header strip above the bordered card rather than crowding the panel interior.
@@ -1246,6 +1254,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       setActivity([]);
       setAgentSuggestions([]);
       setProposal(null);
+      setAgentCardDelivered(false);
       setCurating(null);
       setResolved(null);
 
@@ -1290,6 +1299,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
               }
             } else if (event.type === 'card') {
               runDeliveredResultRef.current = true;
+              setAgentCardDelivered(true);
               // The agent surfaced a native UI card (radar / compare / kit board).
               // Drop it into the conversation as its own artifact the moment it
               // arrives, so it reads as "shown, then explained" before the answer.
@@ -1710,6 +1720,8 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
     // Clear the live-agent deliverables too, or `hasMatch` (resolved || proposal)
     // would keep the header on "Match ready" after a cold-start reset.
     setProposal(null);
+    setAgentCardDelivered(false);
+    beamSessionIdRef.current = undefined;
     setCurating(null);
     setCatalogFailure(false);
     setFacets({});

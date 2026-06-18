@@ -96,6 +96,55 @@ test("travel kit fails when ready mission omits required owned or new picks", ()
   assert.ok(r.violations.includes("mission_unfulfilled"));
 });
 
+test("new-only discovery requires exactly two unowned picks and permits an owned taste reference", () => {
+  const input = {
+    hadExternalEvidence: false,
+    sessionState: {
+      slots: { destination: "Tokyo", month: "August", direction: "lighter/fresh" },
+      mission: { intent: "travel_kit" as const, newCount: 2, destination: "Tokyo", month: "August" },
+    },
+    groundedFragrances: [
+      { canonicalName: "Silver Mountain Water", brand: "Creed", owned: true },
+      { canonicalName: "Wulong Cha", brand: "Nishane", owned: false },
+      { canonicalName: "Tygar", brand: "Bvlgari", owned: false },
+      { canonicalName: "Fiero", brand: "Casamorati", owned: false },
+    ],
+  };
+  const exact = runAnswerQualityGates(
+    "New: Nishane Wulong Cha and Bvlgari Tygar. Taste reference from your vault: Silver Mountain Water.",
+    input,
+  );
+  assert.equal(exact.passed, true, JSON.stringify(exact.violations));
+
+  const tooMany = runAnswerQualityGates("Wulong Cha, Tygar, and Fiero are the three new picks.", input);
+  assert.ok(tooMany.violations.includes("mission_unfulfilled"));
+
+  const ownedTopPick = runAnswerQualityGates(
+    "Silver Mountain Water is your top pick. New alternatives are Wulong Cha and Tygar.",
+    input,
+  );
+  assert.ok(ownedTopPick.violations.includes("owned_pick_in_new_only_mission"));
+
+  const repeatedOutsideReference = runAnswerQualityGates(
+    "Taste reference from your vault: Silver Mountain Water. Your top recommendation is Silver Mountain Water. New: Wulong Cha and Tygar.",
+    input,
+  );
+  assert.ok(repeatedOutsideReference.violations.includes("owned_pick_in_new_only_mission"));
+});
+
+test("travel answer rejects the home city when the mission destination is Tokyo", () => {
+  const r = runAnswerQualityGates("Silver Mountain Water is ideal for Forney's summer warmth.", {
+    hadExternalEvidence: false,
+    localWeatherLocation: "Forney, TX",
+    sessionState: {
+      slots: { destination: "Tokyo", month: "August", direction: "lighter/fresh" },
+      mission: { intent: "travel_kit", newCount: 2, destination: "Tokyo", month: "August" },
+    },
+    groundedFragrances: [{ canonicalName: "Silver Mountain Water", brand: "Creed", owned: true }],
+  });
+  assert.ok(r.violations.includes("destination_context_mismatch"));
+});
+
 test("delegation: asking another preference question after the user delegates is rejected", () => {
   const r = runAnswerQualityGates("Happy to choose! Do you prefer something fresh or warm?", {
     hadExternalEvidence: false,

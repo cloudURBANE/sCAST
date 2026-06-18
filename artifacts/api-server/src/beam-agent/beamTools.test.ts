@@ -136,12 +136,13 @@ test("beam_propose_collection appears only with resolveCatalogEntry and builds a
   );
   const propose = tools.get("beam_propose_collection")!;
   const result = (await propose.handler(
-    { fragrances: [{ name: "Silver Mountain Water", brand: "Creed" }, { name: "Unknown Juice" }] },
+    { fragrances: [{ name: "Aventus", brand: "Creed" }, { name: "Silver Mountain Water", brand: "Creed" }, { name: "Unknown Juice" }] },
     CTX,
-  )) as { proposalId: string; count: number; items: unknown[]; unresolved: string[] };
+  )) as { proposalId: string; count: number; items: unknown[]; unresolved: string[]; excludedOwned: string[] };
 
   assert.equal(result.count, 1);
   assert.equal(result.unresolved.length, 1);
+  assert.deepEqual(result.excludedOwned, ["Creed Aventus"]);
   assert.match(result.proposalId, /^prop_/);
 
   const event = propose.clientEvent?.(result);
@@ -250,15 +251,16 @@ test("beam_present_travel_kit grounds the owned lane and drops un-owned/un-resol
       title: "Tokyo · August",
       // Aventus IS owned; Bleu de Chanel is NOT in the vault → must be dropped from the owned lane.
       owned: [{ name: "Aventus", brand: "Creed" }, { name: "Bleu de Chanel", brand: "Chanel" }],
-      newPicks: [{ name: "Silver Mountain Water", brand: "Creed" }, { name: "Unknown Juice" }],
+      newPicks: [{ name: "Aventus", brand: "Creed" }, { name: "Silver Mountain Water", brand: "Creed" }, { name: "Unknown Juice" }],
     },
     CTX,
-  )) as { resolved: boolean; ownedCount: number; newCount: number; unresolved: string[]; card: { kind: string } };
+  )) as { resolved: boolean; ownedCount: number; newCount: number; unresolved: string[]; excludedOwned: string[]; card: { kind: string } };
 
   assert.equal(result.resolved, true);
   assert.equal(result.ownedCount, 1, "only the genuinely-owned bottle survives the owned lane");
   assert.equal(result.newCount, 1, "only the resolvable new pick survives");
   assert.equal(result.unresolved.length, 1);
+  assert.deepEqual(result.excludedOwned, ["Creed Aventus"]);
 
   const event = kit.clientEvent?.(result);
   assert.ok(event && event.type === "card" && event.card.kind === "travel_kit");
@@ -269,6 +271,31 @@ test("beam_present_travel_kit grounds the owned lane and drops un-owned/un-resol
     assert.equal(event.card.newPicks.length, 1);
     assert.match(event.card.proposalId ?? "", /^prop_/);
   }
+});
+
+test("add-ready tools fail closed when vault ownership cannot be loaded", async () => {
+  const deps = cardDeps();
+  deps.loadVault = async () => { throw new Error("vault unavailable"); };
+  const unavailable = toolMap(deps);
+
+  await assert.rejects(
+    unavailable.get("beam_propose_collection")!.handler({ fragrances: [{ name: "Wulong Cha" }] }, CTX),
+    /vault unavailable/,
+  );
+  await assert.rejects(
+    unavailable.get("beam_present_travel_kit")!.handler({ newPicks: [{ name: "Wulong Cha" }] }, CTX),
+    /vault unavailable/,
+  );
+});
+
+test("beam_present_travel_kit deduplicates repeated new picks", async () => {
+  const kit = toolMap(cardDeps()).get("beam_present_travel_kit")!;
+  const result = (await kit.handler(
+    { newPicks: [{ name: "Silver Mountain Water", brand: "Creed" }, { name: "Silver Mountain Water", brand: "Creed" }] },
+    CTX,
+  )) as { newCount: number; card: { newPicks: unknown[] } };
+  assert.equal(result.newCount, 1);
+  assert.equal(result.card.newPicks.length, 1);
 });
 
 test("beam_get_wardrobe maps the vault to owned packets", async () => {

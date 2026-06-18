@@ -20,6 +20,8 @@ export type QualityGateInput = {
   sessionState?: BeamSessionState;
   /** Tool-grounded fragrance names with ownership, used for mission fulfillment gates. */
   groundedFragrances?: BeamGroundedFragrance[];
+  /** Current/home weather label returned by context; forbidden for a different travel destination. */
+  localWeatherLocation?: string | null;
 };
 
 export type QualityGateResult = {
@@ -153,6 +155,49 @@ function countMissionPicks(answerText: string, grounded: BeamGroundedFragrance[]
   return { owned: owned.size, new: fresh.size };
 }
 
+function namesWrongTravelLocation(
+  text: string,
+  state: BeamSessionState | undefined,
+  localWeatherLocation: string | null | undefined,
+): boolean {
+  const destination = state?.mission?.destination ?? state?.slots.destination;
+  if (!destination || !localWeatherLocation) return false;
+  const homeCity = localWeatherLocation.split(",")[0]?.trim();
+  if (!homeCity || destination.toLowerCase().includes(homeCity.toLowerCase())) return false;
+  return new RegExp(`\\b${escapeRegExp(homeCity)}(?:['’]s)?\\b`, "i").test(text);
+}
+
+function ownsUnlabeledRecommendation(
+  text: string,
+  state: BeamSessionState | undefined,
+  grounded: BeamGroundedFragrance[],
+): boolean {
+  const mission = state?.mission;
+  if (mission?.intent !== "travel_kit" || (mission.ownedCount ?? 0) > 0 || (mission.newCount ?? 0) === 0) {
+    return false;
+  }
+  for (const item of grounded.filter((entry) => entry.owned)) {
+    for (const variant of normalizedNameVariants(item)) {
+      const lowerText = text.toLowerCase();
+      const lowerVariant = variant.toLowerCase();
+      let index = lowerText.indexOf(lowerVariant);
+      while (index >= 0) {
+        const before = text.slice(0, index);
+        const boundary = Math.max(
+          before.lastIndexOf("."), before.lastIndexOf("!"), before.lastIndexOf("?"),
+          before.lastIndexOf(";"), before.lastIndexOf("\n"),
+        );
+        const clause = text.slice(boundary + 1, index + variant.length);
+        if (!/\b(?:taste|comparison) reference\b|\breference (?:point|from your vault)\b/i.test(clause)) {
+          return true;
+        }
+        index = lowerText.indexOf(lowerVariant, index + lowerVariant.length);
+      }
+    }
+  }
+  return false;
+}
+
 /**
  * Evaluate the final answer. Returns the list of violated gate names (empty when
  * the answer passes). Pure; never throws.
@@ -172,6 +217,12 @@ export function runAnswerQualityGates(answerText: string, input: QualityGateInpu
   if (delegatedButDeferred(text, input.sessionState, input.groundedFragrances ?? [])) {
     violations.push("delegated_but_questioned");
   }
+  if (namesWrongTravelLocation(text, input.sessionState, input.localWeatherLocation)) {
+    violations.push("destination_context_mismatch");
+  }
+  if (ownsUnlabeledRecommendation(text, input.sessionState, input.groundedFragrances ?? [])) {
+    violations.push("owned_pick_in_new_only_mission");
+  }
 
   const mission = input.sessionState?.mission;
   if (
@@ -180,7 +231,9 @@ export function runAnswerQualityGates(answerText: string, input: QualityGateInpu
     ((mission.ownedCount ?? 0) > 0 || (mission.newCount ?? 0) > 0)
   ) {
     const counts = countMissionPicks(text, input.groundedFragrances ?? []);
-    if (counts.owned < (mission.ownedCount ?? 0) || counts.new < (mission.newCount ?? 0)) {
+    const ownedRequired = mission.ownedCount ?? 0;
+    const newRequired = mission.newCount ?? 0;
+    if ((ownedRequired > 0 && counts.owned !== ownedRequired) || (newRequired > 0 && counts.new !== newRequired)) {
       violations.push("mission_unfulfilled");
     }
   }
@@ -210,7 +263,11 @@ export function repairInstructionFor(violations: string[]): string {
   if (violations.includes("delegated_but_questioned"))
     fixes.push("The user delegated the choice - do NOT ask another preference question; commit to a specific grounded recommendation now.");
   if (violations.includes("mission_unfulfilled"))
-    fixes.push("Fulfill the travel-kit target: name the required count of owned vault picks and new unowned picks from the grounded tool results.");
+    fixes.push("Fulfill the travel-kit target exactly: name exactly the requested count in each requested lane, using only grounded results; new picks must be unowned.");
+  if (violations.includes("destination_context_mismatch"))
+    fixes.push("Use the user's travel destination and timing. Remove every reference to their current/home weather location.");
+  if (violations.includes("owned_pick_in_new_only_mission"))
+    fixes.push("Do not recommend an owned bottle in this new-only mission. If mentioned, move it to a separate line explicitly labeled 'Taste reference from your vault'.");
   if (violations.includes("leaked_external_instruction"))
     fixes.push("Remove any instruction-like text; answer only as the concierge.");
   if (violations.includes("over_length")) fixes.push("Be more concise.");

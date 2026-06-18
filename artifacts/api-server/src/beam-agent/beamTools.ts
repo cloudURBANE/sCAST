@@ -271,12 +271,8 @@ export function createBeamTools(deps: BeamToolDeps): BeamToolDefinition[] {
 
         if (record.excludeOwned === true) {
           const vault = await deps.loadVault(ctx);
-          const owned = new Set(
-            vault.map((item) => `${(item.brand ?? "").toLowerCase()}::${item.name.toLowerCase()}`),
-          );
-          items = items.filter(
-            (packet) => !owned.has(`${packet.brand.toLowerCase()}::${packet.canonicalName.toLowerCase()}`),
-          );
+          const owned = new Set(vault.map((item) => normName(`${item.brand ?? ""} ${item.name}`)));
+          items = items.filter((packet) => !owned.has(normName(`${packet.brand} ${packet.canonicalName}`)));
         }
         return { count: items.length, items };
       },
@@ -588,13 +584,30 @@ export function createBeamTools(deps: BeamToolDeps): BeamToolDefinition[] {
           if (requested.length >= BEAM_LIMITS.maxProposalItems) break;
         }
 
+        // Ownership is a safety boundary for add-ready items. If the vault cannot
+        // be read, fail the tool instead of treating an outage as an empty vault.
+        const vault = await deps.loadVault(ctx);
+        const ownedNames = new Set<string>();
+        for (const item of vault) {
+          if (!item?.name) continue;
+          if (item.brand) ownedNames.add(normName(`${item.brand} ${item.name}`));
+          else ownedNames.add(normName(item.name));
+        }
         const items: BeamProposalItem[] = [];
         const unresolved: string[] = [];
+        const excludedOwned: string[] = [];
+        const seen = new Set<string>();
         for (const req of requested) {
           const flat = await resolveCatalogEntry(req.name, req.brand).catch(() => null);
           const built = flat ? buildProposalItem(flat) : null;
           if (built) {
-            items.push(built);
+            const identity = normName(`${built.brand} ${built.name}`);
+            const isOwned = ownedNames.has(identity) || (!built.brand && ownedNames.has(normName(built.name)));
+            if (isOwned) excludedOwned.push(`${built.brand} ${built.name}`.trim());
+            else if (!seen.has(identity)) {
+              seen.add(identity);
+              items.push(built);
+            }
           } else {
             unresolved.push(req.brand ? `${req.brand} ${req.name}` : req.name);
             // Curate the miss: enqueue it for enrichment so the user can add it
@@ -618,6 +631,7 @@ export function createBeamTools(deps: BeamToolDeps): BeamToolDefinition[] {
           items,
           proposed: items.map((i) => ({ name: i.name, brand: i.brand })),
           unresolved,
+          excludedOwned,
         };
       },
       clientEvent: (result) => {
@@ -639,12 +653,12 @@ export function createBeamTools(deps: BeamToolDeps): BeamToolDefinition[] {
 
     /** Names the user owns, normalized, for grounding the `owned` flag. */
     const loadOwnedNames = async (ctx: BeamRunContext): Promise<Set<string>> => {
-      const vault = await deps.loadVault(ctx).catch(() => [] as ScentMissionWardrobeItem[]);
+      const vault = await deps.loadVault(ctx);
       const set = new Set<string>();
       for (const it of vault) {
         if (it?.name) {
-          set.add(normName(it.name));
           if (it.brand) set.add(normName(`${it.brand} ${it.name}`));
+          else set.add(normName(it.name));
         }
       }
       return set;
@@ -661,7 +675,8 @@ export function createBeamTools(deps: BeamToolDeps): BeamToolDefinition[] {
       const item = flat ? buildProposalItem(flat) : null;
       if (!item) return null;
       const owned =
-        ownedNames.has(normName(item.name)) || ownedNames.has(normName(`${item.brand} ${item.name}`));
+        ownedNames.has(normName(`${item.brand} ${item.name}`)) ||
+        (!item.brand && ownedNames.has(normName(item.name)));
       return { item, card: cardFragranceFromProposalItem(item, owned) };
     };
 
@@ -846,10 +861,9 @@ export function createBeamTools(deps: BeamToolDeps): BeamToolDefinition[] {
         const r = (typeof input === "object" && input !== null ? input : {}) as Record<string, unknown>;
         const ownedReq = Array.isArray(r.owned) ? r.owned : [];
         const newReq = Array.isArray(r.newPicks) ? r.newPicks : [];
-        const [ownedNames, vault] = await Promise.all([
-          loadOwnedNames(ctx),
-          deps.loadVault(ctx).catch(() => [] as ScentMissionWardrobeItem[]),
-        ]);
+        // Both reads are required to prove lane ownership. Never manufacture an
+        // empty vault when the backing read fails.
+        const [ownedNames, vault] = await Promise.all([loadOwnedNames(ctx), deps.loadVault(ctx)]);
 
         const ownedPicks: BeamCardFragrance[] = [];
         for (const entry of ownedReq.slice(0, BEAM_LIMITS.maxKitPicks)) {
@@ -871,6 +885,8 @@ export function createBeamTools(deps: BeamToolDeps): BeamToolDefinition[] {
 
         const newPicks: BeamProposalItem[] = [];
         const unresolved: string[] = [];
+        const excludedOwned: string[] = [];
+        const seenNew = new Set<string>();
         for (const entry of newReq.slice(0, BEAM_LIMITS.maxKitPicks)) {
           const e = (typeof entry === "object" && entry !== null ? entry : {}) as Record<string, unknown>;
           const name = asString(e.name);
@@ -879,7 +895,13 @@ export function createBeamTools(deps: BeamToolDeps): BeamToolDefinition[] {
           const flat = await resolveCatalogEntry(name, brand).catch(() => null);
           const item = flat ? buildProposalItem(flat) : null;
           if (item) {
-            newPicks.push(item);
+            const identity = normName(`${item.brand} ${item.name}`);
+            const isOwned = ownedNames.has(identity) || (!item.brand && ownedNames.has(normName(item.name)));
+            if (isOwned) excludedOwned.push(`${item.brand} ${item.name}`.trim());
+            else if (!seenNew.has(identity)) {
+              seenNew.add(identity);
+              newPicks.push(item);
+            }
           } else {
             unresolved.push(brand ? `${brand} ${name}` : name);
             try {
@@ -910,6 +932,7 @@ export function createBeamTools(deps: BeamToolDeps): BeamToolDefinition[] {
           owned: ownedPicks.map((p) => ({ name: p.name, brand: p.brand })),
           newProposed: newPicks.map((p) => ({ name: p.name, brand: p.brand })),
           unresolved,
+          excludedOwned,
           card,
         };
       },
