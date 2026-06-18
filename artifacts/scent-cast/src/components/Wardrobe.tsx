@@ -1731,9 +1731,17 @@ export const Wardrobe: React.FC<{
     const trimmed = value.trim();
     return /^(unknown|n\/?a|none|null|undefined)$/i.test(trimmed) ? undefined : trimmed;
   };
+  // A year the engine *authoritatively* marked unknown is a fact, not a gap, so
+  // show an explicit "Unknown" instead of dropping the row (which read as a card
+  // missing a metric). cleanMetaValue strips the literal "unknown", so this
+  // branch is taken only when we deliberately want to surface it.
+  const yearAuthoritativelyUnknown = Boolean(selectedItem?.raw_engine_detail?.year_unknown);
+  const yearMetaValue =
+    cleanMetaValue(formatYear(selectedItem?.year)) ??
+    (yearAuthoritativelyUnknown ? 'Unknown' : undefined);
   const detailMetaRows = selectedItem
     ? [
-        { label: 'Year', value: cleanMetaValue(formatYear(selectedItem.year)) },
+        { label: 'Year', value: yearMetaValue },
         { label: 'Gender', value: cleanMetaValue(stringValue(selectedItem.gender)) },
         { label: 'Concentration', value: cleanMetaValue(stringValue(selectedItem.concentration)) },
         { label: 'Environment', value: cleanMetaValue(stringValue(selectedItem.season)) },
