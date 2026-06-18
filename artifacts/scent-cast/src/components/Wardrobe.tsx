@@ -353,19 +353,23 @@ function FragrancePanel({
   className = "",
   titleSuffix,
 }: {
-  title: string;
+  /** Omit to render the panel without a heading row (e.g. the mobile derived
+   *  metrics block, which matches the title-less iPad/desktop grid). */
+  title?: string;
   children: React.ReactNode;
   className?: string;
   titleSuffix?: React.ReactNode;
 }) {
   return (
     <section className={`border border-white/[0.04] bg-gradient-to-b from-white/[0.018] to-transparent shadow-[inset_0_1px_0_rgba(255,255,255,0.025)] ${className}`}>
-      <div className="relative flex items-center justify-center border-b border-white/[0.05] px-4 py-3 text-center">
-        <p className="scent-type-label">
-          {title}
-        </p>
-        {titleSuffix ? <div className="absolute right-3 top-1/2 -translate-y-1/2">{titleSuffix}</div> : null}
-      </div>
+      {title ? (
+        <div className="relative flex items-center justify-center border-b border-white/[0.05] px-4 py-3 text-center">
+          <p className="scent-type-label">
+            {title}
+          </p>
+          {titleSuffix ? <div className="absolute right-3 top-1/2 -translate-y-1/2">{titleSuffix}</div> : null}
+        </div>
+      ) : null}
       {children}
     </section>
   );
@@ -766,7 +770,9 @@ function ProfileScorePanel({
 
   if (compactOnly) {
     return (
-      <FragrancePanel title="Derived Intelligence">
+      // Title-less on mobile to match the iPad/desktop grid, which has no
+      // "Derived Intelligence" heading.
+      <FragrancePanel>
         <div className="px-4 py-3.5">
           <div className="grid grid-cols-2 gap-1.5">
             {statCards.map((stat) => renderTile(stat, "mobile"))}
@@ -787,7 +793,7 @@ function ProfileScorePanel({
         {renderTile(statCards[3], "desktop")}
       </div>
 
-      <FragrancePanel title="Derived Intelligence" className="sm:hidden">
+      <FragrancePanel className="sm:hidden">
         <div className="px-4 py-3.5">
           <div className="grid grid-cols-2 gap-1.5">
             {statCards.map((stat) => renderTile(stat, "mobile"))}
@@ -1039,6 +1045,14 @@ export const Wardrobe: React.FC<{
   const constrainedDetailMode = lowMotionRenderMode && !isIpad;
   const reducedDetailMotion = constrainedDetailMode || ipadSafariPerformanceMode;
   const stackedDetailMode = constrainedDetailMode;
+  // Shared-element bottle morph from a vault grid card into the detail modal —
+  // the same card→overlay transition the Community feed uses. Spring on capable
+  // devices; a cheap transform-only tween under the low-render budget (phone /
+  // iPad WebKit) so it stays a single transform animation inside WebKit's
+  // compositor budget on the memory-sensitive detail modal.
+  const bottleMorphTransition = reducedDetailMotion
+    ? ({ layout: { type: "tween", duration: 0.4, ease: [0.22, 1, 0.36, 1] } } as const)
+    : ({ layout: { type: "spring", stiffness: 260, damping: 30, mass: 0.9 } } as const);
   const [detailDeferredContentReady, setDetailDeferredContentReady] = React.useState(false);
   const [detailExitInProgress, setDetailExitInProgress] = React.useState(false);
 
@@ -2083,19 +2097,30 @@ export const Wardrobe: React.FC<{
                           brand={entryBrand(item)}
                           name={entryName(item)}
                         >
-                          <BottleImage
-                            variant="grid"
-                            src={item.imageUrl}
-                            videoSrc={betaVideoUrlForFragrance(item)}
-                            alt={entryName(item)}
-                            adjustment={item.imageAdjustment}
-                            imageProperties={item.imageProperties}
-                            isSyncing={isImageSyncing?.(item)}
+                          {/* Shared-bottle morph source: this fills the square
+                              image slot and carries the layoutId that the detail
+                              modal's bottle reuses, so tapping the card morphs the
+                              bottle open (and back on close) — the same effect as
+                              the Community feed. */}
+                          <motion.div
+                            layoutId={`wardrobe-bottle-${item.id}`}
+                            transition={bottleMorphTransition}
                             className="absolute inset-0 z-10"
-                            imgClassName="scent-hover-scale brightness-[1.1] transition-transform duration-[900ms] motion-reduce:transition-none"
-                            loading={prioritizeImage ? 'eager' : 'lazy'}
-                            fetchPriority={prioritizeImage ? 'high' : undefined}
-                          />
+                          >
+                            <BottleImage
+                              variant="grid"
+                              src={item.imageUrl}
+                              videoSrc={betaVideoUrlForFragrance(item)}
+                              alt={entryName(item)}
+                              adjustment={item.imageAdjustment}
+                              imageProperties={item.imageProperties}
+                              isSyncing={isImageSyncing?.(item)}
+                              className="absolute inset-0"
+                              imgClassName="scent-hover-scale brightness-[1.1] transition-transform duration-[900ms] motion-reduce:transition-none"
+                              loading={prioritizeImage ? 'eager' : 'lazy'}
+                              fetchPriority={prioritizeImage ? 'high' : undefined}
+                            />
+                          </motion.div>
                         </VaultCard>
                       </motion.div>
                     );
@@ -2299,7 +2324,12 @@ export const Wardrobe: React.FC<{
                         }
                       >
                         <div className="flex flex-col p-4 space-y-3">
-                          <div 
+                          {/* Shared-bottle morph target: matches the vault card's
+                              layoutId so the bottle animates from the tapped card
+                              into this box (and back on close). */}
+                          <motion.div
+                            layoutId={`wardrobe-bottle-${selectedItem.id}`}
+                            transition={bottleMorphTransition}
                             className={`relative h-56 ${stackedDetailMode ? 'sm:h-60' : 'sm:h-72 lg:h-64'} min-h-0 w-full shrink-0 overflow-hidden cursor-pointer rounded-lg border border-white/5 bg-white/[0.01]`}
                             onClick={() => detailBottleUrl && setEnlargeOpen(true)}
                           >
@@ -2319,7 +2349,7 @@ export const Wardrobe: React.FC<{
                               className="absolute inset-0"
                               imgClassName={reducedDetailMotion ? "" : "transition-all duration-300"}
                             />
-                          </div>
+                          </motion.div>
 
                           {detailBottleUrl && !bottleImageToolsOpen ? (
                             <div className="flex w-full shrink-0 justify-center">

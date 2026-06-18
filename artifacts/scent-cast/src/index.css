@@ -2448,8 +2448,12 @@ a {
   aspect-ratio: 0.7;
   padding: 1.1rem 1.06rem 1.04rem;
   overflow: hidden;
+  /* Drives the concentric inner-frame radii below. Each inset frame subtracts
+     its own inset from this so every corner curve stays parallel instead of
+     bunching tighter (and visibly off-shape) the further in it sits. */
+  --hero-frame-radius: 1.5rem;
   border: 1px solid rgba(212, 175, 55, 0.56);
-  border-radius: 1.5rem;
+  border-radius: var(--hero-frame-radius);
   background:
     radial-gradient(78% 42% at 50% 6%, rgba(255, 237, 190, 0.022), transparent 70%),
     linear-gradient(180deg, rgba(5, 5, 4, 0.98), #000 42%, #000 100%);
@@ -2471,6 +2475,7 @@ a {
 
 .community-fragrance-detail__hero::before {
   inset: 0.56rem;
+  border-radius: calc(var(--hero-frame-radius) - 0.56rem);
   z-index: -1;
   border: 1px solid rgba(255, 222, 149, 0.62);
   box-shadow:
@@ -2483,6 +2488,7 @@ a {
 
 .community-fragrance-detail__hero::after {
   inset: 0.76rem;
+  border-radius: calc(var(--hero-frame-radius) - 0.76rem);
   z-index: -1;
   border: 1px solid rgba(255, 219, 143, 0.24);
   box-shadow:
@@ -2855,7 +2861,8 @@ a {
   .community-fragrance-detail__hero {
     width: clamp(21rem, 42vw, 23rem);
     padding: 1.28rem 1.22rem 1.16rem;
-    border-radius: 1.62rem;
+    --hero-frame-radius: 1.62rem;
+    border-radius: var(--hero-frame-radius);
   }
 
   .community-fragrance-detail__bottle {
