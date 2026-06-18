@@ -22,9 +22,9 @@ interface BottleMarqueeProps {
 // iPad Safari render the minimum so a route tap does not triple image surfaces.
 const COMMUNITY_TRACK_COPIES_DEFAULT = 3;
 const COMMUNITY_TRACK_COPIES_LOW = 2;
-const COMMUNITY_SCROLL_PIXELS_PER_SECOND = 6;
-const COMMUNITY_SCROLL_MIN_SECONDS = 140;
-const COMMUNITY_SCROLL_MAX_SECONDS = 320;
+const COMMUNITY_SCROLL_PIXELS_PER_SECOND = 4.25;
+const COMMUNITY_SCROLL_MIN_SECONDS = 190;
+const COMMUNITY_SCROLL_MAX_SECONDS = 420;
 const COMMUNITY_SCROLL_REDUCED_MOTION_SECONDS = 640;
 const COMMUNITY_LOW_BUDGET_EAGER_IMAGES = 8;
 
@@ -209,6 +209,7 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
   return (
     <MotionConfig reducedMotion="user">
       <section ref={sectionRef} className="scent-community-marquee" aria-label="Community fragrance marquee">
+        <div className="scent-community-marquee-focus" aria-hidden="true" />
         <div
           className="scent-community-marquee-track"
           key={trackKey}
@@ -269,7 +270,7 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
                         loading={lowRenderBudget ? 'eager' : 'lazy'}
                         fetchPriority={lowRenderBudget && copyIndex === 0 ? 'high' : 'auto'}
                         className="absolute inset-0"
-                        imgClassName="scent-hover-scale brightness-[1.1] transition-transform duration-[900ms] motion-reduce:transition-none"
+                        imgClassName="scent-hover-scale brightness-[1.14] contrast-[1.04] transition-transform duration-[900ms] motion-reduce:transition-none"
                         adjustment={item.imageAdjustment}
                         imageProperties={item.imageProperties}
                         showFrameGuide={false}
