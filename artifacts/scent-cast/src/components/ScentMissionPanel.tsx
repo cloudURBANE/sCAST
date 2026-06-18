@@ -614,17 +614,21 @@ function safeAssistantText(text: string | undefined, fallback: string): string {
 
 const BEAM_SCRIPTED_FALLBACK_FAILURE_CODES = new Set<string>(['model_unavailable']);
 
+// User-facing copy for the rare case a turn ends without an answer. Framed as the
+// concierge's own caution (never the user's fault), with no internal jargon ("live
+// run", "quality check", "turn budget"), and it always reassures that the session
+// is kept so the next message continues the same conversation.
 const BEAM_TERMINAL_FAILURE_COPY: Record<string, string> = {
   quality_gate_failed:
-    "I reached Beam's live run, but I couldn't send that answer because it missed my quality check. Try a tighter brief and I'll keep this session.",
+    "I'm not quite ready to commit to a pick for that one. Tell me a little more — an occasion, a mood, or a scent direction — and I'll line it up. Your session's saved.",
   max_turns:
-    "I reached Beam's live run, but hit the turn budget before a final answer. Try a narrower direction and I'll keep this session.",
+    "That one took more digging than I expected. Point me at one direction — an occasion, a mood, or a scent family — and I'll pull it together. Your session's saved.",
   run_timeout:
-    "I reached Beam's live run, but ran out of time before a final answer. Try again with one concrete direction and I'll keep this session.",
+    "That took a little longer than I'd like. Give me one concrete direction and I'll be quicker this time. Your session's saved.",
   agent_error:
-    "I reached Beam's live run, but the agent hit an internal error before a final answer. Try again and I'll keep this session.",
+    "Something tripped on my end before I could answer. Try that once more — your session's saved.",
   stopped:
-    "I stopped that Beam run before a final answer. Send the next cue and I'll keep this session.",
+    "Stopped there. Send your next note whenever you're ready — your session's saved.",
 };
 
 function shouldUseScriptedFallbackForBeamFailure(code: string): boolean {
@@ -634,7 +638,7 @@ function shouldUseScriptedFallbackForBeamFailure(code: string): boolean {
 function beamTerminalFailureMessage(code: string): string {
   return (
     BEAM_TERMINAL_FAILURE_COPY[code] ??
-    "I reached Beam's live run, but couldn't finish that turn. Try again and I'll keep this session."
+    "I couldn't wrap that one up just now. Try again in a moment — your session's saved."
   );
 }
 

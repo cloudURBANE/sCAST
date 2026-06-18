@@ -65,6 +65,33 @@ const SLOT_KEYS: BeamSlotKey[] = [
   "budget",
 ];
 
+/**
+ * Slots that answer the SAME calibration need worded two ways. "vibe" (a mood:
+ * artsy, bold, quiet) and "direction" (a scent family: citrus, woody, green) are
+ * interchangeable — if the agent asked for one and the user replied with the
+ * other, the question IS answered. Without this, asking "what vibe?" then getting
+ * "citrusy" left the vibe slot pending forever, so the agent re-asked and the
+ * deterministic gate scored a sensible re-ask as abandonment. The answer-quality
+ * gate mirrors this same pairing (answerQualityGates.abandonsPendingSlot). Every
+ * other slot only satisfies itself.
+ */
+const COMPATIBLE_SLOTS: Partial<Record<BeamSlotKey, BeamSlotKey[]>> = {
+  vibe: ["direction"],
+  direction: ["vibe"],
+};
+
+/**
+ * Did `slots` answer `pendingSlot` — either directly, or via a compatible slot
+ * (vibe⇄direction)? Used to decide whether the pending question is still open.
+ */
+export function pendingSlotSatisfiedBy(pendingSlot: BeamSlotKey, slots: BeamSessionSlots): boolean {
+  if (slots[pendingSlot]) return true;
+  for (const alt of COMPATIBLE_SLOTS[pendingSlot] ?? []) {
+    if (slots[alt]) return true;
+  }
+  return false;
+}
+
 function cleanCapture(value: string): string {
   return value
     .replace(/\s+/g, " ")
@@ -392,7 +419,10 @@ export function deriveBeamSessionState(
     slots,
     ...(mission ? { mission } : {}),
     ...(isDelegationPhrase(text) ? { userDelegatedChoice: true } : {}),
-    ...(pendingSlot && !slots[pendingSlot] && !isDelegationPhrase(text)
+    // Check satisfaction against the MERGED slots, not just this turn's parse — a
+    // slot captured on a PRIOR turn is already answered, so re-marking it pending
+    // would make the agent (and the deterministic safe re-ask) ask a known value.
+    ...(pendingSlot && !pendingSlotSatisfiedBy(pendingSlot, patchSlots) && !isDelegationPhrase(text)
       ? { pendingSlot, pendingSlotUnanswered: true }
       : {}),
   };

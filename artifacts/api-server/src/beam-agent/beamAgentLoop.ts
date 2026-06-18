@@ -31,7 +31,7 @@ import {
 } from "./beamToolCore.ts";
 import type { ClaudeCallInput, ClaudeResponse } from "./types.ts";
 import { callModel as defaultCallModel, isModelConfigured as defaultIsModelConfigured } from "./provider.ts";
-import { repairInstructionFor, runAnswerQualityGates } from "./answerQualityGates.ts";
+import { buildSafeClarification, repairInstructionFor, runAnswerQualityGates } from "./answerQualityGates.ts";
 import { estimateRunCostUsd, type ModelUsage } from "./costLedger.ts";
 import { beamSessionStatePrompt } from "./missionState.ts";
 
@@ -187,6 +187,20 @@ const ACT_NUDGE =
 /** Last-turn instruction for the dedicated, tool-free synthesis pass. */
 const STATE_NUDGE =
   "You asked for information that is already present in the structured session state, or you ignored a delegated mission target. Re-read Known so far and the Mission target. Do not ask another preference question for known or delegated fields; call the needed tools now or write the grounded answer.";
+
+/**
+ * Repair instruction for a tool-free CLARIFYING turn whose question failed a gate.
+ * Unlike SYNTHESIS_NUDGE this must NOT push a final recommendation — the run
+ * retrieved no fragrances, so naming one would be a hallucination. It re-asks the
+ * open question cleanly instead, which is what a context-gathering turn needs.
+ */
+const CLARIFY_REPAIR_NUDGE =
+  "Your previous reply was not sent because it broke a conversation rule. You are still " +
+  "GATHERING context and have NOT retrieved any fragrances yet, so do NOT name, invent, or " +
+  "recommend any specific fragrance, price, rating, or availability. Reply in 1-2 short " +
+  "sentences: briefly acknowledge what the user just told you, then ask exactly ONE focused " +
+  "question for the single most useful missing detail, and END with a fenced ```cues block of " +
+  "2-4 short tap chips that all answer THAT one question's single category.";
 
 const SYNTHESIS_NUDGE =
   "You now have enough evidence. Write the FINAL answer for the user, grounded ONLY in the " +
@@ -725,6 +739,11 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
      */
     const finish = async (draft: string, opts?: { skipSynthesis?: boolean }): Promise<void> => {
       let finalText = draft;
+      // A context-gathering turn: the model asked/answered without retrieving
+      // anything this run. Such turns can't be re-synthesized into a grounded
+      // recommendation (there is nothing grounded), so their gate-failure recovery
+      // is a clean RE-ASK, not a forced pick.
+      const clarifyingTurn = !usedTools;
       // Don't open a fresh synthesis call once we're already out of wall-clock
       // budget — that extra round could push the response past the client's 60s
       // timeout. Ship the grounded draft instead.
@@ -775,17 +794,21 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
       });
       if (
         !gate.passed &&
-        usedTools &&
         !opts?.skipSynthesis &&
         Date.now() < deadline - REPAIR_MIN_BUDGET_MS
       ) {
         const repairModel = input.synthesisModel ?? input.model;
-        const repairInstruction =
-          SYNTHESIS_NUDGE +
-          groundingAllowlistClause(synthesisAllowlistNames()) +
-          answerConsistencyClause(latestScoring) +
-          " " +
-          repairInstructionFor(gate.violations);
+        // A tool-free clarifying turn is repaired toward a clean re-ask; a
+        // tool-grounded turn is repaired toward a fixed recommendation. Pinning a
+        // grounding allowlist onto a clarifying turn would be pointless (nothing
+        // grounded) and the synthesis nudge would push it to invent a pick.
+        const repairInstruction = clarifyingTurn
+          ? CLARIFY_REPAIR_NUDGE + " " + repairInstructionFor(gate.violations)
+          : SYNTHESIS_NUDGE +
+            groundingAllowlistClause(synthesisAllowlistNames()) +
+            answerConsistencyClause(latestScoring) +
+            " " +
+            repairInstructionFor(gate.violations);
         try {
           const repair = await callModel({
             system: systemPrompt,
@@ -813,6 +836,29 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
           // Repair is best-effort; keep the original draft (still flagged below).
         }
       }
+
+      // Final safety net for context-gathering turns. A clarifying turn must never
+      // dead-end on a gate failure and surface a terminal error to the user — there
+      // is no grounded answer to lose, only a question the model worded poorly. Fall
+      // back to a deterministic, gate-safe re-ask built from the session state so the
+      // session stays alive and the user simply sees the next question. The gate is
+      // re-run on it, so a fallback can never itself smuggle a violation through.
+      if (!gate.passed && clarifyingTurn) {
+        const safe = buildSafeClarification(input.sessionState);
+        if (safe) {
+          const safeGate = runAnswerQualityGates(safe, {
+            hadExternalEvidence,
+            sessionState: input.sessionState,
+            groundedFragrances: [...groundedFragrances.values()],
+            localWeatherLocation,
+          });
+          if (safeGate.passed) {
+            finalText = safe;
+            gate = safeGate;
+          }
+        }
+      }
+
       qualityGatePassed = gate.passed;
       qualityViolations = gate.violations;
 

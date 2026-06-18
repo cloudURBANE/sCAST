@@ -6,7 +6,8 @@
  * leaks, overlong answers, redundant clarifications for known slots, and
  * travel-kit answers that do not fulfill the required owned/new counts.
  */
-import type { BeamGroundedFragrance, BeamSessionState } from "./types.ts";
+import type { BeamGroundedFragrance, BeamSessionSlots, BeamSessionState, BeamSlotKey } from "./types.ts";
+import { pendingSlotSatisfiedBy } from "./missionState.ts";
 
 export type QualityGateInput = {
   /**
@@ -72,16 +73,29 @@ function asksForKnownSlot(text: string, state: BeamSessionState | undefined): bo
   return false;
 }
 
+/**
+ * "vibe" (mood) and "direction" (scent family) are one calibration dimension
+ * worded two ways, so a re-ask of EITHER keeps a vibe-or-direction question alive
+ * — neither counts as abandoning it. Mirrors missionState.COMPATIBLE_SLOTS so the
+ * loop's slot resolution and this gate never disagree about what answered what.
+ */
+const VIBE_OR_DIRECTION_REASK =
+  /\b(?:vibe|mood|style|feel|citrus|green|aromatic|lighter|fresh|warm(?:er)?|rich(?:er)?|woody|woods?|spic(?:y|e)|sweet|floral|fruity|aquatic|direction|family|lean(?:s|ing)?)\b/i;
+
 function abandonsPendingSlot(text: string, state: BeamSessionState | undefined): boolean {
   const slot = state?.pendingSlotUnanswered ? state.pendingSlot : undefined;
   if (!slot) return false;
+  // If the pending slot is already satisfied — directly, or via its compatible twin
+  // (vibe⇄direction) — it isn't actually open, so nothing can abandon it. Keeps this
+  // gate consistent with the loop's slot resolution for any stale pending pointer.
+  if (state && pendingSlotSatisfiedBy(slot, state.slots)) return false;
   if (!text.includes("?")) return true;
   const patterns: Partial<Record<NonNullable<BeamSessionState["pendingSlot"]>, RegExp>> = {
-    direction: /\b(?:citrus|green|aromatic|lighter|fresh|warm|rich|direction|family)\b/i,
+    direction: VIBE_OR_DIRECTION_REASK,
     projection: /\b(?:projection|trail|skin[ -]?close|moderate|statement)\b/i,
     occasion: /\b(?:occasion|setting|work|date|night out|staying in)\b/i,
     impression: /\b(?:impression|calm|focused|confident|social|come across)\b/i,
-    vibe: /\b(?:vibe|mood|style|feel)\b/i,
+    vibe: VIBE_OR_DIRECTION_REASK,
     budget: /\b(?:budget|spend|price)\b/i,
     month: /\b(?:month|when|season|time of year)\b/i,
     destination: /\b(?:where|destination|city)\b/i,
@@ -276,4 +290,100 @@ export function repairInstructionFor(violations: string[]): string {
     fixes.join(" ") +
     " Keep the grounded recommendation; only remove the unsupported claim."
   );
+}
+
+/**
+ * Canonical, gate-safe re-ask text per slot. Each line contains the slot's own
+ * keyword (so `abandonsPendingSlot` passes when that slot is pending) and ends in
+ * a fenced `cues` block of single-category chips. These are the LAST-RESORT
+ * deterministic clarifications the loop falls back to when the model cannot
+ * produce a gate-passing clarifying turn on its own — they keep a context-gathering
+ * session alive instead of dead-ending it on a hard failure.
+ */
+const SLOT_CLARIFICATION: Record<BeamSlotKey, { ask: string; cues: string[] }> = {
+  destination: { ask: "Where are you headed?", cues: ["Tokyo", "Paris", "New York", "Somewhere warm"] },
+  month: {
+    ask: "When is this for — roughly which month or season?",
+    cues: ["This summer", "This winter", "Spring", "Autumn"],
+  },
+  occasion: {
+    ask: "What's the occasion or setting?",
+    cues: ["Work", "Date night", "Night out", "Staying in"],
+  },
+  vibe: {
+    ask: "What vibe are you going for?",
+    cues: ["Artsy and quiet", "Bold and modern", "Clean and classic", "Warm and cozy"],
+  },
+  direction: {
+    ask: "Which scent direction feels right?",
+    cues: ["Citrus / fresh", "Woody / warm", "Green / aromatic", "Sweet / gourmand"],
+  },
+  projection: {
+    ask: "How much presence do you want it to have?",
+    cues: ["Skin-close", "Moderate trail", "A statement"],
+  },
+  impression: {
+    ask: "What impression do you want to give?",
+    cues: ["Calm", "Focused", "Confident", "Social"],
+  },
+  // No "$NN" figures in the cues — a literal price trips the price-evidence gate.
+  budget: { ask: "Any budget in mind?", cues: ["Budget-friendly", "Mid-range", "Premium", "No limit"] },
+};
+
+/** Priority order for picking which still-unknown slot to ask about next. */
+const CLARIFY_PRIORITY: BeamSlotKey[] = [
+  "destination",
+  "month",
+  "occasion",
+  "direction",
+  "projection",
+  "impression",
+  "budget",
+];
+
+const GENERIC_CLARIFICATION =
+  "Tell me a bit more about what you're after and I'll line up the right picks.\n```cues\nA scent for today\nSomething for a trip\nA gift idea\nSurprise me\n```";
+
+function formatClarification(template: { ask: string; cues: string[] }): string {
+  return `${template.ask}\n\`\`\`cues\n${template.cues.join("\n")}\n\`\`\``;
+}
+
+/** First still-unknown slot worth asking about; vibe⇄direction count as one. */
+function firstUnknownSlot(slots: BeamSessionSlots): BeamSlotKey | undefined {
+  for (const key of CLARIFY_PRIORITY) {
+    // vibe and direction are the same calibration dimension — only ask when
+    // NEITHER is known, or we'd re-ask a value already captured.
+    if (key === "direction") {
+      if (!slots.direction && !slots.vibe) return "direction";
+      continue;
+    }
+    if (!slots[key]) return key;
+  }
+  return undefined;
+}
+
+/**
+ * Build a deterministic, gate-safe clarifying question from the session state, so
+ * a tool-free turn that the model couldn't make gate-clean never has to hard-fail.
+ * Returns null when asking would itself be wrong: the user delegated the choice
+ * (must commit, not ask), or a travel kit already has enough context to fulfill
+ * (must recommend, not ask). The caller still re-runs the gates on the output, so
+ * this is a best-effort generator with the gate as the final guarantee.
+ */
+export function buildSafeClarification(state: BeamSessionState | undefined): string | null {
+  if (state?.userDelegatedChoice || state?.mission?.userDelegatedChoice) return null;
+  if (missionReadyForFulfillment(state)) return null;
+
+  const slots = state?.slots ?? {};
+  // Re-ask the pending slot only when it (and its compatible twin, vibe⇄direction)
+  // is genuinely still unknown. A stale pending pointer at an already-captured slot
+  // would otherwise produce a redundant question that fails its own gate.
+  const pending = state?.pendingSlotUnanswered ? state.pendingSlot : undefined;
+  if (pending && !pendingSlotSatisfiedBy(pending, slots)) {
+    return formatClarification(SLOT_CLARIFICATION[pending]);
+  }
+
+  const target = firstUnknownSlot(slots);
+  if (target) return formatClarification(SLOT_CLARIFICATION[target]);
+  return GENERIC_CLARIFICATION;
 }

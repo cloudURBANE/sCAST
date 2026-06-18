@@ -791,6 +791,84 @@ test("pre-tool cue clarification that re-asks known state is nudged instead of c
   assert.ok(sentStateNudge, "expected a state nudge instead of completing the cue question");
 });
 
+test("a tool-free clarifying turn that fails the gate is repaired into a clean re-ask, not hard-failed", async () => {
+  // The exact dead-end the prior pass shipped: a clarifying (tool-free) turn whose
+  // question trips a gate twice used to skip the usedTools-gated repair and hard
+  // fail with quality_gate_failed. It must now recover via a clarify-repair pass.
+  const events: BeamRunEvent[] = [];
+  let completed: string | undefined;
+  let summary: BeamRunSummary | undefined;
+
+  const { callModel, seen } = scriptedModel([
+    // turn 0: abandons the pending vibe question (asks budget) -> cue gate fails -> STATE_NUDGE
+    text("What's your budget?\n```cues\nUnder $100\nUnder $200\n```"),
+    // turn 1: still abandons -> falls through to finish() tool-free (the old dead-end)
+    text("So really, what's your budget?\n```cues\nUnder $150\nNo limit\n```"),
+    // turn 2: the clarify-repair pass re-asks the vibe slot cleanly -> passes the gate
+    text("Got it. What vibe are you after for Tokyo?\n```cues\nArtsy and quiet\nBold and modern\n```"),
+  ]);
+
+  await runBeamAgent({
+    ctx,
+    userMessage: "hmm",
+    sessionState: { slots: { destination: "Tokyo" }, pendingSlot: "vibe", pendingSlotUnanswered: true },
+    tools: [wardrobeTool([])],
+    emit: (e) => events.push(e),
+    isModelConfigured: () => true,
+    callModel,
+    onComplete: (t) => (completed = t),
+    onSummary: (s) => (summary = s),
+  });
+
+  assert.equal(events.some((e) => e.type === "failed"), false, "a clarifying turn must not hard-fail");
+  assert.ok(events.some((e) => e.type === "completed"), "the repaired clarifying turn ships");
+  assert.match(String(completed), /vibe/i);
+  assert.equal(summary?.qualityGatePassed, true);
+  // The repair pass was tool-free and carried the clarify (not synthesis) instruction.
+  const repairCall = seen[seen.length - 1];
+  assert.equal(repairCall.tools.length, 0);
+  const folded = repairCall.messages
+    .flatMap((m) => (Array.isArray(m.content) ? m.content : [{ type: "text", text: m.content }]))
+    .map((b) => (b && typeof b === "object" && "text" in b ? String((b as { text: unknown }).text) : ""))
+    .join("\n");
+  assert.match(folded, /have NOT retrieved any fragrances/i);
+  assert.doesNotMatch(folded, /You may name ONLY these fragrances/i);
+});
+
+test("a tool-free clarifying turn recovers via a deterministic safe re-ask when repair also fails", async () => {
+  // Repair itself produces another abandoning question, so the deterministic
+  // gate-safe fallback (buildSafeClarification) must keep the session alive rather
+  // than surfacing quality_gate_failed.
+  const events: BeamRunEvent[] = [];
+  let completed: string | undefined;
+  let summary: BeamRunSummary | undefined;
+
+  const { callModel } = scriptedModel([
+    text("What's your budget?\n```cues\nUnder $100\nUnder $200\n```"), // turn 0 -> cue gate fails -> STATE_NUDGE
+    text("Seriously — your budget?\n```cues\nCheap\nExpensive\n```"), // turn 1 -> finish() tool-free
+    text("Still, what's the budget?\n```cues\nLow\nHigh\n```"), // turn 2 repair -> still abandons vibe -> fails
+  ]);
+
+  await runBeamAgent({
+    ctx,
+    userMessage: "hmm",
+    sessionState: { slots: { destination: "Tokyo" }, pendingSlot: "vibe", pendingSlotUnanswered: true },
+    tools: [wardrobeTool([])],
+    emit: (e) => events.push(e),
+    isModelConfigured: () => true,
+    callModel,
+    onComplete: (t) => (completed = t),
+    onSummary: (s) => (summary = s),
+  });
+
+  assert.equal(events.some((e) => e.type === "failed"), false, "the safe fallback prevents a hard fail");
+  assert.ok(events.some((e) => e.type === "completed"));
+  // The deterministic fallback re-asks the pending vibe slot and carries tap chips.
+  assert.match(String(completed), /vibe/i);
+  assert.ok(events.some((e) => e.type === "suggestions"));
+  assert.equal(summary?.qualityGatePassed, true);
+});
+
 test("regression script: Tokyo 2+2 kit persists slots, never re-asks month, honors delegation, ships a 4-item kit", async () => {
   // Drives the §7 regression script end-to-end against runBeamAgent, threading
   // structured state across turns exactly the way beamAgentRoutes does: derive

@@ -17,9 +17,9 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { deriveBeamSessionState, isDelegationPhrase } from "./missionState.ts";
-import { runAnswerQualityGates } from "./answerQualityGates.ts";
-import type { BeamGroundedFragrance } from "./types.ts";
+import { deriveBeamSessionState, isDelegationPhrase, pendingSlotSatisfiedBy } from "./missionState.ts";
+import { buildSafeClarification, runAnswerQualityGates } from "./answerQualityGates.ts";
+import type { BeamGroundedFragrance, BeamSessionState } from "./types.ts";
 
 const noEvidence = { hadExternalEvidence: false } as const;
 
@@ -113,4 +113,108 @@ test("a kit answer naming only one owned pick is unfulfilled", () => {
   const gate = runAnswerQualityGates(answer, { ...noEvidence, sessionState: t3, groundedFragrances: grounded });
   assert.equal(gate.passed, false);
   assert.ok(gate.violations.includes("mission_unfulfilled"), gate.violations.join(","));
+});
+
+test("a vibe pending slot is satisfied by a direction answer (it does not stay pending)", () => {
+  // Agent asked for 'vibe'; the user replied with a scent direction ('citrusy').
+  // They are the same calibration dimension, so the pending question is answered.
+  assert.equal(pendingSlotSatisfiedBy("vibe", { direction: "citrus" }), true);
+  assert.equal(pendingSlotSatisfiedBy("direction", { vibe: "artsy" }), true);
+  // A genuinely unrelated answer leaves it pending.
+  assert.equal(pendingSlotSatisfiedBy("vibe", { month: "August" }), false);
+
+  const state = deriveBeamSessionState({ slots: { destination: "Tokyo" } }, "citrusy", "vibe");
+  assert.match(state.slots.direction ?? "", /citrus/i);
+  assert.notEqual(state.pendingSlotUnanswered, true);
+});
+
+test("a direction-worded re-ask of a vibe question is not scored as abandonment", () => {
+  const state: BeamSessionState = {
+    slots: { destination: "Tokyo" },
+    pendingSlot: "vibe",
+    pendingSlotUnanswered: true,
+  };
+  const reask = "Want it to lean fresh and citrusy, or warm and woody?";
+  const gate = runAnswerQualityGates(reask, { ...noEvidence, sessionState: state, groundedFragrances: [] });
+  assert.ok(
+    !gate.violations.includes("pending_slot_abandoned"),
+    `unexpected abandonment: ${gate.violations.join(",")}`,
+  );
+});
+
+test("an off-topic re-ask of a vibe question is still flagged as abandonment", () => {
+  const state: BeamSessionState = {
+    slots: { destination: "Tokyo" },
+    pendingSlot: "vibe",
+    pendingSlotUnanswered: true,
+  };
+  const offTopic = "What's your budget for this?";
+  const gate = runAnswerQualityGates(offTopic, { ...noEvidence, sessionState: state, groundedFragrances: [] });
+  assert.ok(gate.violations.includes("pending_slot_abandoned"), gate.violations.join(","));
+});
+
+test("buildSafeClarification produces a gate-safe re-ask for the pending slot", () => {
+  const state: BeamSessionState = {
+    slots: { destination: "Tokyo" },
+    pendingSlot: "vibe",
+    pendingSlotUnanswered: true,
+  };
+  const safe = buildSafeClarification(state);
+  assert.ok(safe, "expected a fallback clarification");
+  assert.match(safe ?? "", /```cues/);
+  const gate = runAnswerQualityGates(safe ?? "", { ...noEvidence, sessionState: state, groundedFragrances: [] });
+  assert.deepEqual(gate.violations, []);
+});
+
+test("buildSafeClarification refuses to ask once the user has delegated the choice", () => {
+  const delegated: BeamSessionState = { slots: { destination: "Tokyo" }, userDelegatedChoice: true };
+  assert.equal(buildSafeClarification(delegated), null);
+});
+
+test("a slot already known on a prior turn is never re-marked pending", () => {
+  // direction captured earlier; the assistant's last question was classified 'vibe';
+  // this turn answers neither — but direction already satisfies that calibration, so
+  // the pending vibe must NOT reopen (it would make the agent re-ask a known value).
+  const prev: BeamSessionState = { slots: { destination: "Paris", direction: "woody" } };
+  const state = deriveBeamSessionState(prev, "it's for my partner", "vibe");
+  assert.notEqual(state.pendingSlotUnanswered, true);
+});
+
+test("the safe net never re-asks a slot already captured (stale pending pointer)", () => {
+  // Defense-in-depth: even a hand-built state with a stale pending pointer at an
+  // already-known slot must not yield a redundant_clarification re-ask.
+  const staleVibe: BeamSessionState = {
+    slots: { destination: "Paris", direction: "woody" },
+    pendingSlot: "vibe",
+    pendingSlotUnanswered: true,
+  };
+  const safeVibe = buildSafeClarification(staleVibe);
+  if (safeVibe) {
+    const gate = runAnswerQualityGates(safeVibe, { ...noEvidence, sessionState: staleVibe, groundedFragrances: [] });
+    assert.deepEqual(gate.violations, [], safeVibe);
+  }
+
+  const staleMonth: BeamSessionState = {
+    slots: { month: "June", occasion: "work" },
+    pendingSlot: "month",
+    pendingSlotUnanswered: true,
+  };
+  const safeMonth = buildSafeClarification(staleMonth);
+  if (safeMonth) {
+    const gate = runAnswerQualityGates(safeMonth, { ...noEvidence, sessionState: staleMonth, groundedFragrances: [] });
+    assert.deepEqual(gate.violations, [], safeMonth);
+  }
+});
+
+test("every deterministic safe clarification passes its own gates for each pending slot", () => {
+  // Guard against a template ever drifting into a gate violation. For each slot,
+  // build the state where that slot is pending and assert the canonical re-ask is clean.
+  const slots = ["destination", "month", "occasion", "vibe", "direction", "projection", "impression", "budget"] as const;
+  for (const slot of slots) {
+    const state: BeamSessionState = { slots: {}, pendingSlot: slot, pendingSlotUnanswered: true };
+    const safe = buildSafeClarification(state);
+    assert.ok(safe, `expected a clarification for ${slot}`);
+    const gate = runAnswerQualityGates(safe ?? "", { ...noEvidence, sessionState: state, groundedFragrances: [] });
+    assert.deepEqual(gate.violations, [], `${slot} clarification violated: ${gate.violations.join(",")}`);
+  }
 });
