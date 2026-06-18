@@ -35,6 +35,13 @@ mcp_servers:
         # + OPENROUTER_API_KEY are set in the MCP server's env (see
         # dot-hermes-env.example). Safe to list either way.
         - beam_research_web
+        # Presentation/proposal tools resolve grounded catalog and vault data into
+        # app-renderable cards or add-ready proposals. They do not write to the
+        # user's vault; the app Confirm remains the only write path.
+        - beam_propose_collection
+        - beam_show_scent_profile
+        - beam_compare_fragrances
+        - beam_present_travel_kit
       prompts: false
       resources: false
     timeout: 60
