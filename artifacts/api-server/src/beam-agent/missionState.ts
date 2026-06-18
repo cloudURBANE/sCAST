@@ -160,9 +160,9 @@ function parseOwnedCount(text: string): number | undefined {
   return firstCountFor(text, [
     /\b(\d+|one|two|three|four|five)\s+(?:fragrances?|scents?|bottles?|ones?)?\s*(?:from|out of)\s+(?:my\s+)?(?:wardrobe|vault|collection)\b/i,
     /\b(\d+|one|two|three|four|five)\s+(?:owned|already-owned|vault|wardrobe)\s+(?:fragrances?|scents?|bottles?|ones?)\b/i,
-    // Noun optional so "two to take" / "two to pack" (no explicit "fragrances")
-    // still reads as an owned-lane count, matching the "from my wardrobe" pattern.
-    /\b(\d+|one|two|three|four|five)\s+(?:(?:fragrances?|scents?|bottles?|ones?)\s+)?(?:to\s+take|to\s+pack|for\s+(?:the\s+)?trip)\b/i,
+    // Noun optional so "two to take" / "two to pack" / "two to bring" (no explicit
+    // "fragrances") still reads as an owned-lane count, matching the "from my wardrobe" pattern.
+    /\b(\d+|one|two|three|four|five)\s+(?:(?:fragrances?|scents?|bottles?|ones?)\s+)?(?:to\s+(?:take|pack|bring|wear)|for\s+(?:the\s+)?trip)\b/i,
   ]);
 }
 
@@ -189,7 +189,7 @@ export function isDelegationPhrase(message: string): boolean {
 function parseMissionPatch(text: string, slots: BeamSessionSlots): BeamMissionState | undefined {
   const ownedCount = parseOwnedCount(text);
   const newCount = parseNewCount(text);
-  const travelLike = /\b(?:trip|travel|vacation|visit|flying|pack|packing|take with me|travel kit|kit)\b/i.test(text);
+  const travelLike = /\b(?:trip|travel|vacation|visit|flying|pack|packing|bring|bringing|take with me|travel kit|kit)\b/i.test(text);
   const kitLike = ownedCount !== undefined || newCount !== undefined || /\b(?:wardrobe|vault|collection)\b.*\bnew\b|\bnew\b.*\b(?:wardrobe|vault|collection)\b/i.test(text);
 
   if (travelLike || kitLike) {
