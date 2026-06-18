@@ -19,6 +19,18 @@ test("parses a travel kit target with owned and new counts", () => {
   assert.equal(state.mission?.newCount, 2);
 });
 
+test("parses the owned-lane count for 'to bring' phrasing without the noun 'fragrances'", () => {
+  const state = deriveBeamSessionState(
+    undefined,
+    "Trip to Tokyo, two to bring with me and two new ones not in my collection",
+  );
+
+  assert.equal(state.slots.destination, "Tokyo");
+  assert.equal(state.mission?.intent, "travel_kit");
+  assert.equal(state.mission?.ownedCount, 2);
+  assert.equal(state.mission?.newCount, 2);
+});
+
 test("keeps an active scent-direction question unresolved when the user gives an occasion", () => {
   const pending = inferPendingSlotFromAssistant("Should it feel citrusy, green, or aromatic?");
   const state = deriveBeamSessionState(undefined, "Work meeting", pending);
