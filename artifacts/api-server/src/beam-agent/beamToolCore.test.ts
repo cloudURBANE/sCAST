@@ -183,20 +183,24 @@ test("summarizeToolResult produces safe one-liners", () => {
   assert.equal(summarizeToolResult("beam_search_catalog", { items: [1, 2, 3] }), "3 result(s)");
   assert.equal(summarizeToolResult("beam_score_candidates", { recommendation: { canonicalName: "Aventus" } }), "picked Aventus");
   assert.equal(summarizeToolResult("beam_score_candidates", { recommendation: null }), "no match");
+  // Taste profile surfaces families only — never a count (avoids the confusing
+  // "60 bottles" (profiled) vs "125 in your vault" (raw) mismatch in the trail).
   assert.equal(
     summarizeToolResult("beam_get_user_context", {
       wardrobeSummary: { count: 8, topFamilies: ["woody", "amber", "fresh"] },
     }),
-    "8 bottles · woody, amber",
+    "taste profile · woody, amber",
   );
   assert.equal(
     summarizeToolResult("beam_get_user_context", { wardrobeSummary: { count: 1, topFamilies: [] } }),
-    "1 bottle",
+    "taste profile",
   );
   assert.equal(
     summarizeToolResult("beam_get_user_context", { wardrobeSummary: { count: 0, topFamilies: [] } }),
     "vault is empty",
   );
+  // The wardrobe loader owns the single authoritative vault count.
+  assert.equal(summarizeToolResult("beam_get_wardrobe", { items: [1, 2, 3] }), "3 in your vault");
   assert.equal(summarizeToolResult("x", "whatever"), "done");
 });
 
