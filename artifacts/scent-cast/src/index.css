@@ -2368,46 +2368,7 @@ a {
 .scent-community-marquee {
   position: relative;
   overflow: hidden;
-  --community-edge-fade: clamp(3rem, 9vw, 8rem);
-  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 var(--community-edge-fade), #000 calc(100% - var(--community-edge-fade)), transparent 100%);
-  mask-image: linear-gradient(90deg, transparent 0, #000 var(--community-edge-fade), #000 calc(100% - var(--community-edge-fade)), transparent 100%);
   contain: paint;
-}
-
-.scent-community-marquee::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  pointer-events: none;
-  background:
-    linear-gradient(
-      90deg,
-      rgba(0, 0, 0, 0.96) 0%,
-      rgba(0, 0, 0, 0.76) 8%,
-      transparent 23%,
-      transparent 77%,
-      rgba(0, 0, 0, 0.76) 92%,
-      rgba(0, 0, 0, 0.96) 100%
-    );
-}
-
-.scent-community-marquee-focus {
-  position: absolute;
-  top: 0.3rem;
-  bottom: 0.3rem;
-  left: 50%;
-  z-index: 0;
-  width: min(54vw, 19rem);
-  transform: translateX(-50%);
-  pointer-events: none;
-  border-radius: calc(var(--radius-scent) + 0.35rem);
-  background:
-    radial-gradient(76% 58% at 50% 44%, rgba(255, 247, 236, 0.045), transparent 68%),
-    radial-gradient(88% 74% at 50% 52%, rgba(212, 175, 55, 0.09), transparent 72%);
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 236, 183, 0.055),
-    0 26px 72px -56px rgba(212, 175, 55, 0.36);
 }
 
 .scent-community-marquee-track {
@@ -2479,14 +2440,15 @@ a {
 }
 
 @media (max-width: 480px) {
-  .scent-community-marquee {
-    --community-edge-fade: clamp(2.35rem, 15vw, 4.25rem);
+  .scent-community-marquee-group {
+    gap: 1rem;
+    padding-right: 1rem;
   }
 
   .scent-community-marquee-cell {
-    flex: 0 0 clamp(9.75rem, 47vw, 12.25rem);
-    width: clamp(9.75rem, 47vw, 12.25rem);
-    height: clamp(11.75rem, 50vw, 14.75rem);
+    flex: 0 0 clamp(8.75rem, 40vw, 10.5rem);
+    width: clamp(8.75rem, 40vw, 10.5rem);
+    height: clamp(10.5rem, 44vw, 12rem);
   }
 }
 

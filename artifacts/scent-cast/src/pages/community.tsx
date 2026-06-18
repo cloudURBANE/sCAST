@@ -169,7 +169,7 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
   }, []);
 
   return (
-    <div className="min-h-[100svh] relative overflow-x-hidden pb-[calc(var(--bottomnav-h)+3rem)] md:pb-0">
+    <div className="min-h-[100svh] relative overflow-x-hidden pb-[calc(var(--bottomnav-h)+1.5rem)] md:pb-0">
       <AppTopNav
         authToken={authToken}
         authEmail={authEmail}
@@ -196,11 +196,11 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
               <CommunityMarqueeFallback />
             )}
           </div>
-          <section className="scent-deferred-section w-full space-y-3 pb-[calc(var(--bottomnav-h)+2rem)] sm:space-y-7 sm:pb-0" aria-label="Community forum">
+          <section className="scent-deferred-section w-full space-y-3 sm:space-y-7" aria-label="Community forum">
             {communityBodyReady ? (
               <>
               <React.Suspense fallback={<CommunityPanelFallback />}>
-                <div className="mx-auto w-full max-w-[940px] overflow-hidden rounded-[calc(var(--radius-scent)-2px)] border border-scent-accent/14 bg-[linear-gradient(180deg,rgba(10,9,7,0.76),rgba(0,0,0,0.92))] shadow-[0_14px_36px_-32px_rgba(0,0,0,0.95),0_0_0_1px_rgba(212,175,55,0.035),inset_0_1px_0_rgba(255,236,183,0.04)]">
+                <div className="mx-auto w-full max-w-[940px] overflow-hidden rounded-[calc(var(--radius-scent)-2px)] border border-scent-accent/14 bg-[#050403] shadow-[inset_0_1px_0_rgba(255,236,183,0.04)]">
                   {/* ONE deliberate toolbar: compose on the left, search/filter on
                       the right. The two are mutually exclusive — opening either
                       retracts the other — so this never reads as duplicate UI. */}
