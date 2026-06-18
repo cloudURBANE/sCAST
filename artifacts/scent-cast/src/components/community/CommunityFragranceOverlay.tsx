@@ -196,7 +196,12 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
           key="community-fragrance-overlay"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
+          // Open: a quick fade so the shared-bottle morph is already travelling
+          // when the overlay turns opaque. Close: a longer fade that OUTLASTS the
+          // 0.45s bottle morph, so the bottle stays visible until it lands back on
+          // the marquee card instead of vanishing mid-flight (the glitchy close on
+          // phones, where the morph runs longer than a 0.24s fade could cover).
+          exit={{ opacity: 0, transition: { duration: 0.5, ease: [0.4, 0, 0.2, 1] } }}
           transition={{ duration: 0.24, ease: 'easeOut' }}
           className="fixed inset-0 z-[110] flex flex-col bg-[#020202]"
           role="dialog"
@@ -216,17 +221,23 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
             <button
               type="button"
               onClick={closeOverlay}
-              className="-m-1 inline-flex min-h-11 min-w-11 items-center justify-center rounded-full text-scent-text-subtle hover:text-white hover:bg-white/10 transition-all active:scale-95"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-scent-accent/25 bg-white/[0.04] text-scent-text-muted transition-all hover:border-scent-accent/45 hover:bg-white/10 hover:text-white active:scale-95"
               aria-label="Close fragrance details"
               ref={closeButtonRef}
             >
-              <X size={20} strokeWidth={1.75} />
+              <X size={22} strokeWidth={2} />
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto">
-            <div className="flex min-h-full items-center justify-center px-5 py-6 sm:px-10 sm:py-10 lg:px-16">
-              <div className="grid w-full max-w-6xl gap-8 lg:grid-cols-[minmax(18rem,26rem)_minmax(0,1fr)] lg:items-center lg:gap-14">
+          <div className="flex-1 overflow-y-auto overscroll-contain">
+            {/* flex-col + m-auto on the child centers the content vertically when
+                it fits, but collapses the auto margins to the top (fully
+                scrollable) the moment it is taller than the viewport. Plain
+                `items-center` centered an overflowing child and pushed its top
+                above the scroll origin — that was the clipped card top + the
+                lost @username on phones, and the symmetric dead-space on iPad. */}
+            <div className="flex min-h-full flex-col px-5 py-6 sm:px-10 sm:py-12 lg:px-16">
+              <div className="m-auto grid w-full max-w-6xl gap-8 lg:grid-cols-[minmax(18rem,26rem)_minmax(0,1fr)] lg:items-center lg:gap-14">
                 <div className="scent-fragrance-card relative mx-auto flex aspect-[3/4.6] w-full max-w-[20rem] flex-col p-5 sm:max-w-[24rem] sm:p-6">
                   <div className="scent-card-frame" aria-hidden="true" />
                   <div className="relative z-10 flex justify-end">
@@ -266,16 +277,10 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
                   animate="visible"
                   variants={detailRevealVariants}
                 >
+                  {/* No in-panel "Community Wardrobe" eyebrow here: the overlay
+                      header already owns that label, so repeating it above the
+                      brand/title read as duplicated hierarchy. */}
                   <motion.header className="space-y-5">
-                    <motion.p
-                      className="scent-type-label text-scent-accent"
-                      variants={{
-                        hidden: { opacity: 0, y: 10 },
-                        visible: { opacity: 1, y: 0, transition: { duration: 0.38, ease: 'easeOut' } },
-                      }}
-                    >
-                      Community Wardrobe
-                    </motion.p>
                     <motion.div
                       className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start"
                       variants={{
