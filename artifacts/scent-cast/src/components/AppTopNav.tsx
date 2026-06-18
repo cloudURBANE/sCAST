@@ -150,6 +150,7 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
   authEmail,
   authPictureUrl,
   authUsername,
+  renderedRoute,
   agentActive = false,
   onSignIn,
   onShare,
@@ -329,7 +330,10 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
       <div
         aria-hidden="true"
         className={[
-          'pointer-events-none fixed inset-x-0 bottom-0 z-40 h-[calc(var(--bottomnav-h)+1.75rem)] bg-gradient-to-t from-scent-bg via-scent-bg/94 to-transparent md:hidden transition-opacity duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]',
+          'pointer-events-none fixed inset-x-0 bottom-0 z-40 h-[calc(var(--bottomnav-h)+1.75rem)] md:hidden transition-opacity duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]',
+          renderedRoute === 'community'
+            ? 'bg-scent-bg'
+            : 'bg-gradient-to-t from-scent-bg via-scent-bg/94 to-transparent',
           bottomNavShown ? 'opacity-100' : 'opacity-0',
         ].join(' ')}
       />

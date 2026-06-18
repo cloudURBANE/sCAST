@@ -1497,7 +1497,8 @@ export default function App() {
     : lowMotionRenderMode
       ? 'static'
       : 'raf';
-  const showThreadBackground = !isFreezeLab && threadBackgroundReady;
+  const showThreadBackground =
+    !isFreezeLab && renderedLocation.pathname !== '/community' && threadBackgroundReady;
   const transitionTiming = useMemo(
     () => (lowMotionRenderMode || ipadSafariPerformanceMode ? PAGE_TRANSITION_TIMING.lowMotion : PAGE_TRANSITION_TIMING.standard),
     [ipadSafariPerformanceMode, lowMotionRenderMode],

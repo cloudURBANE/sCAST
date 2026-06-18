@@ -23,6 +23,7 @@ interface BottleMarqueeProps {
 const COMMUNITY_TRACK_COPIES_DEFAULT = 3;
 const COMMUNITY_TRACK_COPIES_LOW = 2;
 const COMMUNITY_SCROLL_PIXELS_PER_SECOND = 4.25;
+const COMMUNITY_SCROLL_MOBILE_PIXELS_PER_SECOND = 10;
 const COMMUNITY_SCROLL_MIN_SECONDS = 190;
 const COMMUNITY_SCROLL_MAX_SECONDS = 420;
 const COMMUNITY_SCROLL_REDUCED_MOTION_SECONDS = 640;
@@ -85,11 +86,14 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
       if (distance <= 0) return;
 
       const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const pixelsPerSecond = window.matchMedia('(max-width: 480px)').matches
+        ? COMMUNITY_SCROLL_MOBILE_PIXELS_PER_SECOND
+        : COMMUNITY_SCROLL_PIXELS_PER_SECOND;
       const duration = prefersReducedMotion
         ? COMMUNITY_SCROLL_REDUCED_MOTION_SECONDS
         : Math.min(
             COMMUNITY_SCROLL_MAX_SECONDS,
-            Math.max(COMMUNITY_SCROLL_MIN_SECONDS, distance / COMMUNITY_SCROLL_PIXELS_PER_SECOND),
+            Math.max(COMMUNITY_SCROLL_MIN_SECONDS, distance / pixelsPerSecond),
           );
 
       track.style.setProperty('--community-marquee-distance', `${distance}px`);
@@ -209,7 +213,6 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
   return (
     <MotionConfig reducedMotion="user">
       <section ref={sectionRef} className="scent-community-marquee" aria-label="Community fragrance marquee">
-        <div className="scent-community-marquee-focus" aria-hidden="true" />
         <div
           className="scent-community-marquee-track"
           key={trackKey}
