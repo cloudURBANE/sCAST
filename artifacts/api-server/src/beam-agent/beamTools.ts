@@ -38,6 +38,13 @@ import {
   packetFromOwnedItem,
 } from "./beamToolCore.ts";
 import type { OverlapProfile } from "./beamToolCore.ts";
+import {
+  buildOwnedFragranceIndex,
+  findOwnedVaultItem,
+  fragranceIdentityKey,
+  isOwnedFragrance,
+  type OwnedFragranceIndex,
+} from "./fragranceIdentity.ts";
 
 /** A flattened catalog hit the search dep returns (loose by design). */
 export type BeamCatalogHit = { id: string; flat: Record<string, unknown>; score: number };
@@ -62,11 +69,6 @@ function overlapProfileFromItem(item: BeamProposalItem): OverlapProfile {
   };
 }
 
-/** Normalize a name for owned-vault membership checks (lowercase, single-spaced). */
-function normName(value: string): string {
-  return value.trim().toLowerCase().replace(/\s+/g, " ");
-}
-
 /** Build a card fragrance straight from an owned vault row (no catalog vector). */
 function cardFragranceFromVaultItem(item: ScentMissionWardrobeItem): BeamCardFragrance {
   const accords = [...(item.families ?? []), ...(item.accords ?? [])]
@@ -85,6 +87,8 @@ function cardFragranceFromVaultItem(item: ScentMissionWardrobeItem): BeamCardFra
 export type BeamToolDeps = {
   /** The user's sanitized vault, scoped to ctx.tenantId + ctx.userId. */
   loadVault: (ctx: BeamRunContext) => Promise<ScentMissionWardrobeItem[]>;
+  /** Uncapped identity view used for ownership safety checks on large vaults. */
+  loadVaultForOwnership?: (ctx: BeamRunContext) => Promise<ScentMissionWardrobeItem[]>;
   /**
    * OPTIONAL richer wardrobe loader that returns owned bottles as full candidate
    * packets WITH note pyramids (read from the raw row, not the mission shape). When
@@ -145,6 +149,8 @@ export type BeamToolDeps = {
   ) => ScentMissionRecommendation[];
   /** Current weather context for the run (best-effort; engine has fallbacks). */
   getWeather: (ctx: BeamRunContext) => Promise<ScentMissionWeather>;
+  /** Travel missions must never silently score against the user's home weather. */
+  requiredDestinationClimate?: { destination: string; month?: string };
 };
 
 /** Largest number of ranked vault picks `beam_score_candidates` will return. */
@@ -211,6 +217,7 @@ function topFamilies(items: ScentMissionWardrobeItem[], limit = 4): string[] {
 
 /** Build the Phase-1 read-only tool definitions from injected deps. */
 export function createBeamTools(deps: BeamToolDeps): BeamToolDefinition[] {
+  const loadOwnershipVault = deps.loadVaultForOwnership ?? deps.loadVault;
   const tools: BeamToolDefinition[] = [
     {
       name: "beam_get_user_context",
@@ -270,9 +277,9 @@ export function createBeamTools(deps: BeamToolDeps): BeamToolDefinition[] {
         let items: CandidatePacket[] = hits.map((hit) => packetFromFlatProfile(hit.id, hit.flat, false));
 
         if (record.excludeOwned === true) {
-          const vault = await deps.loadVault(ctx);
-          const owned = new Set(vault.map((item) => normName(`${item.brand ?? ""} ${item.name}`)));
-          items = items.filter((packet) => !owned.has(normName(`${packet.brand} ${packet.canonicalName}`)));
+          const vault = await loadOwnershipVault(ctx);
+          const owned = buildOwnedFragranceIndex(vault);
+          items = items.filter((packet) => !isOwnedFragrance(owned, packet.brand, packet.canonicalName));
         }
         return { count: items.length, items };
       },
@@ -452,12 +459,24 @@ export function createBeamTools(deps: BeamToolDeps): BeamToolDefinition[] {
         const record = (typeof input === "object" && input !== null ? input : {}) as Record<string, unknown>;
         const calibration = parseCalibration(input);
 
-        // Score against the destination's climate when the agent supplies one,
-        // otherwise the run's local weather. The override only patches the fields
-        // it provides, so partial hints still inherit sane local defaults.
+        // Destination overrides are isolated from home weather so omitted fields
+        // use engine defaults instead of unrelated home data.
         const override = parseWeatherOverride(record.weatherOverride);
-        const weather: ScentMissionWeather = override ? { ...localWeather, ...override } : localWeather;
-        const locationLabel = asString(record.locationLabel);
+        const locationLabel = asString(record.locationLabel) ?? "";
+        const requiredClimate = deps.requiredDestinationClimate;
+        if (requiredClimate) {
+          const normalizedLabel = locationLabel.toLowerCase();
+          const destinationMatches = normalizedLabel.includes(requiredClimate.destination.toLowerCase());
+          const monthMatches = !requiredClimate.month || normalizedLabel.includes(requiredClimate.month.toLowerCase());
+          if (!override || !destinationMatches || !monthMatches) {
+            return {
+              recommendation: null,
+              picks: [],
+              note: `destination climate required for ${requiredClimate.destination}${requiredClimate.month ? `, ${requiredClimate.month}` : ""}`,
+            };
+          }
+        }
+        const weather: ScentMissionWeather = override ? { ...override } : localWeather;
 
         const limit = clampLimit(record.limit, MAX_SCORE_PICKS, 1);
         const ranked = deps.rankVault
@@ -586,13 +605,8 @@ export function createBeamTools(deps: BeamToolDeps): BeamToolDefinition[] {
 
         // Ownership is a safety boundary for add-ready items. If the vault cannot
         // be read, fail the tool instead of treating an outage as an empty vault.
-        const vault = await deps.loadVault(ctx);
-        const ownedNames = new Set<string>();
-        for (const item of vault) {
-          if (!item?.name) continue;
-          if (item.brand) ownedNames.add(normName(`${item.brand} ${item.name}`));
-          else ownedNames.add(normName(item.name));
-        }
+        const vault = await loadOwnershipVault(ctx);
+        const ownedNames = buildOwnedFragranceIndex(vault);
         const items: BeamProposalItem[] = [];
         const unresolved: string[] = [];
         const excludedOwned: string[] = [];
@@ -601,8 +615,8 @@ export function createBeamTools(deps: BeamToolDeps): BeamToolDefinition[] {
           const flat = await resolveCatalogEntry(req.name, req.brand).catch(() => null);
           const built = flat ? buildProposalItem(flat) : null;
           if (built) {
-            const identity = normName(`${built.brand} ${built.name}`);
-            const isOwned = ownedNames.has(identity) || (!built.brand && ownedNames.has(normName(built.name)));
+            const identity = fragranceIdentityKey(built.brand, built.name);
+            const isOwned = isOwnedFragrance(ownedNames, built.brand, built.name);
             if (isOwned) excludedOwned.push(`${built.brand} ${built.name}`.trim());
             else if (!seen.has(identity)) {
               seen.add(identity);
@@ -652,31 +666,22 @@ export function createBeamTools(deps: BeamToolDeps): BeamToolDefinition[] {
     // explicit Confirm (same path as `beam_propose_collection`).
 
     /** Names the user owns, normalized, for grounding the `owned` flag. */
-    const loadOwnedNames = async (ctx: BeamRunContext): Promise<Set<string>> => {
-      const vault = await deps.loadVault(ctx);
-      const set = new Set<string>();
-      for (const it of vault) {
-        if (it?.name) {
-          if (it.brand) set.add(normName(`${it.brand} ${it.name}`));
-          else set.add(normName(it.name));
-        }
-      }
-      return set;
+    const loadOwnedNames = async (ctx: BeamRunContext): Promise<OwnedFragranceIndex> => {
+      const vault = await loadOwnershipVault(ctx);
+      return buildOwnedFragranceIndex(vault);
     };
 
     /** Resolve ONE requested fragrance to its grounded card shape, or null. */
     const resolveCardEntry = async (
       name: string | undefined,
       brand: string | undefined,
-      ownedNames: Set<string>,
+      ownedNames: OwnedFragranceIndex,
     ): Promise<{ item: BeamProposalItem; card: BeamCardFragrance } | null> => {
       if (!name) return null;
       const flat = await resolveCatalogEntry(name, brand).catch(() => null);
       const item = flat ? buildProposalItem(flat) : null;
       if (!item) return null;
-      const owned =
-        ownedNames.has(normName(`${item.brand} ${item.name}`)) ||
-        (!item.brand && ownedNames.has(normName(item.name)));
+      const owned = isOwnedFragrance(ownedNames, item.brand, item.name);
       return { item, card: cardFragranceFromProposalItem(item, owned) };
     };
 
@@ -863,7 +868,8 @@ export function createBeamTools(deps: BeamToolDeps): BeamToolDefinition[] {
         const newReq = Array.isArray(r.newPicks) ? r.newPicks : [];
         // Both reads are required to prove lane ownership. Never manufacture an
         // empty vault when the backing read fails.
-        const [ownedNames, vault] = await Promise.all([loadOwnedNames(ctx), deps.loadVault(ctx)]);
+        const vault = await loadOwnershipVault(ctx);
+        const ownedNames = buildOwnedFragranceIndex(vault);
 
         const ownedPicks: BeamCardFragrance[] = [];
         for (const entry of ownedReq.slice(0, BEAM_LIMITS.maxKitPicks)) {
@@ -877,9 +883,7 @@ export function createBeamTools(deps: BeamToolDeps): BeamToolDefinition[] {
           }
           // Catalog missed (or matched an unowned record) but the bottle is
           // genuinely in the vault → show it from the vault row (no vector).
-          const match = vault.find(
-            (v) => v?.name && (normName(v.name) === normName(name) || normName(v.name).includes(normName(name))),
-          );
+          const match = findOwnedVaultItem(vault, asString(e.brand), name);
           if (match) ownedPicks.push(cardFragranceFromVaultItem(match));
         }
 
@@ -895,8 +899,8 @@ export function createBeamTools(deps: BeamToolDeps): BeamToolDefinition[] {
           const flat = await resolveCatalogEntry(name, brand).catch(() => null);
           const item = flat ? buildProposalItem(flat) : null;
           if (item) {
-            const identity = normName(`${item.brand} ${item.name}`);
-            const isOwned = ownedNames.has(identity) || (!item.brand && ownedNames.has(normName(item.name)));
+            const identity = fragranceIdentityKey(item.brand, item.name);
+            const isOwned = isOwnedFragrance(ownedNames, item.brand, item.name);
             if (isOwned) excludedOwned.push(`${item.brand} ${item.name}`.trim());
             else if (!seenNew.has(identity)) {
               seenNew.add(identity);

@@ -7,11 +7,15 @@
 export function vaultIdentityKey(brand?: string | null, name?: string | null): string {
   const norm = (value?: string | null) =>
     (value ?? '')
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
       .toLowerCase()
+      .replace(/&/g, ' and ')
       .replace(/[^a-z0-9\s]/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
-  const b = norm(brand);
+  const rawBrand = norm(brand);
+  const b = rawBrand === 'ysl' || rawBrand === 'yves st laurent' ? 'yves saint laurent' : rawBrand;
   const n = norm(name);
   if (!n) return '';
   return `${b}|${n}`;

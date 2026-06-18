@@ -127,6 +127,28 @@ test("a response that still fails quality gates is never completed", async () =>
 
 const text = (t: string): ClaudeResponse => ({ stop_reason: "end_turn", content: [{ type: "text", text: t }] });
 
+test("completion waits for transcript persistence before publishing the terminal event", async () => {
+  const events: BeamRunEvent[] = [];
+  let release!: () => void;
+  const persisted = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const run = runBeamAgent({
+    ctx,
+    userMessage: "hello",
+    tools: [],
+    emit: (event) => events.push(event),
+    isModelConfigured: () => true,
+    callModel: async () => text("Hello back."),
+    onComplete: async () => persisted,
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(events.some((event) => event.type === "completed"), false);
+  release();
+  await run;
+  assert.equal(events.some((event) => event.type === "completed"), true);
+});
+
 test("zero-tool opening turn is nudged, then the tool path runs and synthesis writes the final answer", async () => {
   const toolCalls: { input: unknown }[] = [];
   const events: BeamRunEvent[] = [];

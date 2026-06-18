@@ -241,11 +241,26 @@ export async function runBeamAgentMission(options: RunBeamAgentOptions): Promise
   }
   const start = (await startRes.json()) as StartRunResponse;
 
+  let stopRequested = false;
+  const stopRun = async (): Promise<void> => {
+    if (stopRequested) return;
+    stopRequested = true;
+    await fetch(`${base}/api/beam-agent/runs/${start.runId}/stop`, {
+      method: 'POST',
+      headers: authHeader,
+      keepalive: true,
+    }).catch(() => undefined);
+  };
+
   const streamRes = await fetch(`${base}${start.eventsUrl}`, {
     headers: authHeader,
     signal: options.signal,
+  }).catch(async (error) => {
+    await stopRun();
+    throw error;
   });
   if (!streamRes.ok || !streamRes.body) {
+    await stopRun();
     throw new BeamAgentError(`Beam Agent stream failed (${streamRes.status}).`, streamRes.status);
   }
 
@@ -253,33 +268,39 @@ export async function runBeamAgentMission(options: RunBeamAgentOptions): Promise
   const decoder = new TextDecoder();
   let buffer = '';
   try {
-    for (;;) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      let sep: number;
-      while ((sep = buffer.indexOf('\n\n')) !== -1) {
-        const frame = buffer.slice(0, sep);
-        buffer = buffer.slice(sep + 2);
-        const event = parseEventFrame(frame);
-        if (!event) continue;
-        options.onEvent?.(event);
-        if (event.type === 'completed') {
-          return { status: 'completed', response: event.response, sessionId: start.sessionId };
-        }
-        if (event.type === 'failed') {
-          return { status: 'failed', code: event.code, message: event.message, sessionId: start.sessionId };
+    try {
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let sep: number;
+        while ((sep = buffer.indexOf('\n\n')) !== -1) {
+          const frame = buffer.slice(0, sep);
+          buffer = buffer.slice(sep + 2);
+          const event = parseEventFrame(frame);
+          if (!event) continue;
+          options.onEvent?.(event);
+          if (event.type === 'completed') {
+            return { status: 'completed', response: event.response, sessionId: start.sessionId };
+          }
+          if (event.type === 'failed') {
+            return { status: 'failed', code: event.code, message: event.message, sessionId: start.sessionId };
+          }
         }
       }
+    } finally {
+      reader.cancel().catch(() => {
+        // Cancelling an already-aborted/closed stream is fine to ignore.
+      });
     }
-  } finally {
-    reader.cancel().catch(() => {
-      // Cancelling an already-aborted/closed stream is fine to ignore.
-    });
+  } catch (error) {
+    await stopRun();
+    throw error;
   }
 
   // The backend always ends the stream after a completed/failed frame, so
   // reaching here means the connection dropped early — treat as a soft failure
   // the caller can fall back from.
+  await stopRun();
   throw new BeamAgentError('Beam Agent stream ended without a result.');
 }

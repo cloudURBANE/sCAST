@@ -468,7 +468,7 @@ export type RunBeamAgentInput = {
   /** Structured slots/mission state persisted by the route/session store. */
   sessionState?: BeamSessionState;
   /** Called with the final assistant text on success, so the caller can persist the turn. */
-  onComplete?: (assistantText: string) => void;
+  onComplete?: (assistantText: string) => void | Promise<void>;
   /**
    * Called exactly once when the run ends (any outcome) with a structured
    * summary the route logs for observability + cost accounting.
@@ -812,7 +812,7 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
       const response = parsed || "Done.";
       messages.push({ role: "assistant", content: response });
       outcome = "completed";
-      input.onComplete?.(response);
+      await input.onComplete?.(response);
       if (cues.length > 0) {
         emit({ type: "suggestions", items: cues.map((label) => ({ label, value: label })) });
       }

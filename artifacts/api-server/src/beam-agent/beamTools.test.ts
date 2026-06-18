@@ -342,6 +342,22 @@ test("beam_search_catalog requires a query and honors excludeOwned", async () =>
   assert.ok(names.includes("Bleu de Chanel"));
 });
 
+test("owned exclusion uses the uncapped identity view for vaults over 60 items", async () => {
+  const ownershipVault = Array.from({ length: 61 }, (_, index) => ({
+    id: `v${index + 1}`,
+    name: index === 60 ? "Aventus" : `Scent ${index + 1}`,
+    brand: index === 60 ? "Creed" : "House",
+  }));
+  const tools = toolMap(makeDeps({
+    loadVault: async () => ownershipVault.slice(0, 60),
+    loadVaultForOwnership: async () => ownershipVault,
+  }));
+  const result = (await tools.get("beam_search_catalog")!.handler(
+    { query: "creed", excludeOwned: true }, CTX,
+  )) as { items: Array<{ canonicalName: string }> };
+  assert.equal(result.items.some((item) => item.canonicalName === "Aventus"), false);
+});
+
 test("beam_search_catalog clamps the model-supplied limit", async () => {
   let askedLimit = -1;
   const tools = toolMap(
@@ -447,4 +463,39 @@ test("beam_score_candidates scores against a destination weatherOverride and ech
   assert.equal(result.scoredFor.locationLabel, "Tokyo, June");
   assert.equal(result.scoredFor.usedOverride, true);
   assert.equal(result.scoredFor.weather.temperature_f, 75);
+});
+
+test("travel scoring rejects missing or mismatched destination climate", async () => {
+  const tools = toolMap(makeDeps({ requiredDestinationClimate: { destination: "Tokyo", month: "August" } }));
+  const missing = (await tools.get("beam_score_candidates")!.handler(
+    { destination: "Going Out", locationLabel: "Tokyo, August" }, CTX,
+  )) as { picks: unknown[]; note: string };
+  assert.deepEqual(missing.picks, []);
+  assert.match(missing.note, /destination climate required/i);
+  const mismatched = (await tools.get("beam_score_candidates")!.handler({
+    destination: "Going Out",
+    locationLabel: "Paris, August",
+    weatherOverride: { temperature_f: 75, humidity_percent: 80 },
+  }, CTX)) as { picks: unknown[] };
+  assert.deepEqual(mismatched.picks, []);
+});
+
+test("destination override never inherits unrelated home weather fields", async () => {
+  let scoredWeather: Record<string, unknown> | undefined;
+  const tools = toolMap(makeDeps({
+    getWeather: async () => ({ temperature_f: 95, humidity_percent: 20, condition: "Clear", location: "Forney" }),
+    rankVault: (items, _cal, weather) => {
+      scoredWeather = weather as Record<string, unknown>;
+      return items.map((item) => ({
+        fragranceId: item.id, name: item.name, brand: item.brand,
+        engine: {} as never, reason: "ranked", score: 80,
+      }));
+    },
+  }));
+  await tools.get("beam_score_candidates")!.handler(
+    { destination: "Going Out", locationLabel: "Tokyo", weatherOverride: { humidity_percent: 85 } }, CTX,
+  );
+  assert.equal(scoredWeather?.humidity_percent, 85);
+  assert.equal(scoredWeather?.temperature_f, undefined);
+  assert.equal(scoredWeather?.location, undefined);
 });

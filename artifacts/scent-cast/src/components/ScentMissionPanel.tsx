@@ -53,6 +53,7 @@ import { BeamMessage } from '@/components/BeamMessage';
 import { BeamCard } from '@/components/BeamCard';
 import type { Fragrance } from '@/components/Wardrobe';
 import type { WeatherData } from '@/context/WeatherContext';
+import type { CurateCollectionResult } from '@/lib/collectionCuration';
 import { useDragToScroll } from '@/hooks/useDragToScroll';
 import { useMarqueeSwipe } from '@/hooks/useMarqueeSwipe';
 import { isIpadSafariPerformanceMode } from '@/lib/platform';
@@ -749,7 +750,7 @@ export type CollectionCurateProgress = {
 export type CurateCollectionFn = (
   items: BeamProposalItem[],
   onProgress: (progress: CollectionCurateProgress) => void,
-) => Promise<{ added: number; total: number }>;
+) => Promise<CurateCollectionResult>;
 
 interface ScentMissionPanelProps {
   items: Fragrance[];
@@ -1323,10 +1324,12 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
           },
         });
 
+        // Failed turns still persist extracted slots server-side. Retain the
+        // returned session so fallback/retry does not silently start over.
+        beamSessionIdRef.current = result.sessionId;
+        sessionIdRef.current = result.sessionId;
+        setSessionId(result.sessionId);
         if (result.status === 'completed') {
-          beamSessionIdRef.current = result.sessionId;
-          sessionIdRef.current = result.sessionId;
-          setSessionId(result.sessionId);
           // Freeze this run's trail onto the reply: seal any still-active row (the
           // run is over) and capture the elapsed time, so the answer carries its
           // own collapsible "Thought for Ns" recap above it.
@@ -1519,20 +1522,19 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   const handleConfirmProposal = useCallback(async () => {
     if (!proposal || !onCurateCollection || curating) return;
     const collection = proposal.items;
-    setProposal(null);
     setCurating({ total: collection.length, progress: null, done: null });
     try {
       const result = await onCurateCollection(collection, (p) => {
         setCurating((prev) => ({ total: collection.length, done: prev?.done ?? null, progress: p }));
       });
-      setCurating({ total: collection.length, progress: null, done: result });
-      const names = collection.map((item) => item.name);
-      const summary =
-        result.added === 0
-          ? "I couldn't add those to your vault just now — want me to try again?"
-          : result.added === result.total
-            ? `Done — all ${result.total} are in your vault and curated: ${names.join(', ')}. Ready to wear.`
-            : `Added ${result.added} of ${result.total} to your vault — the rest are still curating and will appear shortly.`;
+      setCurating(null);
+      setProposal(result.failedItems.length > 0 ? { ...proposal, items: result.failedItems } : null);
+      const failedNames = result.failedItems.map((item) => item.name);
+      const summary = result.added === 0
+        ? "I couldn't add those to your vault just now. The failed picks are ready to retry."
+        : result.added === result.total
+          ? `Done — all ${result.total} are in your vault and curated. Ready to wear.`
+          : `Added ${result.added} of ${result.total}. ${failedNames.join(', ')} failed and can be retried below.`;
       appendMessage('agent', summary);
     } catch {
       setCurating(null);
@@ -1558,15 +1560,17 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         const result = await onCurateCollection(items, (p) => {
           setCurating((prev) => ({ total: items.length, done: prev?.done ?? null, progress: p }));
         });
-        setCurating({ total: items.length, progress: null, done: result });
-        if (proposalId && result.added > 0) setCuratedKitIds((prev) => new Set(prev).add(proposalId));
-        const names = items.map((item) => item.name);
-        const summary =
-          result.added === 0
-            ? "I couldn't add those to your vault just now — want me to try again?"
-            : result.added === result.total
-              ? `Done — all ${result.total} new picks are in your vault and curating: ${names.join(', ')}.`
-              : `Added ${result.added} of ${result.total} — the rest are still curating and will appear shortly.`;
+        setCurating(null);
+        if (proposalId && result.failedItems.length === 0) setCuratedKitIds((prev) => new Set(prev).add(proposalId));
+        if (result.failedItems.length > 0) {
+          setProposal({ proposalId: proposalId ?? `retry-${Date.now()}`, items: result.failedItems });
+        }
+        const failedNames = result.failedItems.map((item) => item.name);
+        const summary = result.added === 0
+          ? "I couldn't add those to your vault just now. The failed picks are ready to retry."
+          : result.added === result.total
+            ? `Done — all ${result.total} new picks are in your vault.`
+            : `Added ${result.added} of ${result.total}. ${failedNames.join(', ')} failed and can be retried below.`;
         appendMessage('agent', summary);
       } catch {
         setCurating(null);

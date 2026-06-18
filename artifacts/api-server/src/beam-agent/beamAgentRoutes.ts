@@ -48,7 +48,7 @@ import { resolveBeamBudget, resolveBeamModels } from "./provider.ts";
 import { selectConciergeLane } from "./laneSelector.ts";
 import { appendSessionTurn, loadSession, saveSessionState } from "./beamSessionStore.ts";
 import { deriveBeamSessionState, inferPendingSlotFromAssistant } from "./missionState.ts";
-import type { BeamEmit, BeamRunContext, BeamRunEvent, CandidatePacket } from "./types.ts";
+import type { BeamEmit, BeamRunContext, BeamRunEvent, BeamSessionState, CandidatePacket } from "./types.ts";
 import { createBeamResearcher } from "./research/beamResearch.ts";
 import { loadResearchCache, saveResearchCache } from "./research/researchCache.ts";
 import { runWebResearch } from "./research/researchProvider.ts";
@@ -112,6 +112,19 @@ function pruneRuns(): void {
   }
 }
 
+function hasActiveSessionRun(ctx: BeamRunContext): boolean {
+  for (const record of runs.values()) {
+    if (
+      !record.done &&
+      !record.stopped &&
+      record.ctx.tenantId === ctx.tenantId &&
+      record.ctx.userId === ctx.userId &&
+      record.ctx.sessionId === ctx.sessionId
+    ) return true;
+  }
+  return false;
+}
+
 /* ------------------------------------------------------------------ */
 /* Conversation memory lives in beamSessionStore (in-memory or Redis). */
 /* ------------------------------------------------------------------ */
@@ -151,6 +164,22 @@ async function loadVault(ctx: BeamRunContext): Promise<ScentMissionWardrobeItem[
       .map((row) => missionItemFromWardrobeRow(row.id, row.fragranceData))
       .filter((item) => item !== null),
   );
+}
+
+async function loadVaultForOwnership(ctx: BeamRunContext): Promise<ScentMissionWardrobeItem[]> {
+  const rows = await db
+    .select({ id: userFragrancesTable.id, fragranceData: userFragrancesTable.fragranceData })
+    .from(userFragrancesTable)
+    .where(and(eq(userFragrancesTable.tenantId, ctx.tenantId), eq(userFragrancesTable.userId, ctx.userId)))
+    .orderBy(asc(userFragrancesTable.createdAt), asc(userFragrancesTable.id));
+  const items: ScentMissionWardrobeItem[] = [];
+  for (const row of rows) {
+    const projected = missionItemFromWardrobeRow(row.id, row.fragranceData);
+    if (!projected) continue;
+    const item = sanitizeScentMissionWardrobe([projected])[0];
+    if (item) items.push(item);
+  }
+  return items;
 }
 
 async function loadWardrobePackets(ctx: BeamRunContext): Promise<CandidatePacket[]> {
@@ -223,9 +252,10 @@ const beamResearchWeb = createBeamResearcher({
   isEnabled: isResearchEnabled,
 });
 
-function buildDeps(ctx: BeamRunContext, weather: ScentMissionWeather): BeamToolDeps {
+function buildDeps(ctx: BeamRunContext, weather: ScentMissionWeather, sessionState?: BeamSessionState): BeamToolDeps {
   return {
     loadVault,
+    loadVaultForOwnership,
     loadWardrobePackets,
     searchCatalog: searchCatalogForBeam,
     resolveCatalogEntry: resolveCatalogEntryForBeam,
@@ -250,6 +280,12 @@ function buildDeps(ctx: BeamRunContext, weather: ScentMissionWeather): BeamToolD
     rankVault: (items, calibration, currentWeather) =>
       rankScentMissionRecommendations(items, calibration, currentWeather),
     getWeather: async () => weather,
+    ...(sessionState?.mission?.intent === "travel_kit" && sessionState.mission.destination
+      ? { requiredDestinationClimate: {
+          destination: sessionState.mission.destination,
+          ...(sessionState.mission.month ? { month: sessionState.mission.month } : {}),
+        } }
+      : {}),
   };
 }
 
@@ -300,6 +336,10 @@ router.post("/runs", runRateLimit, requireAuth, async (req: AuthRequest, res) =>
   const sessionId =
     typeof body.sessionId === "string" && body.sessionId ? body.sessionId : `beam_${randomUUID()}`;
   const ctx: BeamRunContext = { runId, sessionId, tenantId: getTenantId(req), userId: req.user.id };
+  if (hasActiveSessionRun(ctx)) {
+    res.status(409).json({ error: "A Beam turn is already running for this session.", code: "session_run_in_progress" });
+    return;
+  }
 
   const uiContext = (typeof body.uiContext === "object" && body.uiContext !== null
     ? body.uiContext
@@ -317,7 +357,6 @@ router.post("/runs", runRateLimit, requireAuth, async (req: AuthRequest, res) =>
   };
   runs.set(runId, record);
 
-  const tools = createBeamTools(buildDeps(ctx, weather));
   const emit = makeEmit(record);
   const session = await loadSession(ctx);
   const history = session.turns;
@@ -329,6 +368,7 @@ router.post("/runs", runRateLimit, requireAuth, async (req: AuthRequest, res) =>
     : undefined;
   const sessionState = deriveBeamSessionState(session.state, message, pendingSlot);
   await saveSessionState(ctx, sessionState);
+  const tools = createBeamTools(buildDeps(ctx, weather, sessionState));
   // Surface the freshly-merged structured slots/mission to the client up front,
   // BEFORE the loop runs — so the panel can advance its captured-cue count and
   // mission-aware header straight from free-text (the agent path never calls the
@@ -362,10 +402,7 @@ router.post("/runs", runRateLimit, requireAuth, async (req: AuthRequest, res) =>
     synthesisMaxTokens: budget.synthesisMaxTokens,
     history,
     sessionState,
-    onComplete: (assistantText) => {
-      // Best-effort, fire-and-forget (like the usage-ledger write below).
-      void appendSessionTurn(ctx, message, assistantText, sessionState);
-    },
+    onComplete: (assistantText) => appendSessionTurn(ctx, message, assistantText, sessionState),
     onSummary: (summary) => {
       logger.info(
         {
