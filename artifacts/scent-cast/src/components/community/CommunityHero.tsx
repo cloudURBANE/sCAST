@@ -1,7 +1,7 @@
 import React from 'react';
 
 export const CommunityHero: React.FC = () => (
-  <section className="scent-hero-zone mx-auto w-full max-w-[940px] px-4 py-3 text-center sm:px-6 sm:py-4">
+  <section className="scent-hero-zone mx-auto w-full max-w-[940px] px-4 py-2 text-center sm:px-6 sm:py-4">
     {/* Eyebrow — a wide-tracked gold category tag flanked by thin hairlines,
         framing the heading without spending any blur on the render budget. */}
     <div className="mx-auto flex max-w-[19rem] items-center justify-center gap-3 sm:max-w-sm">
@@ -18,7 +18,7 @@ export const CommunityHero: React.FC = () => (
       />
     </div>
 
-    <h2 className="mx-auto mt-4 max-w-[22rem] text-balance font-serif italic text-[clamp(1.9rem,7vw,3.2rem)] leading-[1.04] tracking-normal text-[#fff7ec] sm:max-w-3xl">
+    <h2 className="mx-auto mt-2.5 max-w-[21rem] text-balance font-serif italic text-[clamp(1.55rem,5.7vw,3.2rem)] leading-[1.04] tracking-normal text-[#fff7ec] sm:mt-4 sm:max-w-3xl">
       Discover{' '}
       {/* Metallic bg-clip-text gradient — cheap and Safari-safe (no blur). */}
       <span className="bg-gradient-to-r from-[#fff7ec] via-scent-accent to-[#fff7ec] bg-clip-text text-transparent">
@@ -27,7 +27,7 @@ export const CommunityHero: React.FC = () => (
       from real fragrance lovers.
     </h2>
 
-    <p className="mx-auto mt-4 max-w-[34rem] text-balance text-[0.95rem] leading-relaxed text-scent-text-muted/80 sm:mt-5 sm:text-base">
+    <p className="mx-auto mt-2.5 max-w-[31rem] text-balance text-[0.86rem] leading-5 text-scent-text-muted/80 sm:mt-5 sm:max-w-[34rem] sm:text-base sm:leading-relaxed">
       A curated space where enthusiasts share daily rotations, pit bottles
       head-to-head in battles, and trade olfactory notes.
     </p>

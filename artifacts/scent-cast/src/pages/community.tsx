@@ -169,7 +169,7 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
   }, []);
 
   return (
-    <div className="min-h-[100svh] relative overflow-x-hidden pb-[calc(var(--bottomnav-h)+2rem)] md:pb-0">
+    <div className="min-h-[100svh] relative overflow-x-hidden pb-[calc(var(--bottomnav-h)+3rem)] md:pb-0">
       <AppTopNav
         authToken={authToken}
         authEmail={authEmail}
@@ -184,8 +184,8 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
 
       <div style={{ height: 'var(--topbar-h)' }} />
 
-      <main className="relative z-10 mx-auto max-w-[1760px] px-4 sm:px-8 sm:pb-24">
-        <div className="space-y-14 pt-9 sm:space-y-20 sm:pt-12">
+      <main className="relative z-10 mx-auto max-w-[1760px] px-3 sm:px-8 sm:pb-24">
+        <div className="space-y-5 pt-2 sm:space-y-20 sm:pt-12">
           <CommunityHero />
           <div className="scent-full-bleed">
             {communityBodyReady ? (
@@ -196,17 +196,17 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
               <CommunityMarqueeFallback />
             )}
           </div>
-          <section className="scent-deferred-section w-full space-y-5 sm:space-y-7" aria-label="Community forum">
+          <section className="scent-deferred-section w-full space-y-3 pb-[calc(var(--bottomnav-h)+2rem)] sm:space-y-7 sm:pb-0" aria-label="Community forum">
             {communityBodyReady ? (
               <>
               <React.Suspense fallback={<CommunityPanelFallback />}>
-                <div className="mx-auto w-full max-w-[940px] overflow-hidden rounded-[calc(var(--radius-scent)-2px)] border border-scent-accent/18 bg-[linear-gradient(180deg,rgba(10,9,7,0.82),rgba(0,0,0,0.94))] shadow-[0_18px_44px_-34px_rgba(0,0,0,0.95),0_0_0_1px_rgba(212,175,55,0.045),inset_0_1px_0_rgba(255,236,183,0.05)]">
+                <div className="mx-auto w-full max-w-[940px] overflow-hidden rounded-[calc(var(--radius-scent)-2px)] border border-scent-accent/14 bg-[linear-gradient(180deg,rgba(10,9,7,0.76),rgba(0,0,0,0.92))] shadow-[0_14px_36px_-32px_rgba(0,0,0,0.95),0_0_0_1px_rgba(212,175,55,0.035),inset_0_1px_0_rgba(255,236,183,0.04)]">
                   {/* ONE deliberate toolbar: compose on the left, search/filter on
                       the right. The two are mutually exclusive — opening either
                       retracts the other — so this never reads as duplicate UI. */}
                   <div
                     className={[
-                      'flex items-center justify-between gap-2 px-3 py-2.5 sm:px-4',
+                      'flex items-center justify-between gap-2 px-2.5 py-1.5 sm:px-4 sm:py-2.5',
                       // Only draw the divider when a surface is expanded beneath
                       // the toolbar, so the resting state reads as one clean bar.
                       composerOpen || filtersOpen ? 'border-b border-scent-accent/10' : '',
@@ -219,7 +219,7 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
                       aria-controls="community-composer-panel"
                       aria-label={composerOpen ? 'Close the composer' : 'Start a community room'}
                       className={[
-                        'inline-flex min-h-10 min-w-0 flex-1 items-center gap-2 rounded-full border px-4 py-2 scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 sm:flex-none',
+                        'inline-flex min-h-8 min-w-0 flex-1 items-center gap-2 rounded-full border px-3 py-1.5 scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 sm:min-h-10 sm:flex-none sm:px-4 sm:py-2',
                         composerOpen
                           ? 'border-scent-accent/48 bg-scent-accent/[0.08] text-[#fff7ec]'
                           : 'border-scent-accent/24 bg-black/40 text-scent-text-muted hover:border-scent-accent/46 hover:text-[#fff7ec]',
@@ -239,7 +239,7 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
                       aria-controls="community-search-panel"
                       aria-label={filtersOpen ? 'Close search and filters' : 'Search rooms and filter'}
                       className={[
-                        'inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full border px-4 py-2 scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45',
+                        'inline-flex min-h-8 shrink-0 items-center gap-2 rounded-full border px-3 py-1.5 scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 sm:min-h-10 sm:px-4 sm:py-2',
                         filtersOpen
                           ? 'border-scent-accent/48 bg-scent-accent/[0.08] text-[#fff7ec]'
                           : 'border-scent-accent/24 bg-black/40 text-scent-text-muted hover:border-scent-accent/46 hover:text-[#fff7ec]',
