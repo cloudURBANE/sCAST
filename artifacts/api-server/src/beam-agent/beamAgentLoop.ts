@@ -645,6 +645,27 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
     }
   };
 
+  // For a new-only travel-kit mission the closing synthesis must name UNOWNED
+  // picks only. The flat grounded-name allowlist mixes in owned vault bottles
+  // (grounded from beam_get_wardrobe / scoring), which led the synthesis to either
+  // name an owned bottle (owned_pick_in_new_only_mission) or fail to surface the
+  // required count of new picks (mission_unfulfilled) — the two dominant
+  // travel-kit gate failures seen in the live backtest. Pin the allowlist to the
+  // unowned grounded set so the model can only commit to new discoveries. Every
+  // other mission keeps the full grounded-name allowlist unchanged.
+  const synthesisAllowlistNames = (): string[] => {
+    const mission = input.sessionState?.mission;
+    const newOnlyKit =
+      mission?.intent === "travel_kit" && (mission.ownedCount ?? 0) === 0 && (mission.newCount ?? 0) > 0;
+    if (!newOnlyKit) return [...groundedNames.values()];
+    const unowned = [...groundedFragrances.values()].filter((f) => !f.owned).map((f) => f.canonicalName);
+    // Never hand the synthesis an empty allowlist (that would forbid naming any
+    // fragrance at all); fall back to the full set if we somehow grounded no
+    // unowned candidate. The answer gate still rejects an owned pick, so the
+    // fallback can't smuggle one through.
+    return unowned.length > 0 ? unowned : [...groundedNames.values()];
+  };
+
   const recordUsage = (response: ClaudeResponse, modelSlug?: string): void => {
     modelCalls++;
     if (response.usage) {
@@ -716,7 +737,7 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
         const synthModel = input.synthesisModel ?? input.model;
         const instruction =
           SYNTHESIS_NUDGE +
-          groundingAllowlistClause([...groundedNames.values()]) +
+          groundingAllowlistClause(synthesisAllowlistNames()) +
           answerConsistencyClause(latestScoring);
         const synthMessages = withSynthesisInstruction(messages, instruction);
         try {
@@ -761,7 +782,7 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
         const repairModel = input.synthesisModel ?? input.model;
         const repairInstruction =
           SYNTHESIS_NUDGE +
-          groundingAllowlistClause([...groundedNames.values()]) +
+          groundingAllowlistClause(synthesisAllowlistNames()) +
           answerConsistencyClause(latestScoring) +
           " " +
           repairInstructionFor(gate.violations);
