@@ -105,10 +105,19 @@ function cleanCapture(value: string): string {
 }
 
 function parseMonth(text: string): string | undefined {
-  for (const [pattern, month] of MONTHS) {
-    if (pattern.test(text)) return month;
-  }
-  return undefined;
+  const matches = MONTHS.flatMap(([pattern, month]) => {
+    const match = pattern.exec(text);
+    if (!match || match.index === undefined) return [];
+    const prefix = text.slice(Math.max(0, match.index - 12), match.index);
+    // Corrections such as "September, not August" must not reinstate the
+    // rejected month merely because August appears first in MONTHS.
+    if (/\b(?:not|no)\s*$/i.test(prefix)) return [];
+    return [{ month, index: match.index }];
+  }).sort((a, b) => a.index - b.index);
+
+  const distinct = [...new Set(matches.map(({ month }) => month))];
+  // "August or September" is an unresolved choice, not authoritative state.
+  return distinct.length === 1 ? distinct[0] : undefined;
 }
 
 function parseDestination(text: string): string | undefined {
@@ -413,7 +422,46 @@ export function deriveBeamSessionState(
   const budget = parseBudget(text);
   if (budget) slots.budget = budget;
 
-  const patchSlots = { ...cloneBeamSessionState(previous).slots, ...slots };
+  // The deterministic recovery prompt offers categorical chips that are valid
+  // answers even though they do not use the free-text parser's usual syntax.
+  // Resolve them only when that exact slot is pending, so words such as "warm"
+  // do not leak into the scent-direction slot when the user chose a destination.
+  const concise = text.trim().replace(/[.!?]+$/g, "");
+  if (pendingSlot === "destination") {
+    if (/^somewhere\s+warm$/i.test(concise)) {
+      slots.destination = "Somewhere warm";
+      delete slots.direction;
+    } else if (
+      Object.keys(slots).length === 0 &&
+      /^[A-Za-z][A-Za-z .'-]{1,50}$/.test(concise) &&
+      !/^(?:i don'?t know|not sure|anywhere|wherever)$/i.test(concise)
+    ) {
+      slots.destination = concise;
+    }
+  }
+  if (pendingSlot === "month" && !slots.month) {
+    const season = /^(?:this\s+)?(spring|summer|autumn|fall|winter)$/i.exec(concise)?.[1];
+    if (season) slots.month = season.toLowerCase() === "fall" ? "Autumn" : season[0].toUpperCase() + season.slice(1).toLowerCase();
+  }
+  if (pendingSlot === "budget" && !slots.budget) {
+    const qualitativeBudget = /^(budget-friendly|mid-range|premium|no limit)$/i.exec(concise)?.[1];
+    if (qualitativeBudget) slots.budget = qualitativeBudget[0].toUpperCase() + qualitativeBudget.slice(1).toLowerCase();
+  }
+
+  const parsedAgainstPrevious = { ...cloneBeamSessionState(previous).slots, ...slots };
+  const preliminaryMission = parseMissionPatch(text, parsedAgainstPrevious);
+  const startsNewMission = Boolean(
+    preliminaryMission?.intent &&
+    previous &&
+    (
+      (previous.mission?.intent && previous.mission.intent !== preliminaryMission.intent) ||
+      /^\s*(?:now\b|next\b|another\b|separately\b|for\s+(?:another|a\s+new)\b|new\s+(?:trip|mission)\b)/i.test(text)
+    )
+  );
+  // Explicit mission boundaries must not inherit a prior trip's destination,
+  // month, scent direction, budget, or delegation flag.
+  const baseState = startsNewMission ? EMPTY_STATE : previous ?? EMPTY_STATE;
+  const patchSlots = { ...cloneBeamSessionState(baseState).slots, ...slots };
   const mission = parseMissionPatch(text, patchSlots);
   const patch: BeamSessionState = {
     slots,
@@ -426,7 +474,7 @@ export function deriveBeamSessionState(
       ? { pendingSlot, pendingSlotUnanswered: true }
       : {}),
   };
-  return mergeBeamSessionState(previous ?? EMPTY_STATE, patch);
+  return mergeBeamSessionState(baseState, patch);
 }
 
 export function beamSessionStatePrompt(state: BeamSessionState | undefined): string {

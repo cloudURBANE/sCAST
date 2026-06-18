@@ -8,6 +8,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   clientEventFitsMission,
+  boundedToolTimeoutMs,
   missionToolResultError,
   runBeamAgent,
   toolFitsMission,
@@ -26,6 +27,12 @@ import type {
 } from "./types.ts";
 
 const ctx: BeamRunContext = { runId: "run_1", sessionId: "s_1", tenantId: "t_1", userId: "u_1" };
+
+test("tool waits are capped by the remaining run budget", () => {
+  assert.equal(boundedToolTimeoutMs(30_000), 20_000);
+  assert.equal(boundedToolTimeoutMs(7_500), 7_500);
+  assert.equal(boundedToolTimeoutMs(-10), 1);
+});
 
 test("new-only mission suppresses owned profile cards and incomplete travel cards", () => {
   const state: BeamSessionState = {
@@ -1066,4 +1073,24 @@ test("an unconfigured model fails gracefully with a summary", async () => {
   assert.equal((failed as { code: string }).code, "model_unavailable");
   assert.equal(summary?.outcome, "failed");
   assert.equal(summary?.failureCode, "model_unavailable");
+});
+
+test("unexpected provider errors never expose raw internals in client events", async () => {
+  const events: BeamRunEvent[] = [];
+  await runBeamAgent({
+    ctx,
+    userMessage: "help",
+    tools: [],
+    emit: (event) => events.push(event),
+    isModelConfigured: () => true,
+    callModel: async () => {
+      throw new Error("upstream 401 key=sk-secret internal-host.example");
+    },
+  });
+
+  const failed = events.find((event) => event.type === "failed");
+  assert.equal(failed?.type, "failed");
+  assert.equal((failed as { code: string }).code, "agent_error");
+  assert.equal((failed as { message: string }).message, "Beam could not complete this request. Please try again.");
+  assert.doesNotMatch((failed as { message: string }).message, /sk-secret|internal-host|401/i);
 });

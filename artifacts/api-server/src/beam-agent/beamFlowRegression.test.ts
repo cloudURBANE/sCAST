@@ -171,6 +171,25 @@ test("buildSafeClarification refuses to ask once the user has delegated the choi
   assert.equal(buildSafeClarification(delegated), null);
 });
 
+test("a non-travel fallback does not invent a destination question", () => {
+  const state: BeamSessionState = { slots: {}, mission: { intent: "recommendation" } };
+  const safe = buildSafeClarification(state);
+  assert.ok(safe);
+  assert.doesNotMatch(safe ?? "", /where are you headed/i);
+  assert.match(safe ?? "", /what you're after/i);
+});
+
+test("a travel fallback asks only for the next field required for readiness", () => {
+  const state: BeamSessionState = {
+    slots: { destination: "Tokyo", month: "August" },
+    mission: { intent: "travel_kit", destination: "Tokyo", month: "August", ownedCount: 2, newCount: 2 },
+  };
+  const safe = buildSafeClarification(state);
+  assert.ok(safe);
+  assert.match(safe ?? "", /scent direction/i);
+  assert.doesNotMatch(safe ?? "", /occasion|setting/i);
+});
+
 test("a slot already known on a prior turn is never re-marked pending", () => {
   // direction captured earlier; the assistant's last question was classified 'vibe';
   // this turn answers neither — but direction already satisfies that calibration, so

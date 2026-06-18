@@ -582,6 +582,11 @@ function raceTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
   });
 }
 
+/** Keep a tool wait inside both its own ceiling and the enclosing run deadline. */
+export function boundedToolTimeoutMs(remainingRunMs: number): number {
+  return Math.min(TOOL_TIMEOUT_MS, Math.max(1, remainingRunMs));
+}
+
 /**
  * Heuristic: did the model end a tool-free turn by PROMISING tool work instead of
  * doing it (e.g. "now let me score your vault and search for two…")? We re-prompt
@@ -1044,7 +1049,7 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
         try {
           result = await raceTimeout(
             def.handler(toolInputForMission(def.name, use.input, input.sessionState), ctx),
-            TOOL_TIMEOUT_MS,
+            boundedToolTimeoutMs(deadline - Date.now()),
             def.name,
           );
         } catch (err) {
@@ -1139,8 +1144,12 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
     }
     fail("max_turns", "Reached the tool-call budget before finishing.");
   } catch (err) {
-    const message = err instanceof Error ? err.message : "agent error";
-    fail("agent_error", message);
+    // Provider/transport errors can contain request metadata, upstream response
+    // bodies, or other internals. `failed` events are client-visible, so keep the
+    // detail out of the SSE payload while the run summary retains the stable
+    // `agent_error` failure code for server-side aggregation.
+    void err;
+    fail("agent_error", "Beam could not complete this request. Please try again.");
   } finally {
     input.onSummary?.({
       runId: ctx.runId,

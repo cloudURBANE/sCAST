@@ -147,6 +147,60 @@ test("merges later month and vibe into an existing travel mission", () => {
   assert.equal(second.mission?.newCount, 2);
 });
 
+test("an explicit new mission does not inherit stale slots or delegation", () => {
+  const first = deriveBeamSessionState(
+    undefined,
+    "Trip to Tokyo: 2 from my wardrobe and 2 new in August, artsy. You decide.",
+  );
+  const second = deriveBeamSessionState(
+    first,
+    "Now I need one new fragrance for a trip to Paris in September.",
+  );
+
+  assert.deepEqual(second.slots, { destination: "Paris", month: "September" });
+  assert.equal(second.mission?.ownedCount, undefined);
+  assert.equal(second.mission?.newCount, 1);
+  assert.equal(second.userDelegatedChoice, undefined);
+  assert.equal(second.mission?.userDelegatedChoice, undefined);
+});
+
+test("a new recommendation does not inherit delegation from a prior travel mission", () => {
+  const first = deriveBeamSessionState(undefined, "Trip to Tokyo in August. You decide.");
+  const second = deriveBeamSessionState(first, "What should I wear to work?");
+
+  assert.equal(second.mission?.intent, "recommendation");
+  assert.deepEqual(second.slots, { occasion: "work" });
+  assert.equal(second.userDelegatedChoice, undefined);
+});
+
+test("month corrections reject the negated month regardless of calendar order", () => {
+  assert.equal(deriveBeamSessionState(undefined, "September, not August").slots.month, "September");
+  assert.equal(deriveBeamSessionState(undefined, "Not August — September instead").slots.month, "September");
+});
+
+test("an unresolved choice between two months is not stored as authoritative state", () => {
+  assert.equal(deriveBeamSessionState(undefined, "August or September").slots.month, undefined);
+});
+
+test("deterministic clarification chips resolve the slot that produced them", () => {
+  const paris = deriveBeamSessionState(undefined, "Paris", "destination");
+  assert.equal(paris.slots.destination, "Paris");
+  assert.equal(paris.pendingSlotUnanswered, undefined);
+
+  const warmPlace = deriveBeamSessionState(undefined, "Somewhere warm", "destination");
+  assert.equal(warmPlace.slots.destination, "Somewhere warm");
+  assert.equal(warmPlace.slots.direction, undefined);
+  assert.equal(warmPlace.pendingSlotUnanswered, undefined);
+
+  const summer = deriveBeamSessionState(undefined, "This summer", "month");
+  assert.equal(summer.slots.month, "Summer");
+  assert.equal(summer.pendingSlotUnanswered, undefined);
+
+  const budget = deriveBeamSessionState(undefined, "Mid-range", "budget");
+  assert.equal(budget.slots.budget, "Mid-range");
+  assert.equal(budget.pendingSlotUnanswered, undefined);
+});
+
 test("stops the destination at a sentence boundary (the reported over-capture bug)", () => {
   const state = deriveBeamSessionState(
     undefined,

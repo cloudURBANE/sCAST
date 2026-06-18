@@ -28,6 +28,19 @@ test("the same price claim passes WITH fresh evidence", () => {
   assert.equal(r.passed, true, JSON.stringify(r.violations));
 });
 
+test("common non-USD price formats require external evidence", () => {
+  for (const claim of [
+    "It costs €180 right now.",
+    "The current price is £150.",
+    "Expect to pay EUR 180.",
+    "It is listed at 250 CAD.",
+    "The bottle is ¥22,000.",
+  ]) {
+    const result = runAnswerQualityGates(claim, NO_EVIDENCE);
+    assert.ok(result.violations.includes("price_without_evidence"), claim);
+  }
+});
+
 test("availability and review claims without evidence are rejected", () => {
   const avail = runAnswerQualityGates("It's currently in stock and 20% off.", NO_EVIDENCE);
   assert.ok(avail.violations.includes("availability_without_evidence"));

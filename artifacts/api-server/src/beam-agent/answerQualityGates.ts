@@ -33,9 +33,9 @@ export type QualityGateResult = {
 /** ~4k chars is generous enough for premium answers without tripping normal prose. */
 const DEFAULT_MAX_CHARS = 4000;
 
-/** A price figure: a `$`-prefixed number, or a number followed by a currency word. */
+/** A price figure using a common currency symbol, code, or currency word. */
 const PRICE_PATTERN =
-  /(?:\$\s?\d|\bUSD\s?\d|\b\d{1,4}(?:[.,]\d{2})?\s?(?:usd|eur|gbp|dollars?|euros?|pounds?)\b)/i;
+  /(?:[$€£¥]\s?\d|\b(?:USD|EUR|GBP|CAD|AUD|JPY)\s?\d|\b\d{1,7}(?:[.,]\d{2})?\s?(?:usd|eur|gbp|cad|aud|jpy|dollars?|euros?|pounds?|yen)\b)/i;
 
 /** Availability / stock / discount claims that require a fresh source. */
 const AVAILABILITY_PATTERN =
@@ -330,17 +330,6 @@ const SLOT_CLARIFICATION: Record<BeamSlotKey, { ask: string; cues: string[] }> =
   budget: { ask: "Any budget in mind?", cues: ["Budget-friendly", "Mid-range", "Premium", "No limit"] },
 };
 
-/** Priority order for picking which still-unknown slot to ask about next. */
-const CLARIFY_PRIORITY: BeamSlotKey[] = [
-  "destination",
-  "month",
-  "occasion",
-  "direction",
-  "projection",
-  "impression",
-  "budget",
-];
-
 const GENERIC_CLARIFICATION =
   "Tell me a bit more about what you're after and I'll line up the right picks.\n```cues\nA scent for today\nSomething for a trip\nA gift idea\nSurprise me\n```";
 
@@ -348,17 +337,13 @@ function formatClarification(template: { ask: string; cues: string[] }): string 
   return `${template.ask}\n\`\`\`cues\n${template.cues.join("\n")}\n\`\`\``;
 }
 
-/** First still-unknown slot worth asking about; vibe⇄direction count as one. */
-function firstUnknownSlot(slots: BeamSessionSlots): BeamSlotKey | undefined {
-  for (const key of CLARIFY_PRIORITY) {
-    // vibe and direction are the same calibration dimension — only ask when
-    // NEITHER is known, or we'd re-ask a value already captured.
-    if (key === "direction") {
-      if (!slots.direction && !slots.vibe) return "direction";
-      continue;
-    }
-    if (!slots[key]) return key;
-  }
+/** First missing field required to make a travel kit ready for fulfillment. */
+function firstTravelKitUnknownSlot(slots: BeamSessionSlots): BeamSlotKey | undefined {
+  // An occasion supplies enough setting context to stand in for both destination
+  // and timing (the same rule used by missionReadyForFulfillment).
+  if (!slots.destination && !slots.occasion) return "destination";
+  if (!slots.month && !slots.occasion) return "month";
+  if (!slots.direction && !slots.vibe) return "direction";
   return undefined;
 }
 
@@ -383,7 +368,9 @@ export function buildSafeClarification(state: BeamSessionState | undefined): str
     return formatClarification(SLOT_CLARIFICATION[pending]);
   }
 
-  const target = firstUnknownSlot(slots);
-  if (target) return formatClarification(SLOT_CLARIFICATION[target]);
+  if (state?.mission?.intent === "travel_kit") {
+    const target = firstTravelKitUnknownSlot(slots);
+    if (target) return formatClarification(SLOT_CLARIFICATION[target]);
+  }
   return GENERIC_CLARIFICATION;
 }
