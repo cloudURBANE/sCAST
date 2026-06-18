@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Check, LoaderCircle, Plus, X } from 'lucide-react';
 import { BottleImage } from '@/components/BottleImage';
@@ -9,6 +10,7 @@ import {
 } from '@/components/community/communityMotion';
 import type { CommunityFragranceEntry } from '@/components/community/communityData';
 import { useWardrobe } from '@/context/WardrobeContext';
+import { useModalBehavior } from '@/hooks/use-modal-behavior';
 
 interface CommunityFragranceOverlayProps {
   item: CommunityFragranceEntry | null;
@@ -57,21 +59,27 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
   const { items, handleAddItem } = useWardrobe();
   const [addState, setAddState] = React.useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [addMessage, setAddMessage] = React.useState<string | null>(null);
+  // The card→overlay shared-bottle transition and the staggered detail reveal
+  // play on every device class. On the low-render budget (phone / iPad WebKit /
+  // reduced-motion) we keep the SAME motion but route it through the cheaper
+  // tween (`imageLayoutTransition`) so it stays inside WebKit's compositor
+  // budget — a transform+opacity animation, no blur/blend/extra layers, so it
+  // never pushes the iOS detail-modal memory ceiling. `prefers-reduced-motion`
+  // users still get no motion: BottleMarquee's <MotionConfig reducedMotion="user">
+  // strips the layout/transform animations for them.
   const imageLayoutTransition = lowRenderBudget
     ? COMMUNITY_IMAGE_LAYOUT_TRANSITION_LOW_RENDER
     : COMMUNITY_IMAGE_LAYOUT_TRANSITION;
-  const sharedImageLayoutId = lowRenderBudget ? undefined : imageLayoutId ?? undefined;
-  const detailRevealVariants = lowRenderBudget
-    ? undefined
-    : {
-        hidden: {},
-        visible: {
-          transition: {
-            delayChildren: 0.12,
-            staggerChildren: 0.08,
-          },
-        },
-      };
+  const sharedImageLayoutId = imageLayoutId ?? undefined;
+  const detailRevealVariants = {
+    hidden: {},
+    visible: {
+      transition: {
+        delayChildren: 0.12,
+        staggerChildren: 0.08,
+      },
+    },
+  };
   const activeItemKey = item ? wardrobeIdentityKey(item.brand, item.name) : '';
   const alreadyInWardrobe = Boolean(
     activeItemKey &&
@@ -105,65 +113,25 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
     });
   }, [onExitComplete, restoreFocus]);
 
-  useEffect(() => {
-    if (!item) return;
-    closeButtonRef.current?.focus({ preventScroll: true });
-  }, [item]);
+  // Focus trap, Escape-to-close, and a robust scroll lock (fixed-body on phones,
+  // root-overflow + overscroll-none on iPad WebKit) come from the shared modal
+  // hook — the same one the wardrobe detail modal uses. This replaces the old
+  // bespoke `documentElement.overflow = hidden`, which iOS Safari ignores for
+  // touch scrolling, letting the page footer rubber-band up into view behind the
+  // overlay. restoreFocus stays off here: BottleMarquee restores the trigger
+  // focus on exit-complete so it survives the close animation.
+  useModalBehavior({
+    isOpen: Boolean(item),
+    containerRef: overlayRef,
+    initialFocusRef: closeButtonRef,
+    onDismiss: closeOverlay,
+    restoreFocus: false,
+  });
 
   useEffect(() => {
     setAddState('idle');
     setAddMessage(null);
   }, [activeItemKey]);
-
-  // Lock page scroll behind the modal; restore whatever was there on close.
-  useEffect(() => {
-    if (!item) return;
-    const previousOverflow = document.documentElement.style.overflow;
-    document.documentElement.style.overflow = 'hidden';
-    return () => {
-      document.documentElement.style.overflow = previousOverflow;
-    };
-  }, [item]);
-
-  useEffect(() => {
-    if (!item) return;
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        closeOverlay();
-        return;
-      }
-
-      // Cycle Tab within the dialog so focus can't land on the hidden page.
-      if (event.key !== 'Tab') return;
-      const root = overlayRef.current;
-      if (!root) return;
-      const focusables = Array.from(
-        root.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
-        ),
-      );
-      if (focusables.length === 0) return;
-      const first = focusables[0];
-      const last = focusables[focusables.length - 1];
-      const active = document.activeElement;
-      const activeInDialog = active instanceof HTMLElement && root.contains(active);
-
-      if (event.shiftKey) {
-        if (!activeInDialog || active === first) {
-          event.preventDefault();
-          last.focus({ preventScroll: true });
-        }
-      } else if (!activeInDialog || active === last) {
-        event.preventDefault();
-        first.focus({ preventScroll: true });
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [item, closeOverlay]);
 
   const addToWardrobe = useCallback(async () => {
     if (!item || addState === 'saving' || addState === 'saved' || alreadyInWardrobe) return;
@@ -215,7 +183,13 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
     }
   }, [addState, alreadyInWardrobe, handleAddItem, item]);
 
-  return (
+  // Portal to <body> so the overlay escapes the community page's `main` z-10
+  // stacking context. Trapped inside it, the z-[110] panel still painted UNDER
+  // the z-50 bottom nav (close button unreachable) and under the page footer
+  // (it could rubber-band into view). At the body root, z-[110] wins outright.
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
     <AnimatePresence mode="wait" onExitComplete={handleExitComplete}>
       {item ? (
         <motion.div
@@ -288,8 +262,8 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
 
                 <motion.div
                   className="space-y-8 text-left"
-                  initial={lowRenderBudget ? false : 'hidden'}
-                  animate={lowRenderBudget ? undefined : 'visible'}
+                  initial="hidden"
+                  animate="visible"
                   variants={detailRevealVariants}
                 >
                   <motion.header className="space-y-5">
@@ -324,7 +298,12 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
                         disabled={addState === 'saving' || addState === 'saved' || alreadyInWardrobe}
                         aria-label={alreadyInWardrobe || addState === 'saved' ? `${item.name} is in your wardrobe` : `Add ${item.name} to wardrobe`}
                         className={[
-                          'inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-full border px-3.5 py-2 scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/70 sm:mt-0',
+                          // justify-self-start keeps the pill content-width on the
+                          // single-column mobile grid instead of stretching into a
+                          // full-bleed bar with a lone centered check across the
+                          // middle of the detail copy. It snaps back into the auto
+                          // column at sm+.
+                          'inline-flex min-h-11 w-auto shrink-0 items-center justify-center gap-2 justify-self-start rounded-full border px-3.5 py-2 scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/70 sm:mt-0 sm:justify-self-auto',
                           alreadyInWardrobe || addState === 'saved'
                             ? 'border-scent-accent/30 bg-scent-accent/[0.1] text-[#fff7ec]'
                             : 'border-scent-accent/28 bg-black/58 text-scent-text-muted hover:border-scent-accent/48 hover:text-[#fff7ec]',
@@ -337,8 +316,8 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
                         ) : (
                           <Plus size={17} strokeWidth={1.9} aria-hidden="true" />
                         )}
-                        <span className="hidden sm:inline">
-                          {alreadyInWardrobe || addState === 'saved' ? 'Saved' : 'Wardrobe'}
+                        <span>
+                          {alreadyInWardrobe || addState === 'saved' ? 'Saved' : 'Add to wardrobe'}
                         </span>
                       </button>
                     </motion.div>
@@ -417,6 +396,7 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
           </div>
         </motion.div>
       ) : null}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 };
