@@ -96,6 +96,7 @@ const reducedTransition: Transition = {
 
 const PYRAMID_CENTER_X = 180;
 const APEX_GLINT_Y = 27;
+const NOTE_PYRAMID_ARTWORK_SRC = '/note-pyramid-gold.png';
 const TAP_MOVE_TOLERANCE_PX = 10;
 const TYPEWRITER_FRAME_MS = 24;
 const NOTE_MARQUEE_MIN_CHARS = 58;
@@ -120,17 +121,17 @@ const LAYER_CENTER_Y: Record<ActiveLayer, number> = {
 };
 
 const PYRAMID_OUTER = {
-  apex: [PYRAMID_CENTER_X, 25] as Point,
-  leftBase: [21, 372] as Point,
-  rightBase: [339, 372] as Point,
+  apex: [PYRAMID_CENTER_X, 27] as Point,
+  leftBase: [33, 379] as Point,
+  rightBase: [327, 379] as Point,
 };
 
 const PYRAMID_Y = {
-  topBottom: 136,
-  heartTop: 145,
-  heartBottom: 255,
-  baseTop: 266,
-  baseBottom: 372,
+  topBottom: 149,
+  heartTop: 159,
+  heartBottom: 261,
+  baseTop: 270,
+  baseBottom: 379,
 };
 
 function svgNumber(value: number) {
@@ -2070,6 +2071,17 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
 
             <circle cx="178" cy="397.4" r="1.4" fill="#fff8e8" opacity="0.85" />
           </motion.g>
+
+          <image
+            href={NOTE_PYRAMID_ARTWORK_SRC}
+            x="0"
+            y="0"
+            width="360"
+            height="420"
+            preserveAspectRatio="xMidYMid meet"
+            pointerEvents="none"
+            aria-hidden="true"
+          />
         </svg>
 
         {/* Enhanced Hovering Glassmorphic Text UI */}
