@@ -320,6 +320,20 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
         </div>
       </nav>
 
+      {/* Bottom scrim — fades page content out just beneath the floating tab
+          bar so a panel's action row (e.g. the arena reveal's Next / Share)
+          never appears to bleed through or fight the nav, and the home-indicator
+          safe-area never shows raw content. Phone-only and tied to the bar's own
+          show/hide, so it never darkens the base when the bar is gone. Global:
+          every route renders AppTopNav, so this lands on all pages at once. */}
+      <div
+        aria-hidden="true"
+        className={[
+          'pointer-events-none fixed inset-x-0 bottom-0 z-40 h-[calc(var(--bottomnav-h)+1.75rem)] bg-gradient-to-t from-scent-bg via-scent-bg/94 to-transparent md:hidden transition-opacity duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]',
+          bottomNavShown ? 'opacity-100' : 'opacity-0',
+        ].join(' ')}
+      />
+
       <nav
         className={[
           'fixed bottom-[calc(0.75rem+env(safe-area-inset-bottom,0px))] left-3 right-3 z-50 md:hidden transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-[transform,opacity]',
@@ -331,7 +345,10 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
         aria-hidden={agentActive ? 'true' : undefined}
         onFocusCapture={() => setNavVisible(true)}
       >
-        <div className={`mx-auto grid max-w-sm grid-cols-3 rounded-full border border-scent-accent/22 bg-black/66 p-1 shadow-[0_18px_48px_rgba(0,0,0,0.58),inset_0_1px_0_rgba(255,236,183,0.12)]${lowRenderBudget ? '' : ' backdrop-blur-md'}`}>
+        {/* Opaque pill surface: content must never read through the bar. The
+            near-solid warm-black (was bg-black/66) is what makes the overlap
+            land as a clean tab bar instead of competing layers. */}
+        <div className={`mx-auto grid max-w-sm grid-cols-3 rounded-full border border-scent-accent/22 bg-[rgba(8,6,4,0.94)] p-1 shadow-[0_18px_48px_rgba(0,0,0,0.58),inset_0_1px_0_rgba(255,236,183,0.12)]${lowRenderBudget ? '' : ' backdrop-blur-md'}`}>
           {navItems.map((item) => {
             const Icon = item.icon;
             return (
