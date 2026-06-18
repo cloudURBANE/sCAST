@@ -1,6 +1,7 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import type { BottleImageAdjustment } from '@/lib/bottleImageAdjustment';
 import { normalizeApiBaseUrl } from '@/lib/imageProxy';
+import { sanitizeFamilyLabel } from '@/lib/wardrobeSearchSuggest';
 
 export interface CommunityFragranceEntry {
   id: string;
@@ -78,7 +79,10 @@ function normalizeCommunityEntry(value: unknown, index: number): CommunityFragra
   const name = firstString(record.name);
   const brand = firstString(record.brand, record.house);
   const imageUrl = firstString(record.imageUrl, record.image_url);
-  const family = firstString(record.family);
+  // Drop placeholder labels like "Unknown Family"/"unknown" that leak in from
+  // persisted wardrobe data so the card/overlay never render them as a real
+  // scent family (they'd otherwise pass straight through to display).
+  const family = sanitizeFamilyLabel(firstString(record.family)) ?? undefined;
   const topNotes = stringList(record.topNotes);
   const heartNotes = stringList(record.heartNotes);
   const baseNotes = stringList(record.baseNotes);

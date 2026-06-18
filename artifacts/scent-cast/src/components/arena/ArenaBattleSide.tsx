@@ -120,42 +120,36 @@ export const ArenaBattleSide: React.FC<ArenaBattleSideProps> = ({
         selected ? "bg-scent-accent/[0.045]" : "",
       ].join(" ")}
     >
-      <div
-        className={[
-          "pointer-events-none absolute inset-x-0 top-0 z-10 h-8 bg-gradient-to-b from-scent-accent/[0.12] to-transparent transition-opacity duration-200",
-          selected ? "opacity-100" : "opacity-0",
-        ].join(" ")}
-        aria-hidden="true"
-      >
-        <div className="h-1 bg-scent-accent/85 shadow-[0_0_16px_rgba(212,175,55,0.2)]" />
-      </div>
-
-      {/* Pick marker: tied into the selected card's gold top rail so the
-          chosen contender reads immediately without adding card height. */}
-      {selected ? (
-        <span
-          className="absolute right-1.5 top-1 z-20 inline-grid h-5 w-5 place-items-center rounded-full border border-black/30 bg-scent-accent text-black shadow-[0_0_14px_rgba(212,175,55,0.28)] sm:right-2 sm:h-6 sm:w-6"
-          aria-label={isSaving ? "Saving your pick" : "Your pick"}
-        >
-          {isSaving ? (
-            <LoaderCircle
-              size={11}
-              strokeWidth={2.4}
-              className="animate-spin"
-              aria-hidden="true"
-            />
-          ) : (
-            <Check size={12} strokeWidth={2.8} aria-hidden="true" />
-          )}
-        </span>
-      ) : null}
-
       <div className="relative z-10 flex w-full flex-col">
-        <div className="relative mb-1.5 flex min-h-6 items-center justify-center px-6 sm:mb-2.5 sm:min-h-7">
-          <span className="inline-flex items-center scent-type-label text-[10px] tracking-[0.1em] text-scent-accent/78 sm:text-[12px] sm:tracking-[0.14em]">
-            {`Contender ${contenderLabel}`}
-            {selected ? <span className="sr-only">your pick</span> : null}
-          </span>
+        {/* Selected state: the gold top rail, the "your pick" check, and the
+            card's rounded top edge fuse into ONE gold header — instead of a thin
+            rail plus a separate floating badge. The gold cap is an absolute
+            overlay anchored to this fixed-height header row (its negative insets
+            reach the card's rounded corners, which the article's overflow-hidden
+            clips), so the bottle below never shifts between picked/unpicked and
+            the A/B cards stay aligned. Depth comes from inset + hairline shadows
+            only — no projected gold glow pooling under the card. */}
+        <div className="relative z-10 mb-1.5 flex min-h-6 items-center justify-center px-6 sm:mb-2.5 sm:min-h-7">
+          {selected ? (
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute -left-2 -right-2 -top-2 bottom-0 z-0 bg-gradient-to-b from-scent-accent to-[#e7c45f] shadow-[inset_0_-1px_0_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,247,219,0.45)] transition-opacity duration-200 sm:-left-3 sm:-right-3 sm:-top-3 md:-left-4 md:-right-4 md:-top-4"
+            />
+          ) : null}
+          {selected ? (
+            <span className="relative z-10 inline-flex items-center gap-1.5 scent-type-label text-[10px] font-bold tracking-[0.18em] text-black sm:text-[12px] sm:tracking-[0.2em]">
+              {isSaving ? (
+                <LoaderCircle size={11} strokeWidth={2.6} className="animate-spin" aria-hidden="true" />
+              ) : (
+                <Check size={12} strokeWidth={3} aria-hidden="true" />
+              )}
+              Your Pick
+            </span>
+          ) : (
+            <span className="inline-flex items-center scent-type-label text-[10px] tracking-[0.1em] text-scent-accent/78 sm:text-[12px] sm:tracking-[0.14em]">
+              {`Contender ${contenderLabel}`}
+            </span>
+          )}
         </div>
 
         <div className="relative aspect-[1/0.82] w-full overflow-hidden rounded-md bg-black/[0.18] shadow-[inset_0_0_0_1px_rgba(212,175,55,0.08)] sm:aspect-[1/0.88] md:aspect-[1/0.78] lg:aspect-[1/0.72]">
