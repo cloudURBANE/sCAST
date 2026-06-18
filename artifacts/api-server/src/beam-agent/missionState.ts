@@ -160,7 +160,9 @@ function parseOwnedCount(text: string): number | undefined {
   return firstCountFor(text, [
     /\b(\d+|one|two|three|four|five)\s+(?:fragrances?|scents?|bottles?|ones?)?\s*(?:from|out of)\s+(?:my\s+)?(?:wardrobe|vault|collection)\b/i,
     /\b(\d+|one|two|three|four|five)\s+(?:owned|already-owned|vault|wardrobe)\s+(?:fragrances?|scents?|bottles?|ones?)\b/i,
-    /\b(\d+|one|two|three|four|five)\s+(?:fragrances?|scents?|bottles?|ones?)\s+(?:to\s+take|to\s+pack|for\s+(?:the\s+)?trip)\b/i,
+    // Noun optional so "two to take" / "two to pack" (no explicit "fragrances")
+    // still reads as an owned-lane count, matching the "from my wardrobe" pattern.
+    /\b(\d+|one|two|three|four|five)\s+(?:(?:fragrances?|scents?|bottles?|ones?)\s+)?(?:to\s+take|to\s+pack|for\s+(?:the\s+)?trip)\b/i,
   ]);
 }
 

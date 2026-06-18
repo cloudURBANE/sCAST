@@ -8,9 +8,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { runBeamAgent, type BeamRunSummary } from "./beamAgentLoop.ts";
 import { invalidArgsMarker } from "./beamToolCore.ts";
+import { deriveBeamSessionState, inferPendingSlotFromAssistant } from "./missionState.ts";
 import type {
   BeamRunContext,
   BeamRunEvent,
+  BeamSessionState,
   BeamToolDefinition,
   ClaudeCallInput,
   ClaudeResponse,
@@ -530,6 +532,182 @@ test("pre-tool cue clarification that re-asks known state is nudged instead of c
     ),
   );
   assert.ok(sentStateNudge, "expected a state nudge instead of completing the cue question");
+});
+
+test("regression script: Tokyo 2+2 kit persists slots, never re-asks month, honors delegation, ships a 4-item kit", async () => {
+  // Drives the §7 regression script end-to-end against runBeamAgent, threading
+  // structured state across turns exactly the way beamAgentRoutes does: derive
+  // from each user message (with the pending slot inferred from the prior
+  // assistant turn), then feed the merged state into the loop. The injected model
+  // is the only seam — no network.
+  const ownedTool: BeamToolDefinition = {
+    name: "beam_score_candidates",
+    description: "Rank the vault",
+    inputSchema: { type: "object", properties: {} },
+    handler: async () => ({
+      recommendation: { canonicalName: "Aventus", brand: "Creed", score: 90 },
+      picks: [
+        { canonicalName: "Aventus", brand: "Creed", score: 90 },
+        { canonicalName: "Gabrielle", brand: "Chanel", score: 84 },
+      ],
+      scoredFor: { locationLabel: "Tokyo, August", usedOverride: true },
+    }),
+  };
+  const newTool: BeamToolDefinition = {
+    name: "beam_search_catalog",
+    description: "Find new (unowned) catalog fragrances",
+    inputSchema: { type: "object", properties: {} },
+    handler: async () => ({
+      items: [
+        { canonicalName: "Tam Dao", brand: "Diptyque", owned: false },
+        { canonicalName: "Philosykos", brand: "Diptyque", owned: false },
+      ],
+    }),
+  };
+  const tools = [ownedTool, newTool];
+
+  // Helper: run one turn the way the route does, returning the completed text and
+  // the system prompt the orchestration turn actually saw.
+  async function runTurn(
+    prevState: BeamSessionState | undefined,
+    userMessage: string,
+    lastAssistantText: string | undefined,
+    responses: ClaudeResponse[],
+  ): Promise<{ state: BeamSessionState; completed: string | undefined; firstSystem: string; events: BeamRunEvent[] }> {
+    const pending = lastAssistantText ? inferPendingSlotFromAssistant(lastAssistantText) : undefined;
+    const state = deriveBeamSessionState(prevState, userMessage, pending);
+    const { callModel, seen } = scriptedModel(responses);
+    const events: BeamRunEvent[] = [];
+    let completed: string | undefined;
+    await runBeamAgent({
+      ctx,
+      userMessage,
+      sessionState: state,
+      tools,
+      emit: (e) => events.push(e),
+      isModelConfigured: () => true,
+      callModel,
+      onComplete: (t) => (completed = t),
+    });
+    return { state, completed, firstSystem: seen[0]?.system ?? "", events };
+  }
+
+  // Turn 1: the kit request. One clarifying question (asks month + vibe).
+  const t1 = await runTurn(
+    undefined,
+    "I'm planning a trip to Tokyo and I need two fragrances to take with me and two new ones not in my collection yet",
+    undefined,
+    [text("What month is the trip, and what vibe are you after?\n```cues\nAugust\nArtsy\n```")],
+  );
+  assert.equal(t1.state.mission?.intent, "travel_kit");
+  assert.equal(t1.state.mission?.ownedCount, 2);
+  assert.equal(t1.state.mission?.newCount, 2);
+  assert.equal(t1.state.slots.destination, "Tokyo");
+  // The clarifying question shipped (it asks for unknown month/vibe — allowed).
+  assert.match(String(t1.completed), /month/i);
+
+  // Turn 2: "August and artsy" — month + vibe must persist; no month re-ask.
+  const t2 = await runTurn(
+    t1.state,
+    "August and artsy",
+    "What month is the trip, and what vibe are you after?",
+    [text("Great — Tokyo in August, artsy. Want me to build the kit now?\n```cues\nYes build it\nTweak the vibe\n```")],
+  );
+  assert.equal(t2.state.slots.month, "August");
+  assert.equal(t2.state.slots.vibe, "artsy");
+  assert.equal(t2.state.mission?.month, "August");
+  // The injected state carries month into the system prompt, so the model is told
+  // never to re-ask it.
+  assert.match(t2.firstSystem, /Known so far: .*month=August/i);
+
+  // Turn 3: "Idk you tell me" — delegation honored, and the agent produces a
+  // 4-item kit (2 owned + 2 new). The model first tries to re-ask the vibe (a
+  // known/delegated slot); the loop's pre-tool cue gate rejects that and nudges
+  // it to act, then it scores the vault + searches new and synthesizes the kit.
+  const t3 = await runTurn(
+    t2.state,
+    "Idk you tell me",
+    "Great — Tokyo in August, artsy. Want me to build the kit now?",
+    [
+      // 1) the model tries to ask another preference question -> delegation gate trips -> STATE_NUDGE
+      text("Sure — do you prefer something fresher or warmer?\n```cues\nFresher\nWarmer\n```"),
+      // 2) after the nudge it scores the vault (owned lane)
+      {
+        stop_reason: "tool_use",
+        content: [{ type: "tool_use", id: "tu_score", name: "beam_score_candidates", input: {} }],
+      },
+      // 3) then searches the catalog (new lane)
+      {
+        stop_reason: "tool_use",
+        content: [{ type: "tool_use", id: "tu_search", name: "beam_search_catalog", input: {} }],
+      },
+      // 4) orchestration draft
+      text("draft kit"),
+      // 5) a synthesis attempt that under-fills the kit (only 1 owned, 1 new) -> mission_unfulfilled
+      text("Pack Aventus from your vault and add Tam Dao."),
+      // 6) the single repair pass names the full 2+2 kit
+      text(
+        "From your vault, pack Aventus and Gabrielle. For new picks, line up Tam Dao and Philosykos — both fit an artsy Tokyo August.",
+      ),
+    ],
+  );
+  assert.equal(t3.state.userDelegatedChoice, true);
+  assert.equal(t3.state.mission?.userDelegatedChoice, true);
+
+  // HARD FAIL guards from §7:
+  const finalText = String(t3.completed);
+  // - never a month re-ask
+  assert.doesNotMatch(finalText, /what month|travel dates|can'?t guess/i);
+  // - a full 4-item kit (2 owned + 2 new), not a single daily-scent reply
+  for (const name of ["Aventus", "Gabrielle", "Tam Dao", "Philosykos"]) {
+    assert.match(finalText, new RegExp(name, "i"), `expected the kit to name ${name}`);
+  }
+
+  // The delegation backstop fired: the loop nudged the re-ask turn instead of
+  // shipping it as the answer.
+  const completedEvent = t3.events.find((e) => e.type === "completed");
+  assert.ok(completedEvent, "expected a completed event");
+  assert.doesNotMatch(finalText, /fresher or warmer/i);
+});
+
+test("regression script: a failed/timeout turn still keeps the derived mission state for the next turn", async () => {
+  // B5: the route persists deriveBeamSessionState BEFORE running the loop, so a
+  // failed turn does not lose the user's just-stated mission. We prove the state
+  // derivation is stable across a turn whose model call fails — the merged state
+  // the route would have saved still carries the full mission into turn 2.
+  const t1State = deriveBeamSessionState(
+    undefined,
+    "Trip to Tokyo, two to pack and two new ones, August, artsy",
+  );
+  assert.equal(t1State.mission?.intent, "travel_kit");
+  assert.equal(t1State.slots.month, "August");
+
+  // The loop fails this turn (model unconfigured) — onComplete never fires, so a
+  // store keyed on onComplete would lose everything. The route avoids that by
+  // saving t1State up front; here we assert that the SAME state, fed as prior
+  // state to the next turn, still carries the mission forward intact.
+  let completed: string | undefined;
+  await runBeamAgent({
+    ctx,
+    userMessage: "Trip to Tokyo, two to pack and two new ones, August, artsy",
+    sessionState: t1State,
+    tools: [],
+    emit: () => {},
+    isModelConfigured: () => false, // forces a model_unavailable failure
+    callModel: async () => {
+      throw new Error("should not be called");
+    },
+    onComplete: (t) => (completed = t),
+  });
+  assert.equal(completed, undefined, "a failed turn never calls onComplete");
+
+  // Next turn builds on the up-front-saved state (route's persist-before-run).
+  const t2State = deriveBeamSessionState(t1State, "Idk you tell me");
+  assert.equal(t2State.slots.month, "August");
+  assert.equal(t2State.slots.vibe, "artsy");
+  assert.equal(t2State.mission?.ownedCount, 2);
+  assert.equal(t2State.mission?.newCount, 2);
+  assert.equal(t2State.userDelegatedChoice, true);
 });
 
 test("an unconfigured model fails gracefully with a summary", async () => {

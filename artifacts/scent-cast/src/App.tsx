@@ -115,7 +115,10 @@ const LiveClock: React.FC = React.memo(() => {
       if (interval) clearInterval(interval);
     };
   }, []);
-  const display = time.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
+  // 12-hour clock (e.g. "7:42 PM") for the consumer-facing en-US presentation.
+  // The prior 24-hour render read inconsistently against the rest of the
+  // app's casual time language.
+  const display = time.toLocaleTimeString('en-US', { hour12: true, hour: 'numeric', minute: '2-digit' });
   // The clock sits inside a compositor-animated marquee track; WebKit can skip
   // repainting text mutations inside that cached layer. Remounting the node on
   // each minute (key) and isolating it on its own layer forces the repaint.
@@ -881,6 +884,7 @@ function DashboardView() {
         authPictureUrl={authPictureUrl}
         authUsername={authUsername}
         renderedRoute="home"
+        agentActive={agentActive}
         onSignIn={() => setIsAuthModalOpen(true)}
         onShare={() => setIsShareModalOpen(true)}
         onSignOut={handleSignOut}
@@ -931,13 +935,19 @@ function DashboardView() {
                       today." + phase) is the honest progress signal. The wrapper
                       stays to hold the absolutely-positioned close button. */}
                   <div className="relative mb-2 flex min-h-11 items-center justify-center">
+                    {/* The X is paired with a visible "Close" label so the
+                        affordance reads as an explicit, non-destructive exit
+                        back to search — not a bare ambiguous glyph. The label
+                        rides alongside the X at every width (it is short enough
+                        not to crowd the SE-class header). */}
                     <button
                       type="button"
                       onClick={handleExitMission}
-                      className="absolute right-0 top-1/2 inline-flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center rounded-full text-scent-text-subtle transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
-                      aria-label="Return to fragrance search"
+                      className="absolute right-0 top-1/2 inline-flex min-h-11 -translate-y-1/2 items-center justify-center gap-1.5 rounded-full px-3 text-scent-text-subtle transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
+                      aria-label="Close and return to fragrance search"
                     >
-                      <X size={20} strokeWidth={1.75} />
+                      <X size={18} strokeWidth={1.75} aria-hidden />
+                      <span className="text-[11px] font-semibold uppercase tracking-[0.16em]">Close</span>
                     </button>
                   </div>
                   <h2 className="mx-auto max-w-[32rem] text-balance font-serif italic text-[clamp(1.4rem,3.4vw,1.9rem)] leading-[1.05] tracking-normal text-[#fff7ec] drop-shadow-[0_4px_14px_rgba(0,0,0,0.72)]">
