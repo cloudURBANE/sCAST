@@ -607,6 +607,26 @@ export function normalizedAccordBarPct(
   );
 }
 
+/**
+ * Map a 0–100 accord bar value onto a qualitative prominence tier.
+ *
+ * Fragrantica's accord bars are *relative* widths (the strongest accord is
+ * normalized to 100), not absolute concentrations or the share of users who
+ * detect the accord. Rendering "CITRUS 100%" reads as "100% citrus", which is
+ * impossible. The tier word ("Dominant", "Strong", ...) communicates the same
+ * relative ranking the bar length shows, without implying a false percentage.
+ * Input is the rendered bar value (see {@link normalizedAccordBarPct}) so the
+ * tier always agrees with what the eye sees.
+ */
+export function accordProminenceTier(barPct: number): string {
+  const pct = Number.isFinite(barPct) ? barPct : 0;
+  if (pct >= 90) return "Dominant";
+  if (pct >= 70) return "Strong";
+  if (pct >= 50) return "Moderate";
+  if (pct >= 30) return "Supporting";
+  return "Trace";
+}
+
 /** Catalog / wardrobe 0–10 axes when derived_metrics lacks explicit accord bars. */
 export function axesVectorToMainAccordRows(axes?: NumericScentAxes | null): MainAccordDisplayRow[] {
   if (!axes) return [];
