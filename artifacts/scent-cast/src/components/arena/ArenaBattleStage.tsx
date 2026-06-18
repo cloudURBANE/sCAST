@@ -199,7 +199,7 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
         </p>
       </header>
 
-      <div className="relative mx-auto mt-6 grid w-full max-w-4xl grid-cols-[minmax(0,1fr)_1.5rem_minmax(0,1fr)] items-stretch gap-1.5 sm:mt-8 sm:grid-cols-[minmax(0,1fr)_2.75rem_minmax(0,1fr)] sm:gap-4 md:gap-5">
+      <div className="relative mx-auto mt-5 grid w-full max-w-4xl grid-cols-[minmax(0,1fr)_1.5rem_minmax(0,1fr)] items-stretch gap-1.5 sm:mt-8 sm:grid-cols-[minmax(0,1fr)_2.75rem_minmax(0,1fr)] sm:gap-4 md:gap-5">
         <ArenaBattleSide
           side={battle.left}
           align="left"

@@ -128,36 +128,48 @@ export const ArenaBattleSide: React.FC<ArenaBattleSideProps> = ({
         aria-hidden="true"
       />
 
-      {/* Quiet "you're the pick" badge, pinned top-right of the chosen card.
-          Shows a spinner while the vote persists, then settles to a check. */}
+      {/* Pick marker — spot 1: a clean round gold check circle pinned to the
+          top-right of the chosen card. Spinner while the vote persists, then a
+          settled check. Mirrored by the inline circle beside the contender
+          label (spot 2) so the pick reads from either glance point. */}
       {selected ? (
         <span
-          className="absolute right-1.5 top-1.5 z-20 inline-flex min-h-5 items-center gap-1 rounded-full bg-scent-accent px-1.5 py-0.5 text-[8px] font-bold uppercase leading-none tracking-[0.08em] text-black shadow-[0_0_12px_rgba(212,175,55,0.22)] sm:right-2 sm:top-2 sm:px-2 sm:py-1 sm:text-[10px] sm:tracking-[0.1em]"
+          className="absolute right-1.5 top-1.5 z-20 inline-grid h-5 w-5 place-items-center rounded-full bg-scent-accent text-black shadow-[0_0_12px_rgba(212,175,55,0.22)] sm:right-2 sm:top-2 sm:h-6 sm:w-6"
           aria-label={isSaving ? "Saving your pick" : "Your pick"}
         >
           {isSaving ? (
             <LoaderCircle
-              size={10}
+              size={11}
               strokeWidth={2.4}
               className="animate-spin"
               aria-hidden="true"
             />
           ) : (
-            <Check size={10} strokeWidth={2.8} aria-hidden="true" />
+            <Check size={12} strokeWidth={2.8} aria-hidden="true" />
           )}
-          <span>Picked</span>
         </span>
       ) : null}
 
       <div className="relative z-10 flex w-full flex-col">
-        <div className="mb-2 flex min-h-7 items-center justify-center sm:mb-3">
+        <div className="relative mb-1.5 flex min-h-6 items-center justify-center sm:mb-3 sm:min-h-7">
           <span className="inline-flex items-center scent-type-label text-[10px] tracking-[0.1em] text-scent-accent/78 sm:text-[12px] sm:tracking-[0.14em]">
             {`Contender ${contenderLabel}`}
             {selected ? <span className="sr-only">your pick</span> : null}
           </span>
+          {/* Pick marker — spot 2: durable gold check circle pinned to the right
+              of the centered contender label, matching the top-right corner
+              marker so the chosen side is unmistakable from either glance. */}
+          {selected ? (
+            <span
+              className="absolute right-0 top-1/2 inline-grid h-4 w-4 -translate-y-1/2 place-items-center rounded-full bg-scent-accent text-black shadow-[0_0_10px_rgba(212,175,55,0.28)] sm:h-[1.05rem] sm:w-[1.05rem]"
+              aria-hidden="true"
+            >
+              <Check size={10} strokeWidth={2.6} aria-hidden="true" />
+            </span>
+          ) : null}
         </div>
 
-        <div className="relative aspect-[1/1.08] w-full overflow-hidden rounded-md bg-black/[0.18] shadow-[inset_0_0_0_1px_rgba(212,175,55,0.08)] sm:aspect-[4/5]">
+        <div className="relative aspect-[1/0.9] w-full overflow-hidden rounded-md bg-black/[0.18] shadow-[inset_0_0_0_1px_rgba(212,175,55,0.08)] sm:aspect-[4/5]">
           <div
             className="absolute inset-x-3 bottom-5 h-px bg-gradient-to-r from-transparent via-scent-accent/28 to-transparent sm:inset-x-6 sm:bottom-7"
             aria-hidden="true"
@@ -208,7 +220,7 @@ export const ArenaBattleSide: React.FC<ArenaBattleSideProps> = ({
               {side.name}
             </h2>
           </div>
-          <p className="mx-auto mt-1.5 line-clamp-2 min-h-[2rem] max-w-sm text-[11px] font-medium leading-4 text-scent-text-muted sm:mt-2 sm:min-h-[2.5rem] sm:text-sm sm:leading-5">
+          <p className="mx-auto mt-1 line-clamp-2 min-h-[2rem] max-w-sm text-[11px] font-medium leading-4 text-scent-text-muted sm:mt-2 sm:min-h-[2.5rem] sm:text-sm sm:leading-5">
             {side.descriptor}
           </p>
         </div>
