@@ -20,6 +20,14 @@ export type LaneSignals = {
   message: string;
   /** Number of prior text turns already in the session (user + assistant). */
   historyTurns?: number;
+  /**
+   * The active session mission intent, if one is already established. A
+   * mid-mission follow-up message ("Green and tea") often carries no premium
+   * keyword and is short, so message-only routing would drop it to the cheap
+   * lane mid-plan and starve the multi-step trip work (prod Run 2). The mission
+   * intent is the durable signal the per-turn message lacks — thread it in.
+   */
+  activeMissionIntent?: "travel_kit" | "recommendation";
 };
 
 /**
@@ -65,6 +73,14 @@ const PREMIUM_MESSAGE_CHARS = 600;
 export function selectConciergeLane(signals: LaneSignals): ConciergeLane {
   const message = typeof signals.message === "string" ? signals.message : "";
   const historyTurns = Number.isFinite(signals.historyTurns) ? (signals.historyTurns as number) : 0;
+
+  // An active trip/kit mission is premium-worthy for its whole lifetime: it is
+  // the genuinely multi-step "trip / collection kit" work §03.2 escalates on,
+  // and the keyword that established it ("trip kit for Tokyo") lives in an
+  // earlier turn, not the current short follow-up. Only travel_kit forces the
+  // premium lane — a plain "recommendation" mission is routine fragrance chat
+  // that still routes by message/history like everything else.
+  if (signals.activeMissionIntent === "travel_kit") return "premium";
 
   if (historyTurns >= PREMIUM_HISTORY_TURNS) return "premium";
   if (message.length >= PREMIUM_MESSAGE_CHARS) return "premium";
