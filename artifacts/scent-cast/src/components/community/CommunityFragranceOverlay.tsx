@@ -227,7 +227,7 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
                   aria-label="Close fragrance details"
                   ref={closeButtonRef}
                 >
-                  <X size={32} strokeWidth={1.35} />
+                  <X size={26} strokeWidth={1.18} />
                 </button>
               </header>
 
@@ -270,7 +270,7 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
                       loading="eager"
                       fetchPriority="high"
                       className="absolute inset-0"
-                      imgClassName="brightness-[1.14] contrast-[1.03]"
+                      imgClassName="brightness-[1.06] contrast-[1.04]"
                       adjustment={item.imageAdjustment}
                       imageProperties={item.imageProperties}
                     />
