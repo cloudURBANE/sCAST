@@ -68,7 +68,11 @@ const SLOT_KEYS: BeamSlotKey[] = [
 function cleanCapture(value: string): string {
   return value
     .replace(/\s+/g, " ")
-    .replace(/\b(?:in|on|for|with|and|but|so|then|yet|please|pls)\b.*$/i, "")
+    // Sentence boundary: a period+space after a 3+ letter word ends the capture, so
+    // "tokyo. You pick the direction" cuts to "tokyo". Real abbreviations ("St.",
+    // "Mt.", "Ft.", "D.C.") keep a ≤2-letter token before the dot and survive.
+    .replace(/([A-Za-z]{3,})\.\s+.*$/s, "$1")
+    .replace(/\b(?:in|on|for|with|and|but|so|then|yet|next|this|please|pls)\b.*$/i, "")
     .replace(/[.,!?;:]+$/g, "")
     .trim();
 }

@@ -41,6 +41,26 @@ test("a deep multi-turn session escalates regardless of the latest message", () 
   assert.equal(selectConciergeLane({ message: "and the third one?", historyTurns: 2 }), "default");
 });
 
+test("an active travel_kit mission forces premium for a keyword-less follow-up", () => {
+  // Prod Run 2: mid-mission "Green and tea" carries no premium keyword and is
+  // short, but the trip kit is still in flight — it must stay on premium.
+  assert.equal(
+    selectConciergeLane({ message: "Green and tea", activeMissionIntent: "travel_kit" }),
+    "premium",
+  );
+});
+
+test("no active mission keeps the keyword-less follow-up on default (no regression)", () => {
+  assert.equal(selectConciergeLane({ message: "Green and tea" }), "default");
+});
+
+test("a plain recommendation mission does NOT force premium", () => {
+  assert.equal(
+    selectConciergeLane({ message: "hi", activeMissionIntent: "recommendation" }),
+    "default",
+  );
+});
+
 test("non-string / missing input is safe and defaults", () => {
   assert.equal(selectConciergeLane({ message: undefined as unknown as string }), "default");
   assert.equal(selectConciergeLane({ message: "", historyTurns: NaN }), "default");

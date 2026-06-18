@@ -378,7 +378,7 @@ router.post("/runs", runRateLimit, requireAuth, async (req: AuthRequest, res) =>
   // Pick the cost lane deterministically (brief §03.2) from the message + how much
   // context the session already carries — no extra router LLM call. The premium
   // lane runs MiniMax M3 end-to-end; the default lane runs cheap M2.5 orchestration.
-  const lane = selectConciergeLane({ message, historyTurns: history.length });
+  const lane = selectConciergeLane({ message, historyTurns: history.length, activeMissionIntent: sessionState.mission?.intent });
   const models = resolveBeamModels(lane);
   // Per-lane run guardrails (tool-round + output-token caps). Defaults match the
   // historical hardcoded limits; env can lower them per lane to bound the bill when

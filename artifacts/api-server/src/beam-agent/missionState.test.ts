@@ -147,6 +147,44 @@ test("merges later month and vibe into an existing travel mission", () => {
   assert.equal(second.mission?.newCount, 2);
 });
 
+test("stops the destination at a sentence boundary (the reported over-capture bug)", () => {
+  const state = deriveBeamSessionState(
+    undefined,
+    "Recommend a couple new fragrances for my august trip to tokyo. You pick the direction — surprise me, and tell me why.",
+  );
+
+  assert.equal(state.slots.destination, "tokyo");
+  assert.equal(state.mission?.destination, "tokyo");
+});
+
+test("preserves a 'St.' abbreviation in a multi-word place name", () => {
+  const state = deriveBeamSessionState(undefined, "trip to St. Louis next month");
+
+  assert.equal(state.slots.destination, "St. Louis");
+});
+
+test("captures a two-word destination and stops at the connector", () => {
+  const state = deriveBeamSessionState(undefined, "trip to New York in spring");
+
+  assert.equal(state.slots.destination, "New York");
+});
+
+test("locks in the comma-bounded 'Tokyo, Japan' capture", () => {
+  const state = deriveBeamSessionState(undefined, "trip to Tokyo, Japan");
+
+  assert.equal(state.slots.destination, "Tokyo");
+});
+
+test("does not truncate 'Washington D.C.' at the abbreviation dot", () => {
+  const state = deriveBeamSessionState(undefined, "trip to Washington D.C.");
+
+  // The reported failure mode is cutting at the first dot to "Washington D"; the
+  // ≤2-letter rule preserves the abbreviation. (The pre-existing trailing-punct
+  // strip drops the final period, which is unrelated to this fix.)
+  assert.notEqual(state.slots.destination, "Washington D");
+  assert.equal(state.slots.destination, "Washington D.C");
+});
+
 test("detects delegation phrases and preserves them in state", () => {
   assert.equal(isDelegationPhrase("idk you tell me"), true);
   const state = deriveBeamSessionState(undefined, "idk you tell me");
