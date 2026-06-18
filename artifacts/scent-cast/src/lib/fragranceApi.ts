@@ -154,6 +154,13 @@ export type FragranceDetail = {
   house?: string;
   brand?: string;
   year?: number | null;
+  /**
+   * True only when an authoritative fragrance DB explicitly states the release
+   * year is unknown (a durable fact), as opposed to a year that simply has not
+   * been fetched yet. The vault detail view renders this as an explicit
+   * "Unknown" so a known-unknown does not read as a missing metric.
+   */
+  year_unknown?: boolean;
   gender?: string | null;
   concentration?: string | null;
   season?: string | null;
