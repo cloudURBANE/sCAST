@@ -214,8 +214,8 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
             <div
               className="community-fragrance-detail__shell"
               style={{
-                paddingTop: 'max(1.4rem, env(safe-area-inset-top))',
-                paddingBottom: 'max(1rem, env(safe-area-inset-bottom))',
+                paddingTop: 'max(3.4rem, env(safe-area-inset-top))',
+                paddingBottom: 'max(2.35rem, env(safe-area-inset-bottom))',
               }}
             >
               <header className="community-fragrance-detail__topbar">
