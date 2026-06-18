@@ -180,6 +180,11 @@ interface FragranceMatch extends FragranceSearchResult {
 type LoadingSurface = 'search' | 'sync' | null;
 type ErrorPhase = 'search' | 'sync' | null;
 
+// The loader's longest completion flourish is the 720ms bloom. Keep the veil
+// mounted through that choreography so success does not flash and disappear.
+const SYNC_COMPLETE_SETTLE_MS = 760;
+const REDUCED_MOTION_SETTLE_MS = 680;
+
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)
   ?.trim()
   .replace(/\/+$/, "");
@@ -519,6 +524,27 @@ export const FragranceCapture: React.FC<{
     if (visibleMatches.some((m) => matchKey(m) === selectedId)) return;
     setSelectedId(null);
   }, [visibleMatches, selectedId]);
+
+  // Selection changes the CTA from disabled to actionable. Wait for that
+  // committed layout, then center the desktop action instead of leaving it
+  // below the fold. Mobile already exposes a fixed, portaled action bar.
+  useEffect(() => {
+    if (!selectedId || typeof window === 'undefined') return;
+    if (!window.matchMedia('(min-width: 640px)').matches) return;
+    // Run after the clicked result receives browser focus; otherwise that native
+    // focus scroll can win the same frame and strand the CTA below the fold.
+    const id = window.setTimeout(() => {
+      const actionBar = actionBarRef.current;
+      if (!actionBar) return;
+      const rect = actionBar.getBoundingClientRect();
+      const top = window.scrollY + rect.top - Math.max(0, (window.innerHeight - rect.height) / 2);
+      window.scrollTo({
+        behavior: reduceMotion ? 'auto' : 'smooth',
+        top,
+      });
+    }, 240);
+    return () => window.clearTimeout(id);
+  }, [reduceMotion, selectedId]);
   useEffect(() => {
     onVaultSearchStateChange?.(vaultSearchActive);
   }, [vaultSearchActive, onVaultSearchStateChange]);
@@ -542,6 +568,9 @@ export const FragranceCapture: React.FC<{
     const controller = new AbortController();
     searchAbortController.current = controller;
 
+    // Loading replaces the search controls visually and in the accessibility
+    // tree, so release input focus before the embedded interior is hidden.
+    searchInputRef.current?.blur();
     setUploading(true);
     setLoadingSurface('search');
     setLoadingStatus("Researching Fragrance...");
@@ -655,7 +684,7 @@ export const FragranceCapture: React.FC<{
           return;
         }
         setSyncComplete(true);
-        await sleep(420);
+        await sleep(reduceMotion ? REDUCED_MOTION_SETTLE_MS : SYNC_COMPLETE_SETTLE_MS);
         resetState();
       } catch (err: any) {
         setErrorStatus(err?.message || "Vault sync failed. Please try again.");
@@ -905,9 +934,8 @@ export const FragranceCapture: React.FC<{
         return;
       }
       setSyncComplete(true);
-      // Hold just long enough for the loader's ~0.5s "complete" flourish to read,
-      // then return to the vault — trimmed from 620ms so the add feels snappier.
-      await sleep(500);
+      // Let the complete flourish finish before the veil begins its own exit.
+      await sleep(reduceMotion ? REDUCED_MOTION_SETTLE_MS : SYNC_COMPLETE_SETTLE_MS);
       resetState();
     } catch (err: any) {
       if (err.name === 'AbortError') return;
@@ -1069,14 +1097,15 @@ export const FragranceCapture: React.FC<{
       style={{
         minHeight: SEARCH_LOADER_MIN_H,
         // No backdrop-filter: animating a blur layer in over the card is the
-        // documented iOS Safari / iPad-PWA GPU-crash construct. The veil is
-        // instead a fully opaque solid fill (#030201) so the result cards below
-        // are completely blacked out rather than bleeding through — a clean
-        // loading surface, not a live frosted one.
-        background:
-          'radial-gradient(ellipse 70% 60% at 50% 16%, rgba(212,175,55,0.06), transparent 60%), radial-gradient(ellipse 85% 55% at 50% 102%, rgba(212,175,55,0.05), transparent 64%), #030201',
-        boxShadow:
-          'inset 0 1px 0 rgba(255,230,180,0.08), inset 0 0 90px rgba(212,175,55,0.05)',
+        // documented iOS Safari / iPad-PWA GPU-crash construct. The embedded
+        // loader uses the parent panel's surface; standalone mode supplies its
+        // own opaque fill.
+        background: embeddedInVaultPanel
+          ? 'transparent'
+          : 'radial-gradient(ellipse 70% 60% at 50% 16%, rgba(212,175,55,0.06), transparent 60%), radial-gradient(ellipse 85% 55% at 50% 102%, rgba(212,175,55,0.05), transparent 64%), #030201',
+        boxShadow: embeddedInVaultPanel
+          ? 'none'
+          : 'inset 0 1px 0 rgba(255,230,180,0.08), inset 0 0 90px rgba(212,175,55,0.05)',
       }}
     >
       <ScentIntelligenceLoader
@@ -1137,7 +1166,14 @@ export const FragranceCapture: React.FC<{
       <AnimatePresence>
         {searchVeil}
       </AnimatePresence>
-      <div className="scent-vault-panel-inner min-w-0">
+      <div
+        className={`scent-vault-panel-inner min-w-0 ${
+          embeddedInVaultPanel && loadingSurface === 'search' && uploading
+            ? 'pointer-events-none opacity-0'
+            : ''
+        }`}
+        aria-hidden={embeddedInVaultPanel && loadingSurface === 'search' && uploading}
+      >
         <header className="mx-auto mb-4 max-w-[43rem] px-1 text-center sm:mb-7">
           <p className="sr-only">
             Add perfumes to your vault. Example fragrance names rotate above the search field.
@@ -1206,10 +1242,6 @@ export const FragranceCapture: React.FC<{
               onBlur={() => {
                 setSearchFocused(false);
                 autoFocusPendingRef.current = false;
-                // Recover the iOS Safari viewport after the soft keyboard dismisses;
-                // the hero is a top-anchored view, so settling back to the top
-                // restores the centered layout instead of a half-scrolled gap.
-                window.setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 90);
               }}
               placeholder={searchFocused ? '' : 'Search by house or fragrance...'}
               aria-label="Look up a brand or fragrance"
@@ -1461,7 +1493,7 @@ export const FragranceCapture: React.FC<{
                     panel can run past the fold, so the CTA is instead rendered as a
                     fixed bottom bar (portaled to escape the panel's overflow:hidden)
                     — see `mobileActionBar`. */}
-                <div className="mx-auto mt-5 hidden w-full max-w-[49.75rem] shrink-0 pb-[max(0.15rem,env(safe-area-inset-bottom))] sm:mt-6 sm:block">
+                <div ref={actionBarRef} className="mx-auto mt-5 hidden w-full max-w-[49.75rem] shrink-0 pb-[max(0.15rem,env(safe-area-inset-bottom))] sm:mt-6 sm:block">
                   <AnimatePresence>
                     {hasSelectedMatch ? (
                       <motion.p
@@ -1508,25 +1540,27 @@ export const FragranceCapture: React.FC<{
             style={{ pointerEvents: 'none', minHeight: SEARCH_LOADER_MIN_H }}
             className="mx-auto mt-6 w-full overflow-hidden sm:mt-7"
           >
-            <div className="scent-vault-results-panel mx-auto w-full max-w-[50.5rem] px-4 py-7 sm:px-9 sm:py-9">
-              <div className="mb-4 flex items-center justify-between px-1">
-                <span className="h-3.5 w-32 animate-pulse rounded-full bg-white/10" />
-                <span className="h-7 w-7 animate-pulse rounded-full bg-white/5" />
+            {!embeddedInVaultPanel ? (
+              <div className="scent-vault-results-panel mx-auto w-full max-w-[50.5rem] px-4 py-7 sm:px-9 sm:py-9">
+                <div className="mb-4 flex items-center justify-between px-1">
+                  <span className="h-3.5 w-32 animate-pulse rounded-full bg-white/10" />
+                  <span className="h-7 w-7 animate-pulse rounded-full bg-white/5" />
+                </div>
+                <div className="grid w-full grid-cols-1 gap-3">
+                  {[0, 1, 2].map((i) => (
+                    <div
+                      key={i}
+                      className="scent-vault-result-card mx-auto w-full max-w-[39.75rem] min-h-[60px] animate-pulse px-3.5 py-2 sm:min-h-[70px] sm:px-4 sm:py-2.5"
+                      style={{ animationDelay: `${i * 120}ms` }}
+                    >
+                      <span className="mx-auto mb-0.5 flex h-6 w-6 rounded-full bg-white/10 sm:mb-1 sm:h-7 sm:w-7" />
+                      <span className="mx-auto block h-4 w-44 max-w-[70%] rounded-full bg-white/10" />
+                      <span className="mx-auto mt-1 block h-2.5 w-28 max-w-[50%] rounded-full bg-white/5 sm:mt-1.5" />
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div className="grid w-full grid-cols-1 gap-3">
-                {[0, 1, 2].map((i) => (
-                  <div
-                    key={i}
-                    className="scent-vault-result-card mx-auto w-full max-w-[39.75rem] min-h-[60px] animate-pulse px-3.5 py-2 sm:min-h-[70px] sm:px-4 sm:py-2.5"
-                    style={{ animationDelay: `${i * 120}ms` }}
-                  >
-                    <span className="mx-auto mb-0.5 flex h-6 w-6 rounded-full bg-white/10 sm:mb-1 sm:h-7 sm:w-7" />
-                    <span className="mx-auto block h-4 w-44 max-w-[70%] rounded-full bg-white/10" />
-                    <span className="mx-auto mt-1 block h-2.5 w-28 max-w-[50%] rounded-full bg-white/5 sm:mt-1.5" />
-                  </div>
-                ))}
-              </div>
-            </div>
+            ) : null}
           </motion.div>
         )}
       </AnimatePresence>
