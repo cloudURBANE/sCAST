@@ -262,6 +262,85 @@ test("exhausting the tool-call budget still composes a grounded answer instead o
   assert.equal(toolCalls.length, 2);
 });
 
+test("a new-only travel-kit synthesis is pinned to unowned picks (owned vault bottles excluded)", async () => {
+  const events: BeamRunEvent[] = [];
+  let completed: string | undefined;
+  let summary: BeamRunSummary | undefined;
+  const synthCalls: ClaudeCallInput[] = [];
+
+  // wardrobe grounds an OWNED bottle; catalog grounds two UNOWNED candidates.
+  const wardrobe: BeamToolDefinition = {
+    name: "beam_get_wardrobe",
+    description: "wardrobe",
+    inputSchema: { type: "object", properties: {} },
+    handler: async () => ({ items: [{ name: "Aventus", brand: "Creed" }] }),
+  };
+  const catalog: BeamToolDefinition = {
+    name: "beam_search_catalog",
+    description: "catalog",
+    inputSchema: { type: "object", properties: {} },
+    handler: async () => ({
+      items: [
+        { name: "Wulong Cha", brand: "Nishane", owned: false },
+        { name: "Tygar", brand: "Bvlgari", owned: false },
+      ],
+    }),
+  };
+
+  // The model keeps searching until maxTurns is exhausted, then the forced
+  // synthesis composes the kit. The 3rd reply names exactly the two unowned picks.
+  const responses: ClaudeResponse[] = [
+    {
+      stop_reason: "tool_use",
+      content: [
+        { type: "tool_use", id: "w", name: "beam_get_wardrobe", input: {} },
+        { type: "tool_use", id: "c1", name: "beam_search_catalog", input: { query: "tea" } },
+      ],
+    },
+    { stop_reason: "tool_use", content: [{ type: "tool_use", id: "c2", name: "beam_search_catalog", input: { query: "citrus" } }] },
+    text("For Tokyo in August: Wulong Cha by Nishane and Tygar by Bvlgari — two fresh new picks."),
+  ];
+  let i = 0;
+  const callModel = async (input: ClaudeCallInput): Promise<ClaudeResponse> => {
+    if (input.tools.length === 0) synthCalls.push(input);
+    const next = responses[i++];
+    if (!next) throw new Error(`callModel over-called (${i})`);
+    return next;
+  };
+
+  await runBeamAgent({
+    ctx,
+    userMessage: "pick two new for tokyo, you choose",
+    tools: [wardrobe, catalog],
+    emit: (e) => events.push(e),
+    isModelConfigured: () => true,
+    callModel,
+    maxTurns: 2,
+    sessionState: {
+      slots: { destination: "Tokyo", month: "August", direction: "fresh" },
+      mission: { intent: "travel_kit", newCount: 2, destination: "Tokyo", month: "August" },
+    },
+    onComplete: (t) => (completed = t),
+    onSummary: (s) => (summary = s),
+  });
+
+  // The forced synthesis fulfilled the new-only kit and passed the gate.
+  assert.equal(summary?.outcome, "completed");
+  assert.equal(summary?.usedSynthesis, true);
+  assert.deepEqual(summary?.qualityViolations, []);
+  assert.match(completed ?? "", /Wulong Cha/);
+
+  // The synthesis allowlist clause listed the unowned picks and EXCLUDED the owned
+  // vault bottle — the heart of the fix (the bottle still appears in the tool
+  // transcript, so assert specifically against the "name ONLY these" clause).
+  assert.ok(synthCalls.length >= 1);
+  const blob = JSON.stringify(synthCalls[0].messages);
+  const clause = blob.match(/You may name ONLY these fragrances[^.]*\./);
+  assert.ok(clause, "allowlist clause present in synthesis instruction");
+  assert.match(clause![0], /Wulong Cha/);
+  assert.ok(!clause![0].includes("Aventus"), "owned vault bottle must be excluded from the allowlist");
+});
+
 test("the budget is still failed when nothing was grounded to compose from", async () => {
   let summary: BeamRunSummary | undefined;
   const events: BeamRunEvent[] = [];
