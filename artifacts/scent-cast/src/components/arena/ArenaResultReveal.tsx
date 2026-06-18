@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ArrowRight, Check, LockKeyhole, Pencil, Share2 } from "lucide-react";
+import { ArrowRight, Check, LockKeyhole, Share2 } from "lucide-react";
 import type { ArenaBattle } from "@/components/arena/arenaBattleMapper";
 import type { ArenaReasonKey } from "@/components/arena/arenaTwists";
 import {
@@ -97,8 +97,8 @@ export const ArenaResultReveal: React.FC<ArenaResultRevealProps> = ({
     >
       <div
         className={[
-          "relative rounded-lg border border-scent-accent/18 bg-[rgba(5,4,3,0.86)] p-3.5 text-center shadow-[0_28px_80px_-56px_rgba(212,175,55,0.28),inset_0_1px_0_rgba(255,236,183,0.08)] sm:p-6",
-          guestLocalOnly || showCheckpoint ? "pt-12 sm:pt-14" : "",
+          "relative rounded-lg border border-scent-accent/18 bg-[rgba(5,4,3,0.86)] p-3 text-center shadow-[0_28px_80px_-56px_rgba(212,175,55,0.28),inset_0_1px_0_rgba(255,236,183,0.08)] sm:p-6",
+          guestLocalOnly ? "pt-12 sm:pt-14" : "",
         ].join(" ")}
         aria-label={`${pickedSide.name} is your pick at ${pickedPercent} percent. ${battle.left.name} has ${leftPercent} percent from ${leftCount} saved votes. ${battle.right.name} has ${rightPercent} percent from ${rightCount} saved votes. ${voteStatus}`}
       >
@@ -129,26 +129,18 @@ export const ArenaResultReveal: React.FC<ArenaResultRevealProps> = ({
           </div>
         ) : null}
 
+        {/* Reason, condensed to a single gold check in the top-right corner —
+            matching the contender card's pick check. Tapping it reopens the
+            reason picker to change "why it won"; the label lives in aria only. */}
         {showCheckpoint && selectedReason ? (
-          <div className="absolute right-3 top-3 z-20 flex max-w-[calc(100%-1.5rem)] justify-end sm:right-4 sm:top-4">
-            <button
-              type="button"
-              onClick={() => setEditingReason(true)}
-              className="arena-badge-pop inline-flex min-h-8 items-center gap-1.5 rounded-full bg-scent-accent/12 px-2.5 py-1 text-left shadow-[inset_0_0_0_1px_rgba(212,175,55,0.16)] backdrop-blur transition-colors hover:bg-scent-accent/18 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/60"
-              aria-label={`Why it won: ${selectedReason.label}. Change reason.`}
-            >
-              <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-scent-accent/[0.16] text-scent-accent">
-                <Check size={12} strokeWidth={2.4} aria-hidden="true" />
-              </span>
-              <span className="min-w-0 truncate text-[10px] font-semibold uppercase leading-none tracking-[0.08em] text-scent-accent">
-                Why it won: {selectedReason.label}
-              </span>
-              <span className="ml-0.5 inline-flex shrink-0 items-center gap-1 rounded-full bg-black/40 px-1.5 py-0.5 text-[9px] font-bold uppercase leading-none tracking-[0.08em] text-scent-text-muted">
-                <Pencil size={9} strokeWidth={2} aria-hidden="true" />
-                Change
-              </span>
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => setEditingReason(true)}
+            aria-label={`Why it won: ${selectedReason.label}. Tap to change reason.`}
+            className="arena-badge-pop absolute right-2.5 top-2.5 z-20 inline-grid h-7 w-7 place-items-center rounded-full bg-scent-accent text-black shadow-[0_0_12px_rgba(212,175,55,0.22)] transition-transform duration-200 hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/60 sm:right-3 sm:top-3 sm:h-8 sm:w-8"
+          >
+            <Check size={14} strokeWidth={2.6} aria-hidden="true" />
+          </button>
         ) : null}
 
         <div className="mx-auto max-w-2xl">
@@ -162,7 +154,7 @@ export const ArenaResultReveal: React.FC<ArenaResultRevealProps> = ({
             </p>
           </div>
 
-          <div className="mt-4 sm:mt-5">
+          <div className="mt-3 sm:mt-5">
             <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-2 text-center text-[11px] font-bold uppercase leading-4 tracking-[0.1em] text-scent-text-muted sm:gap-3 sm:text-xs sm:tracking-[0.12em]">
               <span className="min-w-0 whitespace-normal">
                 {battle.left.name}

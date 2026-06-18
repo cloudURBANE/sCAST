@@ -1,5 +1,5 @@
 import React, { useRef } from "react";
-import { Check, LoaderCircle, Repeat2, Search, Sparkles } from "lucide-react";
+import { Check, LoaderCircle, Search, Sparkles } from "lucide-react";
 import { BottleImage } from "@/components/BottleImage";
 import { BrandGoldLabel } from "@/components/BrandGoldLabel";
 import type { ArenaBattleSide as ArenaBattleSideData } from "@/components/arena/arenaBattleMapper";
@@ -157,7 +157,7 @@ export const ArenaBattleSide: React.FC<ArenaBattleSideProps> = ({
           </span>
         </div>
 
-        <div className="relative aspect-[1/0.9] w-full overflow-hidden rounded-md bg-black/[0.18] shadow-[inset_0_0_0_1px_rgba(212,175,55,0.08)] sm:aspect-[4/5]">
+        <div className="relative aspect-[1/0.82] w-full overflow-hidden rounded-md bg-black/[0.18] shadow-[inset_0_0_0_1px_rgba(212,175,55,0.08)] sm:aspect-[4/5]">
           <div
             className="absolute inset-x-3 bottom-5 h-px bg-gradient-to-r from-transparent via-scent-accent/28 to-transparent sm:inset-x-6 sm:bottom-7"
             aria-hidden="true"
@@ -203,7 +203,7 @@ export const ArenaBattleSide: React.FC<ArenaBattleSideProps> = ({
           </div>
           {/* Name block: fixed two-line height so a 1-line and a 2-line name
               occupy identical vertical space across both contender cards. */}
-          <div className="mt-1 flex min-h-[2.5rem] items-center justify-center sm:min-h-[3.75rem]">
+          <div className="mt-1 flex min-h-[2.25rem] items-center justify-center sm:min-h-[3.75rem]">
             <h2 className="line-clamp-2 text-pretty text-balance text-sm font-bold leading-tight text-foreground [overflow-wrap:anywhere] sm:text-xl md:text-2xl">
               {side.name}
             </h2>
@@ -213,6 +213,9 @@ export const ArenaBattleSide: React.FC<ArenaBattleSideProps> = ({
           </p>
         </div>
 
+        {/* Pre-vote: the explicit Vote button. Post-vote there is NO button —
+            the whole card is tappable to switch (the older, cleaner behavior),
+            with the top-right check as the only pick cue. */}
         {!revealed ? (
           <button
             type="button"
@@ -223,26 +226,7 @@ export const ArenaBattleSide: React.FC<ArenaBattleSideProps> = ({
             <Sparkles size={16} strokeWidth={1.8} aria-hidden="true" />
             <span>{`Vote Contender ${contenderLabel}`}</span>
           </button>
-        ) : (
-          /* Post-vote: a contrasting dark/outline "Change" chip so the
-             tap-to-switch affordance reads against the gold-tinted card frame
-             instead of disappearing into it. The chosen card gets the explicit
-             control; the other card stays tappable as a plain switch target. */
-          <button
-            type="button"
-            onClick={onVote}
-            disabled={disabled}
-            className="scent-no-mobile-focus-ring mt-3 inline-flex min-h-9 w-full items-center justify-center gap-1.5 rounded-md border border-scent-accent/30 bg-black/55 px-2 py-1.5 text-[10px] font-bold uppercase tracking-[0.1em] text-scent-text-muted shadow-[inset_0_1px_0_rgba(255,236,183,0.05)] backdrop-blur transition-colors duration-200 hover:border-scent-accent/45 hover:bg-black/72 hover:text-foreground active:bg-black/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55 disabled:pointer-events-none disabled:opacity-60 sm:min-h-10 sm:text-[11px] sm:tracking-[0.12em]"
-            aria-label={
-              selected
-                ? `Change your pick away from ${side.name}`
-                : `Switch your pick to ${side.name}`
-            }
-          >
-            <Repeat2 size={14} strokeWidth={2} aria-hidden="true" />
-            <span>{selected ? "Change pick" : "Pick this"}</span>
-          </button>
-        )}
+        ) : null}
       </div>
     </article>
   );
