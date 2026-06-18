@@ -70,7 +70,7 @@ export const ArenaCompareDialog: React.FC<ArenaCompareDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[calc(100vw-1.5rem)] max-w-2xl gap-0 overflow-hidden rounded-lg border border-scent-accent/18 bg-[rgba(5,4,3,0.97)] p-0 text-foreground shadow-[0_28px_90px_-48px_rgba(212,175,55,0.34),inset_0_1px_0_rgba(255,236,183,0.08)]">
+      <DialogContent className="w-[calc(100vw-1.5rem)] max-w-2xl gap-0 overflow-hidden rounded-lg border border-scent-accent/18 bg-[rgba(5,4,3,0.97)] p-0 text-foreground shadow-[0_28px_90px_-48px_rgba(0,0,0,0.9),inset_0_1px_0_rgba(255,236,183,0.08)]">
         <div className="p-4 sm:p-6">
           <DialogHeader className="space-y-2 text-center">
             <p className="scent-type-label text-scent-accent">Head to head</p>
@@ -218,7 +218,7 @@ function CompareColumn({
       <button
         type="button"
         onClick={onVote}
-        className="scent-no-mobile-focus-ring mt-3 inline-flex min-h-10 w-full items-center justify-center gap-1.5 rounded-md bg-scent-accent px-2 py-2 text-[10px] font-bold uppercase tracking-[0.1em] text-black shadow-[0_14px_30px_-24px_rgba(212,175,55,0.9)] transition-colors duration-200 hover:bg-[#f0cf70] active:bg-[#d7ad32] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/70 sm:min-h-11 sm:text-[11px] sm:tracking-[0.12em]"
+        className="scent-no-mobile-focus-ring mt-3 inline-flex min-h-10 w-full items-center justify-center gap-1.5 rounded-md bg-scent-accent px-2 py-2 text-[10px] font-bold uppercase tracking-[0.1em] text-black shadow-[0_14px_30px_-24px_rgba(0,0,0,0.7)] transition-colors duration-200 hover:bg-[#f0cf70] active:bg-[#d7ad32] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/70 sm:min-h-11 sm:text-[11px] sm:tracking-[0.12em]"
       >
         <Sparkles size={14} strokeWidth={1.8} aria-hidden="true" />
         <span>{`Vote ${label}`}</span>

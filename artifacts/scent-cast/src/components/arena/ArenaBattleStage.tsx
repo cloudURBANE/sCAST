@@ -248,7 +248,7 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
           if (!open) setPendingSwitchChoice(null);
         }}
       >
-        <AlertDialogContent className="w-[calc(100vw-2rem)] max-w-md rounded-lg border border-scent-accent/18 bg-[rgba(5,4,3,0.96)] p-0 text-foreground shadow-[0_28px_90px_-48px_rgba(212,175,55,0.34),inset_0_1px_0_rgba(255,236,183,0.08)]">
+        <AlertDialogContent className="w-[calc(100vw-2rem)] max-w-md rounded-lg border border-scent-accent/18 bg-[rgba(5,4,3,0.96)] p-0 text-foreground shadow-[0_28px_90px_-48px_rgba(0,0,0,0.9),inset_0_1px_0_rgba(255,236,183,0.08)]">
           <div className="p-5 sm:p-6">
             <AlertDialogHeader className="space-y-3 text-center">
               <p className="scent-type-label text-scent-accent">
@@ -271,7 +271,7 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
               </AlertDialogCancel>
               <AlertDialogAction
                 onClick={confirmPendingSwitch}
-                className="min-h-11 rounded-md bg-scent-accent px-3 py-2 text-xs font-bold uppercase tracking-[0.1em] text-black shadow-[0_14px_30px_-24px_rgba(212,175,55,0.9)] transition-colors hover:bg-[#f0cf70] active:bg-[#d7ad32] focus-visible:ring-scent-accent/70"
+                className="min-h-11 rounded-md bg-scent-accent px-3 py-2 text-xs font-bold uppercase tracking-[0.1em] text-black shadow-[0_14px_30px_-24px_rgba(0,0,0,0.7)] transition-colors hover:bg-[#f0cf70] active:bg-[#d7ad32] focus-visible:ring-scent-accent/70"
               >
                 Confirm switch
               </AlertDialogAction>
