@@ -18,6 +18,10 @@ interface AppTopNavProps {
   authPictureUrl?: string | null;
   authUsername?: string | null;
   renderedRoute?: 'home' | 'community' | 'arena';
+  // While the Beam Agent panel owns the screen, the global bottom nav pill is
+  // suppressed so its fixed gold pill never sits over the panel's composer / CTA.
+  // The panel carries its own exit (the header X), so navigation is not lost.
+  agentActive?: boolean;
   onSignIn: () => void;
   onShare: () => void;
   onSignOut: () => void;
@@ -146,6 +150,7 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
   authEmail,
   authPictureUrl,
   authUsername,
+  agentActive = false,
   onSignIn,
   onShare,
   onSignOut,
@@ -174,13 +179,18 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
   // (the solid bg already carries the contrast); iPad never renders it (md:hidden).
   const lowRenderBudget = React.useRef(isLowRenderBudget() || isIpadSafariPerformanceMode()).current;
 
+  // The pill is shown only when scroll-visible AND the Beam panel is not active.
+  // While the panel owns the screen its composer/CTA sit at the bottom, so the
+  // fixed gold nav pill would otherwise overlap them.
+  const bottomNavShown = navVisible && !agentActive;
+
   // Propagate nav visibility state via CSS variable to keep floating elements synchronized
   React.useEffect(() => {
     document.documentElement.style.setProperty(
       '--mobile-nav-offset',
-      navVisible ? 'var(--bottomnav-h)' : '0px'
+      bottomNavShown ? 'var(--bottomnav-h)' : '0px'
     );
-  }, [navVisible]);
+  }, [bottomNavShown]);
 
   React.useEffect(() => {
     lastScrollYRef.current = window.scrollY;
@@ -313,11 +323,12 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
       <nav
         className={[
           'fixed bottom-[calc(0.75rem+env(safe-area-inset-bottom,0px))] left-3 right-3 z-50 md:hidden transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-[transform,opacity]',
-          navVisible
+          bottomNavShown
             ? 'translate-y-0 opacity-100 pointer-events-auto'
             : 'translate-y-[110%] opacity-0 pointer-events-none',
         ].join(' ')}
         aria-label="Primary navigation"
+        aria-hidden={agentActive ? 'true' : undefined}
         onFocusCapture={() => setNavVisible(true)}
       >
         <div className={`mx-auto grid max-w-sm grid-cols-3 rounded-full border border-scent-accent/22 bg-black/66 p-1 shadow-[0_18px_48px_rgba(0,0,0,0.58),inset_0_1px_0_rgba(255,236,183,0.12)]${lowRenderBudget ? '' : ' backdrop-blur-md'}`}>
