@@ -203,52 +203,64 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
           // phones, where the morph runs longer than a 0.24s fade could cover).
           exit={{ opacity: 0, transition: { duration: 0.5, ease: [0.4, 0, 0.2, 1] } }}
           transition={{ duration: 0.24, ease: 'easeOut' }}
-          className="fixed inset-0 z-[110] flex flex-col bg-[#020202]"
+          className="community-fragrance-detail fixed inset-0 z-[110] flex flex-col bg-[#020202]"
           role="dialog"
           aria-modal="true"
           aria-labelledby="community-fragrance-overlay-title"
           ref={overlayRef}
         >
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 -z-10 [background:radial-gradient(58%_46%_at_28%_44%,rgba(214,178,116,0.07),transparent_72%)]"
-          />
-          <div
-            className="relative flex items-center justify-between px-5 pb-4 shrink-0"
-            style={{ paddingTop: 'max(1.25rem, env(safe-area-inset-top))' }}
-          >
-            <p className="scent-type-label text-scent-accent">Community Wardrobe</p>
-            <button
-              type="button"
-              onClick={closeOverlay}
-              className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-scent-accent/25 bg-white/[0.04] text-scent-text-muted transition-all hover:border-scent-accent/45 hover:bg-white/10 hover:text-white active:scale-95"
-              aria-label="Close fragrance details"
-              ref={closeButtonRef}
+          <div aria-hidden="true" className="community-fragrance-detail__atmosphere" />
+          <div className="community-fragrance-detail__scroll flex-1 overflow-y-auto overscroll-contain">
+            <div
+              className="community-fragrance-detail__shell"
+              style={{
+                paddingTop: 'max(1.4rem, env(safe-area-inset-top))',
+                paddingBottom: 'max(1rem, env(safe-area-inset-bottom))',
+              }}
             >
-              <X size={22} strokeWidth={2} />
-            </button>
-          </div>
+              <header className="community-fragrance-detail__topbar">
+                <p className="community-fragrance-detail__eyebrow">Community Wardrobe</p>
+                <button
+                  type="button"
+                  onClick={closeOverlay}
+                  className="community-fragrance-detail__x"
+                  aria-label="Close fragrance details"
+                  ref={closeButtonRef}
+                >
+                  <X size={32} strokeWidth={1.35} />
+                </button>
+              </header>
 
-          <div className="flex-1 overflow-y-auto overscroll-contain">
-            {/* flex-col + m-auto on the child centers the content vertically when
-                it fits, but collapses the auto margins to the top (fully
-                scrollable) the moment it is taller than the viewport. Plain
-                `items-center` centered an overflowing child and pushed its top
-                above the scroll origin — that was the clipped card top + the
-                lost @username on phones, and the symmetric dead-space on iPad. */}
-            <div className="flex min-h-full flex-col px-5 py-6 sm:px-10 sm:py-12 lg:px-16">
-              <div className="m-auto grid w-full max-w-6xl gap-8 lg:grid-cols-[minmax(18rem,26rem)_minmax(0,1fr)] lg:items-center lg:gap-14">
-                <div className="scent-fragrance-card relative mx-auto flex aspect-[3/4.6] w-full max-w-[20rem] flex-col p-5 sm:max-w-[24rem] sm:p-6">
-                  <div className="scent-card-frame" aria-hidden="true" />
-                  <div className="relative z-10 flex justify-end">
-                    <span className="font-mono scent-type-label text-scent-accent">
-                      {item.curator}
-                    </span>
-                  </div>
+              <motion.div
+                className="community-fragrance-detail__content"
+                initial="hidden"
+                animate="visible"
+                variants={detailRevealVariants}
+              >
+                <section className="community-fragrance-detail__hero" aria-labelledby="community-fragrance-overlay-title">
+                  <div className="community-fragrance-detail__hero-frame" aria-hidden="true" />
+                  <button
+                    type="button"
+                    onClick={() => void addToWardrobe()}
+                    disabled={addState === 'saving' || addState === 'saved' || alreadyInWardrobe}
+                    aria-label={alreadyInWardrobe || addState === 'saved' ? `${item.name} is in your wardrobe` : `Add ${item.name} to wardrobe`}
+                    className="community-fragrance-detail__save"
+                    data-state={alreadyInWardrobe || addState === 'saved' ? 'saved' : addState}
+                  >
+                    {addState === 'saving' ? (
+                      <LoaderCircle size={15} className="animate-spin" aria-hidden="true" />
+                    ) : alreadyInWardrobe || addState === 'saved' ? (
+                      <Check size={16} strokeWidth={1.65} aria-hidden="true" />
+                    ) : (
+                      <Plus size={16} strokeWidth={1.65} aria-hidden="true" />
+                    )}
+                    <span>{alreadyInWardrobe || addState === 'saved' ? 'Saved' : 'Save'}</span>
+                  </button>
+
                   <motion.div
                     layoutId={sharedImageLayoutId}
                     transition={imageLayoutTransition}
-                    className="relative z-10 my-3 min-h-0 flex-1"
+                    className="community-fragrance-detail__bottle"
                   >
                     <BottleImage
                       src={item.imageUrl}
@@ -258,146 +270,84 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
                       loading="eager"
                       fetchPriority="high"
                       className="absolute inset-0"
-                      imgClassName="brightness-[1.1]"
+                      imgClassName="brightness-[1.14] contrast-[1.03]"
                       adjustment={item.imageAdjustment}
                       imageProperties={item.imageProperties}
                     />
                   </motion.div>
-                  <div className="relative z-10 mt-2 text-center">
-                    <BrandGoldLabel as="span" brand={item.brand} className="scent-card-brand block" />
-                  </div>
-                  <div className="scent-card-title-row relative z-10 mt-2">
-                    <h3 className="scent-card-title" title={item.name}>{item.name}</h3>
-                  </div>
-                </div>
-
-                <motion.div
-                  className="space-y-8 text-left"
-                  initial="hidden"
-                  animate="visible"
-                  variants={detailRevealVariants}
-                >
-                  {/* No in-panel "Community Wardrobe" eyebrow here: the overlay
-                      header already owns that label, so repeating it above the
-                      brand/title read as duplicated hierarchy. */}
-                  <motion.header className="space-y-5">
-                    <motion.div
-                      className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start"
-                      variants={{
-                        hidden: { opacity: 0, y: 12 },
-                        visible: { opacity: 1, y: 0, transition: { duration: 0.42, ease: 'easeOut' } },
-                      }}
-                    >
-                      <div className="min-w-0 space-y-3">
-                        <BrandGoldLabel as="p" brand={item.brand} className="font-serif text-sm uppercase tracking-[0.24em]" />
-                        <motion.h2
-                          id="community-fragrance-overlay-title"
-                          className="font-serif text-4xl italic leading-none text-[#fff7ec] sm:text-6xl lg:text-7xl"
-                        >
-                          {item.name}
-                        </motion.h2>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => void addToWardrobe()}
-                        disabled={addState === 'saving' || addState === 'saved' || alreadyInWardrobe}
-                        aria-label={alreadyInWardrobe || addState === 'saved' ? `${item.name} is in your wardrobe` : `Add ${item.name} to wardrobe`}
-                        className={[
-                          // justify-self-start keeps the pill content-width on the
-                          // single-column mobile grid instead of stretching into a
-                          // full-bleed bar with a lone centered check across the
-                          // middle of the detail copy. It snaps back into the auto
-                          // column at sm+.
-                          'inline-flex min-h-11 w-auto shrink-0 items-center justify-center gap-2 justify-self-start rounded-full border px-3.5 py-2 scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/70 sm:mt-0 sm:justify-self-auto',
-                          alreadyInWardrobe || addState === 'saved'
-                            ? 'border-scent-accent/30 bg-scent-accent/[0.1] text-[#fff7ec]'
-                            : 'border-scent-accent/28 bg-black/58 text-scent-text-muted hover:border-scent-accent/48 hover:text-[#fff7ec]',
-                        ].join(' ')}
-                      >
-                        {addState === 'saving' ? (
-                          <LoaderCircle size={16} className="animate-spin" aria-hidden="true" />
-                        ) : alreadyInWardrobe || addState === 'saved' ? (
-                          <Check size={16} strokeWidth={1.8} aria-hidden="true" />
-                        ) : (
-                          <Plus size={17} strokeWidth={1.9} aria-hidden="true" />
-                        )}
-                        <span>
-                          {alreadyInWardrobe || addState === 'saved' ? 'Saved' : 'Add to wardrobe'}
-                        </span>
-                      </button>
-                    </motion.div>
-                    {addMessage ? (
-                      <motion.p
-                        className={addState === 'error' ? 'scent-type-meta uppercase text-red-200' : 'scent-type-meta uppercase text-scent-text-muted'}
-                        variants={{
-                          hidden: { opacity: 0, y: 8 },
-                          visible: { opacity: 1, y: 0, transition: { duration: 0.3, ease: 'easeOut' } },
-                        }}
-                      >
-                        {addMessage}
-                      </motion.p>
-                    ) : null}
-                    {item.family ? (
-                      <motion.p
-                        className="scent-type-meta uppercase"
-                        variants={{
-                          hidden: { opacity: 0, y: 8 },
-                          visible: { opacity: 1, y: 0, transition: { duration: 0.36, ease: 'easeOut' } },
-                        }}
-                      >
-                        {item.family}
-                      </motion.p>
-                    ) : null}
-                  </motion.header>
 
                   <motion.div
-                    className="h-px w-full bg-gradient-to-r from-scent-accent/40 via-white/10 to-transparent"
+                    className="community-fragrance-detail__identity"
                     variants={{
-                      hidden: { opacity: 0, scaleX: 0.96 },
-                      visible: {
-                        opacity: 1,
-                        scaleX: 1,
-                        transition: { duration: 0.4, ease: 'easeOut' },
-                      },
+                      hidden: { opacity: 0, y: 10 },
+                      visible: { opacity: 1, y: 0, transition: { duration: 0.38, ease: 'easeOut' } },
                     }}
-                    style={{ transformOrigin: 'left' }}
-                  />
+                  >
+                    <BrandGoldLabel as="p" brand={item.brand} className="community-fragrance-detail__brand" />
+                    <h2 id="community-fragrance-overlay-title" className="community-fragrance-detail__name">
+                      {item.name}
+                    </h2>
+                    <div className="community-fragrance-detail__rule" aria-hidden="true">
+                      <span />
+                    </div>
+                  </motion.div>
+                </section>
 
-                  <div className="grid grid-cols-1 gap-5 sm:grid-cols-3 sm:gap-6">
-                    {noteRows.map(([label, key]) => (
-                      <motion.div
-                        key={label}
-                        className="border-l border-white/10 pl-4"
-                        variants={{
-                          hidden: { opacity: 0, y: 10 },
-                          visible: { opacity: 1, y: 0, transition: { duration: 0.36, ease: 'easeOut' } },
-                        }}
-                      >
-                        <p className="mb-2 scent-type-label text-scent-accent">
-                          {label}
-                        </p>
-                        <p className="font-serif text-base italic leading-relaxed text-scent-text-muted">
-                          {formatNotes(item[key])}
-                        </p>
-                      </motion.div>
-                    ))}
+                {addMessage ? (
+                  <motion.p
+                    className={addState === 'error' ? 'community-fragrance-detail__message community-fragrance-detail__message--error' : 'community-fragrance-detail__message'}
+                    variants={{
+                      hidden: { opacity: 0, y: 8 },
+                      visible: { opacity: 1, y: 0, transition: { duration: 0.3, ease: 'easeOut' } },
+                    }}
+                  >
+                    {addMessage}
+                  </motion.p>
+                ) : null}
+
+                <motion.section
+                  className="community-fragrance-detail__family"
+                  variants={{
+                    hidden: { opacity: 0, y: 12 },
+                    visible: { opacity: 1, y: 0, transition: { duration: 0.38, ease: 'easeOut' } },
+                  }}
+                >
+                  <p>Fragrance Family</p>
+                  <h3>{item.family ?? 'Signature'}</h3>
+                  <div className="community-fragrance-detail__rule" aria-hidden="true">
+                    <span />
                   </div>
-                </motion.div>
-              </div>
-            </div>
-          </div>
+                </motion.section>
 
-          <div
-            className="px-5 pt-3 shrink-0 border-t border-white/5"
-            style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))' }}
-          >
-            <button
-              type="button"
-              onClick={closeOverlay}
-              className="scent-primary-button mx-auto flex min-h-11 w-full max-w-sm items-center justify-center rounded-[var(--radius-scent)] px-5 py-2.5 text-xs font-bold uppercase tracking-[0.18em]"
-            >
-              <span>Close details</span>
-            </button>
+                <motion.div
+                  className="community-fragrance-detail__notes"
+                  variants={{
+                    hidden: { opacity: 0, y: 12 },
+                    visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' } },
+                  }}
+                >
+                  {noteRows.map(([label, key]) => (
+                    <div key={label} className="community-fragrance-detail__note-row">
+                      <p>{label}</p>
+                      <span aria-hidden="true" />
+                      <div>{formatNotes(item[key])}</div>
+                    </div>
+                  ))}
+                </motion.div>
+
+                <motion.button
+                  type="button"
+                  onClick={closeOverlay}
+                  className="community-fragrance-detail__close"
+                  variants={{
+                    hidden: { opacity: 0, y: 14 },
+                    visible: { opacity: 1, y: 0, transition: { duration: 0.42, ease: 'easeOut' } },
+                  }}
+                >
+                  <span>Close Details</span>
+                </motion.button>
+              </motion.div>
+            </div>
           </div>
         </motion.div>
       ) : null}
