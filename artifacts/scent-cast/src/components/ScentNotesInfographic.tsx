@@ -4,6 +4,7 @@ import {
   type DerivedMetrics,
   type MainAccordDisplayRow,
   type NumericScentAxes,
+  accordProminenceTier,
   normalizedAccordBarPct,
   resolveMainAccordChartRows,
 } from '@/lib/fragranceApi';
@@ -118,11 +119,13 @@ function useActivePyramidNotes(scopeKey: string): string[] {
 
 function Panel({
   title,
+  subtitle,
   children,
   className = "",
   headerClassName = "",
 }: {
   title: string;
+  subtitle?: string;
   children: React.ReactNode;
   className?: string;
   headerClassName?: string;
@@ -133,6 +136,11 @@ function Panel({
         <p className="text-[11px] uppercase tracking-[0.34em] text-white/70 font-bold">
           {title}
         </p>
+        {subtitle ? (
+          <p className="mt-1 text-[8.5px] uppercase tracking-[0.22em] text-white/35 font-medium">
+            {subtitle}
+          </p>
+        ) : null}
       </div>
       {children}
     </section>
@@ -245,8 +253,8 @@ const DENSITY: Record<AccordDensity, AccordDensityStyle> = {
   relaxed: {
     bodyPadding: "px-4 py-4 sm:px-5 sm:py-5",
     trackHeight: "h-[9px] sm:h-[10px]",
-    valueColWidth: "2.75rem",
-    labelColWidth: "clamp(5.25rem, 34%, 8.75rem)",
+    valueColWidth: "5rem",
+    labelColWidth: "clamp(5.25rem, 32%, 8.75rem)",
     labelFont: "text-[10.5px] sm:text-[11.5px] tracking-[0.16em]",
     valueFont: "text-[11.5px] sm:text-[12.5px]",
     maxGap: "max-h-[3.35rem]",
@@ -254,8 +262,8 @@ const DENSITY: Record<AccordDensity, AccordDensityStyle> = {
   balanced: {
     bodyPadding: "px-4 py-3.5 sm:px-5 sm:py-4",
     trackHeight: "h-[7px] sm:h-[8px]",
-    valueColWidth: "2.75rem",
-    labelColWidth: "clamp(5rem, 35%, 8.25rem)",
+    valueColWidth: "4.85rem",
+    labelColWidth: "clamp(5rem, 33%, 8.25rem)",
     labelFont: "text-[10px] sm:text-[11px] tracking-[0.14em]",
     valueFont: "text-[11px] sm:text-[12px]",
     maxGap: "max-h-[2.85rem]",
@@ -263,8 +271,8 @@ const DENSITY: Record<AccordDensity, AccordDensityStyle> = {
   compact: {
     bodyPadding: "px-4 py-3 sm:px-5 sm:py-3.5",
     trackHeight: "h-[6px] sm:h-[7px]",
-    valueColWidth: "2.55rem",
-    labelColWidth: "clamp(4.75rem, 36%, 7.75rem)",
+    valueColWidth: "4.6rem",
+    labelColWidth: "clamp(4.75rem, 34%, 7.75rem)",
     labelFont: "text-[9.5px] sm:text-[10.5px] tracking-[0.12em]",
     valueFont: "text-[10.5px] sm:text-[11.5px]",
     maxGap: "max-h-[2.45rem]",
@@ -344,7 +352,7 @@ function AccordPanel({
   }
 
   return (
-    <Panel title="Main Accords" className={className}>
+    <Panel title="Main Accords" subtitle="relative prominence" className={className}>
       <div
         ref={containerRef}
         className={`flex flex-1 flex-col ${densityStyle.bodyPadding}`}
@@ -462,7 +470,7 @@ function AccordPanel({
                   ) : null}
                 </div>
                 <motion.p
-                  className={`text-right leading-none text-white tabular-nums tracking-tight ${densityStyle.valueFont}`}
+                  className={`text-right leading-none text-white/90 tracking-tight ${densityStyle.valueFont}`}
                   initial={false}
                   animate={{
                     opacity: reduced || revealed ? intensity.valueOpacity : 0,
@@ -471,9 +479,9 @@ function AccordPanel({
                     duration: reduced ? 0 : 0.45,
                     delay: reduced ? 0 : rowDelay + 0.28,
                   }}
-                  aria-label={`${fillPct} percent`}
+                  aria-label={`${accordProminenceTier(fillPct)} prominence`}
                 >
-                  {fillPct}%
+                  {accordProminenceTier(fillPct)}
                 </motion.p>
               </motion.li>
             );

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { DerivedMetrics } from "./fragranceApi.ts";
 import {
+  accordProminenceTier,
   collectMainAccordDisplayRows,
   getFragranceDetails,
   isBackgroundEnrichmentQueued,
@@ -1450,6 +1451,23 @@ test("normalizedAccordBarPct maps 0–10 axis scores onto bar widths", () => {
 
 test("normalizedAccordBarPct bumps tiny pct values upward for readability", () => {
   assert.equal(normalizedAccordBarPct({ label: "X", pct: 3 }), 14);
+});
+
+test("accordProminenceTier maps relative bar widths onto qualitative tiers", () => {
+  // The bar value is relative prominence (top accord normalized to 100), not an
+  // absolute percentage -- the tier word communicates the ranking without the
+  // misleading "%". Boundaries: 90 Dominant, 70 Strong, 50 Moderate, 30 Supporting.
+  assert.equal(accordProminenceTier(100), "Dominant");
+  assert.equal(accordProminenceTier(90), "Dominant");
+  assert.equal(accordProminenceTier(89), "Strong");
+  assert.equal(accordProminenceTier(70), "Strong");
+  assert.equal(accordProminenceTier(69), "Moderate");
+  assert.equal(accordProminenceTier(50), "Moderate");
+  assert.equal(accordProminenceTier(49), "Supporting");
+  assert.equal(accordProminenceTier(30), "Supporting");
+  assert.equal(accordProminenceTier(29), "Trace");
+  assert.equal(accordProminenceTier(0), "Trace");
+  assert.equal(accordProminenceTier(Number.NaN), "Trace");
 });
 
 test("collectMainAccordDisplayRows reads object-shaped scent_vector (catalog axes)", () => {
