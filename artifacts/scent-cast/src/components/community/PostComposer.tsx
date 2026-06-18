@@ -837,12 +837,19 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
     // "Room opened in the community" confirmation that fires after collapse),
     // so it stays out of the layout entirely when there is nothing to say.
     if (!statusMessage) {
-      return <section ref={sectionRef} aria-hidden="true" />;
+      return (
+        <section
+          ref={sectionRef}
+          aria-hidden="true"
+          style={{ scrollMarginTop: 'calc(var(--topbar-h) + 1rem)' }}
+        />
+      );
     }
     return (
       <section
         ref={sectionRef}
         className="w-full overflow-hidden border-b border-scent-accent/14 p-3 sm:p-6"
+        style={{ scrollMarginTop: 'calc(var(--topbar-h) + 1rem)' }}
       >
         <p className="mx-auto max-w-2xl rounded-[14px] border border-scent-accent/12 bg-black/58 px-4 py-3 text-center text-sm text-scent-text-muted sm:text-base">
           {statusMessage}
@@ -855,6 +862,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
     <section
       ref={sectionRef}
       className="w-full border-b border-scent-accent/14 p-4 sm:p-6"
+      style={{ scrollMarginTop: 'calc(var(--topbar-h) + 1rem)' }}
     >
       <form
         ref={formRef}
