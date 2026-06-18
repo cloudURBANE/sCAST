@@ -134,6 +134,16 @@ const PYRAMID_Y = {
   baseBottom: 379,
 };
 
+// Horizontal bands that slice the artwork into its three tiers. Each cut falls
+// inside a transparent gap between tiers (top↔heart ≈ y153, heart↔base ≈ y265),
+// so the picture reassembles seamlessly when closed and the per-tier slices ride
+// their own <motion.g> when the pyramid opens. Full SVG viewBox height is 420.
+const TIER_CLIP_BANDS: Record<ActiveLayer, { y: number; height: number }> = {
+  top: { y: 0, height: 153 },
+  heart: { y: 153, height: 112 },
+  base: { y: 265, height: 155 },
+};
+
 function svgNumber(value: number) {
   return Number.isInteger(value) ? `${value}` : value.toFixed(2).replace(/\.?0+$/, '');
 }
@@ -387,54 +397,35 @@ function LayerNotesText({
 function MatchedNoteChip({
   note,
   link,
-  prefersReducedMotion,
 }: {
   note: string;
   link: NoteAccordLink;
-  prefersReducedMotion: boolean;
 }) {
   const pct = link.displayPct;
   const glowRadius = Math.round(5 + pct * 0.08);
-  const glowAlpha = ((pct / 100) * 0.62).toFixed(2);
-  const pulseDuration = 2.4 + (1 - pct / 100) * 0.8;
+  const glowAlpha = ((pct / 100) * 0.5).toFixed(2);
 
+  // Matched notes carry a steady gold glow scaled by match strength. The glow is
+  // a static text-shadow — no looping animation — so the note text stays perfectly
+  // still instead of shimmering/wobbling per character.
   return (
-    <motion.span
+    <span
       title={`${link.row.label} · ${pct}%`}
-      style={{ textShadow: `0 0 ${glowRadius}px rgba(252,157,25,${prefersReducedMotion ? "0.28" : glowAlpha})` }}
-      animate={
-        prefersReducedMotion
-          ? undefined
-          : {
-              opacity: [0.82, 1, 0.82],
-              textShadow: [
-                `0 0 ${Math.max(3, glowRadius - 4)}px rgba(252,157,25,0.28)`,
-                `0 0 ${glowRadius}px rgba(252,157,25,${glowAlpha})`,
-                `0 0 ${Math.max(3, glowRadius - 4)}px rgba(252,157,25,0.28)`,
-              ],
-            }
-      }
-      transition={
-        prefersReducedMotion
-          ? undefined
-          : { duration: pulseDuration, repeat: DECORATIVE_REPEAT_COUNT, ease: 'easeInOut' }
-      }
+      style={{ textShadow: `0 0 ${glowRadius}px rgba(252,157,25,${glowAlpha})` }}
       className="inline text-[8.5px] sm:text-[10px] font-semibold leading-relaxed text-[#ffd98a]"
     >
       {note}
-    </motion.span>
+    </span>
   );
 }
 
 function LayerNotesList({
   notes,
   links,
-  prefersReducedMotion,
   transition,
 }: {
   notes: string[];
   links: Map<string, NoteAccordLink>;
-  prefersReducedMotion: boolean;
   transition: Transition;
 }) {
   return (
@@ -453,7 +444,6 @@ function LayerNotesList({
               key={note}
               note={note}
               link={link}
-              prefersReducedMotion={prefersReducedMotion}
             />
           );
         }
@@ -1038,7 +1028,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
     },
   ];
 
-  const { pulseTransition, floatTransition, shimmerTransition, atmosphericTransition, glyphTransition } = React.useMemo(() => {
+  const { pulseTransition, shimmerTransition, atmosphericTransition, glyphTransition } = React.useMemo(() => {
     if (prefersReducedMotion) {
       return {
         pulseTransition: reducedTransition,
@@ -1080,6 +1070,12 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
           aria-label="Interactive fragrance note pyramid"
         >
           <defs>
+            {(['top', 'heart', 'base'] as ActiveLayer[]).map((tier) => (
+              <clipPath key={tier} id={id(`tier-clip-${tier}`)} clipPathUnits="userSpaceOnUse">
+                <rect x="0" y={TIER_CLIP_BANDS[tier].y} width="360" height={TIER_CLIP_BANDS[tier].height} />
+              </clipPath>
+            ))}
+
             <radialGradient id={id('background-gold-air')} cx="50%" cy="48%" r="58%">
               <stop offset="0" stopColor="#ffb84d" stopOpacity="0.14" />
               <stop offset="0.45" stopColor="#ffb84d" stopOpacity="0.06" />
@@ -1461,7 +1457,6 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
             const targetY = layerMotion.y + (isEngaged && !isActive && !isGuided ? -0.8 : 0);
             const targetScale = layerMotion.scale + (isEngaged && !isActive && !isGuided ? 0.003 : 0);
             const targetOpacity = isEngaged && !isActive ? Math.min(layerMotion.opacity + 0.08, 1) : layerMotion.opacity;
-            const channelPath = linePath(layer.channel.start, layer.channel.end);
             const guideDashLength = layer.hitPathLength + GUIDE_DASH_OVERSCAN_UNITS;
             const guideDashPattern = `${guideDashLength} ${guideDashLength}`;
             const guideDashTrace = [guideDashLength, 0, 0, 0];
@@ -1539,19 +1534,22 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                 />
 
                 <g filter={isActive ? filterRef('piece-active-shadow') : isEngaged ? filterRef('piece-engaged-shadow') : filterRef('piece-shadow')}>
-                  {layer.faces.map((facePath, faceIndex) => (
-                    <path key={`${layer.key}-${faceIndex}`} d={facePath} fill={layer.faceFills[faceIndex]} />
-                  ))}
-
-                  <path d={layer.hitPath} fill={fill('vertical-falloff')} opacity="0.65" />
-
-                  <path
-                    d={layer.hitPath}
-                    fill={layer.polishFill}
-                    opacity={isActive ? layer.polishOpacity + 0.14 : isEngaged ? layer.polishOpacity + 0.06 : layer.polishOpacity}
+                  {/* The fragrance-note artwork, sliced into its three tiers by a
+                      horizontal clip band whose cuts fall inside the transparent
+                      gaps between tiers. Each slice lives in its tier's <motion.g>,
+                      so the picture opens up tier-by-tier exactly like the original
+                      procedural pyramid — the full image reassembles seamlessly at
+                      rest and separates cleanly when a tier is selected. */}
+                  <image
+                    href={NOTE_PYRAMID_ARTWORK_SRC}
+                    x="0"
+                    y="0"
+                    width="360"
+                    height="420"
+                    preserveAspectRatio="xMidYMid meet"
+                    clipPath={`url(#${id(`tier-clip-${layer.key}`)})`}
+                    pointerEvents="none"
                   />
-
-                  <path d={layer.hitPath} fill={layer.grainFill} opacity={layer.grainOpacity} />
 
                   <motion.path
                     d={layer.hitPath}
@@ -1573,62 +1571,9 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                   />
                 </g>
 
-                {/* Center ridge — the chiselled raised spine where the two tier
-                    faces meet. Assembled from offset gradient hairlines (no filter
-                    dependency) so the bevel reads as a solid 3D edge on every
-                    device, including the filter-less low-render-budget path:
-                      1. a shadow band on the light-away (right) side for volume,
-                      2. the polished metallic crest catching the key light,
-                      3. a razor specular hairline pinned to the apex.
-                    The gold-soft bloom on the crest is desktop-only (filterRef
-                    collapses to undefined on constrained devices). */}
-                <path
-                  d={linePath(offsetPoint(layer.channel.start, 1.5), offsetPoint(layer.channel.end, 1.5))}
-                  fill="none"
-                  stroke={fill('ridge-shadow')}
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                  opacity={isActive ? 0.72 : isEngaged ? 0.66 : 0.6}
-                  pointerEvents="none"
-                  vectorEffect="non-scaling-stroke"
-                />
-
-                <motion.path
-                  d={channelPath}
-                  fill="none"
-                  stroke={fill('ridge-core')}
-                  strokeWidth="1.6"
-                  strokeLinecap="round"
-                  filter={filterRef('gold-soft')}
-                  pointerEvents="none"
-                  vectorEffect="non-scaling-stroke"
-                  initial={false}
-                  animate={{ opacity: isActive ? 1 : isEngaged ? 0.94 : 0.82 }}
-                  transition={prefersReducedMotion ? reducedTransition : { duration: 0.6, ease: CALM_EASE }}
-                />
-
-                <path
-                  d={linePath(offsetPoint(layer.channel.start, -0.55), offsetPoint(layer.channel.end, -0.55))}
-                  fill="none"
-                  stroke={fill('groove-highlight')}
-                  strokeWidth="0.6"
-                  strokeLinecap="round"
-                  opacity={isActive ? 0.9 : isEngaged ? 0.78 : 0.62}
-                  pointerEvents="none"
-                  vectorEffect="non-scaling-stroke"
-                />
-
-                <path
-                  d={layer.hitPath}
-                  fill="none"
-                  stroke="#010202"
-                  strokeOpacity="0.95"
-                  strokeWidth="4.4"
-                  strokeLinejoin="miter"
-                  pointerEvents="none"
-                  vectorEffect="non-scaling-stroke"
-                />
-
+                {/* Outer outlining effect — a dynamic gold rim that traces each
+                    tier's silhouette and brightens on hover/active, restored to sit
+                    directly on the artwork's baked border. */}
                 <motion.path
                   d={layer.hitPath}
                   fill="none"
@@ -1669,22 +1614,6 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                   }
                   transition={pulseTransition}
                 />
-
-                {/* Crest highlight — a bright hairline along the tier's freshly-cut upper edge */}
-                {layer.crest && (
-                  <motion.path
-                    d={layer.crest}
-                    fill="none"
-                    stroke={fill('edge-cut')}
-                    strokeWidth="1.15"
-                    strokeLinecap="round"
-                    pointerEvents="none"
-                    vectorEffect="non-scaling-stroke"
-                    initial={false}
-                    animate={{ opacity: isActive ? 0.95 : isEngaged ? 0.8 : 0.58 }}
-                    transition={prefersReducedMotion ? reducedTransition : { duration: 0.6, ease: CALM_EASE }}
-                  />
-                )}
 
                 {/* Premium guide outline — a single, slow, seamless gold tracer that
                     draws the complete tier silhouette, holds it fully outlined, then
@@ -1770,137 +1699,6 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                   strokeLinejoin="miter"
                   vectorEffect="non-scaling-stroke"
                 />
-
-                {/* Apex glint: faceted lens flare seated on the pyramid summit. */}
-                {layer.key === 'top' && (
-                  <motion.g
-                    pointerEvents="none"
-                    className={lightweightEffects ? '' : 'mix-blend-screen'}
-                    initial={false}
-                    animate={
-                      prefersReducedMotion
-                        ? { opacity: isMuted ? 0.42 : 0.78, scale: isActive || isEngaged ? 1 : 0.92, rotate: 0 }
-                        : {
-                            opacity: isMuted
-                              ? [0.28, 0.4, 0.28]
-                              : isActive
-                                ? [0.76, 0.98, 0.76]
-                              : isEngaged
-                                ? [0.64, 0.9, 0.64]
-                              : [0.46, 0.7, 0.46],
-                            scale: isActive
-                              ? [0.98, 1.1, 0.98]
-                              : isEngaged
-                                ? [0.94, 1.06, 0.94]
-                              : [0.9, 1, 0.9],
-                            rotate: [-3, 4, -3],
-                          }
-                    }
-                    transition={pulseTransition}
-                    style={{
-                      transformBox: 'view-box',
-                      transformOrigin: `${PYRAMID_CENTER_X}px ${APEX_GLINT_Y}px`,
-                      willChange: prefersReducedMotion ? 'auto' : 'transform, opacity',
-                    }}
-                  >
-                    <motion.circle
-                      cx={PYRAMID_CENTER_X}
-                      cy={APEX_GLINT_Y}
-                      r="23"
-                      fill={fill('apex-glint-aura')}
-                      filter={filterRef('apex-glint-bloom')}
-                      initial={false}
-                      animate={
-                        prefersReducedMotion
-                          ? { opacity: isMuted ? 0.22 : 0.42, scale: 0.92 }
-                          : { opacity: [0.24, isActive || isEngaged ? 0.62 : 0.42, 0.24], scale: [0.86, 1.08, 0.86] }
-                      }
-                      transition={atmosphericTransition}
-                    />
-
-                    <g filter={filterRef('apex-glint-bloom')}>
-                      <motion.line
-                        x1={PYRAMID_CENTER_X - 28}
-                        y1={APEX_GLINT_Y}
-                        x2={PYRAMID_CENTER_X + 28}
-                        y2={APEX_GLINT_Y}
-                        stroke={fill('apex-glint-beam')}
-                        strokeWidth="1.35"
-                        strokeLinecap="round"
-                        vectorEffect="non-scaling-stroke"
-                        initial={false}
-                        animate={prefersReducedMotion ? { opacity: 0.7 } : { opacity: [0.44, 0.9, 0.44] }}
-                        transition={pulseTransition}
-                      />
-                      <motion.line
-                        x1={PYRAMID_CENTER_X}
-                        y1={APEX_GLINT_Y - 18}
-                        x2={PYRAMID_CENTER_X}
-                        y2={APEX_GLINT_Y + 22}
-                        stroke={fill('apex-glint-beam')}
-                        strokeWidth="1.05"
-                        strokeLinecap="round"
-                        vectorEffect="non-scaling-stroke"
-                        initial={false}
-                        animate={prefersReducedMotion ? { opacity: 0.62 } : { opacity: [0.32, 0.74, 0.32] }}
-                        transition={pulseTransition}
-                      />
-                      <motion.line
-                        x1={PYRAMID_CENTER_X - 13}
-                        y1={APEX_GLINT_Y - 13}
-                        x2={PYRAMID_CENTER_X + 13}
-                        y2={APEX_GLINT_Y + 13}
-                        stroke={fill('apex-glint-prism')}
-                        strokeWidth="0.8"
-                        strokeLinecap="round"
-                        vectorEffect="non-scaling-stroke"
-                        initial={false}
-                        animate={prefersReducedMotion ? { opacity: 0.48 } : { opacity: [0.24, 0.58, 0.24] }}
-                        transition={shimmerTransition}
-                      />
-                      <motion.line
-                        x1={PYRAMID_CENTER_X - 11}
-                        y1={APEX_GLINT_Y + 11}
-                        x2={PYRAMID_CENTER_X + 11}
-                        y2={APEX_GLINT_Y - 11}
-                        stroke={fill('apex-glint-prism')}
-                        strokeWidth="0.68"
-                        strokeLinecap="round"
-                        vectorEffect="non-scaling-stroke"
-                        initial={false}
-                        animate={prefersReducedMotion ? { opacity: 0.38 } : { opacity: [0.18, 0.48, 0.18] }}
-                        transition={shimmerTransition}
-                      />
-                    </g>
-
-                    <path
-                      d={`M${PYRAMID_CENTER_X} ${APEX_GLINT_Y - 8.8} L${PYRAMID_CENTER_X + 2.6} ${APEX_GLINT_Y - 2.6} L${PYRAMID_CENTER_X + 9.6} ${APEX_GLINT_Y} L${PYRAMID_CENTER_X + 2.6} ${APEX_GLINT_Y + 2.6} L${PYRAMID_CENTER_X} ${APEX_GLINT_Y + 9.2} L${PYRAMID_CENTER_X - 2.6} ${APEX_GLINT_Y + 2.6} L${PYRAMID_CENTER_X - 9.6} ${APEX_GLINT_Y} L${PYRAMID_CENTER_X - 2.6} ${APEX_GLINT_Y - 2.6} Z`}
-                      fill={fill('apex-glint-core')}
-                      stroke={fill('apex-glint-prism')}
-                      strokeWidth="0.45"
-                      strokeLinejoin="round"
-                      vectorEffect="non-scaling-stroke"
-                    />
-                    <ellipse
-                      cx={PYRAMID_CENTER_X - 2.2}
-                      cy={APEX_GLINT_Y - 1.9}
-                      rx="2.9"
-                      ry="1.45"
-                      fill="#ffffff"
-                      opacity="0.74"
-                      transform={`rotate(-26 ${PYRAMID_CENTER_X - 2.2} ${APEX_GLINT_Y - 1.9})`}
-                    />
-                    <motion.circle
-                      cx={PYRAMID_CENTER_X}
-                      cy={APEX_GLINT_Y}
-                      r="1.65"
-                      fill="#fffdf4"
-                      initial={false}
-                      animate={prefersReducedMotion ? { opacity: 0.92 } : { opacity: [0.72, 1, 0.72], r: [1.35, 1.85, 1.35] }}
-                      transition={pulseTransition}
-                    />
-                  </motion.g>
-                )}
               </motion.g>
             );
           })}
@@ -2071,17 +1869,6 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
 
             <circle cx="178" cy="397.4" r="1.4" fill="#fff8e8" opacity="0.85" />
           </motion.g>
-
-          <image
-            href={NOTE_PYRAMID_ARTWORK_SRC}
-            x="0"
-            y="0"
-            width="360"
-            height="420"
-            preserveAspectRatio="xMidYMid meet"
-            pointerEvents="none"
-            aria-hidden="true"
-          />
         </svg>
 
         {/* Enhanced Hovering Glassmorphic Text UI */}
@@ -2093,45 +1880,28 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
               animate={lightweightEffects ? { opacity: 1, y: 0, scale: 1 } : { opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
               exit={lightweightEffects ? { opacity: 0, y: -5, scale: 0.99 } : { opacity: 0, y: -5, scale: 0.99, filter: 'blur(2px)' }}
               transition={prefersReducedMotion ? reducedTransition : { duration: 0.32, ease: CALM_EASE }}
-              className={`pointer-events-none absolute left-1/2 z-50 w-[84%] max-w-[15rem] -translate-x-1/2 overflow-hidden rounded-lg border border-white/10 bg-[#060608]/92 px-2 py-2 shadow-[0_10px_30px_-8px_rgba(0,0,0,0.78),inset_0_1px_1px_rgba(255,255,255,0.13),0_0_0_1px_rgba(252,157,25,0.09),0_0_28px_-10px_rgba(252,157,25,0.34)] sm:max-w-[18.5rem] sm:px-3.5 sm:py-3.5 ${selectedLayer.revealClass}`}
+              className={`pointer-events-none absolute left-1/2 z-50 w-[84%] max-w-[15rem] -translate-x-1/2 overflow-hidden rounded-xl border border-white/[0.12] bg-[#08080b]/95 px-2.5 py-2.5 shadow-[0_14px_36px_-12px_rgba(0,0,0,0.85),inset_0_1px_0_rgba(255,255,255,0.12),inset_0_0_0_1px_rgba(252,157,25,0.12)] sm:max-w-[18.5rem] sm:px-4 sm:py-3.5 ${selectedLayer.revealClass}`}
             >
               <span
                 aria-hidden
-                className="pointer-events-none absolute inset-[3px] rounded-md border border-white/[0.045]"
+                className="pointer-events-none absolute inset-[3px] rounded-lg border border-white/[0.05]"
               />
               <span
                 aria-hidden
                 className="pointer-events-none absolute inset-x-4 top-0 h-px bg-gradient-to-r from-transparent via-[#ffd98a]/55 to-transparent"
               />
 
-              <motion.div
-                animate={prefersReducedMotion ? {} : { y: [0, -1, 0] }}
-                transition={floatTransition}
-                className="relative flex flex-col items-center justify-center space-y-1.5 sm:space-y-2 text-center"
-              >
+              <div className="relative flex flex-col items-center justify-center space-y-1.5 sm:space-y-2 text-center">
                 <motion.div
                    initial={{ opacity: 0, y: 4 }}
                    animate={{ opacity: 1, y: 0 }}
                    exit={{ opacity: 0, y: -3 }}
                    transition={prefersReducedMotion ? reducedTransition : { duration: 0.6, delay: 0.08, ease: CALM_EASE }}
-                   className="flex w-full flex-col items-center justify-center space-y-0.5 sm:space-y-1"
+                   className="flex w-full flex-col items-center justify-center"
                 >
                   <h3 className="bg-gradient-to-br from-[#fff3d4] via-[#fc9d19] to-[#8c5a1a] bg-clip-text text-[9.5px] sm:text-[10.5px] font-bold uppercase tracking-[0.38em] text-transparent drop-shadow-[0_2px_10px_rgba(252,157,25,0.4)]">
                     {selectedLayer.title}
                   </h3>
-
-                  <motion.span
-                    aria-hidden
-                    initial={{ scaleX: 0, opacity: 0 }}
-                    animate={{ scaleX: 1, opacity: 1 }}
-                    exit={{ scaleX: 0, opacity: 0 }}
-                    transition={
-                      prefersReducedMotion
-                        ? reducedTransition
-                        : { duration: 0.85, delay: 0.22, ease: CALM_EASE }
-                    }
-                    className="block h-px w-8 sm:w-12 origin-center rounded-full bg-gradient-to-r from-transparent via-[#ffc766] to-transparent shadow-[0_0_7px_rgba(252,157,25,0.48)]"
-                  />
                 </motion.div>
 
                 {(() => {
@@ -2146,7 +1916,6 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                       <LayerNotesList
                         notes={tierNotes}
                         links={allLinks}
-                        prefersReducedMotion={Boolean(prefersReducedMotion)}
                         transition={noteTransition}
                       />
                       <LayerAccordEcho
@@ -2172,7 +1941,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                     </>
                   );
                 })()}
-              </motion.div>
+              </div>
             </motion.div>
           ) : null}
         </AnimatePresence>
