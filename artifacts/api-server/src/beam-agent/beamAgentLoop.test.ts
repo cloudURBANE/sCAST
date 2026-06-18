@@ -211,6 +211,90 @@ test("zero-tool opening turn is nudged, then the tool path runs and synthesis wr
   assert.equal(summary.outputTokens, 60);
 });
 
+test("exhausting the tool-call budget still composes a grounded answer instead of failing", async () => {
+  const events: BeamRunEvent[] = [];
+  const toolCalls: { input: unknown }[] = [];
+  let completed: string | undefined;
+  let summary: BeamRunSummary | undefined;
+
+  // A catalog tool that always returns a grounded fragrance.
+  const catalogTool: BeamToolDefinition = {
+    name: "beam_search_catalog",
+    description: "Search the catalog",
+    inputSchema: { type: "object", properties: {} },
+    handler: async (input) => {
+      toolCalls.push({ input });
+      return { items: [{ name: "Aventus", brand: "Creed" }] };
+    },
+  };
+
+  // The model never stops calling tools, so the loop runs out of turns (maxTurns:
+  // 2) without ever entering the voluntary-answer branch. The 3rd scripted reply
+  // is the forced closing synthesis the exhaustion fix triggers from the grounded
+  // evidence — previously this run failed with max_turns and showed nothing.
+  const { callModel } = scriptedModel([
+    { stop_reason: "tool_use", content: [{ type: "tool_use", id: "tu_1", name: "beam_search_catalog", input: { query: "fresh" } }] },
+    { stop_reason: "tool_use", content: [{ type: "tool_use", id: "tu_2", name: "beam_search_catalog", input: { query: "woody" } }] },
+    text("Aventus by Creed is a great pick."),
+  ]);
+
+  await runBeamAgent({
+    ctx,
+    userMessage: "Recommend a couple new fragrances, you pick.",
+    tools: [catalogTool],
+    emit: (e) => events.push(e),
+    isModelConfigured: () => true,
+    callModel,
+    maxTurns: 2,
+    onComplete: (t) => (completed = t),
+    onSummary: (s) => (summary = s),
+  });
+
+  assert.equal(completed, "Aventus by Creed is a great pick.");
+  assert.ok(events.some((e) => e.type === "completed"));
+  assert.equal(events.some((e) => e.type === "failed"), false);
+  assert.ok(summary);
+  assert.equal(summary.outcome, "completed");
+  assert.equal(summary.failureCode, undefined);
+  assert.equal(summary.usedSynthesis, true);
+  assert.equal(summary.turns, 2);
+  assert.ok((summary.groundedNames ?? 0) >= 1);
+  assert.equal(toolCalls.length, 2);
+});
+
+test("the budget is still failed when nothing was grounded to compose from", async () => {
+  let summary: BeamRunSummary | undefined;
+  const events: BeamRunEvent[] = [];
+  // A tool that grounds nothing (empty result), so exhaustion has no evidence to
+  // synthesize from and must still fail honestly rather than inventing an answer.
+  const emptyTool: BeamToolDefinition = {
+    name: "beam_search_catalog",
+    description: "Search the catalog",
+    inputSchema: { type: "object", properties: {} },
+    handler: async () => ({ items: [] }),
+  };
+  const { callModel } = scriptedModel([
+    { stop_reason: "tool_use", content: [{ type: "tool_use", id: "tu_1", name: "beam_search_catalog", input: {} }] },
+    { stop_reason: "tool_use", content: [{ type: "tool_use", id: "tu_2", name: "beam_search_catalog", input: {} }] },
+  ]);
+
+  await runBeamAgent({
+    ctx,
+    userMessage: "find me something",
+    tools: [emptyTool],
+    emit: (e) => events.push(e),
+    isModelConfigured: () => true,
+    callModel,
+    maxTurns: 2,
+    onSummary: (s) => (summary = s),
+  });
+
+  assert.ok(events.some((e) => e.type === "failed" && e.code === "max_turns"));
+  assert.equal(summary?.outcome, "failed");
+  assert.equal(summary?.failureCode, "max_turns");
+  assert.equal(summary?.usedSynthesis, false);
+});
+
 test("per-run token budgets are forwarded to orchestration and synthesis calls", async () => {
   const toolCalls: { input: unknown }[] = [];
 

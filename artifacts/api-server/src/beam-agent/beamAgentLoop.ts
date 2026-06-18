@@ -1057,6 +1057,19 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
       messages.push({ role: "user", content: results });
     }
 
+    // Exhausted the tool-call budget while the model kept searching instead of
+    // answering. By now we almost always hold grounded evidence (prod runs reach
+    // here with dozens of grounded fragrances), so failing outright throws all of
+    // it away and shows the user nothing — the dominant live failure mode. Mirror
+    // the wall-clock path above: force a closing synthesis from what we gathered.
+    // It is still held to the answer gate inside finish(), so a weak or
+    // hallucinated answer can't slip through, and finish() ships the draft instead
+    // of opening a synthesis call if the deadline has since passed. Only fail
+    // outright when there is genuinely nothing grounded to compose from.
+    if (usedTools && groundedNames.size > 0) {
+      await finish(lastText);
+      return;
+    }
     fail("max_turns", "Reached the tool-call budget before finishing.");
   } catch (err) {
     const message = err instanceof Error ? err.message : "agent error";

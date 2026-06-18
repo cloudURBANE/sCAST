@@ -205,16 +205,16 @@ const BattleRatingOption: React.FC<{
 }> = ({ label, count, total }) => {
   const pct = total > 0 ? Math.round((count / total) * 100) : 0;
   return (
-    <div className="relative w-full min-w-0 overflow-hidden rounded-[14px] border border-scent-accent/14 bg-black/48 px-3 py-2 text-center">
+    <div className="relative flex min-h-[6.5rem] w-full min-w-0 flex-col justify-center overflow-hidden rounded-[22px] border border-scent-accent/42 bg-black/58 px-5 py-4 text-center shadow-[inset_0_1px_0_rgba(255,236,183,0.055)] sm:min-h-[7.5rem] sm:px-8 sm:py-5">
       <span
-        className="absolute inset-y-0 left-0 bg-scent-accent/[0.16] transition-[width] duration-500 ease-out motion-reduce:transition-none"
+        className="absolute inset-y-0 left-0 bg-[linear-gradient(90deg,rgba(212,175,55,0.25),rgba(212,175,55,0.15))] transition-[width] duration-500 ease-out motion-reduce:transition-none"
         style={{ width: `${pct}%` }}
         aria-hidden="true"
       />
-      <p className="relative z-10 truncate font-serif text-lg italic text-[#fff7ec]">
+      <p className="relative z-10 break-words font-serif text-2xl italic leading-tight text-[#fff7ec] sm:text-3xl">
         {label}
       </p>
-      <p className="relative z-10 mt-0.5 font-mono text-[11px] leading-none text-scent-accent/90">
+      <p className="relative z-10 mt-2 font-mono text-xs leading-none text-scent-accent sm:text-sm">
         {total > 0 ? `${pct}% · ${count} ${count === 1 ? 'vote' : 'votes'}` : 'No votes yet'}
       </p>
     </div>
@@ -239,7 +239,7 @@ const CompactBattlePostCard: React.FC<PostCardProps> = ({
   return (
     <article
       aria-labelledby={headingId}
-      className="mx-auto w-full max-w-[940px] overflow-hidden rounded-[calc(var(--radius-scent)-2px)] border border-scent-accent/20 bg-[radial-gradient(78%_64%_at_50%_0%,rgba(255,247,236,0.026),transparent_62%),linear-gradient(180deg,rgba(10,9,7,0.88),rgba(0,0,0,0.97))] p-4 text-left shadow-[0_18px_44px_-36px_rgba(212,175,55,0.26),0_22px_46px_-34px_rgba(0,0,0,0.96),inset_0_1px_0_rgba(255,236,183,0.055)] sm:p-5"
+      className="mx-auto w-full max-w-[940px] overflow-hidden rounded-[30px] border border-scent-accent/34 bg-[radial-gradient(84%_52%_at_50%_0%,rgba(212,175,55,0.055),transparent_66%),linear-gradient(180deg,rgba(9,8,6,0.96),rgba(0,0,0,0.99))] p-5 text-left shadow-[0_28px_76px_-54px_rgba(212,175,55,0.42),0_30px_64px_-42px_rgba(0,0,0,0.98),inset_0_1px_0_rgba(255,236,183,0.07)] sm:p-8 lg:p-10"
     >
       <header className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
@@ -248,50 +248,52 @@ const CompactBattlePostCard: React.FC<PostCardProps> = ({
             aria-label={`View ${authorName}'s vault`}
             className="shrink-0 rounded-full transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/70"
           >
-            <CommunityAuthorAvatar author={post.author} size="md" />
+            <CommunityAuthorAvatar author={post.author} size="lg" />
           </Link>
           <div className="min-w-0">
             <Link
               to={communitySharePath(post.author)}
-              className="block min-w-0 max-w-full truncate scent-type-chip text-[12px] text-[#fff7ec] transition-colors hover:text-scent-accent"
+              className="block min-w-0 max-w-full truncate scent-type-chip text-[13px] text-[#fff7ec] transition-colors hover:text-scent-accent sm:text-sm"
             >
               {authorName}
             </Link>
-            <p className="mt-1 scent-type-meta text-[11px] uppercase text-scent-muted">
+            <p className="mt-1.5 scent-type-meta text-[11px] uppercase text-scent-muted sm:text-xs">
               {formatCommunityTime(post.createdAt)}
             </p>
           </div>
         </div>
-        <span className="inline-flex min-h-9 shrink-0 items-center justify-center gap-2 rounded-full bg-scent-accent/[0.075] px-3 py-1.5 scent-type-chip text-[11px] text-scent-accent shadow-[inset_0_0_0_1px_rgba(212,175,55,0.18)]">
-          <Swords size={15} strokeWidth={1.75} aria-hidden="true" />
+        <span className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-full border border-scent-accent/38 bg-scent-accent/[0.075] px-4 py-2 scent-type-chip text-[11px] text-scent-accent shadow-[inset_0_1px_0_rgba(255,236,183,0.055)] sm:min-h-12 sm:px-5 sm:text-xs">
+          <Swords size={17} strokeWidth={1.75} aria-hidden="true" />
           Battle
         </span>
       </header>
 
-      <div className="mt-4 min-w-0">
+      <div className="mt-7 min-w-0 sm:mt-9">
         <h3
           id={headingId}
-          className="break-words text-balance font-serif text-2xl italic leading-tight text-[#fff7ec] sm:text-3xl"
+          className="max-w-[50rem] break-words text-balance font-serif text-3xl italic leading-[1.08] text-[#fff7ec] sm:text-5xl"
         >
           {heading}
         </h3>
         {post.body ? (
-          <p className="mt-2 line-clamp-2 max-w-2xl whitespace-pre-line break-words text-sm leading-6 text-[#fff7ec]/76 sm:text-[15px]">
+          <p className="mt-3 line-clamp-2 max-w-[48rem] whitespace-pre-line break-words text-base leading-7 text-[#fff7ec]/68 sm:mt-4 sm:text-xl sm:leading-8">
             {post.body}
           </p>
         ) : null}
       </div>
 
       {options.length === 2 ? (
-        <div className="mt-4 flex w-full flex-col items-center gap-2 sm:grid sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center">
+        <div className="mt-7 flex w-full flex-col items-center gap-3 sm:mt-9 sm:gap-4">
           <BattleRatingOption
             label={options[0]}
             count={post.votes[options[0]] ?? 0}
             total={totalVotes}
           />
-          <span className="font-serif text-lg italic text-scent-accent/84" aria-hidden="true">
-            vs
-          </span>
+          <div className="grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-4" aria-hidden="true">
+            <span className="h-px bg-gradient-to-r from-transparent to-scent-accent/44" />
+            <span className="font-serif text-lg italic text-scent-accent">vs</span>
+            <span className="h-px bg-gradient-to-l from-transparent to-scent-accent/44" />
+          </div>
           <BattleRatingOption
             label={options[1]}
             count={post.votes[options[1]] ?? 0}
@@ -300,10 +302,10 @@ const CompactBattlePostCard: React.FC<PostCardProps> = ({
         </div>
       ) : null}
 
-      <div className="mt-4 flex justify-center">
+      <div className="mt-7 flex justify-center sm:mt-9">
         <Link
           to="/arena"
-          className="scent-primary-button scent-no-mobile-focus-ring inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-[var(--radius-scent)] px-5 py-2 text-[12px] font-bold uppercase tracking-[0.13em] sm:w-auto"
+          className="scent-primary-button scent-no-mobile-focus-ring inline-flex min-h-14 w-full items-center justify-center gap-3 rounded-full border border-scent-accent/72 px-6 py-3 text-[12px] font-bold uppercase tracking-[0.17em] shadow-[inset_0_0_0_2px_rgba(255,236,183,0.16),0_12px_26px_-18px_rgba(212,175,55,0.6)] sm:min-h-16 sm:text-sm"
         >
           <span>Open arena</span>
           <ArrowRight size={15} strokeWidth={1.8} aria-hidden="true" />
