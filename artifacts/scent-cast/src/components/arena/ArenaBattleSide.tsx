@@ -128,10 +128,9 @@ export const ArenaBattleSide: React.FC<ArenaBattleSideProps> = ({
         aria-hidden="true"
       />
 
-      {/* Pick marker — spot 1: a clean round gold check circle pinned to the
-          top-right of the chosen card. Spinner while the vote persists, then a
-          settled check. Mirrored by the inline circle beside the contender
-          label (spot 2) so the pick reads from either glance point. */}
+      {/* Pick marker: a single clean round gold check circle pinned to the
+          top-right of the chosen card — the one unambiguous "this is your pick"
+          cue. Spinner while the vote persists, then a settled check. */}
       {selected ? (
         <span
           className="absolute right-1.5 top-1.5 z-20 inline-grid h-5 w-5 place-items-center rounded-full bg-scent-accent text-black shadow-[0_0_12px_rgba(212,175,55,0.22)] sm:right-2 sm:top-2 sm:h-6 sm:w-6"
@@ -151,22 +150,11 @@ export const ArenaBattleSide: React.FC<ArenaBattleSideProps> = ({
       ) : null}
 
       <div className="relative z-10 flex w-full flex-col">
-        <div className="relative mb-1.5 flex min-h-6 items-center justify-center sm:mb-3 sm:min-h-7">
+        <div className="mb-1.5 flex min-h-6 items-center justify-center sm:mb-3 sm:min-h-7">
           <span className="inline-flex items-center scent-type-label text-[10px] tracking-[0.1em] text-scent-accent/78 sm:text-[12px] sm:tracking-[0.14em]">
             {`Contender ${contenderLabel}`}
             {selected ? <span className="sr-only">your pick</span> : null}
           </span>
-          {/* Pick marker — spot 2: durable gold check circle pinned to the right
-              of the centered contender label, matching the top-right corner
-              marker so the chosen side is unmistakable from either glance. */}
-          {selected ? (
-            <span
-              className="absolute right-0 top-1/2 inline-grid h-4 w-4 -translate-y-1/2 place-items-center rounded-full bg-scent-accent text-black shadow-[0_0_10px_rgba(212,175,55,0.28)] sm:h-[1.05rem] sm:w-[1.05rem]"
-              aria-hidden="true"
-            >
-              <Check size={10} strokeWidth={2.6} aria-hidden="true" />
-            </span>
-          ) : null}
         </div>
 
         <div className="relative aspect-[1/0.9] w-full overflow-hidden rounded-md bg-black/[0.18] shadow-[inset_0_0_0_1px_rgba(212,175,55,0.08)] sm:aspect-[4/5]">
