@@ -612,6 +612,32 @@ function safeAssistantText(text: string | undefined, fallback: string): string {
   return value;
 }
 
+const BEAM_SCRIPTED_FALLBACK_FAILURE_CODES = new Set<string>(['model_unavailable']);
+
+const BEAM_TERMINAL_FAILURE_COPY: Record<string, string> = {
+  quality_gate_failed:
+    "I reached Beam's live run, but I couldn't send that answer because it missed my quality check. Try a tighter brief and I'll keep this session.",
+  max_turns:
+    "I reached Beam's live run, but hit the turn budget before a final answer. Try a narrower direction and I'll keep this session.",
+  run_timeout:
+    "I reached Beam's live run, but ran out of time before a final answer. Try again with one concrete direction and I'll keep this session.",
+  agent_error:
+    "I reached Beam's live run, but the agent hit an internal error before a final answer. Try again and I'll keep this session.",
+  stopped:
+    "I stopped that Beam run before a final answer. Send the next cue and I'll keep this session.",
+};
+
+function shouldUseScriptedFallbackForBeamFailure(code: string): boolean {
+  return BEAM_SCRIPTED_FALLBACK_FAILURE_CODES.has(code);
+}
+
+function beamTerminalFailureMessage(code: string): string {
+  return (
+    BEAM_TERMINAL_FAILURE_COPY[code] ??
+    "I reached Beam's live run, but couldn't finish that turn. Try again and I'll keep this session."
+  );
+}
+
 function recommendationMessage(recommendation: ScentMissionRecommendation): string {
   const house = recommendation.brand ? ` by ${recommendation.brand}` : '';
   return `I would start with ${recommendation.name}${house}. ${recommendation.reason}`;
@@ -1230,10 +1256,10 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   );
 
   // Conversational turns go to the live Beam Agent (tool-calling, grounded in the
-  // signed-in user's vault). Returns `handled: true` when the agent answered (or
-  // the turn was superseded by a newer one), and `false` when the caller should
-  // fall back to the scripted `/api/scent-mission` path — so a missing
-  // OPENROUTER_API_KEY or any agent error never leaves the user without a reply.
+  // signed-in user's vault). Returns `handled: true` when the agent answered,
+  // surfaced a live-run terminal failure, or the turn was superseded by a newer
+  // one. `false` is reserved for cases where the live model is unavailable or the
+  // run did not start, so the scripted path can still provide a reply.
   const runAgentTurn = useCallback(
     async (message: string): Promise<{ handled: boolean }> => {
       // Guests have no token; the agent requires auth, so use the scripted path.
@@ -1349,9 +1375,11 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
           );
           return { handled: true };
         }
-        // status === 'failed' (model_unavailable, max_turns, agent_error, …):
-        // fall back to the scripted path so the user still gets an answer.
-        return { handled: false };
+        if (shouldUseScriptedFallbackForBeamFailure(result.code)) {
+          return { handled: false };
+        }
+        pushAgentText(beamTerminalFailureMessage(result.code));
+        return { handled: true };
       } catch (err) {
         // A supersede-abort (newer turn replaced this one) must stay silent and
         // NOT trigger the fallback. A timeout-abort or network error falls back.

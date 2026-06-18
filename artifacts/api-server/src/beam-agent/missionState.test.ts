@@ -35,6 +35,20 @@ test("parses a new-only Tokyo request and preserves Fresh as the scoring directi
   assert.match(prompt, /Preserve destination=Tokyo and month=August/i);
 });
 
+test("parses 'a couple new fragrances' as a two-pick new-only travel mission", () => {
+  const state = deriveBeamSessionState(
+    undefined,
+    "help me find a couple new fragrances for my august trip to tokyo.",
+  );
+
+  assert.equal(state.slots.destination, "tokyo");
+  assert.equal(state.slots.month, "August");
+  assert.equal(state.mission?.intent, "travel_kit");
+  assert.equal(state.mission?.newCount, 2);
+  assert.equal(state.mission?.destination, "tokyo");
+  assert.equal(state.mission?.month, "August");
+});
+
 test("parses the owned-lane count for 'to bring' phrasing without the noun 'fragrances'", () => {
   const state = deriveBeamSessionState(
     undefined,
@@ -66,12 +80,42 @@ test("recognizes the reported fresh-versus-warm wording as a direction question"
   );
 });
 
+test("recognizes a direct 'what direction' prompt as a direction question", () => {
+  assert.equal(
+    inferPendingSlotFromAssistant("What direction are you leaning for the new picks?"),
+    "direction",
+  );
+});
+
 test("resolves the active slot only with an answer from the expected category", () => {
   const state = deriveBeamSessionState(undefined, "Green and aromatic", "direction");
 
   assert.equal(state.slots.direction, "green, aromatic");
   assert.equal(state.pendingSlot, undefined);
   assert.equal(state.pendingSlotUnanswered, undefined);
+});
+
+test("preserves multi-turn green, tea, warm, and aromatic direction refinements", () => {
+  const first = deriveBeamSessionState(
+    undefined,
+    "help me find a couple new fragrances for my august trip to tokyo.",
+  );
+  const second = deriveBeamSessionState(
+    first,
+    "Green & tea",
+    inferPendingSlotFromAssistant("What direction are you leaning for the new picks?"),
+  );
+  const third = deriveBeamSessionState(
+    second,
+    "warm and aromatic",
+    inferPendingSlotFromAssistant("Do you prefer your green and tea fragrances to lean more fresh and crisp or warm and aromatic?"),
+  );
+
+  assert.equal(third.mission?.newCount, 2);
+  assert.equal(third.slots.direction, "green, tea, aromatic, warm");
+  assert.equal(third.pendingSlot, undefined);
+  assert.equal(third.pendingSlotUnanswered, undefined);
+  assert.match(beamSessionStatePrompt(third), /exactly 2 new unowned recommendation/i);
 });
 
 test("explicit delegation bypasses an unresolved preference slot", () => {

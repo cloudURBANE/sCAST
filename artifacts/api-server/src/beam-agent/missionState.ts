@@ -23,7 +23,12 @@ const COUNT_WORDS = new Map<string, number>([
   ["three", 3],
   ["four", 4],
   ["five", 5],
+  ["couple", 2],
+  ["a couple", 2],
+  ["pair", 2],
 ]);
+
+const COUNT_CAPTURE = String.raw`((?:a\s+)?couple|pair|\d+|one|two|three|four|five)`;
 
 const OCCASIONS: Array<[RegExp, string]> = [
   [/\bdate\s+night\b/i, "date night"],
@@ -111,7 +116,9 @@ function parseVibe(text: string): string | undefined {
 const FAMILY_PATTERNS: Array<[RegExp, string]> = [
   [/\bcitrus(?:y)?\b/i, "citrus"],
   [/\bgreen\b/i, "green"],
+  [/\b(?:tea|matcha|chai)\b/i, "tea"],
   [/\baromatic\b/i, "aromatic"],
+  [/\bwarm(?:er|th)?\b/i, "warm"],
   [/\bwood(?:y|s|sy)?\b/i, "woody"],
   [/\bfloral\b/i, "floral"],
   [/\bfruit(?:y)?\b/i, "fruity"],
@@ -159,7 +166,7 @@ function parseImpression(text: string): string | undefined {
 /** Determine the one category an assistant question is asking the user to fill. */
 export function inferPendingSlotFromAssistant(text: string): BeamSlotKey | undefined {
   if (!text.includes("?")) return undefined;
-  if (/\b(?:citrus|green|aromatic|scent famil(?:y|ies)|lighter|warmer|fresh direction|scent direction)\b|\bfresh\b.{0,60}\bwarm(?:th)?\b|\bwarm(?:th)?\b.{0,60}\bfresh\b/i.test(text)) return "direction";
+  if (/\b(?:citrus|green|tea|aromatic|scent famil(?:y|ies)|scent direction|direction|lean more|lighter|warmer)\b|\bfresh\b.{0,60}\bwarm(?:th)?\b|\bwarm(?:th)?\b.{0,60}\bfresh\b/i.test(text)) return "direction";
   if (/\b(?:projection|trail|skin[ -]?close|statement)\b/i.test(text)) return "projection";
   if (/\b(?:occasion|setting|work|date night|night out|staying in)\b/i.test(text)) return "occasion";
   if (/\b(?:impression|come across|calm|focused|confident|social)\b/i.test(text)) return "impression";
@@ -172,7 +179,7 @@ export function inferPendingSlotFromAssistant(text: string): BeamSlotKey | undef
 
 function parseCount(value: string | undefined): number | undefined {
   if (!value) return undefined;
-  const raw = value.toLowerCase();
+  const raw = value.toLowerCase().replace(/\s+/g, " ").trim();
   const asNumber = /^\d+$/.test(raw) ? Number(raw) : COUNT_WORDS.get(raw);
   if (!Number.isFinite(asNumber)) return undefined;
   const count = Math.floor(asNumber as number);
@@ -190,20 +197,20 @@ function firstCountFor(text: string, patterns: RegExp[]): number | undefined {
 
 function parseOwnedCount(text: string): number | undefined {
   return firstCountFor(text, [
-    /\b(\d+|one|two|three|four|five)\s+(?:fragrances?|scents?|bottles?|ones?)?\s*(?:from|out of)\s+(?:my\s+)?(?:wardrobe|vault|collection)\b/i,
-    /\b(\d+|one|two|three|four|five)\s+(?:owned|already-owned|vault|wardrobe)\s+(?:fragrances?|scents?|bottles?|ones?)\b/i,
+    new RegExp(String.raw`\b${COUNT_CAPTURE}\s+(?:of\s+)?(?:fragrances?|scents?|bottles?|ones?)?\s*(?:from|out of)\s+(?:my\s+)?(?:wardrobe|vault|collection)\b`, "i"),
+    new RegExp(String.raw`\b${COUNT_CAPTURE}\s+(?:of\s+)?(?:owned|already-owned|vault|wardrobe)\s+(?:fragrances?|scents?|bottles?|ones?)\b`, "i"),
     // Noun optional so "two to take" / "two to pack" / "two to bring" (no explicit
     // "fragrances") still reads as an owned-lane count, matching the "from my wardrobe" pattern.
-    /\b(\d+|one|two|three|four|five)\s+(?:(?:fragrances?|scents?|bottles?|ones?)\s+)?(?:to\s+(?:take|pack|bring|wear)|for\s+(?:the\s+)?trip)\b/i,
+    new RegExp(String.raw`\b${COUNT_CAPTURE}\s+(?:of\s+)?(?:(?:fragrances?|scents?|bottles?|ones?)\s+)?(?:to\s+(?:take|pack|bring|wear)|for\s+(?:the\s+)?trip)\b`, "i"),
   ]);
 }
 
 function parseNewCount(text: string): number | undefined {
   return firstCountFor(text, [
-    /\b(\d+|one|two|three|four|five)\s+new\s+(?:fragrances?|scents?|bottles?|ones?)\b/i,
-    /\b(\d+|one|two|three|four|five)\s+new\b/i,
-    /\b(\d+|one|two|three|four|five)\s+(?:fragrances?|scents?|bottles?|ones?)\s+(?:not\s+in|outside)\s+(?:my\s+)?(?:wardrobe|vault|collection)\b/i,
-    /\b(\d+|one|two|three|four|five)\s+(?:unowned|to\s+buy|to\s+discover)\s+(?:fragrances?|scents?|bottles?|ones?)\b/i,
+    new RegExp(String.raw`\b${COUNT_CAPTURE}\s+(?:of\s+)?new\s+(?:fragrances?|scents?|bottles?|ones?)\b`, "i"),
+    new RegExp(String.raw`\b${COUNT_CAPTURE}\s+(?:of\s+)?new\b`, "i"),
+    new RegExp(String.raw`\b${COUNT_CAPTURE}\s+(?:of\s+)?(?:fragrances?|scents?|bottles?|ones?)\s+(?:not\s+in|outside)\s+(?:my\s+)?(?:wardrobe|vault|collection)\b`, "i"),
+    new RegExp(String.raw`\b${COUNT_CAPTURE}\s+(?:of\s+)?(?:unowned|to\s+buy|to\s+discover)\s+(?:fragrances?|scents?|bottles?|ones?)\b`, "i"),
   ]);
 }
 
@@ -295,9 +302,38 @@ export function sanitizeBeamSessionState(value: unknown): BeamSessionState {
   };
 }
 
+function splitSlotList(value: string | undefined): string[] {
+  if (!value) return [];
+  return value
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function mergeSlotList(previous: string | undefined, next: string | undefined, limit = 5): string | undefined {
+  const merged: string[] = [];
+  for (const value of [...splitSlotList(previous), ...splitSlotList(next)]) {
+    if (!merged.some((item) => item.toLowerCase() === value.toLowerCase())) merged.push(value);
+    if (merged.length >= limit) break;
+  }
+  return merged.length > 0 ? merged.join(", ") : undefined;
+}
+
+function mergeSlots(previous: BeamSessionSlots, patch: BeamSessionSlots): BeamSessionSlots {
+  const slots: BeamSessionSlots = { ...previous };
+  for (const key of SLOT_KEYS) {
+    const next = patch[key];
+    if (!next) continue;
+    slots[key] = key === "direction" && slots.direction
+      ? mergeSlotList(slots.direction, next)
+      : next;
+  }
+  return slots;
+}
+
 export function mergeBeamSessionState(previous: BeamSessionState | undefined, patch: BeamSessionState): BeamSessionState {
   const base = cloneBeamSessionState(previous);
-  const slots: BeamSessionSlots = { ...base.slots, ...patch.slots };
+  const slots: BeamSessionSlots = mergeSlots(base.slots, patch.slots);
   const mission = base.mission || patch.mission ? { ...base.mission, ...patch.mission } : undefined;
 
   if (mission?.intent === "travel_kit") {
