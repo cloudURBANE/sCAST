@@ -2120,13 +2120,13 @@ export const Wardrobe: React.FC<{
               </div>
             ))
           ) : !activeSearchQuery && (
-            <div className="relative overflow-hidden rounded-[var(--radius-scent)] border border-scent-accent/26 bg-[linear-gradient(180deg,rgba(255,247,236,0.05),rgba(255,247,236,0.014)_38%,rgba(0,0,0,0.34))] px-5 py-10 text-center shadow-[inset_0_1px_0_rgba(255,236,183,0.1),0_30px_78px_-56px_rgba(212,175,55,0.55)] sm:px-8 sm:py-14 lg:px-12">
+            <div className="relative overflow-hidden rounded-[var(--radius-scent)] border border-scent-accent/26 bg-[linear-gradient(180deg,rgba(255,247,236,0.05),rgba(255,247,236,0.014)_38%,rgba(0,0,0,0.34))] px-5 py-10 text-center shadow-[inset_0_1px_0_rgba(255,236,183,0.1),0_30px_78px_-56px_rgba(0,0,0,0.85)] sm:px-8 sm:py-14 lg:px-12">
               <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-scent-accent/50 to-transparent" aria-hidden />
               <div className="pointer-events-none absolute inset-x-10 bottom-0 h-px bg-gradient-to-r from-transparent via-white/12 to-transparent" aria-hidden />
               <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(212,175,55,0.13),transparent_34%),radial-gradient(circle_at_12%_88%,rgba(255,247,236,0.04),transparent_26%)]" aria-hidden />
               <div className="relative z-[1] mx-auto grid max-w-6xl gap-8 text-left lg:grid-cols-[minmax(0,1.08fr)_minmax(20rem,0.92fr)] lg:items-center">
                 <div className="flex min-w-0 flex-col items-center text-center lg:items-start lg:text-left">
-                  <div className="mb-5 flex h-32 w-32 items-center justify-center rounded-[calc(var(--radius-scent)+10px)] border border-scent-accent/24 bg-black/38 shadow-[inset_0_1px_0_rgba(255,236,183,0.1),0_24px_54px_-34px_rgba(212,175,55,0.68)] sm:h-36 sm:w-36" aria-hidden>
+                  <div className="mb-5 flex h-32 w-32 items-center justify-center rounded-[calc(var(--radius-scent)+10px)] border border-scent-accent/24 bg-black/38 shadow-[inset_0_1px_0_rgba(255,236,183,0.1),0_24px_54px_-34px_rgba(0,0,0,0.7)] sm:h-36 sm:w-36" aria-hidden>
                     <VaultEmptyEmblem />
                   </div>
                   <p className="scent-type-label text-scent-accent/85">Collection Vault</p>

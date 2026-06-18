@@ -33,7 +33,7 @@ export const CommunityAuthorAvatar: React.FC<CommunityAuthorAvatarProps> = ({
   author,
   size = 'md',
 }) => (
-  <div className="relative shrink-0 rounded-full bg-[linear-gradient(135deg,rgba(212,175,55,0.72),rgba(255,247,236,0.1)_46%,rgba(212,175,55,0.38))] p-px shadow-[0_16px_34px_-24px_rgba(212,175,55,0.7),0_0_0_1px_rgba(255,236,183,0.08)]">
+  <div className="relative shrink-0 rounded-full bg-[linear-gradient(135deg,rgba(212,175,55,0.72),rgba(255,247,236,0.1)_46%,rgba(212,175,55,0.38))] p-px shadow-[0_16px_34px_-24px_rgba(0,0,0,0.6),0_0_0_1px_rgba(255,236,183,0.08)]">
     <Avatar
       className={`${SIZE_CLASSES[size]} border border-black/70 bg-[#090604]`}
     >

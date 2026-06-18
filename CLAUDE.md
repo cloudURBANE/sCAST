@@ -58,6 +58,7 @@ from this repo (`huge_monorepo/`) — not from the workspace root or `search_eng
 | `optimize-layout-for-device-class`   | Responsive layout/spacing across PC, iPad, iPhone, iPhone SE (320px).                                                        |
 | `optimize-webkit-rendering-budget`   | Reduce WebKit/Safari GPU & compositor pressure (filters, blur, blend, layers).                                               |
 | `unify-card-layouts-and-grids`       | Standardize card/grid alignment, equal heights, column spans across device classes.                                          |
+| `no-projected-gold-glow`             | BEFORE adding/editing any box-shadow on a card/panel/dialog/button — forbids the gold projected glow that pools under surfaces (owner-rejected site-wide). |
 
 **Cross-repo note:** the Python engine (`search_engine/`) has its OWN skill set
 (`engine-live-verify`, `wardrobe-completeness-heal`) indexed in `search_engine/CLAUDE.md`.

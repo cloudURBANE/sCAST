@@ -97,7 +97,7 @@ export const ArenaResultReveal: React.FC<ArenaResultRevealProps> = ({
     >
       <div
         className={[
-          "relative rounded-lg border border-scent-accent/18 bg-[rgba(5,4,3,0.86)] p-3 text-center shadow-[0_28px_80px_-56px_rgba(212,175,55,0.28),inset_0_1px_0_rgba(255,236,183,0.08)] sm:p-6",
+          "relative rounded-lg border border-scent-accent/18 bg-[rgba(5,4,3,0.86)] p-3 text-center shadow-[0_28px_80px_-56px_rgba(0,0,0,0.85),inset_0_1px_0_rgba(255,236,183,0.08)] sm:p-6",
           guestLocalOnly ? "pt-12 sm:pt-14" : "",
         ].join(" ")}
         aria-label={`${pickedSide.name} is your pick at ${pickedPercent} percent. ${battle.left.name} has ${leftPercent} percent from ${leftCount} saved votes. ${battle.right.name} has ${rightPercent} percent from ${rightCount} saved votes. ${voteStatus}`}
