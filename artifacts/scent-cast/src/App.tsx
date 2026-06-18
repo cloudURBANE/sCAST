@@ -3,6 +3,7 @@ import { Routes, Route, useLocation, useParams, type Location } from 'react-rout
 import type { Fragrance } from './components/Wardrobe';
 import type { BeamProposalItem } from '@/lib/beamAgentClient';
 import { vaultIdentityKey } from './lib/vaultIdentity';
+import { stableProposalItemId, type CurateCollectionResult } from './lib/collectionCuration';
 import { getPendingCuration, curationItemToFragrance, pickResumeCurationTarget } from './lib/curationClient';
 import { Sparkles, X } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
@@ -718,15 +719,13 @@ function DashboardView() {
         name: string;
         status: 'adding' | 'curating' | 'ready' | 'failed';
       }) => void,
-    ): Promise<{ added: number; total: number }> => {
+    ): Promise<CurateCollectionResult> => {
       const total = collectionItems.length;
       let added = 0;
+      const failedItems: BeamProposalItem[] = [];
       for (let index = 0; index < total; index++) {
         const item = collectionItems[index];
-        const generatedId =
-          typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-            ? crypto.randomUUID()
-            : `frag-${Date.now()}-${index}`;
+        const generatedId = stableProposalItemId(item);
         const built: Record<string, unknown> = {
           id: generatedId,
           name: item.name,
@@ -750,6 +749,7 @@ function DashboardView() {
         onProgress({ index, total, name: item.name, status: 'adding' });
         const result = await handleAddItem(built).catch(() => ({ persisted: false }));
         if (!result.persisted) {
+          failedItems.push(item);
           onProgress({ index, total, name: item.name, status: 'failed' });
           continue;
         }
@@ -766,7 +766,7 @@ function DashboardView() {
         }
         onProgress({ index, total, name: item.name, status: 'ready' });
       }
-      return { added, total };
+      return { added, total, failedItems };
     },
     [handleAddItem, handlePersistWardrobeImage],
   );

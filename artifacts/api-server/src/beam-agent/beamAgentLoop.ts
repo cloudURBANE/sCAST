@@ -10,6 +10,7 @@
 import type {
   BeamEmit,
   BeamGroundedFragrance,
+  BeamRunEvent,
   BeamRunContext,
   BeamSessionState,
   BeamToolDefinition,
@@ -130,8 +131,9 @@ name the concrete reason it fits them; prefer at least one distinctive, characte
 safe defaults.
 Once you have all three, execute immediately in that same turn:
 1. Ground — beam_get_user_context + beam_get_wardrobe; note dominant families you actually see.
-2. Score vault — beam_score_candidates with weatherOverride for the destination's climate at that
-   time of year (not home weather). Pass a locationLabel like "Tokyo, August".
+2. Score vault ONLY when the mission requests owned picks — beam_score_candidates with
+   weatherOverride for the destination's climate at that time of year (not home weather). Pass a
+   locationLabel like "Tokyo, August". For a new-only mission, skip vault scoring entirely.
 3. Search new — beam_search_catalog for UNOWNED fragrances fitting direction + destination climate;
    deepen top picks with beam_get_fragrance_details.
 4. Check overlap — beam_compare_overlap each new pick against the vault.
@@ -366,7 +368,74 @@ function collectGroundedFragrancesForGate(tool: BeamToolName, result: unknown): 
     add(record.closestMatch, true);
     addArray(record.items, true);
   }
+  if (tool === "beam_present_travel_kit") {
+    addArray(record.owned, true);
+    addArray(record.newProposed, false);
+  }
   return out;
+}
+
+/** Prevent a presentation card from contradicting a deterministic new-only mission. */
+export function clientEventFitsMission(event: BeamRunEvent, state: BeamSessionState | undefined): boolean {
+  const mission = state?.mission;
+  if (mission?.intent !== "travel_kit" || (mission.ownedCount ?? 0) > 0 || (mission.newCount ?? 0) === 0) {
+    return true;
+  }
+  if (event.type === "card" && event.card.kind === "scent_profile") {
+    return event.card.fragrance.owned !== true;
+  }
+  if (event.type === "card" && event.card.kind === "travel_kit") {
+    return event.card.ownedPicks.length === 0 && event.card.newPicks.length === mission.newCount;
+  }
+  return true;
+}
+
+/** A new-only discovery mission has no owned lane, so vault scoring is the wrong operation. */
+export function toolFitsMission(tool: BeamToolName, state: BeamSessionState | undefined): boolean {
+  const mission = state?.mission;
+  const newOnly =
+    mission?.intent === "travel_kit" && (mission.ownedCount ?? 0) === 0 && (mission.newCount ?? 0) > 0;
+  if (newOnly && tool === "beam_score_candidates") return false;
+  // Travel missions must use the structured travel-kit result so exact lane
+  // counts can be enforced before anything is rendered.
+  if (mission?.intent === "travel_kit" && tool === "beam_propose_collection") return false;
+  return true;
+}
+
+/** Server-enforce mission-sensitive tool arguments instead of trusting the model. */
+export function toolInputForMission(
+  tool: BeamToolName,
+  input: unknown,
+  state: BeamSessionState | undefined,
+): unknown {
+  const mission = state?.mission;
+  const newOnly =
+    mission?.intent === "travel_kit" && (mission.ownedCount ?? 0) === 0 && (mission.newCount ?? 0) > 0;
+  if (newOnly && tool === "beam_search_catalog") {
+    const record = input && typeof input === "object" && !Array.isArray(input) ? input as Record<string, unknown> : {};
+    return { ...record, excludeOwned: true };
+  }
+  return input;
+}
+
+/** Exact structured deliverable contract checked before grounding or client emission. */
+export function missionToolResultError(
+  tool: BeamToolName,
+  result: unknown,
+  state: BeamSessionState | undefined,
+): string | null {
+  const mission = state?.mission;
+  if (tool !== "beam_present_travel_kit" || mission?.intent !== "travel_kit") return null;
+  const record = result && typeof result === "object" ? result as Record<string, unknown> : {};
+  const actualOwned = typeof record.ownedCount === "number" ? record.ownedCount : 0;
+  const actualNew = typeof record.newCount === "number" ? record.newCount : 0;
+  const expectedOwned = mission.ownedCount;
+  const expectedNew = mission.newCount;
+  const newOnly = (expectedOwned ?? 0) === 0 && (expectedNew ?? 0) > 0;
+  const ownedMismatch = expectedOwned !== undefined ? actualOwned !== expectedOwned : newOnly && actualOwned !== 0;
+  const newMismatch = expectedNew !== undefined && actualNew !== expectedNew;
+  if (!ownedMismatch && !newMismatch) return null;
+  return `Kit incomplete after ownership/catalog validation: resolved ${actualOwned} owned and ${actualNew} new; required ${expectedOwned ?? 0} owned and ${expectedNew ?? 0} new. Search for distinct replacements and call beam_present_travel_kit again.`;
 }
 
 export type RunBeamAgentInput = {
@@ -399,7 +468,7 @@ export type RunBeamAgentInput = {
   /** Structured slots/mission state persisted by the route/session store. */
   sessionState?: BeamSessionState;
   /** Called with the final assistant text on success, so the caller can persist the turn. */
-  onComplete?: (assistantText: string) => void;
+  onComplete?: (assistantText: string) => void | Promise<void>;
   /**
    * Called exactly once when the run ends (any outcome) with a structured
    * summary the route logs for observability + cost accounting.
@@ -540,6 +609,10 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
   let synthesisFailed = false;
   // Whether any tool returned a fresh external fact this run; gates price/etc. claims.
   let hadExternalEvidence = false;
+  let localWeatherLocation: string | null = null;
+  // Structured deliverables are buffered until the final prose passes its gates;
+  // otherwise a rejected run could leave an irreversible stale card in the UI.
+  const pendingDeliverables: BeamRunEvent[] = [];
   // Deterministic answer-gate outcome, filled in finish(). Defaults to a pass so a
   // greeting / failed run reads as "nothing to reject".
   let qualityGatePassed = true;
@@ -677,6 +750,7 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
         hadExternalEvidence,
         sessionState: input.sessionState,
         groundedFragrances: [...groundedFragrances.values()],
+        localWeatherLocation,
       });
       if (
         !gate.passed &&
@@ -707,6 +781,7 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
               hadExternalEvidence,
               sessionState: input.sessionState,
               groundedFragrances: [...groundedFragrances.values()],
+              localWeatherLocation,
             });
             if (repairGate.violations.length < gate.violations.length) {
               finalText = repairText;
@@ -720,13 +795,24 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
       qualityGatePassed = gate.passed;
       qualityViolations = gate.violations;
 
+      // A rejected answer must never be persisted or emitted as completed. The
+      // caller can use its existing fallback path, while telemetry retains the
+      // precise violations for diagnosis.
+      if (!gate.passed) {
+        fail("quality_gate_failed", "Beam could not produce a recommendation that satisfied the mission constraints.");
+        return;
+      }
+
+      for (const event of pendingDeliverables) emit(event);
+      pendingDeliverables.length = 0;
+
       // Split off any trailing ```cues block so the visible answer stays clean
       // and the chips ride their own event the UI can render as tap buttons.
       const { text: parsed, cues } = extractAgentCues(finalText || "Done.");
       const response = parsed || "Done.";
       messages.push({ role: "assistant", content: response });
       outcome = "completed";
-      input.onComplete?.(response);
+      await input.onComplete?.(response);
       if (cues.length > 0) {
         emit({ type: "suggestions", items: cues.map((label) => ({ label, value: label })) });
       }
@@ -791,6 +877,7 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
               hadExternalEvidence,
               sessionState: input.sessionState,
               groundedFragrances: [...groundedFragrances.values()],
+              localWeatherLocation,
             });
             if (!cueGate.passed) {
               retrievalNudged = true;
@@ -855,6 +942,16 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
           emit({ type: "status", label: "Skipped an unavailable tool" });
           continue;
         }
+        if (!toolFitsMission(def.name, input.sessionState)) {
+          results.push({
+            type: "tool_result",
+            tool_use_id: use.id,
+            content: "Skipped: this is a new-only discovery mission. Search unowned catalog fragrances instead; vault bottles are taste references only.",
+            is_error: true,
+          });
+          emit({ type: "status", label: "Kept recommendations to new fragrances" });
+          continue;
+        }
 
         // The provider couldn't parse the model's arguments. Tell it explicitly so
         // it retries with valid JSON instead of running the tool on coerced-empty
@@ -878,11 +975,22 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
         // single is_error tool_result and we move on.
         let result: unknown;
         try {
-          result = await raceTimeout(def.handler(use.input, ctx), TOOL_TIMEOUT_MS, def.name);
+          result = await raceTimeout(
+            def.handler(toolInputForMission(def.name, use.input, input.sessionState), ctx),
+            TOOL_TIMEOUT_MS,
+            def.name,
+          );
         } catch (err) {
           const message = err instanceof Error ? err.message : "tool error";
           results.push({ type: "tool_result", tool_use_id: use.id, content: `Tool failed: ${message}`, is_error: true });
           emit({ type: "tool_completed", tool: def.name, summary: "failed" });
+          continue;
+        }
+
+        const missionError = missionToolResultError(def.name, result, input.sessionState);
+        if (missionError) {
+          results.push({ type: "tool_result", tool_use_id: use.id, content: missionError, is_error: true });
+          emit({ type: "tool_completed", tool: def.name, summary: "kit incomplete — retrying" });
           continue;
         }
 
@@ -920,6 +1028,12 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
           const scoring = extractScoringContext(result);
           if (scoring) latestScoring = scoring;
         }
+        if (def.name === "beam_get_user_context" && result && typeof result === "object") {
+          const weather = (result as Record<string, unknown>).weather;
+          if (weather && typeof weather === "object") {
+            localWeatherLocation = stringValue((weather as Record<string, unknown>).location) ?? null;
+          }
+        }
         // Note any fresh external fact so the answer gates can allow (only then) a
         // price/availability/review claim grounded in it.
         if (resultCarriesExternalFact(result)) hadExternalEvidence = true;
@@ -933,7 +1047,7 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
           // Some tools surface a structured card to the UI (e.g. a collection proposal).
           if (def.clientEvent) {
             const extra = def.clientEvent(result);
-            if (extra) emit(extra);
+            if (extra && clientEventFitsMission(extra, input.sessionState)) pendingDeliverables.push(extra);
           }
         } catch {
           /* summary/client-event failures are non-fatal — the run continues */

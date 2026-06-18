@@ -53,6 +53,7 @@ import { BeamMessage } from '@/components/BeamMessage';
 import { BeamCard } from '@/components/BeamCard';
 import type { Fragrance } from '@/components/Wardrobe';
 import type { WeatherData } from '@/context/WeatherContext';
+import type { CurateCollectionResult } from '@/lib/collectionCuration';
 import { useDragToScroll } from '@/hooks/useDragToScroll';
 import { useMarqueeSwipe } from '@/hooks/useMarqueeSwipe';
 import { isIpadSafariPerformanceMode } from '@/lib/platform';
@@ -749,7 +750,7 @@ export type CollectionCurateProgress = {
 export type CurateCollectionFn = (
   items: BeamProposalItem[],
   onProgress: (progress: CollectionCurateProgress) => void,
-) => Promise<{ added: number; total: number }>;
+) => Promise<CurateCollectionResult>;
 
 interface ScentMissionPanelProps {
   items: Fragrance[];
@@ -864,6 +865,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   // explicit Confirm. `curating` holds the per-item add/enrich progress; once it
   // finishes it becomes a short completion summary.
   const [proposal, setProposal] = useState<{ proposalId: string; items: BeamProposalItem[] } | null>(null);
+  const [agentCardDelivered, setAgentCardDelivered] = useState(false);
   // Travel-kit cards whose "new" lane has been curated into the vault, keyed by
   // the card's proposalId — so a stale kit card flips to "Added" and can't double-write.
   const [curatedKitIds, setCuratedKitIds] = useState<Set<string>>(() => new Set());
@@ -1064,7 +1066,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   // longer flips to "Match ready" the instant the agent replies with a question
   // (the old `hasDeliveredAnswer` = "any agent reply" bug). Also gates the
   // composer's "refine your match" placeholder below.
-  const hasMatch = Boolean(resolved) || (proposal != null && proposal.items.length > 0);
+  const hasMatch = Boolean(resolved) || (proposal != null && proposal.items.length > 0) || agentCardDelivered;
 
   const progressText = useMemo(() => {
     if (progressNote) return progressNote;
@@ -1094,13 +1096,20 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   }, [agentCues, agentMission]);
 
   const contextLine = useMemo(() => {
+    const destination = (agentMission?.destination || agentCues.destination || '').trim();
+    const month = (agentMission?.month || agentCues.month || '').trim();
+    if (agentMission?.intent === 'travel_kit' && destination) {
+      return month
+        ? `${titleCaseCue(destination)} / ${titleCaseCue(month)} travel context`
+        : `${titleCaseCue(destination)} travel context`;
+    }
     const weatherParts = [
       typeof weather?.temperature === 'number' ? `${Math.round(weather.temperature)}F` : null,
       typeof weather?.humidity === 'number' ? `${Math.round(weather.humidity)}% humidity` : null,
       typeof weather?.condition === 'string' ? weather.condition : null,
     ].filter(Boolean);
     return weatherParts.length > 0 ? weatherParts.join(' / ') : 'Weather context ready when available';
-  }, [weather]);
+  }, [agentCues.destination, agentMission, weather]);
 
   // Surface progress to the host so the title + progress + close can render in a
   // header strip above the bordered card rather than crowding the panel interior.
@@ -1246,6 +1255,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       setActivity([]);
       setAgentSuggestions([]);
       setProposal(null);
+      setAgentCardDelivered(false);
       setCurating(null);
       setResolved(null);
 
@@ -1290,6 +1300,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
               }
             } else if (event.type === 'card') {
               runDeliveredResultRef.current = true;
+              setAgentCardDelivered(true);
               // The agent surfaced a native UI card (radar / compare / kit board).
               // Drop it into the conversation as its own artifact the moment it
               // arrives, so it reads as "shown, then explained" before the answer.
@@ -1313,10 +1324,12 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
           },
         });
 
+        // Failed turns still persist extracted slots server-side. Retain the
+        // returned session so fallback/retry does not silently start over.
+        beamSessionIdRef.current = result.sessionId;
+        sessionIdRef.current = result.sessionId;
+        setSessionId(result.sessionId);
         if (result.status === 'completed') {
-          beamSessionIdRef.current = result.sessionId;
-          sessionIdRef.current = result.sessionId;
-          setSessionId(result.sessionId);
           // Freeze this run's trail onto the reply: seal any still-active row (the
           // run is over) and capture the elapsed time, so the answer carries its
           // own collapsible "Thought for Ns" recap above it.
@@ -1509,20 +1522,19 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   const handleConfirmProposal = useCallback(async () => {
     if (!proposal || !onCurateCollection || curating) return;
     const collection = proposal.items;
-    setProposal(null);
     setCurating({ total: collection.length, progress: null, done: null });
     try {
       const result = await onCurateCollection(collection, (p) => {
         setCurating((prev) => ({ total: collection.length, done: prev?.done ?? null, progress: p }));
       });
-      setCurating({ total: collection.length, progress: null, done: result });
-      const names = collection.map((item) => item.name);
-      const summary =
-        result.added === 0
-          ? "I couldn't add those to your vault just now — want me to try again?"
-          : result.added === result.total
-            ? `Done — all ${result.total} are in your vault and curated: ${names.join(', ')}. Ready to wear.`
-            : `Added ${result.added} of ${result.total} to your vault — the rest are still curating and will appear shortly.`;
+      setCurating(null);
+      setProposal(result.failedItems.length > 0 ? { ...proposal, items: result.failedItems } : null);
+      const failedNames = result.failedItems.map((item) => item.name);
+      const summary = result.added === 0
+        ? "I couldn't add those to your vault just now. The failed picks are ready to retry."
+        : result.added === result.total
+          ? `Done — all ${result.total} are in your vault and curated. Ready to wear.`
+          : `Added ${result.added} of ${result.total}. ${failedNames.join(', ')} failed and can be retried below.`;
       appendMessage('agent', summary);
     } catch {
       setCurating(null);
@@ -1548,15 +1560,17 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         const result = await onCurateCollection(items, (p) => {
           setCurating((prev) => ({ total: items.length, done: prev?.done ?? null, progress: p }));
         });
-        setCurating({ total: items.length, progress: null, done: result });
-        if (proposalId && result.added > 0) setCuratedKitIds((prev) => new Set(prev).add(proposalId));
-        const names = items.map((item) => item.name);
-        const summary =
-          result.added === 0
-            ? "I couldn't add those to your vault just now — want me to try again?"
-            : result.added === result.total
-              ? `Done — all ${result.total} new picks are in your vault and curating: ${names.join(', ')}.`
-              : `Added ${result.added} of ${result.total} — the rest are still curating and will appear shortly.`;
+        setCurating(null);
+        if (proposalId && result.failedItems.length === 0) setCuratedKitIds((prev) => new Set(prev).add(proposalId));
+        if (result.failedItems.length > 0) {
+          setProposal({ proposalId: proposalId ?? `retry-${Date.now()}`, items: result.failedItems });
+        }
+        const failedNames = result.failedItems.map((item) => item.name);
+        const summary = result.added === 0
+          ? "I couldn't add those to your vault just now. The failed picks are ready to retry."
+          : result.added === result.total
+            ? `Done — all ${result.total} new picks are in your vault.`
+            : `Added ${result.added} of ${result.total}. ${failedNames.join(', ')} failed and can be retried below.`;
         appendMessage('agent', summary);
       } catch {
         setCurating(null);
@@ -1710,6 +1724,8 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
     // Clear the live-agent deliverables too, or `hasMatch` (resolved || proposal)
     // would keep the header on "Match ready" after a cold-start reset.
     setProposal(null);
+    setAgentCardDelivered(false);
+    beamSessionIdRef.current = undefined;
     setCurating(null);
     setCatalogFailure(false);
     setFacets({});

@@ -6,7 +6,14 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { runBeamAgent, type BeamRunSummary } from "./beamAgentLoop.ts";
+import {
+  clientEventFitsMission,
+  missionToolResultError,
+  runBeamAgent,
+  toolFitsMission,
+  toolInputForMission,
+  type BeamRunSummary,
+} from "./beamAgentLoop.ts";
 import { invalidArgsMarker } from "./beamToolCore.ts";
 import { deriveBeamSessionState, inferPendingSlotFromAssistant } from "./missionState.ts";
 import type {
@@ -19,6 +26,41 @@ import type {
 } from "./types.ts";
 
 const ctx: BeamRunContext = { runId: "run_1", sessionId: "s_1", tenantId: "t_1", userId: "u_1" };
+
+test("new-only mission suppresses owned profile cards and incomplete travel cards", () => {
+  const state: BeamSessionState = {
+    slots: { destination: "Tokyo", month: "August", direction: "lighter/fresh" },
+    mission: { intent: "travel_kit", newCount: 2, destination: "Tokyo", month: "August" },
+  };
+  const ownedProfile: BeamRunEvent = {
+    type: "card",
+    card: { kind: "scent_profile", fragrance: { name: "Silver Mountain Water", brand: "Creed", accords: ["fresh"], owned: true } },
+  };
+  assert.equal(clientEventFitsMission(ownedProfile, state), false);
+
+  const onePick: BeamRunEvent = {
+    type: "card",
+    card: { kind: "travel_kit", ownedPicks: [], newPicks: [{ name: "Wulong Cha", brand: "Nishane", notes: [], accords: ["fresh"] }] },
+  };
+  assert.equal(clientEventFitsMission(onePick, state), false);
+  onePick.card.kind === "travel_kit" && onePick.card.newPicks.push({ name: "Tygar", brand: "Bvlgari", notes: [], accords: ["citrus"] });
+  assert.equal(clientEventFitsMission(onePick, state), true);
+  assert.equal(toolFitsMission("beam_score_candidates", state), false);
+  assert.equal(toolFitsMission("beam_search_catalog", state), true);
+  assert.equal(toolFitsMission("beam_propose_collection", state), false);
+  assert.deepEqual(toolInputForMission("beam_search_catalog", { query: "citrus", excludeOwned: false }, state), {
+    query: "citrus",
+    excludeOwned: true,
+  });
+  assert.match(
+    missionToolResultError("beam_present_travel_kit", { ownedCount: 0, newCount: 1 }, state) ?? "",
+    /required 0 owned and 2 new/i,
+  );
+  assert.equal(
+    missionToolResultError("beam_present_travel_kit", { ownedCount: 0, newCount: 2 }, state),
+    null,
+  );
+});
 
 function wardrobeTool(calls: { input: unknown }[]): BeamToolDefinition {
   return {
@@ -53,7 +95,59 @@ function scriptedModel(responses: ClaudeResponse[]) {
   return { callModel, seen };
 }
 
+test("a response that still fails quality gates is never completed", async () => {
+  const events: BeamRunEvent[] = [];
+  const toolCalls: { input: unknown }[] = [];
+  let completed: string | undefined;
+  let summary: BeamRunSummary | undefined;
+  const { callModel } = scriptedModel([
+    { stop_reason: "tool_use", content: [{ type: "tool_use", id: "tu_1", name: "beam_get_wardrobe", input: {} }] },
+    text("draft"),
+    text("Aventus is $300 everywhere."),
+    text("Aventus costs $250 everywhere."),
+  ]);
+
+  await runBeamAgent({
+    ctx,
+    userMessage: "Recommend something",
+    tools: [wardrobeTool(toolCalls)],
+    emit: (event) => events.push(event),
+    isModelConfigured: () => true,
+    callModel,
+    onComplete: (response) => (completed = response),
+    onSummary: (value) => (summary = value),
+  });
+
+  assert.equal(completed, undefined);
+  assert.equal(events.some((event) => event.type === "completed"), false);
+  assert.ok(events.some((event) => event.type === "failed" && event.code === "quality_gate_failed"));
+  assert.equal(summary?.qualityGatePassed, false);
+  assert.ok(summary?.qualityViolations.includes("price_without_evidence"));
+});
+
 const text = (t: string): ClaudeResponse => ({ stop_reason: "end_turn", content: [{ type: "text", text: t }] });
+
+test("completion waits for transcript persistence before publishing the terminal event", async () => {
+  const events: BeamRunEvent[] = [];
+  let release!: () => void;
+  const persisted = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const run = runBeamAgent({
+    ctx,
+    userMessage: "hello",
+    tools: [],
+    emit: (event) => events.push(event),
+    isModelConfigured: () => true,
+    callModel: async () => text("Hello back."),
+    onComplete: async () => persisted,
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(events.some((event) => event.type === "completed"), false);
+  release();
+  await run;
+  assert.equal(events.some((event) => event.type === "completed"), true);
+});
 
 test("zero-tool opening turn is nudged, then the tool path runs and synthesis writes the final answer", async () => {
   const toolCalls: { input: unknown }[] = [];

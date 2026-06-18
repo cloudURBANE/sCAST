@@ -18,6 +18,7 @@ import { and, asc, eq } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { userFragrancesTable } from "@workspace/db/schema";
 import {
+  rankScentMissionRecommendations,
   sanitizeScentMissionWardrobe,
   sanitizeScentMissionWeather,
   selectScentMissionRecommendation,
@@ -52,6 +53,22 @@ async function loadVault(ctx: BeamRunContext): Promise<ScentMissionWardrobeItem[
       .map((row) => missionItemFromWardrobeRow(row.id, row.fragranceData))
       .filter((item) => item !== null),
   );
+}
+
+async function loadVaultForOwnership(ctx: BeamRunContext): Promise<ScentMissionWardrobeItem[]> {
+  const rows = await db
+    .select({ id: userFragrancesTable.id, fragranceData: userFragrancesTable.fragranceData })
+    .from(userFragrancesTable)
+    .where(and(eq(userFragrancesTable.tenantId, ctx.tenantId), eq(userFragrancesTable.userId, ctx.userId)))
+    .orderBy(asc(userFragrancesTable.createdAt), asc(userFragrancesTable.id));
+  const items: ScentMissionWardrobeItem[] = [];
+  for (const row of rows) {
+    const projected = missionItemFromWardrobeRow(row.id, row.fragranceData);
+    if (!projected) continue;
+    const item = sanitizeScentMissionWardrobe([projected])[0];
+    if (item) items.push(item);
+  }
+  return items;
 }
 
 async function searchCatalogForBeam(query: string, limit: number): Promise<BeamCatalogHit[]> {
@@ -129,6 +146,7 @@ const beamResearchWeb = createBeamResearcher({
 export function createBeamServiceDeps(): BeamToolDeps {
   return {
     loadVault,
+    loadVaultForOwnership,
     loadWardrobePackets,
     searchCatalog: searchCatalogForBeam,
     resolveCatalogEntry: resolveCatalogEntryForBeam,
@@ -136,6 +154,8 @@ export function createBeamServiceDeps(): BeamToolDeps {
     researchWeb: beamResearchWeb,
     scoreVault: (items, calibration, weather) =>
       selectScentMissionRecommendation(items, calibration, weather),
+    rankVault: (items, calibration, weather) =>
+      rankScentMissionRecommendations(items, calibration, weather),
     getWeather: async () => sanitizeScentMissionWeather(undefined),
     // No `enqueueCuration` here: it must bind the run's tenant/user, but these
     // deps are built once at startup with no ctx. Unresolved proposal/kit names

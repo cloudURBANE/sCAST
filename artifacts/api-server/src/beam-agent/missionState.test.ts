@@ -19,6 +19,22 @@ test("parses a travel kit target with owned and new counts", () => {
   assert.equal(state.mission?.newCount, 2);
 });
 
+test("parses a new-only Tokyo request and preserves Fresh as the scoring direction", () => {
+  const first = deriveBeamSessionState(undefined, "I want two new fragrances for a trip to Tokyo in August");
+  const state = deriveBeamSessionState(first, "Fresh");
+
+  assert.equal(state.mission?.intent, "travel_kit");
+  assert.equal(state.mission?.ownedCount, undefined);
+  assert.equal(state.mission?.newCount, 2);
+  assert.equal(state.slots.destination, "Tokyo");
+  assert.equal(state.slots.month, "August");
+  assert.equal(state.slots.direction, "lighter/fresh");
+  const prompt = beamSessionStatePrompt(state);
+  assert.match(prompt, /NEW-ONLY discovery mission/i);
+  assert.match(prompt, /exactly 2 new unowned recommendation/i);
+  assert.match(prompt, /Preserve destination=Tokyo and month=August/i);
+});
+
 test("parses the owned-lane count for 'to bring' phrasing without the noun 'fragrances'", () => {
   const state = deriveBeamSessionState(
     undefined,
@@ -100,5 +116,5 @@ test("formats known slots and mission rules into a prompt clause", () => {
   assert.match(prompt, /Known so far: .*destination=Tokyo/i);
   assert.match(prompt, /month=August/i);
   assert.match(prompt, /ownedCount=2/i);
-  assert.match(prompt, /beam_propose_collection/i);
+  assert.match(prompt, /beam_present_travel_kit/i);
 });

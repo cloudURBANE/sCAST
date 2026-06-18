@@ -136,12 +136,13 @@ test("beam_propose_collection appears only with resolveCatalogEntry and builds a
   );
   const propose = tools.get("beam_propose_collection")!;
   const result = (await propose.handler(
-    { fragrances: [{ name: "Silver Mountain Water", brand: "Creed" }, { name: "Unknown Juice" }] },
+    { fragrances: [{ name: "Aventus", brand: "Creed" }, { name: "Silver Mountain Water", brand: "Creed" }, { name: "Unknown Juice" }] },
     CTX,
-  )) as { proposalId: string; count: number; items: unknown[]; unresolved: string[] };
+  )) as { proposalId: string; count: number; items: unknown[]; unresolved: string[]; excludedOwned: string[] };
 
   assert.equal(result.count, 1);
   assert.equal(result.unresolved.length, 1);
+  assert.deepEqual(result.excludedOwned, ["Creed Aventus"]);
   assert.match(result.proposalId, /^prop_/);
 
   const event = propose.clientEvent?.(result);
@@ -250,15 +251,16 @@ test("beam_present_travel_kit grounds the owned lane and drops un-owned/un-resol
       title: "Tokyo · August",
       // Aventus IS owned; Bleu de Chanel is NOT in the vault → must be dropped from the owned lane.
       owned: [{ name: "Aventus", brand: "Creed" }, { name: "Bleu de Chanel", brand: "Chanel" }],
-      newPicks: [{ name: "Silver Mountain Water", brand: "Creed" }, { name: "Unknown Juice" }],
+      newPicks: [{ name: "Aventus", brand: "Creed" }, { name: "Silver Mountain Water", brand: "Creed" }, { name: "Unknown Juice" }],
     },
     CTX,
-  )) as { resolved: boolean; ownedCount: number; newCount: number; unresolved: string[]; card: { kind: string } };
+  )) as { resolved: boolean; ownedCount: number; newCount: number; unresolved: string[]; excludedOwned: string[]; card: { kind: string } };
 
   assert.equal(result.resolved, true);
   assert.equal(result.ownedCount, 1, "only the genuinely-owned bottle survives the owned lane");
   assert.equal(result.newCount, 1, "only the resolvable new pick survives");
   assert.equal(result.unresolved.length, 1);
+  assert.deepEqual(result.excludedOwned, ["Creed Aventus"]);
 
   const event = kit.clientEvent?.(result);
   assert.ok(event && event.type === "card" && event.card.kind === "travel_kit");
@@ -269,6 +271,31 @@ test("beam_present_travel_kit grounds the owned lane and drops un-owned/un-resol
     assert.equal(event.card.newPicks.length, 1);
     assert.match(event.card.proposalId ?? "", /^prop_/);
   }
+});
+
+test("add-ready tools fail closed when vault ownership cannot be loaded", async () => {
+  const deps = cardDeps();
+  deps.loadVault = async () => { throw new Error("vault unavailable"); };
+  const unavailable = toolMap(deps);
+
+  await assert.rejects(
+    unavailable.get("beam_propose_collection")!.handler({ fragrances: [{ name: "Wulong Cha" }] }, CTX),
+    /vault unavailable/,
+  );
+  await assert.rejects(
+    unavailable.get("beam_present_travel_kit")!.handler({ newPicks: [{ name: "Wulong Cha" }] }, CTX),
+    /vault unavailable/,
+  );
+});
+
+test("beam_present_travel_kit deduplicates repeated new picks", async () => {
+  const kit = toolMap(cardDeps()).get("beam_present_travel_kit")!;
+  const result = (await kit.handler(
+    { newPicks: [{ name: "Silver Mountain Water", brand: "Creed" }, { name: "Silver Mountain Water", brand: "Creed" }] },
+    CTX,
+  )) as { newCount: number; card: { newPicks: unknown[] } };
+  assert.equal(result.newCount, 1);
+  assert.equal(result.card.newPicks.length, 1);
 });
 
 test("beam_get_wardrobe maps the vault to owned packets", async () => {
@@ -313,6 +340,22 @@ test("beam_search_catalog requires a query and honors excludeOwned", async () =>
   const names = filtered.items.map((item) => item.canonicalName);
   assert.ok(!names.includes("Aventus"));
   assert.ok(names.includes("Bleu de Chanel"));
+});
+
+test("owned exclusion uses the uncapped identity view for vaults over 60 items", async () => {
+  const ownershipVault = Array.from({ length: 61 }, (_, index) => ({
+    id: `v${index + 1}`,
+    name: index === 60 ? "Aventus" : `Scent ${index + 1}`,
+    brand: index === 60 ? "Creed" : "House",
+  }));
+  const tools = toolMap(makeDeps({
+    loadVault: async () => ownershipVault.slice(0, 60),
+    loadVaultForOwnership: async () => ownershipVault,
+  }));
+  const result = (await tools.get("beam_search_catalog")!.handler(
+    { query: "creed", excludeOwned: true }, CTX,
+  )) as { items: Array<{ canonicalName: string }> };
+  assert.equal(result.items.some((item) => item.canonicalName === "Aventus"), false);
 });
 
 test("beam_search_catalog clamps the model-supplied limit", async () => {
@@ -420,4 +463,39 @@ test("beam_score_candidates scores against a destination weatherOverride and ech
   assert.equal(result.scoredFor.locationLabel, "Tokyo, June");
   assert.equal(result.scoredFor.usedOverride, true);
   assert.equal(result.scoredFor.weather.temperature_f, 75);
+});
+
+test("travel scoring rejects missing or mismatched destination climate", async () => {
+  const tools = toolMap(makeDeps({ requiredDestinationClimate: { destination: "Tokyo", month: "August" } }));
+  const missing = (await tools.get("beam_score_candidates")!.handler(
+    { destination: "Going Out", locationLabel: "Tokyo, August" }, CTX,
+  )) as { picks: unknown[]; note: string };
+  assert.deepEqual(missing.picks, []);
+  assert.match(missing.note, /destination climate required/i);
+  const mismatched = (await tools.get("beam_score_candidates")!.handler({
+    destination: "Going Out",
+    locationLabel: "Paris, August",
+    weatherOverride: { temperature_f: 75, humidity_percent: 80 },
+  }, CTX)) as { picks: unknown[] };
+  assert.deepEqual(mismatched.picks, []);
+});
+
+test("destination override never inherits unrelated home weather fields", async () => {
+  let scoredWeather: Record<string, unknown> | undefined;
+  const tools = toolMap(makeDeps({
+    getWeather: async () => ({ temperature_f: 95, humidity_percent: 20, condition: "Clear", location: "Forney" }),
+    rankVault: (items, _cal, weather) => {
+      scoredWeather = weather as Record<string, unknown>;
+      return items.map((item) => ({
+        fragranceId: item.id, name: item.name, brand: item.brand,
+        engine: {} as never, reason: "ranked", score: 80,
+      }));
+    },
+  }));
+  await tools.get("beam_score_candidates")!.handler(
+    { destination: "Going Out", locationLabel: "Tokyo", weatherOverride: { humidity_percent: 85 } }, CTX,
+  );
+  assert.equal(scoredWeather?.humidity_percent, 85);
+  assert.equal(scoredWeather?.temperature_f, undefined);
+  assert.equal(scoredWeather?.location, undefined);
 });
