@@ -294,16 +294,18 @@ export function extractAgentCues(text: string): { text: string; cues: string[] }
 }
 
 /** One-line human summary of a tool result for the `tool_completed` event. */
-export function summarizeToolResult(_name: string, result: unknown): string {
+export function summarizeToolResult(name: string, result: unknown): string {
   if (result && typeof result === "object") {
     const record = result as Record<string, unknown>;
     if (Array.isArray(record.sources)) {
       const n = record.sources.length;
       return record.synthesizedFact ? `researched (${n} source(s))` : "no live result";
     }
-    // beam_get_user_context returns a nested vault summary. Surface the size +
-    // dominant families so the progress line reads as grounded ("8 bottles ·
-    // woody, amber") instead of a bare "done".
+    // beam_get_user_context returns a nested vault summary. Surface only the
+    // dominant families here — NOT a count. The taste-profile count and the
+    // wardrobe count come from different reads (profiled vs raw) and showing both
+    // produced a confusing "60 bottles" vs "125 bottles" mismatch in the activity
+    // trail. The vault size belongs to beam_get_wardrobe's line below, once.
     if (record.wardrobeSummary && typeof record.wardrobeSummary === "object") {
       const ws = record.wardrobeSummary as { count?: unknown; topFamilies?: unknown };
       const count = typeof ws.count === "number" ? ws.count : 0;
@@ -311,8 +313,11 @@ export function summarizeToolResult(_name: string, result: unknown): string {
       const families = Array.isArray(ws.topFamilies)
         ? ws.topFamilies.filter((f): f is string => typeof f === "string").slice(0, 2)
         : [];
-      const noun = count === 1 ? "bottle" : "bottles";
-      return families.length > 0 ? `${count} ${noun} · ${families.join(", ")}` : `${count} ${noun}`;
+      return families.length > 0 ? `taste profile · ${families.join(", ")}` : "taste profile";
+    }
+    // The wardrobe loader owns the single authoritative vault count.
+    if (name === "beam_get_wardrobe" && Array.isArray(record.items)) {
+      return `${record.items.length} in your vault`;
     }
     if (Array.isArray(record.items)) return `${record.items.length} result(s)`;
     if (Array.isArray(record.candidates)) return `${record.candidates.length} candidate(s)`;

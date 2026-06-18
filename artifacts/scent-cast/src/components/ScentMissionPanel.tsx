@@ -909,6 +909,12 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   // completions, so the two paths never bleed into each other.
   const beamSessionIdRef = useRef<string | undefined>(undefined);
   const activityIdRef = useRef(0);
+  // Per-run signals used to decide whether the turn's "thinking" recap is worth
+  // keeping on the reply. A pure clarifying-question turn (it offered cue chips
+  // and produced no card/proposal) should NOT carry a developer-style action
+  // recap — that block reads as repetitive/fake when it appears on every turn.
+  const runEmittedCuesRef = useRef(false);
+  const runDeliveredResultRef = useRef(false);
 
   // Desktop click-drag for the cue strip; touch keeps native momentum scroll.
   useDragToScroll(quickReplyScrollRef);
@@ -1235,6 +1241,8 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       // would otherwise linger pinned at the bottom of the scroll, decoupled from
       // the live conversation (the "curated match stuck under the chat" bug).
       activityIdRef.current = 0;
+      runEmittedCuesRef.current = false;
+      runDeliveredResultRef.current = false;
       setActivity([]);
       setAgentSuggestions([]);
       setProposal(null);
@@ -1271,12 +1279,17 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
               setActivity((prev) => completeToolStep(prev, id, event.tool, event.summary));
             } else if (event.type === 'suggestions') {
               // Stored now; rendered as cue chips once the run settles (!busy).
+              if (event.items.length > 0) runEmittedCuesRef.current = true;
               setAgentSuggestions(event.items);
             } else if (event.type === 'proposal') {
               // The agent lined up a collection — surface a confirmation card
               // once the run settles. Nothing is added until the user taps Confirm.
-              if (event.items.length > 0) setProposal({ proposalId: event.proposalId, items: event.items });
+              if (event.items.length > 0) {
+                runDeliveredResultRef.current = true;
+                setProposal({ proposalId: event.proposalId, items: event.items });
+              }
             } else if (event.type === 'card') {
+              runDeliveredResultRef.current = true;
               // The agent surfaced a native UI card (radar / compare / kit board).
               // Drop it into the conversation as its own artifact the moment it
               // arrives, so it reads as "shown, then explained" before the answer.
@@ -1293,8 +1306,9 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
               setAgentMission(event.mission ?? null);
             } else if (event.type === 'message_delta') {
               // Synthesis is streaming the answer — hold a stable phase note
-              // rather than flashing raw partial text.
-              setProgressNote('Writing your recommendation');
+              // rather than flashing raw partial text. Neutral wording because
+              // this same pass also streams clarifying-question turns.
+              setProgressNote('Composing your reply');
             }
           },
         });
@@ -1311,7 +1325,15 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
           );
           const elapsedMs =
             runStartedAtRef.current != null ? Date.now() - runStartedAtRef.current : null;
-          pushAgentText(result.response, { activity: frozenSteps, elapsedMs });
+          // Only keep the per-turn "thinking" recap on turns that actually deliver
+          // a result. A pure clarifying-question turn (offered cue chips, produced
+          // no card/proposal) drops it, so the action trail no longer repeats on
+          // every back-and-forth and reads as developer noise.
+          const isClarifyingTurn = runEmittedCuesRef.current && !runDeliveredResultRef.current;
+          pushAgentText(
+            result.response,
+            isClarifyingTurn ? undefined : { activity: frozenSteps, elapsedMs },
+          );
           return { handled: true };
         }
         // status === 'failed' (model_unavailable, max_turns, agent_error, …):

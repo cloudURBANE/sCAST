@@ -323,7 +323,7 @@ function TravelKitCard({
 
       {card.newPicks.length > 0 ? (
         <section className="mt-3 border-t border-scent-accent/12 pt-2.5">
-          <p className="scent-type-label text-[9px] text-scent-text-subtle">New to pack</p>
+          <p className="scent-type-label text-[9px] text-scent-text-subtle">New to try</p>
           <ul className="mt-1.5 flex flex-col gap-1.5">
             {card.newPicks.map((pick, index) => (
               <li key={`new-${pick.brand}-${pick.name}-${index}`} className="flex min-w-0 items-baseline justify-between gap-3">
@@ -361,7 +361,7 @@ function TravelKitCard({
                 </button>
                 <p className="mt-2 flex items-center gap-1 scent-type-label text-[9px] text-scent-text-subtle">
                   <Check size={11} aria-hidden />
-                  New picks save only when you confirm.
+                  New picks save only when you tap Add to vault.
                 </p>
               </>
             )

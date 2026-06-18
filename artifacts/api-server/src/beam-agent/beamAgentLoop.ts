@@ -114,10 +114,21 @@ Building a collection (e.g. for a trip or an occasion):
 Read the FULL conversation above before asking anything. The user may have already given you trip
 timing, budget, or direction in a prior message — extract it and use it directly. Never re-ask for
 information the user has already provided, even if it appeared several turns back.
-What you need before executing: (a) destination or occasion, (b) timing / season — a month the user
-stated counts; infer "summer" / "humid" / "hot" from a month name if needed, (c) a rough direction
-(lighter/fresh vs. warmer/richer). You may ask AT MOST ONE clarifying question to fill a genuine
-gap. Once you have all three, execute immediately in that same turn:
+What you need before executing: (a) destination or occasion, (b) timing — a stated month OR a stated
+time of day / daypart (e.g. "daytime exploring", "nights out") fully satisfies this; infer
+"summer" / "humid" / "hot" from a month and infer climate from the destination — never ask a second
+timing or season question once either is given, (c) a rough direction — ANY named scent family
+("citrus", "woody", "green"...) or an overall vibe ("artsy", "clean") fully satisfies this; do NOT
+split it into a narrower sub-style follow-up (e.g. "fresh-green vs warm-spicy citrus") — infer a
+balanced reading of the family they named. Ask AT MOST ONE clarifying question, and only to fill a
+genuinely missing one of these three. The MOMENT you have destination/occasion + timing + any
+direction — or the user delegates ("you decide", "recommend now", "surprise me") — stop asking and
+build the kit in that same turn; do not ask anything else first.
+Quality bar: pick fragrances that fit THIS user's vault taste and the specific trip. Avoid defaulting
+to ubiquitous department-store designers (e.g. the most obvious mass-market blue/aquatic) unless you
+name the concrete reason it fits them; prefer at least one distinctive, characterful pick over four
+safe defaults.
+Once you have all three, execute immediately in that same turn:
 1. Ground — beam_get_user_context + beam_get_wardrobe; note dominant families you actually see.
 2. Score vault — beam_score_candidates with weatherOverride for the destination's climate at that
    time of year (not home weather). Pass a locationLabel like "Tokyo, August".
@@ -130,7 +141,8 @@ gap. Once you have all three, execute immediately in that same turn:
    lane, use beam_propose_collection instead.)
 Do NOT ask "shall I go ahead?" after collecting direction — the user's direction answer IS the
 go-ahead. The kit board's new lane is the confirmation surface; after calling it, say you've laid
-the kit out for their review and that the new picks save only when they tap Confirm, then stop.
+the kit out for their review and that the new picks save only when they tap "Add to vault", then stop
+(say "Add to vault" — that is the actual button label; never tell them to "tap Confirm").
 The app saves ONLY what they approve.
 
 Hard rules:
@@ -189,6 +201,11 @@ const SYNTHESIS_NUDGE =
   "- Stay honest about context. Reference ONLY the occasion, place, and weather the user actually " +
   "gave or a tool returned — never invent a city, climate, season, or scenario (e.g. 'cool London " +
   "evenings') they did not mention.\n" +
+  "- Use the concrete scenario they gave. If they described how they'll spend the trip (e.g. " +
+  "walking, transit/trains, temples/gardens/cafes, indoor/outdoor shifts), tie the pick to it — " +
+  "heat-safe freshness, projection that won't crowd people indoors — instead of only 'hot and humid'.\n" +
+  "- Earn each pick. Don't lean on the most obvious mass-market default unless you say why it fits " +
+  "THIS person; a confident, characterful choice beats a safe department-store one.\n" +
   "- Do NOT narrate your process or restate the plan. Never open with 'I'll', 'I will', 'let me', " +
   "'first I', 'here's what I did', or a description of which tools you ran — just give the " +
   "recommendation itself.\n" +
@@ -620,7 +637,9 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
       const outOfTime = Date.now() >= deadline;
       if (usedTools && !opts?.skipSynthesis && !outOfTime) {
         usedSynthesis = true;
-        emit({ type: "status", label: "Writing your recommendation" });
+        // Neutral label: this same synthesis pass also produces clarifying-question
+        // turns, so promising "your recommendation" here mislabeled question turns.
+        emit({ type: "status", label: "Composing your reply" });
         const synthModel = input.synthesisModel ?? input.model;
         const instruction =
           SYNTHESIS_NUDGE +

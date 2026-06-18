@@ -100,13 +100,45 @@ function parseVibe(text: string): string | undefined {
   return found.length > 0 ? found.slice(0, 3).join(", ") : undefined;
 }
 
+/**
+ * Scent-family patterns. Order matters — it fixes the printed direction string
+ * ("citrus, green") so keep citrus → green → aromatic first. Each base tolerates
+ * a trailing "y"/"sy" so the user's adjective form is captured too: the original
+ * `\bcitrus\b` silently missed "citrusy" (the trailing letter breaks the word
+ * boundary), which left the direction slot empty and let the agent keep asking a
+ * "fresh-green vs warm-spicy" follow-up the gates never caught.
+ */
+const FAMILY_PATTERNS: Array<[RegExp, string]> = [
+  [/\bcitrus(?:y)?\b/i, "citrus"],
+  [/\bgreen\b/i, "green"],
+  [/\baromatic\b/i, "aromatic"],
+  [/\bwood(?:y|s|sy)?\b/i, "woody"],
+  [/\bfloral\b/i, "floral"],
+  [/\bfruit(?:y)?\b/i, "fruity"],
+  [/\bspic(?:y|e)\b/i, "spicy"],
+  [/\bsweet\b/i, "sweet"],
+  [/\bgourmand\b/i, "gourmand"],
+  [/\b(?:aquatic|marine|ozonic)\b/i, "aquatic"],
+  [/\bpowder(?:y)?\b/i, "powdery"],
+  [/\bleather(?:y)?\b/i, "leather"],
+  [/\boud\b/i, "oud"],
+  [/\bamber(?:y)?\b/i, "amber"],
+  [/\bvanilla\b/i, "vanilla"],
+  [/\bfoug[eè]re\b/i, "fougère"],
+  [/\bchypre\b/i, "chypre"],
+  [/\bmoss(?:y)?\b/i, "mossy"],
+  [/\bsmok(?:y|e)\b/i, "smoky"],
+  [/\bmusk(?:y)?\b/i, "musk"],
+];
+
 function parseDirection(text: string): string | undefined {
-  const families = ["citrus", "green", "aromatic"].filter((family) =>
-    new RegExp(`\\b${family}\\b`, "i").test(text),
-  );
-  if (families.length > 0) return families.join(", ");
-  if (/\b(?:light|lighter|fresh|airy|bright)\b/i.test(text)) return "lighter/fresh";
-  if (/\b(?:warm|warmer|rich|richer|spicy|amber|vanilla|woody|smoky)\b/i.test(text)) return "warmer/richer";
+  const found: string[] = [];
+  for (const [pattern, label] of FAMILY_PATTERNS) {
+    if (pattern.test(text) && !found.includes(label)) found.push(label);
+  }
+  if (found.length > 0) return found.slice(0, 3).join(", ");
+  if (/\b(?:light|lighter|fresh|airy|bright|clean|crisp)\b/i.test(text)) return "lighter/fresh";
+  if (/\b(?:warm|warmer|rich|richer|cozy|deep)\b/i.test(text)) return "warmer/richer";
   return undefined;
 }
 
@@ -183,7 +215,7 @@ function parseBudget(text: string): string | undefined {
 export function isDelegationPhrase(message: string): boolean {
   const text = message.trim().toLowerCase();
   if (!text) return false;
-  return /\b(?:idk|i\s+don'?t\s+know|you\s+tell\s+me|surprise\s+me|pick\s+for\s+me|choose\s+for\s+me|you\s+decide|your\s+call|dealer'?s\s+choice|whatever\s+you\s+think)\b/i.test(text);
+  return /\b(?:idk|i\s+don'?t\s+know|you\s+tell\s+me|surprise\s+me|pick\s+for\s+me|choose\s+for\s+me|you\s+decide|your\s+call|dealer'?s\s+choice|whatever\s+you\s+think|recommend\s+now|just\s+(?:pick|choose|recommend|decide)|go\s+ahead|make\s+the\s+call|up\s+to\s+you|with\s+what\s+you\s+(?:know|have)|doesn'?t\s+matter)\b/i.test(text);
 }
 
 function parseMissionPatch(text: string, slots: BeamSessionSlots): BeamMissionState | undefined {
