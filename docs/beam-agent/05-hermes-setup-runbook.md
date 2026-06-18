@@ -149,7 +149,18 @@ mcp_servers:
     headers:
       Authorization: "Bearer ${BEAM_AGENT_TOKEN}"
     tools:
-      include: [beam_get_user_context, beam_get_wardrobe, beam_search_catalog, beam_get_fragrance_details, beam_score_candidates, beam_compare_overlap, beam_research_web]
+      include:
+        - beam_get_user_context
+        - beam_get_wardrobe
+        - beam_search_catalog
+        - beam_get_fragrance_details
+        - beam_score_candidates
+        - beam_compare_overlap
+        - beam_research_web
+        - beam_propose_collection
+        - beam_show_scent_profile
+        - beam_compare_fragrances
+        - beam_present_travel_kit
       prompts: false
       resources: false
     timeout: 60

@@ -30,9 +30,9 @@ hermes-beam/
 2. **Skills** — copy each `skills/<name>/` into `~/.hermes/skills/` (Hermes' skills
    directory). Each becomes an on-demand `/<name>` workflow and is auto-selected when
    a request matches.
-3. **Tools** — `config.example.yaml` registers the Beam MCP server and pins Claude as
-   the provider. Hermes exposes the tools as `mcp_beam_<tool>` and chooses them during
-   reasoning.
+3. **Tools** — `config.example.yaml` registers the Beam MCP server and routes the
+   reasoning model through OpenRouter. Hermes exposes the tools as
+   `mcp_beam_<tool>` and chooses them during reasoning.
 
 Full step-by-step (install Hermes on Windows, auth Claude, start the MCP server, wire
 this profile, verify) is in

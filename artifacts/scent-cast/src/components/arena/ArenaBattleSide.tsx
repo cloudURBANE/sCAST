@@ -122,18 +122,19 @@ export const ArenaBattleSide: React.FC<ArenaBattleSideProps> = ({
     >
       <div
         className={[
-          "pointer-events-none absolute inset-x-0 top-0 h-1 bg-scent-accent transition-opacity",
-          selected ? "opacity-80" : "opacity-0",
+          "pointer-events-none absolute inset-x-0 top-0 z-10 h-8 bg-gradient-to-b from-scent-accent/[0.12] to-transparent transition-opacity duration-200",
+          selected ? "opacity-100" : "opacity-0",
         ].join(" ")}
         aria-hidden="true"
-      />
+      >
+        <div className="h-1 bg-scent-accent/85 shadow-[0_0_16px_rgba(212,175,55,0.2)]" />
+      </div>
 
-      {/* Pick marker: a single clean round gold check circle pinned to the
-          top-right of the chosen card — the one unambiguous "this is your pick"
-          cue. Spinner while the vote persists, then a settled check. */}
+      {/* Pick marker: tied into the selected card's gold top rail so the
+          chosen contender reads immediately without adding card height. */}
       {selected ? (
         <span
-          className="absolute right-1.5 top-1.5 z-20 inline-grid h-5 w-5 place-items-center rounded-full bg-scent-accent text-black shadow-[0_0_12px_rgba(212,175,55,0.22)] sm:right-2 sm:top-2 sm:h-6 sm:w-6"
+          className="absolute right-1.5 top-1 z-20 inline-grid h-5 w-5 place-items-center rounded-full border border-black/30 bg-scent-accent text-black shadow-[0_0_14px_rgba(212,175,55,0.28)] sm:right-2 sm:h-6 sm:w-6"
           aria-label={isSaving ? "Saving your pick" : "Your pick"}
         >
           {isSaving ? (
@@ -150,14 +151,14 @@ export const ArenaBattleSide: React.FC<ArenaBattleSideProps> = ({
       ) : null}
 
       <div className="relative z-10 flex w-full flex-col">
-        <div className="mb-1.5 flex min-h-6 items-center justify-center sm:mb-3 sm:min-h-7">
+        <div className="relative mb-1.5 flex min-h-6 items-center justify-center px-6 sm:mb-2.5 sm:min-h-7">
           <span className="inline-flex items-center scent-type-label text-[10px] tracking-[0.1em] text-scent-accent/78 sm:text-[12px] sm:tracking-[0.14em]">
             {`Contender ${contenderLabel}`}
             {selected ? <span className="sr-only">your pick</span> : null}
           </span>
         </div>
 
-        <div className="relative aspect-[1/0.82] w-full overflow-hidden rounded-md bg-black/[0.18] shadow-[inset_0_0_0_1px_rgba(212,175,55,0.08)] sm:aspect-[4/5]">
+        <div className="relative aspect-[1/0.82] w-full overflow-hidden rounded-md bg-black/[0.18] shadow-[inset_0_0_0_1px_rgba(212,175,55,0.08)] sm:aspect-[1/0.88] md:aspect-[1/0.78] lg:aspect-[1/0.72]">
           <div
             className="absolute inset-x-3 bottom-5 h-px bg-gradient-to-r from-transparent via-scent-accent/28 to-transparent sm:inset-x-6 sm:bottom-7"
             aria-hidden="true"
@@ -203,7 +204,7 @@ export const ArenaBattleSide: React.FC<ArenaBattleSideProps> = ({
           </div>
           {/* Name block: fixed two-line height so a 1-line and a 2-line name
               occupy identical vertical space across both contender cards. */}
-          <div className="mt-1 flex min-h-[2.25rem] items-center justify-center sm:min-h-[3.75rem]">
+          <div className="mt-1 flex min-h-[2.25rem] items-center justify-center sm:min-h-[3rem] md:min-h-[3.25rem]">
             <h2 className="line-clamp-2 text-pretty text-balance text-sm font-bold leading-tight text-foreground [overflow-wrap:anywhere] sm:text-xl md:text-2xl">
               {side.name}
             </h2>
@@ -213,9 +214,8 @@ export const ArenaBattleSide: React.FC<ArenaBattleSideProps> = ({
           </p>
         </div>
 
-        {/* Pre-vote: the explicit Vote button. Post-vote there is NO button —
-            the whole card is tappable to switch (the older, cleaner behavior),
-            with the top-right check as the only pick cue. */}
+        {/* Pre-vote keeps the explicit Vote button. After reveal, the whole card
+            remains the switch target so the compact battle layout is preserved. */}
         {!revealed ? (
           <button
             type="button"

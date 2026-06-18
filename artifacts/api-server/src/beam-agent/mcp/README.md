@@ -1,8 +1,8 @@
 # Beam MCP server (Hermes runtime path)
 
-Exposes the existing Phase‑1 **read‑only** Beam tools over the **Model Context
+Exposes the existing no-write Beam tools over the **Model Context
 Protocol** so [Hermes Agent](https://github.com/NousResearch/hermes-agent) — with
-Claude selected as its reasoning model — can call them. This is the "Beam MCP/tool
+OpenRouter selected as its reasoning provider — can call them. This is the "Beam MCP/tool
 service" in the plan's target architecture (§5.1, §6) and the migration path the
 [architecture decision](../../../../../docs/beam-agent/00-architecture-decision.md)
 named: *keep the runtime‑agnostic tool layer; point Hermes at it over MCP.*
@@ -29,8 +29,9 @@ and "never invent a fragrance" guarantees are identical.
 - The server **verifies** the token (HMAC) and derives `tenantId`/`userId`/`scope`
   **from it** — never from tool arguments. The public tool schemas don't even
   accept tenant/user ids.
-- A token only sees/calls the tools its scopes unlock (`SCOPE_TOOL_MAP`). Phase‑1
-  scopes are all read‑only; **no write tool exists.**
+- A token only sees/calls the tools its scopes unlock (`SCOPE_TOOL_MAP`). Current
+  scopes include read tools plus presentation/proposal tools; **no write tool
+  exists.**
 - Stateless transport: each request builds a fresh MCP server bound to its own
   verified context, so requests can't cross‑read scope.
 
@@ -43,7 +44,7 @@ running this server/Hermes. They are never sent to the browser or passed to tool
 # 1) Same env as the API (DATABASE_URL, etc.) + a strong secret:
 export BEAM_AGENT_TOKEN_SECRET="$(openssl rand -hex 32)"
 
-# 2) Mint a read-only owner token (find ids in users/tenants tables):
+# 2) Mint a no-write owner token (find ids in users/tenants tables):
 pnpm --filter @workspace/api-server run beam:mint-token --user <USER_ID> --tenant <TENANT_ID>
 
 # 3) Start the MCP server (bundles to dist-beam/ then runs; binds 127.0.0.1:8848):
@@ -53,8 +54,8 @@ pnpm --filter @workspace/api-server run beam:mcp
 curl -s http://127.0.0.1:8848/healthz
 ```
 
-Then point Hermes at it (HTTP MCP server + bearer token) and pin Claude as the
-provider — full walkthrough in
+Then point Hermes at it (HTTP MCP server + bearer token) and configure OpenRouter —
+full walkthrough in
 [`docs/beam-agent/05-hermes-setup-runbook.md`](../../../../../docs/beam-agent/05-hermes-setup-runbook.md).
 
 ## Before relying on it
@@ -78,6 +79,6 @@ pnpm --filter @workspace/api-server run test   # includes the token + scope unit
 
 ## Not in scope here (later phases)
 
-Writes/proposals/confirmation tokens (Phase 3–4), per‑run tokens minted by the Node
-API for true multi‑user (Phase 5/§12), and a server‑side weather lookup
+Writes/confirmation tokens (Phase 3–4), per‑run tokens minted by the Node API for
+true multi‑user (Phase 5/§12), and a server‑side weather lookup
 (`getWeather` currently returns the engine's seasonal default).
