@@ -12,17 +12,19 @@ function authorInitials(author: CommunityAuthor): string {
 interface CommunityAuthorAvatarProps {
   author: CommunityAuthor;
   /** Comments render a slightly smaller portrait than the post header. */
-  size?: 'lg' | 'md' | 'sm';
+  size?: 'lg' | 'responsive-lg' | 'md' | 'sm';
 }
 
 const SIZE_CLASSES = {
   lg: 'h-16 w-16 sm:h-20 sm:w-20',
+  'responsive-lg': 'h-12 w-12 sm:h-20 sm:w-20',
   md: 'h-12 w-12 sm:h-14 sm:w-14',
   sm: 'h-9 w-9 sm:h-10 sm:w-10',
 } as const;
 
 const FALLBACK_TEXT_CLASSES = {
   lg: 'text-xl sm:text-2xl',
+  'responsive-lg': 'text-base sm:text-2xl',
   md: 'text-base sm:text-lg',
   sm: 'text-sm sm:text-base',
 } as const;
