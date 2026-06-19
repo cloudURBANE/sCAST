@@ -1085,7 +1085,11 @@ function DashboardView() {
               hero. */}
           {!agentActive ? (
             <div className="mt-auto sm:mt-0">
-              <WeeklyOutlookDashboard items={items} weather={weather} />
+              <WeeklyOutlookDashboard
+                items={items}
+                weather={weather}
+                onSelectFragrance={openFragranceDetail}
+              />
             </div>
           ) : null}
         </div>
