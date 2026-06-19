@@ -1093,6 +1093,82 @@ test("regression script: a failed/timeout turn still keeps the derived mission s
   assert.equal(t2State.userDelegatedChoice, true);
 });
 
+test("deterministic loop backtests fulfill the Dallas and Tokyo freeform missions without re-asking", async () => {
+  const scenarios = [
+    {
+      message: "I'm going to a rooftop party in Dallas tonight. It's hot and humid. I want something clean, attractive, and not too loud. I already own Dior Homme Sport Very Cool and Creed Himalaya. Pick one from my collection and one new fragrance to try.",
+      owned: [{ canonicalName: "Dior Homme Sport Very Cool", brand: "Dior", owned: true, score: 91 }],
+      fresh: [{ canonicalName: "Molecule 01 + Mandarin", brand: "Escentric Molecules", owned: false }],
+      answer: "Wear Dior Homme Sport Very Cool from your vault for the humid Dallas rooftop. New to try: Molecule 01 + Mandarin — clean, airy, and restrained enough for the party.",
+      expectedSlots: /occasion=party.*direction=lighter\/fresh.*projection=moderate.*impression=attractive/i,
+    },
+    {
+      message: "I'm planning a Tokyo trip in August. I need two fragrances to take with me and two new ones not in my collection. I want clean, modern, airy, slightly woody scents that work in humidity.",
+      owned: [
+        { canonicalName: "Creed Himalaya", brand: "Creed", owned: true, score: 90 },
+        { canonicalName: "Dior Homme Sport Very Cool", brand: "Dior", owned: true, score: 86 },
+      ],
+      fresh: [
+        { canonicalName: "Wulong Cha", brand: "Nishane", owned: false },
+        { canonicalName: "Molecule 01", brand: "Escentric Molecules", owned: false },
+      ],
+      answer: "Pack Creed Himalaya and Dior Homme Sport Very Cool from your vault. New for Tokyo: Wulong Cha and Molecule 01 — clean, airy woods that suit August humidity.",
+      expectedSlots: /month=August.*destination=Tokyo.*vibe=modern.*direction=lighter\/fresh, woody/i,
+    },
+  ];
+
+  for (const scenario of scenarios) {
+    const state = deriveBeamSessionState(undefined, scenario.message);
+    const toolInputs: Array<{ tool: string; input: unknown }> = [];
+    const tools: BeamToolDefinition[] = [
+      {
+        name: "beam_score_candidates",
+        description: "Rank owned vault bottles",
+        inputSchema: { type: "object", properties: {} },
+        handler: async (input) => {
+          toolInputs.push({ tool: "score", input });
+          return { recommendation: scenario.owned[0], picks: scenario.owned };
+        },
+      },
+      {
+        name: "beam_search_catalog",
+        description: "Search descriptive catalog profiles",
+        inputSchema: { type: "object", properties: {} },
+        handler: async (input) => {
+          toolInputs.push({ tool: "search", input });
+          return { items: scenario.fresh };
+        },
+      },
+    ];
+    const { callModel, seen } = scriptedModel([
+      { stop_reason: "tool_use", content: [{ type: "tool_use", id: "owned", name: "beam_score_candidates", input: {} }] },
+      { stop_reason: "tool_use", content: [{ type: "tool_use", id: "new", name: "beam_search_catalog", input: { query: "clean modern airy woody hot humid", excludeOwned: false } }] },
+      text("draft"),
+      text(scenario.answer),
+    ]);
+    let completed: string | undefined;
+    await runBeamAgent({
+      ctx,
+      userMessage: scenario.message,
+      sessionState: state,
+      tools,
+      emit: () => {},
+      isModelConfigured: () => true,
+      callModel,
+      onComplete: (value) => (completed = value),
+    });
+
+    assert.equal(completed, scenario.answer);
+    assert.match(seen[0]?.system ?? "", scenario.expectedSlots);
+    assert.equal(toolInputs.length, 2);
+    assert.deepEqual(toolInputs[1]?.input, {
+      query: "clean modern airy woody hot humid",
+      excludeOwned: true,
+    });
+    assert.doesNotMatch(completed ?? "", /what|which|where|when|prefer/i);
+  }
+});
+
 test("an unconfigured model fails gracefully with a summary", async () => {
   const events: BeamRunEvent[] = [];
   let summary: BeamRunSummary | undefined;

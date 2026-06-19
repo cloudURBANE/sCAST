@@ -1,6 +1,6 @@
 import { db } from "@workspace/db";
 import { globalFragrancesTable } from "@workspace/db/schema";
-import { eq, or, sql, type SQL } from "drizzle-orm";
+import { asc, eq, or, sql, type SQL } from "drizzle-orm";
 import type { ScentProfile } from "./scentEngine";
 import {
   assertNoPersistedBase64Image,
@@ -17,6 +17,11 @@ import {
 // Brand canonicalization lives in the pure brandAliasCore (unit-tested in
 // isolation); re-exported below to keep catalogService's public API stable.
 import { canonicalizeBrand, brandSpellings } from "./brandAliasCore";
+import {
+  catalogProfileSearchConcepts,
+  catalogProfileSearchTerms,
+  scoreCatalogProfileForQuery,
+} from "./catalogProfileSearch.ts";
 
 export { canonicalizeBrand, brandSpellings };
 
@@ -40,6 +45,7 @@ export type CatalogSearchHit = {
 
 const DEFAULT_CATALOG_MIN_SCORE = 0.82;
 const MAX_CATALOG_CANDIDATES = 24;
+const MAX_PROFILE_CANDIDATES = 96;
 
 export async function getCatalogEntry(brand: string, name: string): Promise<ScentProfile | null> {
   const key = makeLookupKey(brand, name);
@@ -110,6 +116,48 @@ export async function searchCatalogCandidates(
       profile: sanitizeCatalogProfile(row.profileData),
       score: match.score,
     }));
+}
+
+/**
+ * Beam-only descriptive retrieval. Exact identity lookup above intentionally
+ * keeps its strict name/brand confidence gate; this path searches profile JSON
+ * for how users describe scents (notes, accords, family, context, and vectors).
+ */
+export async function searchCatalogProfileCandidates(
+  query: string,
+  options: Pick<CatalogSearchOptions, "limit"> = {},
+): Promise<CatalogSearchHit[]> {
+  const q = sanitizeFragranceQueryInput(query).toLowerCase();
+  if (!q) return [];
+  // Preserve identity semantics when a fragrance name also contains a descriptive
+  // word (for example "Oud Wood" or "Green Tea").
+  const identityHits = await searchCatalogCandidates(query, options);
+  if (identityHits.length > 0) return identityHits;
+  const concepts = catalogProfileSearchConcepts(q);
+  const limit = Math.max(1, Math.min(options.limit ?? 8, 12));
+  const terms = catalogProfileSearchTerms(q);
+  if (concepts.length === 0 && terms.length === 0) return [];
+  // Exclude vector keys: "%fresh%" must not match "freshness" on every row.
+  const profileText = sql`lower((${globalFragrancesTable.profileData} - 'scent_vector')::text)`;
+  const textMatchCount = sql<number>`(${sql.join(
+    terms.map((term) => sql`case when ${profileText} LIKE ${"%" + term + "%"} then 1 else 0 end`),
+    sql` + `,
+  )})`;
+  const rows = await db
+    .select()
+    .from(globalFragrancesTable)
+    .where(or(...terms.map((term) => sql`${profileText} LIKE ${"%" + term + "%"}`)))
+    .orderBy(sql`${textMatchCount} desc`, asc(globalFragrancesTable.lookupKey))
+    .limit(MAX_PROFILE_CANDIDATES);
+
+  return rows
+    .map((row) => {
+      const profile = sanitizeCatalogProfile(row.profileData);
+      return { profile, score: scoreCatalogProfileForQuery(q, profile) };
+    })
+    .filter((hit) => hit.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit);
 }
 
 export async function searchCatalogBrandCandidates(

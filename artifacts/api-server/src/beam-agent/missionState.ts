@@ -45,6 +45,7 @@ const OCCASIONS: Array<[RegExp, string]> = [
   [/\bwedding\b/i, "wedding"],
   [/\bgraduation\b/i, "graduation"],
   [/\bfuneral\b/i, "funeral"],
+  [/\bformal\s+(?:event|occasion)\b/i, "formal event"],
   [/\bbrunch\b/i, "brunch"],
   [/\bdinner(?:\s+party)?\b/i, "dinner"],
   [/\bparty\b/i, "party"],
@@ -65,6 +66,7 @@ const VIBES = [
   "elegant",
   "cozy",
   "beachy",
+  "modern",
 ];
 
 const SLOT_KEYS: BeamSlotKey[] = [
@@ -112,7 +114,7 @@ function cleanCapture(value: string): string {
     // "tokyo. You pick the direction" cuts to "tokyo". Real abbreviations ("St.",
     // "Mt.", "Ft.", "D.C.") keep a ≤2-letter token before the dot and survive.
     .replace(/([A-Za-z]{3,})\.\s+.*$/s, "$1")
-    .replace(/\b(?:in|on|for|with|and|but|so|then|yet|next|this|please|pls)\b.*$/i, "")
+    .replace(/\b(?:in|on|for|with|and|but|so|then|yet|next|this|tonight|today|tomorrow|please|pls)\b.*$/i, "")
     .replace(/[.,!?;:]+$/g, "")
     .trim();
 }
@@ -135,13 +137,20 @@ function parseMonth(text: string): string | undefined {
 
 function parseDestination(text: string): string | undefined {
   const patterns = [
+    /\b(?:party|dinner|brunch|interview|date|graduation|funeral|event|meeting)\s+in\s+([A-Za-z][A-Za-z .'-]{1,50})/i,
     /\b(?:trip|travel(?:ing)?|vacation|visit(?:ing)?|heading|going|flying)\s+(?:to|in|for)\s+([A-Za-z][A-Za-z .'-]{1,50})/i,
+    // Prepositive places are ambiguous ("business trip", "road trip"). Accept
+    // proper-noun phrasing such as "Tokyo trip" rather than storing false state.
+    /\b(?:planning|taking|booking)\s+(?:a\s+)?([A-Z][A-Za-z .'-]{1,40}?)\s+trip\b/,
     /\b(?:destination|city)\s+(?:is|:)\s*([A-Za-z][A-Za-z .'-]{1,50})/i,
   ];
   for (const pattern of patterns) {
     const match = pattern.exec(text);
     const destination = match?.[1] ? cleanCapture(match[1]) : "";
-    if (destination && !/^(a|an|the|my|this)$/i.test(destination)) return destination;
+    const isMonth = MONTHS.some(([monthPattern]) => monthPattern.test(destination));
+    const isOccasion = OCCASIONS.some(([occasionPattern]) => occasionPattern.test(destination));
+    const isRelativeTime = /^(?:(?:a|an|the|this|next|last|one|two|three|four|five)\s+)?(?:morning|afternoon|evening|night|weekend|day|week|month|year)s?$/i.test(destination);
+    if (destination && !isMonth && !isOccasion && !isRelativeTime && !/^(a|an|the|my|this)$/i.test(destination)) return destination;
   }
   return undefined;
 }
@@ -196,21 +205,24 @@ function parseDirection(text: string): string | undefined {
   for (const [pattern, label] of FAMILY_PATTERNS) {
     if (pattern.test(text) && !found.includes(label)) found.push(label);
   }
+  const alreadyFreshFamily = found.some((label) => ["citrus", "green", "tea", "aromatic", "aquatic"].includes(label));
+  if (/\b(?:light|lighter|fresh|airy|bright|clean|crisp)\b/i.test(text) && !alreadyFreshFamily) {
+    found.unshift("lighter/fresh");
+  }
   if (found.length > 0) return found.slice(0, 3).join(", ");
-  if (/\b(?:light|lighter|fresh|airy|bright|clean|crisp)\b/i.test(text)) return "lighter/fresh";
   if (/\b(?:warm|warmer|rich|richer|cozy|deep)\b/i.test(text)) return "warmer/richer";
   return undefined;
 }
 
 function parseProjection(text: string): string | undefined {
-  if (/\b(?:skin[ -]?close|close to (?:the )?skin|intimate|subtle projection)\b/i.test(text)) return "skin-close";
-  if (/\b(?:moderate (?:trail|projection)|office[- ]safe projection)\b/i.test(text)) return "moderate";
+  if (/\b(?:skin[ -]?close|close to (?:the )?skin|intimate|subtle projection|very quiet)\b/i.test(text)) return "skin-close";
+  if (/\b(?:moderate (?:trail|projection)|office[- ]safe projection|not too loud|restrained|controlled projection)\b/i.test(text)) return "moderate";
   if (/\b(?:statement projection|strong projection|project(?:ion)?|beast mode)\b/i.test(text)) return "statement";
   return undefined;
 }
 
 function parseImpression(text: string): string | undefined {
-  const found = ["calm", "focused", "confident", "social"].filter((value) =>
+  const found = ["calm", "focused", "confident", "social", "attractive", "approachable", "polished"].filter((value) =>
     new RegExp(`\\b${value}\\b`, "i").test(text),
   );
   return found.length > 0 ? found.join(", ") : undefined;
@@ -221,7 +233,7 @@ export function inferPendingSlotFromAssistant(text: string): BeamSlotKey | undef
   if (!text.includes("?")) return undefined;
   if (/\b(?:citrus|green|tea|aromatic|scent famil(?:y|ies)|scent direction|direction|lean more|lighter|warmer)\b|\bfresh\b.{0,60}\bwarm(?:th)?\b|\bwarm(?:th)?\b.{0,60}\bfresh\b/i.test(text)) return "direction";
   if (/\b(?:projection|trail|skin[ -]?close|statement)\b/i.test(text)) return "projection";
-  if (/\b(?:occasion|setting|work|date night|first date|night out|staying in|party|dinner|interview|brunch|funeral|graduation|wedding|gym)\b/i.test(text)) return "occasion";
+  if (/\b(?:occasion|setting|work|date night|first date|night out|staying in|party|dinner|interview|brunch|funeral|formal event|graduation|wedding|gym)\b/i.test(text)) return "occasion";
   if (/\b(?:impression|come across|calm|focused|confident|social)\b/i.test(text)) return "impression";
   if (/\b(?:vibe|mood|style|feel)\b/i.test(text)) return "vibe";
   if (/\b(?:budget|spend|price range)\b/i.test(text)) return "budget";

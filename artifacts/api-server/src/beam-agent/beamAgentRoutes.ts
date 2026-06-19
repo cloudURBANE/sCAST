@@ -37,7 +37,7 @@ import { getTenantId } from "../middlewares/tenant";
 import { rateLimitMiddleware } from "../lib/rateLimit";
 import { logger } from "../lib/logger";
 import { missionItemFromWardrobeRow } from "../services/scentMissionService";
-import { searchCatalogCandidates, flattenProfile, getCatalogEntry } from "../services/catalogService";
+import { searchCatalogCandidates, searchCatalogProfileCandidates, flattenProfile, getCatalogEntry } from "../services/catalogService";
 import { getScentFacts } from "../lib/scent-facts/engine";
 import { getBeamUserUsageSince, recordBeamRunUsage } from "../services/apiUsageLedger";
 import { enqueueBeamCuration } from "../services/curationService";
@@ -198,7 +198,7 @@ async function loadWardrobePackets(ctx: BeamRunContext): Promise<CandidatePacket
 }
 
 async function searchCatalogForBeam(query: string, limit: number): Promise<BeamCatalogHit[]> {
-  const hits = await searchCatalogCandidates(query, { limit });
+  const hits = await searchCatalogProfileCandidates(query, { limit });
   return hits.map((hit) => {
     const flat = flattenProfile(hit.profile) as Record<string, unknown>;
     const brand = typeof flat.brand === "string" ? flat.brand : "";

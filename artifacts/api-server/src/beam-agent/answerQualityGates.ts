@@ -114,7 +114,7 @@ function abandonsPendingSlot(
   const patterns: Partial<Record<NonNullable<BeamSessionState["pendingSlot"]>, RegExp>> = {
     direction: VIBE_OR_DIRECTION_REASK,
     projection: /\b(?:projection|trail|skin[ -]?close|moderate|statement)\b/i,
-    occasion: /\b(?:occasion|setting|work|date|night out|staying in|party|dinner|interview|brunch|funeral|graduation|wedding|gym)\b/i,
+    occasion: /\b(?:occasion|setting|work|date|night out|staying in|party|dinner|interview|brunch|funeral|formal event|graduation|wedding|gym)\b/i,
     impression: /\b(?:impression|calm|focused|confident|social|come across)\b/i,
     vibe: VIBE_OR_DIRECTION_REASK,
     budget: /\b(?:budget|spend|price)\b/i,

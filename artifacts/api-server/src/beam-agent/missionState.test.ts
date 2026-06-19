@@ -147,6 +147,16 @@ test("merges later month and vibe into an existing travel mission", () => {
   assert.equal(second.mission?.newCount, 2);
 });
 
+test("trip modifiers do not become destinations while explicit and prepositive places still parse", () => {
+  assert.equal(deriveBeamSessionState(undefined, "I'm planning a business trip to Tokyo in August").slots.destination, "Tokyo");
+  assert.equal(deriveBeamSessionState(undefined, "I'm planning a family trip to Tokyo in August").slots.destination, "Tokyo");
+  assert.equal(deriveBeamSessionState(undefined, "I'm planning a Tokyo trip in August").slots.destination, "Tokyo");
+  assert.equal(deriveBeamSessionState(undefined, "I'm planning a weekend trip").slots.destination, undefined);
+  assert.equal(deriveBeamSessionState(undefined, "I'm taking a road trip").slots.destination, undefined);
+  assert.equal(deriveBeamSessionState(undefined, "I have a meeting in the morning").slots.destination, undefined);
+  assert.equal(deriveBeamSessionState(undefined, "I have a date in two weeks").slots.destination, undefined);
+});
+
 test("an explicit new mission does not inherit stale slots or delegation", () => {
   const first = deriveBeamSessionState(
     undefined,
