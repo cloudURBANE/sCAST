@@ -1093,7 +1093,7 @@ test("regression script: a failed/timeout turn still keeps the derived mission s
   assert.equal(t2State.userDelegatedChoice, true);
 });
 
-test("route-equivalent backtests fulfill the Dallas and Tokyo freeform missions without re-asking", async () => {
+test("deterministic loop backtests fulfill the Dallas and Tokyo freeform missions without re-asking", async () => {
   const scenarios = [
     {
       message: "I'm going to a rooftop party in Dallas tonight. It's hot and humid. I want something clean, attractive, and not too loud. I already own Dior Homme Sport Very Cool and Creed Himalaya. Pick one from my collection and one new fragrance to try.",

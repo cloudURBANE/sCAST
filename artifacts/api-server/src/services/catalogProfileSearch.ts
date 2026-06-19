@@ -73,7 +73,42 @@ const PROFILE_SEARCH_CONCEPTS: ProfileConcept[] = [
     pattern: /\bmodern\b/i,
     terms: ["modern", "clean", "minimal", "contemporary"],
   },
+  { pattern: /\bcitrus(?:y)?\b/i, terms: ["citrus", "bergamot", "lemon", "orange", "grapefruit"] },
+  { pattern: /\b(?:tea|matcha|chai)\b/i, terms: ["tea", "matcha", "chai"] },
+  { pattern: /\bfloral\b/i, terms: ["floral", "rose", "jasmine", "tuberose", "iris"] },
+  { pattern: /\bfruit(?:y)?\b/i, terms: ["fruity", "fruit", "berry", "peach", "apple"] },
+  { pattern: /\b(?:aquatic|marine|ozonic)\b/i, terms: ["aquatic", "marine", "ozonic", "water"] },
+  { pattern: /\bpowder(?:y)?\b/i, terms: ["powder", "powdery", "orris", "iris"] },
+  { pattern: /\bleather(?:y)?\b/i, terms: ["leather", "suede"] },
+  { pattern: /\boud\b/i, terms: ["oud", "agarwood"] },
+  { pattern: /\bamber(?:y)?\b/i, terms: ["amber", "ambery", "resin", "labdanum"] },
+  { pattern: /\bvanilla\b/i, terms: ["vanilla", "vanillic"] },
+  { pattern: /\bfoug[eè]re\b/i, terms: ["fougere", "fougère", "lavender", "coumarin"] },
+  { pattern: /\bchypre\b/i, terms: ["chypre", "oakmoss", "bergamot", "patchouli"] },
+  { pattern: /\bmoss(?:y)?\b/i, terms: ["moss", "mossy", "oakmoss"] },
+  { pattern: /\bsmok(?:y|e)\b/i, terms: ["smoke", "smoky", "incense"] },
+  { pattern: /\b(?:winter|cold)\b/i, terms: ["winter", "cold", "warm", "amber", "spicy"] },
+  { pattern: /\b(?:spring|autumn|fall)\b/i, terms: ["spring", "autumn", "fall", "transitional"] },
+  {
+    pattern: /\b(?:wedding|formal event|formal occasion|graduation|funeral|brunch)\b/i,
+    terms: ["wedding", "formal", "elegant", "graduation", "funeral", "brunch"],
+  },
 ];
+
+const QUERY_STOP_WORDS = new Set([
+  "about", "after", "also", "and", "any", "are", "best", "but", "cologne", "find", "for", "fragrance",
+  "fragrances", "from", "into", "like", "looking", "more", "need", "not", "occasion", "of", "one", "ones",
+  "perfume", "pick", "please", "really", "scent", "scents", "slightly", "smell", "smelling", "something", "that",
+  "the", "these", "this", "those", "too", "try", "very", "want", "wear", "with", "without", "works",
+]);
+
+/** Useful freeform note/family tokens not already represented by a mapped concept. */
+export function catalogProfileQueryTokens(query: string): string[] {
+  const concepts = catalogProfileSearchConcepts(query);
+  return [...new Set(query.toLowerCase().match(/[a-zà-öø-ÿ]{3,}/g) ?? [])]
+    .filter((term) => !QUERY_STOP_WORDS.has(term))
+    .filter((term) => !concepts.some((concept) => concept.pattern.test(term)));
+}
 
 export function catalogProfileSearchConcepts(query: string): ProfileConcept[] {
   return PROFILE_SEARCH_CONCEPTS.filter((concept) =>
@@ -84,7 +119,7 @@ export function catalogProfileSearchConcepts(query: string): ProfileConcept[] {
 export function catalogProfileSearchTerms(query: string): string[] {
   return [
     ...new Set(
-      catalogProfileSearchConcepts(query).flatMap((concept) => concept.terms),
+      [...catalogProfileSearchConcepts(query).flatMap((concept) => concept.terms), ...catalogProfileQueryTokens(query)],
     ),
   ];
 }
@@ -101,8 +136,10 @@ export function scoreCatalogProfileForQuery(
   profile: ScentProfile,
 ): number {
   const concepts = catalogProfileSearchConcepts(query);
-  if (concepts.length === 0) return 0;
+  const queryTokens = catalogProfileQueryTokens(query);
+  if (concepts.length === 0 && queryTokens.length === 0) return 0;
   const document = JSON.stringify({
+    product: profile.product,
     family: profile.family,
     notes: profile.notes,
     pyramid: profile.pyramid,
@@ -118,5 +155,8 @@ export function scoreCatalogProfileForQuery(
       : 0;
     score += Math.max(textMatch ? 0.8 : 0, vectorMatch * 0.6);
   }
-  return Number((score / concepts.length).toFixed(4));
+  for (const term of queryTokens) {
+    if (document.includes(term)) score += 0.8;
+  }
+  return Number((score / (concepts.length + queryTokens.length)).toFixed(4));
 }

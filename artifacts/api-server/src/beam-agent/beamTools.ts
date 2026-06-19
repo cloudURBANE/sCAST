@@ -257,7 +257,7 @@ export function createBeamTools(deps: BeamToolDeps): BeamToolDefinition[] {
     {
       name: "beam_search_catalog",
       description:
-        "Search the local fragrance catalog (global_fragrances) for REAL fragrances by brand/name OR descriptive profile fields including family, notes, accords, context, and scent vector. Queries such as 'clean airy woody for hot humidity' are supported. Returns candidate packets ranked by profile fit. Prefer this over guessing — never invent a fragrance that is not in a result.",
+        "Search the local fragrance catalog (global_fragrances) for REAL fragrances by brand/name or descriptive profile evidence including family, notes, accords, and context; scent vectors rerank text-retrieved candidates. Queries such as 'clean airy woody for hot humidity' are supported. Returns candidate packets ranked by profile fit. Prefer this over guessing — never invent a fragrance that is not in a result.",
       inputSchema: {
         type: "object",
         properties: {

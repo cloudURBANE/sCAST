@@ -20,7 +20,7 @@ import assert from "node:assert/strict";
 import { deriveBeamSessionState, isDelegationPhrase, pendingSlotSatisfiedBy } from "./missionState.ts";
 import { buildSafeClarification, runAnswerQualityGates } from "./answerQualityGates.ts";
 import type { BeamGroundedFragrance, BeamSessionState } from "./types.ts";
-import { scoreCatalogProfileForQuery } from "../services/catalogProfileSearch.ts";
+import { catalogProfileSearchTerms, scoreCatalogProfileForQuery } from "../services/catalogProfileSearch.ts";
 import type { ScentProfile } from "../services/scentEngineCore.ts";
 
 const noEvidence = { hadExternalEvidence: false } as const;
@@ -314,4 +314,22 @@ test("catalog profile ranking understands vibe, weather, accords, family, and sc
   const query = "clean modern airy slightly woody for hot humidity";
   assert.ok(scoreCatalogProfileForQuery(query, airyWoody) > scoreCatalogProfileForQuery(query, denseGourmand));
   assert.ok(scoreCatalogProfileForQuery(query, airyWoody) >= 0.7);
+});
+
+test("catalog profile ranking covers parser-supported families and freeform note terms", () => {
+  const floralLeather = profile({ family: "floral leather", notes: ["rose", "patchouli", "suede"], accords: ["smoky", "mossy"] });
+  const citrusTea = profile({ family: "citrus aromatic", notes: ["bergamot", "green tea"], accords: ["fresh", "ozonic"] });
+
+  assert.ok(scoreCatalogProfileForQuery("floral leather rose patchouli", floralLeather) > 0.7);
+  assert.ok(scoreCatalogProfileForQuery("citrus tea aquatic", citrusTea) > 0.7);
+  assert.ok(catalogProfileSearchTerms("rose patchouli").includes("rose"));
+  assert.ok(catalogProfileSearchTerms("rose patchouli").includes("patchouli"));
+});
+
+test("mixed brand and profile language retains the identity signal", () => {
+  const vector = { freshness: 9, sweetness: 2, woodiness: 6, spice: 2, warmth: 3, musk: 4 };
+  const creedFresh = profile({ product: { name: "Aventus Cologne", brand: "Creed" }, family: "fresh woody", accords: ["citrus", "green"], scent_vector: vector });
+  const otherFresh = profile({ product: { name: "Fresh One", brand: "Other House" }, family: "fresh woody", accords: ["citrus", "green"], scent_vector: vector });
+
+  assert.ok(scoreCatalogProfileForQuery("Creed fresh", creedFresh) > scoreCatalogProfileForQuery("Creed fresh", otherFresh));
 });

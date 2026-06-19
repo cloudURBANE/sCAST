@@ -138,8 +138,10 @@ function parseMonth(text: string): string | undefined {
 function parseDestination(text: string): string | undefined {
   const patterns = [
     /\b(?:party|dinner|brunch|interview|date|graduation|funeral|event|meeting)\s+in\s+([A-Za-z][A-Za-z .'-]{1,50})/i,
-    /\b(?:planning|taking|booking)\s+(?:a\s+)?([A-Za-z][A-Za-z .'-]{1,40}?)\s+trip\b/i,
     /\b(?:trip|travel(?:ing)?|vacation|visit(?:ing)?|heading|going|flying)\s+(?:to|in|for)\s+([A-Za-z][A-Za-z .'-]{1,50})/i,
+    // Prepositive places are ambiguous ("business trip", "road trip"). Accept
+    // proper-noun phrasing such as "Tokyo trip" rather than storing false state.
+    /\b(?:planning|taking|booking)\s+(?:a\s+)?([A-Z][A-Za-z .'-]{1,40}?)\s+trip\b/,
     /\b(?:destination|city)\s+(?:is|:)\s*([A-Za-z][A-Za-z .'-]{1,50})/i,
   ];
   for (const pattern of patterns) {
@@ -147,7 +149,8 @@ function parseDestination(text: string): string | undefined {
     const destination = match?.[1] ? cleanCapture(match[1]) : "";
     const isMonth = MONTHS.some(([monthPattern]) => monthPattern.test(destination));
     const isOccasion = OCCASIONS.some(([occasionPattern]) => occasionPattern.test(destination));
-    if (destination && !isMonth && !isOccasion && !/^(a|an|the|my|this)$/i.test(destination)) return destination;
+    const isRelativeTime = /^(?:(?:a|an|the|this|next|last|one|two|three|four|five)\s+)?(?:morning|afternoon|evening|night|weekend|day|week|month|year)s?$/i.test(destination);
+    if (destination && !isMonth && !isOccasion && !isRelativeTime && !/^(a|an|the|my|this)$/i.test(destination)) return destination;
   }
   return undefined;
 }
