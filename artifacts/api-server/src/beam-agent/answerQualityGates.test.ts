@@ -244,3 +244,23 @@ test("a committed grounded recommendation is not scored as abandoning a pending 
   });
   assert.ok(empty.violations.includes("pending_slot_abandoned"), JSON.stringify(empty.violations));
 });
+
+test("re-asking a KNOWN occasion is flagged as a redundant clarification (the closed gate hole)", () => {
+  const known = { hadExternalEvidence: false, sessionState: { slots: { occasion: "wedding" } } } as const;
+  for (const reAsk of [
+    "What's the occasion you're dressing for?",
+    "Which occasion is this — work or a night out?",
+    "What are you wearing it for?",
+  ]) {
+    const r = runAnswerQualityGates(reAsk, known);
+    assert.ok(r.violations.includes("redundant_clarification"), `"${reAsk}" -> ${r.violations.join(",")}`);
+  }
+  assert.match(repairInstructionFor(["redundant_clarification"]), /occasion/i);
+});
+
+test("an occasion-worded re-ask of a pending occasion slot is not scored as abandonment", () => {
+  const state = { slots: {}, pendingSlot: "occasion", pendingSlotUnanswered: true } as const;
+  const reAsk = "Is this for a party, a dinner, or something more casual?";
+  const r = runAnswerQualityGates(reAsk, { hadExternalEvidence: false, sessionState: state, groundedFragrances: [] });
+  assert.ok(!r.violations.includes("pending_slot_abandoned"), JSON.stringify(r.violations));
+});
