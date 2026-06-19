@@ -382,7 +382,7 @@ const HeroMarquee: React.FC<HeroMarqueeProps> = React.memo(({ phrases }) => {
   }, [phraseKey]);
 
   return (
-    <div className="scent-marquee-band scent-full-bleed w-full overflow-hidden py-[17px] sm:py-[18px] flex select-none relative">
+    <div className="scent-marquee-band scent-full-bleed w-full overflow-hidden py-[11px] sm:py-[12px] flex select-none relative">
       <div ref={trackRef} className="scent-marquee-track-row whitespace-nowrap scent-marquee-text">
         {[...Array(HERO_TRACK_COPIES)].map((_, copyIndex) => (
           <span
@@ -1078,7 +1078,7 @@ function DashboardView() {
                 ref={signatureSectionRef}
                 layout={isMounted ? !reduceMotion : false}
                 transition={vaultContentTransition}
-                className="scent-mission-action-slot mt-3 flex min-h-[60px] justify-center sm:mt-4 sm:min-h-[68px]"
+                className="scent-mission-action-slot mt-3 flex min-h-[52px] justify-center sm:mt-4 sm:min-h-[60px]"
               >
                 <AnimatePresence initial={false} mode="popLayout">
                   {agentActive ? (
@@ -1102,7 +1102,7 @@ function DashboardView() {
                       animate={{ opacity: 1, y: 0 }}
                       exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -4 }}
                       transition={vaultContentTransition}
-                      className="scent-signature-cta group flex h-[60px] w-full max-w-[52rem] items-center justify-center gap-2.5 rounded-full px-6 text-[12px] font-bold uppercase tracking-[0.14em] text-scent-accent focus-visible:outline-none sm:h-[68px] sm:text-[13px]"
+                      className="scent-signature-cta group flex h-[52px] w-full max-w-[52rem] items-center justify-center gap-2.5 rounded-full px-6 text-[12px] font-bold uppercase tracking-[0.14em] text-scent-accent focus-visible:outline-none sm:h-[60px] sm:text-[13px]"
                       aria-label="Discover with Beam Agent"
                       title="Discover with Beam Agent"
                     >

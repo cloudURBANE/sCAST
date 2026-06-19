@@ -250,9 +250,13 @@ const CompactBattlePostCard: React.FC<PostCardProps> = ({
             </p>
           </div>
         </div>
-        <span className="inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 rounded-full border border-scent-accent/38 bg-scent-accent/[0.075] px-3 py-1.5 scent-type-chip text-[10px] text-scent-accent shadow-[inset_0_1px_0_rgba(255,236,183,0.055)] sm:min-h-12 sm:gap-2 sm:px-5 sm:py-2 sm:text-xs">
+        <span
+          role="img"
+          aria-label="Battle"
+          title="Battle"
+          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-scent-accent/38 bg-scent-accent/[0.075] text-scent-accent shadow-[inset_0_1px_0_rgba(255,236,183,0.055)] sm:h-11 sm:w-11"
+        >
           <Swords size={17} strokeWidth={1.75} aria-hidden="true" />
-          Battle
         </span>
       </header>
 
@@ -331,7 +335,7 @@ const CompactBattlePostCard: React.FC<PostCardProps> = ({
         </div>
         <Link
           to="/arena"
-          className="scent-no-mobile-focus-ring inline-flex shrink-0 items-center gap-1.5 rounded-full border border-scent-accent/55 px-4 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-scent-accent transition-colors hover:border-scent-accent/80 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/60 sm:px-5 sm:py-2 sm:text-xs"
+          className="scent-no-mobile-focus-ring inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 rounded-full border border-scent-accent/55 px-4 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-scent-accent transition-colors hover:border-scent-accent/80 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/60 sm:min-h-10 sm:px-5 sm:py-2 sm:text-xs"
         >
           <span>Open arena</span>
           <ArrowRight size={14} strokeWidth={1.8} aria-hidden="true" />

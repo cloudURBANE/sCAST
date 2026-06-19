@@ -117,7 +117,7 @@ export const ArenaBattleSide: React.FC<ArenaBattleSideProps> = ({
       className={[
         "relative flex h-full min-w-0 overflow-hidden rounded-lg bg-[rgba(4,3,2,0.9)] p-2 shadow-[0_22px_50px_-40px_rgba(0,0,0,0.8),inset_0_1px_0_rgba(255,236,183,0.08)] transition-all duration-200 hover:bg-[rgba(8,6,4,0.94)] hover:shadow-[0_34px_80px_-50px_rgba(0,0,0,0.85),inset_0_1px_0_rgba(255,236,183,0.12)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/58 sm:p-3 md:p-4",
         disabled ? "" : "cursor-pointer",
-        selected ? "bg-scent-accent/[0.045]" : "",
+        selected ? "bg-scent-accent/[0.022]" : "",
       ].join(" ")}
     >
       <div className="relative z-10 flex w-full flex-col">
@@ -129,7 +129,7 @@ export const ArenaBattleSide: React.FC<ArenaBattleSideProps> = ({
             clips), so the bottle below never shifts between picked/unpicked and
             the A/B cards stay aligned. Depth comes from inset + hairline shadows
             only — no projected gold glow pooling under the card. */}
-        <div className="relative z-10 mb-1.5 flex min-h-6 items-center justify-center px-6 sm:mb-2.5 sm:min-h-7">
+        <div className="relative z-10 mb-1.5 flex min-h-5 items-center justify-center px-6 sm:mb-2.5 sm:min-h-6">
           {selected ? (
             <span
               aria-hidden="true"

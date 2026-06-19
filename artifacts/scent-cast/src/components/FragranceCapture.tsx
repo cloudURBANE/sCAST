@@ -1245,7 +1245,7 @@ export const FragranceCapture: React.FC<{
               }}
               placeholder={searchFocused ? '' : 'Search by house or fragrance...'}
               aria-label="Look up a brand or fragrance"
-              className="scent-lux-input scent-vault-search-input relative z-0 h-[60px] w-full text-center font-sans text-base font-medium text-[#fff7ec] outline-none transition-colors placeholder:text-scent-text-subtle placeholder:font-medium sm:h-[68px] scroll-mt-28 px-16 sm:px-[4.35rem]"
+              className="scent-lux-input scent-vault-search-input relative z-0 h-[56px] w-full text-center font-sans text-base font-medium text-[#fff7ec] outline-none transition-colors placeholder:text-scent-text-subtle placeholder:font-medium sm:h-[64px] scroll-mt-28 px-16 sm:px-[4.35rem]"
             />
             <motion.button
               type="submit"
