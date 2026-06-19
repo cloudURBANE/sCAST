@@ -122,19 +122,26 @@ function ForecastHero({
             type="button"
             onClick={onSelect ? () => onSelect(pick) : undefined}
             disabled={!onSelect}
-            className="group grid h-full w-full grid-cols-[37%_63%] items-center text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:cursor-default sm:grid-cols-[38%_62%]"
+            className="group grid h-full w-full grid-cols-[40%_60%] items-center text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:cursor-default sm:grid-cols-[38%_62%]"
             aria-label={onSelect ? `Open ${pick.name} by ${pick.brand}` : `${pick.name} by ${pick.brand}`}
           >
-            <BottleImage
-              src={pick.imageUrl}
-              alt={`${pick.brand} ${pick.name}`}
-              variant="featured"
-              adjustment={pick.imageAdjustment}
-              imageProperties={pick.imageProperties}
-              className="h-full min-h-0 w-full [&_.bottle-artboard]:inset-[3%]"
-              imgClassName="transition-transform duration-500 group-hover:scale-[1.025] motion-reduce:transform-none"
-              loading="eager"
-            />
+            {/* Height-driven square slot: every bottle — normalized square or
+                legacy crop — is contained in one identical footprint and seated
+                on the shared bottom baseline, so picks never render at random
+                sizes/positions as the forecast cycles. (A narrow width-driven
+                slot was what let square packshots shrink and float.) */}
+            <div className="flex h-full min-h-0 items-end justify-center">
+              <BottleImage
+                src={pick.imageUrl}
+                alt={`${pick.brand} ${pick.name}`}
+                variant="featured"
+                adjustment={pick.imageAdjustment}
+                imageProperties={pick.imageProperties}
+                className="aspect-square h-full w-auto max-w-full"
+                imgClassName="transition-transform duration-500 group-hover:scale-[1.025] motion-reduce:transform-none"
+                loading="eager"
+              />
+            </div>
             <div className="min-w-0 self-center pb-1 pl-2 pr-1 sm:pl-5">
               <p className="truncate font-serif text-[clamp(1.7rem,7.5vw,3rem)] italic leading-[1.04] text-[#fff7ec]">
                 {pick.brand}
@@ -244,7 +251,12 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
                   onClick={() => go(index)}
                   title={`${dayLabel(plan.day.date)} — ${plan.day.condition ?? 'Forecast'}`}
                   className={`relative flex min-w-0 flex-col items-center py-2 text-[#f1e7da] transition-colors duration-300 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-scent-accent/60 sm:py-4 ${
-                    index > 0 ? 'border-l border-scent-accent/20' : ''
+                    // Divider sits on a cell's left edge. Drop it on the active
+                    // cell AND the cell right after it so the active box never
+                    // doubles up against a divider line (the messy seam).
+                    index > 0 && index !== selected && index !== selected + 1
+                      ? 'border-l border-scent-accent/20'
+                      : ''
                   }`}
                 >
                   {isActive ? (

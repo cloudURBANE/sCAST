@@ -938,7 +938,7 @@ function DashboardView() {
             (no bottom nav) the min-height + auto-margin relax to the original
             stacked rhythm. The Vault of Aromas is no longer part of this screen —
             it lives one scroll down as the "second page". */}
-        <div className="flex min-h-[calc(100svh-var(--topbar-h)-var(--bottomnav-h))] flex-col gap-7 pt-3 sm:min-h-0 sm:gap-28 sm:pt-14">
+        <div className="flex min-h-[calc(100svh-var(--topbar-h)-var(--bottomnav-h)-2.5rem)] flex-col gap-7 pt-3 sm:min-h-0 sm:gap-28 sm:pt-14">
           <HomepageHeroMarquee />
 
           <section className="relative mx-auto w-full max-w-[60rem] min-w-0 text-center">
