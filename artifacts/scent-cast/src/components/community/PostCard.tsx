@@ -191,32 +191,6 @@ const PostActionsFooter: React.FC<{
   </footer>
 );
 
-// One side of the compact battle card. The gold fill behind the name is a
-// showcase of that option's live share of the vote (server-authoritative
-// `post.votes`), so the card reads the current standing at a glance.
-const BattleRatingOption: React.FC<{
-  label: string;
-  count: number;
-  total: number;
-}> = ({ label, count, total }) => {
-  const pct = total > 0 ? Math.round((count / total) * 100) : 0;
-  return (
-    <div className="relative flex min-h-16 w-full min-w-0 flex-col justify-center overflow-hidden rounded-[14px] border border-scent-accent/42 bg-black/70 px-2.5 py-2 text-center shadow-[inset_0_1px_0_rgba(255,236,183,0.06)] sm:min-h-[5.5rem] sm:rounded-[18px] sm:px-5 sm:py-3">
-      <span
-        className="absolute inset-y-0 left-0 bg-scent-accent/15 transition-[width] duration-500 ease-out motion-reduce:transition-none"
-        style={{ width: `${pct}%` }}
-        aria-hidden="true"
-      />
-      <p className="relative z-10 break-words font-serif text-base italic leading-tight text-[#fff7ec] sm:text-2xl">
-        {label}
-      </p>
-      <p className="relative z-10 mt-1 font-mono text-[9px] leading-none text-scent-accent sm:mt-2 sm:text-sm">
-        {total > 0 ? `${pct}% · ${count} ${count === 1 ? 'vote' : 'votes'}` : 'No votes yet'}
-      </p>
-    </div>
-  );
-};
-
 const CompactBattlePostCard: React.FC<PostCardProps> = ({
   post,
   authToken,
@@ -227,10 +201,28 @@ const CompactBattlePostCard: React.FC<PostCardProps> = ({
   const authorName = displayCommunityAuthor(post.author);
   const heading = post.title?.trim() || 'Battle';
   const options = battleOptions(post);
-  const totalVotes = options.reduce(
-    (sum, option) => sum + (post.votes[option] ?? 0),
-    0,
-  );
+  const [optionA, optionB] = options;
+  const votesA = optionA ? post.votes[optionA] ?? 0 : 0;
+  const votesB = optionB ? post.votes[optionB] ?? 0 : 0;
+  const totalVotes = votesA + votesB;
+  const pctA = totalVotes > 0 ? Math.round((votesA / totalVotes) * 100) : 0;
+  const pctB = totalVotes > 0 ? 100 - pctA : 0;
+  // One plain-language line instead of two tall vote panels: who is ahead and by
+  // how much. That is the only "insight" a glanceable battle card needs.
+  const leaderLabel =
+    options.length < 2 || totalVotes === 0 || votesA === votesB
+      ? null
+      : votesA > votesB
+        ? optionA
+        : optionB;
+  const standing =
+    options.length < 2
+      ? null
+      : totalVotes === 0
+        ? 'No votes yet — cast the first'
+        : leaderLabel
+          ? `${leaderLabel} leading · ${Math.max(pctA, pctB)}%`
+          : `Dead heat · ${pctA}% each`;
 
   return (
     <article
@@ -279,30 +271,47 @@ const CompactBattlePostCard: React.FC<PostCardProps> = ({
       </div>
 
       {options.length === 2 ? (
-        <div className="mt-3 grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:mt-6 sm:gap-3">
-          <BattleRatingOption
-            label={options[0]}
-            count={post.votes[options[0]] ?? 0}
-            total={totalVotes}
-          />
-          <div className="flex items-center justify-center" aria-hidden="true">
-            <span className="font-serif text-base italic text-scent-accent sm:text-lg">vs</span>
+        <div className="mx-auto mt-3 w-full max-w-[34rem] sm:mt-5">
+          {/* Quick standing: one proportional bar plus the two names, replacing
+              the pair of tall vote panels. Keeps the matchup glanceable and the
+              card condensed while still showing who is ahead. */}
+          <div
+            className="flex h-2 w-full overflow-hidden rounded-full border border-scent-accent/20 bg-black/60"
+            role="img"
+            aria-label={standing ?? undefined}
+          >
+            <span
+              className="h-full bg-scent-accent/70 transition-[width] duration-500 ease-out motion-reduce:transition-none"
+              style={{ width: `${pctA}%` }}
+            />
+            <span
+              className="h-full bg-scent-accent/20 transition-[width] duration-500 ease-out motion-reduce:transition-none"
+              style={{ width: `${pctB}%` }}
+            />
           </div>
-          <BattleRatingOption
-            label={options[1]}
-            count={post.votes[options[1]] ?? 0}
-            total={totalVotes}
-          />
+          <div className="mt-2 flex items-center justify-between gap-3 font-mono text-[10px] uppercase tracking-[0.08em] text-scent-text-muted sm:text-[11px]">
+            <span className="min-w-0 truncate">{optionA} · {pctA}%</span>
+            <span className="min-w-0 truncate text-right">{optionB} · {pctB}%</span>
+          </div>
         </div>
       ) : null}
 
-      <div className="mt-3 flex justify-center sm:mt-6">
+      {/* Standing + action share one row so "Open arena" reads as the next step
+          from the result instead of a button stranded in the card's middle. */}
+      <div className="mx-auto mt-3 flex w-full max-w-[34rem] items-center justify-between gap-3 sm:mt-4">
+        {standing ? (
+          <p className="min-w-0 truncate scent-type-chip text-[11px] text-[#fff7ec] sm:text-sm">
+            {standing}
+          </p>
+        ) : (
+          <span aria-hidden="true" />
+        )}
         <Link
           to="/arena"
-          className="scent-primary-button scent-no-mobile-focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-scent-accent/72 px-6 py-2 text-[10px] font-bold uppercase tracking-[0.15em] shadow-[inset_0_0_0_2px_rgba(255,236,183,0.12)] sm:min-h-12 sm:gap-2.5 sm:px-8 sm:py-2.5 sm:text-xs sm:tracking-[0.17em]"
+          className="scent-no-mobile-focus-ring inline-flex shrink-0 items-center gap-1.5 rounded-full border border-scent-accent/55 px-4 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-scent-accent transition-colors hover:border-scent-accent/80 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/60 sm:px-5 sm:py-2 sm:text-xs"
         >
           <span>Open arena</span>
-          <ArrowRight size={15} strokeWidth={1.8} aria-hidden="true" />
+          <ArrowRight size={14} strokeWidth={1.8} aria-hidden="true" />
         </Link>
       </div>
 
@@ -338,7 +347,7 @@ const CompactQuestionPostCard: React.FC<PostCardProps> = ({
   return (
     <article
       aria-labelledby={headingId}
-      className="mx-auto w-full max-w-[940px] overflow-hidden rounded-[calc(var(--radius-scent)-2px)] border border-scent-accent/20 bg-[#050403] p-4 text-left sm:p-5"
+      className="mx-auto w-full max-w-[940px] overflow-hidden rounded-[calc(var(--radius-scent)-2px)] border border-scent-accent/34 bg-[#050403] p-4 text-left sm:p-5"
     >
       <header className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
@@ -367,22 +376,22 @@ const CompactQuestionPostCard: React.FC<PostCardProps> = ({
         </span>
       </header>
 
-      <div className="mt-4 min-w-0">
+      <div className="mt-4 min-w-0 text-center">
         <h3
           id={headingId}
-          className="break-words text-balance font-serif text-2xl italic leading-tight text-[#fff7ec] sm:text-3xl"
+          className="mx-auto break-words text-balance font-serif text-2xl italic leading-tight text-[#fff7ec] sm:text-3xl"
         >
           {heading}
         </h3>
         {post.body ? (
-          <p className="mt-2 max-w-2xl whitespace-pre-line break-words text-sm leading-6 text-[#fff7ec]/76 sm:text-[15px]">
+          <p className="mx-auto mt-2 max-w-2xl whitespace-pre-line break-words text-sm leading-6 text-[#fff7ec]/76 sm:text-[15px]">
             {post.body}
           </p>
         ) : null}
       </div>
 
       {post.tags.length > 0 ? (
-        <div className="mt-4 flex min-w-0 flex-wrap gap-2">
+        <div className="mt-4 flex min-w-0 flex-wrap justify-center gap-2">
           {post.tags.slice(0, 4).map((tag) => (
             <span
               key={tag}
@@ -632,7 +641,7 @@ const ScentOfDayPostCard: React.FC<PostCardProps> = ({
   return (
     <article
       aria-labelledby={headingId}
-      className="mx-auto w-full max-w-[940px] overflow-hidden rounded-[calc(var(--radius-scent)+2px)] border border-scent-accent/22 bg-[#050403] p-4 text-left sm:p-5"
+      className="mx-auto w-full max-w-[940px] overflow-hidden rounded-[calc(var(--radius-scent)+2px)] border border-scent-accent/34 bg-[#050403] p-4 text-left sm:p-5"
     >
       <header className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
@@ -787,7 +796,7 @@ const StandardPostCard: React.FC<PostCardProps> = ({
   return (
     <article
       aria-labelledby={headingId}
-      className="mx-auto w-full max-w-[940px] overflow-hidden rounded-[calc(var(--radius-scent)+2px)] border border-scent-accent/24 bg-[#050403] p-4 text-left sm:p-7"
+      className="mx-auto w-full max-w-[940px] overflow-hidden rounded-[calc(var(--radius-scent)+2px)] border border-scent-accent/34 bg-[#050403] p-4 text-left sm:p-7"
     >
       <header className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
         <div className="flex min-w-0 items-center gap-4 sm:gap-5">

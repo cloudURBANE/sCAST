@@ -342,14 +342,14 @@ function completeToolStep(
   ];
 }
 
-const BeamActivityStepRow: React.FC<{ step: BeamActivityStep; calmMotion: boolean }> = ({
+const BeamActivityStepRow: React.FC<{ step: BeamActivityStep; spin: boolean }> = ({
   step,
-  calmMotion,
+  spin,
 }) => (
   <div className="flex items-start gap-2">
     <span className="mt-[2px] flex h-4 w-4 shrink-0 items-center justify-center">
       {step.state === 'active' ? (
-        <Loader2 size={13} className={calmMotion ? '' : 'animate-spin'} aria-hidden />
+        <Loader2 size={13} className={spin ? 'animate-spin' : ''} aria-hidden />
       ) : step.tone === 'error' ? (
         <AlertTriangle size={12} className="text-scent-accent/55" aria-hidden />
       ) : (
@@ -385,11 +385,14 @@ const ACTIVITY_TRAIL_BODY_ID = 'beam-activity-steps';
 const BeamActivityTrail: React.FC<{
   steps: BeamActivityStep[];
   calmMotion: boolean;
+  // Whether the small working spinner rotates. Independent of calmMotion so iPad
+  // keeps a live, moving spinner while still skipping the heavy layout motion.
+  spin: boolean;
   running: boolean;
   expanded: boolean;
   elapsedMs: number | null;
   onToggleExpand: () => void;
-}> = ({ steps, calmMotion, running, expanded, elapsedMs, onToggleExpand }) => {
+}> = ({ steps, calmMotion, spin, running, expanded, elapsedMs, onToggleExpand }) => {
   if (steps.length === 0) return null;
 
   const activeCount = steps.filter((s) => s.state === 'active').length;
@@ -407,7 +410,7 @@ const BeamActivityTrail: React.FC<{
   const body = (
     <div className="mt-2.5 flex flex-col gap-2 border-t border-scent-accent/10 pt-2.5">
       {steps.map((step) => (
-        <BeamActivityStepRow key={step.id} step={step} calmMotion={calmMotion} />
+        <BeamActivityStepRow key={step.id} step={step} spin={spin} />
       ))}
     </div>
   );
@@ -428,7 +431,7 @@ const BeamActivityTrail: React.FC<{
       <div className="flex items-center gap-2">
         <span className="flex h-4 w-4 shrink-0 items-center justify-center">
           {showSpinner ? (
-            <Loader2 size={13} className={calmMotion ? 'text-scent-accent' : 'animate-spin text-scent-accent'} aria-hidden />
+            <Loader2 size={13} className={spin ? 'animate-spin text-scent-accent' : 'text-scent-accent'} aria-hidden />
           ) : (
             <Check size={13} className="text-scent-accent" aria-hidden />
           )}
@@ -828,6 +831,14 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   const reduceMotion = useReducedMotion();
   const ipadPerformanceMode = useRef(isIpadSafariPerformanceMode()).current;
   const calmMotion = Boolean(reduceMotion) || ipadPerformanceMode;
+  // calmMotion drops the heavy layout / spring / reveal transitions on iPad and
+  // for OS reduced-motion. The tiny live-progress affordances — the working
+  // spinner and the "thinking" dots — are a single small rotating/pulsing icon,
+  // negligible on WebKit's compositor. Freezing them under iPad performance mode
+  // made a live Beam run read as a stuck loader that "doesn't move" and then
+  // jumps to the answer. Animate those whenever the OS has not explicitly asked
+  // for reduced motion, independent of iPad performance mode.
+  const liveMotion = !reduceMotion;
 
   const [mission, setMission] = useState<ScentMissionState>(() => createScentMissionState());
   const [messages, setMessages] = useState<PanelMessage[]>(() => [
@@ -2519,6 +2530,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                 <BeamActivityTrail
                   steps={recapSteps ?? []}
                   calmMotion={calmMotion}
+                  spin={liveMotion}
                   running={false}
                   expanded={!!expandedRecaps[message.id]}
                   elapsedMs={message.elapsedMs ?? null}
@@ -2545,12 +2557,13 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                 key="agent-activity"
                 steps={activity}
                 calmMotion={calmMotion}
+                spin={liveMotion}
                 running={busy}
                 expanded={activityExpanded}
                 elapsedMs={null}
                 onToggleExpand={() => setActivityExpanded((v) => !v)}
               />
-            ) : busy && !calmMotion ? (
+            ) : busy && liveMotion ? (
               <motion.div
                 key="agent-typing"
                 initial={{ opacity: 0, y: 8 }}
@@ -2696,7 +2709,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                 {curating.done ? (
                   <Check size={14} className="text-scent-accent" aria-hidden />
                 ) : (
-                  <Loader2 size={14} className={calmMotion ? 'text-scent-accent' : 'animate-spin text-scent-accent'} aria-hidden />
+                  <Loader2 size={14} className={liveMotion ? 'animate-spin text-scent-accent' : 'text-scent-accent'} aria-hidden />
                 )}
                 <span className="scent-type-label text-scent-accent">
                   {curating.done ? 'Collection curated' : 'Curating your collection…'}
