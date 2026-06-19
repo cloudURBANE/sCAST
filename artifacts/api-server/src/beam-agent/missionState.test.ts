@@ -62,6 +62,20 @@ test("parses the owned-lane count for 'to bring' phrasing without the noun 'frag
   assert.equal(state.mission?.newCount, 2);
 });
 
+test("a lone owned-count recommendation is NOT misclassified as a travel kit", () => {
+  // Live QA: "recommend one fragrance from my vault for work" matched the owned-lane
+  // count regex ("one ... from my vault") and was flipped to a travel_kit, routing a
+  // simple recommendation onto the premium lane + travel-kit gates. A lone owned count
+  // with no new lane and no travel/kit word must stay a recommendation.
+  const state = deriveBeamSessionState(undefined, "Recommend one fragrance from my vault for work");
+  assert.equal(state.mission?.intent, "recommendation");
+
+  // An owned-only TRAVEL request still parses as a kit (it carries "trip"/"pack"/etc.).
+  const travel = deriveBeamSessionState(undefined, "Pack me two from my vault for my Tokyo trip");
+  assert.equal(travel.mission?.intent, "travel_kit");
+  assert.equal(travel.mission?.ownedCount, 2);
+});
+
 test("keeps an active scent-direction question unresolved when the user gives an occasion", () => {
   const pending = inferPendingSlotFromAssistant("Should it feel citrusy, green, or aromatic?");
   const state = deriveBeamSessionState(undefined, "Work meeting", pending);
