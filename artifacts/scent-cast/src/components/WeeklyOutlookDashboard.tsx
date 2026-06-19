@@ -105,17 +105,33 @@ function ForecastHero({
   const prefersReducedMotion = useReducedMotion() === true;
   const pick = plan.pick;
   const notes = pick ? fragranceNotes(pick) : [];
+  // Key the transition on the displayed *content* (the pick), not the calendar
+  // day. Consecutive days frequently resolve to the same recommended bottle, and
+  // keying on the date re-mounted BottleImage — re-fetching/decoding the identical
+  // packshot and replaying the slide + skeleton crossfade for content that did not
+  // change. That redundant flash is the worst under fast day-tab tapping. With a
+  // content key, identical-pick navigations stay still (the day-tab highlight still
+  // moves, so the change reads); only a genuine bottle change animates.
+  const contentKey = pick?.id ?? 'empty';
 
   return (
-    <AnimatePresence initial={false} custom={direction} mode="popLayout">
+    // Default (sync) presence — both layers are already `absolute inset-0`, so the
+    // layout-projection cost of `mode="popLayout"` bought nothing here while making
+    // fast clicks stack measured, GPU-promoted bottle layers. A plain crossfade is
+    // lighter and keeps the in/out overlap that reads as a smooth slide.
+    <AnimatePresence initial={false} custom={direction}>
       <motion.div
-        key={plan.day.date}
+        key={contentKey}
         custom={direction}
         initial={{ opacity: 0, x: prefersReducedMotion ? 0 : direction * 22 }}
         animate={{ opacity: 1, x: 0 }}
         exit={{ opacity: 0, x: prefersReducedMotion ? 0 : direction * -22 }}
         transition={{ duration: prefersReducedMotion ? 0.01 : 0.34, ease: CALM_EASE }}
-        className="absolute inset-0"
+        // Match CyclingTilePair: pre-promote to its own compositor layer and pin
+        // will-change so mobile WebKit stops re-promoting/demotion every slide
+        // (the main "non-steady" jitter). motion-safe so reduced-motion users and
+        // the static fallback keep a clean layer with no leftover hints.
+        className="absolute inset-0 motion-safe:[transform:translateZ(0)] motion-safe:[backface-visibility:hidden] motion-safe:[will-change:transform,opacity]"
       >
         {pick ? (
           <button
