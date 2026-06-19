@@ -265,3 +265,16 @@ test("Fast run keeps a partially-set cue and only fills the missing half as a sy
   assert.equal(result.mission.calibration.energy, FAST_FLEXIBLE_ENERGY);
   assert.notEqual(result.mission.calibration.energy, "Confident");
 });
+
+test("Fast run keeps a mood the user set and only fills the missing occasion as a system default", () => {
+  const mission = createScentMissionState();
+  mission.calibration = { energy: "Confident" };
+
+  const result = missionWithDefaultsForFast(mission);
+  assert.equal(result.usedDefaults, true);
+  // The user's real mood is preserved verbatim (the symmetric mirror of the
+  // occasion-only case) — filling the missing half must never overwrite it...
+  assert.equal(result.mission.calibration.energy, "Confident");
+  // ...and the missing occasion is filled with the flexible default.
+  assert.equal(result.mission.calibration.destination, FAST_FLEXIBLE_DESTINATION);
+});
