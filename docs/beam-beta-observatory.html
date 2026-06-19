@@ -1,0 +1,716 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Beam · Beta Observatory</title>
+<!--
+  Beam Beta Observatory — a self-contained, single-file observability console for
+  the Beam concierge while it is in beta. No build step, no external requests, no
+  dependencies: open it directly or serve it from any static host.
+
+  What it does
+  ------------
+  • Master ON/OFF switch drives "live" mode: when ON it polls the cockpit health
+    + the conversation feed on an interval; when OFF everything freezes.
+  • Live-pings the local Beam MCP cockpit /healthz so you can see at a glance
+    whether the runtime is up (real signal against http://127.0.0.1:8848).
+  • Reads a conversation feed you point it at (a JSON array or NDJSON, one
+    conversation per line) via the "Feed" field — drop a real export there and it
+    goes live. Until then it shows clearly-labelled SAMPLE data so the analysis
+    is demonstrable. It NEVER pretends sample data is live.
+  • Renders each conversation as a clean transcript and surfaces, per turn and in
+    aggregate, exactly where Beam is struggling (fallback used, quality gate
+    failed, jargon stripped, no match, slow) — so the beta tells you what to fix.
+  • A semi-live debug log tails every poll: health pings, feed fetches, parse
+    results, and newly-flagged turns.
+
+  Design honours the house rules: gold is used only for text / hairline borders /
+  inset rings; depth comes from neutral black shadows (no projected gold glow
+  pooling under any surface).
+
+  Feed contract (one conversation):
+    {
+      "sessionId": "s_8f1c",         // any stable id
+      "user": "beta-07",             // anonymised label, never a real email
+      "mode": "fast|research|premium",
+      "startedAt": "2026-06-19T17:02:11Z",
+      "turns": [
+        { "role": "user",  "text": "...", "at": "..." },
+        { "role": "agent", "text": "...", "at": "...", "latencyMs": 1840,
+          "lane": "discovery", "tools": ["beam_search_catalog"], "flags": ["fallback_used"] },
+        { "role": "tool",  "text": "beam_search_catalog · 12 results", "at": "..." }
+      ],
+      "outcome": "match|clarify|no_match|abandoned"
+    }
+  Turn flags understood: fallback_used, quality_gate_failed, jargon_stripped,
+  no_match, slow. Conversation-level outcome drives the list badges.
+-->
+<style>
+  :root {
+    --bg: #0b0a08;
+    --bg-2: #121009;
+    --panel: rgba(22, 19, 12, 0.82);
+    --panel-2: rgba(28, 24, 15, 0.7);
+    --ink: #f4ecd8;
+    --ink-soft: #c9bfa6;
+    --ink-mute: #8d836c;
+    --gold: #d4af37;
+    --gold-soft: #e7c96a;
+    --hair: rgba(212, 175, 55, 0.18);
+    --hair-strong: rgba(212, 175, 55, 0.34);
+    --ok: #6fcf97;
+    --warn: #e0a85a;
+    --bad: #e07a5a;
+    --radius: 16px;
+    /* Depth is neutral black only — never a gold projected glow under surfaces. */
+    --depth: 0 18px 44px rgba(0, 0, 0, 0.55);
+    --depth-sm: 0 8px 22px rgba(0, 0, 0, 0.45);
+    --inset: inset 0 1px 0 rgba(255, 236, 183, 0.06);
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, Consolas, monospace;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    font-family: var(--sans);
+    color: var(--ink);
+    background:
+      radial-gradient(1200px 700px at 80% -10%, rgba(212, 175, 55, 0.06), transparent 60%),
+      radial-gradient(900px 600px at -10% 10%, rgba(120, 90, 30, 0.05), transparent 55%),
+      linear-gradient(180deg, var(--bg-2), var(--bg));
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  .wrap { max-width: 1320px; margin: 0 auto; padding: 26px clamp(14px, 3vw, 34px) 60px; }
+
+  /* ---------- Top bar ---------- */
+  header.bar {
+    display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+    padding: 16px 20px;
+    border: 1px solid var(--hair);
+    border-radius: var(--radius);
+    background: linear-gradient(180deg, var(--panel), var(--panel-2));
+    box-shadow: var(--depth), var(--inset);
+  }
+  .brand { display: flex; align-items: center; gap: 13px; min-width: 0; }
+  .mark {
+    width: 38px; height: 38px; border-radius: 11px; flex: none;
+    border: 1px solid var(--hair-strong);
+    background: radial-gradient(120% 120% at 30% 20%, rgba(231, 201, 106, 0.22), rgba(0,0,0,0.4));
+    box-shadow: var(--inset);
+    display: grid; place-items: center;
+    position: relative;
+  }
+  .mark::after {
+    content: ""; width: 9px; height: 9px; border-radius: 50%;
+    background: var(--gold-soft);
+    box-shadow: 0 0 0 4px rgba(212,175,55,0.12);
+  }
+  .brand h1 { font-size: 16px; letter-spacing: 0.02em; margin: 0; font-weight: 600; }
+  .brand p { margin: 2px 0 0; font-size: 11.5px; color: var(--ink-mute); letter-spacing: 0.16em; text-transform: uppercase; }
+
+  .bar-spacer { flex: 1 1 40px; }
+
+  .pill {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 7px 13px; border-radius: 999px;
+    border: 1px solid var(--hair);
+    background: rgba(0, 0, 0, 0.28);
+    font-size: 12px; color: var(--ink-soft); white-space: nowrap;
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-mute); flex: none; }
+  .dot.ok { background: var(--ok); box-shadow: 0 0 0 4px rgba(111,207,151,0.14); }
+  .dot.bad { background: var(--bad); box-shadow: 0 0 0 4px rgba(224,122,90,0.14); }
+  .dot.live { animation: pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+  /* ---------- Master switch ---------- */
+  .switch {
+    display: inline-flex; align-items: center; gap: 12px;
+    padding: 6px 8px 6px 16px; border-radius: 999px;
+    border: 1px solid var(--hair-strong);
+    background: rgba(0,0,0,0.3); box-shadow: var(--inset);
+  }
+  .switch .lbl { font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-soft); }
+  .toggle {
+    --w: 58px; --h: 30px;
+    width: var(--w); height: var(--h); border-radius: 999px; border: 1px solid var(--hair);
+    background: rgba(255,255,255,0.04); position: relative; cursor: pointer; padding: 0;
+    transition: background .28s ease, border-color .28s ease;
+  }
+  .toggle .knob {
+    position: absolute; top: 50%; left: 4px; transform: translateY(-50%);
+    width: calc(var(--h) - 8px); height: calc(var(--h) - 8px); border-radius: 50%;
+    background: linear-gradient(180deg, #fff8e6, #d8c486);
+    box-shadow: var(--depth-sm); transition: left .28s cubic-bezier(.22,1,.36,1);
+  }
+  .toggle[aria-pressed="true"] {
+    background: linear-gradient(180deg, rgba(212,175,55,0.5), rgba(212,175,55,0.28));
+    border-color: var(--hair-strong);
+  }
+  .toggle[aria-pressed="true"] .knob { left: calc(var(--w) - (var(--h) - 8px) - 4px); }
+  .toggle:focus-visible { outline: 2px solid var(--gold-soft); outline-offset: 3px; }
+
+  .field { display: inline-flex; align-items: center; gap: 8px; }
+  .field label { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-mute); }
+  .field input {
+    font: 12.5px var(--mono); color: var(--ink);
+    background: rgba(0,0,0,0.32); border: 1px solid var(--hair); border-radius: 9px;
+    padding: 8px 10px; min-width: 230px;
+  }
+  .field input:focus { outline: none; border-color: var(--hair-strong); }
+  .btn {
+    font: 600 12px var(--sans); letter-spacing: .04em; color: var(--bg);
+    background: linear-gradient(180deg, var(--gold-soft), var(--gold));
+    border: none; border-radius: 9px; padding: 9px 14px; cursor: pointer;
+    box-shadow: var(--depth-sm);
+  }
+  .btn.ghost { background: rgba(0,0,0,0.3); color: var(--ink-soft); border: 1px solid var(--hair); box-shadow: none; }
+  .btn:active { transform: translateY(1px); }
+
+  /* ---------- Layout ---------- */
+  .grid { display: grid; grid-template-columns: 300px minmax(0, 1fr) 340px; gap: 16px; margin-top: 16px; }
+  @media (max-width: 1080px) { .grid { grid-template-columns: 1fr; } }
+
+  .card {
+    border: 1px solid var(--hair); border-radius: var(--radius);
+    background: linear-gradient(180deg, var(--panel), var(--panel-2));
+    box-shadow: var(--depth), var(--inset);
+    display: flex; flex-direction: column; min-height: 0;
+  }
+  .card > .head {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 13px 16px; border-bottom: 1px solid var(--hair);
+  }
+  .card > .head h2 { margin: 0; font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-soft); font-weight: 600; }
+  .card > .head .meta { font-size: 11px; color: var(--ink-mute); font-family: var(--mono); }
+  .card > .body { padding: 12px; overflow: auto; }
+
+  /* ---------- Conversation list ---------- */
+  .conv-list { display: flex; flex-direction: column; gap: 8px; max-height: 70vh; }
+  .conv {
+    text-align: left; cursor: pointer; width: 100%;
+    border: 1px solid var(--hair); border-radius: 12px; padding: 11px 12px;
+    background: rgba(0,0,0,0.26); color: var(--ink);
+    transition: border-color .2s ease, background .2s ease;
+  }
+  .conv:hover { border-color: var(--hair-strong); background: rgba(0,0,0,0.36); }
+  .conv.active { border-color: var(--gold); background: rgba(212,175,55,0.08); }
+  .conv .row1 { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .conv .who { font-size: 13px; font-weight: 600; }
+  .conv .when { font-size: 10.5px; color: var(--ink-mute); font-family: var(--mono); }
+  .conv .snippet { margin: 6px 0 8px; font-size: 12px; color: var(--ink-soft); line-height: 1.4; max-height: 2.8em; overflow: hidden; }
+  .badges { display: flex; flex-wrap: wrap; gap: 5px; }
+  .badge {
+    font-size: 10px; letter-spacing: .03em; padding: 3px 7px; border-radius: 999px;
+    border: 1px solid var(--hair); color: var(--ink-soft); background: rgba(0,0,0,0.3); white-space: nowrap;
+  }
+  .badge.mode { border-color: var(--hair-strong); color: var(--gold-soft); }
+  .badge.ok { color: var(--ok); border-color: rgba(111,207,151,0.3); }
+  .badge.warn { color: var(--warn); border-color: rgba(224,168,90,0.3); }
+  .badge.bad { color: var(--bad); border-color: rgba(224,122,90,0.32); }
+
+  /* ---------- Transcript ---------- */
+  .transcript { display: flex; flex-direction: column; gap: 12px; max-height: 72vh; }
+  .turn { display: flex; flex-direction: column; gap: 5px; }
+  .turn .bubble {
+    border: 1px solid var(--hair); border-radius: 14px; padding: 11px 14px;
+    font-size: 13.5px; line-height: 1.5; max-width: 86%;
+    box-shadow: var(--inset);
+  }
+  .turn.user { align-items: flex-end; }
+  .turn.user .bubble { background: linear-gradient(180deg, rgba(212,175,55,0.16), rgba(212,175,55,0.07)); border-color: var(--hair-strong); }
+  .turn.agent .bubble { background: rgba(255,255,255,0.035); }
+  .turn.tool { align-items: flex-start; }
+  .turn.tool .bubble {
+    background: rgba(0,0,0,0.34); font-family: var(--mono); font-size: 11.5px;
+    color: var(--ink-soft); border-style: dashed; max-width: 92%;
+  }
+  .turn.system .bubble { background: rgba(224,122,90,0.08); border-color: rgba(224,122,90,0.28); font-size: 12.5px; }
+  .turn .meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 10.5px; color: var(--ink-mute); font-family: var(--mono); }
+  .turn.user .meta { justify-content: flex-end; }
+  .turn .role { letter-spacing: .14em; text-transform: uppercase; }
+
+  .empty { padding: 40px 18px; text-align: center; color: var(--ink-mute); font-size: 13px; }
+
+  /* ---------- Insights ---------- */
+  .insights { display: flex; flex-direction: column; gap: 14px; }
+  .metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .metric { border: 1px solid var(--hair); border-radius: 12px; padding: 11px 12px; background: rgba(0,0,0,0.24); }
+  .metric .k { font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-mute); }
+  .metric .v { font-size: 22px; font-weight: 600; margin-top: 4px; }
+  .metric .v small { font-size: 12px; color: var(--ink-mute); font-weight: 400; }
+  .metric.alert .v { color: var(--bad); }
+  .metric.warn .v { color: var(--warn); }
+
+  .bars { display: flex; flex-direction: column; gap: 9px; }
+  .bar-row { display: grid; grid-template-columns: 130px 1fr 38px; gap: 8px; align-items: center; font-size: 11.5px; }
+  .bar-row .lab { color: var(--ink-soft); }
+  .bar-track { height: 8px; border-radius: 999px; background: rgba(0,0,0,0.4); overflow: hidden; border: 1px solid var(--hair); }
+  .bar-fill { height: 100%; background: linear-gradient(90deg, var(--gold), var(--gold-soft)); border-radius: 999px; transition: width .5s cubic-bezier(.22,1,.36,1); }
+  .bar-fill.bad { background: linear-gradient(90deg, #b8543a, var(--bad)); }
+  .bar-row .num { text-align: right; font-family: var(--mono); color: var(--ink-soft); }
+
+  /* ---------- Debug log ---------- */
+  .log-card .body { padding: 0; }
+  .log {
+    font: 11.5px/1.55 var(--mono); color: var(--ink-soft);
+    max-height: 230px; overflow: auto; padding: 12px 14px;
+    background: rgba(0,0,0,0.34);
+  }
+  .log .line { white-space: pre-wrap; word-break: break-word; }
+  .log .t { color: var(--ink-mute); }
+  .log .lv-info { color: var(--ink-soft); }
+  .log .lv-ok { color: var(--ok); }
+  .log .lv-warn { color: var(--warn); }
+  .log .lv-bad { color: var(--bad); }
+  .log .lv-net { color: var(--gold-soft); }
+
+  .note { font-size: 11px; color: var(--ink-mute); margin-top: 14px; text-align: center; line-height: 1.6; }
+  .src-tag { font-family: var(--mono); font-size: 10.5px; padding: 2px 7px; border-radius: 6px; border: 1px solid var(--hair); }
+  .src-tag.sample { color: var(--warn); border-color: rgba(224,168,90,0.3); }
+  .src-tag.live { color: var(--ok); border-color: rgba(111,207,151,0.3); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="bar">
+    <div class="brand">
+      <div class="mark" aria-hidden="true"></div>
+      <div>
+        <h1>Beam · Beta Observatory</h1>
+        <p>Concierge conversation telemetry</p>
+      </div>
+    </div>
+
+    <div class="bar-spacer"></div>
+
+    <span class="pill" title="Live ping to the local Beam MCP cockpit /healthz">
+      <span class="dot" id="cockpitDot"></span>
+      <span id="cockpitText">cockpit · unknown</span>
+    </span>
+
+    <span class="pill">
+      <span class="dot" id="feedDot"></span>
+      <span>feed</span>
+      <span class="src-tag sample" id="srcTag">sample</span>
+    </span>
+
+    <div class="switch">
+      <span class="lbl">Live</span>
+      <button class="toggle" id="liveToggle" role="switch" aria-pressed="false" aria-label="Toggle live mode"><span class="knob"></span></button>
+    </div>
+  </header>
+
+  <div class="bar" style="margin-top:12px; gap:14px;">
+    <div class="field">
+      <label for="feedUrl">Feed</label>
+      <input id="feedUrl" type="text" spellcheck="false" placeholder="./beam-conversations.ndjson or https://…" />
+    </div>
+    <div class="field">
+      <label for="healthUrl">Cockpit</label>
+      <input id="healthUrl" type="text" spellcheck="false" value="http://127.0.0.1:8848/healthz" />
+    </div>
+    <div class="field">
+      <label for="interval">Poll</label>
+      <input id="interval" type="text" spellcheck="false" value="5s" style="min-width:60px" />
+    </div>
+    <button class="btn" id="refreshBtn">Refresh now</button>
+    <button class="btn ghost" id="sampleBtn">Load sample</button>
+  </div>
+
+  <div class="grid">
+    <!-- Conversation list -->
+    <section class="card">
+      <div class="head"><h2>Conversations</h2><span class="meta" id="convCount">0</span></div>
+      <div class="body"><div class="conv-list" id="convList"></div></div>
+    </section>
+
+    <!-- Transcript -->
+    <section class="card">
+      <div class="head"><h2 id="convTitle">Transcript</h2><span class="meta" id="convMeta"></span></div>
+      <div class="body"><div class="transcript" id="transcript"><div class="empty">Select a conversation to read its full transcript.</div></div></div>
+    </section>
+
+    <!-- Insights + debug log -->
+    <aside style="display:flex; flex-direction:column; gap:16px; min-height:0;">
+      <section class="card">
+        <div class="head"><h2>Where to improve</h2><span class="meta" id="insightScope">all</span></div>
+        <div class="body">
+          <div class="insights">
+            <div class="metrics" id="metrics"></div>
+            <div class="bars" id="failBars"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card log-card" style="flex:1 1 auto;">
+        <div class="head">
+          <h2>Debug log</h2>
+          <button class="btn ghost" id="clearLog" style="padding:5px 10px; font-size:11px;">Clear</button>
+        </div>
+        <div class="body" style="padding:0;"><div class="log" id="log"></div></div>
+      </section>
+    </aside>
+  </div>
+
+  <p class="note">
+    Live mode polls the cockpit health and the conversation feed on the chosen interval.
+    Point <b>Feed</b> at a real JSON/NDJSON export to go live — sample data is shown until then and is always labelled as such.
+    Cockpit pings to <code>localhost</code> may be blocked by the browser when this file is opened directly (<code>file://</code>); serve it from the API origin to avoid that.
+  </p>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  /* ----------------------------- sample data ----------------------------- */
+  // Clearly-synthetic beta transcripts that exercise every flag the analysis
+  // surfaces. Replaced wholesale the moment a real feed loads.
+  const SAMPLE = [
+    {
+      sessionId: "s_demo_01", user: "beta-04", mode: "research", outcome: "match",
+      startedAt: iso(-42),
+      turns: [
+        { role: "user", text: "Something for a summer wedding, elegant but not loud.", at: iso(-42) },
+        { role: "agent", text: "Lovely brief — elegant and restrained for warm weather. Are you leaning floral, woody, or fresh?", at: iso(-41), latencyMs: 1420, lane: "discovery", tools: [] },
+        { role: "user", text: "Fresh, maybe a little woody.", at: iso(-40) },
+        { role: "tool", text: "beam_search_catalog · 12 results", at: iso(-40) },
+        { role: "agent", text: "Then I'd reach for a crisp fig-and-cedar signature — bright on top, soft woods underneath, dignified in the heat.", at: iso(-39), latencyMs: 2180, lane: "discovery", tools: ["beam_search_catalog", "beam_get_fragrance_details"] }
+      ]
+    },
+    {
+      sessionId: "s_demo_02", user: "beta-11", mode: "fast", outcome: "clarify",
+      startedAt: iso(-30),
+      turns: [
+        { role: "user", text: "just go", at: iso(-30) },
+        { role: "agent", text: "No occasion or mood set yet — I'll keep this flexible and pull a versatile match for today's air. Tell me the setting or the vibe and I'll sharpen it.", at: iso(-30), latencyMs: 640, lane: "fast", tools: [], flags: ["fallback_used"] }
+      ]
+    },
+    {
+      sessionId: "s_demo_03", user: "beta-02", mode: "research", outcome: "no_match",
+      startedAt: iso(-21),
+      turns: [
+        { role: "user", text: "I want the exact smell of a thunderstorm over wet asphalt in Lagos.", at: iso(-21) },
+        { role: "tool", text: "beam_search_catalog · 0 results", at: iso(-21) },
+        { role: "agent", text: "That's an evocative one. I couldn't find a clean catalog match for that exact petrichor profile — want me to lean on the closest mineral-ozonic options in your vault instead?", at: iso(-20), latencyMs: 5600, lane: "discovery", tools: ["beam_search_catalog"], flags: ["no_match", "slow"] }
+      ]
+    },
+    {
+      sessionId: "s_demo_04", user: "beta-09", mode: "premium", outcome: "abandoned",
+      startedAt: iso(-12),
+      turns: [
+        { role: "user", text: "what's the molecular breakdown of my Aventus", at: iso(-12) },
+        { role: "system", text: "quality_gate_failed — answer withheld; re-asked for one concrete direction.", at: iso(-12), flags: ["quality_gate_failed"] },
+        { role: "agent", text: "I'm not quite ready to commit to that breakdown yet. Tell me what you want it to do — projection, longevity, or a layering idea — and I'll line it up. Your session's saved.", at: iso(-11), latencyMs: 3100, lane: "premium", tools: ["beam_get_fragrance_details"], flags: ["quality_gate_failed"] }
+      ]
+    },
+    {
+      sessionId: "s_demo_05", user: "beta-15", mode: "research", outcome: "match",
+      startedAt: iso(-4),
+      turns: [
+        { role: "user", text: "date night, want to feel confident, something warm", at: iso(-4) },
+        { role: "tool", text: "beam_get_wardrobe · 8 bottles", at: iso(-4) },
+        { role: "agent", text: "Work through the resolution node to execute the match.", at: iso(-4), latencyMs: 900, lane: "discovery", tools: ["beam_get_wardrobe"], flags: ["jargon_stripped"] },
+        { role: "agent", text: "For a warm, confident date-night read I'd start with the amber-vanilla in your vault — close, magnetic, and it blooms as the evening warms up.", at: iso(-3), latencyMs: 1700, lane: "discovery", tools: ["beam_score_wardrobe"] }
+      ]
+    }
+  ];
+
+  function iso(minAgo) { return new Date(Date.now() + minAgo * 60000).toISOString(); }
+
+  const KNOWN_FLAGS = {
+    fallback_used:       { label: "Fallback used",       tone: "warn" },
+    quality_gate_failed: { label: "Quality gate failed", tone: "bad"  },
+    jargon_stripped:     { label: "Jargon stripped",     tone: "bad"  },
+    no_match:            { label: "No match",            tone: "warn" },
+    slow:                { label: "Slow (>4s)",          tone: "warn" }
+  };
+
+  /* ------------------------------- state -------------------------------- */
+  const state = {
+    conversations: [],
+    selected: null,
+    live: false,
+    source: "sample",      // "sample" | "live"
+    timer: null,
+  };
+
+  const $ = (id) => document.getElementById(id);
+  const el = {
+    cockpitDot: $("cockpitDot"), cockpitText: $("cockpitText"),
+    feedDot: $("feedDot"), srcTag: $("srcTag"),
+    liveToggle: $("liveToggle"), feedUrl: $("feedUrl"), healthUrl: $("healthUrl"),
+    interval: $("interval"), refreshBtn: $("refreshBtn"), sampleBtn: $("sampleBtn"),
+    convList: $("convList"), convCount: $("convCount"),
+    convTitle: $("convTitle"), convMeta: $("convMeta"), transcript: $("transcript"),
+    metrics: $("metrics"), failBars: $("failBars"), insightScope: $("insightScope"),
+    log: $("log"), clearLog: $("clearLog"),
+  };
+
+  /* ------------------------------- logging ------------------------------ */
+  function logLine(level, msg) {
+    const t = new Date().toLocaleTimeString([], { hour12: false });
+    const div = document.createElement("div");
+    div.className = "line";
+    div.innerHTML = `<span class="t">${t}</span>  <span class="lv-${level}">${esc(msg)}</span>`;
+    el.log.appendChild(div);
+    // Keep the log bounded so a long beta session never balloons memory.
+    while (el.log.childNodes.length > 400) el.log.removeChild(el.log.firstChild);
+    el.log.scrollTop = el.log.scrollHeight;
+  }
+  function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+
+  /* --------------------------- feed + parsing --------------------------- */
+  function normalizeConversation(raw, i) {
+    const turns = Array.isArray(raw.turns) ? raw.turns.map((t) => ({
+      role: ["user", "agent", "tool", "system"].includes(t.role) ? t.role : "agent",
+      text: String(t.text ?? ""),
+      at: t.at || null,
+      latencyMs: Number.isFinite(t.latencyMs) ? t.latencyMs : null,
+      lane: t.lane || null,
+      tools: Array.isArray(t.tools) ? t.tools : [],
+      flags: (Array.isArray(t.flags) ? t.flags : []).filter((f) => f in KNOWN_FLAGS),
+    })) : [];
+    // A >4s agent turn is implicitly "slow" even if the feed didn't tag it.
+    for (const t of turns) {
+      if (t.role === "agent" && t.latencyMs != null && t.latencyMs > 4000 && !t.flags.includes("slow")) t.flags.push("slow");
+    }
+    return {
+      sessionId: raw.sessionId || `conv_${i}`,
+      user: raw.user || "anon",
+      mode: ["fast", "research", "premium"].includes(raw.mode) ? raw.mode : "research",
+      outcome: ["match", "clarify", "no_match", "abandoned"].includes(raw.outcome) ? raw.outcome : "clarify",
+      startedAt: raw.startedAt || (turns[0] && turns[0].at) || null,
+      turns,
+      get flags() { const s = new Set(); for (const t of turns) for (const f of t.flags) s.add(f); return [...s]; },
+    };
+  }
+
+  function parseFeed(text) {
+    text = text.trim();
+    if (!text) return [];
+    // JSON array first; fall back to NDJSON (one conversation per line).
+    if (text[0] === "[") {
+      const arr = JSON.parse(text);
+      return arr.map(normalizeConversation);
+    }
+    return text.split(/\r?\n/).filter(Boolean).map((line, i) => normalizeConversation(JSON.parse(line), i));
+  }
+
+  async function loadFeed(reason) {
+    const url = el.feedUrl.value.trim();
+    if (!url) { useSample(reason + " (no feed url)"); return; }
+    logLine("net", `GET ${url}  · ${reason}`);
+    try {
+      const res = await fetch(url, { cache: "no-store" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const convs = parseFeed(await res.text());
+      const prevFlagged = countFlaggedTurns(state.conversations);
+      state.conversations = convs;
+      state.source = "live";
+      setSourceTag(true);
+      logLine("ok", `feed loaded · ${convs.length} conversation(s)`);
+      const nowFlagged = countFlaggedTurns(convs);
+      if (nowFlagged > prevFlagged) logLine("warn", `+${nowFlagged - prevFlagged} newly flagged turn(s) since last poll`);
+      render();
+    } catch (e) {
+      logLine("bad", `feed fetch failed: ${e.message} — keeping ${state.source} data`);
+      setSourceTag(state.source === "live");
+    }
+  }
+
+  function countFlaggedTurns(convs) {
+    let n = 0; for (const c of convs) for (const t of c.turns) n += (t.flags ? t.flags.length : 0); return n;
+  }
+
+  function useSample(reason) {
+    state.conversations = SAMPLE.map(normalizeConversation);
+    state.source = "sample";
+    setSourceTag(false);
+    logLine("info", `sample data loaded · ${state.conversations.length} conversation(s)  · ${reason}`);
+    render();
+  }
+
+  function setSourceTag(live) {
+    el.srcTag.textContent = live ? "live" : "sample";
+    el.srcTag.className = "src-tag " + (live ? "live" : "sample");
+    el.feedDot.className = "dot " + (live ? "ok" : "");
+  }
+
+  /* --------------------------- cockpit health --------------------------- */
+  async function pingCockpit() {
+    const url = el.healthUrl.value.trim();
+    if (!url) return;
+    try {
+      const res = await fetch(url, { cache: "no-store" });
+      const body = await res.json().catch(() => ({}));
+      if (res.ok && body.ok) {
+        el.cockpitDot.className = "dot ok" + (state.live ? " live" : "");
+        el.cockpitText.textContent = `cockpit · up · ${body.server || "beam"} ${body.version || ""}`.trim();
+        logLine("ok", `cockpit healthy · ${body.server || "beam"} ${body.version || ""}`.trim());
+      } else {
+        el.cockpitDot.className = "dot bad";
+        el.cockpitText.textContent = `cockpit · degraded (${res.status})`;
+        logLine("warn", `cockpit degraded · HTTP ${res.status}`);
+      }
+    } catch (e) {
+      el.cockpitDot.className = "dot bad";
+      el.cockpitText.textContent = "cockpit · unreachable";
+      logLine("bad", `cockpit ping failed: ${e.message}`);
+    }
+  }
+
+  /* ------------------------------ rendering ----------------------------- */
+  function outcomeBadge(outcome) {
+    const map = { match: ["ok", "match"], clarify: ["", "clarifying"], no_match: ["warn", "no match"], abandoned: ["bad", "abandoned"] };
+    const [tone, label] = map[outcome] || ["", outcome];
+    return `<span class="badge ${tone}">${label}</span>`;
+  }
+
+  function render() {
+    renderList();
+    renderInsights(state.conversations, "all");
+    if (state.selected && !state.conversations.some((c) => c.sessionId === state.selected)) state.selected = null;
+    renderTranscript();
+  }
+
+  function renderList() {
+    el.convCount.textContent = String(state.conversations.length);
+    el.convList.innerHTML = "";
+    if (!state.conversations.length) {
+      el.convList.innerHTML = `<div class="empty">No conversations in feed.</div>`;
+      return;
+    }
+    for (const c of state.conversations) {
+      const firstUser = c.turns.find((t) => t.role === "user");
+      const btn = document.createElement("button");
+      btn.className = "conv" + (c.sessionId === state.selected ? " active" : "");
+      btn.innerHTML = `
+        <div class="row1"><span class="who">${esc(c.user)}</span><span class="when">${fmtWhen(c.startedAt)}</span></div>
+        <div class="snippet">${esc(firstUser ? firstUser.text : "—")}</div>
+        <div class="badges">
+          <span class="badge mode">${esc(c.mode)}</span>
+          ${outcomeBadge(c.outcome)}
+          ${c.flags.map((f) => `<span class="badge ${KNOWN_FLAGS[f].tone}">${KNOWN_FLAGS[f].label}</span>`).join("")}
+        </div>`;
+      btn.addEventListener("click", () => { state.selected = c.sessionId; renderList(); renderTranscript(); });
+      el.convList.appendChild(btn);
+    }
+  }
+
+  function renderTranscript() {
+    const c = state.conversations.find((x) => x.sessionId === state.selected);
+    if (!c) {
+      el.convTitle.textContent = "Transcript";
+      el.convMeta.textContent = "";
+      el.transcript.innerHTML = `<div class="empty">Select a conversation to read its full transcript.</div>`;
+      renderInsights(state.conversations, "all");
+      return;
+    }
+    el.convTitle.textContent = `${c.user} · ${c.mode}`;
+    el.convMeta.textContent = c.sessionId;
+    el.transcript.innerHTML = "";
+    for (const t of c.turns) {
+      const wrap = document.createElement("div");
+      wrap.className = "turn " + t.role;
+      const meta = [];
+      meta.push(`<span class="role">${t.role}</span>`);
+      if (t.lane) meta.push(`lane:${esc(t.lane)}`);
+      if (t.latencyMs != null) meta.push(`${t.latencyMs}ms`);
+      if (t.tools && t.tools.length) meta.push(esc(t.tools.join(" · ")));
+      const flags = (t.flags || []).map((f) => `<span class="badge ${KNOWN_FLAGS[f].tone}">${KNOWN_FLAGS[f].label}</span>`).join(" ");
+      wrap.innerHTML = `<div class="bubble">${esc(t.text)}</div><div class="meta">${meta.join(" · ")} ${flags}</div>`;
+      el.transcript.appendChild(wrap);
+    }
+    renderInsights([c], `${c.user} · ${c.sessionId}`);
+  }
+
+  function renderInsights(convs, scopeLabel) {
+    el.insightScope.textContent = scopeLabel;
+    const total = convs.length;
+    const agentTurns = convs.flatMap((c) => c.turns.filter((t) => t.role === "agent"));
+    const lat = agentTurns.map((t) => t.latencyMs).filter((x) => x != null);
+    const avgLat = lat.length ? Math.round(lat.reduce((a, b) => a + b, 0) / lat.length) : null;
+    const outcome = (k) => convs.filter((c) => c.outcome === k).length;
+    const matchRate = total ? Math.round((outcome("match") / total) * 100) : 0;
+
+    const m = [
+      { k: "Conversations", v: String(total), cls: "" },
+      { k: "Match rate", v: `${matchRate}<small>%</small>`, cls: matchRate < 50 ? "warn" : "" },
+      { k: "Avg reply", v: avgLat == null ? "—" : `${(avgLat / 1000).toFixed(1)}<small>s</small>`, cls: avgLat != null && avgLat > 4000 ? "alert" : avgLat != null && avgLat > 2500 ? "warn" : "" },
+      { k: "Abandoned", v: String(outcome("abandoned")), cls: outcome("abandoned") > 0 ? "alert" : "" },
+    ];
+    el.metrics.innerHTML = m.map((x) => `<div class="metric ${x.cls}"><div class="k">${x.k}</div><div class="v">${x.v}</div></div>`).join("");
+
+    // Per-flag incidence across conversations (how often each failure shows up).
+    const counts = {}; for (const f in KNOWN_FLAGS) counts[f] = 0;
+    for (const c of convs) for (const f of c.flags) counts[f]++;
+    const rows = Object.keys(KNOWN_FLAGS).map((f) => {
+      const n = counts[f]; const pct = total ? Math.round((n / total) * 100) : 0;
+      return `<div class="bar-row">
+        <span class="lab">${KNOWN_FLAGS[f].label}</span>
+        <span class="bar-track"><span class="bar-fill ${KNOWN_FLAGS[f].tone === "bad" ? "bad" : ""}" style="width:${pct}%"></span></span>
+        <span class="num">${n}</span></div>`;
+    });
+    el.failBars.innerHTML = rows.join("");
+  }
+
+  function fmtWhen(iso) {
+    if (!iso) return "—";
+    const d = new Date(iso); const mins = Math.round((Date.now() - d.getTime()) / 60000);
+    if (Number.isNaN(mins)) return "—";
+    if (mins < 1) return "just now";
+    if (mins < 60) return `${mins}m ago`;
+    if (mins < 1440) return `${Math.round(mins / 60)}h ago`;
+    return d.toLocaleDateString();
+  }
+
+  /* ------------------------------ live loop ----------------------------- */
+  function parseInterval(v) {
+    const m = String(v).trim().match(/^(\d+)\s*(ms|s|m)?$/i);
+    if (!m) return 5000;
+    const n = Number(m[1]); const u = (m[2] || "s").toLowerCase();
+    const ms = u === "ms" ? n : u === "m" ? n * 60000 : n * 1000;
+    return Math.max(1000, ms);
+  }
+
+  async function poll(reason) {
+    await Promise.all([pingCockpit(), loadFeed(reason)]);
+  }
+
+  function setLive(on) {
+    state.live = on;
+    el.liveToggle.setAttribute("aria-pressed", String(on));
+    if (state.timer) { clearInterval(state.timer); state.timer = null; }
+    if (on) {
+      const ms = parseInterval(el.interval.value);
+      logLine("info", `live mode ON · polling every ${ms}ms`);
+      poll("live tick");
+      state.timer = setInterval(() => poll("live tick"), ms);
+    } else {
+      el.cockpitDot.className = el.cockpitDot.className.replace(" live", "");
+      logLine("info", "live mode OFF · polling stopped");
+    }
+  }
+
+  /* ------------------------------- wiring ------------------------------- */
+  el.liveToggle.addEventListener("click", () => setLive(!state.live));
+  el.refreshBtn.addEventListener("click", () => poll("manual refresh"));
+  el.sampleBtn.addEventListener("click", () => useSample("manual"));
+  el.clearLog.addEventListener("click", () => { el.log.innerHTML = ""; logLine("info", "log cleared"); });
+  el.interval.addEventListener("change", () => { if (state.live) setLive(true); });
+
+  logLine("info", "Beam Beta Observatory ready. Toggle Live to begin polling.");
+  useSample("startup");
+})();
+</script>
+</body>
+</html>
