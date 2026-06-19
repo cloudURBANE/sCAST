@@ -90,3 +90,6 @@ supabase-clean-backup-*/
 
 # Supabase CLI local metadata (linked project, versions)
 supabase/.temp/
+
+# agent-run.mjs local command logs (never commit; keep .agent/config.json tracked)
+.agent/runs/
