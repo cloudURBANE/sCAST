@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { mapOpenMeteoWeather, openMeteoWeatherCode } from "./weatherService.ts";
+import {
+  composeCityLabel,
+  mapOpenMeteoWeather,
+  mapOwmDailyForecast,
+  openMeteoWeatherCode,
+} from "./weatherServiceCore.ts";
 
 test("maps WMO weather codes into the dashboard icon contract", () => {
   assert.deepEqual(openMeteoWeatherCode(0), { condition: "clear sky", icon: "01d" });
@@ -47,9 +52,38 @@ test("normalizes Open-Meteo current conditions and seven-day columns", () => {
       uv_index: 7.65,
     }],
     isLive: true,
+    provider: "open-meteo",
   });
 });
 
 test("rejects incomplete current conditions", () => {
   assert.equal(mapOpenMeteoWeather({ current: { temperature_2m: 70 } }), null);
+});
+
+test("resolves a precise US locality instead of the timezone city", () => {
+  // The bug: Open-Meteo reports timezone "America/Chicago" for Forney, TX, so the
+  // dashboard showed "Chicago". The Geo lookup yields the real locality label.
+  assert.equal(composeCityLabel("Forney", "Texas", "US"), "Forney, Texas");
+  assert.equal(composeCityLabel("London", "England", "GB"), "London");
+  assert.equal(composeCityLabel("", "Texas", "US"), null);
+  assert.equal(composeCityLabel(null, null, null), null);
+});
+
+test("maps OpenWeatherMap daily forecast into the SPA shape", () => {
+  const forecast = mapOwmDailyForecast([
+    {
+      dt: 1_750_000_000,
+      temp: { max: 88.2, min: 70.1, day: 80.4 },
+      humidity: 55,
+      uvi: 8.1,
+      weather: [{ description: "scattered clouds", icon: "03d" }],
+    },
+  ]);
+  assert.equal(forecast.length, 1);
+  assert.equal(forecast[0].high, 88.2);
+  assert.equal(forecast[0].low, 70.1);
+  assert.equal(forecast[0].condition, "scattered clouds");
+  assert.equal(forecast[0].icon, "03d");
+  assert.equal(forecast[0].uv_index, 8.1);
+  assert.match(forecast[0].date, /T12:00:00$/);
 });
