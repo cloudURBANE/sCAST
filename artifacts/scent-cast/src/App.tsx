@@ -28,6 +28,7 @@ import { SEO } from './components/SEO';
 import { loadRouteChunk } from '@/lib/routeChunkRecovery';
 import { initWebVitals, vaultSizeBucket } from '@/lib/webVitalsTelemetry';
 import { FragranceCapture } from './components/FragranceCapture';
+import { WeeklyForecastDashboard } from './components/WeeklyForecastDashboard';
 
 const Wardrobe = React.lazy(() =>
   loadRouteChunk(() => import('./components/Wardrobe').then((module) => ({ default: module.Wardrobe }))),
@@ -1071,7 +1072,15 @@ function DashboardView() {
 
           {!agentActive ? <HomepageAtmosphereChrome /> : null}
 
-          <div id="scent-vault-section" className="scent-deferred-section !mt-64 sm:!mt-72 lg:!mt-96" style={{ scrollMarginTop: 'var(--topbar-h)' }}>
+          {/* Weekly scent forecast — a centered "weather map" that recommends a
+              wardrobe pick for each day. It fills the breathing room above the
+              vault (which now starts further down, below the mobile fold) and
+              gives the first scroll a useful, on-brand surface. */}
+          {!agentActive ? (
+            <WeeklyForecastDashboard items={items} onSelectFragrance={openFragranceDetail} />
+          ) : null}
+
+          <div id="scent-vault-section" className="scent-deferred-section !mt-24 sm:!mt-32 lg:!mt-40" style={{ scrollMarginTop: 'var(--topbar-h)' }}>
             <React.Suspense fallback={<WardrobeFallback />}>
               <Wardrobe
                 items={items}
