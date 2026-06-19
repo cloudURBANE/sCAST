@@ -6,6 +6,7 @@ import {
   Bot,
   ChevronDown,
   ChevronUp,
+  Crown,
   FlaskConical,
   MessageCircle,
   MessageCircleQuestion,
@@ -271,41 +272,48 @@ const CompactBattlePostCard: React.FC<PostCardProps> = ({
       </div>
 
       {options.length === 2 ? (
-        <div className="mx-auto mt-3 w-full max-w-[34rem] sm:mt-5">
-          {/* Quick standing: one proportional bar plus the two names, replacing
-              the pair of tall vote panels. Keeps the matchup glanceable and the
-              card condensed while still showing who is ahead. */}
-          <div
-            className="flex h-2 w-full overflow-hidden rounded-full border border-scent-accent/20 bg-black/60"
-            role="img"
-            aria-label={standing ?? undefined}
-          >
-            <span
-              className="h-full bg-scent-accent/70 transition-[width] duration-500 ease-out motion-reduce:transition-none"
-              style={{ width: `${pctA}%` }}
-            />
-            <span
-              className="h-full bg-scent-accent/20 transition-[width] duration-500 ease-out motion-reduce:transition-none"
-              style={{ width: `${pctB}%` }}
-            />
-          </div>
-          <div className="mt-2 flex items-center justify-between gap-3 font-mono text-[10px] uppercase tracking-[0.08em] text-scent-text-muted sm:text-[11px]">
-            <span className="min-w-0 truncate">{optionA} · {pctA}%</span>
-            <span className="min-w-0 truncate text-right">{optionB} · {pctB}%</span>
-          </div>
+        <div className="mx-auto mt-4 w-full max-w-[34rem] sm:mt-5">
+          {leaderLabel ? (
+            // Winner-only standing: the card surfaces just the fragrance that is
+            // ahead — its name ONCE, with its share — instead of listing both
+            // contenders and then repeating the leader in a separate gist line
+            // (which read as the same name twice). The full head-to-head with
+            // both names + vote buttons lives in the arena.
+            <div className="flex flex-col items-center gap-2.5 text-center">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-scent-accent/40 bg-scent-accent/[0.08] px-3 py-1 scent-type-chip text-[10px] uppercase tracking-[0.14em] text-scent-accent">
+                <Crown size={13} strokeWidth={1.8} aria-hidden="true" />
+                Leading
+              </span>
+              <p className="min-w-0 max-w-full break-words font-serif text-xl italic leading-tight text-[#fff7ec] sm:text-2xl">
+                {leaderLabel}
+              </p>
+              <div
+                className="flex h-2 w-full max-w-[20rem] overflow-hidden rounded-full border border-scent-accent/20 bg-black/60"
+                role="img"
+                aria-label={standing ?? undefined}
+              >
+                <span
+                  className="h-full bg-scent-accent/70 transition-[width] duration-500 ease-out motion-reduce:transition-none"
+                  style={{ width: `${Math.max(pctA, pctB)}%` }}
+                />
+              </div>
+              <p className="font-mono text-[10px] uppercase tracking-[0.1em] text-scent-accent sm:text-[11px]">
+                {Math.max(pctA, pctB)}% · {totalVotes} {totalVotes === 1 ? 'vote' : 'votes'}
+              </p>
+            </div>
+          ) : (
+            // No clear winner yet (dead heat or no votes): a single quiet line,
+            // never the contender names.
+            <p className="text-center scent-type-chip text-[11px] text-[#fff7ec] sm:text-sm">
+              {standing}
+            </p>
+          )}
         </div>
       ) : null}
 
-      {/* Standing + action share one row so "Open arena" reads as the next step
-          from the result instead of a button stranded in the card's middle. */}
-      <div className="mx-auto mt-3 flex w-full max-w-[34rem] items-center justify-between gap-3 sm:mt-4">
-        {standing ? (
-          <p className="min-w-0 truncate scent-type-chip text-[11px] text-[#fff7ec] sm:text-sm">
-            {standing}
-          </p>
-        ) : (
-          <span aria-hidden="true" />
-        )}
+      {/* "Open arena" reads as the next step from the result. Centered on its own
+          row now that the standing lives in the winner block above. */}
+      <div className="mx-auto mt-4 flex w-full max-w-[34rem] justify-center sm:mt-5">
         <Link
           to="/arena"
           className="scent-no-mobile-focus-ring inline-flex shrink-0 items-center gap-1.5 rounded-full border border-scent-accent/55 px-4 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-scent-accent transition-colors hover:border-scent-accent/80 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/60 sm:px-5 sm:py-2 sm:text-xs"

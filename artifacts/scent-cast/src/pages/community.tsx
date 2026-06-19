@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Plus, Search, X } from 'lucide-react';
 import { AppTopNav } from '@/components/AppTopNav';
-import { ScentIntelligenceLoader } from '@/components/ScentIntelligenceLoader';
 import { CommunityHero } from '@/components/community/CommunityHero';
 import { useCommunityFragrances } from '@/components/community/communityData';
 import type { PostComposerHandle } from '@/components/community/PostComposer';
@@ -42,16 +41,17 @@ function CommunityPanelFallback() {
   );
 }
 
-// The forum's load state now speaks the app's premium loading language — the
-// gold orbital emblem (ScentIntelligenceLoader) — instead of a stack of pulsing
-// grey blocks that read as a generic fetch skeleton.
+// The forum's load state speaks the app's *initial* loading language — the same
+// quiet gold-edged circular spinner used for the first app paint / route chunk
+// load (App.tsx `RouteChunkFallback`) — NOT the search/agent orbital emblem
+// (ScentIntelligenceLoader), which reads as an active "intelligence" run.
 function CommunityFeedFallback() {
   return (
     <div
       className="mx-auto flex w-full max-w-[940px] items-center justify-center py-20"
       aria-label="Loading community posts"
     >
-      <ScentIntelligenceLoader status="Gathering the community" substatus="Loading rooms" />
+      <div className="h-8 w-8 rounded-full border border-white/15 border-t-scent-accent animate-spin" />
     </div>
   );
 }

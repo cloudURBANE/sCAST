@@ -2,6 +2,19 @@ import React, { createContext, useCallback, useContext, useState, useEffect, use
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from './AuthContext';
 
+/** One forecast day from the backend `/api/weather` payload (One Call 3.0 daily). */
+export interface WeatherForecastDay {
+  /** ISO date for the forecast day (local midnight from the provider). */
+  date: string;
+  high: number | null;
+  low: number | null;
+  temp: number | null;
+  humidity: number | null;
+  condition: string | null;
+  icon: string | null;
+  uv_index: number | null;
+}
+
 export interface WeatherData {
   temp?: number;
   temperature?: number;
@@ -16,6 +29,8 @@ export interface WeatherData {
   /** Live UV index from One Call 3.0; null when the provider/fallback has no UV data. */
   uv_index?: number | null;
   location?: string;
+  /** Up to 7 days of forecast; empty when the provider/fallback has no daily data. */
+  forecast?: WeatherForecastDay[];
   isLive?: boolean;
   error?: string;
 }
