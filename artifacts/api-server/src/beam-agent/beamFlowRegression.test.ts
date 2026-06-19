@@ -333,3 +333,59 @@ test("mixed brand and profile language retains the identity signal", () => {
 
   assert.ok(scoreCatalogProfileForQuery("Creed fresh", creedFresh) > scoreCatalogProfileForQuery("Creed fresh", otherFresh));
 });
+
+test("acceptance: 'one new scent for Miami in July' captures the city without a trip verb", () => {
+  // Regression: the destination parser only matched a place after a trip/travel
+  // verb, so "for Miami in July" dropped the city and the agent re-asked "where
+  // are you headed?" for a place the user already named. A proper-noun place named
+  // right before a month/season is now captured.
+  const state = deriveBeamSessionState(undefined, "I need one new scent for Miami in July, clean but sexy.");
+  assert.equal(state.slots.destination, "Miami");
+  assert.equal(state.slots.month, "July");
+  assert.equal(state.mission?.newCount, 1);
+  // Place + timing + direction are all present, so it must not collapse into a
+  // fixed clarification asking for a city it already has.
+  assert.equal(buildSafeClarification(state), null);
+});
+
+test("acceptance: an article/occasion is never mistaken for a city ('the office in July')", () => {
+  // Proper-noun guard: lowercase candidates ("the office") must not become a
+  // destination, or every "scent for the <thing> in <month>" would fabricate one.
+  const state = deriveBeamSessionState(undefined, "I need a scent for the office in July.");
+  assert.equal(state.slots.destination, undefined);
+  assert.equal(state.slots.month, "July");
+});
+
+test("acceptance: 'three cold-weather date night scents' honors the requested quantity", () => {
+  // Regression: plain (non-kit) recommendation requests dropped the count entirely,
+  // so "give me three" could be answered with one. The recommendation mission now
+  // carries the requested quantity.
+  const state = deriveBeamSessionState(undefined, "Give me three cold-weather date night scents.");
+  assert.equal(state.mission?.intent, "recommendation");
+  assert.equal(state.mission?.count, 3);
+  assert.equal(state.slots.occasion, "date night");
+});
+
+test("acceptance: a recommendation that returns one when three were asked is gated", () => {
+  const state = deriveBeamSessionState(undefined, "Give me three cold-weather date night scents.");
+  const grounded: BeamGroundedFragrance[] = [
+    { canonicalName: "Tobacco Vanille", brand: "Tom Ford", owned: false },
+    { canonicalName: "Pure Malt", brand: "Mugler", owned: false },
+    { canonicalName: "Homme Intense", brand: "Dior", owned: false },
+  ];
+  const one = "For a cold-weather date night, reach for Tom Ford Tobacco Vanille.";
+  const short = runAnswerQualityGates(one, { ...noEvidence, sessionState: state, groundedFragrances: grounded });
+  assert.equal(short.passed, false);
+  assert.ok(short.violations.includes("recommendation_count_short"), short.violations.join(","));
+
+  const three = "Tom Ford Tobacco Vanille, Mugler Pure Malt, and Dior Homme Intense all hold up on a cold night.";
+  const full = runAnswerQualityGates(three, { ...noEvidence, sessionState: state, groundedFragrances: grounded });
+  assert.ok(!full.violations.includes("recommendation_count_short"), full.violations.join(","));
+});
+
+test("a 'two sprays' quantity is not mistaken for a requested pick count", () => {
+  // The count parser is anchored on a fragrance noun, so an unrelated number
+  // ("two sprays") must not set a recommendation quantity.
+  const state = deriveBeamSessionState(undefined, "Should I do two sprays or three?");
+  assert.equal(state.mission?.count, undefined);
+});

@@ -76,6 +76,14 @@ export type BeamMissionState = {
   intent?: BeamMissionIntent;
   ownedCount?: number;
   newCount?: number;
+  /**
+   * Requested number of picks for a plain `recommendation` mission ("give me
+   * three date-night scents", "recommend two for tonight"). Travel kits use the
+   * lane-specific `ownedCount`/`newCount` instead; this is the single-lane count
+   * for non-kit recommendations, so the agent honors an explicit quantity instead
+   * of silently returning one.
+   */
+  count?: number;
   destination?: string;
   month?: string;
   userDelegatedChoice?: boolean;

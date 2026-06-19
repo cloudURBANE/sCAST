@@ -152,7 +152,32 @@ function parseDestination(text: string): string | undefined {
     const isRelativeTime = /^(?:(?:a|an|the|this|next|last|one|two|three|four|five)\s+)?(?:morning|afternoon|evening|night|weekend|day|week|month|year)s?$/i.test(destination);
     if (destination && !isMonth && !isOccasion && !isRelativeTime && !/^(a|an|the|my|this)$/i.test(destination)) return destination;
   }
-  return undefined;
+  return parsePlaceBeforeTime(text);
+}
+
+/**
+ * A place named right before a month or season WITHOUT a trip/travel verb —
+ * "I need one new scent for Miami in July", "something for Tokyo this summer".
+ * The verb-anchored patterns above miss these, which left the destination slot
+ * empty and made the agent re-ask "where are you headed?" for a city the user
+ * already named. The candidate must be a proper noun (leading capital) so an
+ * article/occasion ("for the office in July") is never mistaken for a city.
+ */
+function parsePlaceBeforeTime(text: string): string | undefined {
+  const match =
+    /\b(?:for|to|in|visiting|around|hitting|exploring)\s+([A-Za-z][A-Za-z .'-]{1,40}?)\s+(?:in|this|next|during|come|over)\s+([A-Za-z]+)/i.exec(
+      text,
+    );
+  if (!match?.[1] || !match[2]) return undefined;
+  const trailingIsTime =
+    MONTHS.some(([pattern]) => pattern.test(match[2])) || /^(?:spring|summer|autumn|fall|winter)$/i.test(match[2]);
+  if (!trailingIsTime) return undefined;
+  const candidate = cleanCapture(match[1]);
+  // Proper-noun guard: cities are capitalized; "the office" / "a meeting" are not.
+  if (!/^[A-Z]/.test(candidate)) return undefined;
+  if (MONTHS.some(([pattern]) => pattern.test(candidate))) return undefined;
+  if (OCCASIONS.some(([pattern]) => pattern.test(candidate))) return undefined;
+  return candidate || undefined;
 }
 
 function parseOccasion(text: string): string | undefined {
@@ -279,6 +304,22 @@ function parseNewCount(text: string): number | undefined {
   ]);
 }
 
+/**
+ * A requested quantity for a plain recommendation ("give me three date-night
+ * scents", "recommend two for tonight", "pick 3 fragrances"). Anchored on a
+ * fragrance noun so it can't grab an unrelated number ("two sprays", "three
+ * notes"). Travel-kit lane counts are parsed separately by
+ * parseOwnedCount/parseNewCount.
+ */
+function parseRecommendationCount(text: string): number | undefined {
+  return firstCountFor(text, [
+    new RegExp(
+      String.raw`\b${COUNT_CAPTURE}\s+(?:[\w-]+\s+){0,3}?(?:fragrances?|scents?|bottles?|colognes?|perfumes?|picks?|options?|choices?|ones?)\b`,
+      "i",
+    ),
+  ]);
+}
+
 function parseBudget(text: string): string | undefined {
   const match = /\b(?:under|below|max|budget(?:\s+is)?|less than)\s+\$?\s?(\d{2,4})\b/i.exec(text);
   return match?.[1] ? `$${match[1]}` : undefined;
@@ -317,8 +358,18 @@ function parseMissionPatch(text: string, slots: BeamSessionSlots): BeamMissionSt
     };
   }
 
-  if (/\b(?:recommend|recommendation|what should i wear|pick|choose|match)\b/i.test(text)) {
-    return { intent: "recommendation", userDelegatedChoice: isDelegationPhrase(text) || undefined };
+  // A requested quantity ("give me three scents") is itself a recommendation
+  // request even when the verb isn't one of the explicit recommend/pick words.
+  const count = parseRecommendationCount(text);
+  const recommendationLike =
+    count !== undefined ||
+    /\b(?:recommend|recommendation|suggest|what should i wear|pick|choose|match|give me|show me|find me|i (?:need|want)|need|want)\b/i.test(text);
+  if (recommendationLike) {
+    return {
+      intent: "recommendation",
+      ...(count !== undefined ? { count } : {}),
+      userDelegatedChoice: isDelegationPhrase(text) || undefined,
+    };
   }
 
   return isDelegationPhrase(text) ? { userDelegatedChoice: true } : undefined;
@@ -354,7 +405,7 @@ export function sanitizeBeamSessionState(value: unknown): BeamSessionState {
     const rawMission = record.mission as Record<string, unknown>;
     mission = {};
     if (rawMission.intent === "travel_kit" || rawMission.intent === "recommendation") mission.intent = rawMission.intent;
-    for (const key of ["ownedCount", "newCount"] as const) {
+    for (const key of ["ownedCount", "newCount", "count"] as const) {
       const count = rawMission[key];
       if (typeof count === "number" && Number.isFinite(count) && count >= 1 && count <= 5) mission[key] = Math.floor(count);
     }
@@ -498,10 +549,24 @@ export function deriveBeamSessionState(
     previous?.mission?.intent === "travel_kit" &&
     previous.mission.kitPresented === true &&
     !explicitMissionBoundary;
+  // A travel kit addressed by a bare recommendation TWEAK ("I want it lighter",
+  // "give me something woodier") is a REFINEMENT, not a new mission — the broadened
+  // recommendation verbs (give me / need / want / show me / find me) must not let a
+  // tweak downgrade the kit and wipe its counts/destination/timing. A turn that
+  // brings genuinely new mission context — a different occasion ("what should I wear
+  // to work?"), a new destination, or an explicit pick count — is still a real new
+  // request and resets as before, as does an explicit boundary phrase.
+  const turnBringsNewMissionContext = Boolean(slots.occasion || slots.destination || preliminaryMission?.count);
+  const downgradesKitToRecommendation =
+    previous?.mission?.intent === "travel_kit" &&
+    preliminaryMission?.intent === "recommendation" &&
+    !explicitMissionBoundary &&
+    !turnBringsNewMissionContext;
   const startsNewMission = Boolean(
     preliminaryMission?.intent &&
     previous &&
     !refiningPresentedKit &&
+    !downgradesKitToRecommendation &&
     (
       (previous.mission?.intent && previous.mission.intent !== preliminaryMission.intent) ||
       explicitMissionBoundary
@@ -512,11 +577,14 @@ export function deriveBeamSessionState(
   const baseState = startsNewMission ? EMPTY_STATE : previous ?? EMPTY_STATE;
   const patchSlots = { ...cloneBeamSessionState(baseState).slots, ...slots };
   let mission = parseMissionPatch(text, patchSlots);
-  // Don't let a generic-verb recommendation patch downgrade a preserved, already-
-  // presented travel kit: the kit's intent/counts/destination must survive a swap-
-  // style refinement. A real new-kit patch (it parses as travel_kit, e.g. "make it
-  // 3 new") still merges and updates the counts.
-  if (refiningPresentedKit && mission?.intent === "recommendation") mission = undefined;
+  // Don't let a generic-verb recommendation patch downgrade a preserved travel
+  // kit (presented or still being built): the kit's intent/counts/destination must
+  // survive a swap-style refinement ("swap the Aventus pick", "I want it lighter").
+  // A real new-kit patch (it parses as travel_kit, e.g. "make it 3 new") still
+  // merges and updates the counts, and an explicit boundary already reset the base.
+  if ((refiningPresentedKit || downgradesKitToRecommendation) && mission?.intent === "recommendation") {
+    mission = undefined;
+  }
   const patch: BeamSessionState = {
     slots,
     ...(mission ? { mission } : {}),
@@ -548,6 +616,7 @@ export function beamSessionStatePrompt(state: BeamSessionState | undefined): str
     const parts = [`intent=${mission.intent}`];
     if (mission.ownedCount) parts.push(`ownedCount=${mission.ownedCount}`);
     if (mission.newCount) parts.push(`newCount=${mission.newCount}`);
+    if (mission.count) parts.push(`count=${mission.count}`);
     if (mission.destination) parts.push(`destination=${mission.destination}`);
     if (mission.month) parts.push(`month=${mission.month}`);
     lines.push(`Mission target: ${parts.join("; ")}.`);
@@ -578,6 +647,10 @@ export function beamSessionStatePrompt(state: BeamSessionState | undefined): str
         `The final answer and travel-kit card must contain exactly ${mission.ownedCount ?? 0} owned recommendation(s) and exactly ${mission.newCount ?? 0} new unowned recommendation(s), without duplicates, once enough context or delegation exists. Preserve destination=${mission.destination ?? safe.slots.destination ?? "the user's destination"} and month=${mission.month ?? safe.slots.month ?? "the user's timing"}; never substitute current local weather.`,
       );
     }
+  } else if (mission?.intent === "recommendation" && mission.count) {
+    lines.push(
+      `The user asked for exactly ${mission.count} recommendation(s). Name exactly ${mission.count} primary pick(s) (one optional runner-up is fine) once you have enough context or the user delegates; never return fewer than ${mission.count}.`,
+    );
   }
   return `\n\n${lines.join("\n")}`;
 }
