@@ -9,6 +9,7 @@ import { Sparkles, X } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { ThreadBackground, type ThreadBackgroundMode } from './components/threads/ThreadBackground';
 import { AppTopNav } from './components/AppTopNav';
+import { WeeklyOutlookDashboard } from './components/WeeklyOutlookDashboard';
 import { AuthModal } from './components/AuthModal';
 import { GuestSaveBanner, GuestModeBanner } from './components/GuestSaveBanner';
 import { InstallPrompt } from './components/pwa/InstallPrompt';
@@ -894,7 +895,14 @@ function DashboardView() {
       <div style={{ height: 'var(--topbar-h)' }} />
 
       <main className="relative z-10 px-4 sm:px-8 sm:pb-24 max-w-[1760px] mx-auto">
-        <div className="space-y-7 pt-3 sm:space-y-28 sm:pt-14">
+        {/* Home — first viewport. On phones this column is sized to the visible
+            area between the top bar and the floating tab bar, and the weekly
+            dashboard is pushed to its bottom (mt-auto) so it settles cleanly just
+            above the bottom navigation with nothing rendered beneath it. On md+
+            (no bottom nav) the min-height + auto-margin relax to the original
+            stacked rhythm. The Vault of Aromas is no longer part of this screen —
+            it lives one scroll down as the "second page". */}
+        <div className="flex min-h-[calc(100svh-var(--topbar-h)-var(--bottomnav-h))] flex-col gap-7 pt-3 sm:min-h-0 sm:gap-28 sm:pt-14">
           <HomepageHeroMarquee />
 
           <section className="relative mx-auto w-full max-w-[60rem] min-w-0 text-center">
@@ -1071,7 +1079,20 @@ function DashboardView() {
 
           {!agentActive ? <HomepageAtmosphereChrome /> : null}
 
-          <div id="scent-vault-section" className="scent-deferred-section !mt-64 sm:!mt-72 lg:!mt-96" style={{ scrollMarginTop: 'var(--topbar-h)' }}>
+          {/* Weekly outlook dashboard — anchored to the bottom of the first
+              viewport on phones (mt-auto fills the gap above the tab bar), in
+              normal flow on md+. Hidden in agent mode, which takes over the
+              hero. */}
+          {!agentActive ? (
+            <div className="mt-auto sm:mt-0">
+              <WeeklyOutlookDashboard items={items} weather={weather} />
+            </div>
+          ) : null}
+        </div>
+
+        {/* Page two: the Vault of Aromas, reached by scrolling one screen down
+            from the home view above. */}
+        <div id="scent-vault-section" className="scent-deferred-section !mt-16 sm:!mt-72 lg:!mt-96" style={{ scrollMarginTop: 'var(--topbar-h)' }}>
             <React.Suspense fallback={<WardrobeFallback />}>
               <Wardrobe
                 items={items}
@@ -1096,7 +1117,6 @@ function DashboardView() {
               />
             </React.Suspense>
           </div>
-        </div>
       </main>
 
       {activeRecommendation ? (

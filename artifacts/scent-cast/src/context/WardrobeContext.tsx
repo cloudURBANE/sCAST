@@ -626,6 +626,45 @@ const calculateEngineAlignment = (
   return candidates[0];
 };
 
+// Neutral intent for occasion-agnostic scoring (e.g. the weekly outlook
+// dashboard), so each day's pick reflects the WEATHER rather than a specific
+// destination/energy the user hasn't chosen for that day.
+const NEUTRAL_OUTLOOK_INTENT: { destination: DestinationType; energy: EnergyState } = {
+  destination: 'Going Out',
+  energy: 'Confident',
+};
+
+export interface WeatherOutlookPick {
+  item: Fragrance;
+  name: string;
+  brand: string;
+  recommendation: ScentWeatherRecommendation;
+  score: number;
+}
+
+/**
+ * Pick the single best-aligned vault fragrance for a given weather snapshot,
+ * using the same engine + scoring as the home recommendation. Exposed so the
+ * weekly outlook dashboard can score each forecast day off the user's vault
+ * without duplicating the engine plumbing. Returns null for an empty vault.
+ */
+export function recommendFragranceForWeather(
+  items: Fragrance[],
+  weather: any,
+  intent: { destination: DestinationType; energy: EnergyState } = NEUTRAL_OUTLOOK_INTENT,
+): WeatherOutlookPick | null {
+  if (!items || items.length === 0) return null;
+  const winner = calculateEngineAlignment(items, intent, weather);
+  if (!winner) return null;
+  return {
+    item: winner.item,
+    name: wardrobeEntryName(winner.item),
+    brand: wardrobeEntryBrand(winner.item),
+    recommendation: winner.recommendation,
+    score: winner.score,
+  };
+}
+
 interface WardrobeContextType {
   items: Fragrance[];
   wardrobeLoaded: boolean;
