@@ -33,9 +33,23 @@ import { FragranceCapture } from './components/FragranceCapture';
 const Wardrobe = React.lazy(() =>
   loadRouteChunk(() => import('./components/Wardrobe').then((module) => ({ default: module.Wardrobe }))),
 );
-const ScentMissionPanel = React.lazy(() =>
-  loadRouteChunk(() => import('./components/ScentMissionPanel').then((module) => ({ default: module.ScentMissionPanel }))),
-);
+// Factory is named so the same dynamic import backs both React.lazy and the
+// intent/idle prefetch below — the panel chunk is warmed before the user taps
+// the "Discover Your Signature Scent" CTA, so the open crossfade lands on the
+// real panel instead of flashing the SignaturePanelFallback pulse on first open.
+const importScentMissionPanel = () =>
+  import('./components/ScentMissionPanel').then((module) => ({ default: module.ScentMissionPanel }));
+const ScentMissionPanel = React.lazy(() => loadRouteChunk(importScentMissionPanel));
+let scentMissionPanelPrefetched = false;
+function prefetchScentMissionPanel() {
+  if (scentMissionPanelPrefetched || typeof window === 'undefined') return;
+  scentMissionPanelPrefetched = true;
+  // Best-effort warm-up; on failure clear the flag so a later intent can retry
+  // and the real open still goes through loadRouteChunk's recovery path.
+  void importScentMissionPanel().catch(() => {
+    scentMissionPanelPrefetched = false;
+  });
+}
 type ScentMissionStatus = import('./components/ScentMissionPanel').ScentMissionStatus;
 const ScentNotesInfographic = React.lazy(() =>
   loadRouteChunk(() => import('./components/ScentNotesInfographic').then((module) => ({ default: module.ScentNotesInfographic }))),
@@ -817,6 +831,25 @@ function DashboardView() {
     setViewState('agent');
   }, []);
 
+  // Warm the Beam Agent chunk during idle time once the Discover CTA is actually
+  // reachable, so touch users (no hover to prefetch on) get an instant, flash-free
+  // open. Runs at most once per session via the module-level guard; degrades to a
+  // short timeout where requestIdleCallback is unavailable (Safari/older WebKit).
+  useEffect(() => {
+    if (agentActive || scentMissionPanelPrefetched) return;
+    if (!(discoveryReady && stateSettled && !vaultSearchUiActive)) return;
+    const ric = (window as typeof window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      cancelIdleCallback?: (handle: number) => void;
+    });
+    if (typeof ric.requestIdleCallback === 'function') {
+      const handle = ric.requestIdleCallback(prefetchScentMissionPanel, { timeout: 2000 });
+      return () => ric.cancelIdleCallback?.(handle);
+    }
+    const id = window.setTimeout(prefetchScentMissionPanel, 1200);
+    return () => window.clearTimeout(id);
+  }, [agentActive, discoveryReady, stateSettled, vaultSearchUiActive]);
+
   // Brand+name identities of saved fragrances, so the search overlay can flag
   // results that are already in the vault and offer "View in vault" instead of a
   // silent duplicate add.
@@ -1061,6 +1094,8 @@ function DashboardView() {
                       key="signature-cta"
                       type="button"
                       onClick={handleOpenMission}
+                      onPointerEnter={prefetchScentMissionPanel}
+                      onFocus={prefetchScentMissionPanel}
                       initial={reduceMotion ? false : { opacity: 0, y: -4 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -4 }}
