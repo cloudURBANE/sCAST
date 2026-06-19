@@ -44,7 +44,13 @@ import { enqueueBeamCuration } from "../services/curationService";
 import { createBeamTools, type BeamCatalogHit, type BeamToolDeps } from "./beamTools.ts";
 import { runBeamAgent } from "./beamAgentLoop.ts";
 import { packetFromWardrobeRow, redactEventForClient } from "./beamToolCore.ts";
-import { resolveBeamBudget, resolveBeamModels } from "./provider.ts";
+import { resolveBeamBudget, resolveBeamModels, validateBeamModelConfig } from "./provider.ts";
+import {
+  buildObservatoryFeed,
+  isObservatoryAuthorized,
+  isObservatoryEnabled,
+  recordObservatoryRun,
+} from "./beamObservatory.ts";
 import { selectConciergeLane } from "./laneSelector.ts";
 import { appendSessionTurn, loadSession, saveSessionState } from "./beamSessionStore.ts";
 import { deriveBeamSessionState, inferPendingSlotFromAssistant } from "./missionState.ts";
@@ -404,12 +410,20 @@ router.post("/runs", runRateLimit, requireAuth, async (req: AuthRequest, res) =>
     sessionState,
     onComplete: (assistantText) => appendSessionTurn(ctx, message, assistantText, sessionState),
     onSummary: (summary) => {
+      // Coarse, non-PII scenario label for the observatory feed.
+      const scenario =
+        sessionState.mission?.intent === "travel_kit"
+          ? "travel_kit"
+          : sessionState.mission?.intent === "recommendation"
+            ? "recommendation"
+            : "chat";
       logger.info(
         {
           beam: {
             runId: summary.runId,
             user: hashUser(ctx.userId),
             lane,
+            scenario,
             outcome: summary.outcome,
             failureCode: summary.failureCode,
             turns: summary.turns,
@@ -419,6 +433,11 @@ router.post("/runs", runRateLimit, requireAuth, async (req: AuthRequest, res) =>
             outputTokens: summary.outputTokens,
             usedSynthesis: summary.usedSynthesis,
             synthesisFailed: summary.synthesisFailed,
+            synthesisFailureReason: summary.synthesisFailureReason,
+            // Model slugs make the latency/cost audit (brief §C) diagnosable from logs:
+            // whether a slow/failed turn ran an unexpectedly heavy orchestration/closer.
+            orchestrationModel: summary.orchestrationModel,
+            synthesisModel: summary.synthesisModel,
             groundedNames: summary.groundedNames,
             estimatedCostUsd: summary.estimatedCostUsd,
             qualityGatePassed: summary.qualityGatePassed,
@@ -428,6 +447,16 @@ router.post("/runs", runRateLimit, requireAuth, async (req: AuthRequest, res) =>
         },
         "beam agent run finished",
       );
+      // Feed the redacted summary to the beta observatory ring buffer. The buffer
+      // records regardless of the enabled flag (cheap, bounded, no PII); the GATE
+      // is the read endpoint. Never let observability affect the run.
+      recordObservatoryRun({
+        summary,
+        lane,
+        orchestrationModel: models?.model,
+        synthesisModel: models?.synthesisModel,
+        scenario,
+      });
       // Persist the run to the shared usage ledger so the per-user daily cap and
       // the daily-spend metric have data to read. Best-effort + non-blocking: a
       // ledger write must never affect the run or its SSE stream.
@@ -545,10 +574,41 @@ router.post("/runs/:runId/stop", requireAuth, (req: AuthRequest, res) => {
   res.json({ ok: true });
 });
 
+/**
+ * GET /observatory/feed — gated, authenticated beta-observability feed.
+ *
+ * OFF by default. Returns honest, redacted run summaries ONLY when
+ * `BEAM_OBSERVATORY_ENABLED` is set AND the caller presents `BEAM_OBSERVATORY_TOKEN`
+ * (via `x-observatory-token` or `Authorization: Bearer <token>`). Otherwise it
+ * reports `offline` / `unauthorized` and returns no events. Intentionally NOT on
+ * the user-auth path: this is an ops/cockpit surface keyed by a separate token, and
+ * it never carries user ids, message text, prompts, or tool arguments.
+ */
+router.get("/observatory/feed", (req, res) => {
+  const headerToken =
+    (typeof req.headers["x-observatory-token"] === "string"
+      ? req.headers["x-observatory-token"]
+      : undefined) ??
+    (typeof req.headers.authorization === "string" && req.headers.authorization.startsWith("Bearer ")
+      ? req.headers.authorization.slice(7)
+      : undefined);
+  const parsedLimit = Number.parseInt(String(req.query.limit ?? ""), 10);
+  const feed = buildObservatoryFeed({
+    enabled: isObservatoryEnabled(),
+    authorized: isObservatoryAuthorized(headerToken),
+    ...(Number.isFinite(parsedLimit) ? { limit: parsedLimit } : {}),
+  });
+  res.status(feed.status === "unauthorized" ? 401 : 200).json(feed);
+});
+
 export const beamAgentRouter = router;
 
 /** One-line opt-in mount. Call from app.ts when you're ready to enable Beam. */
 export function mountBeamAgent(app: Express): void {
+  // Surface model-configuration footguns once at startup (non-fatal, brief §C).
+  for (const warning of validateBeamModelConfig()) {
+    logger.warn({ beam: { config: true } }, `beam agent config: ${warning}`);
+  }
   app.use("/api/beam-agent", router);
 }
 

@@ -353,6 +353,7 @@ export function sanitizeBeamSessionState(value: unknown): BeamSessionState {
       if (typeof slot === "string" && slot.trim()) mission[key] = slot.trim().slice(0, 120);
     }
     if (rawMission.userDelegatedChoice === true) mission.userDelegatedChoice = true;
+    if (rawMission.kitPresented === true) mission.kitPresented = true;
     if (Object.keys(mission).length === 0) mission = undefined;
   }
 
@@ -475,19 +476,37 @@ export function deriveBeamSessionState(
 
   const parsedAgainstPrevious = { ...cloneBeamSessionState(previous).slots, ...slots };
   const preliminaryMission = parseMissionPatch(text, parsedAgainstPrevious);
+  const explicitMissionBoundary =
+    /^\s*(?:now\b|next\b|another\b|separately\b|for\s+(?:another|a\s+new)\b|new\s+(?:trip|mission)\b)/i.test(text);
+  // A follow-up to an already-PRESENTED travel kit is a REFINEMENT, not a new
+  // mission — even when a generic verb ("swap the Aventus pick", "match the look")
+  // makes this turn parse as a bare recommendation. Without this, that verb flips
+  // the intent, trips startsNewMission, and wipes the kit's destination/timing/
+  // counts, so the agent both loses context and re-gathers slots. An explicit
+  // boundary phrase ("now…", "new trip…") still starts a fresh mission.
+  const refiningPresentedKit =
+    previous?.mission?.intent === "travel_kit" &&
+    previous.mission.kitPresented === true &&
+    !explicitMissionBoundary;
   const startsNewMission = Boolean(
     preliminaryMission?.intent &&
     previous &&
+    !refiningPresentedKit &&
     (
       (previous.mission?.intent && previous.mission.intent !== preliminaryMission.intent) ||
-      /^\s*(?:now\b|next\b|another\b|separately\b|for\s+(?:another|a\s+new)\b|new\s+(?:trip|mission)\b)/i.test(text)
+      explicitMissionBoundary
     )
   );
   // Explicit mission boundaries must not inherit a prior trip's destination,
   // month, scent direction, budget, or delegation flag.
   const baseState = startsNewMission ? EMPTY_STATE : previous ?? EMPTY_STATE;
   const patchSlots = { ...cloneBeamSessionState(baseState).slots, ...slots };
-  const mission = parseMissionPatch(text, patchSlots);
+  let mission = parseMissionPatch(text, patchSlots);
+  // Don't let a generic-verb recommendation patch downgrade a preserved, already-
+  // presented travel kit: the kit's intent/counts/destination must survive a swap-
+  // style refinement. A real new-kit patch (it parses as travel_kit, e.g. "make it
+  // 3 new") still merges and updates the counts.
+  if (refiningPresentedKit && mission?.intent === "recommendation") mission = undefined;
   const patch: BeamSessionState = {
     slots,
     ...(mission ? { mission } : {}),
