@@ -2456,13 +2456,14 @@ export const Wardrobe: React.FC<{
                                   if (isEditing) {
                                     return (
                                       // The active editor spans the full width and
-                                      // centers, so the input + actions sit
-                                      // symmetrically (not squeezed into one column,
-                                      // and with real breathing room under the label).
+                                      // centers as a self-contained "pop-out" box
+                                      // (bordered card with breathing room), so the
+                                      // input + actions sit symmetrically instead of
+                                      // squeezed cramped under the metric label.
                                       <div
                                         key={field}
                                         ref={factEditorRef}
-                                        className="col-span-2 flex flex-col items-center gap-3 py-4 text-center"
+                                        className="col-span-2 my-1.5 flex flex-col items-center gap-3 rounded-xl border border-scent-accent/20 bg-black/30 px-5 py-5 text-center"
                                       >
                                         <p className="scent-type-label">{label}</p>
                                         <div className="flex items-center justify-center gap-2">
