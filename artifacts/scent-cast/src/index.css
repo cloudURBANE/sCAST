@@ -470,6 +470,31 @@ a {
   transform-origin: center bottom;
 }
 
+/*
+ * Forecast hero (WeeklyOutlookDashboard) edge-case clip fix.
+ *
+ * The +9% normalized upscale above is tuned for ROOMY single-bottle views
+ * (detail modal, enlarge, Wardrobe featured) where it cancels the engine's
+ * baked top padding so the bottle isn't ~12% too small. The daily-forecast hero
+ * reuses variant="featured" but is a TIGHT square slot, so that same upscale
+ * seats a normalized bottle's cap only ~0.7% below the artboard top. Any
+ * edge-case packshot baked a hair taller (older orientationVersion / sub-pixel
+ * rounding) — or a sticky touch :hover scale — tips the cap past the artboard's
+ * overflow-hidden and clips it (the reported "bottle out of its frame").
+ *
+ * In this slot the square packshot already fills the artboard via object-contain
+ * (which can never clip), so cancel the upscale for the forecast hero only and
+ * let plain contain fully frame every pick. Scoped to the .forecast-hero-bottle
+ * marker so roomy detail/featured views keep their upscale untouched. The extra
+ * ancestor class outranks the rule above (and composes with user zoom/nudge via
+ * the --bottle-frame-* vars, so manual frame adjustments still apply on top).
+ */
+.forecast-hero-bottle .bottle-packshot-frame[data-normalized="true"][data-variant="featured"] {
+  transform: translate(var(--bottle-frame-x), var(--bottle-frame-y))
+    scale(var(--bottle-frame-scale));
+  transform-origin: center bottom;
+}
+
 .bottle-packshot-img,
 .bottle-packshot-video {
   display: block;
