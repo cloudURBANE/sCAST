@@ -1101,11 +1101,11 @@ function DashboardView() {
                       exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -4 }}
                       transition={vaultContentTransition}
                       className="scent-signature-cta group flex h-[60px] w-full max-w-[52rem] items-center justify-center gap-2.5 rounded-full px-6 text-[12px] font-bold uppercase tracking-[0.14em] text-scent-accent focus-visible:outline-none sm:h-[68px] sm:text-[13px]"
-                      aria-label="Discover your signature scent"
-                      title="Discover your signature scent"
+                      aria-label="Discover with Beam Agent"
+                      title="Discover with Beam Agent"
                     >
                       <Sparkles size={16} strokeWidth={1.9} aria-hidden />
-                      <span>Discover Your Signature Scent</span>
+                      <span>Discover With Beam Agent</span>
                     </motion.button>
                   )}
                 </AnimatePresence>
