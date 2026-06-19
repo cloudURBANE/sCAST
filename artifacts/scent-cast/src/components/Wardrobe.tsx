@@ -2402,32 +2402,37 @@ export const Wardrobe: React.FC<{
                         }
                       >
                         <div className="flex flex-col p-4 space-y-3">
-                          {/* Shared-bottle morph target: matches the vault card's
-                              layoutId so the bottle animates from the tapped card
-                              into this box (and back on close). */}
-                          <motion.div
-                            layoutId={`wardrobe-bottle-${selectedItem.id}`}
-                            transition={bottleMorphTransition}
-                            className={`relative h-56 ${stackedDetailMode ? 'sm:h-60' : 'sm:h-72 lg:h-64'} min-h-0 w-full shrink-0 overflow-hidden cursor-pointer rounded-lg border border-white/5 bg-white/[0.01]`}
-                            onClick={() => detailBottleUrl && setEnlargeOpen(true)}
+                          <div
+                            className={`relative h-56 ${stackedDetailMode ? 'sm:h-60' : 'sm:h-72 lg:h-64'} min-h-0 w-full shrink-0`}
                           >
-                            <BottleImage
-                              key={detailBottleUrl || 'missing-image'}
-                              variant="detail"
-                              src={detailBottleUrl}
-                              alt={entryName(selectedItem)}
-                              adjustment={frameDraft}
-                              imageProperties={
-                                pendingPreview?.itemId === selectedItem.id
-                                  ? null
-                                  : selectedItem.imageProperties
-                              }
-                              showFrameGuide={bottleImageToolsOpen}
-                              isSyncing={isImageSyncing?.(selectedItem)}
-                              className="absolute inset-0"
-                              imgClassName={reducedDetailMotion ? "" : "transition-all duration-300"}
+                            <div
+                              aria-hidden
+                              className="pointer-events-none absolute inset-0 overflow-hidden rounded-lg border border-white/5 bg-white/[0.01]"
                             />
-                          </motion.div>
+                            <motion.div
+                              layoutId={`wardrobe-bottle-${selectedItem.id}`}
+                              transition={bottleMorphTransition}
+                              className="absolute inset-0 cursor-pointer"
+                              onClick={() => detailBottleUrl && setEnlargeOpen(true)}
+                            >
+                              <BottleImage
+                                key={detailBottleUrl || 'missing-image'}
+                                variant="detail"
+                                src={detailBottleUrl}
+                                alt={entryName(selectedItem)}
+                                adjustment={frameDraft}
+                                imageProperties={
+                                  pendingPreview?.itemId === selectedItem.id
+                                    ? null
+                                    : selectedItem.imageProperties
+                                }
+                                showFrameGuide={bottleImageToolsOpen}
+                                isSyncing={isImageSyncing?.(selectedItem)}
+                                className="absolute inset-0"
+                                imgClassName={reducedDetailMotion ? "" : "transition-all duration-300"}
+                              />
+                            </motion.div>
+                          </div>
 
                           {detailBottleUrl && !bottleImageToolsOpen ? (
                             <div className="flex w-full shrink-0 justify-center">
