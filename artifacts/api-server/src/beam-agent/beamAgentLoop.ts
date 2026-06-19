@@ -158,12 +158,11 @@ Once you have all three, execute immediately in that same turn:
 2. Score vault ONLY when the mission requests owned picks — beam_score_candidates with
    weatherOverride for the destination's climate at that time of year (not home weather). Pass a
    locationLabel like "Tokyo, August". For a new-only mission, skip vault scoring entirely.
-3. Search new — beam_search_catalog matches by BRAND and NAME only, not by notes, accords, or
-   vibe, so a query like "fresh", "aquatic", or "green tea" returns nothing. To discover picks for
-   a direction + destination climate, draw on your own fragrance knowledge to name several specific,
-   real fragrances that fit, then search each ONE BY NAME and keep only those the catalog returns.
-   Search more names than you need — not every fragrance is in the catalog — and never recommend a
-   name the search did not return. Deepen top picks with beam_get_fragrance_details.
+3. Search new — beam_search_catalog accepts user-language profile queries across family, notes,
+   accords, context, and scent vector as well as exact brand/name. Search the user's combined
+   direction + climate + occasion first (for example "clean airy woody hot humid"); refine with a
+   specific brand/name only when useful. Never recommend a name the search did not return. Deepen
+   top picks with beam_get_fragrance_details.
 4. Check overlap — beam_compare_overlap each new pick against the vault.
 5. Present the kit — beam_present_travel_kit with the owned picks (from step 2) and the new picks
    (from step 3). It renders a board with both lanes, and its new lane is add-ready, so for a kit
@@ -451,9 +450,8 @@ export function toolInputForMission(
   state: BeamSessionState | undefined,
 ): unknown {
   const mission = state?.mission;
-  const newOnly =
-    mission?.intent === "travel_kit" && (mission.ownedCount ?? 0) === 0 && (mission.newCount ?? 0) > 0;
-  if (newOnly && tool === "beam_search_catalog") {
+  const needsNewLane = mission?.intent === "travel_kit" && (mission.newCount ?? 0) > 0;
+  if (needsNewLane && tool === "beam_search_catalog") {
     const record = input && typeof input === "object" && !Array.isArray(input) ? input as Record<string, unknown> : {};
     return { ...record, excludeOwned: true };
   }

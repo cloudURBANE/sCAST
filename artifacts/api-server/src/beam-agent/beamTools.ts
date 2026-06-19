@@ -257,11 +257,11 @@ export function createBeamTools(deps: BeamToolDeps): BeamToolDefinition[] {
     {
       name: "beam_search_catalog",
       description:
-        "Search the local fragrance catalog (global_fragrances) for REAL fragrances. Matches by BRAND and NAME only — NOT by notes, accords, or vibe, so a query like 'fresh' or 'aquatic' returns nothing. To find picks that fit a direction/vibe, search specific real fragrance names you expect to fit. Returns candidate packets. Prefer this over guessing — never invent a fragrance that is not in a result.",
+        "Search the local fragrance catalog (global_fragrances) for REAL fragrances by brand/name OR descriptive profile fields including family, notes, accords, context, and scent vector. Queries such as 'clean airy woody for hot humidity' are supported. Returns candidate packets ranked by profile fit. Prefer this over guessing — never invent a fragrance that is not in a result.",
       inputSchema: {
         type: "object",
         properties: {
-          query: { type: "string", description: "Brand and/or fragrance name to search for." },
+          query: { type: "string", description: "Brand/name or scent profile language such as vibe, family, notes, season, weather, or occasion." },
           limit: { type: "number", description: `Max results (server caps at ${BEAM_LIMITS.maxCatalogResults}).` },
           excludeOwned: { type: "boolean", description: "Drop fragrances already in the user's vault." },
         },

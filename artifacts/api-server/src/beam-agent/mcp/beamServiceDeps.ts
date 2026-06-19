@@ -28,7 +28,7 @@ import type { BeamRunContext, CandidatePacket } from "../types.ts";
 import type { BeamCatalogHit, BeamToolDeps } from "../beamTools.ts";
 import { packetFromWardrobeRow } from "../beamToolCore.ts";
 import { missionItemFromWardrobeRow } from "../../services/scentMissionService";
-import { searchCatalogCandidates, flattenProfile, getCatalogEntry } from "../../services/catalogService";
+import { searchCatalogCandidates, searchCatalogProfileCandidates, flattenProfile, getCatalogEntry } from "../../services/catalogService";
 import { getScentFacts } from "../../lib/scent-facts/engine";
 import { createBeamResearcher } from "../research/beamResearch.ts";
 import { loadResearchCache, saveResearchCache } from "../research/researchCache.ts";
@@ -72,7 +72,7 @@ async function loadVaultForOwnership(ctx: BeamRunContext): Promise<ScentMissionW
 }
 
 async function searchCatalogForBeam(query: string, limit: number): Promise<BeamCatalogHit[]> {
-  const hits = await searchCatalogCandidates(query, { limit });
+  const hits = await searchCatalogProfileCandidates(query, { limit });
   return hits.map((hit) => {
     const flat = flattenProfile(hit.profile) as Record<string, unknown>;
     const brand = typeof flat.brand === "string" ? flat.brand : "";

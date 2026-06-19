@@ -20,8 +20,24 @@ import assert from "node:assert/strict";
 import { deriveBeamSessionState, isDelegationPhrase, pendingSlotSatisfiedBy } from "./missionState.ts";
 import { buildSafeClarification, runAnswerQualityGates } from "./answerQualityGates.ts";
 import type { BeamGroundedFragrance, BeamSessionState } from "./types.ts";
+import { scoreCatalogProfileForQuery } from "../services/catalogProfileSearch.ts";
+import type { ScentProfile } from "../services/scentEngineCore.ts";
 
 const noEvidence = { hadExternalEvidence: false } as const;
+
+function profile(overrides: Partial<ScentProfile>): ScentProfile {
+  return {
+    product: { name: "Test scent", brand: "Test house" },
+    scent_vector: { freshness: 5, sweetness: 5, woodiness: 5, spice: 5, warmth: 5, musk: 5 },
+    performance: { sillage: 5, longevity: 5 },
+    context: { weather: [], occasion: [] },
+    notes: [],
+    family: "",
+    concentration: "EDP",
+    accords: [],
+    ...overrides,
+  };
+}
 
 /** Replay the user side of the audited transcript, turn by turn. */
 function tokyoAugustState() {
@@ -251,4 +267,51 @@ test("every deterministic safe clarification passes its own gates for each pendi
     const gate = runAnswerQualityGates(safe ?? "", { ...noEvidence, sessionState: state, groundedFragrances: [] });
     assert.deepEqual(gate.violations, [], `${slot} clarification violated: ${gate.violations.join(",")}`);
   }
+});
+
+test("backtest: hot humid Dallas rooftop request preserves all actionable facts", () => {
+  const message = "I'm going to a rooftop party in Dallas tonight. It's hot and humid. I want something clean, attractive, and not too loud. I already own Dior Homme Sport Very Cool and Creed Himalaya. Pick one from my collection and one new fragrance to try.";
+  const state = deriveBeamSessionState(undefined, message);
+  assert.equal(state.slots.destination, "Dallas");
+  assert.equal(state.slots.occasion, "party");
+  assert.match(state.slots.direction ?? "", /lighter\/fresh/i);
+  assert.equal(state.slots.projection, "moderate");
+  assert.equal(state.slots.impression, "attractive");
+  assert.equal(state.mission?.ownedCount, 1);
+  assert.equal(state.mission?.newCount, 1);
+  assert.equal(buildSafeClarification(state), null, "the complete request must not collapse into fixed clarification chips");
+});
+
+test("backtest: Tokyo August humidity request preserves place, timing, counts, and compound direction", () => {
+  const message = "I'm planning a Tokyo trip in August. I need two fragrances to take with me and two new ones not in my collection. I want clean, modern, airy, slightly woody scents that work in humidity.";
+  const state = deriveBeamSessionState(undefined, message);
+  assert.equal(state.slots.destination, "Tokyo");
+  assert.equal(state.slots.month, "August");
+  assert.equal(state.slots.vibe, "modern");
+  assert.match(state.slots.direction ?? "", /lighter\/fresh/i);
+  assert.match(state.slots.direction ?? "", /woody/i);
+  assert.equal(state.mission?.ownedCount, 2);
+  assert.equal(state.mission?.newCount, 2);
+  assert.equal(buildSafeClarification(state), null, "free text already supplied every readiness field");
+});
+
+test("catalog profile ranking understands vibe, weather, accords, family, and scent vectors", () => {
+  const airyWoody = profile({
+    scent_vector: { freshness: 9, sweetness: 2, woodiness: 7, spice: 2, warmth: 3, musk: 4 },
+    family: "woody aromatic",
+    notes: ["bergamot", "vetiver", "cedar"],
+    accords: ["fresh", "green", "woody"],
+    context: { weather: ["summer", "humid"], occasion: ["travel", "day"] },
+    description: "A clean modern airy composition",
+  });
+  const denseGourmand = profile({
+    scent_vector: { freshness: 1, sweetness: 10, woodiness: 1, spice: 5, warmth: 9, musk: 2 },
+    family: "amber gourmand",
+    notes: ["vanilla", "caramel"],
+    accords: ["sweet", "warm"],
+    context: { weather: ["winter"], occasion: ["evening"] },
+  });
+  const query = "clean modern airy slightly woody for hot humidity";
+  assert.ok(scoreCatalogProfileForQuery(query, airyWoody) > scoreCatalogProfileForQuery(query, denseGourmand));
+  assert.ok(scoreCatalogProfileForQuery(query, airyWoody) >= 0.7);
 });
