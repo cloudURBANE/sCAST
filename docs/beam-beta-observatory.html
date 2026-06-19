@@ -45,6 +45,31 @@
     }
   Turn flags understood: fallback_used, quality_gate_failed, jargon_stripped,
   no_match, slow. Conversation-level outcome drives the list badges.
+
+  Server-side run-summary feed (NEW)
+  ----------------------------------
+  The Express API also exposes a gated, machine-readable HEALTH feed of recent
+  Beam Agent runs at:
+
+      GET /api/beam-agent/observatory/feed
+
+  This is a DIFFERENT, privacy-safe data source from the conversation feed above:
+  it carries per-run SUMMARIES, never transcripts. No user ids, no message text,
+  no prompts, no tool arguments are stored or served — only already-aggregated
+  telemetry (runId, status, durationMs, toolCalls + tool names, gate result +
+  violations, synthesisFailureReason, fallbackReason, model slugs, lane, and a
+  coarse scenario label). Because no transcripts are retained server-side, the
+  transcript console above stays export-driven (point Feed at a JSON/NDJSON export);
+  the run-summary endpoint powers aggregate run-health, not per-turn transcripts.
+
+  It is OFF by default and honest about its source:
+    • disabled (BEAM_OBSERVATORY_ENABLED unset/false) -> { "status": "offline", events: [] }
+    • enabled but no/wrong token                       -> 401 { "status": "unauthorized" }
+    • enabled + valid token                            -> { "status": "live", events: [...] }
+  Authenticate with the configured BEAM_OBSERVATORY_TOKEN via either
+  `x-observatory-token: <token>` or `Authorization: Bearer <token>`. Optional
+  `?limit=N` caps how many recent runs are returned (newest first). The endpoint
+  never returns LIVE data without both the enable flag and a valid token.
 -->
 <style>
   :root {
@@ -364,6 +389,7 @@
     Live mode polls the cockpit health and the conversation feed on the chosen interval.
     Point <b>Feed</b> at a real JSON/NDJSON export to go live — sample data is shown until then and is always labelled as such.
     Cockpit pings to <code>localhost</code> may be blocked by the browser when this file is opened directly (<code>file://</code>); serve it from the API origin to avoid that.
+    A separate, privacy-safe run-summary health feed is served at <code>GET /api/beam-agent/observatory/feed</code> (gated by <code>BEAM_OBSERVATORY_ENABLED</code> + <code>BEAM_OBSERVATORY_TOKEN</code>; returns <code>offline</code> / <code>unauthorized</code> / <code>live</code> honestly). It carries run summaries only — never transcripts or PII — see the file header for the contract.
   </p>
 </div>
 

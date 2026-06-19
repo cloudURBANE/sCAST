@@ -134,6 +134,41 @@ test("a response that still fails quality gates is never completed", async () =>
 
 const text = (t: string): ClaudeResponse => ({ stop_reason: "end_turn", content: [{ type: "text", text: t }] });
 
+test("a mid-loop provider timeout with grounded evidence degrades gracefully, not agent_error", async () => {
+  // A search-heavy runaway emits only tool calls (no inline prose), so the loop's
+  // `lastText` stays empty. A provider TimeoutError on the next turn used to
+  // re-throw into a generic `agent_error` dead-end even though the run held grounded
+  // fragrances. It must instead close gracefully (honest fallback / grounded draft).
+  const events: BeamRunEvent[] = [];
+  const toolCalls: { input: unknown }[] = [];
+  let summary: BeamRunSummary | undefined;
+  let calls = 0;
+  const callModel = async (): Promise<ClaudeResponse> => {
+    calls++;
+    if (calls === 1) {
+      return { stop_reason: "tool_use", content: [{ type: "tool_use", id: "tu_1", name: "beam_get_wardrobe", input: {} }] };
+    }
+    const err = new Error("The operation was aborted due to timeout");
+    err.name = "TimeoutError";
+    throw err;
+  };
+
+  await runBeamAgent({
+    ctx,
+    userMessage: "find me something impossible",
+    tools: [wardrobeTool(toolCalls)],
+    emit: (event) => events.push(event),
+    isModelConfigured: () => true,
+    callModel,
+    onSummary: (value) => (summary = value),
+  });
+
+  assert.equal(events.some((e) => e.type === "failed" && e.code === "agent_error"), false);
+  const completed = events.find((e) => e.type === "completed");
+  assert.ok(completed && completed.type === "completed" && completed.response.trim().length > 0);
+  assert.equal(summary?.outcome, "completed");
+});
+
 test("completion waits for transcript persistence before publishing the terminal event", async () => {
   const events: BeamRunEvent[] = [];
   let release!: () => void;
@@ -1308,4 +1343,76 @@ test("end-to-end occasion run: re-asking a KNOWN occasion is gated and repaired 
     .map((b) => (b && typeof b === "object" && "text" in b ? String((b as { text: unknown }).text) : ""))
     .join("\n");
   assert.match(folded, /Do NOT ask for month, destination, occasion/i);
+});
+
+test("presenting a complete travel kit marks the mission kitPresented for refinement", async () => {
+  // A present-travel-kit tool that resolves the exact 2+2 lanes and surfaces a card.
+  const kitTool: BeamToolDefinition = {
+    name: "beam_present_travel_kit",
+    description: "Lay out the owned + new picks as a board",
+    inputSchema: { type: "object", properties: {} },
+    handler: async () => ({
+      ownedCount: 2,
+      newCount: 2,
+      owned: [
+        { canonicalName: "Aventus", brand: "Creed" },
+        { canonicalName: "Gabrielle", brand: "Chanel" },
+      ],
+      newProposed: [
+        { canonicalName: "Tam Dao", brand: "Diptyque" },
+        { canonicalName: "Philosykos", brand: "Diptyque" },
+      ],
+    }),
+    clientEvent: (result) => {
+      const r = result as { owned: unknown[]; newProposed: unknown[] };
+      return {
+        type: "card",
+        card: {
+          kind: "travel_kit",
+          ownedPicks: [
+            { name: "Aventus", brand: "Creed", accords: ["fruity"], owned: true },
+            { name: "Gabrielle", brand: "Chanel", accords: ["floral"], owned: true },
+          ],
+          newPicks: [
+            { name: "Tam Dao", brand: "Diptyque", notes: [], accords: ["woody"] },
+            { name: "Philosykos", brand: "Diptyque", notes: [], accords: ["green"] },
+          ],
+        },
+      };
+    },
+  };
+
+  // A ready 2+2 travel mission, not yet presented.
+  const sessionState: BeamSessionState = {
+    slots: { destination: "Tokyo", month: "August", direction: "woody" },
+    mission: { intent: "travel_kit", ownedCount: 2, newCount: 2, destination: "Tokyo", month: "August" },
+  };
+
+  const { callModel } = scriptedModel([
+    { stop_reason: "tool_use", content: [{ type: "tool_use", id: "tu_kit", name: "beam_present_travel_kit", input: {} }] },
+    text("draft kit"),
+    text("From your vault, pack Aventus and Gabrielle. New: Tam Dao and Philosykos — all fit an artsy Tokyo August."),
+  ]);
+
+  const events: BeamRunEvent[] = [];
+  let completed: string | undefined;
+  let summary: BeamRunSummary | undefined;
+  await runBeamAgent({
+    ctx,
+    userMessage: "Build my Tokyo kit",
+    tools: [kitTool],
+    sessionState,
+    emit: (e) => events.push(e),
+    isModelConfigured: () => true,
+    callModel,
+    onComplete: (t) => (completed = t),
+    onSummary: (s) => (summary = s),
+  });
+
+  assert.equal(summary?.outcome, "completed", JSON.stringify(summary));
+  assert.ok(events.some((e) => e.type === "card" && e.card.kind === "travel_kit"));
+  assert.ok(completed && /Aventus/.test(completed));
+  // The mission is now flagged so the route persists "kit presented" and the next
+  // turn is treated as a refinement (the prose count gate is relaxed there).
+  assert.equal(sessionState.mission?.kitPresented, true);
 });

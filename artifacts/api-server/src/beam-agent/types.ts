@@ -79,6 +79,18 @@ export type BeamMissionState = {
   destination?: string;
   month?: string;
   userDelegatedChoice?: boolean;
+  /**
+   * Set once a complete travel-kit deliverable has actually been presented to the
+   * user (the structured `beam_present_travel_kit` card passed its exact-count
+   * contract and the run completed). A follow-up turn in the SAME mission is then a
+   * REFINEMENT ("swap the Aventus pick for something cleaner") and must not be
+   * hard-failed by the prose mission-fulfillment gate merely because it doesn't
+   * re-list all picks. A genuinely new mission resets this (see
+   * `deriveBeamSessionState` → `startsNewMission`), so exact counts are still
+   * enforced whenever a NEW kit is created, and any re-presented kit card is still
+   * count-checked by `missionToolResultError`.
+   */
+  kitPresented?: boolean;
 };
 
 export type BeamSessionState = {

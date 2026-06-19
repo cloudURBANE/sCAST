@@ -259,6 +259,20 @@ const SYNTHESIS_NUDGE =
 const MAX_GROUNDED_ALLOWLIST = 40;
 
 /**
+ * Honest, useful closing text for the rare case where a run completes with no
+ * composed answer (synthesis aborted near the wall-clock deadline and no inline
+ * draft survived — observed live on a hard "no exact match" query where the model
+ * searched until the budget was gone). Shipping a bare "Done." dead-ends the user;
+ * this offers a calm next step plus tap chips so the session stays alive. It names
+ * no fragrance, so it can never hallucinate a pick.
+ */
+const EMPTY_ANSWER_FALLBACK =
+  "I couldn't lock in a confident match for that just yet. Give me one more detail — " +
+  "the mood, a note you love, or the occasion — and I'll pull real options.";
+const EMPTY_ANSWER_FALLBACK_WITH_CUES =
+  `${EMPTY_ANSWER_FALLBACK}\n\`\`\`cues\nSomething fresh\nSomething warm\nFor a night out\nSurprise me\n\`\`\``;
+
+/**
  * Don't open the single quality-gate repair pass (brief §08.1 if_fail) unless this
  * much wall-clock budget remains — a repair is a full synthesis round, so attempting
  * it near the deadline would risk overrunning the client's 60s timeout.
@@ -541,6 +555,12 @@ export type BeamRunSummary = {
   outputTokens: number;
   usedSynthesis: boolean;
   synthesisFailed: boolean;
+  /** Why synthesis failed when it did ("empty" | "error"); omitted on success. */
+  synthesisFailureReason?: "empty" | "error";
+  /** Orchestration (tool-calling) model slug used this run, for the latency/model audit. */
+  orchestrationModel?: string;
+  /** Synthesis ("smart closer") model slug used this run; falls back to the orchestration slug. */
+  synthesisModel?: string;
   /** Distinct fragrances retrieved this run and pinned into the answer allowlist. */
   groundedNames: number;
   /** Estimated USD spent on model calls this run (brief §11.3 estimated_llm_cost_usd). */
@@ -652,6 +672,12 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
   let outputTokens = 0;
   let usedSynthesis = false;
   let synthesisFailed = false;
+  // WHY the synthesis turn failed, when it did: "empty" (model returned no text) or
+  // "error" (threw — most often an abort because the orchestration loop ate the
+  // wall-clock budget). Surfaced in the run summary so a silent quality drop (the
+  // user gets the cruder orchestration draft instead of the composed answer) is
+  // diagnosable in beta instead of invisible.
+  let synthesisFailureReason: "empty" | "error" | undefined;
   // Whether any tool returned a fresh external fact this run; gates price/etc. claims.
   let hadExternalEvidence = false;
   let localWeatherLocation: string | null = null;
@@ -803,12 +829,16 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
           recordUsage(synth, synthModel);
           const synthText = extractText(synth.content);
           if (synthText) finalText = synthText;
-          else synthesisFailed = true;
+          else {
+            synthesisFailed = true;
+            synthesisFailureReason = "empty";
+          }
         } catch {
           // Streaming/synthesis failed — keep the orchestration draft so the user
           // still gets an answer rather than a failed run. Flagged in the summary
           // so a high synthesis-failure rate is visible, not silent.
           synthesisFailed = true;
+          synthesisFailureReason = "error";
         }
       }
 
@@ -913,15 +943,28 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
         qualityGatePassed = true;
       }
 
+      // A complete travel-kit card is about to reach the user. Record it on the
+      // mission so the NEXT turn is treated as a refinement: the prose
+      // mission-fulfillment gate then won't hard-fail a "swap one pick" follow-up
+      // that doesn't re-list all picks. Mutating the shared session-state object is
+      // how this reaches persistence — the route's onComplete closes over the very
+      // same object and writes it to the session store after this returns.
+      const presentedKit = pendingDeliverables.some(
+        (event) => event.type === "card" && event.card.kind === "travel_kit",
+      );
+
       for (const event of pendingDeliverables) emit(event);
       pendingDeliverables.length = 0;
 
       // Split off any trailing ```cues block so the visible answer stays clean
       // and the chips ride their own event the UI can render as tap buttons.
-      const { text: parsed, cues } = extractAgentCues(finalText || "Done.");
-      const response = parsed || "Done.";
+      const { text: parsed, cues } = extractAgentCues(
+        finalText && finalText.trim() ? finalText : EMPTY_ANSWER_FALLBACK_WITH_CUES,
+      );
+      const response = parsed || EMPTY_ANSWER_FALLBACK;
       messages.push({ role: "assistant", content: response });
       outcome = "completed";
+      if (presentedKit && input.sessionState?.mission) input.sessionState.mission.kitPresented = true;
       await input.onComplete?.(response);
       if (cues.length > 0) {
         emit({ type: "suggestions", items: cues.map((label) => ({ label, value: label })) });
@@ -970,8 +1013,18 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
         const aborted =
           Date.now() >= deadline ||
           (err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError"));
-        if (aborted && usedTools && lastText) {
-          await finish(lastText, { skipSynthesis: true });
+        if (aborted) {
+          // Compose a closing answer even when no inline prose survived. A
+          // search-heavy runaway emits only tool calls, so `lastText` stays empty;
+          // gating recovery on it used to re-throw into a generic `agent_error`
+          // dead-end ("Please try again") despite holding grounded evidence — a
+          // live-observed failure on hard/no-match queries. finish() composes from
+          // the grounded set or ships the honest fallback; never a raw abort.
+          if (usedTools && (lastText || groundedNames.size > 0)) {
+            await finish(lastText, { skipSynthesis: true });
+            return;
+          }
+          fail("run_timeout", "The agent ran out of time before finishing.");
           return;
         }
         throw err;
@@ -1209,6 +1262,9 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
       outputTokens,
       usedSynthesis,
       synthesisFailed,
+      ...(synthesisFailureReason ? { synthesisFailureReason } : {}),
+      ...(input.model ? { orchestrationModel: input.model } : {}),
+      ...(input.synthesisModel ?? input.model ? { synthesisModel: input.synthesisModel ?? input.model } : {}),
       groundedNames: groundedNames.size,
       estimatedCostUsd: estimateRunCostUsd(usageByModel.values()),
       qualityGatePassed,

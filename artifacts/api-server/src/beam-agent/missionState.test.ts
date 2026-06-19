@@ -5,6 +5,7 @@ import {
   deriveBeamSessionState,
   inferPendingSlotFromAssistant,
   isDelegationPhrase,
+  sanitizeBeamSessionState,
 } from "./missionState.ts";
 
 test("parses a travel kit target with owned and new counts", () => {
@@ -181,6 +182,46 @@ test("a new recommendation does not inherit delegation from a prior travel missi
   assert.equal(second.mission?.intent, "recommendation");
   assert.deepEqual(second.slots, { occasion: "work" });
   assert.equal(second.userDelegatedChoice, undefined);
+});
+
+test("a refinement of an already-presented kit preserves the mission, not a new recommendation", () => {
+  const first = deriveBeamSessionState(undefined, "Trip to Tokyo: 2 from my wardrobe and 2 new in August, artsy.");
+  // Simulate the loop marking the kit as delivered (the route persists this).
+  const presented = { ...first, mission: { ...first.mission, kitPresented: true } };
+  const refine = deriveBeamSessionState(presented, "Swap the Aventus pick for something cleaner.");
+
+  // The generic verb "pick" must NOT downgrade the mission to a recommendation or
+  // wipe the kit's destination/timing/counts.
+  assert.equal(refine.mission?.intent, "travel_kit");
+  assert.equal(refine.mission?.ownedCount, 2);
+  assert.equal(refine.mission?.newCount, 2);
+  assert.equal(refine.mission?.destination, "Tokyo");
+  assert.equal(refine.mission?.kitPresented, true);
+});
+
+test("an explicit boundary after a presented kit still starts a fresh mission", () => {
+  const first = deriveBeamSessionState(undefined, "Trip to Tokyo: 2 from my wardrobe and 2 new in August, artsy.");
+  const presented = { ...first, mission: { ...first.mission, kitPresented: true } };
+  const next = deriveBeamSessionState(presented, "Now what should I wear to work today?");
+
+  assert.equal(next.mission?.intent, "recommendation");
+  assert.equal(next.mission?.kitPresented, undefined);
+  assert.equal(next.mission?.destination, undefined);
+  assert.deepEqual(next.slots, { occasion: "work" });
+});
+
+test("sanitize preserves the kitPresented mission flag", () => {
+  const sanitized = sanitizeBeamSessionState({
+    slots: { destination: "Tokyo" },
+    mission: { intent: "travel_kit", ownedCount: 2, newCount: 2, kitPresented: true },
+  });
+  assert.equal(sanitized.mission?.kitPresented, true);
+
+  const noFlag = sanitizeBeamSessionState({
+    slots: {},
+    mission: { intent: "travel_kit", ownedCount: 2, newCount: 2 },
+  });
+  assert.equal(noFlag.mission?.kitPresented, undefined);
 });
 
 test("month corrections reject the negated month regardless of calendar order", () => {

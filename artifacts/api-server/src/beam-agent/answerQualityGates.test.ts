@@ -109,6 +109,69 @@ test("travel kit fails when ready mission omits required owned or new picks", ()
   assert.ok(r.violations.includes("mission_unfulfilled"));
 });
 
+test("refinement after a presented kit does not hard-fail for omitting the unchanged picks", () => {
+  // The full kit was already delivered last turn (kitPresented). "Swap the heavier
+  // one for something cleaner" names only the replacement; the prose count gate
+  // must not fire just because the other three picks aren't re-listed.
+  const r = runAnswerQualityGates(
+    "Good call — drop Aventus and pack Cologne Indélébile instead: cleaner musks, far airier in the heat.",
+    {
+      hadExternalEvidence: false,
+      sessionState: {
+        slots: { destination: "Tokyo", month: "August", vibe: "artsy" },
+        mission: { intent: "travel_kit", ownedCount: 2, newCount: 2, destination: "Tokyo", month: "August", kitPresented: true },
+      },
+      groundedFragrances: [
+        { canonicalName: "Aventus", brand: "Creed", owned: true },
+        { canonicalName: "Gabrielle", brand: "Chanel", owned: true },
+        { canonicalName: "Cologne Indélébile", brand: "Frederic Malle", owned: false },
+        { canonicalName: "Philosykos", brand: "Diptyque", owned: false },
+      ],
+    },
+  );
+  assert.ok(!r.violations.includes("mission_unfulfilled"), JSON.stringify(r.violations));
+  assert.equal(r.passed, true, JSON.stringify(r.violations));
+});
+
+test("creating a NEW kit (kit not yet presented) still enforces exact counts", () => {
+  // Same as the refinement above but kitPresented is unset → this is the original
+  // creation turn, so omitting required picks must still fail. Guards against the
+  // relaxation leaking into kit creation.
+  const r = runAnswerQualityGates("Aventus is the one to pack for Tokyo.", {
+    hadExternalEvidence: false,
+    sessionState: {
+      slots: { destination: "Tokyo", month: "August", vibe: "artsy" },
+      mission: { intent: "travel_kit", ownedCount: 2, newCount: 2, destination: "Tokyo", month: "August" },
+    },
+    groundedFragrances: [
+      { canonicalName: "Aventus", brand: "Creed", owned: true },
+      { canonicalName: "Gabrielle", brand: "Chanel", owned: true },
+      { canonicalName: "Tam Dao", brand: "Diptyque", owned: false },
+      { canonicalName: "Philosykos", brand: "Diptyque", owned: false },
+    ],
+  });
+  assert.ok(r.violations.includes("mission_unfulfilled"), JSON.stringify(r.violations));
+});
+
+test("a fake/unsupported claim in a kit refinement is still rejected", () => {
+  // Relaxing the count gate for refinements must NOT relax substantive gates: an
+  // unsupported price claim in the swap reply still fails.
+  const r = runAnswerQualityGates(
+    "Swap it for Cologne Indélébile — it's $215 and in stock everywhere right now.",
+    {
+      hadExternalEvidence: false,
+      sessionState: {
+        slots: { destination: "Tokyo", month: "August", vibe: "artsy" },
+        mission: { intent: "travel_kit", ownedCount: 2, newCount: 2, destination: "Tokyo", month: "August", kitPresented: true },
+      },
+      groundedFragrances: [{ canonicalName: "Cologne Indélébile", brand: "Frederic Malle", owned: false }],
+    },
+  );
+  assert.ok(r.violations.includes("price_without_evidence"), JSON.stringify(r.violations));
+  assert.ok(r.violations.includes("availability_without_evidence"), JSON.stringify(r.violations));
+  assert.equal(r.passed, false);
+});
+
 test("new-only discovery requires exactly two unowned picks and permits an owned taste reference", () => {
   const input = {
     hadExternalEvidence: false,

@@ -262,8 +262,16 @@ export function runAnswerQualityGates(answerText: string, input: QualityGateInpu
   }
 
   const mission = input.sessionState?.mission;
+  // Once a complete kit has been presented, a follow-up turn is a REFINEMENT
+  // ("swap the heavier one for something cleaner") and legitimately names only the
+  // pick(s) it is changing — not all 4. Enforcing the exact prose count here would
+  // hard-fail every refinement. The structured deliverable contract
+  // (missionToolResultError) still enforces exact lane counts on ANY kit card the
+  // agent re-presents, and a genuinely new mission resets `kitPresented`
+  // (deriveBeamSessionState → startsNewMission), so creation is still count-gated.
   if (
     mission?.intent === "travel_kit" &&
+    !mission.kitPresented &&
     missionReadyForFulfillment(input.sessionState) &&
     ((mission.ownedCount ?? 0) > 0 || (mission.newCount ?? 0) > 0)
   ) {
