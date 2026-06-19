@@ -7,6 +7,7 @@ import type { BottleImageAdjustment } from '@/lib/bottleImageAdjustment';
 import { reconcileWardrobeItems } from '@/lib/wardrobeReconcile';
 import {
   calculateScentWeatherRecommendation,
+  traitsMatchScentFamily,
   type ScentFamily,
   type ScentWeatherEngineInput,
   type ScentWeatherRecommendation,
@@ -389,24 +390,6 @@ function detailRefreshPayloadFor(item: Fragrance): FragranceDetailRequestPayload
 
 const RAIN_CONDITION_SIGNALS = ['rain', 'drizzle', 'storm'];
 
-const FAMILY_TRAIT_SIGNALS: Record<ScentFamily, string[]> = {
-  fresh: ['fresh', 'freshness', 'clean', 'mint'],
-  citrus: ['citrus', 'bergamot', 'lemon', 'lime', 'orange', 'grapefruit', 'mandarin'],
-  aquatic: ['aquatic', 'marine', 'ocean', 'sea', 'water'],
-  green: ['green', 'grass', 'leaf', 'leafy', 'herbal', 'vetiver'],
-  musky: ['musk', 'musky'],
-  woody: ['wood', 'woody', 'woodiness', 'cedar', 'sandalwood', 'patchouli', 'vetiver'],
-  amber: ['amber', 'resin', 'warmth', 'warm'],
-  sweet: ['sweet', 'sweetness', 'vanilla', 'tonka', 'caramel', 'honey'],
-  gourmand: ['gourmand', 'chocolate', 'coffee', 'praline', 'caramel'],
-  oud: ['oud', 'agarwood'],
-  smoky: ['smoke', 'smoky', 'incense'],
-  leather: ['leather', 'leathery', 'suede'],
-  tobacco: ['tobacco', 'cigar'],
-  spicy: ['spicy', 'spice', 'pepper', 'cardamom', 'cinnamon', 'clove', 'saffron'],
-  powdery: ['powder', 'powdery', 'iris', 'orris', 'violet'],
-};
-
 const mapDestinationToEngineType = (
   destination: DestinationType | string,
 ): ScentWeatherEngineInput['setting']['type'] => {
@@ -497,12 +480,13 @@ const getFragranceTraitTexts = (item: Fragrance): string[] => {
   return traits.map(normalizeTrait).filter(Boolean);
 };
 
-const fragranceHasFamilySignal = (item: Fragrance, family: ScentFamily): boolean => {
-  const traits = getFragranceTraitTexts(item);
-  return traits.some((trait) =>
-    FAMILY_TRAIT_SIGNALS[family].some((signal) => trait.includes(signal)),
-  );
-};
+// Delegate to the engine's canonical family-signal matcher so candidate
+// hit-counting uses the exact same token map the engine used to build
+// best_scent_families/avoid_scent_families. A previous local copy of the signal
+// map had drifted (missing tokens like galbanum, oak, labdanum, watery, edible),
+// which silently dropped legitimate best/avoid hits and skewed the surfaced pick.
+const fragranceHasFamilySignal = (item: Fragrance, family: ScentFamily): boolean =>
+  traitsMatchScentFamily(getFragranceTraitTexts(item), family);
 
 const mapSillageToEngineLabel = (sillage: unknown): string | undefined => {
   if (typeof sillage === 'string') return firstString(sillage);
