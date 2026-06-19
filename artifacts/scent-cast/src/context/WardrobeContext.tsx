@@ -717,6 +717,12 @@ interface WardrobeContextType {
     removeBackground: boolean;
   }) => Promise<{ imageUrl: string; imageHash?: string; backgroundRemoved: boolean }>;
   handlePersistWardrobeDetailRefresh: (target: Fragrance, detail: FragranceDetail) => Promise<Fragrance | null>;
+  /** Persist a single user-verified metric (year/gender/concentration/season) from the detail modal's inline editor. */
+  handleVerifyWardrobeFact: (
+    target: Fragrance,
+    field: 'year' | 'gender' | 'concentration' | 'season',
+    rawValue: string,
+  ) => Promise<Fragrance | null>;
   handleRevertWardrobe: () => void;
   handleDeleteItem: (target: Fragrance) => Promise<void>;
   handleIntentComplete: (intent: { destination: DestinationType; energy: EnergyState }) => void;
@@ -1389,6 +1395,111 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   }, [authToken, toast]);
 
+  // User-verified metric: persist a single fact (year/gender/concentration/
+  // season) the user typed into the detail modal's inline "verify" field. The
+  // engine leaves these as "Unknown" when an authoritative source never stated
+  // them; this lets the owner of the vault row correct/fill one by hand. Reuses
+  // the same PATCH /api/wardrobe/:id fact path as enrichment, so the server's
+  // placeholder guard (usefulDetailFactString) still rejects junk like "n/a",
+  // and a later "Unknown" enrichment can't clobber the value the user supplied.
+  const handleVerifyWardrobeFact = useCallback(async (
+    target: Fragrance,
+    field: 'year' | 'gender' | 'concentration' | 'season',
+    rawValue: string,
+  ): Promise<Fragrance | null> => {
+    const value = rawValue.trim();
+    if (!value) return null;
+
+    // Build the optimistic local patch with the field's real type.
+    const localPatch: Partial<Pick<Fragrance, 'year' | 'gender' | 'concentration' | 'season'>> = {};
+    if (field === 'year') {
+      const year = Number.parseInt(value, 10);
+      if (!Number.isFinite(year) || year < 1800 || year > 2100) {
+        toast({
+          title: 'Enter a valid year',
+          description: 'Use a 4-digit release year, e.g. 2018.',
+          variant: 'destructive',
+        });
+        return null;
+      }
+      localPatch.year = year;
+    } else {
+      localPatch[field] = value;
+    }
+    // The server applies the same guard; mirror it here so the optimistic update
+    // and the "saved" toast don't claim success for a placeholder the API drops.
+    if (field !== 'year' && !usefulFactString(value)) {
+      toast({
+        title: "That reads as “unknown”",
+        description: 'Enter the real value (e.g. Eau de Parfum) to verify this detail.',
+        variant: 'destructive',
+      });
+      return null;
+    }
+    const requestBody = field === 'year' ? { year: localPatch.year } : { [field]: value };
+
+    if (!authToken) {
+      // Guest: no server row to PATCH — persist onto the local item + localStorage
+      // so a guest's verified detail still sticks on this device.
+      let next: Fragrance | null = null;
+      setItems((prev) => {
+        const updated = prev.map((item) => {
+          if (!sameWardrobeEntry(item, target)) return item;
+          next = { ...item, ...localPatch };
+          return next;
+        });
+        if (next) writeGuestWardrobeItems(updated);
+        return updated;
+      });
+      if (next) {
+        toast({ title: 'Detail saved', description: 'Saved to this device.' });
+      }
+      return next;
+    }
+
+    const apiId = target._dbId ?? target.id;
+    isMutatingRef.current = true;
+    try {
+      const res = await fetch(`/api/wardrobe/${apiId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify(requestBody),
+      });
+      const data = (await res.json().catch(() => null)) as
+        | (Partial<Fragrance> & { _dbId?: string; error?: string })
+        | null;
+      if (!res.ok) {
+        throw new Error(data?.error || `HTTP ${res.status}`);
+      }
+      const next: Fragrance = {
+        ...target,
+        ...data,
+        ...localPatch,
+        id: target.id,
+        _dbId: data?._dbId ?? target._dbId,
+      };
+      setItems((prev) =>
+        prev.map((item) => (sameWardrobeEntry(item, target) ? next : item)),
+      );
+      toast({ title: 'Detail verified', description: 'Thanks — saved to your vault.' });
+      return next;
+    } catch (e) {
+      console.error('Failed to persist verified wardrobe fact', e);
+      toast({
+        title: 'Save failed',
+        description: 'Could not save your verified detail. Try again.',
+        variant: 'destructive',
+      });
+      return null;
+    } finally {
+      isMutatingRef.current = false;
+      lastMutationRef.current = Date.now();
+    }
+  }, [authToken, toast]);
+
   // Admin-only: upload/replace a bottle image (file or URL) via the re-hosting
   // endpoint, returning a persistable storage URL. The caller then runs the
   // returned URL through the normal preview -> handlePersistWardrobeImage save
@@ -1927,6 +2038,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     handlePersistWardrobeImage,
     uploadAdminBottleImage,
     handlePersistWardrobeDetailRefresh,
+    handleVerifyWardrobeFact,
     handleRevertWardrobe,
     handleDeleteItem,
     handleIntentComplete,
@@ -1960,6 +2072,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     handlePersistWardrobeImage,
     uploadAdminBottleImage,
     handlePersistWardrobeDetailRefresh,
+    handleVerifyWardrobeFact,
     handleRevertWardrobe,
     handleDeleteItem,
     handleIntentComplete,

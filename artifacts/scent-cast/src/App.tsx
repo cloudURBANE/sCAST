@@ -644,6 +644,7 @@ function DashboardView() {
     setRecommendationReason,
     handleAddItem,
     handlePersistWardrobeImage,
+    handleVerifyWardrobeFact,
     uploadAdminBottleImage,
     handleRevertWardrobe,
     handleDeleteItem,
@@ -1105,6 +1106,7 @@ function DashboardView() {
                 pendingDetailOpen={pendingDetailOpen}
                 onClearPendingDetailOpen={clearPendingDetailOpen}
                 onPersistWardrobeImage={handlePersistWardrobeImage}
+                onVerifyWardrobeFact={handleVerifyWardrobeFact}
                 isAdmin={isAdmin}
                 onUploadBottleImage={authToken && isAdmin ? uploadAdminBottleImage : undefined}
                 featuredItem={activeRecommendation}
