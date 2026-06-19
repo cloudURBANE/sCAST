@@ -1,10 +1,14 @@
 import {
   buildScentMissionEngineInput,
   calculateScentWeatherRecommendation,
+  isScentMissionDestination,
+  isScentMissionEnergy,
   sanitizeScentMissionWardrobe,
   sanitizeScentMissionWeather,
   SCENT_MISSION_NODE_ORDER,
   type ScentMissionCalibration,
+  type ScentMissionDestination,
+  type ScentMissionEnergy,
   type ScentMissionNodeId,
   type ScentMissionRecommendation,
   type ScentMissionState,
@@ -206,6 +210,57 @@ export function buildAgentReveal(
   return { fragrance: proposalItemToFragrance(item), engine, reason };
 }
 
+/* ------------------------------------------------------------------ */
+/* Fast ("just go") calibration defaults                               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Flexible, low-claim defaults for the Fast affordance. `'Going Out'` maps to
+ * the engine's versatile `"mixed"` setting (`destinationToSettingType`), i.e.
+ * "anywhere", and energy never affects scoring at all
+ * (`buildScentMissionEngineInput` ignores it), so `'Relaxed'` is the most
+ * honest placeholder mood — easygoing, not a fabricated `'Confident'` claim.
+ */
+export const FAST_FLEXIBLE_DESTINATION: ScentMissionDestination = "Going Out";
+export const FAST_FLEXIBLE_ENERGY: ScentMissionEnergy = "Relaxed";
+
+export type FastDefaultsResult = {
+  mission: ScentMissionState;
+  /**
+   * True when the user supplied no occasion/mood and the system filled in
+   * flexible defaults. Callers MUST NOT present these as the user's stated
+   * intent — surface them as a system fallback instead.
+   */
+  usedDefaults: boolean;
+};
+
+/**
+ * Prepare a mission for a Fast run. The Fast button must still work when the
+ * user gives no occasion/mood ("just go"), but it must not silently claim an
+ * occasion or mood the user never chose. So this only fills the *missing*
+ * calibration with neutral/flexible defaults and reports whether it had to —
+ * letting the caller mark the run as a flexible system pick rather than a
+ * tailored answer to a stated brief.
+ */
+export function missionWithDefaultsForFast(mission: ScentMissionState): FastDefaultsResult {
+  const hasDestination = isScentMissionDestination(mission.calibration.destination);
+  const hasEnergy = isScentMissionEnergy(mission.calibration.energy);
+  if (hasDestination && hasEnergy) {
+    return { mission, usedDefaults: false };
+  }
+  return {
+    mission: {
+      ...mission,
+      calibration: {
+        ...mission.calibration,
+        destination: hasDestination ? mission.calibration.destination : FAST_FLEXIBLE_DESTINATION,
+        energy: hasEnergy ? mission.calibration.energy : FAST_FLEXIBLE_ENERGY,
+      },
+    },
+    usedDefaults: true,
+  };
+}
+
 /** The node the user can currently act on, if any. */
 export function activeMissionNode(state: ScentMissionState): ScentMissionNodeId | null {
   let retryableBlocked: ScentMissionNodeId | null = null;
@@ -233,7 +288,7 @@ export function suggestedMissionChips(state: ScentMissionState): string[] {
   const active = activeMissionNode(state);
   switch (active) {
     case "onboarding":
-      return ["What does calibration do?", "How do you pick my match?"];
+      return ["How does this work?", "How do you pick my match?"];
     case "wardrobe-sync":
       return ["What's in my vault?", "Which families do I own most?"];
     case "environment-scan":

@@ -195,6 +195,13 @@ test("chat can fill calibration from natural language", async () => {
 // lost. The degraded (no-model) path must never produce them.
 const SPA_REJECTED = /mission tree|execute analysis|resolution node|sync node|hit execute|work through the mission/i;
 
+// Internal mission-graph / product-state vocabulary that must never reach the
+// user in any node-execution or fallback reply. Catches the prior offenders
+// ("Calibration locked", "Environment scan", "Resolution is armed", "mission
+// node", "execute again", "re-run this node") plus a bare "node".
+const NODE_JARGON =
+  /\bnode\b|mission tree|calibration|environment scan|resolution is armed|lock calibration|execute analysis|execute again|re-run this/i;
+
 async function scriptedReply(userMessage: string, overrides: Record<string, unknown> = {}) {
   const parsed = parseScentMissionRequest(baseBody({ userMessage, ...overrides }));
   assert.equal(parsed.ok, true);
@@ -277,7 +284,8 @@ async function runNode(
 test("onboarding execution requires calibration, then advances the graph", async () => {
   const incomplete = await runNode("onboarding", createScentMissionState());
   assert.equal(incomplete.nodeUpdates, undefined);
-  assert.match(incomplete.assistantMessage!, /Calibration incomplete/);
+  assert.match(incomplete.assistantMessage!, /where you're headed|how you want/i);
+  assert.doesNotMatch(incomplete.assistantMessage!, NODE_JARGON);
 
   const complete = await runNode("onboarding", calibratedMission());
   assert.deepEqual(complete.nodeUpdates, [
@@ -325,7 +333,9 @@ test("execute_node refuses locked nodes without leaking a recommendation", async
   if (!parsed.ok) return;
 
   const response = await executeScentMission(parsed.request, { deps: {} });
-  assert.match(response.assistantMessage!, /locked/);
+  // Refuses an out-of-order node, in natural language (no "mission node" jargon).
+  assert.match(response.assistantMessage!, /finish this step|need a little more/i);
+  assert.doesNotMatch(response.assistantMessage!, NODE_JARGON);
   assert.equal(response.recommendation, undefined);
   assert.equal(response.nodeUpdates, undefined);
 });
@@ -398,4 +408,42 @@ test("resolution-premium stays locked with conversion copy and no node updates",
   assert.equal(premium.premiumLock?.locked, true);
   assert.equal(premium.nodeUpdates, undefined);
   assert.equal(premium.recommendation, undefined);
+});
+
+test("every node-execution reply is free of internal mission-graph jargon", async () => {
+  // Walk the full graph plus its degraded branches and assert each user-facing
+  // message reads like a concierge, not a developer console.
+  const messages: string[] = [];
+  const push = (m: string | undefined) => { if (m) messages.push(m); };
+
+  // onboarding: incomplete + completed
+  push((await runNode("onboarding", createScentMissionState())).assistantMessage);
+  push((await runNode("onboarding", calibratedMission())).assistantMessage);
+
+  // wardrobe-sync: empty (blocked) + synced summary
+  const afterOnboarding = completeScentMissionNode(calibratedMission(), "onboarding");
+  push((await runNode("wardrobe-sync", afterOnboarding, [])).assistantMessage);
+  push((await runNode("wardrobe-sync", afterOnboarding)).assistantMessage);
+
+  // environment-scan
+  let env = completeScentMissionNode(afterOnboarding, "wardrobe-sync");
+  push((await runNode("environment-scan", env)).assistantMessage);
+
+  // resolution-standard: empty vault (blocked) + winner
+  let resolveReady = calibratedMission();
+  for (const nodeId of ["onboarding", "wardrobe-sync", "environment-scan"] as const) {
+    resolveReady = completeScentMissionNode(resolveReady, nodeId);
+  }
+  push((await runNode("resolution-standard", resolveReady, [])).assistantMessage);
+  push((await runNode("resolution-standard", resolveReady)).assistantMessage);
+
+  // resolution-premium conversion copy + a locked / already-complete refusal
+  push((await runNode("resolution-premium", completeScentMissionNode(resolveReady, "resolution-standard"))).assistantMessage);
+  push((await runNode("resolution-standard", createScentMissionState())).assistantMessage); // locked refusal
+
+  assert.ok(messages.length >= 8, "expected to exercise every node message");
+  for (const message of messages) {
+    assert.doesNotMatch(message, NODE_JARGON, `leaked node jargon: ${message}`);
+    assert.doesNotMatch(message, SPA_REJECTED, `leaked SPA-stripped jargon: ${message}`);
+  }
 });

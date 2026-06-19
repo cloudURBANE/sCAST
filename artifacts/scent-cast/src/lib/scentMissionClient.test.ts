@@ -10,8 +10,11 @@ import {
   buildAgentReveal,
   buildMissionWardrobe,
   buildMissionWeather,
+  FAST_FLEXIBLE_DESTINATION,
+  FAST_FLEXIBLE_ENERGY,
   findWardrobeMatch,
   missionProgress,
+  missionWithDefaultsForFast,
   proposalItemToFragrance,
   suggestedMissionChips,
 } from "./scentMissionClient.ts";
@@ -219,4 +222,46 @@ test("suggestedMissionChips follow the active node and the resolved end state", 
   }
   const chips = suggestedMissionChips(state);
   assert.ok(chips.some((chip) => /why this match/i.test(chip)));
+});
+
+/* ----------------------- Fast "just go" defaults ----------------------- */
+
+test("Fast run with no occasion/mood fills flexible defaults and flags them as system-supplied", () => {
+  const mission = createScentMissionState();
+  assert.equal(mission.calibration.destination, undefined);
+  assert.equal(mission.calibration.energy, undefined);
+
+  const result = missionWithDefaultsForFast(mission);
+  // It still produces a runnable calibration (the "just go" affordance survives)...
+  assert.equal(result.mission.calibration.destination, FAST_FLEXIBLE_DESTINATION);
+  assert.equal(result.mission.calibration.energy, FAST_FLEXIBLE_ENERGY);
+  // ...but never claims the old misleading "Confident" mood as user intent...
+  assert.notEqual(result.mission.calibration.energy, "Confident");
+  // ...and reports that these were system defaults, not the user's choice.
+  assert.equal(result.usedDefaults, true);
+});
+
+test("Fast run preserves a calibration the user actually set and does not flag defaults", () => {
+  const mission = createScentMissionState();
+  mission.calibration = { destination: "Work", energy: "Focused" };
+
+  const result = missionWithDefaultsForFast(mission);
+  assert.equal(result.usedDefaults, false);
+  assert.deepEqual(result.mission.calibration, { destination: "Work", energy: "Focused" });
+  // No false intent introduced.
+  assert.notEqual(result.mission.calibration.destination, "Going Out");
+  assert.notEqual(result.mission.calibration.energy, "Confident");
+});
+
+test("Fast run keeps a partially-set cue and only fills the missing half as a system default", () => {
+  const mission = createScentMissionState();
+  mission.calibration = { destination: "Date" };
+
+  const result = missionWithDefaultsForFast(mission);
+  assert.equal(result.usedDefaults, true);
+  // The user's real cue is preserved verbatim...
+  assert.equal(result.mission.calibration.destination, "Date");
+  // ...the missing mood is filled with the flexible default, not "Confident".
+  assert.equal(result.mission.calibration.energy, FAST_FLEXIBLE_ENERGY);
+  assert.notEqual(result.mission.calibration.energy, "Confident");
 });

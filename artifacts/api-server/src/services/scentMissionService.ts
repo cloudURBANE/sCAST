@@ -36,12 +36,16 @@ import {
 const MAX_USER_MESSAGE_LENGTH = 2_000;
 const SESSION_ID_RE = /^[0-9a-zA-Z_-]{8,64}$/;
 
+// User-facing step names. These deliberately avoid internal mission-graph
+// vocabulary (no "calibration", "node", "environment scan", "resolution") so the
+// deterministic fallback reads like a concierge, not a developer console. The
+// node ids stay as internal keys.
 const NODE_LABELS: Record<ScentMissionNodeId, string> = {
-  onboarding: "Calibration",
-  "wardrobe-sync": "Vault Sync",
-  "environment-scan": "Environment Scan",
-  "resolution-standard": "Resolution",
-  "resolution-premium": "Molecular Intelligence",
+  onboarding: "your setting and mood",
+  "wardrobe-sync": "your collection",
+  "environment-scan": "today's conditions",
+  "resolution-standard": "your match",
+  "resolution-premium": "the deeper breakdown",
 };
 
 export type ScentMissionChatContext = {
@@ -385,9 +389,9 @@ function calibrationUpdatedReply(calibration: ScentMissionCalibration): string {
 function lockedNodeMessage(nodeId: ScentMissionNodeId, status: string): string {
   const label = NODE_LABELS[nodeId];
   if (status === "complete") {
-    return `${label} is already complete. Continue with the next available mission node.`;
+    return `I've already covered ${label} — let's keep going.`;
   }
-  return `${label} is locked right now. Complete the current mission node first.`;
+  return `I need a little more from you before I can get to ${label}. Let's finish this step first.`;
 }
 
 /* ------------------------------------------------------------------ */
@@ -412,12 +416,12 @@ async function executeNode(
       if (!destination || !energy) {
         return {
           assistantMessage:
-            "Calibration incomplete — choose a destination and an energy state, then execute again.",
+            "I still need two things before I can pick: where you're headed and how you want to come across.",
         };
       }
       const next = completeScentMissionNode(mission, "onboarding");
       return {
-        assistantMessage: `Calibration locked: ${destination}, ${energy} energy. Next, I'll sync your vault.`,
+        assistantMessage: `Got it — ${destination.toLowerCase()}, feeling ${energy.toLowerCase()}. Let me look through your collection.`,
         nodeUpdates: diffScentMissionNodes(mission, next),
         missionPatch: { calibration: mission.calibration },
       };
@@ -431,16 +435,16 @@ async function executeNode(
         };
         return {
           assistantMessage:
-            "Your vault is empty, so there is nothing to sync. Add fragrances from the search panel, then re-run this node.",
+            "Your collection's empty, so there's nothing for me to work with yet. Add a few fragrances from search and I'll pick from them.",
           nodeUpdates: diffScentMissionNodes(mission, next),
         };
       }
       const families = topFamilies(wardrobe);
       const next = completeScentMissionNode(mission, "wardrobe-sync");
       return {
-        assistantMessage: `Vault synced — ${wardrobe.length} fragrance${wardrobe.length === 1 ? "" : "s"} profiled${
+        assistantMessage: `I've been through your collection — ${wardrobe.length} fragrance${wardrobe.length === 1 ? "" : "s"}${
           families.length > 0 ? `, leaning ${families.join(" / ")}` : ""
-        }. Environment scan is next.`,
+        }. Now let me check today's air.`,
         nodeUpdates: diffScentMissionNodes(mission, next),
       };
     }
@@ -448,7 +452,7 @@ async function executeNode(
     case "environment-scan": {
       const next = completeScentMissionNode(mission, "environment-scan");
       return {
-        assistantMessage: `Environment locked: ${describeWeather(weather)}. Resolution is armed.`,
+        assistantMessage: `Today's air: ${describeWeather(weather)}. Now I'll line up your match.`,
         nodeUpdates: diffScentMissionNodes(mission, next),
       };
     }
@@ -466,7 +470,7 @@ async function executeNode(
         };
         return {
           assistantMessage:
-            "I can't resolve a match without a synced vault. Add fragrances and re-run wardrobe sync first.",
+            "I can't pick a match from an empty collection. Add a few fragrances and I'll choose from them.",
           nodeUpdates: diffScentMissionNodes(mission, next),
         };
       }
@@ -485,7 +489,7 @@ async function executeNode(
 
       const next = completeScentMissionNode(mission, "resolution-standard");
       return {
-        assistantMessage: `Resolution: wear ${recommendation.name}${
+        assistantMessage: `Today, reach for ${recommendation.name}${
           recommendation.brand ? ` by ${recommendation.brand}` : ""
         }. ${recommendation.reason}`,
         nodeUpdates: diffScentMissionNodes(mission, next),
