@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Plus, Search, X } from 'lucide-react';
 import { AppTopNav } from '@/components/AppTopNav';
+import { ScentIntelligenceLoader } from '@/components/ScentIntelligenceLoader';
 import { CommunityHero } from '@/components/community/CommunityHero';
 import { useCommunityFragrances } from '@/components/community/communityData';
 import type { PostComposerHandle } from '@/components/community/PostComposer';
@@ -32,20 +33,25 @@ interface CommunityPageProps {
 
 const COMMUNITY_BODY_WAKE_DELAY_MS = 640;
 
+// Quiet, static toolbar placeholder for the composer/search bar. No pulse — the
+// page's single loading "animation" is the orbital emblem below, matching the
+// rest of the app (home / route transitions) instead of the old grey skeletons.
 function CommunityPanelFallback() {
   return (
-    <div className="mx-auto w-full max-w-[940px] overflow-hidden rounded-[calc(var(--radius-scent)-2px)] border border-scent-accent/18 bg-black/46">
-      <div className="min-h-[20rem] animate-pulse" />
-    </div>
+    <div className="mx-auto h-12 w-full max-w-[940px] overflow-hidden rounded-[calc(var(--radius-scent)-2px)] border border-scent-accent/14 bg-[#050403] shadow-[inset_0_1px_0_rgba(255,236,183,0.04)]" />
   );
 }
 
+// The forum's load state now speaks the app's premium loading language — the
+// gold orbital emblem (ScentIntelligenceLoader) — instead of a stack of pulsing
+// grey blocks that read as a generic fetch skeleton.
 function CommunityFeedFallback() {
   return (
-    <div className="mx-auto grid w-full max-w-[940px] gap-4" aria-label="Loading community posts">
-      {Array.from({ length: 12 }, (_, item) => (
-        <div key={item} className="min-h-[15rem] rounded-[calc(var(--radius-scent)+2px)] border border-scent-accent/18 bg-black/46" />
-      ))}
+    <div
+      className="mx-auto flex w-full max-w-[940px] items-center justify-center py-20"
+      aria-label="Loading community posts"
+    >
+      <ScentIntelligenceLoader status="Gathering the community" substatus="Loading rooms" />
     </div>
   );
 }

@@ -261,7 +261,14 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
   return (
     <>
       <nav className="scent-topbar fixed top-0 left-0 right-0 z-50 px-4 md:px-8">
-        <div className="mx-auto grid h-full max-w-4xl grid-cols-[1fr_auto_1fr] items-center md:grid-cols-[auto_1fr_auto] md:gap-8">
+        {/* Symmetric 1fr/auto/1fr on every breakpoint so the centre (logo)
+            column is the true container centre: equal side tracks mean the
+            wider desktop nav-link cluster on the left can't shove the logo
+            right (the old md:[auto_1fr_auto] centred the logo inside an
+            off-centre 1fr track). Nav links justify-self-start ride the far
+            left of their track; the account control justify-self-end the far
+            right. */}
+        <div className="mx-auto grid h-full max-w-4xl grid-cols-[1fr_auto_1fr] items-center md:gap-8">
           {/* Column 1 (desktop): primary nav links, far left. Hidden on mobile,
               where the bottom tab bar carries navigation. */}
           <div className="hidden items-center gap-6 md:flex md:justify-self-start">

@@ -2487,10 +2487,14 @@ a {
 }
 
 .community-fragrance-detail__hero::after {
-  inset: 0.76rem;
-  border-radius: calc(var(--hero-frame-radius) - 0.76rem);
+  /* Innermost mat. Gap from the bright ::before frame widened from 0.20rem to
+     0.34rem so it reads as a deliberate nested mat rather than a doubled line
+     crowding the second frame. inset and the radius subtraction move together
+     so the corner arc stays concentric with the outer two (same centre). */
+  inset: 0.9rem;
+  border-radius: calc(var(--hero-frame-radius) - 0.9rem);
   z-index: -1;
-  border: 1px solid rgba(255, 219, 143, 0.24);
+  border: 1px solid rgba(255, 219, 143, 0.28);
   box-shadow:
     inset 0 0 0 1px rgba(0, 0, 0, 0.7),
     inset 0 1px 0 rgba(255, 245, 214, 0.1);
@@ -3006,7 +3010,14 @@ a {
 
 .scent-community-marquee .scent-community-marquee-card {
   overflow: hidden;
-  border-color: rgba(212, 175, 55, 0.24);
+  /* One unified gold edge: this is the resting outline the owner wants every
+     card (fragrance + forum) to share. Was 0.24 (near-invisible) plus a
+     separate brighter ring that only appeared once a card was clicked — that
+     selected-looking ring then lingered because closing the overlay restores
+     focus to the trigger. Lifting the resting edge and routing the brighter
+     state through :focus-visible (below) makes the gold outline the default,
+     not a post-click artefact. */
+  border-color: rgba(212, 175, 55, 0.34);
   background: #050403;
   box-shadow: inset 0 1px 0 rgba(255, 236, 183, 0.055);
 }
@@ -3028,7 +3039,12 @@ a {
   }
 }
 
-.scent-community-marquee .scent-community-marquee-card:focus-within {
+/* Keyboard-only emphasis. Was :focus-within, which also matches the
+   programmatic trigger.focus() we run after the detail overlay closes — that
+   is what left a gold "you tapped this" ring sitting on the card for pointer
+   users. :focus-visible is input-modality aware, so it shows for keyboard
+   navigation but not for the restore-focus after a tap. */
+.scent-community-marquee .scent-community-marquee-card:focus-visible {
   border-color: rgba(212, 175, 55, 0.52);
   box-shadow:
     0 0 0 2px rgba(212, 175, 55, 0.12),
@@ -3040,8 +3056,19 @@ a {
   transition: opacity var(--scent-transition-base) var(--scent-ease-out);
 }
 
-.scent-community-marquee-card:focus-within .scent-card-title-row {
+.scent-community-marquee-card:focus-visible .scent-card-title-row {
   opacity: 1;
+}
+
+/* Composite each marquee cell as a single layer so its brand label and italic
+   title are rasterised once and then merely translated by the scrolling track.
+   Without this the moving parent forces WebKit to re-rasterise the gold
+   background-clip sheen and the title every frame, which reads as a flicker on
+   the names while the row scrolls. The cell count is small and capped, and iPad
+   perf mode pauses the marquee, so this does not inflate the layer budget. */
+.scent-community-marquee-cell {
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
 @media (hover: hover) and (pointer: fine) {
