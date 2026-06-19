@@ -354,6 +354,7 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
         ].join(' ')}
         aria-label="Primary navigation"
         aria-hidden={agentActive ? 'true' : undefined}
+        inert={agentActive ? true : undefined}
         onFocusCapture={() => setNavVisible(true)}
       >
         {/* Opaque pill surface: content must never read through the bar. The
