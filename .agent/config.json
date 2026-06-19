@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "runsDir": ".agent/runs",
+  "defaultHead": 80,
+  "defaultSuccessTail": 50,
+  "defaultFailureTail": 220,
+  "defaultGrepContext": 20,
+  "maxErrors": 200,
+  "maxWarnings": 100,
+  "redaction": {
+    "enabled": true
+  }
+}

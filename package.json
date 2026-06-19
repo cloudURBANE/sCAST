@@ -13,7 +13,14 @@
     "start": "corepack pnpm --filter @workspace/api-server run start",
     "typecheck:libs": "tsc --build",
     "typecheck": "corepack pnpm run typecheck:libs && corepack pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
-    "test": "corepack pnpm -r --if-present run test"
+    "test": "corepack pnpm -r --if-present run test",
+    "agent:run": "node scripts/agent-run.mjs",
+    "agent:show": "node scripts/agent-show.mjs",
+    "agent:last": "node scripts/agent-show.mjs -- latest",
+    "agent:build": "node scripts/agent-run.mjs -- corepack pnpm build",
+    "agent:lint": "node scripts/agent-run.mjs -- corepack pnpm lint",
+    "agent:test": "node scripts/agent-run.mjs -- corepack pnpm test",
+    "agent:status": "node scripts/agent-run.mjs -- git status --short"
   },
   "private": true,
   "devDependencies": {
