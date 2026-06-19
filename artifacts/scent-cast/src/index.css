@@ -366,7 +366,7 @@ a {
 
   .scent-vault-panel {
     border-radius: calc(var(--radius-scent) + 4px);
-    padding: 1.15rem 0.75rem 0.8rem;
+    padding: 1rem 0.75rem 0.85rem;
   }
 
   .scent-vault-results-panel {
@@ -467,31 +467,6 @@ a {
 .bottle-packshot-frame[data-normalized="true"][data-variant="featured"] {
   transform: translate(var(--bottle-frame-x), var(--bottle-frame-y))
     scale(calc(var(--bottle-frame-scale) * 1.09));
-  transform-origin: center bottom;
-}
-
-/*
- * Forecast hero (WeeklyOutlookDashboard) edge-case clip fix.
- *
- * The +9% normalized upscale above is tuned for ROOMY single-bottle views
- * (detail modal, enlarge, Wardrobe featured) where it cancels the engine's
- * baked top padding so the bottle isn't ~12% too small. The daily-forecast hero
- * reuses variant="featured" but is a TIGHT square slot, so that same upscale
- * seats a normalized bottle's cap only ~0.7% below the artboard top. Any
- * edge-case packshot baked a hair taller (older orientationVersion / sub-pixel
- * rounding) — or a sticky touch :hover scale — tips the cap past the artboard's
- * overflow-hidden and clips it (the reported "bottle out of its frame").
- *
- * In this slot the square packshot already fills the artboard via object-contain
- * (which can never clip), so cancel the upscale for the forecast hero only and
- * let plain contain fully frame every pick. Scoped to the .forecast-hero-bottle
- * marker so roomy detail/featured views keep their upscale untouched. The extra
- * ancestor class outranks the rule above (and composes with user zoom/nudge via
- * the --bottle-frame-* vars, so manual frame adjustments still apply on top).
- */
-.forecast-hero-bottle .bottle-packshot-frame[data-normalized="true"][data-variant="featured"] {
-  transform: translate(var(--bottle-frame-x), var(--bottle-frame-y))
-    scale(var(--bottle-frame-scale));
   transform-origin: center bottom;
 }
 
@@ -1548,7 +1523,7 @@ a {
   will-change: transform;
   transform: translateZ(0);
   backface-visibility: hidden;
-  animation: hero-marquee-scroll var(--hero-marquee-duration) linear infinite;
+  animation: hero-marquee-scroll var(--hero-marquee-duration) linear 1.25s infinite;
 }
 
 .scent-marquee-track-row:not([data-marquee-ready="true"]) {
@@ -1597,6 +1572,7 @@ a {
 .scent-marquee-phrase-group {
   flex: 0 0 auto;
   gap: clamp(2rem, 4.25vw, 5.25rem);
+  padding-left: calc(var(--hero-edge-fade) + 0.75rem);
   padding-right: clamp(2rem, 4.25vw, 5.25rem);
 }
 
@@ -1791,7 +1767,7 @@ a {
   background: linear-gradient(180deg, rgba(0, 0, 0, 0.94), rgba(0, 0, 0, 0.98));
   box-shadow: inset 0 1px 0 rgba(255, 226, 174, 0.06), 0 18px 44px -28px rgba(0, 0, 0, 0.95);
   contain: paint;
-  --atmosphere-edge-fade: clamp(2.75rem, 8vw, 5.5rem);
+  --atmosphere-edge-fade: clamp(2rem, 6vw, 4.75rem);
   -webkit-mask-image: linear-gradient(
     90deg,
     transparent 0,

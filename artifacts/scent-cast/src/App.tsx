@@ -269,12 +269,16 @@ function getHeroTickerPhrases(items: Fragrance[]): HeroPhrase[] {
 
 interface HeroMarqueeProps {
   phrases: HeroPhrase[];
+  resetKey?: string;
 }
 
-const HeroMarquee: React.FC<HeroMarqueeProps> = React.memo(({ phrases }) => {
+const HeroMarquee: React.FC<HeroMarqueeProps> = React.memo(({ phrases, resetKey = '' }) => {
   const trackRef = useRef<HTMLDivElement>(null);
   const groupRef = useRef<HTMLSpanElement>(null);
-  const phraseKey = useMemo(() => phrases.map(heroPhraseText).join('|'), [phrases]);
+  const phraseKey = useMemo(
+    () => `${resetKey}|${phrases.map(heroPhraseText).join('|')}`,
+    [phrases, resetKey],
+  );
 
   useMarqueeSwipe(trackRef, {
     distanceVar: '--hero-marquee-distance',
@@ -354,9 +358,9 @@ const HeroMarquee: React.FC<HeroMarqueeProps> = React.memo(({ phrases }) => {
       }
     };
 
-    if (track.dataset.marqueeReady !== 'true') {
-      track.dataset.marqueeReady = 'false';
-    }
+    // Re-arm from the intentional leading edge whenever the surrounding view
+    // changes instead of inheriting a mid-phrase transform.
+    track.dataset.marqueeReady = 'false';
 
     const startWhenFontsSettle = () => {
       animationFrame = window.requestAnimationFrame(() => updateDistance(true));
@@ -577,11 +581,11 @@ const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({
   );
 });
 
-const HomepageHeroMarquee: React.FC = React.memo(() => {
+const HomepageHeroMarquee: React.FC<{ agentActive: boolean }> = React.memo(({ agentActive }) => {
   const items = useWardrobeItems();
   const tickerPhrases = useMemo(() => getHeroTickerPhrases(items), [items]);
 
-  return <HeroMarquee phrases={tickerPhrases} />;
+  return <HeroMarquee phrases={tickerPhrases} resetKey={agentActive ? 'agent' : 'home'} />;
 });
 
 const HomepageAtmosphereChrome: React.FC = React.memo(() => {
@@ -691,8 +695,8 @@ function DashboardView() {
     return () => mq.removeEventListener('change', onChange);
   }, []);
   const missionHeaderMargins = isSmUp
-    ? { marginTop: '0', marginBottom: '0.75rem' }
-    : { marginTop: '0', marginBottom: '0.625rem' };
+    ? { marginTop: '0', marginBottom: '0.25rem' }
+    : { marginTop: '0', marginBottom: '0.125rem' };
   const [viewState, setViewState] = useState<'search' | 'agent'>('search');
   // Beam Agent progress surfaced by the panel so its header (title + progress +
   // close) can render in a strip ABOVE the bordered card instead of inside it.
@@ -938,8 +942,8 @@ function DashboardView() {
             (no bottom nav) the min-height + auto-margin relax to the original
             stacked rhythm. The Vault of Aromas is no longer part of this screen —
             it lives one scroll down as the "second page". */}
-        <div className="flex min-h-[calc(100svh-var(--topbar-h)-var(--bottomnav-h)-2.5rem)] flex-col gap-6 pt-3 sm:min-h-0 sm:gap-16 sm:pt-14">
-          <HomepageHeroMarquee />
+        <div className="flex min-h-[calc(100svh-var(--topbar-h)-var(--bottomnav-h))] flex-col gap-5 pt-2 sm:min-h-0 sm:gap-24 sm:pt-12">
+          <HomepageHeroMarquee agentActive={agentActive} />
 
           <section className="relative mx-auto w-full max-w-[60rem] min-w-0 text-center">
             {/* Beam Agent header strip — title, progress, and close live ABOVE
@@ -969,21 +973,15 @@ function DashboardView() {
                   style={{ overflow: 'hidden' }}
                   className="mx-auto w-full max-w-[52rem] px-1"
                 >
-                  {/* min-h holds the absolutely-positioned close button fully
-                      inside the header's clipped (overflow-hidden) box, so the
-                      top of the X is not shaved off. */}
-                  {/* The progress bar that used to sit here was driven by the
-                      scripted mission tree, which the live chat agent never
-                      advances — so it sat near-empty and tracked nothing real.
-                      It's been removed; the calm status line below ("A scent for
-                      today." + phase) is the honest progress signal. The wrapper
-                      stays to hold the absolutely-positioned close button. */}
-                  <div className="relative mb-2 flex min-h-11 items-center justify-center">
-                    {/* The X is paired with a visible "Close" label so the
-                        affordance reads as an explicit, non-destructive exit
-                        back to search — not a bare ambiguous glyph. The label
-                        rides alongside the X at every width (it is short enough
-                        not to crowd the SE-class header). */}
+                  <div className="relative mx-auto min-h-11 w-full">
+                    <h2 className="mx-auto max-w-[32rem] text-balance font-serif italic text-[clamp(1.4rem,3.4vw,1.9rem)] leading-[1.05] tracking-normal text-[#fff7ec] drop-shadow-[0_4px_14px_rgba(0,0,0,0.72)]">
+                      {missionStatus?.headerTitle ?? 'A scent for today.'}
+                    </h2>
+                    <p className="mt-0.5 scent-type-label text-scent-accent/55">
+                      {missionStatus?.progressText ?? 'Tell me about your day'}
+                    </p>
+                    {/* Align the close action to the compact intro stack instead
+                        of reserving a separate empty row above it. */}
                     <button
                       type="button"
                       onClick={handleExitMission}
@@ -994,12 +992,6 @@ function DashboardView() {
                       <span className="text-[11px] font-semibold uppercase tracking-[0.16em]">Close</span>
                     </button>
                   </div>
-                  <h2 className="mx-auto max-w-[32rem] text-balance font-serif italic text-[clamp(1.4rem,3.4vw,1.9rem)] leading-[1.05] tracking-normal text-[#fff7ec] drop-shadow-[0_4px_14px_rgba(0,0,0,0.72)]">
-                    {missionStatus?.headerTitle ?? 'A scent for today.'}
-                  </h2>
-                  <p className="mt-1.5 scent-type-label text-scent-accent/55">
-                    {missionStatus?.progressText ?? 'Tell me about your day'}
-                  </p>
                   <p className="mx-auto mt-1 hidden max-w-xl text-sm leading-6 text-scent-text-muted sm:block">
                     {missionStatus?.contextLine ?? 'Weather context ready when available'}
                   </p>
@@ -1078,7 +1070,7 @@ function DashboardView() {
                 ref={signatureSectionRef}
                 layout={isMounted ? !reduceMotion : false}
                 transition={vaultContentTransition}
-                className="scent-mission-action-slot mt-3 flex min-h-[52px] justify-center sm:mt-4 sm:min-h-[60px]"
+                className="scent-mission-action-slot mt-2.5 flex min-h-[52px] justify-center sm:mt-3.5 sm:min-h-[60px]"
               >
                 <AnimatePresence initial={false} mode="popLayout">
                   {agentActive ? (

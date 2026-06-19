@@ -1848,34 +1848,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         : 'Tap a cue below, or describe your day';
 
   const actionControls = (
-    <div className="relative mx-auto mt-4 w-full max-w-[52rem] sm:mt-5">
-      <div className="mb-2 flex min-h-[1.25rem] items-center justify-end gap-2 pr-1">
-        {/* No status text lives next to the avatar anymore. It used to echo the
-            exact live phase ("Reading your vault", "Searching the catalog") that
-            the in-log activity trail already shows step-by-step — so the user saw
-            the same line twice, once in the chat bubble and once beside the icon.
-            The trail is now the single source of granular progress; the avatar's
-            pulse alone signals the concierge is working here, and the calm phase
-            still reads in the header strip above the card (a different register,
-            not adjacent duplication). */}
-        {/* Pulse the avatar while the agent is busy OR composing its opening
-            greeting, so the open reads as the agent coming alive and writing —
-            not a static panel that suddenly drops dots into an empty box. */}
-        <span
-          className="scent-beam-avatar"
-          data-thinking={busy || !introReady ? 'true' : undefined}
-        >
-          <img
-            src="/scent-concierge-avatar.png"
-            alt="ScentCast Beam Agent"
-            width={36}
-            height={36}
-            loading="lazy"
-            decoding="async"
-            className="h-9 w-9 rounded-full border border-scent-accent/35 object-cover shadow-[0_2px_10px_rgba(0,0,0,0.45)]"
-          />
-        </span>
-      </div>
+    <div className="relative mx-auto mt-2 w-full max-w-[52rem] sm:mt-3">
       <form
         ref={composerFormRef}
         onSubmit={handleSubmit}
@@ -1918,7 +1891,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
           placeholder={busy ? 'Composing your recommendation…' : composerFocused ? '' : composerPlaceholder}
           aria-label="Message the Beam Agent"
           autoComplete="off"
-          className="min-w-0 flex-1 bg-transparent px-1 text-center text-[13px] font-medium tracking-[0.015em] text-[#fff7ec] caret-[#f5bd69] outline-none placeholder:text-[#d8c9b5]/72 disabled:cursor-not-allowed disabled:placeholder:text-scent-accent/70 sm:text-[15px]"
+          className="h-full min-w-0 flex-1 bg-transparent px-1 py-0 text-center text-[13px] font-medium leading-none tracking-[0.015em] text-[#fff7ec] caret-[#f5bd69] outline-none placeholder:text-[#d8c9b5]/72 disabled:cursor-not-allowed disabled:placeholder:text-scent-accent/70 sm:text-[15px]"
         />
         <button
           type="submit"
@@ -1996,10 +1969,9 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   );
 
   // The impressions / Confirm lane lives BELOW the card (portaled into the host
-  // container) so it never crowds or shrinks the conversation. When there are
-  // more than two contextual cues they scroll as a marquee any time the agent is
-  // waiting on input; two or fewer stay centered and static.
-  const showCueMarquee = !calmMotion && visibleQuickReplies.length > 2;
+  // container) so it never crowds or shrinks the conversation. Its initial state
+  // remains stationary and user-scrollable so the first cue is always complete.
+  const showCueMarquee = false;
 
   // Changes whenever the cue set changes, the cue bar becomes ready, or the portal
   // container is resolved. This ensures the swipe listeners attach against the live DOM node.
@@ -2058,7 +2030,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   }, [showCueMarquee, cueMarqueeKey]);
 
   const cueChipClass =
-    'scent-beam-cue inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 scent-type-chip focus-visible:outline-none disabled:opacity-45';
+    'scent-beam-cue inline-flex min-h-9 shrink-0 snap-start items-center justify-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-1.5 scent-type-chip focus-visible:outline-none disabled:opacity-45';
 
   const renderCueChip = (reply: QuickReply, key: string) => (
     <button
@@ -2291,7 +2263,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
           ) : (
             <div
               ref={quickReplyScrollRef}
-              className="mt-1.5 flex flex-nowrap items-center justify-center gap-1.5 overflow-x-auto px-3 pb-1 scrollbar-hide select-none"
+              className={`mt-1.5 flex w-full min-w-0 snap-x snap-mandatory flex-nowrap items-center gap-1.5 overflow-x-auto scroll-px-4 px-4 pb-1 scrollbar-hide select-none ${visibleQuickReplies.length <= 2 ? 'justify-center' : 'justify-start'}`}
               style={{ touchAction: 'pan-x', overscrollBehaviorX: 'contain' }}
             >
               <AnimatePresence initial={false} mode="popLayout">
@@ -2387,7 +2359,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       <div
         ref={scrollRef}
         onScroll={updateScrollEdges}
-        className="flex w-full min-h-[13.5rem] max-h-[min(55dvh,29rem)] flex-col gap-3 overflow-y-auto px-1.5 pb-2 pt-3 text-left scrollbar-hide sm:min-h-[15.5rem] sm:max-h-[min(57dvh,33rem)] sm:px-2 sm:pt-4"
+        className="flex w-full min-h-[8rem] max-h-[min(55dvh,29rem)] flex-col gap-3 overflow-y-auto px-2.5 pb-2 pt-3 text-left scrollbar-hide sm:min-h-[9.5rem] sm:max-h-[min(57dvh,33rem)] sm:px-3.5 sm:pt-3.5"
         role="log"
         aria-live="polite"
         aria-label="Beam Agent conversation"
@@ -2467,7 +2439,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                 ease: SCENT_EASE,
                 layout: { duration: 0.52, ease: SCENT_EASE },
               }}
-              className={`relative max-w-[90%] rounded-[calc(var(--radius-scent)-12px)] border px-3.5 py-2.5 text-[13px] leading-relaxed shadow-[inset_0_1px_0_rgba(255,236,183,0.04),0_10px_24px_rgba(0,0,0,0.2)] sm:text-sm ${
+              className={`relative ${isIntroGreeting ? 'max-w-[86%] sm:max-w-[82%]' : 'max-w-[90%]'} rounded-[calc(var(--radius-scent)-12px)] border px-3.5 py-2.5 text-[13px] leading-relaxed shadow-[inset_0_1px_0_rgba(255,236,183,0.04),0_10px_24px_rgba(0,0,0,0.2)] sm:text-sm ${
                 message.role === 'user'
                   ? 'self-end border-scent-accent/18 bg-[linear-gradient(180deg,rgba(255,247,236,0.082),rgba(58,45,30,0.16))] text-[#fff7ec]'
                   : message.role === 'system'
