@@ -19,7 +19,7 @@ interface WeeklyOutlookDashboardProps {
 }
 
 /**
- * Map an OpenWeather icon code (e.g. "10d") — falling back to the condition
+ * Map a normalized provider icon code (e.g. "10d") — falling back to the condition
  * text — to a calm line icon. Kept deliberately small: the dashboard reads as a
  * quiet instrument cluster, not a colourful weather widget.
  */
@@ -115,16 +115,25 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({ 
             7-day outlook
           </h2>
         </div>
-        {weather?.location ? (
-          <p className="shrink-0 scent-type-meta text-[10px] uppercase tracking-[0.14em] text-scent-text-muted sm:text-[11px]">
-            {weather.location}
-          </p>
-        ) : null}
+        <div className="shrink-0 text-right">
+          {weather?.location ? (
+            <p className="scent-type-meta text-[10px] uppercase tracking-[0.14em] text-scent-text-muted sm:text-[11px]">
+              {weather.location}
+            </p>
+          ) : null}
+          <a
+            href="https://open-meteo.com/"
+            target="_blank"
+            rel="noreferrer"
+            className="mt-1 inline-flex text-[8px] uppercase tracking-[0.12em] text-scent-text-muted/55 transition-colors hover:text-scent-text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/50"
+          >
+            Weather data by Open-Meteo
+          </a>
+        </div>
       </header>
 
       {outlook.length === 0 ? (
-        // No live forecast (no provider key, or the 2.5 fallback that carries no
-        // daily data). Keep the dashboard's footprint with one calm line rather
+        // No live forecast. Keep the dashboard's footprint with one calm line rather
         // than collapsing the layout.
         <div className="flex min-h-[8.5rem] items-center justify-center rounded-[20px] border border-scent-accent/16 bg-[#050403] px-5 text-center shadow-[inset_0_1px_0_rgba(255,236,183,0.05)]">
           <p className="scent-type-chip text-[11px] text-scent-text-muted sm:text-sm">
