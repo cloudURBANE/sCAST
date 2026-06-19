@@ -69,8 +69,8 @@
   background-color: var(--color-scent-bg);
   color: var(--color-scent-accent);
   color-scheme: dark;
-  --topbar-h: calc(4rem + env(safe-area-inset-top, 0px));
-  --bottomnav-h: calc(0.75rem + 56px + env(safe-area-inset-bottom, 0px));
+  --topbar-h: calc(3.5rem + env(safe-area-inset-top, 0px));
+  --bottomnav-h: calc(0.75rem + 52px + env(safe-area-inset-bottom, 0px));
   --mobile-nav-offset: var(--bottomnav-h);
   --scent-gold-rgb: 212 175 55;
   --scent-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
@@ -175,7 +175,7 @@ a {
   position: relative;
   border: 1px solid rgba(232, 181, 90, 0.72);
   border-radius: calc(var(--radius-scent) + 12px);
-  padding: clamp(2.35rem, 4.8vw, 3.65rem) clamp(1rem, 5vw, 5.25rem) clamp(1.55rem, 3.6vw, 2.25rem);
+  padding: clamp(1.85rem, 4vw, 3rem) clamp(1rem, 5vw, 5.25rem) clamp(1.25rem, 3vw, 1.85rem);
   background:
     radial-gradient(95% 80% at 50% 8%, rgba(255, 255, 255, 0.018), transparent 58%),
     radial-gradient(72% 68% at 50% 100%, rgba(212, 175, 55, 0.022), transparent 68%),
@@ -1846,10 +1846,10 @@ a {
   justify-content: center;
   text-align: center;
   box-sizing: border-box;
-  gap: 0.35rem;
+  gap: 0.2rem;
   width: clamp(11rem, 18vw, 14rem);
   max-width: clamp(11rem, 18vw, 14rem);
-  padding: clamp(0.85rem, 2vw, 1.1rem) clamp(0.95rem, 2vw, 1.35rem);
+  padding: clamp(0.5rem, 1.4vw, 0.7rem) clamp(0.95rem, 2vw, 1.35rem);
   border-left: 1px solid rgba(212, 175, 55, 0.12);
 }
 
@@ -2943,6 +2943,31 @@ a {
   position: relative;
   overflow: hidden;
   contain: paint;
+  /* Intentional edge fade so the looping track resolves into the page instead of
+     looking like the far-left/right card was accidentally chopped at the
+     container edge — matching the hero + atmosphere bands. */
+  --community-edge-fade: clamp(1rem, 4vw, 2.5rem);
+  -webkit-mask-image: linear-gradient(
+    90deg,
+    transparent 0,
+    #000 var(--community-edge-fade),
+    #000 calc(100% - var(--community-edge-fade)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    90deg,
+    transparent 0,
+    #000 var(--community-edge-fade),
+    #000 calc(100% - var(--community-edge-fade)),
+    transparent 100%
+  );
+}
+
+/* iPad Safari/WebKit compositor relief: a mask on this large image track adds
+   GPU cost, so drop it under perf mode (the band simply hard-clips there). */
+.scent-ipad-safari-perf .scent-community-marquee {
+  -webkit-mask-image: none;
+  mask-image: none;
 }
 
 .scent-community-marquee-track {

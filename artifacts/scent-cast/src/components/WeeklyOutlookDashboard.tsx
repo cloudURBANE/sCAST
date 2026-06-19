@@ -313,11 +313,11 @@ function ForecastChevron({ direction, onClick }: { direction: 'prev' | 'next'; o
       type="button"
       onClick={onClick}
       aria-label={direction === 'prev' ? 'Previous day' : 'Next day'}
-      className={`absolute top-1/2 z-10 flex h-10 w-8 -translate-y-1/2 items-center justify-center text-scent-accent transition-colors hover:text-[#ffe8a5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/50 ${
+      className={`absolute top-1/2 z-10 flex h-9 w-7 -translate-y-1/2 items-center justify-center text-scent-accent/80 transition-colors hover:text-[#ffe8a5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/50 ${
         direction === 'prev' ? 'left-0' : 'right-0'
       }`}
     >
-      <Icon size={29} strokeWidth={1.35} aria-hidden />
+      <Icon size={22} strokeWidth={1.5} aria-hidden />
     </button>
   );
 }
