@@ -1057,6 +1057,10 @@ export const Wardrobe: React.FC<{
   const [editingFactField, setEditingFactField] = React.useState<MetricFactField | null>(null);
   const [factDraft, setFactDraft] = React.useState('');
   const [factSaving, setFactSaving] = React.useState(false);
+  // The expanded inline editor; we scroll it into view on open so the owner
+  // actually sees the input (it can otherwise open below the fold — and they
+  // may not even want to verify, so don't make them hunt for it).
+  const factEditorRef = React.useRef<HTMLDivElement | null>(null);
   // Reviews are no longer shipped inline on every wardrobe row (egress); fetch
   // them for the one open item. Seeded from any inline reviews still present
   // (legacy rows / pre-trim responses) so the panel never regresses.
@@ -1769,12 +1773,12 @@ export const Wardrobe: React.FC<{
     const trimmed = value.trim();
     return /^(unknown|n\/?a|none|null|undefined)$/i.test(trimmed) ? undefined : trimmed;
   };
-  // All four metrics always render. A known value shows as-is; an unscraped one
-  // shows an explicit "Unknown" (cleanMetaValue strips the literal placeholder,
-  // so `value` is undefined exactly when the metric is genuinely missing). Each
-  // row is tappable for the vault owner to verify/fill the fact by hand — an
-  // honest "Unknown" the user can correct reads better than a silently dropped
-  // row that looks like a metric the card simply forgot.
+  // All four metrics always render. A known value shows as-is (read-only); an
+  // unscraped one shows an explicit "Unknown" (cleanMetaValue strips the literal
+  // placeholder, so `value` is undefined exactly when the metric is genuinely
+  // missing). Only the "Unknown" rows are tappable for the vault owner to fill
+  // the fact by hand — already-filled metrics are not editable, so a verified
+  // value can't be accidentally clobbered.
   const detailMetaRows: Array<{ field: MetricFactField; label: string; value?: string }> = selectedItem
     ? [
         { field: 'year', label: 'Year', value: cleanMetaValue(formatYear(selectedItem.year)) },
@@ -1788,12 +1792,12 @@ export const Wardrobe: React.FC<{
   // same metrics read-only until the user adds it to the vault.
   const canVerifyFacts = Boolean(onVerifyWardrobeFact) && selectedItemOwned;
 
-  const beginFactEdit = (field: MetricFactField, currentValue?: string) => {
+  const beginFactEdit = (field: MetricFactField) => {
     if (!canVerifyFacts || factSaving) return;
     setEditingFactField(field);
-    // Year shows just the number; other fields seed the input with the known
-    // value so "verify" can lightly correct rather than force a full retype.
-    setFactDraft(field === 'year' ? '' : (currentValue ?? ''));
+    // Editing is offered only for genuinely-missing ("Unknown") metrics, so the
+    // input always starts empty — there is no known value to seed/correct.
+    setFactDraft('');
   };
 
   const cancelFactEdit = () => {
@@ -1820,6 +1824,18 @@ export const Wardrobe: React.FC<{
       setFactSaving(false);
     }
   };
+
+  // When a metric editor opens, bring it fully into view (centered) — deferred a
+  // frame so the row has expanded to its full-width editing layout first.
+  React.useEffect(() => {
+    if (!editingFactField) return;
+    const el = factEditorRef.current;
+    if (!el || typeof el.scrollIntoView !== 'function') return;
+    const id = window.requestAnimationFrame(() => {
+      el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [editingFactField]);
 
   React.useEffect(() => {
     setBottleImageToolsOpen(false);
@@ -2434,11 +2450,22 @@ export const Wardrobe: React.FC<{
                                   const isUnknown = !value;
                                   const display = value ?? 'Unknown';
                                   const isEditing = editingFactField === field;
+                                  // Only genuinely-missing metrics are editable. A
+                                  // filled value renders as plain, non-interactive text.
+                                  const editable = canVerifyFacts && isUnknown;
                                   if (isEditing) {
                                     return (
-                                      <div key={field} className="flex flex-col items-center gap-1 py-2 text-center">
+                                      // The active editor spans the full width and
+                                      // centers, so the input + actions sit
+                                      // symmetrically (not squeezed into one column,
+                                      // and with real breathing room under the label).
+                                      <div
+                                        key={field}
+                                        ref={factEditorRef}
+                                        className="col-span-2 flex flex-col items-center gap-3 py-4 text-center"
+                                      >
                                         <p className="scent-type-label">{label}</p>
-                                        <div className="flex items-center gap-1">
+                                        <div className="flex items-center justify-center gap-2">
                                           <input
                                             autoFocus
                                             value={factDraft}
@@ -2456,25 +2483,25 @@ export const Wardrobe: React.FC<{
                                             inputMode={field === 'year' ? 'numeric' : 'text'}
                                             placeholder={field === 'year' ? 'e.g. 2018' : `Add ${label.toLowerCase()}`}
                                             aria-label={`Verify ${label}`}
-                                            className="w-[6.5rem] bg-black/45 border border-white/15 rounded-md px-2 py-1 text-sm text-center text-[#fff7ec] outline-none focus:border-scent-accent/50 disabled:opacity-40"
+                                            className="w-44 bg-black/45 border border-white/15 rounded-md px-3 py-1.5 text-sm text-center text-[#fff7ec] outline-none focus:border-scent-accent/50 disabled:opacity-40"
                                           />
                                           <button
                                             type="button"
                                             onClick={() => void commitFactEdit()}
                                             disabled={factSaving || !factDraft.trim()}
                                             aria-label={`Save ${label}`}
-                                            className="p-1 rounded-md text-scent-text-muted hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                            className="flex h-8 w-8 items-center justify-center rounded-md border border-white/15 text-scent-text-muted hover:border-scent-accent/45 hover:text-scent-accent disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                                           >
-                                            <Check size={14} strokeWidth={2} />
+                                            <Check size={15} strokeWidth={2} />
                                           </button>
                                           <button
                                             type="button"
                                             onClick={cancelFactEdit}
                                             disabled={factSaving}
                                             aria-label={`Cancel editing ${label}`}
-                                            className="p-1 rounded-md text-scent-text-muted hover:text-white disabled:opacity-30 transition-colors"
+                                            className="flex h-8 w-8 items-center justify-center rounded-md border border-white/15 text-scent-text-muted hover:border-white/35 hover:text-white disabled:opacity-30 transition-colors"
                                           >
-                                            <X size={14} strokeWidth={2} />
+                                            <X size={15} strokeWidth={2} />
                                           </button>
                                         </div>
                                       </div>
@@ -2483,16 +2510,16 @@ export const Wardrobe: React.FC<{
                                   return (
                                     <div key={field} className="flex flex-col items-center gap-1 py-2 text-center">
                                       <p className="scent-type-label">{label}</p>
-                                      {canVerifyFacts ? (
+                                      {editable ? (
                                         <button
                                           type="button"
-                                          onClick={() => beginFactEdit(field, value)}
+                                          onClick={() => beginFactEdit(field)}
                                           disabled={factSaving}
-                                          title={isUnknown ? `Tap to verify ${label.toLowerCase()}` : `Tap to correct ${label.toLowerCase()}`}
-                                          aria-label={isUnknown ? `Verify ${label}` : `Edit ${label}: ${display}`}
-                                          className="group inline-flex items-center gap-1 text-sm font-medium leading-snug text-scent-text-muted hover:text-white disabled:opacity-40 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-scent-accent/45 rounded px-1"
+                                          title={`Tap to verify ${label.toLowerCase()}`}
+                                          aria-label={`Verify ${label}`}
+                                          className="group inline-flex items-center gap-1 text-sm font-medium leading-snug text-scent-text-subtle italic hover:text-white disabled:opacity-40 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-scent-accent/45 rounded px-1"
                                         >
-                                          <span className={isUnknown ? 'italic text-scent-text-subtle' : undefined}>{display}</span>
+                                          <span>{display}</span>
                                           <Pencil
                                             size={11}
                                             strokeWidth={1.75}
