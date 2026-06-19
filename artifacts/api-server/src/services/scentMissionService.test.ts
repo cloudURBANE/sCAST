@@ -181,7 +181,74 @@ test("chat can fill calibration from natural language", async () => {
     destination: "Work",
     energy: "Focused",
   });
-  assert.match(response.assistantMessage!, /Calibration updated/);
+  // Reflects the captured setting/mood in the user's own framing — no internal
+  // "node"/"mission tree" jargon (which the SPA strips, discarding the reply).
+  assert.match(response.assistantMessage!, /work/i);
+  assert.match(response.assistantMessage!, /focused/i);
+  assert.doesNotMatch(response.assistantMessage!, /mission tree|node|execute analysis/i);
+});
+
+/* ---------------- intent-preserving deterministic fallback ---------------- */
+
+// The phrases the SPA's safeAssistantText() rejects; if the scripted fallback
+// emits any of these the user gets a generic substitute and their intent is
+// lost. The degraded (no-model) path must never produce them.
+const SPA_REJECTED = /mission tree|execute analysis|resolution node|sync node|hit execute|work through the mission/i;
+
+async function scriptedReply(userMessage: string, overrides: Record<string, unknown> = {}) {
+  const parsed = parseScentMissionRequest(baseBody({ userMessage, ...overrides }));
+  assert.equal(parsed.ok, true);
+  if (!parsed.ok) throw new Error("unreachable");
+  const response = await executeScentMission(parsed.request, { deps: {} });
+  return response.assistantMessage ?? "";
+}
+
+test("deterministic fallback never leaks mission-graph jargon the SPA strips", async () => {
+  const probes = [
+    "I want something clean, airy, woody, and expensive-smelling for humid Dallas nights.",
+    "I need a fragrance for a dinner date tomorrow, intimate but memorable.",
+    "I want something fresh aquatic but not basic, good for hot weather.",
+    "I'm going to a wedding and want something elegant that projects but doesn't choke people out.",
+    "what should I wear?",
+    "hello there",
+  ];
+  for (const probe of probes) {
+    const reply = await scriptedReply(probe);
+    assert.ok(reply.length > 0, `empty reply for: ${probe}`);
+    assert.doesNotMatch(reply, SPA_REJECTED, `leaked stripped jargon for: ${probe}`);
+  }
+});
+
+test("deterministic fallback reflects the user's freeform scent/context intent", async () => {
+  const fresh = await scriptedReply(
+    "I want something clean, airy, woody for humid Dallas nights.",
+  );
+  assert.match(fresh, /fresh|clean/i);
+  assert.match(fresh, /woody/i);
+  assert.match(fresh, /humid/i);
+
+  const date = await scriptedReply("something intimate but memorable for a dinner date");
+  // "dinner date" is captured as the Date occasion and acknowledged in the
+  // user's own framing (not collapsed into a canned mission-status line).
+  assert.match(date, /date/i);
+});
+
+test("deterministic fallback only answers weather when actually asked about it", async () => {
+  // A genuine conditions question gets the live atmosphere read.
+  const asked = await scriptedReply("what's the weather like right now?");
+  assert.match(asked, /75°F/);
+
+  // "hot weather" used as scent context must NOT hijack into a weather readout;
+  // it should preserve the fresh-aquatic intent instead.
+  const context = await scriptedReply("something fresh aquatic, good for hot weather");
+  assert.match(context, /fresh|clean/i);
+  assert.doesNotMatch(context, /UV index/i);
+
+  // A bare "is" near "weather" (scent context, not a question) must also not
+  // trigger the readout — it would drop the user's intent.
+  const statement = await scriptedReply("this is a clean scent for warm weather");
+  assert.doesNotMatch(statement, /UV index/i);
+  assert.match(statement, /fresh|clean|warm/i);
 });
 
 /* ---------------------------- node execution --------------------------- */
