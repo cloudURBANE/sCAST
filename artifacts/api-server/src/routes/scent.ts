@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getWeather } from "../services/weatherService";
+import { getWeather, getWeatherForecast } from "../services/weatherService";
 import { buildProfile, searchFragrances } from "../services/scentEngine";
 import { deepScrapeFragrance } from "../services/fallbackIntelligence";
 import { searchCatalog, getCatalogEntry, saveCatalogEntry, flattenProfile } from "../services/catalogService";
@@ -114,6 +114,15 @@ async function upsertRefreshImageCatalog(
 router.get("/weather", async (req, res) => {
   const { lat, lon } = req.query as { lat?: string; lon?: string };
   const data = await getWeather({ lat, lon });
+  res.json(data);
+});
+
+// Weekly scent forecast (today + 6 days). Same One Call 3.0 source as /weather,
+// but returns the daily[] array so the home dashboard can score each day against
+// the user's wardrobe. Always resolves to a 7-day shape (synthesized on failure).
+router.get("/weather/forecast", async (req, res) => {
+  const { lat, lon } = req.query as { lat?: string; lon?: string };
+  const data = await getWeatherForecast({ lat, lon });
   res.json(data);
 });
 
