@@ -267,18 +267,24 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
                   onClick={() => go(index)}
                   title={`${dayLabel(plan.day.date)} — ${plan.day.condition ?? 'Forecast'}`}
                   className={`relative flex min-w-0 flex-col items-center py-2 text-[#f1e7da] transition-colors duration-300 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-scent-accent/60 sm:py-4 ${
-                    // Divider sits on a cell's left edge. Drop it on the active
-                    // cell AND the cell right after it so the active box never
-                    // doubles up against a divider line (the messy seam).
+                    // Divider sits on a cell's left edge as an INSET vertical
+                    // hairline (top/bottom 12px) so it floats inside the rail
+                    // instead of butting against the rounded top/bottom border.
+                    // Drop it on the active cell AND the cell right after it so
+                    // the active pill never doubles up against a divider seam.
                     index > 0 && index !== selected && index !== selected + 1
-                      ? 'border-l border-scent-accent/20'
+                      ? 'before:pointer-events-none before:absolute before:left-0 before:top-[12px] before:bottom-[12px] before:w-px before:bg-scent-accent/20 before:content-[""]'
                       : ''
                   }`}
                 >
                   {isActive ? (
+                    // Independent rounded pill, inset on all four sides so it
+                    // floats clear of the rail's outer border — identical shape
+                    // on the first, middle, and last day (no merged double border)
+                    // and opaque so it sits above any internal divider line.
                     <span
                       aria-hidden
-                      className="pointer-events-none absolute inset-x-[3px] inset-y-1 rounded-[12px] border border-scent-accent/75 bg-[#080705]"
+                      className="pointer-events-none absolute inset-x-[6px] inset-y-[7px] rounded-[14px] border border-scent-accent/75 bg-[#080705]"
                     />
                   ) : null}
                   <span className="relative z-[1] text-[8px] font-semibold uppercase tracking-[0.18em] sm:text-[10px]">
