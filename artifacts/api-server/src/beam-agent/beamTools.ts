@@ -257,7 +257,7 @@ export function createBeamTools(deps: BeamToolDeps): BeamToolDefinition[] {
     {
       name: "beam_search_catalog",
       description:
-        "Search the local fragrance catalog (global_fragrances) for REAL fragrances matching a query. Returns candidate packets. Prefer this over guessing — never invent a fragrance that is not in a result.",
+        "Search the local fragrance catalog (global_fragrances) for REAL fragrances. Matches by BRAND and NAME only — NOT by notes, accords, or vibe, so a query like 'fresh' or 'aquatic' returns nothing. To find picks that fit a direction/vibe, search specific real fragrance names you expect to fit. Returns candidate packets. Prefer this over guessing — never invent a fragrance that is not in a result.",
       inputSchema: {
         type: "object",
         properties: {

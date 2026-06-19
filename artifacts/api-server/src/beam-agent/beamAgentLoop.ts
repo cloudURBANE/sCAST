@@ -47,6 +47,15 @@ import { beamSessionStatePrompt } from "./missionState.ts";
  */
 const RUN_BUDGET_MS = 52_000;
 /**
+ * Wall-clock cushion reserved at the end of the run budget to compose a real
+ * closing answer. Once we are within this window AND already hold grounded
+ * evidence, the loop stops opening new tool rounds and goes straight to finish(),
+ * which synthesizes from what we gathered. Without it a model that keeps searching
+ * (the live runaway: ~20 catalog calls) burns the entire budget and then ships an
+ * unsynthesized orchestration draft — the weak/failed answers seen in prod.
+ */
+const SYNTHESIS_RESERVE_MS = 12_000;
+/**
  * Per-tool execution ceiling. Tool handlers have no AbortSignal of their own, so
  * a slow scrape/DB call could otherwise stall the whole loop until the client
  * times out. The underlying work may keep running; the loop just stops waiting.
@@ -57,6 +66,21 @@ const TOOL_TIMEOUT_MS = 20_000;
  * re-prompts, so a model that insists on narrating still terminates.
  */
 const MAX_ACT_NUDGES = 2;
+
+/**
+ * Conversation-flow gates police HOW a clarification is worded (re-asking a known
+ * value, asking after a delegation, abandoning an open slot). They must never
+ * dead-end a turn that already holds a real, tool-grounded answer to give:
+ * delivering the recommendation beats showing the user a terminal error over a
+ * re-ask nit. Substantive correctness/safety gates (price/availability/review
+ * evidence, mission fulfillment, destination match, owned-pick-in-new-only,
+ * instruction leaks, over-length) are NOT in this set and still fail the run.
+ */
+const SOFT_FLOW_VIOLATIONS = new Set([
+  "pending_slot_abandoned",
+  "redundant_clarification",
+  "delegated_but_questioned",
+]);
 
 const SYSTEM_PROMPT = `You are the Beam Agent for ScentBeam, a fragrance wardrobe app. You are
 a sharp, confident fragrance concierge: you ground every answer in the user's real vault and
@@ -134,8 +158,12 @@ Once you have all three, execute immediately in that same turn:
 2. Score vault ONLY when the mission requests owned picks — beam_score_candidates with
    weatherOverride for the destination's climate at that time of year (not home weather). Pass a
    locationLabel like "Tokyo, August". For a new-only mission, skip vault scoring entirely.
-3. Search new — beam_search_catalog for UNOWNED fragrances fitting direction + destination climate;
-   deepen top picks with beam_get_fragrance_details.
+3. Search new — beam_search_catalog matches by BRAND and NAME only, not by notes, accords, or
+   vibe, so a query like "fresh", "aquatic", or "green tea" returns nothing. To discover picks for
+   a direction + destination climate, draw on your own fragrance knowledge to name several specific,
+   real fragrances that fit, then search each ONE BY NAME and keep only those the catalog returns.
+   Search more names than you need — not every fragrance is in the catalog — and never recommend a
+   name the search did not return. Deepen top picks with beam_get_fragrance_details.
 4. Check overlap — beam_compare_overlap each new pick against the vault.
 5. Present the kit — beam_present_travel_kit with the owned picks (from step 2) and the new picks
    (from step 3). It renders a board with both lanes, and its new lane is add-ready, so for a kit
@@ -867,12 +895,24 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
       qualityGatePassed = gate.passed;
       qualityViolations = gate.violations;
 
-      // A rejected answer must never be persisted or emitted as completed. The
-      // caller can use its existing fallback path, while telemetry retains the
-      // precise violations for diagnosis.
+      // A rejected answer must never be persisted or emitted as completed — EXCEPT
+      // when the only thing wrong is conversation flow and we have a real grounded
+      // answer to deliver. A clarifying turn (no tools) is already recovered above
+      // by buildSafeClarification; a tool-grounded turn that trips only soft-flow
+      // gates ships its grounded draft instead of dead-ending on a terminal error
+      // (the dominant live failure: a 40-name grounded run hard-failing on
+      // pending_slot_abandoned after burning the whole budget). Any substantive
+      // correctness/safety violation still fails the run. Telemetry keeps the
+      // overridden violations for diagnosis.
       if (!gate.passed) {
-        fail("quality_gate_failed", "Beam could not produce a recommendation that satisfied the mission constraints.");
-        return;
+        const hardViolations = gate.violations.filter((v) => !SOFT_FLOW_VIOLATIONS.has(v));
+        const hasGroundedAnswer =
+          usedTools && groundedNames.size > 0 && Boolean(finalText && finalText.trim());
+        if (hardViolations.length > 0 || !hasGroundedAnswer) {
+          fail("quality_gate_failed", "Beam could not produce a recommendation that satisfied the mission constraints.");
+          return;
+        }
+        qualityGatePassed = true;
       }
 
       for (const event of pendingDeliverables) emit(event);
@@ -903,6 +943,15 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
       if (Date.now() >= deadline) {
         if (usedTools && lastText) await finish(lastText, { skipSynthesis: true });
         else fail("run_timeout", "The agent ran out of time before finishing.");
+        return;
+      }
+      // Within the synthesis reserve and already holding grounded evidence: stop
+      // opening new tool rounds and compose the answer now. finish() will run a real
+      // synthesis pass (the deadline has not hit yet, so it isn't skipped) from the
+      // fragrances we already retrieved, instead of letting the model keep searching
+      // until the budget is gone and only a raw orchestration draft is left to ship.
+      if (usedTools && groundedNames.size > 0 && Date.now() >= deadline - SYNTHESIS_RESERVE_MS) {
+        await finish(lastText);
         return;
       }
 

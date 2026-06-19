@@ -269,6 +269,47 @@ test("exhausting the tool-call budget still composes a grounded answer instead o
   assert.equal(toolCalls.length, 2);
 });
 
+test("a grounded turn that only trips a soft conversation-flow gate is delivered, not hard-failed", async () => {
+  // Reproduces the dominant live failure: the run gathers grounded evidence but the
+  // closing draft trips ONLY pending_slot_abandoned (a flow gate). Previously this
+  // hard-failed with quality_gate_failed after burning the budget; it must now ship
+  // the grounded answer instead of showing the user a terminal error.
+  const events: BeamRunEvent[] = [];
+  let completed: string | undefined;
+  let summary: BeamRunSummary | undefined;
+
+  const { callModel } = scriptedModel([
+    // turn 1: retrieve evidence (grounds Aventus)
+    { stop_reason: "tool_use", content: [{ type: "tool_use", id: "tu_1", name: "beam_get_wardrobe", input: {} }] },
+    // turn 2: orchestration hands off to synthesis
+    text("draft"),
+    // synthesis: a non-question that names no grounded pick -> abandons the pending slot
+    text("Noted — I'll take it from here."),
+    // repair: still soft-failing (no fewer violations), so the original draft stays
+    text("Got it, leaving it with me."),
+  ]);
+
+  await runBeamAgent({
+    ctx,
+    userMessage: "something for the office",
+    tools: [wardrobeTool([])],
+    emit: (e) => events.push(e),
+    isModelConfigured: () => true,
+    callModel,
+    // The agent asked for 'direction' last turn; this message did not answer it.
+    sessionState: { slots: { occasion: "work" }, pendingSlot: "direction", pendingSlotUnanswered: true },
+    onComplete: (t) => (completed = t),
+    onSummary: (s) => (summary = s),
+  });
+
+  assert.equal(events.some((e) => e.type === "failed"), false);
+  assert.ok(events.some((e) => e.type === "completed"));
+  assert.equal(completed, "Noted — I'll take it from here.");
+  assert.equal(summary?.outcome, "completed");
+  // Telemetry keeps the overridden soft violation for visibility.
+  assert.ok(summary?.qualityViolations.includes("pending_slot_abandoned"), JSON.stringify(summary?.qualityViolations));
+});
+
 test("a new-only travel-kit synthesis is pinned to unowned picks (owned vault bottles excluded)", async () => {
   const events: BeamRunEvent[] = [];
   let completed: string | undefined;
