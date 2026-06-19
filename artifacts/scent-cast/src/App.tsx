@@ -21,7 +21,7 @@ import { WeatherProvider, useWeather } from './context/WeatherContext';
 import { WardrobeProvider, useWardrobe, useWardrobeItems, useWardrobeShareModalActions } from './context/WardrobeContext';
 import { Toaster } from './components/ui/toaster';
 import { PageTransitionOverlay, warmTransitionEmblem } from './components/PageTransitionOverlay';
-import { useModalBehavior } from '@/hooks/use-modal-behavior';
+import { useBodyScrollLock, useModalBehavior } from '@/hooks/use-modal-behavior';
 import { useRenderBudget } from '@/hooks/useRenderBudget';
 import { useMarqueeSwipe } from '@/hooks/useMarqueeSwipe';
 import NotFound from '@/pages/not-found';
@@ -807,6 +807,8 @@ function DashboardView() {
   const vaultContentTransition = reduceMotion
     ? { duration: 0.01 }
     : { duration: 0.42, ease: [0.16, 1, 0.3, 1] as const };
+
+  useBodyScrollLock(agentActive);
 
   useEffect(() => {
     if (!discoveryReady && viewState === 'agent') {

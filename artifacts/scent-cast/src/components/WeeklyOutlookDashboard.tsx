@@ -131,7 +131,7 @@ function ForecastHero({
               variant="featured"
               adjustment={pick.imageAdjustment}
               imageProperties={pick.imageProperties}
-              className="h-full min-h-0 w-full [&_.bottle-packshot-frame]:scale-[1.5]"
+              className="h-full min-h-0 w-full [&_.bottle-artboard]:inset-[3%]"
               imgClassName="transition-transform duration-500 group-hover:scale-[1.025] motion-reduce:transform-none"
               loading="eager"
             />
@@ -201,7 +201,7 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
 
   return (
     <section
-      className="mx-auto w-full max-w-[52rem] min-w-0 border-t border-scent-accent/12 pt-5 text-center sm:pt-7"
+      className="mx-auto w-full max-w-[52rem] min-w-0 text-center"
       aria-label="Daily scent forecast"
     >
       <h2 className="scent-type-label text-[10px] tracking-[0.34em] text-[#efe4d6] sm:text-[12px]">
@@ -216,7 +216,7 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
         </div>
       ) : (
         <>
-          <div className="relative mt-2 h-[9.75rem] sm:mt-3 sm:h-[15rem]">
+          <div className="relative mt-1.5 h-[8.75rem] sm:mt-3 sm:h-[15rem]">
             <ForecastChevron direction="prev" onClick={() => go(selected - 1)} />
             <div className="absolute inset-y-0 left-9 right-9 overflow-hidden sm:left-12 sm:right-12">
               <ForecastHero
@@ -245,15 +245,21 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
                   title={`${dayLabel(plan.day.date)} — ${plan.day.condition ?? 'Forecast'}`}
                   className={`relative flex min-w-0 flex-col items-center py-2 text-[#f1e7da] transition-colors duration-300 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-scent-accent/60 sm:py-4 ${
                     index > 0 ? 'border-l border-scent-accent/20' : ''
-                  } ${isActive ? 'rounded-[17px] border border-scent-accent/75 bg-[#080705]' : ''}`}
+                  }`}
                 >
-                  <span className="text-[8px] font-semibold uppercase tracking-[0.18em] sm:text-[10px]">
+                  {isActive ? (
+                    <span
+                      aria-hidden
+                      className="pointer-events-none absolute inset-x-[3px] inset-y-1 rounded-[12px] border border-scent-accent/75 bg-[#080705]"
+                    />
+                  ) : null}
+                  <span className="relative z-[1] text-[8px] font-semibold uppercase tracking-[0.18em] sm:text-[10px]">
                     {dayLabel(plan.day.date)}
                   </span>
-                  <span className="mt-1 font-serif text-[1.35rem] leading-none sm:text-[1.8rem]">
+                  <span className="relative z-[1] mt-1 font-serif text-[1.35rem] leading-none sm:text-[1.8rem]">
                     {dayNumber(plan.day.date)}
                   </span>
-                  <span className={`mt-2 ${isActive ? 'text-scent-accent' : 'text-[#eee4d7]'}`}>
+                  <span className={`relative z-[1] mt-2 ${isActive ? 'text-scent-accent' : 'text-[#eee4d7]'}`}>
                     <WeatherGlyph day={plan.day} size={20} />
                   </span>
                 </button>
