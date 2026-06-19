@@ -37,6 +37,7 @@ import {
   buildMissionWeather,
   findWardrobeMatch,
   missionProgress,
+  missionWithDefaultsForFast,
   proposalItemToFragrance,
 } from '@/lib/scentMissionClient';
 import {
@@ -748,14 +749,6 @@ function mergeCalibration(
       ...(nextEnergy ? { energy: nextEnergy } : {}),
     },
   };
-}
-
-function missionWithDefaultsForFast(mission: ScentMissionState): ScentMissionState {
-  return mergeCalibration(
-    mission,
-    mission.calibration.destination ?? 'Going Out',
-    mission.calibration.energy ?? 'Confident',
-  );
 }
 
 /** Live progress surfaced to the host so the header can render outside the card. */
@@ -1476,9 +1469,18 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         return;
       }
 
-      let currentMission = trigger === 'fast'
-        ? missionWithDefaultsForFast(startingMission)
-        : startingMission;
+      const fastDefaults = trigger === 'fast' ? missionWithDefaultsForFast(startingMission) : null;
+      let currentMission = fastDefaults ? fastDefaults.mission : startingMission;
+
+      // "Just go" stays available, but be honest: if the user gave no occasion
+      // or mood, say the pick is a flexible everyday read rather than letting it
+      // imply a brief they never set.
+      if (fastDefaults?.usedDefaults) {
+        appendMessage(
+          'agent',
+          "No occasion or mood set yet — I'll keep this flexible and pull a versatile match for today's air. Tell me the setting or the vibe and I'll sharpen it.",
+        );
+      }
 
       if (!currentMission.calibration.destination || !currentMission.calibration.energy) {
         appendMessage('agent', firstMissingPrompt(startingFacets, currentMission, agentMode, items.length));
