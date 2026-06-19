@@ -294,7 +294,17 @@ function parseMissionPatch(text: string, slots: BeamSessionSlots): BeamMissionSt
   const ownedCount = parseOwnedCount(text);
   const newCount = parseNewCount(text);
   const travelLike = /\b(?:trip|travel|vacation|visit|flying|pack|packing|bring|bringing|take with me|travel kit|kit)\b/i.test(text);
-  const kitLike = ownedCount !== undefined || newCount !== undefined || /\b(?:wardrobe|vault|collection)\b.*\bnew\b|\bnew\b.*\b(?:wardrobe|vault|collection)\b/i.test(text);
+  // A kit is a multi-lane / travel deliverable: a requested NEW (discovery) lane, an
+  // explicit wardrobe+new pairing, or travel/kit phrasing (travelLike). A LONE owned
+  // count with no new lane and no travel/kit word is a plain recommendation, not a kit
+  // — e.g. "recommend one fragrance from my vault for work" must stay a recommendation
+  // so it uses the cheap lane and skips the travel-kit fulfillment gates. (Live QA
+  // found that request misrouted to the premium lane + travel-kit gates because a lone
+  // owned count alone flipped the intent.) Owned-only TRAVEL requests still parse as a
+  // kit via travelLike (they carry "trip"/"pack"/"bring"/"take with me"/"kit").
+  const kitLike =
+    newCount !== undefined ||
+    /\b(?:wardrobe|vault|collection)\b.*\bnew\b|\bnew\b.*\b(?:wardrobe|vault|collection)\b/i.test(text);
 
   if (travelLike || kitLike) {
     return {
