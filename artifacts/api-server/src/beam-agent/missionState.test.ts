@@ -254,3 +254,34 @@ test("formats known slots and mission rules into a prompt clause", () => {
   assert.match(prompt, /ownedCount=2/i);
   assert.match(prompt, /beam_present_travel_kit/i);
 });
+
+test("captures common occasions the parser previously missed (the over-asking gap)", () => {
+  // Each of these is an occasion users state plainly; before the fix none were
+  // captured, so the agent re-asked "what's the occasion?" they had just answered.
+  const cases: Array<[string, string]> = [
+    ["Something for a party this weekend", "party"],
+    ["I need a scent for a dinner tonight", "dinner"],
+    ["What should I wear to a job interview?", "interview"],
+    ["Heading to brunch with friends", "brunch"],
+    ["A fragrance for a funeral", "funeral"],
+    ["Picking something for my graduation", "graduation"],
+    ["It's a first date, help me pick", "first date"],
+  ];
+  for (const [message, expected] of cases) {
+    const state = deriveBeamSessionState(undefined, message);
+    assert.equal(state.slots.occasion, expected, `"${message}" should capture occasion=${expected}`);
+  }
+});
+
+test("classifies an occasion-worded assistant question as the occasion slot", () => {
+  assert.equal(inferPendingSlotFromAssistant("Is this for work, a party, or a night out?"), "occasion");
+  assert.equal(inferPendingSlotFromAssistant("Is it a wedding or a funeral?"), "occasion");
+});
+
+test("a known occasion captured this turn is not re-marked pending after an occasion question", () => {
+  const pending = inferPendingSlotFromAssistant("What's the occasion — work, a party, or dinner?");
+  assert.equal(pending, "occasion");
+  const state = deriveBeamSessionState(undefined, "It's a dinner party", pending);
+  assert.equal(state.slots.occasion, "dinner");
+  assert.notEqual(state.pendingSlotUnanswered, true);
+});

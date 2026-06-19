@@ -70,6 +70,15 @@ function asksForKnownSlot(text: string, state: BeamSessionState | undefined): bo
   ) {
     return true;
   }
+  // The occasion slot had no redundant-clarification guard at all, so re-asking a
+  // known occasion ("what's the occasion?" after the user already said "a wedding")
+  // slipped through. Mirrors the slot the deterministic parser now captures.
+  if (
+    slots.occasion &&
+    /\bwhat'?s\s+the\s+occasion\b|\b(?:what|which)\s+(?:occasion|setting|event)\b|\bwhat\s+(?:are|will)\s+you\s+(?:be\s+)?(?:wear|dress|getting\s+ready)\w*\b.{0,12}\bfor\b/i.test(text)
+  ) {
+    return true;
+  }
   return false;
 }
 
@@ -105,7 +114,7 @@ function abandonsPendingSlot(
   const patterns: Partial<Record<NonNullable<BeamSessionState["pendingSlot"]>, RegExp>> = {
     direction: VIBE_OR_DIRECTION_REASK,
     projection: /\b(?:projection|trail|skin[ -]?close|moderate|statement)\b/i,
-    occasion: /\b(?:occasion|setting|work|date|night out|staying in)\b/i,
+    occasion: /\b(?:occasion|setting|work|date|night out|staying in|party|dinner|interview|brunch|funeral|graduation|wedding|gym)\b/i,
     impression: /\b(?:impression|calm|focused|confident|social|come across)\b/i,
     vibe: VIBE_OR_DIRECTION_REASK,
     budget: /\b(?:budget|spend|price)\b/i,
@@ -285,7 +294,7 @@ export function repairInstructionFor(violations: string[]): string {
   if (violations.includes("review_claim_without_evidence"))
     fixes.push("Do NOT cite ratings or review scores - you have no fresh source for them.");
   if (violations.includes("redundant_clarification"))
-    fixes.push("Do NOT ask for month, destination, vibe, or direction already present in Known so far; use the known value.");
+    fixes.push("Do NOT ask for month, destination, occasion, vibe, or direction already present in Known so far; use the known value.");
   if (violations.includes("pending_slot_abandoned"))
     fixes.push("The latest user message did not answer the active question. Acknowledge useful context, then re-ask that same slot with choices from its category only.");
   if (violations.includes("delegated_but_questioned"))

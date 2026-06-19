@@ -225,6 +225,21 @@ test("the safe net never re-asks a slot already captured (stale pending pointer)
   }
 });
 
+test("backtest: a plainly-stated occasion is captured and never re-asked", () => {
+  // The non-travel analogue of the Tokyo over-asking regression: the user states a
+  // common occasion the parser previously ignored ("dinner party"), so the agent
+  // used to re-ask it. Assert (a) the slot is captured from free text, and (b) a
+  // re-ask of that known occasion now trips the redundant-clarification gate.
+  const state = deriveBeamSessionState(undefined, "What should I wear to a dinner party on Friday?");
+  assert.equal(state.slots.occasion, "dinner");
+  assert.equal(state.mission?.intent, "recommendation");
+
+  const reAsk = "Happy to help — what's the occasion you're getting ready for?";
+  const gate = runAnswerQualityGates(reAsk, { ...noEvidence, sessionState: state, groundedFragrances: [] });
+  assert.equal(gate.passed, false);
+  assert.ok(gate.violations.includes("redundant_clarification"), gate.violations.join(","));
+});
+
 test("every deterministic safe clarification passes its own gates for each pending slot", () => {
   // Guard against a template ever drifting into a gate violation. For each slot,
   // build the state where that slot is pending and assert the canonical re-ask is clean.

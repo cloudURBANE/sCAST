@@ -1135,3 +1135,101 @@ test("unexpected provider errors never expose raw internals in client events", a
   assert.equal((failed as { message: string }).message, "Beam could not complete this request. Please try again.");
   assert.doesNotMatch((failed as { message: string }).message, /sk-secret|internal-host|401/i);
 });
+
+/** A vault scorer that always grounds Aventus — reused by the occasion E2E runs. */
+function aventusScoreTool(): BeamToolDefinition {
+  return {
+    name: "beam_score_candidates",
+    description: "Rank the vault",
+    inputSchema: { type: "object", properties: {} },
+    handler: async () => ({
+      recommendation: { canonicalName: "Aventus", brand: "Creed", score: 90 },
+      picks: [{ canonicalName: "Aventus", brand: "Creed", score: 90 }],
+      scoredFor: { locationLabel: null, usedOverride: false },
+    }),
+  };
+}
+
+test("end-to-end occasion run: a plainly-stated occasion is threaded into the prompt and a pick ships", async () => {
+  // Full-loop run (only the provider is faked) over the newly-captured occasion
+  // path: "dinner party" must reach the system prompt as occasion=dinner, and the
+  // run must complete with a grounded pick instead of re-asking the occasion.
+  const events: BeamRunEvent[] = [];
+  let completed: string | undefined;
+  let summary: BeamRunSummary | undefined;
+
+  const message = "What should I wear to a dinner party this weekend?";
+  const state = deriveBeamSessionState(undefined, message);
+  assert.equal(state.slots.occasion, "dinner");
+
+  const { callModel, seen } = scriptedModel([
+    { stop_reason: "tool_use", content: [{ type: "tool_use", id: "tu_1", name: "beam_score_candidates", input: {} }] },
+    text("draft"),
+    text("For the dinner party, reach for Aventus by Creed — bright and confident without crowding the room."),
+  ]);
+
+  await runBeamAgent({
+    ctx,
+    userMessage: message,
+    sessionState: state,
+    tools: [aventusScoreTool()],
+    emit: (e) => events.push(e),
+    isModelConfigured: () => true,
+    callModel,
+    onComplete: (t) => (completed = t),
+    onSummary: (s) => (summary = s),
+  });
+
+  assert.equal(summary?.outcome, "completed");
+  assert.equal(events.some((e) => e.type === "failed"), false);
+  assert.match(seen[0].system, /Known so far: .*occasion=dinner/i);
+  assert.match(String(completed), /Aventus/);
+});
+
+test("end-to-end occasion run: re-asking a KNOWN occasion is gated and repaired into a committed pick", async () => {
+  // Exercises the closed gate hole through the whole loop: synthesis re-asks the
+  // already-known occasion, the redundant_clarification gate trips, and the single
+  // repair pass (fed the broken rule) ships a committed grounded recommendation
+  // instead of dead-ending on the redundant question.
+  const events: BeamRunEvent[] = [];
+  let completed: string | undefined;
+  let summary: BeamRunSummary | undefined;
+
+  const message = "Recommend something for a wedding I'm attending.";
+  const state = deriveBeamSessionState(undefined, message);
+  assert.equal(state.slots.occasion, "wedding");
+
+  const { callModel, seen } = scriptedModel([
+    { stop_reason: "tool_use", content: [{ type: "tool_use", id: "tu_1", name: "beam_score_candidates", input: {} }] },
+    text("draft"),
+    // synthesis re-asks the known occasion -> redundant_clarification
+    text("Happy to help — what's the occasion you're dressing for?"),
+    // repair pass commits to the grounded pick
+    text("For the wedding, wear Aventus by Creed — polished and celebratory."),
+  ]);
+
+  await runBeamAgent({
+    ctx,
+    userMessage: message,
+    sessionState: state,
+    tools: [aventusScoreTool()],
+    emit: (e) => events.push(e),
+    isModelConfigured: () => true,
+    callModel,
+    synthesisModel: "strong-model",
+    onComplete: (t) => (completed = t),
+    onSummary: (s) => (summary = s),
+  });
+
+  assert.equal(events.some((e) => e.type === "failed"), false);
+  assert.equal(completed, "For the wedding, wear Aventus by Creed — polished and celebratory.");
+  assert.equal(summary?.qualityGatePassed, true);
+  assert.equal(summary?.modelCalls, 4); // tool + draft + synthesis + one repair
+  // The repair instruction fed the redundant-clarification fix (now naming occasion) back.
+  const repairCall = seen[seen.length - 1];
+  const folded = repairCall.messages
+    .flatMap((m) => (Array.isArray(m.content) ? m.content : [{ type: "text", text: m.content }]))
+    .map((b) => (b && typeof b === "object" && "text" in b ? String((b as { text: unknown }).text) : ""))
+    .join("\n");
+  assert.match(folded, /Do NOT ask for month, destination, occasion/i);
+});

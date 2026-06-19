@@ -30,11 +30,24 @@ const COUNT_WORDS = new Map<string, number>([
 
 const COUNT_CAPTURE = String.raw`((?:a\s+)?couple|pair|\d+|one|two|three|four|five)`;
 
+// Order matters: parseOccasion returns the FIRST match, so list the more
+// specific multi-word phrases ("first date", "dinner party") before the broader
+// single words they contain. The original set only knew date-night/work/night-out/
+// wedding/gym/staying-in, so common occasions ("party", "dinner", "interview",
+// "brunch", "funeral", "graduation", "first date") were never captured and the
+// agent re-asked an occasion the user had already given — the felt over-asking.
 const OCCASIONS: Array<[RegExp, string]> = [
+  [/\bfirst\s+date\b/i, "first date"],
   [/\bdate\s+night\b/i, "date night"],
+  [/\b(?:job\s+)?interview\b/i, "interview"],
   [/\bwork(?:\s+meeting|\s+event)?\b/i, "work"],
   [/\bnight\s+out\b/i, "night out"],
   [/\bwedding\b/i, "wedding"],
+  [/\bgraduation\b/i, "graduation"],
+  [/\bfuneral\b/i, "funeral"],
+  [/\bbrunch\b/i, "brunch"],
+  [/\bdinner(?:\s+party)?\b/i, "dinner"],
+  [/\bparty\b/i, "party"],
   [/\bgym\b/i, "gym"],
   [/\bstaying\s+in\b/i, "staying in"],
 ];
@@ -208,7 +221,7 @@ export function inferPendingSlotFromAssistant(text: string): BeamSlotKey | undef
   if (!text.includes("?")) return undefined;
   if (/\b(?:citrus|green|tea|aromatic|scent famil(?:y|ies)|scent direction|direction|lean more|lighter|warmer)\b|\bfresh\b.{0,60}\bwarm(?:th)?\b|\bwarm(?:th)?\b.{0,60}\bfresh\b/i.test(text)) return "direction";
   if (/\b(?:projection|trail|skin[ -]?close|statement)\b/i.test(text)) return "projection";
-  if (/\b(?:occasion|setting|work|date night|night out|staying in)\b/i.test(text)) return "occasion";
+  if (/\b(?:occasion|setting|work|date night|first date|night out|staying in|party|dinner|interview|brunch|funeral|graduation|wedding|gym)\b/i.test(text)) return "occasion";
   if (/\b(?:impression|come across|calm|focused|confident|social)\b/i.test(text)) return "impression";
   if (/\b(?:vibe|mood|style|feel)\b/i.test(text)) return "vibe";
   if (/\b(?:budget|spend|price range)\b/i.test(text)) return "budget";
