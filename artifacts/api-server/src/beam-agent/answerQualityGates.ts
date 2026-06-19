@@ -82,13 +82,25 @@ function asksForKnownSlot(text: string, state: BeamSessionState | undefined): bo
 const VIBE_OR_DIRECTION_REASK =
   /\b(?:vibe|mood|style|feel|citrus|green|aromatic|lighter|fresh|warm(?:er)?|rich(?:er)?|woody|woods?|spic(?:y|e)|sweet|floral|fruity|aquatic|direction|family|lean(?:s|ing)?)\b/i;
 
-function abandonsPendingSlot(text: string, state: BeamSessionState | undefined): boolean {
+function abandonsPendingSlot(
+  text: string,
+  state: BeamSessionState | undefined,
+  grounded: BeamGroundedFragrance[],
+): boolean {
   const slot = state?.pendingSlotUnanswered ? state.pendingSlot : undefined;
   if (!slot) return false;
   // If the pending slot is already satisfied — directly, or via its compatible twin
   // (vibe⇄direction) — it isn't actually open, so nothing can abandon it. Keeps this
   // gate consistent with the loop's slot resolution for any stale pending pointer.
   if (state && pendingSlotSatisfiedBy(slot, state.slots)) return false;
+  // A turn that commits to a tool-grounded pick is a recommendation, not a botched
+  // clarification. Once the agent is delivering real, retrieved fragrances it is
+  // entitled to move past an open clarification (mirrors delegatedButDeferred). The
+  // deterministic slot parser misses plenty of valid free-text answers, so without
+  // this exemption a fully grounded recommendation (e.g. a 40-candidate travel kit)
+  // gets hard-failed over a re-ask nit. Mission completeness stays enforced by the
+  // separate travel_kit fulfillment gate.
+  if (grounded.some((item) => answerMentionsFragrance(text, item))) return false;
   if (!text.includes("?")) return true;
   const patterns: Partial<Record<NonNullable<BeamSessionState["pendingSlot"]>, RegExp>> = {
     direction: VIBE_OR_DIRECTION_REASK,
@@ -227,7 +239,9 @@ export function runAnswerQualityGates(answerText: string, input: QualityGateInpu
     if (REVIEW_PATTERN.test(text)) violations.push("review_claim_without_evidence");
   }
   if (asksForKnownSlot(text, input.sessionState)) violations.push("redundant_clarification");
-  if (abandonsPendingSlot(text, input.sessionState)) violations.push("pending_slot_abandoned");
+  if (abandonsPendingSlot(text, input.sessionState, input.groundedFragrances ?? [])) {
+    violations.push("pending_slot_abandoned");
+  }
   if (delegatedButDeferred(text, input.sessionState, input.groundedFragrances ?? [])) {
     violations.push("delegated_but_questioned");
   }

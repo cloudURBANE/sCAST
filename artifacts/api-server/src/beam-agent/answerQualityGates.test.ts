@@ -220,3 +220,27 @@ test("an unanswered active slot cannot be silently abandoned", () => {
   });
   assert.ok(!clarified.violations.includes("pending_slot_abandoned"), JSON.stringify(clarified.violations));
 });
+
+test("a committed grounded recommendation is not scored as abandoning a pending slot", () => {
+  // The deterministic parser may leave a slot 'pending' even after the agent has
+  // done the work and is delivering real, retrieved picks. A committed answer that
+  // names a grounded fragrance must NOT be hard-failed over the open clarification.
+  const state = { slots: { occasion: "work" }, pendingSlot: "direction", pendingSlotUnanswered: true } as const;
+  const grounded = [{ canonicalName: "Aventus", brand: "Creed", owned: false }];
+  const committed = runAnswerQualityGates(
+    "For a work setting, reach for Aventus by Creed — bright, sharp, and office-friendly.",
+    { hadExternalEvidence: false, sessionState: state, groundedFragrances: grounded },
+  );
+  assert.ok(
+    !committed.violations.includes("pending_slot_abandoned"),
+    JSON.stringify(committed.violations),
+  );
+
+  // But a non-committed turn that names no grounded pick still abandons the slot.
+  const empty = runAnswerQualityGates("Let me look into that for you.", {
+    hadExternalEvidence: false,
+    sessionState: state,
+    groundedFragrances: [],
+  });
+  assert.ok(empty.violations.includes("pending_slot_abandoned"), JSON.stringify(empty.violations));
+});
