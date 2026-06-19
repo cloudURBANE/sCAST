@@ -583,6 +583,46 @@ const HomepageAtmosphereChrome: React.FC = React.memo(() => {
   );
 });
 
+const HomepageMetricsBand: React.FC = React.memo(() => {
+  const { weather, weatherLoading } = useWeather();
+  const pending = weatherLoading && !weather;
+
+  const humidityRaw = (weather as any)?.humidity_percent ?? (weather as any)?.humidity;
+  const tempRaw = (weather as any)?.temperature_f ?? (weather as any)?.temperature ?? (weather as any)?.temp;
+
+  const humidity = pending
+    ? '—'
+    : typeof humidityRaw === 'number' && Number.isFinite(humidityRaw)
+      ? `${humidityRaw}%`
+      : '—';
+  const temp = pending
+    ? '—'
+    : typeof tempRaw === 'number' && Number.isFinite(tempRaw)
+      ? `${Math.round(tempRaw)}°F`
+      : '—';
+
+  return (
+    <div className="mx-auto w-full max-w-[52rem] px-0" aria-label="Current conditions" role="group">
+      <div className="scent-metrics-band">
+        <div className="scent-metrics-col">
+          <span className="scent-metrics-label">Humidity</span>
+          <span className="scent-metrics-value">{humidity}</span>
+        </div>
+        <div className="scent-metrics-sep" aria-hidden="true" />
+        <div className="scent-metrics-col">
+          <span className="scent-metrics-label">Time</span>
+          <span className="scent-metrics-value"><LiveClock /></span>
+        </div>
+        <div className="scent-metrics-sep" aria-hidden="true" />
+        <div className="scent-metrics-col">
+          <span className="scent-metrics-label">Temp</span>
+          <span className="scent-metrics-value">{temp}</span>
+        </div>
+      </div>
+    </div>
+  );
+});
+
 function HeroVaultContentFallback() {
   return (
     <div className="relative w-full min-w-0" aria-label="Loading fragrance search">
@@ -877,7 +917,7 @@ function DashboardView() {
   // iOS PWA standalone mode reports viewport/safe-area differently than Safari;
   // keep this shell padding tied to --bottomnav-h so fixed nav content has space.
   return (
-    <div className="min-h-[100svh] relative overflow-x-hidden pb-[calc(var(--bottomnav-h)+2rem)] md:pb-0">
+    <div className="min-h-[100svh] relative overflow-x-clip pb-[calc(var(--bottomnav-h)+3rem)] md:pb-0">
       <SEO title="ScentBeam — Your scent, perfected" description="Build your fragrance vault and discover your signature scent, calibrated to the weather around you." url="https://scentbeam.com/" />
       <AppTopNav
         authToken={authToken}
@@ -1065,11 +1105,11 @@ function DashboardView() {
                       exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -4 }}
                       transition={vaultContentTransition}
                       className="scent-signature-cta group flex h-[60px] w-full max-w-[52rem] items-center justify-center gap-2.5 rounded-full px-6 text-[12px] font-bold uppercase tracking-[0.14em] text-scent-accent focus-visible:outline-none sm:h-[68px] sm:text-[13px]"
-                      aria-label="Discover your signature scent"
-                      title="Discover your signature scent"
+                      aria-label="Discover with Beam Agent"
+                      title="Discover with Beam Agent"
                     >
                       <Sparkles size={16} strokeWidth={1.9} aria-hidden />
-                      <span>Discover Your Signature Scent</span>
+                      <span>Discover With Beam Agent</span>
                     </motion.button>
                   )}
                 </AnimatePresence>
@@ -1077,7 +1117,7 @@ function DashboardView() {
             ) : null}
           </section>
 
-          {!agentActive ? <HomepageAtmosphereChrome /> : null}
+          {!agentActive ? <HomepageMetricsBand /> : null}
 
           {/* Weekly outlook dashboard — anchored to the bottom of the first
               viewport on phones (mt-auto fills the gap above the tab bar), in
@@ -1485,7 +1525,7 @@ const AppShell = React.memo(function AppShell({
     <AuthProvider>
       <WeatherProvider>
         <WardrobeProvider>
-          <div className={`scent-app-shell min-h-[100svh] bg-scent-bg selection:bg-scent-accent selection:text-black text-white relative overflow-x-hidden${ipadSafariPerformanceMode ? ' scent-ipad-safari-perf' : ''}`}>
+          <div className={`scent-app-shell min-h-[100svh] bg-scent-bg selection:bg-scent-accent selection:text-black text-white relative overflow-x-clip${ipadSafariPerformanceMode ? ' scent-ipad-safari-perf' : ''}`}>
             {showThreadBackground ? <ThreadBackground mode={threadBackgroundMode} /> : null}
             <WebVitalsReporter />
             <AppContent location={renderedLocation} />

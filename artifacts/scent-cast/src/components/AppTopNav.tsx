@@ -347,7 +347,7 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
 
       <nav
         className={[
-          'fixed bottom-[calc(0.75rem+env(safe-area-inset-bottom,0px))] left-3 right-3 z-50 md:hidden transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-[transform,opacity]',
+          'fixed bottom-[calc(1rem+env(safe-area-inset-bottom,0px))] left-5 right-5 z-50 md:hidden transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-[transform,opacity]',
           bottomNavShown
             ? 'translate-y-0 opacity-100 pointer-events-auto'
             : 'translate-y-[110%] opacity-0 pointer-events-none',
@@ -356,10 +356,9 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
         aria-hidden={agentActive ? 'true' : undefined}
         onFocusCapture={() => setNavVisible(true)}
       >
-        {/* Opaque pill surface: content must never read through the bar. The
-            near-solid warm-black (was bg-black/66) is what makes the overlap
-            land as a clean tab bar instead of competing layers. */}
-        <div className={`mx-auto grid max-w-sm grid-cols-3 rounded-full border border-scent-accent/22 bg-[rgba(8,6,4,0.94)] p-1 shadow-[0_18px_48px_rgba(0,0,0,0.58),inset_0_1px_0_rgba(255,236,183,0.12)]${lowRenderBudget ? '' : ' backdrop-blur-md'}`}>
+        {/* Opaque pill surface: warm black with thin gold border matching the
+            target's floating capsule treatment. */}
+        <div className={`mx-auto flex max-w-[22rem] items-stretch rounded-full border border-scent-accent/30 bg-[rgba(8,6,4,0.96)] p-1.5 shadow-[0_18px_48px_rgba(0,0,0,0.62),inset_0_1px_0_rgba(255,236,183,0.10)]${lowRenderBudget ? '' : ' backdrop-blur-md'}`}>
           {navItems.map((item) => {
             const Icon = item.icon;
             return (
@@ -369,14 +368,14 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
                 end={item.to === '/'}
                 className={({ isActive }) =>
                   [
-                    'inline-flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-full px-2 text-[10px] font-bold uppercase tracking-[0.12em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55',
+                    'inline-flex flex-1 flex-col items-center justify-center gap-0.5 rounded-full py-2.5 text-[9px] font-bold uppercase tracking-[0.13em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55',
                     isActive
-                      ? 'bg-scent-accent text-black shadow-[0_0_18px_rgba(212,175,55,0.18)]'
-                      : 'text-scent-text-muted hover:text-foreground',
+                      ? 'bg-scent-accent text-black shadow-[0_2px_12px_rgba(212,175,55,0.22)]'
+                      : 'text-[#c4b48a]/70 hover:text-[#f4debd]',
                   ].join(' ')
                 }
               >
-                <Icon size={16} strokeWidth={1.9} aria-hidden="true" />
+                <Icon size={17} strokeWidth={1.8} aria-hidden="true" />
                 <span>{item.label}</span>
               </NavLink>
             );

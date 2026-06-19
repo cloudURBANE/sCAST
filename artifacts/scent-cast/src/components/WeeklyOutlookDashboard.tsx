@@ -201,10 +201,10 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
 
   return (
     <section
-      className="mx-auto w-full max-w-[52rem] min-w-0 border-t border-scent-accent/12 pt-5 text-center sm:pt-7"
+      className="mx-auto w-full max-w-[52rem] min-w-0 border-t border-scent-accent/18 pt-6 text-center sm:pt-8"
       aria-label="Daily scent forecast"
     >
-      <h2 className="scent-type-label text-[10px] tracking-[0.34em] text-[#efe4d6] sm:text-[12px]">
+      <h2 className="scent-type-label text-[10px] tracking-[0.34em] text-[#c8b48a] sm:text-[11px]">
         Daily Scent Forecast
       </h2>
 
@@ -216,7 +216,7 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
         </div>
       ) : (
         <>
-          <div className="relative mt-2 h-[9.75rem] sm:mt-3 sm:h-[15rem]">
+          <div className="relative mt-4 h-[10.5rem] sm:mt-5 sm:h-[15.5rem]">
             <ForecastChevron direction="prev" onClick={() => go(selected - 1)} />
             <div className="absolute inset-y-0 left-9 right-9 overflow-hidden sm:left-12 sm:right-12">
               <ForecastHero
@@ -231,7 +231,7 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
           <div
             role="tablist"
             aria-label="Days this week"
-            className="mx-1 grid grid-cols-7 overflow-hidden rounded-[18px] border border-scent-accent/30 bg-black/25 sm:mx-0"
+            className="mx-0 mt-4 grid grid-cols-7 overflow-hidden rounded-[16px] border border-scent-accent/28 bg-black/30 sm:mt-5"
           >
             {outlook.slice(0, 7).map((plan, index) => {
               const isActive = index === selected;
@@ -243,18 +243,18 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
                   type="button"
                   onClick={() => go(index)}
                   title={`${dayLabel(plan.day.date)} — ${plan.day.condition ?? 'Forecast'}`}
-                  className={`relative flex min-w-0 flex-col items-center py-2 text-[#f1e7da] transition-colors duration-300 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-scent-accent/60 sm:py-4 ${
-                    index > 0 ? 'border-l border-scent-accent/20' : ''
-                  } ${isActive ? 'rounded-[17px] border border-scent-accent/75 bg-[#080705]' : ''}`}
+                  className={`relative flex min-w-0 flex-col items-center py-2 sm:py-3 text-[#f1e7da] transition-colors duration-300 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-scent-accent/60 ${
+                    index > 0 ? 'border-l border-scent-accent/18' : ''
+                  } ${isActive ? 'bg-[#0d0a06] ring-1 ring-inset ring-scent-accent/55' : ''}`}
                 >
-                  <span className="text-[8px] font-semibold uppercase tracking-[0.18em] sm:text-[10px]">
+                  <span className={`text-[7px] font-bold uppercase tracking-[0.18em] sm:text-[9px] ${isActive ? 'text-scent-accent' : 'text-[#9a8a72]'}`}>
                     {dayLabel(plan.day.date)}
                   </span>
-                  <span className="mt-1 font-serif text-[1.35rem] leading-none sm:text-[1.8rem]">
+                  <span className={`mt-0.5 font-serif text-[1.2rem] leading-none sm:text-[1.55rem] ${isActive ? 'text-[#fff7ec]' : 'text-[#e8ddd0]'}`}>
                     {dayNumber(plan.day.date)}
                   </span>
-                  <span className={`mt-2 ${isActive ? 'text-scent-accent' : 'text-[#eee4d7]'}`}>
-                    <WeatherGlyph day={plan.day} size={20} />
+                  <span className={`mt-1.5 ${isActive ? 'text-scent-accent' : 'text-[#8a7a65]/80'}`}>
+                    <WeatherGlyph day={plan.day} size={16} />
                   </span>
                 </button>
               );
@@ -273,11 +273,11 @@ function ForecastChevron({ direction, onClick }: { direction: 'prev' | 'next'; o
       type="button"
       onClick={onClick}
       aria-label={direction === 'prev' ? 'Previous day' : 'Next day'}
-      className={`absolute top-1/2 z-10 flex h-10 w-8 -translate-y-1/2 items-center justify-center text-scent-accent transition-colors hover:text-[#ffe8a5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/50 ${
+      className={`absolute top-1/2 z-10 flex h-12 w-9 -translate-y-1/2 items-center justify-center text-scent-accent/70 transition-colors hover:text-scent-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/50 ${
         direction === 'prev' ? 'left-0' : 'right-0'
       }`}
     >
-      <Icon size={29} strokeWidth={1.35} aria-hidden />
+      <Icon size={24} strokeWidth={1.25} aria-hidden />
     </button>
   );
 }
