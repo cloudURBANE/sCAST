@@ -153,7 +153,7 @@ function ForecastHero({
                 variant="featured"
                 adjustment={pick.imageAdjustment}
                 imageProperties={pick.imageProperties}
-                className="aspect-square h-full w-auto max-w-full"
+                className="forecast-hero-bottle aspect-square h-full w-auto max-w-full"
                 imgClassName="transition-transform duration-500 group-hover:scale-[1.025] motion-reduce:transform-none"
                 loading="eager"
               />
