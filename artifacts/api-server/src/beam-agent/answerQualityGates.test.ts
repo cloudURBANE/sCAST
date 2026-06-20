@@ -327,3 +327,97 @@ test("an occasion-worded re-ask of a pending occasion slot is not scored as aban
   const r = runAnswerQualityGates(reAsk, { hadExternalEvidence: false, sessionState: state, groundedFragrances: [] });
   assert.ok(!r.violations.includes("pending_slot_abandoned"), JSON.stringify(r.violations));
 });
+
+test("naming a grounded pick flagged as matching an avoided note is rejected (A3 backstop)", () => {
+  // The user asked to avoid oud; an owned-vault pick that bypassed retrieval
+  // filtering is flagged matchedAvoid and the answer NAMES it -> backstop fires.
+  const r = runAnswerQualityGates(
+    "From your vault, Oud Wood by Tom Ford is the play here — deep and warm for the evening.",
+    {
+      hadExternalEvidence: false,
+      sessionState: { slots: { avoid: "oud" } },
+      groundedFragrances: [{ canonicalName: "Oud Wood", brand: "Tom Ford", owned: true, matchedAvoid: true }],
+    },
+  );
+  assert.ok(r.violations.includes("recommends_avoided_note"), JSON.stringify(r.violations));
+  assert.equal(r.passed, false);
+});
+
+test("acknowledging an avoided note in prose without naming the flagged pick does NOT false-positive", () => {
+  // Same flagged pick exists in the grounded set, but the answer does not name it
+  // and merely acknowledges the constraint — must not trip the backstop.
+  const r = runAnswerQualityGates(
+    "No oud here, as you asked — instead reach for Cologne Indélébile, all clean musks and citrus.",
+    {
+      hadExternalEvidence: false,
+      sessionState: { slots: { avoid: "oud" } },
+      groundedFragrances: [
+        { canonicalName: "Oud Wood", brand: "Tom Ford", owned: true, matchedAvoid: true },
+        { canonicalName: "Cologne Indélébile", brand: "Frederic Malle", owned: false, matchedAvoid: false },
+      ],
+    },
+  );
+  assert.ok(!r.violations.includes("recommends_avoided_note"), JSON.stringify(r.violations));
+  assert.equal(r.passed, true, JSON.stringify(r.violations));
+});
+
+test("a committed recommendation that names zero grounded picks is rejected", () => {
+  const r = runAnswerQualityGates(
+    "Honestly, you can't go wrong — pick whatever fits your mood today and you'll be set.",
+    {
+      hadExternalEvidence: false,
+      sessionState: { slots: {}, mission: { intent: "recommendation" } },
+      groundedFragrances: [
+        { canonicalName: "Aventus", brand: "Creed", owned: false },
+        { canonicalName: "Layton", brand: "Parfums de Marly", owned: false },
+      ],
+    },
+  );
+  assert.ok(r.violations.includes("recommendation_without_grounded_pick"), JSON.stringify(r.violations));
+  assert.equal(r.passed, false);
+});
+
+test("a still-gathering clarification (question / empty grounded) does not trip the zero-pick gate", () => {
+  // A clarifying question — even on recommendation intent with grounded picks —
+  // must not be hard-failed for committing to nobody yet.
+  const clarifying = runAnswerQualityGates("Happy to help — do you want something fresh or warm?", {
+    hadExternalEvidence: false,
+    sessionState: { slots: {}, mission: { intent: "recommendation" } },
+    groundedFragrances: [{ canonicalName: "Aventus", brand: "Creed", owned: false }],
+  });
+  assert.ok(
+    !clarifying.violations.includes("recommendation_without_grounded_pick"),
+    JSON.stringify(clarifying.violations),
+  );
+
+  // No tools ran this turn (empty grounded) -> nothing to commit to, no fire.
+  const noTools = runAnswerQualityGates("Let me pull some options together for you.", {
+    hadExternalEvidence: false,
+    sessionState: { slots: {}, mission: { intent: "recommendation" } },
+    groundedFragrances: [],
+  });
+  assert.ok(
+    !noTools.violations.includes("recommendation_without_grounded_pick"),
+    JSON.stringify(noTools.violations),
+  );
+
+  // And a normal committed recommendation that DOES name a grounded pick passes.
+  const committed = runAnswerQualityGates(
+    "For tonight, reach for Creed Aventus — bright pineapple-smoke that reads confident.",
+    {
+      hadExternalEvidence: false,
+      sessionState: { slots: {}, mission: { intent: "recommendation" } },
+      groundedFragrances: [{ canonicalName: "Aventus", brand: "Creed", owned: false }],
+    },
+  );
+  assert.ok(
+    !committed.violations.includes("recommendation_without_grounded_pick"),
+    JSON.stringify(committed.violations),
+  );
+});
+
+test("repairInstructionFor returns fixes for the new gates", () => {
+  const msg = repairInstructionFor(["recommends_avoided_note", "recommendation_without_grounded_pick"]);
+  assert.match(msg, /note the user asked to avoid/i);
+  assert.match(msg, /commit to a specific grounded pick/i);
+});
