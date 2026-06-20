@@ -1310,23 +1310,10 @@ function CommunityPageView() {
 function ArenaPageView() {
   const { authToken, authEmail, authPictureUrl, authUsername, handleSignOut, setIsAuthModalOpen, setIsProfileModalOpen } = useAuth();
   const { setIsShareModalOpen } = useWardrobeShareModalActions();
-  const wardrobeItems = useWardrobeItems();
-  const rushFragrances = useMemo(() => wardrobeItems.flatMap((item) => {
-    const name = item.name || item.product?.name;
-    if (!item.id || !name) return [];
-    return [{
-      fragranceId: item.id,
-      name,
-      brand: item.brand || item.product?.brand,
-      family: item.family,
-      notes: item.notes,
-    }];
-  }), [wardrobeItems]);
   return (
     <>
       <SEO title="Arena | ScentBeam" description="Vote on head-to-head fragrance battles." url="https://scentbeam.com/arena" />
       <ArenaPage
-        rushFragrances={rushFragrances}
         authToken={authToken}
         authEmail={authEmail}
         authPictureUrl={authPictureUrl}
