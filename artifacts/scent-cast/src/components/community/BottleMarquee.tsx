@@ -13,7 +13,6 @@ import { useMarqueeSwipe } from '@/hooks/useMarqueeSwipe';
 
 interface BottleMarqueeProps {
   items: CommunityFragranceEntry[];
-  loading: boolean;
   isError?: boolean;
 }
 
@@ -29,15 +28,7 @@ const COMMUNITY_SCROLL_MAX_SECONDS = 420;
 const COMMUNITY_SCROLL_REDUCED_MOTION_SECONDS = 640;
 const COMMUNITY_LOW_BUDGET_EAGER_IMAGES = 8;
 
-const placeholderItems: CommunityFragranceEntry[] = [...Array(8)].map((_, index) => ({
-  id: `placeholder:${index}`,
-  name: 'Loading fragrance',
-  brand: 'Community',
-  imageUrl: '',
-  curator: '@community',
-}));
-
-export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, loading, isError = false }) => {
+export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, isError = false }) => {
   const sectionRef = useRef<HTMLElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
   const groupRef = useRef<HTMLDivElement>(null);
@@ -50,10 +41,9 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
   const trackCopies = useRef(
     lowRenderBudget ? COMMUNITY_TRACK_COPIES_LOW : COMMUNITY_TRACK_COPIES_DEFAULT,
   ).current;
-  const renderedItems = loading ? placeholderItems : items;
   const visibleItems = useMemo(
-    () => (lowRenderBudget ? renderedItems.slice(0, COMMUNITY_LOW_BUDGET_EAGER_IMAGES) : renderedItems),
-    [lowRenderBudget, renderedItems],
+    () => (lowRenderBudget ? items.slice(0, COMMUNITY_LOW_BUDGET_EAGER_IMAGES) : items),
+    [lowRenderBudget, items],
   );
   const imageLayoutTransition = lowRenderBudget
     ? COMMUNITY_IMAGE_LAYOUT_TRANSITION_LOW_RENDER
@@ -188,17 +178,17 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
 
   const openItem = useCallback(
     (item: CommunityFragranceEntry, copyIndex: number, trigger: HTMLButtonElement) => {
-      if (!loading && item.imageUrl) {
+      if (item.imageUrl) {
         activeTriggerRef.current = trigger;
         setOverlayClosing(false);
         setActiveImageLayoutId(`bottle-image-${copyIndex}-${item.id}`);
         setActiveItem(item);
       }
     },
-    [loading],
+    [],
   );
 
-  if (!loading && (isError || items.length === 0)) {
+  if (isError || items.length === 0) {
     return (
       <section className="scent-community-marquee" aria-label="Community fragrance marquee">
         <div className="flex items-center justify-center py-14">
@@ -277,7 +267,6 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
                         adjustment={item.imageAdjustment}
                         imageProperties={item.imageProperties}
                         showFrameGuide={false}
-                        isSyncing={loading}
                         onLoad={copyIndex === 0 ? requestMarqueeMeasure : undefined}
                         onError={copyIndex === 0 ? requestMarqueeMeasure : undefined}
                       />

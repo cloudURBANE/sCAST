@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { LoaderCircle, Plus, X } from 'lucide-react';
+import { CommunityLoadingState } from '@/components/community/CommunityLoadingState';
 import { PostCard } from '@/components/community/PostCard';
 import {
   type CommunityPostType,
@@ -157,24 +158,7 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
   }, [fetchNextPage, hasNextPage, isFetchingNextPage, posts.length]);
 
   if (isLoading) {
-    return (
-      <div className="mx-auto grid w-full max-w-[940px] gap-4" aria-label="Loading community posts">
-        {[0, 1, 2].map((item) => (
-          <div
-            key={item}
-            className="min-h-[12rem] rounded-[calc(var(--radius-scent)+2px)] border border-scent-accent/18 bg-black/46 p-6 shadow-[0_18px_44px_-34px_rgba(0,0,0,0.95),inset_0_1px_0_rgba(255,236,183,0.04)]"
-          >
-            <div className="mb-5 h-4 w-28 rounded-full bg-scent-accent/10" />
-            <div className="mb-3 h-6 w-2/3 rounded-full bg-white/[0.055]" />
-            <div className="space-y-2">
-              <div className="h-3 w-full rounded-full bg-white/[0.04]" />
-              <div className="h-3 w-5/6 rounded-full bg-white/[0.04]" />
-              <div className="h-3 w-3/5 rounded-full bg-white/[0.04]" />
-            </div>
-          </div>
-        ))}
-      </div>
-    );
+    return <CommunityLoadingState label="Loading community posts" />;
   }
 
   if (isError) {

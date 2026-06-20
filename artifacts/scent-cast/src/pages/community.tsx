@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Plus, Search, X } from 'lucide-react';
 import { AppTopNav } from '@/components/AppTopNav';
 import { CommunityHero } from '@/components/community/CommunityHero';
+import { CommunityLoadingState } from '@/components/community/CommunityLoadingState';
 import { useCommunityFragrances } from '@/components/community/communityData';
 import type { PostComposerHandle } from '@/components/community/PostComposer';
 import type { CommunityPostType } from '@/components/community/communityPosts';
@@ -32,6 +33,11 @@ interface CommunityPageProps {
 
 const COMMUNITY_BODY_WAKE_DELAY_MS = 640;
 
+type CommunityComposerPreset = {
+  type?: CommunityPostType | null;
+  tag?: string | null;
+};
+
 // Quiet, static toolbar placeholder for the composer/search bar. No pulse — the
 // page's single loading "animation" is the orbital emblem below, matching the
 // rest of the app (home / route transitions) instead of the old grey skeletons.
@@ -46,12 +52,13 @@ function CommunityPanelFallback() {
 // load (App.tsx `RouteChunkFallback`) — NOT the search/agent orbital emblem
 // (ScentIntelligenceLoader), which reads as an active "intelligence" run.
 function CommunityFeedFallback() {
+  return <CommunityLoadingState label="Loading community posts" />;
+}
+
+function CommunityPanelBodyFallback() {
   return (
-    <div
-      className="mx-auto flex w-full max-w-[940px] items-center justify-center py-20"
-      aria-label="Loading community posts"
-    >
-      <div className="h-8 w-8 rounded-full border border-white/15 border-t-scent-accent animate-spin" />
+    <div className="border-b border-scent-accent/14 px-4 py-6">
+      <CommunityLoadingState label="Loading community controls" className="py-8" />
     </div>
   );
 }
@@ -123,6 +130,7 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
 }) => {
   const communityBodyReady = useAfterInitialRoutePaint();
   const { data, isLoading, isError } = useCommunityFragrances(communityBodyReady);
+  const communityMarqueeReady = communityBodyReady && (!isLoading || isError);
   const [postType, setPostType] = useState<CommunityPostType | null>(null);
   const [postTag, setPostTag] = useState<string | null>(null);
   const [postQuery, setPostQuery] = useState('');
@@ -131,21 +139,46 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
   // own the panel body at a time; the toolbar reflects which is active.
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [composerOpen, setComposerOpen] = useState(false);
+  const [composerMounted, setComposerMounted] = useState(false);
   const composerRef = useRef<PostComposerHandle | null>(null);
+  const pendingComposerOpenRef = useRef<CommunityComposerPreset | null>(null);
+  const openComposer = useCallback((preset?: CommunityComposerPreset) => {
+    pendingComposerOpenRef.current = preset ?? {};
+    setComposerMounted(true);
+    setComposerOpen(true);
+    setFiltersOpen(false);
+  }, []);
+  const handleComposerRef = useCallback((instance: PostComposerHandle | null) => {
+    composerRef.current = instance;
+    if (!instance || pendingComposerOpenRef.current === null) return;
+
+    const preset = pendingComposerOpenRef.current;
+    pendingComposerOpenRef.current = null;
+    instance.open(preset);
+  }, []);
   const toggleSearch = useCallback(() => {
     setFiltersOpen((open) => {
       // Opening search retracts the composer; the open()/close() ref drives
       // PostComposer, which reports back through handleComposerOpenChange.
-      if (!open) composerRef.current?.close();
+      if (!open) {
+        pendingComposerOpenRef.current = null;
+        composerRef.current?.close();
+        setComposerOpen(false);
+      }
       return !open;
     });
   }, []);
   const toggleComposer = useCallback(() => {
     // The compose control drives the same imperative handle the feed CTAs use,
     // so collapsed/expanded state stays single-sourced inside PostComposer.
-    if (composerOpen) composerRef.current?.close();
-    else composerRef.current?.open();
-  }, [composerOpen]);
+    if (composerOpen) {
+      pendingComposerOpenRef.current = null;
+      composerRef.current?.close();
+      setComposerOpen(false);
+      return;
+    }
+    openComposer();
+  }, [composerOpen, openComposer]);
   const handleComposerOpenChange = useCallback((open: boolean) => {
     setComposerOpen(open);
     // When the composer expands, retract the search panel.
@@ -194,9 +227,9 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
         <div className="space-y-5 pt-2 sm:space-y-20 sm:pt-12">
           <CommunityHero />
           <div className="scent-full-bleed">
-            {communityBodyReady ? (
+            {communityMarqueeReady ? (
               <React.Suspense fallback={<CommunityMarqueeFallback />}>
-                <BottleMarquee items={data ?? []} loading={isLoading} isError={isError} />
+                <BottleMarquee items={data ?? []} isError={isError} />
               </React.Suspense>
             ) : (
               <CommunityMarqueeFallback />
@@ -205,7 +238,6 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
           <section className="scent-deferred-section w-full space-y-3 sm:space-y-7" aria-label="Community forum">
             {communityBodyReady ? (
               <>
-              <React.Suspense fallback={<CommunityPanelFallback />}>
                 <div className="mx-auto w-full max-w-[940px] overflow-hidden rounded-[calc(var(--radius-scent)-2px)] border border-scent-accent/14 bg-[#050403] shadow-[inset_0_1px_0_rgba(255,236,183,0.04)]">
                   {/* ONE deliberate toolbar: compose on the left, search/filter on
                       the right. The two are mutually exclusive — opening either
@@ -259,39 +291,47 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
                       <span>{filtersOpen ? 'Close' : 'Search'}</span>
                     </button>
                   </div>
-                  {/* PostComposer stays mounted so the feed's "start a room"
-                      CTA can drive it via the ref; it renders nothing in its
-                      collapsed state (the toolbar owns the trigger) and is
-                      hidden while the search panel owns the surface. */}
-                  <div id="community-composer-panel" className={filtersOpen ? 'hidden' : undefined}>
-                    <PostComposer
-                      ref={composerRef}
-                      authToken={authToken}
-                      onSignIn={onSignIn}
-                      onOpenChange={handleComposerOpenChange}
-                    />
+                  {/* PostComposer is deferred until first use. Once opened, it
+                      stays mounted so the feed's "start a room" CTA can drive
+                      it via the ref; the collapsed state still renders no
+                      duplicate trigger because the toolbar owns that control. */}
+                  <div
+                    id="community-composer-panel"
+                    className={filtersOpen || !composerMounted ? 'hidden' : undefined}
+                  >
+                    {composerMounted ? (
+                      <React.Suspense fallback={<CommunityPanelBodyFallback />}>
+                        <PostComposer
+                          ref={handleComposerRef}
+                          authToken={authToken}
+                          onSignIn={onSignIn}
+                          onOpenChange={handleComposerOpenChange}
+                        />
+                      </React.Suspense>
+                    ) : null}
                   </div>
                   {filtersOpen ? (
                     <div id="community-search-panel">
-                      <PostFilters
-                        type={postType}
-                        tag={postTag}
-                        q={postQuery}
-                        authToken={authToken}
-                        onTypeChange={setPostType}
-                        onTagChange={setPostTag}
-                        onQueryChange={setPostQuery}
-                      />
+                      <React.Suspense fallback={<CommunityPanelBodyFallback />}>
+                        <PostFilters
+                          type={postType}
+                          tag={postTag}
+                          q={postQuery}
+                          authToken={authToken}
+                          onTypeChange={setPostType}
+                          onTagChange={setPostTag}
+                          onQueryChange={setPostQuery}
+                        />
+                      </React.Suspense>
                     </div>
                   ) : null}
                 </div>
-              </React.Suspense>
               <React.Suspense fallback={<CommunityFeedFallback />}>
                 <CommunityFeed
                   filters={feedFilters}
                   authToken={authToken}
                   onSignIn={onSignIn}
-                  onStartRoom={(preset) => composerRef.current?.open(preset)}
+                  onStartRoom={openComposer}
                   onClearFilters={clearCommunityFilters}
                 />
               </React.Suspense>
