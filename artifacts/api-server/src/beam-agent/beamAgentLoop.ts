@@ -232,7 +232,13 @@ const ACT_NUDGE =
   "actual tool calls, do not just describe them. If you already have enough evidence, write " +
   "the final recommendation instead. Do not end your turn on a promise to act.";
 
-/** Last-turn instruction for the dedicated, tool-free synthesis pass. */
+/** Last-turn instruction that converts grounded kit evidence into the required card. */
+const FINAL_KIT_PRESENTATION_NUDGE =
+  "This is the final orchestration turn and the requested travel-kit lanes are already grounded. " +
+  "Call beam_present_travel_kit now with exactly the requested owned and new picks. Do not search, " +
+  "compare, explain, or answer in prose before making that tool call.";
+
+/** Re-read persisted state instead of asking for a known or delegated preference. */
 const STATE_NUDGE =
   "You asked for information that is already present in the structured session state, or you ignored a delegated mission target. Re-read Known so far and the Mission target. Do not ask another preference question for known or delegated fields; call the needed tools now or write the grounded answer.";
 
@@ -1067,12 +1073,33 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
       }
 
       turnCount++;
+      const mission = input.sessionState?.mission;
+      const grounded = [...groundedFragrances.values()];
+      const groundedOwned = grounded.filter((item) => item.owned).length;
+      const groundedNew = grounded.filter((item) => !item.owned).length;
+      const kitAlreadyPresented = pendingDeliverables.some(
+        (event) => event.type === "card" && event.card.kind === "travel_kit",
+      );
+      const reserveFinalTurnForKit =
+        turn === maxTurns - 1 &&
+        mission?.intent === "travel_kit" &&
+        !kitAlreadyPresented &&
+        toolByName.has("beam_present_travel_kit") &&
+        (mission.ownedCount ?? 0) + (mission.newCount ?? 0) > 0 &&
+        groundedOwned >= (mission.ownedCount ?? 0) &&
+        groundedNew >= (mission.newCount ?? 0);
+      const messagesForTurn = reserveFinalTurnForKit
+        ? withSynthesisInstruction(messages, FINAL_KIT_PRESENTATION_NUDGE)
+        : messages;
+      const toolsForTurn = reserveFinalTurnForKit
+        ? claudeTools.filter((tool) => tool.name === "beam_present_travel_kit")
+        : claudeTools;
       let response: ClaudeResponse;
       try {
         response = await callModel({
           system: systemPrompt,
-          messages,
-          tools: claudeTools,
+          messages: messagesForTurn,
+          tools: toolsForTurn,
           model: input.model,
           maxTokens: orchestrationMaxTokens,
           signal: callBudgetSignal(),
