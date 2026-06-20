@@ -54,7 +54,7 @@ import { useModalBehavior } from '@/hooks/use-modal-behavior';
 import { useRenderBudget } from '@/hooks/useRenderBudget';
 import { useVaultGridPreference } from '@/hooks/useVaultGridPreference';
 import { crumb, domSnapshot } from '@/lib/crashTrace';
-import { isIpadSafariPerformanceMode } from '@/lib/platform';
+import { isIpadSafariPerformanceMode, isLowRenderBudget } from '@/lib/platform';
 import {
   WARDROBE_CLARIFY_SOLVERS,
   WARDROBE_REFRESH_COUNT_STORAGE_KEY,
@@ -445,13 +445,13 @@ function PriceValueSignal({
   tone?: PriceSignalTone;
 }) {
   const reduceMotion = useReducedMotion();
-  const iPadSafariPerformanceMode = React.useRef(isIpadSafariPerformanceMode()).current;
+  const lowRenderBudget = React.useRef(isLowRenderBudget() || isIpadSafariPerformanceMode()).current;
   const intensity = symbols.length;
   const baseClass =
     tone === "accent"
       ? "inline-flex font-serif italic text-scent-accent font-bold drop-shadow-[0_0_10px_rgba(212,175,55,0.7)] whitespace-nowrap"
       : "inline-flex font-serif italic text-white/90 whitespace-nowrap";
-  const animate = reduceMotion || iPadSafariPerformanceMode
+  const animate = reduceMotion || lowRenderBudget
     ? undefined
     : intensity >= 4
       ? { y: [0, -2, 1, 0], opacity: [0.82, 1, 0.9, 0.82] }
@@ -472,7 +472,7 @@ function PriceValueSignal({
             className="inline-block"
             animate={animate}
             transition={
-                reduceMotion || iPadSafariPerformanceMode
+                reduceMotion || lowRenderBudget
                   ? undefined
                   : {
                     duration,

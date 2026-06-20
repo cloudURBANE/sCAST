@@ -326,10 +326,11 @@ a {
   align-items: flex-start;
 }
 
-/* iPad Safari performance mode drops the blur and the sheen to avoid
-   compositing jank, the same trade-off the rest of the chrome makes — the
-   premium gold-glass read is preserved with an opaque gradient. */
-.scent-ipad-safari-perf .scent-signature-cta {
+/* Touch performance mode drops the blur and sheen to avoid compositing jank,
+   the same trade-off the rest of the chrome makes. The premium gold-glass read
+   is preserved with an opaque gradient. */
+.scent-ipad-safari-perf .scent-signature-cta,
+.scent-touch-perf .scent-signature-cta {
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
   background:
@@ -337,7 +338,8 @@ a {
     linear-gradient(180deg, rgba(26, 20, 10, 0.94), rgba(0, 0, 0, 0.94));
 }
 
-.scent-ipad-safari-perf .scent-signature-cta::after {
+.scent-ipad-safari-perf .scent-signature-cta::after,
+.scent-touch-perf .scent-signature-cta::after {
   display: none;
 }
 
@@ -1570,7 +1572,13 @@ a {
 .scent-ipad-safari-perf .scent-community-marquee-track,
 .scent-ipad-safari-perf .scent-note-marquee-track,
 .scent-ipad-safari-perf .animate-infinite-scroll,
-.scent-ipad-safari-perf .animate-infinite-scroll-slow {
+.scent-ipad-safari-perf .animate-infinite-scroll-slow,
+.scent-touch-perf .scent-marquee-track-row,
+.scent-touch-perf .scent-atmosphere-marquee-track,
+.scent-touch-perf .scent-community-marquee-track,
+.scent-touch-perf .scent-note-marquee-track,
+.scent-touch-perf .animate-infinite-scroll,
+.scent-touch-perf .animate-infinite-scroll-slow {
   will-change: auto;
   backface-visibility: visible;
 }
@@ -1598,7 +1606,14 @@ a {
 .scent-ipad-safari-perf .backdrop-blur-lg,
 .scent-ipad-safari-perf .backdrop-blur-xl,
 .scent-ipad-safari-perf .backdrop-blur-2xl,
-.scent-ipad-safari-perf .backdrop-blur-3xl {
+.scent-ipad-safari-perf .backdrop-blur-3xl,
+.scent-touch-perf .backdrop-blur,
+.scent-touch-perf .backdrop-blur-sm,
+.scent-touch-perf .backdrop-blur-md,
+.scent-touch-perf .backdrop-blur-lg,
+.scent-touch-perf .backdrop-blur-xl,
+.scent-touch-perf .backdrop-blur-2xl,
+.scent-touch-perf .backdrop-blur-3xl {
   -webkit-backdrop-filter: none !important;
   backdrop-filter: none !important;
 }

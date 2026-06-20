@@ -259,6 +259,7 @@ export const BottleImage: React.FC<BottleImageProps> = ({
   // && !broken` already implies there's no `src`.) The caller guarantees this is
   // time-bounded, so it can never strand the indefinite spinner FE-1 removed.
   const showFetchingPlaceholder = showPlaceholder && !broken && isSyncing;
+  const skeletonMotionClass = lowRenderBudget ? '' : ' animate-pulse';
 
   // ① Root: sized by parent. ② Artboard: inset + flex-end + .bottle-packshot-img shelf CSS.
   return (
@@ -318,7 +319,7 @@ export const BottleImage: React.FC<BottleImageProps> = ({
         ) : (
           <>
             {showSkeleton && (
-              <div className="absolute inset-0 flex h-full w-full min-h-0 items-end justify-center rounded-sm bg-white/[0.01] px-1 animate-pulse pb-8 z-20">
+              <div className={`absolute inset-0 flex h-full w-full min-h-0 items-end justify-center rounded-sm bg-white/[0.01] px-1 pb-8 z-20${skeletonMotionClass}`}>
                 <div className="h-1/2 w-1/4 rounded-t-md bg-white/5 relative flex flex-col items-center">
                   <div className="absolute -top-2.5 h-2.5 w-1/2 rounded-t-sm bg-white/10" />
                 </div>

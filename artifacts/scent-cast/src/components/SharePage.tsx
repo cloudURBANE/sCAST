@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import {
   Activity,
   CalendarDays,
@@ -34,6 +34,7 @@ import {
 } from '@/lib/fragranceApi';
 import { ReviewsPanel } from '@/components/ReviewsPanel';
 import { useModalBehavior } from '@/hooks/use-modal-behavior';
+import { isTouchPerformanceMode } from '@/lib/platform';
 
 interface ScentVector {
   freshness: number;
@@ -358,6 +359,7 @@ function buildLegacyPerformanceParts(
 }
 
 type PriceSignalTone = "standard" | "accent";
+const PRICE_SIGNAL_REPEAT_COUNT = 2;
 
 function PriceValueSignal({
   symbols,
@@ -368,13 +370,16 @@ function PriceValueSignal({
   label: string;
   tone?: PriceSignalTone;
 }) {
+  const reduceMotion = useReducedMotion();
+  const touchPerformanceMode = React.useRef(isTouchPerformanceMode()).current;
   const intensity = symbols.length;
   const baseClass =
     tone === "accent"
       ? "inline-flex font-serif italic text-scent-accent font-bold drop-shadow-[0_0_10px_rgba(212,175,55,0.7)] whitespace-nowrap"
       : "inline-flex font-serif italic text-white/90 whitespace-nowrap";
-  const animate =
-    intensity >= 4
+  const animate = reduceMotion || touchPerformanceMode
+    ? undefined
+    : intensity >= 4
       ? { y: [0, -2, 1, 0], opacity: [0.82, 1, 0.9, 0.82] }
       : intensity === 3
         ? { y: [0, -2, 0], rotate: [0, -4, 0], opacity: [0.88, 1, 0.88] }
@@ -392,13 +397,17 @@ function PriceValueSignal({
             aria-hidden="true"
             className="inline-block"
             animate={animate}
-            transition={{
-              duration,
-              delay: index * 0.11,
-              repeat: Infinity,
-              repeatType: "mirror",
-              ease: "easeInOut",
-            }}
+            transition={
+              reduceMotion || touchPerformanceMode
+                ? undefined
+                : {
+                  duration,
+                  delay: index * 0.11,
+                  repeat: PRICE_SIGNAL_REPEAT_COUNT,
+                  repeatType: "mirror",
+                  ease: "easeInOut",
+                }
+            }
           >
             {symbol}
           </motion.span>
