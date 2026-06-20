@@ -238,7 +238,7 @@ function ForecastHero({
                 tighter name like "Green Irish Tweed" stays balanced on one line.
                 NON-INTERACTIVE by design: the name is not a tap target (see above). */}
             <div className="flex min-w-0 max-w-[12.25rem] flex-col items-center justify-center self-center text-center sm:max-w-[15rem]">
-              <p className="scent-type-label text-[10px] tracking-[0.3em] text-scent-accent/80 sm:text-[12px]">
+              <p className="scent-type-label text-[10px] tracking-[0.3em] text-scent-accent/80 [text-indent:0.3em] sm:text-[12px]">
                 {pick.brand}
               </p>
               <p className="mt-1 font-serif text-[clamp(1.35rem,5.6vw,2.1rem)] leading-[1.07] text-[#fff7ec] [overflow-wrap:break-word]">
@@ -310,10 +310,12 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
   return (
     <section
       className="mx-auto w-full max-w-[52rem] min-w-0 text-center"
-      aria-label="Daily scent forecast"
+      aria-label="Scent forecast"
     >
-      <h2 className="scent-type-label text-[10px] tracking-[0.34em] text-[#efe4d6] sm:text-[12px]">
-        Daily Scent Forecast
+      {/* text-indent matches the tracking so the uppercase title's trailing
+          letter-spacing doesn't pull it optically left of the centered axis. */}
+      <h2 className="scent-type-label text-[10px] tracking-[0.34em] text-[#efe4d6] [text-indent:0.34em] sm:text-[12px]">
+        Scent Forecast
       </h2>
 
       {!activePlan ? (
@@ -345,7 +347,7 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
               read as a single grouped, screen-centered unit that ties the hero to the
               calendar rather than drifting beside the title. */}
           {activeMeta.length > 0 ? (
-            <div className="mt-2 flex justify-center">
+            <div className="mt-3 flex justify-center sm:mt-3.5">
               <div className="inline-flex items-center gap-1.5 rounded-full border border-scent-accent/20 bg-black/25 px-3 py-1 text-[#cdbfa9]">
                 <WeatherGlyph day={activePlan.day} size={13} />
                 <span className="text-[10px] font-medium uppercase tracking-[0.14em] sm:text-[11px]">
