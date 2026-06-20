@@ -50,6 +50,26 @@ function forecastDate(iso: string): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+/**
+ * True when a forecast day's calendar date is before today (local time).
+ *
+ * A *daily* scent forecast must always begin at today. The provider normally
+ * returns a today-first window, but a payload that crosses local midnight (or an
+ * older/redundancy provider that leads with the prior day) would otherwise push a
+ * stale day into the strip — landing users on "yesterday" with today bumped to the
+ * second tab. Dropping past days keeps the default-selected hero (index 0) pinned
+ * to today regardless of how the window was generated. No-op when the data is
+ * already today-first.
+ */
+function isPastForecastDay(iso: string): boolean {
+  const date = forecastDate(iso);
+  if (!date) return false;
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  date.setHours(0, 0, 0, 0);
+  return date.getTime() < startOfToday.getTime();
+}
+
 function dayLabel(iso: string): string {
   return forecastDate(iso)?.toLocaleDateString(undefined, { weekday: 'short' }) ?? '—';
 }
@@ -240,7 +260,10 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
   weather,
   onSelectFragrance,
 }) => {
-  const forecast = useMemo(() => weather?.forecast ?? [], [weather?.forecast]);
+  const forecast = useMemo(
+    () => (weather?.forecast ?? []).filter((day) => !isPastForecastDay(day.date)),
+    [weather?.forecast],
+  );
   const [selected, setSelected] = useState(0);
   const [direction, setDirection] = useState(0);
 
