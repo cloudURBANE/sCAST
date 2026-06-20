@@ -943,6 +943,7 @@ function DashboardView() {
         authUsername={authUsername}
         renderedRoute="home"
         agentActive={agentActive}
+        suppressBottomNav={vaultSearchUiActive}
         onSignIn={() => setIsAuthModalOpen(true)}
         onShare={() => setIsShareModalOpen(true)}
         onSignOut={handleSignOut}
