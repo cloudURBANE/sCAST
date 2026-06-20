@@ -2462,10 +2462,14 @@ a {
   flex: 1;
   flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  gap: clamp(1.06rem, 2.3svh, 1.72rem);
+  /* Top-aligned, consistent gap instead of space-between: the modal now reads as
+     one curated sheet whose sections sit a fixed distance apart, rather than a
+     stack pushed to the viewport extremes (which detached the family section and
+     made the whole sheet feel stretched on tall phones). */
+  justify-content: flex-start;
+  gap: clamp(1.05rem, 2.1svh, 1.5rem);
   width: 100%;
-  padding-top: 1.04rem;
+  padding-top: 1.1rem;
 }
 
 .community-fragrance-detail__hero {
@@ -2474,27 +2478,23 @@ a {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   width: clamp(16rem, 68vw, 21rem);
-  aspect-ratio: 0.7;
-  padding: 1.1rem 1.06rem 1.04rem;
+  aspect-ratio: 0.72;
+  padding: 0.95rem 1.02rem 1rem;
   overflow: hidden;
-  /* Drives the concentric inner-frame radii below. Each inset frame subtracts
-     its own inset from this so every corner curve stays parallel instead of
-     bunching tighter (and visibly off-shape) the further in it sits. */
+  /* Drives the inner hairline radius below; the inset subtracts from this so the
+     corner curve stays parallel to the outer border. */
   --hero-frame-radius: 1.5rem;
-  border: 1px solid rgba(212, 175, 55, 0.56);
+  border: 1px solid rgba(212, 175, 55, 0.5);
   border-radius: var(--hero-frame-radius);
   background:
-    radial-gradient(78% 42% at 50% 6%, rgba(255, 237, 190, 0.022), transparent 70%),
+    radial-gradient(78% 42% at 50% 6%, rgba(255, 237, 190, 0.02), transparent 70%),
     linear-gradient(180deg, rgba(5, 5, 4, 0.98), #000 42%, #000 100%);
   box-shadow:
     0 0 0 1px rgba(0, 0, 0, 0.9),
-    0 0 22px rgba(212, 175, 55, 0.1),
-    inset 0 1px 0 rgba(255, 232, 168, 0.11),
-    inset 0 0 18px rgba(212, 175, 55, 0.025);
+    inset 0 1px 0 rgba(255, 232, 168, 0.09);
 }
 
 .community-fragrance-detail__hero::before,
-.community-fragrance-detail__hero::after,
 .community-fragrance-detail__hero-frame {
   content: "";
   position: absolute;
@@ -2502,31 +2502,15 @@ a {
   border-radius: inherit;
 }
 
+/* One subtle inner hairline. The competing bright second frame + innermost mat
+   were removed so the card reads as a single premium outer border with one
+   quiet inset line, not a stack of concentric gold rectangles. */
 .community-fragrance-detail__hero::before {
-  inset: 0.56rem;
-  border-radius: calc(var(--hero-frame-radius) - 0.56rem);
+  inset: 0.62rem;
+  border-radius: calc(var(--hero-frame-radius) - 0.62rem);
   z-index: -1;
-  border: 1px solid rgba(255, 222, 149, 0.62);
-  box-shadow:
-    0 0 0 1px rgba(8, 4, 0, 0.92),
-    0 0 12px rgba(212, 175, 55, 0.14),
-    inset 0 1px 0 rgba(255, 248, 218, 0.22),
-    inset 0 0 14px rgba(212, 175, 55, 0.04),
-    inset 0 -1px 0 rgba(150, 93, 24, 0.34);
-}
-
-.community-fragrance-detail__hero::after {
-  /* Innermost mat. Gap from the bright ::before frame widened from 0.20rem to
-     0.34rem so it reads as a deliberate nested mat rather than a doubled line
-     crowding the second frame. inset and the radius subtraction move together
-     so the corner arc stays concentric with the outer two (same centre). */
-  inset: 0.9rem;
-  border-radius: calc(var(--hero-frame-radius) - 0.9rem);
-  z-index: -1;
-  border: 1px solid rgba(255, 219, 143, 0.28);
-  box-shadow:
-    inset 0 0 0 1px rgba(0, 0, 0, 0.7),
-    inset 0 1px 0 rgba(255, 245, 214, 0.1);
+  border: 1px solid rgba(255, 222, 149, 0.26);
+  box-shadow: inset 0 1px 0 rgba(255, 248, 218, 0.08);
 }
 
 .community-fragrance-detail__hero-frame {
@@ -2545,18 +2529,18 @@ a {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.45rem;
-  min-height: 1.92rem;
-  min-width: 6.55rem;
-  padding: 0.45rem 0.78rem;
-  border: 1px solid rgba(255, 214, 135, 0.64);
+  gap: 0.38rem;
+  min-height: 1.72rem;
+  min-width: 5.4rem;
+  padding: 0.38rem 0.7rem;
+  border: 1px solid rgba(255, 214, 135, 0.4);
   border-radius: 999px;
-  color: #f2dba8;
+  color: #e7caa0;
   background:
-    linear-gradient(180deg, rgba(255, 232, 166, 0.045), rgba(0, 0, 0, 0.82));
+    linear-gradient(180deg, rgba(255, 232, 166, 0.03), rgba(0, 0, 0, 0.7));
   box-shadow:
-    inset 0 1px 0 rgba(255, 245, 212, 0.12);
-  font-size: 0.64rem;
+    inset 0 1px 0 rgba(255, 245, 212, 0.08);
+  font-size: 0.61rem;
   font-weight: 700;
   line-height: 1;
   letter-spacing: 0.2em;
@@ -2705,19 +2689,18 @@ a {
 .community-fragrance-detail__family {
   display: grid;
   justify-items: center;
-  gap: 0.42rem;
+  gap: 0.34rem;
   width: 100%;
-  margin-top: 0.04rem;
   text-align: center;
 }
 
 .community-fragrance-detail__family p {
   margin: 0;
   color: #dfbb82;
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   font-weight: 700;
   line-height: 1.1;
-  letter-spacing: 0.22em;
+  letter-spacing: 0.2em;
   text-transform: uppercase;
 }
 
@@ -2725,30 +2708,24 @@ a {
   margin: 0;
   color: #fff7ec;
   font-family: var(--font-serif);
-  font-size: 1.78rem;
+  font-size: 1.54rem;
   font-weight: 600;
   line-height: 1;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
   text-wrap: balance;
   overflow-wrap: anywhere;
 }
 
-.community-fragrance-detail__family .community-fragrance-detail__rule {
-  width: min(10.9rem, 62%);
-  margin-top: 0;
-}
-
 .community-fragrance-detail__notes {
-  width: clamp(18rem, 80vw, 32rem);
+  width: clamp(18rem, 80vw, 30rem);
   overflow: hidden;
-  border: 1px solid rgba(212, 175, 55, 0.24);
+  border: 1px solid rgba(212, 175, 55, 0.16);
   border-radius: 0.72rem;
   background:
-    linear-gradient(180deg, rgba(255, 235, 179, 0.016), rgba(0, 0, 0, 0.78) 34%, rgba(0, 0, 0, 0.9));
+    linear-gradient(180deg, rgba(255, 235, 179, 0.012), rgba(0, 0, 0, 0.78) 34%, rgba(0, 0, 0, 0.9));
   box-shadow:
-    inset 0 1px 0 rgba(255, 232, 178, 0.045),
-    0 22px 58px -42px rgba(0, 0, 0, 0.98);
+    inset 0 1px 0 rgba(255, 232, 178, 0.035);
 }
 
 .community-fragrance-detail__note-row {
@@ -2757,7 +2734,7 @@ a {
   align-items: center;
   min-height: 3.12rem;
   padding: 0.58rem 0.94rem;
-  border-top: 1px solid rgba(212, 175, 55, 0.22);
+  border-top: 1px solid rgba(212, 175, 55, 0.12);
 }
 
 .community-fragrance-detail__note-row:first-child {
@@ -2776,8 +2753,8 @@ a {
 
 .community-fragrance-detail__note-row > span {
   width: 1px;
-  height: 1.72rem;
-  background: rgba(212, 175, 55, 0.44);
+  height: 1.5rem;
+  background: rgba(212, 175, 55, 0.26);
 }
 
 .community-fragrance-detail__note-row div {
@@ -2799,20 +2776,19 @@ a {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: clamp(16.5rem, 70vw, 28rem);
-  min-height: 3.22rem;
-  margin-top: 0.28rem;
+  width: clamp(18rem, 80vw, 30rem);
+  min-height: 2.95rem;
+  margin-top: 0.1rem;
   overflow: hidden;
-  border: 1px solid rgba(255, 218, 143, 0.7);
+  border: 1px solid rgba(255, 218, 143, 0.56);
   border-radius: 999px;
   color: #f2dba8;
   background:
-    linear-gradient(180deg, rgba(255, 236, 183, 0.045), rgba(0, 0, 0, 0.84) 62%, rgba(0, 0, 0, 0.98));
+    linear-gradient(180deg, rgba(255, 236, 183, 0.035), rgba(0, 0, 0, 0.84) 62%, rgba(0, 0, 0, 0.98));
   box-shadow:
     0 0 0 1px rgba(0, 0, 0, 0.88),
-    0 0 18px rgba(212, 175, 55, 0.13),
-    inset 0 1px 0 rgba(255, 244, 204, 0.18),
-    inset 0 -1px 0 rgba(117, 68, 16, 0.38);
+    inset 0 1px 0 rgba(255, 244, 204, 0.14),
+    inset 0 -1px 0 rgba(117, 68, 16, 0.28);
   transition:
     border-color var(--scent-transition-base) var(--scent-ease-out),
     filter var(--scent-transition-base) var(--scent-ease-out),
@@ -2827,8 +2803,8 @@ a {
   border-radius: inherit;
   background: linear-gradient(180deg, rgba(9, 8, 5, 0.98), #000);
   box-shadow:
-    inset 0 1px 0 rgba(255, 244, 204, 0.08),
-    inset 0 -12px 22px rgba(0, 0, 0, 0.68);
+    inset 0 1px 0 rgba(255, 244, 204, 0.06),
+    inset 0 -10px 18px rgba(0, 0, 0, 0.55);
 }
 
 .community-fragrance-detail__close span {
@@ -2920,7 +2896,7 @@ a {
   }
 
   .community-fragrance-detail__family h3 {
-    font-size: 1.96rem;
+    font-size: 1.72rem;
   }
 
   .community-fragrance-detail__note-row {
