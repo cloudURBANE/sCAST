@@ -26,6 +26,15 @@ test("matches an avoided note inside a flattened profile, with word boundaries",
   assert.equal(candidateMatchesAvoid({ accords: ["white musk"] }, parseAvoidTerms("musk")), true);
 });
 
+test("synonym expansion lets the gate flag a profile that never names the avoided word", () => {
+  // The matchedAvoid backstop relies on this: avoiding "sweet" must catch a
+  // gourmand-only profile that never literally says "sweet".
+  const gourmandHit = { accords: ["gourmand", "vanilla"], name: "Dessert Bomb" };
+  assert.equal(candidateMatchesAvoid(gourmandHit, parseAvoidTerms("sweet")), true);
+  // A profile with neither the avoided word nor any synonym stays clear.
+  assert.equal(candidateMatchesAvoid({ accords: ["citrus", "marine"] }, parseAvoidTerms("sweet")), false);
+});
+
 test("drops avoided candidates but never returns an empty pool", () => {
   const hits = [
     { id: "a", flat: { name: "Sweet Gourmand", accords: ["gourmand", "vanilla"] } },

@@ -174,6 +174,14 @@ export type BeamGroundedFragrance = {
   canonicalName: string;
   brand?: string;
   owned: boolean;
+  /**
+   * True when this pick's source-hit profile features a note/family the user
+   * asked to avoid (computed at grounding time via the avoid slot). Used by the
+   * final-answer gate as an additive backstop to retrieval filtering, since
+   * owned-vault and research picks bypass `excludeAvoidedHits`. Left undefined
+   * when the source hit carried no profile to test (treated as not-avoided).
+   */
+  matchedAvoid?: boolean;
 };
 
 /**

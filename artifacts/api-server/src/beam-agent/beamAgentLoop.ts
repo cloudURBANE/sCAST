@@ -32,6 +32,7 @@ import {
 import type { ClaudeCallInput, ClaudeResponse } from "./types.ts";
 import { callModel as defaultCallModel, isModelConfigured as defaultIsModelConfigured } from "./provider.ts";
 import { buildSafeClarification, repairInstructionFor, runAnswerQualityGates } from "./answerQualityGates.ts";
+import { candidateMatchesAvoid, parseAvoidTerms } from "./avoidFilter.ts";
 import { estimateRunCostUsd, type ModelUsage } from "./costLedger.ts";
 import { beamSessionStatePrompt } from "./missionState.ts";
 import { BEAM_SAFETY_RULES } from "./beamSafetyRules.ts";
@@ -385,16 +386,26 @@ function stringValue(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
-function collectGroundedFragrancesForGate(tool: BeamToolName, result: unknown): BeamGroundedFragrance[] {
+function collectGroundedFragrancesForGate(
+  tool: BeamToolName,
+  result: unknown,
+  avoid?: string,
+): BeamGroundedFragrance[] {
   if (!result || typeof result !== "object") return [];
   const record = result as Record<string, unknown>;
   const out: BeamGroundedFragrance[] = [];
+  // Parse once per result so the avoid-backstop flag is cheap to compute per hit.
+  const avoidTerms = parseAvoidTerms(avoid);
   const add = (entry: unknown, owned: boolean): void => {
     if (!entry || typeof entry !== "object") return;
     const e = entry as Record<string, unknown>;
     const canonicalName = stringValue(e.canonicalName ?? e.name);
     if (!canonicalName) return;
-    out.push({ canonicalName, brand: stringValue(e.brand), owned });
+    // Flag picks whose source-hit profile features an avoided note/family. When
+    // there are no avoid terms, leave it undefined (the gate only fires on
+    // === true), so a no-constraint turn carries no extra signal.
+    const matchedAvoid = avoidTerms.length > 0 ? candidateMatchesAvoid(e, avoidTerms) : undefined;
+    out.push({ canonicalName, brand: stringValue(e.brand), owned, matchedAvoid });
   };
   const addArray = (entries: unknown, owned: boolean | "packet"): void => {
     if (!Array.isArray(entries)) return;
@@ -741,6 +752,10 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
         canonicalName: existing?.canonicalName ?? item.canonicalName,
         brand: existing?.brand ?? item.brand,
         owned: Boolean(existing?.owned || item.owned),
+        // Sticky once any source flags the pick as matching an avoided note;
+        // otherwise keep whichever side carried a defined verdict (undefined =
+        // no profile was testable on either source).
+        matchedAvoid: existing?.matchedAvoid || item.matchedAvoid,
       });
     }
   };
@@ -1229,7 +1244,9 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
         // Register the fragrances this result actually grounds, so the closing
         // synthesis can be pinned to only naming fragrances we retrieved.
         addGroundedNames(collectGroundedFragranceNames(result));
-        addGroundedFragrances(collectGroundedFragrancesForGate(def.name, result));
+        addGroundedFragrances(
+          collectGroundedFragrancesForGate(def.name, result, input.sessionState?.slots.avoid),
+        );
         // Capture the scorer's ranking (last one wins) so the synthesis headline
         // must agree with it, or explicitly justify overriding it (W-8).
         if (def.name === "beam_score_candidates") {

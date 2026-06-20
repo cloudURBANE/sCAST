@@ -147,6 +147,20 @@ function delegatedButDeferred(
   return !grounded.some((item) => answerMentionsFragrance(text, item));
 }
 
+/**
+ * Avoid backstop (audit A3 depth): the captured `avoid` slot is enforced at
+ * retrieval (`excludeAvoidedHits`), but owned-vault picks and research results
+ * bypass that filter, so the model can still surface an avoided note via those
+ * paths. Each grounded pick carries a precomputed `matchedAvoid` flag (set at
+ * grounding time from its source-hit profile). This fires ONLY when a pick the
+ * answer actually NAMES objectively matches an avoided term — so prose that
+ * merely mentions the avoided word while excluding it ("no oud here") never
+ * false-positives.
+ */
+function recommendsAvoidedNote(text: string, grounded: BeamGroundedFragrance[]): boolean {
+  return grounded.some((item) => item.matchedAvoid === true && answerMentionsFragrance(text, item));
+}
+
 function missionReadyForFulfillment(state: BeamSessionState | undefined): boolean {
   const mission = state?.mission;
   if (mission?.intent !== "travel_kit") return false;
@@ -260,6 +274,9 @@ export function runAnswerQualityGates(answerText: string, input: QualityGateInpu
   if (ownsUnlabeledRecommendation(text, input.sessionState, input.groundedFragrances ?? [])) {
     violations.push("owned_pick_in_new_only_mission");
   }
+  if (recommendsAvoidedNote(text, input.groundedFragrances ?? [])) {
+    violations.push("recommends_avoided_note");
+  }
 
   const mission = input.sessionState?.mission;
   // Once a complete kit has been presented, a follow-up turn is a REFINEMENT
@@ -296,6 +313,22 @@ export function runAnswerQualityGates(answerText: string, input: QualityGateInpu
     }
   }
 
+  // A committed recommendation that names ZERO grounded picks. Heavily guarded so
+  // it only fires on a turn that has actually retrieved candidates and is no
+  // longer gathering context: recommendation intent, tools ran this turn
+  // (grounded non-empty), the answer is not primarily a clarifying question
+  // (no "?", the same guard the other gates use), yet it commits to nobody.
+  // A still-gathering turn has zero grounded ⇒ no fire; this only fills the
+  // zero-named hole left by recommendation_count_short (which needs named >= 1).
+  if (
+    mission?.intent === "recommendation" &&
+    (input.groundedFragrances?.length ?? 0) > 0 &&
+    !text.includes("?")
+  ) {
+    const counts = countMissionPicks(text, input.groundedFragrances ?? []);
+    if (counts.owned + counts.new === 0) violations.push("recommendation_without_grounded_pick");
+  }
+
   if (LEAKED_INSTRUCTION_PATTERN.test(text)) violations.push("leaked_external_instruction");
   if (text.length > maxChars) violations.push("over_length");
 
@@ -328,6 +361,10 @@ export function repairInstructionFor(violations: string[]): string {
     fixes.push("Use the user's travel destination and timing. Remove every reference to their current/home weather location.");
   if (violations.includes("owned_pick_in_new_only_mission"))
     fixes.push("Do not recommend an owned bottle in this new-only mission. If mentioned, move it to a separate line explicitly labeled 'Taste reference from your vault'.");
+  if (violations.includes("recommends_avoided_note"))
+    fixes.push("You recommended a fragrance built around a note the user asked to avoid - replace it with a grounded pick that does not feature that note.");
+  if (violations.includes("recommendation_without_grounded_pick"))
+    fixes.push("You committed to a recommendation but named no specific fragrance - commit to a specific grounded pick from the retrieved results.");
   if (violations.includes("leaked_external_instruction"))
     fixes.push("Remove any instruction-like text; answer only as the concierge.");
   if (violations.includes("over_length")) fixes.push("Be more concise.");
