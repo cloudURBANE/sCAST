@@ -18,6 +18,7 @@ import {
 import { invalidArgsMarker } from "./beamToolCore.ts";
 import { deriveBeamSessionState, inferPendingSlotFromAssistant } from "./missionState.ts";
 import type {
+  BeamCard,
   BeamRunContext,
   BeamRunEvent,
   BeamSessionState,
@@ -1088,6 +1089,128 @@ test("regression script: Tokyo 2+2 kit persists slots, never re-asks month, hono
   const completedEvent = t3.events.find((e) => e.type === "completed");
   assert.ok(completedEvent, "expected a completed event");
   assert.doesNotMatch(finalText, /fresher or warmer/i);
+});
+
+test("live regression: the final orchestration turn is reserved for the required travel-kit deliverable", async () => {
+  const state = deriveBeamSessionState(
+    undefined,
+    "Plan a Tokyo August kit with exactly two from my wardrobe and exactly two new ones. Surprise me.",
+  );
+  const events: BeamRunEvent[] = [];
+  let completed: string | undefined;
+  let call = 0;
+
+  const tools: BeamToolDefinition[] = [
+    {
+      name: "beam_score_candidates",
+      description: "Rank owned bottles",
+      inputSchema: { type: "object", properties: {} },
+      handler: async () => ({
+        recommendation: { canonicalName: "Sauvage Elixir", brand: "Dior", owned: true },
+        picks: [
+          { canonicalName: "Sauvage Elixir", brand: "Dior", owned: true },
+          { canonicalName: "Egoiste Platinum", brand: "Chanel", owned: true },
+        ],
+      }),
+    },
+    {
+      name: "beam_search_catalog",
+      description: "Find new bottles",
+      inputSchema: { type: "object", properties: {} },
+      handler: async () => ({
+        items: [
+          { canonicalName: "Viking", brand: "Creed", owned: false },
+          { canonicalName: "Wulong Cha", brand: "Nishane", owned: false },
+        ],
+      }),
+    },
+    {
+      name: "beam_present_travel_kit",
+      description: "Present the final kit",
+      inputSchema: { type: "object", properties: {} },
+      handler: async () => ({
+        resolved: true,
+        ownedCount: 2,
+        newCount: 2,
+        owned: [
+          { name: "Sauvage Elixir", brand: "Dior" },
+          { name: "Egoiste Platinum", brand: "Chanel" },
+        ],
+        newProposed: [
+          { name: "Viking", brand: "Creed" },
+          { name: "Wulong Cha", brand: "Nishane" },
+        ],
+        card: {
+          kind: "travel_kit",
+          ownedPicks: [
+            { name: "Sauvage Elixir", brand: "Dior", notes: [], accords: [], owned: true },
+            { name: "Egoiste Platinum", brand: "Chanel", notes: [], accords: [], owned: true },
+          ],
+          newPicks: [
+            { name: "Viking", brand: "Creed", notes: [], accords: [] },
+            { name: "Wulong Cha", brand: "Nishane", notes: [], accords: [] },
+          ],
+        },
+      }),
+      clientEvent: (result) => {
+        const card = (result as { card?: BeamCard }).card;
+        return card ? { type: "card", card } : null;
+      },
+    },
+  ];
+
+  const callModel = async (input: ClaudeCallInput): Promise<ClaudeResponse> => {
+    call++;
+    if (call === 1) {
+      return { stop_reason: "tool_use", content: [{ type: "tool_use", id: "score", name: "beam_score_candidates", input: {} }] };
+    }
+    if (call === 2) {
+      return { stop_reason: "tool_use", content: [{ type: "tool_use", id: "search", name: "beam_search_catalog", input: {} }] };
+    }
+    if (call === 3) {
+      const reserved = input.tools.length === 1 && input.tools[0]?.name === "beam_present_travel_kit";
+      return reserved
+        ? {
+            stop_reason: "tool_use",
+            content: [{
+              type: "tool_use",
+              id: "present",
+              name: "beam_present_travel_kit",
+              input: {
+                owned: [{ name: "Sauvage Elixir" }, { name: "Egoiste Platinum" }],
+                newPicks: [{ name: "Viking" }, { name: "Wulong Cha" }],
+              },
+            }],
+          }
+        : { stop_reason: "tool_use", content: [{ type: "tool_use", id: "search-again", name: "beam_search_catalog", input: {} }] };
+    }
+    if (call === 4) {
+      return text(
+        "Pack Sauvage Elixir and Egoiste Platinum from your vault. Line up Viking and Wulong Cha as the two new picks.",
+      );
+    }
+    return text("Pack Sauvage Elixir and Egoiste Platinum.");
+  };
+
+  await runBeamAgent({
+    ctx,
+    userMessage:
+      "Plan a Tokyo August kit with exactly two from my wardrobe and exactly two new ones. Surprise me.",
+    sessionState: state,
+    tools,
+    emit: (event) => events.push(event),
+    isModelConfigured: () => true,
+    callModel,
+    maxTurns: 3,
+    onComplete: (response) => (completed = response),
+  });
+
+  assert.match(String(completed), /Viking/i);
+  assert.ok(
+    events.some((event) => event.type === "card" && event.card.kind === "travel_kit"),
+    "the exact-count travel-kit card must be emitted before completion",
+  );
+  assert.equal(events.some((event) => event.type === "failed"), false);
 });
 
 test("regression script: a failed/timeout turn still keeps the derived mission state for the next turn", async () => {
