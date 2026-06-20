@@ -676,6 +676,8 @@ interface WardrobeContextType {
    * nothing is queued; the modal consumes it via `consumePendingDetailOpen`.
    */
   pendingDetailOpen: Fragrance | null;
+  /** Shared-element source to use when the queued detail was opened outside the vault. */
+  pendingDetailOpenSourceLayoutId: string | null;
   /** True while a freshly-added imageless tile is actively backfilling its image. */
   isImageSyncing: (item: Pick<Fragrance, 'id' | '_dbId'>) => boolean;
   retryLoadWardrobe: () => void;
@@ -715,11 +717,14 @@ interface WardrobeContextType {
   handleExpandArchive: (options?: { target?: 'hero' | 'vault' }) => void;
   /**
    * Open a fragrance — which may NOT be in the vault — in the wardrobe detail
-   * modal, app-wide. Queues `pendingDetailOpen` and scrolls the vault section
-   * into view so the lazy Wardrobe mounts/reveals and its modal picks the target
-   * up. Used by the Beam proposal "View" and the curation resume flow.
+   * modal, app-wide. Queues `pendingDetailOpen` and normally scrolls the vault
+   * into view. A caller with a visible shared-element source can keep the current
+   * scroll position and pass that source's layout id instead.
    */
-  openFragranceDetail: (fragrance: Fragrance) => void;
+  openFragranceDetail: (
+    fragrance: Fragrance,
+    options?: { sourceLayoutId?: string; scrollToVault?: boolean },
+  ) => void;
   /** Detail modal: clear the queued fragrance once it has been opened. */
   clearPendingDetailOpen: () => void;
 }
@@ -756,6 +761,8 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // A fragrance queued to open in the (lazy-mounted) wardrobe detail modal from
   // another view. See `openFragranceDetail` / `consumePendingDetailOpen`.
   const [pendingDetailOpen, setPendingDetailOpen] = useState<Fragrance | null>(null);
+  const [pendingDetailOpenSourceLayoutId, setPendingDetailOpenSourceLayoutId] =
+    useState<string | null>(null);
 
   const autoWardrobeRebuildAttemptedRef = useRef(false);
   const enrichmentRefreshInFlightRef = useRef(false);
@@ -1956,12 +1963,16 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // Wardrobe component (the vault section), which is far down the page and may
   // not be mounted/visible when the user taps "View" in the Beam proposal up in
   // the hero, or follows a curation deep-link. Rather than lift that whole modal
-  // up to App, we queue the target here and scroll the vault section into view;
-  // mounting/revealing the Wardrobe lets its modal consume the pending target.
-  // Scrolling is best-effort (the element may not exist yet on first paint).
-  const openFragranceDetail = useCallback((fragrance: Fragrance) => {
+  // up to App, we queue the target here. Most callers scroll the vault into view;
+  // surfaces with their own shared-element source (the forecast hero) stay put
+  // and pass that source id so the modal can project from the visible bottle.
+  const openFragranceDetail = useCallback((
+    fragrance: Fragrance,
+    options?: { sourceLayoutId?: string; scrollToVault?: boolean },
+  ) => {
+    setPendingDetailOpenSourceLayoutId(options?.sourceLayoutId ?? null);
     setPendingDetailOpen(fragrance);
-    if (typeof document !== 'undefined') {
+    if (options?.scrollToVault !== false && typeof document !== 'undefined') {
       document
         .getElementById('scent-vault-section')
         ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1970,6 +1981,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const clearPendingDetailOpen = useCallback(() => {
     setPendingDetailOpen(null);
+    setPendingDetailOpenSourceLayoutId(null);
   }, []);
 
   // Hydrate local guest items whenever there is no signed-in wardrobe.
@@ -2007,6 +2019,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     vaultSearchUiActive,
     isAdmin,
     pendingDetailOpen,
+    pendingDetailOpenSourceLayoutId,
     isImageSyncing,
     setItems,
     setIsIntentModalOpen,
@@ -2049,6 +2062,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     vaultSearchUiActive,
     isAdmin,
     pendingDetailOpen,
+    pendingDetailOpenSourceLayoutId,
     isImageSyncing,
     loadWardrobe,
     retryLoadWardrobe,

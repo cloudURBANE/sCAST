@@ -989,6 +989,8 @@ export const Wardrobe: React.FC<{
    * lifting the modal up to App. Consumed once via `onClearPendingDetailOpen`.
    */
   pendingDetailOpen?: Fragrance | null;
+  /** Shared-layout source for a cross-view open; defaults to the vault card. */
+  pendingDetailOpenSourceLayoutId?: string | null;
   /** Clear `pendingDetailOpen` after the detail modal has opened it. */
   onClearPendingDetailOpen?: () => void;
   /** Persist the preview image to the vault row (authenticated). */
@@ -1038,6 +1040,7 @@ export const Wardrobe: React.FC<{
   onDelete,
   onAdd,
   pendingDetailOpen,
+  pendingDetailOpenSourceLayoutId,
   onClearPendingDetailOpen,
   onPersistWardrobeImage,
   onVerifyWardrobeFact,
@@ -1056,6 +1059,7 @@ export const Wardrobe: React.FC<{
   isImageSyncing,
 }) => {
   const [selectedItem, setSelectedItem] = React.useState<Fragrance | null>(null);
+  const [detailBottleLayoutId, setDetailBottleLayoutId] = React.useState<string | null>(null);
   // Inline metric verification: which metric row (if any) is being edited, the
   // working input value, and whether a save is in flight. Only one row edits at
   // a time. Reset whenever the open item changes (effect below).
@@ -1246,7 +1250,7 @@ export const Wardrobe: React.FC<{
     void refreshUsageTotals();
   }, [bottleImageToolsOpen, refreshUsageTotals]);
 
-  const openDetail = React.useCallback((item: Fragrance) => {
+  const openDetail = React.useCallback((item: Fragrance, sourceLayoutId?: string | null) => {
     detailOpenCountRef.current += 1;
     crumb(`detail:open#${detailOpenCountRef.current} ${domSnapshot()}`);
     setDetailExitInProgress(false);
@@ -1256,6 +1260,7 @@ export const Wardrobe: React.FC<{
     setAddBusy(false);
     setAddError(null);
     setFrameDraft(normalizeBottleImageAdjustment(item.imageAdjustment));
+    setDetailBottleLayoutId(sourceLayoutId ?? `wardrobe-bottle-${item.id}`);
     setSelectedItem(item);
   }, []);
 
@@ -1296,9 +1301,9 @@ export const Wardrobe: React.FC<{
   // expected, and drives the "Add to vault" footer below.
   React.useEffect(() => {
     if (!pendingDetailOpen) return;
-    openDetail(pendingDetailOpen);
+    openDetail(pendingDetailOpen, pendingDetailOpenSourceLayoutId);
     onClearPendingDetailOpen?.();
-  }, [pendingDetailOpen, openDetail, onClearPendingDetailOpen]);
+  }, [pendingDetailOpen, pendingDetailOpenSourceLayoutId, openDetail, onClearPendingDetailOpen]);
 
   const closeEnlargedBottle = React.useCallback(() => {
     setEnlargeOpen(false);
@@ -2418,7 +2423,7 @@ export const Wardrobe: React.FC<{
                               className="pointer-events-none absolute inset-0 overflow-hidden rounded-lg border border-white/5 bg-white/[0.01]"
                             />
                             <motion.div
-                              layoutId={`wardrobe-bottle-${selectedItem.id}`}
+                              layoutId={detailBottleLayoutId ?? `wardrobe-bottle-${selectedItem.id}`}
                               transition={bottleMorphTransition}
                               className="absolute inset-0 cursor-pointer"
                               onClick={() => detailBottleUrl && setEnlargeOpen(true)}

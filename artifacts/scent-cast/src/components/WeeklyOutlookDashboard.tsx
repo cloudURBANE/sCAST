@@ -31,6 +31,9 @@ interface OutlookDay {
 
 const CALM_EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
+export const forecastBottleLayoutId = (fragranceId: string): string =>
+  `forecast-bottle-${fragranceId}`;
+
 function WeatherGlyph({ day, size = 22 }: { day: WeatherForecastDay; size?: number }) {
   const code = (day.icon ?? '').slice(0, 2);
   const condition = (day.condition ?? '').toLowerCase();
@@ -200,35 +203,31 @@ function ForecastHero({
                 touch so the bottle sits beside — not below — the title. The shared
                 width + `object-contain` keep every pick's footprint uniform.
 
-                ANIMATION NOTE (shared-bottle morph — fix-later flag): tapping a
-                fragrance "card image" everywhere else (Wardrobe grid, Community feed)
-                plays a framer-motion shared-element morph driven by
-                `layoutId={`wardrobe-bottle-${id}`}` + `bottleMorphTransition`
-                (see Wardrobe.tsx). This bottle opens the SAME detail via the shared
-                `onSelect` → `openFragranceDetail` path, so the modal still morphs from
-                the matching grid bottle — but this forecast bottle does NOT itself
-                carry that `layoutId`, so the morph does not originate from the hero.
-                Deliberately left as-is and flagged here so the shared-morph animation
-                can be wired/standardized from this surface in a later, dedicated pass
-                (kept as one note so every place we implement this animation can be
-                fixed together). */}
+                This forecast bottle carries its own shared-layout id. The caller
+                hands that exact id to the detail modal so the morph originates from
+                this visible slot, not from the matching vault card down-page. */}
             <button
               type="button"
               onClick={onSelect ? () => onSelect(fragrance) : undefined}
               disabled={!onSelect}
-              className="group forecast-hero-bottle relative h-full w-[44%] max-w-[11.5rem] shrink-0 pb-[2%] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:cursor-default sm:w-[44%] sm:max-w-[12.5rem]"
+              className="group forecast-hero-bottle relative h-full w-[44%] max-w-[11.5rem] shrink-0 pb-[2%] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:cursor-default sm:w-[38%] sm:max-w-[14rem]"
               aria-label={onSelect ? `Open ${pick.name} by ${pick.brand}` : `${pick.name} by ${pick.brand}`}
             >
-              <BottleImage
-                src={fragrance.imageUrl}
-                alt={`${pick.brand} ${pick.name}`}
-                variant="featured"
-                adjustment={fragrance.imageAdjustment}
-                imageProperties={fragrance.imageProperties}
-                className="h-full w-full [&_.bottle-artboard]:inset-[1%] sm:[&_.bottle-artboard]:inset-[6%]"
-                imgClassName="transition-transform duration-500 group-hover:scale-[1.03] motion-reduce:transform-none"
-                loading="eager"
-              />
+              <motion.div
+                layoutId={forecastBottleLayoutId(fragrance.id)}
+                className="absolute inset-0"
+              >
+                <BottleImage
+                  src={fragrance.imageUrl}
+                  alt={`${pick.brand} ${pick.name}`}
+                  variant="featured"
+                  adjustment={fragrance.imageAdjustment}
+                  imageProperties={fragrance.imageProperties}
+                  className="h-full w-full [&_.bottle-artboard]:inset-[1%] sm:[&_.bottle-artboard]:inset-[6%]"
+                  imgClassName="transition-transform duration-500 group-hover:scale-[1.03] motion-reduce:transform-none"
+                  loading="eager"
+                />
+              </motion.div>
             </button>
             {/* Width-constrained text stack read as ONE unit: CREED eyebrow → name →
                 lead notes. Hierarchy mirrors how a fragrance is billed (house quiet,
@@ -237,7 +236,7 @@ function ForecastHero({
                 name like "Silver Mountain Water" breaks after "Mountain", while a
                 tighter name like "Green Irish Tweed" stays balanced on one line.
                 NON-INTERACTIVE by design: the name is not a tap target (see above). */}
-            <div className="flex min-w-0 max-w-[12.25rem] flex-col items-center justify-center self-center text-center sm:max-w-[15rem]">
+            <div className="flex min-w-0 max-w-[12.25rem] flex-col items-center justify-center self-center text-center sm:w-[48%] sm:max-w-[20rem]">
               <p className="scent-type-label text-[10px] tracking-[0.3em] text-scent-accent/80 [text-indent:0.3em] sm:text-[12px]">
                 {pick.brand}
               </p>
@@ -330,7 +329,7 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
               to the actual composition (bottle + text) instead of floating against
               the page edges, and the generous height gives the packshot real product
               presence. The bottle and title share one centered, balanced row. */}
-          <div className="relative mx-auto mt-1.5 h-[12.5rem] w-full max-w-[27rem] sm:mt-2 sm:h-[14.5rem]">
+          <div className="relative mx-auto mt-1.5 h-[12.5rem] w-full max-w-[27rem] sm:mt-2 sm:h-[16.5rem] sm:max-w-[42rem]">
             <ForecastChevron direction="prev" onClick={() => go(selected - 1)} />
             <div className="absolute inset-y-0 left-7 right-7 overflow-hidden sm:left-9 sm:right-9">
               <ForecastHero
@@ -365,7 +364,7 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
           <div
             role="tablist"
             aria-label="Days this week"
-            className="mx-auto mt-3 grid w-full max-w-[27rem] grid-cols-7 gap-1.5 sm:mt-4 sm:gap-2.5"
+            className="mx-auto mt-3 grid w-full max-w-[27rem] grid-cols-7 gap-1.5 sm:mt-5 sm:max-w-[46rem] sm:gap-3"
           >
             {outlook.slice(0, 7).map((plan, index) => {
               const isActive = index === selected;
@@ -377,7 +376,7 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
                   type="button"
                   onClick={() => go(index)}
                   title={`${dayLabel(plan.day.date)} — ${plan.day.condition ?? 'Forecast'}`}
-                  className={`flex min-w-0 flex-col items-center gap-0.5 rounded-[13px] border py-2 text-[#f1e7da] transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/60 sm:gap-1.5 sm:rounded-[18px] sm:py-3.5 ${
+                  className={`flex min-w-0 flex-col items-center gap-0.5 rounded-[13px] border py-2 text-[#f1e7da] transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/60 sm:gap-2 sm:rounded-[18px] sm:py-4 ${
                     isActive
                       ? 'border-scent-accent/55 bg-gradient-to-b from-scent-accent/[0.14] to-scent-accent/[0.04]'
                       : 'border-scent-accent/15 bg-black/25'
