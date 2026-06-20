@@ -699,3 +699,134 @@ test("tokyo-bold: missing weather/wardrobe still produces a committable answer (
   const r = runAnswerQualityGates(answer, { ...noEvidence, sessionState: t2, groundedFragrances: tokyoBoldGrounded });
   assert.equal(r.passed, true, JSON.stringify(r.violations));
 });
+
+// --- Semantic delegation: many wordings, one typed signal -------------------
+// The commit chain must NOT depend on a handful of exact phrases. Every wording
+// below hands Beam the choice; each must (a) register as delegation, (b) carry
+// the prior Tokyo/August/bold context forward unchanged (session memory), and
+// (c) make a deferral answer fail the gates. These mirror the production
+// phrasings users actually type to delegate.
+
+const DELEGATION_WORDINGS = [
+  "Recommend now with what you know. You decide.",
+  "Surprise me.",
+  "I trust you.",
+  "Make the call.",
+  "You choose.",
+  "Pick for me.",
+  "Just tell me what to wear.",
+  "Use what you know about me.",
+  "Don't ask me more questions.",
+  "Choose the best option.",
+  "Give me the answer.",
+];
+
+function tokyoBoldTurn1() {
+  return deriveBeamSessionState(
+    undefined,
+    "Help me pick two new fragrances for a trip to Tokyo in August. I want smell bold.",
+  );
+}
+
+test("semantic delegation: every wording registers AND preserves the trip context", () => {
+  const t1 = tokyoBoldTurn1();
+  for (const wording of DELEGATION_WORDINGS) {
+    assert.equal(isDelegationPhrase(wording), true, `delegation: ${wording}`);
+    const t2 = deriveBeamSessionState(t1, wording);
+    assert.equal(t2.userDelegatedChoice || t2.mission?.userDelegatedChoice, true, `flag: ${wording}`);
+    // Durable trip facts survive the delegating turn — no state reset, no re-gather.
+    assert.equal(t2.slots.destination, "Tokyo", `dest: ${wording}`);
+    assert.equal(t2.slots.month, "August", `month: ${wording}`);
+    assert.equal(t2.slots.vibe, "bold", `vibe: ${wording}`);
+  }
+});
+
+test("semantic delegation: a deferral after ANY delegating wording fails the gates", () => {
+  const t1 = tokyoBoldTurn1();
+  const deferral = "I'm not ready to commit yet — I need more info before I can recommend.";
+  for (const wording of DELEGATION_WORDINGS) {
+    const t2 = deriveBeamSessionState(t1, wording);
+    const r = runAnswerQualityGates(deferral, { ...noEvidence, sessionState: t2, groundedFragrances: tokyoBoldGrounded });
+    assert.equal(r.passed, false, `should reject deferral after: ${wording}`);
+    assert.ok(
+      r.violations.includes("commit_refusal") || r.violations.includes("recommendation_without_grounded_pick"),
+      `${wording} -> ${JSON.stringify(r.violations)}`,
+    );
+  }
+});
+
+test("semantic delegation: a clarifying question after delegation is rejected (no re-interrogation)", () => {
+  const t2 = deriveBeamSessionState(tokyoBoldTurn1(), "Don't ask me more questions.");
+  const question = "Sure — do you prefer something fresher or warmer for the trip?";
+  const r = runAnswerQualityGates(question, { ...noEvidence, sessionState: t2, groundedFragrances: tokyoBoldGrounded });
+  assert.equal(r.passed, false);
+  assert.ok(r.violations.includes("delegated_but_questioned"), JSON.stringify(r.violations));
+});
+
+test("memory: re-asking a remembered month after delegation is rejected", () => {
+  const t2 = deriveBeamSessionState(tokyoBoldTurn1(), "You decide.");
+  const reaskMonth = "Happy to help — which month are you traveling?";
+  const r = runAnswerQualityGates(reaskMonth, { ...noEvidence, sessionState: t2, groundedFragrances: tokyoBoldGrounded });
+  assert.equal(r.passed, false, JSON.stringify(r.violations));
+  assert.ok(
+    r.violations.includes("redundant_clarification") || r.violations.includes("delegated_but_questioned"),
+    JSON.stringify(r.violations),
+  );
+});
+
+test("memory: a delegated answer may commit to an OWNED wardrobe pick", () => {
+  const t1 = deriveBeamSessionState(undefined, "What should I wear to work?");
+  const t2 = deriveBeamSessionState(t1, "You decide.");
+  const grounded: BeamGroundedFragrance[] = [{ canonicalName: "Sauvage", brand: "Dior", owned: true }];
+  const answer =
+    "From your vault, reach for Dior Sauvage today — its fresh-spicy ambroxan reads clean and confident at work.";
+  const r = runAnswerQualityGates(answer, { ...noEvidence, sessionState: t2, groundedFragrances: grounded });
+  assert.equal(r.passed, true, JSON.stringify(r.violations));
+});
+
+test("non-Tokyo travel: a delegated Paris/September trip commits and rejects a deferral", () => {
+  const t1 = deriveBeamSessionState(undefined, "I need two new fragrances for a trip to Paris in September. Something elegant.");
+  const t2 = deriveBeamSessionState(t1, "You decide — surprise me.");
+  assert.equal(t2.slots.destination, "Paris");
+  assert.equal(t2.slots.month, "September");
+  assert.equal(t2.userDelegatedChoice || t2.mission?.userDelegatedChoice, true);
+  const grounded: BeamGroundedFragrance[] = [
+    { canonicalName: "Dior Homme Intense", brand: "Dior", owned: false },
+    { canonicalName: "Bleu de Chanel", brand: "Chanel", owned: false },
+  ];
+  const deferral = "I can't pick yet without a few more details about your taste.";
+  const r = runAnswerQualityGates(deferral, { ...noEvidence, sessionState: t2, groundedFragrances: grounded });
+  assert.equal(r.passed, false, JSON.stringify(r.violations));
+  assert.ok(r.violations.includes("commit_refusal"), JSON.stringify(r.violations));
+});
+
+test("daily wear: 'what should I wear today' commits, and a zero-pick non-answer is rejected", () => {
+  const state = deriveBeamSessionState(undefined, "What should I wear today?");
+  assert.equal(state.mission?.intent, "recommendation");
+  const grounded: BeamGroundedFragrance[] = [{ canonicalName: "Terre d'Hermès", brand: "Hermès", owned: true }];
+  const committed =
+    "Go with Terre d'Hermès today — its mineral-citrus woods suit a normal day and never overwhelm.";
+  assert.equal(
+    runAnswerQualityGates(committed, { ...noEvidence, sessionState: state, groundedFragrances: grounded }).passed,
+    true,
+  );
+  const vague = "Honestly you can't go wrong with anything in your rotation.";
+  const r = runAnswerQualityGates(vague, { ...noEvidence, sessionState: state, groundedFragrances: grounded });
+  assert.equal(r.passed, false, JSON.stringify(r.violations));
+  assert.ok(r.violations.includes("recommendation_without_grounded_pick"), JSON.stringify(r.violations));
+});
+
+test("education: a non-delegated 'how does X smell' question is NOT forced into a pick", () => {
+  const question = "What does Aventus actually smell like?";
+  assert.equal(isDelegationPhrase(question), false);
+  const state = deriveBeamSessionState(undefined, question);
+  assert.notEqual(state.mission?.intent, "travel_kit");
+  // An educational answer that ends with a light, optional follow-up must NOT be
+  // gate-failed: no delegation and no recommendation mission, so the commitment
+  // gates stay silent. Education/comparison answers are explicitly allowed.
+  const answer =
+    "Aventus opens with a smoky pineapple over birch, then dries down to a dry, musky woods. " +
+    "Want me to find one with a similar vibe?";
+  const r = runAnswerQualityGates(answer, { ...noEvidence, sessionState: state, groundedFragrances: [] });
+  assert.equal(r.passed, true, JSON.stringify(r.violations));
+});

@@ -577,6 +577,39 @@ test("commit policy: 'I'd rather know' / 'tell me more first' deferrals are reje
   }
 });
 
+test("commit policy: declarative deferrals that name a pick are rejected when owed", () => {
+  // Equivalents of the original banned phrasings that leaked because they used no
+  // commit verb (or excluded "recommend"): "can't recommend yet", "hold off on
+  // recommending", "hesitate to pick", "hard to say without ...". Each names/implies
+  // a pick so the zero-pick gate cannot catch them — commit_refusal must.
+  for (const draft of [
+    "I can't recommend yet, but Acqua di Giò Profumo could maybe work.",
+    "I can't recommend just yet — give me a hint and I'll pick.",
+    "I cannot recommend anything yet without a sense of your taste.",
+    "I'd hold off on recommending until I know more, though Mr Burberry is close.",
+    "I'd hesitate to pick blindly here.",
+    "It's hard to say without knowing more about your taste.",
+  ]) {
+    const r = runAnswerQualityGates(draft, DELEGATED_TOKYO);
+    assert.ok(r.violations.includes("commit_refusal"), `${draft} -> ${JSON.stringify(r.violations)}`);
+  }
+});
+
+test("commit policy: steering, engagement, and comparison hedges do NOT trip the new arms", () => {
+  // Guard the new patterns: category steering keeps "recommend" usable without "yet",
+  // post-pick engagement keeps "hold off"/"hesitate" usable on non-decision verbs,
+  // and a committed comparison keeps "hard to say which ... without ..." usable.
+  for (const draft of [
+    "I wouldn't reach for a dense gourmand here, so go with Acqua di Giò Profumo, plus Mr Burberry for contrast.",
+    "Pack Acqua di Giò Profumo and Mr Burberry. Hold off on a second spray until the afternoon heat.",
+    "Wear Acqua di Giò Profumo by day and Mr Burberry at night — don't hesitate to layer them under a linen jacket.",
+    "It's hard to say which of Acqua di Giò Profumo and Mr Burberry lasts longer without trying both, but I'd lead with the Profumo.",
+  ]) {
+    const r = runAnswerQualityGates(draft, DELEGATED_TOKYO);
+    assert.ok(!r.violations.includes("commit_refusal"), `${draft} -> ${JSON.stringify(r.violations)}`);
+  }
+});
+
 test("commit policy: 'tell me more about ...' engagement and 'I'd rather you ...' commitment do NOT fire", () => {
   // Guard the new patterns against overfiring on a committed answer that invites
   // post-pick engagement or steers the user with "I'd rather you …".
