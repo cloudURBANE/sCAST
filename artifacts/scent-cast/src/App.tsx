@@ -931,14 +931,18 @@ function DashboardView() {
       <div style={{ height: 'var(--topbar-h)' }} />
 
       <main className="relative z-10 px-4 sm:px-8 sm:pb-24 max-w-[1760px] mx-auto">
-        {/* Home — first viewport. On phones this column is sized to the visible
-            area between the top bar and the floating tab bar, and the weekly
-            dashboard is pushed to its bottom (mt-auto) so it settles cleanly just
-            above the bottom navigation with nothing rendered beneath it. On md+
-            (no bottom nav) the min-height + auto-margin relax to the original
-            stacked rhythm. The Vault of Aromas is no longer part of this screen —
-            it lives one scroll down as the "second page". */}
-        <div className="flex min-h-[calc(100svh-var(--topbar-h)-var(--bottomnav-h)-2.5rem)] flex-col gap-6 pt-3 sm:min-h-0 sm:gap-16 sm:pt-14">
+        {/* Home — first viewport. On phones this column fills the space below the
+            top bar (min-h = 100svh − topbar) and reserves the floating tab bar as
+            real bottom PADDING (bottomnav-h + breathing room). Padding — not a
+            min-height-only calc — is what guarantees the calendar clears the nav:
+            when the stacked content is taller than the viewport, my-auto's free
+            space collapses to zero, so a min-height alone would let the last row
+            (the calendar's weather glyphs) flow under the fixed nav. The pb holds
+            that gap open regardless of overflow. On md+ (no bottom nav) the
+            min-height + padding relax to the original stacked rhythm. The Vault of
+            Aromas is no longer part of this screen — it lives one scroll down as
+            the "second page". */}
+        <div className="flex min-h-[calc(100svh-var(--topbar-h))] flex-col gap-6 pt-3 pb-[calc(var(--bottomnav-h)+1.25rem)] sm:min-h-0 sm:gap-16 sm:pt-14 sm:pb-0">
           <HomepageHeroMarquee />
 
           <section className="relative mx-auto w-full max-w-[60rem] min-w-0 text-center">

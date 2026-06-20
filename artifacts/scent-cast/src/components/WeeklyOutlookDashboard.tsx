@@ -221,12 +221,18 @@ function ForecastHero({
               <p className="scent-type-label text-[10px] tracking-[0.3em] text-scent-accent/75 sm:text-[12px]">
                 {pick.brand}
               </p>
-              <p className="mt-1 line-clamp-2 font-serif text-[clamp(1.55rem,7.4vw,2.85rem)] leading-[1.05] text-[#fff7ec]">
+              <p className="mt-1 line-clamp-2 font-serif text-[clamp(1.5rem,7vw,2.6rem)] leading-[1.05] text-[#fff7ec]">
                 {pick.name}
               </p>
               {notes.length > 0 ? (
                 <>
-                  <span aria-hidden className="my-2 h-px w-10 bg-scent-accent/45 sm:my-2.5 sm:w-20" />
+                  {/* Integrated micro-accent: a faint center-weighted hairline that
+                      fades at both ends, so it reads as part of the title→notes
+                      block rather than a hard decorative rule pinned under the name. */}
+                  <span
+                    aria-hidden
+                    className="my-1.5 h-px w-8 bg-gradient-to-r from-transparent via-scent-accent/35 to-transparent sm:my-2 sm:w-16"
+                  />
                   <p className="line-clamp-2 font-serif text-[clamp(0.85rem,3.4vw,1.2rem)] italic leading-snug text-scent-accent/85">
                     {notes.join(' · ')}
                   </p>
@@ -315,7 +321,7 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
           {/* Generous hero height on phone (was 8.75rem) — fills the column space the
               page used to waste as dead margin above the forecast, so the packshot
               reads big and intentional instead of as a thumbnail. */}
-          <div className="relative mt-2 h-[15rem] sm:mt-3 sm:h-[16rem]">
+          <div className="relative mt-2 h-[13rem] sm:mt-3 sm:h-[16rem]">
             <ForecastChevron direction="prev" onClick={() => go(selected - 1)} />
             <div className="absolute inset-y-0 left-9 right-9 overflow-hidden sm:left-12 sm:right-12">
               <ForecastHero
