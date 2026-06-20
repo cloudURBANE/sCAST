@@ -416,6 +416,109 @@ test("a still-gathering clarification (question / empty grounded) does not trip 
   );
 });
 
+test("delegation without recommendation intent: a zero-pick hedge with safe candidates is rejected", () => {
+  // "Recommend now. You decide." with no surviving mission yields only
+  // userDelegatedChoice (no intent). A flat hedge that commits to nobody — while
+  // safe grounded candidates are on the table — used to escape every gate
+  // (delegated_but_questioned needs a `?`, the recommendation arm needs an intent).
+  const r = runAnswerQualityGates(
+    "Honestly, you can't go wrong here — go with whatever fits your mood and you're set.",
+    {
+      hadExternalEvidence: false,
+      sessionState: { slots: {}, userDelegatedChoice: true },
+      groundedFragrances: [
+        { canonicalName: "Aventus", brand: "Creed", owned: false },
+        { canonicalName: "Layton", brand: "Parfums de Marly", owned: false },
+      ],
+    },
+  );
+  assert.ok(r.violations.includes("recommendation_without_grounded_pick"), JSON.stringify(r.violations));
+  assert.equal(r.passed, false);
+});
+
+test("delegation: committing to a grounded pick (no question) passes the zero-pick gate", () => {
+  const r = runAnswerQualityGates(
+    "You delegated, so here it is: wear Creed Aventus tonight — bright, smoky, and decisive.",
+    {
+      hadExternalEvidence: false,
+      sessionState: { slots: {}, userDelegatedChoice: true },
+      groundedFragrances: [{ canonicalName: "Aventus", brand: "Creed", owned: false }],
+    },
+  );
+  assert.ok(
+    !r.violations.includes("recommendation_without_grounded_pick"),
+    JSON.stringify(r.violations),
+  );
+  assert.equal(r.passed, true, JSON.stringify(r.violations));
+});
+
+test("delegation: when EVERY grounded candidate violates an avoid constraint, do not force a commit", () => {
+  // The user delegated but the only retrieved candidates are flagged matchedAvoid.
+  // Forcing a named commit here would be unsatisfiable (naming one trips
+  // recommends_avoided_note), so the zero-pick gate must stay silent and let the
+  // agent ask / broaden instead. Implements the handoff's "all violate avoid → ask".
+  const r = runAnswerQualityGates("None of the close matches fit your no-oud rule cleanly.", {
+    hadExternalEvidence: false,
+    sessionState: { slots: { avoid: "oud" }, userDelegatedChoice: true },
+    groundedFragrances: [
+      { canonicalName: "Oud Wood", brand: "Tom Ford", owned: true, matchedAvoid: true },
+      { canonicalName: "Oud Satin Mood", brand: "MFK", owned: false, matchedAvoid: true },
+    ],
+  });
+  assert.ok(
+    !r.violations.includes("recommendation_without_grounded_pick"),
+    JSON.stringify(r.violations),
+  );
+});
+
+test("recommendation intent with only avoided candidates does not force an unsatisfiable commit", () => {
+  // Same avoid-aware guard on the recommendation arm: a zero-pick answer must NOT
+  // be hard-failed into committing when every grounded candidate is avoid-flagged.
+  const r = runAnswerQualityGates(
+    "Nothing in the current matches steers clear of amber, so let's widen the search.",
+    {
+      hadExternalEvidence: false,
+      sessionState: { slots: { avoid: "amber" }, mission: { intent: "recommendation" } },
+      groundedFragrances: [
+        { canonicalName: "Ambre Nuit", brand: "Dior", owned: false, matchedAvoid: true },
+        { canonicalName: "Amber Absolute", brand: "Tom Ford", owned: false, matchedAvoid: true },
+      ],
+    },
+  );
+  assert.ok(
+    !r.violations.includes("recommendation_without_grounded_pick"),
+    JSON.stringify(r.violations),
+  );
+});
+
+test("recommendation intent with a MIX still fires when a safe pick was available but none was named", () => {
+  // One safe candidate exists alongside an avoided one; a zero-pick hedge should
+  // still be rejected because the agent could have named the safe one.
+  const r = runAnswerQualityGates("Either way works — trust your gut on this one.", {
+    hadExternalEvidence: false,
+    sessionState: { slots: { avoid: "oud" }, mission: { intent: "recommendation" } },
+    groundedFragrances: [
+      { canonicalName: "Oud Wood", brand: "Tom Ford", owned: false, matchedAvoid: true },
+      { canonicalName: "Cologne Indélébile", brand: "Frederic Malle", owned: false, matchedAvoid: false },
+    ],
+  });
+  assert.ok(r.violations.includes("recommendation_without_grounded_pick"), JSON.stringify(r.violations));
+});
+
+test("delegation: a genuine clarifying question (with `?`) does not trip the zero-pick gate", () => {
+  // A `?`-bearing turn is a clarification, not a committed answer — the zero-pick
+  // gate's `?` guard must keep it out (delegated_but_questioned owns that case).
+  const r = runAnswerQualityGates("Before I lock it in — is this for daytime or the evening?", {
+    hadExternalEvidence: false,
+    sessionState: { slots: {}, userDelegatedChoice: true },
+    groundedFragrances: [{ canonicalName: "Aventus", brand: "Creed", owned: false }],
+  });
+  assert.ok(
+    !r.violations.includes("recommendation_without_grounded_pick"),
+    JSON.stringify(r.violations),
+  );
+});
+
 test("repairInstructionFor returns fixes for the new gates", () => {
   const msg = repairInstructionFor(["recommends_avoided_note", "recommendation_without_grounded_pick"]);
   assert.match(msg, /note the user asked to avoid/i);
