@@ -511,3 +511,113 @@ test("matrix/newness: 'two new ones not in my collection' forces a new-only kit"
   // rather than block when the vault can't be read.
   assert.match(prompt, /assuming they are not already in their wardrobe/i);
 });
+
+// ---------------------------------------------------------------------------
+// Matrix extension (this pass): season/climate timing, bare destination-before-
+// time, conditional-purchase quantity guard, and the owned-vs-new recommendation
+// lane. Each fix asserts both the trigger AND a non-trigger guard so a future
+// change that over-reaches is caught.
+// ---------------------------------------------------------------------------
+
+test("matrix/season: a stated season is the timing fallback when no month is named", () => {
+  assert.equal(deriveBeamSessionState(undefined, "a scent for this summer").slots.month, "Summer");
+  assert.equal(deriveBeamSessionState(undefined, "something for the winter").slots.month, "Winter");
+  assert.equal(deriveBeamSessionState(undefined, "a fragrance for spring").slots.month, "Spring");
+  // Climate phrasing maps to the matching season.
+  assert.equal(deriveBeamSessionState(undefined, "cold-weather fragrance").slots.month, "Winter");
+  assert.equal(deriveBeamSessionState(undefined, "something for warm weather").slots.month, "Summer");
+});
+
+test("matrix/season: an explicit calendar month always wins over a climate word", () => {
+  // "humid July" must resolve to July, not be overwritten by a Summer climate guess.
+  assert.equal(deriveBeamSessionState(undefined, "something for humid July").slots.month, "July");
+});
+
+test("matrix/season GUARD: bare ambient temperature words are not a season", () => {
+  // "warm"/"hot"/"cold" alone are scent directions/temperatures, not a stated season.
+  assert.equal(deriveBeamSessionState(undefined, "I want something warm and cozy").slots.month, undefined);
+  assert.equal(deriveBeamSessionState(undefined, "make it hotter and spicier").slots.month, undefined);
+});
+
+test("matrix/season GUARD: a negated season is not stored", () => {
+  assert.equal(deriveBeamSessionState(undefined, "something fresh, not summer").slots.month, undefined);
+});
+
+test("matrix/destination: a bare city before a month/season is captured without a trip verb", () => {
+  // "Tokyo August", "Miami this winter", "Paris in July" — no preposition or verb.
+  const aug = deriveBeamSessionState(undefined, "Tokyo August");
+  assert.equal(aug.slots.destination, "Tokyo");
+  assert.equal(aug.slots.month, "August");
+
+  const winter = deriveBeamSessionState(undefined, "Miami this winter");
+  assert.equal(winter.slots.destination, "Miami");
+  assert.equal(winter.slots.month, "Winter");
+
+  const paris = deriveBeamSessionState(undefined, "Paris in July");
+  assert.equal(paris.slots.destination, "Paris");
+  assert.equal(paris.slots.month, "July");
+});
+
+test("matrix/destination GUARD: a sentence-initial command word is never a city", () => {
+  // "Recommend August scents" must not store destination="Recommend".
+  assert.equal(deriveBeamSessionState(undefined, "Recommend August scents").slots.destination, undefined);
+  // "This summer" must not store destination="This".
+  assert.equal(deriveBeamSessionState(undefined, "This summer please").slots.destination, undefined);
+  // A lowercase generic noun before a month stays excluded.
+  assert.equal(deriveBeamSessionState(undefined, "a scent for the office in July").slots.destination, undefined);
+});
+
+test("matrix/quantity GUARD: 'one bottle if I like it' is a purchase condition, not a pick count", () => {
+  const state = deriveBeamSessionState(undefined, "one bottle if I like it");
+  assert.equal(state.mission?.count, undefined);
+  // A plain multi-pick count with no conditional still registers.
+  assert.equal(deriveBeamSessionState(undefined, "give me two bottles").mission?.count, 2);
+  // A multi-pick request keeps its count even with a trailing condition.
+  assert.equal(deriveBeamSessionState(undefined, "three scents if I like the vibe").mission?.count, 3);
+});
+
+test("matrix/newness: 'avoid owned' / 'new to me' annotate a new-only recommendation", () => {
+  for (const phrase of [
+    "don't recommend anything I already own",
+    "find me something new to me",
+    "I don't own anything good, recommend one",
+  ]) {
+    const state = deriveBeamSessionState(undefined, phrase);
+    assert.equal(state.mission?.intent, "recommendation", phrase);
+    assert.equal(state.mission?.newness, "new", phrase);
+    assert.match(beamSessionStatePrompt(state), /excludeOwned=true/i, phrase);
+  }
+});
+
+test("matrix/newness: 'from my wardrobe' / 'one I already have' annotate an owned recommendation", () => {
+  for (const phrase of ["pick from my wardrobe", "I want one I already have", "something from my collection"]) {
+    const state = deriveBeamSessionState(undefined, phrase);
+    assert.equal(state.mission?.intent, "recommendation", phrase);
+    assert.equal(state.mission?.newness, "owned", phrase);
+    assert.match(beamSessionStatePrompt(state), /ALREADY in the user's wardrobe/i, phrase);
+  }
+});
+
+test("matrix/newness GUARD: a plain recommendation carries no newness annotation", () => {
+  const state = deriveBeamSessionState(undefined, "recommend something for date night");
+  assert.equal(state.mission?.intent, "recommendation");
+  assert.equal(state.mission?.newness, undefined);
+});
+
+test("matrix/newness: an explicit new signal wins over an owned phrase in the same turn", () => {
+  // A turn carrying both an owned cue ("one I already have") and a new cue ("new to
+  // me") is contradictory; the new-only reading wins so the agent never recommends an
+  // already-owned bottle by mistake. (A "collection/wardrobe + new" co-occurrence is a
+  // separate path — it becomes a new-only travel kit, covered above.)
+  const state = deriveBeamSessionState(undefined, "recommend something new to me, not one I already have");
+  assert.equal(state.mission?.intent, "recommendation");
+  assert.equal(state.mission?.newness, "new");
+});
+
+test("matrix/combined: city + season + newness resolve together", () => {
+  const state = deriveBeamSessionState(undefined, "find me something new for Miami this winter");
+  assert.equal(state.slots.destination, "Miami");
+  assert.equal(state.slots.month, "Winter");
+  assert.equal(state.mission?.intent, "recommendation");
+  assert.equal(state.mission?.newness, "new");
+});

@@ -17,6 +17,47 @@ const MONTHS: Array<[RegExp, string]> = [
   [/\bdec(?:ember)?\.?\b/i, "December"],
 ];
 
+// Capitalized tokens that look like a proper noun but are never a city — command
+// verbs that open a sentence ("Recommend August scents"), determiners/pronouns
+// ("This summer"), and common request words. Screens the no-preposition place
+// pattern in parsePlaceBeforeTime so it can't mistake a sentence-initial word for a
+// destination. Lowercased before lookup.
+const NON_PLACE_WORDS = new Set<string>([
+  "this", "that", "these", "those", "the", "a", "an", "my", "our", "your", "his", "her", "their", "its",
+  "it", "i", "we", "you", "they", "he", "she", "one", "some", "any", "no", "each", "every",
+  "recommend", "give", "show", "find", "help", "pick", "choose", "suggest", "get", "grab",
+  "need", "want", "make", "let", "try", "trying", "looking", "look", "wear", "wearing",
+  "something", "anything", "everything", "nothing", "scent", "scents", "fragrance", "fragrances",
+  "cologne", "colognes", "perfume", "perfumes", "bottle", "bottles", "picks", "option", "options",
+  "today", "tonight", "tomorrow", "now", "next", "last", "soon", "maybe", "please", "just",
+  "good", "best", "great", "nice", "new", "fresh", "warm", "cold", "hot", "cool", "light", "dark",
+  "going", "heading", "planning", "visiting", "traveling", "travelling", "somewhere",
+]);
+
+// Season / climate timing stated without a calendar month: "this summer",
+// "cold-weather scents", "in winter", "warm weather". The month slot doubles as the
+// timing label the prompt and weather reasoning consume (the pending-month branch
+// already maps a bare season the same way), so a parsed season is stored there only
+// when no explicit month is present. Bare ambient adjectives ("warm", "hot", "cold",
+// "humid") are deliberately NOT mapped: they are scent directions/temperatures or
+// current-weather description, not a stated season — so only the "-weather"/"climate"
+// compounds and the unambiguous season nouns qualify. Order: compounds and
+// preposition-anchored seasons first, then the safe bare nouns.
+const SEASON_PATTERNS: Array<[RegExp, string]> = [
+  [/\b(?:cold|cool|chilly|freezing|wintry)[- ]weather\b/i, "Winter"],
+  [/\bcold\s+climate\b/i, "Winter"],
+  [/\b(?:hot|warm)[- ]weather\b/i, "Summer"],
+  [/\b(?:hot|warm)\s+climate\b/i, "Summer"],
+  [/\b(?:this|next|in|during|for|come|over)\s+summer\b/i, "Summer"],
+  [/\b(?:this|next|in|during|for|come|over)\s+winter\b/i, "Winter"],
+  [/\b(?:this|next|in|during|for|come|over)\s+spring\b/i, "Spring"],
+  [/\b(?:this|next|in|during|for|come|over)\s+(?:autumn|fall)\b/i, "Autumn"],
+  [/\bsummer(?:time)?\b/i, "Summer"],
+  [/\bwinter(?:time)?\b/i, "Winter"],
+  [/\bspringtime\b/i, "Spring"],
+  [/\bautumn\b/i, "Autumn"],
+];
+
 const COUNT_WORDS = new Map<string, number>([
   ["one", 1],
   ["two", 2],
@@ -135,6 +176,20 @@ function parseMonth(text: string): string | undefined {
   return distinct.length === 1 ? distinct[0] : undefined;
 }
 
+/**
+ * A season/climate the user states without a calendar month ("this summer",
+ * "cold-weather", "in winter"). Used only as the timing fallback when parseMonth
+ * found no explicit month, so "humid July" and "Tokyo in August" still resolve to
+ * the month. A negated mention ("not winter") is skipped, mirroring parseMonth.
+ */
+function parseSeason(text: string): string | undefined {
+  for (const [pattern, season] of SEASON_PATTERNS) {
+    const match = pattern.exec(text);
+    if (match && match.index !== undefined && !isNegatedBefore(text, match.index)) return season;
+  }
+  return undefined;
+}
+
 function parseDestination(text: string): string | undefined {
   const patterns = [
     /\b(?:party|dinner|brunch|interview|date|graduation|funeral|event|meeting)\s+in\s+([A-Za-z][A-Za-z .'-]{1,50})/i,
@@ -171,17 +226,41 @@ function parseDestination(text: string): string | undefined {
  * article/occasion ("for the office in July") is never mistaken for a city.
  */
 function parsePlaceBeforeTime(text: string): string | undefined {
-  const match =
+  // (A) Place introduced by a connector/verb, then a month or season:
+  //     "for Miami in July", "to Tokyo this summer".
+  const lead =
     /\b(?:for|to|in|visiting|around|hitting|exploring)\s+([A-Za-z][A-Za-z .'-]{1,40}?)\s+(?:in|this|next|during|come|over)\s+([A-Za-z]+)/i.exec(
       text,
     );
-  if (!match?.[1] || !match[2]) return undefined;
+  if (lead?.[1] && lead[2]) {
+    const fromLead = validatePlaceBeforeTime(lead[1], lead[2]);
+    if (fromLead) return fromLead;
+  }
+  // (B) A bare proper-noun city written directly before a month/season with no
+  //     leading preposition or trip verb — "Tokyo August", "Miami this winter",
+  //     "Paris in July". Common phrasings (A) and the verb patterns above miss.
+  //     Restricted to a SINGLE capitalized token (multi-word bare cities stay with
+  //     the verb/comma forms) and screened by NON_PLACE_WORDS so a sentence-initial
+  //     command word or determiner is never read as a destination.
+  const bare = /\b([A-Z][a-z][A-Za-z'.-]{1,20})\s+(?:in\s+|this\s+|next\s+|during\s+|come\s+|over\s+)?([A-Za-z]+)\b/g;
+  for (let match = bare.exec(text); match; match = bare.exec(text)) {
+    const candidate = validatePlaceBeforeTime(match[1], match[2]);
+    if (candidate) return candidate;
+    if (bare.lastIndex === match.index) bare.lastIndex += 1; // zero-width guard
+  }
+  return undefined;
+}
+
+/** Validate a captured (place, trailingWord) pair: trailing must be a month/season,
+ * place must be a proper noun that is not a month/occasion/stopword. */
+function validatePlaceBeforeTime(rawPlace: string, rawTime: string): string | undefined {
   const trailingIsTime =
-    MONTHS.some(([pattern]) => pattern.test(match[2])) || /^(?:spring|summer|autumn|fall|winter)$/i.test(match[2]);
+    MONTHS.some(([pattern]) => pattern.test(rawTime)) || /^(?:spring|summer|autumn|fall|winter)$/i.test(rawTime);
   if (!trailingIsTime) return undefined;
-  const candidate = cleanCapture(match[1]);
+  const candidate = cleanCapture(rawPlace);
   // Proper-noun guard: cities are capitalized; "the office" / "a meeting" are not.
   if (!/^[A-Z]/.test(candidate)) return undefined;
+  if (NON_PLACE_WORDS.has(candidate.toLowerCase())) return undefined;
   if (MONTHS.some(([pattern]) => pattern.test(candidate))) return undefined;
   if (OCCASIONS.some(([pattern]) => pattern.test(candidate))) return undefined;
   return candidate || undefined;
@@ -348,12 +427,25 @@ function parseNewCount(text: string): number | undefined {
  * parseOwnedCount/parseNewCount.
  */
 function parseRecommendationCount(text: string): number | undefined {
-  return firstCountFor(text, [
-    new RegExp(
-      String.raw`\b${COUNT_CAPTURE}\s+(?:[\w-]+\s+){0,3}?(?:fragrances?|scents?|bottles?|colognes?|perfumes?|picks?|options?|choices?|ones?)\b`,
-      "i",
-    ),
-  ]);
+  const re = new RegExp(
+    String.raw`\b${COUNT_CAPTURE}\s+(?:[\w-]+\s+){0,3}?(?:fragrances?|scents?|bottles?|colognes?|perfumes?|picks?|options?|choices?|ones?)\b`,
+    "ig",
+  );
+  for (let match = re.exec(text); match; match = re.exec(text)) {
+    const count = parseCount(match[1]);
+    if (count === undefined) {
+      if (re.lastIndex === match.index) re.lastIndex += 1; // zero-width guard
+      continue;
+    }
+    // A purchase/preference CONDITION on a single item ("one bottle if I like it")
+    // describes buying behavior, not a request to name a pick now — so it must not
+    // set a count. A plain "give me two bottles" (no conditional) still counts, and
+    // a multi-pick request keeps its count even if it carries a trailing condition.
+    const after = text.slice(re.lastIndex, re.lastIndex + 24);
+    if (count === 1 && /^\s*if\s+(?:i\b|it\b|they\b)/i.test(after)) continue;
+    return count;
+  }
+  return undefined;
 }
 
 /**
@@ -383,6 +475,26 @@ export function isDelegationPhrase(message: string): boolean {
   return /\b(?:idk|i\s+don'?t\s+know|you\s+tell\s+me|surprise\s+me|pick\s+for\s+me|choose\s+for\s+me|you\s+decide|your\s+call|dealer'?s\s+choice|whatever\s+you\s+think|recommend\s+now|just\s+(?:pick|choose|recommend|decide)|go\s+ahead|make\s+the\s+call|up\s+to\s+you|with\s+what\s+you\s+(?:know|have)|doesn'?t\s+matter)\b/i.test(text);
 }
 
+/**
+ * Owned-vs-new constraint for a plain recommendation stated without a count/trip
+ * (those become travel-kit lanes). "don't recommend anything I already own" / "new
+ * to me" → "new"; "pick from my wardrobe" / "one I already have" → "owned". An
+ * explicit new-only signal wins over an owned phrase if both appear.
+ */
+function parseNewness(text: string): "new" | "owned" | undefined {
+  const newOnly =
+    /\b(?:new\s+to\s+me|not\s+in\s+my\s+(?:wardrobe|vault|collection)|(?:don'?t|do\s+not)\s+(?:already\s+)?(?:own|have)\b|haven'?t\s+(?:tried|owned)|nothing\s+i\s+(?:already\s+)?own|don'?t\s+recommend\s+(?:anything|ones?|stuff|fragrances?|scents?)\s+i\s+(?:already\s+)?own|avoid\s+(?:ones?\s+|stuff\s+|fragrances?\s+)?i\s+(?:already\s+)?own|something\s+new\b)/i.test(
+      text,
+    );
+  if (newOnly) return "new";
+  const ownedOnly =
+    /\b(?:from\s+my\s+(?:wardrobe|vault|collection)|in\s+my\s+(?:wardrobe|vault|collection)|(?:one|something|a\s+scent|a\s+fragrance)\s+i\s+(?:already\s+)?(?:own|have)\b|already\s+(?:own|have)\s+(?:it|one|something)|wear\s+what\s+i\s+(?:own|have))/i.test(
+      text,
+    );
+  if (ownedOnly) return "owned";
+  return undefined;
+}
+
 function parseMissionPatch(text: string, slots: BeamSessionSlots): BeamMissionState | undefined {
   const ownedCount = parseOwnedCount(text);
   const newCount = parseNewCount(text);
@@ -410,16 +522,20 @@ function parseMissionPatch(text: string, slots: BeamSessionSlots): BeamMissionSt
     };
   }
 
-  // A requested quantity ("give me three scents") is itself a recommendation
-  // request even when the verb isn't one of the explicit recommend/pick words.
+  // A requested quantity ("give me three scents") or an owned/new constraint ("wear
+  // what I own", "something new to me") is itself a recommendation request even when
+  // the verb isn't one of the explicit recommend/pick words.
   const count = parseRecommendationCount(text);
+  const newness = parseNewness(text);
   const recommendationLike =
     count !== undefined ||
+    newness !== undefined ||
     /\b(?:recommend|recommendation|suggest|what should i wear|pick|choose|match|give me|show me|find me|i (?:need|want)|need|want)\b/i.test(text);
   if (recommendationLike) {
     return {
       intent: "recommendation",
       ...(count !== undefined ? { count } : {}),
+      ...(newness ? { newness } : {}),
       userDelegatedChoice: isDelegationPhrase(text) || undefined,
     };
   }
@@ -465,6 +581,7 @@ export function sanitizeBeamSessionState(value: unknown): BeamSessionState {
       const slot = rawMission[key];
       if (typeof slot === "string" && slot.trim()) mission[key] = slot.trim().slice(0, 120);
     }
+    if (rawMission.newness === "new" || rawMission.newness === "owned") mission.newness = rawMission.newness;
     if (rawMission.userDelegatedChoice === true) mission.userDelegatedChoice = true;
     if (rawMission.kitPresented === true) mission.kitPresented = true;
     if (Object.keys(mission).length === 0) mission = undefined;
@@ -544,7 +661,9 @@ export function deriveBeamSessionState(
 ): BeamSessionState {
   const text = userMessage.slice(0, 2000);
   const slots: BeamSessionSlots = {};
-  const month = parseMonth(text);
+  // Explicit calendar month wins; a stated season/climate ("this summer",
+  // "cold-weather") is the timing fallback so "humid July" still resolves to July.
+  const month = parseMonth(text) ?? parseSeason(text);
   if (month) slots.month = month;
   const destination = parseDestination(text);
   if (destination) slots.destination = destination;
@@ -722,10 +841,21 @@ export function beamSessionStatePrompt(state: BeamSessionState | undefined): str
         `The final answer and travel-kit card must contain exactly ${mission.ownedCount ?? 0} owned recommendation(s) and exactly ${mission.newCount ?? 0} new unowned recommendation(s), without duplicates, once enough context or delegation exists. Preserve destination=${mission.destination ?? safe.slots.destination ?? "the user's destination"} and month=${mission.month ?? safe.slots.month ?? "the user's timing"}; never substitute current local weather.`,
       );
     }
-  } else if (mission?.intent === "recommendation" && mission.count) {
-    lines.push(
-      `The user asked for exactly ${mission.count} recommendation(s). Name exactly ${mission.count} primary pick(s) (one optional runner-up is fine) once you have enough context or the user delegates; never return fewer than ${mission.count}.`,
-    );
+  } else if (mission?.intent === "recommendation") {
+    if (mission.count) {
+      lines.push(
+        `The user asked for exactly ${mission.count} recommendation(s). Name exactly ${mission.count} primary pick(s) (one optional runner-up is fine) once you have enough context or the user delegates; never return fewer than ${mission.count}.`,
+      );
+    }
+    if (mission.newness === "new") {
+      lines.push(
+        "Recommend only fragrances the user does NOT already own. Use the vault only as a taste reference, search with excludeOwned=true, and present only unowned picks. If the wardrobe cannot be loaded, still deliver the picks but say you are assuming they are not already in their wardrobe.",
+      );
+    } else if (mission.newness === "owned") {
+      lines.push(
+        "Recommend only fragrances ALREADY in the user's wardrobe. Score the owned vault with beam_score_candidates and do not suggest unowned catalog fragrances.",
+      );
+    }
   }
   return `\n\n${lines.join("\n")}`;
 }
