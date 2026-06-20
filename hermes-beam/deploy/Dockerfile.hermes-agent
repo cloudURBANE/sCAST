@@ -1,0 +1,56 @@
+# syntax=docker/dockerfile:1
+#
+# Hermes Agent service image — the external NousResearch Hermes runtime (v0.17.0 /
+# v2026.6.19) that connects to the Beam MCP listener and reasons over the Beam
+# tools. This is the "hermes-agent" Railway service in the standup topology
+# (docs/beam-agent/16-hermes-017-railway-standup.md). The Beam MCP listener itself
+# is the SEPARATE service built from the repo-root Dockerfile (`start:beam-mcp`).
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# NOT build-verified in this repo. Hermes is an external runtime installed via an
+# upstream network script; this Dockerfile could not be built/run from the dev box
+# that authored it. Treat it as a grounded starting point and VALIDATE on the
+# deploy host (build it, `hermes --version` → 0.17.0, then a `tools/list` smoke
+# test against the MCP service) before routing any real traffic. Lines marked
+# VERIFY depend on upstream installer/CLI flags that may have drifted.
+# ─────────────────────────────────────────────────────────────────────────────
+
+FROM python:3.11-bookworm
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Runtime deps the upstream installer expects (Node, ripgrep, ffmpeg, git, curl).
+# The install.sh also pulls `uv`; the apt set below covers the system packages.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+       ca-certificates curl git ripgrep ffmpeg \
+  && rm -rf /var/lib/apt/lists/*
+
+# Pin the Hermes version we target. VERIFY the installer honours this variable
+# (some builds use `HERMES_VERSION`, others a `--version` flag); pin so a future
+# "latest" cannot silently change the runtime under us.
+ENV HERMES_VERSION=0.17.0
+
+# Install Hermes Agent (Linux install script). VERIFY the URL + version-pin flag
+# against https://github.com/NousResearch/hermes-agent before relying on this.
+RUN curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
+
+# Hermes reads its profile/config from $HOME/.hermes. Stage the Beam profile and
+# the config/env excerpts; real secrets are injected at runtime by Railway, not
+# baked into the image.
+ENV HERMES_HOME=/root/.hermes
+COPY hermes-beam/AGENTS.md hermes-beam/SOUL.md ${HERMES_HOME}/
+COPY hermes-beam/beam-context ${HERMES_HOME}/beam-context
+COPY hermes-beam/skills ${HERMES_HOME}/skills
+COPY hermes-beam/config.example.yaml ${HERMES_HOME}/config.yaml
+
+# The MCP endpoint URL is environment-driven so the same image works locally
+# (127.0.0.1:8848) and on Railway (api-server.railway.internal:8848). The config
+# references ${BEAM_MCP_URL} and ${BEAM_AGENT_TOKEN}; both come from Railway env.
+#   BEAM_MCP_URL=http://api-server.railway.internal:8848/mcp   (always http on Railway private net)
+#   BEAM_AGENT_TOKEN=<token minted with beam:mint-token, same BEAM_AGENT_TOKEN_SECRET as the MCP service>
+#   OPENROUTER_API_KEY=<reasoning model credential>
+
+# Long-lived service entrypoint. VERIFY the serve subcommand for v0.17.0
+# (`hermes gateway` per upstream docs; `hermes serve` in some builds).
+CMD ["hermes", "gateway"]

@@ -23,9 +23,20 @@ RUN NODE_ENV=development CI=true pnpm install --frozen-lockfile
 # Typecheck + workspace builds; production mode for app bundles where applicable.
 RUN NODE_ENV=production pnpm run build
 
+# Also bundle the Beam MCP server (dist-beam/beam-mcp.mjs). This build is isolated
+# from the main one (build-beam-mcp.mjs never touches dist/), so it cannot affect
+# the API bundle. Baking it in lets a SEPARATE Railway service run the MCP listener
+# from this same image via `start:beam-mcp`; the API service below is unchanged.
+RUN NODE_ENV=production pnpm --filter @workspace/api-server run beam:mcp:build
+
 ENV NODE_ENV=production
 ENV PORT=8080
 
 EXPOSE 8080
 
+# Default command = the Express API only (unchanged). The Beam MCP listener runs
+# as a SEPARATE Railway service from this same image with an overridden start
+# command: `pnpm --filter @workspace/api-server run start:beam-mcp` (binds
+# BEAM_MCP_HOST/BEAM_MCP_PORT, default :8848). See
+# docs/beam-agent/16-hermes-017-railway-standup.md.
 CMD ["pnpm", "start"]
