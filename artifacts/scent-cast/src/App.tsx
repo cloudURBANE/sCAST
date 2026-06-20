@@ -382,7 +382,7 @@ const HeroMarquee: React.FC<HeroMarqueeProps> = React.memo(({ phrases }) => {
   }, [phraseKey]);
 
   return (
-    <div className="scent-marquee-band scent-full-bleed w-full overflow-hidden py-[11px] sm:py-[12px] flex select-none relative">
+    <div className="scent-marquee-band scent-full-bleed w-full overflow-hidden py-[8px] sm:py-[12px] flex select-none relative">
       <div ref={trackRef} className="scent-marquee-track-row whitespace-nowrap scent-marquee-text">
         {[...Array(HERO_TRACK_COPIES)].map((_, copyIndex) => (
           <span
@@ -942,7 +942,7 @@ function DashboardView() {
             min-height + padding relax to the original stacked rhythm. The Vault of
             Aromas is no longer part of this screen — it lives one scroll down as
             the "second page". */}
-        <div className="flex min-h-[calc(100svh-var(--topbar-h))] flex-col gap-6 pt-3 pb-[calc(var(--bottomnav-h)+1.25rem)] sm:min-h-0 sm:gap-16 sm:pt-14 sm:pb-0">
+        <div className="flex min-h-[calc(100svh-var(--topbar-h))] flex-col gap-4 pt-1.5 pb-[calc(var(--bottomnav-h)+1.25rem)] sm:min-h-0 sm:gap-16 sm:pt-14 sm:pb-0">
           <HomepageHeroMarquee />
 
           <section className="relative mx-auto w-full max-w-[60rem] min-w-0 text-center">
@@ -1082,7 +1082,7 @@ function DashboardView() {
                 ref={signatureSectionRef}
                 layout={isMounted ? !reduceMotion : false}
                 transition={vaultContentTransition}
-                className="scent-mission-action-slot mt-3 flex min-h-[52px] justify-center sm:mt-4 sm:min-h-[60px]"
+                className="scent-mission-action-slot mt-2 flex min-h-[46px] justify-center sm:mt-4 sm:min-h-[60px]"
               >
                 <AnimatePresence initial={false} mode="popLayout">
                   {agentActive ? (
@@ -1106,7 +1106,7 @@ function DashboardView() {
                       animate={{ opacity: 1, y: 0 }}
                       exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -4 }}
                       transition={vaultContentTransition}
-                      className="scent-signature-cta group flex h-[52px] w-full max-w-[52rem] items-center justify-center gap-2.5 rounded-full px-6 text-[12px] font-bold uppercase tracking-[0.14em] text-scent-accent focus-visible:outline-none sm:h-[60px] sm:text-[13px]"
+                      className="scent-signature-cta group flex h-[46px] w-full max-w-[52rem] items-center justify-center gap-2 rounded-full px-6 text-[11.5px] font-bold uppercase tracking-[0.11em] text-scent-accent focus-visible:outline-none sm:h-[60px] sm:gap-2.5 sm:text-[13px] sm:tracking-[0.14em]"
                       aria-label="Discover with Beam Agent"
                       title="Discover with Beam Agent"
                     >
