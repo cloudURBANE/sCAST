@@ -216,7 +216,7 @@ function ForecastHero({
               type="button"
               onClick={onSelect ? () => onSelect(fragrance) : undefined}
               disabled={!onSelect}
-              className="group forecast-hero-bottle relative h-full w-[46%] max-w-[12rem] shrink-0 pb-[5%] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:cursor-default sm:w-[44%] sm:max-w-[12.5rem]"
+              className="group forecast-hero-bottle relative h-full w-[44%] max-w-[11.5rem] shrink-0 pb-[2%] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:cursor-default sm:w-[44%] sm:max-w-[12.5rem]"
               aria-label={onSelect ? `Open ${pick.name} by ${pick.brand}` : `${pick.name} by ${pick.brand}`}
             >
               <BottleImage
@@ -347,7 +347,7 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
               read as a single grouped, screen-centered unit that ties the hero to the
               calendar rather than drifting beside the title. */}
           {activeMeta.length > 0 ? (
-            <div className="mt-3 flex justify-center sm:mt-3.5">
+            <div className="mt-4 flex justify-center sm:mt-4">
               <div className="inline-flex items-center gap-1.5 rounded-full border border-scent-accent/20 bg-black/25 px-3 py-1 text-[#cdbfa9]">
                 <WeatherGlyph day={activePlan.day} size={13} />
                 <span className="text-[10px] font-medium uppercase tracking-[0.14em] sm:text-[11px]">
@@ -365,7 +365,7 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
           <div
             role="tablist"
             aria-label="Days this week"
-            className="mx-auto mt-2.5 grid w-full max-w-[27rem] grid-cols-7 gap-1.5 sm:mt-3.5 sm:gap-2.5"
+            className="mx-auto mt-3 grid w-full max-w-[27rem] grid-cols-7 gap-1.5 sm:mt-4 sm:gap-2.5"
           >
             {outlook.slice(0, 7).map((plan, index) => {
               const isActive = index === selected;

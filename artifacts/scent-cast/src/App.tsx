@@ -1050,7 +1050,7 @@ function DashboardView() {
             min-height + padding relax to the original stacked rhythm. The Vault of
             Aromas is no longer part of this screen — it lives one scroll down as
             the "second page". */}
-        <div className="flex min-h-[calc(100svh-var(--topbar-h))] flex-col gap-4 pt-0 pb-[calc(var(--bottomnav-h)+1.25rem)] sm:min-h-0 sm:gap-12 sm:pt-0 sm:pb-0">
+        <div className="flex min-h-[calc(100svh-var(--topbar-h))] flex-col gap-4 pt-0 pb-[calc(var(--bottomnav-h)+0.5rem)] sm:min-h-0 sm:gap-12 sm:pt-0 sm:pb-0">
           {/* The hero ticker sits flush against the fixed top bar (no padding
               above it) so it visually replaces the bar's old bottom hairline. */}
           <HomepageHeroMarquee />
@@ -1255,10 +1255,12 @@ function DashboardView() {
               md+. Hidden in agent mode, which takes over the hero. */}
           {!agentActive ? (
             // Bias the leftover column space BELOW the forecast (mb-auto) with
-            // only a small deliberate gap above it (mt-6), so the forecast reads
+            // only a small deliberate gap above it (mt-3), so the forecast reads
             // as connected to the stat row above instead of floating in a large
-            // centered void. Normal flow on md+ (no bottom nav).
-            <div className="mt-6 mb-auto sm:mt-0 sm:mb-0">
+            // centered void. The top gap was tightened (mt-6 → mt-3) so the
+            // forecast group sits closer to the weather stat row. Normal flow on
+            // md+ (no bottom nav).
+            <div className="mt-3 mb-auto sm:mt-0 sm:mb-0">
               <WeeklyOutlookDashboard
                 items={items}
                 weather={weather}
