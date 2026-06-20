@@ -15,7 +15,8 @@ import {
 import { BottleImage } from '@/components/BottleImage';
 import type { Fragrance } from '@/components/Wardrobe';
 import type { WeatherData, WeatherForecastDay } from '@/context/WeatherContext';
-import { recommendFragranceForWeather } from '@/context/WardrobeContext';
+import { recommendFragranceForWeather, type WeatherOutlookPick } from '@/context/WardrobeContext';
+import type { ScentWeatherRecommendation } from '@/lib/scentWeatherEngine';
 
 interface WeeklyOutlookDashboardProps {
   items: Fragrance[];
@@ -25,7 +26,7 @@ interface WeeklyOutlookDashboardProps {
 
 interface OutlookDay {
   day: WeatherForecastDay;
-  pick: Fragrance | null;
+  pick: WeatherOutlookPick | null;
 }
 
 const CALM_EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
@@ -93,6 +94,38 @@ function fragranceNotes(item: Fragrance): string[] {
   return accordSummary ? [accordSummary] : [];
 }
 
+function titleCase(value: string): string {
+  return value.replace(/\b\w/g, (ch) => ch.toUpperCase());
+}
+
+/** Rounded °F for the selected day — prefers the daypart temp, then the high/low. */
+function temperatureLabel(day: WeatherForecastDay): string | null {
+  const temp = day.temp ?? day.high ?? day.low;
+  return typeof temp === 'number' && Number.isFinite(temp) ? `${Math.round(temp)}°` : null;
+}
+
+/**
+ * The "why this bottle today" caption. The engine already scores each forecast
+ * day (temperature, humidity, projection) and we previously threw that result
+ * away, rendering a bare bottle that read as arbitrary. Surfacing the day's
+ * weather plus the engine's recommended spray load turns the card back into an
+ * actual forecast: the pick is visibly tied to the conditions that earned it.
+ */
+function forecastMeta(day: WeatherForecastDay, rec: ScentWeatherRecommendation | null): string[] {
+  const parts: string[] = [];
+  const temp = temperatureLabel(day);
+  if (temp) parts.push(temp);
+
+  const condition = (day.condition ?? '').trim();
+  if (condition) parts.push(titleCase(condition));
+
+  const sprays = rec?.spray_count?.recommended;
+  if (typeof sprays === 'number' && sprays > 0) {
+    parts.push(`${sprays} ${sprays === 1 ? 'spray' : 'sprays'}`);
+  }
+  return parts;
+}
+
 function ForecastHero({
   plan,
   direction,
@@ -104,14 +137,16 @@ function ForecastHero({
 }) {
   const prefersReducedMotion = useReducedMotion() === true;
   const pick = plan.pick;
-  const notes = pick ? fragranceNotes(pick) : [];
+  const fragrance = pick?.item ?? null;
+  const notes = fragrance ? fragranceNotes(fragrance) : [];
+  const meta = pick ? forecastMeta(plan.day, pick.recommendation) : [];
   // Key the transition on the displayed *content* (the pick), not the calendar
   // day. Consecutive days frequently resolve to the same recommended bottle, and
   // keying on the date re-mounted BottleImage — re-fetching/decoding the identical
   // packshot and replaying the slide + skeleton crossfade for content that did not
   // change. With a content key, identical-pick navigations stay still (the day-tab
   // highlight still moves, so the change reads); only a genuine bottle change animates.
-  const contentKey = pick?.id ?? 'empty';
+  const contentKey = fragrance?.id ?? 'empty';
 
   return (
     // Default (sync) presence — both layers are already `absolute inset-0`, so a
@@ -130,10 +165,10 @@ function ForecastHero({
         // and the static fallback keep a clean layer with no leftover hints.
         className="absolute inset-0 motion-safe:[transform:translateZ(0)] motion-safe:[backface-visibility:hidden] motion-safe:[will-change:transform,opacity]"
       >
-        {pick ? (
+        {pick && fragrance ? (
           <button
             type="button"
-            onClick={onSelect ? () => onSelect(pick) : undefined}
+            onClick={onSelect ? () => onSelect(fragrance) : undefined}
             disabled={!onSelect}
             className="group grid h-full w-full grid-cols-[44%_56%] items-center text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:cursor-default sm:grid-cols-[40%_60%]"
             aria-label={onSelect ? `Open ${pick.name} by ${pick.brand}` : `${pick.name} by ${pick.brand}`}
@@ -146,32 +181,44 @@ function ForecastHero({
                 one shelf line: big and uniform. Tight artboard inset on phones draws
                 it as large as the column allows; desktop keeps its 7% breathing room. */}
             <BottleImage
-              src={pick.imageUrl}
+              src={fragrance.imageUrl}
               alt={`${pick.brand} ${pick.name}`}
               variant="featured"
-              adjustment={pick.imageAdjustment}
-              imageProperties={pick.imageProperties}
+              adjustment={fragrance.imageAdjustment}
+              imageProperties={fragrance.imageProperties}
               className="h-full w-full [&_.bottle-artboard]:inset-[2.5%] sm:[&_.bottle-artboard]:inset-[7%]"
               imgClassName="transition-transform duration-500 group-hover:scale-[1.025] motion-reduce:transform-none"
               loading="eager"
             />
-            {/* Brand / name / notes centered as a single column — mirrors the
-                reference forecast card where "Creed · Green Irish Tweed · notes"
-                stack centered beside the bottle, not flush-left. */}
+            {/* One centered column beside the bottle. Hierarchy mirrors how a
+                fragrance is actually billed: the HOUSE is a quiet eyebrow and the
+                fragrance NAME is the headline (the previous build inverted this —
+                a 3.4rem "Creed" dwarfed the actual scent it forecast). A thin gold
+                rule, the lead notes, then a weather caption that ties the bottle to
+                the day's conditions so the card reads as a forecast, not a random
+                packshot. */}
             <div className="flex min-w-0 flex-col items-center justify-center self-center px-1.5 text-center sm:px-4">
-              <p className="line-clamp-2 font-serif text-[clamp(2rem,9vw,3.4rem)] leading-[1.0] text-[#fff7ec]">
+              <p className="scent-type-label text-[10px] tracking-[0.3em] text-scent-accent/75 sm:text-[12px]">
                 {pick.brand}
               </p>
-              <p className="mt-1.5 line-clamp-2 font-serif text-[clamp(1.05rem,4.7vw,1.85rem)] leading-[1.1] text-[#f3e8d8]">
+              <p className="mt-1 line-clamp-2 font-serif text-[clamp(1.55rem,7.4vw,2.85rem)] leading-[1.05] text-[#fff7ec]">
                 {pick.name}
               </p>
               {notes.length > 0 ? (
                 <>
-                  <span aria-hidden className="my-2.5 h-px w-12 bg-scent-accent/45 sm:w-24" />
-                  <p className="line-clamp-2 font-serif text-[clamp(0.9rem,3.6vw,1.25rem)] italic leading-snug text-scent-accent/85">
+                  <span aria-hidden className="my-2 h-px w-10 bg-scent-accent/45 sm:my-2.5 sm:w-20" />
+                  <p className="line-clamp-2 font-serif text-[clamp(0.85rem,3.4vw,1.2rem)] italic leading-snug text-scent-accent/85">
                     {notes.join(' · ')}
                   </p>
                 </>
+              ) : null}
+              {meta.length > 0 ? (
+                <div className="mt-2.5 flex items-center justify-center gap-1.5 text-[#cdbfa9]">
+                  <WeatherGlyph day={plan.day} size={13} />
+                  <span className="text-[9.5px] font-medium uppercase tracking-[0.14em] sm:text-[11px]">
+                    {meta.join(' · ')}
+                  </span>
+                </div>
               ) : null}
             </div>
           </button>
@@ -206,7 +253,7 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
             temperature_f: day.temp ?? day.high,
             humidity: day.humidity ?? undefined,
             condition: day.condition ?? undefined,
-          })?.item ?? null,
+          }) ?? null,
       })),
     [forecast, items],
   );
@@ -245,7 +292,7 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
           {/* Generous hero height on phone (was 8.75rem) — fills the column space the
               page used to waste as dead margin above the forecast, so the packshot
               reads big and intentional instead of as a thumbnail. */}
-          <div className="relative mt-2 h-[14rem] sm:mt-3 sm:h-[15rem]">
+          <div className="relative mt-2 h-[15rem] sm:mt-3 sm:h-[16rem]">
             <ForecastChevron direction="prev" onClick={() => go(selected - 1)} />
             <div className="absolute inset-y-0 left-9 right-9 overflow-hidden sm:left-12 sm:right-12">
               <ForecastHero
