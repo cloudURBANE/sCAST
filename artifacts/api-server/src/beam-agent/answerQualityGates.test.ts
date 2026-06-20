@@ -524,3 +524,99 @@ test("repairInstructionFor returns fixes for the new gates", () => {
   assert.match(msg, /note the user asked to avoid/i);
   assert.match(msg, /commit to a specific grounded pick/i);
 });
+
+// --- Recommendation Commit Policy: commit_refusal gate -----------------------
+
+const DELEGATED_TOKYO = {
+  hadExternalEvidence: false,
+  sessionState: {
+    slots: { destination: "Tokyo", month: "August", vibe: "bold" },
+    mission: { intent: "travel_kit" as const, newCount: 2, destination: "Tokyo", month: "August" },
+    userDelegatedChoice: true,
+  },
+  groundedFragrances: [
+    { canonicalName: "Acqua di Giò Profumo", brand: "Giorgio Armani", owned: false },
+    { canonicalName: "Mr Burberry", brand: "Burberry", owned: false },
+  ],
+} as const;
+
+test("commit policy: a deferral phrase after delegation is rejected even though a pick is named", () => {
+  // The hole the question-shaped and zero-pick gates miss: a hedge that NAMES a
+  // pick but still leads with banned deferral language.
+  const r = runAnswerQualityGates(
+    "Honestly I'm not ready to commit yet, but Acqua di Giò Profumo could maybe work.",
+    DELEGATED_TOKYO,
+  );
+  assert.ok(r.violations.includes("commit_refusal"), JSON.stringify(r.violations));
+  assert.equal(r.passed, false);
+});
+
+test("commit policy: 'I need more information' is rejected when the user is owed a pick", () => {
+  const r = runAnswerQualityGates("I need more information before I can recommend two scents.", DELEGATED_TOKYO);
+  assert.ok(r.violations.includes("commit_refusal"), JSON.stringify(r.violations));
+});
+
+test("commit policy: 'I can't pick yet' is rejected when the user is owed a pick", () => {
+  const r = runAnswerQualityGates("I can't pick yet — give me a little more to go on.", DELEGATED_TOKYO);
+  assert.ok(r.violations.includes("commit_refusal"), JSON.stringify(r.violations));
+});
+
+test("commit policy: a confident committed answer with assumptions passes", () => {
+  const r = runAnswerQualityGates(
+    "Based on what you gave me, I'm assuming hot, humid Tokyo days. I'd pack Acqua di Giò Profumo " +
+      "for a bold but heat-safe marine projection, and Mr Burberry for a crisp woody contrast.",
+    DELEGATED_TOKYO,
+  );
+  assert.equal(r.passed, true, JSON.stringify(r.violations));
+});
+
+test("commit policy: stays silent when nothing was retrieved (cannot fabricate a commit)", () => {
+  // No grounded picks -> the retrieval nudge / zero-pick gate own this path; the
+  // commit gate must not fire and create an unsatisfiable terminal failure.
+  const r = runAnswerQualityGates("I'm not ready to commit just yet.", {
+    hadExternalEvidence: false,
+    sessionState: { slots: {}, userDelegatedChoice: true },
+    groundedFragrances: [],
+  });
+  assert.ok(!r.violations.includes("commit_refusal"), JSON.stringify(r.violations));
+});
+
+test("commit policy: stays silent when every grounded candidate violates an avoid constraint", () => {
+  const r = runAnswerQualityGates("I'm not ready to commit — none of these dodge the oud you dislike.", {
+    hadExternalEvidence: false,
+    sessionState: { slots: { avoid: "oud" }, userDelegatedChoice: true },
+    groundedFragrances: [
+      { canonicalName: "Oud Wood", brand: "Tom Ford", owned: false, matchedAvoid: true },
+      { canonicalName: "Oud Satin Mood", brand: "MFK", owned: false, matchedAvoid: true },
+    ],
+  });
+  assert.ok(!r.violations.includes("commit_refusal"), JSON.stringify(r.violations));
+});
+
+test("commit policy: does NOT fire when the user has not asked to decide", () => {
+  // No delegation, no recommendation/travel-kit mission -> not an owed turn.
+  const r = runAnswerQualityGates("I'm not ready to commit without knowing the occasion.", {
+    hadExternalEvidence: false,
+    sessionState: { slots: { destination: "Tokyo" } },
+    groundedFragrances: [{ canonicalName: "Aventus", brand: "Creed", owned: false }],
+  });
+  assert.ok(!r.violations.includes("commit_refusal"), JSON.stringify(r.violations));
+});
+
+test("commit policy: steering away from a category is not a refusal", () => {
+  // "I can't recommend a dense gourmand here" steers AWAY from a category while
+  // committing to a real pick — it must not trip the deferral gate.
+  const r = runAnswerQualityGates(
+    "I wouldn't reach for a dense gourmand in that humidity, so go with Acqua di Giò Profumo — " +
+      "bold, marine, and heat-safe — plus Mr Burberry for a crisp woody contrast.",
+    DELEGATED_TOKYO,
+  );
+  assert.ok(!r.violations.includes("commit_refusal"), JSON.stringify(r.violations));
+  assert.equal(r.passed, true, JSON.stringify(r.violations));
+});
+
+test("commit policy: repairInstructionFor explains the commit_refusal fix", () => {
+  const msg = repairInstructionFor(["commit_refusal"]);
+  assert.match(msg, /deferral|hedging/i);
+  assert.match(msg, /confident named pick|commit/i);
+});

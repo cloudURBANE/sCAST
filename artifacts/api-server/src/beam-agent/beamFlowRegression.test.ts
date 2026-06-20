@@ -621,3 +621,81 @@ test("matrix/combined: city + season + newness resolve together", () => {
   assert.equal(state.mission?.intent, "recommendation");
   assert.equal(state.mission?.newness, "new");
 });
+
+// --- Exact reported failure: "Tokyo / August / bold" + "you decide" ----------
+// The flow the Recommendation Commit Policy must make pass end-to-end at the
+// deterministic layer: turn 1 states a bold two-new Tokyo-August trip; turn 2
+// delegates ("Recommend now with what you know. You decide."). Beam must commit.
+
+function tokyoBoldDecideState() {
+  const t1 = deriveBeamSessionState(
+    undefined,
+    "Help me pick two new fragrances for a trip to Tokyo in August. I want smell bold.",
+  );
+  const t2 = deriveBeamSessionState(t1, "Recommend now with what you know. You decide.");
+  return { t1, t2 };
+}
+
+const tokyoBoldGrounded: BeamGroundedFragrance[] = [
+  { canonicalName: "Acqua di Giò Profumo", brand: "Giorgio Armani", owned: false },
+  { canonicalName: "Mr Burberry", brand: "Burberry", owned: false },
+];
+
+test("tokyo-bold: opening message captures city, month, bold vibe, and a 2-new kit", () => {
+  const { t1 } = tokyoBoldDecideState();
+  assert.equal(t1.slots.destination, "Tokyo");
+  assert.equal(t1.slots.month, "August");
+  assert.equal(t1.slots.vibe, "bold");
+  assert.equal(t1.mission?.intent, "travel_kit");
+  assert.equal(t1.mission?.newCount, 2);
+});
+
+test("tokyo-bold: the follow-up is recognized as delegation and is preserved in state", () => {
+  assert.equal(isDelegationPhrase("Recommend now with what you know. You decide."), true);
+  const { t2 } = tokyoBoldDecideState();
+  assert.equal(t2.userDelegatedChoice || t2.mission?.userDelegatedChoice, true);
+  // The Tokyo/August/bold context survives the delegating turn (no state reset).
+  assert.equal(t2.slots.destination, "Tokyo");
+  assert.equal(t2.slots.month, "August");
+});
+
+test("tokyo-bold: a deferral after 'you decide' is rejected by the gates", () => {
+  const { t2 } = tokyoBoldDecideState();
+  for (const deferral of [
+    "I'm not ready to commit yet — tell me more about your taste.",
+    "I need more information before I can recommend two scents.",
+    "I can't pick yet without knowing your budget.",
+  ]) {
+    const r = runAnswerQualityGates(deferral, { ...noEvidence, sessionState: t2, groundedFragrances: tokyoBoldGrounded });
+    assert.equal(r.passed, false, deferral);
+    assert.ok(
+      r.violations.includes("commit_refusal") ||
+        r.violations.includes("delegated_but_questioned") ||
+        r.violations.includes("recommendation_without_grounded_pick") ||
+        r.violations.includes("mission_unfulfilled"),
+      `${deferral} -> ${JSON.stringify(r.violations)}`,
+    );
+  }
+});
+
+test("tokyo-bold: a confident two-pick answer that reasons about August humidity passes", () => {
+  const { t2 } = tokyoBoldDecideState();
+  const answer =
+    "Based on what you gave me, I'm assuming hot, humid Tokyo days in August, so I went bold but " +
+    "heat-safe. Pick 1: Acqua di Giò Profumo — a marine-woody projection that reads confident " +
+    "without turning syrupy in humidity. Pick 2: Mr Burberry — a crisp woody contrast that still " +
+    "carries. I steered clear of dense sweet ambers since heat amplifies them.";
+  const r = runAnswerQualityGates(answer, { ...noEvidence, sessionState: t2, groundedFragrances: tokyoBoldGrounded });
+  assert.equal(r.passed, true, JSON.stringify(r.violations));
+});
+
+test("tokyo-bold: missing weather/wardrobe still produces a committable answer (no refusal needed)", () => {
+  // Even with NO grounded vault picks and no weather echo, naming two new catalog
+  // picks with stated assumptions satisfies every gate — assumptions, not refusal.
+  const { t2 } = tokyoBoldDecideState();
+  const answer =
+    "Assuming a hot, humid August with no budget cap, I'd buy Acqua di Giò Profumo for a bold " +
+    "marine projection and Mr Burberry for a crisp woody contrast.";
+  const r = runAnswerQualityGates(answer, { ...noEvidence, sessionState: t2, groundedFragrances: tokyoBoldGrounded });
+  assert.equal(r.passed, true, JSON.stringify(r.violations));
+});
