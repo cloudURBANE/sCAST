@@ -396,8 +396,10 @@ export const FragranceCapture: React.FC<{
   onVaultSearchStateChange?: (active: boolean) => void;
   /** Brand+name identity keys ({@link vaultIdentityKey}) of fragrances already saved. */
   existingVaultKeys?: Set<string>;
-  /** Scroll the user to their vault — used by the "View in vault" action on duplicates. */
-  onViewVault?: () => void;
+  /** Open the matching saved fragrance in the vault — used by the "View in vault"
+   *  action on duplicates. Receives the selected result so the parent can open
+   *  that exact item's detail rather than just scrolling to the section. */
+  onViewVault?: (match: FragranceMatch) => void;
   /** Render only the search interior when the stable vault panel is owned by the parent. */
   embeddedInVaultPanel?: boolean;
 }> = ({
@@ -509,8 +511,8 @@ export const FragranceCapture: React.FC<{
   // Plain (non-memoized) so it always closes over the current `handleConfirm`,
   // which is declared below and re-created each render.
   const handlePrimaryAction = () => {
-    if (selectedInVault) {
-      onViewVault?.();
+    if (selectedInVault && selectedMatch) {
+      onViewVault?.(selectedMatch);
       return;
     }
     void handleConfirm();
@@ -537,6 +539,11 @@ export const FragranceCapture: React.FC<{
       const actionBar = actionBarRef.current;
       if (!actionBar) return;
       const rect = actionBar.getBoundingClientRect();
+      // Skip the scroll when the CTA is already fully in view. With a compact
+      // result set (e.g. a single match, now that the panel hugs its content)
+      // the action appears on-screen immediately, so re-centering it only reads
+      // as an unprompted jump. Only chase the CTA when it's actually off the fold.
+      if (rect.top >= 0 && rect.bottom <= window.innerHeight) return;
       const top = window.scrollY + rect.top - Math.max(0, (window.innerHeight - rect.height) / 2);
       window.scrollTo({
         behavior: reduceMotion ? 'auto' : 'smooth',
@@ -1330,7 +1337,17 @@ export const FragranceCapture: React.FC<{
               className={`mx-auto mt-5 w-full scroll-mt-24 sm:mt-7 sm:pb-0 ${hasSelectedMatch ? 'pb-[7rem]' : 'pb-2'}`}
             >
               <div className="flex min-h-0 flex-col">
-                <div className="scent-vault-results-panel mx-auto w-full max-w-[50.5rem] px-3 py-4 sm:px-9 sm:py-9">
+                <div
+                  className="scent-vault-results-panel mx-auto w-full max-w-[50.5rem] px-3 py-4 sm:px-9 sm:py-9"
+                  // The panel's CSS sets a tall min-height (≈19rem) so the loading
+                  // skeleton reads as a full surface. For *real* results that reserve
+                  // is wrong: a single match left the card stranded in a large void
+                  // (the gap that "grows" on wider viewports via the 30vw clamp).
+                  // Hug the content instead so the panel is only ever as tall as the
+                  // list it holds; many results still cap + scroll via the list's
+                  // own max-height below.
+                  style={{ minHeight: 0 }}
+                >
                   {/* Results-nav header: count on the left, a desktop-only
                       "Back to top" affordance on the right. Lives outside the
                       scroll area below, so it stays put while the list scrolls.
