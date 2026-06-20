@@ -513,7 +513,8 @@ async function buildPostDtos(tenantId: string, posts: PostRow[], viewerId?: stri
 
   const fragranceIds = [...new Set(fragranceRows.flatMap((row) => {
     const snapshot = row.fragrance as FragranceSnapshot;
-    return snapshot.fragranceId ? [snapshot.fragranceId] : [];
+    const fragranceId = snapshot.fragranceId ?? stableFragranceId(snapshot.brand, snapshot.name);
+    return fragranceId ? [fragranceId] : [];
   }))];
   let beamRows: Array<{ fragranceId: string; supporters: number; totalBeamPower: number }> = [];
   try {
@@ -544,8 +545,14 @@ async function buildPostDtos(tenantId: string, posts: PostRow[], viewerId?: stri
   for (const row of fragranceRows) {
     const fragrances = fragrancesByPost.get(row.postId) ?? [];
     const snapshot = row.fragrance as FragranceSnapshot;
-    const beam = snapshot.fragranceId ? beamByFragrance.get(snapshot.fragranceId) : undefined;
-    fragrances.push({ ...snapshot, beamSupporters: beam?.beamSupporters ?? 0, totalBeamPower: beam?.totalBeamPower ?? 0 });
+    const fragranceId = snapshot.fragranceId ?? stableFragranceId(snapshot.brand, snapshot.name) ?? undefined;
+    const beam = fragranceId ? beamByFragrance.get(fragranceId) : undefined;
+    fragrances.push({
+      ...snapshot,
+      ...(fragranceId ? { fragranceId } : {}),
+      beamSupporters: beam?.beamSupporters ?? 0,
+      totalBeamPower: beam?.totalBeamPower ?? 0,
+    });
     fragrancesByPost.set(row.postId, fragrances);
   }
 
