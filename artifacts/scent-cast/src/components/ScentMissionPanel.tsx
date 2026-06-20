@@ -53,6 +53,17 @@ import {
   type BeamSuggestion,
 } from '@/lib/beamAgentClient';
 import { formatAgentResponse } from '@/lib/beamMessageFormat';
+import {
+  classifyTurnOutcome,
+  composerPlaceholderForState,
+  deriveFlowState,
+  formatKitTitle,
+  normalizeLocation,
+  parseDateLabel,
+  recapLabelForOutcome,
+  recommendCtaForState,
+  type BeamTurnOutcome,
+} from '@/lib/beamAnswerContract';
 import { BeamMessage } from '@/components/BeamMessage';
 import { BeamCard } from '@/components/BeamCard';
 import type { Fragrance } from '@/components/Wardrobe';
@@ -88,6 +99,10 @@ type PanelMessage = {
   // delivered Beam answers; gates the "report this answer" feedback affordance so
   // it can attach to a real server-side record.
   answerLogId?: string;
+  // The completion-contract outcome for this turn (answered / needs_more_info /
+  // pending). Drives the truthful recap label and whether final-answer feedback
+  // shows — a "let me search first" stall is `pending`, never `answered`.
+  outcome?: BeamTurnOutcome;
 };
 
 type AgentMode = 'fast' | 'research' | 'premium';
@@ -472,21 +487,24 @@ const BeamActivityTrail: React.FC<{
   running: boolean;
   expanded: boolean;
   elapsedMs: number | null;
+  // The settled turn's completion-contract outcome. When absent (live trail) the
+  // label tracks the spinner; once settled it drives a truthful recap label so a
+  // stalled turn never reads as "Answered".
+  outcome?: BeamTurnOutcome;
   onToggleExpand: () => void;
-}> = ({ steps, calmMotion, spin, running, expanded, elapsedMs, onToggleExpand }) => {
+}> = ({ steps, calmMotion, spin, running, expanded, elapsedMs, outcome, onToggleExpand }) => {
   if (steps.length === 0) return null;
 
   const activeCount = steps.filter((s) => s.state === 'active').length;
   const currentStep = [...steps].reverse().find((s) => s.state === 'active') ?? steps[steps.length - 1];
   const showSpinner = running && activeCount > 0;
   const elapsedSeconds = elapsedMs != null ? Math.max(1, Math.round(elapsedMs / 1000)) : null;
-  // A completed tool trail is not necessarily a completed recommendation. Keep
-  // this factual and leave the actual actions behind a descriptive control.
+  // A completed tool trail is not necessarily a completed recommendation. The
+  // settled label is keyed off the turn's real outcome (answered vs pending vs
+  // clarifying), never the bare fact that the run finished.
   const summaryLabel = showSpinner
     ? currentStep.label
-    : elapsedSeconds != null
-      ? `Answered in ${elapsedSeconds}s`
-      : 'Response ready';
+    : recapLabelForOutcome(outcome ?? 'answered', elapsedSeconds);
 
   const body = (
     <div className="mt-2.5 flex flex-col gap-2 border-t border-scent-accent/10 pt-2.5">
@@ -1045,6 +1063,10 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   // the cue lane can offer recovery actions instead of vibe cues. Cleared on the
   // next user turn / a successful curation.
   const [catalogFailure, setCatalogFailure] = useState(false);
+  // The completion-contract outcome of the most recent agent turn. Drives the
+  // flow state machine (CTA / placeholder / status) so a stalled "let me search
+  // first" turn is treated as a recoverable error, not a fresh answer.
+  const [lastTurnOutcome, setLastTurnOutcome] = useState<BeamTurnOutcome | null>(null);
   // The last message the user actually sent — lets "Retry catalog search" re-run
   // the same turn without making them retype it.
   const [lastUserMessage, setLastUserMessage] = useState('');
@@ -1235,6 +1257,23 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   // composer's "refine your match" placeholder below.
   const hasMatch = Boolean(resolved) || (proposal != null && proposal.items.length > 0) || agentCardDelivered;
 
+  // The flow state machine — one derived source of truth for the CTA, composer
+  // placeholder, and status affordances. `hasClarifyingCues` is filled in below
+  // once the suggestion lane is computed; pass it through so a follow-up question
+  // reads as needs_more_info, not a stalled answer.
+  const flowState = useMemo(
+    () =>
+      deriveFlowState({
+        busy,
+        catalogFailure,
+        hasMatch,
+        lastTurnOutcome,
+        hasClarifyingCues: agentSuggestions.length > 0,
+        conversationStarted,
+      }),
+    [busy, catalogFailure, hasMatch, lastTurnOutcome, agentSuggestions.length, conversationStarted],
+  );
+
   const progressText = useMemo(() => {
     if (progressNote) return progressNote;
     if (hasMatch && !busy) return 'Match ready';
@@ -1248,23 +1287,28 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   // the title instead of the static "A scent for today." A travel kit reads as a
   // named kit; a single destination/occasion reads as a scent-for line. Falls back
   // to the calm default before any cue lands.
+  // A human date/time context ("…Duluth mn tomorrow" → "Tomorrow"), parsed from
+  // the user's own words since the backend slots carry no date field. Used to keep
+  // the kit title truthful ("Your Duluth, MN · Tomorrow kit").
+  const dateLabel = useMemo(() => parseDateLabel(lastUserMessage), [lastUserMessage]);
+
   const headerTitle = useMemo(() => {
     const destination = (agentMission?.destination || agentCues.destination || '').trim();
     const month = (agentMission?.month || agentCues.month || '').trim();
     if (agentMission?.intent === 'travel_kit' && destination) {
-      return month
-        ? `Your ${titleCaseCue(destination)} · ${titleCaseCue(month)} kit`
-        : `Your ${titleCaseCue(destination)} kit`;
+      // Route the place through normalizeLocation so "duluth mn" reads as
+      // "Duluth, MN" (never "Duluth Mn"), and preserve the date context.
+      return formatKitTitle({ destination, month, dateLabel });
     }
     // A requested quantity ("give me three…") reads as a count, so the header
     // matches what's being delivered instead of always promising one scent.
     const recCount = agentMission?.intent === 'recommendation' ? agentMission.count ?? 0 : 0;
     const lead = recCount > 1 ? `${recCount} scents` : 'A scent';
-    if (destination) return `${lead} for ${titleCaseCue(destination)}`;
+    if (destination) return `${lead} for ${normalizeLocation(destination)}`;
     const occasion = (agentCues.occasion || '').trim();
     if (occasion) return `${lead} for ${occasion}`;
     return recCount > 1 ? `${recCount} scent picks` : 'A scent for today.';
-  }, [agentCues, agentMission]);
+  }, [agentCues, agentMission, dateLabel]);
 
   const contextLine = useMemo(() => {
     const destination = (agentMission?.destination || agentCues.destination || '').trim();
@@ -1276,9 +1320,11 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       if ((agentMission.ownedCount ?? 0) > 0) kitParts.push(`${agentMission.ownedCount} from your vault`);
       if ((agentMission.newCount ?? 0) > 0) kitParts.push(`${agentMission.newCount} new`);
       const countPhrase = kitParts.length > 0 ? ` · ${kitParts.join(' + ')}` : '';
-      return month
-        ? `${titleCaseCue(destination)} / ${titleCaseCue(month)} travel context${countPhrase}`
-        : `${titleCaseCue(destination)} travel context${countPhrase}`;
+      const place = normalizeLocation(destination);
+      const when = month ? titleCaseCue(month) : dateLabel;
+      return when
+        ? `${place} / ${when} travel context${countPhrase}`
+        : `${place} travel context${countPhrase}`;
     }
     const weatherParts = [
       typeof weather?.temperature === 'number' ? `${Math.round(weather.temperature)}F` : null,
@@ -1286,7 +1332,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       typeof weather?.condition === 'string' ? weather.condition : null,
     ].filter(Boolean);
     return weatherParts.length > 0 ? weatherParts.join(' / ') : 'Weather context ready when available';
-  }, [agentCues.destination, agentMission, weather]);
+  }, [agentCues.destination, agentMission, weather, dateLabel]);
 
   // Surface progress to the host so the title + progress + close can render in a
   // header strip above the bordered card rather than crowding the panel interior.
@@ -1311,7 +1357,12 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
     (
       role: PanelMessage['role'],
       text: string,
-      meta?: { activity?: BeamActivityStep[]; elapsedMs?: number | null; answerLogId?: string },
+      meta?: {
+        activity?: BeamActivityStep[];
+        elapsedMs?: number | null;
+        answerLogId?: string;
+        outcome?: BeamTurnOutcome;
+      },
     ) => {
       setMessages((prev) => [
         ...prev,
@@ -1323,6 +1374,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
             ? { activity: meta.activity, elapsedMs: meta.elapsedMs ?? null }
             : {}),
           ...(meta?.answerLogId ? { answerLogId: meta.answerLogId } : {}),
+          ...(meta?.outcome ? { outcome: meta.outcome } : {}),
         },
       ]);
     },
@@ -1336,7 +1388,12 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   const pushAgentText = useCallback(
     (
       raw: string,
-      meta?: { activity?: BeamActivityStep[]; elapsedMs?: number | null; answerLogId?: string },
+      meta?: {
+        activity?: BeamActivityStep[];
+        elapsedMs?: number | null;
+        answerLogId?: string;
+        outcome?: BeamTurnOutcome;
+      },
     ): { catalogUnavailable: boolean } => {
       const { text, catalogUnavailable } = formatAgentResponse(raw);
       if (catalogUnavailable) setCatalogFailure(true);
@@ -1430,6 +1487,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       activityIdRef.current = 0;
       runEmittedCuesRef.current = false;
       runDeliveredResultRef.current = false;
+      setLastTurnOutcome(null);
       setActivity([]);
       setAgentSuggestions([]);
       setProposal(null);
@@ -1521,14 +1579,35 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
           // no card/proposal) drops it, so the action trail no longer repeats on
           // every back-and-forth and reads as developer noise.
           const isClarifyingTurn = runEmittedCuesRef.current && !runDeliveredResultRef.current;
+          // Completion contract: decide what this turn actually was before we let
+          // the UI call it "Answered". A delivered card/proposal or real text
+          // picks → answered; a "let me search the catalog first" stall → pending;
+          // a clarifying question → needs_more_info. The recap label, the primary
+          // CTA, and the feedback affordance all key off this — never off the bare
+          // fact that the run finished.
+          const outcome = classifyTurnOutcome({
+            text: result.response,
+            deliveredResult: runDeliveredResultRef.current,
+            emittedCues: runEmittedCuesRef.current,
+          });
+          setLastTurnOutcome(outcome);
           // Feedback attaches to substantive answers only — a pure clarifying
-          // question ("what's the occasion?") isn't something to report. The
-          // server still logs that turn for diagnosis; it just gets no UI verdict.
+          // question ("what's the occasion?") or an unfinished stall isn't
+          // something to report. The server still logs that turn for diagnosis; it
+          // just gets no final-answer UI verdict. Only a real `answered` turn
+          // carries the durable answerLogId that opens the feedback control.
           pushAgentText(
             result.response,
             isClarifyingTurn
-              ? undefined
-              : { activity: frozenSteps, elapsedMs, ...(result.answerLogId ? { answerLogId: result.answerLogId } : {}) },
+              ? { outcome }
+              : {
+                  activity: frozenSteps,
+                  elapsedMs,
+                  outcome,
+                  ...(result.answerLogId && outcome === 'answered'
+                    ? { answerLogId: result.answerLogId }
+                    : {}),
+                },
           );
           return { handled: true };
         }
@@ -1922,6 +2001,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
     beamSessionIdRef.current = undefined;
     setCurating(null);
     setCatalogFailure(false);
+    setLastTurnOutcome(null);
     setFacets({});
     setAgentCues({});
     setAgentMission(null);
@@ -1988,13 +2068,16 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   // Once a recommendation is on screen the composer is no longer a cold-start
   // prompt — it's a follow-up line, so the copy advances to invite refinement
   // instead of repeating "describe your day" beneath an answer.
-  const composerPlaceholder = hasMatch
-    ? 'Ask a follow-up, or refine your match'
-    : agentMode === 'fast'
+  // State-aware placeholder: the contract helper owns the post-answer / pending /
+  // error / needs-more-info copy; cold-start states fall through to the
+  // mode-specific opening line so the field always tells the user what to do next.
+  const composerPlaceholder =
+    composerPlaceholderForState(flowState) ??
+    (agentMode === 'fast'
       ? 'Tap a cue below or type, then send'
       : agentMode === 'premium'
         ? 'Tap a cue or describe the impression'
-        : 'Tap a cue below, or describe your day';
+        : 'Tap a cue below, or describe your day');
 
   const actionControls = (
     <div className="relative mx-auto mt-4 w-full max-w-[52rem] sm:mt-5">
@@ -2252,7 +2335,13 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   );
 
   const hasConfirmAction = items.length > 0 && (enoughContext || agentMode === 'fast');
-  const hasRecommendNowAction = items.length > 0 && conversationStarted && !hasMatch;
+  // The primary "Recommend now" CTA changes meaning with the flow state: it's
+  // hidden once an answer is on screen, disabled + "Finding picks…" while
+  // thinking, and "Try again" after a stalled turn — never a stale "Recommend
+  // now" that loops with the same meaning after an answer or pending response.
+  const recommendCta = recommendCtaForState(flowState);
+  const hasRecommendNowAction =
+    items.length > 0 && conversationStarted && !recommendCta.hidden;
   const hasPreviewAction = agentMode === 'premium';
   const hasActionRow = hasConfirmAction || hasRecommendNowAction || hasPreviewAction;
   // A cue has been tapped into the composer but not sent yet. Tapping a cue used
@@ -2379,12 +2468,16 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
             {hasRecommendNowAction && !hasConfirmAction ? (
               <button
                 type="button"
-                onClick={recommendNow}
-                disabled={busy}
+                onClick={flowState === 'error' && !catalogFailure ? retryCatalog : recommendNow}
+                disabled={busy || recommendCta.disabled}
                 className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-scent-accent/42 px-5 py-2.5 text-[12px] font-semibold text-[#fff7ec] transition-colors hover:bg-scent-accent/10 disabled:opacity-45"
               >
-                <Zap size={13} aria-hidden />
-                Recommend now
+                {recommendCta.disabled ? (
+                  <Loader2 size={13} className="animate-spin" aria-hidden />
+                ) : (
+                  <Zap size={13} aria-hidden />
+                )}
+                {recommendCta.label}
               </button>
             ) : null}
             {hasPreviewAction ? (
@@ -2536,7 +2629,11 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       <div
         ref={scrollRef}
         onScroll={updateScrollEdges}
-        className="flex w-full min-h-[13.5rem] max-h-[min(55dvh,29rem)] flex-col gap-3 overflow-y-auto px-1.5 pb-2 pt-3 text-left scrollbar-hide sm:min-h-[15.5rem] sm:max-h-[min(57dvh,33rem)] sm:px-2 sm:pt-4"
+        // Reserve real bottom padding so the final answer line is never swallowed
+        // by the bottom fade overlay (h-8) or pinned behind the composer below it
+        // — the "last line hidden behind the input" mobile clip. Honors the iOS
+        // safe-area inset so it also clears the home indicator on notched phones.
+        className="flex w-full min-h-[13.5rem] max-h-[min(55dvh,29rem)] flex-col gap-3 overflow-y-auto px-1.5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-3 text-left scrollbar-hide sm:min-h-[15.5rem] sm:max-h-[min(57dvh,33rem)] sm:px-2 sm:pb-9 sm:pt-4"
         role="log"
         aria-live="polite"
         aria-label="Beam Agent conversation"
@@ -2706,6 +2803,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                   running={false}
                   expanded={!!expandedRecaps[message.id]}
                   elapsedMs={message.elapsedMs ?? null}
+                  outcome={message.outcome}
                   onToggleExpand={() => toggleRecap(message.id)}
                 />
               ) : null}
