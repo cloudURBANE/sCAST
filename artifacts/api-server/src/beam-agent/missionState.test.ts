@@ -311,6 +311,55 @@ test("detects delegation phrases and preserves them in state", () => {
   assert.equal(state.mission?.userDelegatedChoice, true);
 });
 
+test("delegation detection is semantic, not a few exact phrases", () => {
+  // The full set of production wordings that hand Beam the choice. None of these
+  // is a literal substring of another — they exercise distinct intent families
+  // (hand-off, trust, commit-now, indifference, 'use what you know', 'stop
+  // asking'). All must register so the commit gates fire on every one.
+  for (const phrase of [
+    "you decide",
+    "recommend now",
+    "with what you know",
+    "pick for me",
+    "make the call",
+    "you choose",
+    "surprise me",
+    "I trust you",
+    "just tell me what to wear",
+    "use what you know about me",
+    "don't ask me more questions",
+    "choose the best option",
+    "give me the answer",
+    "I want you to decide",
+  ]) {
+    assert.equal(isDelegationPhrase(phrase), true, `should delegate: ${phrase}`);
+  }
+});
+
+test("delegation detection does not over-fire on exploration or reserved choice", () => {
+  // Education, opinion-seeking, and the user RESERVING the choice for themselves
+  // must NOT be read as delegation — otherwise the gates would force a premature
+  // commit and block legitimate clarification.
+  for (const phrase of [
+    "what do you think of Aventus?",
+    "tell me what you know about it",
+    "tell me what to expect from the dry down",
+    "let me decide",
+    "I'll pick once I know more",
+    "Green and aromatic",
+    "how do you choose between two woods?",
+    // Reserved-choice and education forms of "choose the best" must NOT delegate.
+    "I want to choose the best one myself",
+    "how do I choose the best summer scent?",
+    // "what you know/have" as the premise of a QUESTION is education/availability,
+    // not a hand-off — the trailing "?" keeps it out.
+    "based on what you know about niche houses, are they worth it?",
+    "with what you have in stock?",
+  ]) {
+    assert.equal(isDelegationPhrase(phrase), false, `should NOT delegate: ${phrase}`);
+  }
+});
+
 test("formats known slots and mission rules into a prompt clause", () => {
   const state = deriveBeamSessionState(undefined, "Trip to Tokyo: 2 from my wardrobe and 2 new in August, artsy");
   const prompt = beamSessionStatePrompt(state);

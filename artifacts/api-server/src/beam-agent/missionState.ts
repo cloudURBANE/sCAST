@@ -534,10 +534,86 @@ function parseBudget(text: string): string | undefined {
   return undefined;
 }
 
+/**
+ * Normalize a user message for delegation detection: lowercase, fold curly
+ * apostrophes/backticks to a straight `'`, and collapse whitespace. Keeps the
+ * pattern layer below free of per-pattern apostrophe and spacing noise.
+ */
+function normalizeForDelegation(message: string): string {
+  return message
+    .toLowerCase()
+    .replace(/[’‘`´]/g, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Delegation detection layers. The user has handed Beam the choice and is owed a
+ * committed pick, not another clarifying question. This is intentionally LAYERED
+ * by intent FAMILY rather than one flat keyword list, so semantically equivalent
+ * phrasings ("I trust you", "don't ask me more questions", "give me the answer",
+ * "use what you know") all resolve to the same typed `userDelegatedChoice` signal
+ * the commit gates consume — no per-gate regex sprawl. Each family is tightly
+ * scoped so ordinary exploration ("what do you think of Aventus?", "tell me what
+ * you know about it") and the user RESERVING the choice ("let me decide", "I'll
+ * pick") never trip it.
+ */
+const DELEGATION_PATTERNS: RegExp[] = [
+  // 1. "I don't know — you tell me" — punting the decision outright.
+  /\b(?:idk|i\s+don'?t\s+know|i\s+have\s+no\s+idea|you\s+tell\s+me)\b/,
+  // 2. Direct hand-off aimed at "you": you decide / you choose / you pick / you
+  //    call it / (I want) you to decide. The negative lookbehind blocks the
+  //    interrogative "how/do/can/would you decide" (a question about HOW Beam
+  //    works, not a hand-off).
+  /(?<!\b(?:how|do|does|did|can|could|will|would|should|why)\s)\byou\s+(?:to\s+)?(?:decide|choose|pick|call\s+it|make\s+the\s+call)\b/,
+  // 3. Possessive / "up to you" hand-off: your call|choice|pick, dealer's choice,
+  //    up to you, in your hands, whatever you think|like|want|recommend|say.
+  /\byour\s+(?:call|choice|pick)\b|\bdealer'?s\s+choice\b|\bup\s+to\s+you\b|\bin\s+your\s+hands\b|\bwhatever\s+you\s+(?:think|like|want|recommend|say)\b/,
+  // 4. Trust frames: I trust you / I'll trust your judgment|taste|gut|instinct.
+  /\bi\s+(?:will\s+|'?ll\s+)?trust\s+(?:you|your\s+\w+)\b|\btrust\s+your\s+(?:judg\w*|taste|gut|instinct\w*|call|pick)\b/,
+  // 5. Commit-now framing: recommend now, make the call|decision, just pick/choose/
+  //    recommend/decide, just go ahead/for it, go ahead. ("just go" is scoped to
+  //    go-ahead/for-it/with-it so a narrative "I just go for whatever" never trips.)
+  /\brecommend\s+now\b|\bmake\s+the\s+(?:call|decision)\b|\bjust\s+(?:pick|choose|recommend|decide)\b|\bjust\s+go\s+(?:ahead|for\s+it|with\s+(?:it|one|that))\b|\bgo\s+ahead\b/,
+  // 6. "pick/choose/recommend (something) for me" / "give me the answer|pick|best"
+  //    — explicit ask for the conclusion. The "choose the best" arm is anchored to
+  //    a hand-off subject (clause-start imperative or "you choose the best") so the
+  //    user RESERVING it ("I want to choose the best myself") and the educational
+  //    "how do I choose the best summer scent?" never register as delegation.
+  /\b(?:pick|choose|decide|recommend)\s+(?:one\s+|something\s+|the\s+best\s+)?for\s+me\b|(?:^|[.,;!]\s*|\byou\s+)(?:just\s+)?(?:choose|pick|recommend)\s+the\s+best\b|\bgive\s+me\s+(?:the|your|an|one)\s+(?:answer|pick|best)\b/,
+  // 7. Indifference: surprise me, doesn't matter, anything works|is fine|goes.
+  /\bsurprise\s+me\b|\bdoesn'?t\s+matter\b|\banything\s+(?:works|is\s+fine|goes)\b/,
+  // 8. "just tell me what to wear/buy/get/grab" — wants the answer, not a menu.
+  //    Scoped to the action verbs so "tell me what to expect" never trips.
+  /\b(?:just\s+)?tell\s+me\s+what\s+to\s+(?:wear|buy|get|grab|pick|use|spray)\b/,
+  // 9. "don't ask me more questions" / "no more questions" / "stop asking" — an
+  //    explicit demand to stop clarifying and commit.
+  /\b(?:don'?t|do\s+not|stop|quit)\s+ask\w*(?:\s+me)?(?:\s+(?:any\s+)?more)?\s+questions?\b|\bno\s+more\s+questions?\b|\bstop\s+asking\b/,
+];
+
+/**
+ * "use/with/based on what you know|have|got" — commit on the context Beam already
+ * holds. This is a hand-off ("use what you know about me", "Recommend now with
+ * what you know") ONLY as an instruction, NOT as the premise of an education /
+ * availability QUESTION ("based on what you know about niche houses, are they
+ * worth it?", "with what you have in stock?"). The trailing "?" is the
+ * discriminator, applied by isDelegationPhrase; the base clause stays anchored to
+ * with/use/using/from/based-on so "tell me what you know" never matches.
+ */
+const CONTEXT_HANDOFF_PATTERN = /\b(?:with|use|using|from|based\s+on)\s+what\s+you\s+(?:know|have|got)\b/;
+
+/**
+ * True when the message hands the choice to Beam. Pure and cheap — runs before
+ * any model call so delegation is a deterministic, typed signal rather than
+ * something the model has to infer.
+ */
 export function isDelegationPhrase(message: string): boolean {
-  const text = message.trim().toLowerCase();
+  const text = normalizeForDelegation(message);
   if (!text) return false;
-  return /\b(?:idk|i\s+don'?t\s+know|you\s+tell\s+me|surprise\s+me|pick\s+for\s+me|choose\s+for\s+me|you\s+decide|your\s+call|dealer'?s\s+choice|whatever\s+you\s+think|recommend\s+now|just\s+(?:pick|choose|recommend|decide)|go\s+ahead|make\s+the\s+call|up\s+to\s+you|with\s+what\s+you\s+(?:know|have)|doesn'?t\s+matter)\b/i.test(text);
+  if (DELEGATION_PATTERNS.some((pattern) => pattern.test(text))) return true;
+  // Context hand-off only when it is an instruction, not a trailing question.
+  if (!/\?\s*$/.test(text) && CONTEXT_HANDOFF_PATTERN.test(text)) return true;
+  return false;
 }
 
 /**
