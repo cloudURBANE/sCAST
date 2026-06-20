@@ -585,27 +585,37 @@ const BeamActivityTrail: React.FC<{
  * scroll fired immediately on blur fights the native dismissal and makes the page
  * shudder, so we deliberately avoid both.
  */
-function recoverViewportAfterKeyboard(): void {
-  if (typeof window === 'undefined') return;
+function recoverViewportAfterKeyboard(): () => void {
+  if (typeof window === 'undefined') return () => {};
   const correct = () => {
     if (window.scrollY > 0) window.scrollTo({ top: 0 });
   };
   const vv = window.visualViewport;
   if (!vv) {
-    window.setTimeout(correct, 280);
-    return;
+    const timeoutId = window.setTimeout(correct, 280);
+    return () => window.clearTimeout(timeoutId);
   }
   let settled = false;
-  const finish = () => {
+  let timeoutId = 0;
+  const teardown = () => {
     if (settled) return;
     settled = true;
     vv.removeEventListener('resize', onResize);
+    window.clearTimeout(timeoutId);
+  };
+  const finish = () => {
+    if (settled) return;
+    teardown();
     correct();
   };
   const onResize = () => finish();
   vv.addEventListener('resize', onResize);
   // Fallback when no resize fires (desktop, or keyboard already gone).
-  window.setTimeout(finish, 320);
+  timeoutId = window.setTimeout(finish, 320);
+  // Cancelling stops the deferred `correct()` from firing — used on panel close
+  // so this never races the host's scroll-lock restore (which would otherwise
+  // yank the page to the top after the conversation has already closed).
+  return teardown;
 }
 
 function newMessageId(): string {
@@ -1075,6 +1085,9 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   const [scrollEdges, setScrollEdges] = useState({ top: false, bottom: false });
 
   const abortRef = useRef<AbortController | null>(null);
+  // Cancels any pending post-keyboard viewport recovery (a deferred scroll-to-top)
+  // so it cannot fire after the panel closes and fight the host scroll restore.
+  const viewportRecoveryCleanupRef = useRef<(() => void) | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const quickReplyScrollRef = useRef<HTMLDivElement | null>(null);
   const cueTrackRef = useRef<HTMLDivElement | null>(null);
@@ -1108,7 +1121,13 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
     setScrollEdges((prev) => (prev.top === top && prev.bottom === bottom ? prev : { top, bottom }));
   }, []);
 
-  useEffect(() => () => abortRef.current?.abort(), []);
+  useEffect(
+    () => () => {
+      abortRef.current?.abort();
+      viewportRecoveryCleanupRef.current?.();
+    },
+    [],
+  );
 
   // Mount the owned portal host inside the App-provided cue container while it is
   // present, and detach it defensively on cleanup / host change. Because the panel
@@ -2140,7 +2159,10 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
             // Skip viewport recovery when the blur was forced by the field
             // disabling itself as generation starts (busy) — that would yank the
             // page to the top mid-turn. Only recover on a genuine user dismiss.
-            if (!busy) recoverViewportAfterKeyboard();
+            if (!busy) {
+              viewportRecoveryCleanupRef.current?.();
+              viewportRecoveryCleanupRef.current = recoverViewportAfterKeyboard();
+            }
           }}
           // While the concierge is composing, lock the field and swap the
           // placeholder to a calm status line so it never looks like the user is
@@ -2777,7 +2799,17 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
               />
             ) : null;
           if (!hasRecap) {
-            if (!feedbackNode) return bubble;
+            // Whether this message can EVER show feedback — a fixed property of the
+            // message, unlike `feedbackNode` which is null while the newest turn is
+            // still settling (busy) and non-null once it clears. Keying the wrapper
+            // off the live `feedbackNode` would swap a bare `bubble` (key=message.id)
+            // for a `<div key="…-turn">` the instant busy flipped, remounting the
+            // bubble and replaying its entrance animation — the answer would fade
+            // out and jump right as the spinner stopped. Branch on the stable
+            // capability instead so the bubble's identity never changes.
+            const canShowFeedback =
+              message.role === 'agent' && !!message.answerLogId && !isIntroGreeting;
+            if (!canShowFeedback) return bubble;
             return (
               <div key={`${message.id}-turn`} className="flex w-full flex-col gap-1">
                 {bubble}
