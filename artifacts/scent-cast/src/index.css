@@ -1569,6 +1569,8 @@ a {
 
 .scent-ipad-safari-perf .scent-marquee-track-row,
 .scent-ipad-safari-perf .scent-atmosphere-marquee-track,
+.scent-low-render-perf .scent-marquee-track-row,
+.scent-low-render-perf .scent-atmosphere-marquee-track,
 .scent-ipad-safari-perf .scent-community-marquee-track,
 .scent-ipad-safari-perf .scent-note-marquee-track,
 .scent-ipad-safari-perf .animate-infinite-scroll,
@@ -1593,6 +1595,11 @@ a {
   cursor: grabbing;
   animation: none;
   will-change: transform;
+}
+
+.scent-marquee-track-row[data-marquee-paused="true"],
+.scent-atmosphere-marquee-track[data-marquee-paused="true"] {
+  animation-play-state: paused;
 }
 
 /* iPad Safari/WebKit compositor relief: strip every backdrop-filter strength,

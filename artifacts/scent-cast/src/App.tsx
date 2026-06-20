@@ -24,6 +24,7 @@ import { PageTransitionOverlay, warmTransitionEmblem } from './components/PageTr
 import { useBodyScrollLock, useModalBehavior } from '@/hooks/use-modal-behavior';
 import { useRenderBudget } from '@/hooks/useRenderBudget';
 import { useMarqueeSwipe } from '@/hooks/useMarqueeSwipe';
+import { isIpadSafariPerformanceMode, isLowRenderBudget } from '@/lib/platform';
 import NotFound from '@/pages/not-found';
 import { SEO } from './components/SEO';
 import { loadRouteChunk } from '@/lib/routeChunkRecovery';
@@ -154,12 +155,14 @@ interface AtmosphereBarProps {
   weatherLoading: boolean;
 }
 
-const ATMOSPHERE_TRACK_COPIES = 4;
+const ATMOSPHERE_TRACK_COPIES_DEFAULT = 4;
+const ATMOSPHERE_TRACK_COPIES_LOW = 2;
 const ATMOSPHERE_SCROLL_PIXELS_PER_SECOND = 14;
 const ATMOSPHERE_SCROLL_MIN_SECONDS = 72;
 const ATMOSPHERE_SCROLL_MAX_SECONDS = 160;
 const ATMOSPHERE_SCROLL_REDUCED_MOTION_SECONDS = 240;
-const HERO_TRACK_COPIES = 4;
+const HERO_TRACK_COPIES_DEFAULT = 4;
+const HERO_TRACK_COPIES_LOW = 2;
 const HERO_SCROLL_PIXELS_PER_SECOND = 14;
 const HERO_SCROLL_MIN_SECONDS = 60;
 const HERO_SCROLL_MAX_SECONDS = 180;
@@ -186,6 +189,52 @@ type HeroPhrase = HeroPhraseSegment[];
 
 /** Flat text of a phrase — used for React keys, aria text, and the swipe-loop reset key. */
 const heroPhraseText = (phrase: HeroPhrase): string => phrase.map((segment) => segment.text).join('');
+
+function useLowBudgetMarqueeMode(): boolean {
+  return useRef(isLowRenderBudget() || isIpadSafariPerformanceMode()).current;
+}
+
+function usePauseMarqueeWhenHidden(
+  sectionRef: React.RefObject<HTMLElement | null>,
+  trackRef: React.RefObject<HTMLElement | null>,
+  resetKey?: unknown,
+): void {
+  useEffect(() => {
+    const section = sectionRef.current;
+    const track = trackRef.current;
+    if (!section || !track) return;
+
+    let offscreen = false;
+    const syncPaused = () => {
+      if (offscreen || document.visibilityState === 'hidden') {
+        track.dataset.marqueePaused = 'true';
+      } else {
+        delete track.dataset.marqueePaused;
+      }
+    };
+
+    let observer: IntersectionObserver | null = null;
+    if ('IntersectionObserver' in window) {
+      observer = new IntersectionObserver(
+        (entries) => {
+          offscreen = entries.some((entry) => !entry.isIntersecting);
+          syncPaused();
+        },
+        { rootMargin: '160px 0px' },
+      );
+      observer.observe(section);
+    }
+
+    document.addEventListener('visibilitychange', syncPaused);
+    syncPaused();
+
+    return () => {
+      observer?.disconnect();
+      document.removeEventListener('visibilitychange', syncPaused);
+      delete track.dataset.marqueePaused;
+    };
+  }, [resetKey, sectionRef, trackRef]);
+}
 
 function getHeroTickerPhrases(items: Fragrance[]): HeroPhrase[] {
   if (!items.length) {
@@ -272,8 +321,11 @@ interface HeroMarqueeProps {
 }
 
 const HeroMarquee: React.FC<HeroMarqueeProps> = React.memo(({ phrases }) => {
+  const sectionRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
   const groupRef = useRef<HTMLSpanElement>(null);
+  const lowBudgetMarquee = useLowBudgetMarqueeMode();
+  const trackCopies = lowBudgetMarquee ? HERO_TRACK_COPIES_LOW : HERO_TRACK_COPIES_DEFAULT;
   const phraseKey = useMemo(() => phrases.map(heroPhraseText).join('|'), [phrases]);
 
   useMarqueeSwipe(trackRef, {
@@ -281,6 +333,7 @@ const HeroMarquee: React.FC<HeroMarqueeProps> = React.memo(({ phrases }) => {
     durationVar: '--hero-marquee-duration',
     resetKey: phraseKey,
   });
+  usePauseMarqueeWhenHidden(sectionRef, trackRef, phraseKey);
 
   // Center-crossing sheen.
   //
@@ -333,6 +386,7 @@ const HeroMarquee: React.FC<HeroMarqueeProps> = React.memo(({ phrases }) => {
     if (!track || !group) return;
     let cancelled = false;
     let animationFrame = 0;
+    let pendingReady = false;
 
     const updateDistance = (ready = true) => {
       if (cancelled) return;
@@ -354,13 +408,22 @@ const HeroMarquee: React.FC<HeroMarqueeProps> = React.memo(({ phrases }) => {
       }
     };
 
+    const scheduleDistanceUpdate = (ready = true) => {
+      pendingReady = pendingReady || ready;
+      if (animationFrame) return;
+      animationFrame = window.requestAnimationFrame(() => {
+        animationFrame = 0;
+        const readyForFrame = pendingReady;
+        pendingReady = false;
+        updateDistance(readyForFrame);
+      });
+    };
+
     if (track.dataset.marqueeReady !== 'true') {
       track.dataset.marqueeReady = 'false';
     }
 
-    const startWhenFontsSettle = () => {
-      animationFrame = window.requestAnimationFrame(() => updateDistance(true));
-    };
+    const startWhenFontsSettle = () => scheduleDistanceUpdate(true);
 
     if (document.fonts?.ready) {
       document.fonts.ready.then(startWhenFontsSettle);
@@ -368,10 +431,10 @@ const HeroMarquee: React.FC<HeroMarqueeProps> = React.memo(({ phrases }) => {
       startWhenFontsSettle();
     }
 
-    const handleResize = () => updateDistance(track.dataset.marqueeReady === 'true');
+    const handleResize = () => scheduleDistanceUpdate(track.dataset.marqueeReady === 'true');
     const resizeObserver = new ResizeObserver(handleResize);
     resizeObserver.observe(group);
-    window.addEventListener('resize', handleResize);
+    window.addEventListener('resize', handleResize, { passive: true });
 
     return () => {
       cancelled = true;
@@ -382,9 +445,9 @@ const HeroMarquee: React.FC<HeroMarqueeProps> = React.memo(({ phrases }) => {
   }, [phraseKey]);
 
   return (
-    <div className="scent-marquee-band scent-full-bleed w-full overflow-hidden py-[8px] sm:py-[12px] flex select-none relative">
+    <div ref={sectionRef} className="scent-marquee-band scent-full-bleed w-full overflow-hidden py-[8px] sm:py-[12px] flex select-none relative">
       <div ref={trackRef} className="scent-marquee-track-row whitespace-nowrap scent-marquee-text">
-        {[...Array(HERO_TRACK_COPIES)].map((_, copyIndex) => (
+        {[...Array(trackCopies)].map((_, copyIndex) => (
           <span
             key={copyIndex}
             ref={copyIndex === 0 ? groupRef : undefined}
@@ -426,8 +489,11 @@ const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({
   weather,
   weatherLoading,
 }) => {
+  const sectionRef = useRef<HTMLElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
   const groupRef = useRef<HTMLDivElement>(null);
+  const lowBudgetMarquee = useLowBudgetMarqueeMode();
+  const trackCopies = lowBudgetMarquee ? ATMOSPHERE_TRACK_COPIES_LOW : ATMOSPHERE_TRACK_COPIES_DEFAULT;
 
   useMarqueeSwipe(trackRef, {
     distanceVar: '--atmosphere-marquee-distance',
@@ -490,6 +556,7 @@ const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({
     conditionText || 'condition-missing',
     locationText || 'location-missing',
   ].join('|');
+  usePauseMarqueeWhenHidden(sectionRef, trackRef, atmosphereDisplayKey);
   const metrics = [
     { label: 'Conditions', value: condition },
     { label: 'Humidity', value: humidity },
@@ -504,6 +571,7 @@ const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({
     if (!track || !group) return;
     let cancelled = false;
     let animationFrame = 0;
+    let pendingReady = false;
 
     const updateDistance = (ready = true) => {
       if (cancelled) return;
@@ -525,13 +593,22 @@ const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({
       }
     };
 
+    const scheduleDistanceUpdate = (ready = true) => {
+      pendingReady = pendingReady || ready;
+      if (animationFrame) return;
+      animationFrame = window.requestAnimationFrame(() => {
+        animationFrame = 0;
+        const readyForFrame = pendingReady;
+        pendingReady = false;
+        updateDistance(readyForFrame);
+      });
+    };
+
     if (track.dataset.marqueeReady !== 'true') {
       track.dataset.marqueeReady = 'false';
     }
 
-    const startWhenFontsSettle = () => {
-      animationFrame = window.requestAnimationFrame(() => updateDistance(true));
-    };
+    const startWhenFontsSettle = () => scheduleDistanceUpdate(true);
 
     if (document.fonts?.ready) {
       document.fonts.ready.then(startWhenFontsSettle);
@@ -539,10 +616,10 @@ const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({
       startWhenFontsSettle();
     }
 
-    const handleResize = () => updateDistance(track.dataset.marqueeReady === 'true');
+    const handleResize = () => scheduleDistanceUpdate(track.dataset.marqueeReady === 'true');
     const resizeObserver = new ResizeObserver(handleResize);
     resizeObserver.observe(group);
-    window.addEventListener('resize', handleResize);
+    window.addEventListener('resize', handleResize, { passive: true });
 
     return () => {
       cancelled = true;
@@ -553,9 +630,9 @@ const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({
   }, [atmosphereDisplayKey]);
 
   return (
-    <section className="scent-atmosphere-marquee relative" aria-label="Current atmosphere" aria-busy={pendingWeather}>
+    <section ref={sectionRef} className="scent-atmosphere-marquee relative" aria-label="Current atmosphere" aria-busy={pendingWeather}>
       <div className="scent-atmosphere-marquee-track" ref={trackRef}>
-        {[...Array(ATMOSPHERE_TRACK_COPIES)].map((_, copyIndex) => (
+        {[...Array(trackCopies)].map((_, copyIndex) => (
           <div
             className="scent-atmosphere-marquee-group"
             key={copyIndex}
@@ -1543,18 +1620,27 @@ const AppShell = React.memo(function AppShell({
   threadBackgroundMode,
   ipadSafariPerformanceMode,
   touchPerformanceMode,
+  lowRenderPerformanceMode,
 }: {
   renderedLocation: Location;
   showThreadBackground: boolean;
   threadBackgroundMode: ThreadBackgroundMode;
   ipadSafariPerformanceMode: boolean;
   touchPerformanceMode: boolean;
+  lowRenderPerformanceMode: boolean;
 }) {
+  const shellClassName = [
+    'scent-app-shell min-h-[100svh] bg-scent-bg selection:bg-scent-accent selection:text-black text-white relative overflow-x-hidden',
+    ipadSafariPerformanceMode ? 'scent-ipad-safari-perf' : '',
+    touchPerformanceMode ? 'scent-touch-perf' : '',
+    lowRenderPerformanceMode ? 'scent-low-render-perf' : '',
+  ].filter(Boolean).join(' ');
+
   return (
     <AuthProvider>
       <WeatherProvider>
         <WardrobeProvider>
-          <div className={`scent-app-shell min-h-[100svh] bg-scent-bg selection:bg-scent-accent selection:text-black text-white relative overflow-x-hidden${ipadSafariPerformanceMode ? ' scent-ipad-safari-perf' : ''}${touchPerformanceMode ? ' scent-touch-perf' : ''}`}>
+          <div className={shellClassName}>
             {showThreadBackground ? <ThreadBackground mode={threadBackgroundMode} /> : null}
             <WebVitalsReporter />
             <AppContent location={renderedLocation} />
@@ -1723,6 +1809,7 @@ export default function App() {
         threadBackgroundMode={threadBackgroundMode}
         ipadSafariPerformanceMode={ipadSafariPerformanceMode}
         touchPerformanceMode={touchPerformanceMode}
+        lowRenderPerformanceMode={lowMotionRenderMode}
       />
       <PageTransitionOverlay visible={transitionVisible} animationKey={transitionKey} />
     </>
