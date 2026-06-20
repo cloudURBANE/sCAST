@@ -109,16 +109,14 @@ function ForecastHero({
   // day. Consecutive days frequently resolve to the same recommended bottle, and
   // keying on the date re-mounted BottleImage — re-fetching/decoding the identical
   // packshot and replaying the slide + skeleton crossfade for content that did not
-  // change. That redundant flash is the worst under fast day-tab tapping. With a
-  // content key, identical-pick navigations stay still (the day-tab highlight still
-  // moves, so the change reads); only a genuine bottle change animates.
+  // change. With a content key, identical-pick navigations stay still (the day-tab
+  // highlight still moves, so the change reads); only a genuine bottle change animates.
   const contentKey = pick?.id ?? 'empty';
 
   return (
-    // Default (sync) presence — both layers are already `absolute inset-0`, so the
-    // layout-projection cost of `mode="popLayout"` bought nothing here while making
-    // fast clicks stack measured, GPU-promoted bottle layers. A plain crossfade is
-    // lighter and keeps the in/out overlap that reads as a smooth slide.
+    // Default (sync) presence — both layers are already `absolute inset-0`, so a
+    // plain crossfade keeps the in/out overlap that reads as a smooth slide without
+    // the layout-projection cost of popLayout stacking GPU-promoted bottle layers.
     <AnimatePresence initial={false} custom={direction}>
       <motion.div
         key={contentKey}
@@ -127,10 +125,9 @@ function ForecastHero({
         animate={{ opacity: 1, x: 0 }}
         exit={{ opacity: 0, x: prefersReducedMotion ? 0 : direction * -22 }}
         transition={{ duration: prefersReducedMotion ? 0.01 : 0.34, ease: CALM_EASE }}
-        // Match CyclingTilePair: pre-promote to its own compositor layer and pin
-        // will-change so mobile WebKit stops re-promoting/demotion every slide
-        // (the main "non-steady" jitter). motion-safe so reduced-motion users and
-        // the static fallback keep a clean layer with no leftover hints.
+        // Pre-promote to its own compositor layer + pin will-change so mobile WebKit
+        // stops re-promoting/demoting every slide. motion-safe so reduced-motion users
+        // and the static fallback keep a clean layer with no leftover hints.
         className="absolute inset-0 motion-safe:[transform:translateZ(0)] motion-safe:[backface-visibility:hidden] motion-safe:[will-change:transform,opacity]"
       >
         {pick ? (
@@ -138,37 +135,43 @@ function ForecastHero({
             type="button"
             onClick={onSelect ? () => onSelect(pick) : undefined}
             disabled={!onSelect}
-            className="group grid h-full w-full grid-cols-[40%_60%] items-center text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:cursor-default sm:grid-cols-[38%_62%]"
+            className="group grid h-full w-full grid-cols-[44%_56%] items-center text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:cursor-default sm:grid-cols-[40%_60%]"
             aria-label={onSelect ? `Open ${pick.name} by ${pick.brand}` : `${pick.name} by ${pick.brand}`}
           >
-            {/* Height-driven square slot: every bottle — normalized square or
-                legacy crop — is contained in one identical footprint and seated
-                on the shared bottom baseline, so picks never render at random
-                sizes/positions as the forecast cycles. (A narrow width-driven
-                slot was what let square packshots shrink and float.) */}
-            <div className="flex h-full min-h-0 items-end justify-center">
-              <BottleImage
-                src={pick.imageUrl}
-                alt={`${pick.brand} ${pick.name}`}
-                variant="featured"
-                adjustment={pick.imageAdjustment}
-                imageProperties={pick.imageProperties}
-                className="forecast-hero-bottle aspect-square h-full w-auto max-w-full"
-                imgClassName="transition-transform duration-500 group-hover:scale-[1.025] motion-reduce:transform-none"
-                loading="eager"
-              />
-            </div>
-            <div className="min-w-0 self-center pb-1 pl-2 pr-1 sm:pl-5">
-              <p className="truncate font-serif text-[clamp(1.7rem,7.5vw,3rem)] italic leading-[1.04] text-[#fff7ec]">
+            {/* Bottle FILLS its column (height + width) — not a width-clamped square.
+                A narrow mobile column would cap an `aspect-square` packshot at the
+                column width and ignore the tall hero, rendering it tiny and floating.
+                Filling the slot lets `object-fit: contain` + `center bottom` size each
+                normalized 768² packshot to the full column width AND seat them all on
+                one shelf line: big and uniform. Tight artboard inset on phones draws
+                it as large as the column allows; desktop keeps its 7% breathing room. */}
+            <BottleImage
+              src={pick.imageUrl}
+              alt={`${pick.brand} ${pick.name}`}
+              variant="featured"
+              adjustment={pick.imageAdjustment}
+              imageProperties={pick.imageProperties}
+              className="h-full w-full [&_.bottle-artboard]:inset-[2.5%] sm:[&_.bottle-artboard]:inset-[7%]"
+              imgClassName="transition-transform duration-500 group-hover:scale-[1.025] motion-reduce:transform-none"
+              loading="eager"
+            />
+            {/* Brand / name / notes centered as a single column — mirrors the
+                reference forecast card where "Creed · Green Irish Tweed · notes"
+                stack centered beside the bottle, not flush-left. */}
+            <div className="flex min-w-0 flex-col items-center justify-center self-center px-1.5 text-center sm:px-4">
+              <p className="line-clamp-2 font-serif text-[clamp(2rem,9vw,3.4rem)] leading-[1.0] text-[#fff7ec]">
                 {pick.brand}
               </p>
-              <p className="mt-2 line-clamp-2 font-serif text-[clamp(1.2rem,5.3vw,2rem)] leading-[1.08] text-[#f3e8d8]">
+              <p className="mt-1.5 line-clamp-2 font-serif text-[clamp(1.05rem,4.7vw,1.85rem)] leading-[1.1] text-[#f3e8d8]">
                 {pick.name}
               </p>
               {notes.length > 0 ? (
-                <p className="mt-4 line-clamp-2 font-serif text-[clamp(0.92rem,3.7vw,1.3rem)] italic leading-snug text-[#d9c9b5]">
-                  {notes.join(' · ')}
-                </p>
+                <>
+                  <span aria-hidden className="my-2.5 h-px w-12 bg-scent-accent/45 sm:w-24" />
+                  <p className="line-clamp-2 font-serif text-[clamp(0.9rem,3.6vw,1.25rem)] italic leading-snug text-scent-accent/85">
+                    {notes.join(' · ')}
+                  </p>
+                </>
               ) : null}
             </div>
           </button>
@@ -239,7 +242,10 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
         </div>
       ) : (
         <>
-          <div className="relative mt-1.5 h-[8.75rem] sm:mt-3 sm:h-[15rem]">
+          {/* Generous hero height on phone (was 8.75rem) — fills the column space the
+              page used to waste as dead margin above the forecast, so the packshot
+              reads big and intentional instead of as a thumbnail. */}
+          <div className="relative mt-2 h-[14rem] sm:mt-3 sm:h-[15rem]">
             <ForecastChevron direction="prev" onClick={() => go(selected - 1)} />
             <div className="absolute inset-y-0 left-9 right-9 overflow-hidden sm:left-12 sm:right-12">
               <ForecastHero
@@ -251,10 +257,14 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
             <ForecastChevron direction="next" onClick={() => go(selected + 1)} />
           </div>
 
+          {/* Seven free-standing calendar cards (gap-separated, each its own
+              rounded border) — matches the reference forecast strip. No single
+              wrapping rail/border. Active day = gold border + warm fill + gold
+              glyph; depth comes from border/fill only (no projected gold glow). */}
           <div
             role="tablist"
             aria-label="Days this week"
-            className="mx-1 grid grid-cols-7 overflow-hidden rounded-[18px] border border-scent-accent/30 bg-black/25 sm:mx-0"
+            className="mt-4 grid grid-cols-7 gap-1.5 sm:mt-6 sm:gap-2.5"
           >
             {outlook.slice(0, 7).map((plan, index) => {
               const isActive = index === selected;
@@ -266,35 +276,20 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
                   type="button"
                   onClick={() => go(index)}
                   title={`${dayLabel(plan.day.date)} — ${plan.day.condition ?? 'Forecast'}`}
-                  className={`relative flex min-w-0 flex-col items-center py-2 text-[#f1e7da] transition-colors duration-300 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-scent-accent/60 sm:py-4 ${
-                    // Divider sits on a cell's left edge as an INSET vertical
-                    // hairline (top/bottom 12px) so it floats inside the rail
-                    // instead of butting against the rounded top/bottom border.
-                    // Drop it on the active cell AND the cell right after it so
-                    // the active pill never doubles up against a divider seam.
-                    index > 0 && index !== selected && index !== selected + 1
-                      ? 'before:pointer-events-none before:absolute before:left-0 before:top-[12px] before:bottom-[12px] before:w-px before:bg-scent-accent/20 before:content-[""]'
-                      : ''
+                  className={`flex min-w-0 flex-col items-center gap-1 rounded-[14px] border py-2.5 text-[#f1e7da] transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/60 sm:gap-1.5 sm:rounded-[18px] sm:py-4 ${
+                    isActive
+                      ? 'border-scent-accent/70 bg-[#140e07]'
+                      : 'border-scent-accent/18 bg-black/30'
                   }`}
                 >
-                  {isActive ? (
-                    // Independent rounded pill, inset on all four sides so it
-                    // floats clear of the rail's outer border — identical shape
-                    // on the first, middle, and last day (no merged double border)
-                    // and opaque so it sits above any internal divider line.
-                    <span
-                      aria-hidden
-                      className="pointer-events-none absolute inset-x-[6px] inset-y-[7px] rounded-[14px] border border-scent-accent/75 bg-[#080705]"
-                    />
-                  ) : null}
-                  <span className="relative z-[1] text-[8px] font-semibold uppercase tracking-[0.18em] sm:text-[10px]">
+                  <span className="text-[8px] font-semibold uppercase tracking-[0.16em] sm:text-[10px]">
                     {dayLabel(plan.day.date)}
                   </span>
-                  <span className="relative z-[1] mt-1 font-serif text-[1.35rem] leading-none sm:text-[1.8rem]">
+                  <span className="font-serif text-[1.3rem] leading-none sm:text-[1.8rem]">
                     {dayNumber(plan.day.date)}
                   </span>
-                  <span className={`relative z-[1] mt-2 ${isActive ? 'text-scent-accent' : 'text-[#eee4d7]'}`}>
-                    <WeatherGlyph day={plan.day} size={20} />
+                  <span className={isActive ? 'text-scent-accent' : 'text-[#eee4d7]'}>
+                    <WeatherGlyph day={plan.day} size={18} />
                   </span>
                 </button>
               );
