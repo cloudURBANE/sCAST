@@ -747,6 +747,15 @@ function DashboardView() {
     clearPendingDetailOpen,
   } = useWardrobe();
   const reduceMotion = useReducedMotion();
+  // framer-motion `layout` (FLIP) animations measure getBoundingClientRect and
+  // apply compensating transforms. On iOS/iPadOS WebKit, running them on the
+  // Beam Agent open/close — especially as the body scroll-lock is torn down —
+  // produces blank/gray frames and compositor stalls. `layout` was previously
+  // gated only on the OS reduce-motion flag (false by default), so it ran at
+  // full fidelity on every phone/tablet. Treat low-render-budget and iPad-Safari
+  // as "calm" too, so those devices get a plain crossfade instead of FLIP.
+  const calmLayout =
+    reduceMotion || isLowRenderBudget() || isIpadSafariPerformanceMode();
   const [isMounted, setIsMounted] = useState(false);
   useEffect(() => {
     setIsMounted(true);
@@ -1041,7 +1050,9 @@ function DashboardView() {
             min-height + padding relax to the original stacked rhythm. The Vault of
             Aromas is no longer part of this screen — it lives one scroll down as
             the "second page". */}
-        <div className="flex min-h-[calc(100svh-var(--topbar-h))] flex-col gap-4 pt-1.5 pb-[calc(var(--bottomnav-h)+1.25rem)] sm:min-h-0 sm:gap-16 sm:pt-14 sm:pb-0">
+        <div className="flex min-h-[calc(100svh-var(--topbar-h))] flex-col gap-4 pt-0 pb-[calc(var(--bottomnav-h)+1.25rem)] sm:min-h-0 sm:gap-16 sm:pt-0 sm:pb-0">
+          {/* The hero ticker sits flush against the fixed top bar (no padding
+              above it) so it visually replaces the bar's old bottom hairline. */}
           <HomepageHeroMarquee />
 
           <section className="relative mx-auto w-full max-w-[60rem] min-w-0 text-center">
@@ -1090,6 +1101,10 @@ function DashboardView() {
                     <button
                       type="button"
                       onClick={handleExitMission}
+                      // touch-manipulation drops the iOS tap delay and stops the
+                      // tap from being read as a scroll-start during the busy
+                      // close frame, so a single tap reliably triggers the exit.
+                      style={{ touchAction: 'manipulation' }}
                       className="absolute right-0 top-1/2 inline-flex min-h-11 -translate-y-1/2 items-center justify-center gap-1.5 rounded-full px-3 text-scent-text-subtle transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
                       aria-label="Close and return to fragrance search"
                     >
@@ -1117,7 +1132,7 @@ function DashboardView() {
                 search card. */}
             <motion.div
               ref={heroVaultRef}
-              layout={isMounted ? !reduceMotion : false}
+              layout={isMounted ? !calmLayout : false}
               transition={vaultContentTransition}
               className="scent-vault-panel w-full min-w-0 relative overflow-hidden"
               style={{ scrollMarginTop: 'calc(var(--topbar-h) + 1rem)' }}
@@ -1179,7 +1194,7 @@ function DashboardView() {
             {(agentActive || (discoveryReady && stateSettled && !vaultSearchUiActive)) ? (
               <motion.div
                 ref={signatureSectionRef}
-                layout={isMounted ? !reduceMotion : false}
+                layout={isMounted ? !calmLayout : false}
                 transition={vaultContentTransition}
                 className="scent-mission-action-slot mt-2 flex min-h-[46px] justify-center sm:mt-4 sm:min-h-[60px]"
               >

@@ -101,75 +101,6 @@ function detailHasUsableNotes(detail: FragranceDetail): boolean {
   );
 }
 
-/** Rotating vault headline — example house + scent pairs. */
-const VAULT_HEADLINE_ROTATION = [
-  'Chanel Coco Mademoiselle',
-  'Tom Ford Oud Wood',
-  'Maison Francis Kurkdjian Baccarat Rouge 540',
-  'Le Labo Santal 33',
-  'Dior Sauvage',
-  'Yves Saint Laurent Libre',
-  'Creed Aventus',
-] as const;
-
-/** ~one line in the headline slot at max-w-lg; longer phrases truncate */
-const HEADLINE_BASE_MAX_CHARS = 34;
-
-function vaultHeadlineBase(full: string): string {
-  const t = full.trim();
-  if (t.length <= HEADLINE_BASE_MAX_CHARS) return t;
-  return t.slice(0, HEADLINE_BASE_MAX_CHARS).trimEnd();
-}
-
-function VaultHeadlineRotation({ phrases }: { phrases: readonly string[] }) {
-  const reduceMotion = useReducedMotion();
-  const [idx, setIdx] = useState(() => Math.floor(Math.random() * phrases.length));
-
-  useEffect(() => {
-    const id = window.setInterval(() => {
-      setIdx((i) => (i + 1) % phrases.length);
-    }, 5200);
-    return () => window.clearInterval(id);
-  }, [phrases.length]);
-
-  const display = vaultHeadlineBase(phrases[idx]);
-
-  if (reduceMotion) {
-    return (
-      <h2
-        className="flex h-[3rem] items-center justify-center font-serif italic text-[clamp(1.25rem,4vw,1.75rem)] leading-none tracking-[0.0187em] text-[#fff7ec] drop-shadow-[0_0_22px_rgba(212,175,55,0.14)]"
-        aria-hidden
-      >
-        <span className="max-w-full truncate bg-gradient-to-br from-[#fffbf5] via-[#fff7ec] to-[#e6d2b8]/88 bg-clip-text text-center text-transparent px-1">
-          {display}
-        </span>
-      </h2>
-    );
-  }
-
-  return (
-    <h2
-      className="flex h-[3rem] items-center justify-center font-serif italic text-[clamp(1.25rem,4vw,1.75rem)] leading-none tracking-[0.0187em] text-[#fff7ec] drop-shadow-[0_0_22px_rgba(212,175,55,0.14)]"
-      aria-hidden
-    >
-      <span className="relative flex min-h-[1.15em] w-full min-w-0 max-w-full items-center justify-center px-1">
-        <AnimatePresence mode="wait">
-          <motion.span
-            key={idx}
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-            transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
-            className="max-w-full truncate bg-gradient-to-br from-[#fffbf5] via-[#fff7ec] to-[#e6d2b8]/88 bg-clip-text text-center text-transparent"
-          >
-            {display}
-          </motion.span>
-        </AnimatePresence>
-      </span>
-    </h2>
-  );
-}
-
 interface FragranceMatch extends FragranceSearchResult {
   name: string;
   brand: string;
@@ -1281,14 +1212,6 @@ export const FragranceCapture: React.FC<{
               </motion.span>
             </motion.button>
           </form>
-          <div className="mx-auto mt-2.5 max-w-lg space-y-0.5 px-2 sm:mt-4 sm:space-y-1" aria-label="Recently added fragrance">
-            <p className="scent-type-meta text-[9px] uppercase tracking-[0.14em] text-scent-accent/62 sm:text-[10px]">
-              Recently added
-            </p>
-            <div className="opacity-75">
-              <VaultHeadlineRotation phrases={VAULT_HEADLINE_ROTATION} />
-            </div>
-          </div>
         </div>
 
         {/* Screen-reader announcement for dynamic search results */}

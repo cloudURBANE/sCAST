@@ -630,7 +630,9 @@ a {
      scroll/animation frame — the dominant scroll-jank source over the animated
      nexus background. */
   background: rgba(5, 3, 2, 0.97);
-  border-bottom: 1px solid rgba(255, 215, 160, 0.1);
+  /* No bottom hairline: on the home screen the scrolling marketing marquee sits
+     flush against the bar and acts as the divider; the soft drop-shadow below
+     still separates the bar from content on every route. */
   box-shadow: 0 1px 0 rgba(255, 224, 174, 0.03), 0 12px 34px rgba(0, 0, 0, 0.42);
   transition: background var(--scent-transition-base) var(--scent-ease-out), box-shadow var(--scent-transition-base) var(--scent-ease-out);
   /* Push nav content below the iOS status bar on notched devices */
@@ -1543,7 +1545,7 @@ a {
   align-items: center;
   width: max-content;
   gap: 0;
-  font-size: clamp(11.3px, 0.72vw, 11.4px);
+  font-size: clamp(12.5px, 0.82vw, 13.25px);
   letter-spacing: 0.5em;
   text-transform: uppercase;
   font-family: "Iowan Old Style", "Times New Roman", serif;

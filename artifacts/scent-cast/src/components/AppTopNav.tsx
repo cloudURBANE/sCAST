@@ -339,14 +339,15 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
           never appears to bleed through or fight the nav, and the home-indicator
           safe-area never shows raw content. Phone-only and tied to the bar's own
           show/hide, so it never darkens the base when the bar is gone. Global:
-          every route renders AppTopNav, so this lands on all pages at once. */}
+          every route renders AppTopNav, so this lands on all pages at once. A
+          single soft gradient is used on every route — Community previously got
+          an opaque `bg-scent-bg` fill, which read as a solid black bottom strip
+          behind the pill instead of a fade, so it now matches the other pages. */}
       <div
         aria-hidden="true"
         className={[
           'pointer-events-none fixed inset-x-0 bottom-0 z-40 h-[calc(var(--bottomnav-h)+1.75rem)] md:hidden transition-opacity duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]',
-          renderedRoute === 'community'
-            ? 'bg-scent-bg'
-            : 'bg-gradient-to-t from-scent-bg via-scent-bg/94 to-transparent',
+          'bg-gradient-to-t from-scent-bg via-scent-bg/94 to-transparent',
           bottomNavShown ? 'opacity-100' : 'opacity-0',
         ].join(' ')}
       />
