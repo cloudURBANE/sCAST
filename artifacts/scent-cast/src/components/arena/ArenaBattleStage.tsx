@@ -29,7 +29,11 @@ interface ArenaBattleStageProps {
   hasMoreBattles?: boolean;
   onSignIn: () => void;
   onNext: () => void;
-  onGuestVoteQueued: (vote: { postId: string; choice: string }) => void;
+  onGuestVoteQueued: (vote: {
+    postId: string;
+    choice: string;
+    reason?: ArenaReasonKey | null;
+  }) => void;
   externalVotePending?: boolean;
   externalErrorMessage?: string | null;
 }
@@ -153,7 +157,9 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
     setErrorMessage(null);
 
     if (!authToken) {
-      onGuestVoteQueued({ postId: battle.id, choice });
+      // Carry the chosen reason (if any) so it isn't dropped on the floor — the
+      // post-login replay in ArenaPage submits it alongside the pick.
+      onGuestVoteQueued({ postId: battle.id, choice, reason });
       return;
     }
 

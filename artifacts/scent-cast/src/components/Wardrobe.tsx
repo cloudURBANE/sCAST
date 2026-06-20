@@ -67,6 +67,11 @@ import {
   type WardrobeSearchSuggestion,
 } from '@/lib/wardrobeSearchSuggest';
 import {
+  addFragranceShelfIndex,
+  chunkWardrobeShelves,
+  WARDROBE_ITEMS_PER_SHELF,
+} from '@/lib/wardrobeShelves';
+import {
   collectMainAccordDisplayRows,
   extractDetailReviews,
   getWardrobeReviews,
@@ -1664,14 +1669,17 @@ export const Wardrobe: React.FC<{
   }, []);
 
   // Performance Optimization: Memoize shelf chunking
-  const shelves = React.useMemo(() => {
-    const itemsPerShelf = 4;
-    const chunked = [];
-    for (let i = 0; i < filteredItems.length; i += itemsPerShelf) {
-      chunked.push(filteredItems.slice(i, i + itemsPerShelf));
-    }
-    return chunked;
-  }, [filteredItems]);
+  const shelves = React.useMemo(
+    () => chunkWardrobeShelves(filteredItems, WARDROBE_ITEMS_PER_SHELF),
+    [filteredItems],
+  );
+  // Shelf that hosts the "Add Fragrance" card. Always the final shelf for a
+  // non-empty wardrobe — including when the last shelf is full (item count a
+  // multiple of 4), where the card wraps onto a fresh row rather than vanishing.
+  const addCardShelfIndex = addFragranceShelfIndex(
+    filteredItems.length,
+    WARDROBE_ITEMS_PER_SHELF,
+  );
   const prioritizedGridImageCount = 4;
 
   const detailNeedsClarify =
@@ -2203,7 +2211,7 @@ export const Wardrobe: React.FC<{
                       </motion.div>
                     );
                   })}
-                  {shelfIndex === shelves.length - 1 && shelfItems.length < 4 && (
+                  {shelfIndex === addCardShelfIndex && (
                     <button
                       type="button"
                       onClick={() => onExpandArchive?.({ target: 'vault' })}

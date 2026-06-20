@@ -22,6 +22,13 @@ export const userFragrancesTable = pgTable(
   (table) => [
     index("user_fragrances_user_id_idx").on(table.userId),
     index("user_fragrances_tenant_user_idx").on(table.tenantId, table.userId),
+    // Tenant-scoped, newest-first feed query (community.ts filters by tenant_id
+    // and orders by created_at desc). The (tenant_id, user_id) index above can't
+    // serve that ordering, so the feed otherwise falls back to a heap sort.
+    index("user_fragrances_tenant_created_at_idx").on(
+      table.tenantId,
+      table.createdAt.desc(),
+    ),
     index("user_fragrances_user_client_id_idx").on(
       table.userId,
       sql`(${table.fragranceData}->>'id')`,

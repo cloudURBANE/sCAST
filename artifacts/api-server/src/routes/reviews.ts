@@ -3,8 +3,25 @@ import {
   summarizeFragranceReviews,
   type RawReview,
 } from "../services/reviewSummaryService";
+import { rateLimitMiddleware } from "../lib/rateLimit";
 
 const router = Router();
+
+// Per-IP rate limit on the (intentionally unauthenticated) review-summary
+// endpoint. A cache MISS bills an LLM call (see reviewSummaryService), so cap
+// abuse without forcing login: fragrance detail pages — where these summaries
+// render — are a public/guest surface, so login-gating would regress public
+// behavior. Cache HITS still short-circuit inside the service, so ordinary
+// browsing rarely approaches the limit. Tunable via REVIEWS_SUMMARIZE_RATE_LIMIT
+// (default 30 / 5 min / IP), mirroring the scent-mission throttle.
+const summarizeRateLimit = rateLimitMiddleware({
+  name: "reviews-summarize",
+  limit: (() => {
+    const raw = Number(process.env.REVIEWS_SUMMARIZE_RATE_LIMIT?.trim());
+    return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 30;
+  })(),
+  windowMs: 5 * 60_000,
+});
 
 /**
  * Distill scraped fragrance reviews into short, original display comments.
@@ -16,7 +33,7 @@ const router = Router();
  * Degrades gracefully: with no reviews, no LLM key, or an LLM failure it
  * responds 200 with an empty `comments` array rather than surfacing an error.
  */
-router.post("/reviews/summarize", async (req, res) => {
+router.post("/reviews/summarize", summarizeRateLimit, async (req, res) => {
   const body = (req.body ?? {}) as {
     name?: unknown;
     brand?: unknown;

@@ -498,7 +498,7 @@ test("saveCatalogEntry rejection is reported and remains non-fatal", async () =>
   });
 });
 
-test("image pipeline: search-query call returns null AND fallback.imageUrl present → second attempt with manual sourceUrl", async () => {
+test("image pipeline: free crawled sourceUrl is tried first; on failure falls back to the paid search-query (Serper) path", async () => {
   let callIdx = 0;
   const { deps, calls } = makeDeps({
     findDatasetFragrance: () => ({
@@ -510,8 +510,9 @@ test("image pipeline: search-query call returns null AND fallback.imageUrl prese
     }),
     resolveProcessedFragranceImage: async (_opts) => {
       callIdx++;
-      // First call (search-query path) fails; second (manual sourceUrl) succeeds.
-      // Recording is handled by makeDeps; the override only provides the return value.
+      // First call (free crawled sourceUrl) fails; second (paid search-query)
+      // succeeds. Recording is handled by makeDeps; the override only provides
+      // the return value.
       if (callIdx === 1) return null;
       return { imageUrl: "https://cdn.example.com/fallback.webp", storagePath: "images/processed/x.webp", imageHash: "abc", storageProvider: "supabase" };
     },
@@ -523,13 +524,13 @@ test("image pipeline: search-query call returns null AND fallback.imageUrl prese
   ok(result);
 
   assert.equal(calls.resolveProcessedFragranceImage.length, 2);
-  // First call: search-query mode
-  assert.equal(calls.resolveProcessedFragranceImage[0].searchQuery, "Dior Sauvage single fragrance bottle no box HQ product photo studio no plants");
-  assert.equal(calls.resolveProcessedFragranceImage[0].sourceUrl, undefined);
-  // Second call: manual sourceUrl from fallback
-  assert.equal(calls.resolveProcessedFragranceImage[1].sourceUrl, "https://upstream.example.com/raw.jpg");
-  assert.equal(calls.resolveProcessedFragranceImage[1].sourceProvider, "manual");
-  assert.equal(calls.resolveProcessedFragranceImage[1].allowLookupCache, false);
+  // First call: free crawled sourceUrl from the fallback (no paid Serper search).
+  assert.equal(calls.resolveProcessedFragranceImage[0].sourceUrl, "https://upstream.example.com/raw.jpg");
+  assert.equal(calls.resolveProcessedFragranceImage[0].sourceProvider, "manual");
+  assert.equal(calls.resolveProcessedFragranceImage[0].allowLookupCache, false);
+  // Second call: paid search-query (Serper) fallback.
+  assert.equal(calls.resolveProcessedFragranceImage[1].searchQuery, "Dior Sauvage single fragrance bottle no box HQ product photo studio no plants");
+  assert.equal(calls.resolveProcessedFragranceImage[1].sourceUrl, undefined);
 
   assert.equal(result.imageUrl, "https://cdn.example.com/fallback.webp");
 });
@@ -779,4 +780,66 @@ test("identity normalization: uses resolveFragranceIdentity output for catalog l
     calls.resolveProcessedFragranceImage[0].searchQuery,
     "Dior Sauvage single fragrance bottle no box HQ product photo studio no plants",
   );
+});
+
+// --- 5A: free crawled URL is preferred over a paid Serper search -------------
+
+test("5A: a usable crawled image URL is processed before any paid Serper search", async () => {
+  const { deps, calls } = makeDeps({
+    // No cached image, so resolution must choose between crawled URL and Serper.
+    resolveCachedFragranceImage: async () => null,
+    resolveProcessedFragranceImage: async (opts) => {
+      const o = opts as { sourceUrl?: string; searchQuery?: string };
+      // The crawled (sourceUrl) path succeeds; the Serper (searchQuery) path
+      // would also succeed but must never be reached.
+      if (o.sourceUrl) return { imageUrl: "https://cdn.example.com/from-crawl.webp" };
+      return { imageUrl: "https://cdn.example.com/from-serper.webp" };
+    },
+  });
+
+  const result = await buildProfileWithDeps(deps, "Sauvage", "Dior", {
+    notes: ["bergamot", "pepper"],
+    family: "Fresh Spicy",
+    description: "fresh spicy",
+    imageUrl: "https://crawled.example/bottle.jpg",
+  });
+  ok(result);
+
+  // Exactly one resolve call, and it was the free crawled URL — never Serper.
+  assert.equal(calls.resolveProcessedFragranceImage.length, 1);
+  assert.equal(calls.resolveProcessedFragranceImage[0].sourceUrl, "https://crawled.example/bottle.jpg");
+  assert.equal(
+    calls.resolveProcessedFragranceImage.some((o) => typeof o.searchQuery === "string"),
+    false,
+    "paid Serper search must not run when the crawled URL resolves",
+  );
+  assert.equal(result.imageUrl, "https://cdn.example.com/from-crawl.webp");
+});
+
+test("5A: falls back to the paid Serper search when the crawled URL fails to resolve", async () => {
+  const { deps, calls } = makeDeps({
+    resolveCachedFragranceImage: async () => null,
+    resolveProcessedFragranceImage: async (opts) => {
+      const o = opts as { sourceUrl?: string; searchQuery?: string };
+      if (o.sourceUrl) return null; // crawled URL did not yield a usable image
+      return { imageUrl: "https://cdn.example.com/from-serper.webp" };
+    },
+  });
+
+  const result = await buildProfileWithDeps(deps, "Sauvage", "Dior", {
+    notes: ["bergamot", "pepper"],
+    family: "Fresh Spicy",
+    description: "fresh spicy",
+    imageUrl: "https://crawled.example/bottle.jpg",
+  });
+  ok(result);
+
+  // Crawled URL tried first, then the Serper search as the documented fallback.
+  assert.equal(calls.resolveProcessedFragranceImage.length, 2);
+  assert.equal(calls.resolveProcessedFragranceImage[0].sourceUrl, "https://crawled.example/bottle.jpg");
+  assert.equal(
+    calls.resolveProcessedFragranceImage[1].searchQuery,
+    "Dior Sauvage single fragrance bottle no box HQ product photo studio no plants",
+  );
+  assert.equal(result.imageUrl, "https://cdn.example.com/from-serper.webp");
 });

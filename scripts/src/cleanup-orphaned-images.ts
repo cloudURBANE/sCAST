@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, "../../.env") });
 
-import { db } from "@workspace/db";
+import { db, pool } from "@workspace/db";
 import {
   userFragrancesTable,
   imageCacheTable,
@@ -151,7 +151,25 @@ async function main() {
   console.log("[GC] Garbage collection complete successfully.");
 }
 
-main().catch(err => {
-  console.error("[GC] Garbage collection failed:", err);
-  process.exit(1);
-});
+async function run() {
+  try {
+    await main();
+  } catch (err) {
+    console.error("[GC] Garbage collection failed:", err);
+    process.exitCode = 1;
+  } finally {
+    // Always release the pg pool so the script can exit cleanly instead of
+    // hanging on open connections. Set a non-zero exit code if cleanup itself
+    // fails, but never throw out of the finally (which would mask the original
+    // error). We rely on `process.exitCode` + a drained event loop rather than
+    // a forced `process.exit()`, so pending log/IO flushes are not cut off.
+    try {
+      await pool.end();
+    } catch (err) {
+      console.error("[GC] Failed to close the database pool:", err);
+      process.exitCode = 1;
+    }
+  }
+}
+
+void run();
