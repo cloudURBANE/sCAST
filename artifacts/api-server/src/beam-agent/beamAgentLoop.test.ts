@@ -228,7 +228,9 @@ test("zero-tool opening turn is nudged, then the tool path runs and synthesis wr
   // Final answer comes from the synthesis turn, not the clipped "draft".
   assert.equal(completed, "Wear Aventus today.");
   const completedEvent = events.find((e) => e.type === "completed");
-  assert.deepEqual(completedEvent, { type: "completed", response: "Wear Aventus today." });
+  // The completed event now also carries the durable answer id (= the run id) so
+  // the client can tag the answer for feedback.
+  assert.deepEqual(completedEvent, { type: "completed", response: "Wear Aventus today.", answerLogId: "run_1" });
 
   // The tool actually ran once.
   assert.equal(toolCalls.length, 1);

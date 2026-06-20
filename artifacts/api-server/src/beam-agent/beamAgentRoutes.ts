@@ -40,6 +40,12 @@ import { missionItemFromWardrobeRow } from "../services/scentMissionService";
 import { searchCatalogCandidates, searchCatalogProfileCandidates, flattenProfile, getCatalogEntry } from "../services/catalogService";
 import { getScentFacts } from "../lib/scent-facts/engine";
 import { getBeamUserUsageSince, recordBeamRunUsage } from "../services/apiUsageLedger";
+import {
+  BeamFeedbackUnavailableError,
+  beamAnswerLogExistsForUser,
+  recordBeamAnswerFeedback,
+  recordBeamAnswerLog,
+} from "../services/beamAnswerLog";
 import { enqueueBeamCuration } from "../services/curationService";
 import { createBeamTools, type BeamCatalogHit, type BeamToolDeps } from "./beamTools.ts";
 import { runBeamAgent } from "./beamAgentLoop.ts";
@@ -52,6 +58,8 @@ import {
   recordObservatoryRun,
 } from "./beamObservatory.ts";
 import { selectConciergeLane } from "./laneSelector.ts";
+import { excludeAvoidedHits } from "./avoidFilter.ts";
+import { validateBeamFeedbackInput } from "./beamFeedbackCore.ts";
 import { appendSessionTurn, loadSession, saveSessionState } from "./beamSessionStore.ts";
 import { deriveBeamSessionState, inferPendingSlotFromAssistant } from "./missionState.ts";
 import type { BeamEmit, BeamRunContext, BeamRunEvent, BeamSessionState, CandidatePacket } from "./types.ts";
@@ -259,11 +267,22 @@ const beamResearchWeb = createBeamResearcher({
 });
 
 function buildDeps(ctx: BeamRunContext, weather: ScentMissionWeather, sessionState?: BeamSessionState): BeamToolDeps {
+  // Captured dislikes shape retrieval, not just wording (audit A3): wrap catalog
+  // search so candidates built around an avoided note/family are dropped before
+  // the model ever sees them. Over-fetch a little then trim, so the requested
+  // limit is still met after exclusion when possible.
+  const avoid = sessionState?.slots.avoid;
+  const searchCatalog: typeof searchCatalogForBeam = avoid
+    ? async (query, limit) => {
+        const hits = await searchCatalogForBeam(query, Math.min(limit * 2, limit + 12));
+        return excludeAvoidedHits(hits, avoid).slice(0, limit);
+      }
+    : searchCatalogForBeam;
   return {
     loadVault,
     loadVaultForOwnership,
     loadWardrobePackets,
-    searchCatalog: searchCatalogForBeam,
+    searchCatalog,
     resolveCatalogEntry: resolveCatalogEntryForBeam,
     research: researchForBeam,
     researchWeb: beamResearchWeb,
@@ -471,6 +490,35 @@ router.post("/runs", runRateLimit, requireAuth, async (req: AuthRequest, res) =>
         status: summary.outcome === "completed" ? "success" : "failure",
         failureReason: summary.failureCode ?? null,
       });
+      // Persist the durable per-turn answer log keyed by the run id (= the
+      // answerLogId the client received in the completed event). This is the
+      // record a user feedback report attaches to, and the reproducible input →
+      // candidates → answer a downvote becomes a regression fixture from. Best-
+      // effort + non-blocking: a logging failure must never affect the run.
+      void recordBeamAnswerLog({
+        id: summary.runId,
+        tenantId: ctx.tenantId,
+        userId: ctx.userId,
+        sessionId: ctx.sessionId,
+        userMessage: message,
+        derivedState: sessionState,
+        lane,
+        orchestrationModel: summary.orchestrationModel ?? models?.model ?? null,
+        synthesisModel: summary.synthesisModel ?? models?.synthesisModel ?? null,
+        groundedCandidates: summary.groundedFragranceList.map((f) => ({
+          canonicalName: f.canonicalName,
+          ...(f.brand ? { brand: f.brand } : {}),
+          owned: f.owned,
+        })),
+        finalAnswer: summary.finalAnswer,
+        gatePassed: summary.qualityGatePassed,
+        gateViolations: summary.qualityViolations,
+        shippedWithSoftViolations: summary.shippedWithSoftViolations,
+        outcome: summary.outcome,
+        failureCode: summary.failureCode ?? null,
+        inputTokens: summary.inputTokens,
+        outputTokens: summary.outputTokens,
+      });
     },
     shouldStop: () => record.stopped,
   }).catch((err) => {
@@ -572,6 +620,69 @@ router.post("/runs/:runId/stop", requireAuth, (req: AuthRequest, res) => {
   }
   record.stopped = true;
   res.json({ ok: true });
+});
+
+/* ------------------------------------------------------------------ */
+/* Answer feedback (the report-this-answer loop)                      */
+/* ------------------------------------------------------------------ */
+
+// Light throttle: feedback is a single small insert, but a user (or a runaway
+// client) shouldn't be able to hammer it.
+const feedbackRateLimit = rateLimitMiddleware({ name: "beam-feedback", limit: 40, windowMs: 5 * 60_000 });
+
+/**
+ * POST /feedback — record a user's verdict on a delivered Beam answer.
+ *
+ * Body: { answerLogId, rating?: "down"|"up", reasonCode?, detail? }.
+ * Validates the id belongs to THIS user's real answer log before inserting, so a
+ * verdict can never attach to nothing or to another user's turn. Returns a small
+ * success payload. Degrades gracefully if the feedback table isn't provisioned.
+ */
+router.post("/feedback", feedbackRateLimit, requireAuth, async (req: AuthRequest, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Authentication required." });
+    return;
+  }
+  const validated = validateBeamFeedbackInput(req.body);
+  if (!validated.ok) {
+    res.status(validated.status).json({ error: validated.error, code: validated.code });
+    return;
+  }
+  const { answerLogId, rating, reasonCode, detail } = validated.value;
+
+  // The verdict must attach to a real answer this user owns. If the log isn't
+  // found (unknown id, another user's turn, or the rare case where the best-
+  // effort log write hasn't landed/failed), reject clearly rather than orphaning.
+  const exists = await beamAnswerLogExistsForUser(answerLogId, req.user.id);
+  if (!exists) {
+    res.status(404).json({ error: "No answer found to attach this feedback to.", code: "answer_log_not_found" });
+    return;
+  }
+
+  try {
+    await recordBeamAnswerFeedback({
+      answerLogId,
+      tenantId: getTenantId(req),
+      userId: req.user.id,
+      rating,
+      reasonCode,
+      detail,
+    });
+  } catch (err) {
+    if (err instanceof BeamFeedbackUnavailableError) {
+      res.status(503).json({ error: "Feedback is temporarily unavailable.", code: "feedback_unavailable" });
+      return;
+    }
+    logger.warn({ err, user: hashUser(req.user.id) }, "beam feedback insert failed");
+    res.status(500).json({ error: "Could not record feedback." });
+    return;
+  }
+
+  logger.info(
+    { beam: { feedback: true, user: hashUser(req.user.id), rating, reasonCode } },
+    "beam answer feedback recorded",
+  );
+  res.status(201).json({ ok: true });
 });
 
 /**

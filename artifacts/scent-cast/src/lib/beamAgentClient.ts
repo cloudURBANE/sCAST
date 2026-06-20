@@ -111,7 +111,10 @@ export type BeamCard =
 
 /** Free-text cues the backend extracted deterministically from the transcript. */
 export type BeamAgentSlots = Partial<
-  Record<'month' | 'destination' | 'occasion' | 'vibe' | 'direction' | 'projection' | 'impression' | 'budget', string>
+  Record<
+    'month' | 'destination' | 'occasion' | 'vibe' | 'direction' | 'projection' | 'impression' | 'budget' | 'avoid',
+    string
+  >
 >;
 
 /** Structured mission target derived from the conversation (e.g. a travel kit). */
@@ -140,12 +143,14 @@ export type BeamAgentEvent =
   | { type: 'proposal'; proposalId: string; items: BeamProposalItem[] }
   | { type: 'card'; card: BeamCard }
   | { type: 'slots'; slots: BeamAgentSlots; mission?: BeamAgentMission }
-  | { type: 'completed'; response: string }
+  // `answerLogId` is the durable per-turn id; the panel tags the rendered answer
+  // with it so "report this answer" feedback attaches to a real server record.
+  | { type: 'completed'; response: string; answerLogId?: string }
   | { type: 'failed'; code: string; message: string };
 
 /** Terminal outcome of a run — `completed` with text, or `failed` with a code. */
 export type BeamAgentRunResult =
-  | { status: 'completed'; response: string; sessionId: string }
+  | { status: 'completed'; response: string; sessionId: string; answerLogId?: string }
   | { status: 'failed'; code: string; message: string; sessionId: string };
 
 export type RunBeamAgentOptions = {
@@ -288,7 +293,12 @@ export async function runBeamAgentMission(options: RunBeamAgentOptions): Promise
           if (!event) continue;
           options.onEvent?.(event);
           if (event.type === 'completed') {
-            return { status: 'completed', response: event.response, sessionId: start.sessionId };
+            return {
+              status: 'completed',
+              response: event.response,
+              sessionId: start.sessionId,
+              ...(event.answerLogId ? { answerLogId: event.answerLogId } : {}),
+            };
           }
           if (event.type === 'failed') {
             return { status: 'failed', code: event.code, message: event.message, sessionId: start.sessionId };
@@ -310,4 +320,61 @@ export async function runBeamAgentMission(options: RunBeamAgentOptions): Promise
   // the caller can fall back from.
   await stopRun();
   throw new BeamAgentError('Beam Agent stream ended without a result.');
+}
+
+/**
+ * Fixed reason-code vocabulary for an answer downvote. Kept in lockstep with the
+ * server's `FEEDBACK_REASON_CODES` (beamAgentRoutes.ts) so every verdict maps to
+ * a triageable bucket that can seed a regression fixture. `label` is the chip
+ * shown to the user; `code` is what the API stores.
+ */
+export type BeamFeedbackReason = { code: string; label: string };
+
+export const BEAM_FEEDBACK_REASONS: BeamFeedbackReason[] = [
+  { code: 'wrong_vibe', label: 'Wrong vibe' },
+  { code: 'ignored_budget', label: 'Ignored budget' },
+  { code: 'ignored_dislike', label: 'Ignored a dislike' },
+  { code: 'too_generic', label: 'Too generic' },
+  { code: 'already_owned', label: 'Already own it' },
+  { code: 'not_bold_enough', label: 'Not bold enough' },
+  { code: 'bad_for_context', label: 'Wrong for the occasion' },
+  { code: 'unsafe_concern', label: 'Safety concern' },
+  { code: 'other', label: 'Something else' },
+];
+
+export type SubmitBeamFeedbackOptions = {
+  /** The durable answer id from the completed event. */
+  answerLogId: string;
+  /** Verdict — only `down` has a UI today; `up` is reserved server-side. */
+  rating?: 'down' | 'up';
+  /** One reason code from BEAM_FEEDBACK_REASONS. */
+  reasonCode?: string;
+  /** Optional free-text detail. */
+  detail?: string;
+  authToken: string;
+  apiBaseUrl?: string;
+  signal?: AbortSignal;
+};
+
+/**
+ * Record a user's verdict on a delivered Beam answer. Resolves on success and
+ * throws `BeamAgentError` (carrying the HTTP status) otherwise, so the caller can
+ * surface a graceful failure without crashing the panel.
+ */
+export async function submitBeamFeedback(options: SubmitBeamFeedbackOptions): Promise<void> {
+  const base = (options.apiBaseUrl ?? '').replace(/\/+$/, '');
+  const res = await fetch(`${base}/api/beam-agent/feedback`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${options.authToken}` },
+    signal: options.signal,
+    body: JSON.stringify({
+      answerLogId: options.answerLogId,
+      rating: options.rating ?? 'down',
+      reasonCode: options.reasonCode,
+      detail: options.detail,
+    }),
+  });
+  if (!res.ok) {
+    throw new BeamAgentError(`Feedback could not be recorded (${res.status}).`, res.status);
+  }
 }
