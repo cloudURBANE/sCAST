@@ -864,11 +864,32 @@ function DashboardView() {
     return keys;
   }, [items]);
 
-  const handleViewVault = useCallback(() => {
-    document
-      .getElementById('scent-vault-section')
-      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, []);
+  // "View in vault" on an already-saved search result. Rather than dumping the
+  // user at the top of the vault to hunt for the fragrance themselves, resolve
+  // the exact saved item by its brand+name identity and open its detail — the
+  // same path used by Beam proposals and curation deep-links, which also handles
+  // scrolling the (lazy) vault section into view. Falls back to a plain scroll
+  // when the match can't be resolved (e.g. identity drift between catalogs).
+  const handleViewVault = useCallback(
+    (match?: { brand?: string | null; house?: string | null; name?: string | null }) => {
+      const targetKey = match ? vaultIdentityKey(match.brand ?? match.house, match.name) : '';
+      const targetItem = targetKey
+        ? items.find(
+            (it) =>
+              vaultIdentityKey(it.brand ?? it.product?.brand, it.name ?? it.product?.name) ===
+              targetKey,
+          )
+        : undefined;
+      if (targetItem) {
+        openFragranceDetail(targetItem);
+        return;
+      }
+      document
+        .getElementById('scent-vault-section')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    },
+    [items, openFragranceDetail],
+  );
 
   // Resume-on-return: when a signed-in user opens the app — especially via the
   // completion push deep-link `/?curation=<jobKey>` (see the SW's notificationclick
