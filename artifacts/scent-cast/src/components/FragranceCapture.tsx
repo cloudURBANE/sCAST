@@ -8,6 +8,7 @@ import {
   getFragranceDetails,
   isBackgroundEnrichmentQueued,
   isFetchNetworkError,
+  isSearchResponseDegraded,
   isTransientDetailFetchError,
   normalizeFragranceDetail,
   sanitizeEngineQuery,
@@ -593,9 +594,15 @@ export const FragranceCapture: React.FC<{
     try {
       let nextMatches: FragranceMatch[] = [];
       let primarySearchError: Error | null = null;
+      // True when the engine answered from a degraded/fallback path. A zero-result
+      // search in that state is a transient coverage condition (live providers
+      // were blocked), so it is surfaced as retryable rather than a flat "no such
+      // fragrance" — see the empty-state branch below.
+      let searchWasDegraded = false;
 
       try {
         const searchData = await searchFragrances(targetQuery, { signal: controller.signal });
+        searchWasDegraded = isSearchResponseDegraded(searchData);
         const results = Array.isArray(searchData.results) ? searchData.results : [];
         nextMatches = results
           .map((result): FragranceMatch | null => {
@@ -637,6 +644,15 @@ export const FragranceCapture: React.FC<{
           setErrorStatus(message);
           setErrorPhase('search');
           setLoadingStatus('Search failed.');
+        } else if (searchWasDegraded) {
+          // The engine reached us but only via a degraded fallback and found
+          // nothing — a retryable coverage gap, not a confirmed non-match. Route
+          // it through the error banner's "Try Again" instead of the absolute
+          // "No Olfactory Matches" empty state, which would misread a transient
+          // provider outage as the fragrance not existing.
+          setErrorStatus('Search is still expanding coverage for this one. Try again in a moment.');
+          setErrorPhase('search');
+          setLoadingStatus('Coverage still expanding.');
         } else {
           setLoadingStatus('No fragrance match found.');
         }

@@ -1222,6 +1222,11 @@ function searchResultMatchesQueryIntent(query: string, result: FragranceSearchRe
     return true;
   }
 
+  // At least half of the query tokens must appear. This deliberately keeps
+  // same-house siblings ("Tom Ford Lost Cherry" still surfaces Oud Wood /
+  // Tobacco Vanille, ranked below the exact hit) so the user sees a brand's
+  // lineup — the engine's brand-only recall is only useful if the web does not
+  // re-reject it here. Tightening past 0.5 was tried and regressed that breadth.
   const matched = queryTokens.filter((token) => combined.includes(token)).length;
   return matched / queryTokens.length >= 0.5;
 }
@@ -1330,6 +1335,19 @@ function shouldSupplementWithAppSearch(
   );
 }
 
+/**
+ * True when the engine answered from a degraded/fallback path (live providers
+ * were unavailable, so breadth came from a narrower source). A zero-result
+ * search in this state is a transient coverage condition the user can retry —
+ * not a confirmed "this fragrance does not exist" — so the UI surfaces a
+ * retryable message instead of a harsh empty state. See {@link hasDegradedBreadth}.
+ */
+export function isSearchResponseDegraded(
+  response: Pick<FragranceSearchResponse, "diagnostics"> | null | undefined,
+): boolean {
+  return hasDegradedBreadth(response?.diagnostics);
+}
+
 async function apiErrorMessage(res: Response, fallback: string): Promise<string> {
   try {
     const data = await res.clone().json();
@@ -1397,6 +1415,12 @@ async function parseJsonResponse<T>(res: Response, context: string): Promise<T> 
  * zero results, so it can never change a search that already succeeded. The
  * caller's original query string is preserved on the returned response, and the
  * result is cached under that original query.
+ *
+ * Call budget: the flow makes at most three serial requests — pass 1 spends the
+ * engine call plus (optionally) one Express app-search round-trip, and the
+ * sanitized retry is a single lone engine call (`allowAppSearch: false`) because
+ * the equivalent app search already ran in pass 1. This stops a symbol-laden
+ * empty query from fanning out into a duplicate engine+app pair on the retry.
  */
 export async function searchFragrances(
   query: string,
@@ -1411,7 +1435,9 @@ export async function searchFragrances(
     const sanitized = sanitizeEngineQuery(query);
     if (sanitized && sanitized.toLowerCase() !== query.trim().toLowerCase()) {
       try {
-        const retried = await executeFragranceSearch(sanitized, options);
+        const retried = await executeFragranceSearch(sanitized, options, {
+          allowAppSearch: false,
+        });
         if (retried.results.length > 0) {
           response = { ...retried, query };
         }
@@ -1431,7 +1457,14 @@ export async function searchFragrances(
 async function executeFragranceSearch(
   query: string,
   options?: { signal?: AbortSignal },
+  flags?: { allowAppSearch?: boolean },
 ): Promise<FragranceSearchResponse> {
+  // `allowAppSearch` lets the caller suppress every Express app-search round-trip
+  // (the 5xx/transport fallback and the breadth supplement). The sanitized retry
+  // in {@link searchFragrances} sets it false so the whole search flow stays
+  // within a 3-call budget: pass 1 spends engine + optional app, pass 2 is a lone
+  // engine call. Defaults to true so the primary pass behaves exactly as before.
+  const allowAppSearch = flags?.allowAppSearch ?? true;
   const requestQuery = expandKnownSearchBrandAlias(query);
 
   let data: unknown;
@@ -1443,7 +1476,9 @@ async function executeFragranceSearch(
     );
 
     if (res.status >= 500) {
-      return await searchAppFragrances(requestQuery, options, query);
+      return allowAppSearch
+        ? await searchAppFragrances(requestQuery, options, query)
+        : { query, results: [] };
     }
 
     if (!res.ok) {
@@ -1455,8 +1490,9 @@ async function executeFragranceSearch(
     if (err instanceof Error && err.name === "AbortError") throw err;
     // A transport failure or a 2xx with an empty/HTML body (truncated proxy
     // response, cold-start gateway page) both mean the engine gave us nothing
-    // usable — try the Express app search before surfacing the error.
-    if (isFragranceEngineTransportError(err) || isResponseBodyError(err)) {
+    // usable — try the Express app search before surfacing the error, unless the
+    // caller has already spent its app-search budget on an earlier pass.
+    if (allowAppSearch && (isFragranceEngineTransportError(err) || isResponseBodyError(err))) {
       try {
         return await searchAppFragrances(requestQuery, options, query);
       } catch (fallbackErr) {
@@ -1482,7 +1518,7 @@ async function executeFragranceSearch(
     diagnostics: normalizeSearchDiagnostics((data as { diagnostics?: unknown })?.diagnostics),
   };
 
-  if (shouldSupplementWithAppSearch(requestQuery, response)) {
+  if (allowAppSearch && shouldSupplementWithAppSearch(requestQuery, response)) {
     try {
       const supplemental = await searchAppFragrances(requestQuery, { signal: options?.signal }, query);
       response.results = mergeSearchResults(
