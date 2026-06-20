@@ -314,9 +314,6 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
                 >
                   <p>Fragrance Family</p>
                   <h3>{item.family ?? 'Signature'}</h3>
-                  <div className="community-fragrance-detail__rule" aria-hidden="true">
-                    <span />
-                  </div>
                 </motion.section>
 
                 <motion.div
