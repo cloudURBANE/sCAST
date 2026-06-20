@@ -1198,18 +1198,27 @@ function DashboardView() {
                 transition={vaultContentTransition}
                 className="scent-mission-action-slot mt-2 flex min-h-[46px] justify-center sm:mt-4 sm:min-h-[60px]"
               >
+                {/* Stable portal host for the Beam Agent cue / Confirm lane.
+                    This element stays mounted for the whole time the action slot
+                    is shown (it is merely hidden in search mode) instead of being
+                    swapped in/out inside the AnimatePresence below. The panel
+                    injects an owned portal node into THIS element, so keeping the
+                    host mounted across the close means the panel's portal
+                    teardown can never race a host that unmounts in a SEPARATE
+                    AnimatePresence — that race was the cross-tree `removeChild`
+                    exception that tripped the ErrorBoundary ("System Disruption"
+                    / reload) and left the body-scroll lock stuck (frozen page) on
+                    close, across every browser. Cue entrance/exit is animated by
+                    the portaled content itself, so no motion is lost. The host is
+                    pulled out of flow when hidden so the Discover CTA still
+                    centers in search mode. */}
+                <div
+                  ref={setMissionCueHost}
+                  className={`w-full ${agentActive ? '' : 'hidden'}`}
+                  aria-hidden={!agentActive}
+                />
                 <AnimatePresence initial={false} mode="popLayout">
-                  {agentActive ? (
-                    <motion.div
-                      ref={setMissionCueHost}
-                      key="mission-cue-host"
-                      initial={reduceMotion ? false : { opacity: 0, y: 6 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 6 }}
-                      transition={vaultContentTransition}
-                      className="w-full"
-                    />
-                  ) : (
+                  {agentActive ? null : (
                     <motion.button
                       key="signature-cta"
                       type="button"
