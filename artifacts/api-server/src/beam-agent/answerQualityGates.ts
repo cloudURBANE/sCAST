@@ -184,6 +184,25 @@ const DEFERRAL_PATTERN = new RegExp(
     // The "first/before" anchor keeps engagement prose ("tell me more about how it
     // wears") from firing.
     String.raw`\btell\s+me\s+(?:a\s+(?:bit|little)\s+)?more\s+(?:first|before)\b`,
+    // "(I) can't recommend (anything/one/a pick) (just) yet" — the temporal "yet"
+    // anchor is what makes this a deferral, not category steering. "recommend" is
+    // deliberately excluded from the intransitive commit-verb arm above so
+    // "I can't recommend a dense gourmand here" (steering toward a real pick) stays
+    // allowed; that phrase has no "yet", so these two "yet"-anchored forms catch the
+    // pure deferral ("I can't recommend yet, but maybe X") without re-trapping it.
+    String.raw`\b(?:can'?t|cannot)\s+recommend\s+(?:anything\s+|one\s+|a\s+pick\s+)?(?:just\s+)?yet\b`,
+    String.raw`\b(?:can'?t|cannot)\s+yet\s+recommend\b`,
+    // "hold off on recommending/picking/committing ..." — postpones the decision.
+    // Scoped to the decision verbs so "hold off on a second spray" never fires.
+    String.raw`\bhold\s+off\s+(?:on\s+)?(?:recommend\w*|pick\w*|commit\w*|choos\w*|decid\w*)\b`,
+    // "(I'd) hesitate to pick/recommend/commit ..." — a refusal to choose. Scoped to
+    // the decision verbs so "don't hesitate to layer it" never fires.
+    String.raw`\bhesitate\s+to\s+(?:recommend|pick|commit|choose|decide|call)\b`,
+    // "hard to say/pick ... (anything) without/until <more input>" — defers pending
+    // info. The verb must be immediately followed by without/until (optionally
+    // "anything"/"much") so a genuine comparison ("hard to say which lasts longer
+    // without trying both, but I'd take X") keeps its committed pick and stays silent.
+    String.raw`\bhard\s+to\s+(?:say|pick|recommend|commit|choose|decide)\s+(?:anything\s+|much\s+)?(?:without|until)\b`,
   ].join("|"),
   "i",
 );
