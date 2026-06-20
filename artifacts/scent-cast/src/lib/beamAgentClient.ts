@@ -119,6 +119,13 @@ export type BeamAgentMission = {
   intent?: 'travel_kit' | 'recommendation';
   ownedCount?: number;
   newCount?: number;
+  /**
+   * Requested number of picks for a plain `recommendation` mission ("give me three
+   * date-night scents"). The backend emits it on the `slots` event; keep it in this
+   * type so the panel can show the requested count instead of silently dropping it
+   * (travel kits use the lane-specific ownedCount/newCount instead).
+   */
+  count?: number;
   destination?: string;
   month?: string;
   userDelegatedChoice?: boolean;

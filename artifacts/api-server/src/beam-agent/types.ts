@@ -76,6 +76,24 @@ export type BeamMissionState = {
   intent?: BeamMissionIntent;
   ownedCount?: number;
   newCount?: number;
+  /**
+   * Requested number of picks for a plain `recommendation` mission ("give me
+   * three date-night scents", "recommend two for tonight"). Travel kits use the
+   * lane-specific `ownedCount`/`newCount` instead; this is the single-lane count
+   * for non-kit recommendations, so the agent honors an explicit quantity instead
+   * of silently returning one.
+   */
+  count?: number;
+  /**
+   * Owned-vs-new constraint for a plain `recommendation` mission, stated without a
+   * trip/quantity that would make it a travel kit: "don't recommend anything I
+   * already own" / "new to me" → `"new"`; "pick from my wardrobe" / "one I already
+   * have" → `"owned"`. Travel kits express this through the `ownedCount`/`newCount`
+   * lanes instead, so this only annotates non-kit recommendations. Surfaced in the
+   * session-state prompt so the agent searches unowned catalog (excludeOwned=true)
+   * or scores the owned vault accordingly, instead of guessing from prose alone.
+   */
+  newness?: "new" | "owned";
   destination?: string;
   month?: string;
   userDelegatedChoice?: boolean;

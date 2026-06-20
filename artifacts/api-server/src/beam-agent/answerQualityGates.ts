@@ -283,6 +283,19 @@ export function runAnswerQualityGates(answerText: string, input: QualityGateInpu
     }
   }
 
+  // Plain recommendation with an explicit quantity ("give me three date-night
+  // scents"): the bug is returning ONE when the user asked for more. Fire only
+  // when the answer already commits to at least one grounded pick but names
+  // fewer than requested — so a still-gathering clarification turn (zero picks)
+  // and a complete answer (an optional runner-up beyond the count) are both safe.
+  if (mission?.intent === "recommendation" && (mission.count ?? 0) > 1) {
+    const counts = countMissionPicks(text, input.groundedFragrances ?? []);
+    const named = counts.owned + counts.new;
+    if (named >= 1 && named < (mission.count ?? 0)) {
+      violations.push("recommendation_count_short");
+    }
+  }
+
   if (LEAKED_INSTRUCTION_PATTERN.test(text)) violations.push("leaked_external_instruction");
   if (text.length > maxChars) violations.push("over_length");
 
@@ -309,6 +322,8 @@ export function repairInstructionFor(violations: string[]): string {
     fixes.push("The user delegated the choice - do NOT ask another preference question; commit to a specific grounded recommendation now.");
   if (violations.includes("mission_unfulfilled"))
     fixes.push("Fulfill the travel-kit target exactly: name exactly the requested count in each requested lane, using only grounded results; new picks must be unowned.");
+  if (violations.includes("recommendation_count_short"))
+    fixes.push("The user asked for more than one pick - name the full requested number of distinct grounded recommendations, not just one.");
   if (violations.includes("destination_context_mismatch"))
     fixes.push("Use the user's travel destination and timing. Remove every reference to their current/home weather location.");
   if (violations.includes("owned_pick_in_new_only_mission"))

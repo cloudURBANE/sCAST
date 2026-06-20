@@ -1123,19 +1123,29 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         ? `Your ${titleCaseCue(destination)} · ${titleCaseCue(month)} kit`
         : `Your ${titleCaseCue(destination)} kit`;
     }
-    if (destination) return `A scent for ${titleCaseCue(destination)}`;
+    // A requested quantity ("give me three…") reads as a count, so the header
+    // matches what's being delivered instead of always promising one scent.
+    const recCount = agentMission?.intent === 'recommendation' ? agentMission.count ?? 0 : 0;
+    const lead = recCount > 1 ? `${recCount} scents` : 'A scent';
+    if (destination) return `${lead} for ${titleCaseCue(destination)}`;
     const occasion = (agentCues.occasion || '').trim();
-    if (occasion) return `A scent for ${occasion}`;
-    return 'A scent for today.';
+    if (occasion) return `${lead} for ${occasion}`;
+    return recCount > 1 ? `${recCount} scent picks` : 'A scent for today.';
   }, [agentCues, agentMission]);
 
   const contextLine = useMemo(() => {
     const destination = (agentMission?.destination || agentCues.destination || '').trim();
     const month = (agentMission?.month || agentCues.month || '').trim();
     if (agentMission?.intent === 'travel_kit' && destination) {
+      // Surface the requested lane counts so "2 from your vault + 2 new" is visible
+      // up front instead of only inside the delivered kit card.
+      const kitParts: string[] = [];
+      if ((agentMission.ownedCount ?? 0) > 0) kitParts.push(`${agentMission.ownedCount} from your vault`);
+      if ((agentMission.newCount ?? 0) > 0) kitParts.push(`${agentMission.newCount} new`);
+      const countPhrase = kitParts.length > 0 ? ` · ${kitParts.join(' + ')}` : '';
       return month
-        ? `${titleCaseCue(destination)} / ${titleCaseCue(month)} travel context`
-        : `${titleCaseCue(destination)} travel context`;
+        ? `${titleCaseCue(destination)} / ${titleCaseCue(month)} travel context${countPhrase}`
+        : `${titleCaseCue(destination)} travel context${countPhrase}`;
     }
     const weatherParts = [
       typeof weather?.temperature === 'number' ? `${Math.round(weather.temperature)}F` : null,
