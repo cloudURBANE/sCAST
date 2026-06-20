@@ -312,8 +312,45 @@ export async function buildProfileWithDeps(
           sourceProvider: catalogBase.sourceProvider,
         }
       : null;
-  const resolveImageNow = async (): Promise<ProcessedImageRef | null> =>
-    (await deps
+  const resolveCachedImage = async (): Promise<ProcessedImageRef | null> => {
+    if (!deps.resolveCachedFragranceImage) return null;
+    return deps.resolveCachedFragranceImage(profileBrand, profileName).catch((err) => {
+      deps.reportNonFatalError?.("scentEngine.cachedImageResolution", err, imageSearchContext);
+      return null;
+    });
+  };
+
+  // The engine's already-crawled/direct image URL — processing it costs NO paid
+  // Serper image search (the `sourceUrl` path skips Serper entirely). Tried
+  // before the Serper search below.
+  const resolveImageFromCrawledUrl = async (): Promise<ProcessedImageRef | null> => {
+    if (!effectiveFallback?.imageUrl) return null;
+    const crawledUrl = effectiveFallback.imageUrl;
+    return deps
+      .resolveProcessedFragranceImage({
+        brand: profileBrand,
+        name: profileName,
+        sourceUrl: crawledUrl,
+        sourceProvider: "manual",
+        allowLookupCache: false,
+        removeBackground: true,
+      })
+      .catch((err) => {
+        deps.reportNonFatalError?.("scentEngine.imageResolution", err, {
+          brand: profileBrand,
+          name: profileName,
+          mode: "manual",
+          sourceUrl: crawledUrl,
+        });
+        return null;
+      });
+  };
+
+  // Paid Serper image search. Internally cache-aware: it re-checks the lookup-key
+  // and search-query caches before spending a Serper call (see imagePipeline),
+  // so that behavior is preserved — this is just the last resort.
+  const resolveImageFromSerper = async (): Promise<ProcessedImageRef | null> =>
+    deps
       .resolveProcessedFragranceImage({
         brand: profileBrand,
         name: profileName,
@@ -323,34 +360,21 @@ export async function buildProfileWithDeps(
       .catch((err) => {
         deps.reportNonFatalError?.("scentEngine.imageResolution", err, imageSearchContext);
         return null;
-      })) ??
-    (effectiveFallback?.imageUrl
-      ? await deps
-          .resolveProcessedFragranceImage({
-            brand: profileBrand,
-            name: profileName,
-            sourceUrl: effectiveFallback.imageUrl,
-            sourceProvider: "manual",
-            allowLookupCache: false,
-            removeBackground: true,
-          })
-          .catch((err) => {
-            deps.reportNonFatalError?.("scentEngine.imageResolution", err, {
-              brand: profileBrand,
-              name: profileName,
-              mode: "manual",
-              sourceUrl: effectiveFallback.imageUrl,
-            });
-            return null;
-          })
-      : null);
+      });
 
-  const resolveCachedImage = async (): Promise<ProcessedImageRef | null> => {
-    if (!deps.resolveCachedFragranceImage) return null;
-    return deps.resolveCachedFragranceImage(profileBrand, profileName).catch((err) => {
-      deps.reportNonFatalError?.("scentEngine.cachedImageResolution", err, imageSearchContext);
-      return null;
-    });
+  // Free crawled URL before the paid Serper search. When the engine already
+  // handed us a usable direct image URL we process that (no Serper call); only
+  // when it is absent or fails to resolve do we fall back to the Serper search,
+  // which itself still consults the lookup-key and search-query caches before
+  // spending a call — so that cache behavior is unchanged. (The deferred path
+  // already checks the cache up front via resolveCachedImage, so re-checking it
+  // here would be redundant.)
+  const resolveImageNow = async (): Promise<ProcessedImageRef | null> => {
+    if (effectiveFallback?.imageUrl) {
+      const fromCrawl = await resolveImageFromCrawledUrl();
+      if (fromCrawl) return fromCrawl;
+    }
+    return resolveImageFromSerper();
   };
 
   const processedImage =
