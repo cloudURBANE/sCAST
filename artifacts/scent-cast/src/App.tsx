@@ -1117,12 +1117,14 @@ function DashboardView() {
 
           {!agentActive ? <HomepageAtmosphereChrome /> : null}
 
-          {/* Weekly outlook dashboard — anchored to the bottom of the first
-              viewport on phones (mt-auto fills the gap above the tab bar), in
-              normal flow on md+. Hidden in agent mode, which takes over the
-              hero. */}
+          {/* Weekly outlook dashboard — on phones it CENTERS in the leftover
+              column space (my-auto splits the free space evenly above and below
+              instead of mt-auto dumping it all into one void above), so the
+              forecast reads as intentionally placed and balanced rather than
+              slammed against the tab bar with a dead gap overhead. Normal flow on
+              md+. Hidden in agent mode, which takes over the hero. */}
           {!agentActive ? (
-            <div className="mt-auto sm:mt-0">
+            <div className="my-auto sm:my-0">
               <WeeklyOutlookDashboard
                 items={items}
                 weather={weather}
