@@ -5,6 +5,7 @@ import {
   ARENA_BEAM_MAX_SCORE,
   ARENA_BEAM_MIN_SCORE,
   cleanArenaBeamRunId,
+  resolveArenaBeamFragranceId,
   scoreArenaBeamRun,
 } from "./arenaBeamPowerCore.ts";
 
@@ -30,4 +31,24 @@ test("cleanArenaBeamRunId accepts compact ids and rejects unsafe values", () => 
   assert.equal(cleanArenaBeamRunId(" run_123456 "), "run_123456");
   assert.equal(cleanArenaBeamRunId("short"), null);
   assert.equal(cleanArenaBeamRunId("bad id with spaces"), null);
+});
+
+test("resolveArenaBeamFragranceId falls back for blank legacy snapshot ids", () => {
+  assert.equal(
+    resolveArenaBeamFragranceId({
+      fragranceId: "  ",
+      brand: "Xerjoff",
+      name: "Casamorati Mefisto",
+    }),
+    "catalog:xerjoff:casamorati-mefisto",
+  );
+  assert.equal(
+    resolveArenaBeamFragranceId({
+      fragranceId: " catalog:creed:aventus ",
+      brand: "Creed",
+      name: "Aventus",
+    }),
+    "catalog:creed:aventus",
+  );
+  assert.equal(resolveArenaBeamFragranceId({ brand: "Unknown", name: "" }), null);
 });

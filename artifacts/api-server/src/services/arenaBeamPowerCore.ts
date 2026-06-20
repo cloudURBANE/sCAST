@@ -29,3 +29,22 @@ export function cleanArenaBeamRunId(value: unknown): string | null {
   if (!/^[a-zA-Z0-9_-]{8,80}$/.test(trimmed)) return null;
   return trimmed;
 }
+
+type ArenaBeamFragranceIdentity = {
+  fragranceId?: string | null;
+  brand?: string | null;
+  name?: string | null;
+};
+
+function stableArenaFragranceId(brand: string | null | undefined, name: string | null | undefined): string | null {
+  const cleanName = name?.trim();
+  if (!cleanName) return null;
+  const part = (value: string) =>
+    value.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+  return `catalog:${part(brand?.trim() || "unknown")}:${part(cleanName)}`;
+}
+
+export function resolveArenaBeamFragranceId(snapshot: ArenaBeamFragranceIdentity | null | undefined): string | null {
+  const explicitId = snapshot?.fragranceId?.trim();
+  return explicitId || stableArenaFragranceId(snapshot?.brand, snapshot?.name);
+}

@@ -38,6 +38,26 @@ test('maps a community battle post into a two-side arena battle', () => {
   assert.equal(mapped?.viewerReason, null);
 });
 
+test('keeps Beam Power values when a legacy snapshot has a blank fragrance id', () => {
+  const mapped = mapCommunityPostToArenaBattle({
+    ...basePost,
+    fragrances: [
+      {
+        fragranceId: '  ',
+        name: 'Casamorati Mefisto',
+        brand: 'Xerjoff',
+        beamSupporters: 1,
+        totalBeamPower: 2,
+      },
+      basePost.fragrances[1],
+    ],
+  });
+
+  assert.equal(mapped?.left.fragranceId, 'catalog:xerjoff:casamorati-mefisto');
+  assert.equal(mapped?.left.beamSupporters, 1);
+  assert.equal(mapped?.left.totalBeamPower, 2);
+});
+
 test('drops placeholder family labels from battle descriptors', () => {
   const mapped = mapCommunityPostToArenaBattle({
     ...basePost,

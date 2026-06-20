@@ -439,7 +439,7 @@ function applyBeamPowerToPost(post: CommunityPost, result: SubmitBeamPowerResult
     changed = true;
     return {
       ...fragrance,
-      fragranceId: fragrance.fragranceId ?? result.fragranceId,
+      fragranceId: fragrance.fragranceId?.trim() || result.fragranceId,
       beamSupporters: result.supporters,
       totalBeamPower: result.totalBeamPower,
     };
