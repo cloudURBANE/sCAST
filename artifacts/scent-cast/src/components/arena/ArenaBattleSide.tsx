@@ -15,6 +15,9 @@ interface ArenaBattleSideProps {
   onVote: () => void;
   /** Open the pre-vote head-to-head compare detail for both contenders. */
   onCompare: () => void;
+  onAddBeamPower: () => void;
+  onSignIn: () => void;
+  signedIn: boolean;
 }
 
 // Tap-vs-scroll isolation: a pointer that travels farther than this between
@@ -31,6 +34,9 @@ export const ArenaBattleSide: React.FC<ArenaBattleSideProps> = ({
   isSaving = false,
   onVote,
   onCompare,
+  onAddBeamPower,
+  onSignIn,
+  signedIn,
 }) => {
   const contenderLabel = align === "left" ? "A" : "B";
 
@@ -210,6 +216,14 @@ export const ArenaBattleSide: React.FC<ArenaBattleSideProps> = ({
             <div><span className="block text-[8px] uppercase tracking-[0.08em] text-scent-text-subtle sm:text-[9px]">Supporters</span><strong className="mt-0.5 block text-xs text-foreground sm:text-sm">{side.beamSupporters}</strong></div>
             <div><span className="block text-[8px] uppercase tracking-[0.08em] text-scent-text-subtle sm:text-[9px]">Beam Power</span><strong className="mt-0.5 block text-xs text-scent-accent sm:text-sm">{side.totalBeamPower}</strong></div>
           </div>
+          <button
+            type="button"
+            onClick={signedIn ? onAddBeamPower : onSignIn}
+            className="scent-no-mobile-focus-ring mt-2 inline-flex min-h-9 w-full items-center justify-center gap-1.5 rounded-md border border-scent-accent/22 bg-scent-accent/[0.12] px-2 py-2 text-[10px] font-bold uppercase tracking-[0.1em] text-scent-accent shadow-[inset_0_1px_0_rgba(255,236,183,0.08)] transition-colors hover:border-scent-accent/42 hover:bg-scent-accent/[0.16] hover:text-[#f0cf70] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/60 sm:min-h-10 sm:text-xs"
+          >
+            <Sparkles size={13} strokeWidth={1.9} aria-hidden="true" />
+            <span>{signedIn ? "Add Beam Power" : "Sign in to add"}</span>
+          </button>
         </div>
 
         {/* Pre-vote keeps the explicit Vote button. After reveal, the whole card
