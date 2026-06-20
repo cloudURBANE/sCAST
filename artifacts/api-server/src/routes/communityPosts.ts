@@ -7,6 +7,7 @@ import {
   communityReactionsTable,
   communityTagsTable,
   communityVotesTable,
+  scentRushProgressTable,
   userSettingsTable,
   usersTable,
   type CommunityPostType,
@@ -30,6 +31,15 @@ const MAX_FRAGRANCES = 3;
 const MAX_BATTLE_OPTION_LENGTH = 120;
 const MAX_REASON_LENGTH = 40;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isMissingRushTableError(error: unknown): boolean {
+  let current: unknown = error;
+  for (let depth = 0; depth < 4 && current && typeof current === "object"; depth += 1) {
+    if ((current as { code?: unknown }).code === "42P01") return true;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return false;
+}
 
 type TenantUser = {
   id: string;
@@ -64,6 +74,9 @@ type CommentRow = {
 };
 
 type FragranceSnapshot = {
+  fragranceId?: string;
+  beamSupporters?: number;
+  totalBeamPower?: number;
   name: string;
   brand: string;
   imageUrl?: string;
@@ -201,6 +214,7 @@ function normalizeFragrances(raw: unknown): { fragrances: FragranceSnapshot[] } 
     const brand = cleanRequiredText(value.brand, 120);
     const imageUrl = cleanOptionalText(value.imageUrl, 500);
     const family = cleanOptionalText(value.family, 80);
+    const fragranceId = cleanOptionalText(value.fragranceId, 240);
 
     if (!name || !brand) {
       return { error: "each fragrance requires name and brand" };
@@ -210,6 +224,7 @@ function normalizeFragrances(raw: unknown): { fragrances: FragranceSnapshot[] } 
     }
 
     fragrances.push({
+      ...(fragranceId && /^[a-zA-Z0-9._~:@/+-]+$/.test(fragranceId) ? { fragranceId } : {}),
       name,
       brand,
       ...(imageUrl ? { imageUrl } : {}),
@@ -477,10 +492,41 @@ async function buildPostDtos(tenantId: string, posts: PostRow[], viewerId?: stri
     tagsByPost.set(row.postId, tags);
   }
 
+  const fragranceIds = [...new Set(fragranceRows.flatMap((row) => {
+    const snapshot = row.fragrance as FragranceSnapshot;
+    return snapshot.fragranceId ? [snapshot.fragranceId] : [];
+  }))];
+  let rushRows: Array<{ fragranceId: string; supporters: number; totalBeamPower: number }> = [];
+  try {
+    rushRows = fragranceIds.length > 0
+      ? await db
+        .select({
+          fragranceId: scentRushProgressTable.fragranceId,
+          supporters: sql<number>`count(distinct ${scentRushProgressTable.userId}) filter (where ${scentRushProgressTable.beamPower} > 0)`,
+          totalBeamPower: sql<number>`coalesce(sum(${scentRushProgressTable.beamPower}), 0)`,
+        })
+        .from(scentRushProgressTable)
+        .where(and(
+          eq(scentRushProgressTable.tenantId, tenantId),
+          inArray(scentRushProgressTable.fragranceId, fragranceIds),
+        ))
+        .groupBy(scentRushProgressTable.fragranceId)
+      : [];
+  } catch (error) {
+    if (!isMissingRushTableError(error)) throw error;
+    logger.warn("scent_rush_progress is unavailable; community Beam totals default to zero");
+  }
+  const rushByFragrance = new Map(rushRows.map((row) => [row.fragranceId, {
+    beamSupporters: Number(row.supporters) || 0,
+    totalBeamPower: Number(row.totalBeamPower) || 0,
+  }]));
+
   const fragrancesByPost = new Map<string, FragranceSnapshot[]>();
   for (const row of fragranceRows) {
     const fragrances = fragrancesByPost.get(row.postId) ?? [];
-    fragrances.push(row.fragrance as FragranceSnapshot);
+    const snapshot = row.fragrance as FragranceSnapshot;
+    const rush = snapshot.fragranceId ? rushByFragrance.get(snapshot.fragranceId) : undefined;
+    fragrances.push({ ...snapshot, beamSupporters: rush?.beamSupporters ?? 0, totalBeamPower: rush?.totalBeamPower ?? 0 });
     fragrancesByPost.set(row.postId, fragrances);
   }
 

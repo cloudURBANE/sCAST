@@ -206,6 +206,10 @@ export const ArenaBattleSide: React.FC<ArenaBattleSideProps> = ({
           <p className="mx-auto mt-1 line-clamp-2 min-h-[2rem] max-w-sm text-[11px] font-medium leading-4 text-scent-text-muted sm:mt-2 sm:min-h-[2.5rem] sm:text-sm sm:leading-5">
             {side.descriptor}
           </p>
+          <div className="mt-2 grid grid-cols-2 gap-1 rounded-lg border border-white/8 bg-black/20 p-1.5 text-center">
+            <div><span className="block text-[8px] uppercase tracking-[0.08em] text-scent-text-subtle sm:text-[9px]">Supporters</span><strong className="mt-0.5 block text-xs text-foreground sm:text-sm">{side.beamSupporters}</strong></div>
+            <div><span className="block text-[8px] uppercase tracking-[0.08em] text-scent-text-subtle sm:text-[9px]">Beam Power</span><strong className="mt-0.5 block text-xs text-scent-accent sm:text-sm">{side.totalBeamPower}</strong></div>
+          </div>
         </div>
 
         {/* Pre-vote keeps the explicit Vote button. After reveal, the whole card

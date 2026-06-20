@@ -20,6 +20,7 @@ import usageRouter from "./usage";
 import reviewsRouter from "./reviews";
 import fragranceEngineProxyRouter from "./fragranceEngineProxy";
 import pushRouter from "./push";
+import scentRushRouter from "./scentRush";
 
 const router: IRouter = Router();
 
@@ -44,5 +45,6 @@ router.use(usageRouter);
 router.use(reviewsRouter);
 router.use(fragranceEngineProxyRouter);
 router.use(pushRouter);
+router.use(scentRushRouter);
 
 export default router;

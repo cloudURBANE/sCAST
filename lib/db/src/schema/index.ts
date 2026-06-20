@@ -16,3 +16,5 @@ export * from "./communityReactions";
 export * from "./communityPostFragrances";
 export * from "./communityTags";
 export * from "./communityVotes";
+export * from "./scentRushRuns";
+export * from "./scentRushProgress";
