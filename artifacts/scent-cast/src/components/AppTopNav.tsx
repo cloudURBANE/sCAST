@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { isIpadSafariPerformanceMode, isLowRenderBudget } from '@/lib/platform';
+import { isIpadSafariPerformanceMode, isLowRenderBudget, isTouchPerformanceMode } from '@/lib/platform';
 
 interface AppTopNavProps {
   authToken: string | null;
@@ -86,7 +86,7 @@ const AccountMenu: React.FC<AccountMenuProps> = ({
   onEditProfile,
 }) => {
   const displayName = authUsername?.trim() || authEmail || null;
-  const ipadSafariPerformanceMode = React.useRef(isIpadSafariPerformanceMode()).current;
+  const touchPerformanceMode = React.useRef(isTouchPerformanceMode()).current;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -108,7 +108,7 @@ const AccountMenu: React.FC<AccountMenuProps> = ({
       <DropdownMenuContent
         align="start"
         sideOffset={10}
-        className={`w-56 rounded-[8px] border-scent-accent/25 bg-[#090604]/95 p-1.5 text-[#fff7ec] shadow-[0_18px_48px_rgba(0,0,0,0.62)]${ipadSafariPerformanceMode ? '' : ' backdrop-blur-sm'}`}
+        className={`w-56 rounded-[8px] border-scent-accent/25 bg-[#090604]/95 p-1.5 text-[#fff7ec] shadow-[0_18px_48px_rgba(0,0,0,0.62)]${touchPerformanceMode ? '' : ' backdrop-blur-sm'}`}
       >
         {displayName ? (
           <>

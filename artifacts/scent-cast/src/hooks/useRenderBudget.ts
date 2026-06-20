@@ -4,6 +4,7 @@ import {
   isIpadSafariPerformanceMode,
   isIpadStandalone,
   isLowRenderBudget,
+  isTouchPerformanceMode,
   prefersReducedMotion,
 } from "@/lib/platform";
 
@@ -21,6 +22,8 @@ export interface RenderBudget {
   isIpadStandalone: boolean;
   /** iPad Safari/WebKit-specific compositor pressure guard. */
   ipadSafariPerformanceMode: boolean;
+  /** Touch browsers that should receive compositor-relief CSS. */
+  touchPerformanceMode: boolean;
   /** OS-level reduced-motion preference. */
   reducedMotion: boolean;
 }
@@ -31,6 +34,7 @@ function readBudget(): RenderBudget {
     isIpad: isIpadDevice(),
     isIpadStandalone: isIpadStandalone(),
     ipadSafariPerformanceMode: isIpadSafariPerformanceMode(),
+    touchPerformanceMode: isTouchPerformanceMode(),
     reducedMotion: prefersReducedMotion(),
   };
 }
@@ -41,6 +45,7 @@ function sameBudget(a: RenderBudget, b: RenderBudget): boolean {
     a.isIpad === b.isIpad &&
     a.isIpadStandalone === b.isIpadStandalone &&
     a.ipadSafariPerformanceMode === b.ipadSafariPerformanceMode &&
+    a.touchPerformanceMode === b.touchPerformanceMode &&
     a.reducedMotion === b.reducedMotion
   );
 }

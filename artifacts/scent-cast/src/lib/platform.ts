@@ -60,6 +60,16 @@ export function isIpadSafariPerformanceMode(): boolean {
   return isIpadSafariBrowser() || isIpadStandalone();
 }
 
+/**
+ * True when the current touch/browser environment should receive compositor
+ * relief CSS. This intentionally combines the known WebKit tablet path with
+ * phone-class coarse-pointer devices, but does not include desktop
+ * reduced-motion by itself.
+ */
+export function isTouchPerformanceMode(): boolean {
+  return isIpadSafariPerformanceMode() || isConstrainedTouchDevice();
+}
+
 /** True when the page is running as an installed/standalone PWA. */
 export function isStandalonePwa(): boolean {
   if (!hasWindow()) return false;

@@ -1542,17 +1542,19 @@ const AppShell = React.memo(function AppShell({
   showThreadBackground,
   threadBackgroundMode,
   ipadSafariPerformanceMode,
+  touchPerformanceMode,
 }: {
   renderedLocation: Location;
   showThreadBackground: boolean;
   threadBackgroundMode: ThreadBackgroundMode;
   ipadSafariPerformanceMode: boolean;
+  touchPerformanceMode: boolean;
 }) {
   return (
     <AuthProvider>
       <WeatherProvider>
         <WardrobeProvider>
-          <div className={`scent-app-shell min-h-[100svh] bg-scent-bg selection:bg-scent-accent selection:text-black text-white relative overflow-x-hidden${ipadSafariPerformanceMode ? ' scent-ipad-safari-perf' : ''}`}>
+          <div className={`scent-app-shell min-h-[100svh] bg-scent-bg selection:bg-scent-accent selection:text-black text-white relative overflow-x-hidden${ipadSafariPerformanceMode ? ' scent-ipad-safari-perf' : ''}${touchPerformanceMode ? ' scent-touch-perf' : ''}`}>
             {showThreadBackground ? <ThreadBackground mode={threadBackgroundMode} /> : null}
             <WebVitalsReporter />
             <AppContent location={renderedLocation} />
@@ -1579,7 +1581,7 @@ export default function App() {
   const pendingRevealRouteRef = useRef<string | null>(null);
   const transitionStartedAtRef = useRef(0);
   const isFreezeLab = import.meta.env.DEV && renderedLocation.pathname === '/debug/ipad-freeze';
-  const { lowMotionRenderMode, isIpad, isIpadStandalone, ipadSafariPerformanceMode } = useRenderBudget();
+  const { lowMotionRenderMode, isIpad, isIpadStandalone, ipadSafariPerformanceMode, touchPerformanceMode } = useRenderBudget();
   const [threadBackgroundReady, setThreadBackgroundReady] = useState(false);
   // iPad keeps the full tablet layout, but gets its own CSS-scheduled backdrop:
   // fewer moving layers, no per-line filters, and no JS animation loop.
@@ -1720,6 +1722,7 @@ export default function App() {
         showThreadBackground={showThreadBackground}
         threadBackgroundMode={threadBackgroundMode}
         ipadSafariPerformanceMode={ipadSafariPerformanceMode}
+        touchPerformanceMode={touchPerformanceMode}
       />
       <PageTransitionOverlay visible={transitionVisible} animationKey={transitionKey} />
     </>
