@@ -1,5 +1,6 @@
 # Beam — excerpt to MERGE into ~/.hermes/config.yaml (not a standalone file).
-# Verify keys against your installed Hermes: `hermes doctor`, `hermes model`.
+# Targets Hermes Agent v0.17.0 (v2026.6.19, "The Reach Release"). Verify keys
+# against your installed Hermes: `hermes --version`, `hermes doctor`, `hermes model`.
 
 # --- Reasoning model: route through OpenRouter ------------------------------
 # Beam reasons through OpenRouter (matches the production in-process loop, which
@@ -14,7 +15,11 @@ model: "anthropic/claude-opus-4.8"        # strong tier for synthesis/collection
 # --- Beam MCP tool server (HTTP, private/localhost) -------------------------
 mcp_servers:
   beam:
-    url: "http://127.0.0.1:8848/mcp"
+    # Env-driven so the same profile works locally and on Railway. Set in
+    # ~/.hermes/.env (dev: http://127.0.0.1:8848/mcp) or Railway env
+    # (prod: http://api-server.railway.internal:8848/mcp — always http on the
+    # private network; TLS is unnecessary there and will fail).
+    url: "${BEAM_MCP_URL}"
     headers:
       # Resolved at connect time from ~/.hermes/.env (see dot-hermes-env.example).
       Authorization: "Bearer ${BEAM_AGENT_TOKEN}"

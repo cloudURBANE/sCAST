@@ -12,6 +12,7 @@
     "backtest:scent-facts": "node --experimental-strip-types src/lib/scent-facts/backtest.ts",
     "beam:mcp:build": "node ./build-beam-mcp.mjs",
     "beam:mcp": "pnpm run beam:mcp:build && node --enable-source-maps ./dist-beam/beam-mcp.mjs",
+    "start:beam-mcp": "node --enable-source-maps ./dist-beam/beam-mcp.mjs",
     "beam:mint-token": "node --experimental-strip-types src/beam-agent/mcp/mintOwnerToken.ts"
   },
   "dependencies": {

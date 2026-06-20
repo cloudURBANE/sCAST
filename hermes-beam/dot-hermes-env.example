@@ -1,4 +1,10 @@
 # Beam — excerpt to MERGE into ~/.hermes/.env  (secrets; never commit)
+# Targets Hermes Agent v0.17.0 (v2026.6.19).
+
+# Where the Beam MCP listener lives. Local dev: the value below. On Railway, set
+# this in the hermes-agent service env to the private-network URL instead:
+#   BEAM_MCP_URL=http://api-server.railway.internal:8848/mcp
+BEAM_MCP_URL=http://127.0.0.1:8848/mcp
 
 # Delegation token that authorizes Hermes to call the Beam MCP server.
 # Mint it (owner/dev mode) with, from the repo:
