@@ -313,20 +313,34 @@ export function runAnswerQualityGates(answerText: string, input: QualityGateInpu
     }
   }
 
-  // A committed recommendation that names ZERO grounded picks. Heavily guarded so
-  // it only fires on a turn that has actually retrieved candidates and is no
-  // longer gathering context: recommendation intent, tools ran this turn
-  // (grounded non-empty), the answer is not primarily a clarifying question
-  // (no "?", the same guard the other gates use), yet it commits to nobody.
-  // A still-gathering turn has zero grounded ⇒ no fire; this only fills the
-  // zero-named hole left by recommendation_count_short (which needs named >= 1).
-  if (
-    mission?.intent === "recommendation" &&
-    (input.groundedFragrances?.length ?? 0) > 0 &&
-    !text.includes("?")
-  ) {
-    const counts = countMissionPicks(text, input.groundedFragrances ?? []);
-    if (counts.owned + counts.new === 0) violations.push("recommendation_without_grounded_pick");
+  // A committed answer that names ZERO grounded picks when the user is OWED a
+  // concrete recommendation. "Owed" = a plain `recommendation` mission OR the user
+  // explicitly DELEGATED the choice ("you decide", "surprise me", "pick for me").
+  // A bare delegation carries no recommendation intent — missionState returns only
+  // `userDelegatedChoice` with no mission (see missionState.deriveBeamSessionState)
+  // — so without this delegation arm a flat "honestly you can't go wrong" hedge,
+  // with safe grounded candidates already on the table, escaped every gate:
+  // delegated_but_questioned needs a `?`, and the recommendation arm needs the
+  // intent. That was the dominant "Recommend now. You decide." → vague-non-answer
+  // hole.
+  //
+  // Avoid-aware: fire ONLY when at least one SAFE (non-`matchedAvoid`) grounded pick
+  // is actually available to name. If every grounded candidate violates an avoid
+  // constraint, the agent legitimately cannot commit and SHOULD ask — forcing a
+  // commit there would create an unsatisfiable repair (commit ⇒ recommends_avoided_note).
+  // The `?` guard keeps a genuine clarifying turn safe; a still-gathering turn has
+  // zero grounded ⇒ no fire; this only fills the zero-named hole left by
+  // recommendation_count_short (which needs named >= 1).
+  const owedRecommendation =
+    mission?.intent === "recommendation" ||
+    Boolean(input.sessionState?.userDelegatedChoice || mission?.userDelegatedChoice);
+  if (owedRecommendation && !text.includes("?")) {
+    const grounded = input.groundedFragrances ?? [];
+    const hasSafeGroundedPick = grounded.some((item) => item.matchedAvoid !== true);
+    if (hasSafeGroundedPick) {
+      const counts = countMissionPicks(text, grounded);
+      if (counts.owned + counts.new === 0) violations.push("recommendation_without_grounded_pick");
+    }
   }
 
   if (LEAKED_INSTRUCTION_PATTERN.test(text)) violations.push("leaked_external_instruction");
