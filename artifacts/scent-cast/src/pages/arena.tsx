@@ -28,7 +28,14 @@ export const ArenaPage: React.FC<ArenaPageProps> = ({
   onEditProfile,
 }) => {
   const [activeIndex, setActiveIndex] = useState(0);
-  const [pendingGuestVote, setPendingGuestVote] = useState<{ postId: string; choice: string } | null>(null);
+  const [pendingGuestVote, setPendingGuestVote] = useState<{
+    postId: string;
+    choice: string;
+    // Preserved through login so a guest's "why it won" reason isn't lost when
+    // the queued vote is replayed after auth. Optional for backward compatibility
+    // with votes queued before a reason was captured.
+    reason?: string | null;
+  } | null>(null);
   const [savingGuestVotePostId, setSavingGuestVotePostId] = useState<string | null>(null);
   const [guestVoteSaveError, setGuestVoteSaveError] = useState<{ postId: string; message: string } | null>(null);
   const guestVoteMutation = useCommunityBattleVote(authToken);
