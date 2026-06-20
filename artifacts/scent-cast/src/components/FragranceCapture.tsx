@@ -558,8 +558,8 @@ export const FragranceCapture: React.FC<{
   const handleSearch = async (e?: React.FormEvent, overrideQuery?: string) => {
     if (e) e.preventDefault();
     
-    const targetQuery = overrideQuery !== undefined ? overrideQuery : searchQuery;
-    if (!targetQuery.trim()) return;
+    const targetQuery = (overrideQuery !== undefined ? overrideQuery : searchQuery).trim();
+    if (!targetQuery) return;
 
     // Abort any in-flight searches to prevent race conditions
     if (searchAbortController.current) {
@@ -1174,21 +1174,13 @@ export const FragranceCapture: React.FC<{
         }`}
         aria-hidden={embeddedInVaultPanel && loadingSurface === 'search' && uploading}
       >
-        <header className="mx-auto mb-4 max-w-[43rem] px-1 text-center sm:mb-7">
+        <header className="mx-auto mb-4 max-w-[43rem] px-1 text-center sm:mb-6">
           <p className="sr-only">
             Add perfumes to your vault. Example fragrance names rotate above the search field.
           </p>
           <h2 className="mx-auto max-w-[38rem] text-balance font-serif italic text-[clamp(2rem,5.6vw,4.15rem)] leading-[1.01] tracking-normal text-[#fff7ec] drop-shadow-[0_4px_14px_rgba(0,0,0,0.72)]">
             Search any fragrance or brand.
           </h2>
-          <div className="mt-3 space-y-1.5 sm:mt-6 sm:space-y-2.5">
-            <p className="scent-type-label text-scent-accent">
-              Recently Added Fragrances
-            </p>
-            <div className="mx-auto w-full max-w-lg px-1">
-              <VaultHeadlineRotation phrases={VAULT_HEADLINE_ROTATION} />
-            </div>
-          </div>
         </header>
 
         <AnimatePresence>
@@ -1249,7 +1241,7 @@ export const FragranceCapture: React.FC<{
             />
             <motion.button
               type="submit"
-              disabled={uploading}
+              disabled={uploading || !trimmedQuery}
               whileHover={uploading ? undefined : { scale: 1.06 }}
               whileTap={uploading ? undefined : { scale: 0.9 }}
               transition={{ type: "spring", stiffness: 520, damping: 22 }}
@@ -1266,6 +1258,14 @@ export const FragranceCapture: React.FC<{
               </motion.span>
             </motion.button>
           </form>
+          <div className="mx-auto mt-4 max-w-lg space-y-1 px-2 sm:mt-5 sm:space-y-1.5" aria-label="Recently added fragrance">
+            <p className="scent-type-meta text-[9px] uppercase tracking-[0.14em] text-scent-accent/62 sm:text-[10px]">
+              Recently added
+            </p>
+            <div className="opacity-75">
+              <VaultHeadlineRotation phrases={VAULT_HEADLINE_ROTATION} />
+            </div>
+          </div>
         </div>
 
         {/* Screen-reader announcement for dynamic search results */}
@@ -1332,7 +1332,7 @@ export const FragranceCapture: React.FC<{
               <div className="flex min-h-0 flex-col">
                 <div className="scent-vault-results-panel mx-auto w-full max-w-[50.5rem] px-3 py-4 sm:px-9 sm:py-9">
                   {/* Results-nav header: count on the left, a desktop-only
-                      "Back to top" affordance on the right. Lives outside the
+                      refinement affordance on the right. Lives outside the
                       scroll area below, so it stays put while the list scrolls.
                       Dismissal is handled by Esc and the mobile action bar's
                       "Back to search", so no redundant New-search/× buttons. */}
@@ -1353,8 +1353,8 @@ export const FragranceCapture: React.FC<{
                         className="inline-flex min-h-[38px] shrink-0 items-center gap-1.5 rounded-full border border-white/30 px-3 py-1 scent-type-chip text-scent-text-muted transition-colors hover:border-scent-accent/45 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 sm:min-h-[44px] sm:px-3.5 sm:py-1.5"
                       >
                         <Search size={12} strokeWidth={2.2} aria-hidden className="sm:hidden" />
-                        <span className="hidden sm:inline">↑ Back to top</span>
-                        <span className="sm:hidden">Search</span>
+                        <span className="hidden sm:inline">Refine search</span>
+                        <span className="sm:hidden">Refine</span>
                       </button>
                     </div>
                   </div>

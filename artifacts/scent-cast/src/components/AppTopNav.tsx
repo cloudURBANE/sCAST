@@ -22,6 +22,10 @@ interface AppTopNavProps {
   // suppressed so its fixed gold pill never sits over the panel's composer / CTA.
   // The panel carries its own exit (the header X), so navigation is not lost.
   agentActive?: boolean;
+  // Search owns a fixed mobile result action and may also have the software
+  // keyboard open. Suppress the global tab bar during that focused flow so the
+  // two fixed surfaces never compete for the same safe-area space.
+  suppressBottomNav?: boolean;
   onSignIn: () => void;
   onShare: () => void;
   onSignOut: () => void;
@@ -152,6 +156,7 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
   authUsername,
   renderedRoute,
   agentActive = false,
+  suppressBottomNav = false,
   onSignIn,
   onShare,
   onSignOut,
@@ -183,7 +188,8 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
   // The pill is shown only when scroll-visible AND the Beam panel is not active.
   // While the panel owns the screen its composer/CTA sit at the bottom, so the
   // fixed gold nav pill would otherwise overlap them.
-  const bottomNavShown = navVisible && !agentActive;
+  const bottomNavSuppressed = agentActive || suppressBottomNav;
+  const bottomNavShown = navVisible && !bottomNavSuppressed;
 
   // Propagate nav visibility state via CSS variable to keep floating elements synchronized
   React.useEffect(() => {
@@ -353,7 +359,7 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
             : 'translate-y-[110%] opacity-0 pointer-events-none',
         ].join(' ')}
         aria-label="Primary navigation"
-        aria-hidden={agentActive ? 'true' : undefined}
+        aria-hidden={bottomNavSuppressed ? 'true' : undefined}
         onFocusCapture={() => setNavVisible(true)}
       >
         {/* Opaque pill surface: content must never read through the bar. The

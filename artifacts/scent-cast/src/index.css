@@ -70,7 +70,7 @@
   color: var(--color-scent-accent);
   color-scheme: dark;
   --topbar-h: calc(4rem + env(safe-area-inset-top, 0px));
-  --bottomnav-h: calc(0.75rem + 56px + env(safe-area-inset-bottom, 0px));
+  --bottomnav-h: calc(0.75rem + 60px + env(safe-area-inset-bottom, 0px));
   --mobile-nav-offset: var(--bottomnav-h);
   --scent-gold-rgb: 212 175 55;
   --scent-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
@@ -1478,6 +1478,10 @@ a {
 
 
 .scent-marquee-band {
+  display: flex;
+  min-height: clamp(3.25rem, 6vw, 3.5rem);
+  align-items: center;
+  padding-block: clamp(0.82rem, 2vw, 0.95rem);
   overflow: hidden;
   border-block: 1px solid rgba(212, 175, 55, 0.14);
   background: linear-gradient(90deg, transparent, rgba(212, 175, 55, 0.045), transparent);
@@ -1506,6 +1510,7 @@ a {
 
 .scent-marquee-track-row {
   display: flex;
+  align-items: center;
   width: max-content;
   gap: 0;
   font-size: clamp(11.3px, 0.72vw, 11.4px);
@@ -1513,6 +1518,7 @@ a {
   text-transform: uppercase;
   font-family: "Iowan Old Style", "Times New Roman", serif;
   font-style: italic;
+  line-height: 1.3;
   --hero-marquee-distance: 0px;
   --hero-marquee-duration: 96s;
   touch-action: pan-y;
@@ -1829,6 +1835,12 @@ a {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .scent-marquee-track-row {
+    animation: none;
+    transform: translate3d(0, 0, 0);
+    will-change: auto;
+  }
+
   .scent-atmosphere-marquee-track {
     --atmosphere-marquee-duration: 240s;
   }

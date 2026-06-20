@@ -368,7 +368,7 @@ const HeroMarquee: React.FC<HeroMarqueeProps> = React.memo(({ phrases }) => {
   }, [phraseKey]);
 
   return (
-    <div className="scent-marquee-band scent-full-bleed w-full overflow-hidden py-[17px] sm:py-[18px] flex select-none relative">
+    <div className="scent-marquee-band scent-full-bleed w-full overflow-hidden flex select-none relative">
       <div ref={trackRef} className="scent-marquee-track-row whitespace-nowrap scent-marquee-text">
         {[...Array(HERO_TRACK_COPIES)].map((_, copyIndex) => (
           <span
@@ -886,6 +886,7 @@ function DashboardView() {
         authUsername={authUsername}
         renderedRoute="home"
         agentActive={agentActive}
+        suppressBottomNav={vaultSearchUiActive}
         onSignIn={() => setIsAuthModalOpen(true)}
         onShare={() => setIsShareModalOpen(true)}
         onSignOut={handleSignOut}
@@ -902,7 +903,7 @@ function DashboardView() {
             (no bottom nav) the min-height + auto-margin relax to the original
             stacked rhythm. The Vault of Aromas is no longer part of this screen —
             it lives one scroll down as the "second page". */}
-        <div className="flex min-h-[calc(100svh-var(--topbar-h)-var(--bottomnav-h))] flex-col gap-7 pt-3 sm:min-h-0 sm:gap-28 sm:pt-14">
+        <div className="flex min-h-[calc(100svh-var(--topbar-h)-var(--bottomnav-h))] flex-col gap-3.5 pt-3 sm:min-h-0 sm:gap-28 sm:pt-14">
           <HomepageHeroMarquee />
 
           <section className="relative mx-auto w-full max-w-[60rem] min-w-0 text-center">

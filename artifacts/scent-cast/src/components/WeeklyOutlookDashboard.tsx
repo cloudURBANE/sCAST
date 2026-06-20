@@ -108,16 +108,16 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({ 
       aria-label="Your week in scent"
       className="mx-auto w-full max-w-[60rem] min-w-0"
     >
-      <header className="mb-3 flex items-end justify-between gap-3 px-1 sm:mb-4">
+      <header className="mb-3 flex items-center justify-between gap-3 px-1 sm:mb-4">
         <div className="min-w-0">
-          <p className="scent-type-label text-scent-accent/88">Your week in scent</p>
+          <p className="scent-type-label text-scent-accent/88">Daily scent forecast</p>
           <h2 className="mt-1 break-words font-serif text-xl italic leading-tight text-[#fff7ec] sm:text-2xl">
-            7-day outlook
+            Your week in scent
           </h2>
         </div>
-        <div className="shrink-0 text-right">
+        <div className="max-w-[48%] shrink-0 rounded-[14px] border border-scent-accent/16 bg-[#050403] px-3 py-2 text-right shadow-[inset_0_1px_0_rgba(255,236,183,0.04)]">
           {weather?.location ? (
-            <p className="scent-type-meta text-[10px] uppercase tracking-[0.14em] text-scent-text-muted sm:text-[11px]">
+            <p className="truncate scent-type-meta text-[9px] uppercase tracking-[0.12em] text-scent-text-muted sm:text-[10px] sm:tracking-[0.14em]" title={weather.location}>
               {weather.location}
             </p>
           ) : null}
@@ -125,7 +125,7 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({ 
             href="https://open-meteo.com/"
             target="_blank"
             rel="noreferrer"
-            className="mt-1 inline-flex text-[8px] uppercase tracking-[0.12em] text-scent-text-muted/55 transition-colors hover:text-scent-text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/50"
+            className="mt-1 inline-flex text-[7px] uppercase tracking-[0.1em] text-scent-text-muted/55 transition-colors hover:text-scent-text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/50 sm:text-[8px] sm:tracking-[0.12em]"
           >
             Weather data by Open-Meteo
           </a>
@@ -142,7 +142,7 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({ 
         </div>
       ) : (
         <div
-          className="-mx-4 flex snap-x snap-mandatory gap-2.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:grid sm:grid-cols-7 sm:gap-2 sm:overflow-visible sm:px-0"
+          className="-mx-4 flex snap-x snap-mandatory items-stretch gap-2.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:grid sm:grid-cols-7 sm:gap-2 sm:overflow-visible sm:px-0"
           role="list"
         >
           {outlook.map(({ day, label, Icon, pickName, pickBrand }, index) => (
@@ -150,7 +150,7 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({ 
               key={day.date}
               role="listitem"
               className={[
-                'flex min-w-[7.25rem] shrink-0 snap-start flex-col items-center gap-2 rounded-[18px] border bg-[#050403] px-3 py-3.5 text-center shadow-[inset_0_1px_0_rgba(255,236,183,0.05)] sm:min-w-0',
+                'flex min-h-[10.5rem] min-w-[7.25rem] shrink-0 snap-start flex-col items-center gap-2 rounded-[18px] border bg-[#050403] px-3 py-3.5 text-center shadow-[inset_0_1px_0_rgba(255,236,183,0.05)] sm:min-w-0',
                 index === 0
                   ? 'border-scent-accent/55'
                   : 'border-scent-accent/18',
@@ -174,7 +174,7 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({ 
                 aria-hidden="true"
               />
               {hasVault && pickName ? (
-                <div className="min-w-0">
+                <div className="mt-auto min-w-0">
                   <p
                     className="line-clamp-2 break-words font-serif text-[12px] italic leading-tight text-[#fff7ec]"
                     title={pickBrand ? `${pickName} · ${pickBrand}` : pickName}
@@ -188,7 +188,7 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({ 
                   ) : null}
                 </div>
               ) : (
-                <p className="scent-type-meta text-[9px] uppercase tracking-[0.12em] text-scent-text-muted/80">
+                <p className="mt-auto scent-type-meta text-[9px] uppercase tracking-[0.12em] text-scent-text-muted/80">
                   {hasVault ? 'No match' : 'Add scents'}
                 </p>
               )}
