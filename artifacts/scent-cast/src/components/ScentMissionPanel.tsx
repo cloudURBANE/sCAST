@@ -209,7 +209,7 @@ const BEAM_AGENT_TIMEOUT_MS = 60000;
 // Shared chat-bubble shell for the agent's typing indicator (used both on first
 // open and while the agent is working a turn).
 const BEAM_TYPING_BUBBLE_CLASS =
-  'inline-flex max-w-[90%] items-center gap-1.5 self-start rounded-[calc(var(--radius-scent)-12px)] border border-scent-accent/18 bg-[linear-gradient(180deg,rgba(255,236,183,0.055),rgba(212,175,55,0.028)_42%,rgba(0,0,0,0.2))] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,236,183,0.055),0_10px_24px_rgba(0,0,0,0.22)]';
+  'inline-flex max-w-[92%] items-center gap-1.5 self-start rounded-[calc(var(--radius-scent)-10px)] border border-scent-accent/18 bg-[linear-gradient(180deg,rgba(255,236,183,0.055),rgba(212,175,55,0.028)_42%,rgba(0,0,0,0.2))] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,236,183,0.055),0_10px_24px_rgba(0,0,0,0.22)]';
 
 // Three dots with an organic, staggered shimmer so the agent reads as genuinely
 // "thinking" rather than mechanically blinking.
@@ -322,7 +322,7 @@ type BeamActivityStep = {
 };
 
 const BEAM_ACTIVITY_BUBBLE_CLASS =
-  'flex max-w-[92%] flex-col gap-1.5 self-start rounded-[calc(var(--radius-scent)-12px)] border border-scent-accent/16 bg-[linear-gradient(180deg,rgba(255,236,183,0.045),rgba(212,175,55,0.024)_44%,rgba(0,0,0,0.2))] px-3.5 py-3 shadow-[inset_0_1px_0_rgba(255,236,183,0.045),0_10px_24px_rgba(0,0,0,0.2)]';
+  'flex max-w-[92%] flex-col gap-1.5 self-start rounded-[calc(var(--radius-scent)-10px)] border border-scent-accent/18 bg-[linear-gradient(180deg,rgba(255,236,183,0.055),rgba(212,175,55,0.028)_42%,rgba(0,0,0,0.2))] px-3.5 py-3 shadow-[inset_0_1px_0_rgba(255,236,183,0.055),0_10px_24px_rgba(0,0,0,0.22)]';
 
 /** Human copy for each per-fragrance curate phase. */
 const CURATE_STATUS_COPY: Record<'adding' | 'curating' | 'ready' | 'failed', string> = {
@@ -430,7 +430,7 @@ const BeamActivityStepRow: React.FC<{ step: BeamActivityStep; spin: boolean }> =
   <div className="flex items-start gap-2">
     <span className="mt-[2px] flex h-4 w-4 shrink-0 items-center justify-center">
       {step.state === 'active' ? (
-        <Loader2 size={13} className={spin ? 'animate-spin' : ''} aria-hidden />
+        <Loader2 size={13} className={`text-scent-accent ${spin ? 'animate-spin' : ''}`} aria-hidden />
       ) : step.tone === 'error' ? (
         <AlertTriangle size={12} className="text-scent-accent/55" aria-hidden />
       ) : (
@@ -2067,7 +2067,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
           placeholder={busy ? 'Composing your recommendation…' : composerFocused ? '' : composerPlaceholder}
           aria-label="Message the Beam Agent"
           autoComplete="off"
-          className="min-w-0 flex-1 bg-transparent px-1 text-center text-[13px] font-medium tracking-[0.015em] text-[#fff7ec] caret-[#f5bd69] outline-none placeholder:text-[#d8c9b5]/72 disabled:cursor-not-allowed disabled:placeholder:text-scent-accent/70 sm:text-[15px]"
+          className={`min-w-0 flex-1 bg-transparent px-1 ${composer ? 'text-left' : 'text-center'} text-[13px] font-medium tracking-[0.015em] text-[#fff7ec] caret-[#f5bd69] outline-none placeholder:text-[#d8c9b5]/72 disabled:cursor-not-allowed disabled:placeholder:text-[#d8c9b5]/55 sm:text-[15px]`}
         />
         <button
           type="submit"
@@ -2087,11 +2087,11 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
             animate={{ opacity: 1, y: 0 }}
             exit={calmMotion ? { opacity: 0 } : { opacity: 0, y: 6 }}
             transition={calmMotion ? { duration: 0.18, ease: [0.22, 1, 0.36, 1] } : { type: 'spring', stiffness: 380, damping: 30 }}
-            className="absolute bottom-full left-0 right-0 z-20 mb-3 rounded-[calc(var(--radius-scent)-8px)] border border-scent-accent/22 bg-[#0c0a07]/95 p-3 text-center shadow-[0_-10px_34px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,236,183,0.06)]"
+            className="absolute bottom-full left-0 right-0 z-20 mb-3 rounded-[calc(var(--radius-scent)-10px)] border border-scent-accent/22 bg-[#0c0a07]/95 p-3 text-center shadow-[0_-10px_34px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,236,183,0.06)]"
           >
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
-                <p className="scent-type-label mb-1.5 text-center text-scent-accent/80">Response mode</p>
+                <p className="scent-type-label mb-1.5 text-center text-scent-accent/90">Response mode</p>
                 <div className="flex flex-wrap justify-center gap-1.5">
                   {MODE_OPTIONS.map(({ id, label, icon: Icon }) => {
                     const selected = agentMode === id;
@@ -2115,7 +2115,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                 </div>
               </div>
               <div>
-                <p className="scent-type-label mb-1.5 text-center text-scent-accent/80">Tone</p>
+                <p className="scent-type-label mb-1.5 text-center text-scent-accent/90">Tone</p>
                 <div className="flex flex-wrap justify-center gap-1.5">
                   {TONE_OPTIONS.map(({ id, label }) => {
                     const selected = tone === id;
@@ -2616,7 +2616,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                 ease: SCENT_EASE,
                 layout: { duration: 0.52, ease: SCENT_EASE },
               }}
-              className={`relative max-w-[90%] rounded-[calc(var(--radius-scent)-12px)] border px-3.5 py-2.5 text-[13px] leading-relaxed shadow-[inset_0_1px_0_rgba(255,236,183,0.04),0_10px_24px_rgba(0,0,0,0.2)] sm:text-sm ${
+              className={`relative max-w-[92%] rounded-[calc(var(--radius-scent)-10px)] border px-3.5 py-2.5 text-[13px] leading-relaxed shadow-[inset_0_1px_0_rgba(255,236,183,0.04),0_10px_24px_rgba(0,0,0,0.2)] sm:text-sm ${
                 message.role === 'user'
                   ? 'self-end border-scent-accent/18 bg-[linear-gradient(180deg,rgba(255,247,236,0.082),rgba(58,45,30,0.16))] text-[#fff7ec]'
                   : message.role === 'system'
@@ -2771,7 +2771,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
               role="group"
               aria-label={`Beam recommends ${proposalReveal.fragrance.name}`}
             >
-              <motion.p variants={revealItem} className="scent-type-label text-scent-accent">
+              <motion.p variants={revealItem} className="scent-type-label text-scent-accent/90">
                 Your match
               </motion.p>
               {proposalReveal.fragrance.brand ? (
@@ -2858,7 +2858,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                 </button>
               </motion.div>
               {!onCurateCollection ? (
-                <motion.p variants={revealItem} className="mt-2 scent-type-label text-scent-text-subtle">Sign in to save to your vault.</motion.p>
+                <motion.p variants={revealItem} className="mt-2 scent-type-label text-scent-text-subtle/70">Sign in to save to your vault.</motion.p>
               ) : null}
             </motion.div>
           ) : null}
@@ -2880,9 +2880,9 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
             >
               <div className="flex items-center gap-2">
                 {curating.done ? (
-                  <Check size={14} className="text-scent-accent" aria-hidden />
+                  <Check size={13} className="text-scent-accent" aria-hidden />
                 ) : (
-                  <Loader2 size={14} className={liveMotion ? 'animate-spin text-scent-accent' : 'text-scent-accent'} aria-hidden />
+                  <Loader2 size={13} className={liveMotion ? 'animate-spin text-scent-accent' : 'text-scent-accent'} aria-hidden />
                 )}
                 <span className="scent-type-label text-scent-accent">
                   {curating.done ? 'Collection curated' : 'Curating your collection…'}
@@ -2913,7 +2913,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
               className="scent-match-reveal max-w-[92%] self-start rounded-[calc(var(--radius-scent)-10px)] border border-scent-accent/32 bg-[linear-gradient(180deg,rgba(212,175,55,0.07),rgba(0,0,0,0.28))] p-4 text-left"
               data-calm={calmMotion ? 'true' : undefined}
             >
-              <motion.p variants={revealItem} className="scent-type-label text-scent-accent">Curated match</motion.p>
+              <motion.p variants={revealItem} className="scent-type-label text-scent-accent/90">Curated match</motion.p>
               {resolved.recommendation.brand ? (
                 <motion.p variants={revealItem} className="mt-2 font-serif text-xs uppercase tracking-[0.2em] text-scent-text-muted">
                   {resolved.recommendation.brand}
