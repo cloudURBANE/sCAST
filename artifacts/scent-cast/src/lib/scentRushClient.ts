@@ -88,7 +88,7 @@ async function read<T>(response: Response): Promise<T> {
       invalid_event_outcomes: 'The saved run did not match the verified game timeline. Start again.',
       run_not_found: 'This run is no longer available. Start a fresh run.',
     };
-    throw new Error(messages[body.error || ''] || body.error || 'ScentBeam Rush is unavailable.');
+    throw new Error(messages[body.error || ''] || body.error || 'Scent Rush is unavailable.');
   }
   return response.json() as Promise<T>;
 }
