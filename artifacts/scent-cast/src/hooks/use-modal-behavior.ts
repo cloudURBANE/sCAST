@@ -106,31 +106,55 @@ function lockBodyScroll(): () => void {
     if (scrollLockCount === 0) {
       const root = document.documentElement;
       const body = document.body;
-      if (previousBodyStyles) {
-        body.style.overflow = previousBodyStyles.overflow;
-        body.style.position = previousBodyStyles.position;
-        body.style.top = previousBodyStyles.top;
-        body.style.left = previousBodyStyles.left;
-        body.style.right = previousBodyStyles.right;
-        body.style.width = previousBodyStyles.width;
-        writeOverscrollBehavior(body, previousBodyStyles.overscrollBehavior);
-      }
-      if (previousRootStyles) {
-        root.style.overflow = previousRootStyles.overflow;
-        writeOverscrollBehavior(root, previousRootStyles.overscrollBehavior);
-      }
-      if (
-        scrollLockMode === "fixed-body" ||
-        window.scrollX !== lockedScrollX ||
-        window.scrollY !== lockedScrollY
-      ) {
-        window.scrollTo(lockedScrollX, lockedScrollY);
-      }
+      // Snapshot the values this teardown owns, then reset module state NOW so a
+      // re-lock during the deferred frame starts from a clean slate.
+      const restoreBodyStyles = previousBodyStyles;
+      const restoreRootStyles = previousRootStyles;
+      const restoreMode = scrollLockMode;
+      const restoreX = lockedScrollX;
+      const restoreY = lockedScrollY;
       previousBodyStyles = null;
       previousRootStyles = null;
       scrollLockMode = "fixed-body";
       lockedScrollX = 0;
       lockedScrollY = 0;
+
+      // Restore the body OUT of the commit frame. On iOS the lock pins the body
+      // with position:fixed; unfixing it and re-scrolling in the SAME frame as
+      // framer-motion's layout / popLayout exit animations makes WebKit measure
+      // FLIP transforms against a body mid-transition, which produces an
+      // un-painted (gray) compositor layer that locks the page — the iOS/iPadOS
+      // "tap Close → gray flash → freeze" bug. Deferring the unfix by one frame
+      // lets the exit animation take its first measured frame first, so the
+      // close stays smooth. Desktop is unaffected by the extra frame.
+      const restore = () => {
+        if (restoreBodyStyles) {
+          body.style.overflow = restoreBodyStyles.overflow;
+          body.style.position = restoreBodyStyles.position;
+          body.style.top = restoreBodyStyles.top;
+          body.style.left = restoreBodyStyles.left;
+          body.style.right = restoreBodyStyles.right;
+          body.style.width = restoreBodyStyles.width;
+          writeOverscrollBehavior(body, restoreBodyStyles.overscrollBehavior);
+        }
+        if (restoreRootStyles) {
+          root.style.overflow = restoreRootStyles.overflow;
+          writeOverscrollBehavior(root, restoreRootStyles.overscrollBehavior);
+        }
+        if (
+          restoreMode === "fixed-body" ||
+          window.scrollX !== restoreX ||
+          window.scrollY !== restoreY
+        ) {
+          window.scrollTo(restoreX, restoreY);
+        }
+      };
+
+      if (typeof window.requestAnimationFrame === "function") {
+        window.requestAnimationFrame(restore);
+      } else {
+        restore();
+      }
     }
   };
 }
