@@ -78,6 +78,9 @@ Thumbs.db
 !/.claude/skills/safe-edit-verify/SKILL.md
 !/.claude/skills/commit-discipline/
 !/.claude/skills/commit-discipline/SKILL.md
+!/.claude/commands/
+/.claude/commands/*
+!/.claude/commands/fix-beam.md
 
 # Env (never commit secrets)
 .env
@@ -93,3 +96,7 @@ supabase/.temp/
 
 # agent-run.mjs local command logs (never commit; keep .agent/config.json tracked)
 .agent/runs/
+
+# agent-context.mjs generated cache + latest report (never commit; regenerated on demand)
+.agent/context-map.json
+.agent/latest-context.md
