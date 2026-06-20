@@ -372,7 +372,7 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
                   [
                     'inline-flex min-h-11 flex-col items-center justify-center gap-px rounded-full px-2 text-[10px] font-bold uppercase tracking-[0.12em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55',
                     isActive
-                      ? 'bg-scent-accent text-black shadow-[0_0_18px_rgba(212,175,55,0.18)]'
+                      ? 'bg-gradient-to-b from-scent-gold-200 to-scent-accent text-black shadow-[inset_0_1px_0_rgba(255,247,236,0.45)]'
                       : 'text-scent-text-muted hover:text-foreground',
                   ].join(' ')
                 }
