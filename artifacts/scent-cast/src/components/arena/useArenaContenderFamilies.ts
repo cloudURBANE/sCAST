@@ -2,11 +2,13 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   getFragranceDetails,
-  resolveMainAccordChartRows,
-  type FragranceDetail,
+  searchFragrances,
+  type FragranceDetailRequestPayload,
+  type FragranceSearchResult,
 } from "@/lib/fragranceApi";
 import { sanitizeFamilyLabel } from "@/lib/wardrobeSearchSuggest";
 import type { ArenaBattle, ArenaBattleSide } from "@/components/arena/arenaBattleMapper";
+import { resolveArenaFamilyFromDetail } from "@/components/arena/arenaFamilyResolver";
 
 const FAMILY_FALLBACKS = new Set(["classic fragrance", "community option"]);
 
@@ -20,23 +22,50 @@ function hasRealFamily(side: ArenaBattleSide): boolean {
   return Boolean(side.family || !FAMILY_FALLBACKS.has(side.descriptor.trim().toLowerCase()));
 }
 
-function familyFromDetail(detail: FragranceDetail): string | null {
-  const direct = sanitizeFamilyLabel(detail.family);
-  if (direct) return direct;
+async function familyForPayload(payload: FragranceDetailRequestPayload, signal?: AbortSignal): Promise<string | null> {
+  const detail = await getFragranceDetails(payload, { signal });
+  return resolveArenaFamilyFromDetail(detail);
+}
 
-  const rows = resolveMainAccordChartRows(detail.derived_metrics?.main_accords, null);
-  return sanitizeFamilyLabel(rows[0]?.label);
+function detailPayloadForSearchResult(result: FragranceSearchResult): FragranceDetailRequestPayload {
+  return {
+    id: result.id,
+    ...(result.source_url ? { source_url: result.source_url } : {}),
+    ...(result.origin ? { origin: result.origin } : {}),
+  };
+}
+
+async function tryFamilyForPayload(payload: FragranceDetailRequestPayload, signal?: AbortSignal): Promise<string | null> {
+  try {
+    return await familyForPayload(payload, signal);
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") throw err;
+    return null;
+  }
 }
 
 async function fetchFamily(side: ArenaBattleSide, signal?: AbortSignal): Promise<string | null> {
   const id = side.fragranceId?.trim() || stableFragranceId(side.brand, side.name);
-  const detail = await getFragranceDetails({ id, origin: "app" }, { signal });
-  return familyFromDetail(detail);
+  const direct = await tryFamilyForPayload({ id, origin: "app", recover_incomplete: true }, signal);
+  if (direct) return direct;
+
+  const query = [side.brand, side.name].filter(Boolean).join(" ").trim() || side.name;
+  const search = await searchFragrances(query, { signal });
+  const best = search.results.find((result) => {
+    const resultName = result.name.trim().toLowerCase();
+    const resultHouse = (result.house || result.brand || "").trim().toLowerCase();
+    const nameMatches = resultName === side.name.trim().toLowerCase();
+    const brandMatches = !side.brand || resultHouse === side.brand.trim().toLowerCase();
+    return nameMatches && brandMatches;
+  }) ?? search.results[0];
+
+  return best ? tryFamilyForPayload(detailPayloadForSearchResult(best), signal) : null;
 }
 
 function useContenderFamily(side: ArenaBattleSide) {
+  const cleanId = side.fragranceId?.trim();
   return useQuery({
-    queryKey: ["arena", "contender-family", side.fragranceId || side.brand || "", side.name],
+    queryKey: ["arena", "contender-family", cleanId || side.brand || "", side.name],
     queryFn: ({ signal }) => fetchFamily(side, signal),
     enabled: !hasRealFamily(side),
     staleTime: 24 * 60 * 60 * 1000,

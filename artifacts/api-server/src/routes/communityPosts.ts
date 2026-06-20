@@ -29,7 +29,7 @@ import {
   nextStreak,
   resolveCrowdLeader,
 } from "../services/crowdReadCore";
-import { cleanArenaBeamRunId, scoreArenaBeamRun } from "../services/arenaBeamPowerCore";
+import { cleanArenaBeamRunId, resolveArenaBeamFragranceId, scoreArenaBeamRun } from "../services/arenaBeamPowerCore";
 import { logger } from "../lib/logger";
 
 const router = Router();
@@ -138,13 +138,6 @@ function cleanRequiredText(value: unknown, maxLength: number): string | null {
   const trimmed = value.trim();
   if (!trimmed || trimmed.length > maxLength) return null;
   return trimmed;
-}
-
-function stableFragranceId(brand: string | undefined, name: string | undefined): string | null {
-  if (!name?.trim()) return null;
-  const part = (value: string) =>
-    value.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
-  return `catalog:${part(brand?.trim() || "unknown")}:${part(name.trim())}`;
 }
 
 function isPostType(value: unknown): value is CommunityPostType {
@@ -513,7 +506,7 @@ async function buildPostDtos(tenantId: string, posts: PostRow[], viewerId?: stri
 
   const fragranceIds = [...new Set(fragranceRows.flatMap((row) => {
     const snapshot = row.fragrance as FragranceSnapshot;
-    const fragranceId = snapshot.fragranceId ?? stableFragranceId(snapshot.brand, snapshot.name);
+    const fragranceId = resolveArenaBeamFragranceId(snapshot);
     return fragranceId ? [fragranceId] : [];
   }))];
   let beamRows: Array<{ fragranceId: string; supporters: number; totalBeamPower: number }> = [];
@@ -545,7 +538,7 @@ async function buildPostDtos(tenantId: string, posts: PostRow[], viewerId?: stri
   for (const row of fragranceRows) {
     const fragrances = fragrancesByPost.get(row.postId) ?? [];
     const snapshot = row.fragrance as FragranceSnapshot;
-    const fragranceId = snapshot.fragranceId ?? stableFragranceId(snapshot.brand, snapshot.name) ?? undefined;
+    const fragranceId = resolveArenaBeamFragranceId(snapshot) ?? undefined;
     const beam = fragranceId ? beamByFragrance.get(fragranceId) : undefined;
     fragrances.push({
       ...snapshot,
@@ -1438,10 +1431,7 @@ router.post("/community/posts/:id/beam", requireAuth, async (req: AuthRequest, r
       ))
       .limit(1);
     const snapshot = (fragranceRows[0]?.fragrance ?? null) as Partial<FragranceSnapshot> | null;
-    const fragranceId =
-      typeof snapshot?.fragranceId === "string" && snapshot.fragranceId.trim()
-        ? snapshot.fragranceId.trim()
-        : stableFragranceId(snapshot?.brand, snapshot?.name);
+    const fragranceId = resolveArenaBeamFragranceId(snapshot);
     if (!fragranceId) {
       sendBadRequest(res, "battle contender is missing a fragrance id");
       return;
