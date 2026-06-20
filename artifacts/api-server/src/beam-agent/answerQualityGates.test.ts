@@ -561,6 +561,38 @@ test("commit policy: 'I can't pick yet' is rejected when the user is owed a pick
   assert.ok(r.violations.includes("commit_refusal"), JSON.stringify(r.violations));
 });
 
+test("commit policy: 'I'd rather know' / 'tell me more first' deferrals are rejected when owed", () => {
+  // These two declarative deferrals slipped past the original DEFERRAL_PATTERN
+  // (no commit verb, no "before I <verb>"), so a delegated turn could still defer
+  // with them. Both curly and straight apostrophes must be caught.
+  for (const draft of [
+    "I’d rather know your budget first, then I’ll line up the two.",
+    "I'd rather know a bit more about your plans before I commit.",
+    "I would rather understand the vibe first.",
+    "Tell me more first and I’ll pick the two.",
+    "Tell me a bit more before I lock these in.",
+  ]) {
+    const r = runAnswerQualityGates(draft, DELEGATED_TOKYO);
+    assert.ok(r.violations.includes("commit_refusal"), `${draft} -> ${JSON.stringify(r.violations)}`);
+  }
+});
+
+test("commit policy: 'tell me more about ...' engagement and 'I'd rather you ...' commitment do NOT fire", () => {
+  // Guard the new patterns against overfiring on a committed answer that invites
+  // post-pick engagement or steers the user with "I'd rather you …".
+  const engagement = runAnswerQualityGates(
+    "Pack Acqua di Giò Profumo and Mr Burberry for the heat. Tell me more about how the Profumo wears on you and I’ll fine-tune.",
+    DELEGATED_TOKYO,
+  );
+  assert.ok(!engagement.violations.includes("commit_refusal"), JSON.stringify(engagement.violations));
+
+  const steer = runAnswerQualityGates(
+    "I’d rather you go bold here — wear Acqua di Giò Profumo, and add Mr Burberry for a crisp woody contrast.",
+    DELEGATED_TOKYO,
+  );
+  assert.ok(!steer.violations.includes("commit_refusal"), JSON.stringify(steer.violations));
+});
+
 test("commit policy: a confident committed answer with assumptions passes", () => {
   const r = runAnswerQualityGates(
     "Based on what you gave me, I'm assuming hot, humid Tokyo days. I'd pack Acqua di Giò Profumo " +

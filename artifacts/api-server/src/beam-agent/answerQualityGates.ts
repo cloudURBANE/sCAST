@@ -176,6 +176,14 @@ const DEFERRAL_PATTERN = new RegExp(
     String.raw`\bnot\s+enough\s+(?:info|information|context|to\s+go\s+on)\b`,
     // "before I (can) recommend/pick/commit/decide"
     String.raw`\bbefore\s+i\s+(?:can\s+)?(?:recommend|pick|commit|choose|decide)\b`,
+    // "I'd rather know / hear / understand / learn ..." — wants more info before
+    // committing (apostrophe class covers the straight ' and curly ’ models emit).
+    // Scoped to info verbs so "I'd rather you go bold" (a commitment) never trips.
+    String.raw`\b(?:i['’]?d|i\s+would)\s+rather\s+(?:know|hear|understand|learn)\b`,
+    // "tell me (a bit) more first/before ..." — defers the pick pending more input.
+    // The "first/before" anchor keeps engagement prose ("tell me more about how it
+    // wears") from firing.
+    String.raw`\btell\s+me\s+(?:a\s+(?:bit|little)\s+)?more\s+(?:first|before)\b`,
   ].join("|"),
   "i",
 );
