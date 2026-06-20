@@ -1,5 +1,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { logger } from "../lib/logger";
+import { optionalAuth } from "../middlewares/auth";
+import { createEngineProxyCostGuard } from "./engineProxyCostGuard";
 
 const router: IRouter = Router();
 
@@ -77,6 +79,19 @@ async function proxyToEngine(req: Request, res: Response) {
   }
 }
 
-router.all("/engine/*path", proxyToEngine);
+function positiveIntEnv(name: string, fallback: number): number {
+  const raw = Number(process.env[name]?.trim());
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : fallback;
+}
+
+const engineProxyCostGuard = createEngineProxyCostGuard({
+  anonLimit: positiveIntEnv("ENGINE_PROXY_ANON_RATE_LIMIT", 60),
+  authedLimit: positiveIntEnv("ENGINE_PROXY_AUTH_RATE_LIMIT", 600),
+  windowMs: 5 * 60_000,
+});
+
+// optionalAuth populates req.user when a valid bearer token is present (no DB hit
+// for guests), so the guard can tell anonymous from authenticated callers.
+router.all("/engine/*path", optionalAuth, engineProxyCostGuard, proxyToEngine);
 
 export default router;

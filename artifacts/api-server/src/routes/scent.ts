@@ -19,6 +19,11 @@ import { imageReferenceDiagnostic, usableImageUrlForResponse } from "../services
 import { resolveSharedImageReference } from "../services/imageHydration";
 import { parseIncomingImageUrl } from "../services/incomingImageUrl";
 import {
+  RefreshAttemptCounter,
+  decideRefreshThrottle,
+  refreshAttemptKey,
+} from "../services/refreshImageThrottle";
+import {
   asciiForImageSearch,
   resolveFragranceIdentity,
   resolveFragranceQuery,
@@ -27,6 +32,10 @@ import {
 import type { Concentration } from "../services/scentParser";
 
 const router = Router();
+
+// Server-owned refresh-image attempt counter. Replaces the old client-supplied
+// `refreshCount`, which a client could reset to bypass the regeneration caps.
+const refreshAttemptCounter = new RefreshAttemptCounter();
 
 type ConcentrationHint = "edt" | "edp" | "parfum" | "extrait" | "elixir";
 
@@ -464,12 +473,20 @@ router.post("/refresh-image", async (req, res) => {
     let skipBg = solverSkipsBgRemoval(solverId);
     if (typeof body.skipBg === "boolean") skipBg = body.skipBg;
 
-    if (!solverId && (refreshCount ?? 0) > 3) {
-      res.status(429).json({ error: "Automatic image regeneration paused. Choose what looks wrong and try with a hint." });
-      return;
-    }
-    if ((refreshCount ?? 0) > 10) {
-      res.status(429).json({ error: "Too many image regeneration attempts for this session." });
+    // Abuse caps are enforced from SERVER-owned state, not the client's
+    // `refreshCount` (which a client can reset to drive unbounded paid
+    // regeneration). Count this attempt per client + fragrance; `priorAttempts`
+    // is everything before it, matching the thresholds the old gate used.
+    const priorAttempts =
+      refreshAttemptCounter.record(refreshAttemptKey(req.ip || "unknown", imageBrand, imageName)) - 1;
+    const throttle = decideRefreshThrottle(priorAttempts, Boolean(solverId));
+    if (!throttle.allowed) {
+      res.status(429).json({
+        error:
+          throttle.reason === "needs-solver"
+            ? "Automatic image regeneration paused. Choose what looks wrong and try with a hint."
+            : "Too many image regeneration attempts for this session.",
+      });
       return;
     }
 
@@ -503,6 +520,7 @@ router.post("/refresh-image", async (req, res) => {
       {
         solverId: solverId ?? null,
         refreshCount: refreshCount ?? null,
+        serverAttempts: priorAttempts,
         refine,
         skipBg,
         poofType: poofType ?? null,
