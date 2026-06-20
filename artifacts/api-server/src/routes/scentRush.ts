@@ -68,6 +68,15 @@ function manifestFromOwnedFragrance(fragranceId: string, raw: unknown) {
   });
 }
 
+function isMissingRushTableError(error: unknown): boolean {
+  let current: unknown = error;
+  for (let depth = 0; depth < 4 && current && typeof current === "object"; depth += 1) {
+    if ((current as { code?: unknown }).code === "42P01") return true;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return false;
+}
+
 async function progressSummary(tenantId: string, fragranceId: string, userId?: string) {
   const [aggregateRows, userRows] = await Promise.all([
     db
@@ -95,7 +104,15 @@ router.get("/fragrances/:fragranceId/rush/progress", optionalAuth, async (req: A
   try {
     const fragranceId = routeParam(req.params.fragranceId);
     if (!fragranceId) return void res.status(400).json({ error: "invalid_fragrance_id" });
-    res.json(await progressSummary(getTenantId(req), fragranceId, req.user?.id));
+    try {
+      res.json(await progressSummary(getTenantId(req), fragranceId, req.user?.id));
+    } catch (err) {
+      // Before the scent_rush migration is pushed the progress tables don't exist;
+      // degrade to a zeroed summary (mirrors communityPosts) so the Arena card renders
+      // cleanly instead of surfacing a "could not load" error on a brand-new feature.
+      if (!isMissingRushTableError(err)) throw err;
+      res.json(buildRushProgressSummary(undefined, []));
+    }
   } catch (err) {
     next(err);
   }
