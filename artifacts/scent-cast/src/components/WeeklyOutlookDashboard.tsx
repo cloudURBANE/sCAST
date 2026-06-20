@@ -185,21 +185,40 @@ function ForecastHero({
         className="absolute inset-0 motion-safe:[transform:translateZ(0)] motion-safe:[backface-visibility:hidden] motion-safe:[will-change:transform,opacity]"
       >
         {pick && fragrance ? (
-          <button
-            type="button"
-            onClick={onSelect ? () => onSelect(fragrance) : undefined}
-            disabled={!onSelect}
-            className="group flex h-full w-full items-center justify-center gap-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:cursor-default sm:gap-3"
-            aria-label={onSelect ? `Open ${pick.name} by ${pick.brand}` : `${pick.name} by ${pick.brand}`}
-          >
+          // Only the BOTTLE opens the fragrance — the title/brand/notes are now
+          // read-only. Previously the whole hero (bottle + text) was one <button>,
+          // so tapping the NAME also navigated; product feedback is that the name
+          // must NOT be a tap target. The row stays a plain flex container; the
+          // bottle is the lone interactive element and the text sits beside it as
+          // static copy.
+          <div className="flex h-full w-full items-center justify-center gap-1.5 sm:gap-3">
             {/* Normalized bottle frame — a fixed share of the hero (not a full-width
                 column), so the bottle and the title read as ONE centered unit instead
                 of splitting to opposite edges. `forecast-hero-bottle` cancels the +9%
                 normalized upscale (see index.css) so this tight square slot can never
                 clip the cap, and the wrapper's bottom padding raises the shelf line a
                 touch so the bottle sits beside — not below — the title. The shared
-                width + `object-contain` keep every pick's footprint uniform. */}
-            <div className="forecast-hero-bottle relative h-full w-[46%] max-w-[12rem] shrink-0 pb-[5%] sm:w-[44%] sm:max-w-[12.5rem]">
+                width + `object-contain` keep every pick's footprint uniform.
+
+                ANIMATION NOTE (shared-bottle morph — fix-later flag): tapping a
+                fragrance "card image" everywhere else (Wardrobe grid, Community feed)
+                plays a framer-motion shared-element morph driven by
+                `layoutId={`wardrobe-bottle-${id}`}` + `bottleMorphTransition`
+                (see Wardrobe.tsx). This bottle opens the SAME detail via the shared
+                `onSelect` → `openFragranceDetail` path, so the modal still morphs from
+                the matching grid bottle — but this forecast bottle does NOT itself
+                carry that `layoutId`, so the morph does not originate from the hero.
+                Deliberately left as-is and flagged here so the shared-morph animation
+                can be wired/standardized from this surface in a later, dedicated pass
+                (kept as one note so every place we implement this animation can be
+                fixed together). */}
+            <button
+              type="button"
+              onClick={onSelect ? () => onSelect(fragrance) : undefined}
+              disabled={!onSelect}
+              className="group forecast-hero-bottle relative h-full w-[46%] max-w-[12rem] shrink-0 pb-[5%] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:cursor-default sm:w-[44%] sm:max-w-[12.5rem]"
+              aria-label={onSelect ? `Open ${pick.name} by ${pick.brand}` : `${pick.name} by ${pick.brand}`}
+            >
               <BottleImage
                 src={fragrance.imageUrl}
                 alt={`${pick.brand} ${pick.name}`}
@@ -210,13 +229,14 @@ function ForecastHero({
                 imgClassName="transition-transform duration-500 group-hover:scale-[1.03] motion-reduce:transform-none"
                 loading="eager"
               />
-            </div>
+            </button>
             {/* Width-constrained text stack read as ONE unit: CREED eyebrow → name →
                 lead notes. Hierarchy mirrors how a fragrance is billed (house quiet,
                 NAME the headline). The narrow max-width makes the title wrap in a
                 controlled, premium way and NEVER truncate with an ellipsis — a 3-word
                 name like "Silver Mountain Water" breaks after "Mountain", while a
-                tighter name like "Green Irish Tweed" stays balanced on one line. */}
+                tighter name like "Green Irish Tweed" stays balanced on one line.
+                NON-INTERACTIVE by design: the name is not a tap target (see above). */}
             <div className="flex min-w-0 max-w-[12.25rem] flex-col items-center justify-center self-center text-center sm:max-w-[15rem]">
               <p className="scent-type-label text-[10px] tracking-[0.3em] text-scent-accent/80 sm:text-[12px]">
                 {pick.brand}
@@ -230,7 +250,7 @@ function ForecastHero({
                 </p>
               ) : null}
             </div>
-          </button>
+          </div>
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-3 px-12 text-center">
             <Sparkles size={24} strokeWidth={1.5} className="text-scent-accent/75" aria-hidden />
