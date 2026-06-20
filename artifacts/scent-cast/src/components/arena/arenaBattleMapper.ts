@@ -2,11 +2,19 @@ import type { CommunityFragranceSnapshot, CommunityPost } from '@/components/com
 import { isArenaReasonKey, type ArenaReasonKey } from './arenaTwists.ts';
 
 export interface ArenaBattleSide {
+  fragranceId: string;
+  beamSupporters: number;
+  totalBeamPower: number;
   key: string;
   name: string;
   brand?: string;
   imageUrl?: string;
   descriptor: string;
+}
+
+function stableFragranceId(brand: string | undefined, name: string): string {
+  const part = (value: string) => value.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  return `catalog:${part(brand || 'unknown')}:${part(name)}`;
 }
 
 export interface ArenaBattle {
@@ -33,6 +41,9 @@ function battleOptions(post: CommunityPost): [string, string] | null {
 
 function sideFromOption(option: string, fragrance: CommunityFragranceSnapshot | undefined): ArenaBattleSide {
   return {
+    fragranceId: fragrance?.fragranceId?.trim() || stableFragranceId(fragrance?.brand, fragrance?.name?.trim() || option),
+    beamSupporters: Math.max(0, Number(fragrance?.beamSupporters) || 0),
+    totalBeamPower: Math.max(0, Number(fragrance?.totalBeamPower) || 0),
     key: option,
     name: fragrance?.name?.trim() || option,
     ...(fragrance?.brand?.trim() ? { brand: fragrance.brand.trim() } : {}),

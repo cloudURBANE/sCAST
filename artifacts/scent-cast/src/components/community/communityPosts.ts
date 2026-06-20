@@ -24,6 +24,9 @@ export interface CommunityAuthor {
 }
 
 export interface CommunityFragranceSnapshot {
+  fragranceId?: string;
+  beamSupporters?: number;
+  totalBeamPower?: number;
   name: string;
   brand: string;
   imageUrl?: string;
