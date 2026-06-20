@@ -148,6 +148,72 @@ function delegatedButDeferred(
 }
 
 /**
+ * Explicit deferral / "I'm not ready" language. These are the phrasings the
+ * Recommendation Commit Policy forbids once the user is owed a pick — refusals
+ * that the question-shaped (`delegated_but_questioned`) and zero-pick
+ * (`recommendation_without_grounded_pick`) gates miss because the answer either
+ * carries no `?` or still names a pick while leading with a hedge ("I'm not ready
+ * to commit, but maybe Aventus"). Patterns are deferral-specific so a committed
+ * answer that merely steers AWAY from a category ("I can't recommend a dense
+ * gourmand here, so reach for X") never trips: "recommend" alone is excluded; the
+ * commit verbs (commit/pick/choose/decide) and the "not ready / need more info /
+ * before I" frames are the trigger.
+ */
+const DEFERRAL_PATTERN = new RegExp(
+  [
+    // "not ready to commit / pick / recommend / decide"
+    String.raw`\bnot\s+(?:yet\s+)?ready\s+to\s+(?:commit|pick|choose|decide|recommend|call\s+it)\b`,
+    // bare "I'm not ready"
+    String.raw`\b(?:i'?m|i\s+am)\s+not\s+(?:quite\s+)?ready\b`,
+    // "I can't / cannot pick|choose|decide|commit (yet)" — intransitive commit verbs only
+    String.raw`\b(?:can'?t|cannot|not\s+able\s+to|unable\s+to)\s+(?:quite\s+|yet\s+)?(?:commit|pick|choose|decide)\b(?:\s+(?:yet|right\s+now|just\s+yet))?`,
+    // "can't confidently pick/recommend" / "not confident enough"
+    String.raw`\b(?:can'?t|cannot)\s+confidently\s+(?:commit|pick|choose|decide|recommend)\b`,
+    String.raw`\bnot\s+confident\s+enough\s+to\s+(?:commit|pick|choose|decide|recommend)\b`,
+    // "I need / I'd need more info|information|details|context" (not "if YOU need …")
+    String.raw`(?<!you\s)(?<!if\syou\s)\b(?:i\s+(?:still\s+)?need|i'?d\s+need|i\s+would\s+need|need)\s+(?:a\s+bit\s+)?more\s+(?:info|information|details?|context|to\s+go\s+on)\b`,
+    // "not enough info/context to go on"
+    String.raw`\bnot\s+enough\s+(?:info|information|context|to\s+go\s+on)\b`,
+    // "before I (can) recommend/pick/commit/decide"
+    String.raw`\bbefore\s+i\s+(?:can\s+)?(?:recommend|pick|commit|choose|decide)\b`,
+  ].join("|"),
+  "i",
+);
+
+/**
+ * Recommendation Commit Policy backstop. Once the user is owed a concrete pick
+ * (they delegated the choice, stated a plain recommendation intent, or a travel
+ * kit has enough context to fulfill), the agent must commit — never lead with a
+ * deferral. Fires when such a turn uses forbidden deferral language AND at least
+ * one SAFE (non-avoided) grounded pick is on the table, so the single repair pass
+ * can always rewrite it into a clean, named commitment. If every grounded
+ * candidate violates an avoid constraint — or nothing was retrieved at all — the
+ * agent legitimately cannot commit, so this stays silent (the zero-pick gate and
+ * the retrieval nudge own those paths).
+ */
+function refusedToCommit(
+  text: string,
+  state: BeamSessionState | undefined,
+  grounded: BeamGroundedFragrance[],
+): boolean {
+  if (!isOwedRecommendation(state)) return false;
+  if (!DEFERRAL_PATTERN.test(text)) return false;
+  return grounded.some((item) => item.matchedAvoid !== true);
+}
+
+/**
+ * The user is owed a concrete recommendation this turn: they delegated the
+ * choice, asked for a plain recommendation, or a travel kit has enough context to
+ * fulfill. Shared by the commit-policy and zero-pick backstops.
+ */
+function isOwedRecommendation(state: BeamSessionState | undefined): boolean {
+  if (state?.userDelegatedChoice || state?.mission?.userDelegatedChoice) return true;
+  if (state?.mission?.intent === "recommendation") return true;
+  if (state?.mission?.intent === "travel_kit" && missionReadyForFulfillment(state)) return true;
+  return false;
+}
+
+/**
  * Avoid backstop (audit A3 depth): the captured `avoid` slot is enforced at
  * retrieval (`excludeAvoidedHits`), but owned-vault picks and research results
  * bypass that filter, so the model can still surface an avoided note via those
@@ -268,6 +334,9 @@ export function runAnswerQualityGates(answerText: string, input: QualityGateInpu
   if (delegatedButDeferred(text, input.sessionState, input.groundedFragrances ?? [])) {
     violations.push("delegated_but_questioned");
   }
+  if (refusedToCommit(text, input.sessionState, input.groundedFragrances ?? [])) {
+    violations.push("commit_refusal");
+  }
   if (namesWrongTravelLocation(text, input.sessionState, input.localWeatherLocation)) {
     violations.push("destination_context_mismatch");
   }
@@ -367,6 +436,8 @@ export function repairInstructionFor(violations: string[]): string {
     fixes.push("The latest user message did not answer the active question. Acknowledge useful context, then re-ask that same slot with choices from its category only.");
   if (violations.includes("delegated_but_questioned"))
     fixes.push("The user delegated the choice - do NOT ask another preference question; commit to a specific grounded recommendation now.");
+  if (violations.includes("commit_refusal"))
+    fixes.push("Remove all deferral/hedging language ('not ready to commit', 'I need more information', 'I can't pick yet'). The user asked you to decide and you have grounded options - lead with a confident named pick and state any assumptions instead of asking for more.");
   if (violations.includes("mission_unfulfilled"))
     fixes.push("Fulfill the travel-kit target exactly: name exactly the requested count in each requested lane, using only grounded results; new picks must be unowned.");
   if (violations.includes("recommendation_count_short"))
