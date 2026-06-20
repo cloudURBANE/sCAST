@@ -159,7 +159,6 @@ function ForecastHero({
   const pick = plan.pick;
   const fragrance = pick?.item ?? null;
   const notes = fragrance ? fragranceNotes(fragrance) : [];
-  const meta = pick ? forecastMeta(plan.day, pick.recommendation) : [];
   // Key the transition on the displayed *content* (the pick), not the calendar
   // day. Consecutive days frequently resolve to the same recommended bottle, and
   // keying on the date re-mounted BottleImage — re-fetching/decoding the identical
@@ -190,53 +189,45 @@ function ForecastHero({
             type="button"
             onClick={onSelect ? () => onSelect(fragrance) : undefined}
             disabled={!onSelect}
-            className="group grid h-full w-full grid-cols-[46%_54%] items-center text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:cursor-default sm:grid-cols-[40%_60%]"
+            className="group flex h-full w-full items-center justify-center gap-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:cursor-default sm:gap-3"
             aria-label={onSelect ? `Open ${pick.name} by ${pick.brand}` : `${pick.name} by ${pick.brand}`}
           >
-            {/* Bottle FILLS its column (height + width) — not a width-clamped square.
-                A narrow mobile column would cap an `aspect-square` packshot at the
-                column width and ignore the tall hero, rendering it tiny and floating.
-                Filling the slot lets `object-fit: contain` + `center bottom` size each
-                normalized 768² packshot to the full column width AND seat them all on
-                one shelf line: big and uniform. Tight artboard inset on phones draws
-                it as large as the column allows; desktop keeps its 7% breathing room. */}
-            <BottleImage
-              src={fragrance.imageUrl}
-              alt={`${pick.brand} ${pick.name}`}
-              variant="featured"
-              adjustment={fragrance.imageAdjustment}
-              imageProperties={fragrance.imageProperties}
-              className="h-full w-full [&_.bottle-artboard]:inset-[0%] sm:[&_.bottle-artboard]:inset-[7%]"
-              imgClassName="transition-transform duration-500 group-hover:scale-[1.025] motion-reduce:transform-none"
-              loading="eager"
-            />
-            {/* One centered column beside the bottle, read as ONE text unit:
-                brand → name → notes → weather caption (no decorative divider rule).
-                Hierarchy mirrors how a fragrance is actually billed — the HOUSE is a
-                quiet eyebrow and the fragrance NAME is the headline (the previous
-                build inverted this, a 3.4rem "Creed" dwarfing the scent it forecast).
-                The lead notes and the weather caption tie the bottle to the day's
-                conditions so the card reads as a forecast, not a random packshot, and
-                the tight rhythm pairs the block with the bottle as a single hero. */}
-            <div className="flex min-w-0 flex-col items-center justify-center self-center px-1 text-center sm:px-4">
-              <p className="scent-type-label text-[10px] tracking-[0.32em] text-scent-accent/80 sm:text-[12px]">
+            {/* Normalized bottle frame — a fixed share of the hero (not a full-width
+                column), so the bottle and the title read as ONE centered unit instead
+                of splitting to opposite edges. `forecast-hero-bottle` cancels the +9%
+                normalized upscale (see index.css) so this tight square slot can never
+                clip the cap, and the wrapper's bottom padding raises the shelf line a
+                touch so the bottle sits beside — not below — the title. The shared
+                width + `object-contain` keep every pick's footprint uniform. */}
+            <div className="forecast-hero-bottle relative h-full w-[46%] max-w-[12rem] shrink-0 pb-[5%] sm:w-[44%] sm:max-w-[12.5rem]">
+              <BottleImage
+                src={fragrance.imageUrl}
+                alt={`${pick.brand} ${pick.name}`}
+                variant="featured"
+                adjustment={fragrance.imageAdjustment}
+                imageProperties={fragrance.imageProperties}
+                className="h-full w-full [&_.bottle-artboard]:inset-[1%] sm:[&_.bottle-artboard]:inset-[6%]"
+                imgClassName="transition-transform duration-500 group-hover:scale-[1.03] motion-reduce:transform-none"
+                loading="eager"
+              />
+            </div>
+            {/* Width-constrained text stack read as ONE unit: CREED eyebrow → name →
+                lead notes. Hierarchy mirrors how a fragrance is billed (house quiet,
+                NAME the headline). The narrow max-width makes the title wrap in a
+                controlled, premium way and NEVER truncate with an ellipsis — a 3-word
+                name like "Silver Mountain Water" breaks after "Mountain", while a
+                tighter name like "Green Irish Tweed" stays balanced on one line. */}
+            <div className="flex min-w-0 max-w-[12.25rem] flex-col items-center justify-center self-center text-center sm:max-w-[15rem]">
+              <p className="scent-type-label text-[10px] tracking-[0.3em] text-scent-accent/80 sm:text-[12px]">
                 {pick.brand}
               </p>
-              <p className="mt-1 line-clamp-2 font-serif text-[clamp(1.55rem,7.2vw,2.7rem)] leading-[1.04] text-[#fff7ec]">
+              <p className="mt-1 font-serif text-[clamp(1.35rem,5.6vw,2.1rem)] leading-[1.07] text-[#fff7ec] [overflow-wrap:break-word]">
                 {pick.name}
               </p>
               {notes.length > 0 ? (
-                <p className="mt-1.5 line-clamp-2 font-serif text-[clamp(0.85rem,3.4vw,1.2rem)] italic leading-snug text-scent-accent/85 sm:mt-2">
+                <p className="mt-1.5 line-clamp-2 font-serif text-[clamp(0.8rem,3vw,1.05rem)] italic leading-snug text-scent-accent/85 sm:mt-2">
                   {notes.join(' · ')}
                 </p>
-              ) : null}
-              {meta.length > 0 ? (
-                <div className="mt-2 flex items-center justify-center gap-1.5 text-[#cdbfa9]">
-                  <WeatherGlyph day={plan.day} size={13} />
-                  <span className="text-[9.5px] font-medium uppercase tracking-[0.14em] sm:text-[11px]">
-                    {meta.join(' · ')}
-                  </span>
-                </div>
               ) : null}
             </div>
           </button>
@@ -292,6 +283,9 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
   };
 
   const activePlan = outlook[selected] ?? null;
+  const activeMeta = activePlan?.pick
+    ? forecastMeta(activePlan.day, activePlan.pick.recommendation)
+    : [];
 
   return (
     <section
@@ -310,12 +304,13 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
         </div>
       ) : (
         <>
-          {/* Generous hero height on phone (was 8.75rem) — fills the column space the
-              page used to waste as dead margin above the forecast, so the packshot
-              reads big and intentional instead of as a thumbnail. */}
-          <div className="relative mt-3 h-[14.5rem] sm:mt-3 sm:h-[16rem]">
+          {/* Hero frame is width-capped and centered so the carousel chevrons anchor
+              to the actual composition (bottle + text) instead of floating against
+              the page edges, and the generous height gives the packshot real product
+              presence. The bottle and title share one centered, balanced row. */}
+          <div className="relative mx-auto mt-3 h-[14.5rem] w-full max-w-[27rem] sm:h-[16rem]">
             <ForecastChevron direction="prev" onClick={() => go(selected - 1)} />
-            <div className="absolute inset-y-0 left-9 right-9 overflow-hidden sm:left-12 sm:right-12">
+            <div className="absolute inset-y-0 left-7 right-7 overflow-hidden sm:left-9 sm:right-9">
               <ForecastHero
                 plan={activePlan}
                 direction={direction}
@@ -325,14 +320,30 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
             <ForecastChevron direction="next" onClick={() => go(selected + 1)} />
           </div>
 
-          {/* Seven free-standing calendar cards (gap-separated, each its own
-              rounded border) — matches the reference forecast strip. No single
-              wrapping rail/border. Active day = gold border + warm fill + gold
-              glyph; depth comes from border/fill only (no projected gold glow). */}
+          {/* Weather + spray metadata as ONE centered inline pill, lifted out of the
+              per-pick text column so the icon and "85° · Thunderstorms · 2 Sprays"
+              read as a single grouped, screen-centered unit that ties the hero to the
+              calendar rather than drifting beside the title. */}
+          {activeMeta.length > 0 ? (
+            <div className="mt-3 flex justify-center">
+              <div className="inline-flex items-center gap-1.5 rounded-full border border-scent-accent/20 bg-black/25 px-3 py-1 text-[#cdbfa9]">
+                <WeatherGlyph day={activePlan.day} size={13} />
+                <span className="text-[10px] font-medium uppercase tracking-[0.14em] sm:text-[11px]">
+                  {activeMeta.join(' · ')}
+                </span>
+              </div>
+            </div>
+          ) : null}
+
+          {/* Seven free-standing calendar cards (gap-separated, each its own rounded
+              border), width-matched and centered under the hero so the strip reads as
+              a continuation of the recommendation rather than a separate band. Active
+              day = gold border + warm fill + gold glyph; depth from border/fill only
+              (no projected gold glow). */}
           <div
             role="tablist"
             aria-label="Days this week"
-            className="mt-4 grid grid-cols-7 gap-1.5 sm:mt-6 sm:gap-2.5"
+            className="mx-auto mt-3 grid w-full max-w-[27rem] grid-cols-7 gap-1.5 sm:mt-4 sm:gap-2.5"
           >
             {outlook.slice(0, 7).map((plan, index) => {
               const isActive = index === selected;
