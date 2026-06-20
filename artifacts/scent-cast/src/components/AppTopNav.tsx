@@ -360,7 +360,7 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
         {/* Opaque pill surface: content must never read through the bar. The
             near-solid warm-black (was bg-black/66) is what makes the overlap
             land as a clean tab bar instead of competing layers. */}
-        <div className={`mx-auto grid max-w-sm grid-cols-3 rounded-full border border-scent-accent/22 bg-[rgba(8,6,4,0.94)] p-1 shadow-[0_18px_48px_rgba(0,0,0,0.58),inset_0_1px_0_rgba(255,236,183,0.12)]${lowRenderBudget ? '' : ' backdrop-blur-md'}`}>
+        <div className={`mx-auto grid max-w-sm grid-cols-3 rounded-full border border-scent-accent/16 bg-[rgba(8,6,4,0.94)] p-1 shadow-[0_18px_48px_rgba(0,0,0,0.58),inset_0_1px_0_rgba(255,236,183,0.1)]${lowRenderBudget ? '' : ' backdrop-blur-md'}`}>
           {navItems.map((item) => {
             const Icon = item.icon;
             return (
@@ -370,14 +370,14 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
                 end={item.to === '/'}
                 className={({ isActive }) =>
                   [
-                    'inline-flex min-h-11 flex-col items-center justify-center gap-px rounded-full px-2 text-[10px] font-bold uppercase tracking-[0.12em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55',
+                    'inline-flex min-h-11 flex-col items-center justify-center gap-px rounded-full px-2 text-[9.5px] font-semibold uppercase tracking-[0.1em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55',
                     isActive
-                      ? 'bg-gradient-to-b from-scent-gold-200 to-scent-accent text-black shadow-[inset_0_1px_0_rgba(255,247,236,0.45)]'
+                      ? 'bg-gradient-to-b from-[#E6CB6E] to-[#C9A436] text-[#1a1206] shadow-[inset_0_1px_0_rgba(255,247,236,0.4)]'
                       : 'text-scent-text-muted hover:text-foreground',
                   ].join(' ')
                 }
               >
-                <Icon size={16} strokeWidth={1.9} aria-hidden="true" />
+                <Icon size={15} strokeWidth={1.85} aria-hidden="true" />
                 <span>{item.label}</span>
               </NavLink>
             );

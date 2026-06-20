@@ -190,7 +190,7 @@ function ForecastHero({
             type="button"
             onClick={onSelect ? () => onSelect(fragrance) : undefined}
             disabled={!onSelect}
-            className="group grid h-full w-full grid-cols-[44%_56%] items-center text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:cursor-default sm:grid-cols-[40%_60%]"
+            className="group grid h-full w-full grid-cols-[46%_54%] items-center text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:cursor-default sm:grid-cols-[40%_60%]"
             aria-label={onSelect ? `Open ${pick.name} by ${pick.brand}` : `${pick.name} by ${pick.brand}`}
           >
             {/* Bottle FILLS its column (height + width) — not a width-clamped square.
@@ -206,40 +206,32 @@ function ForecastHero({
               variant="featured"
               adjustment={fragrance.imageAdjustment}
               imageProperties={fragrance.imageProperties}
-              className="h-full w-full [&_.bottle-artboard]:inset-[2.5%] sm:[&_.bottle-artboard]:inset-[7%]"
+              className="h-full w-full [&_.bottle-artboard]:inset-[0%] sm:[&_.bottle-artboard]:inset-[7%]"
               imgClassName="transition-transform duration-500 group-hover:scale-[1.025] motion-reduce:transform-none"
               loading="eager"
             />
-            {/* One centered column beside the bottle. Hierarchy mirrors how a
-                fragrance is actually billed: the HOUSE is a quiet eyebrow and the
-                fragrance NAME is the headline (the previous build inverted this —
-                a 3.4rem "Creed" dwarfed the actual scent it forecast). A thin gold
-                rule, the lead notes, then a weather caption that ties the bottle to
-                the day's conditions so the card reads as a forecast, not a random
-                packshot. */}
-            <div className="flex min-w-0 flex-col items-center justify-center self-center px-1.5 text-center sm:px-4">
-              <p className="scent-type-label text-[10px] tracking-[0.3em] text-scent-accent/75 sm:text-[12px]">
+            {/* One centered column beside the bottle, read as ONE text unit:
+                brand → name → notes → weather caption (no decorative divider rule).
+                Hierarchy mirrors how a fragrance is actually billed — the HOUSE is a
+                quiet eyebrow and the fragrance NAME is the headline (the previous
+                build inverted this, a 3.4rem "Creed" dwarfing the scent it forecast).
+                The lead notes and the weather caption tie the bottle to the day's
+                conditions so the card reads as a forecast, not a random packshot, and
+                the tight rhythm pairs the block with the bottle as a single hero. */}
+            <div className="flex min-w-0 flex-col items-center justify-center self-center px-1 text-center sm:px-4">
+              <p className="scent-type-label text-[10px] tracking-[0.32em] text-scent-accent/80 sm:text-[12px]">
                 {pick.brand}
               </p>
-              <p className="mt-1 line-clamp-2 font-serif text-[clamp(1.5rem,7vw,2.6rem)] leading-[1.05] text-[#fff7ec]">
+              <p className="mt-1 line-clamp-2 font-serif text-[clamp(1.55rem,7.2vw,2.7rem)] leading-[1.04] text-[#fff7ec]">
                 {pick.name}
               </p>
               {notes.length > 0 ? (
-                <>
-                  {/* Integrated micro-accent: a faint center-weighted hairline that
-                      fades at both ends, so it reads as part of the title→notes
-                      block rather than a hard decorative rule pinned under the name. */}
-                  <span
-                    aria-hidden
-                    className="my-1.5 h-px w-8 bg-gradient-to-r from-transparent via-scent-accent/35 to-transparent sm:my-2 sm:w-16"
-                  />
-                  <p className="line-clamp-2 font-serif text-[clamp(0.85rem,3.4vw,1.2rem)] italic leading-snug text-scent-accent/85">
-                    {notes.join(' · ')}
-                  </p>
-                </>
+                <p className="mt-1.5 line-clamp-2 font-serif text-[clamp(0.85rem,3.4vw,1.2rem)] italic leading-snug text-scent-accent/85 sm:mt-2">
+                  {notes.join(' · ')}
+                </p>
               ) : null}
               {meta.length > 0 ? (
-                <div className="mt-2.5 flex items-center justify-center gap-1.5 text-[#cdbfa9]">
+                <div className="mt-2 flex items-center justify-center gap-1.5 text-[#cdbfa9]">
                   <WeatherGlyph day={plan.day} size={13} />
                   <span className="text-[9.5px] font-medium uppercase tracking-[0.14em] sm:text-[11px]">
                     {meta.join(' · ')}
@@ -321,7 +313,7 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
           {/* Generous hero height on phone (was 8.75rem) — fills the column space the
               page used to waste as dead margin above the forecast, so the packshot
               reads big and intentional instead of as a thumbnail. */}
-          <div className="relative mt-2 h-[13rem] sm:mt-3 sm:h-[16rem]">
+          <div className="relative mt-3 h-[14.5rem] sm:mt-3 sm:h-[16rem]">
             <ForecastChevron direction="prev" onClick={() => go(selected - 1)} />
             <div className="absolute inset-y-0 left-9 right-9 overflow-hidden sm:left-12 sm:right-12">
               <ForecastHero
@@ -352,20 +344,20 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
                   type="button"
                   onClick={() => go(index)}
                   title={`${dayLabel(plan.day.date)} — ${plan.day.condition ?? 'Forecast'}`}
-                  className={`flex min-w-0 flex-col items-center gap-1 rounded-[14px] border py-2.5 text-[#f1e7da] transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/60 sm:gap-1.5 sm:rounded-[18px] sm:py-4 ${
+                  className={`flex min-w-0 flex-col items-center gap-0.5 rounded-[13px] border py-2 text-[#f1e7da] transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/60 sm:gap-1.5 sm:rounded-[18px] sm:py-3.5 ${
                     isActive
-                      ? 'border-scent-accent/70 bg-[#140e07]'
-                      : 'border-scent-accent/18 bg-black/30'
+                      ? 'border-scent-accent/55 bg-gradient-to-b from-scent-accent/[0.14] to-scent-accent/[0.04]'
+                      : 'border-scent-accent/15 bg-black/25'
                   }`}
                 >
-                  <span className="text-[8px] font-semibold uppercase tracking-[0.16em] sm:text-[10px]">
+                  <span className={`text-[8px] font-semibold uppercase tracking-[0.16em] sm:text-[10px] ${isActive ? 'text-scent-accent/90' : 'text-[#cdbfa9]'}`}>
                     {dayLabel(plan.day.date)}
                   </span>
-                  <span className="font-serif text-[1.3rem] leading-none sm:text-[1.8rem]">
+                  <span className="font-serif text-[1.2rem] leading-none sm:text-[1.8rem]">
                     {dayNumber(plan.day.date)}
                   </span>
-                  <span className={isActive ? 'text-scent-accent' : 'text-[#eee4d7]'}>
-                    <WeatherGlyph day={plan.day} size={18} />
+                  <span className={isActive ? 'text-scent-accent' : 'text-[#cdbfa9]'}>
+                    <WeatherGlyph day={plan.day} size={17} />
                   </span>
                 </button>
               );
