@@ -142,6 +142,10 @@ function parseDestination(text: string): string | undefined {
     // Prepositive places are ambiguous ("business trip", "road trip"). Accept
     // proper-noun phrasing such as "Tokyo trip" rather than storing false state.
     /\b(?:planning|taking|booking)\s+(?:a\s+)?([A-Z][A-Za-z .'-]{1,40}?)\s+trip\b/,
+    // Possessive/appositive phrasing WITHOUT a planning verb — "my Tokyo trip in
+    // August", "our Paris trip", "a Berlin trip". The leading capital + the
+    // trip-type denylist below keep "a weekend trip" / "a Business trip" out.
+    /\b(?:my|our|a|an|the|this|that|on|for)\s+([A-Z][A-Za-z .'-]{1,40}?)\s+trip\b/,
     /\b(?:destination|city)\s+(?:is|:)\s*([A-Za-z][A-Za-z .'-]{1,50})/i,
   ];
   for (const pattern of patterns) {
@@ -150,7 +154,10 @@ function parseDestination(text: string): string | undefined {
     const isMonth = MONTHS.some(([monthPattern]) => monthPattern.test(destination));
     const isOccasion = OCCASIONS.some(([occasionPattern]) => occasionPattern.test(destination));
     const isRelativeTime = /^(?:(?:a|an|the|this|next|last|one|two|three|four|five)\s+)?(?:morning|afternoon|evening|night|weekend|day|week|month|year)s?$/i.test(destination);
-    if (destination && !isMonth && !isOccasion && !isRelativeTime && !/^(a|an|the|my|this)$/i.test(destination)) return destination;
+    // Common trip-TYPE words that are not places, so "<Type> trip" never fabricates
+    // a city even when the user capitalized the type at a sentence start.
+    const isTripType = /^(?:business|road|family|work|day|weekend|holiday|ski|beach|camping|fishing|golf|shopping|bachelor|bachelorette|company|team|school|field|solo|group|guys?|girls?|boys?|round|sales|press|book)$/i.test(destination);
+    if (destination && !isMonth && !isOccasion && !isRelativeTime && !isTripType && !/^(a|an|the|my|this)$/i.test(destination)) return destination;
   }
   return parsePlaceBeforeTime(text);
 }
@@ -187,8 +194,35 @@ function parseOccasion(text: string): string | undefined {
   return undefined;
 }
 
+/**
+ * Was the token at `index` introduced by a negation/reduction cue ("less sweet",
+ * "not too woody", "no oud", "nothing sweet", "don't want sweet")? A short
+ * preceding window is scanned for a negation word that is NOT cut off by a clause
+ * boundary (comma/semicolon), so "fresh, not boring" never suppresses "fresh".
+ * Mirrors the month-correction guard in parseMonth: a rejected preference must not
+ * be stored as if the user asked for it. Without this, "make it less sweet" set
+ * direction=sweet — the exact opposite of the refinement — and pushed the agent
+ * toward the family the user wanted reduced.
+ */
+function isNegatedBefore(text: string, index: number): boolean {
+  const prefix = text.slice(Math.max(0, index - 16), index);
+  return /(?:\b(?:less|not|no|never|without|avoid|avoiding|nothing|skip|drop|reduce|cut|minus|tone\s+down|too)\b|\w*n['’]t\b)[\s\w]{0,8}$/i.test(
+    prefix,
+  );
+}
+
+/** First case-insensitive match of `pattern` whose match is not negated, if any. */
+function matchesUnnegated(text: string, pattern: RegExp): boolean {
+  const re = new RegExp(pattern.source, pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`);
+  for (let m = re.exec(text); m; m = re.exec(text)) {
+    if (m.index !== undefined && !isNegatedBefore(text, m.index)) return true;
+    if (re.lastIndex === m.index) re.lastIndex += 1; // zero-width guard
+  }
+  return false;
+}
+
 function parseVibe(text: string): string | undefined {
-  const found = VIBES.filter((vibe) => new RegExp(`\\b${vibe}\\b`, "i").test(text));
+  const found = VIBES.filter((vibe) => matchesUnnegated(text, new RegExp(`\\b${vibe}\\b`, "i")));
   return found.length > 0 ? found.slice(0, 3).join(", ") : undefined;
 }
 
@@ -228,14 +262,16 @@ const FAMILY_PATTERNS: Array<[RegExp, string]> = [
 function parseDirection(text: string): string | undefined {
   const found: string[] = [];
   for (const [pattern, label] of FAMILY_PATTERNS) {
-    if (pattern.test(text) && !found.includes(label)) found.push(label);
+    // A negated family ("less sweet", "no oud") is a constraint to AVOID, not a
+    // direction to chase, so it must not enter the scoring direction slot.
+    if (matchesUnnegated(text, pattern) && !found.includes(label)) found.push(label);
   }
   const alreadyFreshFamily = found.some((label) => ["citrus", "green", "tea", "aromatic", "aquatic"].includes(label));
-  if (/\b(?:light|lighter|fresh|airy|bright|clean|crisp)\b/i.test(text) && !alreadyFreshFamily) {
+  if (matchesUnnegated(text, /\b(?:light|lighter|fresh|airy|bright|clean|crisp)\b/i) && !alreadyFreshFamily) {
     found.unshift("lighter/fresh");
   }
   if (found.length > 0) return found.slice(0, 3).join(", ");
-  if (/\b(?:warm|warmer|rich|richer|cozy|deep)\b/i.test(text)) return "warmer/richer";
+  if (matchesUnnegated(text, /\b(?:warm|warmer|rich|richer|cozy|deep)\b/i)) return "warmer/richer";
   return undefined;
 }
 
@@ -318,6 +354,22 @@ function parseRecommendationCount(text: string): number | undefined {
       "i",
     ),
   ]);
+}
+
+/**
+ * A terse, count-ONLY reply ("two", "just 2", "exactly three", "make it 3",
+ * "a couple please"). Used for clarify recovery when the assistant asked "how
+ * many?" and the user answered with nothing but a number. Anchored to the WHOLE
+ * message (only leading lead-ins and trailing politeness allowed) so a count that
+ * is part of a larger sentence — "two sprays", "two new ones", "for three days" —
+ * is left to the noun-anchored parsers and never mistaken for a bare answer.
+ */
+function parseBareCount(text: string): number | undefined {
+  const match =
+    /^\s*(?:(?:just|exactly|only|maybe|make\s+it|let'?s\s+do|give\s+me|i'?ll\s+take|i\s+want|do|how\s+about)\s+)*((?:a\s+)?couple|pair|\d+|one|two|three|four|five)\s*(?:picks?|scents?|fragrances?|please|thanks?|of\s+(?:them|those))?\s*[.!]?\s*$/i.exec(
+      text,
+    );
+  return parseCount(match?.[1]);
 }
 
 function parseBudget(text: string): string | undefined {
@@ -537,18 +589,32 @@ export function deriveBeamSessionState(
 
   const parsedAgainstPrevious = { ...cloneBeamSessionState(previous).slots, ...slots };
   const preliminaryMission = parseMissionPatch(text, parsedAgainstPrevious);
+  // Explicit verbal boundaries that DISCARD the prior mission. Two families:
+  // forward pivots ("now…", "next…", "new trip…") and outright resets ("forget
+  // that", "scratch that", "never mind", "start over", "new/different question").
+  // Both must wipe a prior trip's destination/timing/counts/delegation so the user
+  // can cleanly change subject.
   const explicitMissionBoundary =
-    /^\s*(?:now\b|next\b|another\b|separately\b|for\s+(?:another|a\s+new)\b|new\s+(?:trip|mission)\b)/i.test(text);
+    /^\s*(?:now\b|next\b|another\b|separately\b|for\s+(?:another|a\s+new)\b|new\s+(?:trip|mission|question|request|topic)\b|forget\s+(?:that|it|the\b)|scratch\s+that\b|never\s?mind\b|start\s+over\b|change\s+of\s+plans?\b|different\s+(?:question|request|topic)\b)/i.test(text);
+  // A turn that brings genuinely new mission context — a different occasion ("what
+  // should I wear to work?"), a new/different destination, or an explicit pick
+  // count ("give me one date-night scent") — is a real new request, NOT a tweak of
+  // the current kit. Computed up front so the refinement guards below can exclude it.
+  const turnBringsNewMissionContext = Boolean(slots.occasion || slots.destination || preliminaryMission?.count);
   // A follow-up to an already-PRESENTED travel kit is a REFINEMENT, not a new
   // mission — even when a generic verb ("swap the Aventus pick", "match the look")
   // makes this turn parse as a bare recommendation. Without this, that verb flips
   // the intent, trips startsNewMission, and wipes the kit's destination/timing/
-  // counts, so the agent both loses context and re-gathers slots. An explicit
-  // boundary phrase ("now…", "new trip…") still starts a fresh mission.
+  // counts, so the agent both loses context and re-gathers slots. BUT a turn that
+  // carries genuinely new mission context (a new occasion/destination/pick count) or
+  // an explicit boundary phrase is a real new ask, so it must NOT be absorbed as a
+  // refinement — otherwise "actually give me one date-night scent" inherits the
+  // whole Tokyo kit.
   const refiningPresentedKit =
     previous?.mission?.intent === "travel_kit" &&
     previous.mission.kitPresented === true &&
-    !explicitMissionBoundary;
+    !explicitMissionBoundary &&
+    !turnBringsNewMissionContext;
   // A travel kit addressed by a bare recommendation TWEAK ("I want it lighter",
   // "give me something woodier") is a REFINEMENT, not a new mission — the broadened
   // recommendation verbs (give me / need / want / show me / find me) must not let a
@@ -556,7 +622,6 @@ export function deriveBeamSessionState(
   // brings genuinely new mission context — a different occasion ("what should I wear
   // to work?"), a new destination, or an explicit pick count — is still a real new
   // request and resets as before, as does an explicit boundary phrase.
-  const turnBringsNewMissionContext = Boolean(slots.occasion || slots.destination || preliminaryMission?.count);
   const downgradesKitToRecommendation =
     previous?.mission?.intent === "travel_kit" &&
     preliminaryMission?.intent === "recommendation" &&
@@ -596,7 +661,17 @@ export function deriveBeamSessionState(
       ? { pendingSlot, pendingSlotUnanswered: true }
       : {}),
   };
-  return mergeBeamSessionState(baseState, patch);
+  const result = mergeBeamSessionState(baseState, patch);
+  // Clarify recovery for a bare count answer: if the agent asked "how many?" and
+  // the user replied with just a number ("two", "make it 3"), attach it to an
+  // active recommendation mission that has no count yet. Scoped to recommendation
+  // missions only — a bare count against a travel kit is owned/new-ambiguous, so it
+  // is intentionally left for the user to disambiguate rather than guessed.
+  if (result.mission?.intent === "recommendation" && result.mission.count === undefined) {
+    const bare = parseBareCount(text);
+    if (bare !== undefined) result.mission.count = bare;
+  }
+  return result;
 }
 
 export function beamSessionStatePrompt(state: BeamSessionState | undefined): string {
@@ -639,7 +714,7 @@ export function beamSessionStatePrompt(state: BeamSessionState | undefined): str
       );
     } else {
       lines.push(
-        "This is a NEW-ONLY discovery mission. Do not recommend or score an owned vault bottle. Use the vault only as a taste reference, search with excludeOwned=true, check each new pick's vault overlap, and call beam_present_travel_kit with an empty owned lane. For each new pick, explain its destination/timing fit, direction fit, and how it differs from the vault. Any owned bottle mentioned in prose must appear only in a separate, explicit taste-reference label.",
+        "This is a NEW-ONLY discovery mission. Do not recommend or score an owned vault bottle. Use the vault only as a taste reference, search with excludeOwned=true, check each new pick's vault overlap, and call beam_present_travel_kit with an empty owned lane. For each new pick, explain its destination/timing fit, direction fit, and how it differs from the vault. Any owned bottle mentioned in prose must appear only in a separate, explicit taste-reference label. If the wardrobe cannot be loaded, still deliver the new picks but say you are assuming they are not already in their wardrobe.",
       );
     }
     if (mission.ownedCount || mission.newCount) {

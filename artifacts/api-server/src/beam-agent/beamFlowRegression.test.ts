@@ -17,7 +17,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { deriveBeamSessionState, isDelegationPhrase, pendingSlotSatisfiedBy } from "./missionState.ts";
+import { beamSessionStatePrompt, deriveBeamSessionState, isDelegationPhrase, pendingSlotSatisfiedBy } from "./missionState.ts";
 import { buildSafeClarification, runAnswerQualityGates } from "./answerQualityGates.ts";
 import type { BeamGroundedFragrance, BeamSessionState } from "./types.ts";
 import { catalogProfileSearchTerms, scoreCatalogProfileForQuery } from "../services/catalogProfileSearch.ts";
@@ -388,4 +388,126 @@ test("a 'two sprays' quantity is not mistaken for a requested pick count", () =>
   // ("two sprays") must not set a recommendation quantity.
   const state = deriveBeamSessionState(undefined, "Should I do two sprays or three?");
   assert.equal(state.mission?.count, undefined);
+});
+
+/* ================================================================== */
+/* Completion pass: the real ways users ask (deterministic matrix).    */
+/* Each case asserts the parser/gate behaviour the live runtime relies */
+/* on; the model never sees these, so they must be exact and cheap.    */
+/* ================================================================== */
+
+/** Simulate the loop having delivered a kit, the way the route persists it. */
+function presentedTokyoKit(): BeamSessionState {
+  const first = deriveBeamSessionState(
+    undefined,
+    "Plan a travel kit for Tokyo in August — two from my vault and two new ones, bold.",
+  );
+  return { ...first, mission: { ...first.mission, kitPresented: true } };
+}
+
+test("matrix/refinement: 'less sweet' does not invert into direction=sweet", () => {
+  // A reduction cue ("less sweet", "no oud", "not too woody") is a constraint to
+  // AVOID, so it must never be stored as the scent direction to chase — that pushed
+  // the agent toward exactly the family the user wanted dialed back.
+  const kit = presentedTokyoKit();
+  const refined = deriveBeamSessionState(kit, "make it less sweet");
+  assert.doesNotMatch(refined.slots.direction ?? "", /sweet/i);
+  // The kit itself survives the refinement.
+  assert.equal(refined.mission?.intent, "travel_kit");
+  assert.equal(refined.mission?.newCount, 2);
+
+  assert.equal(deriveBeamSessionState(undefined, "something less sweet").slots.direction, undefined);
+  assert.match(
+    deriveBeamSessionState(undefined, "I want it fresh but not too woody").slots.direction ?? "",
+    /lighter\/fresh/i,
+  );
+  assert.doesNotMatch(
+    deriveBeamSessionState(undefined, "I want it fresh but not too woody").slots.direction ?? "",
+    /woody/i,
+  );
+  // A positive, un-negated family still parses normally.
+  assert.match(deriveBeamSessionState(undefined, "warm and woody").slots.direction ?? "", /woody/i);
+});
+
+test("matrix/boundary: 'actually give me one date night scent' transitions off a presented kit", () => {
+  // New occasion + explicit pick count is a NEW request, not a kit tweak — it must
+  // not inherit the Tokyo trip's destination/timing/owned+new counts.
+  const next = deriveBeamSessionState(presentedTokyoKit(), "actually give me one date night scent");
+  assert.equal(next.mission?.intent, "recommendation");
+  assert.equal(next.mission?.count, 1);
+  assert.equal(next.slots.occasion, "date night");
+  assert.equal(next.slots.destination, undefined);
+  assert.equal(next.mission?.ownedCount, undefined);
+  assert.equal(next.mission?.newCount, undefined);
+});
+
+test("matrix/boundary: 'forget that, pick a gym scent' resets the kit", () => {
+  const next = deriveBeamSessionState(presentedTokyoKit(), "forget that, pick a gym scent");
+  assert.equal(next.mission?.intent, "recommendation");
+  assert.equal(next.slots.occasion, "gym");
+  assert.equal(next.slots.destination, undefined);
+});
+
+test("matrix/boundary: a bare tweak still refines a presented kit (no false reset)", () => {
+  // Guard the opposite failure: "make it lighter" / "swap the Aventus pick" carry NO
+  // new occasion/destination/count, so they must stay refinements of the kit.
+  for (const tweak of ["make it lighter", "swap the Aventus pick for something cleaner"]) {
+    const refined = deriveBeamSessionState(presentedTokyoKit(), tweak);
+    assert.equal(refined.mission?.intent, "travel_kit", tweak);
+    assert.equal(refined.mission?.destination, "Tokyo", tweak);
+    assert.equal(refined.mission?.newCount, 2, tweak);
+  }
+});
+
+test("matrix/clarify: a bare count answer attaches to a recommendation mission", () => {
+  // "How many?" → "two" / "make it three" / "give me exactly two": the terse reply
+  // must set the recommendation count. A count with a noun-bearing tail ("two
+  // sprays") is NOT a bare answer and must be ignored.
+  const recBase = deriveBeamSessionState(undefined, "recommend some date night scents");
+  assert.equal(recBase.mission?.intent, "recommendation");
+  assert.equal(deriveBeamSessionState(recBase, "two").mission?.count, 2);
+  assert.equal(deriveBeamSessionState(recBase, "make it three").mission?.count, 3);
+  assert.equal(deriveBeamSessionState(recBase, "give me exactly two").mission?.count, 2);
+  assert.equal(deriveBeamSessionState(recBase, "two sprays").mission?.count, undefined);
+  // A travel kit is owned/new-ambiguous for a bare count, so it is left untouched.
+  const kitBase = deriveBeamSessionState(undefined, "a travel kit for my trip to Tokyo");
+  const kitTwo = deriveBeamSessionState(kitBase, "two");
+  assert.equal(kitTwo.mission?.count, undefined);
+});
+
+test("matrix/destination: '<Place> trip' without a planning verb captures the city", () => {
+  assert.equal(deriveBeamSessionState(undefined, "my Tokyo trip in August, two new").slots.destination, "Tokyo");
+  assert.equal(deriveBeamSessionState(undefined, "a Berlin trip next month").slots.destination, "Berlin");
+  // Trip-TYPE words are not places, even capitalized at a sentence start.
+  assert.equal(deriveBeamSessionState(undefined, "I'm on a Business trip in March").slots.destination, undefined);
+  assert.equal(deriveBeamSessionState(undefined, "planning a weekend trip").slots.destination, undefined);
+});
+
+test("matrix/destination: 'show me two scents for Tokyo in August' keeps count + city + month", () => {
+  const state = deriveBeamSessionState(undefined, "show me two scents for Tokyo in August");
+  assert.equal(state.mission?.intent, "recommendation");
+  assert.equal(state.mission?.count, 2);
+  assert.equal(state.slots.destination, "Tokyo");
+  assert.equal(state.slots.month, "August");
+});
+
+test("matrix/delegation: terse delegation phrases all register", () => {
+  for (const phrase of ["Pick for me.", "Surprise me.", "you decide", "recommend now"]) {
+    assert.equal(isDelegationPhrase(phrase), true, phrase);
+    assert.equal(deriveBeamSessionState(undefined, phrase).userDelegatedChoice, true, phrase);
+  }
+});
+
+test("matrix/newness: 'two new ones not in my collection' forces a new-only kit", () => {
+  // Whatever the surface verb, a new-count request must commit to NEW picks
+  // (excludeOwned), never owned-wardrobe picks.
+  const state = deriveBeamSessionState(undefined, "two new ones not in my collection");
+  assert.equal(state.mission?.intent, "travel_kit");
+  assert.equal(state.mission?.newCount, 2);
+  assert.equal(state.mission?.ownedCount, undefined);
+  const prompt = beamSessionStatePrompt(state);
+  assert.match(prompt, /NEW-ONLY discovery mission/i);
+  // Wardrobe-unavailable safety: the new-only contract must degrade gracefully
+  // rather than block when the vault can't be read.
+  assert.match(prompt, /assuming they are not already in their wardrobe/i);
 });
