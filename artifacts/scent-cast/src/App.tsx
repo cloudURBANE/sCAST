@@ -21,7 +21,7 @@ import { WeatherProvider, useWeather } from './context/WeatherContext';
 import { WardrobeProvider, useWardrobe, useWardrobeItems, useWardrobeShareModalActions } from './context/WardrobeContext';
 import { Toaster } from './components/ui/toaster';
 import { PageTransitionOverlay, warmTransitionEmblem } from './components/PageTransitionOverlay';
-import { useModalBehavior } from '@/hooks/use-modal-behavior';
+import { useBodyScrollLock, useModalBehavior } from '@/hooks/use-modal-behavior';
 import { useRenderBudget } from '@/hooks/useRenderBudget';
 import { useMarqueeSwipe } from '@/hooks/useMarqueeSwipe';
 import NotFound from '@/pages/not-found';
@@ -33,9 +33,23 @@ import { FragranceCapture } from './components/FragranceCapture';
 const Wardrobe = React.lazy(() =>
   loadRouteChunk(() => import('./components/Wardrobe').then((module) => ({ default: module.Wardrobe }))),
 );
-const ScentMissionPanel = React.lazy(() =>
-  loadRouteChunk(() => import('./components/ScentMissionPanel').then((module) => ({ default: module.ScentMissionPanel }))),
-);
+// Factory is named so the same dynamic import backs both React.lazy and the
+// intent/idle prefetch below — the panel chunk is warmed before the user taps
+// the "Discover Your Signature Scent" CTA, so the open crossfade lands on the
+// real panel instead of flashing the SignaturePanelFallback pulse on first open.
+const importScentMissionPanel = () =>
+  import('./components/ScentMissionPanel').then((module) => ({ default: module.ScentMissionPanel }));
+const ScentMissionPanel = React.lazy(() => loadRouteChunk(importScentMissionPanel));
+let scentMissionPanelPrefetched = false;
+function prefetchScentMissionPanel() {
+  if (scentMissionPanelPrefetched || typeof window === 'undefined') return;
+  scentMissionPanelPrefetched = true;
+  // Best-effort warm-up; on failure clear the flag so a later intent can retry
+  // and the real open still goes through loadRouteChunk's recovery path.
+  void importScentMissionPanel().catch(() => {
+    scentMissionPanelPrefetched = false;
+  });
+}
 type ScentMissionStatus = import('./components/ScentMissionPanel').ScentMissionStatus;
 const ScentNotesInfographic = React.lazy(() =>
   loadRouteChunk(() => import('./components/ScentNotesInfographic').then((module) => ({ default: module.ScentNotesInfographic }))),
@@ -368,7 +382,7 @@ const HeroMarquee: React.FC<HeroMarqueeProps> = React.memo(({ phrases }) => {
   }, [phraseKey]);
 
   return (
-    <div className="scent-marquee-band scent-full-bleed w-full overflow-hidden flex select-none relative">
+    <div className="scent-marquee-band scent-full-bleed w-full overflow-hidden py-[8px] sm:py-[12px] flex select-none relative">
       <div ref={trackRef} className="scent-marquee-track-row whitespace-nowrap scent-marquee-text">
         {[...Array(HERO_TRACK_COPIES)].map((_, copyIndex) => (
           <span
@@ -644,6 +658,7 @@ function DashboardView() {
     setRecommendationReason,
     handleAddItem,
     handlePersistWardrobeImage,
+    handleVerifyWardrobeFact,
     uploadAdminBottleImage,
     handleRevertWardrobe,
     handleDeleteItem,
@@ -793,6 +808,8 @@ function DashboardView() {
     ? { duration: 0.01 }
     : { duration: 0.42, ease: [0.16, 1, 0.3, 1] as const };
 
+  useBodyScrollLock(agentActive);
+
   useEffect(() => {
     if (!discoveryReady && viewState === 'agent') {
       setViewState('search');
@@ -816,6 +833,25 @@ function DashboardView() {
     setViewState('agent');
   }, []);
 
+  // Warm the Beam Agent chunk during idle time once the Discover CTA is actually
+  // reachable, so touch users (no hover to prefetch on) get an instant, flash-free
+  // open. Runs at most once per session via the module-level guard; degrades to a
+  // short timeout where requestIdleCallback is unavailable (Safari/older WebKit).
+  useEffect(() => {
+    if (agentActive || scentMissionPanelPrefetched) return;
+    if (!(discoveryReady && stateSettled && !vaultSearchUiActive)) return;
+    const ric = (window as typeof window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      cancelIdleCallback?: (handle: number) => void;
+    });
+    if (typeof ric.requestIdleCallback === 'function') {
+      const handle = ric.requestIdleCallback(prefetchScentMissionPanel, { timeout: 2000 });
+      return () => ric.cancelIdleCallback?.(handle);
+    }
+    const id = window.setTimeout(prefetchScentMissionPanel, 1200);
+    return () => window.clearTimeout(id);
+  }, [agentActive, discoveryReady, stateSettled, vaultSearchUiActive]);
+
   // Brand+name identities of saved fragrances, so the search overlay can flag
   // results that are already in the vault and offer "View in vault" instead of a
   // silent duplicate add.
@@ -828,11 +864,32 @@ function DashboardView() {
     return keys;
   }, [items]);
 
-  const handleViewVault = useCallback(() => {
-    document
-      .getElementById('scent-vault-section')
-      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, []);
+  // "View in vault" on an already-saved search result. Rather than dumping the
+  // user at the top of the vault to hunt for the fragrance themselves, resolve
+  // the exact saved item by its brand+name identity and open its detail — the
+  // same path used by Beam proposals and curation deep-links, which also handles
+  // scrolling the (lazy) vault section into view. Falls back to a plain scroll
+  // when the match can't be resolved (e.g. identity drift between catalogs).
+  const handleViewVault = useCallback(
+    (match?: { brand?: string | null; house?: string | null; name?: string | null }) => {
+      const targetKey = match ? vaultIdentityKey(match.brand ?? match.house, match.name) : '';
+      const targetItem = targetKey
+        ? items.find(
+            (it) =>
+              vaultIdentityKey(it.brand ?? it.product?.brand, it.name ?? it.product?.name) ===
+              targetKey,
+          )
+        : undefined;
+      if (targetItem) {
+        openFragranceDetail(targetItem);
+        return;
+      }
+      document
+        .getElementById('scent-vault-section')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    },
+    [items, openFragranceDetail],
+  );
 
   // Resume-on-return: when a signed-in user opens the app — especially via the
   // completion push deep-link `/?curation=<jobKey>` (see the SW's notificationclick
@@ -896,14 +953,18 @@ function DashboardView() {
       <div style={{ height: 'var(--topbar-h)' }} />
 
       <main className="relative z-10 px-4 sm:px-8 sm:pb-24 max-w-[1760px] mx-auto">
-        {/* Home — first viewport. On phones this column is sized to the visible
-            area between the top bar and the floating tab bar, and the weekly
-            dashboard is pushed to its bottom (mt-auto) so it settles cleanly just
-            above the bottom navigation with nothing rendered beneath it. On md+
-            (no bottom nav) the min-height + auto-margin relax to the original
-            stacked rhythm. The Vault of Aromas is no longer part of this screen —
-            it lives one scroll down as the "second page". */}
-        <div className="flex min-h-[calc(100svh-var(--topbar-h)-var(--bottomnav-h))] flex-col gap-3.5 pt-3 sm:min-h-0 sm:gap-28 sm:pt-14">
+        {/* Home — first viewport. On phones this column fills the space below the
+            top bar (min-h = 100svh − topbar) and reserves the floating tab bar as
+            real bottom PADDING (bottomnav-h + breathing room). Padding — not a
+            min-height-only calc — is what guarantees the calendar clears the nav:
+            when the stacked content is taller than the viewport, my-auto's free
+            space collapses to zero, so a min-height alone would let the last row
+            (the calendar's weather glyphs) flow under the fixed nav. The pb holds
+            that gap open regardless of overflow. On md+ (no bottom nav) the
+            min-height + padding relax to the original stacked rhythm. The Vault of
+            Aromas is no longer part of this screen — it lives one scroll down as
+            the "second page". */}
+        <div className="flex min-h-[calc(100svh-var(--topbar-h))] flex-col gap-4 pt-1.5 pb-[calc(var(--bottomnav-h)+1.25rem)] sm:min-h-0 sm:gap-16 sm:pt-14 sm:pb-0">
           <HomepageHeroMarquee />
 
           <section className="relative mx-auto w-full max-w-[60rem] min-w-0 text-center">
@@ -1043,7 +1104,7 @@ function DashboardView() {
                 ref={signatureSectionRef}
                 layout={isMounted ? !reduceMotion : false}
                 transition={vaultContentTransition}
-                className="scent-mission-action-slot mt-4 flex min-h-[60px] justify-center sm:mt-5 sm:min-h-[68px]"
+                className="scent-mission-action-slot mt-2 flex min-h-[46px] justify-center sm:mt-4 sm:min-h-[60px]"
               >
                 <AnimatePresence initial={false} mode="popLayout">
                   {agentActive ? (
@@ -1061,16 +1122,18 @@ function DashboardView() {
                       key="signature-cta"
                       type="button"
                       onClick={handleOpenMission}
+                      onPointerEnter={prefetchScentMissionPanel}
+                      onFocus={prefetchScentMissionPanel}
                       initial={reduceMotion ? false : { opacity: 0, y: -4 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -4 }}
                       transition={vaultContentTransition}
-                      className="scent-signature-cta group flex h-[60px] w-full max-w-[52rem] items-center justify-center gap-2.5 rounded-full px-6 text-[12px] font-bold uppercase tracking-[0.14em] text-scent-accent focus-visible:outline-none sm:h-[68px] sm:text-[13px]"
-                      aria-label="Discover your signature scent"
-                      title="Discover your signature scent"
+                      className="scent-signature-cta group flex h-[46px] w-full max-w-[52rem] items-center justify-center gap-2 rounded-full px-6 text-[11.5px] font-bold uppercase tracking-[0.11em] text-scent-accent focus-visible:outline-none sm:h-[60px] sm:gap-2.5 sm:text-[13px] sm:tracking-[0.14em]"
+                      aria-label="Discover with Beam Agent"
+                      title="Discover with Beam Agent"
                     >
                       <Sparkles size={16} strokeWidth={1.9} aria-hidden />
-                      <span>Discover Your Signature Scent</span>
+                      <span>Discover With Beam Agent</span>
                     </motion.button>
                   )}
                 </AnimatePresence>
@@ -1080,13 +1143,19 @@ function DashboardView() {
 
           {!agentActive ? <HomepageAtmosphereChrome /> : null}
 
-          {/* Weekly outlook dashboard — anchored to the bottom of the first
-              viewport on phones (mt-auto fills the gap above the tab bar), in
-              normal flow on md+. Hidden in agent mode, which takes over the
-              hero. */}
+          {/* Weekly outlook dashboard — on phones it CENTERS in the leftover
+              column space (my-auto splits the free space evenly above and below
+              instead of mt-auto dumping it all into one void above), so the
+              forecast reads as intentionally placed and balanced rather than
+              slammed against the tab bar with a dead gap overhead. Normal flow on
+              md+. Hidden in agent mode, which takes over the hero. */}
           {!agentActive ? (
-            <div className="mt-auto sm:mt-0">
-              <WeeklyOutlookDashboard items={items} weather={weather} />
+            <div className="my-auto sm:my-0">
+              <WeeklyOutlookDashboard
+                items={items}
+                weather={weather}
+                onSelectFragrance={openFragranceDetail}
+              />
             </div>
           ) : null}
         </div>
@@ -1102,6 +1171,7 @@ function DashboardView() {
                 pendingDetailOpen={pendingDetailOpen}
                 onClearPendingDetailOpen={clearPendingDetailOpen}
                 onPersistWardrobeImage={handlePersistWardrobeImage}
+                onVerifyWardrobeFact={handleVerifyWardrobeFact}
                 isAdmin={isAdmin}
                 onUploadBottleImage={authToken && isAdmin ? uploadAdminBottleImage : undefined}
                 featuredItem={activeRecommendation}
@@ -1472,17 +1542,19 @@ const AppShell = React.memo(function AppShell({
   showThreadBackground,
   threadBackgroundMode,
   ipadSafariPerformanceMode,
+  touchPerformanceMode,
 }: {
   renderedLocation: Location;
   showThreadBackground: boolean;
   threadBackgroundMode: ThreadBackgroundMode;
   ipadSafariPerformanceMode: boolean;
+  touchPerformanceMode: boolean;
 }) {
   return (
     <AuthProvider>
       <WeatherProvider>
         <WardrobeProvider>
-          <div className={`scent-app-shell min-h-[100svh] bg-scent-bg selection:bg-scent-accent selection:text-black text-white relative overflow-x-hidden${ipadSafariPerformanceMode ? ' scent-ipad-safari-perf' : ''}`}>
+          <div className={`scent-app-shell min-h-[100svh] bg-scent-bg selection:bg-scent-accent selection:text-black text-white relative overflow-x-hidden${ipadSafariPerformanceMode ? ' scent-ipad-safari-perf' : ''}${touchPerformanceMode ? ' scent-touch-perf' : ''}`}>
             {showThreadBackground ? <ThreadBackground mode={threadBackgroundMode} /> : null}
             <WebVitalsReporter />
             <AppContent location={renderedLocation} />
@@ -1509,7 +1581,7 @@ export default function App() {
   const pendingRevealRouteRef = useRef<string | null>(null);
   const transitionStartedAtRef = useRef(0);
   const isFreezeLab = import.meta.env.DEV && renderedLocation.pathname === '/debug/ipad-freeze';
-  const { lowMotionRenderMode, isIpad, isIpadStandalone, ipadSafariPerformanceMode } = useRenderBudget();
+  const { lowMotionRenderMode, isIpad, isIpadStandalone, ipadSafariPerformanceMode, touchPerformanceMode } = useRenderBudget();
   const [threadBackgroundReady, setThreadBackgroundReady] = useState(false);
   // iPad keeps the full tablet layout, but gets its own CSS-scheduled backdrop:
   // fewer moving layers, no per-line filters, and no JS animation loop.
@@ -1650,6 +1722,7 @@ export default function App() {
         showThreadBackground={showThreadBackground}
         threadBackgroundMode={threadBackgroundMode}
         ipadSafariPerformanceMode={ipadSafariPerformanceMode}
+        touchPerformanceMode={touchPerformanceMode}
       />
       <PageTransitionOverlay visible={transitionVisible} animationKey={transitionKey} />
     </>

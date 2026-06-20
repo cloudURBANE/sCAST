@@ -1,12 +1,22 @@
 import type { CommunityFragranceSnapshot, CommunityPost } from '@/components/community/communityPosts';
+import { sanitizeFamilyLabel } from '../../lib/wardrobeSearchSuggest.ts';
 import { isArenaReasonKey, type ArenaReasonKey } from './arenaTwists.ts';
 
 export interface ArenaBattleSide {
+  fragranceId: string;
+  beamSupporters: number;
+  totalBeamPower: number;
   key: string;
   name: string;
   brand?: string;
   imageUrl?: string;
+  family?: string;
   descriptor: string;
+}
+
+function stableFragranceId(brand: string | undefined, name: string): string {
+  const part = (value: string) => value.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  return `catalog:${part(brand || 'unknown')}:${part(name)}`;
 }
 
 export interface ArenaBattle {
@@ -32,12 +42,17 @@ function battleOptions(post: CommunityPost): [string, string] | null {
 }
 
 function sideFromOption(option: string, fragrance: CommunityFragranceSnapshot | undefined): ArenaBattleSide {
+  const family = sanitizeFamilyLabel(fragrance?.family);
   return {
+    fragranceId: fragrance?.fragranceId?.trim() || stableFragranceId(fragrance?.brand, fragrance?.name?.trim() || option),
+    beamSupporters: Math.max(0, Number(fragrance?.beamSupporters) || 0),
+    totalBeamPower: Math.max(0, Number(fragrance?.totalBeamPower) || 0),
     key: option,
     name: fragrance?.name?.trim() || option,
     ...(fragrance?.brand?.trim() ? { brand: fragrance.brand.trim() } : {}),
     ...(fragrance?.imageUrl?.trim() ? { imageUrl: fragrance.imageUrl.trim() } : {}),
-    descriptor: fragrance?.family?.trim() || (fragrance ? 'Classic fragrance' : 'Community option'),
+    ...(family ? { family } : {}),
+    descriptor: family || (fragrance ? 'Classic fragrance' : 'Community option'),
   };
 }
 

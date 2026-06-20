@@ -164,6 +164,53 @@ export function resolveDeepModel(): string | null {
   return null;
 }
 
+/**
+ * Reasoning/"thinking" slugs bill their hidden trace as output tokens and run far
+ * slower per turn — fine for the single closing synthesis, dangerous on the
+ * tool-calling orchestration loop where they can eat the whole wall-clock budget
+ * before a kit is composed (the live ~52s/synthesisFailed symptom). We only WARN:
+ * env is owner-controlled and we never override an explicit choice.
+ */
+function looksLikeReasoningSlug(slug: string | undefined): boolean {
+  return /thinking|reason|deepseek-r|kimi/i.test(slug ?? "");
+}
+
+/**
+ * Non-fatal model-configuration audit (brief §C). Returns human-readable warnings
+ * for the misconfigurations the code can detect without changing behavior:
+ *   - no provider configured (the agent will report model_unavailable),
+ *   - the premium ORCHESTRATION slug pinned to the strong SYNTHESIS slug (every
+ *     premium tool turn then pays closer prices — the documented ~$0.60/mission
+ *     footgun),
+ *   - a reasoning/"thinking" slug used for ORCHESTRATION (latency/budget risk).
+ * Pure (reads env only); the caller logs the result once at mount.
+ */
+export function validateBeamModelConfig(): string[] {
+  const warnings: string[] = [];
+  const provider = resolveProvider();
+  if (!provider) {
+    warnings.push(
+      "No Beam Agent model provider configured (set OPENROUTER_API_KEY or ANTHROPIC_API_KEY); runs will report model_unavailable.",
+    );
+    return warnings;
+  }
+  const premium = resolveBeamModels("premium");
+  const def = resolveBeamModels("default");
+  if (premium && premium.model === premium.synthesisModel) {
+    warnings.push(
+      `Premium orchestration model equals the synthesis model ("${premium.model}"); every premium tool turn pays the closer's price. Set BEAM_AGENT_MODEL_PREMIUM to a cheaper orchestration slug.`,
+    );
+  }
+  for (const [lane, models] of [["default", def], ["premium", premium]] as const) {
+    if (models && looksLikeReasoningSlug(models.model)) {
+      warnings.push(
+        `The ${lane}-lane ORCHESTRATION model ("${models.model}") looks like a reasoning/thinking slug; it can exhaust the run's wall-clock budget before synthesis. Prefer a fast non-reasoning slug for orchestration and reserve reasoning for the synthesis turn.`,
+      );
+    }
+  }
+  return warnings;
+}
+
 export async function callModel(input: ClaudeCallInput): Promise<ClaudeResponse> {
   const provider = resolveProvider();
   if (provider === "openrouter") return callOpenRouter(input);

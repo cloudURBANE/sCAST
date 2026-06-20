@@ -97,10 +97,10 @@ export const ArenaResultReveal: React.FC<ArenaResultRevealProps> = ({
     >
       <div
         className={[
-          "relative rounded-lg border border-scent-accent/18 bg-[rgba(5,4,3,0.86)] p-3 text-center shadow-[0_28px_80px_-56px_rgba(0,0,0,0.85),inset_0_1px_0_rgba(255,236,183,0.08)] sm:p-6",
+          "relative rounded-lg border border-scent-accent/18 bg-[rgba(5,4,3,0.86)] p-3 text-center shadow-[0_28px_80px_-56px_rgba(0,0,0,0.85),inset_0_1px_0_rgba(255,236,183,0.08)] sm:p-5",
           guestLocalOnly ? "pt-12 sm:pt-14" : "",
         ].join(" ")}
-        aria-label={`${pickedSide.name} is your pick at ${pickedPercent} percent. ${battle.left.name} has ${leftPercent} percent from ${leftCount} saved votes. ${battle.right.name} has ${rightPercent} percent from ${rightCount} saved votes. ${voteStatus}`}
+        aria-label={`${pickedSide.name} is your pick at ${pickedPercent} percent. ${battle.left.name} has ${leftPercent} percent from ${leftCount} votes. ${battle.right.name} has ${rightPercent} percent from ${rightCount} votes. ${voteStatus}`}
       >
         {guestLocalOnly ? (
           <div
@@ -154,13 +154,13 @@ export const ArenaResultReveal: React.FC<ArenaResultRevealProps> = ({
             </p>
           </div>
 
-          <div className="mt-3 sm:mt-5">
+          <div className="mt-2.5 sm:mt-4">
             <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-2 text-center text-[11px] font-bold uppercase leading-4 tracking-[0.1em] text-scent-text-muted sm:gap-3 sm:text-xs sm:tracking-[0.12em]">
               <span className="min-w-0 whitespace-normal">
                 {battle.left.name}
               </span>
               <span className="shrink-0 text-scent-accent">
-                {total} saved {total === 1 ? "vote" : "votes"}
+                {total} {total === 1 ? "vote" : "votes"}
               </span>
               <span className="min-w-0 whitespace-normal">
                 {battle.right.name}
@@ -262,11 +262,13 @@ export const ArenaResultReveal: React.FC<ArenaResultRevealProps> = ({
               "scent-no-mobile-focus-ring inline-flex min-h-12 items-center justify-center gap-2 px-4 py-3 text-xs font-bold uppercase tracking-[0.12em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-scent-accent/70 sm:text-sm sm:tracking-[0.16em]",
               hasMoreBattles
                 ? "bg-scent-accent text-black hover:bg-[#f0cf70] active:bg-[#d7ad32]"
-                : "cursor-not-allowed bg-scent-accent/24 text-black/55",
+                : "cursor-not-allowed bg-white/[0.035] text-scent-text-subtle shadow-[inset_0_0_0_1px_rgba(212,175,55,0.12)]",
             ].join(" ")}
           >
             <span>{hasMoreBattles ? "Next battle" : "Only battle"}</span>
-            <ArrowRight size={16} strokeWidth={1.8} aria-hidden="true" />
+            {hasMoreBattles ? (
+              <ArrowRight size={16} strokeWidth={1.8} aria-hidden="true" />
+            ) : null}
           </button>
           <button
             type="button"

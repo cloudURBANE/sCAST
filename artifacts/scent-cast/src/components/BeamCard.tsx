@@ -69,7 +69,7 @@ function CardShell({
       role="group"
       aria-label={ariaLabel}
     >
-      <p className="scent-type-label flex items-center gap-1.5 text-scent-accent">
+      <p className="scent-type-label flex items-center gap-1.5 text-scent-accent/90">
         <Sparkles size={12} aria-hidden />
         {label}
       </p>
@@ -197,12 +197,14 @@ function FragranceHeading({ fragrance }: { fragrance: BeamCardFragrance }): Reac
       ) : null}
       <p className="font-serif italic text-xl leading-tight text-[#fff7ec]">
         {fragrance.name}
-        {fragrance.owned ? (
-          <span className="ml-2 align-middle rounded-full border border-scent-accent/30 bg-scent-accent/[0.08] px-1.5 py-0.5 scent-type-label text-[9px] text-scent-accent">
+      </p>
+      {fragrance.owned ? (
+        <p className="mt-1.5">
+          <span className="inline-flex items-center rounded-full border border-scent-accent/30 bg-scent-accent/[0.08] px-1.5 py-0.5 scent-type-label text-[9px] text-scent-accent/90">
             In vault
           </span>
-        ) : null}
-      </p>
+        </p>
+      ) : null}
     </>
   );
 }
@@ -359,8 +361,7 @@ function TravelKitCard({
                   <Plus size={14} aria-hidden />
                   {card.newPicks.length > 1 ? `Add ${card.newPicks.length} new to vault` : 'Add new to vault'}
                 </button>
-                <p className="mt-2 flex items-center gap-1 scent-type-label text-[9px] text-scent-text-subtle">
-                  <Check size={11} aria-hidden />
+                <p className="mt-2 scent-type-label text-[9px] text-scent-text-subtle/65">
                   New picks save only when you tap Add to vault.
                 </p>
               </>

@@ -66,7 +66,11 @@ export type BeamSlotKey =
   | "direction"
   | "projection"
   | "impression"
-  | "budget";
+  | "budget"
+  // Negated scent families / notes the user explicitly wants AVOIDED ("no oud",
+  // "nothing sweet"). Captured as a comma-joined list, surfaced to the prompt as
+  // a hard exclusion, and used to drop matching catalog candidates at retrieval.
+  | "avoid";
 
 export type BeamSessionSlots = Partial<Record<BeamSlotKey, string>>;
 
@@ -76,9 +80,39 @@ export type BeamMissionState = {
   intent?: BeamMissionIntent;
   ownedCount?: number;
   newCount?: number;
+  /**
+   * Requested number of picks for a plain `recommendation` mission ("give me
+   * three date-night scents", "recommend two for tonight"). Travel kits use the
+   * lane-specific `ownedCount`/`newCount` instead; this is the single-lane count
+   * for non-kit recommendations, so the agent honors an explicit quantity instead
+   * of silently returning one.
+   */
+  count?: number;
+  /**
+   * Owned-vs-new constraint for a plain `recommendation` mission, stated without a
+   * trip/quantity that would make it a travel kit: "don't recommend anything I
+   * already own" / "new to me" → `"new"`; "pick from my wardrobe" / "one I already
+   * have" → `"owned"`. Travel kits express this through the `ownedCount`/`newCount`
+   * lanes instead, so this only annotates non-kit recommendations. Surfaced in the
+   * session-state prompt so the agent searches unowned catalog (excludeOwned=true)
+   * or scores the owned vault accordingly, instead of guessing from prose alone.
+   */
+  newness?: "new" | "owned";
   destination?: string;
   month?: string;
   userDelegatedChoice?: boolean;
+  /**
+   * Set once a complete travel-kit deliverable has actually been presented to the
+   * user (the structured `beam_present_travel_kit` card passed its exact-count
+   * contract and the run completed). A follow-up turn in the SAME mission is then a
+   * REFINEMENT ("swap the Aventus pick for something cleaner") and must not be
+   * hard-failed by the prose mission-fulfillment gate merely because it doesn't
+   * re-list all picks. A genuinely new mission resets this (see
+   * `deriveBeamSessionState` → `startsNewMission`), so exact counts are still
+   * enforced whenever a NEW kit is created, and any re-presented kit card is still
+   * count-checked by `missionToolResultError`.
+   */
+  kitPresented?: boolean;
 };
 
 export type BeamSessionState = {
@@ -140,6 +174,14 @@ export type BeamGroundedFragrance = {
   canonicalName: string;
   brand?: string;
   owned: boolean;
+  /**
+   * True when this pick's source-hit profile features a note/family the user
+   * asked to avoid (computed at grounding time via the avoid slot). Used by the
+   * final-answer gate as an additive backstop to retrieval filtering, since
+   * owned-vault and research picks bypass `excludeAvoidedHits`. Left undefined
+   * when the source hit carried no profile to test (treated as not-avoided).
+   */
+  matchedAvoid?: boolean;
 };
 
 /**
@@ -261,7 +303,12 @@ export type BeamRunEvent =
   | { type: "proposal"; proposalId: string; items: BeamProposalItem[] }
   | { type: "card"; card: BeamCard }
   | { type: "slots"; slots: BeamSessionSlots; mission?: BeamMissionState }
-  | { type: "completed"; response: string }
+  // `answerLogId` is the durable per-turn id (= the run id) the client tags onto
+  // the rendered answer so a "report this answer" action can attach to a real,
+  // persisted `beam_answer_log` row. Optional so older/degraded paths that emit
+  // a bare completed event (and existing `{ type, response }` consumers) keep
+  // working unchanged.
+  | { type: "completed"; response: string; answerLogId?: string }
   | { type: "failed"; code: string; message: string };
 
 export type BeamEmit = (event: BeamRunEvent) => void;

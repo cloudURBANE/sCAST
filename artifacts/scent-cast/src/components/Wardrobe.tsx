@@ -28,6 +28,7 @@ import {
   ArrowLeft,
   Upload,
   Link2,
+  Pencil,
 } from 'lucide-react';
 import { ReviewsPanel } from './ReviewsPanel';
 import { CyclingTilePair, type CyclingPart } from './CyclingTilePair';
@@ -53,7 +54,7 @@ import { useModalBehavior } from '@/hooks/use-modal-behavior';
 import { useRenderBudget } from '@/hooks/useRenderBudget';
 import { useVaultGridPreference } from '@/hooks/useVaultGridPreference';
 import { crumb, domSnapshot } from '@/lib/crashTrace';
-import { isIpadSafariPerformanceMode } from '@/lib/platform';
+import { isIpadSafariPerformanceMode, isLowRenderBudget } from '@/lib/platform';
 import {
   WARDROBE_CLARIFY_SOLVERS,
   WARDROBE_REFRESH_COUNT_STORAGE_KEY,
@@ -449,13 +450,13 @@ function PriceValueSignal({
   tone?: PriceSignalTone;
 }) {
   const reduceMotion = useReducedMotion();
-  const iPadSafariPerformanceMode = React.useRef(isIpadSafariPerformanceMode()).current;
+  const lowRenderBudget = React.useRef(isLowRenderBudget() || isIpadSafariPerformanceMode()).current;
   const intensity = symbols.length;
   const baseClass =
     tone === "accent"
       ? "inline-flex font-serif italic text-scent-accent font-bold drop-shadow-[0_0_10px_rgba(212,175,55,0.7)] whitespace-nowrap"
       : "inline-flex font-serif italic text-white/90 whitespace-nowrap";
-  const animate = reduceMotion || iPadSafariPerformanceMode
+  const animate = reduceMotion || lowRenderBudget
     ? undefined
     : intensity >= 4
       ? { y: [0, -2, 1, 0], opacity: [0.82, 1, 0.9, 0.82] }
@@ -476,7 +477,7 @@ function PriceValueSignal({
             className="inline-block"
             animate={animate}
             transition={
-                reduceMotion || iPadSafariPerformanceMode
+                reduceMotion || lowRenderBudget
                   ? undefined
                   : {
                     duration,
@@ -966,6 +967,12 @@ const VaultEmptyEmblem: React.FC = () => (
   </svg>
 );
 
+// The four metrics the detail modal surfaces and lets the vault owner verify by
+// hand when the engine left them "Unknown". Same keys the wardrobe PATCH fact
+// path accepts (detailRefreshPatchFromBody), so a typed value persists exactly
+// like an enrichment-sourced fact.
+type MetricFactField = 'year' | 'gender' | 'concentration' | 'season';
+
 export const Wardrobe: React.FC<{
   items: Fragrance[];
   onDelete: (item: Fragrance) => void | Promise<void>;
@@ -989,6 +996,16 @@ export const Wardrobe: React.FC<{
     item: Fragrance,
     imageUrl?: string,
     imageAdjustment?: BottleImageAdjustment,
+  ) => Promise<Fragrance | null>;
+  /**
+   * Persist a single user-verified metric typed into the detail modal's inline
+   * editor. Lets the vault owner fill an "Unknown" fact (or correct a wrong one)
+   * the engine could not scrape. Only wired for vault-resident rows.
+   */
+  onVerifyWardrobeFact?: (
+    item: Fragrance,
+    field: 'year' | 'gender' | 'concentration' | 'season',
+    rawValue: string,
   ) => Promise<Fragrance | null>;
   /** True when the signed-in user is an admin; gates the bottle-image uploader. */
   isAdmin?: boolean;
@@ -1023,6 +1040,7 @@ export const Wardrobe: React.FC<{
   pendingDetailOpen,
   onClearPendingDetailOpen,
   onPersistWardrobeImage,
+  onVerifyWardrobeFact,
   isAdmin = false,
   onUploadBottleImage,
   featuredItem,
@@ -1038,6 +1056,16 @@ export const Wardrobe: React.FC<{
   isImageSyncing,
 }) => {
   const [selectedItem, setSelectedItem] = React.useState<Fragrance | null>(null);
+  // Inline metric verification: which metric row (if any) is being edited, the
+  // working input value, and whether a save is in flight. Only one row edits at
+  // a time. Reset whenever the open item changes (effect below).
+  const [editingFactField, setEditingFactField] = React.useState<MetricFactField | null>(null);
+  const [factDraft, setFactDraft] = React.useState('');
+  const [factSaving, setFactSaving] = React.useState(false);
+  // The expanded inline editor; we scroll it into view on open so the owner
+  // actually sees the input (it can otherwise open below the fold — and they
+  // may not even want to verify, so don't make them hunt for it).
+  const factEditorRef = React.useRef<HTMLDivElement | null>(null);
   // Reviews are no longer shipped inline on every wardrobe row (egress); fetch
   // them for the one open item. Seeded from any inline reviews still present
   // (legacy rows / pre-trim responses) so the panel never regresses.
@@ -1753,28 +1781,78 @@ export const Wardrobe: React.FC<{
     const trimmed = value.trim();
     return /^(unknown|n\/?a|none|null|undefined)$/i.test(trimmed) ? undefined : trimmed;
   };
-  // A year the engine *authoritatively* marked unknown is a fact, not a gap, so
-  // show an explicit "Unknown" instead of dropping the row (which read as a card
-  // missing a metric). cleanMetaValue strips the literal "unknown", so this
-  // branch is taken only when we deliberately want to surface it.
-  const yearAuthoritativelyUnknown = Boolean(selectedItem?.raw_engine_detail?.year_unknown);
-  const yearMetaValue =
-    cleanMetaValue(formatYear(selectedItem?.year)) ??
-    (yearAuthoritativelyUnknown ? 'Unknown' : undefined);
-  const detailMetaRows = selectedItem
+  // All four metrics always render. A known value shows as-is (read-only); an
+  // unscraped one shows an explicit "Unknown" (cleanMetaValue strips the literal
+  // placeholder, so `value` is undefined exactly when the metric is genuinely
+  // missing). Only the "Unknown" rows are tappable for the vault owner to fill
+  // the fact by hand — already-filled metrics are not editable, so a verified
+  // value can't be accidentally clobbered.
+  const detailMetaRows: Array<{ field: MetricFactField; label: string; value?: string }> = selectedItem
     ? [
-        { label: 'Year', value: yearMetaValue },
-        { label: 'Gender', value: cleanMetaValue(stringValue(selectedItem.gender)) },
-        { label: 'Concentration', value: cleanMetaValue(stringValue(selectedItem.concentration)) },
-        { label: 'Environment', value: cleanMetaValue(stringValue(selectedItem.season)) },
-      ].filter((row): row is { label: string; value: string } => Boolean(row.value))
+        { field: 'year', label: 'Year', value: cleanMetaValue(formatYear(selectedItem.year)) },
+        { field: 'gender', label: 'Gender', value: cleanMetaValue(stringValue(selectedItem.gender)) },
+        { field: 'concentration', label: 'Concentration', value: cleanMetaValue(stringValue(selectedItem.concentration)) },
+        { field: 'season', label: 'Environment', value: cleanMetaValue(stringValue(selectedItem.season)) },
+      ]
     : [];
+  // Inline verify is only meaningful for a real, owned vault row (it PATCHes that
+  // row). A not-yet-owned preview (Beam "View" / curation deep-link) shows the
+  // same metrics read-only until the user adds it to the vault.
+  const canVerifyFacts = Boolean(onVerifyWardrobeFact) && selectedItemOwned;
+
+  const beginFactEdit = (field: MetricFactField) => {
+    if (!canVerifyFacts || factSaving) return;
+    setEditingFactField(field);
+    // Editing is offered only for genuinely-missing ("Unknown") metrics, so the
+    // input always starts empty — there is no known value to seed/correct.
+    setFactDraft('');
+  };
+
+  const cancelFactEdit = () => {
+    if (factSaving) return;
+    setEditingFactField(null);
+    setFactDraft('');
+  };
+
+  const commitFactEdit = async () => {
+    if (!onVerifyWardrobeFact || !selectedItem || !editingFactField) return;
+    const value = factDraft.trim();
+    if (!value) {
+      cancelFactEdit();
+      return;
+    }
+    setFactSaving(true);
+    try {
+      const saved = await onVerifyWardrobeFact(selectedItem, editingFactField, value);
+      if (saved) {
+        setEditingFactField(null);
+        setFactDraft('');
+      }
+    } finally {
+      setFactSaving(false);
+    }
+  };
+
+  // When a metric editor opens, bring it fully into view (centered) — deferred a
+  // frame so the row has expanded to its full-width editing layout first.
+  React.useEffect(() => {
+    if (!editingFactField) return;
+    const el = factEditorRef.current;
+    if (!el || typeof el.scrollIntoView !== 'function') return;
+    const id = window.requestAnimationFrame(() => {
+      el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [editingFactField]);
 
   React.useEffect(() => {
     setBottleImageToolsOpen(false);
     setDeleteConfirming(false);
     setDeleteBusy(false);
     setDeleteError(null);
+    setEditingFactField(null);
+    setFactDraft('');
+    setFactSaving(false);
   }, [selectedItem?.id]);
 
   React.useEffect(() => {
@@ -2332,32 +2410,37 @@ export const Wardrobe: React.FC<{
                         }
                       >
                         <div className="flex flex-col p-4 space-y-3">
-                          {/* Shared-bottle morph target: matches the vault card's
-                              layoutId so the bottle animates from the tapped card
-                              into this box (and back on close). */}
-                          <motion.div
-                            layoutId={`wardrobe-bottle-${selectedItem.id}`}
-                            transition={bottleMorphTransition}
-                            className={`relative h-56 ${stackedDetailMode ? 'sm:h-60' : 'sm:h-72 lg:h-64'} min-h-0 w-full shrink-0 overflow-hidden cursor-pointer rounded-lg border border-white/5 bg-white/[0.01]`}
-                            onClick={() => detailBottleUrl && setEnlargeOpen(true)}
+                          <div
+                            className={`relative h-56 ${stackedDetailMode ? 'sm:h-60' : 'sm:h-72 lg:h-64'} min-h-0 w-full shrink-0`}
                           >
-                            <BottleImage
-                              key={detailBottleUrl || 'missing-image'}
-                              variant="detail"
-                              src={detailBottleUrl}
-                              alt={entryName(selectedItem)}
-                              adjustment={frameDraft}
-                              imageProperties={
-                                pendingPreview?.itemId === selectedItem.id
-                                  ? null
-                                  : selectedItem.imageProperties
-                              }
-                              showFrameGuide={bottleImageToolsOpen}
-                              isSyncing={isImageSyncing?.(selectedItem)}
-                              className="absolute inset-0"
-                              imgClassName={reducedDetailMotion ? "" : "transition-all duration-300"}
+                            <div
+                              aria-hidden
+                              className="pointer-events-none absolute inset-0 overflow-hidden rounded-lg border border-white/5 bg-white/[0.01]"
                             />
-                          </motion.div>
+                            <motion.div
+                              layoutId={`wardrobe-bottle-${selectedItem.id}`}
+                              transition={bottleMorphTransition}
+                              className="absolute inset-0 cursor-pointer"
+                              onClick={() => detailBottleUrl && setEnlargeOpen(true)}
+                            >
+                              <BottleImage
+                                key={detailBottleUrl || 'missing-image'}
+                                variant="detail"
+                                src={detailBottleUrl}
+                                alt={entryName(selectedItem)}
+                                adjustment={frameDraft}
+                                imageProperties={
+                                  pendingPreview?.itemId === selectedItem.id
+                                    ? null
+                                    : selectedItem.imageProperties
+                                }
+                                showFrameGuide={bottleImageToolsOpen}
+                                isSyncing={isImageSyncing?.(selectedItem)}
+                                className="absolute inset-0"
+                                imgClassName={reducedDetailMotion ? "" : "transition-all duration-300"}
+                              />
+                            </motion.div>
+                          </div>
 
                           {detailBottleUrl && !bottleImageToolsOpen ? (
                             <div className="flex w-full shrink-0 justify-center">
@@ -2376,12 +2459,93 @@ export const Wardrobe: React.FC<{
                           {!bottleImageToolsOpen && detailMetaRows.length > 0 ? (
                             <div className="border-t border-white/[0.06] pt-3">
                               <div className="grid grid-cols-2 gap-px">
-                                {detailMetaRows.map(({ label, value }) => (
-                                  <div key={label} className="flex flex-col items-center gap-1 py-2 text-center">
-                                    <p className="scent-type-label">{label}</p>
-                                    <p className="text-sm font-medium leading-snug text-scent-text-muted">{value}</p>
-                                  </div>
-                                ))}
+                                {detailMetaRows.map(({ field, label, value }) => {
+                                  const isUnknown = !value;
+                                  const display = value ?? 'Unknown';
+                                  const isEditing = editingFactField === field;
+                                  // Only genuinely-missing metrics are editable. A
+                                  // filled value renders as plain, non-interactive text.
+                                  const editable = canVerifyFacts && isUnknown;
+                                  if (isEditing) {
+                                    return (
+                                      // The active editor spans the full width and
+                                      // centers as a self-contained "pop-out" box
+                                      // (bordered card with breathing room), so the
+                                      // input + actions sit symmetrically instead of
+                                      // squeezed cramped under the metric label.
+                                      <div
+                                        key={field}
+                                        ref={factEditorRef}
+                                        className="col-span-2 my-1.5 flex flex-col items-center gap-3 rounded-xl border border-scent-accent/20 bg-black/30 px-5 py-5 text-center"
+                                      >
+                                        <p className="scent-type-label">{label}</p>
+                                        <div className="flex items-center justify-center gap-2">
+                                          <input
+                                            autoFocus
+                                            value={factDraft}
+                                            onChange={(e) => setFactDraft(e.target.value)}
+                                            onKeyDown={(e) => {
+                                              if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                void commitFactEdit();
+                                              } else if (e.key === 'Escape') {
+                                                e.preventDefault();
+                                                cancelFactEdit();
+                                              }
+                                            }}
+                                            disabled={factSaving}
+                                            inputMode={field === 'year' ? 'numeric' : 'text'}
+                                            placeholder={field === 'year' ? 'e.g. 2018' : `Add ${label.toLowerCase()}`}
+                                            aria-label={`Verify ${label}`}
+                                            className="w-44 bg-black/45 border border-white/15 rounded-md px-3 py-1.5 text-sm text-center text-[#fff7ec] outline-none focus:border-scent-accent/50 disabled:opacity-40"
+                                          />
+                                          <button
+                                            type="button"
+                                            onClick={() => void commitFactEdit()}
+                                            disabled={factSaving || !factDraft.trim()}
+                                            aria-label={`Save ${label}`}
+                                            className="flex h-8 w-8 items-center justify-center rounded-md border border-white/15 text-scent-text-muted hover:border-scent-accent/45 hover:text-scent-accent disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                          >
+                                            <Check size={15} strokeWidth={2} />
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={cancelFactEdit}
+                                            disabled={factSaving}
+                                            aria-label={`Cancel editing ${label}`}
+                                            className="flex h-8 w-8 items-center justify-center rounded-md border border-white/15 text-scent-text-muted hover:border-white/35 hover:text-white disabled:opacity-30 transition-colors"
+                                          >
+                                            <X size={15} strokeWidth={2} />
+                                          </button>
+                                        </div>
+                                      </div>
+                                    );
+                                  }
+                                  return (
+                                    <div key={field} className="flex flex-col items-center gap-1 py-2 text-center">
+                                      <p className="scent-type-label">{label}</p>
+                                      {editable ? (
+                                        <button
+                                          type="button"
+                                          onClick={() => beginFactEdit(field)}
+                                          disabled={factSaving}
+                                          title={`Tap to verify ${label.toLowerCase()}`}
+                                          aria-label={`Verify ${label}`}
+                                          className="group inline-flex items-center gap-1 text-sm font-medium leading-snug text-scent-text-subtle italic hover:text-white disabled:opacity-40 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-scent-accent/45 rounded px-1"
+                                        >
+                                          <span>{display}</span>
+                                          <Pencil
+                                            size={11}
+                                            strokeWidth={1.75}
+                                            className="opacity-0 group-hover:opacity-60 transition-opacity"
+                                          />
+                                        </button>
+                                      ) : (
+                                        <p className={`text-sm font-medium leading-snug ${isUnknown ? 'italic text-scent-text-subtle' : 'text-scent-text-muted'}`}>{display}</p>
+                                      )}
+                                    </div>
+                                  );
+                                })}
                               </div>
                             </div>
                           ) : null}

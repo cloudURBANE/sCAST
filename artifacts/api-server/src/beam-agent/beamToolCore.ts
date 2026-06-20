@@ -272,6 +272,24 @@ export function sanitizeSuggestions(
  * render them as buttons. Tolerant: a malformed/absent block yields no chips and
  * leaves the text untouched.
  */
+/**
+ * A cue must read like a short tap chip, not a sentence the model spilled into the
+ * fenced block. A malformed ```cues block (a missing/duplicated closing fence, or
+ * answer prose left inside it) used to let answer-body fragments and stray fence
+ * markers through as garbage chips — a real, user-visible premium-UI defect seen in
+ * live QA (a comparison answer produced chips like "```**Bleu de Chanel** is…").
+ * Reject anything carrying markdown, a backtick/fence marker, or running longer than
+ * a tap chip ever should, so only genuine short chips survive.
+ */
+function looksLikeCueChip(label: string): boolean {
+  if (!label) return false;
+  if (label.length > BEAM_LIMITS.maxSuggestionLabel) return false;
+  if (label.includes("`")) return false; // stray fence / code marker
+  if (/\*\*|__|\]\(/.test(label)) return false; // markdown emphasis / link
+  if (label.split(/\s+/).length > 8) return false; // chips are ~6 words
+  return true;
+}
+
 export function extractAgentCues(text: string): { text: string; cues: string[] } {
   const fence = /\n*```+\s*cues\b[^\n]*\n([\s\S]*?)```+\s*$/i.exec(text);
   if (!fence) return { text: text.trim(), cues: [] };
@@ -288,8 +306,14 @@ export function extractAgentCues(text: string): { text: string; cues: string[] }
   if (raw.length === 0) {
     raw = inner.split(/\r?\n/).map((line) => line.replace(/^\s*[-*•]\s*/, "").trim());
   }
-  const cues = sanitizeSuggestions(raw.map((label) => ({ label, value: label }))).map((c) => c.label);
+  // Keep only genuine chip lines, so a malformed block can never leak answer prose
+  // or stray fence markers into the tap chips.
+  const chipCandidates = raw.map((line) => line.trim()).filter(looksLikeCueChip);
+  const cues = sanitizeSuggestions(chipCandidates.map((label) => ({ label, value: label }))).map((c) => c.label);
   const cleaned = text.slice(0, fence.index).trim();
+  // A leading/standalone cues block leaves no answer prose; surfacing an empty bubble
+  // with chips reads as broken, so fall back to the raw text and drop the chips.
+  if (!cleaned) return { text: text.trim(), cues: [] };
   return { text: cleaned, cues };
 }
 

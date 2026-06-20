@@ -5,6 +5,7 @@ import {
   deriveBeamSessionState,
   inferPendingSlotFromAssistant,
   isDelegationPhrase,
+  sanitizeBeamSessionState,
 } from "./missionState.ts";
 
 test("parses a travel kit target with owned and new counts", () => {
@@ -59,6 +60,20 @@ test("parses the owned-lane count for 'to bring' phrasing without the noun 'frag
   assert.equal(state.mission?.intent, "travel_kit");
   assert.equal(state.mission?.ownedCount, 2);
   assert.equal(state.mission?.newCount, 2);
+});
+
+test("a lone owned-count recommendation is NOT misclassified as a travel kit", () => {
+  // Live QA: "recommend one fragrance from my vault for work" matched the owned-lane
+  // count regex ("one ... from my vault") and was flipped to a travel_kit, routing a
+  // simple recommendation onto the premium lane + travel-kit gates. A lone owned count
+  // with no new lane and no travel/kit word must stay a recommendation.
+  const state = deriveBeamSessionState(undefined, "Recommend one fragrance from my vault for work");
+  assert.equal(state.mission?.intent, "recommendation");
+
+  // An owned-only TRAVEL request still parses as a kit (it carries "trip"/"pack"/etc.).
+  const travel = deriveBeamSessionState(undefined, "Pack me two from my vault for my Tokyo trip");
+  assert.equal(travel.mission?.intent, "travel_kit");
+  assert.equal(travel.mission?.ownedCount, 2);
 });
 
 test("keeps an active scent-direction question unresolved when the user gives an occasion", () => {
@@ -147,6 +162,16 @@ test("merges later month and vibe into an existing travel mission", () => {
   assert.equal(second.mission?.newCount, 2);
 });
 
+test("trip modifiers do not become destinations while explicit and prepositive places still parse", () => {
+  assert.equal(deriveBeamSessionState(undefined, "I'm planning a business trip to Tokyo in August").slots.destination, "Tokyo");
+  assert.equal(deriveBeamSessionState(undefined, "I'm planning a family trip to Tokyo in August").slots.destination, "Tokyo");
+  assert.equal(deriveBeamSessionState(undefined, "I'm planning a Tokyo trip in August").slots.destination, "Tokyo");
+  assert.equal(deriveBeamSessionState(undefined, "I'm planning a weekend trip").slots.destination, undefined);
+  assert.equal(deriveBeamSessionState(undefined, "I'm taking a road trip").slots.destination, undefined);
+  assert.equal(deriveBeamSessionState(undefined, "I have a meeting in the morning").slots.destination, undefined);
+  assert.equal(deriveBeamSessionState(undefined, "I have a date in two weeks").slots.destination, undefined);
+});
+
 test("an explicit new mission does not inherit stale slots or delegation", () => {
   const first = deriveBeamSessionState(
     undefined,
@@ -171,6 +196,46 @@ test("a new recommendation does not inherit delegation from a prior travel missi
   assert.equal(second.mission?.intent, "recommendation");
   assert.deepEqual(second.slots, { occasion: "work" });
   assert.equal(second.userDelegatedChoice, undefined);
+});
+
+test("a refinement of an already-presented kit preserves the mission, not a new recommendation", () => {
+  const first = deriveBeamSessionState(undefined, "Trip to Tokyo: 2 from my wardrobe and 2 new in August, artsy.");
+  // Simulate the loop marking the kit as delivered (the route persists this).
+  const presented = { ...first, mission: { ...first.mission, kitPresented: true } };
+  const refine = deriveBeamSessionState(presented, "Swap the Aventus pick for something cleaner.");
+
+  // The generic verb "pick" must NOT downgrade the mission to a recommendation or
+  // wipe the kit's destination/timing/counts.
+  assert.equal(refine.mission?.intent, "travel_kit");
+  assert.equal(refine.mission?.ownedCount, 2);
+  assert.equal(refine.mission?.newCount, 2);
+  assert.equal(refine.mission?.destination, "Tokyo");
+  assert.equal(refine.mission?.kitPresented, true);
+});
+
+test("an explicit boundary after a presented kit still starts a fresh mission", () => {
+  const first = deriveBeamSessionState(undefined, "Trip to Tokyo: 2 from my wardrobe and 2 new in August, artsy.");
+  const presented = { ...first, mission: { ...first.mission, kitPresented: true } };
+  const next = deriveBeamSessionState(presented, "Now what should I wear to work today?");
+
+  assert.equal(next.mission?.intent, "recommendation");
+  assert.equal(next.mission?.kitPresented, undefined);
+  assert.equal(next.mission?.destination, undefined);
+  assert.deepEqual(next.slots, { occasion: "work" });
+});
+
+test("sanitize preserves the kitPresented mission flag", () => {
+  const sanitized = sanitizeBeamSessionState({
+    slots: { destination: "Tokyo" },
+    mission: { intent: "travel_kit", ownedCount: 2, newCount: 2, kitPresented: true },
+  });
+  assert.equal(sanitized.mission?.kitPresented, true);
+
+  const noFlag = sanitizeBeamSessionState({
+    slots: {},
+    mission: { intent: "travel_kit", ownedCount: 2, newCount: 2 },
+  });
+  assert.equal(noFlag.mission?.kitPresented, undefined);
 });
 
 test("month corrections reject the negated month regardless of calendar order", () => {
@@ -253,4 +318,35 @@ test("formats known slots and mission rules into a prompt clause", () => {
   assert.match(prompt, /month=August/i);
   assert.match(prompt, /ownedCount=2/i);
   assert.match(prompt, /beam_present_travel_kit/i);
+});
+
+test("captures common occasions the parser previously missed (the over-asking gap)", () => {
+  // Each of these is an occasion users state plainly; before the fix none were
+  // captured, so the agent re-asked "what's the occasion?" they had just answered.
+  const cases: Array<[string, string]> = [
+    ["Something for a party this weekend", "party"],
+    ["I need a scent for a dinner tonight", "dinner"],
+    ["What should I wear to a job interview?", "interview"],
+    ["Heading to brunch with friends", "brunch"],
+    ["A fragrance for a funeral", "funeral"],
+    ["Picking something for my graduation", "graduation"],
+    ["It's a first date, help me pick", "first date"],
+  ];
+  for (const [message, expected] of cases) {
+    const state = deriveBeamSessionState(undefined, message);
+    assert.equal(state.slots.occasion, expected, `"${message}" should capture occasion=${expected}`);
+  }
+});
+
+test("classifies an occasion-worded assistant question as the occasion slot", () => {
+  assert.equal(inferPendingSlotFromAssistant("Is this for work, a party, or a night out?"), "occasion");
+  assert.equal(inferPendingSlotFromAssistant("Is it a wedding or a funeral?"), "occasion");
+});
+
+test("a known occasion captured this turn is not re-marked pending after an occasion question", () => {
+  const pending = inferPendingSlotFromAssistant("What's the occasion — work, a party, or dinner?");
+  assert.equal(pending, "occasion");
+  const state = deriveBeamSessionState(undefined, "It's a dinner party", pending);
+  assert.equal(state.slots.occasion, "dinner");
+  assert.notEqual(state.pendingSlotUnanswered, true);
 });

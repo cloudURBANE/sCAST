@@ -16,3 +16,8 @@ export * from "./communityReactions";
 export * from "./communityPostFragrances";
 export * from "./communityTags";
 export * from "./communityVotes";
+export * from "./beamAnswerLog";
+export * from "./beamAnswerFeedback";
+export * from "./arenaCrowdPredictions";
+export * from "./arenaCrowdStats";
+export * from "./arenaBeamGrants";

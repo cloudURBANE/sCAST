@@ -142,6 +142,13 @@ function removeFromStack(id: string) {
   }
 }
 
+export function useBodyScrollLock(active: boolean) {
+  React.useEffect(() => {
+    if (!active || typeof document === "undefined" || typeof window === "undefined") return;
+    return lockBodyScroll();
+  }, [active]);
+}
+
 export function useModalBehavior({
   isOpen,
   containerRef,

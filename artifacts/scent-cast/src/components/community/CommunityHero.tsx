@@ -1,7 +1,7 @@
 import React from 'react';
 
 export const CommunityHero: React.FC = () => (
-  <section className="scent-hero-zone mx-auto w-full max-w-[940px] overflow-hidden rounded-[18px] border border-scent-accent/55 bg-[#050403] px-4 py-4 text-center sm:rounded-[28px] sm:px-10 sm:py-8 lg:px-16 lg:py-9">
+  <section className="scent-hero-zone mx-auto w-full max-w-[940px] overflow-hidden rounded-[18px] border border-scent-accent/55 bg-[#050403] px-4 py-3.5 text-center sm:rounded-[28px] sm:px-10 sm:py-7 lg:px-16 lg:py-8">
     <div className="mx-auto flex max-w-[17rem] items-center justify-center gap-3 sm:max-w-[34rem] sm:gap-6">
       <span
         className="h-px flex-1 bg-scent-accent/55"

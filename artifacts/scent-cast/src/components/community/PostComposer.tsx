@@ -28,6 +28,7 @@ import {
 } from '@/components/community/communityPosts';
 import { useWardrobeItems } from '@/context/WardrobeContext';
 import { BottleImage } from '@/components/BottleImage';
+import { sanitizeFamilyLabel } from '@/lib/wardrobeSearchSuggest';
 
 interface ComposerRoom {
   type: CommunityPostType;
@@ -167,6 +168,11 @@ function snapshotIdentityKey(snapshot: Pick<CommunityFragranceSnapshot, 'brand' 
   return `${snapshot.brand.trim().toLowerCase()}::${snapshot.name.trim().toLowerCase()}`;
 }
 
+function stableFragranceId(brand: string, name: string): string {
+  const part = (value: string) => value.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  return `catalog:${part(brand)}:${part(name)}`;
+}
+
 function battleOptionKey(snapshot: Pick<CommunityFragranceSnapshot, 'name'>): string {
   return snapshot.name.trim();
 }
@@ -177,9 +183,10 @@ function snapshotFromWardrobeItem(item: Record<string, unknown>, index: number):
   if (!name || !brand) return null;
 
   const imageUrl = firstString(item.imageUrl, item.image_url);
-  const family = firstString(item.family);
+  const family = sanitizeFamilyLabel(firstString(item.family));
   return {
     id: firstString(item._dbId, item.id) ?? `wardrobe:${index}:${brand}:${name}`,
+    fragranceId: stableFragranceId(brand, name),
     source: 'wardrobe',
     name,
     brand,
@@ -195,6 +202,7 @@ function candidateFromSearchResult(result: FragranceSearchResult): BattleFragran
   const imageUrl = searchResultImageUrl(result);
   return {
     id: firstString(result.id, result.source_url, `global:${brand}:${name}`) ?? `global:${brand}:${name}`,
+    fragranceId: stableFragranceId(brand, name),
     source: 'global',
     name,
     brand,
@@ -238,8 +246,9 @@ async function snapshotFromSearchResult(result: FragranceSearchResult): Promise<
 
   const directImageUrl = searchResultImageUrl(result);
   if (isAllowedCatalogImageUrl(directImageUrl)) {
-    const family = firstString((result as Record<string, unknown>).family);
+    const family = sanitizeFamilyLabel(firstString((result as Record<string, unknown>).family));
     return {
+      fragranceId: stableFragranceId(brand, name),
       name,
       brand,
       imageUrl: directImageUrl,
@@ -249,13 +258,14 @@ async function snapshotFromSearchResult(result: FragranceSearchResult): Promise<
 
   const payload = detailPayloadFor(result);
   if (!payload) {
-    return { name, brand };
+    return { fragranceId: stableFragranceId(brand, name), name, brand };
   }
 
   const detail = await getFragranceDetails(payload);
   const imageUrl = detailImageUrl(detail);
-  const family = firstString(detail.family, (detail as Record<string, unknown>).family);
+  const family = sanitizeFamilyLabel(firstString(detail.family, (detail as Record<string, unknown>).family));
   return {
+    fragranceId: stableFragranceId(brand, name),
     name: firstString(detail.name, name) ?? name,
     brand: firstString(detail.brand, detail.house, brand) ?? brand,
     ...(isAllowedCatalogImageUrl(imageUrl) ? { imageUrl } : {}),
@@ -690,10 +700,11 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
     clearStatus();
     try {
       const fallbackSnapshot: CommunityFragranceSnapshot = {
+        fragranceId: stableFragranceId(candidate.brand, candidate.name),
         name: candidate.name,
         brand: candidate.brand,
         ...(candidate.imageUrl ? { imageUrl: candidate.imageUrl } : {}),
-        ...(candidate.family ? { family: candidate.family } : {}),
+        ...(sanitizeFamilyLabel(candidate.family) ? { family: sanitizeFamilyLabel(candidate.family) ?? undefined } : {}),
       };
       let snapshot = fallbackSnapshot;
       if (candidate.result) {

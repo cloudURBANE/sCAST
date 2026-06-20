@@ -6,6 +6,7 @@ import {
   isIpadSafariBrowser,
   isIpadSafariPerformanceMode,
   isLowRenderBudget,
+  isTouchPerformanceMode,
 } from './platform.ts';
 
 const originalWindow = globalThis.window;
@@ -81,6 +82,7 @@ test('iPadOS Safari is detected but is not downgraded into the phone render budg
   assert.equal(isIpadDevice(), true);
   assert.equal(isIpadSafariBrowser(), true);
   assert.equal(isIpadSafariPerformanceMode(), true);
+  assert.equal(isTouchPerformanceMode(), true);
   assert.equal(isConstrainedTouchDevice(), false);
   assert.equal(isLowRenderBudget(), false);
 });
@@ -100,6 +102,7 @@ test('installed iPad PWA (no Safari UA token) still enters performance mode', ()
   assert.equal(isIpadDevice(), true);
   assert.equal(isIpadSafariBrowser(), false);
   assert.equal(isIpadSafariPerformanceMode(), true);
+  assert.equal(isTouchPerformanceMode(), true);
   assert.equal(isLowRenderBudget(), false);
 });
 
@@ -116,6 +119,7 @@ test('iPad Chrome does not enter Safari-specific performance mode', () => {
   assert.equal(isIpadDevice(), true);
   assert.equal(isIpadSafariBrowser(), false);
   assert.equal(isIpadSafariPerformanceMode(), false);
+  assert.equal(isTouchPerformanceMode(), false);
 });
 
 test('phone-class coarse pointer devices keep the constrained render budget', () => {
@@ -131,6 +135,7 @@ test('phone-class coarse pointer devices keep the constrained render budget', ()
   assert.equal(isIpadDevice(), false);
   assert.equal(isIpadSafariPerformanceMode(), false);
   assert.equal(isConstrainedTouchDevice(), true);
+  assert.equal(isTouchPerformanceMode(), true);
   assert.equal(isLowRenderBudget(), true);
 });
 
@@ -147,5 +152,6 @@ test('reduced motion constrains even desktop-class devices', () => {
 
   assert.equal(isConstrainedTouchDevice(), false);
   assert.equal(isIpadSafariPerformanceMode(), false);
+  assert.equal(isTouchPerformanceMode(), false);
   assert.equal(isLowRenderBudget(), true);
 });

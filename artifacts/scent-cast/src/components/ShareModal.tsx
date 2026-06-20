@@ -132,11 +132,21 @@ export const ShareModal: React.FC<ShareModalProps> = ({
     }
   };
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(shareUrl).then(() => {
+  const handleCopy = async () => {
+    if (!shareUrl) return;
+
+    try {
+      if (!navigator.clipboard) throw new Error('Clipboard API unavailable');
+      await navigator.clipboard.writeText(shareUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    });
+    } catch {
+      toast({
+        title: 'Copy Failed',
+        description: 'The share link could not be copied. Please try again or use Preview.',
+        variant: 'destructive',
+      });
+    }
   };
 
   const handleToggleImagesOnSharePage = async () => {
@@ -232,21 +242,32 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                 </div>
                 <button
                   type="button"
-                  onClick={handleCopy}
-                  className="px-4 py-3 bg-white text-black text-[9px] uppercase tracking-[0.3em] font-bold flex items-center gap-2 hover:bg-white/90 active:scale-[0.97] transition-all shrink-0"
+                  onClick={() => void handleCopy()}
+                  disabled={!shareUrl}
+                  className="px-4 py-3 bg-white text-black text-[9px] uppercase tracking-[0.3em] font-bold flex items-center gap-2 hover:bg-white/90 active:scale-[0.97] transition-all shrink-0 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   {copied ? <><Check size={11} strokeWidth={1.75} /> Copied</> : <><Link size={11} strokeWidth={1.75} /> Copy</>}
                 </button>
               </div>
-              <a
-                href={shareUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2 w-full py-2.5 border border-white/8 text-white/50 hover:text-white hover:border-white/20 transition-colors text-[9px] uppercase tracking-[0.35em] font-bold"
-              >
-                <ExternalLink size={10} strokeWidth={1.75} />
-                Preview Shared Page
-              </a>
+              {shareUrl ? (
+                <a
+                  href={shareUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 w-full py-2.5 border border-white/8 text-white/50 hover:text-white hover:border-white/20 transition-colors text-[9px] uppercase tracking-[0.35em] font-bold"
+                >
+                  <ExternalLink size={10} strokeWidth={1.75} />
+                  Preview Shared Page
+                </a>
+              ) : (
+                <span
+                  aria-disabled="true"
+                  className="flex items-center justify-center gap-2 w-full py-2.5 border border-white/8 text-white/25 text-[9px] uppercase tracking-[0.35em] font-bold"
+                >
+                  <ExternalLink size={10} strokeWidth={1.75} />
+                  Preview Unavailable
+                </span>
+              )}
               <button
                 type="button"
                 onClick={() => void handleToggleImagesOnSharePage()}

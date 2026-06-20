@@ -15,6 +15,7 @@ import {
   Send,
   SlidersHorizontal,
   Sparkles,
+  ThumbsDown,
   Wand2,
   Zap,
 } from 'lucide-react';
@@ -37,11 +38,14 @@ import {
   buildMissionWeather,
   findWardrobeMatch,
   missionProgress,
+  missionWithDefaultsForFast,
   proposalItemToFragrance,
 } from '@/lib/scentMissionClient';
 import {
+  BEAM_FEEDBACK_REASONS,
   humanizeBeamTool,
   runBeamAgentMission,
+  submitBeamFeedback,
   type BeamAgentMission,
   type BeamAgentSlots,
   type BeamCard as BeamCardData,
@@ -49,6 +53,17 @@ import {
   type BeamSuggestion,
 } from '@/lib/beamAgentClient';
 import { formatAgentResponse } from '@/lib/beamMessageFormat';
+import {
+  classifyTurnOutcome,
+  composerPlaceholderForState,
+  deriveFlowState,
+  formatKitTitle,
+  normalizeLocation,
+  parseDateLabel,
+  recapLabelForOutcome,
+  recommendCtaForState,
+  type BeamTurnOutcome,
+} from '@/lib/beamAnswerContract';
 import { BeamMessage } from '@/components/BeamMessage';
 import { BeamCard } from '@/components/BeamCard';
 import type { Fragrance } from '@/components/Wardrobe';
@@ -80,6 +95,14 @@ type PanelMessage = {
   // scripted replies that ran no tools.
   activity?: BeamActivityStep[];
   elapsedMs?: number | null;
+  // The durable per-turn answer id (from the completed event). Present only on
+  // delivered Beam answers; gates the "report this answer" feedback affordance so
+  // it can attach to a real server-side record.
+  answerLogId?: string;
+  // The completion-contract outcome for this turn (answered / needs_more_info /
+  // pending). Drives the truthful recap label and whether final-answer feedback
+  // shows — a "let me search first" stall is `pending`, never `answered`.
+  outcome?: BeamTurnOutcome;
 };
 
 type AgentMode = 'fast' | 'research' | 'premium';
@@ -201,7 +224,7 @@ const BEAM_AGENT_TIMEOUT_MS = 60000;
 // Shared chat-bubble shell for the agent's typing indicator (used both on first
 // open and while the agent is working a turn).
 const BEAM_TYPING_BUBBLE_CLASS =
-  'inline-flex max-w-[90%] items-center gap-1.5 self-start rounded-[calc(var(--radius-scent)-12px)] border border-scent-accent/18 bg-[linear-gradient(180deg,rgba(255,236,183,0.055),rgba(212,175,55,0.028)_42%,rgba(0,0,0,0.2))] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,236,183,0.055),0_10px_24px_rgba(0,0,0,0.22)]';
+  'inline-flex max-w-[92%] items-center gap-1.5 self-start rounded-[calc(var(--radius-scent)-10px)] border border-scent-accent/18 bg-[linear-gradient(180deg,rgba(255,236,183,0.055),rgba(212,175,55,0.028)_42%,rgba(0,0,0,0.2))] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,236,183,0.055),0_10px_24px_rgba(0,0,0,0.22)]';
 
 // Three dots with an organic, staggered shimmer so the agent reads as genuinely
 // "thinking" rather than mechanically blinking.
@@ -217,6 +240,79 @@ const BeamTypingDots: React.FC = () => (
     ))}
   </>
 );
+
+/* --------------------------------------------------------------------------
+ * Answer feedback affordance ("report this answer")
+ *
+ * A deliberately quiet thumbs-down sits under a delivered Beam answer. Tapping it
+ * reveals a compact set of reason chips; choosing one posts the verdict (tied to
+ * the answer's durable id) and the control settles into a subtle "noted" state.
+ * Visually subordinate to the answer — muted text, no heavy borders, chips wrap
+ * gracefully and stay tappable on mobile — so it reads as curated, not bolted on.
+ * ------------------------------------------------------------------------ */
+
+type AnswerFeedbackStatus = 'idle' | 'open' | 'submitting' | 'submitted' | 'error';
+
+const AnswerFeedbackControl: React.FC<{
+  status: AnswerFeedbackStatus;
+  onOpen: () => void;
+  onPick: (reasonCode: string) => void;
+  calmMotion: boolean;
+}> = ({ status, onOpen, onPick, calmMotion }) => {
+  if (status === 'submitted') {
+    return (
+      <p className="mt-1 inline-flex items-center gap-1.5 pl-1 text-[11px] text-scent-text-muted/70">
+        <Check size={12} className="text-scent-accent/70" aria-hidden />
+        Thanks — noted. We use this to sharpen future picks.
+      </p>
+    );
+  }
+
+  if (status === 'idle') {
+    return (
+      <button
+        type="button"
+        onClick={onOpen}
+        className="mt-1 inline-flex items-center gap-1.5 self-start pl-1 text-[11px] text-scent-text-muted/55 transition-colors hover:text-scent-text-muted focus:outline-none focus-visible:ring-1 focus-visible:ring-scent-accent/40 rounded-full"
+        aria-label="This answer missed — tell us why"
+      >
+        <ThumbsDown size={12} strokeWidth={1.75} aria-hidden />
+        Not quite right?
+      </button>
+    );
+  }
+
+  // open / submitting / error: the reason chips.
+  const submitting = status === 'submitting';
+  return (
+    <motion.div
+      initial={calmMotion ? false : { opacity: 0, y: -2 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2, ease: SCENT_EASE }}
+      className="mt-1.5 flex flex-col gap-1.5 pl-1"
+      role="group"
+      aria-label="What was off about this answer?"
+    >
+      <span className="text-[11px] text-scent-text-muted/70">What was off?</span>
+      <div className="flex flex-wrap gap-1.5">
+        {BEAM_FEEDBACK_REASONS.map((reason) => (
+          <button
+            key={reason.code}
+            type="button"
+            disabled={submitting}
+            onClick={() => onPick(reason.code)}
+            className="min-h-8 rounded-full border border-scent-accent/18 px-3 py-1 scent-type-chip text-[11px] text-scent-text-muted transition-colors hover:border-scent-accent/40 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40 disabled:opacity-45"
+          >
+            {reason.label}
+          </button>
+        ))}
+      </div>
+      {status === 'error' ? (
+        <span className="text-[11px] text-red-300/80">Couldn’t send that — tap a reason to try again.</span>
+      ) : null}
+    </motion.div>
+  );
+};
 
 /* --------------------------------------------------------------------------
  * Beam Agent live activity trail
@@ -241,7 +337,7 @@ type BeamActivityStep = {
 };
 
 const BEAM_ACTIVITY_BUBBLE_CLASS =
-  'flex max-w-[92%] flex-col gap-1.5 self-start rounded-[calc(var(--radius-scent)-12px)] border border-scent-accent/16 bg-[linear-gradient(180deg,rgba(255,236,183,0.045),rgba(212,175,55,0.024)_44%,rgba(0,0,0,0.2))] px-3.5 py-3 shadow-[inset_0_1px_0_rgba(255,236,183,0.045),0_10px_24px_rgba(0,0,0,0.2)]';
+  'flex max-w-[92%] flex-col gap-1.5 self-start rounded-[calc(var(--radius-scent)-10px)] border border-scent-accent/18 bg-[linear-gradient(180deg,rgba(255,236,183,0.055),rgba(212,175,55,0.028)_42%,rgba(0,0,0,0.2))] px-3.5 py-3 shadow-[inset_0_1px_0_rgba(255,236,183,0.055),0_10px_24px_rgba(0,0,0,0.22)]';
 
 /** Human copy for each per-fragrance curate phase. */
 const CURATE_STATUS_COPY: Record<'adding' | 'curating' | 'ready' | 'failed', string> = {
@@ -349,7 +445,7 @@ const BeamActivityStepRow: React.FC<{ step: BeamActivityStep; spin: boolean }> =
   <div className="flex items-start gap-2">
     <span className="mt-[2px] flex h-4 w-4 shrink-0 items-center justify-center">
       {step.state === 'active' ? (
-        <Loader2 size={13} className={spin ? 'animate-spin' : ''} aria-hidden />
+        <Loader2 size={13} className={`text-scent-accent ${spin ? 'animate-spin' : ''}`} aria-hidden />
       ) : step.tone === 'error' ? (
         <AlertTriangle size={12} className="text-scent-accent/55" aria-hidden />
       ) : (
@@ -391,21 +487,24 @@ const BeamActivityTrail: React.FC<{
   running: boolean;
   expanded: boolean;
   elapsedMs: number | null;
+  // The settled turn's completion-contract outcome. When absent (live trail) the
+  // label tracks the spinner; once settled it drives a truthful recap label so a
+  // stalled turn never reads as "Answered".
+  outcome?: BeamTurnOutcome;
   onToggleExpand: () => void;
-}> = ({ steps, calmMotion, spin, running, expanded, elapsedMs, onToggleExpand }) => {
+}> = ({ steps, calmMotion, spin, running, expanded, elapsedMs, outcome, onToggleExpand }) => {
   if (steps.length === 0) return null;
 
   const activeCount = steps.filter((s) => s.state === 'active').length;
   const currentStep = [...steps].reverse().find((s) => s.state === 'active') ?? steps[steps.length - 1];
   const showSpinner = running && activeCount > 0;
   const elapsedSeconds = elapsedMs != null ? Math.max(1, Math.round(elapsedMs / 1000)) : null;
-  // A completed tool trail is not necessarily a completed recommendation. Keep
-  // this factual and leave the actual actions behind a descriptive control.
+  // A completed tool trail is not necessarily a completed recommendation. The
+  // settled label is keyed off the turn's real outcome (answered vs pending vs
+  // clarifying), never the bare fact that the run finished.
   const summaryLabel = showSpinner
     ? currentStep.label
-    : elapsedSeconds != null
-      ? `Answered in ${elapsedSeconds}s`
-      : 'Response ready';
+    : recapLabelForOutcome(outcome ?? 'answered', elapsedSeconds);
 
   const body = (
     <div className="mt-2.5 flex flex-col gap-2 border-t border-scent-accent/10 pt-2.5">
@@ -750,14 +849,6 @@ function mergeCalibration(
   };
 }
 
-function missionWithDefaultsForFast(mission: ScentMissionState): ScentMissionState {
-  return mergeCalibration(
-    mission,
-    mission.calibration.destination ?? 'Going Out',
-    mission.calibration.energy ?? 'Confident',
-  );
-}
-
 /** Live progress surfaced to the host so the header can render outside the card. */
 export interface ScentMissionStatus {
   progress: number;
@@ -856,6 +947,23 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   // behavior) rather than holding the prompt copy under the caret.
   const [composerFocused, setComposerFocused] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+
+  // Stable, panel-owned portal target for the impressions / Confirm lane. We
+  // portal into THIS node (which the panel owns for its whole lifetime) and only
+  // attach it as a child of `cueBarContainer` while that host is mounted. The
+  // host (`missionCueHost` in App.tsx) lives in a SEPARATE AnimatePresence from
+  // this panel, so on close the two unmount independently; if the host node were
+  // the direct portal target and detached first, React's portal teardown would
+  // call removeChild on an already-removed node and throw — surfacing the
+  // ErrorBoundary ("System Disruption" / reload). Portaling into an owned node
+  // keeps the portal content a coherent subtree regardless of host teardown
+  // order, so close always returns cleanly to the search view.
+  const [cuePortalHost] = useState(() => {
+    if (typeof document === 'undefined') return null;
+    const node = document.createElement('div');
+    node.dataset.beamCuePortal = 'true';
+    return node;
+  });
   // Pause the cue marquee while the user is pressing it, so a moving chip is
   // still easy to tap. Hover-pause (desktop) is handled in CSS.
   const [marqueePaused, setMarqueePaused] = useState(false);
@@ -899,6 +1007,30 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
     (id: string) => setExpandedRecaps((prev) => ({ ...prev, [id]: !prev[id] })),
     [],
   );
+  // Per-answer feedback affordance. Keyed by message id: 'idle' shows just the
+  // quiet thumbs-down; 'open' reveals the reason chips; then submitting →
+  // submitted (a subtle confirmation) or error (a one-line retry hint). State
+  // lives here, not on the message, so it never affects answer/scroll bookkeeping.
+  type FeedbackUiState = 'idle' | 'open' | 'submitting' | 'submitted' | 'error';
+  const [feedbackState, setFeedbackState] = useState<Record<string, FeedbackUiState>>({});
+  const setFeedbackFor = useCallback(
+    (id: string, status: FeedbackUiState) => setFeedbackState((prev) => ({ ...prev, [id]: status })),
+    [],
+  );
+  const submitAnswerFeedback = useCallback(
+    async (answerLogId: string, messageId: string, reasonCode: string) => {
+      if (!authToken) return;
+      setFeedbackFor(messageId, 'submitting');
+      try {
+        await submitBeamFeedback({ answerLogId, reasonCode, authToken, apiBaseUrl: API_BASE_URL });
+        setFeedbackFor(messageId, 'submitted');
+      } catch {
+        // Keep the chips up so the user can retry; a failed verdict is low-stakes.
+        setFeedbackFor(messageId, 'error');
+      }
+    },
+    [authToken, setFeedbackFor],
+  );
   // Tap-to-answer chips the agent offered with its last reply (e.g. trip-vibe
   // follow-ups). When set, these replace the static facet cues.
   const [agentSuggestions, setAgentSuggestions] = useState<BeamSuggestion[]>([]);
@@ -931,6 +1063,10 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   // the cue lane can offer recovery actions instead of vibe cues. Cleared on the
   // next user turn / a successful curation.
   const [catalogFailure, setCatalogFailure] = useState(false);
+  // The completion-contract outcome of the most recent agent turn. Drives the
+  // flow state machine (CTA / placeholder / status) so a stalled "let me search
+  // first" turn is treated as a recoverable error, not a fresh answer.
+  const [lastTurnOutcome, setLastTurnOutcome] = useState<BeamTurnOutcome | null>(null);
   // The last message the user actually sent — lets "Retry catalog search" re-run
   // the same turn without making them retype it.
   const [lastUserMessage, setLastUserMessage] = useState('');
@@ -973,6 +1109,18 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   }, []);
 
   useEffect(() => () => abortRef.current?.abort(), []);
+
+  // Mount the owned portal host inside the App-provided cue container while it is
+  // present, and detach it defensively on cleanup / host change. Because the panel
+  // owns `cuePortalHost`, React's portal content always unmounts from a node we
+  // control — never from a foreign node another tree may have already removed.
+  useLayoutEffect(() => {
+    if (!cueBarContainer || !cuePortalHost) return;
+    cueBarContainer.appendChild(cuePortalHost);
+    return () => {
+      if (cuePortalHost.parentNode) cuePortalHost.parentNode.removeChild(cuePortalHost);
+    };
+  }, [cueBarContainer, cuePortalHost]);
 
   // Time each run (so a completed turn can freeze "Thought for Ns" onto its
   // reply) and reset the live trail to its collapsed summary whenever a fresh
@@ -1109,6 +1257,23 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   // composer's "refine your match" placeholder below.
   const hasMatch = Boolean(resolved) || (proposal != null && proposal.items.length > 0) || agentCardDelivered;
 
+  // The flow state machine — one derived source of truth for the CTA, composer
+  // placeholder, and status affordances. `hasClarifyingCues` is filled in below
+  // once the suggestion lane is computed; pass it through so a follow-up question
+  // reads as needs_more_info, not a stalled answer.
+  const flowState = useMemo(
+    () =>
+      deriveFlowState({
+        busy,
+        catalogFailure,
+        hasMatch,
+        lastTurnOutcome,
+        hasClarifyingCues: agentSuggestions.length > 0,
+        conversationStarted,
+      }),
+    [busy, catalogFailure, hasMatch, lastTurnOutcome, agentSuggestions.length, conversationStarted],
+  );
+
   const progressText = useMemo(() => {
     if (progressNote) return progressNote;
     if (hasMatch && !busy) return 'Match ready';
@@ -1122,27 +1287,44 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   // the title instead of the static "A scent for today." A travel kit reads as a
   // named kit; a single destination/occasion reads as a scent-for line. Falls back
   // to the calm default before any cue lands.
+  // A human date/time context ("…Duluth mn tomorrow" → "Tomorrow"), parsed from
+  // the user's own words since the backend slots carry no date field. Used to keep
+  // the kit title truthful ("Your Duluth, MN · Tomorrow kit").
+  const dateLabel = useMemo(() => parseDateLabel(lastUserMessage), [lastUserMessage]);
+
   const headerTitle = useMemo(() => {
     const destination = (agentMission?.destination || agentCues.destination || '').trim();
     const month = (agentMission?.month || agentCues.month || '').trim();
     if (agentMission?.intent === 'travel_kit' && destination) {
-      return month
-        ? `Your ${titleCaseCue(destination)} · ${titleCaseCue(month)} kit`
-        : `Your ${titleCaseCue(destination)} kit`;
+      // Route the place through normalizeLocation so "duluth mn" reads as
+      // "Duluth, MN" (never "Duluth Mn"), and preserve the date context.
+      return formatKitTitle({ destination, month, dateLabel });
     }
-    if (destination) return `A scent for ${titleCaseCue(destination)}`;
+    // A requested quantity ("give me three…") reads as a count, so the header
+    // matches what's being delivered instead of always promising one scent.
+    const recCount = agentMission?.intent === 'recommendation' ? agentMission.count ?? 0 : 0;
+    const lead = recCount > 1 ? `${recCount} scents` : 'A scent';
+    if (destination) return `${lead} for ${normalizeLocation(destination)}`;
     const occasion = (agentCues.occasion || '').trim();
-    if (occasion) return `A scent for ${occasion}`;
-    return 'A scent for today.';
-  }, [agentCues, agentMission]);
+    if (occasion) return `${lead} for ${occasion}`;
+    return recCount > 1 ? `${recCount} scent picks` : 'A scent for today.';
+  }, [agentCues, agentMission, dateLabel]);
 
   const contextLine = useMemo(() => {
     const destination = (agentMission?.destination || agentCues.destination || '').trim();
     const month = (agentMission?.month || agentCues.month || '').trim();
     if (agentMission?.intent === 'travel_kit' && destination) {
-      return month
-        ? `${titleCaseCue(destination)} / ${titleCaseCue(month)} travel context`
-        : `${titleCaseCue(destination)} travel context`;
+      // Surface the requested lane counts so "2 from your vault + 2 new" is visible
+      // up front instead of only inside the delivered kit card.
+      const kitParts: string[] = [];
+      if ((agentMission.ownedCount ?? 0) > 0) kitParts.push(`${agentMission.ownedCount} from your vault`);
+      if ((agentMission.newCount ?? 0) > 0) kitParts.push(`${agentMission.newCount} new`);
+      const countPhrase = kitParts.length > 0 ? ` · ${kitParts.join(' + ')}` : '';
+      const place = normalizeLocation(destination);
+      const when = month ? titleCaseCue(month) : dateLabel;
+      return when
+        ? `${place} / ${when} travel context${countPhrase}`
+        : `${place} travel context${countPhrase}`;
     }
     const weatherParts = [
       typeof weather?.temperature === 'number' ? `${Math.round(weather.temperature)}F` : null,
@@ -1150,7 +1332,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       typeof weather?.condition === 'string' ? weather.condition : null,
     ].filter(Boolean);
     return weatherParts.length > 0 ? weatherParts.join(' / ') : 'Weather context ready when available';
-  }, [agentCues.destination, agentMission, weather]);
+  }, [agentCues.destination, agentMission, weather, dateLabel]);
 
   // Surface progress to the host so the title + progress + close can render in a
   // header strip above the bordered card rather than crowding the panel interior.
@@ -1175,7 +1357,12 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
     (
       role: PanelMessage['role'],
       text: string,
-      meta?: { activity?: BeamActivityStep[]; elapsedMs?: number | null },
+      meta?: {
+        activity?: BeamActivityStep[];
+        elapsedMs?: number | null;
+        answerLogId?: string;
+        outcome?: BeamTurnOutcome;
+      },
     ) => {
       setMessages((prev) => [
         ...prev,
@@ -1186,6 +1373,8 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
           ...(meta?.activity && meta.activity.length > 0
             ? { activity: meta.activity, elapsedMs: meta.elapsedMs ?? null }
             : {}),
+          ...(meta?.answerLogId ? { answerLogId: meta.answerLogId } : {}),
+          ...(meta?.outcome ? { outcome: meta.outcome } : {}),
         },
       ]);
     },
@@ -1199,7 +1388,12 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   const pushAgentText = useCallback(
     (
       raw: string,
-      meta?: { activity?: BeamActivityStep[]; elapsedMs?: number | null },
+      meta?: {
+        activity?: BeamActivityStep[];
+        elapsedMs?: number | null;
+        answerLogId?: string;
+        outcome?: BeamTurnOutcome;
+      },
     ): { catalogUnavailable: boolean } => {
       const { text, catalogUnavailable } = formatAgentResponse(raw);
       if (catalogUnavailable) setCatalogFailure(true);
@@ -1293,6 +1487,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       activityIdRef.current = 0;
       runEmittedCuesRef.current = false;
       runDeliveredResultRef.current = false;
+      setLastTurnOutcome(null);
       setActivity([]);
       setAgentSuggestions([]);
       setProposal(null);
@@ -1384,9 +1579,35 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
           // no card/proposal) drops it, so the action trail no longer repeats on
           // every back-and-forth and reads as developer noise.
           const isClarifyingTurn = runEmittedCuesRef.current && !runDeliveredResultRef.current;
+          // Completion contract: decide what this turn actually was before we let
+          // the UI call it "Answered". A delivered card/proposal or real text
+          // picks → answered; a "let me search the catalog first" stall → pending;
+          // a clarifying question → needs_more_info. The recap label, the primary
+          // CTA, and the feedback affordance all key off this — never off the bare
+          // fact that the run finished.
+          const outcome = classifyTurnOutcome({
+            text: result.response,
+            deliveredResult: runDeliveredResultRef.current,
+            emittedCues: runEmittedCuesRef.current,
+          });
+          setLastTurnOutcome(outcome);
+          // Feedback attaches to substantive answers only — a pure clarifying
+          // question ("what's the occasion?") or an unfinished stall isn't
+          // something to report. The server still logs that turn for diagnosis; it
+          // just gets no final-answer UI verdict. Only a real `answered` turn
+          // carries the durable answerLogId that opens the feedback control.
           pushAgentText(
             result.response,
-            isClarifyingTurn ? undefined : { activity: frozenSteps, elapsedMs },
+            isClarifyingTurn
+              ? { outcome }
+              : {
+                  activity: frozenSteps,
+                  elapsedMs,
+                  outcome,
+                  ...(result.answerLogId && outcome === 'answered'
+                    ? { answerLogId: result.answerLogId }
+                    : {}),
+                },
           );
           return { handled: true };
         }
@@ -1476,9 +1697,18 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         return;
       }
 
-      let currentMission = trigger === 'fast'
-        ? missionWithDefaultsForFast(startingMission)
-        : startingMission;
+      const fastDefaults = trigger === 'fast' ? missionWithDefaultsForFast(startingMission) : null;
+      let currentMission = fastDefaults ? fastDefaults.mission : startingMission;
+
+      // "Just go" stays available, but be honest: if the user gave no occasion
+      // or mood, say the pick is a flexible everyday read rather than letting it
+      // imply a brief they never set.
+      if (fastDefaults?.usedDefaults) {
+        appendMessage(
+          'agent',
+          "No occasion or mood set yet — I'll keep this flexible and pull a versatile match for today's air. Tell me the setting or the vibe and I'll sharpen it.",
+        );
+      }
 
       if (!currentMission.calibration.destination || !currentMission.calibration.energy) {
         appendMessage('agent', firstMissingPrompt(startingFacets, currentMission, agentMode, items.length));
@@ -1771,6 +2001,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
     beamSessionIdRef.current = undefined;
     setCurating(null);
     setCatalogFailure(false);
+    setLastTurnOutcome(null);
     setFacets({});
     setAgentCues({});
     setAgentMission(null);
@@ -1837,13 +2068,16 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   // Once a recommendation is on screen the composer is no longer a cold-start
   // prompt — it's a follow-up line, so the copy advances to invite refinement
   // instead of repeating "describe your day" beneath an answer.
-  const composerPlaceholder = hasMatch
-    ? 'Ask a follow-up, or refine your match'
-    : agentMode === 'fast'
+  // State-aware placeholder: the contract helper owns the post-answer / pending /
+  // error / needs-more-info copy; cold-start states fall through to the
+  // mode-specific opening line so the field always tells the user what to do next.
+  const composerPlaceholder =
+    composerPlaceholderForState(flowState) ??
+    (agentMode === 'fast'
       ? 'Tap a cue below or type, then send'
       : agentMode === 'premium'
         ? 'Tap a cue or describe the impression'
-        : 'Tap a cue below, or describe your day';
+        : 'Tap a cue below, or describe your day');
 
   const actionControls = (
     <div className="relative mx-auto mt-4 w-full max-w-[52rem] sm:mt-5">
@@ -1916,7 +2150,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
           placeholder={busy ? 'Composing your recommendation…' : composerFocused ? '' : composerPlaceholder}
           aria-label="Message the Beam Agent"
           autoComplete="off"
-          className="min-w-0 flex-1 bg-transparent px-1 text-center text-[13px] font-medium tracking-[0.015em] text-[#fff7ec] caret-[#f5bd69] outline-none placeholder:text-[#d8c9b5]/72 disabled:cursor-not-allowed disabled:placeholder:text-scent-accent/70 sm:text-[15px]"
+          className={`min-w-0 flex-1 bg-transparent px-1 ${composer ? 'text-left' : 'text-center'} text-[13px] font-medium tracking-[0.015em] text-[#fff7ec] caret-[#f5bd69] outline-none placeholder:text-[#d8c9b5]/72 disabled:cursor-not-allowed disabled:placeholder:text-[#d8c9b5]/55 sm:text-[15px]`}
         />
         <button
           type="submit"
@@ -1936,11 +2170,11 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
             animate={{ opacity: 1, y: 0 }}
             exit={calmMotion ? { opacity: 0 } : { opacity: 0, y: 6 }}
             transition={calmMotion ? { duration: 0.18, ease: [0.22, 1, 0.36, 1] } : { type: 'spring', stiffness: 380, damping: 30 }}
-            className="absolute bottom-full left-0 right-0 z-20 mb-3 rounded-[calc(var(--radius-scent)-8px)] border border-scent-accent/22 bg-[#0c0a07]/95 p-3 text-center shadow-[0_-10px_34px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,236,183,0.06)]"
+            className="absolute bottom-full left-0 right-0 z-20 mb-3 rounded-[calc(var(--radius-scent)-10px)] border border-scent-accent/22 bg-[#0c0a07]/95 p-3 text-center shadow-[0_-10px_34px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,236,183,0.06)]"
           >
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
-                <p className="scent-type-label mb-1.5 text-center text-scent-accent/80">Response mode</p>
+                <p className="scent-type-label mb-1.5 text-center text-scent-accent/90">Response mode</p>
                 <div className="flex flex-wrap justify-center gap-1.5">
                   {MODE_OPTIONS.map(({ id, label, icon: Icon }) => {
                     const selected = agentMode === id;
@@ -1964,7 +2198,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                 </div>
               </div>
               <div>
-                <p className="scent-type-label mb-1.5 text-center text-scent-accent/80">Tone</p>
+                <p className="scent-type-label mb-1.5 text-center text-scent-accent/90">Tone</p>
                 <div className="flex flex-wrap justify-center gap-1.5">
                   {TONE_OPTIONS.map(({ id, label }) => {
                     const selected = tone === id;
@@ -2101,7 +2335,13 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   );
 
   const hasConfirmAction = items.length > 0 && (enoughContext || agentMode === 'fast');
-  const hasRecommendNowAction = items.length > 0 && conversationStarted && !hasMatch;
+  // The primary "Recommend now" CTA changes meaning with the flow state: it's
+  // hidden once an answer is on screen, disabled + "Finding picks…" while
+  // thinking, and "Try again" after a stalled turn — never a stale "Recommend
+  // now" that loops with the same meaning after an answer or pending response.
+  const recommendCta = recommendCtaForState(flowState);
+  const hasRecommendNowAction =
+    items.length > 0 && conversationStarted && !recommendCta.hidden;
   const hasPreviewAction = agentMode === 'premium';
   const hasActionRow = hasConfirmAction || hasRecommendNowAction || hasPreviewAction;
   // A cue has been tapped into the composer but not sent yet. Tapping a cue used
@@ -2228,12 +2468,16 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
             {hasRecommendNowAction && !hasConfirmAction ? (
               <button
                 type="button"
-                onClick={recommendNow}
-                disabled={busy}
+                onClick={flowState === 'error' && !catalogFailure ? retryCatalog : recommendNow}
+                disabled={busy || recommendCta.disabled}
                 className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-scent-accent/42 px-5 py-2.5 text-[12px] font-semibold text-[#fff7ec] transition-colors hover:bg-scent-accent/10 disabled:opacity-45"
               >
-                <Zap size={13} aria-hidden />
-                Recommend now
+                {recommendCta.disabled ? (
+                  <Loader2 size={13} className="animate-spin" aria-hidden />
+                ) : (
+                  <Zap size={13} aria-hidden />
+                )}
+                {recommendCta.label}
               </button>
             ) : null}
             {hasPreviewAction ? (
@@ -2385,7 +2629,11 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       <div
         ref={scrollRef}
         onScroll={updateScrollEdges}
-        className="flex w-full min-h-[13.5rem] max-h-[min(55dvh,29rem)] flex-col gap-3 overflow-y-auto px-1.5 pb-2 pt-3 text-left scrollbar-hide sm:min-h-[15.5rem] sm:max-h-[min(57dvh,33rem)] sm:px-2 sm:pt-4"
+        // Reserve real bottom padding so the final answer line is never swallowed
+        // by the bottom fade overlay (h-8) or pinned behind the composer below it
+        // — the "last line hidden behind the input" mobile clip. Honors the iOS
+        // safe-area inset so it also clears the home indicator on notched phones.
+        className="flex w-full min-h-[13.5rem] max-h-[min(55dvh,29rem)] flex-col gap-3 overflow-y-auto px-1.5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-3 text-left scrollbar-hide sm:min-h-[15.5rem] sm:max-h-[min(57dvh,33rem)] sm:px-2 sm:pb-9 sm:pt-4"
         role="log"
         aria-live="polite"
         aria-label="Beam Agent conversation"
@@ -2465,7 +2713,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                 ease: SCENT_EASE,
                 layout: { duration: 0.52, ease: SCENT_EASE },
               }}
-              className={`relative max-w-[90%] rounded-[calc(var(--radius-scent)-12px)] border px-3.5 py-2.5 text-[13px] leading-relaxed shadow-[inset_0_1px_0_rgba(255,236,183,0.04),0_10px_24px_rgba(0,0,0,0.2)] sm:text-sm ${
+              className={`relative max-w-[92%] rounded-[calc(var(--radius-scent)-10px)] border px-3.5 py-2.5 text-[13px] leading-relaxed shadow-[inset_0_1px_0_rgba(255,236,183,0.04),0_10px_24px_rgba(0,0,0,0.2)] sm:text-sm ${
                 message.role === 'user'
                   ? 'self-end border-scent-accent/18 bg-[linear-gradient(180deg,rgba(255,247,236,0.082),rgba(58,45,30,0.16))] text-[#fff7ec]'
                   : message.role === 'system'
@@ -2515,7 +2763,28 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
               )}
             </motion.div>
           );
-          if (!hasRecap) return bubble;
+          // Feedback affordance: only on a delivered agent answer that carries a
+          // durable id, and never on the newest turn while it's still settling
+          // (busy) — the verdict is about a finished answer. Held off the intro
+          // greeting too. Visually subordinate, rendered directly under the bubble.
+          const feedbackNode =
+            message.role === 'agent' && message.answerLogId && !isIntroGreeting && !(isLatestAgent && busy) ? (
+              <AnswerFeedbackControl
+                status={feedbackState[message.id] ?? 'idle'}
+                calmMotion={calmMotion}
+                onOpen={() => setFeedbackFor(message.id, 'open')}
+                onPick={(reasonCode) => submitAnswerFeedback(message.answerLogId as string, message.id, reasonCode)}
+              />
+            ) : null;
+          if (!hasRecap) {
+            if (!feedbackNode) return bubble;
+            return (
+              <div key={`${message.id}-turn`} className="flex w-full flex-col gap-1">
+                {bubble}
+                {feedbackNode}
+              </div>
+            );
+          }
           // Per-turn recap sits ABOVE its answer, both left-aligned in a column.
           // The wrapper carries the scroll anchor so a fresh reply lands on the
           // "Thought for Ns" line, then the answer — not buried beneath it. The
@@ -2534,10 +2803,12 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                   running={false}
                   expanded={!!expandedRecaps[message.id]}
                   elapsedMs={message.elapsedMs ?? null}
+                  outcome={message.outcome}
                   onToggleExpand={() => toggleRecap(message.id)}
                 />
               ) : null}
               {bubble}
+              {feedbackNode}
             </div>
           );
         })}
@@ -2598,7 +2869,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
               role="group"
               aria-label={`Beam recommends ${proposalReveal.fragrance.name}`}
             >
-              <motion.p variants={revealItem} className="scent-type-label text-scent-accent">
+              <motion.p variants={revealItem} className="scent-type-label text-scent-accent/90">
                 Your match
               </motion.p>
               {proposalReveal.fragrance.brand ? (
@@ -2685,7 +2956,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                 </button>
               </motion.div>
               {!onCurateCollection ? (
-                <motion.p variants={revealItem} className="mt-2 scent-type-label text-scent-text-subtle">Sign in to save to your vault.</motion.p>
+                <motion.p variants={revealItem} className="mt-2 scent-type-label text-scent-text-subtle/70">Sign in to save to your vault.</motion.p>
               ) : null}
             </motion.div>
           ) : null}
@@ -2707,9 +2978,9 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
             >
               <div className="flex items-center gap-2">
                 {curating.done ? (
-                  <Check size={14} className="text-scent-accent" aria-hidden />
+                  <Check size={13} className="text-scent-accent" aria-hidden />
                 ) : (
-                  <Loader2 size={14} className={liveMotion ? 'animate-spin text-scent-accent' : 'text-scent-accent'} aria-hidden />
+                  <Loader2 size={13} className={liveMotion ? 'animate-spin text-scent-accent' : 'text-scent-accent'} aria-hidden />
                 )}
                 <span className="scent-type-label text-scent-accent">
                   {curating.done ? 'Collection curated' : 'Curating your collection…'}
@@ -2740,7 +3011,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
               className="scent-match-reveal max-w-[92%] self-start rounded-[calc(var(--radius-scent)-10px)] border border-scent-accent/32 bg-[linear-gradient(180deg,rgba(212,175,55,0.07),rgba(0,0,0,0.28))] p-4 text-left"
               data-calm={calmMotion ? 'true' : undefined}
             >
-              <motion.p variants={revealItem} className="scent-type-label text-scent-accent">Curated match</motion.p>
+              <motion.p variants={revealItem} className="scent-type-label text-scent-accent/90">Curated match</motion.p>
               {resolved.recommendation.brand ? (
                 <motion.p variants={revealItem} className="mt-2 font-serif text-xs uppercase tracking-[0.2em] text-scent-text-muted">
                   {resolved.recommendation.brand}
@@ -2783,8 +3054,8 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
           hold the space — rendering the inline fallback here first would yank the
           lane down into the portal on the next frame. Only a consumer that omits
           the prop entirely (`undefined`) gets the inline fallback. */}
-      {cueBarContainer
-        ? createPortal(<AnimatePresence initial={false}>{cueBar}</AnimatePresence>, cueBarContainer)
+      {cueBarContainer && cuePortalHost
+        ? createPortal(<AnimatePresence initial={false}>{cueBar}</AnimatePresence>, cuePortalHost)
         : cueBarContainer === null
           ? null
           : cueBar

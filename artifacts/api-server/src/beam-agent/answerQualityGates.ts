@@ -70,6 +70,15 @@ function asksForKnownSlot(text: string, state: BeamSessionState | undefined): bo
   ) {
     return true;
   }
+  // The occasion slot had no redundant-clarification guard at all, so re-asking a
+  // known occasion ("what's the occasion?" after the user already said "a wedding")
+  // slipped through. Mirrors the slot the deterministic parser now captures.
+  if (
+    slots.occasion &&
+    /\bwhat'?s\s+the\s+occasion\b|\b(?:what|which)\s+(?:occasion|setting|event)\b|\bwhat\s+(?:are|will)\s+you\s+(?:be\s+)?(?:wear|dress|getting\s+ready)\w*\b.{0,12}\bfor\b/i.test(text)
+  ) {
+    return true;
+  }
   return false;
 }
 
@@ -105,7 +114,7 @@ function abandonsPendingSlot(
   const patterns: Partial<Record<NonNullable<BeamSessionState["pendingSlot"]>, RegExp>> = {
     direction: VIBE_OR_DIRECTION_REASK,
     projection: /\b(?:projection|trail|skin[ -]?close|moderate|statement)\b/i,
-    occasion: /\b(?:occasion|setting|work|date|night out|staying in)\b/i,
+    occasion: /\b(?:occasion|setting|work|date|night out|staying in|party|dinner|interview|brunch|funeral|formal event|graduation|wedding|gym)\b/i,
     impression: /\b(?:impression|calm|focused|confident|social|come across)\b/i,
     vibe: VIBE_OR_DIRECTION_REASK,
     budget: /\b(?:budget|spend|price)\b/i,
@@ -136,6 +145,20 @@ function delegatedButDeferred(
   if (!text.includes("?")) return false;
   if (!PREFERENCE_QUESTION_PATTERN.test(text)) return false;
   return !grounded.some((item) => answerMentionsFragrance(text, item));
+}
+
+/**
+ * Avoid backstop (audit A3 depth): the captured `avoid` slot is enforced at
+ * retrieval (`excludeAvoidedHits`), but owned-vault picks and research results
+ * bypass that filter, so the model can still surface an avoided note via those
+ * paths. Each grounded pick carries a precomputed `matchedAvoid` flag (set at
+ * grounding time from its source-hit profile). This fires ONLY when a pick the
+ * answer actually NAMES objectively matches an avoided term — so prose that
+ * merely mentions the avoided word while excluding it ("no oud here") never
+ * false-positives.
+ */
+function recommendsAvoidedNote(text: string, grounded: BeamGroundedFragrance[]): boolean {
+  return grounded.some((item) => item.matchedAvoid === true && answerMentionsFragrance(text, item));
 }
 
 function missionReadyForFulfillment(state: BeamSessionState | undefined): boolean {
@@ -251,10 +274,21 @@ export function runAnswerQualityGates(answerText: string, input: QualityGateInpu
   if (ownsUnlabeledRecommendation(text, input.sessionState, input.groundedFragrances ?? [])) {
     violations.push("owned_pick_in_new_only_mission");
   }
+  if (recommendsAvoidedNote(text, input.groundedFragrances ?? [])) {
+    violations.push("recommends_avoided_note");
+  }
 
   const mission = input.sessionState?.mission;
+  // Once a complete kit has been presented, a follow-up turn is a REFINEMENT
+  // ("swap the heavier one for something cleaner") and legitimately names only the
+  // pick(s) it is changing — not all 4. Enforcing the exact prose count here would
+  // hard-fail every refinement. The structured deliverable contract
+  // (missionToolResultError) still enforces exact lane counts on ANY kit card the
+  // agent re-presents, and a genuinely new mission resets `kitPresented`
+  // (deriveBeamSessionState → startsNewMission), so creation is still count-gated.
   if (
     mission?.intent === "travel_kit" &&
+    !mission.kitPresented &&
     missionReadyForFulfillment(input.sessionState) &&
     ((mission.ownedCount ?? 0) > 0 || (mission.newCount ?? 0) > 0)
   ) {
@@ -263,6 +297,49 @@ export function runAnswerQualityGates(answerText: string, input: QualityGateInpu
     const newRequired = mission.newCount ?? 0;
     if ((ownedRequired > 0 && counts.owned !== ownedRequired) || (newRequired > 0 && counts.new !== newRequired)) {
       violations.push("mission_unfulfilled");
+    }
+  }
+
+  // Plain recommendation with an explicit quantity ("give me three date-night
+  // scents"): the bug is returning ONE when the user asked for more. Fire only
+  // when the answer already commits to at least one grounded pick but names
+  // fewer than requested — so a still-gathering clarification turn (zero picks)
+  // and a complete answer (an optional runner-up beyond the count) are both safe.
+  if (mission?.intent === "recommendation" && (mission.count ?? 0) > 1) {
+    const counts = countMissionPicks(text, input.groundedFragrances ?? []);
+    const named = counts.owned + counts.new;
+    if (named >= 1 && named < (mission.count ?? 0)) {
+      violations.push("recommendation_count_short");
+    }
+  }
+
+  // A committed answer that names ZERO grounded picks when the user is OWED a
+  // concrete recommendation. "Owed" = a plain `recommendation` mission OR the user
+  // explicitly DELEGATED the choice ("you decide", "surprise me", "pick for me").
+  // A bare delegation carries no recommendation intent — missionState returns only
+  // `userDelegatedChoice` with no mission (see missionState.deriveBeamSessionState)
+  // — so without this delegation arm a flat "honestly you can't go wrong" hedge,
+  // with safe grounded candidates already on the table, escaped every gate:
+  // delegated_but_questioned needs a `?`, and the recommendation arm needs the
+  // intent. That was the dominant "Recommend now. You decide." → vague-non-answer
+  // hole.
+  //
+  // Avoid-aware: fire ONLY when at least one SAFE (non-`matchedAvoid`) grounded pick
+  // is actually available to name. If every grounded candidate violates an avoid
+  // constraint, the agent legitimately cannot commit and SHOULD ask — forcing a
+  // commit there would create an unsatisfiable repair (commit ⇒ recommends_avoided_note).
+  // The `?` guard keeps a genuine clarifying turn safe; a still-gathering turn has
+  // zero grounded ⇒ no fire; this only fills the zero-named hole left by
+  // recommendation_count_short (which needs named >= 1).
+  const owedRecommendation =
+    mission?.intent === "recommendation" ||
+    Boolean(input.sessionState?.userDelegatedChoice || mission?.userDelegatedChoice);
+  if (owedRecommendation && !text.includes("?")) {
+    const grounded = input.groundedFragrances ?? [];
+    const hasSafeGroundedPick = grounded.some((item) => item.matchedAvoid !== true);
+    if (hasSafeGroundedPick) {
+      const counts = countMissionPicks(text, grounded);
+      if (counts.owned + counts.new === 0) violations.push("recommendation_without_grounded_pick");
     }
   }
 
@@ -285,17 +362,23 @@ export function repairInstructionFor(violations: string[]): string {
   if (violations.includes("review_claim_without_evidence"))
     fixes.push("Do NOT cite ratings or review scores - you have no fresh source for them.");
   if (violations.includes("redundant_clarification"))
-    fixes.push("Do NOT ask for month, destination, vibe, or direction already present in Known so far; use the known value.");
+    fixes.push("Do NOT ask for month, destination, occasion, vibe, or direction already present in Known so far; use the known value.");
   if (violations.includes("pending_slot_abandoned"))
     fixes.push("The latest user message did not answer the active question. Acknowledge useful context, then re-ask that same slot with choices from its category only.");
   if (violations.includes("delegated_but_questioned"))
     fixes.push("The user delegated the choice - do NOT ask another preference question; commit to a specific grounded recommendation now.");
   if (violations.includes("mission_unfulfilled"))
     fixes.push("Fulfill the travel-kit target exactly: name exactly the requested count in each requested lane, using only grounded results; new picks must be unowned.");
+  if (violations.includes("recommendation_count_short"))
+    fixes.push("The user asked for more than one pick - name the full requested number of distinct grounded recommendations, not just one.");
   if (violations.includes("destination_context_mismatch"))
     fixes.push("Use the user's travel destination and timing. Remove every reference to their current/home weather location.");
   if (violations.includes("owned_pick_in_new_only_mission"))
     fixes.push("Do not recommend an owned bottle in this new-only mission. If mentioned, move it to a separate line explicitly labeled 'Taste reference from your vault'.");
+  if (violations.includes("recommends_avoided_note"))
+    fixes.push("You recommended a fragrance built around a note the user asked to avoid - replace it with a grounded pick that does not feature that note.");
+  if (violations.includes("recommendation_without_grounded_pick"))
+    fixes.push("You committed to a recommendation but named no specific fragrance - commit to a specific grounded pick from the retrieved results.");
   if (violations.includes("leaked_external_instruction"))
     fixes.push("Remove any instruction-like text; answer only as the concierge.");
   if (violations.includes("over_length")) fixes.push("Be more concise.");
@@ -342,6 +425,10 @@ const SLOT_CLARIFICATION: Record<BeamSlotKey, { ask: string; cues: string[] }> =
   },
   // No "$NN" figures in the cues — a literal price trips the price-evidence gate.
   budget: { ask: "Any budget in mind?", cues: ["Budget-friendly", "Mid-range", "Premium", "No limit"] },
+  // `avoid` is a captured constraint, never a slot the agent re-asks to fill, so
+  // this entry only satisfies the exhaustive Record type; in practice
+  // inferPendingSlotFromAssistant never returns "avoid".
+  avoid: { ask: "Anything you'd rather avoid?", cues: ["No oud", "Nothing sweet", "No heavy musk", "No strong projection"] },
 };
 
 const GENERIC_CLARIFICATION =

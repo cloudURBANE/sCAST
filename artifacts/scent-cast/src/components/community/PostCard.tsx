@@ -197,7 +197,6 @@ const CompactBattlePostCard: React.FC<PostCardProps> = ({
   authToken,
   onSignIn,
 }) => {
-  const [commentsOpen, setCommentsOpen] = useState(false);
   const headingId = useId();
   const authorName = displayCommunityAuthor(post.author);
   const heading = post.title?.trim() || 'Battle';
@@ -251,13 +250,17 @@ const CompactBattlePostCard: React.FC<PostCardProps> = ({
             </p>
           </div>
         </div>
-        <span className="inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 rounded-full border border-scent-accent/38 bg-scent-accent/[0.075] px-3 py-1.5 scent-type-chip text-[10px] text-scent-accent shadow-[inset_0_1px_0_rgba(255,236,183,0.055)] sm:min-h-12 sm:gap-2 sm:px-5 sm:py-2 sm:text-xs">
+        <span
+          role="img"
+          aria-label="Battle"
+          title="Battle"
+          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-scent-accent/38 bg-scent-accent/[0.075] text-scent-accent shadow-[inset_0_1px_0_rgba(255,236,183,0.055)] sm:h-11 sm:w-11"
+        >
           <Swords size={17} strokeWidth={1.75} aria-hidden="true" />
-          Battle
         </span>
       </header>
 
-      <div className="mx-auto mt-3 min-w-0 max-w-[48rem] text-center sm:mt-6">
+      <div className="mx-auto mt-3 min-w-0 max-w-[48rem] text-center sm:mt-5">
         <h3
           id={headingId}
           className="mx-auto break-words text-balance font-serif text-xl italic leading-[1.08] text-[#fff7ec] sm:text-3xl"
@@ -272,23 +275,26 @@ const CompactBattlePostCard: React.FC<PostCardProps> = ({
       </div>
 
       {options.length === 2 ? (
-        <div className="mx-auto mt-4 w-full max-w-[34rem] sm:mt-5">
+        <div className="mx-auto mt-3 w-full max-w-[48rem] sm:mt-4">
           {leaderLabel ? (
             // Winner-only standing: the card surfaces just the fragrance that is
             // ahead — its name ONCE, with its share — instead of listing both
             // contenders and then repeating the leader in a separate gist line
-            // (which read as the same name twice). The full head-to-head with
-            // both names + vote buttons lives in the arena.
-            <div className="flex flex-col items-center gap-2.5 text-center">
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-scent-accent/40 bg-scent-accent/[0.08] px-3 py-1 scent-type-chip text-[10px] uppercase tracking-[0.14em] text-scent-accent">
-                <Crown size={13} strokeWidth={1.8} aria-hidden="true" />
-                Leading
-              </span>
-              <p className="min-w-0 max-w-full break-words font-serif text-xl italic leading-tight text-[#fff7ec] sm:text-2xl">
-                {leaderLabel}
+            // (which read as the same name twice). The crown rides inline with
+            // the leader name; the full head-to-head with both names + vote
+            // buttons lives in the arena.
+            <div className="flex flex-col items-center gap-2 text-center sm:gap-2.5">
+              <p className="flex min-w-0 max-w-full items-center justify-center gap-2 break-words font-serif text-xl italic leading-tight text-[#fff7ec] sm:text-2xl">
+                <span className="min-w-0 break-words">{leaderLabel}</span>
+                <Crown
+                  size={18}
+                  strokeWidth={1.8}
+                  className="shrink-0 text-scent-accent"
+                  aria-hidden="true"
+                />
               </p>
               <div
-                className="flex h-2 w-full max-w-[20rem] overflow-hidden rounded-full border border-scent-accent/20 bg-black/60"
+                className="flex h-2 w-full overflow-hidden rounded-full border border-scent-accent/20 bg-black/60"
                 role="img"
                 aria-label={standing ?? undefined}
               >
@@ -311,33 +317,30 @@ const CompactBattlePostCard: React.FC<PostCardProps> = ({
         </div>
       ) : null}
 
-      {/* "Open arena" reads as the next step from the result. Centered on its own
-          row now that the standing lives in the winner block above. */}
-      <div className="mx-auto mt-4 flex w-full max-w-[34rem] justify-center sm:mt-5">
+      {/* Compact footer: the heart reaction sits opposite "Open arena", which is
+          the card's single call to action (it replaces the standalone arena row
+          and the comment toggle for this glanceable battle surface). */}
+      <footer className="mt-3 flex flex-row items-center justify-between gap-4 border-t border-scent-accent/10 pt-3 sm:mt-4">
+        <h4 className="sr-only">Post actions</h4>
+        <div className="flex flex-1 justify-start">
+          <ReactionBar
+            targetType="post"
+            targetId={post.id}
+            counts={post.counts.reactions}
+            viewerReactions={post.viewerReactions}
+            authToken={authToken}
+            onSignIn={onSignIn}
+            compact={true}
+          />
+        </div>
         <Link
           to="/arena"
-          className="scent-no-mobile-focus-ring inline-flex shrink-0 items-center gap-1.5 rounded-full border border-scent-accent/55 px-4 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-scent-accent transition-colors hover:border-scent-accent/80 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/60 sm:px-5 sm:py-2 sm:text-xs"
+          className="scent-no-mobile-focus-ring inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 rounded-full border border-scent-accent/55 px-4 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-scent-accent transition-colors hover:border-scent-accent/80 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/60 sm:min-h-10 sm:px-5 sm:py-2 sm:text-xs"
         >
           <span>Open arena</span>
           <ArrowRight size={14} strokeWidth={1.8} aria-hidden="true" />
         </Link>
-      </div>
-
-      <PostActionsFooter
-        post={post}
-        authToken={authToken}
-        onSignIn={onSignIn}
-        commentsOpen={commentsOpen}
-        onToggleComments={() => setCommentsOpen((open) => !open)}
-      />
-
-      {commentsOpen ? (
-        <CommentThread
-          postId={post.id}
-          authToken={authToken}
-          onSignIn={onSignIn}
-        />
-      ) : null}
+      </footer>
     </article>
   );
 };

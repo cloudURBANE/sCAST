@@ -37,15 +37,29 @@ import { getTenantId } from "../middlewares/tenant";
 import { rateLimitMiddleware } from "../lib/rateLimit";
 import { logger } from "../lib/logger";
 import { missionItemFromWardrobeRow } from "../services/scentMissionService";
-import { searchCatalogCandidates, flattenProfile, getCatalogEntry } from "../services/catalogService";
+import { searchCatalogCandidates, searchCatalogProfileCandidates, flattenProfile, getCatalogEntry } from "../services/catalogService";
 import { getScentFacts } from "../lib/scent-facts/engine";
 import { getBeamUserUsageSince, recordBeamRunUsage } from "../services/apiUsageLedger";
+import {
+  BeamFeedbackUnavailableError,
+  beamAnswerLogExistsForUser,
+  recordBeamAnswerFeedback,
+  recordBeamAnswerLog,
+} from "../services/beamAnswerLog";
 import { enqueueBeamCuration } from "../services/curationService";
 import { createBeamTools, type BeamCatalogHit, type BeamToolDeps } from "./beamTools.ts";
 import { runBeamAgent } from "./beamAgentLoop.ts";
 import { packetFromWardrobeRow, redactEventForClient } from "./beamToolCore.ts";
-import { resolveBeamBudget, resolveBeamModels } from "./provider.ts";
+import { resolveBeamBudget, resolveBeamModels, validateBeamModelConfig } from "./provider.ts";
+import {
+  buildObservatoryFeed,
+  isObservatoryAuthorized,
+  isObservatoryEnabled,
+  recordObservatoryRun,
+} from "./beamObservatory.ts";
 import { selectConciergeLane } from "./laneSelector.ts";
+import { excludeAvoidedHits } from "./avoidFilter.ts";
+import { validateBeamFeedbackInput } from "./beamFeedbackCore.ts";
 import { appendSessionTurn, loadSession, saveSessionState } from "./beamSessionStore.ts";
 import { deriveBeamSessionState, inferPendingSlotFromAssistant } from "./missionState.ts";
 import type { BeamEmit, BeamRunContext, BeamRunEvent, BeamSessionState, CandidatePacket } from "./types.ts";
@@ -198,7 +212,7 @@ async function loadWardrobePackets(ctx: BeamRunContext): Promise<CandidatePacket
 }
 
 async function searchCatalogForBeam(query: string, limit: number): Promise<BeamCatalogHit[]> {
-  const hits = await searchCatalogCandidates(query, { limit });
+  const hits = await searchCatalogProfileCandidates(query, { limit });
   return hits.map((hit) => {
     const flat = flattenProfile(hit.profile) as Record<string, unknown>;
     const brand = typeof flat.brand === "string" ? flat.brand : "";
@@ -253,11 +267,22 @@ const beamResearchWeb = createBeamResearcher({
 });
 
 function buildDeps(ctx: BeamRunContext, weather: ScentMissionWeather, sessionState?: BeamSessionState): BeamToolDeps {
+  // Captured dislikes shape retrieval, not just wording (audit A3): wrap catalog
+  // search so candidates built around an avoided note/family are dropped before
+  // the model ever sees them. Over-fetch a little then trim, so the requested
+  // limit is still met after exclusion when possible.
+  const avoid = sessionState?.slots.avoid;
+  const searchCatalog: typeof searchCatalogForBeam = avoid
+    ? async (query, limit) => {
+        const hits = await searchCatalogForBeam(query, Math.min(limit * 2, limit + 12));
+        return excludeAvoidedHits(hits, avoid).slice(0, limit);
+      }
+    : searchCatalogForBeam;
   return {
     loadVault,
     loadVaultForOwnership,
     loadWardrobePackets,
-    searchCatalog: searchCatalogForBeam,
+    searchCatalog,
     resolveCatalogEntry: resolveCatalogEntryForBeam,
     research: researchForBeam,
     researchWeb: beamResearchWeb,
@@ -404,12 +429,20 @@ router.post("/runs", runRateLimit, requireAuth, async (req: AuthRequest, res) =>
     sessionState,
     onComplete: (assistantText) => appendSessionTurn(ctx, message, assistantText, sessionState),
     onSummary: (summary) => {
+      // Coarse, non-PII scenario label for the observatory feed.
+      const scenario =
+        sessionState.mission?.intent === "travel_kit"
+          ? "travel_kit"
+          : sessionState.mission?.intent === "recommendation"
+            ? "recommendation"
+            : "chat";
       logger.info(
         {
           beam: {
             runId: summary.runId,
             user: hashUser(ctx.userId),
             lane,
+            scenario,
             outcome: summary.outcome,
             failureCode: summary.failureCode,
             turns: summary.turns,
@@ -419,6 +452,11 @@ router.post("/runs", runRateLimit, requireAuth, async (req: AuthRequest, res) =>
             outputTokens: summary.outputTokens,
             usedSynthesis: summary.usedSynthesis,
             synthesisFailed: summary.synthesisFailed,
+            synthesisFailureReason: summary.synthesisFailureReason,
+            // Model slugs make the latency/cost audit (brief §C) diagnosable from logs:
+            // whether a slow/failed turn ran an unexpectedly heavy orchestration/closer.
+            orchestrationModel: summary.orchestrationModel,
+            synthesisModel: summary.synthesisModel,
             groundedNames: summary.groundedNames,
             estimatedCostUsd: summary.estimatedCostUsd,
             qualityGatePassed: summary.qualityGatePassed,
@@ -428,6 +466,16 @@ router.post("/runs", runRateLimit, requireAuth, async (req: AuthRequest, res) =>
         },
         "beam agent run finished",
       );
+      // Feed the redacted summary to the beta observatory ring buffer. The buffer
+      // records regardless of the enabled flag (cheap, bounded, no PII); the GATE
+      // is the read endpoint. Never let observability affect the run.
+      recordObservatoryRun({
+        summary,
+        lane,
+        orchestrationModel: models?.model,
+        synthesisModel: models?.synthesisModel,
+        scenario,
+      });
       // Persist the run to the shared usage ledger so the per-user daily cap and
       // the daily-spend metric have data to read. Best-effort + non-blocking: a
       // ledger write must never affect the run or its SSE stream.
@@ -441,6 +489,35 @@ router.post("/runs", runRateLimit, requireAuth, async (req: AuthRequest, res) =>
         estimatedCostUsd: summary.estimatedCostUsd,
         status: summary.outcome === "completed" ? "success" : "failure",
         failureReason: summary.failureCode ?? null,
+      });
+      // Persist the durable per-turn answer log keyed by the run id (= the
+      // answerLogId the client received in the completed event). This is the
+      // record a user feedback report attaches to, and the reproducible input →
+      // candidates → answer a downvote becomes a regression fixture from. Best-
+      // effort + non-blocking: a logging failure must never affect the run.
+      void recordBeamAnswerLog({
+        id: summary.runId,
+        tenantId: ctx.tenantId,
+        userId: ctx.userId,
+        sessionId: ctx.sessionId,
+        userMessage: message,
+        derivedState: sessionState,
+        lane,
+        orchestrationModel: summary.orchestrationModel ?? models?.model ?? null,
+        synthesisModel: summary.synthesisModel ?? models?.synthesisModel ?? null,
+        groundedCandidates: summary.groundedFragranceList.map((f) => ({
+          canonicalName: f.canonicalName,
+          ...(f.brand ? { brand: f.brand } : {}),
+          owned: f.owned,
+        })),
+        finalAnswer: summary.finalAnswer,
+        gatePassed: summary.qualityGatePassed,
+        gateViolations: summary.qualityViolations,
+        shippedWithSoftViolations: summary.shippedWithSoftViolations,
+        outcome: summary.outcome,
+        failureCode: summary.failureCode ?? null,
+        inputTokens: summary.inputTokens,
+        outputTokens: summary.outputTokens,
       });
     },
     shouldStop: () => record.stopped,
@@ -545,10 +622,104 @@ router.post("/runs/:runId/stop", requireAuth, (req: AuthRequest, res) => {
   res.json({ ok: true });
 });
 
+/* ------------------------------------------------------------------ */
+/* Answer feedback (the report-this-answer loop)                      */
+/* ------------------------------------------------------------------ */
+
+// Light throttle: feedback is a single small insert, but a user (or a runaway
+// client) shouldn't be able to hammer it.
+const feedbackRateLimit = rateLimitMiddleware({ name: "beam-feedback", limit: 40, windowMs: 5 * 60_000 });
+
+/**
+ * POST /feedback — record a user's verdict on a delivered Beam answer.
+ *
+ * Body: { answerLogId, rating?: "down"|"up", reasonCode?, detail? }.
+ * Validates the id belongs to THIS user's real answer log before inserting, so a
+ * verdict can never attach to nothing or to another user's turn. Returns a small
+ * success payload. Degrades gracefully if the feedback table isn't provisioned.
+ */
+router.post("/feedback", feedbackRateLimit, requireAuth, async (req: AuthRequest, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Authentication required." });
+    return;
+  }
+  const validated = validateBeamFeedbackInput(req.body);
+  if (!validated.ok) {
+    res.status(validated.status).json({ error: validated.error, code: validated.code });
+    return;
+  }
+  const { answerLogId, rating, reasonCode, detail } = validated.value;
+
+  // The verdict must attach to a real answer this user owns. If the log isn't
+  // found (unknown id, another user's turn, or the rare case where the best-
+  // effort log write hasn't landed/failed), reject clearly rather than orphaning.
+  const exists = await beamAnswerLogExistsForUser(answerLogId, req.user.id);
+  if (!exists) {
+    res.status(404).json({ error: "No answer found to attach this feedback to.", code: "answer_log_not_found" });
+    return;
+  }
+
+  try {
+    await recordBeamAnswerFeedback({
+      answerLogId,
+      tenantId: getTenantId(req),
+      userId: req.user.id,
+      rating,
+      reasonCode,
+      detail,
+    });
+  } catch (err) {
+    if (err instanceof BeamFeedbackUnavailableError) {
+      res.status(503).json({ error: "Feedback is temporarily unavailable.", code: "feedback_unavailable" });
+      return;
+    }
+    logger.warn({ err, user: hashUser(req.user.id) }, "beam feedback insert failed");
+    res.status(500).json({ error: "Could not record feedback." });
+    return;
+  }
+
+  logger.info(
+    { beam: { feedback: true, user: hashUser(req.user.id), rating, reasonCode } },
+    "beam answer feedback recorded",
+  );
+  res.status(201).json({ ok: true });
+});
+
+/**
+ * GET /observatory/feed — gated, authenticated beta-observability feed.
+ *
+ * OFF by default. Returns honest, redacted run summaries ONLY when
+ * `BEAM_OBSERVATORY_ENABLED` is set AND the caller presents `BEAM_OBSERVATORY_TOKEN`
+ * (via `x-observatory-token` or `Authorization: Bearer <token>`). Otherwise it
+ * reports `offline` / `unauthorized` and returns no events. Intentionally NOT on
+ * the user-auth path: this is an ops/cockpit surface keyed by a separate token, and
+ * it never carries user ids, message text, prompts, or tool arguments.
+ */
+router.get("/observatory/feed", (req, res) => {
+  const headerToken =
+    (typeof req.headers["x-observatory-token"] === "string"
+      ? req.headers["x-observatory-token"]
+      : undefined) ??
+    (typeof req.headers.authorization === "string" && req.headers.authorization.startsWith("Bearer ")
+      ? req.headers.authorization.slice(7)
+      : undefined);
+  const parsedLimit = Number.parseInt(String(req.query.limit ?? ""), 10);
+  const feed = buildObservatoryFeed({
+    enabled: isObservatoryEnabled(),
+    authorized: isObservatoryAuthorized(headerToken),
+    ...(Number.isFinite(parsedLimit) ? { limit: parsedLimit } : {}),
+  });
+  res.status(feed.status === "unauthorized" ? 401 : 200).json(feed);
+});
+
 export const beamAgentRouter = router;
 
 /** One-line opt-in mount. Call from app.ts when you're ready to enable Beam. */
 export function mountBeamAgent(app: Express): void {
+  // Surface model-configuration footguns once at startup (non-fatal, brief §C).
+  for (const warning of validateBeamModelConfig()) {
+    logger.warn({ beam: { config: true } }, `beam agent config: ${warning}`);
+  }
   app.use("/api/beam-agent", router);
 }
 

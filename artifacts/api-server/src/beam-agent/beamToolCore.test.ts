@@ -223,6 +223,34 @@ test("extractAgentCues leaves plain answers untouched", () => {
   assert.deepEqual(cues, []);
 });
 
+test("extractAgentCues drops answer-prose lines that leaked into the cues block", () => {
+  // Live-observed malformation: a comparison answer spilled body prose and a stray
+  // fence marker into the fenced block, producing garbage tap chips.
+  const text =
+    "Bleu de Chanel is the pick for a summer date night.\n\n```cues\n" +
+    "Go with Bleu de Chanel\n" +
+    "Go with Dior Sauvage\n" +
+    "```**Bleu de Chanel** is your pick — it's already in your vault and reads intimate\n" +
+    "If the date is more casual or outdoors, **Dior Sauvage** is a solid runner-up\n" +
+    "```";
+  const { cues } = extractAgentCues(text);
+  assert.deepEqual(cues, ["Go with Bleu de Chanel", "Go with Dior Sauvage"]);
+});
+
+test("extractAgentCues drops markdown/over-long chips", () => {
+  const { cues } = extractAgentCues(
+    "Pick one.\n```cues\nDay\n**Night** with a long emphasized clause that runs well past a chip\n[A link](http://x)\nNight\n```",
+  );
+  assert.deepEqual(cues, ["Day", "Night"]);
+});
+
+test("extractAgentCues falls back to raw text (no chips) when the block leaves no prose", () => {
+  // A leading/standalone cues block would otherwise surface an empty bubble + chips.
+  const { text, cues } = extractAgentCues("```cues\nDay\nNight\n```");
+  assert.equal(cues.length, 0);
+  assert.ok(text.length > 0);
+});
+
 test("buildProposalItem maps a flattened catalog profile to an add-ready item", () => {
   const item = buildProposalItem({
     name: "Silver Mountain Water",

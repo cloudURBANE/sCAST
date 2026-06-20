@@ -30,11 +30,46 @@ test('maps a community battle post into a two-side arena battle', () => {
   assert.equal(mapped?.title, 'Office signature');
   assert.equal(mapped?.scenario, 'Which one wins Monday morning?');
   assert.equal(mapped?.left.brand, 'Chanel');
+  assert.equal(mapped?.left.family, 'Woody Aromatic');
   assert.equal(mapped?.left.descriptor, 'Woody Aromatic');
   assert.equal(mapped?.right.descriptor, 'Classic fragrance');
   assert.deepEqual(mapped?.votes, { 'Bleu de Chanel': 3, Aventus: 2 });
   assert.equal(mapped?.viewerVote, 'Aventus');
   assert.equal(mapped?.viewerReason, null);
+});
+
+test('keeps Beam Power values when a legacy snapshot has a blank fragrance id', () => {
+  const mapped = mapCommunityPostToArenaBattle({
+    ...basePost,
+    fragrances: [
+      {
+        fragranceId: '  ',
+        name: 'Casamorati Mefisto',
+        brand: 'Xerjoff',
+        beamSupporters: 1,
+        totalBeamPower: 2,
+      },
+      basePost.fragrances[1],
+    ],
+  });
+
+  assert.equal(mapped?.left.fragranceId, 'catalog:xerjoff:casamorati-mefisto');
+  assert.equal(mapped?.left.beamSupporters, 1);
+  assert.equal(mapped?.left.totalBeamPower, 2);
+});
+
+test('drops placeholder family labels from battle descriptors', () => {
+  const mapped = mapCommunityPostToArenaBattle({
+    ...basePost,
+    fragrances: [
+      { name: 'Bleu de Chanel', brand: 'Chanel', family: 'Unknown Family' },
+      { name: 'Aventus', brand: 'Creed', family: '  N/A  ' },
+    ],
+  });
+
+  assert.equal(mapped?.left.family, undefined);
+  assert.equal(mapped?.left.descriptor, 'Classic fragrance');
+  assert.equal(mapped?.right.descriptor, 'Classic fragrance');
 });
 
 test('maps a valid server reason onto the battle and ignores invalid keys', () => {

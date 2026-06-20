@@ -134,6 +134,41 @@ test("a response that still fails quality gates is never completed", async () =>
 
 const text = (t: string): ClaudeResponse => ({ stop_reason: "end_turn", content: [{ type: "text", text: t }] });
 
+test("a mid-loop provider timeout with grounded evidence degrades gracefully, not agent_error", async () => {
+  // A search-heavy runaway emits only tool calls (no inline prose), so the loop's
+  // `lastText` stays empty. A provider TimeoutError on the next turn used to
+  // re-throw into a generic `agent_error` dead-end even though the run held grounded
+  // fragrances. It must instead close gracefully (honest fallback / grounded draft).
+  const events: BeamRunEvent[] = [];
+  const toolCalls: { input: unknown }[] = [];
+  let summary: BeamRunSummary | undefined;
+  let calls = 0;
+  const callModel = async (): Promise<ClaudeResponse> => {
+    calls++;
+    if (calls === 1) {
+      return { stop_reason: "tool_use", content: [{ type: "tool_use", id: "tu_1", name: "beam_get_wardrobe", input: {} }] };
+    }
+    const err = new Error("The operation was aborted due to timeout");
+    err.name = "TimeoutError";
+    throw err;
+  };
+
+  await runBeamAgent({
+    ctx,
+    userMessage: "find me something impossible",
+    tools: [wardrobeTool(toolCalls)],
+    emit: (event) => events.push(event),
+    isModelConfigured: () => true,
+    callModel,
+    onSummary: (value) => (summary = value),
+  });
+
+  assert.equal(events.some((e) => e.type === "failed" && e.code === "agent_error"), false);
+  const completed = events.find((e) => e.type === "completed");
+  assert.ok(completed && completed.type === "completed" && completed.response.trim().length > 0);
+  assert.equal(summary?.outcome, "completed");
+});
+
 test("completion waits for transcript persistence before publishing the terminal event", async () => {
   const events: BeamRunEvent[] = [];
   let release!: () => void;
@@ -193,7 +228,9 @@ test("zero-tool opening turn is nudged, then the tool path runs and synthesis wr
   // Final answer comes from the synthesis turn, not the clipped "draft".
   assert.equal(completed, "Wear Aventus today.");
   const completedEvent = events.find((e) => e.type === "completed");
-  assert.deepEqual(completedEvent, { type: "completed", response: "Wear Aventus today." });
+  // The completed event now also carries the durable answer id (= the run id) so
+  // the client can tag the answer for feedback.
+  assert.deepEqual(completedEvent, { type: "completed", response: "Wear Aventus today.", answerLogId: "run_1" });
 
   // The tool actually ran once.
   assert.equal(toolCalls.length, 1);
@@ -1093,6 +1130,82 @@ test("regression script: a failed/timeout turn still keeps the derived mission s
   assert.equal(t2State.userDelegatedChoice, true);
 });
 
+test("deterministic loop backtests fulfill the Dallas and Tokyo freeform missions without re-asking", async () => {
+  const scenarios = [
+    {
+      message: "I'm going to a rooftop party in Dallas tonight. It's hot and humid. I want something clean, attractive, and not too loud. I already own Dior Homme Sport Very Cool and Creed Himalaya. Pick one from my collection and one new fragrance to try.",
+      owned: [{ canonicalName: "Dior Homme Sport Very Cool", brand: "Dior", owned: true, score: 91 }],
+      fresh: [{ canonicalName: "Molecule 01 + Mandarin", brand: "Escentric Molecules", owned: false }],
+      answer: "Wear Dior Homme Sport Very Cool from your vault for the humid Dallas rooftop. New to try: Molecule 01 + Mandarin — clean, airy, and restrained enough for the party.",
+      expectedSlots: /occasion=party.*direction=lighter\/fresh.*projection=moderate.*impression=attractive/i,
+    },
+    {
+      message: "I'm planning a Tokyo trip in August. I need two fragrances to take with me and two new ones not in my collection. I want clean, modern, airy, slightly woody scents that work in humidity.",
+      owned: [
+        { canonicalName: "Creed Himalaya", brand: "Creed", owned: true, score: 90 },
+        { canonicalName: "Dior Homme Sport Very Cool", brand: "Dior", owned: true, score: 86 },
+      ],
+      fresh: [
+        { canonicalName: "Wulong Cha", brand: "Nishane", owned: false },
+        { canonicalName: "Molecule 01", brand: "Escentric Molecules", owned: false },
+      ],
+      answer: "Pack Creed Himalaya and Dior Homme Sport Very Cool from your vault. New for Tokyo: Wulong Cha and Molecule 01 — clean, airy woods that suit August humidity.",
+      expectedSlots: /month=August.*destination=Tokyo.*vibe=modern.*direction=lighter\/fresh, woody/i,
+    },
+  ];
+
+  for (const scenario of scenarios) {
+    const state = deriveBeamSessionState(undefined, scenario.message);
+    const toolInputs: Array<{ tool: string; input: unknown }> = [];
+    const tools: BeamToolDefinition[] = [
+      {
+        name: "beam_score_candidates",
+        description: "Rank owned vault bottles",
+        inputSchema: { type: "object", properties: {} },
+        handler: async (input) => {
+          toolInputs.push({ tool: "score", input });
+          return { recommendation: scenario.owned[0], picks: scenario.owned };
+        },
+      },
+      {
+        name: "beam_search_catalog",
+        description: "Search descriptive catalog profiles",
+        inputSchema: { type: "object", properties: {} },
+        handler: async (input) => {
+          toolInputs.push({ tool: "search", input });
+          return { items: scenario.fresh };
+        },
+      },
+    ];
+    const { callModel, seen } = scriptedModel([
+      { stop_reason: "tool_use", content: [{ type: "tool_use", id: "owned", name: "beam_score_candidates", input: {} }] },
+      { stop_reason: "tool_use", content: [{ type: "tool_use", id: "new", name: "beam_search_catalog", input: { query: "clean modern airy woody hot humid", excludeOwned: false } }] },
+      text("draft"),
+      text(scenario.answer),
+    ]);
+    let completed: string | undefined;
+    await runBeamAgent({
+      ctx,
+      userMessage: scenario.message,
+      sessionState: state,
+      tools,
+      emit: () => {},
+      isModelConfigured: () => true,
+      callModel,
+      onComplete: (value) => (completed = value),
+    });
+
+    assert.equal(completed, scenario.answer);
+    assert.match(seen[0]?.system ?? "", scenario.expectedSlots);
+    assert.equal(toolInputs.length, 2);
+    assert.deepEqual(toolInputs[1]?.input, {
+      query: "clean modern airy woody hot humid",
+      excludeOwned: true,
+    });
+    assert.doesNotMatch(completed ?? "", /what|which|where|when|prefer/i);
+  }
+});
+
 test("an unconfigured model fails gracefully with a summary", async () => {
   const events: BeamRunEvent[] = [];
   let summary: BeamRunSummary | undefined;
@@ -1134,4 +1247,174 @@ test("unexpected provider errors never expose raw internals in client events", a
   assert.equal((failed as { code: string }).code, "agent_error");
   assert.equal((failed as { message: string }).message, "Beam could not complete this request. Please try again.");
   assert.doesNotMatch((failed as { message: string }).message, /sk-secret|internal-host|401/i);
+});
+
+/** A vault scorer that always grounds Aventus — reused by the occasion E2E runs. */
+function aventusScoreTool(): BeamToolDefinition {
+  return {
+    name: "beam_score_candidates",
+    description: "Rank the vault",
+    inputSchema: { type: "object", properties: {} },
+    handler: async () => ({
+      recommendation: { canonicalName: "Aventus", brand: "Creed", score: 90 },
+      picks: [{ canonicalName: "Aventus", brand: "Creed", score: 90 }],
+      scoredFor: { locationLabel: null, usedOverride: false },
+    }),
+  };
+}
+
+test("end-to-end occasion run: a plainly-stated occasion is threaded into the prompt and a pick ships", async () => {
+  // Full-loop run (only the provider is faked) over the newly-captured occasion
+  // path: "dinner party" must reach the system prompt as occasion=dinner, and the
+  // run must complete with a grounded pick instead of re-asking the occasion.
+  const events: BeamRunEvent[] = [];
+  let completed: string | undefined;
+  let summary: BeamRunSummary | undefined;
+
+  const message = "What should I wear to a dinner party this weekend?";
+  const state = deriveBeamSessionState(undefined, message);
+  assert.equal(state.slots.occasion, "dinner");
+
+  const { callModel, seen } = scriptedModel([
+    { stop_reason: "tool_use", content: [{ type: "tool_use", id: "tu_1", name: "beam_score_candidates", input: {} }] },
+    text("draft"),
+    text("For the dinner party, reach for Aventus by Creed — bright and confident without crowding the room."),
+  ]);
+
+  await runBeamAgent({
+    ctx,
+    userMessage: message,
+    sessionState: state,
+    tools: [aventusScoreTool()],
+    emit: (e) => events.push(e),
+    isModelConfigured: () => true,
+    callModel,
+    onComplete: (t) => (completed = t),
+    onSummary: (s) => (summary = s),
+  });
+
+  assert.equal(summary?.outcome, "completed");
+  assert.equal(events.some((e) => e.type === "failed"), false);
+  assert.match(seen[0].system, /Known so far: .*occasion=dinner/i);
+  assert.match(String(completed), /Aventus/);
+});
+
+test("end-to-end occasion run: re-asking a KNOWN occasion is gated and repaired into a committed pick", async () => {
+  // Exercises the closed gate hole through the whole loop: synthesis re-asks the
+  // already-known occasion, the redundant_clarification gate trips, and the single
+  // repair pass (fed the broken rule) ships a committed grounded recommendation
+  // instead of dead-ending on the redundant question.
+  const events: BeamRunEvent[] = [];
+  let completed: string | undefined;
+  let summary: BeamRunSummary | undefined;
+
+  const message = "Recommend something for a wedding I'm attending.";
+  const state = deriveBeamSessionState(undefined, message);
+  assert.equal(state.slots.occasion, "wedding");
+
+  const { callModel, seen } = scriptedModel([
+    { stop_reason: "tool_use", content: [{ type: "tool_use", id: "tu_1", name: "beam_score_candidates", input: {} }] },
+    text("draft"),
+    // synthesis re-asks the known occasion -> redundant_clarification
+    text("Happy to help — what's the occasion you're dressing for?"),
+    // repair pass commits to the grounded pick
+    text("For the wedding, wear Aventus by Creed — polished and celebratory."),
+  ]);
+
+  await runBeamAgent({
+    ctx,
+    userMessage: message,
+    sessionState: state,
+    tools: [aventusScoreTool()],
+    emit: (e) => events.push(e),
+    isModelConfigured: () => true,
+    callModel,
+    synthesisModel: "strong-model",
+    onComplete: (t) => (completed = t),
+    onSummary: (s) => (summary = s),
+  });
+
+  assert.equal(events.some((e) => e.type === "failed"), false);
+  assert.equal(completed, "For the wedding, wear Aventus by Creed — polished and celebratory.");
+  assert.equal(summary?.qualityGatePassed, true);
+  assert.equal(summary?.modelCalls, 4); // tool + draft + synthesis + one repair
+  // The repair instruction fed the redundant-clarification fix (now naming occasion) back.
+  const repairCall = seen[seen.length - 1];
+  const folded = repairCall.messages
+    .flatMap((m) => (Array.isArray(m.content) ? m.content : [{ type: "text", text: m.content }]))
+    .map((b) => (b && typeof b === "object" && "text" in b ? String((b as { text: unknown }).text) : ""))
+    .join("\n");
+  assert.match(folded, /Do NOT ask for month, destination, occasion/i);
+});
+
+test("presenting a complete travel kit marks the mission kitPresented for refinement", async () => {
+  // A present-travel-kit tool that resolves the exact 2+2 lanes and surfaces a card.
+  const kitTool: BeamToolDefinition = {
+    name: "beam_present_travel_kit",
+    description: "Lay out the owned + new picks as a board",
+    inputSchema: { type: "object", properties: {} },
+    handler: async () => ({
+      ownedCount: 2,
+      newCount: 2,
+      owned: [
+        { canonicalName: "Aventus", brand: "Creed" },
+        { canonicalName: "Gabrielle", brand: "Chanel" },
+      ],
+      newProposed: [
+        { canonicalName: "Tam Dao", brand: "Diptyque" },
+        { canonicalName: "Philosykos", brand: "Diptyque" },
+      ],
+    }),
+    clientEvent: (result) => {
+      const r = result as { owned: unknown[]; newProposed: unknown[] };
+      return {
+        type: "card",
+        card: {
+          kind: "travel_kit",
+          ownedPicks: [
+            { name: "Aventus", brand: "Creed", accords: ["fruity"], owned: true },
+            { name: "Gabrielle", brand: "Chanel", accords: ["floral"], owned: true },
+          ],
+          newPicks: [
+            { name: "Tam Dao", brand: "Diptyque", notes: [], accords: ["woody"] },
+            { name: "Philosykos", brand: "Diptyque", notes: [], accords: ["green"] },
+          ],
+        },
+      };
+    },
+  };
+
+  // A ready 2+2 travel mission, not yet presented.
+  const sessionState: BeamSessionState = {
+    slots: { destination: "Tokyo", month: "August", direction: "woody" },
+    mission: { intent: "travel_kit", ownedCount: 2, newCount: 2, destination: "Tokyo", month: "August" },
+  };
+
+  const { callModel } = scriptedModel([
+    { stop_reason: "tool_use", content: [{ type: "tool_use", id: "tu_kit", name: "beam_present_travel_kit", input: {} }] },
+    text("draft kit"),
+    text("From your vault, pack Aventus and Gabrielle. New: Tam Dao and Philosykos — all fit an artsy Tokyo August."),
+  ]);
+
+  const events: BeamRunEvent[] = [];
+  let completed: string | undefined;
+  let summary: BeamRunSummary | undefined;
+  await runBeamAgent({
+    ctx,
+    userMessage: "Build my Tokyo kit",
+    tools: [kitTool],
+    sessionState,
+    emit: (e) => events.push(e),
+    isModelConfigured: () => true,
+    callModel,
+    onComplete: (t) => (completed = t),
+    onSummary: (s) => (summary = s),
+  });
+
+  assert.equal(summary?.outcome, "completed", JSON.stringify(summary));
+  assert.ok(events.some((e) => e.type === "card" && e.card.kind === "travel_kit"));
+  assert.ok(completed && /Aventus/.test(completed));
+  // The mission is now flagged so the route persists "kit presented" and the next
+  // turn is treated as a refinement (the prose count gate is relaxed there).
+  assert.equal(sessionState.mission?.kitPresented, true);
 });

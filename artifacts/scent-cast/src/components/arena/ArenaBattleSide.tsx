@@ -15,6 +15,9 @@ interface ArenaBattleSideProps {
   onVote: () => void;
   /** Open the pre-vote head-to-head compare detail for both contenders. */
   onCompare: () => void;
+  onAddBeamPower: () => void;
+  onSignIn: () => void;
+  signedIn: boolean;
 }
 
 // Tap-vs-scroll isolation: a pointer that travels farther than this between
@@ -31,6 +34,9 @@ export const ArenaBattleSide: React.FC<ArenaBattleSideProps> = ({
   isSaving = false,
   onVote,
   onCompare,
+  onAddBeamPower,
+  onSignIn,
+  signedIn,
 }) => {
   const contenderLabel = align === "left" ? "A" : "B";
 
@@ -117,7 +123,7 @@ export const ArenaBattleSide: React.FC<ArenaBattleSideProps> = ({
       className={[
         "relative flex h-full min-w-0 overflow-hidden rounded-lg bg-[rgba(4,3,2,0.9)] p-2 shadow-[0_22px_50px_-40px_rgba(0,0,0,0.8),inset_0_1px_0_rgba(255,236,183,0.08)] transition-all duration-200 hover:bg-[rgba(8,6,4,0.94)] hover:shadow-[0_34px_80px_-50px_rgba(0,0,0,0.85),inset_0_1px_0_rgba(255,236,183,0.12)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/58 sm:p-3 md:p-4",
         disabled ? "" : "cursor-pointer",
-        selected ? "bg-scent-accent/[0.045]" : "",
+        selected ? "bg-scent-accent/[0.022]" : "",
       ].join(" ")}
     >
       <div className="relative z-10 flex w-full flex-col">
@@ -129,7 +135,7 @@ export const ArenaBattleSide: React.FC<ArenaBattleSideProps> = ({
             clips), so the bottle below never shifts between picked/unpicked and
             the A/B cards stay aligned. Depth comes from inset + hairline shadows
             only — no projected gold glow pooling under the card. */}
-        <div className="relative z-10 mb-1.5 flex min-h-6 items-center justify-center px-6 sm:mb-2.5 sm:min-h-7">
+        <div className="relative z-10 mb-1.5 flex min-h-5 items-center justify-center px-6 sm:mb-2.5 sm:min-h-6">
           {selected ? (
             <span
               aria-hidden="true"
@@ -206,6 +212,18 @@ export const ArenaBattleSide: React.FC<ArenaBattleSideProps> = ({
           <p className="mx-auto mt-1 line-clamp-2 min-h-[2rem] max-w-sm text-[11px] font-medium leading-4 text-scent-text-muted sm:mt-2 sm:min-h-[2.5rem] sm:text-sm sm:leading-5">
             {side.descriptor}
           </p>
+          <div className="mt-2 grid grid-cols-2 gap-1 rounded-lg border border-white/8 bg-black/20 p-1.5 text-center">
+            <div><span className="block text-[8px] uppercase tracking-[0.08em] text-scent-text-subtle sm:text-[9px]">Supporters</span><strong className="mt-0.5 block text-xs text-foreground sm:text-sm">{side.beamSupporters}</strong></div>
+            <div><span className="block text-[8px] uppercase tracking-[0.08em] text-scent-text-subtle sm:text-[9px]">Beam Power</span><strong className="mt-0.5 block text-xs text-scent-accent sm:text-sm">{side.totalBeamPower}</strong></div>
+          </div>
+          <button
+            type="button"
+            onClick={signedIn ? onAddBeamPower : onSignIn}
+            className="scent-no-mobile-focus-ring mt-2 inline-flex min-h-9 w-full items-center justify-center gap-1.5 rounded-md border border-scent-accent/22 bg-scent-accent/[0.12] px-2 py-2 text-[10px] font-bold uppercase tracking-[0.1em] text-scent-accent shadow-[inset_0_1px_0_rgba(255,236,183,0.08)] transition-colors hover:border-scent-accent/42 hover:bg-scent-accent/[0.16] hover:text-[#f0cf70] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/60 sm:min-h-10 sm:text-xs"
+          >
+            <Sparkles size={13} strokeWidth={1.9} aria-hidden="true" />
+            <span>{signedIn ? "Add Beam Power" : "Sign in to add"}</span>
+          </button>
         </div>
 
         {/* Pre-vote keeps the explicit Vote button. After reveal, the whole card

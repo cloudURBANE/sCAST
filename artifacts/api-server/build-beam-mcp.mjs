@@ -10,15 +10,42 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { build as esbuild } from "esbuild";
 import esbuildPluginPino from "esbuild-plugin-pino";
-import { rm } from "node:fs/promises";
+import { mkdir, readdir, rm } from "node:fs/promises";
 
 globalThis.require = createRequire(import.meta.url);
 
 const artifactDir = path.dirname(fileURLToPath(import.meta.url));
 
+/**
+ * Remove only the build outputs from dist-beam, never the runtime `*.log` files.
+ *
+ * The locally-running Beam MCP cockpit (`node ./dist-beam/beam-mcp.mjs`) keeps
+ * open handles on `beam-mcp.out.log` / `beam-mcp.err.log`. A blanket
+ * `rm dist-beam` therefore fails with EBUSY on Windows while that process is
+ * alive, leaving the artifact swap blocked. Node loads the entry `.mjs` into
+ * memory at startup and does not hold the file open, so the emitted bundle can
+ * be overwritten in place — only the log handles are contended. Cleaning the
+ * build outputs while preserving logs makes the rebuild succeed without having
+ * to stop the owner's cockpit.
+ */
+async function cleanBuildOutputs(distDir) {
+  await mkdir(distDir, { recursive: true });
+  let entries;
+  try {
+    entries = await readdir(distDir);
+  } catch {
+    return;
+  }
+  await Promise.all(
+    entries
+      .filter((name) => !name.endsWith(".log"))
+      .map((name) => rm(path.join(distDir, name), { recursive: true, force: true })),
+  );
+}
+
 async function buildBeamMcp() {
   const distDir = path.resolve(artifactDir, "dist-beam");
-  await rm(distDir, { recursive: true, force: true });
+  await cleanBuildOutputs(distDir);
 
   await esbuild({
     entryPoints: [{ in: path.resolve(artifactDir, "src/beam-agent/mcp/mcpMain.ts"), out: "beam-mcp" }],

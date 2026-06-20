@@ -36,12 +36,16 @@ import {
 const MAX_USER_MESSAGE_LENGTH = 2_000;
 const SESSION_ID_RE = /^[0-9a-zA-Z_-]{8,64}$/;
 
+// User-facing step names. These deliberately avoid internal mission-graph
+// vocabulary (no "calibration", "node", "environment scan", "resolution") so the
+// deterministic fallback reads like a concierge, not a developer console. The
+// node ids stay as internal keys.
 const NODE_LABELS: Record<ScentMissionNodeId, string> = {
-  onboarding: "Calibration",
-  "wardrobe-sync": "Vault Sync",
-  "environment-scan": "Environment Scan",
-  "resolution-standard": "Resolution",
-  "resolution-premium": "Molecular Intelligence",
+  onboarding: "your setting and mood",
+  "wardrobe-sync": "your collection",
+  "environment-scan": "today's conditions",
+  "resolution-standard": "your match",
+  "resolution-premium": "the deeper breakdown",
 };
 
 export type ScentMissionChatContext = {
@@ -230,41 +234,104 @@ function topFamilies(wardrobe: ScentMissionWardrobeItem[], limit = 3): string[] 
     .map(([family]) => family);
 }
 
+/**
+ * Pulls human-readable intent cues straight from the user's own words so the
+ * deterministic fallback can REFLECT what they actually asked for instead of
+ * collapsing it into a canned mission-status line. Phrases are returned in the
+ * user's own framing (never internal node/enum labels); empty when nothing is
+ * recognized. This is the degraded path the SPA hits only when the live Beam
+ * model is unavailable, so preserving intent here is what keeps that worst case
+ * from feeling robotic.
+ */
+function understoodIntentCues(userMessage: string): string[] {
+  const text = userMessage.toLowerCase();
+  const cues: string[] = [];
+  const add = (phrase: string) => {
+    if (!cues.includes(phrase)) cues.push(phrase);
+  };
+
+  if (/\b(work|office|meeting|client|presentation)\b/.test(text)) add("the office");
+  if (/\b(date|romantic|dinner)\b/.test(text)) add("a date");
+  if (/\b(night out|club|bar|party|evening)\b/.test(text)) add("a night out");
+  if (/\b(wedding|gala|formal|black tie)\b/.test(text)) add("a formal event");
+  if (/\b(gym|workout|training|fitness)\b/.test(text)) add("the gym");
+
+  if (/\b(fresh|clean|crisp|airy|aquatic|citrus)\b/.test(text)) add("something fresh and clean");
+  if (/\b(woody|wood|sandalwood|cedar|vetiver)\b/.test(text)) add("a woody direction");
+  if (/\b(warm|cozy|amber|vanilla|sweet)\b/.test(text)) add("something warm");
+  if (/\b(spicy|spice|oud|smoky|leather)\b/.test(text)) add("something bold");
+  if (/\b(green|greener|herbal|aromatic|modern)\b/.test(text)) add("a green, modern feel");
+
+  if (/\b(hot|heat|humid|humidity|tropical)\b/.test(text)) add("hot, humid air");
+  if (/\b(cold|cool|winter|chilly)\b/.test(text)) add("cooler weather");
+  if (/\b(rain|rainy)\b/.test(text)) add("a rainy day");
+
+  if (/\b(subtle|skin.?close|intimate|quiet)\b/.test(text)) add("a close, subtle trail");
+  if (/\b(statement|projects?|beast|loud|bold)\b/.test(text)) add("real projection");
+
+  return cues.slice(0, 3);
+}
+
+function joinCues(cues: string[]): string {
+  if (cues.length <= 1) return cues[0] ?? "";
+  if (cues.length === 2) return `${cues[0]} and ${cues[1]}`;
+  return `${cues.slice(0, -1).join(", ")}, and ${cues[cues.length - 1]}`;
+}
+
+/**
+ * Conversational fallback when no model is configured. It never exposes the
+ * internal mission graph ("node", "mission tree", "Execute Analysis") — that
+ * jargon both reads as a developer terminal and is actively stripped by the SPA
+ * (`safeAssistantText`), which would otherwise replace the whole reply with a
+ * generic prompt and discard the user's intent. So this reflects the user's own
+ * words back and invites one concrete next detail.
+ */
 function deterministicChatReply(context: ScentMissionChatContext): string {
   const message = context.userMessage.toLowerCase();
   const { mission, wardrobe, weather } = context;
+  const resolved = mission.nodes["resolution-standard"] === "complete";
 
   const calibration = inferCalibrationFromMessage(context.userMessage, mission.calibration);
   if (calibration.changed) {
     return calibrationUpdatedReply(calibration.calibration);
   }
 
-  if (/(weather|humidity|temperature|uv|rain|outside)/.test(message)) {
-    return `Current atmosphere: ${describeWeather(weather)}. Run the environment scan node to fold this into your mission calibration.`;
-  }
-
-  if (/(recommend|what should i wear|pick|match|best)/.test(message)) {
-    if (mission.nodes["resolution-standard"] === "complete") {
-      return "Your standard resolution is already complete — use Reveal Match to see the full breakdown, or ask me about the pick.";
-    }
-    return "Work through the mission tree to reach your match: calibrate, sync your vault, scan the environment, then execute the resolution node.";
-  }
-
+  // A vault fragrance the user named: describe what it brings, not a status.
   const mentioned = wardrobe.find((item) => message.includes(item.name.toLowerCase()));
   if (mentioned) {
     const traits = [...(mentioned.families ?? []), ...(mentioned.accords ?? [])].slice(0, 6);
     return traits.length > 0
-      ? `${mentioned.name}${mentioned.brand ? ` by ${mentioned.brand}` : ""} reads as ${traits.join(", ")}. I weigh those traits against today's air when scoring your vault.`
-      : `${mentioned.name} is in your vault, but I have little trait data on it yet — open its card to enrich it for sharper scoring.`;
+      ? `${mentioned.name}${mentioned.brand ? ` by ${mentioned.brand}` : ""} reads as ${traits.join(", ")} — I weigh those against today's air when I score your collection.`
+      : `${mentioned.name} is in your collection, but I don't have much detail on it yet. Open its card to enrich it and I'll score it more sharply.`;
   }
 
-  const activeNode = (Object.entries(mission.nodes) as [ScentMissionNodeId, string][]).find(
-    ([, status]) => status === "active",
-  )?.[0];
-  if (activeNode) {
-    return `Mission status: ${activeNode.replace(/-/g, " ")} is ready. Hit Execute Analysis to advance, or ask me about your vault or today's conditions.`;
+  // Only treat this as a conditions question when the user is actually asking
+  // about the weather — not when "hot"/"humid"/"rain" appear as scent context.
+  const asksAboutConditions =
+    /\b(weather|temperature|uv index|how hot|how cold|how humid|is it (going to )?rain)/.test(message) &&
+    /\b(what|whats|how|hows|tell me|right now|today|outside|like|forecast)\b/.test(message);
+  if (asksAboutConditions) {
+    return `Right now it's ${describeWeather(weather)}. Tell me where you're headed or the vibe you want, and I'll match a fragrance to it.`;
   }
-  return "Mission complete on the standard track. Ask me about your match, your vault, or today's conditions.";
+
+  // Reflect whatever intent we can read straight from their words.
+  const cues = understoodIntentCues(context.userMessage);
+  if (cues.length > 0) {
+    const tail = resolved
+      ? "Tap Reveal Match to see what I lined up, or tell me anything else to refine it."
+      : "Give me one more detail — the setting or the mood — or just say go and I'll pull picks from your collection.";
+    return `Got it — ${joinCues(cues)}. ${tail}`;
+  }
+
+  if (resolved) {
+    return "Your pick's already lined up — tap Reveal Match for the full breakdown, or ask me anything about it.";
+  }
+
+  if (/(recommend|what should i wear|pick|match|best|suggest|something|wear)/.test(message)) {
+    return "Happy to pull something from your collection. Tell me the setting and the mood you're after — or just say go and I'll work with what I have.";
+  }
+
+  return "Tell me where you're headed and the mood you want, and I'll match a fragrance from your collection to today's air.";
 }
 
 const DESTINATION_PATTERNS: Array<[ScentMissionDestination, RegExp]> = [
@@ -310,18 +377,21 @@ function inferCalibrationFromMessage(
 
 function calibrationUpdatedReply(calibration: ScentMissionCalibration): string {
   const parts = [
-    calibration.destination ? `destination: ${calibration.destination}` : null,
-    calibration.energy ? `energy: ${calibration.energy}` : null,
+    calibration.destination ? calibration.destination.toLowerCase() : null,
+    calibration.energy ? `feeling ${calibration.energy.toLowerCase()}` : null,
   ].filter(Boolean);
-  return `Calibration updated (${parts.join(", ")}). When both destination and energy are set, lock calibration to begin the mission tree.`;
+  if (parts.length === 0) {
+    return "Got it. Tell me the setting and the mood you want, and I'll match a fragrance from your collection to today's air.";
+  }
+  return `Got it — lining this up for ${parts.join(", ")}. Add anything else you want it to do, or just say go and I'll pull picks from your collection.`;
 }
 
 function lockedNodeMessage(nodeId: ScentMissionNodeId, status: string): string {
   const label = NODE_LABELS[nodeId];
   if (status === "complete") {
-    return `${label} is already complete. Continue with the next available mission node.`;
+    return `I've already covered ${label} — let's keep going.`;
   }
-  return `${label} is locked right now. Complete the current mission node first.`;
+  return `I need a little more from you before I can get to ${label}. Let's finish this step first.`;
 }
 
 /* ------------------------------------------------------------------ */
@@ -346,12 +416,12 @@ async function executeNode(
       if (!destination || !energy) {
         return {
           assistantMessage:
-            "Calibration incomplete — choose a destination and an energy state, then execute again.",
+            "I still need two things before I can pick: where you're headed and how you want to come across.",
         };
       }
       const next = completeScentMissionNode(mission, "onboarding");
       return {
-        assistantMessage: `Calibration locked: ${destination}, ${energy} energy. Next, I'll sync your vault.`,
+        assistantMessage: `Got it — ${destination.toLowerCase()}, feeling ${energy.toLowerCase()}. Let me look through your collection.`,
         nodeUpdates: diffScentMissionNodes(mission, next),
         missionPatch: { calibration: mission.calibration },
       };
@@ -365,16 +435,16 @@ async function executeNode(
         };
         return {
           assistantMessage:
-            "Your vault is empty, so there is nothing to sync. Add fragrances from the search panel, then re-run this node.",
+            "Your collection's empty, so there's nothing for me to work with yet. Add a few fragrances from search and I'll pick from them.",
           nodeUpdates: diffScentMissionNodes(mission, next),
         };
       }
       const families = topFamilies(wardrobe);
       const next = completeScentMissionNode(mission, "wardrobe-sync");
       return {
-        assistantMessage: `Vault synced — ${wardrobe.length} fragrance${wardrobe.length === 1 ? "" : "s"} profiled${
+        assistantMessage: `I've been through your collection — ${wardrobe.length} fragrance${wardrobe.length === 1 ? "" : "s"}${
           families.length > 0 ? `, leaning ${families.join(" / ")}` : ""
-        }. Environment scan is next.`,
+        }. Now let me check today's air.`,
         nodeUpdates: diffScentMissionNodes(mission, next),
       };
     }
@@ -382,7 +452,7 @@ async function executeNode(
     case "environment-scan": {
       const next = completeScentMissionNode(mission, "environment-scan");
       return {
-        assistantMessage: `Environment locked: ${describeWeather(weather)}. Resolution is armed.`,
+        assistantMessage: `Today's air: ${describeWeather(weather)}. Now I'll line up your match.`,
         nodeUpdates: diffScentMissionNodes(mission, next),
       };
     }
@@ -400,7 +470,7 @@ async function executeNode(
         };
         return {
           assistantMessage:
-            "I can't resolve a match without a synced vault. Add fragrances and re-run wardrobe sync first.",
+            "I can't pick a match from an empty collection. Add a few fragrances and I'll choose from them.",
           nodeUpdates: diffScentMissionNodes(mission, next),
         };
       }
@@ -419,7 +489,7 @@ async function executeNode(
 
       const next = completeScentMissionNode(mission, "resolution-standard");
       return {
-        assistantMessage: `Resolution: wear ${recommendation.name}${
+        assistantMessage: `Today, reach for ${recommendation.name}${
           recommendation.brand ? ` by ${recommendation.brand}` : ""
         }. ${recommendation.reason}`,
         nodeUpdates: diffScentMissionNodes(mission, next),

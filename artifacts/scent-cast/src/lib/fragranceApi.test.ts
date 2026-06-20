@@ -7,6 +7,7 @@ import {
   getFragranceDetails,
   isBackgroundEnrichmentQueued,
   isFetchNetworkError,
+  isSearchResponseDegraded,
   isTransientDetailFetchError,
   isFragranceDetailEffectivelyComplete,
   normalizeFragranceDetail,
@@ -1494,4 +1495,103 @@ test("resolveMainAccordChartRows falls back to profile axes when metrics lack ro
     musk: 2,
   });
   assert.equal(rows[0]?.label, "Woodiness");
+});
+
+test("searchFragrances keeps the whole flow within a 3-call budget on an empty symbol query", async (t) => {
+  const previousFetch = globalThis.fetch;
+  const previousApiUrl = process.env.VITE_FRAGRANCE_API_URL;
+  const previousAppApiUrl = process.env.VITE_API_BASE_URL;
+  let engineCalls = 0;
+  let appCalls = 0;
+
+  process.env.VITE_FRAGRANCE_API_URL = "https://engine.example.test";
+  process.env.VITE_API_BASE_URL = "https://app-api.example.test";
+  Object.defineProperty(globalThis, "fetch", {
+    configurable: true,
+    value: async (url: string) => {
+      if (String(url).startsWith("https://engine.example.test")) engineCalls += 1;
+      else if (String(url).startsWith("https://app-api.example.test")) appCalls += 1;
+      // Everything comes back empty so the search exhausts every recovery branch.
+      return new Response(JSON.stringify({ query: "x", results: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    },
+  });
+
+  t.after(() => {
+    Object.defineProperty(globalThis, "fetch", { configurable: true, value: previousFetch });
+    if (previousApiUrl === undefined) delete process.env.VITE_FRAGRANCE_API_URL;
+    else process.env.VITE_FRAGRANCE_API_URL = previousApiUrl;
+    if (previousAppApiUrl === undefined) delete process.env.VITE_API_BASE_URL;
+    else process.env.VITE_API_BASE_URL = previousAppApiUrl;
+  });
+
+  const response = await searchFragrances("Idôle™ Spécial");
+
+  assert.equal(response.results.length, 0);
+  // pass 1: engine (accented) + one app supplement; pass 2 (sanitized): a single
+  // lone engine call with the app supplement suppressed. Never a 4th round-trip.
+  assert.equal(engineCalls, 2);
+  assert.equal(appCalls, 1);
+  assert.ok(engineCalls + appCalls <= 3, `expected <=3 calls, saw ${engineCalls + appCalls}`);
+});
+
+test("searchFragrances does not reject brand-acronym results the engine returned", async (t) => {
+  // Guards the web token-coverage gate against re-rejecting the engine's brand-only
+  // recall: a "jpg" search must surface the whole Jean Paul Gaultier lineup the
+  // engine expanded, not silently drop it into a false empty state.
+  const previousFetch = globalThis.fetch;
+  const previousApiUrl = process.env.VITE_FRAGRANCE_API_URL;
+  const previousAppApiUrl = process.env.VITE_API_BASE_URL;
+
+  process.env.VITE_FRAGRANCE_API_URL = "https://engine.example.test";
+  process.env.VITE_API_BASE_URL = "https://app-api.example.test";
+  Object.defineProperty(globalThis, "fetch", {
+    configurable: true,
+    value: async (url: string) => {
+      if (String(url).startsWith("https://engine.example.test")) {
+        return new Response(
+          JSON.stringify({
+            query: "jpg",
+            results: [
+              { id: "jpg-le-male", name: "Le Male", house: "Jean Paul Gaultier" },
+              { id: "jpg-ultra-male", name: "Ultra Male", house: "Jean Paul Gaultier" },
+              { id: "jpg-le-beau", name: "Le Beau", house: "Jean Paul Gaultier" },
+            ],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      return new Response(JSON.stringify({ results: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    },
+  });
+
+  t.after(() => {
+    Object.defineProperty(globalThis, "fetch", { configurable: true, value: previousFetch });
+    if (previousApiUrl === undefined) delete process.env.VITE_FRAGRANCE_API_URL;
+    else process.env.VITE_FRAGRANCE_API_URL = previousApiUrl;
+    if (previousAppApiUrl === undefined) delete process.env.VITE_API_BASE_URL;
+    else process.env.VITE_API_BASE_URL = previousAppApiUrl;
+  });
+
+  const response = await searchFragrances("jpg");
+  const names = response.results.map((result) => result.name).sort();
+
+  assert.deepEqual(names, ["Le Beau", "Le Male", "Ultra Male"]);
+});
+
+test("isSearchResponseDegraded flags fallback-sourced answers only", () => {
+  assert.equal(
+    isSearchResponseDegraded({ diagnostics: { fallback_source: "designer_catalog" } }),
+    true,
+  );
+  assert.equal(isSearchResponseDegraded({ diagnostics: { fallback_source: null } }), false);
+  assert.equal(isSearchResponseDegraded({ diagnostics: {} }), false);
+  assert.equal(isSearchResponseDegraded({ diagnostics: undefined }), false);
+  assert.equal(isSearchResponseDegraded(undefined), false);
+  assert.equal(isSearchResponseDegraded(null), false);
 });

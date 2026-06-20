@@ -8,6 +8,7 @@ import {
   getFragranceDetails,
   isBackgroundEnrichmentQueued,
   isFetchNetworkError,
+  isSearchResponseDegraded,
   isTransientDetailFetchError,
   normalizeFragranceDetail,
   sanitizeEngineQuery,
@@ -396,8 +397,10 @@ export const FragranceCapture: React.FC<{
   onVaultSearchStateChange?: (active: boolean) => void;
   /** Brand+name identity keys ({@link vaultIdentityKey}) of fragrances already saved. */
   existingVaultKeys?: Set<string>;
-  /** Scroll the user to their vault — used by the "View in vault" action on duplicates. */
-  onViewVault?: () => void;
+  /** Open the matching saved fragrance in the vault — used by the "View in vault"
+   *  action on duplicates. Receives the selected result so the parent can open
+   *  that exact item's detail rather than just scrolling to the section. */
+  onViewVault?: (match: FragranceMatch) => void;
   /** Render only the search interior when the stable vault panel is owned by the parent. */
   embeddedInVaultPanel?: boolean;
 }> = ({
@@ -509,8 +512,8 @@ export const FragranceCapture: React.FC<{
   // Plain (non-memoized) so it always closes over the current `handleConfirm`,
   // which is declared below and re-created each render.
   const handlePrimaryAction = () => {
-    if (selectedInVault) {
-      onViewVault?.();
+    if (selectedInVault && selectedMatch) {
+      onViewVault?.(selectedMatch);
       return;
     }
     void handleConfirm();
@@ -537,6 +540,11 @@ export const FragranceCapture: React.FC<{
       const actionBar = actionBarRef.current;
       if (!actionBar) return;
       const rect = actionBar.getBoundingClientRect();
+      // Skip the scroll when the CTA is already fully in view. With a compact
+      // result set (e.g. a single match, now that the panel hugs its content)
+      // the action appears on-screen immediately, so re-centering it only reads
+      // as an unprompted jump. Only chase the CTA when it's actually off the fold.
+      if (rect.top >= 0 && rect.bottom <= window.innerHeight) return;
       const top = window.scrollY + rect.top - Math.max(0, (window.innerHeight - rect.height) / 2);
       window.scrollTo({
         behavior: reduceMotion ? 'auto' : 'smooth',
@@ -586,9 +594,15 @@ export const FragranceCapture: React.FC<{
     try {
       let nextMatches: FragranceMatch[] = [];
       let primarySearchError: Error | null = null;
+      // True when the engine answered from a degraded/fallback path. A zero-result
+      // search in that state is a transient coverage condition (live providers
+      // were blocked), so it is surfaced as retryable rather than a flat "no such
+      // fragrance" — see the empty-state branch below.
+      let searchWasDegraded = false;
 
       try {
         const searchData = await searchFragrances(targetQuery, { signal: controller.signal });
+        searchWasDegraded = isSearchResponseDegraded(searchData);
         const results = Array.isArray(searchData.results) ? searchData.results : [];
         nextMatches = results
           .map((result): FragranceMatch | null => {
@@ -630,6 +644,15 @@ export const FragranceCapture: React.FC<{
           setErrorStatus(message);
           setErrorPhase('search');
           setLoadingStatus('Search failed.');
+        } else if (searchWasDegraded) {
+          // The engine reached us but only via a degraded fallback and found
+          // nothing — a retryable coverage gap, not a confirmed non-match. Route
+          // it through the error banner's "Try Again" instead of the absolute
+          // "No Olfactory Matches" empty state, which would misread a transient
+          // provider outage as the fragrance not existing.
+          setErrorStatus('Search is still expanding coverage for this one. Try again in a moment.');
+          setErrorPhase('search');
+          setLoadingStatus('Coverage still expanding.');
         } else {
           setLoadingStatus('No fragrance match found.');
         }
@@ -1174,11 +1197,11 @@ export const FragranceCapture: React.FC<{
         }`}
         aria-hidden={embeddedInVaultPanel && loadingSurface === 'search' && uploading}
       >
-        <header className="mx-auto mb-4 max-w-[43rem] px-1 text-center sm:mb-6">
+        <header className="mx-auto mb-2 max-w-[43rem] px-1 text-center sm:mb-5">
           <p className="sr-only">
             Add perfumes to your vault. Example fragrance names rotate above the search field.
           </p>
-          <h2 className="mx-auto max-w-[38rem] text-balance font-serif italic text-[clamp(2rem,5.6vw,4.15rem)] leading-[1.01] tracking-normal text-[#fff7ec] drop-shadow-[0_4px_14px_rgba(0,0,0,0.72)]">
+          <h2 className="mx-auto max-w-[38rem] text-balance font-serif italic text-[clamp(1.6rem,5.2vw,4.15rem)] leading-[1.03] tracking-normal text-[#fff7ec] drop-shadow-[0_4px_14px_rgba(0,0,0,0.72)] sm:leading-[1.01]">
             Search any fragrance or brand.
           </h2>
         </header>
@@ -1237,7 +1260,7 @@ export const FragranceCapture: React.FC<{
               }}
               placeholder={searchFocused ? '' : 'Search by house or fragrance...'}
               aria-label="Look up a brand or fragrance"
-              className="scent-lux-input scent-vault-search-input relative z-0 h-[60px] w-full text-center font-sans text-base font-medium text-[#fff7ec] outline-none transition-colors placeholder:text-scent-text-subtle placeholder:font-medium sm:h-[68px] scroll-mt-28 px-16 sm:px-[4.35rem]"
+              className="scent-lux-input scent-vault-search-input relative z-0 h-[56px] w-full text-center font-sans text-base font-medium text-[#fff7ec] outline-none transition-colors placeholder:text-scent-text-subtle placeholder:font-medium sm:h-[64px] scroll-mt-28 px-16 sm:px-[4.35rem]"
             />
             <motion.button
               type="submit"
@@ -1258,7 +1281,7 @@ export const FragranceCapture: React.FC<{
               </motion.span>
             </motion.button>
           </form>
-          <div className="mx-auto mt-4 max-w-lg space-y-1 px-2 sm:mt-5 sm:space-y-1.5" aria-label="Recently added fragrance">
+          <div className="mx-auto mt-2.5 max-w-lg space-y-0.5 px-2 sm:mt-4 sm:space-y-1" aria-label="Recently added fragrance">
             <p className="scent-type-meta text-[9px] uppercase tracking-[0.14em] text-scent-accent/62 sm:text-[10px]">
               Recently added
             </p>
@@ -1330,9 +1353,19 @@ export const FragranceCapture: React.FC<{
               className={`mx-auto mt-5 w-full scroll-mt-24 sm:mt-7 sm:pb-0 ${hasSelectedMatch ? 'pb-[7rem]' : 'pb-2'}`}
             >
               <div className="flex min-h-0 flex-col">
-                <div className="scent-vault-results-panel mx-auto w-full max-w-[50.5rem] px-3 py-4 sm:px-9 sm:py-9">
-                  {/* Results-nav header: count on the left, a desktop-only
-                      refinement affordance on the right. Lives outside the
+                <div
+                  className="scent-vault-results-panel mx-auto w-full max-w-[50.5rem] px-3 py-4 sm:px-9 sm:py-9"
+                  // The panel's CSS sets a tall min-height (≈19rem) so the loading
+                  // skeleton reads as a full surface. For *real* results that reserve
+                  // is wrong: a single match left the card stranded in a large void
+                  // (the gap that "grows" on wider viewports via the 30vw clamp).
+                  // Hug the content instead so the panel is only ever as tall as the
+                  // list it holds; many results still cap + scroll via the list's
+                  // own max-height below.
+                  style={{ minHeight: 0 }}
+                >
+                  {/* Results-nav header: count on the left, a refinement
+                      affordance on the right. Lives outside the
                       scroll area below, so it stays put while the list scrolls.
                       Dismissal is handled by Esc and the mobile action bar's
                       "Back to search", so no redundant New-search/× buttons. */}
