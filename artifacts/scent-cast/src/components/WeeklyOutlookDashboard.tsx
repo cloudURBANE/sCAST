@@ -308,7 +308,7 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
               to the actual composition (bottle + text) instead of floating against
               the page edges, and the generous height gives the packshot real product
               presence. The bottle and title share one centered, balanced row. */}
-          <div className="relative mx-auto mt-3 h-[14.5rem] w-full max-w-[27rem] sm:h-[16rem]">
+          <div className="relative mx-auto mt-1.5 h-[12.5rem] w-full max-w-[27rem] sm:mt-2 sm:h-[14.5rem]">
             <ForecastChevron direction="prev" onClick={() => go(selected - 1)} />
             <div className="absolute inset-y-0 left-7 right-7 overflow-hidden sm:left-9 sm:right-9">
               <ForecastHero
@@ -325,7 +325,7 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
               read as a single grouped, screen-centered unit that ties the hero to the
               calendar rather than drifting beside the title. */}
           {activeMeta.length > 0 ? (
-            <div className="mt-3 flex justify-center">
+            <div className="mt-2 flex justify-center">
               <div className="inline-flex items-center gap-1.5 rounded-full border border-scent-accent/20 bg-black/25 px-3 py-1 text-[#cdbfa9]">
                 <WeatherGlyph day={activePlan.day} size={13} />
                 <span className="text-[10px] font-medium uppercase tracking-[0.14em] sm:text-[11px]">
@@ -343,7 +343,7 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
           <div
             role="tablist"
             aria-label="Days this week"
-            className="mx-auto mt-3 grid w-full max-w-[27rem] grid-cols-7 gap-1.5 sm:mt-4 sm:gap-2.5"
+            className="mx-auto mt-2.5 grid w-full max-w-[27rem] grid-cols-7 gap-1.5 sm:mt-3.5 sm:gap-2.5"
           >
             {outlook.slice(0, 7).map((plan, index) => {
               const isActive = index === selected;
