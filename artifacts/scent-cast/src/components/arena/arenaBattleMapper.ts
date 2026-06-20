@@ -1,4 +1,5 @@
 import type { CommunityFragranceSnapshot, CommunityPost } from '@/components/community/communityPosts';
+import { sanitizeFamilyLabel } from '../../lib/wardrobeSearchSuggest.ts';
 import { isArenaReasonKey, type ArenaReasonKey } from './arenaTwists.ts';
 
 export interface ArenaBattleSide {
@@ -9,6 +10,7 @@ export interface ArenaBattleSide {
   name: string;
   brand?: string;
   imageUrl?: string;
+  family?: string;
   descriptor: string;
 }
 
@@ -40,6 +42,7 @@ function battleOptions(post: CommunityPost): [string, string] | null {
 }
 
 function sideFromOption(option: string, fragrance: CommunityFragranceSnapshot | undefined): ArenaBattleSide {
+  const family = sanitizeFamilyLabel(fragrance?.family);
   return {
     fragranceId: fragrance?.fragranceId?.trim() || stableFragranceId(fragrance?.brand, fragrance?.name?.trim() || option),
     beamSupporters: Math.max(0, Number(fragrance?.beamSupporters) || 0),
@@ -48,7 +51,8 @@ function sideFromOption(option: string, fragrance: CommunityFragranceSnapshot | 
     name: fragrance?.name?.trim() || option,
     ...(fragrance?.brand?.trim() ? { brand: fragrance.brand.trim() } : {}),
     ...(fragrance?.imageUrl?.trim() ? { imageUrl: fragrance.imageUrl.trim() } : {}),
-    descriptor: fragrance?.family?.trim() || (fragrance ? 'Classic fragrance' : 'Community option'),
+    ...(family ? { family } : {}),
+    descriptor: family || (fragrance ? 'Classic fragrance' : 'Community option'),
   };
 }
 

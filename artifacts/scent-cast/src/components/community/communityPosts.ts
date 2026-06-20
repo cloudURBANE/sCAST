@@ -7,6 +7,11 @@ import {
   type QueryClient,
 } from '@tanstack/react-query';
 import { normalizeApiBaseUrl } from '@/lib/imageProxy';
+import {
+  submitBeamPower,
+  type SubmitBeamPowerInput,
+  type SubmitBeamPowerResult,
+} from '@/lib/arenaBeamClient';
 
 export const COMMUNITY_POST_TYPES = ['question', 'sotd', 'battle', 'worth_it'] as const;
 
@@ -420,6 +425,28 @@ function applyVoteToPost(
   return { ...post, viewerVote: choice, viewerVoteReason: nextReason, votes };
 }
 
+function applyBeamPowerToPost(post: CommunityPost, result: SubmitBeamPowerResult): CommunityPost {
+  if (post.id !== result.postId) return post;
+  const optionIndex = Array.isArray(post.metadata?.options)
+    ? post.metadata.options.findIndex((option) => option === result.choice)
+    : -1;
+  let changed = false;
+  const fragrances = post.fragrances.map((fragrance, index) => {
+    const matches =
+      fragrance.fragranceId === result.fragranceId ||
+      (optionIndex >= 0 && index === optionIndex);
+    if (!matches) return fragrance;
+    changed = true;
+    return {
+      ...fragrance,
+      fragranceId: fragrance.fragranceId ?? result.fragranceId,
+      beamSupporters: result.supporters,
+      totalBeamPower: result.totalBeamPower,
+    };
+  });
+  return changed ? { ...post, fragrances } : post;
+}
+
 export function useCreateCommunityPost(authToken: string | null) {
   const queryClient = useQueryClient();
 
@@ -561,6 +588,21 @@ export function useCommunityBattleVote(authToken: string | null) {
         // keep whatever reason the post already had.
         viewerVoteReason: 'reason' in variables ? data.reason : post.viewerVoteReason,
       }));
+    },
+  });
+}
+
+export function useSubmitBeamPower(authToken: string | null) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: SubmitBeamPowerInput) => {
+      const token = requireAuthToken(authToken);
+      return submitBeamPower(input, token);
+    },
+    onSuccess: async (result) => {
+      patchPostEverywhere(queryClient, result.postId, (post) => applyBeamPowerToPost(post, result));
+      await queryClient.invalidateQueries({ queryKey: COMMUNITY_POSTS_ROOT_KEY });
     },
   });
 }

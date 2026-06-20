@@ -30,11 +30,26 @@ test('maps a community battle post into a two-side arena battle', () => {
   assert.equal(mapped?.title, 'Office signature');
   assert.equal(mapped?.scenario, 'Which one wins Monday morning?');
   assert.equal(mapped?.left.brand, 'Chanel');
+  assert.equal(mapped?.left.family, 'Woody Aromatic');
   assert.equal(mapped?.left.descriptor, 'Woody Aromatic');
   assert.equal(mapped?.right.descriptor, 'Classic fragrance');
   assert.deepEqual(mapped?.votes, { 'Bleu de Chanel': 3, Aventus: 2 });
   assert.equal(mapped?.viewerVote, 'Aventus');
   assert.equal(mapped?.viewerReason, null);
+});
+
+test('drops placeholder family labels from battle descriptors', () => {
+  const mapped = mapCommunityPostToArenaBattle({
+    ...basePost,
+    fragrances: [
+      { name: 'Bleu de Chanel', brand: 'Chanel', family: 'Unknown Family' },
+      { name: 'Aventus', brand: 'Creed', family: '  N/A  ' },
+    ],
+  });
+
+  assert.equal(mapped?.left.family, undefined);
+  assert.equal(mapped?.left.descriptor, 'Classic fragrance');
+  assert.equal(mapped?.right.descriptor, 'Classic fragrance');
 });
 
 test('maps a valid server reason onto the battle and ignores invalid keys', () => {

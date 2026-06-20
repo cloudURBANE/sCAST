@@ -1,9 +1,11 @@
 import React, { useEffect, useRef, useState } from "react";
+import { ArenaBeamGame } from "@/components/arena/ArenaBeamGame";
 import { ArenaBattleSide } from "@/components/arena/ArenaBattleSide";
 import { ArenaCompareDialog } from "@/components/arena/ArenaCompareDialog";
 import { ArenaResultReveal } from "@/components/arena/ArenaResultReveal";
-import type { ArenaBattle } from "@/components/arena/arenaBattleMapper";
+import type { ArenaBattle, ArenaBattleSide as ArenaBattleSideData } from "@/components/arena/arenaBattleMapper";
 import type { ArenaReasonKey } from "@/components/arena/arenaTwists";
+import { useArenaContenderFamilies } from "@/components/arena/useArenaContenderFamilies";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,7 +20,7 @@ import {
   readArenaReason,
   writeArenaReason,
 } from "@/components/arena/arenaReasonStore";
-import { useCommunityBattleVote } from "@/components/community/communityPosts";
+import { useCommunityBattleVote, useSubmitBeamPower } from "@/components/community/communityPosts";
 
 interface ArenaBattleStageProps {
   battle: ArenaBattle;
@@ -42,7 +44,9 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
   externalVotePending = false,
   externalErrorMessage = null,
 }) => {
+  const displayBattle = useArenaContenderFamilies(battle);
   const voteMutation = useCommunityBattleVote(authToken);
+  const beamMutation = useSubmitBeamPower(authToken);
   const [localVote, setLocalVote] = useState<string | null>(battle.viewerVote);
   // Server-synced reason wins; localStorage is the offline / guest fallback so a
   // revisited battle restores the resolved "why it won" state without re-prompting.
@@ -65,6 +69,7 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
   // Pre-vote head-to-head compare overlay. Opens from tapping a contender card
   // before a pick is made; closing it leaves the vote flow untouched.
   const [compareOpen, setCompareOpen] = useState(false);
+  const [beamTarget, setBeamTarget] = useState<ArenaBattleSideData | null>(null);
   const revealRef = useRef<HTMLDivElement>(null);
 
   // Battle identity changed → adopt that battle's resolved state from scratch.
@@ -77,6 +82,7 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
     setJustVotedChoice(null);
     setPendingSwitchChoice(null);
     setCompareOpen(false);
+    setBeamTarget(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [battle.id]);
 
@@ -112,6 +118,16 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
   const handleReasonDeclinedChange = (declined: boolean) => {
     setReasonDeclinedState(declined);
     writeArenaReason(battle.id, { reason, declined });
+  };
+
+  const claimBeamPower = async (score: number, runId: string) => {
+    if (!beamTarget) return;
+    await beamMutation.mutateAsync({
+      postId: battle.id,
+      choice: beamTarget.key,
+      score,
+      runId,
+    });
   };
 
   const revealed = Boolean(localVote);
@@ -201,7 +217,7 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
 
       <div className="relative mx-auto mt-5 grid w-full max-w-4xl grid-cols-[minmax(0,1fr)_1.5rem_minmax(0,1fr)] items-stretch gap-1.5 sm:mt-8 sm:grid-cols-[minmax(0,1fr)_2.75rem_minmax(0,1fr)] sm:gap-4 md:gap-5">
         <ArenaBattleSide
-          side={battle.left}
+          side={displayBattle.left}
           align="left"
           selected={selectedKey === battle.left.key}
           revealed={revealed}
@@ -209,6 +225,9 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
           isSaving={votePending && selectedKey === battle.left.key}
           onVote={() => requestVote(battle.left.key)}
           onCompare={() => setCompareOpen(true)}
+          onAddBeamPower={() => setBeamTarget(displayBattle.left)}
+          onSignIn={onSignIn}
+          signedIn={Boolean(authToken)}
         />
 
         <div className="grid place-items-center">
@@ -221,7 +240,7 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
         </div>
 
         <ArenaBattleSide
-          side={battle.right}
+          side={displayBattle.right}
           align="right"
           selected={selectedKey === battle.right.key}
           revealed={revealed}
@@ -229,17 +248,33 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
           isSaving={votePending && selectedKey === battle.right.key}
           onVote={() => requestVote(battle.right.key)}
           onCompare={() => setCompareOpen(true)}
+          onAddBeamPower={() => setBeamTarget(displayBattle.right)}
+          onSignIn={onSignIn}
+          signedIn={Boolean(authToken)}
         />
       </div>
 
       <ArenaCompareDialog
-        battle={battle}
+        battle={displayBattle}
         open={compareOpen}
         onOpenChange={setCompareOpen}
         onVote={(choice) => {
           setCompareOpen(false);
           requestVote(choice);
         }}
+      />
+
+      <ArenaBeamGame
+        open={Boolean(beamTarget)}
+        side={beamTarget}
+        signedIn={Boolean(authToken)}
+        submitting={beamMutation.isPending}
+        errorMessage={beamMutation.error instanceof Error ? beamMutation.error.message : null}
+        onOpenChange={(open) => {
+          if (!open) setBeamTarget(null);
+        }}
+        onClaim={claimBeamPower}
+        onSignIn={onSignIn}
       />
 
       <AlertDialog
@@ -292,7 +327,7 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
       <div ref={revealRef}>
         {revealed && localVote ? (
           <ArenaResultReveal
-            battle={battle}
+            battle={displayBattle}
             viewerChoice={localVote}
             reason={reason}
             reasonDeclined={reasonDeclined}

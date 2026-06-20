@@ -20,3 +20,4 @@ export * from "./beamAnswerLog";
 export * from "./beamAnswerFeedback";
 export * from "./arenaCrowdPredictions";
 export * from "./arenaCrowdStats";
+export * from "./arenaBeamGrants";

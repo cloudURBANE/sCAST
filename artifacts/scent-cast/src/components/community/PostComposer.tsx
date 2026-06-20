@@ -28,6 +28,7 @@ import {
 } from '@/components/community/communityPosts';
 import { useWardrobeItems } from '@/context/WardrobeContext';
 import { BottleImage } from '@/components/BottleImage';
+import { sanitizeFamilyLabel } from '@/lib/wardrobeSearchSuggest';
 
 interface ComposerRoom {
   type: CommunityPostType;
@@ -182,7 +183,7 @@ function snapshotFromWardrobeItem(item: Record<string, unknown>, index: number):
   if (!name || !brand) return null;
 
   const imageUrl = firstString(item.imageUrl, item.image_url);
-  const family = firstString(item.family);
+  const family = sanitizeFamilyLabel(firstString(item.family));
   return {
     id: firstString(item._dbId, item.id) ?? `wardrobe:${index}:${brand}:${name}`,
     fragranceId: stableFragranceId(brand, name),
@@ -245,7 +246,7 @@ async function snapshotFromSearchResult(result: FragranceSearchResult): Promise<
 
   const directImageUrl = searchResultImageUrl(result);
   if (isAllowedCatalogImageUrl(directImageUrl)) {
-    const family = firstString((result as Record<string, unknown>).family);
+    const family = sanitizeFamilyLabel(firstString((result as Record<string, unknown>).family));
     return {
       fragranceId: stableFragranceId(brand, name),
       name,
@@ -262,7 +263,7 @@ async function snapshotFromSearchResult(result: FragranceSearchResult): Promise<
 
   const detail = await getFragranceDetails(payload);
   const imageUrl = detailImageUrl(detail);
-  const family = firstString(detail.family, (detail as Record<string, unknown>).family);
+  const family = sanitizeFamilyLabel(firstString(detail.family, (detail as Record<string, unknown>).family));
   return {
     fragranceId: stableFragranceId(brand, name),
     name: firstString(detail.name, name) ?? name,
@@ -703,7 +704,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
         name: candidate.name,
         brand: candidate.brand,
         ...(candidate.imageUrl ? { imageUrl: candidate.imageUrl } : {}),
-        ...(candidate.family ? { family: candidate.family } : {}),
+        ...(sanitizeFamilyLabel(candidate.family) ? { family: sanitizeFamilyLabel(candidate.family) ?? undefined } : {}),
       };
       let snapshot = fallbackSnapshot;
       if (candidate.result) {

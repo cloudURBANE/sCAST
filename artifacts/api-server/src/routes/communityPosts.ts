@@ -1,6 +1,7 @@
 import { Router, type Response } from "express";
 import { db } from "@workspace/db";
 import {
+  arenaBeamGrantsTable,
   arenaCrowdPredictionsTable,
   arenaCrowdStatsTable,
   communityCommentsTable,
@@ -28,6 +29,7 @@ import {
   nextStreak,
   resolveCrowdLeader,
 } from "../services/crowdReadCore";
+import { cleanArenaBeamRunId, scoreArenaBeamRun } from "../services/arenaBeamPowerCore";
 import { logger } from "../lib/logger";
 
 const router = Router();
@@ -136,6 +138,13 @@ function cleanRequiredText(value: unknown, maxLength: number): string | null {
   const trimmed = value.trim();
   if (!trimmed || trimmed.length > maxLength) return null;
   return trimmed;
+}
+
+function stableFragranceId(brand: string | undefined, name: string | undefined): string | null {
+  if (!name?.trim()) return null;
+  const part = (value: string) =>
+    value.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+  return `catalog:${part(brand?.trim() || "unknown")}:${part(name.trim())}`;
 }
 
 function isPostType(value: unknown): value is CommunityPostType {
@@ -506,46 +515,27 @@ async function buildPostDtos(tenantId: string, posts: PostRow[], viewerId?: stri
     const snapshot = row.fragrance as FragranceSnapshot;
     return snapshot.fragranceId ? [snapshot.fragranceId] : [];
   }))];
-  let crowdRows: Array<{ fragranceId: string; supporters: number; totalBeamPower: number }> = [];
+  let beamRows: Array<{ fragranceId: string; supporters: number; totalBeamPower: number }> = [];
   try {
-    crowdRows = fragranceIds.length > 0
+    beamRows = fragranceIds.length > 0
       ? await db
         .select({
-          fragranceId: sql<string>`${communityPostFragrancesTable.fragrance}->>'fragranceId'`,
-          supporters: sql<number>`count(distinct ${arenaCrowdPredictionsTable.userId})::int`,
-          totalBeamPower: sql<number>`count(*)::int`,
+          fragranceId: arenaBeamGrantsTable.fragranceId,
+          supporters: sql<number>`count(distinct ${arenaBeamGrantsTable.userId})::int`,
+          totalBeamPower: sql<number>`coalesce(sum(${arenaBeamGrantsTable.beamPower}), 0)::int`,
         })
-        .from(arenaCrowdPredictionsTable)
-        .innerJoin(
-          communityPostsTable,
-          and(
-            eq(communityPostsTable.tenantId, arenaCrowdPredictionsTable.tenantId),
-            eq(communityPostsTable.id, arenaCrowdPredictionsTable.postId),
-          ),
-        )
-        .innerJoin(
-          communityPostFragrancesTable,
-          and(
-            eq(communityPostFragrancesTable.tenantId, arenaCrowdPredictionsTable.tenantId),
-            eq(communityPostFragrancesTable.postId, arenaCrowdPredictionsTable.postId),
-            sql`${communityPostFragrancesTable.position} = case
-              when ${arenaCrowdPredictionsTable.ownPick} = ${communityPostsTable.metadata}->'options'->>0 then 0
-              when ${arenaCrowdPredictionsTable.ownPick} = ${communityPostsTable.metadata}->'options'->>1 then 1
-              else -1
-            end`,
-          ),
-        )
+        .from(arenaBeamGrantsTable)
         .where(and(
-          eq(arenaCrowdPredictionsTable.tenantId, tenantId),
-          inArray(sql<string>`${communityPostFragrancesTable.fragrance}->>'fragranceId'`, fragranceIds),
+          eq(arenaBeamGrantsTable.tenantId, tenantId),
+          inArray(arenaBeamGrantsTable.fragranceId, fragranceIds),
         ))
-        .groupBy(sql`${communityPostFragrancesTable.fragrance}->>'fragranceId'`)
+        .groupBy(arenaBeamGrantsTable.fragranceId)
       : [];
   } catch (error) {
     if (!isMissingCrowdTableError(error)) throw error;
-    logger.warn("arena_crowd_predictions is unavailable; community Beam totals default to zero");
+    logger.warn("arena_beam_grants is unavailable; community Beam totals default to zero");
   }
-  const crowdByFragrance = new Map(crowdRows.map((row) => [row.fragranceId, {
+  const beamByFragrance = new Map(beamRows.map((row) => [row.fragranceId, {
     beamSupporters: Number(row.supporters) || 0,
     totalBeamPower: Number(row.totalBeamPower) || 0,
   }]));
@@ -554,8 +544,8 @@ async function buildPostDtos(tenantId: string, posts: PostRow[], viewerId?: stri
   for (const row of fragranceRows) {
     const fragrances = fragrancesByPost.get(row.postId) ?? [];
     const snapshot = row.fragrance as FragranceSnapshot;
-    const crowd = snapshot.fragranceId ? crowdByFragrance.get(snapshot.fragranceId) : undefined;
-    fragrances.push({ ...snapshot, beamSupporters: crowd?.beamSupporters ?? 0, totalBeamPower: crowd?.totalBeamPower ?? 0 });
+    const beam = snapshot.fragranceId ? beamByFragrance.get(snapshot.fragranceId) : undefined;
+    fragrances.push({ ...snapshot, beamSupporters: beam?.beamSupporters ?? 0, totalBeamPower: beam?.totalBeamPower ?? 0 });
     fragrancesByPost.set(row.postId, fragrances);
   }
 
@@ -708,6 +698,24 @@ async function reactionCountsForTarget(
     .groupBy(communityReactionsTable.targetId, communityReactionsTable.reaction);
 
   return reactionCountsFromRows(rows).get(targetId) ?? {};
+}
+
+async function beamTotalsForFragrance(tenantId: string, fragranceId: string) {
+  const [row] = await db
+    .select({
+      supporters: sql<number>`count(distinct ${arenaBeamGrantsTable.userId})::int`,
+      totalBeamPower: sql<number>`coalesce(sum(${arenaBeamGrantsTable.beamPower}), 0)::int`,
+    })
+    .from(arenaBeamGrantsTable)
+    .where(and(
+      eq(arenaBeamGrantsTable.tenantId, tenantId),
+      eq(arenaBeamGrantsTable.fragranceId, fragranceId),
+    ));
+
+  return {
+    supporters: Number(row?.supporters) || 0,
+    totalBeamPower: Number(row?.totalBeamPower) || 0,
+  };
 }
 
 router.get("/community/posts", optionalAuth, async (req: AuthRequest, res, next) => {
@@ -1345,6 +1353,121 @@ router.post("/community/posts/:id/votes", requireAuth, async (req: AuthRequest, 
 
     const votes = await voteTallyForPost(tenantId, postId);
     res.json({ postId, choice, reason: reasonProvided ? reason : null, votes });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/community/posts/:id/beam", requireAuth, async (req: AuthRequest, res, next) => {
+  try {
+    const tenantId = getTenantId(req);
+    const user = req.user!;
+    const postId = routeParam(req.params.id);
+    if (!postId || !UUID_RE.test(postId)) {
+      sendBadRequest(res, "post id must be a UUID");
+      return;
+    }
+
+    const body = isPlainObject(req.body) ? req.body : {};
+    const choice = cleanRequiredText(body.choice, MAX_BATTLE_OPTION_LENGTH);
+    if (!choice) {
+      sendBadRequest(res, "choice is required");
+      return;
+    }
+
+    const scored = scoreArenaBeamRun(body.score);
+    if (!scored.ok) {
+      sendBadRequest(res, scored.error);
+      return;
+    }
+
+    const runId = cleanArenaBeamRunId(body.runId);
+    if (!runId) {
+      sendBadRequest(res, "runId is required");
+      return;
+    }
+
+    const rows = await db
+      .select({
+        id: communityPostsTable.id,
+        postType: communityPostsTable.postType,
+        metadata: communityPostsTable.metadata,
+      })
+      .from(communityPostsTable)
+      .where(and(eq(communityPostsTable.tenantId, tenantId), eq(communityPostsTable.id, postId)))
+      .limit(1);
+    const post = rows[0];
+    if (!post) {
+      res.status(404).json({ error: "Post not found" });
+      return;
+    }
+    if (post.postType !== "battle") {
+      sendBadRequest(res, "Beam Power is only available for battle posts");
+      return;
+    }
+
+    const metadata = isPlainObject(post.metadata) ? post.metadata : {};
+    const rawOptions = Array.isArray(metadata.options) ? metadata.options : [];
+    const options = rawOptions.map((option: unknown) =>
+      typeof option === "string" ? option.trim() : "",
+    );
+    if (options.length !== 2 || options.some((option) => !option)) {
+      sendBadRequest(res, "battle metadata requires exactly two valid options");
+      return;
+    }
+    if (!options.includes(choice)) {
+      sendBadRequest(res, "choice must match one of the battle options");
+      return;
+    }
+
+    const position = options.indexOf(choice);
+    const fragranceRows = await db
+      .select({ fragrance: communityPostFragrancesTable.fragrance })
+      .from(communityPostFragrancesTable)
+      .where(and(
+        eq(communityPostFragrancesTable.tenantId, tenantId),
+        eq(communityPostFragrancesTable.postId, postId),
+        eq(communityPostFragrancesTable.position, position),
+      ))
+      .limit(1);
+    const snapshot = (fragranceRows[0]?.fragrance ?? null) as Partial<FragranceSnapshot> | null;
+    const fragranceId =
+      typeof snapshot?.fragranceId === "string" && snapshot.fragranceId.trim()
+        ? snapshot.fragranceId.trim()
+        : stableFragranceId(snapshot?.brand, snapshot?.name);
+    if (!fragranceId) {
+      sendBadRequest(res, "battle contender is missing a fragrance id");
+      return;
+    }
+
+    await db
+      .insert(arenaBeamGrantsTable)
+      .values({
+        tenantId,
+        postId,
+        userId: user.id,
+        fragranceId,
+        runId,
+        beamPower: scored.beamPower,
+        gameScore: scored.score,
+      })
+      .onConflictDoNothing({
+        target: [
+          arenaBeamGrantsTable.userId,
+          arenaBeamGrantsTable.postId,
+          arenaBeamGrantsTable.runId,
+        ],
+      });
+
+    const totals = await beamTotalsForFragrance(tenantId, fragranceId);
+    res.status(201).json({
+      postId,
+      choice,
+      fragranceId,
+      score: scored.score,
+      beamPower: scored.beamPower,
+      ...totals,
+    });
   } catch (err) {
     next(err);
   }
