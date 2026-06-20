@@ -5,7 +5,7 @@ import type { BeamProposalItem } from '@/lib/beamAgentClient';
 import { vaultIdentityKey } from './lib/vaultIdentity';
 import { stableProposalItemId, type CurateCollectionResult } from './lib/collectionCuration';
 import { getPendingCuration, curationItemToFragrance, pickResumeCurationTarget } from './lib/curationClient';
-import { Sparkles, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { ThreadBackground, type ThreadBackgroundMode } from './components/threads/ThreadBackground';
 import { AppTopNav } from './components/AppTopNav';
@@ -1050,7 +1050,7 @@ function DashboardView() {
             min-height + padding relax to the original stacked rhythm. The Vault of
             Aromas is no longer part of this screen — it lives one scroll down as
             the "second page". */}
-        <div className="flex min-h-[calc(100svh-var(--topbar-h))] flex-col gap-4 pt-0 pb-[calc(var(--bottomnav-h)+1.25rem)] sm:min-h-0 sm:gap-16 sm:pt-0 sm:pb-0">
+        <div className="flex min-h-[calc(100svh-var(--topbar-h))] flex-col gap-4 pt-0 pb-[calc(var(--bottomnav-h)+1.25rem)] sm:min-h-0 sm:gap-12 sm:pt-0 sm:pb-0">
           {/* The hero ticker sits flush against the fixed top bar (no padding
               above it) so it visually replaces the bar's old bottom hairline. */}
           <HomepageHeroMarquee />
@@ -1220,12 +1220,15 @@ function DashboardView() {
                       animate={{ opacity: 1, y: 0 }}
                       exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -4 }}
                       transition={vaultContentTransition}
-                      className="scent-signature-cta group flex h-[46px] w-full max-w-[52rem] items-center justify-center gap-2 rounded-full px-6 text-[11.5px] font-bold uppercase tracking-[0.11em] text-scent-accent focus-visible:outline-none sm:h-[60px] sm:gap-2.5 sm:text-[13px] sm:tracking-[0.14em]"
+                      className="scent-signature-cta group flex h-[46px] w-full max-w-[52rem] items-center justify-center rounded-full px-6 text-[11.5px] font-bold uppercase tracking-[0.11em] text-scent-accent focus-visible:outline-none sm:h-[60px] sm:text-[13px] sm:tracking-[0.14em]"
                       aria-label="Discover with Beam Agent"
                       title="Discover with Beam Agent"
                     >
-                      <Sparkles size={16} strokeWidth={1.9} aria-hidden />
-                      <span>Discover With Beam Agent</span>
+                      {/* No leading icon — the label is the sole content so it
+                          centers in the pill. The text-indent equals the
+                          letter-spacing so the trailing tracking gap doesn't pull
+                          the glyphs optically left of center. */}
+                      <span className="[text-indent:0.11em] sm:[text-indent:0.14em]">Discover With Beam Agent</span>
                     </motion.button>
                   )}
                 </AnimatePresence>
@@ -1242,7 +1245,11 @@ function DashboardView() {
               slammed against the tab bar with a dead gap overhead. Normal flow on
               md+. Hidden in agent mode, which takes over the hero. */}
           {!agentActive ? (
-            <div className="my-auto sm:my-0">
+            // Bias the leftover column space BELOW the forecast (mb-auto) with
+            // only a small deliberate gap above it (mt-6), so the forecast reads
+            // as connected to the stat row above instead of floating in a large
+            // centered void. Normal flow on md+ (no bottom nav).
+            <div className="mt-6 mb-auto sm:mt-0 sm:mb-0">
               <WeeklyOutlookDashboard
                 items={items}
                 weather={weather}
