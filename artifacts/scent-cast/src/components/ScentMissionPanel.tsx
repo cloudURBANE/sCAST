@@ -849,6 +849,23 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   // behavior) rather than holding the prompt copy under the caret.
   const [composerFocused, setComposerFocused] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+
+  // Stable, panel-owned portal target for the impressions / Confirm lane. We
+  // portal into THIS node (which the panel owns for its whole lifetime) and only
+  // attach it as a child of `cueBarContainer` while that host is mounted. The
+  // host (`missionCueHost` in App.tsx) lives in a SEPARATE AnimatePresence from
+  // this panel, so on close the two unmount independently; if the host node were
+  // the direct portal target and detached first, React's portal teardown would
+  // call removeChild on an already-removed node and throw — surfacing the
+  // ErrorBoundary ("System Disruption" / reload). Portaling into an owned node
+  // keeps the portal content a coherent subtree regardless of host teardown
+  // order, so close always returns cleanly to the search view.
+  const [cuePortalHost] = useState(() => {
+    if (typeof document === 'undefined') return null;
+    const node = document.createElement('div');
+    node.dataset.beamCuePortal = 'true';
+    return node;
+  });
   // Pause the cue marquee while the user is pressing it, so a moving chip is
   // still easy to tap. Hover-pause (desktop) is handled in CSS.
   const [marqueePaused, setMarqueePaused] = useState(false);
@@ -966,6 +983,18 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   }, []);
 
   useEffect(() => () => abortRef.current?.abort(), []);
+
+  // Mount the owned portal host inside the App-provided cue container while it is
+  // present, and detach it defensively on cleanup / host change. Because the panel
+  // owns `cuePortalHost`, React's portal content always unmounts from a node we
+  // control — never from a foreign node another tree may have already removed.
+  useLayoutEffect(() => {
+    if (!cueBarContainer || !cuePortalHost) return;
+    cueBarContainer.appendChild(cuePortalHost);
+    return () => {
+      if (cuePortalHost.parentNode) cuePortalHost.parentNode.removeChild(cuePortalHost);
+    };
+  }, [cueBarContainer, cuePortalHost]);
 
   // Time each run (so a completed turn can freeze "Thought for Ns" onto its
   // reply) and reset the live trail to its collapsed summary whenever a fresh
@@ -2795,8 +2824,8 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
           hold the space — rendering the inline fallback here first would yank the
           lane down into the portal on the next frame. Only a consumer that omits
           the prop entirely (`undefined`) gets the inline fallback. */}
-      {cueBarContainer
-        ? createPortal(<AnimatePresence initial={false}>{cueBar}</AnimatePresence>, cueBarContainer)
+      {cueBarContainer && cuePortalHost
+        ? createPortal(<AnimatePresence initial={false}>{cueBar}</AnimatePresence>, cuePortalHost)
         : cueBarContainer === null
           ? null
           : cueBar
