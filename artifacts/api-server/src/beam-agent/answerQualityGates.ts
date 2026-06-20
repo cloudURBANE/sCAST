@@ -374,6 +374,10 @@ const SLOT_CLARIFICATION: Record<BeamSlotKey, { ask: string; cues: string[] }> =
   },
   // No "$NN" figures in the cues — a literal price trips the price-evidence gate.
   budget: { ask: "Any budget in mind?", cues: ["Budget-friendly", "Mid-range", "Premium", "No limit"] },
+  // `avoid` is a captured constraint, never a slot the agent re-asks to fill, so
+  // this entry only satisfies the exhaustive Record type; in practice
+  // inferPendingSlotFromAssistant never returns "avoid".
+  avoid: { ask: "Anything you'd rather avoid?", cues: ["No oud", "Nothing sweet", "No heavy musk", "No strong projection"] },
 };
 
 const GENERIC_CLARIFICATION =

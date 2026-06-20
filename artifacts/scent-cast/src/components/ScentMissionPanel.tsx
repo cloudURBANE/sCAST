@@ -15,6 +15,7 @@ import {
   Send,
   SlidersHorizontal,
   Sparkles,
+  ThumbsDown,
   Wand2,
   Zap,
 } from 'lucide-react';
@@ -41,8 +42,10 @@ import {
   proposalItemToFragrance,
 } from '@/lib/scentMissionClient';
 import {
+  BEAM_FEEDBACK_REASONS,
   humanizeBeamTool,
   runBeamAgentMission,
+  submitBeamFeedback,
   type BeamAgentMission,
   type BeamAgentSlots,
   type BeamCard as BeamCardData,
@@ -81,6 +84,10 @@ type PanelMessage = {
   // scripted replies that ran no tools.
   activity?: BeamActivityStep[];
   elapsedMs?: number | null;
+  // The durable per-turn answer id (from the completed event). Present only on
+  // delivered Beam answers; gates the "report this answer" feedback affordance so
+  // it can attach to a real server-side record.
+  answerLogId?: string;
 };
 
 type AgentMode = 'fast' | 'research' | 'premium';
@@ -218,6 +225,79 @@ const BeamTypingDots: React.FC = () => (
     ))}
   </>
 );
+
+/* --------------------------------------------------------------------------
+ * Answer feedback affordance ("report this answer")
+ *
+ * A deliberately quiet thumbs-down sits under a delivered Beam answer. Tapping it
+ * reveals a compact set of reason chips; choosing one posts the verdict (tied to
+ * the answer's durable id) and the control settles into a subtle "noted" state.
+ * Visually subordinate to the answer — muted text, no heavy borders, chips wrap
+ * gracefully and stay tappable on mobile — so it reads as curated, not bolted on.
+ * ------------------------------------------------------------------------ */
+
+type AnswerFeedbackStatus = 'idle' | 'open' | 'submitting' | 'submitted' | 'error';
+
+const AnswerFeedbackControl: React.FC<{
+  status: AnswerFeedbackStatus;
+  onOpen: () => void;
+  onPick: (reasonCode: string) => void;
+  calmMotion: boolean;
+}> = ({ status, onOpen, onPick, calmMotion }) => {
+  if (status === 'submitted') {
+    return (
+      <p className="mt-1 inline-flex items-center gap-1.5 pl-1 text-[11px] text-scent-text-muted/70">
+        <Check size={12} className="text-scent-accent/70" aria-hidden />
+        Thanks — noted. We use this to sharpen future picks.
+      </p>
+    );
+  }
+
+  if (status === 'idle') {
+    return (
+      <button
+        type="button"
+        onClick={onOpen}
+        className="mt-1 inline-flex items-center gap-1.5 self-start pl-1 text-[11px] text-scent-text-muted/55 transition-colors hover:text-scent-text-muted focus:outline-none focus-visible:ring-1 focus-visible:ring-scent-accent/40 rounded-full"
+        aria-label="This answer missed — tell us why"
+      >
+        <ThumbsDown size={12} strokeWidth={1.75} aria-hidden />
+        Not quite right?
+      </button>
+    );
+  }
+
+  // open / submitting / error: the reason chips.
+  const submitting = status === 'submitting';
+  return (
+    <motion.div
+      initial={calmMotion ? false : { opacity: 0, y: -2 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2, ease: SCENT_EASE }}
+      className="mt-1.5 flex flex-col gap-1.5 pl-1"
+      role="group"
+      aria-label="What was off about this answer?"
+    >
+      <span className="text-[11px] text-scent-text-muted/70">What was off?</span>
+      <div className="flex flex-wrap gap-1.5">
+        {BEAM_FEEDBACK_REASONS.map((reason) => (
+          <button
+            key={reason.code}
+            type="button"
+            disabled={submitting}
+            onClick={() => onPick(reason.code)}
+            className="min-h-8 rounded-full border border-scent-accent/18 px-3 py-1 scent-type-chip text-[11px] text-scent-text-muted transition-colors hover:border-scent-accent/40 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40 disabled:opacity-45"
+          >
+            {reason.label}
+          </button>
+        ))}
+      </div>
+      {status === 'error' ? (
+        <span className="text-[11px] text-red-300/80">Couldn’t send that — tap a reason to try again.</span>
+      ) : null}
+    </motion.div>
+  );
+};
 
 /* --------------------------------------------------------------------------
  * Beam Agent live activity trail
@@ -909,6 +989,30 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
     (id: string) => setExpandedRecaps((prev) => ({ ...prev, [id]: !prev[id] })),
     [],
   );
+  // Per-answer feedback affordance. Keyed by message id: 'idle' shows just the
+  // quiet thumbs-down; 'open' reveals the reason chips; then submitting →
+  // submitted (a subtle confirmation) or error (a one-line retry hint). State
+  // lives here, not on the message, so it never affects answer/scroll bookkeeping.
+  type FeedbackUiState = 'idle' | 'open' | 'submitting' | 'submitted' | 'error';
+  const [feedbackState, setFeedbackState] = useState<Record<string, FeedbackUiState>>({});
+  const setFeedbackFor = useCallback(
+    (id: string, status: FeedbackUiState) => setFeedbackState((prev) => ({ ...prev, [id]: status })),
+    [],
+  );
+  const submitAnswerFeedback = useCallback(
+    async (answerLogId: string, messageId: string, reasonCode: string) => {
+      if (!authToken) return;
+      setFeedbackFor(messageId, 'submitting');
+      try {
+        await submitBeamFeedback({ answerLogId, reasonCode, authToken, apiBaseUrl: API_BASE_URL });
+        setFeedbackFor(messageId, 'submitted');
+      } catch {
+        // Keep the chips up so the user can retry; a failed verdict is low-stakes.
+        setFeedbackFor(messageId, 'error');
+      }
+    },
+    [authToken, setFeedbackFor],
+  );
   // Tap-to-answer chips the agent offered with its last reply (e.g. trip-vibe
   // follow-ups). When set, these replace the static facet cues.
   const [agentSuggestions, setAgentSuggestions] = useState<BeamSuggestion[]>([]);
@@ -1207,7 +1311,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
     (
       role: PanelMessage['role'],
       text: string,
-      meta?: { activity?: BeamActivityStep[]; elapsedMs?: number | null },
+      meta?: { activity?: BeamActivityStep[]; elapsedMs?: number | null; answerLogId?: string },
     ) => {
       setMessages((prev) => [
         ...prev,
@@ -1218,6 +1322,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
           ...(meta?.activity && meta.activity.length > 0
             ? { activity: meta.activity, elapsedMs: meta.elapsedMs ?? null }
             : {}),
+          ...(meta?.answerLogId ? { answerLogId: meta.answerLogId } : {}),
         },
       ]);
     },
@@ -1231,7 +1336,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   const pushAgentText = useCallback(
     (
       raw: string,
-      meta?: { activity?: BeamActivityStep[]; elapsedMs?: number | null },
+      meta?: { activity?: BeamActivityStep[]; elapsedMs?: number | null; answerLogId?: string },
     ): { catalogUnavailable: boolean } => {
       const { text, catalogUnavailable } = formatAgentResponse(raw);
       if (catalogUnavailable) setCatalogFailure(true);
@@ -1416,9 +1521,14 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
           // no card/proposal) drops it, so the action trail no longer repeats on
           // every back-and-forth and reads as developer noise.
           const isClarifyingTurn = runEmittedCuesRef.current && !runDeliveredResultRef.current;
+          // Feedback attaches to substantive answers only — a pure clarifying
+          // question ("what's the occasion?") isn't something to report. The
+          // server still logs that turn for diagnosis; it just gets no UI verdict.
           pushAgentText(
             result.response,
-            isClarifyingTurn ? undefined : { activity: frozenSteps, elapsedMs },
+            isClarifyingTurn
+              ? undefined
+              : { activity: frozenSteps, elapsedMs, ...(result.answerLogId ? { answerLogId: result.answerLogId } : {}) },
           );
           return { handled: true };
         }
@@ -2556,7 +2666,28 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
               )}
             </motion.div>
           );
-          if (!hasRecap) return bubble;
+          // Feedback affordance: only on a delivered agent answer that carries a
+          // durable id, and never on the newest turn while it's still settling
+          // (busy) — the verdict is about a finished answer. Held off the intro
+          // greeting too. Visually subordinate, rendered directly under the bubble.
+          const feedbackNode =
+            message.role === 'agent' && message.answerLogId && !isIntroGreeting && !(isLatestAgent && busy) ? (
+              <AnswerFeedbackControl
+                status={feedbackState[message.id] ?? 'idle'}
+                calmMotion={calmMotion}
+                onOpen={() => setFeedbackFor(message.id, 'open')}
+                onPick={(reasonCode) => submitAnswerFeedback(message.answerLogId as string, message.id, reasonCode)}
+              />
+            ) : null;
+          if (!hasRecap) {
+            if (!feedbackNode) return bubble;
+            return (
+              <div key={`${message.id}-turn`} className="flex w-full flex-col gap-1">
+                {bubble}
+                {feedbackNode}
+              </div>
+            );
+          }
           // Per-turn recap sits ABOVE its answer, both left-aligned in a column.
           // The wrapper carries the scroll anchor so a fresh reply lands on the
           // "Thought for Ns" line, then the answer — not buried beneath it. The
@@ -2579,6 +2710,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                 />
               ) : null}
               {bubble}
+              {feedbackNode}
             </div>
           );
         })}

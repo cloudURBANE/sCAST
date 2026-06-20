@@ -119,6 +119,7 @@ const SLOT_KEYS: BeamSlotKey[] = [
   "projection",
   "impression",
   "budget",
+  "avoid",
 ];
 
 /**
@@ -354,6 +355,45 @@ function parseDirection(text: string): string | undefined {
   return undefined;
 }
 
+/**
+ * Hard-dislike markers immediately before a note/family ("no oud", "I hate
+ * anything sweet", "without leather", "avoid gourmand", "can't stand patchouli",
+ * "allergic to musk"). Deliberately EXCLUDES soft refinements ("less sweet",
+ * "tone down the spice", "not too woody") — those tune the positive direction and
+ * are handled by parseDirection, whereas these are constraints to exclude from
+ * retrieval entirely. The marker must sit within a few words before the family.
+ */
+function isHardDislikeBefore(text: string, index: number): boolean {
+  const prefix = text.slice(Math.max(0, index - 28), index);
+  return /\b(?:no|never|without|avoid|avoiding|hate|hates|hating|dislike|disliking|skip|skipping|nothing|none|anti|can'?t\s+stand|cannot\s+stand|don'?t\s+(?:like|want)|do\s+not\s+(?:like|want)|allergic\s+to|stay\s+away\s+from|keep\s+away\s+from)\b[\s\w]{0,16}$/i.test(
+    prefix,
+  );
+}
+
+/** First case-insensitive match of `pattern` that IS preceded by a hard-dislike marker. */
+function matchesHardDislike(text: string, pattern: RegExp): boolean {
+  const re = new RegExp(pattern.source, pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`);
+  for (let m = re.exec(text); m; m = re.exec(text)) {
+    if (m.index !== undefined && isHardDislikeBefore(text, m.index)) return true;
+    if (re.lastIndex === m.index) re.lastIndex += 1; // zero-width guard
+  }
+  return false;
+}
+
+/**
+ * Capture scent families/notes the user explicitly asked to AVOID. Unlike the
+ * negation guard in parseDirection (which merely keeps a negated family OUT of the
+ * positive direction), this records them so they reach the prompt as a hard
+ * exclusion and drop matching catalog candidates at retrieval (audit A3).
+ */
+function parseAvoid(text: string): string | undefined {
+  const found: string[] = [];
+  for (const [pattern, label] of FAMILY_PATTERNS) {
+    if (matchesHardDislike(text, pattern) && !found.includes(label)) found.push(label);
+  }
+  return found.length > 0 ? found.slice(0, 5).join(", ") : undefined;
+}
+
 function parseProjection(text: string): string | undefined {
   if (/\b(?:skin[ -]?close|close to (?:the )?skin|intimate|subtle projection|very quiet)\b/i.test(text)) return "skin-close";
   if (/\b(?:moderate (?:trail|projection)|office[- ]safe projection|not too loud|restrained|controlled projection)\b/i.test(text)) return "moderate";
@@ -465,8 +505,33 @@ function parseBareCount(text: string): number | undefined {
 }
 
 function parseBudget(text: string): string | undefined {
-  const match = /\b(?:under|below|max|budget(?:\s+is)?|less than)\s+\$?\s?(\d{2,4})\b/i.exec(text);
-  return match?.[1] ? `$${match[1]}` : undefined;
+  // An explicit range ("$50-100", "between 80 and 150") — keep both bounds so the
+  // ceiling is unambiguous.
+  const range =
+    /\$?\s?(\d{2,4})\s?(?:-|–|to|and)\s?\$?\s?(\d{2,4})\b/i.exec(text) ??
+    /\bbetween\s+\$?\s?(\d{2,4})\s+and\s+\$?\s?(\d{2,4})\b/i.exec(text);
+  if (range?.[1] && range?.[2]) {
+    const lo = Number(range[1]);
+    const hi = Number(range[2]);
+    if (Number.isFinite(lo) && Number.isFinite(hi)) {
+      return `$${Math.min(lo, hi)}-${Math.max(lo, hi)}`;
+    }
+  }
+  // A single ceiling ("under $80", "max 150", "no more than 100", "around 90").
+  const match =
+    /\b(?:under|below|max(?:imum)?|budget(?:\s+is)?|less than|no more than|up to|around|about|approx(?:imately)?)\s+\$?\s?(\d{2,4})\b/i.exec(
+      text,
+    );
+  if (match?.[1]) return `$${match[1]}`;
+  // Qualitative budget words, with negation guarded so "not cheap" / "no budget"
+  // don't register as a cheap constraint.
+  if (matchesUnnegated(text, /\b(?:cheap|affordable|inexpensive|budget[- ]friendly|on a budget)\b/i)) {
+    return "Budget-friendly";
+  }
+  if (matchesUnnegated(text, /\b(?:splurge|high[- ]?end|money is no object|premium|luxury)\b/i)) {
+    return "Premium";
+  }
+  return undefined;
 }
 
 export function isDelegationPhrase(message: string): boolean {
@@ -620,8 +685,10 @@ function mergeSlots(previous: BeamSessionSlots, patch: BeamSessionSlots): BeamSe
   for (const key of SLOT_KEYS) {
     const next = patch[key];
     if (!next) continue;
-    slots[key] = key === "direction" && slots.direction
-      ? mergeSlotList(slots.direction, next)
+    // direction + avoid are additive lists (a user piles up families they want /
+    // want excluded across turns); every other slot is last-write-wins.
+    slots[key] = (key === "direction" || key === "avoid") && slots[key]
+      ? mergeSlotList(slots[key], next)
       : next;
   }
   return slots;
@@ -679,6 +746,8 @@ export function deriveBeamSessionState(
   if (impression) slots.impression = impression;
   const budget = parseBudget(text);
   if (budget) slots.budget = budget;
+  const avoid = parseAvoid(text);
+  if (avoid) slots.avoid = avoid;
 
   // The deterministic recovery prompt offers categorical chips that are valid
   // answers even though they do not use the free-text parser's usual syntax.
@@ -805,6 +874,19 @@ export function beamSessionStatePrompt(state: BeamSessionState | undefined): str
   ];
   if (known.length > 0) {
     lines.push(`Known so far: ${known.map(([key, value]) => `${key}=${value}`).join("; ")}.`);
+  }
+  // Captured constraints are HARD, not just context the model may weigh. Surface
+  // them explicitly so budget and dislikes shape the recommendation itself, not
+  // only its wording (audit A2/A3).
+  if (safe.slots.avoid) {
+    lines.push(
+      `Hard exclusion: the user does NOT want ${safe.slots.avoid}. Never headline or build the recommendation around an avoided note/family; if a strong pick happens to contain one, either choose a different pick or call out the trace honestly. Do not search for these.`,
+    );
+  }
+  if (safe.slots.budget && !/^no\s*limit$/i.test(safe.slots.budget)) {
+    lines.push(
+      `Budget constraint: ${safe.slots.budget}. Treat this as a ceiling — favor picks within it, and if you must mention something above it, flag that it's a splurge rather than presenting it as the obvious choice.`,
+    );
   }
   if (mission?.intent) {
     const parts = [`intent=${mission.intent}`];

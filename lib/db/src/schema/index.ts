@@ -18,3 +18,5 @@ export * from "./communityTags";
 export * from "./communityVotes";
 export * from "./scentRushRuns";
 export * from "./scentRushProgress";
+export * from "./beamAnswerLog";
+export * from "./beamAnswerFeedback";

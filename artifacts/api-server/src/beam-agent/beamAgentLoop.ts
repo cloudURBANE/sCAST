@@ -34,6 +34,7 @@ import { callModel as defaultCallModel, isModelConfigured as defaultIsModelConfi
 import { buildSafeClarification, repairInstructionFor, runAnswerQualityGates } from "./answerQualityGates.ts";
 import { estimateRunCostUsd, type ModelUsage } from "./costLedger.ts";
 import { beamSessionStatePrompt } from "./missionState.ts";
+import { BEAM_SAFETY_RULES } from "./beamSafetyRules.ts";
 
 // Output-token budgets live in BEAM_LIMITS (orchestrationMaxTokens / synthesisMaxTokens)
 // so the route can lower them per lane via resolveBeamBudget; the loop reads the
@@ -563,6 +564,24 @@ export type BeamRunSummary = {
   synthesisModel?: string;
   /** Distinct fragrances retrieved this run and pinned into the answer allowlist. */
   groundedNames: number;
+  /**
+   * The distinct grounded fragrances themselves (name + brand + owned), not just
+   * a count. Persisted on the answer log so a downvote is reproducible as a
+   * fixture (audit §3.2 step 1). Bounded by MAX_GROUNDED_ALLOWLIST.
+   */
+  groundedFragranceList: BeamGroundedFragrance[];
+  /**
+   * The composed answer text the user saw (post-cue-split), so the durable
+   * answer log stores exactly what was delivered. Empty on a failed run.
+   */
+  finalAnswer: string;
+  /**
+   * True when the answer shipped despite tripping ONLY soft-flow gates — the
+   * deliberate override that flips qualityGatePassed back to true (audit A6). A
+   * distinct signal so these "didn't quite listen" answers are visible (and prime
+   * feedback-loop candidates) instead of being hidden by the flipped pass flag.
+   */
+  shippedWithSoftViolations: boolean;
   /** Estimated USD spent on model calls this run (brief §11.3 estimated_llm_cost_usd). */
   estimatedCostUsd: number;
   /** Whether the final answer passed the deterministic quality gates (brief §11.3). */
@@ -658,7 +677,12 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
   const { ctx, tools, emit } = input;
   const callModel = input.callModel ?? defaultCallModel;
   const isModelConfigured = input.isModelConfigured ?? defaultIsModelConfigured;
-  const systemPrompt = SYSTEM_PROMPT + beamSessionStatePrompt(input.sessionState);
+  // Compose the live prompt: base concierge instructions + the hermes-beam
+  // safety/ontology/persona rules (audit A1 — these were never loaded on the
+  // production path) + the structured session state. Keeping the safety rules in
+  // a shared constant (beamSafetyRules.ts), asserted by a test, means the live
+  // path can't silently drift away from the authored guidance again.
+  const systemPrompt = SYSTEM_PROMPT + BEAM_SAFETY_RULES + beamSessionStatePrompt(input.sessionState);
 
   // Run-scoped accounting, emitted once at the end for observability + cost.
   const startedAt = Date.now();
@@ -688,6 +712,11 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
   // greeting / failed run reads as "nothing to reject".
   let qualityGatePassed = true;
   let qualityViolations: string[] = [];
+  // True once an answer ships despite tripping ONLY soft-flow gates (audit A6).
+  let shippedWithSoftViolations = false;
+  // The composed answer text actually delivered (set in finish()); persisted to
+  // the durable answer log so a feedback report references exactly what shipped.
+  let finalAnswerText = "";
   // Per-model token tallies so the cost ledger can price each lane separately.
   const usageByModel = new Map<string, ModelUsage>();
   // Most recent deterministic scorer verdict this run; the closing synthesis is
@@ -941,6 +970,10 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
           return;
         }
         qualityGatePassed = true;
+        // The answer is shipping with only soft-flow violations overridden — flag
+        // it so observability + the answer log can surface the "didn't quite
+        // listen" case the pass flag would otherwise hide (audit A6).
+        shippedWithSoftViolations = true;
       }
 
       // A complete travel-kit card is about to reach the user. Record it on the
@@ -962,6 +995,7 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
         finalText && finalText.trim() ? finalText : EMPTY_ANSWER_FALLBACK_WITH_CUES,
       );
       const response = parsed || EMPTY_ANSWER_FALLBACK;
+      finalAnswerText = response;
       messages.push({ role: "assistant", content: response });
       outcome = "completed";
       if (presentedKit && input.sessionState?.mission) input.sessionState.mission.kitPresented = true;
@@ -969,7 +1003,9 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
       if (cues.length > 0) {
         emit({ type: "suggestions", items: cues.map((label) => ({ label, value: label })) });
       }
-      emit({ type: "completed", response });
+      // Carry the durable answer id (= the run id) so the client can tag this
+      // answer and a feedback report attaches to its persisted beam_answer_log row.
+      emit({ type: "completed", response, answerLogId: ctx.runId });
     };
 
     emit({ type: "status", label: "Understanding your request" });
@@ -1266,6 +1302,9 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
       ...(input.model ? { orchestrationModel: input.model } : {}),
       ...(input.synthesisModel ?? input.model ? { synthesisModel: input.synthesisModel ?? input.model } : {}),
       groundedNames: groundedNames.size,
+      groundedFragranceList: [...groundedFragrances.values()],
+      finalAnswer: finalAnswerText,
+      shippedWithSoftViolations,
       estimatedCostUsd: estimateRunCostUsd(usageByModel.values()),
       qualityGatePassed,
       qualityViolations,

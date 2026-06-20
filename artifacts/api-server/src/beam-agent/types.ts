@@ -66,7 +66,11 @@ export type BeamSlotKey =
   | "direction"
   | "projection"
   | "impression"
-  | "budget";
+  | "budget"
+  // Negated scent families / notes the user explicitly wants AVOIDED ("no oud",
+  // "nothing sweet"). Captured as a comma-joined list, surfaced to the prompt as
+  // a hard exclusion, and used to drop matching catalog candidates at retrieval.
+  | "avoid";
 
 export type BeamSessionSlots = Partial<Record<BeamSlotKey, string>>;
 
@@ -291,7 +295,12 @@ export type BeamRunEvent =
   | { type: "proposal"; proposalId: string; items: BeamProposalItem[] }
   | { type: "card"; card: BeamCard }
   | { type: "slots"; slots: BeamSessionSlots; mission?: BeamMissionState }
-  | { type: "completed"; response: string }
+  // `answerLogId` is the durable per-turn id (= the run id) the client tags onto
+  // the rendered answer so a "report this answer" action can attach to a real,
+  // persisted `beam_answer_log` row. Optional so older/degraded paths that emit
+  // a bare completed event (and existing `{ type, response }` consumers) keep
+  // working unchanged.
+  | { type: "completed"; response: string; answerLogId?: string }
   | { type: "failed"; code: string; message: string };
 
 export type BeamEmit = (event: BeamRunEvent) => void;
