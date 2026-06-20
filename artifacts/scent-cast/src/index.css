@@ -3391,7 +3391,6 @@ a {
     inset 0 -1px 0 rgba(98, 48, 7, 0.34),
     inset 0 0 30px rgba(224, 149, 48, 0.035),
     0 0 0 1px rgba(92, 46, 8, 0.2),
-    0 0 14px rgba(244, 164, 60, 0.16),
     0 16px 34px -18px rgba(0, 0, 0, 0.98);
   transform: translateZ(0);
   -webkit-transform: translateZ(0);
@@ -3403,20 +3402,6 @@ a {
     background var(--scent-transition-fast) var(--scent-ease-out);
 }
 
-.scent-beam-composer::before {
-  content: "";
-  position: absolute;
-  z-index: -1;
-  inset: -7px 8%;
-  border-radius: 999px;
-  pointer-events: none;
-  opacity: 0.72;
-  background:
-    radial-gradient(ellipse at 26% 50%, rgba(255, 177, 76, 0.2), transparent 33%),
-    radial-gradient(ellipse at 76% 50%, rgba(255, 177, 76, 0.14), transparent 30%);
-  filter: blur(12px);
-}
-
 .scent-beam-composer:focus-within {
   border-color: rgba(255, 206, 126, 0.98) !important;
   box-shadow:
@@ -3424,7 +3409,6 @@ a {
     inset 0 -1px 0 rgba(112, 55, 9, 0.38),
     inset 0 0 34px rgba(237, 165, 63, 0.055),
     0 0 0 1px rgba(239, 159, 54, 0.22),
-    0 0 18px rgba(246, 170, 68, 0.22),
     0 18px 38px -18px rgba(0, 0, 0, 0.98);
 }
 
@@ -3439,8 +3423,7 @@ a {
     inset 0 1px 0 rgba(255, 239, 204, 0.15),
     inset 0 -1px 0 rgba(95, 43, 5, 0.34),
     0 0 0 1px rgba(74, 34, 5, 0.28),
-    0 5px 13px rgba(0, 0, 0, 0.56),
-    0 0 10px rgba(238, 151, 42, 0.08);
+    0 5px 13px rgba(0, 0, 0, 0.56);
   text-shadow: 0 0 8px rgba(255, 177, 72, 0.36);
   transition:
     color var(--scent-transition-fast) var(--scent-ease-out),
@@ -3458,16 +3441,14 @@ a {
     linear-gradient(180deg, rgba(35, 25, 14, 0.98), rgba(10, 7, 4, 0.99));
   box-shadow:
     inset 0 1px 0 rgba(255, 245, 221, 0.2),
-    0 6px 15px rgba(0, 0, 0, 0.58),
-    0 0 13px rgba(246, 166, 61, 0.2);
+    0 6px 15px rgba(0, 0, 0, 0.58);
   transform: translateY(-1px);
 }
 
 .scent-beam-composer-control:focus-visible {
   box-shadow:
     inset 0 1px 0 rgba(255, 245, 221, 0.2),
-    0 0 0 3px rgba(236, 165, 69, 0.2),
-    0 0 14px rgba(246, 166, 61, 0.18);
+    0 0 0 3px rgba(236, 165, 69, 0.2);
 }
 
 .scent-beam-composer-control:active:not(:disabled) {
@@ -3483,8 +3464,7 @@ a {
   box-shadow:
     inset 0 1px 0 rgba(255, 235, 197, 0.1),
     inset 0 -1px 0 rgba(96, 44, 7, 0.22),
-    0 5px 14px -8px rgba(0, 0, 0, 0.95),
-    0 0 9px rgba(230, 146, 37, 0.055);
+    0 5px 14px -8px rgba(0, 0, 0, 0.95);
   transition:
     color var(--scent-transition-fast) var(--scent-ease-out),
     border-color var(--scent-transition-fast) var(--scent-ease-out),
@@ -3501,8 +3481,7 @@ a {
     rgba(15, 10, 6, 0.97);
   box-shadow:
     inset 0 1px 0 rgba(255, 240, 211, 0.14),
-    0 6px 16px -8px rgba(0, 0, 0, 0.98),
-    0 0 12px rgba(238, 153, 43, 0.14);
+    0 6px 16px -8px rgba(0, 0, 0, 0.98);
   transform: translateY(-1px);
 }
 
@@ -3510,8 +3489,7 @@ a {
   border-color: rgba(255, 207, 135, 0.92);
   box-shadow:
     inset 0 1px 0 rgba(255, 240, 211, 0.14),
-    0 0 0 3px rgba(232, 158, 61, 0.18),
-    0 0 12px rgba(238, 153, 43, 0.14);
+    0 0 0 3px rgba(232, 158, 61, 0.18);
 }
 
 .scent-beam-cue:active:not(:disabled) {
@@ -3528,11 +3506,6 @@ a {
 .scent-ipad-safari-perf .scent-beam-composer,
 .scent-ipad-safari-perf .scent-beam-composer.scent-lux-input {
   transition: none;
-}
-
-.scent-ipad-safari-perf .scent-beam-composer::before {
-  filter: none;
-  opacity: 0.22;
 }
 
 /* ─── Curated match reveal sheen ──────────────────────────────────────────────
