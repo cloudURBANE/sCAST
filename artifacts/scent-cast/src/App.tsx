@@ -9,7 +9,7 @@ import { X } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { ThreadBackground, type ThreadBackgroundMode } from './components/threads/ThreadBackground';
 import { AppTopNav } from './components/AppTopNav';
-import { WeeklyOutlookDashboard } from './components/WeeklyOutlookDashboard';
+import { WeeklyOutlookDashboard, forecastBottleLayoutId } from './components/WeeklyOutlookDashboard';
 import { AuthModal } from './components/AuthModal';
 import { GuestSaveBanner, GuestModeBanner } from './components/GuestSaveBanner';
 import { InstallPrompt } from './components/pwa/InstallPrompt';
@@ -743,6 +743,7 @@ function DashboardView() {
     handleVaultSearchStateChange,
     handleExpandArchive,
     pendingDetailOpen,
+    pendingDetailOpenSourceLayoutId,
     openFragranceDetail,
     clearPendingDetailOpen,
   } = useWardrobe();
@@ -1264,7 +1265,10 @@ function DashboardView() {
               <WeeklyOutlookDashboard
                 items={items}
                 weather={weather}
-                onSelectFragrance={openFragranceDetail}
+                onSelectFragrance={(item) => openFragranceDetail(item, {
+                  sourceLayoutId: forecastBottleLayoutId(item.id),
+                  scrollToVault: false,
+                })}
               />
             </div>
           ) : null}
@@ -1279,6 +1283,7 @@ function DashboardView() {
                 onDelete={handleDeleteItem}
                 onAdd={handleAddItem}
                 pendingDetailOpen={pendingDetailOpen}
+                pendingDetailOpenSourceLayoutId={pendingDetailOpenSourceLayoutId}
                 onClearPendingDetailOpen={clearPendingDetailOpen}
                 onPersistWardrobeImage={handlePersistWardrobeImage}
                 onVerifyWardrobeFact={handleVerifyWardrobeFact}
