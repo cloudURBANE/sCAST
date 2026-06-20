@@ -3,12 +3,11 @@ import { LoaderCircle, Swords } from 'lucide-react';
 import { AppTopNav } from '@/components/AppTopNav';
 import { ArenaBattleStage } from '@/components/arena/ArenaBattleStage';
 import { ArenaNextRail } from '@/components/arena/ArenaNextRail';
-import { ScentRush, type RushFragrance } from '@/components/arena/ScentRush';
+import { CrowdVsYou } from '@/components/arena/CrowdVsYou';
 import { mapCommunityPostToArenaBattle } from '@/components/arena/arenaBattleMapper';
 import { useCommunityBattleVote, useCommunityPosts } from '@/components/community/communityPosts';
 
 interface ArenaPageProps {
-  rushFragrances: RushFragrance[];
   authToken: string | null;
   authEmail?: string | null;
   authPictureUrl?: string | null;
@@ -20,7 +19,6 @@ interface ArenaPageProps {
 }
 
 export const ArenaPage: React.FC<ArenaPageProps> = ({
-  rushFragrances,
   authToken,
   authEmail,
   authPictureUrl,
@@ -109,7 +107,10 @@ export const ArenaPage: React.FC<ArenaPageProps> = ({
       <div style={{ height: 'var(--topbar-h)' }} />
 
       <main className="relative z-10 px-4 pt-8 sm:px-8 sm:pb-24 sm:pt-12">
-        <ScentRush fragrances={rushFragrances} authToken={authToken} onSignIn={onSignIn} />
+        <div className="mx-auto mb-8 w-full max-w-4xl sm:mb-12">
+          <CrowdVsYou authToken={authToken} onSignIn={onSignIn} />
+        </div>
+
         {isLoading ? (
           <div className="grid min-h-[62svh] place-items-center text-center">
             <div>
