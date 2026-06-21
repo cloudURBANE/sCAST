@@ -1255,13 +1255,13 @@ function DashboardView() {
               slammed against the tab bar with a dead gap overhead. Normal flow on
               md+. Hidden in agent mode, which takes over the hero. */}
           {!agentActive ? (
-            // Bias the leftover column space BELOW the forecast (mb-auto) with
-            // only a small deliberate gap above it (mt-3), so the forecast reads
-            // as connected to the stat row above instead of floating in a large
-            // centered void. The top gap was tightened (mt-6 → mt-3) so the
-            // forecast group sits closer to the weather stat row. Normal flow on
-            // md+ (no bottom nav).
-            <div className="mt-3 mb-auto sm:mt-0 sm:mb-0">
+            // Split the leftover column height EVENLY above and below the
+            // forecast (my-auto) instead of dumping all of it below (mb-auto),
+            // which left a giant dead gap between the date cards and the fixed
+            // bottom nav. The even split pulls the date-card row down toward the
+            // nav so the lower rhythm reads intentionally tight rather than
+            // stretched. Normal flow on md+ (no bottom nav).
+            <div className="my-auto sm:my-0">
               <WeeklyOutlookDashboard
                 items={items}
                 weather={weather}
