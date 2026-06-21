@@ -13,7 +13,20 @@ import "./index.css";
 // breadcrumbs; surfaces nothing unless the URL carries `?__mcdiag`. Temporary.
 initCrashTrace();
 
-const queryClient = new QueryClient();
+// App-wide React Query defaults act as the safety net so individual hooks are
+// the exception, not the rule. Without these, every query inherits v5 defaults
+// (staleTime: 0 + refetch-on-focus/reconnect/mount), so any hook that forgets to
+// override them refetches aggressively. Per-query options still take precedence.
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 60_000, // 1 min baseline; per-query overrides still win
+      gcTime: 30 * 60_000, // keep cache across route hops
+      refetchOnWindowFocus: false, // matches the explicit choice every hook already makes
+      retry: 1,
+    },
+  },
+});
 
 createRoot(document.getElementById("root")!).render(
   <ErrorBoundary>

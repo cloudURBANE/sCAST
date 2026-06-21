@@ -202,11 +202,18 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
 
   React.useEffect(() => {
     lastScrollYRef.current = window.scrollY;
+    let rafId: number | null = null;
 
-    const handleScroll = () => {
+    // Coalesce scroll work into a single rAF: read layout (scrollY) and run the
+    // at-most-one setState per frame, instead of on every raw scroll event. The
+    // hide/reveal thresholds and the 320ms settle stay identical — this only
+    // stops layout reads + React updates from firing at the scroll event cadence,
+    // which is what caused jank during fast flings on mobile.
+    const processScroll = () => {
+      rafId = null;
       const y = window.scrollY;
       const delta = y - lastScrollYRef.current;
-      
+
       if (Math.abs(delta) > 6) {
         if (delta > 0 && y > 56) {
           // Scrolling down: hide bottom nav immediately (immersive gesture).
@@ -218,15 +225,21 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
         lastScrollYRef.current = y;
       }
       // Reveal the bar once the scroll SETTLES, so the resting state is always
-      // visible and reachable in a single tap. Each scroll event resets the
-      // timer, so the bar stays hidden only while a downward scroll is actively
-      // in motion — never while the user is at rest (the double-tap bug came from
-      // the old timer doing the opposite and hiding the bar on settle).
+      // visible and reachable in a single tap. Each frame resets the timer, so
+      // the bar stays hidden only while a downward scroll is actively in motion —
+      // never while the user is at rest (the double-tap bug came from the old
+      // timer doing the opposite and hiding the bar on settle).
       if (settleTimerRef.current !== null) window.clearTimeout(settleTimerRef.current);
       settleTimerRef.current = window.setTimeout(() => {
         setNavVisible(true);
         settleTimerRef.current = null;
       }, 320);
+    };
+
+    const handleScroll = () => {
+      if (rafId === null) {
+        rafId = window.requestAnimationFrame(processScroll);
+      }
     };
 
     // Any direct interaction reveals the bar (covers the case where the user
@@ -241,6 +254,7 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
       window.removeEventListener('scroll', handleScroll);
       window.removeEventListener('touchstart', reveal);
       window.removeEventListener('pointerdown', reveal);
+      if (rafId !== null) window.cancelAnimationFrame(rafId);
       if (settleTimerRef.current !== null) window.clearTimeout(settleTimerRef.current);
     };
   }, []);
@@ -358,7 +372,7 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
 
       <nav
         className={[
-          'fixed bottom-[calc(0.75rem+env(safe-area-inset-bottom,0px))] left-[max(0.75rem,env(safe-area-inset-left,0px))] right-[max(0.75rem,env(safe-area-inset-right,0px))] z-50 md:hidden transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-[transform,opacity]',
+          'fixed bottom-[calc(0.75rem+env(safe-area-inset-bottom,0px))] left-[max(0.75rem,env(safe-area-inset-left,0px))] right-[max(0.75rem,env(safe-area-inset-right,0px))] z-50 md:hidden transition-[transform,opacity] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-[transform,opacity]',
           bottomNavShown
             ? 'translate-y-0 opacity-100 pointer-events-auto'
             : 'translate-y-[110%] opacity-0 pointer-events-none',

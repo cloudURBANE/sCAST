@@ -891,7 +891,13 @@ const StandardPostCard: React.FC<PostCardProps> = ({
   );
 };
 
-export const PostCard: React.FC<PostCardProps> = (props) => {
+// Memoized so an accumulating, unvirtualized feed doesn't re-render every
+// already-rendered card (and its heavy sub-cards) when CommunityFeed re-renders
+// for its own state — refetch / placeholderData / fetchNextPage toggles. Those
+// re-renders keep the same `post`/`authToken`/`onSignIn` references, so the
+// shallow compare skips untouched cards. Memoizing the dispatcher short-circuits
+// the whole post subtree in one boundary.
+export const PostCard = React.memo(function PostCard(props: PostCardProps) {
   if (props.post.postType === 'battle') {
     return <CompactBattlePostCard {...props} />;
   }
@@ -905,4 +911,4 @@ export const PostCard: React.FC<PostCardProps> = (props) => {
   }
 
   return <StandardPostCard {...props} />;
-};
+});

@@ -390,7 +390,7 @@ function TravelKitCard({
 }
 
 /** Dispatch a card payload to its renderer. Unknown kinds render nothing. */
-export function BeamCard({ card, onAddNewPicks, onViewItem, added }: BeamCardProps): React.ReactElement | null {
+function BeamCardImpl({ card, onAddNewPicks, onViewItem, added }: BeamCardProps): React.ReactElement | null {
   switch (card.kind) {
     case 'scent_profile':
       return <ScentProfileCard card={card} />;
@@ -402,5 +402,14 @@ export function BeamCard({ card, onAddNewPicks, onViewItem, added }: BeamCardPro
       return null;
   }
 }
+
+/**
+ * Memoized so card-type Beam messages (radar SVGs, compare tables, travel kits)
+ * don't re-render on every composer keystroke. The parent panel re-renders on
+ * each input change, but BeamCard's props (card, the useCallback-stable
+ * onAddNewPicks/onViewItem, and the by-value `added`) are referentially stable,
+ * so the shallow compare skips untouched cards.
+ */
+export const BeamCard = React.memo(BeamCardImpl);
 
 export default BeamCard;

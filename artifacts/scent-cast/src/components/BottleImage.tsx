@@ -86,7 +86,7 @@ function BottleFrameGuide() {
   );
 }
 
-export const BottleImage: React.FC<BottleImageProps> = ({
+const BottleImageComponent: React.FC<BottleImageProps> = ({
   src,
   alt,
   variant,
@@ -371,3 +371,12 @@ export const BottleImage: React.FC<BottleImageProps> = ({
     </div>
   );
 };
+
+/**
+ * Memoized so vault/grid tiles don't re-run this heavy image component (proxy-URL
+ * resolution, effects, metric reporting) when the parent list re-renders for
+ * unrelated state (search query, modal toggles, refresh counters). Wardrobe item
+ * identity is preserved by reconcileWardrobeItems, so the props stay referentially
+ * stable and the shallow compare skips untouched tiles.
+ */
+export const BottleImage = React.memo(BottleImageComponent);

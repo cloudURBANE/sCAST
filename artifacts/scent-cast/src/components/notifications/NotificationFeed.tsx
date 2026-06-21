@@ -66,7 +66,9 @@ export function NotificationFeed() {
       return json.notifications || [];
     },
     enabled: !!authToken,
-    refetchInterval: 15000 // Poll every 15s to keep feed fresh
+    refetchInterval: 15000, // Poll every 15s to keep feed fresh
+    staleTime: 15000, // align freshness window with the poll cadence
+    refetchOnWindowFocus: false // the 15s poll already keeps it fresh; avoid focus-storm refetches
   });
 
   // 2. Mutations
