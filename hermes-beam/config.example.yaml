@@ -40,6 +40,14 @@ mcp_servers:
         # + OPENROUTER_API_KEY are set in the MCP server's env (see
         # dot-hermes-env.example). Safe to list either way.
         - beam_research_web
+        # Hybrid-corpus discovery beyond the local catalog: the ONLY tool that
+        # reaches the live engine search + /details enrichment. The server only
+        # advertises it when BEAM_DISCOVER_EXTERNAL_ENABLED is not disabled (it is
+        # on by default), so listing it here is safe either way; omit it and the
+        # promoted Hermes agent could never fetch real engine data.
+        - beam_discover_external
+        # "Smells like X" — rank the catalog by similarity to a named reference.
+        - beam_find_similar
         # Presentation/proposal tools resolve grounded catalog and vault data into
         # app-renderable cards or add-ready proposals. They do not write to the
         # user's vault; the app Confirm remains the only write path.

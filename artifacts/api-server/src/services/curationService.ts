@@ -24,6 +24,7 @@ import {
   BEAM_CURATION_SOURCE,
   buildCurationMetadata,
   curationPushCopy,
+  curationRunPushCopy,
   pendingCurationItemFromRow,
   type BeamCurationInput,
   type BeamCurationMetadata,
@@ -142,20 +143,44 @@ export async function listPendingCurationForUser(
 export async function notifyBeamCurationComplete(job: EnrichmentJob): Promise<void> {
   const metadata = (job.metadataJson ?? {}) as Partial<BeamCurationMetadata>;
   if (metadata.source !== BEAM_CURATION_SOURCE) return;
+  // Background cache-on-discover jobs are queued only so the pick lands in the
+  // catalog for next time; the user already saw them inline in the conversation,
+  // so they must NOT generate a notification (this was the main spam source).
+  if (metadata.notify === false) return;
   const userId = typeof metadata.userId === "string" ? metadata.userId : "";
   if (!userId) return;
 
   const name = (typeof metadata.name === "string" ? metadata.name : job.name) ?? "";
   const brand = (typeof metadata.brand === "string" ? metadata.brand : job.house) ?? null;
-  const { title, body } = curationPushCopy({ name, brand });
+
+  // Coalesce per agent run: every job from the same run shares one dedupe key, so
+  // the unique (user, dedupe_key) index in sendCategoryPushToUser lets only the
+  // FIRST-ready job produce a notification — the rest are suppressed. A run-scoped
+  // copy + deep-link then reads as one "your recommendations are ready" nudge
+  // instead of five separate per-fragrance links. Jobs with no runId (legacy /
+  // single proposals) fall back to the original per-job copy + link.
+  const runId = typeof metadata.runId === "string" ? metadata.runId : "";
+  const coalesced = runId.length > 0;
+  // Run-level copy when coalescing ("your recommendations are ready"), but always
+  // deep-link via the existing `?curation=<jobKey>` resume path — the SPA opens the
+  // first ready pick when it loads (pickResumeCurationTarget) and strips the param
+  // cleanly. The dedupe key is what guarantees one notification per run.
+  const { title, body } = coalesced
+    ? curationRunPushCopy({ name, brand })
+    : curationPushCopy({ name, brand });
 
   try {
-    await sendCategoryPushToUser(userId, "curation", {
-      title,
-      body,
-      url: `/?curation=${encodeURIComponent(job.jobKey)}`,
-      tag: `curation:${job.jobKey}`,
-    });
+    await sendCategoryPushToUser(
+      userId,
+      "curation",
+      {
+        title,
+        body,
+        url: `/?curation=${encodeURIComponent(job.jobKey)}`,
+        tag: coalesced ? `curation-run:${runId}` : `curation:${job.jobKey}`,
+      },
+      coalesced ? { dedupeKey: `beam-curation-run:${runId}` } : undefined,
+    );
   } catch (err) {
     // The notify is a courtesy; a push failure must never bubble into the worker
     // and flip a real "completed" enrichment to "failed".

@@ -24,6 +24,20 @@ export type BeamCurationInput = {
   tenantId?: string | null;
   name: string;
   brand?: string | null;
+  /**
+   * Agent-run id that produced this curation. All jobs queued in one Beam run
+   * share it, so completion notifications can coalesce into a single "your picks
+   * are ready" nudge instead of one push per fragrance.
+   */
+  runId?: string | null;
+  /**
+   * Whether finishing this job should notify the user. Defaults to true. The
+   * background cache-on-discover path (`beam_discover_external`) sets this false:
+   * those candidates were already shown inline in the conversation, so there is
+   * nothing new to nudge about — notifying per discovered candidate was the
+   * primary cause of the "5-6 notification links" fan-out.
+   */
+  notify?: boolean;
 };
 
 /**
@@ -38,6 +52,10 @@ export type BeamCurationMetadata = {
   tenantId?: string;
   name: string;
   brand?: string;
+  /** Shared across every job from one Beam run; coalesces completion pushes. */
+  runId?: string;
+  /** Only stored when explicitly false — suppresses the completion notification. */
+  notify?: false;
 };
 
 function cleanString(value: string | null | undefined): string | null {
@@ -61,6 +79,10 @@ export function buildCurationMetadata(input: BeamCurationInput): BeamCurationMet
   if (tenantId) metadata.tenantId = tenantId;
   const brand = cleanString(input.brand);
   if (brand) metadata.brand = brand;
+  const runId = cleanString(input.runId);
+  if (runId) metadata.runId = runId;
+  // Compact: only persist the flag when it suppresses (the default is notify).
+  if (input.notify === false) metadata.notify = false;
   return metadata;
 }
 
@@ -118,5 +140,24 @@ export function curationPushCopy(item: { name: string; brand: string | null }): 
     body: label
       ? `${label} is ready — open Scentbeam to add it and continue curating.`
       : "A recommendation is ready — open Scentbeam to add it and continue curating.",
+  };
+}
+
+/**
+ * Run-level completion copy. When a single Beam run queues several fragrances,
+ * we coalesce their completions into ONE notification (see the run dedupe key in
+ * notifyBeamCurationComplete) and name the first-ready bottle while signalling
+ * there may be more, rather than firing a separate push per fragrance.
+ */
+export function curationRunPushCopy(item: { name: string; brand: string | null }): {
+  title: string;
+  body: string;
+} {
+  const label = item.brand ? `${item.brand} ${item.name}`.trim() : item.name;
+  return {
+    title: "Your recommendations are ready",
+    body: label
+      ? `${label} and any others from that set are ready — open Scentbeam to add them to your vault.`
+      : "Your Beam recommendations are ready — open Scentbeam to add them to your vault.",
   };
 }

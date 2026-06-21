@@ -5,6 +5,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import { usersTable } from "./users";
@@ -37,12 +38,22 @@ export const inAppNotificationsTable = pgTable(
     url: text("url"),
     category: text("category").notNull().default("system"),
     read: boolean("read").notNull().default(false),
+    // Optional coalescing key. When set, a row is unique per (user, dedupeKey) so
+    // a single logical event that would otherwise fan out into many notifications
+    // (e.g. a Beam agent run that queues several fragrances for enrichment) lands
+    // as exactly ONE feed entry / push. NULL keeps the legacy behavior — Postgres
+    // treats NULLs as distinct, so un-keyed notifications never collide.
+    dedupeKey: text("dedupe_key"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => [
     index("in_app_notifications_tenant_user_idx").on(
       table.tenantId,
       table.userId,
+    ),
+    uniqueIndex("in_app_notifications_user_dedupe_uniq").on(
+      table.userId,
+      table.dedupeKey,
     ),
   ],
 );
