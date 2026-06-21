@@ -69,7 +69,7 @@ function CardShell({
       role="group"
       aria-label={ariaLabel}
     >
-      <p className="scent-type-label flex items-center gap-1.5 text-scent-accent/90">
+      <p className="scent-type-label flex items-center justify-center gap-1.5 text-center text-scent-accent/90">
         <Sparkles size={12} aria-hidden className="shrink-0" />
         <span className="min-w-0 break-words">{label}</span>
       </p>
@@ -82,7 +82,7 @@ function CardShell({
 function AccordChips({ accords }: { accords: string[] }): React.ReactElement | null {
   if (accords.length === 0) return null;
   return (
-    <ul className="mt-2 flex flex-wrap gap-1.5">
+    <ul className="mt-2 flex flex-wrap justify-center gap-1.5">
       {accords.slice(0, 6).map((accord) => (
         <li
           key={accord}
@@ -194,15 +194,15 @@ function FragranceHeading({ fragrance }: { fragrance: BeamCardFragrance }): Reac
   return (
     <>
       {fragrance.brand ? (
-        <p className="mt-2 break-words font-serif text-[10px] uppercase tracking-[0.2em] text-scent-text-muted">
+        <p className="mt-2 break-words text-center font-serif text-[10px] uppercase tracking-[0.2em] text-scent-text-muted">
           {fragrance.brand}
         </p>
       ) : null}
-      <p className="break-words font-serif italic text-xl leading-tight text-[#fff7ec]">
+      <p className="break-words text-center font-serif italic text-xl leading-tight text-[#fff7ec]">
         {fragrance.name}
       </p>
       {fragrance.owned ? (
-        <p className="mt-1.5">
+        <p className="mt-1.5 text-center">
           <span className="inline-flex items-center rounded-full border border-scent-accent/30 bg-scent-accent/[0.08] px-1.5 py-0.5 scent-type-label text-[9px] text-scent-accent/90">
             In vault
           </span>
@@ -235,22 +235,22 @@ function ScentProfileCard({ card }: { card: Extract<BeamCardData, { kind: 'scent
       {hasVector ? <ScentRadar vector={fragrance.scentVector!} /> : null}
       {hasAccords ? <AccordChips accords={fragrance.accords} /> : null}
       {hasPyramid ? (
-        <dl className="mt-3 flex flex-col gap-1 border-t border-scent-accent/12 pt-2.5">
+        <dl className="mt-3 flex flex-col gap-1.5 border-t border-scent-accent/12 pt-2.5 text-center">
           {([['Top', pyramid!.top], ['Heart', pyramid!.heart], ['Base', pyramid!.base]] as const).map(([tier, notes]) =>
             notes.length ? (
-              <div key={tier} className="flex gap-2">
-                <dt className="w-9 shrink-0 scent-type-label text-[9px] text-scent-text-subtle">{tier}</dt>
-                <dd className="min-w-0 flex-1 break-words text-[12px] text-scent-text-muted">{notes.join(', ')}</dd>
+              <div key={tier}>
+                <dt className="scent-type-label text-[9px] text-scent-text-subtle">{tier}</dt>
+                <dd className="break-words text-[12px] text-scent-text-muted">{notes.join(', ')}</dd>
               </div>
             ) : null,
           )}
         </dl>
       ) : null}
       {caption ? (
-        <p className="mt-3 break-words text-[12.5px] italic leading-relaxed text-scent-text-muted">{caption}</p>
+        <p className="mt-3 break-words text-center text-[12.5px] italic leading-relaxed text-scent-text-muted">{caption}</p>
       ) : null}
       {!hasAnyDetail ? (
-        <p className="mt-3 break-words text-[12.5px] italic leading-relaxed text-scent-text-muted">
+        <p className="mt-3 break-words text-center text-[12.5px] italic leading-relaxed text-scent-text-muted">
           Nothing to chart yet — the notes for this one aren&rsquo;t in the catalog.
         </p>
       ) : null}
@@ -260,7 +260,7 @@ function ScentProfileCard({ card }: { card: Extract<BeamCardData, { kind: 'scent
 
 function CompareColumn({ fragrance }: { fragrance: BeamCardFragrance }): React.ReactElement {
   return (
-    <div className="min-w-0 flex-1">
+    <div className="min-w-0 flex-1 text-center">
       <p className="truncate font-serif italic text-[13px] leading-tight text-[#fff7ec] sm:text-[15px]">{fragrance.name}</p>
       <p className="truncate scent-type-label text-[9px] text-scent-text-subtle">{fragrance.brand}</p>
       {fragrance.owned ? (
@@ -361,16 +361,16 @@ function TravelKitCard({
           </ul>
           {onAddNewPicks ? (
             added ? (
-              <p className="mt-3 inline-flex items-center gap-1.5 scent-type-label text-[10px] text-scent-accent">
+              <p className="mt-3 flex items-center justify-center gap-1.5 scent-type-label text-[10px] text-scent-accent">
                 <Check size={13} aria-hidden />
                 Added to your vault
               </p>
             ) : (
-              <>
+              <div className="mt-3 flex flex-col items-center text-center">
                 <button
                   type="button"
                   onClick={() => onAddNewPicks(card.newPicks, card.proposalId)}
-                  className="mt-3 inline-flex min-h-11 max-w-full items-center justify-center gap-1.5 rounded-full border border-scent-accent/42 px-4 py-2 text-center scent-type-chip text-[11px] text-[#fff7ec] transition-colors hover:bg-scent-accent/12"
+                  className="inline-flex min-h-11 max-w-full items-center justify-center gap-1.5 rounded-full border border-scent-accent/42 px-4 py-2 text-center scent-type-chip text-[11px] text-[#fff7ec] transition-colors hover:bg-scent-accent/12"
                 >
                   <Plus size={14} aria-hidden className="shrink-0" />
                   <span className="min-w-0 break-words">
@@ -380,7 +380,7 @@ function TravelKitCard({
                 <p className="mt-2 break-words scent-type-label text-[9px] text-scent-text-subtle/65">
                   New picks save only when you tap Add to vault.
                 </p>
-              </>
+              </div>
             )
           ) : null}
         </section>
