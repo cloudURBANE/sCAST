@@ -31,6 +31,50 @@ function sessionKey(ctx: BeamRunContext): string {
   return `${ctx.tenantId}:${ctx.userId}:${ctx.sessionId}`;
 }
 
+/* ------------------------------------------------------------------ */
+/* Per-session serialization (in-process async mutex)                 */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Every read-modify-write (load → append/mutate → save) for a session must run
+ * to completion before the next one for the SAME session starts; otherwise a
+ * double-tap or rapid-fire of two messages for one session interleaves two
+ * cycles — both read the same prior turns, both append, and the second save
+ * clobbers the first, losing/duplicating/reordering transcript turns and
+ * corrupting slot/mission state.
+ *
+ * This is an in-process per-key mutex: a tail promise per session key, onto
+ * which each operation chains. Entries are removed once they become the live
+ * tail and settle, so the map can't grow unbounded. Operations for DIFFERENT
+ * keys never block each other.
+ *
+ * Scope/limitation: this serializes only within a single Node process. It fully
+ * fixes the dominant single-replica double-tap corruption, but does NOT make the
+ * Redis read-modify-write atomic across multiple replicas sharing one Redis —
+ * that would require a Lua/WATCH compare-and-set on the Redis side.
+ */
+const sessionLocks = new Map<string, Promise<unknown>>();
+
+function withSessionLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const prior = sessionLocks.get(key) ?? Promise.resolve();
+  // Chain after the prior op for this key (ignoring its outcome — each op owns
+  // its own try/catch), then run ours.
+  const run = prior.then(fn, fn);
+  // Park a settle-only tail so a rejection in `run` doesn't surface as an
+  // unhandled rejection through the chain, and clean the map entry once this is
+  // the live tail and has settled (so different keys / future ops aren't held by
+  // a stale entry and the map stays bounded).
+  const tail = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  sessionLocks.set(key, tail);
+  void tail.then(() => {
+    if (sessionLocks.get(key) === tail) sessionLocks.delete(key);
+  });
+  return run;
+}
+
 function capTurns(turns: ClaudeMessage[]): ClaudeMessage[] {
   return turns.length > MAX_SESSION_TURNS ? turns.slice(-MAX_SESSION_TURNS) : turns;
 }
@@ -186,22 +230,26 @@ export async function loadSessionState(ctx: BeamRunContext): Promise<BeamSession
 
 /** Persist slots/mission state without appending a transcript turn. */
 export async function saveSessionState(ctx: BeamRunContext, state: BeamSessionState): Promise<void> {
-  let client: RedisLike | null = null;
-  try {
-    client = await getClient();
-  } catch {
-    client = null;
-  }
-  if (!client) {
-    memorySaveState(ctx, state);
-    return;
-  }
-  try {
-    await redisSaveState(client, ctx, state);
-  } catch (err) {
-    logger.warn({ err }, "beam session: redis state save failed - writing to in-memory session");
-    memorySaveState(ctx, state);
-  }
+  // Serialize the whole load-mutate-save against concurrent writes to the same
+  // session (Redis path does a read-modify-write; the memory fallback does too).
+  return withSessionLock(sessionKey(ctx), async () => {
+    let client: RedisLike | null = null;
+    try {
+      client = await getClient();
+    } catch {
+      client = null;
+    }
+    if (!client) {
+      memorySaveState(ctx, state);
+      return;
+    }
+    try {
+      await redisSaveState(client, ctx, state);
+    } catch (err) {
+      logger.warn({ err }, "beam session: redis state save failed - writing to in-memory session");
+      memorySaveState(ctx, state);
+    }
+  });
 }
 
 /**
@@ -214,20 +262,25 @@ export async function appendSessionTurn(
   assistantText: string,
   state?: BeamSessionState,
 ): Promise<void> {
-  let client: RedisLike | null = null;
-  try {
-    client = await getClient();
-  } catch {
-    client = null;
-  }
-  if (!client) {
-    memoryAppend(ctx, userMessage, assistantText, state);
-    return;
-  }
-  try {
-    await redisAppend(client, ctx, userMessage, assistantText, state);
-  } catch (err) {
-    logger.warn({ err }, "beam session: redis append failed - writing to in-memory history");
-    memoryAppend(ctx, userMessage, assistantText, state);
-  }
+  // Serialize the whole load-mutate-save against concurrent writes to the same
+  // session so two rapid appends can't both read the same prior turns and clobber
+  // each other (Redis read-modify-write and the memory fallback alike).
+  return withSessionLock(sessionKey(ctx), async () => {
+    let client: RedisLike | null = null;
+    try {
+      client = await getClient();
+    } catch {
+      client = null;
+    }
+    if (!client) {
+      memoryAppend(ctx, userMessage, assistantText, state);
+      return;
+    }
+    try {
+      await redisAppend(client, ctx, userMessage, assistantText, state);
+    } catch (err) {
+      logger.warn({ err }, "beam session: redis append failed - writing to in-memory history");
+      memoryAppend(ctx, userMessage, assistantText, state);
+    }
+  });
 }

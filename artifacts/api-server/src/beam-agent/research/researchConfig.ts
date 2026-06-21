@@ -1,12 +1,11 @@
 /**
  * Beam research lane — deployment configuration (env-driven).
  *
- * Every model slug is read from the environment with a safe default. The default
- * slugs below were verified against the live OpenRouter catalog (2026-06-14):
- * `minimax/minimax-m3`, `moonshotai/kimi-k2.7-code`, and `stepfun/step-3.7-flash`
- * all resolve. Provider slugs still drift, so treat the defaults as a starting
- * point and pin the exact slugs per deployment via env. A banned/cost-opaque slug
- * (`*:online`, `openrouter/auto`,
+ * Every model slug is read from the environment with a safe default. The defaults
+ * below are the free/cheap stack (free Gemma concierge for single/standard/degraded
+ * lanes, the strong hy3-preview closer for premium). Provider slugs drift, so treat
+ * the defaults as a starting point and pin the exact slugs per deployment via env.
+ * A banned/cost-opaque slug (`*:online`, `openrouter/auto`,
  * `openrouter/fusion`) falls back to the safe default rather than going to wire.
  *
  * Read at CALL TIME (functions, not module constants) so tests and ops can flip
@@ -17,10 +16,10 @@ import { isBannedResearchModel } from "./researchPolicy.ts";
 
 /** Default OpenRouter slugs per lane. Override with the matching env var. */
 const DEFAULTS = {
-  single: "minimax/minimax-m3",
-  standard: "minimax/minimax-m3",
-  premium: "moonshotai/kimi-k2.7-code",
-  degraded: "stepfun/step-3.7-flash",
+  single: "google/gemma-4-31b-it:free",
+  standard: "google/gemma-4-31b-it:free",
+  premium: "tencent/hy3-preview",
+  degraded: "google/gemma-4-31b-it:free",
 } as const;
 
 function pickModel(envVar: string, fallback: string): string {

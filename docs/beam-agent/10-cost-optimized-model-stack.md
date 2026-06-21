@@ -20,16 +20,18 @@ drift — re-verify in the OpenRouter dashboard before production (brief §15).*
 
 | Lane | OpenRouter default | Env var | When |
 |---|---|---|---|
-| Default concierge / orchestration | `minimax/minimax-m2.5` | `BEAM_AGENT_MODEL` | normal fragrance chat |
-| Premium / synthesis | `minimax/minimax-m3` | `BEAM_AGENT_MODEL_STRONG` | the closing synthesis turn; the whole premium lane |
-| Deep strategy | `moonshotai/kimi-k2-thinking` | `BEAM_AGENT_MODEL_DEEP` | gated deep workflows only (hot path never auto-routes here) |
+| Default concierge / orchestration | `google/gemma-4-31b-it:free` | `BEAM_AGENT_MODEL` | normal fragrance chat |
+| Premium / synthesis | `tencent/hy3-preview` | `BEAM_AGENT_MODEL_STRONG` | the closing synthesis turn; the whole premium lane |
+| Premium-lane orchestration | `google/gemma-4-31b-it:free` | `BEAM_AGENT_MODEL_PREMIUM` | tool-calling turns on the premium lane (NOT the closer) |
+| Deep strategy | `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free` | `BEAM_AGENT_MODEL_DEEP` | gated deep workflows only (hot path never auto-routes here) |
 
 Code: `openRouterProvider.ts` (`defaultOpenRouterModel` / `strongOpenRouterModel`
 / `deepOpenRouterModel`), `provider.ts` (`resolveBeamModels(lane)`,
 `resolveDeepModel`). Anthropic-direct stays as the graceful fallback provider.
 
-The research lane (`research/researchConfig.ts`) already defaulted to
-`minimax/minimax-m3` and `moonshotai/kimi-k2.7-code`, matching the brief.
+The research lane (`research/researchConfig.ts`) defaults to the same free stack:
+`google/gemma-4-31b-it:free` for the single/standard/degraded lanes and
+`tencent/hy3-preview` for premium research. Slugs drift — pin per deployment via env.
 
 ## 2. Deterministic concierge lane (brief §03)
 

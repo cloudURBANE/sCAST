@@ -2,8 +2,8 @@
  * Pure unit tests for provider/lane → model resolution. No network.
  *   node --experimental-strip-types --test src/beam-agent/provider.test.ts
  *
- * Locks in the cost-critical invariant: the premium lane steps ORCHESTRATION up
- * to the cheap premium tier (M3) but reserves the strong (possibly Sonnet)
+ * Locks in the cost-critical invariant: the premium lane keeps ORCHESTRATION on
+ * the cheap premium tier (free Gemma) but reserves the strong (possibly Sonnet)
  * synthesis slug for the closing turn only — it is never the orchestration model.
  */
 import { test } from "node:test";
@@ -28,7 +28,7 @@ function withEnv(vars: Record<string, string | undefined>, fn: () => void): void
   }
 }
 
-test("OpenRouter premium lane keeps orchestration cheap (M3) and synthesis strong", () => {
+test("OpenRouter premium lane keeps orchestration cheap (free Gemma) and synthesis strong", () => {
   withEnv(
     {
       BEAM_AGENT_PROVIDER: "openrouter",
@@ -41,14 +41,14 @@ test("OpenRouter premium lane keeps orchestration cheap (M3) and synthesis stron
     () => {
       const premium = resolveBeamModels("premium");
       assert.ok(premium);
-      assert.equal(premium!.model, "minimax/minimax-m3");
+      assert.equal(premium!.model, "google/gemma-4-31b-it:free");
       assert.equal(premium!.synthesisModel, "anthropic/claude-sonnet-4.6");
       // The blowup we are guarding against: premium orchestration == the closer.
       assert.notEqual(premium!.model, premium!.synthesisModel);
 
       const def = resolveBeamModels("default");
       assert.ok(def);
-      assert.equal(def!.model, "minimax/minimax-m2.5");
+      assert.equal(def!.model, "google/gemma-4-31b-it:free");
       assert.equal(def!.synthesisModel, "anthropic/claude-sonnet-4.6");
     },
   );
@@ -100,7 +100,7 @@ test("lane-aware synthesis override routes each lane's closer independently", ()
       const premium = resolveBeamModels("premium");
       assert.equal(def!.synthesisModel, "deepseek/deepseek-v4-flash");
       // Orchestration is untouched by the synthesis override.
-      assert.equal(def!.model, "minimax/minimax-m2.5");
+      assert.equal(def!.model, "google/gemma-4-31b-it:free");
       // Premium lane, no override → falls back to the strong slug (unchanged).
       assert.equal(premium!.synthesisModel, "anthropic/claude-sonnet-4.6");
     },
@@ -117,8 +117,8 @@ test("no synthesis override → both lanes keep the strong slug (default unchang
       BEAM_AGENT_SYNTH_MODEL_PREMIUM: undefined,
     },
     () => {
-      assert.equal(resolveBeamModels("default")!.synthesisModel, "minimax/minimax-m3");
-      assert.equal(resolveBeamModels("premium")!.synthesisModel, "minimax/minimax-m3");
+      assert.equal(resolveBeamModels("default")!.synthesisModel, "tencent/hy3-preview");
+      assert.equal(resolveBeamModels("premium")!.synthesisModel, "tencent/hy3-preview");
     },
   );
 });

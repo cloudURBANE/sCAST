@@ -157,6 +157,97 @@ test("redis: a store error degrades to in-memory (no throw)", async () => {
   ]);
 });
 
+/**
+ * RedisLike fake that yields the event loop on every get/set, so a naive
+ * read-modify-write would interleave: two concurrent appends would both read the
+ * same prior turns before either writes, and the second write would clobber the
+ * first. The per-session mutex must prevent that.
+ */
+class SlowFakeRedis implements RedisLike {
+  private store = new Map<string, string>();
+  async eval(): Promise<unknown> {
+    throw new Error("unused");
+  }
+  async get(key: string): Promise<string | null> {
+    await Promise.resolve(); // yield, exposing any unserialized interleave
+    return this.store.get(key) ?? null;
+  }
+  async set(key: string, value: string): Promise<unknown> {
+    await Promise.resolve(); // yield
+    this.store.set(key, value);
+    return "OK";
+  }
+  async del(key: string): Promise<number> {
+    return this.store.delete(key) ? 1 : 0;
+  }
+}
+
+test("redis: concurrent appends to one session are serialized (no lost/reordered turns)", async () => {
+  const client = new SlowFakeRedis();
+  __setSessionRedisForTests(async () => client);
+  const c = ctx();
+  // Fire both without awaiting between them; the per-key lock must order them.
+  await Promise.all([appendSessionTurn(c, "q1", "r1"), appendSessionTurn(c, "q2", "r2")]);
+
+  const history = await loadSessionHistory(c);
+  // Both exchanges present, in order, with no loss or duplication.
+  assert.deepEqual(history, [
+    { role: "user", content: "q1" },
+    { role: "assistant", content: "r1" },
+    { role: "user", content: "q2" },
+    { role: "assistant", content: "r2" },
+  ]);
+});
+
+test("in-memory: concurrent appends to one session are serialized", async () => {
+  __setSessionRedisForTests(async () => null);
+  const c = ctx();
+  await Promise.all([appendSessionTurn(c, "q1", "r1"), appendSessionTurn(c, "q2", "r2")]);
+
+  const history = await loadSessionHistory(c);
+  assert.equal(history.length, 4);
+  assert.deepEqual(history, [
+    { role: "user", content: "q1" },
+    { role: "assistant", content: "r1" },
+    { role: "user", content: "q2" },
+    { role: "assistant", content: "r2" },
+  ]);
+});
+
+test("concurrent saveSessionState + appendSessionTurn for one session don't clobber", async () => {
+  const client = new SlowFakeRedis();
+  __setSessionRedisForTests(async () => client);
+  const c = ctx();
+  await appendSessionTurn(c, "q1", "r1");
+  // A state save racing an append: both touch the same record; the lock must let
+  // the append's turn survive and the state save's slots survive.
+  await Promise.all([
+    saveSessionState(c, { slots: { month: "August" } }),
+    appendSessionTurn(c, "q2", "r2"),
+  ]);
+
+  const session = await loadSession(c);
+  assert.equal(session.turns.length, 4); // both appends survived
+  assert.equal(session.state.slots.month, "August"); // state save survived
+});
+
+test("different session keys are NOT serialized against each other (both persist)", async () => {
+  const client = new SlowFakeRedis();
+  __setSessionRedisForTests(async () => client);
+  const a = ctx();
+  const b = ctx();
+  await Promise.all([appendSessionTurn(a, "for-a", "reply-a"), appendSessionTurn(b, "for-b", "reply-b")]);
+
+  assert.deepEqual(await loadSessionHistory(a), [
+    { role: "user", content: "for-a" },
+    { role: "assistant", content: "reply-a" },
+  ]);
+  assert.deepEqual(await loadSessionHistory(b), [
+    { role: "user", content: "for-b" },
+    { role: "assistant", content: "reply-b" },
+  ]);
+});
+
 // Restore the default backend for any later-loaded suites in the same process.
 test("teardown: restore default redis getter", () => {
   __setSessionRedisForTests(async () => null);

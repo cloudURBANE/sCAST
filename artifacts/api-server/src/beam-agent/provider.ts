@@ -26,9 +26,10 @@ import {
 export type BeamProvider = "openrouter" | "anthropic";
 
 /**
- * Concierge lane (brief §03.2). The cheap `default` lane (MiniMax M2.5) handles
- * normal fragrance chat; the `premium` lane (MiniMax M3) is reserved for long /
- * multi-turn / nuanced work. The lane is chosen deterministically at the route
+ * Concierge lane (brief §03.2). The cheap `default` lane (free Gemma concierge)
+ * handles normal fragrance chat; the `premium` lane (also free Gemma orchestration)
+ * is reserved for long / multi-turn / nuanced work, with the strong hy3-preview
+ * closer reserved for synthesis. The lane is chosen deterministically at the route
  * (see laneSelector.ts) — no extra router LLM call.
  */
 export type BeamLane = "default" | "premium";
@@ -71,8 +72,9 @@ export function isBeamAgentEnabled(): boolean {
  * for orchestration and reserve the strong slug for the closing synthesis turn
  * only — that "cheap orchestration + smart closer" split is the documented intent.
  * The lane changes only the *orchestration* tier: `default` runs the cheap
- * concierge model (M2.5 / Haiku), `premium` steps orchestration up to the premium
- * tier (M3) for nuanced / multi-item missions. Crucially, premium orchestration is
+ * concierge model (free Gemma / Haiku), `premium` steps orchestration up to the
+ * premium tier (free Gemma premium-orch) for nuanced / multi-item missions.
+ * Crucially, premium orchestration is
  * NOT the synthesis slug — reusing the (often Sonnet-overridden) strong slug for
  * every premium orchestration turn is what previously made a single "trip/kit"
  * mission cost ~$0.60 (7+ closer-priced tool turns). A no-arg call keeps the

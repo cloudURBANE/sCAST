@@ -15,7 +15,7 @@ const { toOpenAiMessages, toOpenAiTools, openAiResponseToClaude } = __test;
 test("modelSupportsCaching matches Anthropic slugs only", () => {
   assert.equal(modelSupportsCaching("anthropic/claude-sonnet-4.6"), true);
   assert.equal(modelSupportsCaching("claude-haiku-4-5"), true);
-  assert.equal(modelSupportsCaching("minimax/minimax-m2.5"), false);
+  assert.equal(modelSupportsCaching("google/gemma-4-31b-it:free"), false);
   assert.equal(modelSupportsCaching(undefined), false);
 });
 
@@ -65,7 +65,7 @@ test("premiumOrchestrationModel never returns the synthesis (strong) slug", () =
   try {
     // Premium orchestration must stay on its own cheap tier even when the strong
     // synthesis slug is overridden to an expensive Anthropic model.
-    assert.equal(premiumOrchestrationModel(), "minimax/minimax-m3");
+    assert.equal(premiumOrchestrationModel(), "google/gemma-4-31b-it:free");
   } finally {
     if (prevPremium === undefined) delete process.env.BEAM_AGENT_MODEL_PREMIUM;
     else process.env.BEAM_AGENT_MODEL_PREMIUM = prevPremium;
