@@ -71,6 +71,7 @@ import type { WeatherData } from '@/context/WeatherContext';
 import type { CurateCollectionResult } from '@/lib/collectionCuration';
 import { useDragToScroll } from '@/hooks/useDragToScroll';
 import { useMarqueeSwipe } from '@/hooks/useMarqueeSwipe';
+import { isBodyScrollLockActive } from '@/hooks/use-modal-behavior';
 import { isIpadSafariPerformanceMode } from '@/lib/platform';
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)
@@ -588,6 +589,13 @@ const BeamActivityTrail: React.FC<{
 function recoverViewportAfterKeyboard(): void {
   if (typeof window === 'undefined') return;
   const correct = () => {
+    // While the Beam panel is open (or just closing) the body scroll-lock owns
+    // scroll restoration. On iPhone it pins <body> with position:fixed, so this
+    // correction is a no-op while open and, on close, would fight the lock's own
+    // deferred scrollTo — a race that surfaces as a viewport jump, especially
+    // after an iOS screen-lock freezes the keyboard-dismiss resize/timer and the
+    // recovery lands late. Defer to the lock entirely in that window.
+    if (isBodyScrollLockActive()) return;
     if (window.scrollY > 0) window.scrollTo({ top: 0 });
   };
   const vv = window.visualViewport;
