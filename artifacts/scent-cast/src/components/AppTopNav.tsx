@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, LogOut, Settings, Share2, Swords, UsersRound } from 'lucide-react';
+import { Home, LogOut, Settings, Share2, ShieldCheck, Swords, UsersRound } from 'lucide-react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { NotificationFeed } from './notifications/NotificationFeed';
@@ -138,6 +138,16 @@ const AccountMenu: React.FC<AccountMenuProps> = ({
           <Share2 size={15} />
           Share
         </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link
+            to="/cookies"
+            className="cursor-pointer rounded-[6px] px-3 py-2.5 text-[13px] font-semibold uppercase tracking-[0.14em] text-[#f4debd] focus:bg-scent-accent/15 focus:text-white"
+          >
+            <ShieldCheck size={15} />
+            Privacy &amp; Cookies
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator className="bg-scent-accent/15" />
         <DropdownMenuItem
           className="cursor-pointer rounded-[6px] px-3 py-2.5 text-[13px] font-semibold uppercase tracking-[0.14em] text-[#f4debd] focus:bg-scent-accent/15 focus:text-white"
           onSelect={onSignOut}
