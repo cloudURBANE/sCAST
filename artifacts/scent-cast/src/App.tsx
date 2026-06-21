@@ -1024,6 +1024,56 @@ function DashboardView() {
     };
   }, [authToken, resumeCurationToken, openFragranceDetail]);
 
+  // ── PWA shortcut deep-links ──────────────────────────────────────────────
+  // Manifest shortcuts (and shared links) can carry `?intent=search` or
+  // `?intent=weekly` to jump straight to the search card or the weekly scent
+  // forecast.  We read the param once, act on it, then strip both `intent`
+  // and `source` via replaceState — same pattern as the `?curation=` handler
+  // above — so a refresh is clean and React Router isn't disturbed.
+  const intentHandledRef = useRef<string | null>(null);
+  useEffect(() => {
+    const raw = location.search;
+    if (intentHandledRef.current === raw) return;
+    intentHandledRef.current = raw;
+
+    const params = new URLSearchParams(raw);
+    const intent = params.get('intent');
+    if (!intent) return;
+
+    // Strip shortcut params immediately so a later refresh is clean.
+    if (typeof window !== 'undefined' && window.history?.replaceState) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('intent');
+      url.searchParams.delete('source');
+      window.history.replaceState(window.history.state, '', url.toString());
+    }
+
+    // Defer the scroll/focus until the next frame to ensure the target DOM
+    // node has painted after route-level suspense boundaries resolve.
+    requestAnimationFrame(() => {
+      if (intent === 'search') {
+        setViewState('search');
+        heroVaultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        // Focus the search input after the scroll animation settles.
+        setTimeout(() => {
+          const searchInput = document.getElementById('scent-add-to-vault-search');
+          if (searchInput) {
+            searchInput.focus();
+            // On mobile (non-hover devices) focusing programmatically may not
+            // raise the keyboard; a synthetic click nudges Safari/Chrome PWA.
+            if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
+              searchInput.click();
+            }
+          }
+        }, 400);
+      } else if (intent === 'weekly') {
+        document
+          .getElementById('weekly-outlook-section')
+          ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+  }, [location.search, setViewState]);
+
   // iOS PWA standalone mode reports viewport/safe-area differently than Safari;
   // keep this shell padding tied to --bottomnav-h so fixed nav content has space.
   return (
@@ -1268,7 +1318,7 @@ function DashboardView() {
             // Any residual height becomes measured breathing room between the
             // atmosphere strip and forecast title; it can no longer accumulate
             // beneath the date cards. Normal flow on md+ (no bottom nav).
-            <div className="mt-auto md:mt-0">
+            <div id="weekly-outlook-section" className="mt-auto md:mt-0" style={{ scrollMarginTop: 'calc(var(--topbar-h) + 1rem)' }}>
               <WeeklyOutlookDashboard
                 items={items}
                 weather={weather}
