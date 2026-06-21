@@ -71,7 +71,7 @@ import type { WeatherData } from '@/context/WeatherContext';
 import type { CurateCollectionResult } from '@/lib/collectionCuration';
 import { useDragToScroll } from '@/hooks/useDragToScroll';
 import { useMarqueeSwipe } from '@/hooks/useMarqueeSwipe';
-import { isIpadSafariPerformanceMode } from '@/lib/platform';
+import { isConstrainedTouchDevice, isIpadSafariPerformanceMode } from '@/lib/platform';
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)
   ?.trim()
@@ -934,9 +934,15 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
 }) => {
   const reduceMotion = useReducedMotion();
   const ipadPerformanceMode = useRef(isIpadSafariPerformanceMode()).current;
-  const calmMotion = Boolean(reduceMotion) || ipadPerformanceMode;
-  // calmMotion drops the heavy layout / spring / reveal transitions on iPad and
-  // for OS reduced-motion. The tiny live-progress affordances — the working
+  // Phone-class coarse-pointer devices (iPhone / small Android) carry the lowest
+  // compositor budget. Running the panel's heavy spring + `layout` + staggered
+  // reveal motion there is the same layer-churn profile tied to the iOS
+  // "A problem repeatedly occurred" modal OOM — so they join iPad performance
+  // mode in dropping it. iPads are intentionally excluded by isConstrainedTouchDevice.
+  const constrainedTouch = useRef(isConstrainedTouchDevice()).current;
+  const calmMotion = Boolean(reduceMotion) || ipadPerformanceMode || constrainedTouch;
+  // calmMotion drops the heavy layout / spring / reveal transitions on iPad,
+  // phone-class touch devices, and for OS reduced-motion. The tiny live-progress affordances — the working
   // spinner and the "thinking" dots — are a single small rotating/pulsing icon,
   // negligible on WebKit's compositor. Freezing them under iPad performance mode
   // made a live Beam run read as a stuck loader that "doesn't move" and then
