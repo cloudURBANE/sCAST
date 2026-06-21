@@ -498,7 +498,19 @@ a {
 .forecast-hero-bottle .bottle-packshot-frame[data-normalized="true"][data-variant="featured"] {
   transform: translate(var(--bottle-frame-x), var(--bottle-frame-y))
     scale(var(--bottle-frame-scale));
-  transform-origin: center bottom;
+  transform-origin: center center;
+}
+
+/* Align forecast hero bottle to the vertical center instead of the bottom shelf */
+.forecast-hero-bottle .bottle-artboard {
+  justify-content: center;
+}
+.forecast-hero-bottle .bottle-packshot-frame {
+  justify-content: center;
+}
+.forecast-hero-bottle .bottle-packshot-img,
+.forecast-hero-bottle .bottle-packshot-video {
+  object-position: center center;
 }
 
 .bottle-packshot-img,
@@ -1248,16 +1260,6 @@ a {
     box-shadow var(--scent-transition-base) var(--scent-ease-out);
 }
 
-/* Compositor relief: `mix-blend-mode: screen` forces every card's specular
-   frame into its own blend layer, which WebKit re-composites on each scroll
-   frame across the whole grid. On constrained touch surfaces (phone-class and
-   iPad Safari) drop the blend — over the dark card surface the bright corner
-   glints render almost identically with normal compositing, at a fraction of
-   the cost. Desktop keeps the true screen blend. */
-.scent-touch-perf .scent-card-frame::before {
-  mix-blend-mode: normal;
-}
-
 .scent-card-brand {
   --brand-size: clamp(1.71rem, 2.565vw, 2.25rem);
   color: #f7f3ec;
@@ -1532,7 +1534,7 @@ a {
      ends rather than reading as a hard left/right crop on narrow screens. The
      floor is widened so a paused/at-rest marquee never exposes a partial word
      flush against either edge on phone widths. */
-  --hero-edge-fade: clamp(4.25rem, 11vw, 5.5rem);
+  --hero-edge-fade: clamp(3.5rem, 9vw, 5rem);
   -webkit-mask-image: linear-gradient(
     90deg,
     transparent 0,
@@ -1842,7 +1844,7 @@ a {
      left a stat cell ("Temperature", "48% H…") sitting half-cropped flush
      against the edge at rest. A larger floor dissolves the partial cell into
      the band so no value text reads as hard-clipped. */
-  --atmosphere-edge-fade: clamp(4.5rem, 13vw, 6rem);
+  --atmosphere-edge-fade: clamp(3.5rem, 10vw, 5.5rem);
   -webkit-mask-image: linear-gradient(
     90deg,
     transparent 0,
@@ -1904,18 +1906,6 @@ a {
   border-left: 1px solid rgba(212, 175, 55, 0.12);
 }
 
-@media (max-width: 480px) {
-  .scent-atmosphere-marquee {
-    --atmosphere-edge-fade: clamp(2.75rem, 12vw, 3.5rem);
-  }
-
-  .scent-atmosphere-marquee-cell {
-    flex-basis: clamp(9.5rem, 44vw, 10.5rem);
-    width: clamp(9.5rem, 44vw, 10.5rem);
-    max-width: clamp(9.5rem, 44vw, 10.5rem);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .scent-marquee-track-row {
     animation: none;
@@ -1924,9 +1914,7 @@ a {
   }
 
   .scent-atmosphere-marquee-track {
-    animation: none;
-    transform: translate3d(0, 0, 0);
-    will-change: auto;
+    --atmosphere-marquee-duration: 240s;
   }
 }
 
@@ -2247,12 +2235,15 @@ a {
 @keyframes scent-lava-fallback-drift {
   0%, 100% {
     background-position: 12% 18%, 78% 68%, 0% 50%, 62% 18%;
+    filter: saturate(0.98) brightness(0.95);
   }
   45% {
     background-position: 22% 28%, 70% 58%, 100% 50%, 55% 24%;
+    filter: saturate(1.06) brightness(1.02);
   }
   72% {
     background-position: 6% 34%, 86% 62%, 42% 50%, 67% 11%;
+    filter: saturate(1) brightness(0.98);
   }
 }
 
@@ -2276,7 +2267,6 @@ a {
 }
 
 .scent-lava-fallback--visible.scent-lava-fallback--animated {
-  will-change: background-position;
   animation: scent-lava-fallback-drift 26s ease-in-out infinite;
 }
 
@@ -2428,15 +2418,6 @@ a {
   }
 
   .scent-lava-fallback--visible.scent-lava-fallback--animated {
-    animation: none;
-  }
-
-  /* Infinite auto-scrolling marquees must not run for users who request
-     reduced motion (WCAG 2.2.2). They stay static and remain pointer-draggable. */
-  .scent-marquee-track-row,
-  .scent-note-marquee-track,
-  .scent-atmosphere-marquee-track,
-  .scent-community-marquee-track {
     animation: none;
   }
 }
@@ -3712,8 +3693,7 @@ a {
 
 /* Arena animations */
 @keyframes arena-bar-fill {
-  from { transform: scaleX(0); }
-  to { transform: scaleX(1); }
+  from { width: 0%; }
 }
 
 @keyframes arena-fade-in {
@@ -3739,7 +3719,6 @@ a {
 }
 
 .arena-bar-segment {
-  transform-origin: left center;
   animation: arena-bar-fill 700ms var(--scent-ease-out) both;
 }
 
