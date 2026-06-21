@@ -22,7 +22,7 @@ mcp_servers:
     url: "${BEAM_MCP_URL}"
     headers:
       # Resolved at connect time from ~/.hermes/.env (see dot-hermes-env.example).
-      Authorization: "Bearer ${BEAM_AGENT_TOKEN}"
+      Authorization: "Bearer ${BEAM_AGENT_TOKEN_V2}"
     tools:
       # Expose ONLY the Beam read tools. No write/terminal/browser tools here.
       include:

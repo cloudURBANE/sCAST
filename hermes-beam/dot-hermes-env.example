@@ -10,7 +10,7 @@ BEAM_MCP_URL=http://127.0.0.1:8848/mcp
 # Mint it (owner/dev mode) with, from the repo:
 #   pnpm --filter @workspace/api-server run beam:mint-token --user <USER_ID> --tenant <TENANT_ID>
 # The minter and the MCP server must share the SAME BEAM_AGENT_TOKEN_SECRET.
-BEAM_AGENT_TOKEN=paste-the-minted-token-here
+BEAM_AGENT_TOKEN_V2=paste-the-minted-token-here
 
 # --- OpenRouter provider credential -----------------------------------------
 # Beam routes its reasoning model through OpenRouter (pay-per-token, one key for

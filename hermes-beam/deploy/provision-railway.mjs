@@ -16,9 +16,9 @@
  *   2. hermes-agent service — same repo/branch,
  *      railwayConfigFile=hermes-beam/deploy/railway.hermes-agent.json,
  *      vars: BEAM_MCP_URL=http://beam-mcp.railway.internal:8848/mcp,
- *      OPENROUTER_API_KEY (ref sCAST), BEAM_AGENT_TOKEN (see note).
+ *      OPENROUTER_API_KEY (ref sCAST), BEAM_AGENT_TOKEN_V2 (see note).
  *
- * NOTE on BEAM_AGENT_TOKEN: the hermes-agent needs a minted delegation token.
+ * NOTE on BEAM_AGENT_TOKEN_V2: the hermes-agent needs a minted delegation token.
  * Mint it against the SAME secret the MCP uses:
  *   railway run --service sCAST -- pnpm --filter @workspace/api-server run beam:mint-token --user <ID> --tenant <ID>
  * then set it:  node hermes-beam/deploy/provision-railway.mjs --set-hermes-token <token>
@@ -100,7 +100,7 @@ const hermesToken =
 await ensureService("hermes-agent", "hermes-beam/deploy/railway.hermes-agent.json", {
   BEAM_MCP_URL: "http://beam-mcp.railway.internal:8848/mcp",
   OPENROUTER_API_KEY: "${{ sCAST.OPENROUTER_API_KEY }}",
-  BEAM_AGENT_TOKEN: hermesToken,
+  BEAM_AGENT_TOKEN_V2: hermesToken,
 });
 
 console.log("\nDone. Check builds:  railway logs --service beam-mcp   (and hermes-agent)");
