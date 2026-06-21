@@ -99,8 +99,8 @@ BEAM_AGENT_SYNTH_MODEL_PREMIUM=...          # per-lane synthesis closer, premium
 ```
 
 Defaults when unset (confirm slugs in your provider dashboard — they drift):
-OpenRouter uses `minimax/minimax-m2.5` (`BEAM_AGENT_MODEL`) and
-`minimax/minimax-m3` (`BEAM_AGENT_MODEL_STRONG` / `BEAM_AGENT_MODEL_PREMIUM`);
+OpenRouter uses `google/gemma-4-31b-it:free` (`BEAM_AGENT_MODEL` /
+`BEAM_AGENT_MODEL_PREMIUM`) and `tencent/hy3-preview` (`BEAM_AGENT_MODEL_STRONG`);
 Anthropic-direct uses `claude-haiku-4-5-20251001` and `claude-sonnet-4-6`. The
 `BEAM_AGENT_SYNTH_MODEL_*` overrides fall back to the strong slug when unset.
 

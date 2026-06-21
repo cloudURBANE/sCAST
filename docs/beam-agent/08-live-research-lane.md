@@ -82,10 +82,10 @@ still asserts exactly those five).
 
 | Mode | max_results | max_output_tokens | target | hard cap | default model (env-overridable) |
 |---|---|---|---|---|---|
-| `single_source_check` | 1 | 450 | ~$0.010 | $0.025 | `minimax/minimax-m3` |
-| `standard_research` | 2 | 700 | ~$0.025 | $0.060 | `minimax/minimax-m3` |
-| `premium_research` | 5 | 1200 | ~$0.090 | $0.150 | `moonshotai/kimi-k2.7-code` |
-| _degraded fallback_ | 1 | 450 | ~$0.010 | $0.025 | `stepfun/step-3.7-flash` |
+| `single_source_check` | 1 | 450 | ~$0.010 | $0.025 | `google/gemma-4-31b-it:free` |
+| `standard_research` | 2 | 700 | ~$0.025 | $0.060 | `google/gemma-4-31b-it:free` |
+| `premium_research` | 5 | 1200 | ~$0.090 | $0.150 | `tencent/hy3-preview` |
+| _degraded fallback_ | 1 | 450 | ~$0.010 | $0.025 | `google/gemma-4-31b-it:free` |
 
 **Structural enforcement, not a post-hoc kill switch:** the real cost lever is
 `max_results` (Exa/Parallel bill ~$0.005 ≤10 results) + `max_output_tokens` +
@@ -143,11 +143,10 @@ BEAM_RESEARCH_ENGINE=exa            # exa | parallel | native
 BEAM_RESEARCH_INCLUDE_DOMAINS=fragrantica.com,parfumo.com,basenotes.com,luckyscent.com
 ```
 
-> **Verify the model slugs before enabling.** The defaults were verified against
-> the live OpenRouter catalog on 2026-06-14 — `minimax/minimax-m3`,
-> `moonshotai/kimi-k2.7-code`, and `stepfun/step-3.7-flash` all resolve. Provider
-> slugs still drift, so re-confirm in the OpenRouter dashboard and pin via env if a
-> default ever starts 404ing at runtime.
+> **Verify the model slugs before enabling.** The defaults are the free/cheap
+> stack — `google/gemma-4-31b-it:free` for the single/standard/degraded lanes and
+> `tencent/hy3-preview` for premium research. Provider slugs drift, so re-confirm in
+> the OpenRouter dashboard and pin via env if a default ever starts 404ing at runtime.
 
 ---
 

@@ -91,7 +91,7 @@ test("redaction: served events carry only safe fields — no user id, message, o
       qualityViolations: ["mission_unfulfilled"],
     }),
     lane: "premium",
-    orchestrationModel: "minimax/minimax-m3",
+    orchestrationModel: "google/gemma-4-31b-it:free",
     synthesisModel: "anthropic/claude-sonnet",
     scenario: "travel_kit",
   });
@@ -104,7 +104,7 @@ test("redaction: served events carry only safe fields — no user id, message, o
   assert.equal(event.synthesisFailureReason, "error");
   assert.equal(event.gatePassed, false);
   assert.deepEqual(event.gateViolations, ["mission_unfulfilled"]);
-  assert.equal(event.orchestrationModel, "minimax/minimax-m3");
+  assert.equal(event.orchestrationModel, "google/gemma-4-31b-it:free");
   assert.equal(event.synthesisModel, "anthropic/claude-sonnet");
   assert.equal(event.toolCalls, 2);
 

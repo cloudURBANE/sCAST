@@ -35,8 +35,8 @@ Per-mission before: default ≈ **$0.08**, premium ≈ **$0.40–0.60**.
   prompt + tool schemas are run-stable (computed once per run — [beamAgentLoop.ts:497,580](../../artifacts/api-server/src/beam-agent/beamAgentLoop.ts)),
   so calls 2..N in a run read that prefix at ~10% of input price.
 - **OpenRouter** ([openRouterProvider.ts](../../artifacts/api-server/src/beam-agent/openRouterProvider.ts)):
-  `modelSupportsCaching()` gates caching to Anthropic slugs only (MiniMax keeps the plain-string
-  shape — no surprise behavior on the cheap lane). When enabled, the system prompt is sent as a
+  `modelSupportsCaching()` gates caching to Anthropic slugs only (the cheap free lane keeps the
+  plain-string shape — no surprise behavior on the cheap lane). When enabled, the system prompt is sent as a
   single cached text part. **Limitation (intentional, for the next pass):** only the *system*
   prompt is cached on OpenRouter — the transcript/tool-result tail is **not** yet cached there
   (tool-role message parts aren't a documented OpenRouter cache surface). On Anthropic-direct the
@@ -46,8 +46,8 @@ Per-mission before: default ≈ **$0.08**, premium ≈ **$0.40–0.60**.
 - **Separated the two model roles** ([provider.ts:`resolveBeamModels`](../../artifacts/api-server/src/beam-agent/provider.ts)):
   the `strong`/synthesis slug (often a Sonnet override via `BEAM_AGENT_MODEL_STRONG`) is now used
   for the **closing synthesis turn only**. Premium **orchestration** uses its own cheap tier via
-  the new `premiumOrchestrationModel()` (`BEAM_AGENT_MODEL_PREMIUM`, default `minimax/minimax-m3`).
-  This restores brief §03.2's actual intent (premium = M3) and means premium can never again put
+  the new `premiumOrchestrationModel()` (`BEAM_AGENT_MODEL_PREMIUM`, default `google/gemma-4-31b-it:free`).
+  This restores brief §03.2's actual intent (premium orchestration stays on the cheap free lane) and means premium can never again put
   the tool loop on Sonnet. Anthropic-direct mirrors this (premium orchestration stays on Haiku/the
   default unless `BEAM_AGENT_MODEL_PREMIUM` is pinned).
 - **Narrowed over-broad triggers** ([laneSelector.ts](../../artifacts/api-server/src/beam-agent/laneSelector.ts)):
@@ -102,7 +102,7 @@ decision (see §2).
   The closing synthesis transcript ends on the folded user instruction, so the whole
   ~25k-token prefix (system + every tool result) is now read from cache on the Sonnet
   synthesis call — the call where the discount pays off. Restricted to the user role
-  (the documented OpenRouter surface); tool-role parts left untouched. MiniMax keeps
+  (the documented OpenRouter surface); tool-role parts left untouched. The cheap free lane keeps
   the plain-string shape. Anthropic-direct already cached the transcript tail.
 - Tests: caching marks the trailing user turn; non-caching leaves it a plain string.
 
@@ -140,8 +140,8 @@ not the system prompt. Caching helps repeat turns; trimming shrinks the base.
 ### #3 — Default-lane synthesis model (product call — confirm with owner)
 Today both lanes synthesize on the strong (Sonnet) slug → a ~$0.077 floor on every default
 mission. Options, cheapest-first:
-- **(a)** Default-lane synthesis on MiniMax M3 instead of Sonnet; reserve Sonnet synthesis for the
-  premium lane only. Wire this in `resolveBeamModels` by returning a lane-aware `synthesisModel`.
+- **(a)** Default-lane synthesis on the cheap free-stack closer instead of Sonnet; reserve Sonnet
+  synthesis for the premium lane only. Wire this in `resolveBeamModels` by returning a lane-aware `synthesisModel`.
 - **(b)** Keep Sonnet synthesis but rely on #1+#2 to make its input cheap. Validate the real
   post-cache cost before deciding — caching may make Sonnet synthesis cheap enough to keep
   everywhere (best quality).
@@ -171,14 +171,14 @@ mission. Options, cheapest-first:
 |---|---|---|
 | `REDIS_URL` | the Upstash URL | **Critical.** Without it, sessions fall back to a 1h in-memory Map on a single replica ([beamSessionStore.ts:17,47](../../artifacts/api-server/src/beam-agent/beamSessionStore.ts)) — a redeploy mid-session wipes all memory. Confirm it's set AND that logs don't show "redis … failed - using in-memory session". |
 | `BEAM_AGENT_MODEL_STRONG` | the Sonnet slug (e.g. `anthropic/claude-sonnet-4.6`) | Now used for **synthesis only**. Confirm it's still the closer you want. |
-| `BEAM_AGENT_MODEL_PREMIUM` | **leave unset** (→ `minimax/minimax-m3`), or pin to M3 | NEW. **Never set this to a Sonnet/closer slug** — that re-creates the premium blowup. |
-| `BEAM_AGENT_MODEL` | unset (→ `minimax/minimax-m2.5`) | Default-lane orchestration. |
+| `BEAM_AGENT_MODEL_PREMIUM` | **leave unset** (→ `google/gemma-4-31b-it:free`), or pin to your own cheap orch slug | NEW. **Never set this to a Sonnet/closer slug** — that re-creates the premium blowup. |
+| `BEAM_AGENT_MODEL` | unset (→ `google/gemma-4-31b-it:free`) | Default-lane orchestration. |
 | `OPENROUTER_API_KEY` | the (rotated) key | The leaked key from the diagnosis chat must be **rotated** in the OpenRouter dashboard. |
 | `BEAM_AGENT_PROVIDER` | unset/`openrouter` | Production path. |
 
 **Post-deploy validation:** run the §4 regression transcript live, then read the OpenRouter logs:
-premium missions should show MiniMax (M3) orchestration turns + a single Sonnet synthesis (not 7
-Sonnet turns), and Sonnet calls should show a cache discount on turns after the first.
+premium missions should show free-lane (gemma) orchestration turns + a single strong-closer synthesis (not 7
+closer turns), and the closer's calls should show a cache discount on turns after the first.
 
 ---
 
@@ -212,7 +212,7 @@ premium-lane split; tsc clean; suite 437/437.*
 *Implemented + verified 2026-06-17 (second sitting): #2 record-aware tool-result trim,
 OpenRouter synthesis-transcript caching; confirmed #5 cost cap already in place. tsc clean;
 api-server suite 441/441. **Only remaining item: #3** — whether the DEFAULT lane closes on
-MiniMax M3 instead of Sonnet. That is a product/quality call (the closing recommendation is the
+the cheap free-stack closer instead of Sonnet. That is a product/quality call (the closing recommendation is the
 most user-visible output) and per §3 it needs a quality A/B before flipping, so it was deliberately
 NOT changed here — both lanes still synthesize on the strong (Sonnet) slug, now with cheap cached +
 trimmed input. The split system-cache fine-tuning (§2) was judged low-value vs. blast radius and
