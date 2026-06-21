@@ -2688,7 +2688,13 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                 initial={calmMotion ? false : { opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.28, ease: SCENT_EASE }}
-                className="flex w-full flex-col"
+                // min-w-0 lets the 92%-wide CardShell compute against the
+                // constrained scroll box instead of the card's intrinsic content
+                // width (the fixed 168px radar SVG / long names). Without it the
+                // wrapper grows to its content and the rounded overflow-hidden
+                // frame clips the card at the corners/edges. box-border keeps the
+                // px-1.5 scroll padding inside the frame so 92% never spills past it.
+                className="flex w-full min-w-0 flex-col box-border"
               >
                 <BeamCard
                   card={message.card}
@@ -2744,7 +2750,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                 ease: SCENT_EASE,
                 layout: { duration: 0.52, ease: SCENT_EASE },
               }}
-              className={`relative max-w-[92%] rounded-[calc(var(--radius-scent)-10px)] border px-3.5 py-2.5 text-[13px] leading-relaxed shadow-[inset_0_1px_0_rgba(255,236,183,0.04),0_10px_24px_rgba(0,0,0,0.2)] sm:text-sm ${
+              className={`relative max-w-[92%] min-w-0 break-words [overflow-wrap:anywhere] rounded-[calc(var(--radius-scent)-10px)] border px-3.5 py-2.5 text-[13px] leading-relaxed shadow-[inset_0_1px_0_rgba(255,236,183,0.04),0_10px_24px_rgba(0,0,0,0.2)] sm:text-sm ${
                 message.role === 'user'
                   ? 'self-end border-scent-accent/18 bg-[linear-gradient(180deg,rgba(255,247,236,0.082),rgba(58,45,30,0.16))] text-[#fff7ec]'
                   : message.role === 'system'
