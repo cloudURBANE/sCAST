@@ -263,7 +263,7 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
                         loading={lowRenderBudget ? 'eager' : 'lazy'}
                         fetchPriority={lowRenderBudget && copyIndex === 0 ? 'high' : 'auto'}
                         className="absolute inset-0"
-                        imgClassName="scent-hover-scale brightness-[1.14] contrast-[1.04] transition-transform duration-[900ms] motion-reduce:transition-none"
+                        imgClassName="scent-hover-scale brightness-[1.14] contrast-[1.04] transition-transform duration-500 motion-reduce:transition-none"
                         adjustment={item.imageAdjustment}
                         imageProperties={item.imageProperties}
                         showFrameGuide={false}

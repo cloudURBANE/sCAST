@@ -2237,15 +2237,12 @@ a {
 @keyframes scent-lava-fallback-drift {
   0%, 100% {
     background-position: 12% 18%, 78% 68%, 0% 50%, 62% 18%;
-    filter: saturate(0.98) brightness(0.95);
   }
   45% {
     background-position: 22% 28%, 70% 58%, 100% 50%, 55% 24%;
-    filter: saturate(1.06) brightness(1.02);
   }
   72% {
     background-position: 6% 34%, 86% 62%, 42% 50%, 67% 11%;
-    filter: saturate(1) brightness(0.98);
   }
 }
 
@@ -2269,6 +2266,7 @@ a {
 }
 
 .scent-lava-fallback--visible.scent-lava-fallback--animated {
+  will-change: background-position;
   animation: scent-lava-fallback-drift 26s ease-in-out infinite;
 }
 
@@ -2420,6 +2418,15 @@ a {
   }
 
   .scent-lava-fallback--visible.scent-lava-fallback--animated {
+    animation: none;
+  }
+
+  /* Infinite auto-scrolling marquees must not run for users who request
+     reduced motion (WCAG 2.2.2). They stay static and remain pointer-draggable. */
+  .scent-marquee-track-row,
+  .scent-note-marquee-track,
+  .scent-atmosphere-marquee-track,
+  .scent-community-marquee-track {
     animation: none;
   }
 }
@@ -3695,7 +3702,8 @@ a {
 
 /* Arena animations */
 @keyframes arena-bar-fill {
-  from { width: 0%; }
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
 }
 
 @keyframes arena-fade-in {
@@ -3721,6 +3729,7 @@ a {
 }
 
 .arena-bar-segment {
+  transform-origin: left center;
   animation: arena-bar-fill 700ms var(--scent-ease-out) both;
 }
 

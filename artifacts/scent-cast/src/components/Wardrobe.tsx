@@ -2096,7 +2096,7 @@ export const Wardrobe: React.FC<{
                         imageProperties={featuredItem.imageProperties}
                         isSyncing={isImageSyncing?.(featuredItem)}
                         className="min-h-0 w-full flex-1"
-                        imgClassName="scent-hover-scale transition-transform duration-1000 brightness-[1.15]"
+                        imgClassName="scent-hover-scale transition-transform duration-500 brightness-[1.15] motion-reduce:transition-none"
                         loading="eager"
                         fetchPriority="high"
                       />
@@ -2207,7 +2207,7 @@ export const Wardrobe: React.FC<{
                               imageProperties={item.imageProperties}
                               isSyncing={isImageSyncing?.(item)}
                               className="absolute inset-0"
-                              imgClassName="scent-hover-scale brightness-[1.1] transition-transform duration-[900ms] motion-reduce:transition-none"
+                              imgClassName="scent-hover-scale brightness-[1.1] transition-transform duration-500 motion-reduce:transition-none"
                               loading={prioritizeImage ? 'eager' : 'lazy'}
                               fetchPriority={prioritizeImage ? 'high' : undefined}
                             />
