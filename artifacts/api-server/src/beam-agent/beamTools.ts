@@ -133,7 +133,15 @@ export type BeamToolDeps = {
    * tool result. When absent (lean deploys, tool tests), proposals behave exactly
    * as before — unresolved names are simply dropped.
    */
-  enqueueCuration?: (fragrance: { name: string; brand?: string }) => void;
+  enqueueCuration?: (
+    fragrance: { name: string; brand?: string },
+    opts?: {
+      /** Beam run id — coalesces all of a run's completion notifications into one. */
+      runId?: string;
+      /** Default true. Set false for background cache warms that need no user nudge. */
+      notify?: boolean;
+    },
+  ) => void;
   /**
    * OPTIONAL hybrid-corpus discovery: search the external Python engine for REAL
    * fragrances beyond our local catalog, enriching up to `detailLimit` of them
@@ -662,7 +670,7 @@ export function createBeamTools(deps: BeamToolDeps): BeamToolDefinition[] {
             // still guard here so a wiring slip can NEVER throw into the tool
             // result (which would surface to the model as a failed proposal).
             try {
-              deps.enqueueCuration?.({ name: req.name, brand: req.brand });
+              deps.enqueueCuration?.({ name: req.name, brand: req.brand }, { runId: ctx.runId });
             } catch {
               // Curation is a courtesy; never let it break the proposal.
             }
@@ -942,7 +950,7 @@ export function createBeamTools(deps: BeamToolDeps): BeamToolDefinition[] {
           } else {
             unresolved.push(brand ? `${brand} ${name}` : name);
             try {
-              deps.enqueueCuration?.({ name, brand });
+              deps.enqueueCuration?.({ name, brand }, { runId: ctx.runId });
             } catch {
               // Curation is a courtesy; never let it break the card.
             }
@@ -1157,7 +1165,13 @@ export function createBeamTools(deps: BeamToolDeps): BeamToolDefinition[] {
           // silently when the dep is absent (MCP/lean) or the worker is disabled.
           if (deps.enqueueCuration) {
             try {
-              deps.enqueueCuration({ name: candidate.name, brand: candidate.brand || undefined });
+              // notify:false — this is a background cache warm. The candidate is
+              // already shown inline in this reply, so a per-candidate push would
+              // be pure noise (the old "5-6 notification links" fan-out).
+              deps.enqueueCuration(
+                { name: candidate.name, brand: candidate.brand || undefined },
+                { runId: ctx.runId, notify: false },
+              );
               curated += 1;
             } catch {
               // Curation is a courtesy; never let it break discovery.

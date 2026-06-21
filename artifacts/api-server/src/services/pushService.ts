@@ -384,15 +384,16 @@ export async function sendCategoryPushToUser(
   userId: string,
   category: PushCategory,
   payload: PushPayload,
+  opts?: { dedupeKey?: string },
 ): Promise<{ sent: number; pruned: number; skipped?: boolean }> {
   if (!configured) return { sent: 0, pruned: 0 };
   const prefs = await getPushPreferences(userId);
   const allowed = prefs[category];
   if (!allowed) return { sent: 0, pruned: 0, skipped: true };
 
-  const badgeCount = await bumpBadge(userId);
+  const dedupeKey = opts?.dedupeKey?.trim() || null;
 
-  // Write to the database inAppNotificationsTable
+  // Resolve tenant scope for the persisted feed row.
   let tenantId: string | null = null;
   try {
     const [sub] = await db
@@ -407,9 +408,15 @@ export async function sendCategoryPushToUser(
     // ignore
   }
 
+  // Write the mirror feed row FIRST so a coalescing key can suppress the push.
+  // With a dedupeKey, the unique (user_id, dedupe_key) index makes the insert a
+  // no-op for any later event in the same logical run; an empty `returning` then
+  // means "already notified" and we skip the duplicate web push entirely. Without
+  // a key, behavior is unchanged (every call inserts + sends).
+  let dedupeSuppressed = false;
   try {
     const { inAppNotificationsTable } = await import("@workspace/db/schema");
-    await db.insert(inAppNotificationsTable).values({
+    const values = {
       tenantId,
       userId,
       title: payload.title || "ScentBeam",
@@ -417,10 +424,32 @@ export async function sendCategoryPushToUser(
       url: payload.url || null,
       category,
       read: false,
-    });
+      ...(dedupeKey ? { dedupeKey } : {}),
+    };
+    if (dedupeKey) {
+      const inserted = await db
+        .insert(inAppNotificationsTable)
+        .values(values)
+        .onConflictDoNothing({
+          target: [inAppNotificationsTable.userId, inAppNotificationsTable.dedupeKey],
+        })
+        .returning({ id: inAppNotificationsTable.id });
+      if (inserted.length === 0) dedupeSuppressed = true;
+    } else {
+      await db.insert(inAppNotificationsTable).values(values);
+    }
   } catch (err) {
+    // Degrade like the read paths do: a missing column/table (pre-migration) must
+    // never block the push. We just lose dedupe until the migration lands.
     logger.warn({ err }, "[push] failed to write to in_app_notifications");
   }
 
+  if (dedupeSuppressed) {
+    // Another job in this run already produced the coalesced notification.
+    return { sent: 0, pruned: 0, skipped: true };
+  }
+
+  // Only consume a badge increment for a notification we are actually sending.
+  const badgeCount = await bumpBadge(userId);
   return sendPushToUser(userId, { ...payload, badgeCount });
 }

@@ -12,13 +12,27 @@ function envFlag(value: string | undefined): boolean {
   return /^(1|true|yes|on)$/i.test((value ?? "").trim());
 }
 
+/** An explicitly-falsey env flag in the usual `0|false|no|off` family. */
+function envDisabled(value: string | undefined): boolean {
+  return /^(0|false|no|off)$/i.test((value ?? "").trim());
+}
+
 /**
- * Is external discovery turned on for THIS environment? Off by default so lean /
- * local / test deploys never reach the paid engine, and the tool is simply not
- * exposed until an operator opts in.
+ * Is external discovery turned on for THIS environment?
+ *
+ * ON by default: `beam_discover_external` is the ONLY tool that reaches the live
+ * fragrance engine's search + `/details` enrichment, so leaving it off meant the
+ * agent could only ever return thin local-catalog names and never fetched real
+ * Fragrantica/Basenotes data — the "links but no data" defect. Spend stays bounded
+ * by the per-call (`BEAM_LIMITS.maxExternalResults` / `maxExternalDetailFetch`) and
+ * per-run (`externalDetailRunCap`) caps. Operators can still hard-disable it for a
+ * lean/offline deploy with `BEAM_DISCOVER_EXTERNAL_ENABLED=false|0|off`.
  */
 export function isDiscoverExternalEnabled(): boolean {
-  return envFlag(process.env.BEAM_DISCOVER_EXTERNAL_ENABLED);
+  const raw = process.env.BEAM_DISCOVER_EXTERNAL_ENABLED;
+  if (envDisabled(raw)) return false;
+  // Unset OR truthy → enabled.
+  return true;
 }
 
 /**

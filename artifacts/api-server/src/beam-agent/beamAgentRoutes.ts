@@ -340,12 +340,14 @@ function buildDeps(ctx: BeamRunContext, weather: ScentMissionWeather, sessionSta
     // for enrichment tagged to THIS authenticated user (scope comes from ctx, never
     // model args). Fire-and-forget — the beam loop must not wait on (or fail from)
     // a queue write — so we kick the promise and swallow any error.
-    enqueueCuration: (fragrance) => {
+    enqueueCuration: (fragrance, opts) => {
       void enqueueBeamCuration({
         userId: ctx.userId,
         tenantId: ctx.tenantId,
         name: fragrance.name,
         brand: fragrance.brand,
+        runId: opts?.runId ?? null,
+        notify: opts?.notify,
       }).catch((err) => {
         logger.warn({ err, user: hashUser(ctx.userId) }, "beam curation enqueue failed");
       });
