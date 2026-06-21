@@ -724,7 +724,10 @@ function safeAssistantText(text: string | undefined, fallback: string): string {
   return value;
 }
 
-const BEAM_SCRIPTED_FALLBACK_FAILURE_CODES = new Set<string>(['model_unavailable']);
+// Terminal failure codes that should silently fall back to the scripted mission
+// with NO error shown: the model is not configured (`model_unavailable`) OR the
+// agent is turned off via the runtime kill-switch (`beam_disabled`).
+const BEAM_SCRIPTED_FALLBACK_FAILURE_CODES = new Set<string>(['model_unavailable', 'beam_disabled']);
 
 // User-facing copy for the rare case a turn ends without an answer. Framed as the
 // concierge's own caution (never the user's fault), with no internal jargon ("live

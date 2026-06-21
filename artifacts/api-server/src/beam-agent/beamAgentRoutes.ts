@@ -50,7 +50,7 @@ import { enqueueBeamCuration } from "../services/curationService";
 import { createBeamTools, type BeamCatalogHit, type BeamToolDeps } from "./beamTools.ts";
 import { runBeamAgent } from "./beamAgentLoop.ts";
 import { packetFromWardrobeRow, redactEventForClient } from "./beamToolCore.ts";
-import { resolveBeamBudget, resolveBeamModels, validateBeamModelConfig } from "./provider.ts";
+import { isBeamAgentEnabled, resolveBeamBudget, resolveBeamModels, validateBeamModelConfig } from "./provider.ts";
 import {
   buildObservatoryFeed,
   isObservatoryAuthorized,
@@ -104,6 +104,7 @@ const BEAM_USER_DAILY_SPEND_USD = positiveNumberFromEnv(process.env.BEAM_USER_DA
 // Tag stored in the ledger's `provider` column so beam rows are cleanly
 // separable (via the provider/operation index) from the image-generation rows.
 const BEAM_USAGE_PROVIDER = "beam-agent";
+const BEAM_DISABLED_MESSAGE = "Beam Agent is currently turned off.";
 
 /* ------------------------------------------------------------------ */
 /* In-memory run registry                                             */
@@ -362,6 +363,32 @@ router.post("/runs", runRateLimit, requireAuth, async (req: AuthRequest, res) =>
   const message = typeof body.message === "string" ? body.message.trim() : "";
   if (!message) {
     res.status(400).json({ error: "message is required." });
+    return;
+  }
+
+  // Global runtime kill-switch (env-driven; default ON). When an operator sets
+  // BEAM_AGENT_ENABLED to a falsey value the agent is OFF for ALL users without a
+  // code change: we emit one graceful `beam_disabled` failure and the SPA silently
+  // falls back to the scripted mission (the code is in its fallback set). No model
+  // call, tool work, ledger write, or quota read happens on a disabled run.
+  if (!isBeamAgentEnabled()) {
+    pruneRuns();
+    const runId = `run_${randomUUID()}`;
+    const sessionId =
+      typeof body.sessionId === "string" && body.sessionId ? body.sessionId : `beam_${randomUUID()}`;
+    const ctx: BeamRunContext = { runId, sessionId, tenantId: getTenantId(req), userId: req.user.id };
+    const record: RunRecord = {
+      ctx,
+      weather: sanitizeScentMissionWeather(undefined),
+      events: [],
+      listeners: new Set(),
+      done: false,
+      stopped: false,
+      createdAt: Date.now(),
+    };
+    runs.set(runId, record);
+    makeEmit(record)({ type: "failed", code: "beam_disabled", message: BEAM_DISABLED_MESSAGE });
+    res.status(202).json({ runId, sessionId, eventsUrl: `/api/beam-agent/runs/${runId}/events` });
     return;
   }
 
@@ -760,6 +787,12 @@ export const beamAgentRouter = router;
 
 /** One-line opt-in mount. Call from app.ts when you're ready to enable Beam. */
 export function mountBeamAgent(app: Express): void {
+  if (!isBeamAgentEnabled()) {
+    logger.warn(
+      { beam: { enabled: false } },
+      "Beam Agent is DISABLED via BEAM_AGENT_ENABLED — all runs fall back to the scripted mission.",
+    );
+  }
   // Surface model-configuration footguns once at startup (non-fatal, brief §C).
   for (const warning of validateBeamModelConfig()) {
     logger.warn({ beam: { config: true } }, `beam agent config: ${warning}`);

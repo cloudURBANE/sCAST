@@ -72,6 +72,27 @@ OPENROUTER_APP_TITLE=ScentBeam Beam Agent
 If no provider is configured, runs fail gracefully with a `model_unavailable`
 event — they never crash the server.
 
+## Turn it on/off (runtime kill-switch)
+
+A single env var gates the whole agent at runtime:
+
+```env
+# Default ON. Set to false/0/off/no/disabled (case/space-insensitive) to turn
+# the live agent OFF for ALL users. Anything else (including unset) = ON.
+BEAM_AGENT_ENABLED=true
+```
+
+It is read fresh per request (`isBeamAgentEnabled()` in `provider.ts`), so it is
+an operator switch, not a code change: flip it in the Railway api-server service
+env and **restart** to toggle the agent for everyone. When OFF, every Beam run
+emits a graceful `beam_disabled` failure and the SPA silently falls back to the
+scripted Scent Mission — users keep working, just without the live agent.
+
+This is independent of the model-switch vars above (`BEAM_AGENT_PROVIDER`,
+`BEAM_AGENT_MODEL`, `BEAM_AGENT_MODEL_STRONG`): leaving the agent ON while
+swapping those changes *which* model serves runs; setting `BEAM_AGENT_ENABLED`
+falsey turns the agent off entirely regardless of provider/model config.
+
 ## Run the tests
 
 ```bash
