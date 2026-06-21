@@ -216,7 +216,7 @@ function ForecastHero({
               type="button"
               onClick={onSelect ? () => onSelect(fragrance) : undefined}
               disabled={!onSelect}
-              className="group forecast-hero-bottle relative h-full w-[48%] max-w-[12.5rem] shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:cursor-default sm:w-[48%] sm:max-w-[13.5rem]"
+              className="group forecast-hero-bottle relative h-full w-[52%] max-w-[13.5rem] shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:cursor-default sm:w-[50%] sm:max-w-[15rem]"
               aria-label={onSelect ? `Open ${pick.name} by ${pick.brand}` : `${pick.name} by ${pick.brand}`}
             >
               <BottleImage
@@ -237,7 +237,7 @@ function ForecastHero({
                 name like "Silver Mountain Water" breaks after "Mountain", while a
                 tighter name like "Green Irish Tweed" stays balanced on one line.
                 NON-INTERACTIVE by design: the name is not a tap target (see above). */}
-            <div className="flex min-w-0 w-[52%] max-w-[12.5rem] flex-col items-center justify-center self-center text-center sm:w-[52%] sm:max-w-[14rem]">
+            <div className="flex min-w-0 w-[48%] max-w-[12.5rem] flex-col items-center justify-center self-center text-center sm:w-[50%] sm:max-w-[14rem]">
               <p className="scent-type-label text-[10px] tracking-[0.3em] text-scent-accent/80 [text-indent:0.3em] sm:text-[12px]">
                 {pick.brand}
               </p>
@@ -309,7 +309,7 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
 
   return (
     <section
-      className="mx-auto w-full max-w-[52rem] min-w-0 text-center"
+      className="scent-forecast mx-auto w-full max-w-[52rem] min-w-0 text-center"
       aria-label="Scent forecast"
     >
       {/* text-indent matches the tracking so the uppercase title's trailing
@@ -328,9 +328,12 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
         <>
           {/* Hero frame is width-capped and centered so the carousel chevrons anchor
               to the actual composition (bottle + text) instead of floating against
-              the page edges, and the generous height gives the packshot real product
-              presence. The bottle and title share one centered, balanced row. */}
-          <div className="relative mx-auto mt-1 flex h-[11.25rem] w-full max-w-[27rem] items-center justify-between gap-1.5 sm:mt-2 sm:h-[13rem] sm:gap-3">
+              the page edges. Section vertical rhythm comes from the --fc-* spacing
+              tokens (defined on .scent-forecast in index.css), NOT ad-hoc margins,
+              so title→hero→pill→rail read as one tuned system. The hero is the focal
+              point: a taller slot + larger bottle give the recommendation real
+              product authority. The bottle and title share one centered row. */}
+          <div className="relative mx-auto mt-[var(--fc-title-hero)] flex h-[12.5rem] w-full max-w-[27rem] items-center justify-between gap-1.5 sm:h-[14rem] sm:gap-3">
             <ForecastChevron direction="prev" onClick={() => go(selected - 1)} />
             <div className="relative h-full flex-1 overflow-hidden">
               <ForecastHero
@@ -347,10 +350,10 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
               read as a single grouped, screen-centered unit that ties the hero to the
               calendar rather than drifting beside the title. */}
           {activeMeta.length > 0 ? (
-            <div className="mt-2.5 flex justify-center sm:mt-3">
-              <div className="inline-flex items-center gap-1.5 rounded-full border border-scent-accent/20 bg-black/25 px-3 py-1 text-[#cdbfa9]">
-                <WeatherGlyph day={activePlan.day} size={13} />
-                <span className="text-[10px] font-medium uppercase tracking-[0.14em] sm:text-[11px]">
+            <div className="mt-[var(--fc-hero-pill)] flex justify-center">
+              <div className="inline-flex items-center gap-2 rounded-full border border-scent-accent/20 bg-black/25 px-3.5 py-1.5 text-[#cdbfa9]">
+                <WeatherGlyph day={activePlan.day} size={14} />
+                <span className="text-[11px] font-medium uppercase tracking-[0.14em] sm:text-[12px]">
                   {activeMeta.join(' · ')}
                 </span>
               </div>
@@ -369,9 +372,7 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
           <div
             role="tablist"
             aria-label="Days this week"
-            className={`mx-auto grid w-full max-w-[28.5rem] grid-cols-7 gap-1 sm:gap-2 ${
-              activeMeta.length > 0 ? 'mt-3 sm:mt-4' : 'mt-4 sm:mt-5'
-            }`}
+            className="mx-auto mt-[var(--fc-pill-rail)] grid w-full max-w-[28.5rem] grid-cols-7 gap-1 sm:gap-2"
           >
             {outlook.slice(0, 7).map((plan, index) => {
               const isActive = index === selected;

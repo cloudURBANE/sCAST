@@ -1253,13 +1253,14 @@ function DashboardView() {
               above it. Normal flow on md+. Hidden in agent mode (it takes over the
               hero). */}
           {!agentActive ? (
-            // Bias ALL leftover column space BELOW the forecast (mb-auto), with NO
-            // top margin: the column's own gap-4 already separates the forecast
-            // from the atmosphere row by one rhythm unit, so it sits flush in
-            // rhythm with the stat row instead of being pushed down into a large
-            // top void (the owner-reported "big gap above the Scent Forecast").
-            // mb-auto + the column pb still hold nav clearance below. md+ unchanged.
-            <div className="mb-auto sm:mb-0">
+            // SPLIT the leftover column space evenly above AND below the forecast
+            // (my-auto), so the module sits naturally seated — a controlled, equal
+            // breathing band on each side — instead of being shoved up with one
+            // giant void below (mb-auto, which produced the "huge gap before nav")
+            // or shoved down with a void above (mt-auto). The module's own scale +
+            // --fc-* rhythm carry the section; my-auto only distributes the small
+            // remainder. The column pb still holds nav clearance. md+ unchanged.
+            <div className="my-auto sm:my-0">
               <WeeklyOutlookDashboard
                 items={items}
                 weather={weather}
