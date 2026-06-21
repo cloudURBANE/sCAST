@@ -5,7 +5,6 @@
     "dockerfilePath": "hermes-beam/deploy/Dockerfile.hermes-agent"
   },
   "deploy": {
-    "startCommand": "gateway run",
     "restartPolicyType": "ON_FAILURE",
     "numReplicas": 1
   }
