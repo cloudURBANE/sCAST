@@ -31,6 +31,7 @@ import {
   readLocalImageObject,
   storagePathFromLocalImageObjectUrl,
 } from "./imageObjectStorage";
+import { shouldNegativeCacheImageFailure } from "./imagePipelineFailureClassifier";
 import { safeImageUrlForResponse } from "./persistenceGuards";
 import { fetchExternalImage, parseAndValidateExternalImageUrl } from "./safeImageFetch";
 import { searchSerperImageCandidates, type SerperImageCandidate } from "./serperService";
@@ -450,17 +451,27 @@ async function processCandidate(input: {
     } catch (err: any) {
       if (err instanceof ImageObjectStorageConfigurationError) throw err;
       const reason = err?.message ?? "image processing failed";
-      await recordImageFailure({
-        userId: input.userId ?? null,
-        fragranceId: input.fragranceId ?? null,
-        lookupKey: input.lookupKey,
-        sourceProvider: input.sourceProvider,
-        sourceUrl: input.source.sourceUrlForDb,
-        sourceUrlHash: input.source.sourceUrlHash,
-        searchQueryHash: input.searchQueryHash,
-        failureReason: reason,
-      }).catch(() => {});
-      logger.warn({ err: reason }, "[imagePipeline] candidate failed");
+      // Only persist a negative-cache row for deterministic, source/content-level
+      // failures. Transient failures (upstream 5xx/429, DNS/network blips,
+      // storage or DB hiccups) must NOT be cached: the row is keyed on the source
+      // URL hash, so one blip would otherwise black out this source for every
+      // caller for the full retry window. Transient failures simply return null
+      // and are retried on the next request (image-pipeline audit, finding #4).
+      if (shouldNegativeCacheImageFailure(err)) {
+        await recordImageFailure({
+          userId: input.userId ?? null,
+          fragranceId: input.fragranceId ?? null,
+          lookupKey: input.lookupKey,
+          sourceProvider: input.sourceProvider,
+          sourceUrl: input.source.sourceUrlForDb,
+          sourceUrlHash: input.source.sourceUrlHash,
+          searchQueryHash: input.searchQueryHash,
+          failureReason: reason,
+        }).catch(() => {});
+        logger.warn({ err: reason }, "[imagePipeline] candidate failed (negative-cached)");
+      } else {
+        logger.warn({ err: reason }, "[imagePipeline] candidate failed transiently (will retry)");
+      }
       return null;
     } finally {
       inFlightBySource.delete(flightKey);
