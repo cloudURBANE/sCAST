@@ -1077,7 +1077,13 @@ function DashboardView() {
                   key="mission-header"
                   initial={reduceMotion ? false : { opacity: 0, y: 6, ...missionHeaderMargins }}
                   animate={{ opacity: 1, y: 0, ...missionHeaderMargins }}
-                  exit={reduceMotion ? { opacity: 0 } : { opacity: 0, height: 0, marginTop: 0, marginBottom: 0 }}
+                  // Use the calm fallback (opacity-only) on constrained budgets
+                  // too, not just OS reduced-motion: the height/margin collapse
+                  // is a layout-reflow tween, and the sibling cards already snap
+                  // (their `layout` is off when calmLayout), so animating this
+                  // header's height on phones/iPad-Safari only adds compositor
+                  // churn during the close.
+                  exit={calmLayout ? { opacity: 0 } : { opacity: 0, height: 0, marginTop: 0, marginBottom: 0 }}
                   transition={vaultContentTransition}
                   // The pull-up margins (toward the hero marquee, so the agent
                   // does not open with a dead gap above "A scent for today.")

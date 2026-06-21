@@ -633,6 +633,13 @@ function AtmosphereCanvas({ reducedMotion, lowRenderBudget }: { reducedMotion: b
   const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
 
   React.useEffect(() => {
+    // Under a constrained budget the render loop never runs (see queueRender),
+    // so the only thing a mounted canvas would do is allocate a full-surface 2D
+    // backing store on every detail-modal open — a large offscreen IOSurface
+    // that feeds the iPhone "A problem repeatedly occurred" memory-pressure
+    // kill. Skip allocation entirely; the SVG's own gold-air gradient carries
+    // the ambient haze on these devices.
+    if (lowRenderBudget) return;
     const canvas = canvasRef.current;
     if (!canvas || typeof window === 'undefined') return;
 
@@ -691,11 +698,15 @@ function AtmosphereCanvas({ reducedMotion, lowRenderBudget }: { reducedMotion: b
     };
   }, [lowRenderBudget, reducedMotion]);
 
+  // Don't even mount the element on constrained devices — no DOM node means no
+  // canvas backing store is ever allocated for it.
+  if (lowRenderBudget) return null;
+
   return (
     <canvas
       ref={canvasRef}
       aria-hidden
-      className={`pointer-events-none absolute inset-0 z-0 h-full w-full ${lowRenderBudget ? '' : 'mix-blend-screen'}`}
+      className="pointer-events-none absolute inset-0 z-0 h-full w-full mix-blend-screen"
     />
   );
 }

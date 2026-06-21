@@ -1248,6 +1248,16 @@ a {
     box-shadow var(--scent-transition-base) var(--scent-ease-out);
 }
 
+/* Compositor relief: `mix-blend-mode: screen` forces every card's specular
+   frame into its own blend layer, which WebKit re-composites on each scroll
+   frame across the whole grid. On constrained touch surfaces (phone-class and
+   iPad Safari) drop the blend — over the dark card surface the bright corner
+   glints render almost identically with normal compositing, at a fraction of
+   the cost. Desktop keeps the true screen blend. */
+.scent-touch-perf .scent-card-frame::before {
+  mix-blend-mode: normal;
+}
+
 .scent-card-brand {
   --brand-size: clamp(1.71rem, 2.565vw, 2.25rem);
   color: #f7f3ec;

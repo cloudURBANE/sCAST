@@ -2,7 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, viewport-fit=cover" />
+    <!-- No `maximum-scale`/`user-scalable=no`: blocking pinch-zoom fails WCAG
+         1.4.4 (Resize Text) and iOS Safari ignores it anyway for accessibility.
+         `viewport-fit=cover` is retained for the edge-to-edge safe-area layout. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>ScentBeam</title>
     <meta name="description" content="Your scent. Perfected." />
     <!--
