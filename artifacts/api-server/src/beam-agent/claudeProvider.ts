@@ -96,7 +96,12 @@ export async function callClaude(input: ClaudeCallInput): Promise<ClaudeResponse
       "x-api-key": apiKey,
       "anthropic-version": ANTHROPIC_VERSION,
     },
-    signal: input.signal ?? AbortSignal.timeout(CLAUDE_TIMEOUT_MS),
+    // Combine the caller's signal with the upstream timeout instead of letting a
+    // supplied signal disable the timeout — a hung socket that never trips the
+    // caller's deadline must still abort.
+    signal: input.signal
+      ? AbortSignal.any([input.signal, AbortSignal.timeout(CLAUDE_TIMEOUT_MS)])
+      : AbortSignal.timeout(CLAUDE_TIMEOUT_MS),
     body: JSON.stringify({
       model: input.model ?? DEFAULT_BEAM_MODEL,
       max_tokens: input.maxTokens ?? 1024,
@@ -168,7 +173,13 @@ async function streamClaudeText(
       const chunk = evt.delta.text;
       if (typeof chunk === "string" && chunk) {
         text += chunk;
-        onDelta(chunk);
+        // Keep accumulating even if the consumer throws — a downstream emit
+        // failure must not abort the read and discard the assembled answer.
+        try {
+          onDelta(chunk);
+        } catch {
+          /* swallow: the assembled text is still returned at the end */
+        }
       }
     } else if (evt?.type === "message_start" && evt.message?.usage) {
       inputTokens = evt.message.usage.input_tokens ?? inputTokens;
