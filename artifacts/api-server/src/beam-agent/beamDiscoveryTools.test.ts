@@ -196,6 +196,27 @@ test("beam_discover_external caps the per-call detail-fetch and surfaces unowned
   assert.deepEqual(enqueued.map((e) => e.name).sort(), ["Asad", "Cloud"]);
 });
 
+test("beam_discover_external honors deepen:0 (search only) and defaults to the cap (H4)", async () => {
+  const calls: Array<{ limit: number; detailLimit: number }> = [];
+  const tool = toolMap(
+    makeDeps({
+      discoverExternal: async (_q, opts) => {
+        calls.push(opts);
+        return [];
+      },
+    }),
+  ).get("beam_discover_external");
+  assert.ok(tool);
+
+  // Explicit 0 must suppress every paid /details fetch — not be floored to 1.
+  await tool.handler({ query: "search only", deepen: 0 }, CTX);
+  assert.equal(calls[0].detailLimit, 0, "deepen:0 yields zero detail fetches");
+
+  // Omitted deepen falls back to the per-call cap.
+  await tool.handler({ query: "default deepen" }, CTX);
+  assert.equal(calls[1].detailLimit, BEAM_LIMITS.maxExternalDetailFetch, "omitted deepen uses the cap");
+});
+
 test("beam_discover_external no-ops gracefully when the engine yields nothing", async () => {
   const tool = toolMap(makeDeps({ discoverExternal: async () => [] })).get("beam_discover_external");
   assert.ok(tool);

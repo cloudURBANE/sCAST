@@ -17,7 +17,7 @@
  * This module does NOT change the engine HTTP contract; it only consumes existing
  * search/details endpoints (see cross-service-contract).
  */
-import { logger } from "../lib/logger";
+import { logger } from "../lib/logger.ts";
 import type { ExternalDiscoveryCandidate } from "../beam-agent/types.ts";
 
 const DEFAULT_ENGINE_ORIGIN = "https://srt-scent-engine-production.up.railway.app";
@@ -83,6 +83,27 @@ function asStringArray(value: unknown): string[] {
   return out;
 }
 
+/**
+ * Engine `derived_metrics.main_accords.top_accords` is a flat `string[]` in both
+ * production paths (`api.py` via `expand_raw_accords`, and the adapter's
+ * `[v.accord]` projection). Some sibling shapes (`scent_vector`) carry the accord
+ * as `{ accord | name }` objects, so we defensively unwrap those too — otherwise a
+ * future shape change would silently re-hide accords (the C1 footgun).
+ */
+function asAccordArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const flattened = value.map((v) => {
+    if (typeof v === "string") return v;
+    if (v && typeof v === "object") {
+      const o = v as { accord?: unknown; name?: unknown };
+      if (typeof o.accord === "string") return o.accord;
+      if (typeof o.name === "string") return o.name;
+    }
+    return "";
+  });
+  return asStringArray(flattened);
+}
+
 function str(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
   const t = value.trim();
@@ -136,6 +157,7 @@ async function enrichCandidate(candidate: ExternalDiscoveryCandidate): Promise<v
     accords?: unknown;
     price?: unknown;
     currency?: unknown;
+    derived_metrics?: { main_accords?: { top_accords?: unknown } };
     raw?: { notes?: { top?: unknown; heart?: unknown; base?: unknown }; accords?: unknown };
   };
   const rawNotes = d.raw?.notes ?? {};
@@ -144,7 +166,12 @@ async function enrichCandidate(candidate: ExternalDiscoveryCandidate): Promise<v
   const base = asStringArray(rawNotes.base);
   if (top.length + heart.length + base.length > 0) candidate.notes = { top, heart, base };
 
-  const accords = asStringArray(d.accords ?? d.raw?.accords);
+  // C1: the engine emits accords at derived_metrics.main_accords.top_accords, NOT
+  // at a top-level `accords` nor `raw.accords`. Read the canonical nested path
+  // first; keep the legacy keys as belt-and-braces fallbacks.
+  const accords = asAccordArray(
+    d.derived_metrics?.main_accords?.top_accords ?? d.accords ?? d.raw?.accords,
+  );
   if (accords.length > 0) candidate.accords = accords;
 
   const family = str(d.family);
