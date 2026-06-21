@@ -334,12 +334,14 @@ export const FragranceCapture: React.FC<{
   onViewVault?: (match: FragranceMatch) => void;
   /** Render only the search interior when the stable vault panel is owned by the parent. */
   embeddedInVaultPanel?: boolean;
+  autoFocusTrigger?: number;
 }> = ({
   onAdd,
   onVaultSearchStateChange,
   existingVaultKeys,
   onViewVault,
   embeddedInVaultPanel = false,
+  autoFocusTrigger,
 }) => {
   const [uploading, setUploading] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState("");
@@ -390,6 +392,16 @@ export const FragranceCapture: React.FC<{
     el.focus({ preventScroll: true });
     if (document.activeElement !== el) autoFocusPendingRef.current = false;
   }, []);
+
+  // Handle external focus triggers (e.g. deep-link routing)
+  useEffect(() => {
+    if (autoFocusTrigger && searchInputRef.current) {
+      searchInputRef.current.focus({ preventScroll: true });
+      if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
+        searchInputRef.current.click();
+      }
+    }
+  }, [autoFocusTrigger]);
 
   // Filter chips operate on the full result set; the rendered list, available
   // chips, and the resolved selection are all derived from it so nothing drifts

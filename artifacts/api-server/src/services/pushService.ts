@@ -1,5 +1,5 @@
 import webpush, { type PushSubscription as WebPushSubscription } from "web-push";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, inArray } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { pushSubscriptionsTable, userSettingsTable } from "@workspace/db/schema";
 import { logger } from "../lib/logger";
@@ -140,6 +140,19 @@ export async function rotateSubscription(
     return { rotated: updated.length > 0 };
   } catch (err) {
     if (isMissingTableError(err)) return { rotated: false };
+    
+    // Catch unique violation error code '23505' (collision with another registered session)
+    const code = (err as { code?: string })?.code;
+    if (code === "23505") {
+      logger.info({ oldEndpoint, nextEndpoint: next.endpoint }, "[push] rotation endpoint collision, silently deleting old endpoint");
+      try {
+        await db.delete(pushSubscriptionsTable).where(eq(pushSubscriptionsTable.endpoint, oldEndpoint));
+      } catch (delErr) {
+        // ignore
+      }
+      return { rotated: true };
+    }
+    
     throw err;
   }
 }
@@ -151,30 +164,58 @@ interface SubscriptionRow {
 }
 
 async function sendToRows(rows: SubscriptionRow[], payload: PushPayload): Promise<{ sent: number; pruned: number }> {
+  if (rows.length === 0) return { sent: 0, pruned: 0 };
   const body = JSON.stringify(payload);
-  let sent = 0;
-  let pruned = 0;
-  for (const row of rows) {
+  
+  const promises = rows.map(async (row) => {
     const subscription: WebPushSubscription = {
       endpoint: row.endpoint,
       keys: { p256dh: row.p256dh, auth: row.auth },
     };
     try {
       await webpush.sendNotification(subscription, body);
-      sent += 1;
+      return { success: true, endpoint: row.endpoint };
     } catch (err) {
       const statusCode = (err as { statusCode?: number }).statusCode;
-      // 404/410 mean the subscription is gone (browser uninstalled / expired) —
-      // prune it so we stop trying. Other errors are transient; just log.
-      if (statusCode === 404 || statusCode === 410) {
-        await deleteSubscription(row.endpoint);
-        pruned += 1;
+      return { 
+        success: false, 
+        endpoint: row.endpoint, 
+        isExpired: statusCode === 404 || statusCode === 410, 
+        err, 
+        statusCode 
+      };
+    }
+  });
+
+  const results = await Promise.allSettled(promises);
+  
+  let sent = 0;
+  const expiredEndpoints: string[] = [];
+
+  for (const result of results) {
+    if (result.status === "fulfilled") {
+      const val = result.value;
+      if (val.success) {
+        sent += 1;
       } else {
-        logger.warn({ err, statusCode }, "[push] sendNotification failed");
+        if (val.isExpired) {
+          expiredEndpoints.push(val.endpoint);
+        } else {
+          logger.warn({ err: val.err, statusCode: val.statusCode }, "[push] sendNotification failed");
+        }
       }
     }
   }
-  return { sent, pruned };
+
+  if (expiredEndpoints.length > 0) {
+    try {
+      await db.delete(pushSubscriptionsTable).where(inArray(pushSubscriptionsTable.endpoint, expiredEndpoints));
+    } catch (err) {
+      if (!isMissingTableError(err)) throw err;
+    }
+  }
+
+  return { sent, pruned: expiredEndpoints.length };
 }
 
 const SUBSCRIPTION_COLUMNS = {
@@ -350,5 +391,36 @@ export async function sendCategoryPushToUser(
   if (!allowed) return { sent: 0, pruned: 0, skipped: true };
 
   const badgeCount = await bumpBadge(userId);
+
+  // Write to the database inAppNotificationsTable
+  let tenantId: string | null = null;
+  try {
+    const [sub] = await db
+      .select({ tenantId: pushSubscriptionsTable.tenantId })
+      .from(pushSubscriptionsTable)
+      .where(eq(pushSubscriptionsTable.userId, userId))
+      .limit(1);
+    if (sub) {
+      tenantId = sub.tenantId;
+    }
+  } catch (err) {
+    // ignore
+  }
+
+  try {
+    const { inAppNotificationsTable } = await import("@workspace/db/schema");
+    await db.insert(inAppNotificationsTable).values({
+      tenantId,
+      userId,
+      title: payload.title || "ScentBeam",
+      body: payload.body || "",
+      url: payload.url || null,
+      category,
+      read: false,
+    });
+  } catch (err) {
+    logger.warn({ err }, "[push] failed to write to in_app_notifications");
+  }
+
   return sendPushToUser(userId, { ...payload, badgeCount });
 }

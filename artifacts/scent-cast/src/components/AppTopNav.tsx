@@ -2,6 +2,7 @@ import React from 'react';
 import { Home, LogOut, Settings, Share2, Swords, UsersRound } from 'lucide-react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { NotificationFeed } from './notifications/NotificationFeed';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -250,14 +251,17 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
   }, [location.pathname]);
 
   const authControl = authToken ? (
-    <AccountMenu
-      authEmail={authEmail}
-      authPictureUrl={authPictureUrl}
-      authUsername={authUsername}
-      onShare={onShare}
-      onSignOut={onSignOut}
-      onEditProfile={onEditProfile}
-    />
+    <div className="flex items-center gap-3">
+      <NotificationFeed />
+      <AccountMenu
+        authEmail={authEmail}
+        authPictureUrl={authPictureUrl}
+        authUsername={authUsername}
+        onShare={onShare}
+        onSignOut={onSignOut}
+        onEditProfile={onEditProfile}
+      />
+    </div>
   ) : (
     <button type="button" onClick={onSignIn} className={inactiveNavClassName}>
       Sign In

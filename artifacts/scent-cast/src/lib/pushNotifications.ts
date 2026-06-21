@@ -67,6 +67,33 @@ export async function subscribeToPush(authToken: string): Promise<{ ok: boolean;
   if (!registration) return { ok: false, reason: "no-sw" };
 
   let subscription = await registration.pushManager.getSubscription();
+  if (subscription) {
+    // VAPID Key Rotation Recovery: check if subscription key matches current server key
+    const serverKeyBytes = urlBase64ToUint8Array(key);
+    const subKey = subscription.options.applicationServerKey;
+    let keysMatch = false;
+    if (subKey) {
+      const subKeyBytes = new Uint8Array(subKey);
+      if (subKeyBytes.length === serverKeyBytes.length) {
+        keysMatch = true;
+        for (let i = 0; i < serverKeyBytes.length; i++) {
+          if (subKeyBytes[i] !== serverKeyBytes[i]) {
+            keysMatch = false;
+            break;
+          }
+        }
+      }
+    }
+    if (!keysMatch) {
+      try {
+        await subscription.unsubscribe();
+      } catch {
+        // ignore
+      }
+      subscription = null;
+    }
+  }
+
   if (!subscription) {
     subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
