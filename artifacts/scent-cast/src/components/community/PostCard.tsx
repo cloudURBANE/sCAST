@@ -713,7 +713,7 @@ const ScentOfDayPostCard: React.FC<PostCardProps> = ({
                   alt={`${fragrance.name} by ${fragrance.brand}`}
                   variant="card"
                   className="absolute inset-0"
-                  imgClassName="scent-hover-scale brightness-[1.08] transition-transform duration-[900ms] motion-reduce:transition-none"
+                  imgClassName="scent-hover-scale brightness-[1.08] transition-transform duration-500 motion-reduce:transition-none"
                   videoSrc={videoSrc}
                   loading="lazy"
                 />

@@ -809,7 +809,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                           adjustment={item.imageAdjustment}
                           imageProperties={item.imageProperties}
                           className="absolute inset-0 z-10"
-                          imgClassName="scent-hover-scale brightness-[1.1] transition-transform duration-[900ms] motion-reduce:transition-none"
+                          imgClassName="scent-hover-scale brightness-[1.1] transition-transform duration-500 motion-reduce:transition-none"
                         />
                       ) : (
                         <div className="absolute inset-0 flex items-center justify-center px-6 text-center">

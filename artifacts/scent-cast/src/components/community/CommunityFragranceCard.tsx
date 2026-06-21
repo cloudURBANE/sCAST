@@ -28,7 +28,7 @@ export const CommunityFragranceCard = React.forwardRef<HTMLButtonElement, Commun
         alt={`${item.name} by ${item.brand}`}
         variant="card"
         className="absolute inset-0"
-        imgClassName="scent-hover-scale brightness-[1.1] transition-transform duration-[900ms] motion-reduce:transition-none"
+        imgClassName="scent-hover-scale brightness-[1.1] transition-transform duration-500 motion-reduce:transition-none"
         adjustment={item.imageAdjustment}
       />
     </div>
