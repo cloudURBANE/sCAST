@@ -194,7 +194,7 @@ function ForecastHero({
           // must NOT be a tap target. The row stays a plain flex container; the
           // bottle is the lone interactive element and the text sits beside it as
           // static copy.
-          <div className="flex h-full w-full items-center justify-center gap-1.5 sm:gap-3">
+          <div className="flex h-full w-full items-center justify-center gap-3 sm:gap-5">
             {/* Normalized bottle frame — a fixed share of the hero (not a full-width
                 column), so the bottle and the title read as ONE centered unit instead
                 of splitting to opposite edges. `forecast-hero-bottle` cancels the +9%
@@ -210,7 +210,7 @@ function ForecastHero({
               type="button"
               onClick={onSelect ? () => onSelect(fragrance) : undefined}
               disabled={!onSelect}
-              className="group forecast-hero-bottle relative h-full w-[44%] max-w-[11.5rem] shrink-0 pb-[2%] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:cursor-default sm:w-[38%] sm:max-w-[14rem]"
+              className="group forecast-hero-bottle relative h-full w-[42%] max-w-[13.5rem] shrink-0 pb-[2%] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:cursor-default sm:w-[40%] sm:max-w-[18rem]"
               aria-label={onSelect ? `Open ${pick.name} by ${pick.brand}` : `${pick.name} by ${pick.brand}`}
             >
               <motion.div
@@ -236,7 +236,7 @@ function ForecastHero({
                 name like "Silver Mountain Water" breaks after "Mountain", while a
                 tighter name like "Green Irish Tweed" stays balanced on one line.
                 NON-INTERACTIVE by design: the name is not a tap target (see above). */}
-            <div className="flex min-w-0 max-w-[12.25rem] flex-col items-center justify-center self-center text-center sm:w-[48%] sm:max-w-[20rem]">
+            <div className="flex w-[50%] min-w-0 max-w-[13.5rem] flex-col items-center justify-center self-center text-center sm:max-w-[22rem]">
               <p className="scent-type-label text-[10px] tracking-[0.3em] text-scent-accent/80 [text-indent:0.3em] sm:text-[12px]">
                 {pick.brand}
               </p>
@@ -329,9 +329,9 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
               to the actual composition (bottle + text) instead of floating against
               the page edges, and the generous height gives the packshot real product
               presence. The bottle and title share one centered, balanced row. */}
-          <div className="relative mx-auto mt-1.5 h-[12.5rem] w-full max-w-[27rem] sm:mt-2 sm:h-[16.5rem] sm:max-w-[42rem]">
+          <div className="relative mx-auto mt-1.5 h-[14.5rem] w-full max-w-[30rem] sm:mt-2 sm:h-[18rem] sm:max-w-[50rem]">
             <ForecastChevron direction="prev" onClick={() => go(selected - 1)} />
-            <div className="absolute inset-y-0 left-7 right-7 overflow-hidden sm:left-9 sm:right-9">
+            <div className="absolute inset-y-0 left-9 right-9 overflow-hidden sm:left-11 sm:right-11">
               <ForecastHero
                 plan={activePlan}
                 direction={direction}
@@ -364,7 +364,7 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
           <div
             role="tablist"
             aria-label="Days this week"
-            className="mx-auto mt-3 grid w-full max-w-[27rem] grid-cols-7 gap-1.5 sm:mt-5 sm:max-w-[46rem] sm:gap-3"
+            className="mx-auto mt-3 grid w-full max-w-[30rem] grid-cols-7 gap-1 sm:mt-5 sm:max-w-[50rem] sm:gap-3"
           >
             {outlook.slice(0, 7).map((plan, index) => {
               const isActive = index === selected;
@@ -376,20 +376,20 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
                   type="button"
                   onClick={() => go(index)}
                   title={`${dayLabel(plan.day.date)} — ${plan.day.condition ?? 'Forecast'}`}
-                  className={`flex min-w-0 flex-col items-center gap-0.5 rounded-[13px] border py-2 text-[#f1e7da] transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/60 sm:gap-2 sm:rounded-[18px] sm:py-4 ${
+                  className={`flex min-h-[4.75rem] min-w-0 flex-col items-center justify-center gap-0.5 rounded-[13px] border py-2.5 text-[#f1e7da] transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/60 sm:min-h-[6.75rem] sm:gap-2 sm:rounded-[18px] sm:py-4 ${
                     isActive
                       ? 'border-scent-accent/55 bg-gradient-to-b from-scent-accent/[0.14] to-scent-accent/[0.04]'
                       : 'border-scent-accent/15 bg-black/25'
                   }`}
                 >
-                  <span className={`text-[8px] font-semibold uppercase tracking-[0.16em] sm:text-[10px] ${isActive ? 'text-scent-accent/90' : 'text-[#cdbfa9]'}`}>
+                  <span className={`text-[9px] font-semibold uppercase tracking-[0.12em] sm:text-[10px] sm:tracking-[0.16em] ${isActive ? 'text-scent-accent/90' : 'text-[#cdbfa9]'}`}>
                     {dayLabel(plan.day.date)}
                   </span>
-                  <span className="font-serif text-[1.2rem] leading-none sm:text-[1.8rem]">
+                  <span className="font-serif text-[1.35rem] leading-none sm:text-[1.8rem]">
                     {dayNumber(plan.day.date)}
                   </span>
                   <span className={isActive ? 'text-scent-accent' : 'text-[#cdbfa9]'}>
-                    <WeatherGlyph day={plan.day} size={17} />
+                    <WeatherGlyph day={plan.day} size={18} />
                   </span>
                 </button>
               );
@@ -408,7 +408,7 @@ function ForecastChevron({ direction, onClick }: { direction: 'prev' | 'next'; o
       type="button"
       onClick={onClick}
       aria-label={direction === 'prev' ? 'Previous day' : 'Next day'}
-      className={`absolute top-1/2 z-10 flex h-9 w-7 -translate-y-1/2 items-center justify-center text-scent-accent/80 transition-colors hover:text-[#ffe8a5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/50 ${
+      className={`absolute top-1/2 z-10 flex h-11 w-9 -translate-y-1/2 items-center justify-center text-scent-accent/80 transition-colors hover:text-[#ffe8a5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/50 ${
         direction === 'prev' ? 'left-0' : 'right-0'
       }`}
     >
