@@ -1541,3 +1541,74 @@ test("presenting a complete travel kit marks the mission kitPresented for refine
   // turn is treated as a refinement (the prose count gate is relaxed there).
   assert.equal(sessionState.mission?.kitPresented, true);
 });
+
+test("live regression: a delegated tool-grounded turn whose synthesis names no pick commits to the grounded picks instead of failing empty", async () => {
+  // Found by the live OpenRouter QA harness on the Tokyo -> "You decide - surprise
+  // me." transcript: the model searched (grounding two unowned candidates), but the
+  // synthesis AND its single repair pass both came back without naming a grounded
+  // pick. The owed-recommendation gate (recommendation_without_grounded_pick) then
+  // hard-failed the run, so the user saw an EMPTY answer on a turn they had
+  // explicitly delegated. A tool-grounded turn the user is owed a pick on must
+  // never dead-end: when synthesis can't name one, the loop commits deterministically
+  // to the grounded candidates (the mirror of buildSafeClarification for ask-turns).
+  const searchTool: BeamToolDefinition = {
+    name: "beam_search_catalog",
+    description: "Search the catalog",
+    inputSchema: { type: "object", properties: { query: { type: "string" } } },
+    handler: async () => ({
+      count: 2,
+      items: [
+        { canonicalName: "Wulong Cha", brand: "Nishane", owned: false, accords: ["green", "tea"] },
+        { canonicalName: "Greenley", brand: "Parfums de Marly", owned: false, accords: ["green", "fresh"] },
+      ],
+    }),
+  };
+
+  // A hedge that names no grounded fragrance and asks nothing — exactly the
+  // gate-failing shape the live synthesis + repair produced.
+  const HEDGE = "These are all solid options for your trip.";
+  const { callModel } = scriptedModel([
+    { stop_reason: "tool_use", content: [{ type: "tool_use", id: "tu_s", name: "beam_search_catalog", input: { query: "tokyo fresh" } }] },
+    text(HEDGE), // orchestration draft
+    text(HEDGE), // synthesis
+    text(HEDGE), // repair
+  ]);
+
+  const sessionState: BeamSessionState = {
+    slots: { destination: "Tokyo", month: "June", direction: "fresh" },
+    mission: {
+      intent: "travel_kit",
+      ownedCount: 0,
+      newCount: 2,
+      destination: "Tokyo",
+      month: "June",
+      userDelegatedChoice: true,
+      kitPresented: true,
+    },
+    userDelegatedChoice: true,
+  };
+
+  const events: BeamRunEvent[] = [];
+  let completed: string | undefined;
+  let summary: BeamRunSummary | undefined;
+  await runBeamAgent({
+    ctx,
+    userMessage: "You decide — surprise me.",
+    tools: [searchTool],
+    sessionState,
+    emit: (e) => events.push(e),
+    isModelConfigured: () => true,
+    callModel,
+    onComplete: (t) => (completed = t),
+    onSummary: (s) => (summary = s),
+  });
+
+  assert.equal(
+    events.some((e) => e.type === "failed"),
+    false,
+    "delegated turn must not hard-fail: " + JSON.stringify(events.filter((e) => e.type === "failed")),
+  );
+  assert.equal(summary?.outcome, "completed", JSON.stringify(summary));
+  assert.ok(completed && completed.trim().length > 0, "expected a non-empty committed answer");
+  assert.match(completed!, /Wulong Cha|Greenley/, completed);
+});

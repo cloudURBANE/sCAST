@@ -31,7 +31,7 @@ import {
 } from "./beamToolCore.ts";
 import type { ClaudeCallInput, ClaudeResponse } from "./types.ts";
 import { callModel as defaultCallModel, isModelConfigured as defaultIsModelConfigured } from "./provider.ts";
-import { buildSafeClarification, repairInstructionFor, runAnswerQualityGates } from "./answerQualityGates.ts";
+import { buildGroundedCommitFallback, buildSafeClarification, repairInstructionFor, runAnswerQualityGates } from "./answerQualityGates.ts";
 import { candidateMatchesAvoid, parseAvoidTerms } from "./avoidFilter.ts";
 import { estimateRunCostUsd, type ModelUsage } from "./costLedger.ts";
 import { beamSessionStatePrompt } from "./missionState.ts";
@@ -985,6 +985,29 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
           if (safeGate.passed) {
             finalText = safe;
             gate = safeGate;
+          }
+        }
+      }
+
+      // Final safety net for a tool-grounded turn the user is OWED a pick on — the
+      // recommend-side mirror of buildSafeClarification. When the model's synthesis
+      // (and its single repair) failed to NAME a grounded pick — empty text or a
+      // hedge — a delegated/recommendation turn used to dead-end on a terminal
+      // error and ship the user nothing (the live Tokyo "you decide" failure). Commit
+      // deterministically to the grounded candidates instead; the gate is re-run on
+      // the commit, so a fallback can never itself smuggle a violation through.
+      if (!gate.passed && !clarifyingTurn) {
+        const commit = buildGroundedCommitFallback(input.sessionState, [...groundedFragrances.values()]);
+        if (commit) {
+          const commitGate = runAnswerQualityGates(commit, {
+            hadExternalEvidence,
+            sessionState: input.sessionState,
+            groundedFragrances: [...groundedFragrances.values()],
+            localWeatherLocation,
+          });
+          if (commitGate.passed) {
+            finalText = commit;
+            gate = commitGate;
           }
         }
       }

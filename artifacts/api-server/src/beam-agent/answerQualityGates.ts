@@ -573,3 +573,63 @@ export function buildSafeClarification(state: BeamSessionState | undefined): str
   }
   return GENERIC_CLARIFICATION;
 }
+
+/** Render one grounded pick as the gate's name-matching variant ("Brand Name"). */
+function commitDisplayName(item: BeamGroundedFragrance): string {
+  return item.brand ? `${item.brand} ${item.canonicalName}` : item.canonicalName;
+}
+
+/**
+ * Pick the grounded fragrances a deterministic commit should name, honoring the
+ * mission's lane/count contract so the composed text passes the same gates:
+ *   - new-only travel kit → up to `newCount` UNOWNED picks (never an owned bottle,
+ *     which would trip owned_pick_in_new_only_mission / mission_unfulfilled),
+ *   - plain recommendation with an explicit count → that many picks,
+ *   - otherwise a single decisive pick.
+ * Returns [] when no safe pick exists in the required lane.
+ */
+function commitPicks(
+  state: BeamSessionState | undefined,
+  safe: BeamGroundedFragrance[],
+): BeamGroundedFragrance[] {
+  const mission = state?.mission;
+  const newOnlyKit =
+    mission?.intent === "travel_kit" && (mission.ownedCount ?? 0) === 0 && (mission.newCount ?? 0) > 0;
+  if (newOnlyKit) {
+    return safe.filter((item) => !item.owned).slice(0, mission!.newCount ?? 1);
+  }
+  if (mission?.intent === "recommendation" && (mission.count ?? 0) > 1) {
+    return safe.slice(0, mission.count!);
+  }
+  return safe.slice(0, 1);
+}
+
+/**
+ * Build a deterministic, gate-safe COMMIT from the grounded candidates, so a
+ * tool-grounded turn the user is owed a pick on never has to dead-end on an empty
+ * answer when the model's synthesis (and its single repair) failed to name one.
+ * The mirror of `buildSafeClarification` for the recommend side: it names ONLY
+ * already-grounded fragrances (never invents one), states no price/availability/
+ * review claim, and asks nothing — so re-running the gates on it is the final
+ * guarantee. Returns null when committing would itself be wrong: the user is not
+ * owed a recommendation this turn, or every grounded candidate is unsafe (avoided)
+ * or absent in the required lane (then a clarification, not a forced pick, is owed).
+ */
+export function buildGroundedCommitFallback(
+  state: BeamSessionState | undefined,
+  grounded: BeamGroundedFragrance[],
+): string | null {
+  if (!isOwedRecommendation(state)) return null;
+  const safe = grounded.filter((item) => item.matchedAvoid !== true);
+  if (safe.length === 0) return null;
+  const picks = commitPicks(state, safe);
+  if (picks.length === 0) return null;
+
+  const names = picks.map((item) => `**${commitDisplayName(item)}**`);
+  const list =
+    names.length === 1
+      ? names[0]
+      : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  const tail = picks.length > 1 ? "the strongest grounded matches" : "the strongest grounded match";
+  return `Here's my call: ${list} — ${tail} from what I pulled for you.`;
+}
