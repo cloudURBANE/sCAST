@@ -156,6 +156,13 @@ export function createBeamServiceDeps(): BeamToolDeps {
     // (capped by BEAM_LIMITS.maxExternalDetailFetch) is the spend bound here; the
     // route additionally stacks a per-run budget + dislike filtering it can't. Like
     // `enqueueCuration` below, that richer behavior needs the run context.
+    //
+    // For the SAME reason `budgetCeiling` and `avoidTerms` are intentionally absent
+    // here: they come from per-run session slots the MCP surface never sees. So on
+    // MCP, discovery budget-gating degrades to "unknown" and `beam_find_similar`'s
+    // explicit dislike gate is a no-op — the Hermes/MCP *client* owns budget,
+    // dislikes and the safety prompt (BEAM_SAFETY_RULES is injected by the
+    // in-process loop, not this tool surface). See README.md "Safety & run-context".
     discoverExternal: isDiscoverExternalEnabled()
       ? (query, opts) => discoverExternalCandidates(query, opts)
       : undefined,

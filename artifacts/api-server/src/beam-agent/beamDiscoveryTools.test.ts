@@ -213,3 +213,70 @@ test("beam_discover_external works (no throw) when enrichment curation is unavai
   assert.equal(result.count, 2);
   assert.equal(result.curatedForEnrichment, 0, "nothing curated when the hook is absent");
 });
+
+/* ---------------------------------------------------------------- */
+/* beam_discover_external — price/budget gating (audit F)           */
+/* ---------------------------------------------------------------- */
+
+const PRICED_CANDIDATES: ExternalDiscoveryCandidate[] = [
+  { id: "p1", name: "Cheap One", brand: "BrandA", detailed: true, price: 45 },
+  { id: "p2", name: "Pricey One", brand: "BrandB", detailed: true, price: 150 },
+  { id: "p3", name: "No Price", brand: "BrandC", detailed: false },
+];
+
+test("packetFromExternalCandidate carries a captured price (and omits it when absent)", () => {
+  const priced = packetFromExternalCandidate({ id: "p", name: "X", brand: "Y", detailed: true, price: 99 });
+  assert.equal(priced.price, 99);
+  const unpriced = packetFromExternalCandidate({ id: "p", name: "X", brand: "Y", detailed: true });
+  assert.equal("price" in unpriced, false, "no price key when none was captured");
+});
+
+test("beam_discover_external annotates priceStatus and downranks over-budget when a ceiling is set", async () => {
+  const tool = toolMap(
+    makeDeps({ discoverExternal: async () => PRICED_CANDIDATES, budgetCeiling: 100 }),
+  ).get("beam_discover_external");
+  assert.ok(tool);
+  const result = (await tool.handler({ query: "under 100" }, CTX)) as {
+    items: Array<{ canonicalName: string; priceStatus: string }>;
+    withinBudget: number;
+    overBudget: number;
+    budgetCeiling: number;
+    note: string;
+  };
+  // within -> unknown -> over (downranked, never dropped).
+  assert.deepEqual(result.items.map((i) => i.canonicalName), ["Cheap One", "No Price", "Pricey One"]);
+  assert.deepEqual(result.items.map((i) => i.priceStatus), ["within_budget", "unknown", "over_budget"]);
+  assert.equal(result.withinBudget, 1);
+  assert.equal(result.overBudget, 1);
+  assert.equal(result.budgetCeiling, 100);
+  assert.match(result.note, /over the ~\$100 budget/);
+});
+
+test("beam_discover_external leaves price 'unknown' when no ceiling (degrade, never fake within)", async () => {
+  const tool = toolMap(makeDeps({ discoverExternal: async () => PRICED_CANDIDATES })).get("beam_discover_external");
+  assert.ok(tool);
+  const result = (await tool.handler({ query: "anything" }, CTX)) as {
+    items: Array<{ priceStatus: string }>;
+    budgetCeiling?: number;
+  };
+  // No ceiling -> no enforcement, original order, everything 'unknown'.
+  assert.ok(result.items.every((i) => i.priceStatus === "unknown"));
+  assert.equal("budgetCeiling" in result, false);
+});
+
+/* ---------------------------------------------------------------- */
+/* beam_find_similar — explicit dislike gate (audit D)              */
+/* ---------------------------------------------------------------- */
+
+test("beam_find_similar drops picks that headline an avoided term when avoidTerms is wired", async () => {
+  // Bleu de Chanel's accords include 'woody'; an explicit avoid must drop it even
+  // though the (fake) pool still returns it.
+  const tool = toolMap(similarDeps({ avoidTerms: ["woody"] })).get("beam_find_similar");
+  assert.ok(tool);
+  const result = (await tool.handler({ query: "Aventus" }, CTX)) as {
+    items: Array<{ name: string }>;
+  };
+  const names = result.items.map((i) => i.name);
+  assert.ok(!names.includes("Bleu de Chanel"), "avoided (woody) pick must be dropped");
+  assert.ok(names.includes("Aventus Cologne"), "non-avoided similar pick still surfaces");
+});
