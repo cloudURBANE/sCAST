@@ -5,6 +5,7 @@
     "dockerfilePath": "hermes-beam/deploy/Dockerfile.hermes-agent"
   },
   "deploy": {
+    "startCommand": "/init /opt/hermes/docker/main-wrapper.sh gateway run",
     "restartPolicyType": "ON_FAILURE",
     "numReplicas": 1
   }
