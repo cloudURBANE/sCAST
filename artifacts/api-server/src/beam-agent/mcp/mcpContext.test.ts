@@ -19,6 +19,8 @@ test("a full owner token unlocks every read + presentation tool", () => {
     [
       "beam_compare_fragrances",
       "beam_compare_overlap",
+      "beam_discover_external",
+      "beam_find_similar",
       "beam_get_fragrance_details",
       "beam_get_user_context",
       "beam_get_wardrobe",

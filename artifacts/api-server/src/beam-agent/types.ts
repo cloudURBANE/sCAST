@@ -20,7 +20,15 @@ export type BeamReadToolName =
   | "beam_get_fragrance_details"
   | "beam_score_candidates"
   | "beam_compare_overlap"
-  | "beam_research_web";
+  | "beam_research_web"
+  // Find catalog fragrances similar to a reference ("smells like X"). Pure
+  // read: ranks the catalog by 6-axis scent-vector closeness + accord overlap.
+  | "beam_find_similar"
+  // Discover REAL fragrances beyond the local catalog via the Python engine's
+  // /search (bounded /details enrichment). Writes nothing the user sees; each
+  // surfaced pick is fire-and-forget enqueued for enrichment so the catalog
+  // grows. Additive + gated on the `discoverExternal` dep (lean deploys omit it).
+  | "beam_discover_external";
 
 /**
  * `beam_propose_collection` resolves catalog fragrances into add-ready payloads
@@ -231,6 +239,30 @@ export type BeamScentVector = {
   spice: number;
   warmth: number;
   musk: number;
+};
+
+/**
+ * One REAL fragrance surfaced by `beam_discover_external` from the Python engine's
+ * `/api/fragrances/search` — i.e. beyond our local `global_fragrances` catalog.
+ * `detailed` records whether a (cost-capped) `/details` enrichment ran for this
+ * pick; when false only the search-row identity is known, so notes/accords are
+ * empty and `family` may be absent. The discovery service returns these; the tool
+ * normalizes them into the standard `CandidatePacket` pick shape (with an
+ * `engine:` id prefix marking the external source) and enqueues each for curation.
+ */
+export type ExternalDiscoveryCandidate = {
+  /** The engine's opaque id when present, else a derived stable key. */
+  id: string;
+  name: string;
+  brand: string;
+  /** Engine source URL (Fragrantica), used to fetch details / dedupe. */
+  sourceUrl?: string;
+  family?: string;
+  notes?: { top: string[]; heart: string[]; base: string[] };
+  accords?: string[];
+  imageUrl?: string;
+  /** True when a `/details` round-trip enriched this pick (counts to the cap). */
+  detailed: boolean;
 };
 
 /**
