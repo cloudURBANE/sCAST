@@ -210,7 +210,7 @@ function ForecastHero({
               type="button"
               onClick={onSelect ? () => onSelect(fragrance) : undefined}
               disabled={!onSelect}
-              className="group forecast-hero-bottle relative h-full w-[42%] max-w-[13.5rem] shrink-0 pb-[2%] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:cursor-default sm:w-[40%] sm:max-w-[18rem]"
+              className="group forecast-hero-bottle relative h-full w-[50%] max-w-[16rem] shrink-0 pb-[2%] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:cursor-default sm:w-[48%] sm:max-w-[22rem]"
               aria-label={onSelect ? `Open ${pick.name} by ${pick.brand}` : `${pick.name} by ${pick.brand}`}
             >
               <motion.div
@@ -236,15 +236,15 @@ function ForecastHero({
                 name like "Silver Mountain Water" breaks after "Mountain", while a
                 tighter name like "Green Irish Tweed" stays balanced on one line.
                 NON-INTERACTIVE by design: the name is not a tap target (see above). */}
-            <div className="flex w-[50%] min-w-0 max-w-[13.5rem] flex-col items-center justify-center self-center text-center sm:max-w-[22rem]">
-              <p className="scent-type-label text-[10px] tracking-[0.3em] text-scent-accent/80 [text-indent:0.3em] sm:text-[12px]">
+            <div className="flex w-[44%] min-w-0 max-w-[13rem] flex-col items-center justify-center self-center text-center sm:max-w-[20rem]">
+              <p className="scent-type-label text-[10px] tracking-[0.32em] text-scent-accent/80 [text-indent:0.32em] sm:text-[12px]">
                 {pick.brand}
               </p>
-              <p className="mt-1 font-serif text-[clamp(1.35rem,5.6vw,2.1rem)] leading-[1.07] text-[#fff7ec] [overflow-wrap:break-word]">
+              <p className="mt-1 font-serif text-[clamp(1.5rem,5.2vw,2.1rem)] leading-[1.08] text-[#fff7ec] [overflow-wrap:break-word]">
                 {pick.name}
               </p>
               {notes.length > 0 ? (
-                <p className="mt-1.5 line-clamp-2 font-serif text-[clamp(0.8rem,3vw,1.05rem)] italic leading-snug text-scent-accent/85 sm:mt-2">
+                <p className="mt-1.5 line-clamp-2 font-serif text-[clamp(0.85rem,2.6vw,1.05rem)] italic leading-snug text-scent-accent/85 sm:mt-2">
                   {notes.join(' · ')}
                 </p>
               ) : null}
@@ -308,17 +308,17 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
 
   return (
     <section
-      className="mx-auto w-full max-w-[52rem] min-w-0 text-center"
+      className="mx-auto w-full max-w-[54rem] min-w-0 text-center"
       aria-label="Scent forecast"
     >
       {/* text-indent matches the tracking so the uppercase title's trailing
           letter-spacing doesn't pull it optically left of the centered axis. */}
-      <h2 className="scent-type-label text-[10px] tracking-[0.34em] text-[#efe4d6] [text-indent:0.34em] sm:text-[12px]">
+      <h2 className="scent-type-label text-[10px] tracking-[0.32em] text-[#efe4d6] [text-indent:0.32em] sm:text-[12px]">
         Scent Forecast
       </h2>
 
       {!activePlan ? (
-        <div className="flex h-[14rem] items-center justify-center px-8 sm:h-[17rem]">
+        <div className="flex h-[clamp(14.5rem,33svh,16.5rem)] items-center justify-center px-8 sm:h-[clamp(18rem,40vh,20.5rem)]">
           <p className="max-w-sm font-serif text-lg italic leading-relaxed text-scent-text-muted">
             Live forecast unavailable right now. Your daily scent picks will return with the weather feed.
           </p>
@@ -329,7 +329,7 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
               to the actual composition (bottle + text) instead of floating against
               the page edges, and the generous height gives the packshot real product
               presence. The bottle and title share one centered, balanced row. */}
-          <div className="relative mx-auto mt-1.5 h-[14.5rem] w-full max-w-[30rem] sm:mt-2 sm:h-[18rem] sm:max-w-[50rem]">
+          <div className="relative mx-auto mt-2 h-[clamp(14.5rem,33svh,16.5rem)] w-full max-w-[30rem] sm:mt-3 sm:h-[clamp(18rem,40vh,20.5rem)] sm:max-w-[54rem]">
             <ForecastChevron direction="prev" onClick={() => go(selected - 1)} />
             <div className="absolute inset-y-0 left-9 right-9 overflow-hidden sm:left-11 sm:right-11">
               <ForecastHero
@@ -346,10 +346,10 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
               read as a single grouped, screen-centered unit that ties the hero to the
               calendar rather than drifting beside the title. */}
           {activeMeta.length > 0 ? (
-            <div className="mt-4 flex justify-center sm:mt-4">
+            <div className="mt-3 flex justify-center sm:mt-5">
               <div className="inline-flex items-center gap-1.5 rounded-full border border-scent-accent/20 bg-black/25 px-3 py-1 text-[#cdbfa9]">
                 <WeatherGlyph day={activePlan.day} size={13} />
-                <span className="text-[10px] font-medium uppercase tracking-[0.14em] sm:text-[11px]">
+                <span className="scent-type-label text-[10px] tracking-[0.16em] sm:text-[11px]">
                   {activeMeta.join(' · ')}
                 </span>
               </div>
@@ -364,7 +364,7 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
           <div
             role="tablist"
             aria-label="Days this week"
-            className="mx-auto mt-3 grid w-full max-w-[30rem] grid-cols-7 gap-1 sm:mt-5 sm:max-w-[50rem] sm:gap-3"
+            className="mx-auto mt-4 grid w-full max-w-[30rem] grid-cols-7 gap-1 sm:mt-6 sm:max-w-[54rem] sm:gap-3"
           >
             {outlook.slice(0, 7).map((plan, index) => {
               const isActive = index === selected;
@@ -382,10 +382,10 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
                       : 'border-scent-accent/15 bg-black/25'
                   }`}
                 >
-                  <span className={`text-[9px] font-semibold uppercase tracking-[0.12em] sm:text-[10px] sm:tracking-[0.16em] ${isActive ? 'text-scent-accent/90' : 'text-[#cdbfa9]'}`}>
+                  <span className={`scent-type-label text-[10px] tracking-[0.16em] sm:text-[11px] ${isActive ? 'text-scent-accent/90' : 'text-[#cdbfa9]'}`}>
                     {dayLabel(plan.day.date)}
                   </span>
-                  <span className="font-serif text-[1.35rem] leading-none sm:text-[1.8rem]">
+                  <span className="font-serif text-[1.5rem] leading-none sm:text-[1.8rem]">
                     {dayNumber(plan.day.date)}
                   </span>
                   <span className={isActive ? 'text-scent-accent' : 'text-[#cdbfa9]'}>
