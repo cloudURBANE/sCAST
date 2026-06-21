@@ -61,9 +61,17 @@ export const imageCacheTable = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
-    sourcePipelineUnique: uniqueIndex("image_cache_source_pipeline_unique_idx").on(
+    // Cache identity includes the background-removal variant so a bg-removed
+    // (transparent) result and a no-bg (white-background) result for the SAME
+    // source URL + pipeline version live in SEPARATE rows. Without the
+    // `background_removed` dimension the two variants shared one row and could
+    // clobber each other on upsert (a bg-removed reprocess overwriting the no-bg
+    // row, or vice versa), and a negative-cache "failed" row for one variant
+    // suppressed retries for the other.
+    sourcePipelineBgUnique: uniqueIndex("image_cache_source_pipeline_bg_unique_idx").on(
       table.sourceUrlHash,
       table.pipelineVersion,
+      table.backgroundRemoved,
     ),
     lookupKeyIdx: index("image_cache_lookup_key_idx").on(table.lookupKey),
     userIdIdx: index("image_cache_user_id_idx").on(table.userId),

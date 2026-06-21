@@ -366,7 +366,7 @@ async function processCandidate(input: {
   removeBackground: boolean;
   poofOptions?: RemoveBgOptions;
 }): Promise<ProcessedImageResult | null> {
-  const cached = await getReadyCachedImageBySourceHash(input.source.sourceUrlHash);
+  const cached = await getReadyCachedImageBySourceHash(input.source.sourceUrlHash, input.removeBackground);
   if (cached) {
     // Skip cache when BG removal is requested but the cached image has a white background.
     if (!input.removeBackground || cached.backgroundRemoved) {
@@ -374,7 +374,7 @@ async function processCandidate(input: {
     }
   }
 
-  const status = await getCachedImageStatusBySourceHash(input.source.sourceUrlHash);
+  const status = await getCachedImageStatusBySourceHash(input.source.sourceUrlHash, input.removeBackground);
   if (status === "failed") return null;
 
   const flightKey = inFlightKey(input.source.sourceUrlHash, input.removeBackground);
@@ -383,7 +383,7 @@ async function processCandidate(input: {
 
   const promise = (async (): Promise<ProcessedImageResult | null> => {
     try {
-      const doubleCheck = await getReadyCachedImageBySourceHash(input.source.sourceUrlHash);
+      const doubleCheck = await getReadyCachedImageBySourceHash(input.source.sourceUrlHash, input.removeBackground);
       if (doubleCheck) {
         if (!input.removeBackground || doubleCheck.backgroundRemoved) {
           return { ...doubleCheck, sourceProvider: input.sourceProvider, pipelineVersion: IMAGE_PIPELINE_VERSION };
@@ -466,6 +466,9 @@ async function processCandidate(input: {
           sourceUrl: input.source.sourceUrlForDb,
           sourceUrlHash: input.source.sourceUrlHash,
           searchQueryHash: input.searchQueryHash,
+          // Negative-cache the variant that was requested: a removeBackground
+          // failure must not suppress a no-bg request, and vice versa.
+          backgroundRemoved: input.removeBackground,
           failureReason: reason,
         }).catch(() => {});
         logger.warn({ err: reason }, "[imagePipeline] candidate failed (negative-cached)");

@@ -620,6 +620,9 @@ export async function reimagineBottleImage(
         sourceUrl: sourceUrlForDb,
         sourceUrlHash,
         searchQueryHash: null,
+        // Keep the negative-cache row in the same variant slot as this job's
+        // ready row would use (recordImageReady writes optimized.backgroundRemoved).
+        backgroundRemoved: optimized.backgroundRemoved,
         failureReason: reason,
       }).catch(() => {});
       throw err;
