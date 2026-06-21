@@ -31,9 +31,6 @@ interface OutlookDay {
 
 const CALM_EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
-export const forecastBottleLayoutId = (fragranceId: string): string =>
-  `forecast-bottle-${fragranceId}`;
-
 function WeatherGlyph({ day, size = 22 }: { day: WeatherForecastDay; size?: number }) {
   const code = (day.icon ?? '').slice(0, 2);
   const condition = (day.condition ?? '').toLowerCase();
@@ -194,7 +191,7 @@ function ForecastHero({
           // must NOT be a tap target. The row stays a plain flex container; the
           // bottle is the lone interactive element and the text sits beside it as
           // static copy.
-          <div className="flex h-full w-full items-center justify-center gap-3 sm:gap-5">
+          <div className="flex h-full w-full items-center justify-center gap-1.5 sm:gap-3">
             {/* Normalized bottle frame — a fixed share of the hero (not a full-width
                 column), so the bottle and the title read as ONE centered unit instead
                 of splitting to opposite edges. `forecast-hero-bottle` cancels the +9%
@@ -203,31 +200,35 @@ function ForecastHero({
                 touch so the bottle sits beside — not below — the title. The shared
                 width + `object-contain` keep every pick's footprint uniform.
 
-                This forecast bottle carries its own shared-layout id. The caller
-                hands that exact id to the detail modal so the morph originates from
-                this visible slot, not from the matching vault card down-page. */}
+                ANIMATION NOTE (shared-bottle morph — fix-later flag): tapping a
+                fragrance "card image" everywhere else (Wardrobe grid, Community feed)
+                plays a framer-motion shared-element morph driven by
+                `layoutId={`wardrobe-bottle-${id}`}` + `bottleMorphTransition`
+                (see Wardrobe.tsx). This bottle opens the SAME detail via the shared
+                `onSelect` → `openFragranceDetail` path, so the modal still morphs from
+                the matching grid bottle — but this forecast bottle does NOT itself
+                carry that `layoutId`, so the morph does not originate from the hero.
+                Deliberately left as-is and flagged here so the shared-morph animation
+                can be wired/standardized from this surface in a later, dedicated pass
+                (kept as one note so every place we implement this animation can be
+                fixed together). */}
             <button
               type="button"
               onClick={onSelect ? () => onSelect(fragrance) : undefined}
               disabled={!onSelect}
-              className="group forecast-hero-bottle relative h-full w-[50%] max-w-[16rem] shrink-0 pb-[5%] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:cursor-default sm:w-[48%] sm:max-w-[22rem] sm:pb-[3%]"
+              className="group forecast-hero-bottle relative h-full w-[42%] max-w-[10.5rem] shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:cursor-default sm:w-[44%] sm:max-w-[11.5rem]"
               aria-label={onSelect ? `Open ${pick.name} by ${pick.brand}` : `${pick.name} by ${pick.brand}`}
             >
-              <motion.div
-                layoutId={forecastBottleLayoutId(fragrance.id)}
-                className="absolute inset-0"
-              >
-                <BottleImage
-                  src={fragrance.imageUrl}
-                  alt={`${pick.brand} ${pick.name}`}
-                  variant="featured"
-                  adjustment={fragrance.imageAdjustment}
-                  imageProperties={fragrance.imageProperties}
-                  className="h-full w-full [&_.bottle-artboard]:inset-[1%] sm:[&_.bottle-artboard]:inset-[6%]"
-                  imgClassName="transition-transform duration-500 group-hover:scale-[1.03] motion-reduce:transform-none"
-                  loading="eager"
-                />
-              </motion.div>
+              <BottleImage
+                src={fragrance.imageUrl}
+                alt={`${pick.brand} ${pick.name}`}
+                variant="featured"
+                adjustment={fragrance.imageAdjustment}
+                imageProperties={fragrance.imageProperties}
+                className="h-full w-full [&_.bottle-artboard]:inset-[1%] sm:[&_.bottle-artboard]:inset-[6%]"
+                imgClassName="transition-transform duration-500 group-hover:scale-[1.03] motion-reduce:transform-none"
+                loading="eager"
+              />
             </button>
             {/* Width-constrained text stack read as ONE unit: CREED eyebrow → name →
                 lead notes. Hierarchy mirrors how a fragrance is billed (house quiet,
@@ -236,15 +237,15 @@ function ForecastHero({
                 name like "Silver Mountain Water" breaks after "Mountain", while a
                 tighter name like "Green Irish Tweed" stays balanced on one line.
                 NON-INTERACTIVE by design: the name is not a tap target (see above). */}
-            <div className="flex w-[44%] min-w-0 max-w-[13rem] flex-col items-center justify-center self-center text-center sm:max-w-[20rem]">
-              <p className="scent-type-label text-[10px] tracking-[0.32em] text-scent-accent/80 [text-indent:0.32em] sm:text-[12px]">
+            <div className="flex min-w-0 w-[58%] max-w-[12.5rem] flex-col items-center justify-center self-center text-center sm:w-[56%] sm:max-w-[14rem]">
+              <p className="scent-type-label text-[10px] tracking-[0.3em] text-scent-accent/80 [text-indent:0.3em] sm:text-[12px]">
                 {pick.brand}
               </p>
-              <p className="mt-1 font-serif text-[clamp(1.5rem,5.2vw,2.1rem)] leading-[1.08] text-[#fff7ec] [overflow-wrap:break-word]">
+              <p className="mt-1 font-serif text-[clamp(1.35rem,5.6vw,2.1rem)] leading-[1.07] text-[#fff7ec] [overflow-wrap:break-word]">
                 {pick.name}
               </p>
               {notes.length > 0 ? (
-                <p className="mt-1.5 line-clamp-2 font-serif text-[clamp(0.85rem,2.6vw,1.05rem)] italic leading-snug text-scent-accent/85 sm:mt-2">
+                <p className="mt-1.5 line-clamp-2 font-serif text-[clamp(0.8rem,3vw,1.05rem)] italic leading-snug text-scent-accent/85 sm:mt-2">
                   {notes.join(' · ')}
                 </p>
               ) : null}
@@ -308,17 +309,17 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
 
   return (
     <section
-      className="mx-auto w-full max-w-[54rem] min-w-0 text-center"
+      className="mx-auto w-full max-w-[52rem] min-w-0 text-center"
       aria-label="Scent forecast"
     >
       {/* text-indent matches the tracking so the uppercase title's trailing
           letter-spacing doesn't pull it optically left of the centered axis. */}
-      <h2 className="scent-type-label text-[10px] tracking-[0.32em] text-[#efe4d6] [text-indent:0.32em] sm:text-[12px]">
+      <h2 className="scent-type-label text-[10px] tracking-[0.34em] text-[#efe4d6] [text-indent:0.34em] sm:text-[12px]">
         Scent Forecast
       </h2>
 
       {!activePlan ? (
-        <div className="flex h-[clamp(14.5rem,33svh,16.5rem)] items-center justify-center px-8 sm:h-[clamp(18rem,40vh,20.5rem)]">
+        <div className="flex h-[14rem] items-center justify-center px-8 sm:h-[17rem]">
           <p className="max-w-sm font-serif text-lg italic leading-relaxed text-scent-text-muted">
             Live forecast unavailable right now. Your daily scent picks will return with the weather feed.
           </p>
@@ -327,16 +328,11 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
         <>
           {/* Hero frame is width-capped and centered so the carousel chevrons anchor
               to the actual composition (bottle + text) instead of floating against
-              the page edges. The height is MEASURED — tall enough for real packshot
-              presence, but not so tall that the vertically-centered bottle+text float
-              in a pool of dead air below the title (which read as the title drifting
-              alone, the bottle stranded, and the chevrons framing empty space). A
-              tighter frame pulls the hero up under the title, fills the box with the
-              composition so the chevrons frame the actual bottle+text, and shrinks the
-              vertical slack that let the bottle's optical center sit below the copy. */}
-          <div className="relative mx-auto mt-2 h-[clamp(12.75rem,30svh,14.25rem)] w-full max-w-[30rem] sm:mt-2 sm:h-[clamp(16.5rem,37vh,19rem)] sm:max-w-[54rem]">
+              the page edges, and the generous height gives the packshot real product
+              presence. The bottle and title share one centered, balanced row. */}
+          <div className="relative mx-auto mt-1 flex h-[11.25rem] w-full max-w-[27rem] items-center justify-between gap-1.5 sm:mt-2 sm:h-[13rem] sm:gap-3">
             <ForecastChevron direction="prev" onClick={() => go(selected - 1)} />
-            <div className="absolute inset-y-0 left-9 right-9 overflow-hidden sm:left-11 sm:right-11">
+            <div className="relative h-full flex-1 overflow-hidden">
               <ForecastHero
                 plan={activePlan}
                 direction={direction}
@@ -351,10 +347,10 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
               read as a single grouped, screen-centered unit that ties the hero to the
               calendar rather than drifting beside the title. */}
           {activeMeta.length > 0 ? (
-            <div className="mt-4 flex justify-center sm:mt-5">
+            <div className="mt-2.5 flex justify-center sm:mt-3">
               <div className="inline-flex items-center gap-1.5 rounded-full border border-scent-accent/20 bg-black/25 px-3 py-1 text-[#cdbfa9]">
                 <WeatherGlyph day={activePlan.day} size={13} />
-                <span className="scent-type-label text-[10px] tracking-[0.16em] sm:text-[11px]">
+                <span className="text-[10px] font-medium uppercase tracking-[0.14em] sm:text-[11px]">
                   {activeMeta.join(' · ')}
                 </span>
               </div>
@@ -369,7 +365,9 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
           <div
             role="tablist"
             aria-label="Days this week"
-            className="mx-auto mt-3 grid w-full max-w-[30rem] grid-cols-7 gap-1 sm:mt-4 sm:max-w-[54rem] sm:gap-3"
+            className={`mx-auto grid w-full max-w-[27rem] grid-cols-7 gap-1.5 sm:gap-2.5 ${
+              activeMeta.length > 0 ? 'mt-3 sm:mt-4' : 'mt-4 sm:mt-5'
+            }`}
           >
             {outlook.slice(0, 7).map((plan, index) => {
               const isActive = index === selected;
@@ -381,19 +379,19 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
                   type="button"
                   onClick={() => go(index)}
                   title={`${dayLabel(plan.day.date)} — ${plan.day.condition ?? 'Forecast'}`}
-                  className={`group flex min-h-[4.75rem] min-w-0 flex-col items-center justify-center gap-0.5 rounded-[13px] border py-2.5 text-[#f1e7da] transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/60 sm:min-h-[6.75rem] sm:gap-2 sm:rounded-[18px] sm:py-4 ${
+                  className={`flex w-full h-[4.75rem] sm:h-[6.5rem] flex-col items-center justify-between rounded-[13px] border py-2 text-[#f1e7da] transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/60 sm:rounded-[18px] sm:py-3.5 ${
                     isActive
                       ? 'border-scent-accent/55 bg-gradient-to-b from-scent-accent/[0.14] to-scent-accent/[0.04]'
-                      : 'border-scent-accent/15 bg-black/25 hover:border-scent-accent/35 hover:bg-scent-accent/[0.06]'
+                      : 'border-scent-accent/15 bg-black/25'
                   }`}
                 >
-                  <span className={`scent-type-label text-[10px] tracking-[0.16em] transition-colors duration-300 sm:text-[11px] ${isActive ? 'text-scent-accent/90' : 'text-[#cdbfa9] group-hover:text-scent-accent/75'}`}>
+                  <span className={`text-[8px] font-semibold uppercase tracking-[0.16em] sm:text-[10px] ${isActive ? 'text-scent-accent/90' : 'text-[#cdbfa9]'}`}>
                     {dayLabel(plan.day.date)}
                   </span>
-                  <span className="font-serif text-[1.5rem] leading-none sm:text-[1.8rem]">
+                  <span className="font-serif text-[1.2rem] leading-none sm:text-[1.8rem]">
                     {dayNumber(plan.day.date)}
                   </span>
-                  <span className={`transition-colors duration-300 ${isActive ? 'text-scent-accent' : 'text-[#cdbfa9] group-hover:text-scent-accent/75'}`}>
+                  <span className={`flex items-center justify-center h-[18px] w-full sm:h-[22px] ${isActive ? 'text-scent-accent' : 'text-[#cdbfa9]'}`}>
                     <WeatherGlyph day={plan.day} size={18} />
                   </span>
                 </button>
@@ -413,9 +411,7 @@ function ForecastChevron({ direction, onClick }: { direction: 'prev' | 'next'; o
       type="button"
       onClick={onClick}
       aria-label={direction === 'prev' ? 'Previous day' : 'Next day'}
-      className={`absolute top-1/2 z-10 flex h-11 w-9 -translate-y-1/2 items-center justify-center rounded-full text-scent-accent/80 transition-colors hover:bg-scent-accent/[0.08] hover:text-[#ffe8a5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/50 ${
-        direction === 'prev' ? 'left-0' : 'right-0'
-      }`}
+      className="flex h-9 w-7 shrink-0 items-center justify-center text-scent-accent/80 transition-colors hover:text-[#ffe8a5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/50"
     >
       <Icon size={22} strokeWidth={1.5} aria-hidden />
     </button>

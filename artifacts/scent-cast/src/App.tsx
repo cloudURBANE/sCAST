@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useLayoutEffect, useMemo, useCallback } from 'react';
-import { Routes, Route, useLocation, useParams, useNavigate, type Location } from 'react-router-dom';
+import { Routes, Route, useLocation, useParams, type Location } from 'react-router-dom';
 import type { Fragrance } from './components/Wardrobe';
 import type { BeamProposalItem } from '@/lib/beamAgentClient';
 import { vaultIdentityKey } from './lib/vaultIdentity';
@@ -9,20 +9,19 @@ import { X } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { ThreadBackground, type ThreadBackgroundMode } from './components/threads/ThreadBackground';
 import { AppTopNav } from './components/AppTopNav';
-import { WeeklyOutlookDashboard, forecastBottleLayoutId } from './components/WeeklyOutlookDashboard';
+import { WeeklyOutlookDashboard } from './components/WeeklyOutlookDashboard';
 import { AuthModal } from './components/AuthModal';
 import { GuestSaveBanner, GuestModeBanner } from './components/GuestSaveBanner';
 import { InstallPrompt } from './components/pwa/InstallPrompt';
 import { PushPrompt } from './components/pwa/PushPrompt';
 import { BadgeClearer } from './components/pwa/BadgeClearer';
-import { DevNotificationConsole } from './components/notifications/DevNotificationConsole';
 import type { ScentFamily, ScentWeatherRecommendation } from './lib/scentWeatherEngine';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { WeatherProvider, useWeather } from './context/WeatherContext';
 import { WardrobeProvider, useWardrobe, useWardrobeItems, useWardrobeShareModalActions } from './context/WardrobeContext';
 import { Toaster } from './components/ui/toaster';
 import { PageTransitionOverlay, warmTransitionEmblem } from './components/PageTransitionOverlay';
-import { useModalBehavior } from '@/hooks/use-modal-behavior';
+import { useBodyScrollLock, useModalBehavior } from '@/hooks/use-modal-behavior';
 import { useRenderBudget } from '@/hooks/useRenderBudget';
 import { useMarqueeSwipe } from '@/hooks/useMarqueeSwipe';
 import { isIpadSafariPerformanceMode, isLowRenderBudget } from '@/lib/platform';
@@ -744,7 +743,6 @@ function DashboardView() {
     handleVaultSearchStateChange,
     handleExpandArchive,
     pendingDetailOpen,
-    pendingDetailOpenSourceLayoutId,
     openFragranceDetail,
     clearPendingDetailOpen,
   } = useWardrobe();
@@ -782,7 +780,6 @@ function DashboardView() {
     ? { marginTop: '0', marginBottom: '0.75rem' }
     : { marginTop: '0', marginBottom: '0.625rem' };
   const [viewState, setViewState] = useState<'search' | 'agent'>('search');
-  const [searchFocusTrigger, setSearchFocusTrigger] = useState(0);
   // Beam Agent progress surfaced by the panel so its header (title + progress +
   // close) can render in a strip ABOVE the bordered card instead of inside it.
   const [missionStatus, setMissionStatus] = useState<ScentMissionStatus | null>(null);
@@ -897,13 +894,7 @@ function DashboardView() {
     ? { duration: 0.01 }
     : { duration: 0.42, ease: [0.16, 1, 0.3, 1] as const };
 
-  // NOTE: the Beam agent panel deliberately does NOT lock body scroll. It is
-  // inline content that replaces the search card within the page flow (not a
-  // fixed overlay), so it never needed scroll isolation. Pinning <body> with
-  // position:fixed for it caused the iPhone "tap Close -> gray screen" freeze:
-  // on close, removing position:fixed leaves iOS WebKit showing a blank gray
-  // compositor layer that locks the page until the next touch. Letting the page
-  // scroll normally while the panel is open removes that failure mode entirely.
+  useBodyScrollLock(agentActive);
 
   useEffect(() => {
     if (!discoveryReady && viewState === 'agent') {
@@ -1026,46 +1017,6 @@ function DashboardView() {
     };
   }, [authToken, resumeCurationToken, openFragranceDetail]);
 
-  // ── PWA shortcut deep-links ──────────────────────────────────────────────
-  // Manifest shortcuts (and shared links) can carry `?intent=search` or
-  // `?intent=weekly` to jump straight to the search card or the weekly scent
-  // forecast.  We read the param once, act on it, then strip both `intent`
-  // and `source` via replaceState — same pattern as the `?curation=` handler
-  // above — so a refresh is clean and React Router isn't disturbed.
-  const intentHandledRef = useRef<string | null>(null);
-  useEffect(() => {
-    const raw = location.search;
-    if (intentHandledRef.current === raw) return;
-    intentHandledRef.current = raw;
-
-    const params = new URLSearchParams(raw);
-    const intent = params.get('intent');
-    if (!intent) return;
-
-    // Strip shortcut params immediately so a later refresh is clean.
-    if (typeof window !== 'undefined' && window.history?.replaceState) {
-      const url = new URL(window.location.href);
-      url.searchParams.delete('intent');
-      url.searchParams.delete('source');
-      window.history.replaceState(window.history.state, '', url.toString());
-    }
-
-    // Defer the scroll/focus to ensure the target DOM node has painted
-    // after route-level suspense boundaries resolve and same-route resets finish.
-    setTimeout(() => {
-      if (intent === 'search') {
-        setViewState('search');
-        heroVaultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        // Focus the search input after the scroll animation settles
-        setSearchFocusTrigger((prev) => prev + 1);
-      } else if (intent === 'weekly') {
-        document
-          .getElementById('weekly-outlook-section')
-          ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-    }, 200);
-  }, [location.search, setViewState]);
-
   // iOS PWA standalone mode reports viewport/safe-area differently than Safari;
   // keep this shell padding tied to --bottomnav-h so fixed nav content has space.
   return (
@@ -1087,7 +1038,7 @@ function DashboardView() {
 
       <div style={{ height: 'var(--topbar-h)' }} />
 
-      <main className="relative z-10 mx-auto max-w-[1760px] pl-[max(1rem,env(safe-area-inset-left,0px))] pr-[max(1rem,env(safe-area-inset-right,0px))] md:px-8 md:pb-24">
+      <main className="relative z-10 px-4 sm:px-8 sm:pb-24 max-w-[1760px] mx-auto">
         {/* Home — first viewport. On phones this column fills the space below the
             top bar (min-h = 100svh − topbar) and reserves the floating tab bar as
             real bottom PADDING (bottomnav-h + breathing room). Padding — not a
@@ -1099,7 +1050,7 @@ function DashboardView() {
             min-height + padding relax to the original stacked rhythm. The Vault of
             Aromas is no longer part of this screen — it lives one scroll down as
             the "second page". */}
-        <div className="flex min-h-[calc(100svh-var(--topbar-h))] flex-col gap-4 pb-[calc(var(--bottomnav-h)+0.5rem)] pt-0 md:min-h-0 md:gap-12 md:pb-0 md:pt-0">
+        <div className="flex min-h-[calc(100svh-var(--topbar-h))] flex-col gap-4 pt-0 pb-[calc(var(--bottomnav-h)+0.5rem)] sm:min-h-0 sm:gap-12 sm:pt-0 sm:pb-0">
           {/* The hero ticker sits flush against the fixed top bar (no padding
               above it) so it visually replaces the bar's old bottom hairline. */}
           <HomepageHeroMarquee />
@@ -1119,13 +1070,7 @@ function DashboardView() {
                   key="mission-header"
                   initial={reduceMotion ? false : { opacity: 0, y: 6, ...missionHeaderMargins }}
                   animate={{ opacity: 1, y: 0, ...missionHeaderMargins }}
-                  // Use the calm fallback (opacity-only) on constrained budgets
-                  // too, not just OS reduced-motion: the height/margin collapse
-                  // is a layout-reflow tween, and the sibling cards already snap
-                  // (their `layout` is off when calmLayout), so animating this
-                  // header's height on phones/iPad-Safari only adds compositor
-                  // churn during the close.
-                  exit={calmLayout ? { opacity: 0 } : { opacity: 0, height: 0, marginTop: 0, marginBottom: 0 }}
+                  exit={reduceMotion ? { opacity: 0 } : { opacity: 0, height: 0, marginTop: 0, marginBottom: 0 }}
                   transition={vaultContentTransition}
                   // The pull-up margins (toward the hero marquee, so the agent
                   // does not open with a dead gap above "A scent for today.")
@@ -1235,7 +1180,6 @@ function DashboardView() {
                         existingVaultKeys={vaultIdentityKeys}
                         onViewVault={handleViewVault}
                         embeddedInVaultPanel
-                        autoFocusTrigger={searchFocusTrigger}
                       />
                     </motion.div>
                   )}
@@ -1303,22 +1247,22 @@ function DashboardView() {
 
           {!agentActive ? <HomepageAtmosphereChrome /> : null}
 
-          {/* On phones the larger forecast consumes the available canvas, while
-              mt-auto seats its date row directly above the reserved bottom-nav
-              clearance instead of leaving unused space below it. Normal flow on
+          {/* Weekly outlook dashboard — on phones it CENTERS in the leftover
+              column space (my-auto splits the free space evenly above and below
+              instead of mt-auto dumping it all into one void above), so the
+              forecast reads as intentionally placed and balanced rather than
+              slammed against the tab bar with a dead gap overhead. Normal flow on
               md+. Hidden in agent mode, which takes over the hero. */}
           {!agentActive ? (
-            // Any residual height becomes measured breathing room between the
-            // atmosphere strip and forecast title; it can no longer accumulate
-            // beneath the date cards. Normal flow on md+ (no bottom nav).
-            <div id="weekly-outlook-section" className="mt-auto md:mt-0" style={{ scrollMarginTop: 'calc(var(--topbar-h) + 1rem)' }}>
+            // Bias the leftover column space ABOVE the forecast (mt-auto) and set
+            // a small deliberate gap below it (mb-4), so the forecast reads as
+            // seated above the bottom nav instead of floating in a large centered void.
+            // Normal flow on md+ (no bottom nav).
+            <div className="mt-auto mb-4 sm:mt-0 sm:mb-0">
               <WeeklyOutlookDashboard
                 items={items}
                 weather={weather}
-                onSelectFragrance={(item) => openFragranceDetail(item, {
-                  sourceLayoutId: forecastBottleLayoutId(item.id),
-                  scrollToVault: false,
-                })}
+                onSelectFragrance={openFragranceDetail}
               />
             </div>
           ) : null}
@@ -1333,7 +1277,6 @@ function DashboardView() {
                 onDelete={handleDeleteItem}
                 onAdd={handleAddItem}
                 pendingDetailOpen={pendingDetailOpen}
-                pendingDetailOpenSourceLayoutId={pendingDetailOpenSourceLayoutId}
                 onClearPendingDetailOpen={clearPendingDetailOpen}
                 onPersistWardrobeImage={handlePersistWardrobeImage}
                 onVerifyWardrobeFact={handleVerifyWardrobeFact}
@@ -1683,16 +1626,6 @@ function WebVitalsReporter() {
 }
 
 const AppContent = React.memo(function AppContent({ location }: { location: Location }) {
-  const { authToken, setIsAuthModalOpen } = useAuth();
-
-  // If unauthenticated guest lands with a ?curation= deep link, trigger AuthModal immediately
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    if (params.has('curation') && !authToken) {
-      setIsAuthModalOpen(true);
-    }
-  }, [location.search, authToken, setIsAuthModalOpen]);
-
   return (
     <>
       <React.Suspense fallback={<RouteChunkFallback />}>
@@ -1746,7 +1679,6 @@ const AppShell = React.memo(function AppShell({
             <InstallPrompt />
             <PushPrompt />
             <BadgeClearer />
-            <DevNotificationConsole />
           </div>
         </WardrobeProvider>
       </WeatherProvider>
@@ -1756,20 +1688,9 @@ const AppShell = React.memo(function AppShell({
 
 export default function App() {
   const location = useLocation();
-  const navigate = useNavigate();
   const [renderedLocation, setRenderedLocation] = useState<Location>(location);
   const [transitionVisible, setTransitionVisible] = useState(false);
   const [transitionKey, setTransitionKey] = useState(0);
-
-  // Redirect deep-linked queries on subpages to '/' to ensure proper state-driven view loading
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const hasIntent = params.has('intent');
-    const hasCuration = params.has('curation');
-    if ((hasIntent || hasCuration) && location.pathname !== '/') {
-      navigate('/' + location.search, { replace: true });
-    }
-  }, [location.pathname, location.search, navigate]);
   const activeRouteRef = useRef(routeSignature(location));
   const coverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
