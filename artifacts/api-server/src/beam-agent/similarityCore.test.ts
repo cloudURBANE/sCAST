@@ -22,18 +22,26 @@ const vec = (over: Partial<BeamScentVector> = {}): BeamScentVector => ({
   ...over,
 });
 
-test("scentVectorSimilarity is 1 for identical vectors and lower for different ones", () => {
+test("scentVectorSimilarity (cosine) is 1 for identical, 0 for orthogonal, and ranks neighbors", () => {
   const a = vec({ freshness: 0.8, woodiness: 0.6, warmth: 0.4 });
   assert.equal(scentVectorSimilarity(a, a), 1);
 
-  const b = vec({ sweetness: 0.9, musk: 0.7 });
-  const sim = scentVectorSimilarity(a, b);
-  assert.ok(sim !== null && sim > 0 && sim < 1, `expected 0<sim<1, got ${sim}`);
+  // Orthogonal character (no shared axis direction) → cosine 0: maximally
+  // different. The old √6-normalized euclidean form scored nearly every pair into
+  // the top bands; cosine (M1) restores discrimination.
+  const orthogonal = vec({ sweetness: 0.9, musk: 0.7 });
+  assert.equal(scentVectorSimilarity(a, orthogonal), 0);
 
-  // A near neighbor must score higher than a far one.
+  // A partially-overlapping but clearly DIFFERENT vector lands strictly between
+  // 0 and 1 and must NOT sit in the top "very similar" band (>= 0.7).
+  const different = vec({ freshness: 0.2, sweetness: 0.8, musk: 0.6 });
+  const diffSim = scentVectorSimilarity(a, different)!;
+  assert.ok(diffSim > 0 && diffSim < 0.7, `expected 0<sim<0.7, got ${diffSim}`);
+
+  // A near neighbor must score higher than the different one.
   const near = vec({ freshness: 0.7, woodiness: 0.6, warmth: 0.4 });
   const nearSim = scentVectorSimilarity(a, near)!;
-  assert.ok(nearSim > sim!, `near (${nearSim}) should beat far (${sim})`);
+  assert.ok(nearSim > diffSim, `near (${nearSim}) should beat different (${diffSim})`);
 });
 
 test("scentVectorSimilarity degrades to null when either vector has no signal", () => {

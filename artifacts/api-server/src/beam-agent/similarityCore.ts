@@ -15,9 +15,6 @@
  */
 import type { BeamScentVector } from "./types.ts";
 
-/** Largest possible Euclidean distance between two 6-axis vectors in [0,1]^6. */
-const MAX_AXIS_DISTANCE = Math.sqrt(6);
-
 /** The six axes, fixed order — keep in sync with BeamScentVector. */
 const AXES: ReadonlyArray<keyof BeamScentVector> = [
   "freshness",
@@ -40,8 +37,16 @@ export function hasVectorSignal(v: BeamScentVector | undefined): v is BeamScentV
 }
 
 /**
- * 0..1 closeness of two scent vectors (1 = identical fingerprint). Euclidean
- * distance over the six axes, mapped onto 0..1 via the max possible distance.
+ * 0..1 closeness of two scent vectors (1 = identical character). COSINE
+ * similarity over the six (non-negative, [0,1]-clamped) axes.
+ *
+ * M1: the old Euclidean form (`1 - distance/√6`) normalized by the theoretical max
+ * axis distance, but real scent vectors rarely span the full cube, so almost every
+ * pair compressed into the top "very similar"/"similar" bands and the score barely
+ * discriminated. Cosine measures DIRECTION (the overall character a user means by
+ * "smells like") and spreads sparse vectors naturally across 0..1. Both sides are
+ * non-zero by `hasVectorSignal`, so the magnitude product is never 0.
+ *
  * Returns null when either side has no usable vector — the caller then leans on
  * accord overlap instead of treating "no data" as "completely different".
  */
@@ -50,13 +55,19 @@ export function scentVectorSimilarity(
   b: BeamScentVector | undefined,
 ): number | null {
   if (!hasVectorSignal(a) || !hasVectorSignal(b)) return null;
-  let sumSq = 0;
+  let dot = 0;
+  let magA = 0;
+  let magB = 0;
   for (const key of AXES) {
-    const d = axis(a, key) - axis(b, key);
-    sumSq += d * d;
+    const va = axis(a, key);
+    const vb = axis(b, key);
+    dot += va * vb;
+    magA += va * va;
+    magB += vb * vb;
   }
-  const distance = Math.sqrt(sumSq);
-  const sim = 1 - distance / MAX_AXIS_DISTANCE;
+  const denom = Math.sqrt(magA) * Math.sqrt(magB);
+  if (denom === 0) return null;
+  const sim = dot / denom;
   return round2(Math.min(1, Math.max(0, sim)));
 }
 
