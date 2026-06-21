@@ -84,6 +84,22 @@ const SOFT_FLOW_VIOLATIONS = new Set([
   "delegated_but_questioned",
 ]);
 
+/**
+ * Hard gates that a deterministic safe re-ask CAN resolve: the model produced a
+ * mission-shaped deliverable before the mission was ready to fulfill (it named an
+ * owned bottle in a new-only kit, or filled the wrong lane counts). When a
+ * tool-grounded turn that isn't yet owed a pick fails only these (plus, at most,
+ * soft-flow gates), the right recovery is to ask for the one missing slot rather
+ * than dead-end. Distinct from SOFT_FLOW_VIOLATIONS: these still fail a run that
+ * has no safe re-ask available (e.g. an owed/ready kit, where buildSafeClarification
+ * returns null). Evidence claims, instruction leaks, and over-length are NOT here —
+ * asking does not fix them, so they keep failing the run.
+ */
+const KIT_PREMATURE_VIOLATIONS = new Set([
+  "owned_pick_in_new_only_mission",
+  "mission_unfulfilled",
+]);
+
 const SYSTEM_PROMPT = `You are the Beam Agent for ScentBeam, a fragrance wardrobe app. You are
 a sharp, confident fragrance concierge: you ground every answer in the user's real vault and
 the real catalog, then give a specific, decisive recommendation.
@@ -1008,6 +1024,41 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
           if (commitGate.passed) {
             finalText = commit;
             gate = commitGate;
+          }
+        }
+      }
+
+      // Final safety net for a tool-grounded turn that jumped ahead on a kit the
+      // mission wasn't ready to fulfill. The commit fallback above only fires once
+      // the user is owed a recommendation; a turn that pulled tools while still
+      // MISSING an essential slot (the live Tokyo "2 new fragrances" with no
+      // direction given: the model built a kit and named an owned vault bottle ->
+      // owned_pick_in_new_only_mission) is really an over-eager clarification.
+      // Recover it with the same deterministic safe re-ask the clarifying-turn net
+      // uses — ask for the one missing slot — instead of dead-ending on a terminal
+      // error. Scoped to the premature-kit violation class so an unsupported
+      // price/availability/review claim, an instruction leak, or an over-length
+      // draft (none fixable by asking) still fails the run; and only when EVERY
+      // remaining violation is one a re-ask resolves (premature-kit or soft-flow).
+      // buildSafeClarification returns null when the user IS owed (delegated / kit
+      // ready), so this never converts an owed turn into a question and the
+      // unfulfillable ready-kit case still fails; the gate is re-run on the re-ask.
+      const recoverableByReask =
+        gate.violations.length > 0 &&
+        gate.violations.some((v) => KIT_PREMATURE_VIOLATIONS.has(v)) &&
+        gate.violations.every((v) => KIT_PREMATURE_VIOLATIONS.has(v) || SOFT_FLOW_VIOLATIONS.has(v));
+      if (!gate.passed && !clarifyingTurn && recoverableByReask) {
+        const safe = buildSafeClarification(input.sessionState);
+        if (safe) {
+          const safeGate = runAnswerQualityGates(safe, {
+            hadExternalEvidence,
+            sessionState: input.sessionState,
+            groundedFragrances: [...groundedFragrances.values()],
+            localWeatherLocation,
+          });
+          if (safeGate.passed) {
+            finalText = safe;
+            gate = safeGate;
           }
         }
       }
