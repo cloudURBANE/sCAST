@@ -499,3 +499,53 @@ test("destination override never inherits unrelated home weather fields", async 
   assert.equal(scoredWeather?.temperature_f, undefined);
   assert.equal(scoredWeather?.location, undefined);
 });
+
+test("beam_check_enrichment_state is exposed only when the dep is wired", () => {
+  assert.equal(toolMap(makeDeps()).has("beam_check_enrichment_state"), false);
+  assert.equal(
+    toolMap(makeDeps({ checkEnrichmentState: async () => ({ level: "full", complete: true }) })).has(
+      "beam_check_enrichment_state",
+    ),
+    true,
+  );
+});
+
+test("beam_check_enrichment_state reports complete vs defer per level", async () => {
+  const tools = toolMap(
+    makeDeps({
+      checkEnrichmentState: async ({ name }) =>
+        name === "Aventus" ? { level: "full", complete: true } : { level: "partial", complete: false },
+    }),
+  );
+  const tool = tools.get("beam_check_enrichment_state")!;
+
+  const complete = (await tool.handler({ name: "Aventus", brand: "Creed" }, CTX)) as Record<string, unknown>;
+  assert.equal(complete.complete, true);
+  assert.equal(complete.level, "full");
+  assert.match(String(complete.recommendation), /safe to present/i);
+
+  const partial = (await tool.handler({ name: "Obscure Blend" }, CTX)) as Record<string, unknown>;
+  assert.equal(partial.complete, false);
+  assert.equal(partial.level, "partial");
+  assert.match(String(partial.recommendation), /researching|notify/i);
+});
+
+test("beam_check_enrichment_state is conservative when the probe throws or name is missing", async () => {
+  const tools = toolMap(
+    makeDeps({
+      checkEnrichmentState: async () => {
+        throw new Error("engine down");
+      },
+    }),
+  );
+  const tool = tools.get("beam_check_enrichment_state")!;
+
+  const noName = (await tool.handler({}, CTX)) as Record<string, unknown>;
+  assert.equal(noName.ok, false);
+  assert.equal(noName.complete, false);
+
+  const failed = (await tool.handler({ name: "Anything" }, CTX)) as Record<string, unknown>;
+  assert.equal(failed.ok, false);
+  assert.equal(failed.complete, false);
+  assert.equal(failed.level, "none");
+});

@@ -28,7 +28,12 @@ export type BeamReadToolName =
   // /search (bounded /details enrichment). Writes nothing the user sees; each
   // surfaced pick is fire-and-forget enqueued for enrichment so the catalog
   // grows. Additive + gated on the `discoverExternal` dep (lean deploys omit it).
-  | "beam_discover_external";
+  | "beam_discover_external"
+  // Verify a fragrance's ENRICHMENT STATE (none/partial/full) before presenting
+  // or recommending it, so the agent never surfaces an under-enriched "Unknown"
+  // card. Read-only; gated on the `checkEnrichmentState` dep. Reads the cheap
+  // cached engine state — no billed live scrape.
+  | "beam_check_enrichment_state";
 
 /**
  * `beam_propose_collection` resolves catalog fragrances into add-ready payloads

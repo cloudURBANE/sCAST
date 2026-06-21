@@ -59,6 +59,7 @@ test("pendingCurationItemFromRow prefers metadata name/brand and is not ready wh
     name: "Aventus",
     brand: "Creed",
     ready: false,
+    enrichmentLevel: "none",
     lastRequestedAt: "2026-06-17T12:00:00.000Z",
   });
 });
@@ -67,6 +68,31 @@ test("pendingCurationItemFromRow is ready only when status is completed", () => 
   assert.equal(pendingCurationItemFromRow(row({ status: "completed" })).ready, true);
   assert.equal(pendingCurationItemFromRow(row({ status: "processing" })).ready, false);
   assert.equal(pendingCurationItemFromRow(row({ status: "failed" })).ready, false);
+});
+
+test("pendingCurationItemFromRow reports the observed enrichment level", () => {
+  // A completed job is full by definition, regardless of the stamped level.
+  assert.equal(
+    pendingCurationItemFromRow(row({ status: "completed" })).enrichmentLevel,
+    "full",
+  );
+  // A still-running job surfaces the worker's last stamped level.
+  assert.equal(
+    pendingCurationItemFromRow(
+      row({
+        status: "failed",
+        metadataJson: { source: BEAM_CURATION_SOURCE, userId: "u", enrichLevel: "partial" },
+      }),
+    ).enrichmentLevel,
+    "partial",
+  );
+  // Garbage/missing level degrades to "none".
+  assert.equal(
+    pendingCurationItemFromRow(
+      row({ status: "pending", metadataJson: { source: BEAM_CURATION_SOURCE, userId: "u", enrichLevel: "??" } }),
+    ).enrichmentLevel,
+    "none",
+  );
 });
 
 test("pendingCurationItemFromRow falls back to row name/house when metadata lacks them", () => {

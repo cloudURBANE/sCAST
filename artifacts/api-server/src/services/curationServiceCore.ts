@@ -102,10 +102,22 @@ export type PendingCurationItem = {
   status: string;
   name: string;
   brand: string | null;
-  /** Convenience flag — true once the enrichment finished and the fragrance is addable. */
+  /**
+   * Convenience flag — true once enrichment is FULLY complete and the fragrance
+   * is addable. A job only reaches `status: "completed"` when the engine reports
+   * full source coverage (see enrichmentProcessor.ts), so `ready` now means
+   * "complete enough to surface", not merely "the worker ran".
+   */
   ready: boolean;
+  /** Latest coarse completeness the worker observed ("none" | "partial" | "full"). */
+  enrichmentLevel: "none" | "partial" | "full";
   lastRequestedAt: string;
 };
+
+/** Narrow an arbitrary metadata value to the enrichment-level union. */
+function asEnrichmentLevel(value: unknown): "none" | "partial" | "full" {
+  return value === "partial" || value === "full" ? value : "none";
+}
 
 /**
  * Map an enrichment_jobs row → the pending-list item shape.
@@ -116,15 +128,21 @@ export type PendingCurationItem = {
  * purely from the status so the client never re-implements that rule.
  */
 export function pendingCurationItemFromRow(row: CurationJobRow): PendingCurationItem {
-  const metadata = (row.metadataJson ?? {}) as Partial<BeamCurationMetadata>;
+  const metadata = (row.metadataJson ?? {}) as Partial<BeamCurationMetadata> & {
+    enrichLevel?: unknown;
+  };
   const name = cleanString(metadata.name) ?? cleanString(row.name) ?? "";
   const brand = cleanString(metadata.brand) ?? cleanString(row.house);
+  const complete = row.status === "completed";
   return {
     jobKey: row.jobKey,
     status: row.status,
     name,
     brand,
-    ready: row.status === "completed",
+    // `completed` is only ever set at full coverage, so trust it; surface the
+    // observed level too (a completed job is "full" by definition).
+    ready: complete,
+    enrichmentLevel: complete ? "full" : asEnrichmentLevel(metadata.enrichLevel),
     lastRequestedAt: row.lastRequestedAt.toISOString(),
   };
 }

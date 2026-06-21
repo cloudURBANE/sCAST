@@ -188,6 +188,18 @@ export type BeamToolDeps = {
     calibration: ScentMissionCalibration,
     weather: ScentMissionWeather,
   ) => ScentMissionRecommendation[];
+  /**
+   * OPTIONAL enrichment-state probe: report whether a fragrance is fully enriched
+   * ("full"), partially enriched ("partial"), or has no usable data yet ("none"),
+   * using the cheap CACHED engine state (no billed live scrape). When present, the
+   * `beam_check_enrichment_state` tool is exposed so the agent can verify a pick
+   * BEFORE presenting/recommending it — and tell the user "I'm researching this,
+   * I'll notify you when it's ready" instead of surfacing an Unknown card. When
+   * absent (lean deploys, tool tests), the tool is not exposed.
+   */
+  checkEnrichmentState?: (
+    fragrance: { name: string; brand?: string | null },
+  ) => Promise<{ level: "none" | "partial" | "full"; complete: boolean }>;
   /** Current weather context for the run (best-effort; engine has fallbacks). */
   getWeather: (ctx: BeamRunContext) => Promise<ScentMissionWeather>;
   /** Travel missions must never silently score against the user's home weather. */
@@ -1202,6 +1214,64 @@ export function createBeamTools(deps: BeamToolDeps): BeamToolDefinition[] {
                   ? ` ${overBudget} priced over the ~$${ceiling} budget (shown last); say so honestly rather than hiding them.`
                   : "")
               : "All external matches are already in the user's vault.",
+        };
+      },
+    });
+  }
+
+  // Enrichment-state verification — additive, gated on the `checkEnrichmentState`
+  // dep. Lets the agent confirm a fragrance is fully enriched BEFORE presenting it
+  // (so it never surfaces an under-enriched "Unknown" card), and shapes the user
+  // message: complete → present it; partial/none → tell the user it's being
+  // researched and they'll be notified, then enqueue via the discovery/curation path.
+  if (deps.checkEnrichmentState) {
+    const checkEnrichmentState = deps.checkEnrichmentState;
+    tools.push({
+      name: "beam_check_enrichment_state",
+      description:
+        "Verify whether a fragrance is fully researched BEFORE you present, recommend, or notify about it. " +
+        "Returns level 'full' (complete — safe to present), 'partial' (some data, still missing community " +
+        "sources/metrics), or 'none' (nothing yet). ALWAYS call this for any pick that came from discovery " +
+        "or isn't clearly in the local catalog. If level is not 'full', do NOT show it as a finished " +
+        "recommendation — instead tell the user you're researching it and will notify them when it's ready " +
+        "(the system enqueues enrichment and pushes a 'ready to add' notification on completion). Read-only; " +
+        "uses cheap cached engine state, so calling it is inexpensive.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          name: { type: "string", description: "Fragrance name to check." },
+          brand: { type: "string", description: "Brand/house, if known (improves identity match)." },
+        },
+        required: ["name"],
+        additionalProperties: false,
+      },
+      handler: async (input) => {
+        const record = (typeof input === "object" && input !== null ? input : {}) as Record<string, unknown>;
+        const name = asString(record.name);
+        const brand = asString(record.brand);
+        if (!name) {
+          return { ok: false, level: "none", complete: false, note: "name is required" };
+        }
+        const state = await checkEnrichmentState({ name, brand: brand || null }).catch(() => null);
+        if (!state) {
+          // Probe failed (engine unreachable). Be conservative: treat as not-ready
+          // so the agent defers to "researching, will notify" rather than presenting.
+          return {
+            ok: false,
+            level: "none" as const,
+            complete: false,
+            note: "Enrichment state unavailable; treat as not ready and tell the user you're researching it.",
+          };
+        }
+        return {
+          ok: true,
+          name,
+          ...(brand ? { brand } : {}),
+          level: state.level,
+          complete: state.complete,
+          recommendation: state.complete
+            ? "Fully enriched — safe to present as a finished recommendation."
+            : "Not fully enriched yet — do NOT present as finished. Tell the user you're researching it and will notify them when it's ready.",
         };
       },
     });

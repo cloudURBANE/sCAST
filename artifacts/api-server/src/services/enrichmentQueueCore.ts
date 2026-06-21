@@ -404,16 +404,29 @@ export const DEFAULT_WORKER_BATCH = 3;
 
 export type ClaimableJob = { jobKey: string };
 
-/** Process one claimed job, returning the terminal status to record for it. */
+/**
+ * Process one claimed job, returning the terminal status to record for it:
+ *   - "completed" → enrichment is fully complete (the only `ready`/notify state);
+ *   - "failed"    → retryable; the sweeper reopens it after backoff;
+ *   - "ignored"   → give up quietly (e.g. still partial after the attempt budget,
+ *                   or no usable identity). Terminal — never reopened, never
+ *                   surfaced, never notified.
+ */
 export type EnrichmentWorkerProcessor<J extends ClaimableJob = ClaimableJob> = (
   job: J,
-) => Promise<"completed" | "failed">;
+) => Promise<"completed" | "failed" | "ignored">;
 
 /** Injected seams so the runner can be exercised without a DB or the engine. */
 export type EnrichmentWorkerDeps<J extends ClaimableJob = ClaimableJob> = {
   claim: () => Promise<J | null>;
   complete: (jobKey: string) => Promise<void>;
   fail: (jobKey: string, error: string) => Promise<void>;
+  /**
+   * Mark a job terminally ignored (no reopen). Optional for back-compat: when a
+   * caller doesn't supply it, an "ignored" outcome degrades to `fail` (which is
+   * still safe — the worst case is one more backoff cycle).
+   */
+  ignore?: (jobKey: string, reason: string) => Promise<void>;
   process: EnrichmentWorkerProcessor<J>;
 };
 
@@ -434,8 +447,14 @@ export async function runEnrichmentWorkerOnce<J extends ClaimableJob>(
     handled++;
     try {
       const outcome = await deps.process(job);
-      if (outcome === "completed") await deps.complete(job.jobKey);
-      else await deps.fail(job.jobKey, "processor reported failure");
+      if (outcome === "completed") {
+        await deps.complete(job.jobKey);
+      } else if (outcome === "ignored") {
+        if (deps.ignore) await deps.ignore(job.jobKey, "enrichment incomplete after attempt budget");
+        else await deps.fail(job.jobKey, "enrichment incomplete (no ignore seam)");
+      } else {
+        await deps.fail(job.jobKey, "processor reported failure");
+      }
     } catch (err) {
       // If fail() itself throws, the job stays `processing` and its claim lease
       // will expire and be reclaimed — never wedge the loop on one bad job.
