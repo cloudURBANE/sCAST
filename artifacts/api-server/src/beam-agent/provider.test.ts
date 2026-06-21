@@ -8,7 +8,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { resolveBeamBudget, resolveBeamModels } from "./provider.ts";
+import { isBeamAgentEnabled, resolveBeamBudget, resolveBeamModels } from "./provider.ts";
 import { BEAM_LIMITS } from "./beamToolCore.ts";
 
 function withEnv(vars: Record<string, string | undefined>, fn: () => void): void {
@@ -171,4 +171,32 @@ test("resolveBeamBudget ignores blank/invalid env and falls back to defaults", (
       assert.equal(budget.synthesisMaxTokens, BEAM_LIMITS.synthesisMaxTokens);
     },
   );
+});
+
+test("isBeamAgentEnabled defaults ON when unset or blank", () => {
+  withEnv({ BEAM_AGENT_ENABLED: undefined }, () => {
+    assert.equal(isBeamAgentEnabled(), true);
+  });
+  withEnv({ BEAM_AGENT_ENABLED: "" }, () => {
+    assert.equal(isBeamAgentEnabled(), true);
+  });
+  withEnv({ BEAM_AGENT_ENABLED: "   " }, () => {
+    assert.equal(isBeamAgentEnabled(), true);
+  });
+});
+
+test("isBeamAgentEnabled is OFF only for explicit falsey values (case/space-insensitive)", () => {
+  for (const value of ["false", "0", "off", "no", "disabled", "OFF", " false ", " Disabled "]) {
+    withEnv({ BEAM_AGENT_ENABLED: value }, () => {
+      assert.equal(isBeamAgentEnabled(), false, `expected "${value}" to disable the agent`);
+    });
+  }
+});
+
+test("isBeamAgentEnabled stays ON for truthy / unrelated values", () => {
+  for (const value of ["true", "1", "on", "yes", "enabled", "TRUE", " on "]) {
+    withEnv({ BEAM_AGENT_ENABLED: value }, () => {
+      assert.equal(isBeamAgentEnabled(), true, `expected "${value}" to keep the agent enabled`);
+    });
+  }
 });

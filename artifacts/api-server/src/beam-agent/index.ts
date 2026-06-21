@@ -10,6 +10,7 @@ export { runBeamAgent, type RunBeamAgentInput } from "./beamAgentLoop.ts";
 export {
   callModel,
   isModelConfigured,
+  isBeamAgentEnabled,
   resolveProvider,
   resolveBeamModels,
   resolveDeepModel,

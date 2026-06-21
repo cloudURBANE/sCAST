@@ -50,6 +50,19 @@ export function isModelConfigured(): boolean {
 }
 
 /**
+ * Global runtime kill-switch for the whole Beam Agent, read fresh from env on
+ * every call so an operator can turn the agent on/off for ALL users by changing
+ * BEAM_AGENT_ENABLED and restarting (Railway) — no code change. Default ON: only
+ * an explicit falsey value ("0" | "false" | "off" | "no" | "disabled",
+ * case/space-insensitive) disables it. Anything else (including unset) is ON.
+ */
+export function isBeamAgentEnabled(): boolean {
+  const raw = process.env.BEAM_AGENT_ENABLED?.trim().toLowerCase();
+  if (!raw) return true;
+  return !["0", "false", "off", "no", "disabled"].includes(raw);
+}
+
+/**
  * The orchestration (`model`) and final-synthesis (`synthesisModel`) slugs for
  * the provider that will actually serve the run, resolved from env at call time.
  * Returns null when no provider is configured.

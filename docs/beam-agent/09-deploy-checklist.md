@@ -60,3 +60,52 @@ api-server (see root `.env.example`). The concierge sends the user's
 `localStorage["scent_token"]` as the bearer token the agent's `requireAuth`
 needs — no extra config. Guests (no token) always use the scripted path by
 design.
+
+## 4. Operating the agent: on/off and model switching
+
+All of the below are owner-config in the Railway **api-server** service →
+Variables, applied on **restart**. No code change, no redeploy of the SPA.
+
+### Disable / enable the agent (kill-switch)
+
+```
+BEAM_AGENT_ENABLED=false   # turn the live agent OFF for ALL users
+```
+
+`BEAM_AGENT_ENABLED` is the global kill-switch, read fresh per request in
+`provider.ts` (`isBeamAgentEnabled()`). It is **ON by default**: only an explicit
+falsey value — `0`, `false`, `off`, `no`, or `disabled` (case/space-insensitive)
+— turns it off. Anything else, including leaving it unset, keeps the agent ON.
+Change it and **restart** the api-server to toggle for everyone.
+
+**What users experience when off:** every Beam run emits a graceful
+`beam_disabled` failure and the SPA silently falls back to the scripted Scent
+Mission — the concierge keeps working, just without the live agent (same UX as
+the `model_unavailable` fallback in §1).
+
+### Switch model / provider live
+
+Model selection is fully env-driven (resolved at call time in `provider.ts`,
+`openRouterProvider.ts`, `claudeProvider.ts`), so swapping models is just a
+variable change + restart — no code edit:
+
+```
+BEAM_AGENT_PROVIDER=openrouter|anthropic   # force a provider (else auto-selected)
+BEAM_AGENT_MODEL=...                        # default concierge / cheap orchestration lane
+BEAM_AGENT_MODEL_STRONG=...                 # synthesis "smart closer" tier
+BEAM_AGENT_MODEL_PREMIUM=...                # premium-lane ORCHESTRATION tier (NOT the closer)
+BEAM_AGENT_SYNTH_MODEL_DEFAULT=...          # per-lane synthesis closer, default lane
+BEAM_AGENT_SYNTH_MODEL_PREMIUM=...          # per-lane synthesis closer, premium lane
+```
+
+Defaults when unset (confirm slugs in your provider dashboard — they drift):
+OpenRouter uses `minimax/minimax-m2.5` (`BEAM_AGENT_MODEL`) and
+`minimax/minimax-m3` (`BEAM_AGENT_MODEL_STRONG` / `BEAM_AGENT_MODEL_PREMIUM`);
+Anthropic-direct uses `claude-haiku-4-5-20251001` and `claude-sonnet-4-6`. The
+`BEAM_AGENT_SYNTH_MODEL_*` overrides fall back to the strong slug when unset.
+
+Do **not** pin `BEAM_AGENT_MODEL_PREMIUM` to the expensive synthesis/closer slug
+— that puts every premium tool-calling turn on the closer model (the documented
+~$0.60/mission blowup). The full model ladder and cost rationale live in
+[10-cost-optimized-model-stack.md](./10-cost-optimized-model-stack.md); every
+name above is mirrored in the root `.env.example` Beam Agent block.
