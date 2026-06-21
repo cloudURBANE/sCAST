@@ -216,7 +216,7 @@ function ForecastHero({
               type="button"
               onClick={onSelect ? () => onSelect(fragrance) : undefined}
               disabled={!onSelect}
-              className="group forecast-hero-bottle relative h-full w-[42%] max-w-[10.5rem] shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:cursor-default sm:w-[44%] sm:max-w-[11.5rem]"
+              className="group forecast-hero-bottle relative h-full w-[48%] max-w-[12.5rem] shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:cursor-default sm:w-[48%] sm:max-w-[13.5rem]"
               aria-label={onSelect ? `Open ${pick.name} by ${pick.brand}` : `${pick.name} by ${pick.brand}`}
             >
               <BottleImage
@@ -237,7 +237,7 @@ function ForecastHero({
                 name like "Silver Mountain Water" breaks after "Mountain", while a
                 tighter name like "Green Irish Tweed" stays balanced on one line.
                 NON-INTERACTIVE by design: the name is not a tap target (see above). */}
-            <div className="flex min-w-0 w-[58%] max-w-[12.5rem] flex-col items-center justify-center self-center text-center sm:w-[56%] sm:max-w-[14rem]">
+            <div className="flex min-w-0 w-[52%] max-w-[12.5rem] flex-col items-center justify-center self-center text-center sm:w-[52%] sm:max-w-[14rem]">
               <p className="scent-type-label text-[10px] tracking-[0.3em] text-scent-accent/80 [text-indent:0.3em] sm:text-[12px]">
                 {pick.brand}
               </p>
@@ -357,15 +357,19 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
             </div>
           ) : null}
 
-          {/* Seven free-standing calendar cards (gap-separated, each its own rounded
-              border), width-matched and centered under the hero so the strip reads as
-              a continuation of the recommendation rather than a separate band. Active
-              day = gold border + warm fill + gold glyph; depth from border/fill only
-              (no projected gold glow). */}
+          {/* Seven calendar tiles, each a MINI of the community fragrance-detail
+              card frame (`.forecast-day-tile` in index.css): a deep near-black
+              fill, one gold hairline border, and — when active — a second quiet
+              concentric inner hairline + a barely-there top sheen, exactly like
+              the detail card's framing the owner likes. Depth comes from the
+              border + inset highlight ONLY; the old active gold gradient fill
+              (`from-scent-accent/[0.14]`) read as the rejected "glow inside the
+              tile" and is gone (no projected gold glow). Tighter gap + slightly
+              wider max-width give each tile a touch more width and presence. */}
           <div
             role="tablist"
             aria-label="Days this week"
-            className={`mx-auto grid w-full max-w-[27rem] grid-cols-7 gap-1.5 sm:gap-2.5 ${
+            className={`mx-auto grid w-full max-w-[28.5rem] grid-cols-7 gap-1 sm:gap-2 ${
               activeMeta.length > 0 ? 'mt-3 sm:mt-4' : 'mt-4 sm:mt-5'
             }`}
           >
@@ -379,10 +383,8 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
                   type="button"
                   onClick={() => go(index)}
                   title={`${dayLabel(plan.day.date)} — ${plan.day.condition ?? 'Forecast'}`}
-                  className={`flex w-full h-[4.75rem] sm:h-[6.5rem] flex-col items-center justify-between rounded-[13px] border py-2 text-[#f1e7da] transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/60 sm:rounded-[18px] sm:py-3.5 ${
-                    isActive
-                      ? 'border-scent-accent/55 bg-gradient-to-b from-scent-accent/[0.14] to-scent-accent/[0.04]'
-                      : 'border-scent-accent/15 bg-black/25'
+                  className={`forecast-day-tile flex w-full h-[4.75rem] flex-col items-center justify-between py-2 text-[#f1e7da] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/60 sm:h-[6.5rem] sm:py-3.5 ${
+                    isActive ? 'is-active' : ''
                   }`}
                 >
                   <span className={`text-[8px] font-semibold uppercase tracking-[0.16em] sm:text-[10px] ${isActive ? 'text-scent-accent/90' : 'text-[#cdbfa9]'}`}>
