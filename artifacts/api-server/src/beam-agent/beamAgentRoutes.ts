@@ -58,7 +58,9 @@ import {
   recordObservatoryRun,
 } from "./beamObservatory.ts";
 import { selectConciergeLane } from "./laneSelector.ts";
-import { excludeAvoidedHits } from "./avoidFilter.ts";
+import { candidateMatchesAvoid, excludeAvoidedHits, parseAvoidTerms } from "./avoidFilter.ts";
+import { discoverExternalCandidates } from "../services/engineDiscover";
+import { externalDetailRunCap, isDiscoverExternalEnabled } from "./discoveryConfig.ts";
 import { validateBeamFeedbackInput } from "./beamFeedbackCore.ts";
 import { appendSessionTurn, loadSession, saveSessionState } from "./beamSessionStore.ts";
 import { deriveBeamSessionState, inferPendingSlotFromAssistant } from "./missionState.ts";
@@ -278,11 +280,35 @@ function buildDeps(ctx: BeamRunContext, weather: ScentMissionWeather, sessionSta
         return excludeAvoidedHits(hits, avoid).slice(0, limit);
       }
     : searchCatalogForBeam;
+
+  // Hybrid-corpus external discovery (opt-in per env). Stack a per-RUN /details
+  // budget on the per-call cap so a multi-call run can't multiply Decodo spend,
+  // and drop avoided notes/families the same way catalog search does. Left
+  // undefined when disabled so `beam_discover_external` is simply not exposed.
+  const avoidTerms = avoid ? parseAvoidTerms(avoid) : [];
+  let externalDetailBudget = externalDetailRunCap();
+  const discoverExternal: BeamToolDeps["discoverExternal"] = isDiscoverExternalEnabled()
+    ? async (query, opts) => {
+        const detailLimit = Math.max(0, Math.min(opts.detailLimit, externalDetailBudget));
+        const candidates = await discoverExternalCandidates(query, { limit: opts.limit, detailLimit });
+        externalDetailBudget -= candidates.filter((c) => c.detailed).length;
+        if (avoidTerms.length === 0) return candidates;
+        return candidates.filter(
+          (c) =>
+            !candidateMatchesAvoid(
+              { name: c.name, brand: c.brand, family: c.family, accords: c.accords, notes: c.notes },
+              avoidTerms,
+            ),
+        );
+      }
+    : undefined;
+
   return {
     loadVault,
     loadVaultForOwnership,
     loadWardrobePackets,
     searchCatalog,
+    discoverExternal,
     resolveCatalogEntry: resolveCatalogEntryForBeam,
     research: researchForBeam,
     researchWeb: beamResearchWeb,

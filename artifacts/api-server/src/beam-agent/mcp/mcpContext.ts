@@ -29,7 +29,12 @@ export const ALL_READ_SCOPES: BeamScope[] = [
 export const SCOPE_TOOL_MAP: Record<BeamScope, readonly string[]> = {
   "beam:user-context:read": ["beam_get_user_context"],
   "beam:wardrobe:read": ["beam_get_wardrobe"],
-  "beam:catalog:read": ["beam_search_catalog"],
+  // `beam_find_similar` ("smells like X") and `beam_discover_external` (hybrid-
+  // corpus engine discovery) are catalog-scoped reads. find_similar is built when
+  // `resolveCatalogEntry` is wired (always, on MCP); discover_external only when
+  // `discoverExternal` is wired (BEAM_DISCOVER_EXTERNAL_ENABLED) — when off it is
+  // never built, so listing it here is harmless (the server lists built ∩ allowed).
+  "beam:catalog:read": ["beam_search_catalog", "beam_find_similar", "beam_discover_external"],
   "beam:details:read": ["beam_get_fragrance_details"],
   "beam:score:read": ["beam_score_candidates"],
   // The MCP service wires `searchCatalog` (always) and `researchWeb` (see

@@ -14,6 +14,7 @@ import type {
   CandidatePacket,
   ClaudeContentBlock,
   ClaudeToolUseBlock,
+  ExternalDiscoveryCandidate,
 } from "./types.ts";
 import { sanitizeBeamSessionState } from "./missionState.ts";
 
@@ -65,6 +66,15 @@ export const BEAM_LIMITS = {
   maxCardSharedItems: 8,
   maxKitPicks: 5,
   maxCardCaption: 180,
+  /** `beam_find_similar`: max ranked similar picks returned. */
+  maxSimilarResults: 6,
+  /** `beam_discover_external`: max external candidates surfaced per call. */
+  maxExternalResults: 8,
+  /**
+   * `beam_discover_external`: HARD ceiling on /details (Decodo-egress) fetches
+   * per single tool CALL. The route stacks a per-RUN budget on top of this.
+   */
+  maxExternalDetailFetch: 3,
 } as const;
 
 export function clampLimit(value: unknown, max: number, fallback = max): number {
@@ -684,6 +694,42 @@ export function packetFromFlatProfile(
       projection: numOrStr(flat.sillage ?? flat.projection),
     },
     sourceConfidence: missing.length === 0 ? 0.9 : Math.max(0.3, 0.9 - missing.length * 0.15),
+    missingFields: missing,
+  };
+}
+
+/**
+ * Build a CandidatePacket from an EXTERNAL (engine-discovered) candidate. The
+ * `engine:` id prefix marks the off-catalog provenance internally without leaking
+ * technical language into user copy. A search-only candidate (no /details) carries
+ * no notes/accords, so its confidence is low and `missingFields` says so — the
+ * model treats it as a lead to deepen, not a fully grounded pick.
+ */
+export function packetFromExternalCandidate(candidate: ExternalDiscoveryCandidate): CandidatePacket {
+  const notes = {
+    top: cleanStringList(candidate.notes?.top),
+    middle: cleanStringList(candidate.notes?.heart),
+    base: cleanStringList(candidate.notes?.base),
+  };
+  const accords = cleanStringList(candidate.accords ?? (candidate.family ? [candidate.family] : []));
+  const name = asString(candidate.name) ?? "";
+  const brand = asString(candidate.brand) ?? "";
+  const missing: string[] = [];
+  if (!name) missing.push("name");
+  if (!brand) missing.push("brand");
+  if (notes.top.length + notes.middle.length + notes.base.length === 0) missing.push("notes");
+  if (accords.length === 0) missing.push("accords");
+  // Detailed picks carry real notes/accords; search-only picks are thin leads.
+  const baseConfidence = candidate.detailed ? 0.6 : 0.35;
+  return {
+    fragranceId: `engine:${candidate.id}`,
+    canonicalName: name,
+    brand,
+    owned: false,
+    notes,
+    accords,
+    performance: {},
+    sourceConfidence: Math.max(0.2, baseConfidence - missing.length * 0.05),
     missingFields: missing,
   };
 }

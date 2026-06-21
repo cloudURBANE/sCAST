@@ -26,6 +26,7 @@ import type {
   BeamRunContext,
   BeamToolDefinition,
   CandidatePacket,
+  ExternalDiscoveryCandidate,
 } from "./types.ts";
 import {
   BEAM_LIMITS,
@@ -34,10 +35,12 @@ import {
   cardFragranceFromProposalItem,
   clampLimit,
   computeOverlap,
+  packetFromExternalCandidate,
   packetFromFlatProfile,
   packetFromOwnedItem,
 } from "./beamToolCore.ts";
 import type { OverlapProfile } from "./beamToolCore.ts";
+import { combineSimilarity, scentVectorSimilarity, similarityBand } from "./similarityCore.ts";
 import {
   buildOwnedFragranceIndex,
   findOwnedVaultItem,
@@ -129,6 +132,18 @@ export type BeamToolDeps = {
    * as before — unresolved names are simply dropped.
    */
   enqueueCuration?: (fragrance: { name: string; brand?: string }) => void;
+  /**
+   * OPTIONAL hybrid-corpus discovery: search the external Python engine for REAL
+   * fragrances beyond our local catalog, enriching up to `detailLimit` of them
+   * with notes/accords (the Decodo-spend bound). When absent (lean deploys, tool
+   * tests, MCP with discovery disabled), `beam_discover_external` is not exposed,
+   * so the surface stays exactly as before. The route layers a per-RUN detail
+   * budget and dislike filtering on top of the per-call `detailLimit`.
+   */
+  discoverExternal?: (
+    query: string,
+    opts: { limit: number; detailLimit: number },
+  ) => Promise<ExternalDiscoveryCandidate[]>;
   /** Deterministic weather scoring over the vault (kept in code, not the LLM). */
   scoreVault: (
     items: ScentMissionWardrobeItem[],
@@ -944,6 +959,185 @@ export function createBeamTools(deps: BeamToolDeps): BeamToolDefinition[] {
         const r = (typeof result === "object" && result !== null ? result : {}) as { card?: unknown };
         const card = r.card as BeamCard | undefined;
         return card && card.kind === "travel_kit" ? { type: "card", card } : null;
+      },
+    });
+
+    // "Smells like X" — rank the catalog by similarity to a named reference. Built
+    // on the same `resolveCatalogEntry` dep as the card tools (and `searchCatalog`),
+    // so lean/read-only surfaces that omit it never see this tool.
+    tools.push({
+      name: "beam_find_similar",
+      description:
+        "Find REAL catalog fragrances that smell similar to a reference the user names ('smells like X', " +
+        "'alternatives to X', 'same vibe as X', 'something like X but cheaper'). Resolves the reference " +
+        "against the catalog, then ranks OTHER catalog fragrances by a blend of the 6-axis scent " +
+        "fingerprint and shared accords/notes — computed in code, never guessed. Each pick comes back with " +
+        "a similarity band and what it shares with the reference. If the reference has no fingerprint, it " +
+        "ranks by accord/note overlap instead. Use this for 'like X' requests; use beam_search_catalog for " +
+        "open-ended 'clean woody for summer' style searches.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "The reference fragrance (brand and/or name), e.g. 'Creed Aventus'." },
+          limit: { type: "number", description: `Max similar picks (server caps at ${BEAM_LIMITS.maxSimilarResults}).` },
+          excludeOwned: { type: "boolean", description: "Drop fragrances already in the user's vault." },
+        },
+        required: ["query"],
+        additionalProperties: false,
+      },
+      handler: async (input, ctx) => {
+        const record = (typeof input === "object" && input !== null ? input : {}) as Record<string, unknown>;
+        const query = asString(record.query);
+        if (!query) return { resolved: false, items: [], note: "query is required" };
+
+        // Resolve the reference: exact catalog entry first, then the top descriptive
+        // search hit, so 'smells like Aventus' grounds to a real record.
+        let refFlat = await resolveCatalogEntry(query).catch(() => null);
+        if (!refFlat) {
+          const refHits = await deps.searchCatalog(query, 1);
+          refFlat = refHits[0]?.flat ?? null;
+        }
+        const reference = refFlat ? buildProposalItem(refFlat) : null;
+        if (!reference) {
+          return { resolved: false, items: [], note: `No catalog match for "${query}". Search the catalog first.` };
+        }
+        const refProfile = overlapProfileFromItem(reference);
+        const refIdentity = fragranceIdentityKey(reference.brand, reference.name);
+
+        // Build the candidate pool from the reference's own character (family +
+        // leading accords) so retrieval is similarity-oriented, falling back to the
+        // raw query when the reference carries no descriptive evidence.
+        const poolQuery =
+          [reference.family, ...reference.accords.slice(0, 4)].filter(Boolean).join(" ") || query;
+        const hits = await deps.searchCatalog(poolQuery, BEAM_LIMITS.maxCatalogResults);
+
+        let owned: OwnedFragranceIndex | null = null;
+        if (record.excludeOwned === true) {
+          owned = buildOwnedFragranceIndex(await loadOwnershipVault(ctx));
+        }
+
+        const scored = hits
+          .map((hit) => buildProposalItem(hit.flat))
+          .filter((item): item is BeamProposalItem => item !== null)
+          // Never return the reference as its own similar result.
+          .filter((item) => fragranceIdentityKey(item.brand, item.name) !== refIdentity)
+          .filter((item) => !(owned && isOwnedFragrance(owned, item.brand, item.name)))
+          .map((item) => {
+            const overlap = computeOverlap(refProfile, overlapProfileFromItem(item));
+            const vectorSim = scentVectorSimilarity(reference.scentVector, item.scentVector);
+            const similarity = combineSimilarity({ vectorSim, overlapCombined: overlap.combined });
+            return { item, overlap, vectorSim, similarity };
+          })
+          .sort((a, b) => b.similarity - a.similarity);
+
+        const limit = clampLimit(record.limit, BEAM_LIMITS.maxSimilarResults);
+        const items = scored.slice(0, limit).map(({ item, overlap, vectorSim, similarity }) => ({
+          name: item.name,
+          brand: item.brand,
+          ...(item.family ? { family: item.family } : {}),
+          similarity,
+          band: similarityBand(similarity),
+          basis: vectorSim !== null ? "scent-vector + accords" : "accords/notes",
+          sharedAccords: overlap.sharedAccords,
+          sharedNotes: overlap.sharedBaseNotes,
+        }));
+
+        return {
+          resolved: true,
+          reference: { name: reference.name, brand: reference.brand },
+          count: items.length,
+          items,
+          ...(reference.scentVector
+            ? {}
+            : { note: "Reference has no scent fingerprint; ranked by accord/note overlap." }),
+        };
+      },
+    });
+  }
+
+  // Hybrid-corpus external discovery is additive and opt-in: exposed only when the
+  // route/MCP wires a `discoverExternal` dep (itself gated on
+  // BEAM_DISCOVER_EXTERNAL_ENABLED). Absent it, the surface is unchanged.
+  const { discoverExternal } = deps;
+  if (discoverExternal) {
+    tools.push({
+      name: "beam_discover_external",
+      description:
+        "Discover REAL fragrances BEYOND the local catalog by searching the live fragrance engine. Use " +
+        "this ONLY when beam_search_catalog returns too few or no good matches for what the user wants — " +
+        "the local catalog is always the first choice. Returns external candidates (name, brand, and " +
+        "notes/accords for the few that get deep-fetched). Each surfaced pick is queued so it enters the " +
+        "catalog for next time. Treat results as real but not-yet-fully-verified: say you found them " +
+        "beyond the usual catalog; never expose ids or technical sourcing. Bounded and cost-capped " +
+        "server-side.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "What to look for — brand/name or scent description." },
+          limit: {
+            type: "number",
+            description: `Max external candidates (server caps at ${BEAM_LIMITS.maxExternalResults}).`,
+          },
+          deepen: {
+            type: "number",
+            description: `How many to deep-fetch notes for (server caps at ${BEAM_LIMITS.maxExternalDetailFetch} per call).`,
+          },
+        },
+        required: ["query"],
+        additionalProperties: false,
+      },
+      handler: async (input, ctx) => {
+        const record = (typeof input === "object" && input !== null ? input : {}) as Record<string, unknown>;
+        const query = asString(record.query);
+        if (!query) return { source: "external", count: 0, items: [], note: "query is required" };
+        const limit = clampLimit(record.limit, BEAM_LIMITS.maxExternalResults);
+        const detailLimit = clampLimit(record.deepen, BEAM_LIMITS.maxExternalDetailFetch);
+        const candidates = await discoverExternal(query, { limit, detailLimit }).catch(() => []);
+        if (candidates.length === 0) {
+          return {
+            source: "external",
+            count: 0,
+            items: [],
+            note: "No external matches right now (the engine may be unavailable).",
+          };
+        }
+
+        // Ownership is a safety boundary: never surface (or re-curate) a bottle the
+        // user already owns. A vault-read outage throws here (same as the proposal/
+        // kit tools) rather than masking an outage as an empty vault.
+        const owned = buildOwnedFragranceIndex(await loadOwnershipVault(ctx));
+        const items: CandidatePacket[] = [];
+        const seen = new Set<string>();
+        let curated = 0;
+        for (const candidate of candidates) {
+          if (isOwnedFragrance(owned, candidate.brand, candidate.name)) continue;
+          const identity = fragranceIdentityKey(candidate.brand, candidate.name);
+          if (seen.has(identity)) continue;
+          seen.add(identity);
+          items.push(packetFromExternalCandidate(candidate));
+          // Cache-on-discover: enqueue for enrichment so the pick lands in
+          // global_fragrances and repeat queries are free. Fire-and-forget and
+          // guarded so a wiring slip can never throw into the tool result. Skipped
+          // silently when the dep is absent (MCP/lean) or the worker is disabled.
+          if (deps.enqueueCuration) {
+            try {
+              deps.enqueueCuration({ name: candidate.name, brand: candidate.brand || undefined });
+              curated += 1;
+            } catch {
+              // Curation is a courtesy; never let it break discovery.
+            }
+          }
+        }
+        return {
+          source: "external",
+          count: items.length,
+          items,
+          curatedForEnrichment: curated,
+          note:
+            items.length > 0
+              ? "Found beyond the usual catalog and queued to learn them — present as real but freshly surfaced."
+              : "All external matches are already in the user's vault.",
+        };
       },
     });
   }

@@ -29,6 +29,8 @@ import type { BeamCatalogHit, BeamToolDeps } from "../beamTools.ts";
 import { packetFromWardrobeRow } from "../beamToolCore.ts";
 import { missionItemFromWardrobeRow } from "../../services/scentMissionService";
 import { searchCatalogCandidates, searchCatalogProfileCandidates, flattenProfile, getCatalogEntry } from "../../services/catalogService";
+import { discoverExternalCandidates } from "../../services/engineDiscover";
+import { isDiscoverExternalEnabled } from "../discoveryConfig.ts";
 import { getScentFacts } from "../../lib/scent-facts/engine";
 import { createBeamResearcher } from "../research/beamResearch.ts";
 import { loadResearchCache, saveResearchCache } from "../research/researchCache.ts";
@@ -149,6 +151,14 @@ export function createBeamServiceDeps(): BeamToolDeps {
     loadVaultForOwnership,
     loadWardrobePackets,
     searchCatalog: searchCatalogForBeam,
+    // External discovery mirrors the in-process route, gated on the same env flag.
+    // These startup-built deps have no per-run ctx, so the per-CALL `detailLimit`
+    // (capped by BEAM_LIMITS.maxExternalDetailFetch) is the spend bound here; the
+    // route additionally stacks a per-run budget + dislike filtering it can't. Like
+    // `enqueueCuration` below, that richer behavior needs the run context.
+    discoverExternal: isDiscoverExternalEnabled()
+      ? (query, opts) => discoverExternalCandidates(query, opts)
+      : undefined,
     resolveCatalogEntry: resolveCatalogEntryForBeam,
     research: researchForBeam,
     researchWeb: beamResearchWeb,
