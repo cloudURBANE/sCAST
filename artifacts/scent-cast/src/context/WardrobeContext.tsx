@@ -1828,7 +1828,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const handleRevertWardrobe = useCallback(() => {
     if (!wardrobeRevertSnapshot) return;
-    const snap = JSON.parse(JSON.stringify(wardrobeRevertSnapshot)) as Fragrance[];
+    const snap = structuredClone(wardrobeRevertSnapshot) as Fragrance[];
     setItems(snap);
     lastMutationRef.current = Date.now();
     setWardrobeFixHint('Reverted to the in-memory snapshot from before the last automatic rebuild. Server data may differ; refresh loads the API again.');
@@ -1852,7 +1852,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (!wardrobeNeedsLegacyRebuild(items)) return;
 
     autoWardrobeRebuildAttemptedRef.current = true;
-    const snapshot = JSON.parse(JSON.stringify(items)) as Fragrance[];
+    const snapshot = structuredClone(items) as Fragrance[];
 
     void (async () => {
       setWardrobeFixBusy(true);

@@ -107,7 +107,10 @@
   transform: translate3d(0, 0, 0);
   transform-origin: center;
   backface-visibility: hidden;
-  will-change: transform, opacity;
+  /* translate3d above already promotes each line to its own compositor layer for
+     the rAF-driven transform/opacity animation. A permanent `will-change` on all
+     ~30 always-mounted lines is the MDN-cautioned anti-pattern (it pins extra GPU
+     buffers continuously), so it is intentionally omitted here. */
 }
 
 .scent-thread-line--mode-css-animated {

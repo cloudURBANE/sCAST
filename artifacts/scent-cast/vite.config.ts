@@ -138,6 +138,12 @@ export default defineConfig(async () => {
             if (normalizedId.includes("framer-motion") || normalizedId.includes("motion-dom")) {
               return "vendor-motion";
             }
+            if (normalizedId.includes("/@radix-ui/")) {
+              // Radix primitives are used across many always-loaded components;
+              // isolating them keeps the rarely-changing UI vendor code in a
+              // separately-cacheable chunk instead of bloating the entry chunk.
+              return "vendor-radix";
+            }
             if (normalizedId.includes("web-vitals")) {
               return "vendor-vitals";
             }
