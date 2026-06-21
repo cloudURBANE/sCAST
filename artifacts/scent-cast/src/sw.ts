@@ -134,16 +134,16 @@ interface PushPayload {
   badgeCount?: number;
 }
 
-// The App Badge API lives on the SW global in supporting browsers (iOS 16.4+
+// The App Badge API lives on the navigator in supporting browsers (iOS 16.4+
 // standalone, Chromium). Absent elsewhere — guard every call.
-type BadgeCapableGlobal = typeof self & {
+type BadgeCapableNavigator = Navigator & {
   setAppBadge?: (count?: number) => Promise<void>;
   clearAppBadge?: () => Promise<void>;
 };
 
 function applyAppBadge(count: number | undefined): Promise<void> {
   if (typeof count !== "number" || !Number.isFinite(count)) return Promise.resolve();
-  const nav = self as BadgeCapableGlobal;
+  const nav = self.navigator as BadgeCapableNavigator;
   try {
     if (count <= 0) return nav.clearAppBadge?.() ?? Promise.resolve();
     return nav.setAppBadge?.(count) ?? Promise.resolve();
@@ -227,15 +227,27 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 self.addEventListener("notificationclick", (event: NotificationEvent) => {
   event.notification.close();
   const data = event.notification.data as { url?: string } | undefined;
-  const targetUrl = data?.url || "/";
+  const targetUrl = new URL(data?.url || "/", self.location.origin).href;
+  
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
+      // 1. Search for a window already matching targetUrl exactly
       for (const client of clientList) {
-        if ("focus" in client) {
-          (client as WindowClient).navigate?.(targetUrl);
+        const clientUrl = new URL(client.url, self.location.origin).href;
+        if (clientUrl === targetUrl && "focus" in client) {
           return (client as WindowClient).focus();
         }
       }
+      
+      // 2. If no exact match, navigate the first client we can focus
+      for (const client of clientList) {
+        if ("focus" in client && "navigate" in client) {
+          (client as WindowClient).navigate(targetUrl);
+          return (client as WindowClient).focus();
+        }
+      }
+      
+      // 3. Fallback: open a new window
       return self.clients.openWindow(targetUrl);
     }),
   );

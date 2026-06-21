@@ -11,6 +11,7 @@ import {
   rotateSubscription,
   saveSubscription,
   setPushPreferences,
+  sendCategoryPushToUser,
 } from "../services/pushService";
 
 const router = Router();
@@ -116,6 +117,38 @@ router.post("/push/rotate", async (req, res) => {
   // 200 either way: an unknown old endpoint just means "nothing to rotate" (the
   // SW will re-subscribe fresh on next app open), not a client error.
   res.json({ ok: true, rotated });
+});
+
+router.post("/push/mock", requireAuth, async (req: AuthRequest, res) => {
+  if (process.env.NODE_ENV === "production") {
+    res.status(403).json({ error: "Mocking is disabled in production." });
+    return;
+  }
+
+  const body = (req.body ?? {}) as {
+    title?: unknown;
+    body?: unknown;
+    url?: unknown;
+    category?: unknown;
+  };
+
+  const title = typeof body.title === "string" ? body.title : "Mock Title";
+  const textBody = typeof body.body === "string" ? body.body : "Mock Body";
+  const url = typeof body.url === "string" ? body.url : undefined;
+  const category = (body.category === "weather" || body.category === "community" || body.category === "curation")
+    ? body.category
+    : "system";
+
+  try {
+    const result = await sendCategoryPushToUser(req.user!.id, category === "system" ? "curation" : category, {
+      title,
+      body: textBody,
+      url,
+    });
+    res.json({ ok: true, ...result });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Failed to dispatch mock notification." });
+  }
 });
 
 export default router;

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Download, Share, SquarePlus, X } from "lucide-react";
+import { useLocation } from "react-router-dom";
+import { Download, Share, SquarePlus, X, HelpCircle } from "lucide-react";
 
 import { isIpadDevice, isStandalonePwa } from "@/lib/platform";
 
@@ -59,6 +60,7 @@ function isIosSafari(): boolean {
 export function InstallPrompt() {
   const [mode, setMode] = useState<null | "native" | "ios">(null);
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
+  const location = useLocation();
 
   useEffect(() => {
     if (isStandalonePwa() || recentlyDismissed()) return;
@@ -108,65 +110,94 @@ export function InstallPrompt() {
     dismiss();
   };
 
+  // Compute contextual copy based on route
+  const getContextualCopy = () => {
+    const path = location.pathname;
+    if (path.startsWith("/arena")) {
+      return {
+        title: mode === "native" ? "Install Scent Arena" : "Add Scent Arena to Home Screen",
+        description: "Pin Scent Arena to Home Screen to jump instantly into head-to-head fragrance battles.",
+      };
+    }
+    if (path.startsWith("/community")) {
+      return {
+        title: mode === "native" ? "Install Scent Community" : "Add Scent Community to Home Screen",
+        description: "Pin Community to Home Screen to connect with fragrance enthusiasts and share your daily wear.",
+      };
+    }
+    return {
+      title: mode === "native" ? "Install ScentBeam" : "Add ScentBeam to Home Screen",
+      description: "Add it to your home screen for a full-screen, offline-ready app.",
+    };
+  };
+
+  const copy = getContextualCopy();
+
   return (
     <div
       className="fixed inset-x-3 bottom-[calc(var(--mobile-nav-offset,var(--bottomnav-h))+0.5rem)] z-[100] transition-[bottom] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] md:inset-x-auto md:right-4 md:bottom-4 md:w-[22rem]"
       role="dialog"
-      aria-label="Install ScentBeam"
+      aria-label={copy.title}
     >
-      <div className="mx-auto flex w-full max-w-2xl items-start gap-3 rounded-2xl border border-scent-accent/30 bg-neutral-950/95 px-4 py-3 shadow-[0_18px_40px_-24px_rgba(0,0,0,0.95)] backdrop-blur-sm md:max-w-none">
-        <span className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-scent-accent/40 bg-scent-accent/10 text-scent-accent">
-          {mode === "native" ? <Download size={18} strokeWidth={2} aria-hidden /> : <Share size={18} strokeWidth={2} aria-hidden />}
-        </span>
+      <div className="mx-auto flex w-full max-w-2xl flex-col gap-3.5 rounded-2xl border border-neutral-800 bg-neutral-950/95 p-4 shadow-[0_18px_50px_-16px_rgba(0,0,0,0.95)] backdrop-blur-md md:max-w-none">
+        <div className="flex items-start gap-3">
+          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-scent-accent/40 bg-scent-accent/10 text-scent-accent">
+            {mode === "native" ? <Download size={18} strokeWidth={2} aria-hidden /> : <Share size={18} strokeWidth={2} aria-hidden />}
+          </span>
 
-        <div className="min-w-0 flex-1">
-          {mode === "native" ? (
-            <>
-              <p className="text-[13px] font-semibold leading-snug text-white">Install ScentBeam</p>
-              <p className="mt-0.5 text-[12px] leading-snug text-white/65 font-sans">
-                Add it to your home screen for a full-screen, offline-ready app.
-              </p>
-              <div className="mt-2.5 flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={install}
-                  className="rounded-full border border-scent-accent/70 bg-scent-accent/15 px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-[#fff7ec] transition-colors hover:bg-scent-accent/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40"
-                >
-                  Install
-                </button>
-                <button
-                  type="button"
-                  onClick={dismiss}
-                  className="rounded-full px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/45 transition-colors hover:text-white/75"
-                >
-                  Not now
-                </button>
-              </div>
-            </>
-          ) : (
-            <>
-              <p className="text-[13px] font-semibold leading-snug text-white">Add ScentBeam to your Home Screen</p>
-              <p className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[12px] leading-snug text-white/65 font-sans">
-                <span>Tap</span>
-                <Share size={13} strokeWidth={2} aria-hidden className="inline text-white/80" />
-                <span>in the Safari toolbar, then</span>
-                <span className="inline-flex items-center gap-1 font-semibold text-white/90">
-                  <SquarePlus size={13} strokeWidth={2} aria-hidden /> Add to Home Screen
-                </span>
-                <span>.</span>
-              </p>
-            </>
-          )}
+          <div className="min-w-0 flex-1">
+            <p className="text-[14px] font-semibold leading-snug text-white">{copy.title}</p>
+            <p className="mt-1 text-[12px] leading-snug text-white/65 font-sans">
+              {copy.description}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={dismiss}
+            aria-label="Dismiss install prompt"
+            className="-mr-1.5 -mt-1.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white/40 transition-colors hover:bg-white/10 hover:text-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+          >
+            <X size={15} strokeWidth={2} aria-hidden />
+          </button>
         </div>
 
-        <button
-          type="button"
-          onClick={dismiss}
-          aria-label="Dismiss install prompt"
-          className="-my-1 -mr-1 inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full text-white/40 transition-colors hover:bg-white/10 hover:text-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
-        >
-          <X size={15} strokeWidth={2} aria-hidden />
-        </button>
+        {mode === "native" ? (
+          <div className="flex items-center gap-2 pl-12">
+            <button
+              type="button"
+              onClick={install}
+              className="rounded-full border border-scent-accent/70 bg-scent-accent/15 px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-[#fff7ec] transition-colors hover:bg-scent-accent/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40"
+            >
+              Install
+            </button>
+            <button
+              type="button"
+              onClick={dismiss}
+              className="rounded-full px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/45 transition-colors hover:text-white/75"
+            >
+              Not now
+            </button>
+          </div>
+        ) : (
+          <div className="rounded-xl border border-neutral-900 bg-neutral-900/40 p-3 text-[11.5px] leading-relaxed text-white/75 font-sans">
+            <div className="flex items-center gap-1.5 font-semibold text-scent-accent mb-2">
+              <HelpCircle size={13} />
+              <span>iOS Safari Installation Guide</span>
+            </div>
+            <ol className="space-y-2 list-decimal list-inside pl-0.5">
+              <li className="pl-1">
+                Tap the <span className="inline-flex items-center px-1.5 py-0.5 mx-0.5 rounded border border-neutral-700 bg-neutral-900 text-white"><Share size={12} className="inline mr-1" /> Share</span> button in the Safari toolbar.
+              </li>
+              <li className="pl-1">
+                Scroll down the options list and select <span className="inline-flex items-center px-1.5 py-0.5 mx-0.5 rounded border border-neutral-700 bg-neutral-900 font-semibold text-white"><SquarePlus size={12} className="inline mr-1 text-scent-accent" /> Add to Home Screen</span>.
+              </li>
+              <li className="pl-1">
+                Tap <span className="font-semibold text-white">Add</span> in the top-right corner to complete installation.
+              </li>
+            </ol>
+          </div>
+        )}
       </div>
     </div>
   );

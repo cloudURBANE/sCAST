@@ -21,3 +21,4 @@ export * from "./beamAnswerFeedback";
 export * from "./arenaCrowdPredictions";
 export * from "./arenaCrowdStats";
 export * from "./arenaBeamGrants";
+export * from "./inAppNotifications";

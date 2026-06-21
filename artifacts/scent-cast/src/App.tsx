@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useLayoutEffect, useMemo, useCallback } from 'react';
-import { Routes, Route, useLocation, useParams, type Location } from 'react-router-dom';
+import { Routes, Route, useLocation, useParams, useNavigate, type Location } from 'react-router-dom';
 import type { Fragrance } from './components/Wardrobe';
 import type { BeamProposalItem } from '@/lib/beamAgentClient';
 import { vaultIdentityKey } from './lib/vaultIdentity';
@@ -15,6 +15,7 @@ import { GuestSaveBanner, GuestModeBanner } from './components/GuestSaveBanner';
 import { InstallPrompt } from './components/pwa/InstallPrompt';
 import { PushPrompt } from './components/pwa/PushPrompt';
 import { BadgeClearer } from './components/pwa/BadgeClearer';
+import { DevNotificationConsole } from './components/notifications/DevNotificationConsole';
 import type { ScentFamily, ScentWeatherRecommendation } from './lib/scentWeatherEngine';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { WeatherProvider, useWeather } from './context/WeatherContext';
@@ -781,6 +782,7 @@ function DashboardView() {
     ? { marginTop: '0', marginBottom: '0.75rem' }
     : { marginTop: '0', marginBottom: '0.625rem' };
   const [viewState, setViewState] = useState<'search' | 'agent'>('search');
+  const [searchFocusTrigger, setSearchFocusTrigger] = useState(0);
   // Beam Agent progress surfaced by the panel so its header (title + progress +
   // close) can render in a strip ABOVE the bordered card instead of inside it.
   const [missionStatus, setMissionStatus] = useState<ScentMissionStatus | null>(null);
@@ -1048,30 +1050,20 @@ function DashboardView() {
       window.history.replaceState(window.history.state, '', url.toString());
     }
 
-    // Defer the scroll/focus until the next frame to ensure the target DOM
-    // node has painted after route-level suspense boundaries resolve.
-    requestAnimationFrame(() => {
+    // Defer the scroll/focus to ensure the target DOM node has painted
+    // after route-level suspense boundaries resolve and same-route resets finish.
+    setTimeout(() => {
       if (intent === 'search') {
         setViewState('search');
         heroVaultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        // Focus the search input after the scroll animation settles.
-        setTimeout(() => {
-          const searchInput = document.getElementById('scent-add-to-vault-search');
-          if (searchInput) {
-            searchInput.focus();
-            // On mobile (non-hover devices) focusing programmatically may not
-            // raise the keyboard; a synthetic click nudges Safari/Chrome PWA.
-            if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
-              searchInput.click();
-            }
-          }
-        }, 400);
+        // Focus the search input after the scroll animation settles
+        setSearchFocusTrigger((prev) => prev + 1);
       } else if (intent === 'weekly') {
         document
           .getElementById('weekly-outlook-section')
           ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
-    });
+    }, 200);
   }, [location.search, setViewState]);
 
   // iOS PWA standalone mode reports viewport/safe-area differently than Safari;
@@ -1243,6 +1235,7 @@ function DashboardView() {
                         existingVaultKeys={vaultIdentityKeys}
                         onViewVault={handleViewVault}
                         embeddedInVaultPanel
+                        autoFocusTrigger={searchFocusTrigger}
                       />
                     </motion.div>
                   )}
@@ -1690,6 +1683,16 @@ function WebVitalsReporter() {
 }
 
 const AppContent = React.memo(function AppContent({ location }: { location: Location }) {
+  const { authToken, setIsAuthModalOpen } = useAuth();
+
+  // If unauthenticated guest lands with a ?curation= deep link, trigger AuthModal immediately
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.has('curation') && !authToken) {
+      setIsAuthModalOpen(true);
+    }
+  }, [location.search, authToken, setIsAuthModalOpen]);
+
   return (
     <>
       <React.Suspense fallback={<RouteChunkFallback />}>
@@ -1743,6 +1746,7 @@ const AppShell = React.memo(function AppShell({
             <InstallPrompt />
             <PushPrompt />
             <BadgeClearer />
+            <DevNotificationConsole />
           </div>
         </WardrobeProvider>
       </WeatherProvider>
@@ -1752,9 +1756,20 @@ const AppShell = React.memo(function AppShell({
 
 export default function App() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [renderedLocation, setRenderedLocation] = useState<Location>(location);
   const [transitionVisible, setTransitionVisible] = useState(false);
   const [transitionKey, setTransitionKey] = useState(0);
+
+  // Redirect deep-linked queries on subpages to '/' to ensure proper state-driven view loading
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const hasIntent = params.has('intent');
+    const hasCuration = params.has('curation');
+    if ((hasIntent || hasCuration) && location.pathname !== '/') {
+      navigate('/' + location.search, { replace: true });
+    }
+  }, [location.pathname, location.search, navigate]);
   const activeRouteRef = useRef(routeSignature(location));
   const coverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
