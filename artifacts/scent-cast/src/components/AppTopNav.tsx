@@ -266,7 +266,7 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
 
   return (
     <>
-      <nav className="scent-topbar fixed top-0 left-0 right-0 z-50 px-4 md:px-8">
+      <nav className="scent-topbar fixed left-0 right-0 top-0 z-50 pl-[max(1rem,env(safe-area-inset-left,0px))] pr-[max(1rem,env(safe-area-inset-right,0px))] md:px-8">
         {/* Symmetric 1fr/auto/1fr on every breakpoint so the centre (logo)
             column is the true container centre: equal side tracks mean the
             wider desktop nav-link cluster on the left can't shove the logo
@@ -354,7 +354,7 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
 
       <nav
         className={[
-          'fixed bottom-[calc(0.75rem+env(safe-area-inset-bottom,0px))] left-3 right-3 z-50 md:hidden transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-[transform,opacity]',
+          'fixed bottom-[calc(0.75rem+env(safe-area-inset-bottom,0px))] left-[max(0.75rem,env(safe-area-inset-left,0px))] right-[max(0.75rem,env(safe-area-inset-right,0px))] z-50 md:hidden transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-[transform,opacity]',
           bottomNavShown
             ? 'translate-y-0 opacity-100 pointer-events-auto'
             : 'translate-y-[110%] opacity-0 pointer-events-none',

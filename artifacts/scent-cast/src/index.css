@@ -1894,6 +1894,18 @@ a {
   border-left: 1px solid rgba(212, 175, 55, 0.12);
 }
 
+@media (max-width: 480px) {
+  .scent-atmosphere-marquee {
+    --atmosphere-edge-fade: clamp(2.75rem, 12vw, 3.5rem);
+  }
+
+  .scent-atmosphere-marquee-cell {
+    flex-basis: clamp(9.5rem, 44vw, 10.5rem);
+    width: clamp(9.5rem, 44vw, 10.5rem);
+    max-width: clamp(9.5rem, 44vw, 10.5rem);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .scent-marquee-track-row {
     animation: none;
@@ -1902,7 +1914,9 @@ a {
   }
 
   .scent-atmosphere-marquee-track {
-    --atmosphere-marquee-duration: 240s;
+    animation: none;
+    transform: translate3d(0, 0, 0);
+    will-change: auto;
   }
 }
 

@@ -1045,7 +1045,7 @@ function DashboardView() {
 
       <div style={{ height: 'var(--topbar-h)' }} />
 
-      <main className="relative z-10 px-4 sm:px-8 sm:pb-24 max-w-[1760px] mx-auto">
+      <main className="relative z-10 mx-auto max-w-[1760px] pl-[max(1rem,env(safe-area-inset-left,0px))] pr-[max(1rem,env(safe-area-inset-right,0px))] md:px-8 md:pb-24">
         {/* Home — first viewport. On phones this column fills the space below the
             top bar (min-h = 100svh − topbar) and reserves the floating tab bar as
             real bottom PADDING (bottomnav-h + breathing room). Padding — not a
@@ -1057,7 +1057,7 @@ function DashboardView() {
             min-height + padding relax to the original stacked rhythm. The Vault of
             Aromas is no longer part of this screen — it lives one scroll down as
             the "second page". */}
-        <div className="flex min-h-[calc(100svh-var(--topbar-h))] flex-col gap-4 pt-0 pb-[calc(var(--bottomnav-h)+0.5rem)] sm:min-h-0 sm:gap-12 sm:pt-0 sm:pb-0">
+        <div className="flex min-h-[calc(100svh-var(--topbar-h))] flex-col gap-4 pb-[calc(var(--bottomnav-h)+0.5rem)] pt-0 md:min-h-0 md:gap-12 md:pb-0 md:pt-0">
           {/* The hero ticker sits flush against the fixed top bar (no padding
               above it) so it visually replaces the bar's old bottom hairline. */}
           <HomepageHeroMarquee />
@@ -1254,20 +1254,15 @@ function DashboardView() {
 
           {!agentActive ? <HomepageAtmosphereChrome /> : null}
 
-          {/* Weekly outlook dashboard — on phones it CENTERS in the leftover
-              column space (my-auto splits the free space evenly above and below
-              instead of mt-auto dumping it all into one void above), so the
-              forecast reads as intentionally placed and balanced rather than
-              slammed against the tab bar with a dead gap overhead. Normal flow on
+          {/* On phones the larger forecast consumes the available canvas, while
+              mt-auto seats its date row directly above the reserved bottom-nav
+              clearance instead of leaving unused space below it. Normal flow on
               md+. Hidden in agent mode, which takes over the hero. */}
           {!agentActive ? (
-            // Split the leftover column height EVENLY above and below the
-            // forecast (my-auto) instead of dumping all of it below (mb-auto),
-            // which left a giant dead gap between the date cards and the fixed
-            // bottom nav. The even split pulls the date-card row down toward the
-            // nav so the lower rhythm reads intentionally tight rather than
-            // stretched. Normal flow on md+ (no bottom nav).
-            <div className="my-auto sm:my-0">
+            // Any residual height becomes measured breathing room between the
+            // atmosphere strip and forecast title; it can no longer accumulate
+            // beneath the date cards. Normal flow on md+ (no bottom nav).
+            <div className="mt-auto md:mt-0">
               <WeeklyOutlookDashboard
                 items={items}
                 weather={weather}
