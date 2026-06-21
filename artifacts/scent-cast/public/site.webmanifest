@@ -42,10 +42,19 @@
   ],
   "shortcuts": [
     {
-      "name": "Search & Vault",
-      "short_name": "Vault",
-      "description": "Search fragrances and open your scent vault",
-      "url": "/?source=pwa-shortcut",
+      "name": "Search Fragrances",
+      "short_name": "Search",
+      "description": "Find a fragrance and add it to your vault",
+      "url": "/?intent=search&source=pwa-shortcut",
+      "icons": [
+        { "src": "/icons/app-icon-black/android-chrome-192x192.png", "sizes": "192x192", "type": "image/png" }
+      ]
+    },
+    {
+      "name": "Weekly Recommended",
+      "short_name": "Weekly",
+      "description": "See this week's scent forecast",
+      "url": "/?intent=weekly&source=pwa-shortcut",
       "icons": [
         { "src": "/icons/app-icon-black/android-chrome-192x192.png", "sizes": "192x192", "type": "image/png" }
       ]
