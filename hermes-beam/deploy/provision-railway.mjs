@@ -9,7 +9,7 @@
  *   RW_TOKEN=<railway project token> node hermes-beam/deploy/provision-railway.mjs
  *
  * What it does:
- *   1. beam-mcp service  — repo cloudURBANE/sCAST @ chore/hermes-017-standup,
+ *   1. beam-mcp service  — repo cloudURBANE/sCAST @ main (auto-deploys on merge),
  *      railwayConfigFile=hermes-beam/deploy/railway.beam-mcp.json (start:beam-mcp),
  *      vars referencing sCAST's BEAM_AGENT_TOKEN_SECRET + DATABASE_URL, plus
  *      BEAM_MCP_HOST=:: and BEAM_MCP_PORT=8848. No public domain (private only).
@@ -29,7 +29,7 @@ const TOKEN = process.env.RW_TOKEN;
 if (!TOKEN) { console.error("RW_TOKEN (Railway project token) is required"); process.exit(2); }
 const ENDPOINT = "https://backboard.railway.com/graphql/v2";
 const REPO = "cloudURBANE/sCAST";
-const BRANCH = "chore/hermes-017-standup";
+const BRANCH = "main";
 
 async function gql(query, variables) {
   const res = await fetch(ENDPOINT, {
