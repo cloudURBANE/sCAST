@@ -188,6 +188,39 @@ test("acceptsImageCacheForRequest: backgroundRemoved=false rejected when removeB
   assert.equal(acceptsImageCacheForRequest({ backgroundRemoved: true }, false), true);
 });
 
+test("positive cache isolation: a no-bg entry does not satisfy a bg-removal request", async () => {
+  // Mirrors the WHERE clause in getReadyCachedImageBySourceHash. The image_cache
+  // unique key is (source_url_hash, pipeline_version, background_removed), so the
+  // two variants are stored as separate rows. The positive lookup must constrain
+  // to background_removed=true ONLY when BG removal is requested, so a stored
+  // white-bg (background_removed=false) row can never satisfy a removeBackground
+  // request — it falls through to reprocess and writes the OTHER variant's row
+  // instead of clobbering the no-bg one.
+  const { positiveCacheRequiresBackgroundRemoved } = await import("./imagePipelineCachePolicy.ts");
+
+  // BG removal requested → lookup is constrained to background_removed=true,
+  // so a background_removed=false row is excluded (does not satisfy).
+  assert.equal(positiveCacheRequiresBackgroundRemoved(true), true);
+  // BG removal NOT requested → either variant is acceptable (transparent still
+  // renders), so the lookup is not constrained.
+  assert.equal(positiveCacheRequiresBackgroundRemoved(false), false);
+});
+
+test("negative cache isolation: a failure for one variant does not suppress the other", async () => {
+  // Mirrors recordImageFailure's `background_removed` write value and the
+  // equality filter in getCachedImageStatusBySourceHash. A "failed" row is keyed
+  // on the requested variant, so it suppresses retries for THAT variant only.
+  const { negativeCacheFailureSuppressesRequest } = await import("./imagePipelineCachePolicy.ts");
+
+  // Same variant → the failed row suppresses the request (intended).
+  assert.equal(negativeCacheFailureSuppressesRequest(true, true), true);
+  assert.equal(negativeCacheFailureSuppressesRequest(false, false), true);
+  // Cross variant → a bg-removed failure must NOT black out a no-bg request, and
+  // a no-bg failure must NOT black out a bg-removal request.
+  assert.equal(negativeCacheFailureSuppressesRequest(true, false), false);
+  assert.equal(negativeCacheFailureSuppressesRequest(false, true), false);
+});
+
 test("shouldUseImageLookupCaches: allowLookupCache=false bypasses both caches", async () => {
   const { shouldUseImageLookupCaches } = await import("./imagePipelineCachePolicy.ts");
 

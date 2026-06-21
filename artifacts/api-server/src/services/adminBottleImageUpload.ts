@@ -200,6 +200,9 @@ export async function processAdminBottleImage(
       sourceUrl: sourceUrlForDb,
       sourceUrlHash,
       searchQueryHash: null,
+      // Same variant slot as this upload's ready row (recordImageReady above
+      // writes this `backgroundRemoved`) so the negative cache stays isolated.
+      backgroundRemoved,
       failureReason: reason,
     }).catch(() => {});
     throw err;

@@ -10,7 +10,10 @@ import {
   storagePathFromLocalImageObjectUrl,
   type ImageStorageProvider,
 } from "./imageObjectStorage";
-import { shouldRetryFailedImageStatus } from "./imagePipelineCachePolicy";
+import {
+  positiveCacheRequiresBackgroundRemoved,
+  shouldRetryFailedImageStatus,
+} from "./imagePipelineCachePolicy";
 import { assertNoPersistedBase64Image, safeImageUrlForResponse } from "./persistenceGuards";
 export {
   buildProcessedImageStorageKey,
@@ -244,8 +247,16 @@ function markCacheHitDeferred(id: string): void {
 
 export async function getReadyCachedImageBySourceHash(
   sourceUrlHash: string,
+  removeBackground: boolean,
   pipelineVersion = IMAGE_PIPELINE_VERSION,
 ): Promise<CachedImageReference | null> {
+  // Positive-cache variant isolation: when BG removal is requested, only a
+  // background-removed row may satisfy it (a white-bg row must not). When it is
+  // not requested, either variant is acceptable, but prefer the transparent one
+  // when both exist (ordering below) since it renders on any surface.
+  const variantFilter = positiveCacheRequiresBackgroundRemoved(removeBackground)
+    ? [eq(imageCacheTable.backgroundRemoved, true)]
+    : [];
   let rows: (typeof imageCacheTable.$inferSelect)[];
   try {
     rows = await db
@@ -256,8 +267,10 @@ export async function getReadyCachedImageBySourceHash(
           eq(imageCacheTable.sourceUrlHash, sourceUrlHash),
           eq(imageCacheTable.pipelineVersion, pipelineVersion),
           eq(imageCacheTable.processingStatus, "ready"),
+          ...variantFilter,
         ),
       )
+      .orderBy(desc(imageCacheTable.backgroundRemoved))
       .limit(1);
   } catch (err) {
     if (isImageCacheUnavailableError(err)) return null;
@@ -341,8 +354,13 @@ export async function getLatestReadyCachedImageBySearchQueryHash(
 
 export async function getCachedImageStatusBySourceHash(
   sourceUrlHash: string,
+  removeBackground: boolean,
   pipelineVersion = IMAGE_PIPELINE_VERSION,
 ): Promise<"ready" | "failed" | "processing" | null> {
+  // Negative-cache variant isolation: a "failed" row is keyed on the requested
+  // background-removal variant, so only check the slot for THIS request's
+  // variant. A failure recorded for the other variant must not suppress this
+  // one (matches recordImageFailure's `backgroundRemoved` write value).
   let rows: { processingStatus: string; updatedAt: Date | null }[];
   try {
     rows = await db
@@ -352,6 +370,7 @@ export async function getCachedImageStatusBySourceHash(
         and(
           eq(imageCacheTable.sourceUrlHash, sourceUrlHash),
           eq(imageCacheTable.pipelineVersion, pipelineVersion),
+          eq(imageCacheTable.backgroundRemoved, removeBackground),
         ),
       )
       .limit(1);
@@ -442,7 +461,14 @@ export async function recordImageReady(input: {
         updatedAt: new Date(),
       })
       .onConflictDoUpdate({
-        target: [imageCacheTable.sourceUrlHash, imageCacheTable.pipelineVersion],
+        // Conflict key matches the (source_url_hash, pipeline_version,
+        // background_removed) unique index so re-processing the SAME variant
+        // upgrades its row in place, while the OTHER variant keeps its own row.
+        target: [
+          imageCacheTable.sourceUrlHash,
+          imageCacheTable.pipelineVersion,
+          imageCacheTable.backgroundRemoved,
+        ],
         set: {
           lookupKey: input.lookupKey ?? null,
           contentHash: input.contentHash,
@@ -483,6 +509,10 @@ export async function recordImageFailure(input: {
   sourceUrlHash: string;
   searchQueryHash?: string | null;
   pipelineVersion?: string;
+  // The background-removal variant this failure belongs to. Negative-cache rows
+  // are isolated per variant so a deterministic failure for one variant never
+  // suppresses retries for the other (see image_cache_source_pipeline_bg_unique_idx).
+  backgroundRemoved: boolean;
   failureReason: string;
 }): Promise<void> {
   assertNoPersistedBase64Image(input.sourceUrl, "image_cache.source_url");
@@ -499,6 +529,7 @@ export async function recordImageFailure(input: {
         sourceUrlHash: input.sourceUrlHash,
         searchQueryHash: input.searchQueryHash ?? null,
         pipelineVersion,
+        backgroundRemoved: input.backgroundRemoved,
         storageProvider: "local",
         storagePath: "",
         processingStatus: "failed",
@@ -506,7 +537,11 @@ export async function recordImageFailure(input: {
         updatedAt: new Date(),
       })
       .onConflictDoUpdate({
-        target: [imageCacheTable.sourceUrlHash, imageCacheTable.pipelineVersion],
+        target: [
+          imageCacheTable.sourceUrlHash,
+          imageCacheTable.pipelineVersion,
+          imageCacheTable.backgroundRemoved,
+        ],
         set: {
           processingStatus: "failed",
           failureReason: input.failureReason.slice(0, 500),
