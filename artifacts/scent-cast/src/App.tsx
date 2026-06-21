@@ -1247,18 +1247,19 @@ function DashboardView() {
 
           {!agentActive ? <HomepageAtmosphereChrome /> : null}
 
-          {/* Weekly outlook dashboard — on phones it CENTERS in the leftover
-              column space (my-auto splits the free space evenly above and below
-              instead of mt-auto dumping it all into one void above), so the
-              forecast reads as intentionally placed and balanced rather than
-              slammed against the tab bar with a dead gap overhead. Normal flow on
-              md+. Hidden in agent mode, which takes over the hero. */}
+          {/* Weekly outlook dashboard — on phones the forecast sits directly in
+              the column's natural gap-4 rhythm beneath the atmosphere/stat row, so
+              it reads as connected to that row rather than isolated by a void
+              above it. Normal flow on md+. Hidden in agent mode (it takes over the
+              hero). */}
           {!agentActive ? (
-            // Bias the leftover column space ABOVE the forecast (mt-auto) and set
-            // a small deliberate gap below it (mb-4), so the forecast reads as
-            // seated above the bottom nav instead of floating in a large centered void.
-            // Normal flow on md+ (no bottom nav).
-            <div className="mt-auto mb-4 sm:mt-0 sm:mb-0">
+            // Bias ALL leftover column space BELOW the forecast (mb-auto), with NO
+            // top margin: the column's own gap-4 already separates the forecast
+            // from the atmosphere row by one rhythm unit, so it sits flush in
+            // rhythm with the stat row instead of being pushed down into a large
+            // top void (the owner-reported "big gap above the Scent Forecast").
+            // mb-auto + the column pb still hold nav clearance below. md+ unchanged.
+            <div className="mb-auto sm:mb-0">
               <WeeklyOutlookDashboard
                 items={items}
                 weather={weather}
