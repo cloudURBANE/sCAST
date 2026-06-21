@@ -157,6 +157,28 @@ function lockBodyScroll(): () => void {
         ) {
           window.scrollTo(restoreX, restoreY);
         }
+        // Force iOS WebKit to repaint the viewport after un-fixing <body>.
+        // Removing position:fixed from <body> on iPhone frequently leaves the
+        // compositor showing a blank GRAY layer that locks the page until the
+        // next touch/scroll — the "tap Close -> gray screen" freeze. Deferring
+        // the unfix one frame (above) is not enough on iPhone, where the layout
+        // FLIP is already disabled, so nothing else nudges a paint. On the next
+        // frame we toggle a cheap throwaway transform on <html> (re-establishes
+        // the compositor layer) and do a 1px scroll round-trip, both of which
+        // reliably force an immediate repaint. Scoped to the fixed-body path so
+        // desktop / iPad root-overflow are untouched.
+        if (restoreMode === "fixed-body" && typeof window.requestAnimationFrame === "function") {
+          window.requestAnimationFrame(() => {
+            const previousTransform = root.style.transform;
+            root.style.transform = "translateZ(0)";
+            // Read back to flush the style before clearing it.
+            void root.offsetHeight;
+            root.style.transform = previousTransform;
+            const nudge = restoreY > 0 ? restoreY - 1 : 1;
+            window.scrollTo(restoreX, nudge);
+            window.scrollTo(restoreX, restoreY);
+          });
+        }
       };
 
       if (typeof window.requestAnimationFrame === "function") {
