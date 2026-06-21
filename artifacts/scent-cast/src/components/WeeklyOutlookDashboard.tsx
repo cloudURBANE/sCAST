@@ -210,7 +210,7 @@ function ForecastHero({
               type="button"
               onClick={onSelect ? () => onSelect(fragrance) : undefined}
               disabled={!onSelect}
-              className="group forecast-hero-bottle relative h-full w-[50%] max-w-[16rem] shrink-0 pb-[2%] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:cursor-default sm:w-[48%] sm:max-w-[22rem]"
+              className="group forecast-hero-bottle relative h-full w-[50%] max-w-[16rem] shrink-0 pb-[5%] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:cursor-default sm:w-[48%] sm:max-w-[22rem] sm:pb-[3%]"
               aria-label={onSelect ? `Open ${pick.name} by ${pick.brand}` : `${pick.name} by ${pick.brand}`}
             >
               <motion.div
@@ -327,9 +327,14 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
         <>
           {/* Hero frame is width-capped and centered so the carousel chevrons anchor
               to the actual composition (bottle + text) instead of floating against
-              the page edges, and the generous height gives the packshot real product
-              presence. The bottle and title share one centered, balanced row. */}
-          <div className="relative mx-auto mt-2 h-[clamp(14.5rem,33svh,16.5rem)] w-full max-w-[30rem] sm:mt-3 sm:h-[clamp(18rem,40vh,20.5rem)] sm:max-w-[54rem]">
+              the page edges. The height is MEASURED — tall enough for real packshot
+              presence, but not so tall that the vertically-centered bottle+text float
+              in a pool of dead air below the title (which read as the title drifting
+              alone, the bottle stranded, and the chevrons framing empty space). A
+              tighter frame pulls the hero up under the title, fills the box with the
+              composition so the chevrons frame the actual bottle+text, and shrinks the
+              vertical slack that let the bottle's optical center sit below the copy. */}
+          <div className="relative mx-auto mt-2 h-[clamp(12.75rem,30svh,14.25rem)] w-full max-w-[30rem] sm:mt-2 sm:h-[clamp(16.5rem,37vh,19rem)] sm:max-w-[54rem]">
             <ForecastChevron direction="prev" onClick={() => go(selected - 1)} />
             <div className="absolute inset-y-0 left-9 right-9 overflow-hidden sm:left-11 sm:right-11">
               <ForecastHero
@@ -346,7 +351,7 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
               read as a single grouped, screen-centered unit that ties the hero to the
               calendar rather than drifting beside the title. */}
           {activeMeta.length > 0 ? (
-            <div className="mt-3 flex justify-center sm:mt-5">
+            <div className="mt-4 flex justify-center sm:mt-5">
               <div className="inline-flex items-center gap-1.5 rounded-full border border-scent-accent/20 bg-black/25 px-3 py-1 text-[#cdbfa9]">
                 <WeatherGlyph day={activePlan.day} size={13} />
                 <span className="scent-type-label text-[10px] tracking-[0.16em] sm:text-[11px]">
@@ -364,7 +369,7 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
           <div
             role="tablist"
             aria-label="Days this week"
-            className="mx-auto mt-4 grid w-full max-w-[30rem] grid-cols-7 gap-1 sm:mt-6 sm:max-w-[54rem] sm:gap-3"
+            className="mx-auto mt-3 grid w-full max-w-[30rem] grid-cols-7 gap-1 sm:mt-4 sm:max-w-[54rem] sm:gap-3"
           >
             {outlook.slice(0, 7).map((plan, index) => {
               const isActive = index === selected;
