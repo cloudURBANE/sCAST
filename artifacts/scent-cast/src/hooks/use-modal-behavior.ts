@@ -24,6 +24,10 @@ const FOCUSABLE_SELECTOR = [
 
 const modalStack: string[] = [];
 let scrollLockCount = 0;
+// Timestamp (ms) until which a just-released body scroll-lock is still
+// "settling": its deferred scroll restore and the keyboard-dismiss viewport
+// recovery may both still be in flight. Read via `isBodyScrollLockActive`.
+let scrollLockSettleUntil = 0;
 let lockedScrollX = 0;
 let lockedScrollY = 0;
 let scrollLockMode: "fixed-body" | "root-overflow" = "fixed-body";
@@ -104,6 +108,11 @@ function lockBodyScroll(): () => void {
     if (scrollLockCount <= 0) return;
     scrollLockCount -= 1;
     if (scrollLockCount === 0) {
+      // Mark a settle window so viewport recovery (the composer's
+      // keyboard-dismiss scrollTo) defers to this teardown's own restore and
+      // does not race it on close. Covers the rAF defer below plus the
+      // ~320ms keyboard-dismiss fallback timer.
+      scrollLockSettleUntil = Date.now() + 800;
       const root = document.documentElement;
       const body = document.body;
       // Snapshot the values this teardown owns, then reset module state NOW so a
@@ -164,6 +173,16 @@ function removeFromStack(id: string) {
   if (index >= 0) {
     modalStack.splice(index, 1);
   }
+}
+
+/**
+ * True while a body scroll-lock is engaged, or just released and still
+ * settling. Callers that imperatively adjust scroll (e.g. iOS keyboard-dismiss
+ * recovery) should bail when this is true and let the lock own restoration —
+ * otherwise two scrollTo calls race on a modal close frame.
+ */
+export function isBodyScrollLockActive(): boolean {
+  return scrollLockCount > 0 || Date.now() < scrollLockSettleUntil;
 }
 
 export function useBodyScrollLock(active: boolean) {
