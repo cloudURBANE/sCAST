@@ -222,6 +222,52 @@ test("shouldRetryFailedImageStatus: stale failures can be retried", async () => 
   assert.equal(shouldRetryFailedImageStatus("failed", null, retryAfterMs, now), false);
 });
 
+test("shouldNegativeCacheImageFailure: only deterministic failures are cached", async () => {
+  const { shouldNegativeCacheImageFailure } = await import("./imagePipelineFailureClassifier.ts");
+  const { UnsafeImageUrlError } = await import("./safeImageFetch.ts");
+
+  // Deterministic / terminal: worth negative-caching.
+  assert.equal(shouldNegativeCacheImageFailure(new UnsafeImageUrlError("Invalid image URL")), true);
+  assert.equal(
+    shouldNegativeCacheImageFailure(new UnsafeImageUrlError("Image fetch failed with HTTP 404")),
+    true,
+  );
+  assert.equal(shouldNegativeCacheImageFailure(new Error("Invalid data image")), true);
+  assert.equal(
+    shouldNegativeCacheImageFailure(new Error("Input buffer contains unsupported image format")),
+    true,
+  );
+
+  // Transient / infrastructure: must NOT be cached so the next request retries.
+  assert.equal(
+    shouldNegativeCacheImageFailure(
+      new UnsafeImageUrlError("Image fetch failed with HTTP 503", { transient: true }),
+    ),
+    false,
+  );
+  assert.equal(
+    shouldNegativeCacheImageFailure(
+      new UnsafeImageUrlError("Image host did not resolve", { transient: true }),
+    ),
+    false,
+  );
+  assert.equal(shouldNegativeCacheImageFailure(Object.assign(new Error("read econnreset"), { code: "ECONNRESET" })), false);
+  assert.equal(shouldNegativeCacheImageFailure(Object.assign(new Error("aborted"), { name: "AbortError" })), false);
+  assert.equal(shouldNegativeCacheImageFailure(new Error("fetch failed")), false);
+  assert.equal(shouldNegativeCacheImageFailure(new Error("Supabase Storage upload failed with HTTP 500")), false);
+
+  // Ambiguous / unknown causes bias toward retry (do not cache).
+  assert.equal(shouldNegativeCacheImageFailure(new Error("Image processing failed")), false);
+  assert.equal(shouldNegativeCacheImageFailure(null), false);
+  assert.equal(shouldNegativeCacheImageFailure(undefined), false);
+});
+
+test("UnsafeImageUrlError carries transient flag for upstream 5xx / 429 and DNS failures", async () => {
+  const { UnsafeImageUrlError } = await import("./safeImageFetch.ts");
+  assert.equal(new UnsafeImageUrlError("x").transient, false);
+  assert.equal(new UnsafeImageUrlError("x", { transient: true }).transient, true);
+});
+
 test("image candidate ranking prefers identity match and successful BG removal", async () => {
   const {
     computeFragranceIdentityCoverage,

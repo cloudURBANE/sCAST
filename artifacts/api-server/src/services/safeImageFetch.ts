@@ -93,9 +93,17 @@ export type SafeImageFetchResult = {
 };
 
 export class UnsafeImageUrlError extends Error {
-  constructor(message: string) {
+  /**
+   * True when the failure is transient/infrastructure (upstream 5xx/429, DNS
+   * hiccup) rather than a deterministic problem with the URL or its content.
+   * The image pipeline's negative cache keys off this so a passing blip does
+   * not black out a source for every caller for hours (image-pipeline audit).
+   */
+  readonly transient: boolean;
+  constructor(message: string, options?: { transient?: boolean }) {
     super(message);
     this.name = "UnsafeImageUrlError";
+    this.transient = options?.transient ?? false;
   }
 }
 
@@ -171,7 +179,9 @@ async function assertPublicDnsTarget(hostname: string): Promise<void> {
 
   const addresses = await lookup(hostname, { all: true, verbatim: false });
   if (addresses.length === 0) {
-    throw new UnsafeImageUrlError("Image host did not resolve");
+    // DNS can fail intermittently; treat a non-resolving host as transient so
+    // the pipeline retries on the next request instead of negative-caching it.
+    throw new UnsafeImageUrlError("Image host did not resolve", { transient: true });
   }
 
   for (const record of addresses) {
@@ -272,7 +282,12 @@ export async function fetchExternalImage(
     }
 
     if (!response.ok) {
-      throw new UnsafeImageUrlError(`Image fetch failed with HTTP ${response.status}`);
+      // 5xx and 429 are upstream-side and usually recover; mark them transient
+      // so they are not negative-cached. 4xx (404/403/410/…) are deterministic.
+      const transient = response.status >= 500 || response.status === 429;
+      throw new UnsafeImageUrlError(`Image fetch failed with HTTP ${response.status}`, {
+        transient,
+      });
     }
 
     const contentLength = Number(response.headers.get("content-length") ?? "0");
