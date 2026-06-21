@@ -376,19 +376,19 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
                   type="button"
                   onClick={() => go(index)}
                   title={`${dayLabel(plan.day.date)} — ${plan.day.condition ?? 'Forecast'}`}
-                  className={`flex min-h-[4.75rem] min-w-0 flex-col items-center justify-center gap-0.5 rounded-[13px] border py-2.5 text-[#f1e7da] transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/60 sm:min-h-[6.75rem] sm:gap-2 sm:rounded-[18px] sm:py-4 ${
+                  className={`group flex min-h-[4.75rem] min-w-0 flex-col items-center justify-center gap-0.5 rounded-[13px] border py-2.5 text-[#f1e7da] transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/60 sm:min-h-[6.75rem] sm:gap-2 sm:rounded-[18px] sm:py-4 ${
                     isActive
                       ? 'border-scent-accent/55 bg-gradient-to-b from-scent-accent/[0.14] to-scent-accent/[0.04]'
-                      : 'border-scent-accent/15 bg-black/25'
+                      : 'border-scent-accent/15 bg-black/25 hover:border-scent-accent/35 hover:bg-scent-accent/[0.06]'
                   }`}
                 >
-                  <span className={`scent-type-label text-[10px] tracking-[0.16em] sm:text-[11px] ${isActive ? 'text-scent-accent/90' : 'text-[#cdbfa9]'}`}>
+                  <span className={`scent-type-label text-[10px] tracking-[0.16em] transition-colors duration-300 sm:text-[11px] ${isActive ? 'text-scent-accent/90' : 'text-[#cdbfa9] group-hover:text-scent-accent/75'}`}>
                     {dayLabel(plan.day.date)}
                   </span>
                   <span className="font-serif text-[1.5rem] leading-none sm:text-[1.8rem]">
                     {dayNumber(plan.day.date)}
                   </span>
-                  <span className={isActive ? 'text-scent-accent' : 'text-[#cdbfa9]'}>
+                  <span className={`transition-colors duration-300 ${isActive ? 'text-scent-accent' : 'text-[#cdbfa9] group-hover:text-scent-accent/75'}`}>
                     <WeatherGlyph day={plan.day} size={18} />
                   </span>
                 </button>
@@ -408,7 +408,7 @@ function ForecastChevron({ direction, onClick }: { direction: 'prev' | 'next'; o
       type="button"
       onClick={onClick}
       aria-label={direction === 'prev' ? 'Previous day' : 'Next day'}
-      className={`absolute top-1/2 z-10 flex h-11 w-9 -translate-y-1/2 items-center justify-center text-scent-accent/80 transition-colors hover:text-[#ffe8a5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/50 ${
+      className={`absolute top-1/2 z-10 flex h-11 w-9 -translate-y-1/2 items-center justify-center rounded-full text-scent-accent/80 transition-colors hover:bg-scent-accent/[0.08] hover:text-[#ffe8a5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/50 ${
         direction === 'prev' ? 'left-0' : 'right-0'
       }`}
     >
