@@ -24,10 +24,6 @@ const FOCUSABLE_SELECTOR = [
 
 const modalStack: string[] = [];
 let scrollLockCount = 0;
-// Timestamp (ms) until which a just-released body scroll-lock is still
-// "settling": its deferred scroll restore and the keyboard-dismiss viewport
-// recovery may both still be in flight. Read via `isBodyScrollLockActive`.
-let scrollLockSettleUntil = 0;
 let lockedScrollX = 0;
 let lockedScrollY = 0;
 let scrollLockMode: "fixed-body" | "root-overflow" = "fixed-body";
@@ -108,11 +104,6 @@ function lockBodyScroll(): () => void {
     if (scrollLockCount <= 0) return;
     scrollLockCount -= 1;
     if (scrollLockCount === 0) {
-      // Mark a settle window so viewport recovery (the composer's
-      // keyboard-dismiss scrollTo) defers to this teardown's own restore and
-      // does not race it on close. Covers the rAF defer below plus the
-      // ~320ms keyboard-dismiss fallback timer.
-      scrollLockSettleUntil = Date.now() + 800;
       const root = document.documentElement;
       const body = document.body;
       // Snapshot the values this teardown owns, then reset module state NOW so a
@@ -157,28 +148,6 @@ function lockBodyScroll(): () => void {
         ) {
           window.scrollTo(restoreX, restoreY);
         }
-        // Force iOS WebKit to repaint the viewport after un-fixing <body>.
-        // Removing position:fixed from <body> on iPhone frequently leaves the
-        // compositor showing a blank GRAY layer that locks the page until the
-        // next touch/scroll — the "tap Close -> gray screen" freeze. Deferring
-        // the unfix one frame (above) is not enough on iPhone, where the layout
-        // FLIP is already disabled, so nothing else nudges a paint. On the next
-        // frame we toggle a cheap throwaway transform on <html> (re-establishes
-        // the compositor layer) and do a 1px scroll round-trip, both of which
-        // reliably force an immediate repaint. Scoped to the fixed-body path so
-        // desktop / iPad root-overflow are untouched.
-        if (restoreMode === "fixed-body" && typeof window.requestAnimationFrame === "function") {
-          window.requestAnimationFrame(() => {
-            const previousTransform = root.style.transform;
-            root.style.transform = "translateZ(0)";
-            // Read back to flush the style before clearing it.
-            void root.offsetHeight;
-            root.style.transform = previousTransform;
-            const nudge = restoreY > 0 ? restoreY - 1 : 1;
-            window.scrollTo(restoreX, nudge);
-            window.scrollTo(restoreX, restoreY);
-          });
-        }
       };
 
       if (typeof window.requestAnimationFrame === "function") {
@@ -195,16 +164,6 @@ function removeFromStack(id: string) {
   if (index >= 0) {
     modalStack.splice(index, 1);
   }
-}
-
-/**
- * True while a body scroll-lock is engaged, or just released and still
- * settling. Callers that imperatively adjust scroll (e.g. iOS keyboard-dismiss
- * recovery) should bail when this is true and let the lock own restoration —
- * otherwise two scrollTo calls race on a modal close frame.
- */
-export function isBodyScrollLockActive(): boolean {
-  return scrollLockCount > 0 || Date.now() < scrollLockSettleUntil;
 }
 
 export function useBodyScrollLock(active: boolean) {
