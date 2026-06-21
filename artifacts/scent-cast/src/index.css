@@ -514,6 +514,26 @@ a {
 }
 
 /*
+ * Scent Forecast section — vertical rhythm tokens. One tuned spacing scale for
+ * title→hero→pill→rail so the module reads as a single product unit instead of a
+ * stack of independent elements with ad-hoc margins. Edit the rhythm HERE, in one
+ * place, not as scattered mt-* nudges. Values step up slightly at sm+.
+ */
+.scent-forecast {
+  --fc-title-hero: 0.5rem;
+  --fc-hero-pill: 0.95rem;
+  --fc-pill-rail: 0.8rem;
+}
+
+@media (min-width: 640px) {
+  .scent-forecast {
+    --fc-title-hero: 0.75rem;
+    --fc-hero-pill: 1.15rem;
+    --fc-pill-rail: 1rem;
+  }
+}
+
+/*
  * Forecast day tile (WeeklyOutlookDashboard) — a MINI of the community
  * fragrance-detail card frame (.community-fragrance-detail__hero). The owner
  * loves that card's framing and wants the calendar tiles to echo it: a deep
