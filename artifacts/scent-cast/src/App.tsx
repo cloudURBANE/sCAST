@@ -27,6 +27,9 @@ import { useMarqueeSwipe } from '@/hooks/useMarqueeSwipe';
 import { isIpadSafariPerformanceMode, isLowRenderBudget } from '@/lib/platform';
 import NotFound from '@/pages/not-found';
 import { SEO } from './components/SEO';
+import { AppFooter } from './components/AppFooter';
+import { CookieConsentBanner } from './components/legal/CookieConsentBanner';
+import { hasAnalyticsConsent, onConsentChange } from '@/lib/consent';
 import { loadRouteChunk } from '@/lib/routeChunkRecovery';
 import { initWebVitals, vaultSizeBucket } from '@/lib/webVitalsTelemetry';
 import { FragranceCapture } from './components/FragranceCapture';
@@ -73,6 +76,17 @@ const IpadFreezeLab = import.meta.env.DEV
   : null;
 const SharePage = React.lazy(() =>
   loadRouteChunk(() => import('./components/SharePage').then((module) => ({ default: module.SharePage }))),
+);
+// Trust / legal surfaces. Lazy + route-chunk-recovered like every other view so
+// they never weigh on the home bundle.
+const PrivacyPage = React.lazy(() =>
+  loadRouteChunk(() => import('@/pages/legal').then((module) => ({ default: module.PrivacyPage }))),
+);
+const TermsPage = React.lazy(() =>
+  loadRouteChunk(() => import('@/pages/legal').then((module) => ({ default: module.TermsPage }))),
+);
+const CookiePolicyPage = React.lazy(() =>
+  loadRouteChunk(() => import('@/pages/legal').then((module) => ({ default: module.CookiePolicyPage }))),
 );
 
 const titleCaseToken = (value: string): string =>
@@ -1401,20 +1415,7 @@ function DashboardView() {
           </div>
       ) : null}
 
-      <footer className="relative z-10 border-t border-scent-accent/10 py-16 px-8 mt-24">
-        <div className="max-w-[1400px] mx-auto text-center space-y-4">
-          <div className="flex items-center justify-center opacity-30">
-            <img
-              src="/nav/scentbeam-nav-logo.png"
-              srcSet="/nav/scentbeam-nav-logo.png 1x, /nav/scentbeam-nav-logo@2x.png 2x"
-              alt="ScentBeam"
-              className="h-5 w-auto"
-              draggable={false}
-            />
-          </div>
-          <p className="scent-type-label">© 2026 Olfactory Intelligence Systems</p>
-        </div>
-      </footer>
+      <AppFooter className="mt-24" />
     </div>
   );
 }
@@ -1596,10 +1597,16 @@ function WebVitalsReporter() {
 
   useEffect(() => {
     let cancelled = false;
+    let started = false;
     let idleHandle: number | null = null;
     let timer: ReturnType<typeof setTimeout> | null = null;
 
+    // Performance analytics is opt-in. Only initialise Web Vitals once the user
+    // has granted analytics consent — and only once. If they grant it later in
+    // the session, the consent listener below starts it then.
     const start = () => {
+      if (cancelled || started || !hasAnalyticsConsent()) return;
+      started = true;
       void initWebVitals(() => contextRef.current).catch((err) => {
         if (!cancelled && import.meta.env.DEV) {
           console.debug('[web-vital] init failed', err);
@@ -1617,8 +1624,11 @@ function WebVitalsReporter() {
       timer = setTimeout(start, 1000);
     }
 
+    const unsubscribe = onConsentChange(() => start());
+
     return () => {
       cancelled = true;
+      unsubscribe();
       if (idleHandle !== null && window.cancelIdleCallback) window.cancelIdleCallback(idleHandle);
       if (timer) clearTimeout(timer);
     };
@@ -1639,6 +1649,9 @@ const AppContent = React.memo(function AppContent({ location }: { location: Loca
             <Route path="/debug/ipad-freeze" element={<IpadFreezeLab />} />
           ) : null}
           <Route path="/share/:userId" element={<SharePageView />} />
+          <Route path="/privacy" element={<PrivacyPage />} />
+          <Route path="/terms" element={<TermsPage />} />
+          <Route path="/cookies" element={<CookiePolicyPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </React.Suspense>
@@ -1681,6 +1694,7 @@ const AppShell = React.memo(function AppShell({
             <InstallPrompt />
             <PushPrompt />
             <BadgeClearer />
+            <CookieConsentBanner />
           </div>
         </WardrobeProvider>
       </WeatherProvider>
