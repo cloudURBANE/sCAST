@@ -22,7 +22,7 @@ import {
   hasTieredPyramidNotes,
   normalizePyramidNotes as normalizePyramidInput,
 } from '@/lib/fragranceNotes';
-import { isIpadSafariPerformanceMode } from '@/lib/platform';
+import { isIpadSafariPerformanceMode, isLowRenderBudget } from '@/lib/platform';
 
 /**
  * Generate a stable, collision-resistant id for newly added wardrobe items.
@@ -357,6 +357,10 @@ export const FragranceCapture: React.FC<{
   const reduceMotion = useReducedMotion();
   const ipadSafariPerformanceMode = useRef(isIpadSafariPerformanceMode()).current;
   const reducedAddMotion = reduceMotion || ipadSafariPerformanceMode;
+  // Render budget for the in-card intelligence loader: phone-class or iPad
+  // Safari. Sampled once (device class is stable). Drives the loader's
+  // GPU-surface gating so a single search doesn't flood WebKit's compositor.
+  const loaderLightweight = useRef(isLowRenderBudget() || isIpadSafariPerformanceMode()).current;
 
   const searchAbortController = useRef<AbortController | null>(null);
   const syncAbortController = useRef<AbortController | null>(null);
@@ -1030,6 +1034,7 @@ export const FragranceCapture: React.FC<{
       <ScentIntelligenceLoader
         status={loadingStatus}
         complete={syncComplete}
+        lightweight={loaderLightweight}
       />
     </motion.div>
   ) : null;
@@ -1065,6 +1070,7 @@ export const FragranceCapture: React.FC<{
       <ScentIntelligenceLoader
         status={loadingStatus}
         complete={syncComplete}
+        lightweight={loaderLightweight}
       />
       {/* Indeterminate progress bar — a concrete "work in progress" signal beneath
           the orbital loader so submitting a search reads as active progress rather

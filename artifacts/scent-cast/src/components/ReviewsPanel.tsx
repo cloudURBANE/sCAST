@@ -8,6 +8,7 @@ import {
   type FragranceRawReview,
   type SummarizedComment,
 } from "@/lib/fragranceApi";
+import { isIpadSafariPerformanceMode, isLowRenderBudget } from "@/lib/platform";
 
 interface ReviewsPanelProps {
   name?: string;
@@ -121,7 +122,14 @@ export function ReviewsPanel({ name, brand, reviews }: ReviewsPanelProps) {
   const [fetchError, setFetchError] = useState<string | null>(null);
 
   const prefersReducedMotion = useReducedMotion();
-  const reduced = prefersReducedMotion ?? false;
+  // `reduced` switches the controls/summary reveals from height-auto layout
+  // reflow tweens to an opacity-only fallback. Fold in the render budget so
+  // phones and iPad Safari (where the height reflow stutters) get the cheap
+  // path too — device class is stable, so sample once.
+  const constrainedBudget = React.useRef(
+    isLowRenderBudget() || isIpadSafariPerformanceMode(),
+  ).current;
+  const reduced = (prefersReducedMotion ?? false) || constrainedBudget;
 
   const reviewsKey = useMemo(
     () => reviews.map((r) => r.text).join("|").slice(0, 6000),

@@ -30,6 +30,15 @@ export type ScentIntelligenceLoaderProps = {
   status: string;
   substatus?: string;
   complete?: boolean;
+  /**
+   * Phone-class / iPad-Safari render budget (computed by the parent from the
+   * app's budget signals, not OS reduced-motion). When true, the loader drops
+   * the offscreen-surface effects — the blurred warmth halo, the emblem's
+   * drop-shadow, and the per-dot glow — and runs no infinite animations, so a
+   * single search no longer floods WebKit's compositor budget on iOS. Desktop
+   * keeps the full treatment; OS reduced-motion is honored on top of this.
+   */
+  lightweight?: boolean;
 };
 
 /** A gold dot that orbits a circular path of the given diameter. */
@@ -40,7 +49,8 @@ const Orbit: React.FC<{
   reverse?: boolean;
   spin: boolean; // false = reduced motion (no rotation)
   fade: boolean; // true = completion → dissolve the orbit
-}> = ({ diameter, dotSize, duration, reverse = false, spin, fade }) => (
+  glow: boolean; // false = low render budget (no blurred boxShadow halo)
+}> = ({ diameter, dotSize, duration, reverse = false, spin, fade, glow }) => (
   <motion.div
     aria-hidden
     className="absolute"
@@ -60,13 +70,19 @@ const Orbit: React.FC<{
         marginTop: -dotSize / 2,
         borderRadius: '50%',
         background: `radial-gradient(circle, ${gold(0.95)} 0%, ${gold(0.5)} 45%, transparent 72%)`,
-        boxShadow: `0 0 ${Math.round(dotSize * 1.7)}px ${gold(0.5)}`,
+        boxShadow: glow ? `0 0 ${Math.round(dotSize * 1.7)}px ${gold(0.5)}` : 'none',
       }}
     />
   </motion.div>
 );
 
-function emblemFilter(complete: boolean): string {
+function emblemFilter(complete: boolean, lightweight: boolean): string {
+  if (lightweight) {
+    // No drop-shadow: a blurred drop-shadow filter allocates an offscreen
+    // surface that WebKit re-rasterizes per frame during the brightness/scale
+    // settle. Brightness alone carries the gold "lift" with no extra layer.
+    return complete ? 'brightness(1.4)' : 'brightness(1.12)';
+  }
   return complete
     ? `drop-shadow(0 0 22px ${gold(0.6)}) brightness(1.5)`
     : `drop-shadow(0 0 14px ${gold(0.5)}) brightness(1.12)`;
@@ -76,9 +92,15 @@ export const ScentIntelligenceLoader: React.FC<ScentIntelligenceLoaderProps> = (
   status,
   substatus,
   complete = false,
+  lightweight = false,
 }) => {
   const reduceMotion = useReducedMotion();
-  const spin = !reduceMotion;
+  // "calm" = no infinite animation, static end-states. Driven by the OS
+  // reduced-motion preference OR a constrained render budget. "lightweight"
+  // (budget only) additionally drops the GPU offscreen surfaces — desktop
+  // reduced-motion keeps those cheap static effects.
+  const calm = Boolean(reduceMotion) || lightweight;
+  const spin = !calm;
 
   return (
     <div className="flex flex-col items-center justify-center text-center">
@@ -93,11 +115,13 @@ export const ScentIntelligenceLoader: React.FC<ScentIntelligenceLoaderProps> = (
             height: 150,
             borderRadius: '50%',
             background: `radial-gradient(circle, ${gold(0.16)} 0%, ${gold(0.05)} 42%, transparent 70%)`,
-            filter: 'blur(6px)',
+            // The blurred halo is a full offscreen surface; drop it under a
+            // constrained budget and let the soft radial gradient stand alone.
+            filter: lightweight ? undefined : 'blur(6px)',
           }}
-          animate={reduceMotion ? { opacity: 0.75 } : { opacity: complete ? [0.75, 1, 0.85] : [0.5, 0.78, 0.5] }}
+          animate={calm ? { opacity: 0.75 } : { opacity: complete ? [0.75, 1, 0.85] : [0.5, 0.78, 0.5] }}
           transition={
-            reduceMotion
+            calm
               ? { duration: 0.3 }
               : complete
                 ? { duration: 0.5, ease: EASE_OUT }
@@ -122,12 +146,12 @@ export const ScentIntelligenceLoader: React.FC<ScentIntelligenceLoaderProps> = (
         />
 
         {/* Orbiting dots carry the motion */}
-        <Orbit diameter={118} dotSize={6} duration={4.6} spin={spin} fade={complete} />
-        <Orbit diameter={82} dotSize={5} duration={3.0} reverse spin={spin} fade={complete} />
+        <Orbit diameter={118} dotSize={6} duration={4.6} spin={spin} fade={complete} glow={!lightweight} />
+        <Orbit diameter={82} dotSize={5} duration={3.0} reverse spin={spin} fade={complete} glow={!lightweight} />
 
         {/* One-shot completion bloom */}
         <AnimatePresence>
-          {complete && !reduceMotion && (
+          {complete && !calm && (
             <motion.div
               key="bloom"
               aria-hidden
@@ -152,7 +176,7 @@ export const ScentIntelligenceLoader: React.FC<ScentIntelligenceLoaderProps> = (
           className="absolute flex items-center justify-center"
           initial={{ opacity: 0, scale: 0.72 }}
           animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: reduceMotion ? 0.3 : 0.7, ease: EASE_OUT }}
+          transition={{ duration: calm ? 0.3 : 0.7, ease: EASE_OUT }}
         >
           <motion.img
             src={EMBLEM}
@@ -160,14 +184,14 @@ export const ScentIntelligenceLoader: React.FC<ScentIntelligenceLoaderProps> = (
             aria-hidden
             draggable={false}
             animate={
-              reduceMotion
-                ? { scale: 1, filter: emblemFilter(complete) }
+              calm
+                ? { scale: 1, filter: emblemFilter(complete, lightweight) }
                 : complete
-                  ? { scale: [1, 1.14, 1.0], filter: emblemFilter(true) }
-                  : { scale: [1, 1.05, 1], filter: emblemFilter(false) }
+                  ? { scale: [1, 1.14, 1.0], filter: emblemFilter(true, false) }
+                  : { scale: [1, 1.05, 1], filter: emblemFilter(false, false) }
             }
             transition={
-              reduceMotion
+              calm
                 ? { duration: 0.3, ease: EASE_OUT }
                 : complete
                   ? { duration: 0.5, ease: EASE_OUT }
@@ -207,9 +231,9 @@ export const ScentIntelligenceLoader: React.FC<ScentIntelligenceLoaderProps> = (
               key="substatus"
               aria-hidden
               initial={{ opacity: 0 }}
-              animate={{ opacity: reduceMotion ? 0.5 : [0.32, 0.6, 0.32] }}
+              animate={{ opacity: calm ? 0.5 : [0.32, 0.6, 0.32] }}
               exit={{ opacity: 0 }}
-              transition={reduceMotion ? { duration: 0.3 } : { duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}
+              transition={calm ? { duration: 0.3 } : { duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}
               className="text-[10px] uppercase tracking-[0.3em] font-sans font-bold italic text-scent-accent/45"
             >
               {substatus}
