@@ -524,6 +524,9 @@ router.post("/runs", runRateLimit, requireAuth, async (req: AuthRequest, res) =>
         estimatedCostUsd: summary.estimatedCostUsd,
         status: summary.outcome === "completed" ? "success" : "failure",
         failureReason: summary.failureCode ?? null,
+      }).catch(() => {
+        // Best-effort ledger write: tenant resolution can reject outside the
+        // function's own try/catch, so guard the floating promise here too.
       });
       // Persist the durable per-turn answer log keyed by the run id (= the
       // answerLogId the client received in the completed event). This is the
@@ -553,6 +556,9 @@ router.post("/runs", runRateLimit, requireAuth, async (req: AuthRequest, res) =>
         failureCode: summary.failureCode ?? null,
         inputTokens: summary.inputTokens,
         outputTokens: summary.outputTokens,
+      }).catch(() => {
+        // Best-effort answer log: never let a rejected write surface as an
+        // unhandled rejection or affect the run.
       });
     },
     shouldStop: () => record.stopped,
@@ -649,7 +655,10 @@ router.post("/runs/:runId/stop", requireAuth, (req: AuthRequest, res) => {
     res.status(404).json({ error: "Run not found.", code: "run_not_found" });
     return;
   }
-  if (record.ctx.userId !== req.user.id) {
+  // Match the SSE attach check: ownership is keyed by (userId, tenantId), not
+  // userId alone — otherwise a same-id principal under another tenant could stop
+  // a run that isn't theirs.
+  if (record.ctx.userId !== req.user.id || record.ctx.tenantId !== getTenantId(req)) {
     res.status(403).json({ error: "Forbidden." });
     return;
   }

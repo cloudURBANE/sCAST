@@ -327,7 +327,12 @@ export async function callOpenRouter(input: ClaudeCallInput): Promise<ClaudeResp
   const res = await fetch(OPENROUTER_URL, {
     method: "POST",
     headers,
-    signal: input.signal ?? AbortSignal.timeout(OPENROUTER_TIMEOUT_MS),
+    // Combine the caller's signal (client disconnect / run deadline) WITH the
+    // upstream timeout instead of letting a supplied signal disable the timeout —
+    // a hung socket that never trips the caller's deadline must still abort.
+    signal: input.signal
+      ? AbortSignal.any([input.signal, AbortSignal.timeout(OPENROUTER_TIMEOUT_MS)])
+      : AbortSignal.timeout(OPENROUTER_TIMEOUT_MS),
     body: JSON.stringify({
       model,
       max_tokens: input.maxTokens ?? 1024,
@@ -389,7 +394,13 @@ async function streamOpenAiText(
     const chunk = choice.delta?.content;
     if (typeof chunk === "string" && chunk) {
       text += chunk;
-      onDelta(chunk);
+      // Keep accumulating even if the consumer throws — a downstream emit failure
+      // must not abort the read and discard the fully-assembled answer.
+      try {
+        onDelta(chunk);
+      } catch {
+        /* swallow: the assembled text is still returned at the end */
+      }
     }
   };
 

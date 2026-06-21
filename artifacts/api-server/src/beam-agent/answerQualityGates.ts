@@ -45,9 +45,16 @@ const AVAILABILITY_PATTERN =
 const REVIEW_PATTERN =
   /\b\d(?:\.\d)?\s?(?:\/|out of|of)\s?5\b|\b\d(?:\.\d)?\s?stars?\b|\b\d{1,3}%\s?(?:positive|recommend)/i;
 
-/** Prompt-injection / instruction text leaking out of untrusted content into the reply. */
+/**
+ * Prompt-injection / instruction text leaking out of untrusted content into the
+ * reply. The verb→noun arms allow 1–3 stacked qualifiers and `\s+` between every
+ * token, so the canonical "ignore all previous instructions" (two qualifiers) and
+ * whitespace-padded variants ("ignore  all  instructions") are both caught — the
+ * single-space, single-qualifier form silently missed them. Repetition is bounded
+ * to 3 so there is no catastrophic backtracking.
+ */
 const LEAKED_INSTRUCTION_PATTERN =
-  /\b(?:ignore (?:all|any|the|previous|above) (?:instructions?|prompts?)|disregard (?:all|any|the|previous|above)|you are now (?:a|an)\b|system prompt)\b|<\/?(?:system|instructions?)>|^\s*(?:system|assistant)\s*:/im;
+  /\b(?:ignore\s+(?:(?:all|any|the|previous|above|prior)\s+){1,3}(?:instructions?|prompts?|rules?)|disregard\s+(?:all|any|the|previous|above|prior)|you\s+are\s+now\s+(?:a|an)\b|system\s+prompt)\b|<\/?(?:system|instructions?)>|^\s*(?:system|assistant)\s*:/im;
 
 function asksForKnownSlot(text: string, state: BeamSessionState | undefined): boolean {
   const slots = state?.slots ?? {};

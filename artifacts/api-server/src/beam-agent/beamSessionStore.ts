@@ -46,9 +46,25 @@ function snapshot(turns: ClaudeMessage[], state: BeamSessionState): BeamSessionS
 type SessionRecord = { turns: ClaudeMessage[]; state: BeamSessionState; updatedAt: number };
 const sessions = new Map<string, SessionRecord>();
 
+// Hard cap so the in-memory fallback (used when Redis is down) can't grow
+// unbounded: pruneSessions only runs on reads, so write-only/abandoned sessions
+// that are never re-read would otherwise accumulate forever. Evicts in a batch
+// down to 90% so the sort doesn't run on every write at steady state.
+const MAX_MEMORY_SESSIONS = 5000;
+
 function pruneSessions(now: number): void {
   for (const [key, record] of sessions) {
     if (now - record.updatedAt > SESSION_TTL_MS) sessions.delete(key);
+  }
+}
+
+function enforceSessionCap(): void {
+  if (sessions.size <= MAX_MEMORY_SESSIONS) return;
+  const target = Math.floor(MAX_MEMORY_SESSIONS * 0.9);
+  const oldestFirst = [...sessions.entries()].sort((a, b) => a[1].updatedAt - b[1].updatedAt);
+  for (const [key] of oldestFirst) {
+    if (sessions.size <= target) break;
+    sessions.delete(key);
   }
 }
 
@@ -64,6 +80,7 @@ function memorySaveState(ctx: BeamRunContext, state: BeamSessionState): void {
   record.state = cloneBeamSessionState(state);
   record.updatedAt = Date.now();
   sessions.set(key, record);
+  enforceSessionCap();
 }
 
 function memoryAppend(ctx: BeamRunContext, userMessage: string, assistantText: string, state?: BeamSessionState): void {
@@ -75,6 +92,7 @@ function memoryAppend(ctx: BeamRunContext, userMessage: string, assistantText: s
   if (state) record.state = cloneBeamSessionState(state);
   record.updatedAt = Date.now();
   sessions.set(key, record);
+  enforceSessionCap();
 }
 
 /* ------------------------------------------------------------------ */

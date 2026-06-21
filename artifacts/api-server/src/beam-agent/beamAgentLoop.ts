@@ -843,8 +843,13 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
   };
   // A per-call abort signal bounded by BOTH the provider's own ceiling and the
   // remaining run budget, so a single model call can never overrun the whole run.
-  const callBudgetSignal = (): AbortSignal =>
-    AbortSignal.timeout(Math.min(45_000, Math.max(1_000, deadline - Date.now())));
+  // If the run was cooperatively stopped, abort the call immediately instead of
+  // spending a full synthesis/repair/orchestration round on a cancelled run — the
+  // top-of-loop stop check only guards turn boundaries, not finish()'s own calls.
+  const callBudgetSignal = (): AbortSignal => {
+    const timeout = AbortSignal.timeout(Math.min(45_000, Math.max(1_000, deadline - Date.now())));
+    return input.shouldStop?.() ? AbortSignal.any([timeout, AbortSignal.abort()]) : timeout;
+  };
 
   try {
     if (!isModelConfigured()) {

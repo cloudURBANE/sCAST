@@ -15,7 +15,10 @@ import type { ResearchSource, ResearchSourceType } from "./researchPolicy.ts";
 import { estimateCostUsd } from "./researchPolicy.ts";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-const RESEARCH_TIMEOUT_MS = 30_000;
+// Kept below the loop's per-tool ceiling (TOOL_TIMEOUT_MS = 20s) so the fetch
+// aborts itself before the orchestrator abandons the tool race — otherwise the
+// call runs on detached to 30s, discarding its result and any cache write.
+const RESEARCH_TIMEOUT_MS = 18_000;
 
 const RESEARCH_SYSTEM =
   "You are a fragrance research assistant. Use ONLY the provided web results. " +
@@ -127,7 +130,10 @@ export async function runWebResearch(input: WebResearchInput): Promise<WebResear
   const res = await fetch(OPENROUTER_URL, {
     method: "POST",
     headers,
-    signal: input.signal ?? AbortSignal.timeout(RESEARCH_TIMEOUT_MS),
+    // Combine a caller signal with the timeout rather than letting it disable it.
+    signal: input.signal
+      ? AbortSignal.any([input.signal, AbortSignal.timeout(RESEARCH_TIMEOUT_MS)])
+      : AbortSignal.timeout(RESEARCH_TIMEOUT_MS),
     body: JSON.stringify({
       model: input.model,
       max_tokens: input.maxOutputTokens,
