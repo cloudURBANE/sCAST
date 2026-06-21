@@ -955,6 +955,70 @@ test("a tool-free clarifying turn recovers via a deterministic safe re-ask when 
   assert.equal(summary?.qualityGatePassed, true);
 });
 
+test("a tool-grounded turn that jumps ahead on a not-yet-owed new-only kit recovers via a safe re-ask, not an empty dead-end", async () => {
+  // FAILURE #2 from the live delegation stress run. The user asked for a 2-new
+  // travel kit but gave NO scent direction, so the turn is NOT yet owed a
+  // recommendation (missionReadyForFulfillment is false). The model jumped ahead,
+  // pulled tools, and its synthesis (and repair) named an OWNED vault bottle in a
+  // new-only mission -> owned_pick_in_new_only_mission, a HARD gate. Because the
+  // turn used tools (clarifyingTurn is false) the clarify net never ran, and
+  // because it isn't owed a pick the commit fallback returned null -> the run used
+  // to dead-end on quality_gate_failed and ship the user nothing. It must instead
+  // recover with the deterministic safe re-ask for the one missing slot (direction).
+  const events: BeamRunEvent[] = [];
+  let completed: string | undefined;
+  let summary: BeamRunSummary | undefined;
+
+  const catalog: BeamToolDefinition = {
+    name: "beam_search_catalog",
+    description: "catalog",
+    inputSchema: { type: "object", properties: {} },
+    handler: async () => ({ items: [{ name: "Wulong Cha", brand: "Nishane", owned: false }] }),
+  };
+
+  const { callModel } = scriptedModel([
+    // turn 0: grounds an OWNED bottle (wardrobe) + an unowned candidate (catalog)
+    {
+      stop_reason: "tool_use",
+      content: [
+        { type: "tool_use", id: "w", name: "beam_get_wardrobe", input: {} },
+        { type: "tool_use", id: "c", name: "beam_search_catalog", input: { query: "fresh" } },
+      ],
+    },
+    // turn 1: orchestration hands off to synthesis
+    text("draft"),
+    // synthesis: names the OWNED vault bottle in a new-only kit -> owned_pick_in_new_only_mission
+    text("For Tokyo in June, pack Aventus by Creed — a clean, confident travel pick."),
+    // repair: still names the owned bottle, so it doesn't reduce violations
+    text("Honestly, Aventus by Creed is the one to take to Tokyo."),
+  ]);
+
+  await runBeamAgent({
+    ctx,
+    userMessage: "I'm going to Tokyo in June and want a small travel kit, 2 new fragrances.",
+    tools: [wardrobeTool([]), catalog],
+    emit: (e) => events.push(e),
+    isModelConfigured: () => true,
+    callModel,
+    // A new-only kit with destination + month but NO direction yet: not owed a pick.
+    sessionState: {
+      slots: { destination: "Tokyo", month: "June" },
+      mission: { intent: "travel_kit", newCount: 2, destination: "Tokyo", month: "June" },
+    },
+    onComplete: (t) => (completed = t),
+    onSummary: (s) => (summary = s),
+  });
+
+  assert.equal(events.some((e) => e.type === "failed"), false, "the not-yet-owed kit turn must not hard-fail");
+  assert.ok(events.some((e) => e.type === "completed"), "it ships a recovered answer");
+  // The deterministic recovery re-asks the one genuinely missing slot (direction)…
+  assert.match(String(completed), /direction/i);
+  // …never the owned bottle that tripped the gate, and never an invented pick.
+  assert.doesNotMatch(String(completed), /Aventus/i);
+  assert.ok(events.some((e) => e.type === "suggestions"), "the re-ask carries tap chips");
+  assert.equal(summary?.qualityGatePassed, true);
+});
+
 test("regression script: Tokyo 2+2 kit persists slots, never re-asks month, honors delegation, ships a 4-item kit", async () => {
   // Drives the §7 regression script end-to-end against runBeamAgent, threading
   // structured state across turns exactly the way beamAgentRoutes does: derive
