@@ -170,6 +170,102 @@ test("a mid-loop provider timeout with grounded evidence degrades gracefully, no
   assert.equal(summary?.outcome, "completed");
 });
 
+/**
+ * A tool that resolves a single curated-match scent_profile card the way
+ * beam_show_scent_profile does — grounding a real fragrance and emitting a
+ * `card` clientEvent. Used to prove the buffered card reaches the user even when
+ * the run later fails (gate or provider error).
+ */
+function curatedMatchCardTool(): BeamToolDefinition {
+  return {
+    name: "beam_show_scent_profile",
+    description: "Show a scent profile card",
+    inputSchema: { type: "object", properties: {} },
+    handler: async () => {
+      const card: BeamCard = {
+        kind: "scent_profile",
+        fragrance: { name: "Aventus", brand: "Creed", accords: ["fruity", "smoky"] },
+      };
+      return { resolved: true, shown: { name: "Aventus", brand: "Creed", owned: false }, card };
+    },
+    clientEvent: (result) => {
+      const r = (typeof result === "object" && result !== null ? result : {}) as { card?: unknown };
+      const card = r.card as BeamCard | undefined;
+      return card && card.kind === "scent_profile" ? { type: "card", card } : null;
+    },
+  };
+}
+
+test("a grounded curated-match card still reaches the user even when the closing prose fails a hard gate", async () => {
+  // The model surfaces a real curated-match card, then its closing prose makes an
+  // unsupported price claim that hard-fails the answer gate. The run correctly
+  // fails — but the server-grounded card must NOT be discarded with it (the live
+  // symptom: "the agent sends the curated match" but it never appears).
+  const events: BeamRunEvent[] = [];
+  const { callModel } = scriptedModel([
+    { stop_reason: "tool_use", content: [{ type: "tool_use", id: "tu_1", name: "beam_show_scent_profile", input: {} }] },
+    text("draft"),
+    text("Aventus is $300 everywhere."),
+    text("Aventus is $250 everywhere."),
+  ]);
+
+  await runBeamAgent({
+    ctx,
+    userMessage: "What's my curated match?",
+    tools: [curatedMatchCardTool()],
+    emit: (event) => events.push(event),
+    isModelConfigured: () => true,
+    callModel,
+  });
+
+  // The prose run still fails its hard gate...
+  assert.ok(events.some((e) => e.type === "failed" && e.code === "quality_gate_failed"));
+  // ...but the grounded curated-match card was flushed to the user first.
+  const card = events.find((e) => e.type === "card");
+  assert.ok(card && card.type === "card" && card.card.kind === "scent_profile");
+  if (card && card.type === "card" && card.card.kind === "scent_profile") {
+    assert.equal(card.card.fragrance.name, "Aventus");
+  }
+});
+
+test("a non-abort provider failure (429/5xx) with a grounded card degrades gracefully, not agent_error", async () => {
+  // The model emits the curated-match card, then the NEXT orchestration call hits a
+  // provider 429/5xx (not an abort/timeout). This used to re-throw into a generic
+  // agent_error, throwing away both the grounded evidence and the buffered card. It
+  // must instead close gracefully AND still surface the card.
+  const events: BeamRunEvent[] = [];
+  let summary: BeamRunSummary | undefined;
+  let calls = 0;
+  const callModel = async (): Promise<ClaudeResponse> => {
+    calls++;
+    if (calls === 1) {
+      return { stop_reason: "tool_use", content: [{ type: "tool_use", id: "tu_1", name: "beam_show_scent_profile", input: {} }] };
+    }
+    // A rate-limit style provider error — NOT a TimeoutError/AbortError.
+    const err = new Error("429 Too Many Requests");
+    err.name = "Error";
+    throw err;
+  };
+
+  await runBeamAgent({
+    ctx,
+    userMessage: "What's my curated match?",
+    tools: [curatedMatchCardTool()],
+    emit: (event) => events.push(event),
+    isModelConfigured: () => true,
+    callModel,
+    onSummary: (value) => (summary = value),
+  });
+
+  assert.equal(events.some((e) => e.type === "failed" && e.code === "agent_error"), false);
+  const completed = events.find((e) => e.type === "completed");
+  assert.ok(completed && completed.type === "completed" && completed.response.trim().length > 0);
+  assert.equal(summary?.outcome, "completed");
+  // The grounded curated-match card reached the user.
+  const card = events.find((e) => e.type === "card");
+  assert.ok(card && card.type === "card" && card.card.kind === "scent_profile");
+});
+
 test("completion waits for transcript persistence before publishing the terminal event", async () => {
   const events: BeamRunEvent[] = [];
   let release!: () => void;

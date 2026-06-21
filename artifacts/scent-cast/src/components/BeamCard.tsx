@@ -64,14 +64,14 @@ function CardShell({
 }): React.ReactElement {
   return (
     <div
-      className="max-w-[92%] self-start rounded-[calc(var(--radius-scent)-10px)] border border-scent-accent/32 bg-[linear-gradient(180deg,rgba(212,175,55,0.07),rgba(0,0,0,0.28))] p-4 text-left"
+      className="w-full min-w-0 max-w-[92%] self-start overflow-hidden rounded-[calc(var(--radius-scent)-10px)] border border-scent-accent/32 bg-[linear-gradient(180deg,rgba(212,175,55,0.07),rgba(0,0,0,0.28))] p-4 text-left"
       data-testid={testId}
       role="group"
       aria-label={ariaLabel}
     >
       <p className="scent-type-label flex items-center gap-1.5 text-scent-accent/90">
-        <Sparkles size={12} aria-hidden />
-        {label}
+        <Sparkles size={12} aria-hidden className="shrink-0" />
+        <span className="min-w-0 break-words">{label}</span>
       </p>
       {children}
     </div>
@@ -86,7 +86,7 @@ function AccordChips({ accords }: { accords: string[] }): React.ReactElement | n
       {accords.slice(0, 6).map((accord) => (
         <li
           key={accord}
-          className="rounded-full border border-scent-accent/22 bg-scent-accent/[0.06] px-2 py-0.5 scent-type-label text-[10px] text-scent-text-muted"
+          className="max-w-full break-words rounded-full border border-scent-accent/22 bg-scent-accent/[0.06] px-2 py-0.5 scent-type-label text-[10px] text-scent-text-muted"
         >
           {accord}
         </li>
@@ -121,11 +121,12 @@ function ScentRadar({ vector, size = 168 }: { vector: BeamScentVector; size?: nu
   }, [cx, cy, r, vector]);
 
   return (
+    // Cap the radar at its natural 168px but let it shrink with the card so it
+    // never forces horizontal overflow on a 320px (iPhone SE) column. The SVG
+    // scales via its viewBox — no fixed pixel width/height attributes.
     <svg
       viewBox={`0 0 ${size} ${size}`}
-      width={size}
-      height={size}
-      className="mx-auto block"
+      className="mx-auto mt-3 block h-auto w-full max-w-[168px]"
       role="img"
       aria-label="Scent profile radar across six axes"
     >
@@ -193,9 +194,11 @@ function FragranceHeading({ fragrance }: { fragrance: BeamCardFragrance }): Reac
   return (
     <>
       {fragrance.brand ? (
-        <p className="mt-2 font-serif text-[10px] uppercase tracking-[0.2em] text-scent-text-muted">{fragrance.brand}</p>
+        <p className="mt-2 break-words font-serif text-[10px] uppercase tracking-[0.2em] text-scent-text-muted">
+          {fragrance.brand}
+        </p>
       ) : null}
-      <p className="font-serif italic text-xl leading-tight text-[#fff7ec]">
+      <p className="break-words font-serif italic text-xl leading-tight text-[#fff7ec]">
         {fragrance.name}
       </p>
       {fragrance.owned ? (
@@ -218,30 +221,39 @@ const BAND_COPY: Record<'high' | 'moderate' | 'some' | 'low', string> = {
 
 function ScentProfileCard({ card }: { card: Extract<BeamCardData, { kind: 'scent_profile' }> }): React.ReactElement {
   const { fragrance, pyramid, caption } = card;
+  const hasVector = vectorHasSignal(fragrance.scentVector);
+  const hasAccords = fragrance.accords.length > 0;
+  const hasPyramid = Boolean(pyramid && (pyramid.top.length || pyramid.heart.length || pyramid.base.length));
+  // A profile with no chartable vector, no accords, no pyramid, and no caption
+  // would render an almost-empty card (just the name) — show a graceful line
+  // instead of a hollow frame.
+  const hasAnyDetail = hasVector || hasAccords || hasPyramid || Boolean(caption);
+
   return (
     <CardShell label="Scent profile" testId="beam-card-scent-profile" ariaLabel={`Scent profile for ${fragrance.name}`}>
       <FragranceHeading fragrance={fragrance} />
-      {vectorHasSignal(fragrance.scentVector) ? (
-        <>
-          <ScentRadar vector={fragrance.scentVector!} />
-          <AccordChips accords={fragrance.accords} />
-        </>
-      ) : (
-        <AccordChips accords={fragrance.accords} />
-      )}
-      {pyramid && (pyramid.top.length || pyramid.heart.length || pyramid.base.length) ? (
+      {hasVector ? <ScentRadar vector={fragrance.scentVector!} /> : null}
+      {hasAccords ? <AccordChips accords={fragrance.accords} /> : null}
+      {hasPyramid ? (
         <dl className="mt-3 flex flex-col gap-1 border-t border-scent-accent/12 pt-2.5">
-          {([['Top', pyramid.top], ['Heart', pyramid.heart], ['Base', pyramid.base]] as const).map(([tier, notes]) =>
+          {([['Top', pyramid!.top], ['Heart', pyramid!.heart], ['Base', pyramid!.base]] as const).map(([tier, notes]) =>
             notes.length ? (
               <div key={tier} className="flex gap-2">
                 <dt className="w-9 shrink-0 scent-type-label text-[9px] text-scent-text-subtle">{tier}</dt>
-                <dd className="min-w-0 flex-1 text-[12px] text-scent-text-muted">{notes.join(', ')}</dd>
+                <dd className="min-w-0 flex-1 break-words text-[12px] text-scent-text-muted">{notes.join(', ')}</dd>
               </div>
             ) : null,
           )}
         </dl>
       ) : null}
-      {caption ? <p className="mt-3 text-[12.5px] italic leading-relaxed text-scent-text-muted">{caption}</p> : null}
+      {caption ? (
+        <p className="mt-3 break-words text-[12.5px] italic leading-relaxed text-scent-text-muted">{caption}</p>
+      ) : null}
+      {!hasAnyDetail ? (
+        <p className="mt-3 break-words text-[12.5px] italic leading-relaxed text-scent-text-muted">
+          Nothing to chart yet — the notes for this one aren&rsquo;t in the catalog.
+        </p>
+      ) : null}
     </CardShell>
   );
 }
@@ -273,20 +285,22 @@ function CompareCard({ card }: { card: Extract<BeamCardData, { kind: 'compare' }
       </div>
       <div className="mt-3 flex items-center justify-center gap-2 border-t border-scent-accent/12 pt-2.5">
         <span
-          className="rounded-full border border-scent-accent/32 bg-scent-accent/[0.08] px-2.5 py-1 scent-type-label text-[10px] text-scent-accent"
+          className="max-w-full break-words rounded-full border border-scent-accent/32 bg-scent-accent/[0.08] px-2.5 py-1 text-center scent-type-label text-[10px] text-scent-accent"
           aria-label={`${card.overlapPercent} percent overlap, ${BAND_COPY[card.band]}`}
         >
           {card.overlapPercent}% · {BAND_COPY[card.band]}
         </span>
       </div>
       {card.sharedNotes.length || card.sharedAccords.length ? (
-        <p className="mt-2 text-center text-[11.5px] text-scent-text-muted">
+        <p className="mt-2 break-words text-center text-[11.5px] text-scent-text-muted">
           <span className="scent-type-label text-[9px] text-scent-text-subtle">Shared&nbsp;</span>
           {[...card.sharedNotes, ...card.sharedAccords].slice(0, 6).join(', ')}
         </p>
       ) : null}
       {card.verdict ? (
-        <p className="mt-2 text-center text-[12.5px] italic leading-relaxed text-scent-text-muted">{card.verdict}</p>
+        <p className="mt-2 break-words text-center text-[12.5px] italic leading-relaxed text-scent-text-muted">
+          {card.verdict}
+        </p>
       ) : null}
     </CardShell>
   );
@@ -316,7 +330,7 @@ function TravelKitCard({
             {card.ownedPicks.map((pick, index) => (
               <li key={`owned-${pick.brand}-${pick.name}-${index}`} className="flex min-w-0 items-baseline justify-between gap-3">
                 <span className="min-w-0 flex-1 truncate font-serif italic text-[13px] text-[#fff7ec]">{pick.name}</span>
-                <span className="scent-type-label shrink-0 text-[9px] text-scent-text-subtle">{pick.brand}</span>
+                <span className="max-w-[45%] shrink-0 truncate scent-type-label text-[9px] text-scent-text-subtle">{pick.brand}</span>
               </li>
             ))}
           </ul>
@@ -328,9 +342,9 @@ function TravelKitCard({
           <p className="scent-type-label text-[9px] text-scent-text-subtle">New to try</p>
           <ul className="mt-1.5 flex flex-col gap-1.5">
             {card.newPicks.map((pick, index) => (
-              <li key={`new-${pick.brand}-${pick.name}-${index}`} className="flex min-w-0 items-baseline justify-between gap-3">
+              <li key={`new-${pick.brand}-${pick.name}-${index}`} className="flex min-w-0 items-baseline justify-between gap-2 sm:gap-3">
                 <span className="min-w-0 flex-1 truncate font-serif italic text-[13px] text-[#fff7ec]">{pick.name}</span>
-                <span className="scent-type-label shrink-0 text-[9px] text-scent-text-subtle">{pick.brand}</span>
+                <span className="max-w-[35%] shrink-0 truncate scent-type-label text-[9px] text-scent-text-subtle">{pick.brand}</span>
                 {onViewItem ? (
                   <button
                     type="button"
@@ -356,12 +370,14 @@ function TravelKitCard({
                 <button
                   type="button"
                   onClick={() => onAddNewPicks(card.newPicks, card.proposalId)}
-                  className="mt-3 inline-flex min-h-11 items-center justify-center gap-1.5 rounded-full border border-scent-accent/42 px-4 py-2 scent-type-chip text-[11px] text-[#fff7ec] transition-colors hover:bg-scent-accent/12"
+                  className="mt-3 inline-flex min-h-11 max-w-full items-center justify-center gap-1.5 rounded-full border border-scent-accent/42 px-4 py-2 text-center scent-type-chip text-[11px] text-[#fff7ec] transition-colors hover:bg-scent-accent/12"
                 >
-                  <Plus size={14} aria-hidden />
-                  {card.newPicks.length > 1 ? `Add ${card.newPicks.length} new to vault` : 'Add new to vault'}
+                  <Plus size={14} aria-hidden className="shrink-0" />
+                  <span className="min-w-0 break-words">
+                    {card.newPicks.length > 1 ? `Add ${card.newPicks.length} new to vault` : 'Add new to vault'}
+                  </span>
                 </button>
-                <p className="mt-2 scent-type-label text-[9px] text-scent-text-subtle/65">
+                <p className="mt-2 break-words scent-type-label text-[9px] text-scent-text-subtle/65">
                   New picks save only when you tap Add to vault.
                 </p>
               </>

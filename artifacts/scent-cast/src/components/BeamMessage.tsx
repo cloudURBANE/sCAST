@@ -67,11 +67,16 @@ export const BeamMessage: React.FC<{ text: string; className?: string }> = ({ te
   // payload), still show the trimmed text rather than an empty bubble.
   if (blocks.length === 0) {
     const fallback = text.trim();
-    return fallback ? <span className={className}>{fallback}</span> : null;
+    return fallback ? (
+      <span className={`break-words [overflow-wrap:anywhere] ${className ?? ''}`}>{fallback}</span>
+    ) : null;
   }
 
   return (
-    <div className={className}>
+    // min-w-0 + break-words/overflow-wrap keep long unbroken tokens (URLs, long
+    // fragrance names) wrapping inside the bubble's 92% cap instead of forcing
+    // the bubble wider than the rounded overflow-hidden frame and clipping.
+    <div className={`min-w-0 break-words [overflow-wrap:anywhere] ${className ?? ''}`}>
       {blocks.map((block, index) => (
         <BeamBlockView key={index} block={block} index={index} />
       ))}

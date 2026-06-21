@@ -841,6 +841,19 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
     failureCode = code;
     emit({ type: "failed", code, message });
   };
+  // Emit only the server-grounded presentation deliverables (cards / proposals) that
+  // were buffered this run, then drop them from the buffer. Used when the run is
+  // about to FAIL on a prose-level gate but already produced a real curated-match
+  // card: the card is resolved from actual catalog/vault records and was already
+  // mission-validated, so it should still render rather than be thrown away with the
+  // run. Never emits status/text/suggestion events — only the renderable cards.
+  const flushDeliverableCards = (): void => {
+    if (pendingDeliverables.length === 0) return;
+    for (const event of pendingDeliverables) {
+      if (event.type === "card" || event.type === "proposal") emit(event);
+    }
+    pendingDeliverables.length = 0;
+  };
   // A per-call abort signal bounded by BOTH the provider's own ceiling and the
   // remaining run budget, so a single model call can never overrun the whole run.
   // If the run was cooperatively stopped, abort the call immediately instead of
@@ -1085,6 +1098,16 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
         const hasGroundedAnswer =
           usedTools && groundedNames.size > 0 && Boolean(finalText && finalText.trim());
         if (hardViolations.length > 0 || !hasGroundedAnswer) {
+          // The closing PROSE failed a hard gate, but any buffered presentation
+          // card was resolved server-side from a real catalog/vault record and is
+          // already mission-filtered (clientEventFitsMission) — its correctness does
+          // not depend on the prose. Surfacing the curated-match card before we fail
+          // is the difference between the user seeing their grounded recommendation
+          // and seeing only a terminal error. (Live symptom: "the agent sends the
+          // curated match" but it never appears — the card was being discarded with
+          // the run.) We flush ONLY the grounded card/proposal deliverables, never
+          // status/text, and clear them so the failed run carries nothing further.
+          flushDeliverableCards();
           fail("quality_gate_failed", "Beam could not produce a recommendation that satisfied the mission constraints.");
           return;
         }
@@ -1189,6 +1212,18 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
         const aborted =
           Date.now() >= deadline ||
           (err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError"));
+        // Whether we already hold something worth shipping (grounded fragrances or
+        // inline prose, INCLUDING a buffered curated-match card emitted by a prior
+        // tool round). When we do, ANY mid-call provider failure — a 429 rate-limit,
+        // a 5xx, a transport drop, not only an abort/timeout — must degrade
+        // gracefully instead of re-throwing into the generic `agent_error` dead-end.
+        // That re-throw was discarding grounded evidence AND the already-produced
+        // curated-match card (the live symptom: the agent "sends the curated match"
+        // but the user only ever sees a generic error). finish() composes a closing
+        // answer from the grounded set (or ships the honest fallback) and flushes the
+        // buffered card; it never surfaces the raw provider error.
+        const haveGroundedToShip =
+          usedTools && (lastText !== "" || groundedNames.size > 0 || pendingDeliverables.length > 0);
         if (aborted) {
           // Compose a closing answer even when no inline prose survived. A
           // search-heavy runaway emits only tool calls, so `lastText` stays empty;
@@ -1196,11 +1231,17 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
           // dead-end ("Please try again") despite holding grounded evidence — a
           // live-observed failure on hard/no-match queries. finish() composes from
           // the grounded set or ships the honest fallback; never a raw abort.
-          if (usedTools && (lastText || groundedNames.size > 0)) {
+          if (haveGroundedToShip) {
             await finish(lastText, { skipSynthesis: true });
             return;
           }
           fail("run_timeout", "The agent ran out of time before finishing.");
+          return;
+        }
+        // Non-abort provider failure (429/5xx/transport) WITH grounded evidence: same
+        // graceful degrade rather than throwing away the run and the buffered card.
+        if (haveGroundedToShip) {
+          await finish(lastText, { skipSynthesis: true });
           return;
         }
         throw err;
