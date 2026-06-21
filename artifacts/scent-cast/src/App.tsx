@@ -21,7 +21,7 @@ import { WeatherProvider, useWeather } from './context/WeatherContext';
 import { WardrobeProvider, useWardrobe, useWardrobeItems, useWardrobeShareModalActions } from './context/WardrobeContext';
 import { Toaster } from './components/ui/toaster';
 import { PageTransitionOverlay, warmTransitionEmblem } from './components/PageTransitionOverlay';
-import { useBodyScrollLock, useModalBehavior } from '@/hooks/use-modal-behavior';
+import { useModalBehavior } from '@/hooks/use-modal-behavior';
 import { useRenderBudget } from '@/hooks/useRenderBudget';
 import { useMarqueeSwipe } from '@/hooks/useMarqueeSwipe';
 import { isIpadSafariPerformanceMode, isLowRenderBudget } from '@/lib/platform';
@@ -894,7 +894,13 @@ function DashboardView() {
     ? { duration: 0.01 }
     : { duration: 0.42, ease: [0.16, 1, 0.3, 1] as const };
 
-  useBodyScrollLock(agentActive);
+  // NOTE: the Beam agent panel deliberately does NOT lock body scroll. It is
+  // inline content that replaces the search card within the page flow (not a
+  // fixed overlay), so it never needed scroll isolation. Pinning <body> with
+  // position:fixed for it caused the iPhone "tap Close -> gray screen" freeze:
+  // on close, removing position:fixed leaves iOS WebKit showing a blank gray
+  // compositor layer that locks the page until the next touch. Letting the page
+  // scroll normally while the panel is open removes that failure mode entirely.
 
   useEffect(() => {
     if (!discoveryReady && viewState === 'agent') {
