@@ -77,9 +77,9 @@ export const BEAM_LIMITS = {
   maxExternalDetailFetch: 3,
 } as const;
 
-export function clampLimit(value: unknown, max: number, fallback = max): number {
+export function clampLimit(value: unknown, max: number, fallback = max, min = 1): number {
   const n = typeof value === "number" && Number.isFinite(value) ? Math.floor(value) : fallback;
-  return Math.max(1, Math.min(n, max));
+  return Math.max(min, Math.min(n, max));
 }
 
 export function asString(value: unknown): string | undefined {

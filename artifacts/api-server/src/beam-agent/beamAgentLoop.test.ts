@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import {
   clientEventFitsMission,
   boundedToolTimeoutMs,
+  collectGroundedFragrancesForGate,
   missionToolResultError,
   runBeamAgent,
   toolFitsMission,
@@ -1771,4 +1772,49 @@ test("live regression: a delegated tool-grounded turn whose synthesis names no p
   assert.equal(summary?.outcome, "completed", JSON.stringify(summary));
   assert.ok(completed && completed.trim().length > 0, "expected a non-empty committed answer");
   assert.match(completed!, /Wulong Cha|Greenley/, completed);
+});
+
+/* ---------------------------------------------------------------- */
+/* H3 — discovery tools feed the avoid answer-gate                   */
+/* ---------------------------------------------------------------- */
+
+test("collectGroundedFragrancesForGate flags avoided picks from beam_discover_external", () => {
+  const result = {
+    source: "external",
+    count: 2,
+    items: [
+      { canonicalName: "Asad", brand: "Lattafa", accords: ["sweet", "woody"], notes: { top: [], middle: [], base: [] } },
+      { canonicalName: "Vanilla 28", brand: "Kayali", accords: ["vanilla", "sweet"], notes: { top: [], middle: [], base: [] } },
+    ],
+  };
+  const grounded = collectGroundedFragrancesForGate("beam_discover_external", result, "vanilla");
+  assert.equal(grounded.length, 2, "both external picks reach the gate set");
+  const vanilla = grounded.find((g) => g.canonicalName === "Vanilla 28");
+  const asad = grounded.find((g) => g.canonicalName === "Asad");
+  assert.equal(vanilla?.matchedAvoid, true, "the vanilla pick is flagged against the avoid term");
+  assert.equal(asad?.matchedAvoid, false, "the non-vanilla pick is not flagged");
+  assert.ok(grounded.every((g) => g.owned === false), "external picks are new (non-owned)");
+});
+
+test("collectGroundedFragrancesForGate flags avoided picks from beam_find_similar", () => {
+  const result = {
+    resolved: true,
+    reference: { name: "Aventus", brand: "Creed" },
+    count: 2,
+    items: [
+      { name: "Aventus Cologne", brand: "Creed", accords: ["fruity", "fresh"], sharedAccords: ["fruity"] },
+      { name: "Spicebomb", brand: "Viktor & Rolf", accords: ["cinnamon", "tobacco"], sharedAccords: [] },
+    ],
+  };
+  const grounded = collectGroundedFragrancesForGate("beam_find_similar", result, "tobacco");
+  assert.equal(grounded.length, 2, "both similar picks reach the gate set");
+  const spicebomb = grounded.find((g) => g.canonicalName === "Spicebomb");
+  assert.equal(spicebomb?.matchedAvoid, true, "the tobacco pick is flagged via its surfaced accords");
+});
+
+test("collectGroundedFragrancesForGate leaves matchedAvoid undefined when no avoid term", () => {
+  const result = { items: [{ canonicalName: "Asad", brand: "Lattafa", accords: ["sweet"] }] };
+  const grounded = collectGroundedFragrancesForGate("beam_discover_external", result);
+  assert.equal(grounded.length, 1);
+  assert.equal(grounded[0].matchedAvoid, undefined);
 });

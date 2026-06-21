@@ -1068,6 +1068,9 @@ export function createBeamTools(deps: BeamToolDeps): BeamToolDefinition[] {
           similarity,
           band: similarityBand(similarity),
           basis: vectorSim !== null ? "scent-vector + accords" : "accords/notes",
+          // Surface the candidate's own leading accords (not just the shared ones)
+          // so the avoid answer-gate (H3) has the full character to test against.
+          ...(item.accords.length ? { accords: item.accords.slice(0, 6) } : {}),
           sharedAccords: overlap.sharedAccords,
           sharedNotes: overlap.sharedBaseNotes,
         }));
@@ -1110,7 +1113,7 @@ export function createBeamTools(deps: BeamToolDeps): BeamToolDefinition[] {
           },
           deepen: {
             type: "number",
-            description: `How many to deep-fetch notes for (server caps at ${BEAM_LIMITS.maxExternalDetailFetch} per call).`,
+            description: `How many to deep-fetch notes for (0 = search only, no paid fetch; server caps at ${BEAM_LIMITS.maxExternalDetailFetch} per call).`,
           },
         },
         required: ["query"],
@@ -1121,7 +1124,10 @@ export function createBeamTools(deps: BeamToolDeps): BeamToolDefinition[] {
         const query = asString(record.query);
         if (!query) return { source: "external", count: 0, items: [], note: "query is required" };
         const limit = clampLimit(record.limit, BEAM_LIMITS.maxExternalResults);
-        const detailLimit = clampLimit(record.deepen, BEAM_LIMITS.maxExternalDetailFetch);
+        // H4: honor an explicit `deepen: 0` ("search only, don't spend"). Default
+        // (deepen omitted) stays at the per-call cap; min floor is 0 here so the
+        // model can suppress every paid /details fetch.
+        const detailLimit = clampLimit(record.deepen, BEAM_LIMITS.maxExternalDetailFetch, BEAM_LIMITS.maxExternalDetailFetch, 0);
         const candidates = await discoverExternal(query, { limit, detailLimit }).catch(() => []);
         if (candidates.length === 0) {
           return {

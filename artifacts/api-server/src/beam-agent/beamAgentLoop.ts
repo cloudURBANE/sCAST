@@ -427,7 +427,7 @@ function stringValue(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
-function collectGroundedFragrancesForGate(
+export function collectGroundedFragrancesForGate(
   tool: BeamToolName,
   result: unknown,
   avoid?: string,
@@ -480,6 +480,12 @@ function collectGroundedFragrancesForGate(
     addArray(record.owned, true);
     addArray(record.newProposed, false);
   }
+  // H3: the discovery tools surface picks that can reach the answer with no other
+  // grounded source, so they need the same avoid backstop. Both contribute their
+  // items as new (non-owned) picks; candidateMatchesAvoid serializes each item, so
+  // the accords/family/notes they carry become the avoid haystack.
+  if (tool === "beam_find_similar") addArray(record.items, false);
+  if (tool === "beam_discover_external") addArray(record.items, false);
   return out;
 }
 

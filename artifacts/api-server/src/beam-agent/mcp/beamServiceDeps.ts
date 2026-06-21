@@ -31,6 +31,7 @@ import { missionItemFromWardrobeRow } from "../../services/scentMissionService";
 import { searchCatalogCandidates, searchCatalogProfileCandidates, flattenProfile, getCatalogEntry } from "../../services/catalogService";
 import { discoverExternalCandidates } from "../../services/engineDiscover";
 import { isDiscoverExternalEnabled } from "../discoveryConfig.ts";
+import { mcpDetailBudget } from "./mcpDiscoveryBudget.ts";
 import { getScentFacts } from "../../lib/scent-facts/engine";
 import { createBeamResearcher } from "../research/beamResearch.ts";
 import { loadResearchCache, saveResearchCache } from "../research/researchCache.ts";
@@ -152,19 +153,27 @@ export function createBeamServiceDeps(): BeamToolDeps {
     loadWardrobePackets,
     searchCatalog: searchCatalogForBeam,
     // External discovery mirrors the in-process route, gated on the same env flag.
-    // These startup-built deps have no per-run ctx, so the per-CALL `detailLimit`
-    // (capped by BEAM_LIMITS.maxExternalDetailFetch) is the spend bound here; the
-    // route additionally stacks a per-run budget + dislike filtering it can't. Like
-    // `enqueueCuration` below, that richer behavior needs the run context.
+    // H1: these startup-built deps have no per-run ctx, so instead of an unbounded
+    // per-call passthrough we bound /details (Decodo) spend process-wide with a
+    // refilling token bucket (BEAM_EXTERNAL_DETAIL_RUN_CAP capacity). Reserve the
+    // grant synchronously, then refund the unspent portion after the await — the
+    // same reserve/refund discipline the route uses (H2), kept correct under
+    // concurrent tools/call dispatch.
     //
-    // For the SAME reason `budgetCeiling` and `avoidTerms` are intentionally absent
-    // here: they come from per-run session slots the MCP surface never sees. So on
-    // MCP, discovery budget-gating degrades to "unknown" and `beam_find_similar`'s
-    // explicit dislike gate is a no-op — the Hermes/MCP *client* owns budget,
-    // dislikes and the safety prompt (BEAM_SAFETY_RULES is injected by the
-    // in-process loop, not this tool surface). See README.md "Safety & run-context".
+    // `budgetCeiling` and `avoidTerms` remain intentionally absent here: they come
+    // from per-run session slots the MCP surface never sees. So on MCP, discovery
+    // budget-gating degrades to "unknown" and `beam_find_similar`'s explicit dislike
+    // gate is a no-op — the Hermes/MCP *client* owns budget, dislikes and the safety
+    // prompt (BEAM_SAFETY_RULES is injected by the in-process loop, not this tool
+    // surface). See README.md "Safety & run-context".
     discoverExternal: isDiscoverExternalEnabled()
-      ? (query, opts) => discoverExternalCandidates(query, opts)
+      ? async (query, opts) => {
+          const detailLimit = mcpDetailBudget.reserve(opts.detailLimit);
+          const candidates = await discoverExternalCandidates(query, { limit: opts.limit, detailLimit });
+          const spent = candidates.filter((c) => c.detailed).length;
+          mcpDetailBudget.refund(detailLimit - spent);
+          return candidates;
+        }
       : undefined,
     resolveCatalogEntry: resolveCatalogEntryForBeam,
     research: researchForBeam,

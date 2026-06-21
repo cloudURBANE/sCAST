@@ -289,11 +289,25 @@ function buildDeps(ctx: BeamRunContext, weather: ScentMissionWeather, sessionSta
   // undefined when disabled so `beam_discover_external` is simply not exposed.
   const avoidTerms = avoid ? parseAvoidTerms(avoid) : [];
   let externalDetailBudget = externalDetailRunCap();
+  // H2: reserve the /details grant SYNCHRONOUSLY before the await so the
+  // read-clamp and the write-decrement don't straddle the round-trip. The prior
+  // check-then-act was only safe while tool dispatch stayed strictly sequential;
+  // reserving up-front keeps the per-run Decodo cap correct even if calls ever
+  // run concurrently. We reconcile (refund) the unspent grant after the await.
+  const reserveDetailBudget = (want: number): number => {
+    const grant = Math.max(0, Math.min(Math.floor(want), externalDetailBudget));
+    externalDetailBudget -= grant;
+    return grant;
+  };
   const discoverExternal: BeamToolDeps["discoverExternal"] = isDiscoverExternalEnabled()
     ? async (query, opts) => {
-        const detailLimit = Math.max(0, Math.min(opts.detailLimit, externalDetailBudget));
+        const detailLimit = reserveDetailBudget(opts.detailLimit);
         const candidates = await discoverExternalCandidates(query, { limit: opts.limit, detailLimit });
-        externalDetailBudget -= candidates.filter((c) => c.detailed).length;
+        // Count ATTEMPTS, not successes: enrichCandidate marks `detailed` on every
+        // /details attempt (incl. thin bodies) so the spend is debited. Refund the
+        // reserved grant we didn't actually spend back into the run budget.
+        const spent = candidates.filter((c) => c.detailed).length;
+        externalDetailBudget += detailLimit - spent;
         if (avoidTerms.length === 0) return candidates;
         return candidates.filter(
           (c) =>
