@@ -41,6 +41,8 @@ import {
 } from "./beamToolCore.ts";
 import type { OverlapProfile } from "./beamToolCore.ts";
 import { combineSimilarity, scentVectorSimilarity, similarityBand } from "./similarityCore.ts";
+import { annotateBudget } from "./budgetGate.ts";
+import { candidateMatchesAvoid } from "./avoidFilter.ts";
 import {
   buildOwnedFragranceIndex,
   findOwnedVaultItem,
@@ -144,6 +146,22 @@ export type BeamToolDeps = {
     query: string,
     opts: { limit: number; detailLimit: number },
   ) => Promise<ExternalDiscoveryCandidate[]>;
+  /**
+   * OPTIONAL numeric budget ceiling (USD) for this run, parsed from the user's
+   * `budget` slot. When set, `beam_discover_external` annotates each priced pick
+   * with a `priceStatus` and downranks known-over-budget ones (honest gating:
+   * enforce when price is known, degrade silently when not). The route supplies
+   * it from session slots; lean/MCP surfaces leave it undefined (no run context),
+   * so gating simply degrades to "unknown" everywhere price/ceiling is absent.
+   */
+  budgetCeiling?: number | null;
+  /**
+   * OPTIONAL pre-parsed dislike terms for this run (the `avoid` slot expanded via
+   * `parseAvoidTerms`). When set, `beam_find_similar` drops picks that headline an
+   * avoided note/family — an explicit gate so similarity results honor dislikes on
+   * every surface that wires it, not only via the avoid-wrapped catalog search.
+   */
+  avoidTerms?: string[];
   /** Deterministic weather scoring over the vault (kept in code, not the LLM). */
   scoreVault: (
     items: ScentMissionWardrobeItem[],
@@ -1022,6 +1040,18 @@ export function createBeamTools(deps: BeamToolDeps): BeamToolDefinition[] {
           // Never return the reference as its own similar result.
           .filter((item) => fragranceIdentityKey(item.brand, item.name) !== refIdentity)
           .filter((item) => !(owned && isOwnedFragrance(owned, item.brand, item.name)))
+          // Explicit dislike gate: a "smells like X" result must still honor the
+          // user's avoids ("like Aventus but no oud"). The route's avoid-wrapped
+          // searchCatalog already thins the pool, but this makes the guarantee hold
+          // on any surface that wires `avoidTerms`, independent of the pool source.
+          .filter(
+            (item) =>
+              !(deps.avoidTerms && deps.avoidTerms.length > 0) ||
+              !candidateMatchesAvoid(
+                { name: item.name, brand: item.brand, family: item.family, accords: item.accords },
+                deps.avoidTerms,
+              ),
+          )
           .map((item) => {
             const overlap = computeOverlap(refProfile, overlapProfileFromItem(item));
             const vectorSim = scentVectorSimilarity(reference.scentVector, item.scentVector);
@@ -1128,14 +1158,29 @@ export function createBeamTools(deps: BeamToolDeps): BeamToolDefinition[] {
             }
           }
         }
+        // Honest budget gating: when the run carries a numeric ceiling, annotate
+        // each pick with a `priceStatus` and downrank known-over-budget ones (they
+        // stay available, just last, so the agent can still say "a touch over your
+        // budget"). Picks with no captured price — and every pick when no ceiling
+        // is set — are `unknown` and ride through untouched, never mislabeled
+        // "within budget". Identity pass when ceiling is absent (MCP/lean surfaces).
+        const ceiling = deps.budgetCeiling ?? null;
+        const gated = annotateBudget(items, ceiling);
+        const overBudget = gated.filter((i) => i.priceStatus === "over_budget").length;
+        const withinBudget = gated.filter((i) => i.priceStatus === "within_budget").length;
+
         return {
           source: "external",
-          count: items.length,
-          items,
+          count: gated.length,
+          items: gated,
           curatedForEnrichment: curated,
+          ...(ceiling !== null ? { budgetCeiling: ceiling, withinBudget, overBudget } : {}),
           note:
-            items.length > 0
-              ? "Found beyond the usual catalog and queued to learn them — present as real but freshly surfaced."
+            gated.length > 0
+              ? "Found beyond the usual catalog and queued to learn them — present as real but freshly surfaced." +
+                (ceiling !== null && overBudget > 0
+                  ? ` ${overBudget} priced over the ~$${ceiling} budget (shown last); say so honestly rather than hiding them.`
+                  : "")
               : "All external matches are already in the user's vault.",
         };
       },

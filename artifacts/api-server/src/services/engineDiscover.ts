@@ -108,12 +108,17 @@ function baseCandidateFromSearchRow(row: EngineSearchResult): ExternalDiscoveryC
 
 /** Enrich one candidate via /details, mutating notes/family/accords. Best-effort. */
 async function enrichCandidate(candidate: ExternalDiscoveryCandidate): Promise<void> {
-  const detailBody = candidate.id && !candidate.id.includes("::")
+  const ref = candidate.id && !candidate.id.includes("::")
     ? { id: candidate.id }
     : candidate.sourceUrl
       ? { source_url: candidate.sourceUrl }
       : null;
-  if (!detailBody) return;
+  if (!ref) return;
+  // Opt into the engine's structured google_shopping price leg. The engine fires
+  // it only on this flag (so ordinary detail traffic is never billed) and only
+  // when its own DECODO_DISABLE_PRICE_CAPTURE kill-switch is off; an absent price
+  // is the normal degraded case, handled below.
+  const detailBody = { ...ref, include_price: true };
 
   const detail = await fetchJson(
     `${ENGINE_BASE}/api/fragrances/details`,
@@ -129,6 +134,8 @@ async function enrichCandidate(candidate: ExternalDiscoveryCandidate): Promise<v
     family?: unknown;
     image_url?: unknown;
     accords?: unknown;
+    price?: unknown;
+    currency?: unknown;
     raw?: { notes?: { top?: unknown; heart?: unknown; base?: unknown }; accords?: unknown };
   };
   const rawNotes = d.raw?.notes ?? {};
@@ -145,6 +152,15 @@ async function enrichCandidate(candidate: ExternalDiscoveryCandidate): Promise<v
 
   const imageUrl = str(d.image_url);
   if (imageUrl && !candidate.imageUrl) candidate.imageUrl = imageUrl;
+
+  // Opportunistic price: a positive number from the engine's structured price
+  // leg. Absent/zero/garbage leaves price undefined — never a fabricated value.
+  const price = typeof d.price === "number" ? d.price : Number(d.price);
+  if (Number.isFinite(price) && price > 0) {
+    candidate.price = price;
+    const currency = str(d.currency);
+    if (currency) candidate.currency = currency.toUpperCase();
+  }
 }
 
 export type DiscoverExternalOptions = {

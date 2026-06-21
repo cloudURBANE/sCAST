@@ -731,6 +731,11 @@ export function packetFromExternalCandidate(candidate: ExternalDiscoveryCandidat
     performance: {},
     sourceConfidence: Math.max(0.2, baseConfidence - missing.length * 0.05),
     missingFields: missing,
+    // Carry a captured price through so the discovery tool can gate it against
+    // the user's budget. Absent when the engine returned no priced offer.
+    ...(typeof candidate.price === "number" && candidate.price > 0
+      ? { price: candidate.price }
+      : {}),
   };
 }
 

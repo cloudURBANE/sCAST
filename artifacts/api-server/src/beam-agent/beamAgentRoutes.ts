@@ -61,6 +61,7 @@ import { selectConciergeLane } from "./laneSelector.ts";
 import { candidateMatchesAvoid, excludeAvoidedHits, parseAvoidTerms } from "./avoidFilter.ts";
 import { discoverExternalCandidates } from "../services/engineDiscover";
 import { externalDetailRunCap, isDiscoverExternalEnabled } from "./discoveryConfig.ts";
+import { parseBudgetCeiling } from "./budgetGate.ts";
 import { validateBeamFeedbackInput } from "./beamFeedbackCore.ts";
 import { appendSessionTurn, loadSession, saveSessionState } from "./beamSessionStore.ts";
 import { deriveBeamSessionState, inferPendingSlotFromAssistant } from "./missionState.ts";
@@ -303,12 +304,20 @@ function buildDeps(ctx: BeamRunContext, weather: ScentMissionWeather, sessionSta
       }
     : undefined;
 
+  // Honest price/budget gating (audit F): a NUMERIC ceiling from the `budget`
+  // slot lets discovery downrank known-over-budget picks. Qualitative budgets
+  // ("Premium") yield null — no fake number is enforced. `avoidTerms` is also
+  // handed to the tools so `beam_find_similar` honors dislikes explicitly.
+  const budgetCeiling = parseBudgetCeiling(sessionState?.slots.budget);
+
   return {
     loadVault,
     loadVaultForOwnership,
     loadWardrobePackets,
     searchCatalog,
     discoverExternal,
+    budgetCeiling,
+    avoidTerms,
     resolveCatalogEntry: resolveCatalogEntryForBeam,
     research: researchForBeam,
     researchWeb: beamResearchWeb,

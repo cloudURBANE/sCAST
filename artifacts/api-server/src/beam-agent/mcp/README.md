@@ -38,6 +38,32 @@ and "never invent a fragrance" guarantees are identical.
 The secret (`BEAM_AGENT_TOKEN_SECRET`) and the model credential stay on the host
 running this server/Hermes. They are never sent to the browser or passed to tools.
 
+## Safety & run-context (what Hermes must own)
+
+The tool *layer* is identical across surfaces, but some guarantees live in the
+**in-process loop**, not the tools — and so are NOT enforced for a Hermes/MCP
+client. Hermes must supply them itself:
+
+- **Safety / ontology / soul prompt.** `BEAM_SAFETY_RULES` (`../beamSafetyRules.ts`)
+  is concatenated into the system prompt by `../beamAgentLoop.ts` only. The MCP
+  server exposes tools, not a loop, so it never injects these rules. **Hermes must
+  put equivalent safety/ontology guidance in its own system prompt.** There is one
+  source of truth (`beamSafetyRules.ts`); it is simply consumed loop-side.
+- **Per-run session slots.** `budgetCeiling` (price/budget gating) and `avoidTerms`
+  (the explicit dislike gate in `beam_find_similar`) are derived from a run's
+  session slots, which the stateless MCP surface never sees. On MCP they are absent,
+  so budget gating degrades to "unknown" (never a false "within budget") and the
+  similarity dislike gate is a no-op. **Hermes must apply the user's stated budget
+  and dislikes in its own reasoning.**
+- **Per-run spend budget + curation.** `beam_discover_external` is bounded per-CALL
+  (`BEAM_LIMITS.maxExternalDetailFetch`) on every surface, but the per-RUN detail
+  budget and cache-on-discover `enqueueCuration` need run context and run loop-side
+  only. The per-call cap still protects against runaway spend on MCP.
+
+This is the intended architecture (Hermes is an MCP *client*/owner cockpit, not a
+second runtime), not a gap — but it must be explicit so a Hermes deployment doesn't
+assume the loop's guardrails come for free.
+
 ## Run it (owner/dev)
 
 ```bash

@@ -176,6 +176,12 @@ export type CandidatePacket = {
   /** 0..1 — how complete/trusted the underlying record is. */
   sourceConfidence: number;
   missingFields: string[];
+  /**
+   * Captured retail price (USD) when known — carried through from an external
+   * discovery candidate. Absent for catalog/vault packets and any pick we never
+   * priced. The discovery tool layers a `priceStatus` over this via budgetGate.
+   */
+  price?: number;
 };
 
 export type BeamGroundedFragrance = {
@@ -261,6 +267,14 @@ export type ExternalDiscoveryCandidate = {
   notes?: { top: string[]; heart: string[]; base: string[] };
   accords?: string[];
   imageUrl?: string;
+  /**
+   * Opportunistically-captured retail price (USD) from the engine's structured
+   * google_shopping leg, present ONLY when a deep-fetch returned a priced offer.
+   * Absent otherwise — budget gating enforces only when known and never treats a
+   * missing price as "within budget" (see budgetGate.ts).
+   */
+  price?: number;
+  currency?: string;
   /** True when a `/details` round-trip enriched this pick (counts to the cap). */
   detailed: boolean;
 };
