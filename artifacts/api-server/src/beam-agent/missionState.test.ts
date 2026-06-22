@@ -191,6 +191,21 @@ test("trip modifiers do not become destinations while explicit and prepositive p
   assert.equal(deriveBeamSessionState(undefined, "I have a date in two weeks").slots.destination, undefined);
 });
 
+test("a run-on transcript after a place does not store a word-salad destination", () => {
+  // Live bug: "...trip to Chicago I want to sneak bike she it's fit today" stored the
+  // whole tail as the destination and rendered "Your Chicago I Want To Sneak Bike
+  // She It · Today kit". The capture is now clamped to the leading place tokens.
+  assert.equal(
+    deriveBeamSessionState(undefined, "Two new fragrances for a trip to Chicago I want to sneak bike she it's fit today").slots.destination,
+    "Chicago",
+  );
+  // Multi-word cities still survive the clamp.
+  assert.equal(
+    deriveBeamSessionState(undefined, "I'm flying to New York tomorrow").slots.destination,
+    "New York",
+  );
+});
+
 test("an explicit new mission does not inherit stale slots or delegation", () => {
   const first = deriveBeamSessionState(
     undefined,

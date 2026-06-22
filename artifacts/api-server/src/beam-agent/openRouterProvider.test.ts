@@ -6,7 +6,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { __test, modelSupportsCaching, premiumOrchestrationModel } from "./openRouterProvider.ts";
+import { __test, modelSupportsCaching, premiumOrchestrationModel, stripHarmonyTokens } from "./openRouterProvider.ts";
 import { readInvalidArgs } from "./beamToolCore.ts";
 import type { ClaudeCallInput, ClaudeMessage } from "./types.ts";
 
@@ -200,4 +200,31 @@ test("openAiResponseToClaude maps finish reasons", () => {
   assert.equal(openAiResponseToClaude({ choices: [{ finish_reason: "stop", message: { content: "hi" } }] }).stop_reason, "end_turn");
   assert.equal(openAiResponseToClaude({ choices: [{ finish_reason: "length", message: { content: "hi" } }] }).stop_reason, "max_tokens");
   assert.equal(openAiResponseToClaude({ choices: [{ finish_reason: null, message: { content: "hi" } }] }).stop_reason, null);
+});
+
+test("stripHarmonyTokens removes a leaked tool-call commentary block", () => {
+  const raw =
+    '<|start|>assistant<|channel|>commentary to=functions.beam_compare_overlap ' +
+    '<|constrain|>json<|message|>{"candidateFragranceId":"christian dior::eau sauvage",' +
+    '"wardrobeFragranceIds":["a","b"]}<|call|>';
+  assert.equal(stripHarmonyTokens(raw), "");
+});
+
+test("stripHarmonyTokens keeps only the final channel and drops analysis", () => {
+  const raw =
+    "<|channel|>analysis<|message|>thinking about overlap and notes<|end|>" +
+    "<|channel|>final<|message|>Go with Eau Sauvage for the Chicago trip.<|return|>";
+  assert.equal(stripHarmonyTokens(raw), "Go with Eau Sauvage for the Chicago trip.");
+});
+
+test("stripHarmonyTokens leaves a plain answer untouched", () => {
+  const raw = "Start with **Creed Viking** — bright and confident for the day.";
+  assert.equal(stripHarmonyTokens(raw), raw);
+});
+
+test("openAiResponseToClaude scrubs harmony markup from content", () => {
+  const res = openAiResponseToClaude({
+    choices: [{ finish_reason: "stop", message: { content: "<|channel|>commentary to=functions.x <|message|>{}<|call|>" } }],
+  });
+  assert.deepEqual(res.content, []);
 });

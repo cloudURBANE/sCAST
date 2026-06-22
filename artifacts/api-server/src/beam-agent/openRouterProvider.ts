@@ -264,6 +264,47 @@ function safeParseArgs(raw: string): unknown {
   }
 }
 
+/**
+ * Strip OpenAI "harmony" / gpt-oss control markup that some OpenRouter slugs emit
+ * inside the plain `content` channel instead of as structured `tool_calls`.
+ *
+ * The synthesis turn runs tool-free, so a harmony-trained model has no structured
+ * channel for a call it still "wants" (e.g. `beam_compare_overlap`) and dumps it as
+ * text: `<|start|>assistant<|channel|>commentary to=functions.NAME <|constrain|>json
+ * <|message|>{…}<|call|>`. Rendered verbatim that reads as raw tokens to the user.
+ *
+ * This is a defensive adapter-layer scrub (the real fix is pointing BEAM_AGENT_MODEL*
+ * at a non-harmony slug): when the harmony envelope is present we keep only the
+ * user-facing `final` channel, drop `commentary`/`analysis` (tool-call + reasoning)
+ * blocks, and remove any residual control tokens. Plain answers (no `<|`) pass
+ * through byte-for-byte. Real OpenAI `tool_calls` are untouched — they never live in
+ * `content`, so structured tool routing is unaffected.
+ */
+export function stripHarmonyTokens(raw: string): string {
+  if (typeof raw !== "string") return "";
+  if (!raw.includes("<|")) return raw;
+
+  // Prefer the model's user-facing "final" channel when the harmony envelope wraps it.
+  const finalChannel = raw.match(
+    /<\|channel\|>\s*final\s*<\|message\|>([\s\S]*?)(?:<\|return\|>|<\|end\|>|<\|start\|>|$)/,
+  );
+  let text = finalChannel ? finalChannel[1] : raw;
+
+  text = text
+    // A whole tool-call / reasoning block: header → args → terminator.
+    .replace(/<\|channel\|>\s*(?:commentary|analysis)[\s\S]*?(?:<\|call\|>|<\|end\|>|<\|return\|>)/g, "")
+    // A role preamble such as "<|start|>assistant".
+    .replace(/<\|start\|>\s*\w*/g, "")
+    // Any remaining well-formed control token: <|message|>, <|constrain|>, <|channel|>…
+    .replace(/<\|[^|>]*\|>/g, "")
+    // A dangling partial token left at the end of a truncated chunk.
+    .replace(/<\|[^|>]*$/g, "")
+    // A leftover tool-recipient header if its block was malformed.
+    .replace(/\bto=functions\.[A-Za-z0-9_.]+/g, "");
+
+  return text.trim();
+}
+
 function mapFinishReason(reason: string | null | undefined): string | null {
   if (reason === "tool_calls") return "tool_use";
   if (reason === "stop") return "end_turn";
@@ -276,7 +317,10 @@ export function openAiResponseToClaude(data: OpenAiResponse): ClaudeResponse {
   const message = choice?.message;
   const content: ClaudeContentBlock[] = [];
 
-  if (message?.content) content.push({ type: "text", text: message.content });
+  if (message?.content) {
+    const clean = stripHarmonyTokens(message.content);
+    if (clean) content.push({ type: "text", text: clean });
+  }
 
   for (const call of message?.tool_calls ?? []) {
     content.push({
@@ -424,9 +468,15 @@ async function streamOpenAiText(
     reader.cancel().catch(() => {});
   }
 
+  // Scrub harmony control markup from the assembled answer before it becomes the
+  // synthesis reply (the streamed deltas are not rendered as text by the client —
+  // it shows a static "Composing your reply" — so the whole-text pass here is the
+  // correct boundary and avoids splitting a token across two SSE frames).
+  const cleanText = stripHarmonyTokens(text);
+
   return {
     stop_reason: mapFinishReason(finishReason),
-    content: text ? [{ type: "text", text }] : [],
+    content: cleanText ? [{ type: "text", text: cleanText }] : [],
     usage: usageFromOpenAi(usage),
   };
 }

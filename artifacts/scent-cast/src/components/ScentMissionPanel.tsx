@@ -62,6 +62,7 @@ import {
   parseDateLabel,
   recapLabelForOutcome,
   recommendCtaForState,
+  sanitizeDestination,
   type BeamTurnOutcome,
 } from '@/lib/beamAnswerContract';
 import { BeamMessage } from '@/components/BeamMessage';
@@ -1310,7 +1311,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   const dateLabel = useMemo(() => parseDateLabel(lastUserMessage), [lastUserMessage]);
 
   const headerTitle = useMemo(() => {
-    const destination = (agentMission?.destination || agentCues.destination || '').trim();
+    const destination = sanitizeDestination(agentMission?.destination || agentCues.destination);
     const month = (agentMission?.month || agentCues.month || '').trim();
     if (agentMission?.intent === 'travel_kit' && destination) {
       // Route the place through normalizeLocation so "duluth mn" reads as
@@ -1328,7 +1329,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   }, [agentCues, agentMission, dateLabel]);
 
   const contextLine = useMemo(() => {
-    const destination = (agentMission?.destination || agentCues.destination || '').trim();
+    const destination = sanitizeDestination(agentMission?.destination || agentCues.destination);
     const month = (agentMission?.month || agentCues.month || '').trim();
     if (agentMission?.intent === 'travel_kit' && destination) {
       // Surface the requested lane counts so "2 from your vault + 2 new" is visible

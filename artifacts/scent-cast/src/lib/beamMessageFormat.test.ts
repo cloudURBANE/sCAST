@@ -7,9 +7,29 @@ import {
   formatAgentResponse,
   parseBeamMessage,
   parseInlineSegments,
+  stripHarmonyTokens,
   toPlainText,
   type BeamBlock,
 } from './beamMessageFormat.ts';
+
+test('stripHarmonyTokens removes a leaked harmony tool-call block', () => {
+  const raw =
+    '<|start|>assistant<|channel|>commentary to=functions.beam_compare_overlap ' +
+    '<|constrain|>json<|message|>{"candidateFragranceId":"christian dior::eau sauvage"}<|call|>';
+  assert.equal(stripHarmonyTokens(raw), '');
+});
+
+test('cleanAgentText strips harmony control tokens before parsing', () => {
+  const raw =
+    '<|channel|>analysis<|message|>weighing the vault<|end|>' +
+    '<|channel|>final<|message|>Wear Eau Sauvage for Chicago.<|return|>';
+  assert.equal(cleanAgentText(raw), 'Wear Eau Sauvage for Chicago.');
+});
+
+test('parseBeamMessage never surfaces raw harmony tokens', () => {
+  const raw = '<|start|>assistant<|channel|>commentary to=functions.x<|message|>{}<|call|>';
+  assert.equal(parseBeamMessage(raw).length, 0);
+});
 
 test('parseInlineSegments marks bold runs and strips other markdown', () => {
   const segs = parseInlineSegments('Start with **Black Afgano** — a `dark` _smoky_ pick');
