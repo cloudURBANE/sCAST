@@ -1818,3 +1818,68 @@ test("collectGroundedFragrancesForGate leaves matchedAvoid undefined when no avo
   assert.equal(grounded.length, 1);
   assert.equal(grounded[0].matchedAvoid, undefined);
 });
+
+// --- The loop must NEVER reject its promise --------------------------------
+// The in-process (front-end) path wraps the run promise and turns a rejection
+// into the generic "Beam Agent failed unexpectedly." banner (beamAgentRoutes.ts).
+// The MCP/Telegram path never runs this loop, which is why those rejections were
+// front-end-only. The loop's contract is "never throws"; these lock the two
+// escape hatches that used to violate it (prompt assembly + the summary callback).
+
+test("a throwing onSummary callback never rejects the run promise (observability can't fail a run)", async () => {
+  const events: BeamRunEvent[] = [];
+  // isModelConfigured:false gives a deterministic terminal (model_unavailable) that
+  // still runs the `finally` summary callback — no model call needed. Before the
+  // fix, a throw from onSummary escaped `finally` and rejected the run promise.
+  await assert.doesNotReject(
+    runBeamAgent({
+      ctx,
+      userMessage: "hello",
+      tools: [],
+      emit: (event) => events.push(event),
+      isModelConfigured: () => false,
+      callModel: async () => {
+        throw new Error("callModel should not run when the model is unconfigured");
+      },
+      onSummary: () => {
+        throw new Error("observatory sink exploded");
+      },
+    }),
+  );
+  assert.ok(
+    events.some((e) => e.type === "failed" && e.code === "model_unavailable"),
+    "the run still emitted its terminal event; the thrown summary callback did not become a rejection",
+  );
+});
+
+test("a session state that throws during prompt assembly degrades to a graceful failed event, not a rejected promise", async () => {
+  const events: BeamRunEvent[] = [];
+  // A corrupt cached session-state shape whose property access throws. Prompt
+  // assembly now happens INSIDE the run try/catch, so this surfaces as a graceful
+  // `failed`/agent_error event rather than rejecting the run promise.
+  const explosiveState = new Proxy(
+    {},
+    {
+      get() {
+        throw new Error("corrupt session state");
+      },
+    },
+  ) as unknown as BeamSessionState;
+
+  await assert.doesNotReject(
+    runBeamAgent({
+      ctx,
+      userMessage: "hello",
+      tools: [],
+      emit: (event) => events.push(event),
+      isModelConfigured: () => true,
+      callModel: async () => text("hi"),
+      sessionState: explosiveState,
+      onSummary: () => {},
+    }),
+  );
+  assert.ok(
+    events.some((e) => e.type === "failed" && e.code === "agent_error"),
+    "prompt-assembly failure degraded to a graceful failed event instead of a rejected promise",
+  );
+});
