@@ -108,6 +108,18 @@ async function engineSearchTop(query: string, timeoutMs: number): Promise<Engine
   return candidates.find((r) => r && (r.id || r.source_url || r.fg_url)) ?? null;
 }
 
+/** Build an explicit engine candidate from a version-precise identity, or null. */
+function pinnedCandidate(
+  identity: { sourceUrl?: string | null; id?: string | null } | undefined,
+): EngineCandidate | null {
+  if (!identity) return null;
+  const id = typeof identity.id === "string" ? identity.id.trim() : "";
+  const sourceUrl = typeof identity.sourceUrl === "string" ? identity.sourceUrl.trim() : "";
+  if (id) return sourceUrl ? { id, source_url: sourceUrl } : { id };
+  if (sourceUrl) return { source_url: sourceUrl };
+  return null;
+}
+
 export async function resolveDetailViaEngine(house: string, name: string): Promise<EngineResolveResult> {
   const empty: EngineResolveResult = { fallback: null, coverage: null, level: "none" };
   const query = [house, name].filter((p) => p && p.trim()).join(" ").trim();
@@ -117,6 +129,21 @@ export async function resolveDetailViaEngine(house: string, name: string): Promi
   const top = await engineSearchTop(query, RESOLVE_TIMEOUT_MS);
   if (!top) return empty;
 
+  return resolveDetailForCandidate(top, startedAt);
+}
+
+/**
+ * Fetch + shape a `/details` body for an ALREADY-RESOLVED engine candidate. Split
+ * out of resolveDetailViaEngine so a version-precise pick (exact id/source_url
+ * carried from engine discovery) can be enriched WITHOUT a fresh name search —
+ * the search step is precisely what collapsed flankers/concentrations onto the
+ * wrong version ("Sauvage" taking "Sauvage Elixir").
+ */
+async function resolveDetailForCandidate(
+  top: EngineCandidate,
+  startedAt: number = Date.now(),
+): Promise<EngineResolveResult> {
+  const empty: EngineResolveResult = { fallback: null, coverage: null, level: "none" };
   const remainingMs = Math.max(1_000, RESOLVE_TIMEOUT_MS - (Date.now() - startedAt));
   const detail = await fetchJson(
     `${ENGINE_BASE}/api/fragrances/details`,
@@ -173,22 +200,31 @@ export async function resolveDetailViaEngine(house: string, name: string): Promi
  * know "is this complete?" before surfacing or recommending it. Reuses the same
  * engine resolve + completeness rule as the worker, so the agent's gate and the
  * worker's gate can never disagree. Returns `level: "none"` on any miss.
+ *
+ * `identity` pins the EXACT recommended version (engine id / source_url carried
+ * from discovery). When supplied it skips the `/search` step entirely, so the
+ * probe reads the state of the fragrance the agent actually recommended instead
+ * of whatever a name search ranks first (which collapses flankers/concentrations
+ * — verifying "Sauvage" when the pick was "Sauvage Elixir").
  */
 export async function fetchEngineEnrichmentState(
   name: string,
   brand: string | null | undefined,
+  identity?: { sourceUrl?: string | null; id?: string | null },
 ): Promise<{ level: EnrichmentLevel; coverage: EngineSourceCoverage | null; complete: boolean }> {
   const cleanName = (name ?? "").trim();
   const cleanBrand = (brand ?? "").trim();
   const none = { level: "none" as EnrichmentLevel, coverage: null, complete: false };
+  const pinned = pinnedCandidate(identity);
   const query = [cleanBrand, cleanName].filter((p) => p).join(" ").trim();
-  if (!query) return none;
+  if (!pinned && !query) return none;
 
-  // Cheap path: resolve identity via /search (no egress), then read the CACHED
-  // enrichment state via /api/fragrances/enrichment-state — which never triggers a
-  // billed live scrape. This is what keeps on-demand agent verification from
-  // hammering the paid /details endpoint.
-  const top = await engineSearchTop(query, RESOLVE_TIMEOUT_MS).catch(() => null);
+  // Cheap path: pin the EXACT version when discovery handed us an id/source_url,
+  // else resolve identity via /search (no egress). Then read the CACHED enrichment
+  // state via /api/fragrances/enrichment-state — which never triggers a billed
+  // live scrape. This keeps on-demand agent verification off the paid /details
+  // endpoint while reading the right version's state.
+  const top = pinned ?? (await engineSearchTop(query, RESOLVE_TIMEOUT_MS).catch(() => null));
   if (top) {
     const state = await fetchJson(
       `${ENGINE_BASE}/api/fragrances/enrichment-state`,
@@ -209,7 +245,10 @@ export async function fetchEngineEnrichmentState(
 
   // Fallback: the cheap endpoint isn't deployed yet (404/empty). Use the full
   // resolve so the agent still gets a correct answer; bounded by RESOLVE_TIMEOUT_MS.
-  const result = await resolveDetailViaEngine(cleanBrand, cleanName);
+  // Keep pinning the exact version here too — never re-search a pinned pick.
+  const result = pinned
+    ? await resolveDetailForCandidate(pinned)
+    : await resolveDetailViaEngine(cleanBrand, cleanName);
   return { level: result.level, coverage: result.coverage, complete: result.level === "full" };
 }
 

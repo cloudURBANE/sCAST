@@ -25,6 +25,16 @@ export type BeamCurationInput = {
   name: string;
   brand?: string | null;
   /**
+   * Exact Fragrantica/engine source URL for the recommended fragrance, when the
+   * pick came from engine discovery (it carries the version-precise identity).
+   * When present the enrichment job is keyed on the canonical fg_url and typed
+   * `detail_only`, so the worker enriches THIS exact version instead of
+   * re-resolving by name (which collapses flankers/concentrations — "Sauvage"
+   * vs "Sauvage Elixir"). Absent for name-only picks, which keep the old
+   * identity_and_detail behaviour.
+   */
+  fgUrl?: string | null;
+  /**
    * Agent-run id that produced this curation. All jobs queued in one Beam run
    * share it, so completion notifications can coalesce into a single "your picks
    * are ready" nudge instead of one push per fragrance.

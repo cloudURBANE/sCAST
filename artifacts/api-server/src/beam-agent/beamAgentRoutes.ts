@@ -52,6 +52,7 @@ import {
 import { enqueueBeamCuration } from "../services/curationService";
 import { fetchEngineEnrichmentState } from "../services/enrichmentProcessor";
 import { createBeamTools, type BeamCatalogHit, type BeamToolDeps } from "./beamTools.ts";
+import { fragranceIdentityKey } from "./fragranceIdentity.ts";
 import { runBeamAgent } from "./beamAgentLoop.ts";
 import { packetFromWardrobeRow, redactEventForClient } from "./beamToolCore.ts";
 import { isBeamAgentEnabled, resolveBeamBudget, resolveBeamModels, validateBeamModelConfig } from "./provider.ts";
@@ -305,6 +306,28 @@ const beamResearchWeb = createBeamResearcher({
 });
 
 function buildDeps(ctx: BeamRunContext, weather: ScentMissionWeather, sessionState?: BeamSessionState): BeamToolDeps {
+  // Per-run identity registry: maps a recommended fragrance's brand+name key to
+  // the version-precise engine source URL captured when discovery surfaced it.
+  // The verify (`checkEnrichmentState`) and enqueue (`enqueueCuration`) paths
+  // consult it so they act on the EXACT recommended version instead of
+  // re-resolving by free-text name — which collapsed flankers/concentrations
+  // ("Sauvage" vs "Sauvage Elixir") onto whatever a fresh search ranked first.
+  // The model never sees these URLs; the key is reproduced from the name+brand
+  // it already passes, so the tool surface stays unchanged.
+  const candidateSourceUrls = new Map<string, string>();
+  const rememberSourceUrl = (
+    name: string,
+    brand: string | null | undefined,
+    sourceUrl: string | null | undefined,
+  ): void => {
+    const url = typeof sourceUrl === "string" ? sourceUrl.trim() : "";
+    if (!url) return;
+    const key = fragranceIdentityKey(brand, name);
+    if (key) candidateSourceUrls.set(key, url);
+  };
+  const lookupSourceUrl = (name: string, brand: string | null | undefined): string | null =>
+    candidateSourceUrls.get(fragranceIdentityKey(brand, name)) ?? null;
+
   // Captured dislikes shape retrieval, not just wording (audit A3): wrap catalog
   // search so candidates built around an avoided note/family are dropped before
   // the model ever sees them. Over-fetch a little then trim, so the requested
@@ -337,6 +360,11 @@ function buildDeps(ctx: BeamRunContext, weather: ScentMissionWeather, sessionSta
     ? async (query, opts) => {
         const detailLimit = reserveDetailBudget(opts.detailLimit);
         const candidates = await discoverExternalCandidates(query, { limit: opts.limit, detailLimit });
+        // Capture each discovered pick's version-precise engine source URL so a
+        // later verify/enqueue for it acts on THIS exact version, not a re-search.
+        for (const candidate of candidates) {
+          rememberSourceUrl(candidate.name, candidate.brand, candidate.sourceUrl);
+        }
         // Count ATTEMPTS, not successes: enrichCandidate marks `detailed` on every
         // /details attempt (incl. thin bodies) so the spend is debited. Refund the
         // reserved grant we didn't actually spend back into the run budget.
@@ -380,6 +408,10 @@ function buildDeps(ctx: BeamRunContext, weather: ScentMissionWeather, sessionSta
         tenantId: ctx.tenantId,
         name: fragrance.name,
         brand: fragrance.brand,
+        // Pin the EXACT recommended version when discovery captured its source URL,
+        // so the enrichment job is keyed on the canonical fg_url and the worker
+        // enriches this version instead of re-resolving the name into a sibling.
+        fgUrl: lookupSourceUrl(fragrance.name, fragrance.brand),
         runId: opts?.runId ?? null,
         notify: opts?.notify,
       }).catch((err) => {
@@ -389,8 +421,17 @@ function buildDeps(ctx: BeamRunContext, weather: ScentMissionWeather, sessionSta
     // Enrichment-state verification: report whether a fragrance is fully enriched
     // using the cheap CACHED engine state (no billed live scrape), so the agent can
     // gate what it presents and defer un-enriched picks to "researching, will notify".
-    checkEnrichmentState: (fragrance) =>
-      fetchEngineEnrichmentState(fragrance.name, fragrance.brand ?? null),
+    checkEnrichmentState: (fragrance) => {
+      // Verify the EXACT recommended version: when discovery captured this pick's
+      // source URL, read its cached enrichment state directly instead of probing
+      // whatever a fresh name search ranks first (a flanker/concentration sibling).
+      const sourceUrl = lookupSourceUrl(fragrance.name, fragrance.brand);
+      return fetchEngineEnrichmentState(
+        fragrance.name,
+        fragrance.brand ?? null,
+        sourceUrl ? { sourceUrl } : undefined,
+      );
+    },
     scoreVault: (items, calibration, currentWeather) =>
       selectScentMissionRecommendation(items, calibration, currentWeather),
     rankVault: (items, calibration, currentWeather) =>

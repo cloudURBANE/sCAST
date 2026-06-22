@@ -31,6 +31,7 @@ import { missionItemFromWardrobeRow } from "../../services/scentMissionService";
 import { searchCatalogCandidates, searchCatalogProfileCandidates, flattenProfile, getCatalogEntry } from "../../services/catalogService";
 import { discoverExternalCandidates } from "../../services/engineDiscover";
 import { fetchEngineEnrichmentState } from "../../services/enrichmentProcessor";
+import { fragranceIdentityKey } from "../fragranceIdentity.ts";
 import { isDiscoverExternalEnabled } from "../discoveryConfig.ts";
 import { mcpDetailBudget } from "./mcpDiscoveryBudget.ts";
 import { getScentFacts } from "../../lib/scent-facts/engine";
@@ -143,6 +144,38 @@ const beamResearchWeb = createBeamResearcher({
 });
 
 /**
+ * Process-wide registry of each discovered fragrance's version-precise engine
+ * source URL, keyed by brand+name. The MCP deps are built once at startup (no
+ * per-run ctx), and a Fragrantica URL is identity-, not user-, specific — so a
+ * bounded shared map is safe and lets `checkEnrichmentState` verify the EXACT
+ * version a discovery surfaced instead of re-resolving the name into a sibling
+ * ("Sauvage" vs "Sauvage Elixir"). Bounded (oldest-evicted) so it can't grow
+ * unbounded on a long-lived process.
+ */
+const MCP_SOURCE_URL_CACHE_MAX = 2048;
+const mcpCandidateSourceUrls = new Map<string, string>();
+function rememberMcpSourceUrl(
+  name: string,
+  brand: string | null | undefined,
+  sourceUrl: string | null | undefined,
+): void {
+  const url = typeof sourceUrl === "string" ? sourceUrl.trim() : "";
+  if (!url) return;
+  const key = fragranceIdentityKey(brand, name);
+  if (!key) return;
+  // Refresh recency: re-inserting moves the key to the end of the iteration order.
+  mcpCandidateSourceUrls.delete(key);
+  mcpCandidateSourceUrls.set(key, url);
+  if (mcpCandidateSourceUrls.size > MCP_SOURCE_URL_CACHE_MAX) {
+    const oldest = mcpCandidateSourceUrls.keys().next().value;
+    if (oldest !== undefined) mcpCandidateSourceUrls.delete(oldest);
+  }
+}
+function lookupMcpSourceUrl(name: string, brand: string | null | undefined): string | null {
+  return mcpCandidateSourceUrls.get(fragranceIdentityKey(brand, name)) ?? null;
+}
+
+/**
  * Build the concrete tool dependencies for the MCP server. Stateless: safe to
  * construct once at startup and reuse across requests (per-request scope comes
  * from the BeamRunContext, not from these closures).
@@ -173,6 +206,11 @@ export function createBeamServiceDeps(): BeamToolDeps {
           const candidates = await discoverExternalCandidates(query, { limit: opts.limit, detailLimit });
           const spent = candidates.filter((c) => c.detailed).length;
           mcpDetailBudget.refund(detailLimit - spent);
+          // Capture each pick's version-precise source URL so a later verify acts
+          // on THIS exact version rather than a fresh name search.
+          for (const candidate of candidates) {
+            rememberMcpSourceUrl(candidate.name, candidate.brand, candidate.sourceUrl);
+          }
           return candidates;
         }
       : undefined,
@@ -183,8 +221,14 @@ export function createBeamServiceDeps(): BeamToolDeps {
     // safe to expose on the MCP/Hermes surface too — a promoted Hermes agent can
     // verify a pick is fully enriched before presenting it, using the cheap cached
     // engine state (no billed live scrape).
-    checkEnrichmentState: (fragrance) =>
-      fetchEngineEnrichmentState(fragrance.name, fragrance.brand ?? null),
+    checkEnrichmentState: (fragrance) => {
+      const sourceUrl = lookupMcpSourceUrl(fragrance.name, fragrance.brand);
+      return fetchEngineEnrichmentState(
+        fragrance.name,
+        fragrance.brand ?? null,
+        sourceUrl ? { sourceUrl } : undefined,
+      );
+    },
     scoreVault: (items, calibration, weather) =>
       selectScentMissionRecommendation(items, calibration, weather),
     rankVault: (items, calibration, weather) =>
