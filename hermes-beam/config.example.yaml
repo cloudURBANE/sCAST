@@ -30,6 +30,11 @@ mcp_servers:
         - beam_get_wardrobe
         - beam_search_catalog
         - beam_get_fragrance_details
+        # Verify a pick's ENRICHMENT STATE (none/partial/full) before presenting or
+        # recommending it, using cheap cached engine state (no billed live scrape).
+        # Keeps a promoted Hermes agent from surfacing under-enriched "Unknown" cards;
+        # when not 'full', defer the pick to "researching — will notify you".
+        - beam_check_enrichment_state
         - beam_score_candidates
         # Redundancy radar: does a candidate overlap with what the user already
         # owns? Deterministic note/accord comparison against the vault.

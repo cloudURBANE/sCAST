@@ -17,6 +17,7 @@ test("a full owner token unlocks every read + presentation tool", () => {
   assert.deepEqual(
     [...names].sort(),
     [
+      "beam_check_enrichment_state",
       "beam_compare_fragrances",
       "beam_compare_overlap",
       "beam_discover_external",

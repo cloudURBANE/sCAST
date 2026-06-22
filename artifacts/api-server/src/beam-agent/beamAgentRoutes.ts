@@ -47,6 +47,7 @@ import {
   recordBeamAnswerLog,
 } from "../services/beamAnswerLog";
 import { enqueueBeamCuration } from "../services/curationService";
+import { fetchEngineEnrichmentState } from "../services/enrichmentProcessor";
 import { createBeamTools, type BeamCatalogHit, type BeamToolDeps } from "./beamTools.ts";
 import { runBeamAgent } from "./beamAgentLoop.ts";
 import { packetFromWardrobeRow, redactEventForClient } from "./beamToolCore.ts";
@@ -352,6 +353,11 @@ function buildDeps(ctx: BeamRunContext, weather: ScentMissionWeather, sessionSta
         logger.warn({ err, user: hashUser(ctx.userId) }, "beam curation enqueue failed");
       });
     },
+    // Enrichment-state verification: report whether a fragrance is fully enriched
+    // using the cheap CACHED engine state (no billed live scrape), so the agent can
+    // gate what it presents and defer un-enriched picks to "researching, will notify".
+    checkEnrichmentState: (fragrance) =>
+      fetchEngineEnrichmentState(fragrance.name, fragrance.brand ?? null),
     scoreVault: (items, calibration, currentWeather) =>
       selectScentMissionRecommendation(items, calibration, currentWeather),
     rankVault: (items, calibration, currentWeather) =>

@@ -35,7 +35,10 @@ export const SCOPE_TOOL_MAP: Record<BeamScope, readonly string[]> = {
   // `discoverExternal` is wired (BEAM_DISCOVER_EXTERNAL_ENABLED) — when off it is
   // never built, so listing it here is harmless (the server lists built ∩ allowed).
   "beam:catalog:read": ["beam_search_catalog", "beam_find_similar", "beam_discover_external"],
-  "beam:details:read": ["beam_get_fragrance_details"],
+  // `beam_check_enrichment_state` is built only when `checkEnrichmentState` is
+  // wired (always, on MCP). It's a read-only enrichment-state probe (cheap cached
+  // engine state), so it rides the same details-read scope as fragrance details.
+  "beam:details:read": ["beam_get_fragrance_details", "beam_check_enrichment_state"],
   "beam:score:read": ["beam_score_candidates"],
   // The MCP service wires `searchCatalog` (always) and `researchWeb` (see
   // beamServiceDeps), so createBeamTools builds these two tools on every request.

@@ -991,39 +991,66 @@ function DashboardView() {
     [items, openFragranceDetail],
   );
 
-  // Resume-on-return: when a signed-in user opens the app — especially via the
-  // completion push deep-link `/?curation=<jobKey>` (see the SW's notificationclick
-  // → data.url) — fetch their pending/ready beam curations and surface the ready
-  // one by opening its detail card (where "Add to vault" is offered). This runs
-  // once per token; it degrades to a no-op when nothing is ready or the request
-  // fails (the client returns []). We strip the `?curation` param afterward via
-  // history.replaceState so a reload doesn't re-trigger and React Router's page
-  // transition is not disturbed. Guarded by a ref so re-renders don't re-fetch.
+  // Resume-on-DEEP-LINK: open a curation's detail card ONLY when the user arrived
+  // via a completion push deep-link `/?curation=<jobKey>` (the SW's
+  // notificationclick → data.url) AND that exact pick is fully enriched. A plain
+  // app open never force-opens anything — ready picks live in the notification
+  // feed. This is the fix for the "Unknown / NO IMAGE card greets me on every
+  // launch" artifact: previously this effect opened the first `ready` item on
+  // every load, and `ready` was set on a too-weak enrichment bar.
+  //
+  // We strip the `?curation` param immediately and record the jobKey as "opened"
+  // in localStorage so a refresh (or a re-tap) can't re-slam the same modal.
+  // Guarded by a ref so re-renders don't re-fetch.
   const resumeCurationToken = location.search;
   const curationResumeHandledRef = useRef<string | null>(null);
   useEffect(() => {
     if (!authToken) return;
-    const guardKey = `${authToken}:${resumeCurationToken}`;
+    const jobKey = new URLSearchParams(resumeCurationToken).get('curation');
+    // No deep-link → nothing to resume. Don't even hit the network on a plain open.
+    if (!jobKey) return;
+
+    const guardKey = `${authToken}:${jobKey}`;
     if (curationResumeHandledRef.current === guardKey) return;
     curationResumeHandledRef.current = guardKey;
 
-    let cancelled = false;
-    const jobKey = new URLSearchParams(resumeCurationToken).get('curation');
+    // Strip the param up front so a reload is clean regardless of the outcome.
+    if (typeof window !== 'undefined' && window.history?.replaceState) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('curation');
+      window.history.replaceState(window.history.state, '', url.toString());
+    }
 
+    // Once-per-device de-dupe: never auto-open the same curation twice.
+    const seenStorageKey = 'scent_curation_opened';
+    const readSeen = (): string[] => {
+      try {
+        const seen = JSON.parse(window.localStorage.getItem(seenStorageKey) ?? '[]');
+        return Array.isArray(seen) ? (seen as string[]) : [];
+      } catch {
+        return [];
+      }
+    };
+    if (readSeen().includes(jobKey)) return;
+
+    let cancelled = false;
     void (async () => {
       const items = await getPendingCuration(authToken);
       if (cancelled) return;
 
-      // Always clear the deep-link param once we've handled this open, so a
-      // refresh is clean whether or not anything was ready.
-      if (jobKey && typeof window !== 'undefined' && window.history?.replaceState) {
-        const url = new URL(window.location.href);
-        url.searchParams.delete('curation');
-        window.history.replaceState(window.history.state, '', url.toString());
+      const target = pickResumeCurationTarget(items, jobKey);
+      if (!target) return;
+
+      try {
+        const next = readSeen();
+        if (!next.includes(jobKey)) next.push(jobKey);
+        // Keep the list bounded so it can't grow without limit.
+        window.localStorage.setItem(seenStorageKey, JSON.stringify(next.slice(-100)));
+      } catch {
+        /* storage unavailable — opening once is still fine */
       }
 
-      const target = pickResumeCurationTarget(items, jobKey);
-      if (target) openFragranceDetail(curationItemToFragrance(target));
+      openFragranceDetail(curationItemToFragrance(target));
     })();
 
     return () => {

@@ -22,8 +22,14 @@ export interface CurationItem {
   status: 'pending' | 'processing' | 'completed' | 'failed';
   name: string;
   brand: string | null;
-  /** True once enrichment completed — `ready === status === "completed"`. */
+  /**
+   * True once enrichment is FULLY complete and the fragrance is addable. The
+   * server only sets `status: "completed"` at full source coverage, so a `ready`
+   * item is safe to open — never an under-enriched "Unknown" card.
+   */
   ready: boolean;
+  /** Coarse completeness reported by the server ("none" | "partial" | "full"). */
+  enrichmentLevel: 'none' | 'partial' | 'full';
   lastRequestedAt: string;
 }
 
@@ -46,6 +52,7 @@ export function parseCurationItem(raw: unknown): CurationItem | null {
   const name = typeof record.name === 'string' ? record.name.trim() : '';
   if (!jobKey || !name) return null;
   const status = asCurationStatus(record.status);
+  const ready = typeof record.ready === 'boolean' ? record.ready : status === 'completed';
   return {
     jobKey,
     status,
@@ -53,7 +60,15 @@ export function parseCurationItem(raw: unknown): CurationItem | null {
     brand: typeof record.brand === 'string' && record.brand.trim() ? record.brand.trim() : null,
     // Trust the server's `ready` when present, but keep it consistent with the
     // contract's `ready === status === "completed"` invariant either way.
-    ready: typeof record.ready === 'boolean' ? record.ready : status === 'completed',
+    ready,
+    // A completed/ready job is full by definition; otherwise trust the server's
+    // level, defaulting unknown values to "none".
+    enrichmentLevel:
+      record.enrichmentLevel === 'partial' || record.enrichmentLevel === 'full'
+        ? record.enrichmentLevel
+        : ready
+          ? 'full'
+          : 'none',
     lastRequestedAt:
       typeof record.lastRequestedAt === 'string' ? record.lastRequestedAt : '',
   };
@@ -84,21 +99,33 @@ export function curationItemToFragrance(item: CurationItem): Fragrance {
   });
 }
 
+/** A curation is safe to force-open only when it is fully complete. */
+export function isCurationOpenable(item: CurationItem | null | undefined): boolean {
+  return Boolean(item && item.ready && item.enrichmentLevel === 'full');
+}
+
 /**
- * Choose which ready curation to surface on app open / deep-link, given the
- * fetched list and an optional `?curation=<jobKey>` from the push deep-link:
- *   - if the deep-linked jobKey is present AND ready, open exactly that one;
- *   - otherwise open the first ready item (resume the most recent finished pick);
- *   - if nothing is ready, return null (the queue is still pending — no UI).
- * Pure, so it is unit-tested under the node runner.
+ * Choose which curation to force-open on app open, given the fetched list and the
+ * `?curation=<jobKey>` from a push deep-link.
+ *
+ * Deliberately DEEP-LINK-ONLY and COMPLETE-ONLY: we open a detail modal on load
+ * ONLY when the user actually tapped a "ready to add" notification (which carries
+ * the jobKey) AND that exact pick is fully enriched. A plain app open never
+ * force-opens anything — previously it opened the first `ready` item every load,
+ * which, combined with the old too-weak "ready" bar, slammed an under-enriched
+ * "Unknown / NO IMAGE" card in the user's face on every launch. Ready picks on a
+ * plain open are surfaced through the notification feed instead, not a modal.
+ *
+ * Returns null when there is no jobKey, the jobKey isn't found, or the target
+ * isn't fully complete. Pure, so it is unit-tested under the node runner.
  */
 export function pickResumeCurationTarget(
   items: CurationItem[],
   jobKey?: string | null,
 ): CurationItem | null {
-  const requested = jobKey ? items.find((item) => item.jobKey === jobKey) : undefined;
-  if (requested && requested.ready) return requested;
-  return items.find((item) => item.ready) ?? null;
+  if (!jobKey) return null;
+  const requested = items.find((item) => item.jobKey === jobKey);
+  return isCurationOpenable(requested) ? (requested as CurationItem) : null;
 }
 
 /**

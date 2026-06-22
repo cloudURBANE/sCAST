@@ -294,11 +294,54 @@ export async function failEnrichmentJob(jobKey: string, error: string, now: Date
     .where(eq(enrichmentJobsTable.jobKey, jobKey));
 }
 
+/**
+ * Mark a claimed job terminally `ignored` — used when enrichment is still
+ * incomplete after the attempt budget (or the job has no usable identity).
+ * Like `completed`, this is in TERMINAL_SKIP_STATUSES, so the failed-job sweeper
+ * never reopens it and the curation pending-list never reports it `ready`. This
+ * is what stops a permanently-thin fragrance from re-polling the engine forever.
+ */
+export async function ignoreEnrichmentJob(jobKey: string, reason: string, now: Date = new Date()): Promise<void> {
+  await db
+    .update(enrichmentJobsTable)
+    .set({
+      status: "ignored",
+      ignoredAt: now,
+      updatedAt: now,
+      claimedAt: null,
+      claimExpiresAt: null,
+      lastError: reason.slice(0, 500),
+    })
+    .where(eq(enrichmentJobsTable.jobKey, jobKey));
+}
+
+/**
+ * Merge a small progress patch into `enrichment_jobs.metadata_json` without
+ * clobbering the existing keys (source/userId/runId/notify stay intact). Used by
+ * the processor to persist the running `enrichAttempts` counter and the latest
+ * `enrichLevel` so the bounded-retry budget survives across worker passes and the
+ * pending-list can report the real completeness. Atomic jsonb concat; best-effort.
+ */
+export async function stampEnrichmentProgress(
+  jobKey: string,
+  patch: Record<string, unknown>,
+  now: Date = new Date(),
+): Promise<void> {
+  await db
+    .update(enrichmentJobsTable)
+    .set({
+      metadataJson: sql`coalesce(${enrichmentJobsTable.metadataJson}, '{}'::jsonb) || ${JSON.stringify(patch)}::jsonb`,
+      updatedAt: now,
+    })
+    .where(eq(enrichmentJobsTable.jobKey, jobKey));
+}
+
 function defaultWorkerDeps(process: EnrichmentWorkerProcessor<EnrichmentJob>): EnrichmentWorkerDeps<EnrichmentJob> {
   return {
     claim: () => claimNextEnrichmentJob(),
     complete: (jobKey) => completeEnrichmentJob(jobKey),
     fail: (jobKey, error) => failEnrichmentJob(jobKey, error),
+    ignore: (jobKey, reason) => ignoreEnrichmentJob(jobKey, reason),
     process,
   };
 }

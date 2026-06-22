@@ -14,6 +14,7 @@ const readyItem = (over: Partial<CurationItem> = {}): CurationItem => ({
   name: 'Layton',
   brand: 'Parfums de Marly',
   ready: true,
+  enrichmentLevel: 'full',
   lastRequestedAt: '2026-06-17T00:00:00.000Z',
   ...over,
 });
@@ -33,6 +34,7 @@ test('parseCurationItem coerces a well-formed row and trims', () => {
     name: 'Aventus',
     brand: 'Creed',
     ready: true,
+    enrichmentLevel: 'full',
     lastRequestedAt: '2026-06-17T00:00:00.000Z',
   });
 });
@@ -72,7 +74,7 @@ test('parseCurationResponse filters malformed rows and tolerates a bad envelope'
   assert.deepEqual(parseCurationResponse({ items: 'nope' }), []);
 });
 
-test('pickResumeCurationTarget prefers a ready deep-linked jobKey', () => {
+test('pickResumeCurationTarget opens the deep-linked job only when fully complete', () => {
   const items = [
     readyItem({ jobKey: 'job-a' }),
     readyItem({ jobKey: 'job-b', name: 'Other' }),
@@ -80,21 +82,25 @@ test('pickResumeCurationTarget prefers a ready deep-linked jobKey', () => {
   assert.equal(pickResumeCurationTarget(items, 'job-b')?.jobKey, 'job-b');
 });
 
-test('pickResumeCurationTarget falls back to the first ready item', () => {
-  const items = [
-    readyItem({ jobKey: 'pending-1', status: 'pending', ready: false }),
-    readyItem({ jobKey: 'ready-1' }),
-  ];
-  // Deep-linked jobKey not ready → fall back to first ready.
-  assert.equal(pickResumeCurationTarget(items, 'pending-1')?.jobKey, 'ready-1');
-  // No jobKey → first ready.
-  assert.equal(pickResumeCurationTarget(items, null)?.jobKey, 'ready-1');
+test('pickResumeCurationTarget NEVER force-opens on a plain load (no jobKey)', () => {
+  // Even with a ready item present, no deep-link → no modal. Ready picks surface
+  // through the notification feed on a plain open, not a forced card.
+  const items = [readyItem({ jobKey: 'ready-1' })];
+  assert.equal(pickResumeCurationTarget(items, null), null);
+  assert.equal(pickResumeCurationTarget(items, undefined), null);
+  assert.equal(pickResumeCurationTarget(items, ''), null);
 });
 
-test('pickResumeCurationTarget returns null when nothing is ready', () => {
-  const items = [readyItem({ status: 'pending', ready: false })];
-  assert.equal(pickResumeCurationTarget(items, 'job-1'), null);
-  assert.equal(pickResumeCurationTarget([], null), null);
+test('pickResumeCurationTarget refuses an incomplete or unfinished deep-link target', () => {
+  // status completed but only partially enriched → not openable (the bug class).
+  const partial = readyItem({ jobKey: 'job-x', enrichmentLevel: 'partial' });
+  assert.equal(pickResumeCurationTarget([partial], 'job-x'), null);
+  // still pending → not openable.
+  const pending = readyItem({ jobKey: 'job-y', status: 'pending', ready: false, enrichmentLevel: 'none' });
+  assert.equal(pickResumeCurationTarget([pending], 'job-y'), null);
+  // jobKey not in the list → null.
+  assert.equal(pickResumeCurationTarget([readyItem({ jobKey: 'job-z' })], 'missing'), null);
+  assert.equal(pickResumeCurationTarget([], 'anything'), null);
 });
 
 test('curationItemToFragrance projects a minimal, non-vault Fragrance', () => {

@@ -30,6 +30,7 @@ import { packetFromWardrobeRow } from "../beamToolCore.ts";
 import { missionItemFromWardrobeRow } from "../../services/scentMissionService";
 import { searchCatalogCandidates, searchCatalogProfileCandidates, flattenProfile, getCatalogEntry } from "../../services/catalogService";
 import { discoverExternalCandidates } from "../../services/engineDiscover";
+import { fetchEngineEnrichmentState } from "../../services/enrichmentProcessor";
 import { isDiscoverExternalEnabled } from "../discoveryConfig.ts";
 import { mcpDetailBudget } from "./mcpDiscoveryBudget.ts";
 import { getScentFacts } from "../../lib/scent-facts/engine";
@@ -178,6 +179,12 @@ export function createBeamServiceDeps(): BeamToolDeps {
     resolveCatalogEntry: resolveCatalogEntryForBeam,
     research: researchForBeam,
     researchWeb: beamResearchWeb,
+    // Enrichment-state verification is ctx-free (identity in, state out), so it is
+    // safe to expose on the MCP/Hermes surface too — a promoted Hermes agent can
+    // verify a pick is fully enriched before presenting it, using the cheap cached
+    // engine state (no billed live scrape).
+    checkEnrichmentState: (fragrance) =>
+      fetchEngineEnrichmentState(fragrance.name, fragrance.brand ?? null),
     scoreVault: (items, calibration, weather) =>
       selectScentMissionRecommendation(items, calibration, weather),
     rankVault: (items, calibration, weather) =>
