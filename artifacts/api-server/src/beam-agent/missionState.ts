@@ -797,6 +797,14 @@ export function mergeBeamSessionState(previous: BeamSessionState | undefined, pa
   };
 }
 
+/**
+ * A bare "travel kit" with no stated lane counts ("pack me a kit for Tokyo")
+ * defaults to this many NEW (discovery) picks so it always produces a real
+ * multi-bottle kit instead of collapsing to a single recommendation. New-only
+ * keeps the kit fulfillable regardless of what's in the user's vault.
+ */
+const DEFAULT_TRAVEL_KIT_NEW_COUNT = 3;
+
 export function deriveBeamSessionState(
   previous: BeamSessionState | undefined,
   userMessage: string,
@@ -934,6 +942,19 @@ export function deriveBeamSessionState(
   if (result.mission?.intent === "recommendation" && result.mission.count === undefined) {
     const bare = parseBareCount(text);
     if (bare !== undefined) result.mission.count = bare;
+  }
+  // A travel kit the user never gave lane counts for ("travel kit to Tokyo")
+  // used to degrade to a single recommendation, which reads nothing like a kit.
+  // Default it to a small NEW-discovery kit so it yields a real multi-bottle
+  // deliverable. Fires only when BOTH counts are absent, so an explicit count —
+  // on this turn or carried from a prior one via the merge above — is never
+  // overridden, and a kit downgraded/reset elsewhere stays as the other logic left it.
+  if (
+    result.mission?.intent === "travel_kit" &&
+    result.mission.ownedCount === undefined &&
+    result.mission.newCount === undefined
+  ) {
+    result.mission.newCount = DEFAULT_TRAVEL_KIT_NEW_COUNT;
   }
   return result;
 }
