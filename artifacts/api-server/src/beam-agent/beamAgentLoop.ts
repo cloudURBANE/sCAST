@@ -976,11 +976,21 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
       // On a hard violation, attempt ONE constrained re-synthesis that feeds the
       // broken rules back (brief §08.1 if_fail), and keep whichever draft has fewer
       // violations. Bounded by budget + a single attempt so it can never loop.
+      // A complete, lane-count-validated travel-kit card is shipping THIS turn (the
+      // model called beam_present_travel_kit and its result passed
+      // missionToolResultError). The system prompt then forbids re-listing the
+      // card's picks in prose, so the prose mission_unfulfilled count gate must not
+      // hard-fail that obedient answer on the creation turn. `kitPresented` is only
+      // set after this point, so it cannot cover this turn — this flag does.
+      const missionCardPresented = pendingDeliverables.some(
+        (event) => event.type === "card" && event.card.kind === "travel_kit",
+      );
       let gate = runAnswerQualityGates(finalText, {
         hadExternalEvidence,
         sessionState: input.sessionState,
         groundedFragrances: [...groundedFragrances.values()],
         localWeatherLocation,
+        missionCardPresented,
       });
       if (
         !gate.passed &&
@@ -1016,6 +1026,7 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
               sessionState: input.sessionState,
               groundedFragrances: [...groundedFragrances.values()],
               localWeatherLocation,
+              missionCardPresented,
             });
             if (repairGate.violations.length < gate.violations.length) {
               finalText = repairText;
@@ -1041,6 +1052,7 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
             sessionState: input.sessionState,
             groundedFragrances: [...groundedFragrances.values()],
             localWeatherLocation,
+            missionCardPresented,
           });
           if (safeGate.passed) {
             finalText = safe;
@@ -1064,6 +1076,7 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
             sessionState: input.sessionState,
             groundedFragrances: [...groundedFragrances.values()],
             localWeatherLocation,
+            missionCardPresented,
           });
           if (commitGate.passed) {
             finalText = commit;
@@ -1099,6 +1112,7 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
             sessionState: input.sessionState,
             groundedFragrances: [...groundedFragrances.values()],
             localWeatherLocation,
+            missionCardPresented,
           });
           if (safeGate.passed) {
             finalText = safe;
