@@ -906,7 +906,9 @@ a {
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  border: 1px solid rgba(232, 181, 90, 0.62);
+  /* Calmer resting border so hover (0.78) and the committed-selection state
+     (0.98) have clear contrast to step up into — a legible interaction ladder. */
+  border: 1px solid rgba(232, 181, 90, 0.5);
   border-radius: calc(var(--radius-scent) - 6px);
   color: #fff7ec;
   background:
@@ -951,21 +953,24 @@ a {
     radial-gradient(78% 78% at 50% 7%, rgba(255, 247, 225, 0.07), transparent 60%),
     radial-gradient(85% 90% at 50% 105%, rgb(var(--scent-accent-rgb) / 0.075), transparent 68%),
     linear-gradient(180deg, rgba(42, 38, 27, 0.84), rgba(14, 13, 9, 0.92));
+  /* Selected reads structurally — a crisp inset gold frame + the row-end check —
+     not via a projected halo. The old `0 0 0 1px rgba(255,216,128,0.46)` was a
+     projected gold ring; it's gone, the inset ring is stronger instead. */
   box-shadow:
-    inset 0 0 0 1px rgba(255, 226, 150, 0.5),
+    inset 0 0 0 1.5px rgba(255, 226, 150, 0.85),
     inset 0 1px 0 rgba(255, 244, 205, 0.22),
     inset 0 0 54px rgb(var(--scent-accent-rgb) / 0.085),
-    0 0 0 1px rgba(255, 216, 128, 0.46),
     0 18px 42px -26px rgba(0, 0, 0, 0.98);
 }
 
-/* Gold "selected" check badge — pinned to the card's top-right corner. */
+/* Gold "selected" check badge. Depth from a neutral drop + inset highlight only;
+   no projected gold glow pooling under the badge (see no-projected-gold-glow). */
 .scent-vault-result-check {
   border: 1px solid rgba(255, 232, 170, 0.95);
   color: #1a1205;
   background: linear-gradient(180deg, #f8e3a6 0%, #dcb457 100%);
   box-shadow:
-    0 2px 12px rgb(var(--scent-accent-rgb) / 0.45),
+    0 1px 3px rgba(0, 0, 0, 0.5),
     inset 0 1px 0 rgba(255, 255, 255, 0.55);
 }
 
@@ -984,9 +989,11 @@ a {
   background:
     radial-gradient(circle at 50% 22%, rgba(255, 243, 200, 0.09), transparent 44%),
     rgba(3, 3, 2, 0.5);
+  /* Inset highlight + a faint neutral drop for depth — the gold border and
+     text-shadow carry the accent; no projected gold halo around the disc. */
   box-shadow:
     inset 0 1px 0 rgba(255, 238, 191, 0.12),
-    0 0 22px rgb(var(--scent-accent-rgb) / 0.08);
+    0 1px 2px rgba(0, 0, 0, 0.4);
   text-shadow: 0 0 12px rgb(var(--scent-accent-rgb) / 0.24);
 }
 
