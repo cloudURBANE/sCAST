@@ -64,11 +64,19 @@ export async function enqueueBeamCuration(input: BeamCurationInput): Promise<{ e
   if (!name) return { enqueued: false };
 
   const metadata: BeamCurationMetadata = buildCurationMetadata({ ...input, name });
+  // A version-precise engine source URL pins the EXACT recommended fragrance:
+  // the job is then keyed on the canonical fg_url and typed `detail_only`, so the
+  // worker fetches this version instead of re-resolving the name (which collapses
+  // flankers/concentrations like "Sauvage" vs "Sauvage Elixir"). Name-only picks
+  // keep the identity_and_detail path unchanged.
+  const fgUrl = input.fgUrl?.trim() || null;
   try {
     await upsertEnrichmentJob({
       name,
       house: input.brand?.trim() || null,
-      jobType: "identity_and_detail",
+      ...(fgUrl
+        ? { fgUrl, jobType: "detail_only" as const }
+        : { jobType: "identity_and_detail" as const }),
       metadata: metadata as unknown as Record<string, unknown>,
     });
     return { enqueued: true };
