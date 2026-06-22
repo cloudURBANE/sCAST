@@ -5,6 +5,7 @@ import {
   chooseHydratedImageUrlWithMetadata,
   CURRENT_VAULT_SCHEMA_VERSION,
   isLegacyVaultRow,
+  resolveCanonicalImageUrl,
   stampVaultSchemaVersion,
 } from "./fragrancePayloadCore.ts";
 
@@ -120,4 +121,42 @@ test("chooseHydratedImageUrlWithMetadata treats processed manual paths as saved 
     ),
     "https://storage.example.com/images/processed/manual/reflection.webp",
   );
+});
+
+// Regression guard for the "no image after successful add" bug: the external
+// Python engine and some legacy/search payloads carry the bottle image as
+// snake_case `image_url` (or bare `image`), while every persistence/render path
+// reads camelCase `imageUrl`. resolveCanonicalImageUrl must alias these so a
+// *known* image is never silently dropped at add time.
+
+test("resolveCanonicalImageUrl carries snake_case image_url through", () => {
+  assert.equal(
+    resolveCanonicalImageUrl({ name: "Sauvage", image_url: "https://cdn.example.com/s.webp" }),
+    "https://cdn.example.com/s.webp",
+  );
+});
+
+test("resolveCanonicalImageUrl carries bare `image` through", () => {
+  assert.equal(
+    resolveCanonicalImageUrl({ name: "Aventus", image: "https://cdn.example.com/a.webp" }),
+    "https://cdn.example.com/a.webp",
+  );
+});
+
+test("resolveCanonicalImageUrl prefers an explicit camelCase imageUrl over aliases", () => {
+  assert.equal(
+    resolveCanonicalImageUrl({
+      imageUrl: "https://cdn.example.com/canonical.webp",
+      image_url: "https://cdn.example.com/legacy.webp",
+    }),
+    "https://cdn.example.com/canonical.webp",
+  );
+});
+
+test("resolveCanonicalImageUrl ignores blank/whitespace aliases and falls back to imageUrl", () => {
+  assert.equal(
+    resolveCanonicalImageUrl({ imageUrl: "", image_url: "   " }),
+    "",
+  );
+  assert.equal(resolveCanonicalImageUrl({ name: "Terre" }), undefined);
 });
