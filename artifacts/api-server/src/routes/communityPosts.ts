@@ -827,7 +827,15 @@ router.get("/community/posts", optionalAuth, async (req: AuthRequest, res, next)
             eq(arenaCrowdPredictionsTable.tenantId, tenantId),
             eq(arenaCrowdPredictionsTable.userId, viewerId),
             inArray(arenaCrowdPredictionsTable.postId, candidateIds),
-          )),
+          ))
+          .catch((error: unknown) => {
+            // Arena tables may not be migrated yet in prod (deploy runs no
+            // drizzle push). Degrade to "nothing predicted" so the playable
+            // feed still loads instead of 500ing the whole queue.
+            if (!isMissingCrowdTableError(error)) throw error;
+            logger.warn("arena_crowd_predictions is unavailable; viewer prediction set defaults to empty");
+            return [] as Array<{ postId: string }>;
+          }),
       ]);
 
       const talliesByPost = voteTalliesFromRows(tallyRows);
@@ -1466,6 +1474,11 @@ router.post("/community/posts/:id/beam", requireAuth, async (req: AuthRequest, r
       ...totals,
     });
   } catch (err) {
+    if (isMissingCrowdTableError(err)) {
+      // arena_beam_grants not migrated yet — don't 500 the user mid-game.
+      res.status(503).json({ error: "Arena is warming up. Try again shortly." });
+      return;
+    }
     next(err);
   }
 });
@@ -1759,6 +1772,11 @@ router.post("/community/posts/:id/crowd-read", requireAuth, async (req: AuthRequ
 
     res.json(result);
   } catch (err) {
+    if (isMissingCrowdTableError(err)) {
+      // arena_crowd_predictions / arena_crowd_stats not migrated yet.
+      res.status(503).json({ error: "Arena is warming up. Try again shortly." });
+      return;
+    }
     next(err);
   }
 });
@@ -1795,6 +1813,12 @@ router.get("/community/arena/crowd-stats", requireAuth, async (req: AuthRequest,
       total_reads: stats?.totalReads ?? 0,
     });
   } catch (err) {
+    if (isMissingCrowdTableError(err)) {
+      // arena_crowd_stats not migrated yet — show a fresh (zeroed) streak card
+      // rather than 500ing the arena entry point.
+      res.json({ current_streak: 0, best_streak: 0, accuracy: 0, total_reads: 0 });
+      return;
+    }
     next(err);
   }
 });
