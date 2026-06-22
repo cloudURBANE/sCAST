@@ -2651,6 +2651,13 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         // — the "last line hidden behind the input" mobile clip. Honors the iOS
         // safe-area inset so it also clears the home indicator on notched phones.
         className="flex w-full min-h-[13.5rem] max-h-[min(55dvh,29rem)] flex-col gap-3 overflow-y-auto px-1.5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-3 text-left scrollbar-hide sm:min-h-[15.5rem] sm:max-h-[min(57dvh,33rem)] sm:px-2 sm:pb-9 sm:pt-4"
+        // Contain the transcript's scroll so dragging it past its top/bottom does
+        // NOT chain to the document and drag the page behind the panel. This is
+        // the iOS-safe replacement for the old body scroll-lock: it keeps the
+        // page from scrolling under the (inline) Beam panel without pinning
+        // <body> with position:fixed, whose teardown caused the iPhone
+        // "tap Close -> gray screen" freeze. Same pattern as the cue lane above.
+        style={{ overscrollBehavior: 'contain' }}
         role="log"
         aria-live="polite"
         aria-label="Beam Agent conversation"
