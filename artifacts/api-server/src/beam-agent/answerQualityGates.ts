@@ -23,6 +23,21 @@ export type QualityGateInput = {
   groundedFragrances?: BeamGroundedFragrance[];
   /** Current/home weather label returned by context; forbidden for a different travel destination. */
   localWeatherLocation?: string | null;
+  /**
+   * True when THIS turn is emitting a complete, lane-count-validated travel-kit
+   * CARD that already carries the picks (the structured `beam_present_travel_kit`
+   * deliverable, after `missionToolResultError` confirmed its exact lane counts).
+   * The system prompt tells the model NOT to re-list a card's data in prose
+   * ("After emitting a card, point to what it shows — never re-list its data in
+   * prose"), so a correct card-backed kit answer intentionally names few or no
+   * picks in prose. Without this flag the prose `mission_unfulfilled` count gate
+   * would hard-fail that obedient answer on the very turn the card is created
+   * (`kitPresented` is only set AFTER the gate runs). The card's lane counts are
+   * already enforced independently by `missionToolResultError`, so suppressing the
+   * prose count here loses no protection. Defaults to false (prose count still
+   * enforced) so a kit creation with NO card behaves exactly as before.
+   */
+  missionCardPresented?: boolean;
 };
 
 export type QualityGateResult = {
@@ -389,9 +404,18 @@ export function runAnswerQualityGates(answerText: string, input: QualityGateInpu
   // (missionToolResultError) still enforces exact lane counts on ANY kit card the
   // agent re-presents, and a genuinely new mission resets `kitPresented`
   // (deriveBeamSessionState → startsNewMission), so creation is still count-gated.
+  //
+  // The same relaxation applies to the CREATION turn itself when a complete kit
+  // CARD is emitted this turn (`missionCardPresented`). The system prompt forbids
+  // re-listing a card's data in prose, so an obedient card-backed answer names few
+  // or no picks in prose — and `kitPresented` is only set AFTER this gate runs, so
+  // it cannot cover the creation turn. The card's lane counts are already validated
+  // by `missionToolResultError`, so skipping the prose count here loses nothing; a
+  // kit "creation" with NO card (model claimed a kit in prose only) still fails.
   if (
     mission?.intent === "travel_kit" &&
     !mission.kitPresented &&
+    !input.missionCardPresented &&
     missionReadyForFulfillment(input.sessionState) &&
     ((mission.ownedCount ?? 0) > 0 || (mission.newCount ?? 0) > 0)
   ) {

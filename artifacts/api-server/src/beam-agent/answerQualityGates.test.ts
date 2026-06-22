@@ -170,6 +170,36 @@ test("creating a NEW kit (kit not yet presented) still enforces exact counts", (
   assert.ok(r.violations.includes("mission_unfulfilled"), JSON.stringify(r.violations));
 });
 
+test("creating a kit while emitting its CARD does not require re-listing every pick in prose", () => {
+  // The creation turn ships a complete, lane-count-validated travel_kit CARD, and
+  // the system prompt forbids re-listing the card's picks in prose. The prose count
+  // gate must not hard-fail that obedient answer — the card's counts are enforced
+  // separately by missionToolResultError. Same incomplete-prose setup as the
+  // creation test above, but with missionCardPresented set.
+  const input = {
+    hadExternalEvidence: false,
+    sessionState: {
+      slots: { destination: "Tokyo", month: "August", vibe: "artsy" },
+      mission: { intent: "travel_kit" as const, ownedCount: 2, newCount: 2, destination: "Tokyo", month: "August" },
+    },
+    groundedFragrances: [
+      { canonicalName: "Aventus", brand: "Creed", owned: true },
+      { canonicalName: "Gabrielle", brand: "Chanel", owned: true },
+      { canonicalName: "Tam Dao", brand: "Diptyque", owned: false },
+      { canonicalName: "Philosykos", brand: "Diptyque", owned: false },
+    ],
+  };
+  const carded = runAnswerQualityGates("Here's your Tokyo kit — the card lays out all four.", {
+    ...input,
+    missionCardPresented: true,
+  });
+  assert.ok(!carded.violations.includes("mission_unfulfilled"), JSON.stringify(carded.violations));
+  // Without the card flag the very same prose still fails — the relaxation is scoped
+  // strictly to the card-backed turn.
+  const uncarded = runAnswerQualityGates("Here's your Tokyo kit — the card lays out all four.", input);
+  assert.ok(uncarded.violations.includes("mission_unfulfilled"), JSON.stringify(uncarded.violations));
+});
+
 test("a fake/unsupported claim in a kit refinement is still rejected", () => {
   // Relaxing the count gate for refinements must NOT relax substantive gates: an
   // unsupported price claim in the swap reply still fails.
