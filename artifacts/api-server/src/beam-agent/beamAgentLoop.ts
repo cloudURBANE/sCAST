@@ -752,13 +752,6 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
   const { ctx, tools, emit } = input;
   const callModel = input.callModel ?? defaultCallModel;
   const isModelConfigured = input.isModelConfigured ?? defaultIsModelConfigured;
-  // Compose the live prompt: base concierge instructions + the hermes-beam
-  // safety/ontology/persona rules (audit A1 — these were never loaded on the
-  // production path) + the structured session state. Keeping the safety rules in
-  // a shared constant (beamSafetyRules.ts), asserted by a test, means the live
-  // path can't silently drift away from the authored guidance again.
-  const systemPrompt = SYSTEM_PROMPT + BEAM_SAFETY_RULES + beamSessionStatePrompt(input.sessionState);
-
   // Run-scoped accounting, emitted once at the end for observability + cost.
   const startedAt = Date.now();
   const deadline = startedAt + RUN_BUDGET_MS;
@@ -895,6 +888,16 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
       );
       return;
     }
+
+    // Compose the live prompt: base concierge instructions + the hermes-beam
+    // safety/ontology/persona rules (audit A1 — these were never loaded on the
+    // production path) + the structured session state. Assembled INSIDE the run
+    // try/catch (not at the top of the function) so a malformed/unexpected
+    // session-state shape degrades to a graceful `failed` event instead of
+    // rejecting the run promise — which surfaced to front-end users as the
+    // generic "Beam Agent failed unexpectedly." banner. The MCP/Telegram path
+    // never builds this prompt, which is why that path was unaffected.
+    const systemPrompt = SYSTEM_PROMPT + BEAM_SAFETY_RULES + beamSessionStatePrompt(input.sessionState);
 
     const maxTurns = Math.min(input.maxTurns ?? BEAM_LIMITS.maxAgentTurns, BEAM_LIMITS.maxAgentTurns);
     const orchestrationMaxTokens = input.orchestrationMaxTokens ?? BEAM_LIMITS.orchestrationMaxTokens;
@@ -1493,28 +1496,39 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
     void err;
     fail("agent_error", "Beam could not complete this request. Please try again.");
   } finally {
-    input.onSummary?.({
-      runId: ctx.runId,
-      outcome,
-      failureCode,
-      turns: turnCount,
-      tools: toolsUsed,
-      modelCalls,
-      inputTokens,
-      outputTokens,
-      usedSynthesis,
-      synthesisFailed,
-      ...(synthesisFailureReason ? { synthesisFailureReason } : {}),
-      ...(input.model ? { orchestrationModel: input.model } : {}),
-      ...(input.synthesisModel ?? input.model ? { synthesisModel: input.synthesisModel ?? input.model } : {}),
-      groundedNames: groundedNames.size,
-      groundedFragranceList: [...groundedFragrances.values()],
-      finalAnswer: finalAnswerText,
-      shippedWithSoftViolations,
-      estimatedCostUsd: estimateRunCostUsd(usageByModel.values()),
-      qualityGatePassed,
-      qualityViolations,
-      ms: Date.now() - startedAt,
-    });
+    // The summary callback (observatory + ledger + answer-log) and the inline
+    // cost estimate run on EVERY run, including completed ones. A throw here used
+    // to escape from `finally`, overriding the normal return and rejecting the
+    // run promise — so a logging/cost-estimate hiccup surfaced to the user as the
+    // generic "Beam Agent failed unexpectedly." banner even after a good answer.
+    // Observability must never break the run: swallow anything it throws.
+    try {
+      input.onSummary?.({
+        runId: ctx.runId,
+        outcome,
+        failureCode,
+        turns: turnCount,
+        tools: toolsUsed,
+        modelCalls,
+        inputTokens,
+        outputTokens,
+        usedSynthesis,
+        synthesisFailed,
+        ...(synthesisFailureReason ? { synthesisFailureReason } : {}),
+        ...(input.model ? { orchestrationModel: input.model } : {}),
+        ...(input.synthesisModel ?? input.model ? { synthesisModel: input.synthesisModel ?? input.model } : {}),
+        groundedNames: groundedNames.size,
+        groundedFragranceList: [...groundedFragrances.values()],
+        finalAnswer: finalAnswerText,
+        shippedWithSoftViolations,
+        estimatedCostUsd: estimateRunCostUsd(usageByModel.values()),
+        qualityGatePassed,
+        qualityViolations,
+        ms: Date.now() - startedAt,
+      });
+    } catch {
+      // Best-effort summary: a broken observability sink must never turn a
+      // finished run into a failure for the user.
+    }
   }
 }
