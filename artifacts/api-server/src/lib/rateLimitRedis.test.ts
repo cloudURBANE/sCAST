@@ -61,6 +61,16 @@ class FakeRedis implements RedisLike {
   async del(key: string): Promise<number> {
     return this.store.delete(key) ? 1 : 0;
   }
+  // Stream methods are unused by the limiter; present to satisfy RedisLike.
+  async xadd(): Promise<string | null> {
+    return null;
+  }
+  async xrange(): Promise<Array<[string, string[]]>> {
+    return [];
+  }
+  async pexpire(): Promise<number> {
+    return 1;
+  }
 }
 
 function makeLimiter(opts: {
@@ -148,6 +158,9 @@ test("redis limiter: falls back to in-memory when the client errors", async () =
     get: async () => null,
     set: async () => "OK",
     del: async () => 0,
+    xadd: async () => null,
+    xrange: async () => [],
+    pexpire: async () => 1,
   };
   const fallback = new FixedWindowRateLimiter(1, 1000);
   const limiter = makeLimiter({ limit: 1, windowMs: 1000, name: "t", client: throwing, fallback });

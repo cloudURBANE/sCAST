@@ -9,14 +9,17 @@
  * configured the loop emits a graceful `model_unavailable` event and the SPA
  * falls back to the scripted /api/scent-mission path.
  *
- * Run state is in-memory (one process). `POST /runs` and the follow-up
- * `GET /runs/:id/events` MUST land on the same instance, so the deploy is pinned
- * to a single replica (`railway.json` → `deploy.numReplicas: 1`; see
- * docs/beam-agent/09-deploy-checklist.md). If that invariant is ever broken the
- * SSE attach 404s — so a missing run is logged as a warning here to make the
- * misconfiguration visible rather than a silent client-side fallback. Phase 5
- * moves session/run state into Postgres and lifts the single-replica limit (see
- * the migration plan).
+ * Run state is in-memory (the local `runs` Map = the fast path) AND mirrored to
+ * Redis when `REDIS_URL` is configured (Phase 5, `beamRunStore.ts`). Same-replica
+ * attaches stream from memory exactly as before (incl. live message_delta). When
+ * `POST /runs` and the follow-up `GET /runs/:id/events` land on DIFFERENT replicas
+ * (or the process restarted), the GET falls back to Redis — replaying the durable
+ * event stream and poll-tailing to completion — instead of 404'ing. This lifts the
+ * single-replica requirement: once `REDIS_URL` is set and SSE-through-the-proxy is
+ * verified in staging, `railway.json` → `deploy.numReplicas` may be raised (see
+ * docs/beam-agent/09-deploy-checklist.md). With Redis OFF the behavior is unchanged:
+ * the run lives only in this process, so a cross-instance/restart attach 404s and is
+ * logged as a warning, and the client falls back to the scripted mission.
  */
 import { Router } from "express";
 import type { Express } from "express";
@@ -65,6 +68,19 @@ import { externalDetailRunCap, isDiscoverExternalEnabled } from "./discoveryConf
 import { parseBudgetCeiling } from "./budgetGate.ts";
 import { validateBeamFeedbackInput } from "./beamFeedbackCore.ts";
 import { appendSessionTurn, loadSession, saveSessionState } from "./beamSessionStore.ts";
+import {
+  appendRunEvent,
+  clearActiveSession,
+  createRunMeta,
+  isRunDone,
+  isRunStopped,
+  loadRunMeta,
+  markRunDone,
+  markRunStopped,
+  readRunEventsAfter,
+  tryAcquireActiveSession,
+} from "./beamRunStore.ts";
+import { isRedisConfigured } from "../lib/redisClient.ts";
 import { deriveBeamSessionState, inferPendingSlotFromAssistant } from "./missionState.ts";
 import type { BeamEmit, BeamRunContext, BeamRunEvent, BeamSessionState, CandidatePacket } from "./types.ts";
 import { createBeamResearcher } from "./research/beamResearch.ts";
@@ -123,6 +139,13 @@ type RunRecord = {
 
 const runs = new Map<string, RunRecord>();
 const RUN_TTL_MS = 30 * 60_000;
+// How often the producing replica polls the shared Redis stopped flag into its
+// local record (cross-replica cooperative stop). A few seconds is responsive
+// enough for a cancel while costing ~one cheap GET per active run per tick.
+const STOP_REFRESH_MS = 4_000;
+// Poll cadence for the cross-replica SSE tail (consumer replay path). Tight
+// enough that structural events feel live, loose enough to keep Redis load low.
+const SSE_POLL_MS = 250;
 
 function pruneRuns(): void {
   const now = Date.now();
@@ -156,13 +179,23 @@ function hashUser(userId: string): string {
 function makeEmit(record: RunRecord): BeamEmit {
   return (event) => {
     record.events.push(event);
-    if (event.type === "completed" || event.type === "failed") record.done = true;
+    const terminal = event.type === "completed" || event.type === "failed";
+    if (terminal) record.done = true;
     for (const listener of record.listeners) {
       try {
         listener(event);
       } catch {
         // A broken SSE client must never break the agent run.
       }
+    }
+    // Durable cross-replica mirror (Phase 5). Fire-and-forget and best-effort:
+    // a Redis hiccup must never affect the run or the local stream. `appendRunEvent`
+    // skips `message_delta` internally; on a terminal event we flip the shared
+    // done flag (so a tailing consumer can stop) and release the session lock.
+    void appendRunEvent(record.ctx.runId, event);
+    if (terminal) {
+      void markRunDone(record.ctx.runId);
+      void clearActiveSession(record.ctx);
     }
   };
 }
@@ -445,7 +478,12 @@ router.post("/runs", runRateLimit, requireAuth, async (req: AuthRequest, res) =>
   const sessionId =
     typeof body.sessionId === "string" && body.sessionId ? body.sessionId : `beam_${randomUUID()}`;
   const ctx: BeamRunContext = { runId, sessionId, tenantId: getTenantId(req), userId: req.user.id };
-  if (hasActiveSessionRun(ctx)) {
+  // One active Beam turn per session. The local guard catches same-replica
+  // concurrency; `tryAcquireActiveSession` is the cross-replica guard (a Redis
+  // SET NX lock). `||` short-circuits so we never take a lock for a run we then
+  // reject locally; the lock is permissive (returns true) when Redis is absent,
+  // so single-replica behavior is unchanged. Released on the terminal event.
+  if (hasActiveSessionRun(ctx) || !(await tryAcquireActiveSession(ctx))) {
     res.status(409).json({ error: "A Beam turn is already running for this session.", code: "session_run_in_progress" });
     return;
   }
@@ -465,6 +503,11 @@ router.post("/runs", runRateLimit, requireAuth, async (req: AuthRequest, res) =>
     createdAt: Date.now(),
   };
   runs.set(runId, record);
+  // Persist run metadata BEFORE returning 202, so a follow-up SSE attach that
+  // lands on another replica can authorize and bound the stream. Awaited (one
+  // Redis round-trip) to win the race with the client's immediate GET; a no-op
+  // when Redis is absent.
+  await createRunMeta(ctx);
 
   const emit = makeEmit(record);
   const session = await loadSession(ctx);
@@ -493,6 +536,21 @@ router.post("/runs", runRateLimit, requireAuth, async (req: AuthRequest, res) =>
   // historical hardcoded limits; env can lower them per lane to bound the bill when
   // a cheaper/reasoning closer is in play (brief §03.2). See resolveBeamBudget.
   const budget = resolveBeamBudget(lane);
+
+  // Cross-replica stop: a `POST /stop` can land on a different replica than the
+  // one running this loop. That replica only sets the shared Redis stopped flag,
+  // so the producing replica polls it into `record.stopped` here, keeping the
+  // loop's `shouldStop` a cheap synchronous read. Only armed when Redis is
+  // configured (otherwise a same-replica stop sets `record.stopped` directly);
+  // unref'd so it never holds the process open. Cleared when the run settles.
+  const stopRefresh = isRedisConfigured()
+    ? setInterval(() => {
+        void isRunStopped(runId).then((stopped) => {
+          if (stopped) record.stopped = true;
+        });
+      }, STOP_REFRESH_MS)
+    : null;
+  if (stopRefresh && typeof stopRefresh.unref === "function") stopRefresh.unref();
 
   // Fire-and-forget: the client consumes progress over SSE. runBeamAgent never
   // throws, but we guard anyway so a registry record can't be left half-open.
@@ -614,30 +672,100 @@ router.post("/runs", runRateLimit, requireAuth, async (req: AuthRequest, res) =>
   }).catch((err) => {
     logger.error({ err }, "beam agent run crashed");
     emit({ type: "failed", code: "agent_error", message: "Beam Agent failed unexpectedly." });
+  }).finally(() => {
+    if (stopRefresh) clearInterval(stopRefresh);
   });
 
   res.status(202).json({ runId, sessionId, eventsUrl: `/api/beam-agent/runs/${runId}/events` });
 });
 
-router.get("/runs/:runId/events", requireAuth, (req: AuthRequest, res) => {
+router.get("/runs/:runId/events", requireAuth, async (req: AuthRequest, res) => {
   if (!req.user) {
     res.status(401).end();
     return;
   }
   const runId = String(req.params.runId);
   const record = runs.get(runId);
-  if (!record) {
-    // The run was created by POST /runs but isn't in THIS process's registry.
-    // Almost always one of: (a) the deploy is running >1 replica and the SSE
-    // attach landed on a different instance than the POST — the single-replica
-    // invariant (railway.json numReplicas:1) is broken; (b) the run aged out of
-    // the TTL window; (c) the process restarted mid-run. Log it so the topology
-    // bug is visible in Railway logs instead of only as a silent client fallback.
+
+  /* --- Fast path: the run lives in THIS process's registry (same replica, the
+     common case and always true at numReplicas:1). Stream from the in-memory
+     buffer + live listener, including live message_delta tokens — unchanged. --- */
+  if (record) {
+    if (record.ctx.userId !== req.user.id || record.ctx.tenantId !== getTenantId(req)) {
+      res.status(403).json({ error: "Forbidden." });
+      return;
+    }
+
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    });
+    res.write(": beam-agent stream open\n\n");
+
+    let ended = false;
+    // Heartbeat: idle proxies (Railway/Vercel/Cloudflare) can drop a connection
+    // with no traffic, and an agent run can go many seconds between events. A
+    // comment frame every 15s keeps the stream alive without affecting the client.
+    const heartbeat = setInterval(() => {
+      if (ended) return;
+      try {
+        res.write(": ping\n\n");
+      } catch {
+        // Write after close — let the close handler clean up.
+      }
+    }, 15_000);
+    if (typeof heartbeat.unref === "function") heartbeat.unref();
+
+    const finish = (): void => {
+      if (ended) return;
+      ended = true;
+      clearInterval(heartbeat);
+      record.listeners.delete(send);
+    };
+    const send = (event: BeamRunEvent): void => {
+      if (ended) return;
+      const safe = redactEventForClient(event);
+      res.write(`data: ${JSON.stringify(safe)}\n\n`);
+      if (safe.type === "completed" || safe.type === "failed") {
+        finish();
+        res.end();
+      }
+    };
+
+    // Replay buffered events first (the run starts before the SSE attaches).
+    for (const event of record.events) {
+      send(event);
+      if (ended) break;
+    }
+    if (!ended && !record.done) record.listeners.add(send);
+    else if (!ended) {
+      finish();
+      res.end();
+    }
+
+    req.on("close", finish);
+    return;
+  }
+
+  /* --- Cross-replica / post-restart fallback (Phase 5). The run was created by
+     POST /runs on a DIFFERENT replica (or this process restarted mid-run). If
+     Redis holds the run's metadata, authorize against it and stream from the
+     durable event stream — replay the buffer, then poll-tail to the terminal
+     event. This is the case that used to 404 `run_not_found` every time under
+     >1 replica. message_delta isn't mirrored, so this path delivers structural
+     events + the full `completed` response, just without live token preview. --- */
+  const meta = await loadRunMeta(runId);
+  if (!meta) {
+    // Genuinely unknown: Redis is off (single-replica invariant still holds and
+    // the run aged out / restarted), or the id is bogus. Same observable result
+    // as before — log it and let the client fall back to the scripted mission.
     logger.warn({ runId, knownRuns: runs.size }, "beam agent run not found for SSE attach");
     res.status(404).json({ error: "Run not found.", code: "run_not_found" });
     return;
   }
-  if (record.ctx.userId !== req.user.id || record.ctx.tenantId !== getTenantId(req)) {
+  if (meta.ctx.userId !== req.user.id || meta.ctx.tenantId !== getTenantId(req)) {
     res.status(403).json({ error: "Forbidden." });
     return;
   }
@@ -648,18 +776,19 @@ router.get("/runs/:runId/events", requireAuth, (req: AuthRequest, res) => {
     Connection: "keep-alive",
     "X-Accel-Buffering": "no",
   });
-  res.write(": beam-agent stream open\n\n");
+  res.write(": beam-agent stream open (shared)\n\n");
 
   let ended = false;
-  // Heartbeat: idle proxies (Railway/Vercel/Cloudflare) can drop a connection
-  // with no traffic, and an agent run can go many seconds between events. A
-  // comment frame every 15s keeps the stream alive without affecting the client.
+  let lastId = "0";
+  let polling = false;
+  let pollTimer: ReturnType<typeof setTimeout> | null = null;
+
   const heartbeat = setInterval(() => {
     if (ended) return;
     try {
       res.write(": ping\n\n");
     } catch {
-      // Write after close — let the close handler clean up.
+      // Write after close — the close handler cleans up.
     }
   }, 15_000);
   if (typeof heartbeat.unref === "function") heartbeat.unref();
@@ -668,50 +797,86 @@ router.get("/runs/:runId/events", requireAuth, (req: AuthRequest, res) => {
     if (ended) return;
     ended = true;
     clearInterval(heartbeat);
-    record.listeners.delete(send);
+    if (pollTimer) clearTimeout(pollTimer);
   };
-  const send = (event: BeamRunEvent): void => {
-    if (ended) return;
+  // Returns true once a terminal event was written (the stream is closed).
+  const send = (event: BeamRunEvent): boolean => {
+    if (ended) return false;
     const safe = redactEventForClient(event);
     res.write(`data: ${JSON.stringify(safe)}\n\n`);
     if (safe.type === "completed" || safe.type === "failed") {
       finish();
       res.end();
+      return true;
+    }
+    return false;
+  };
+
+  const poll = async (): Promise<void> => {
+    if (ended || polling) return;
+    polling = true;
+    try {
+      const entries = await readRunEventsAfter(runId, lastId);
+      for (const { id, event } of entries) {
+        lastId = id;
+        if (send(event) || ended) return;
+      }
+      // Drained with no terminal frame yet. If the producer marked the run done,
+      // the terminal event may not have mirrored (best-effort) — close gracefully
+      // so the client falls back rather than hanging forever on a finished run.
+      if (!ended && (await isRunDone(runId))) {
+        finish();
+        res.end();
+        return;
+      }
+    } catch {
+      // Best-effort: a transient Redis error just retries on the next tick.
+    } finally {
+      polling = false;
+      if (!ended) pollTimer = setTimeout(() => void poll(), SSE_POLL_MS);
     }
   };
 
-  // Replay buffered events first (the run starts before the SSE attaches).
-  for (const event of record.events) {
-    send(event);
-    if (ended) break;
-  }
-  if (!ended && !record.done) record.listeners.add(send);
-  else if (!ended) {
-    finish();
-    res.end();
-  }
-
   req.on("close", finish);
+  void poll();
 });
 
-router.post("/runs/:runId/stop", requireAuth, (req: AuthRequest, res) => {
+router.post("/runs/:runId/stop", requireAuth, async (req: AuthRequest, res) => {
   if (!req.user) {
     res.status(401).end();
     return;
   }
-  const record = runs.get(String(req.params.runId));
-  if (!record) {
+  const runId = String(req.params.runId);
+  const record = runs.get(runId);
+  if (record) {
+    // Match the SSE attach check: ownership is keyed by (userId, tenantId), not
+    // userId alone — otherwise a same-id principal under another tenant could stop
+    // a run that isn't theirs.
+    if (record.ctx.userId !== req.user.id || record.ctx.tenantId !== getTenantId(req)) {
+      res.status(403).json({ error: "Forbidden." });
+      return;
+    }
+    record.stopped = true;
+    // Also flip the shared flag so a same-session attach on another replica
+    // observes the stop too (harmless when Redis is absent).
+    void markRunStopped(runId);
+    res.json({ ok: true });
+    return;
+  }
+
+  // Cross-replica: the run is executing on another replica. Authorize against the
+  // shared metadata, then set the shared stopped flag — the producing replica
+  // polls it into its local record (see STOP_REFRESH_MS).
+  const meta = await loadRunMeta(runId);
+  if (!meta) {
     res.status(404).json({ error: "Run not found.", code: "run_not_found" });
     return;
   }
-  // Match the SSE attach check: ownership is keyed by (userId, tenantId), not
-  // userId alone — otherwise a same-id principal under another tenant could stop
-  // a run that isn't theirs.
-  if (record.ctx.userId !== req.user.id || record.ctx.tenantId !== getTenantId(req)) {
+  if (meta.ctx.userId !== req.user.id || meta.ctx.tenantId !== getTenantId(req)) {
     res.status(403).json({ error: "Forbidden." });
     return;
   }
-  record.stopped = true;
+  await markRunStopped(runId);
   res.json({ ok: true });
 });
 
