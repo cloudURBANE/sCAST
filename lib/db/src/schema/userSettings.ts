@@ -48,6 +48,18 @@ export const userSettingsTable = pgTable(
     // truth here keeps multiple devices in sync — the next push to any device
     // carries the updated number.
     notificationBadgeCount: integer("notification_badge_count").notNull().default(0),
+    // UI preferences — color theme, accent palette, and interface language. All
+    // additive + nullable so reads tolerate a pre-migration live DB exactly like
+    // the columns above (routes/me.ts catches 42703 and falls back to defaults).
+    // Kept nullable with no DB default: the app owns the baseline ('dark' / 'gold'
+    // / 'en'), so an unset row renders the current look and a deploy stays a
+    // trivially additive `drizzle-kit push`.
+    //   themePreference:  'dark' | 'light'
+    //   accentPreference: 'gold' | 'green'
+    //   localePreference: 'en' | 'es' | 'fr' | 'de'
+    themePreference: text("theme_preference"),
+    accentPreference: text("accent_preference"),
+    localePreference: text("locale_preference"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },

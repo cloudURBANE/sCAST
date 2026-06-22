@@ -33,6 +33,7 @@ import { hasAnalyticsConsent, onConsentChange } from '@/lib/consent';
 import { loadRouteChunk } from '@/lib/routeChunkRecovery';
 import { initWebVitals, vaultSizeBucket } from '@/lib/webVitalsTelemetry';
 import { FragranceCapture } from './components/FragranceCapture';
+import { PreferenceSync } from './components/PreferenceSync';
 
 const Wardrobe = React.lazy(() =>
   loadRouteChunk(() => import('./components/Wardrobe').then((module) => ({ default: module.Wardrobe }))),
@@ -1714,6 +1715,7 @@ const AppShell = React.memo(function AppShell({
       <WeatherProvider>
         <WardrobeProvider>
           <div className={shellClassName}>
+            <PreferenceSync />
             {showThreadBackground ? <ThreadBackground mode={threadBackgroundMode} /> : null}
             <WebVitalsReporter />
             <AppContent location={renderedLocation} />

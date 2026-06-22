@@ -6,6 +6,8 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { CrashDiag } from "./components/CrashDiag";
 import { PwaUpdater } from "./components/pwa/PwaUpdater";
 import { initCrashTrace } from "./lib/crashTrace";
+import { I18nProvider } from "./i18n";
+import { ThemeProvider } from "./context/ThemeContext";
 import App from "./App";
 import "./index.css";
 
@@ -32,9 +34,13 @@ createRoot(document.getElementById("root")!).render(
   <ErrorBoundary>
     <HelmetProvider>
       <QueryClientProvider client={queryClient}>
-        <BrowserRouter>
-          <App />
-        </BrowserRouter>
+        <I18nProvider>
+          <ThemeProvider>
+            <BrowserRouter>
+              <App />
+            </BrowserRouter>
+          </ThemeProvider>
+        </I18nProvider>
       </QueryClientProvider>
     </HelmetProvider>
     <CrashDiag />

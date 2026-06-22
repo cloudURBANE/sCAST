@@ -306,4 +306,112 @@ router.put("/me/profile", requireAuth, async (req: AuthRequest, res) => {
   res.json({ username, email: user.email });
 });
 
+// ── UI preferences (theme / accent / language) ─────────────────────────────
+// Cross-device sync for the appearance + language pickers. The client treats
+// localStorage as the source of truth for instant, offline-capable switching;
+// this endpoint reconciles that choice across a user's devices. Like every
+// other user_settings read here, it tolerates the columns not yet existing in
+// the live DB (migration lag) by catching 42703 and reporting nulls, so the
+// settings panel never 500s before `drizzle-kit push` lands.
+
+const THEME_VALUES = new Set(["dark", "light"]);
+const ACCENT_VALUES = new Set(["gold", "green"]);
+const LOCALE_VALUES = new Set(["en", "es", "fr", "de"]);
+
+type PreferencesDto = {
+  theme: string | null;
+  accent: string | null;
+  locale: string | null;
+};
+
+function pickEnum(value: unknown, allowed: Set<string>): string | null | undefined {
+  // undefined  → caller omitted the field (leave unchanged)
+  // null/""     → explicit clear (revert to app default)
+  // valid enum  → set it
+  // anything else → undefined (ignored), so a bad value can't wipe a good one
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+  if (typeof value === "string" && allowed.has(value)) return value;
+  return undefined;
+}
+
+router.get("/me/preferences", requireAuth, async (req: AuthRequest, res) => {
+  const user = req.user!;
+  let prefs: PreferencesDto = { theme: null, accent: null, locale: null };
+  try {
+    const [row] = await db
+      .select({
+        theme: userSettingsTable.themePreference,
+        accent: userSettingsTable.accentPreference,
+        locale: userSettingsTable.localePreference,
+      })
+      .from(userSettingsTable)
+      .where(eq(userSettingsTable.userId, user.id))
+      .limit(1);
+    if (row) {
+      prefs = {
+        theme: row.theme ?? null,
+        accent: row.accent ?? null,
+        locale: row.locale ?? null,
+      };
+    }
+  } catch (err) {
+    if (!isUndefinedColumnError(err)) throw err;
+    logger.warn({ userId: user.id }, "user_settings preference columns not yet migrated — reporting nulls");
+  }
+  res.json({ preferences: prefs });
+});
+
+router.put("/me/preferences", requireAuth, async (req: AuthRequest, res) => {
+  const user = req.user!;
+  const tenantId = getTenantId(req);
+  const body = (req.body ?? {}) as { theme?: unknown; accent?: unknown; locale?: unknown };
+
+  const theme = pickEnum(body.theme, THEME_VALUES);
+  const accent = pickEnum(body.accent, ACCENT_VALUES);
+  const locale = pickEnum(body.locale, LOCALE_VALUES);
+
+  if (theme === undefined && accent === undefined && locale === undefined) {
+    res.status(400).json({ error: "Provide at least one of theme, accent, or locale." });
+    return;
+  }
+
+  // Only the explicitly-provided fields land in the update set, so a partial
+  // PUT (e.g. just the language) never clobbers the other two preferences.
+  const now = new Date();
+  const updates: Record<string, unknown> = { updatedAt: now };
+  if (theme !== undefined) updates.themePreference = theme;
+  if (accent !== undefined) updates.accentPreference = accent;
+  if (locale !== undefined) updates.localePreference = locale;
+
+  try {
+    await db
+      .insert(userSettingsTable)
+      .values({
+        tenantId,
+        userId: user.id,
+        themePreference: theme === undefined ? null : theme,
+        accentPreference: accent === undefined ? null : accent,
+        localePreference: locale === undefined ? null : locale,
+      })
+      .onConflictDoUpdate({
+        target: userSettingsTable.userId,
+        set: { tenantId, ...updates },
+      });
+  } catch (err) {
+    if (!isUndefinedColumnError(err)) throw err;
+    logger.warn({ userId: user.id }, "Cannot save UI preferences before migration is applied");
+    res.status(503).json({ error: "Preference sync is temporarily unavailable." });
+    return;
+  }
+
+  res.json({
+    preferences: {
+      theme: theme === undefined ? null : theme,
+      accent: accent === undefined ? null : accent,
+      locale: locale === undefined ? null : locale,
+    } satisfies PreferencesDto,
+  });
+});
+
 export default router;

@@ -1,10 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { BellRing, Check, CloudSun, LocateFixed, LoaderCircle, UserRound, X } from 'lucide-react';
+import { BellRing, Check, CloudSun, Languages, LocateFixed, LoaderCircle, Palette, UserRound, X } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { useModalBehavior } from '@/hooks/use-modal-behavior';
 import { useWeather } from '@/context/WeatherContext';
+import { useTheme, type AccentName, type ThemeMode } from '@/context/ThemeContext';
+import { useTranslation, LOCALE_LABELS, SUPPORTED_LOCALES, type Locale } from '@/i18n';
+import { savePreferences } from '@/lib/preferences';
 import {
   getPushSupport,
   getServerPushConfig,
@@ -34,20 +37,6 @@ const USERNAME_MAX = 20;
 // and . _ -, never at the start or end. Empty clears the username.
 const USERNAME_RE = /^[a-zA-Z0-9](?:[a-zA-Z0-9_.\-]{1,18}[a-zA-Z0-9])$/;
 
-const LOCATION_STATUS_COPY = {
-  idle: 'Default weather source',
-  requesting: 'Requesting location',
-  granted: 'Current location active',
-  denied: 'Location access blocked',
-  unsupported: 'Location unavailable',
-} as const;
-
-const LOCATION_SOURCE_COPY = {
-  fallback: 'Regional fallback',
-  preferred: 'Saved preference',
-  browser: 'Device location',
-} as const;
-
 /** Compact labelled switch used for the per-category notification toggles. */
 const NotificationToggle: React.FC<{
   label: string;
@@ -68,7 +57,7 @@ const NotificationToggle: React.FC<{
       disabled={busy || disabled}
       role="switch"
       aria-checked={checked}
-      aria-label={`Toggle ${label}`}
+      aria-label={label}
       className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40 disabled:cursor-wait disabled:opacity-70 ${
         checked ? 'border-scent-accent/60 bg-scent-accent/30' : 'border-white/15 bg-white/5'
       }`}
@@ -84,6 +73,70 @@ const NotificationToggle: React.FC<{
   </div>
 );
 
+interface SegmentedOption<T extends string> {
+  value: T;
+  label: string;
+  hint?: string;
+  swatch?: string;
+}
+
+/** Pill-segmented selector matching the panel's dark cards. The active segment
+ *  picks up the live accent, so it doubles as a preview of the accent choice. */
+function SegmentedControl<T extends string>({
+  options,
+  value,
+  onChange,
+  ariaLabel,
+}: {
+  options: SegmentedOption<T>[];
+  value: T;
+  onChange: (next: T) => void;
+  ariaLabel: string;
+}) {
+  return (
+    <div
+      role="radiogroup"
+      aria-label={ariaLabel}
+      className="grid gap-2"
+      style={{ gridTemplateColumns: `repeat(${Math.min(options.length, 2)}, minmax(0, 1fr))` }}
+    >
+      {options.map((option) => {
+        const active = option.value === value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            onClick={() => onChange(option.value)}
+            className={`flex min-h-[3.25rem] flex-col items-start justify-center gap-0.5 rounded-[10px] border px-3.5 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40 ${
+              active
+                ? 'border-scent-accent/60 bg-scent-accent/[0.12]'
+                : 'border-white/10 bg-black/20 hover:border-white/20'
+            }`}
+          >
+            <span className="flex items-center gap-2">
+              {option.swatch ? (
+                <span
+                  aria-hidden="true"
+                  className="h-3 w-3 shrink-0 rounded-full ring-1 ring-white/25"
+                  style={{ background: option.swatch }}
+                />
+              ) : null}
+              <span className={`text-[12px] font-semibold leading-snug ${active ? 'text-[#fff7ec]' : 'text-white/80'}`}>
+                {option.label}
+              </span>
+            </span>
+            {option.hint ? (
+              <span className="text-[10px] leading-snug text-white/40">{option.hint}</span>
+            ) : null}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
   isOpen,
   onClose,
@@ -94,6 +147,8 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { weather, weatherLoading, locationStatus, locationSource, requestLocation } = useWeather();
+  const { t, locale, setLocale } = useTranslation();
+  const { theme, accent, setTheme, setAccent } = useTheme();
   const [value, setValue] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -165,19 +220,42 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
   const formatInvalid = trimmed.length > 0 && !USERNAME_RE.test(trimmed);
   const locating = locationStatus === 'requesting';
   const locationButtonLabel = locationStatus === 'granted'
-    ? 'Refresh current location'
-    : 'Use current location';
+    ? t('atmosphere.refreshLocation')
+    : t('atmosphere.useLocation');
   const locationSourceLabel = locating
-    ? 'Awaiting permission'
-    : LOCATION_SOURCE_COPY[locationSource];
+    ? t('atmosphere.awaitingPermission')
+    : t(`atmosphere.source.${locationSource}`);
   const weatherLocation = typeof weather?.location === 'string' && weather.location.trim()
     ? weather.location.trim()
-    : 'Not set';
+    : t('atmosphere.notSet');
+
+  // Appearance + language: apply locally for an instant, offline-capable switch,
+  // then best-effort sync to the account so the choice follows the user across
+  // devices (no-op for guests / offline — the local change still sticks).
+  const handleThemeChange = (next: ThemeMode) => {
+    if (next === theme) return;
+    setTheme(next);
+    if (authToken) void savePreferences(authToken, { theme: next });
+  };
+  const handleAccentChange = (next: AccentName) => {
+    if (next === accent) return;
+    setAccent(next);
+    if (authToken) void savePreferences(authToken, { accent: next });
+  };
+  const handleLocaleChange = (next: Locale) => {
+    if (next === locale) return;
+    setLocale(next);
+    if (authToken) void savePreferences(authToken, { locale: next });
+    toast({
+      title: t('language.savedTitle'),
+      description: t('language.savedDescription', { language: LOCALE_LABELS[next] }),
+    });
+  };
 
   const handleSave = async () => {
     if (!authToken || saving) return;
     if (formatInvalid) {
-      setError('Use 3-20 characters: letters, numbers, and . _ - only (not at the start or end).');
+      setError(t('profile.formatError'));
       return;
     }
     setSaving(true);
@@ -200,14 +278,14 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
       // Author names are baked into cached community payloads, so refetch after a rename.
       void queryClient.invalidateQueries({ queryKey: ['community'] });
       toast({
-        title: savedUsername ? 'Username updated' : 'Username cleared',
+        title: savedUsername ? t('profile.savedTitle') : t('profile.clearedTitle'),
         description: savedUsername
-          ? `You'll appear as "${savedUsername}" in the community.`
-          : 'Your posts now show a private alias.',
+          ? t('profile.savedDescription', { username: savedUsername })
+          : t('profile.clearedDescription'),
       });
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not save your username.');
+      setError(err instanceof Error ? err.message : t('profile.genericError'));
     } finally {
       setSaving(false);
     }
@@ -309,15 +387,15 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                 <div className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-scent-accent" />
                 <div className="min-w-0">
                   <p id="profile-modal-title" className="text-[9px] font-bold uppercase tracking-[0.5em] text-scent-accent">
-                    Settings
+                    {t('settings.eyebrow')}
                   </p>
-                  <p className="mt-0.5 font-sans text-[9px] text-white/40">Account and atmosphere</p>
+                  <p className="mt-0.5 font-sans text-[9px] text-white/40">{t('settings.subtitle')}</p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={onClose}
-                aria-label="Close"
+                aria-label={t('common.close')}
                 className="group ml-3 inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
               >
                 <X size={16} className="transition-transform duration-300 group-hover:rotate-90" />
@@ -332,8 +410,8 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                       <UserRound size={16} aria-hidden="true" />
                     </span>
                     <div className="min-w-0">
-                      <h3 className="text-[10px] font-bold uppercase tracking-[0.34em] text-[#fff7ec]">Profile</h3>
-                      <p className="mt-0.5 text-[11px] text-white/35">Community identity</p>
+                      <h3 className="text-[10px] font-bold uppercase tracking-[0.34em] text-[#fff7ec]">{t('profile.title')}</h3>
+                      <p className="mt-0.5 text-[11px] text-white/35">{t('profile.subtitle')}</p>
                     </div>
                   </div>
 
@@ -345,7 +423,7 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                     }}
                   >
                     <label htmlFor="profile-username" className="block">
-                      <span className="text-[9px] font-bold uppercase tracking-[0.32em] text-white/35">Username</span>
+                      <span className="text-[9px] font-bold uppercase tracking-[0.32em] text-white/35">{t('profile.usernameLabel')}</span>
                       <input
                         id="profile-username"
                         ref={inputRef}
@@ -356,7 +434,7 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                           setValue(event.target.value);
                           if (error) setError(null);
                         }}
-                        placeholder="e.g. velvet_oud"
+                        placeholder={t('profile.usernamePlaceholder')}
                         autoCapitalize="none"
                         autoCorrect="off"
                         spellCheck={false}
@@ -369,7 +447,7 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                         {error ? (
                           <span className="text-red-300">{error}</span>
                         ) : (
-                          'Letters, numbers, and . _ -; leave blank to stay anonymous.'
+                          t('profile.help')
                         )}
                       </p>
                       <span className="shrink-0 font-mono text-[11px] text-white/30">
@@ -387,33 +465,92 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                       ) : (
                         <Check size={15} strokeWidth={2} aria-hidden="true" />
                       )}
-                      {saving ? 'Saving' : 'Save username'}
+                      {saving ? t('profile.saving') : t('profile.save')}
                     </button>
                   </form>
                 </section>
 
-                <section className="rounded-[12px] border border-scent-accent/20 bg-[linear-gradient(180deg,rgba(212,175,55,0.07),rgba(255,255,255,0.025))] p-4 shadow-[inset_0_1px_0_rgba(255,236,183,0.08)]">
+                <section className="rounded-[12px] border border-white/10 bg-white/[0.025] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                  <div className="mb-4 flex items-center gap-3">
+                    <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-scent-accent/20 bg-scent-accent/[0.08] text-scent-accent">
+                      <Palette size={16} aria-hidden="true" />
+                    </span>
+                    <div className="min-w-0">
+                      <h3 className="text-[10px] font-bold uppercase tracking-[0.34em] text-[#fff7ec]">{t('appearance.title')}</h3>
+                      <p className="mt-0.5 text-[11px] text-white/35">{t('appearance.subtitle')}</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div>
+                      <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.28em] text-white/30">{t('appearance.themeLabel')}</p>
+                      <SegmentedControl<ThemeMode>
+                        ariaLabel={t('appearance.themeLabel')}
+                        value={theme}
+                        onChange={handleThemeChange}
+                        options={[
+                          { value: 'dark', label: t('appearance.themeDark'), hint: t('appearance.themeDarkHint') },
+                          { value: 'light', label: t('appearance.themeLight'), hint: t('appearance.themeLightHint') },
+                        ]}
+                      />
+                    </div>
+                    <div>
+                      <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.28em] text-white/30">{t('appearance.accentLabel')}</p>
+                      <SegmentedControl<AccentName>
+                        ariaLabel={t('appearance.accentLabel')}
+                        value={accent}
+                        onChange={handleAccentChange}
+                        options={[
+                          { value: 'gold', label: t('appearance.accentGold'), hint: t('appearance.accentGoldHint'), swatch: '#d4af37' },
+                          { value: 'green', label: t('appearance.accentGreen'), hint: t('appearance.accentGreenHint'), swatch: '#5e984e' },
+                        ]}
+                      />
+                    </div>
+                  </div>
+                </section>
+
+                <section className="rounded-[12px] border border-white/10 bg-white/[0.025] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                  <div className="mb-4 flex items-center gap-3">
+                    <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-scent-accent/20 bg-scent-accent/[0.08] text-scent-accent">
+                      <Languages size={16} aria-hidden="true" />
+                    </span>
+                    <div className="min-w-0">
+                      <h3 className="text-[10px] font-bold uppercase tracking-[0.34em] text-[#fff7ec]">{t('language.title')}</h3>
+                      <p className="mt-0.5 text-[11px] text-white/35">{t('language.subtitle')}</p>
+                    </div>
+                  </div>
+
+                  <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.28em] text-white/30">{t('language.label')}</p>
+                  <SegmentedControl<Locale>
+                    ariaLabel={t('language.label')}
+                    value={locale}
+                    onChange={handleLocaleChange}
+                    options={SUPPORTED_LOCALES.map((code) => ({ value: code, label: LOCALE_LABELS[code] }))}
+                  />
+                </section>
+
+                <section className="rounded-[12px] border border-scent-accent/20 bg-[linear-gradient(180deg,rgb(var(--scent-accent-rgb)/0.07),rgba(255,255,255,0.025))] p-4 shadow-[inset_0_1px_0_rgba(255,236,183,0.08)]">
                   <div className="mb-4 flex items-center gap-3">
                     <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-scent-accent/24 bg-black/35 text-scent-accent">
                       <CloudSun size={17} aria-hidden="true" />
                     </span>
                     <div className="min-w-0">
-                      <h3 className="text-[10px] font-bold uppercase tracking-[0.34em] text-[#fff7ec]">Atmosphere</h3>
+                      <h3 className="text-[10px] font-bold uppercase tracking-[0.34em] text-[#fff7ec]">{t('atmosphere.title')}</h3>
                       <p className="mt-0.5 text-[11px] text-white/35">{locationSourceLabel}</p>
                     </div>
                   </div>
 
                   <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div className="rounded-[10px] border border-white/10 bg-black/25 px-3.5 py-3">
-                      <dt className="text-[9px] font-bold uppercase tracking-[0.28em] text-white/30">Location</dt>
-                      <dd className="mt-1 min-w-0 truncate text-sm text-[#fff7ec]" title={weatherLoading ? 'Loading' : weatherLocation}>
-                        {weatherLoading ? 'Loading' : weatherLocation}
+                      <dt className="text-[9px] font-bold uppercase tracking-[0.28em] text-white/30">{t('atmosphere.locationLabel')}</dt>
+                      <dd className="mt-1 min-w-0 truncate text-sm text-[#fff7ec]" title={weatherLoading ? t('atmosphere.loading') : weatherLocation}>
+                        {weatherLoading ? t('atmosphere.loading') : weatherLocation}
                       </dd>
                     </div>
                     <div className="rounded-[10px] border border-white/10 bg-black/25 px-3.5 py-3">
-                      <dt className="text-[9px] font-bold uppercase tracking-[0.28em] text-white/30">Status</dt>
-                      <dd className="mt-1 min-w-0 truncate text-sm text-[#fff7ec]" title={LOCATION_STATUS_COPY[locationStatus]}>
-                        {LOCATION_STATUS_COPY[locationStatus]}
+                      <dt className="text-[9px] font-bold uppercase tracking-[0.28em] text-white/30">{t('atmosphere.statusLabel')}</dt>
+                      <dd className="mt-1 min-w-0 truncate text-sm text-[#fff7ec]" title={t(`atmosphere.status.${locationStatus}`)}>
+                        {t(`atmosphere.status.${locationStatus}`)}
                       </dd>
                     </div>
                   </dl>
@@ -422,14 +559,14 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                     type="button"
                     onClick={handleLocationRequest}
                     disabled={locating}
-                    className="mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full border border-scent-accent/35 bg-[#d4af37] px-4 py-3 text-[13px] font-bold uppercase tracking-[0.16em] text-black shadow-[0_14px_34px_-20px_rgba(0,0,0,0.6)] transition-colors hover:bg-[#e6c85e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950 disabled:cursor-wait disabled:opacity-70"
+                    className="mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full border border-scent-accent/35 bg-scent-accent px-4 py-3 text-[13px] font-bold uppercase tracking-[0.16em] text-black shadow-[0_14px_34px_-20px_rgba(0,0,0,0.6)] transition-[filter,background-color] hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950 disabled:cursor-wait disabled:opacity-70"
                   >
                     {locating ? (
                       <LoaderCircle size={15} className="animate-spin" aria-hidden="true" />
                     ) : (
                       <LocateFixed size={15} strokeWidth={2} aria-hidden="true" />
                     )}
-                    {locating ? 'Locating' : locationButtonLabel}
+                    {locating ? t('atmosphere.locating') : locationButtonLabel}
                   </button>
                 </section>
 
@@ -440,8 +577,8 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                         <BellRing size={16} aria-hidden="true" />
                       </span>
                       <div className="min-w-0">
-                        <h3 className="text-[10px] font-bold uppercase tracking-[0.34em] text-[#fff7ec]">Notifications</h3>
-                        <p className="mt-0.5 text-[11px] text-white/35">Scent nudges on this device</p>
+                        <h3 className="text-[10px] font-bold uppercase tracking-[0.34em] text-[#fff7ec]">{t('notifications.title')}</h3>
+                        <p className="mt-0.5 text-[11px] text-white/35">{t('notifications.subtitle')}</p>
                       </div>
                     </div>
 
@@ -466,8 +603,8 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                         <div className="flex items-center justify-between gap-3">
                           <p className="min-w-0 flex-1 text-[11px] leading-snug text-white/45">
                             {pushState === 'on'
-                              ? "Notifications are on for this device."
-                              : 'Get the occasional scent-of-the-day nudge.'}
+                              ? t('notifications.on')
+                              : t('notifications.off')}
                           </p>
                           <button
                             type="button"
@@ -475,7 +612,7 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                             disabled={pushBusy}
                             role="switch"
                             aria-checked={pushState === 'on'}
-                            aria-label="Toggle scent notifications"
+                            aria-label={t('notifications.toggleAria')}
                             className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40 disabled:cursor-wait disabled:opacity-70 ${
                               pushState === 'on'
                                 ? 'border-scent-accent/60 bg-scent-accent/30'
@@ -495,18 +632,18 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                         {pushState === 'on' && (
                           <div className="mt-3 space-y-2">
                             <p className="text-[9px] font-bold uppercase tracking-[0.28em] text-white/30">
-                              What to send
+                              {t('notifications.whatToSend')}
                             </p>
                             <NotificationToggle
-                              label="Scent weather nudges"
-                              description="When the weather shifts your perfect wear."
+                              label={t('notifications.weatherLabel')}
+                              description={t('notifications.weatherDescription')}
                               checked={pushPrefs.weather}
                               busy={prefBusy === 'weather'}
                               onToggle={() => void handleToggleCategory('weather')}
                             />
                             <NotificationToggle
-                              label="Community replies"
-                              description="When someone replies to your posts or comments."
+                              label={t('notifications.communityLabel')}
+                              description={t('notifications.communityDescription')}
                               checked={pushPrefs.community}
                               busy={prefBusy === 'community'}
                               onToggle={() => void handleToggleCategory('community')}
@@ -515,9 +652,7 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                         )}
 
                         <p className="mt-3 text-[10px] leading-snug text-white/35">
-                          We only use your saved city and weather to time these — no tracking, no
-                          message content leaves your device. Turn them off anytime here or in your
-                          device settings.
+                          {t('notifications.privacyNote')}
                         </p>
                       </>
                     )}
