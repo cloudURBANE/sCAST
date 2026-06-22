@@ -12,7 +12,16 @@ import {
   parseDateLabel,
   recapLabelForOutcome,
   recommendCtaForState,
+  sanitizeDestination,
 } from './beamAnswerContract.ts';
+
+test('sanitizeDestination drops run-on word-salad and keeps real places', () => {
+  assert.equal(sanitizeDestination('Chicago I want to sneak bike she it'), '');
+  assert.equal(sanitizeDestination('Chicago'), 'Chicago');
+  assert.equal(sanitizeDestination('New York'), 'New York');
+  assert.equal(sanitizeDestination('Salt Lake City'), 'Salt Lake City');
+  assert.equal(sanitizeDestination(undefined), '');
+});
 
 /* ---------------------------------------------------------------- location -- */
 

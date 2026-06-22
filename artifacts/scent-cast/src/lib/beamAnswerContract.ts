@@ -45,6 +45,20 @@ export function titleCaseWords(value: string): string {
 }
 
 /**
+ * Defensive guard for the header title. The backend destination slot is free-text
+ * from a deterministic parser; if it ever over-captures a run-on phrase
+ * ("Chicago I want to sneak bike she it") it must not render as a word-salad place
+ * name. A real destination is at most a few words, so anything longer is dropped to
+ * empty and the title falls back to its calm default. The backend now clamps the
+ * capture too; this is the last-line client guard.
+ */
+export function sanitizeDestination(raw: string | null | undefined): string {
+  const cleaned = (raw ?? '').replace(/\s+/g, ' ').trim();
+  if (!cleaned) return '';
+  return cleaned.split(' ').length <= 4 ? cleaned : '';
+}
+
+/**
  * Normalize a free-text location for display.
  *   "duluth mn"   → "Duluth, MN"
  *   "duluth, mn"  → "Duluth, MN"

@@ -71,6 +71,15 @@ const REVIEW_PATTERN =
 const LEAKED_INSTRUCTION_PATTERN =
   /\b(?:ignore\s+(?:(?:all|any|the|previous|above|prior)\s+){1,3}(?:instructions?|prompts?|rules?)|disregard\s+(?:all|any|the|previous|above|prior)|you\s+are\s+now\s+(?:a|an)\b|system\s+prompt)\b|<\/?(?:system|instructions?)>|^\s*(?:system|assistant)\s*:/im;
 
+/**
+ * Raw OpenAI "harmony"/gpt-oss control markup or a tool-call recipient header that
+ * leaked into the prose (a harmony-format model emitting `<|channel|>commentary
+ * to=functions.x <|message|>{…}<|call|>` as text instead of a structured tool call).
+ * The provider scrubs this at the source; this gate is the deterministic backstop
+ * so any residue fails the run cleanly instead of rendering as tokens to the user.
+ */
+const LEAKED_TOOL_CALL_PATTERN = /<\|(?:start|end|message|channel|constrain|call|return)\b|\bto=functions\./i;
+
 function asksForKnownSlot(text: string, state: BeamSessionState | undefined): boolean {
   const slots = state?.slots ?? {};
   if (!/[?]|\b(?:tell me|let me know|which|what|when|where)\b/i.test(text)) return false;
@@ -471,6 +480,7 @@ export function runAnswerQualityGates(answerText: string, input: QualityGateInpu
   }
 
   if (LEAKED_INSTRUCTION_PATTERN.test(text)) violations.push("leaked_external_instruction");
+  if (LEAKED_TOOL_CALL_PATTERN.test(text)) violations.push("leaked_tool_call");
   if (text.length > maxChars) violations.push("over_length");
 
   return { passed: violations.length === 0, violations };
@@ -510,6 +520,8 @@ export function repairInstructionFor(violations: string[]): string {
     fixes.push("You committed to a recommendation but named no specific fragrance - commit to a specific grounded pick from the retrieved results.");
   if (violations.includes("leaked_external_instruction"))
     fixes.push("Remove any instruction-like text; answer only as the concierge.");
+  if (violations.includes("leaked_tool_call"))
+    fixes.push("Remove all raw control tokens and tool-call syntax ('<|...|>', 'to=functions.*', 'commentary'/'analysis' channels). Reply only with the finished, user-facing recommendation in plain prose.");
   if (violations.includes("over_length")) fixes.push("Be more concise.");
   return (
     "Your draft broke an answer rule. Rewrite it for the user, fixing: " +

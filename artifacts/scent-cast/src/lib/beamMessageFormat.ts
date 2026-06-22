@@ -69,8 +69,42 @@ export function detectCatalogUnavailable(raw: string): boolean {
  * inside kept lines is normalized; blank-line structure is preserved so the block
  * parser can still separate paragraphs.
  */
+/**
+ * Strip OpenAI "harmony" / gpt-oss control markup that can leak into a message when
+ * a misconfigured model emits its raw channel transcript instead of just the final
+ * answer (e.g. `<|start|>assistant<|channel|>commentary to=functions.x <|constrain|>
+ * json<|message|>{…}<|call|>`). The api-server provider already scrubs this at the
+ * source; this is the last-line client guard so the symptom can never render — and
+ * it also cleans any message persisted before the server fix shipped. Plain answers
+ * (no `<|`) are returned unchanged.
+ */
+export function stripHarmonyTokens(raw: string): string {
+  if (!raw || !raw.includes('<|')) return raw ?? '';
+
+  // Prefer the user-facing "final" channel when the harmony envelope wraps it.
+  const finalChannel = raw.match(
+    /<\|channel\|>\s*final\s*<\|message\|>([\s\S]*?)(?:<\|return\|>|<\|end\|>|<\|start\|>|$)/,
+  );
+  let text = finalChannel ? finalChannel[1] : raw;
+
+  text = text
+    // A whole tool-call / reasoning block: header → args → terminator.
+    .replace(/<\|channel\|>\s*(?:commentary|analysis)[\s\S]*?(?:<\|call\|>|<\|end\|>|<\|return\|>)/g, '')
+    // A role preamble such as "<|start|>assistant".
+    .replace(/<\|start\|>\s*\w*/g, '')
+    // Any remaining well-formed control token.
+    .replace(/<\|[^|>]*\|>/g, '')
+    // A dangling partial token from a truncated chunk.
+    .replace(/<\|[^|>]*$/g, '')
+    // A leftover tool-recipient header if its block was malformed.
+    .replace(/\bto=functions\.[A-Za-z0-9_.]+/g, '');
+
+  return text.trim();
+}
+
 export function cleanAgentText(raw: string): string {
   if (!raw) return '';
+  raw = stripHarmonyTokens(raw);
   const out: string[] = [];
   let lastKept = '';
   let pendingBlank = false;

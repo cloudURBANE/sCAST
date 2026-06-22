@@ -191,6 +191,26 @@ function parseSeason(text: string): string | undefined {
   return undefined;
 }
 
+/**
+ * Clamp a captured destination to the leading place tokens. The capture groups are
+ * deliberately permissive (`[A-Za-z .'-]{1,50}`), so a run-on sentence after the
+ * preposition ("trip to Chicago I want to sneak bike she it…") would otherwise be
+ * stored whole and later rendered as a word-salad kit title. A place phrase ends at
+ * the first function/pronoun/verb word, so we keep tokens up to (but not including)
+ * the first NON_PLACE_WORD — "Chicago I want to…" → "Chicago", while real multi-word
+ * cities ("New York", "Salt Lake City") survive untouched.
+ */
+function clampToPlaceTokens(value: string): string {
+  const tokens = value.split(" ").filter(Boolean);
+  const kept: string[] = [];
+  for (const token of tokens) {
+    const bare = token.toLowerCase().replace(/[^a-z]/g, "");
+    if (kept.length > 0 && NON_PLACE_WORDS.has(bare)) break;
+    kept.push(token);
+  }
+  return kept.join(" ").trim();
+}
+
 function parseDestination(text: string): string | undefined {
   const patterns = [
     /\b(?:party|dinner|brunch|interview|date|graduation|funeral|event|meeting)\s+in\s+([A-Za-z][A-Za-z .'-]{1,50})/i,
@@ -206,7 +226,7 @@ function parseDestination(text: string): string | undefined {
   ];
   for (const pattern of patterns) {
     const match = pattern.exec(text);
-    const destination = match?.[1] ? cleanCapture(match[1]) : "";
+    const destination = match?.[1] ? clampToPlaceTokens(cleanCapture(match[1])) : "";
     const isMonth = MONTHS.some(([monthPattern]) => monthPattern.test(destination));
     const isOccasion = OCCASIONS.some(([occasionPattern]) => occasionPattern.test(destination));
     const isRelativeTime = /^(?:(?:a|an|the|this|next|last|one|two|three|four|five)\s+)?(?:morning|afternoon|evening|night|weekend|day|week|month|year)s?$/i.test(destination);

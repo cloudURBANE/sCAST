@@ -59,6 +59,25 @@ test("leaked injection instructions are flagged regardless of evidence", () => {
   assert.ok(r.violations.includes("leaked_external_instruction"));
 });
 
+test("leaked harmony tool-call markup is flagged as leaked_tool_call", () => {
+  for (const text of [
+    "<|start|>assistant<|channel|>commentary to=functions.beam_compare_overlap <|message|>{}<|call|>",
+    "Here you go to=functions.beam_search_catalog {}",
+    "<|channel|>final<|message|>Pick this one.<|return|>",
+  ]) {
+    const r = runAnswerQualityGates(text, WITH_EVIDENCE);
+    assert.ok(
+      r.violations.includes("leaked_tool_call"),
+      `expected leaked_tool_call for: "${text}" -> ${r.violations.join(",")}`,
+    );
+  }
+});
+
+test("a clean recommendation never trips the tool-call gate", () => {
+  const r = runAnswerQualityGates("Go with Eau Sauvage — bright and fresh for Chicago.", WITH_EVIDENCE);
+  assert.equal(r.violations.includes("leaked_tool_call"), false, JSON.stringify(r.violations));
+});
+
 test("leak gate catches the canonical injection without the 'system prompt' tail", () => {
   // The two-qualifier canonical phrase ("ignore all previous instructions") and a
   // whitespace-padded variant both previously slipped: the old pattern allowed a
