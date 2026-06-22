@@ -977,44 +977,62 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const scheduleImageBackfillRehydrate = useCallback(
     (target: Fragrance, token: string | null) => {
       clearImageBackfillTimers();
-      // Mark the tile as actively syncing for the lifetime of the burst.
+      // Mark the tile as actively syncing for the lifetime of the VISIBLE burst.
       setImageSyncTarget(target);
-      const POLL_SCHEDULE_MS = [6000, 12000, 20000, 32000, 48000];
-      for (const delay of POLL_SCHEDULE_MS) {
-        const id = window.setTimeout(() => {
-          // Auth changed since the burst began (signed in or out) → abandon: the
-          // freshly-relevant mode owns the tile now. For a guest burst `token` is
-          // null, so this fires the moment a token appears mid-burst.
-          if (authTokenRef.current !== token) {
-            clearImageBackfillTimers();
-            return;
-          }
-          const current = itemsRef.current.find((item) => sameWardrobeEntry(item, target));
-          const resolved =
-            typeof current?.imageUrl === 'string' && current.imageUrl.trim().length > 0;
-          // Row gone (deleted) or image already arrived → stop the remaining burst.
-          if (!current || resolved) {
-            clearImageBackfillTimers();
-            return;
-          }
-          if (token) {
-            void loadWardrobe(token);
-          } else {
-            void pollGuestSharedImage(target);
-          }
-        }, delay);
-        imageBackfillTimersRef.current.push(id);
+      // One probe attempt; returns false once the burst should stop (auth flipped,
+      // row deleted, or image landed) so callers can skip scheduling more work.
+      const runProbe = (): boolean => {
+        // Auth changed since the burst began (signed in or out) → abandon: the
+        // freshly-relevant mode owns the tile now. For a guest burst `token` is
+        // null, so this fires the moment a token appears mid-burst.
+        if (authTokenRef.current !== token) {
+          clearImageBackfillTimers();
+          return false;
+        }
+        const current = itemsRef.current.find((item) => sameWardrobeEntry(item, target));
+        const resolved =
+          typeof current?.imageUrl === 'string' && current.imageUrl.trim().length > 0;
+        // Row gone (deleted) or image already arrived → stop the remaining burst.
+        if (!current || resolved) {
+          clearImageBackfillTimers();
+          return false;
+        }
+        if (token) {
+          void loadWardrobe(token);
+        } else {
+          void pollGuestSharedImage(target);
+        }
+        return true;
+      };
+      // Visible phase: fast, decaying probes while the "fetching image…" spinner
+      // is shown. The image usually lands here (catalog re-hydrate after the
+      // engine harvest + deferred pipeline).
+      const VISIBLE_POLL_SCHEDULE_MS = [6000, 12000, 20000, 32000, 48000];
+      for (const delay of VISIBLE_POLL_SCHEDULE_MS) {
+        imageBackfillTimersRef.current.push(window.setTimeout(runProbe, delay));
       }
-      // Hard stop just after the final poll: if the image still hasn't landed,
-      // drop the syncing affordance so the tile settles to "No image" instead of
-      // spinning indefinitely. This guarantees the spinner is always bounded —
+      // Hard stop just after the final visible poll: if the image still hasn't
+      // landed, drop the syncing affordance so the tile settles to "No image"
+      // instead of spinning indefinitely. The spinner is always bounded here —
       // never reintroducing the perpetual-spinner bug FE-1 fixed.
-      const giveUpId = window.setTimeout(() => {
-        setImageSyncTarget((current) =>
-          current && sameWardrobeEntry(current, target) ? null : current,
-        );
-      }, POLL_SCHEDULE_MS[POLL_SCHEDULE_MS.length - 1] + 4000);
-      imageBackfillTimersRef.current.push(giveUpId);
+      const SPINNER_GIVE_UP_MS = VISIBLE_POLL_SCHEDULE_MS[VISIBLE_POLL_SCHEDULE_MS.length - 1] + 4000;
+      imageBackfillTimersRef.current.push(
+        window.setTimeout(() => {
+          setImageSyncTarget((current) =>
+            current && sameWardrobeEntry(current, target) ? null : current,
+          );
+        }, SPINNER_GIVE_UP_MS),
+      );
+      // Silent phase: a few more decaying probes AFTER the spinner is dropped, so
+      // a slow cold-start image (slow Decodo crawl, deferred Serper+Poof+upload,
+      // or a catalog row that lands past the visible window) still fills the tile
+      // without any spinner. This is the only recovery path for guests, who have
+      // no 60s signed-in wardrobe poll. Bounded total (~3 min) keeps it cheap and
+      // preserves FE-1: probing continues silently, the spinner does not.
+      const SILENT_POLL_SCHEDULE_MS = [70000, 95000, 130000, 175000];
+      for (const delay of SILENT_POLL_SCHEDULE_MS) {
+        imageBackfillTimersRef.current.push(window.setTimeout(runProbe, delay));
+      }
     },
     [clearImageBackfillTimers, loadWardrobe, pollGuestSharedImage],
   );

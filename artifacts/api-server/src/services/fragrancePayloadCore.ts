@@ -35,6 +35,24 @@ function nonEmptyString(value: unknown): string | null {
   return trimmed ? trimmed : null;
 }
 
+/**
+ * The external Python engine (and some legacy/search payloads) carry the bottle
+ * image as snake_case `image_url` (or bare `image`), but every persistence,
+ * hydration and render path in this app reads camelCase `imageUrl`. Without this
+ * alias a *known* image is silently dropped the moment a fragrance is added —
+ * stranding the tile on "No image" until the deferred background image pipeline
+ * (which can fail, be misconfigured, or time out) happens to backfill it. Resolve
+ * every known spelling to the canonical `imageUrl` so a present image survives.
+ */
+export function resolveCanonicalImageUrl(fragrance: Record<string, any>): unknown {
+  return (
+    nonEmptyString(fragrance.imageUrl) ??
+    nonEmptyString(fragrance.image_url) ??
+    nonEmptyString(fragrance.image) ??
+    fragrance.imageUrl
+  );
+}
+
 export function chooseHydratedImageUrl(
   sharedImageUrl: unknown,
   currentImageUrl: unknown,

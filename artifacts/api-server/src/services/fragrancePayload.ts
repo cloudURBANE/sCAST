@@ -12,6 +12,7 @@ import {
   chooseHydratedImageUrl,
   chooseHydratedImageUrlWithMetadata,
   CURRENT_VAULT_SCHEMA_VERSION,
+  resolveCanonicalImageUrl,
   stampVaultSchemaVersion,
   type HydratedImageCandidate,
 } from "./fragrancePayloadCore";
@@ -123,7 +124,7 @@ export function normalizeFragrance(fragrance: Record<string, any>): Record<strin
   const name = fragrance.name || product?.name;
   const brand = fragrance.brand || product?.brand;
   const perfumer = fragrance.perfumer || product?.perfumer;
-  const imageUrl = safeImageUrlForResponse(fragrance.imageUrl);
+  const imageUrl = safeImageUrlForResponse(resolveCanonicalImageUrl(fragrance));
   const imageAdjustment = normalizeImageAdjustment(fragrance.imageAdjustment);
   const identity =
     typeof name === "string" && typeof brand === "string"
@@ -164,7 +165,7 @@ export function normalizeFragrance(fragrance: Record<string, any>): Record<strin
 
 /** Prefer saved manual/generated row images, but let generated cache repair stale Serper/catalog rows. */
 export async function hydrateImageUrl(fragrance: Record<string, any>): Promise<Record<string, any>> {
-  const current = await usableImageUrlForResponse(fragrance.imageUrl);
+  const current = await usableImageUrlForResponse(resolveCanonicalImageUrl(fragrance));
   const currentRef: HydratedImageCandidate = {
     imageUrl: current,
     sourceProvider: fragrance.sourceProvider,
