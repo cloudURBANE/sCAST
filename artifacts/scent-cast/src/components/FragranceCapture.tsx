@@ -806,6 +806,13 @@ export const FragranceCapture: React.FC<{
       );
       const detailDescription =
         typeof detail.raw?.description === 'string' ? detail.raw.description : undefined;
+      // The engine has already resolved a real (Decodo-crawled) bottle image for
+      // this fragrance. Forward it so the deferred image pipeline processes that
+      // known URL via the free, no-Serper crawled-URL path instead of gambling on
+      // a fresh Serper image search (which, on an empty result, silently leaves
+      // the new add permanently "no image"). Without this passthrough the engine's
+      // image is discarded and the tile depends entirely on the flaky Serper leg.
+      const detailImageUrl = firstString(detail.imageUrl, detail.image_url);
 
       const profileRes = await fetch(SCENT_PROFILE_ENDPOINT, {
         method: 'POST',
@@ -818,6 +825,7 @@ export const FragranceCapture: React.FC<{
           ...(detailFamily ? { family: detailFamily } : {}),
           ...(detailDescription ? { description: detailDescription } : {}),
           ...(detailPerfumer ? { perfumer: detailPerfumer } : {}),
+          ...(detailImageUrl ? { imageUrl: detailImageUrl } : {}),
           ...(pyramidNotes.top.length || pyramidNotes.heart.length || pyramidNotes.base.length
             ? { pyramid: pyramidNotes }
             : {}),
