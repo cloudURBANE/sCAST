@@ -20,6 +20,25 @@ test("parses a travel kit target with owned and new counts", () => {
   assert.equal(state.mission?.newCount, 2);
 });
 
+test("a count-less travel kit defaults to a small new-only kit and preserves explicit counts", () => {
+  // "travel kit to Tokyo" with no stated counts used to collapse to a single
+  // recommendation; it now defaults to a 3-new discovery kit so it yields a real
+  // multi-bottle deliverable.
+  const bare = deriveBeamSessionState(undefined, "travel kit to Tokyo please");
+  assert.equal(bare.mission?.intent, "travel_kit");
+  assert.equal(bare.mission?.ownedCount, undefined);
+  assert.equal(bare.mission?.newCount, 3);
+
+  // The default carries forward and is NOT re-applied/changed on a follow-up.
+  const next = deriveBeamSessionState(bare, "July, fresh aquatic");
+  assert.equal(next.mission?.newCount, 3);
+  assert.equal(next.slots.month, "July");
+
+  // An explicit count on a kit turn is never overridden by the default.
+  const explicit = deriveBeamSessionState(undefined, "travel kit to Tokyo, two new ones");
+  assert.equal(explicit.mission?.newCount, 2);
+});
+
 test("parses a new-only Tokyo request and preserves Fresh as the scoring direction", () => {
   const first = deriveBeamSessionState(undefined, "I want two new fragrances for a trip to Tokyo in August");
   const state = deriveBeamSessionState(first, "Fresh");
