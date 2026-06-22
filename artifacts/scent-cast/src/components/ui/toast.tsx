@@ -28,13 +28,18 @@ const ToastViewport = React.forwardRef<
 ToastViewport.displayName = ToastPrimitives.Viewport.displayName
 
 const toastVariants = cva(
-  "group pointer-events-auto relative flex w-full items-center justify-between space-x-4 overflow-hidden rounded-md border p-6 pr-8 shadow-lg transition-all data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-right-full data-[state=open]:slide-in-from-top-full data-[state=open]:sm:slide-in-from-bottom-full",
+  // Radius + spacing follow the app's panel language (rounded-scent). Depth is
+  // per-variant below — the default uses an inset gold highlight + neutral black
+  // drop (no projected gold glow, per no-projected-gold-glow); destructive keeps
+  // a plain neutral drop.
+  "group pointer-events-auto relative flex w-full items-center justify-between space-x-4 overflow-hidden rounded-scent border p-5 pr-9 transition-all data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-right-full data-[state=open]:slide-in-from-top-full data-[state=open]:sm:slide-in-from-bottom-full",
   {
     variants: {
       variant: {
-        default: "border bg-background text-foreground",
+        default:
+          "border-scent-accent/40 bg-background text-foreground shadow-[inset_0_1px_0_rgba(255,232,179,0.10),0_22px_44px_-16px_rgba(0,0,0,0.85)]",
         destructive:
-          "destructive group border-destructive bg-destructive text-destructive-foreground",
+          "destructive group border-destructive bg-destructive text-destructive-foreground shadow-[0_22px_44px_-18px_rgba(0,0,0,0.8)]",
       },
     },
     defaultVariants: {
@@ -97,7 +102,10 @@ const ToastTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <ToastPrimitives.Title
     ref={ref}
-    className={cn("text-sm font-semibold", className)}
+    className={cn(
+      "font-serif italic text-[1.05rem] leading-tight text-foreground",
+      className,
+    )}
     {...props}
   />
 ))
@@ -109,7 +117,7 @@ const ToastDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <ToastPrimitives.Description
     ref={ref}
-    className={cn("text-sm opacity-90", className)}
+    className={cn("mt-0.5 text-[0.82rem] leading-snug text-foreground/70", className)}
     {...props}
   />
 ))

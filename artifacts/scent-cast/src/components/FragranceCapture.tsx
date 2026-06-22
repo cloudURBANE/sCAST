@@ -1410,7 +1410,7 @@ export const FragranceCapture: React.FC<{
                                 if (uploading) return;
                                 handlePrimaryAction();
                               }}
-                              className={`scent-vault-result-card group mx-auto w-full max-w-[39.75rem] min-h-[54px] px-3 py-1.5 text-center transition-[border-color,box-shadow] duration-200 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55 sm:min-h-[70px] sm:px-4 sm:py-2.5 ${
+                              className={`scent-vault-result-card group mx-auto flex w-full max-w-[39.75rem] min-h-[64px] items-center gap-3 px-3 py-2.5 text-left transition-[border-color,box-shadow] duration-200 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55 sm:min-h-[74px] sm:gap-4 sm:px-4 sm:py-3 ${
                                 isSelected ? 'is-selected' : ''
                               }`}
                               aria-pressed={isSelected}
@@ -1422,40 +1422,49 @@ export const FragranceCapture: React.FC<{
                                     : `Select ${m.name}`
                               }
                             >
+                              {/* Monogram disc — the row's visual anchor; left-aligned so
+                                  the eye lands on a consistent column instead of three
+                                  centered, ragged lines. Doubles as a ≥44px target. */}
+                              <span className="scent-vault-monogram flex h-11 w-11 shrink-0 items-center justify-center rounded-full font-serif text-[0.95rem] font-semibold leading-none sm:h-12 sm:w-12 sm:text-[1.05rem]">
+                                {matchMonogram(m)}
+                              </span>
+                              {/* Text column — single-line truncation keeps every row the
+                                  same height for a clean vertical rhythm. */}
+                              <span className="flex min-w-0 flex-1 flex-col">
+                                <span
+                                  className="truncate font-serif text-[1.05rem] italic leading-tight text-[#fff7ec] sm:text-[1.2rem]"
+                                  title={m.name}
+                                >
+                                  {m.name}
+                                </span>
+                                <span className="mt-1 flex items-center gap-2">
+                                  <span
+                                    className="min-w-0 truncate font-sans text-[10px] font-bold uppercase tracking-[0.18em] text-[#f3dca6] sm:text-[11px] sm:tracking-[0.2em]"
+                                    title={m.brand || 'House unavailable'}
+                                  >
+                                    {truncateMatchLine(m.brand || 'House unavailable', MATCH_LINE_MAX_CHARS)}
+                                  </span>
+                                  {inVault && (
+                                    <span className="pointer-events-none inline-flex shrink-0 items-center gap-1 rounded-full border border-scent-accent/35 bg-scent-bg/70 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em] text-scent-accent sm:px-2 sm:text-[10px]">
+                                      <Check size={9} strokeWidth={3} aria-hidden />
+                                      In vault
+                                    </span>
+                                  )}
+                                </span>
+                              </span>
+                              {/* Selected check — pinned to the row end (not the corner)
+                                  so it never overlaps the name or the thumb's tap zone. */}
                               {isSelected && (
                                 <motion.span
                                   initial={reduceMotion ? false : { scale: 0.5, opacity: 0 }}
                                   animate={{ scale: 1, opacity: 1 }}
                                   transition={{ type: 'spring', stiffness: 520, damping: 24 }}
-                                  className="scent-vault-result-check pointer-events-none absolute right-3 top-2.5 z-10 flex h-7 w-7 items-center justify-center rounded-full sm:right-4 sm:top-3"
+                                  className="scent-vault-result-check pointer-events-none ml-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
                                   aria-hidden
                                 >
                                   <Check size={16} strokeWidth={3} />
                                 </motion.span>
                               )}
-                              <span className="scent-vault-monogram mx-auto mb-0.5 flex h-5 w-5 items-center justify-center rounded-full font-serif text-[0.72rem] font-semibold leading-none sm:mb-1 sm:h-7 sm:w-7 sm:text-[0.92rem]">
-                                {matchMonogram(m)}
-                              </span>
-                              <span
-                                className="mx-auto block max-w-full font-serif text-[1rem] italic leading-tight text-[#fff7ec] line-clamp-2 [overflow-wrap:anywhere] sm:text-[1.22rem] sm:leading-snug"
-                                title={m.name}
-                              >
-                                {m.name}
-                              </span>
-                              <span className="mx-auto mt-0.5 flex max-w-full items-center justify-center gap-2 sm:mt-1.5">
-                                <span
-                                  className="min-w-0 truncate font-sans text-[10px] font-bold uppercase tracking-[0.2em] text-[#f3dca6] sm:text-[11px] sm:tracking-[0.24em]"
-                                  title={m.brand || 'House unavailable'}
-                                >
-                                  {truncateMatchLine(m.brand || 'House unavailable', MATCH_LINE_MAX_CHARS)}
-                                </span>
-                                {inVault && (
-                                  <span className="pointer-events-none inline-flex shrink-0 items-center gap-1 rounded-full border border-scent-accent/35 bg-scent-bg/70 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em] text-scent-accent sm:px-2 sm:text-[10px]">
-                                    <Check size={9} strokeWidth={3} aria-hidden />
-                                    In vault
-                                  </span>
-                                )}
-                              </span>
                             </button>
                           );
                         })}

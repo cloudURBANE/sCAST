@@ -34,9 +34,11 @@ export type ScentIntelligenceLoaderProps = {
    * Phone-class / iPad-Safari render budget (computed by the parent from the
    * app's budget signals, not OS reduced-motion). When true, the loader drops
    * the offscreen-surface effects — the blurred warmth halo, the emblem's
-   * drop-shadow, and the per-dot glow — and runs no infinite animations, so a
-   * single search no longer floods WebKit's compositor budget on iOS. Desktop
-   * keeps the full treatment; OS reduced-motion is honored on top of this.
+   * drop-shadow, and the per-dot glow — that allocate a fresh IOSurface per
+   * frame and flood WebKit's compositor budget on iOS. The orbital rotation,
+   * warmth pulse, and emblem breathe (pure transform/opacity keyframes) KEEP
+   * running so the loader still visibly animates on iPhone/iPad. Only OS
+   * reduced-motion freezes the motion entirely.
    */
   lightweight?: boolean;
 };
@@ -58,7 +60,9 @@ const Orbit: React.FC<{
     animate={{ rotate: spin ? (reverse ? -360 : 360) : 0, opacity: fade ? 0 : 1 }}
     transition={{
       rotate: spin ? { duration, repeat: Infinity, ease: 'linear' } : { duration: 0 },
-      opacity: { duration: 0.45, ease: EASE_OUT },
+      // Slightly longer than the old 0.45 so the orbit melts into the completion
+      // bloom instead of snapping out before it — the dissolve reads as a settle.
+      opacity: { duration: 0.6, ease: EASE_OUT },
     }}
   >
     <span
@@ -95,11 +99,15 @@ export const ScentIntelligenceLoader: React.FC<ScentIntelligenceLoaderProps> = (
   lightweight = false,
 }) => {
   const reduceMotion = useReducedMotion();
-  // "calm" = no infinite animation, static end-states. Driven by the OS
-  // reduced-motion preference OR a constrained render budget. "lightweight"
-  // (budget only) additionally drops the GPU offscreen surfaces — desktop
-  // reduced-motion keeps those cheap static effects.
-  const calm = Boolean(reduceMotion) || lightweight;
+  // "calm" = honor the OS reduced-motion preference ONLY: fully static
+  // end-states, no infinite animation. The render-budget `lightweight` flag must
+  // NOT force calm — that was the regression that froze the orbital loader on
+  // every iPhone and iPad. Orbital rotation, the warmth pulse, and the emblem
+  // breathe are GPU-cheap transform/opacity keyframes that are safe on iOS.
+  // `lightweight` keeps stripping only the offscreen-surface effects (blur halo,
+  // emblem drop-shadow, per-dot box-shadow glow) that allocate a fresh IOSurface
+  // per frame — the actual WebKit compositor-budget hazard.
+  const calm = Boolean(reduceMotion);
   const spin = !calm;
 
   return (
@@ -122,9 +130,9 @@ export const ScentIntelligenceLoader: React.FC<ScentIntelligenceLoaderProps> = (
           animate={calm ? { opacity: 0.75 } : { opacity: complete ? [0.75, 1, 0.85] : [0.5, 0.78, 0.5] }}
           transition={
             calm
-              ? { duration: 0.3 }
+              ? { duration: 0.42, ease: EASE_OUT }
               : complete
-                ? { duration: 0.5, ease: EASE_OUT }
+                ? { duration: 0.62, ease: EASE_OUT }
                 : { duration: 3.6, repeat: Infinity, ease: 'easeInOut' }
           }
         />
@@ -160,7 +168,7 @@ export const ScentIntelligenceLoader: React.FC<ScentIntelligenceLoaderProps> = (
               initial={{ scale: 0.6, opacity: 0 }}
               animate={{ scale: [0.6, 1.9], opacity: [0.55, 0] }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.72, ease: 'easeOut' }}
+              transition={{ duration: 0.78, ease: 'easeOut' }}
             />
           )}
         </AnimatePresence>
@@ -187,14 +195,14 @@ export const ScentIntelligenceLoader: React.FC<ScentIntelligenceLoaderProps> = (
               calm
                 ? { scale: 1, filter: emblemFilter(complete, lightweight) }
                 : complete
-                  ? { scale: [1, 1.14, 1.0], filter: emblemFilter(true, false) }
-                  : { scale: [1, 1.05, 1], filter: emblemFilter(false, false) }
+                  ? { scale: [1, 1.14, 1.0], filter: emblemFilter(true, lightweight) }
+                  : { scale: [1, 1.05, 1], filter: emblemFilter(false, lightweight) }
             }
             transition={
               calm
-                ? { duration: 0.3, ease: EASE_OUT }
+                ? { duration: 0.42, ease: EASE_OUT }
                 : complete
-                  ? { duration: 0.5, ease: EASE_OUT }
+                  ? { duration: 0.62, ease: EASE_OUT, times: [0, 0.4, 1] }
                   : {
                       scale: { duration: 3.6, repeat: Infinity, ease: 'easeInOut' },
                       filter: { duration: 0.4 },

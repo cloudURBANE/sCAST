@@ -1225,8 +1225,8 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             }
           }
           toast({
-            title: "Fragrance Enshrined",
-            description: `${newItem.name} has been synced with your database.`
+            title: "Added to your vault",
+            description: `${newItem.name} is saved and ready to wear.`
           });
           // Deferred image resolution saves the row imageless; poll the catalog
           // re-hydrate quickly instead of waiting for the 60s background tick.
