@@ -43,6 +43,19 @@ export interface RedisLike {
    * latency that matters most against a managed/remote Redis.
    */
   eval(script: string, numKeys: number, ...keysAndArgs: (string | number)[]): Promise<unknown>;
+  /**
+   * Mirrors ioredis variadic `XADD` (e.g. `xadd(key, "MAXLEN", "~", 512, "*",
+   * field, value, …)`). Returns the generated stream entry id. The Beam run
+   * store builds the arg list and parses results; this stays a thin mirror.
+   */
+  xadd(...args: (string | number)[]): Promise<string | null>;
+  /**
+   * Mirrors ioredis `XRANGE key start end` → `[[id, [field, value, …]], …]`.
+   * The Beam run store reads run events after a watermark id with this.
+   */
+  xrange(key: string, start: string, end: string): Promise<Array<[string, string[]]>>;
+  /** Mirrors `PEXPIRE key <ttlMs>`; returns 1 when the TTL was set, 0 otherwise. */
+  pexpire(key: string, ttlMs: number): Promise<number>;
 }
 
 /** True when a non-blank REDIS_URL is configured. */

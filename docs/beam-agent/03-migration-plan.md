@@ -90,10 +90,20 @@ Hard rules: the model can never construct a valid token; tokens are one-time
 (replay-rejected); write scopes are off by default. Add an `agent delegation
 token` per run carrying only the read scopes it needs.
 
-## Phase 5 — sessions & memory (Postgres)
+## Phase 5 — sessions & memory
 
-Move run/session state out of process memory into tenant-scoped tables (names per
-`new.md` §9):
+> **Status (run registry done).** The split-memory P0 — the in-memory run
+> registry that forced `numReplicas: 1` — is fixed by mirroring the run registry
+> (events, done/stopped, per-session active lock) to **Redis** (`beamRunStore.ts`),
+> not Postgres: a minute-lived run with a live SSE tail is a streaming shape
+> Postgres serves poorly, and sessions already live in Redis. The in-memory Map
+> stays the same-replica fast path; Redis is the cross-replica backstop. See
+> [09-deploy-checklist.md](./09-deploy-checklist.md) §2. The **durable** Postgres
+> tables below (curated memory, proposals, audits) remain the unbuilt part of this
+> phase — a separate, larger change against the shared prod Supabase DB.
+
+Move the remaining **durable** run/session state into tenant-scoped tables (names
+per `new.md` §9):
 
 - `beam_agent_sessions`, `beam_agent_runs`, `beam_agent_tool_audits`,
   `beam_agent_memories`, `beam_collection_proposals`, `beam_agent_feedback`.

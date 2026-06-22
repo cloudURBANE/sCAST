@@ -35,6 +35,16 @@ class FakeRedis implements RedisLike {
   async del(key: string): Promise<number> {
     return this.store.delete(key) ? 1 : 0;
   }
+  // Stream methods are unused by the session store; present to satisfy RedisLike.
+  async xadd(): Promise<string | null> {
+    return null;
+  }
+  async xrange(): Promise<Array<[string, string[]]>> {
+    return [];
+  }
+  async pexpire(): Promise<number> {
+    return 1;
+  }
 }
 
 test("in-memory: empty history, then round-trips appended turns", async () => {
@@ -145,6 +155,9 @@ test("redis: a store error degrades to in-memory (no throw)", async () => {
       throw new Error("redis down");
     },
     del: async () => 0,
+    xadd: async () => null,
+    xrange: async () => [],
+    pexpire: async () => 1,
   };
   __setSessionRedisForTests(async () => throwing);
   const c = ctx();
@@ -179,6 +192,15 @@ class SlowFakeRedis implements RedisLike {
   }
   async del(key: string): Promise<number> {
     return this.store.delete(key) ? 1 : 0;
+  }
+  async xadd(): Promise<string | null> {
+    return null;
+  }
+  async xrange(): Promise<Array<[string, string[]]>> {
+    return [];
+  }
+  async pexpire(): Promise<number> {
+    return 1;
   }
 }
 

@@ -29,29 +29,43 @@ Optional: `BEAM_AGENT_PROVIDER=openrouter|anthropic` forces a provider;
 `BEAM_RESEARCH_ENABLED=true` (also needs `OPENROUTER_API_KEY`) turns on the live
 web-research lane.
 
-## 2. Keep the api-server at a single replica (required, until Phase 5)
+## 2. Replicas: single by default, raisable once Redis is on (Phase 5 landed)
 
-Run/session state is an in-memory `Map` in `beamAgentRoutes.ts`. The browser does
-`POST /api/beam-agent/runs` (creates the run on one instance), then a **separate**
-`GET /runs/:id/events` for the SSE stream. With more than one Railway replica the
-SSE attach can land on a different instance, which has no record of the run → the
-stream 404s (`code: "run_not_found"`) and the user silently gets the scripted
-fallback.
+The browser does `POST /api/beam-agent/runs` (creates the run on one instance),
+then a **separate** `GET /runs/:id/events` for the SSE stream. Run state lives in
+an in-memory `Map` in `beamAgentRoutes.ts` (the fast path) **and**, when
+`REDIS_URL` is set, is mirrored to Redis by `beamRunStore.ts` (Phase 5):
 
-This is enforced in [`railway.json`](../../railway.json):
+- **`REDIS_URL` set:** if the SSE attach lands on a different replica than the
+  POST (or the process restarted), the GET falls back to Redis — replaying the
+  durable event stream and poll-tailing to completion instead of 404'ing. The
+  run is replica-safe. `message_delta` token deltas are not mirrored, so a
+  cross-replica viewer gets structural events + the full `completed` answer, just
+  without live token preview. The cross-replica "one active run per session" 409
+  guard and cooperative stop also work via Redis.
+- **`REDIS_URL` unset:** unchanged from before — the run lives only in the process
+  that created it, so a cross-instance/restart attach 404s (`run_not_found`) and
+  the user silently gets the scripted fallback. The api-server logs
+  `beam agent run not found for SSE attach` on every miss.
+
+This is gated in [`railway.json`](../../railway.json):
 
 ```jsonc
-"deploy": { "numReplicas": 1 }   // do not raise until run-state is in Postgres
+"deploy": { "numReplicas": 1 }   // safe to raise ONLY after the two checks below
 ```
 
-If the invariant is ever broken, the api-server logs
-`beam agent run not found for SSE attach` on every miss — that warning in the
-Railway logs is the signal that replicas were scaled up (or the run aged out of
-its 30-min TTL / the process restarted mid-run).
+**Before raising `numReplicas` past 1:**
 
-**Lifting the limit:** migration-plan Phase 5 moves run/session state into
-tenant-scoped Postgres tables; once that ships, the agent is replica-safe and
-`numReplicas` can be raised. See [03-migration-plan.md](./03-migration-plan.md).
+1. `REDIS_URL` is set on the api-server and the boot log shows
+   `redis: connected — shared state backend active` (not the in-memory warning).
+2. SSE is verified streaming end-to-end through the Vercel→Railway proxy in
+   staging (P0-3 in [09-production-readiness-plan.md](./09-production-readiness-plan.md);
+   still open). A buffered edge proxy would defeat the live stream regardless of
+   replica count.
+
+Run/session **durable** state (answer log, cost ledger, feedback) stays in
+Postgres; only the ephemeral run registry moved to Redis. See
+[03-migration-plan.md](./03-migration-plan.md).
 
 ## 3. Frontend reachability (already wired)
 
