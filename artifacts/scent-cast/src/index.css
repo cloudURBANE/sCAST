@@ -7,7 +7,7 @@
   --color-card-foreground: #fff7ec;
   --color-popover: #080604;
   --color-popover-foreground: #fff7ec;
-  --color-primary: #d4af37;
+  --color-primary: rgb(var(--scent-accent-rgb));
   --color-primary-foreground: #080604;
   --color-primary-border: #f1d27a;
   --color-secondary: #1f1710;
@@ -15,7 +15,7 @@
   --color-secondary-border: #d8bd82;
   --color-muted: #17120d;
   --color-muted-foreground: #ead8bd;
-  --color-accent: #d4af37;
+  --color-accent: rgb(var(--scent-accent-rgb));
   --color-accent-foreground: #080604;
   --color-destructive: #dc2626;
   --color-destructive-foreground: #fff7ec;
@@ -27,7 +27,7 @@
   --color-scent-bg: #030201;
   --color-scent-surface: #020202;
   --color-scent-border: #1a1a1a;
-  --color-scent-accent: #D4AF37;
+  --color-scent-accent: rgb(var(--scent-accent-rgb));
   --color-scent-gold-100: #fef3c7;
   --color-scent-gold-200: #fde68a;
   --color-scent-muted: #c4b39b;
@@ -72,7 +72,12 @@
   --topbar-h: calc(3.5rem + env(safe-area-inset-top, 0px));
   --bottomnav-h: calc(0.75rem + 54px + env(safe-area-inset-bottom, 0px));
   --mobile-nav-offset: var(--bottomnav-h);
-  --scent-gold-rgb: 212 175 55;
+  /* Single source of truth for the accent hue. Every accent surface, hairline,
+     glow, ring, and the gold token utilities resolve through this triplet, so a
+     theme re-tints the whole UI by overriding ONE value (see [data-accent]). */
+  --scent-accent-rgb: 212 175 55;
+  /* Alias so the existing --scent-card-shadow follows the active accent. */
+  --scent-gold-rgb: var(--scent-accent-rgb);
   --scent-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --scent-ease-snappy: cubic-bezier(0.34, 1.56, 0.64, 1);
   --scent-transition-fast: 180ms;
@@ -80,18 +85,93 @@
   --button-outline: rgba(255, 221, 150, 0.72);
   --badge-outline: rgba(255, 221, 150, 0.7);
   --scent-card-shadow: 0 26px 68px -40px rgb(var(--scent-gold-rgb) / 0.5), 0 18px 42px -22px rgba(0, 0, 0, 0.96);
-  --scent-card-glow: inset 0 1px 0 rgba(255, 226, 176, 0.1), inset 0 0 72px rgba(212, 175, 55, 0.028);
+  --scent-card-glow: inset 0 1px 0 rgba(255, 226, 176, 0.1), inset 0 0 72px rgb(var(--scent-accent-rgb) / 0.028);
   --scent-black-panel:
     radial-gradient(120% 120% at 50% -24%, rgba(255, 255, 255, 0.018), transparent 42%),
-    radial-gradient(120% 180% at 50% 118%, rgba(212, 175, 55, 0.02), transparent 50%),
+    radial-gradient(120% 180% at 50% 118%, rgb(var(--scent-accent-rgb) / 0.02), transparent 50%),
     linear-gradient(180deg, #010101 0%, #000 58%, #000 100%);
   --scent-black-sheen:
     linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.012) 36%, transparent 62%),
-    radial-gradient(80% 120% at 50% 0%, rgba(212, 175, 55, 0.026), transparent 60%);
+    radial-gradient(80% 120% at 50% 0%, rgb(var(--scent-accent-rgb) / 0.026), transparent 60%);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* ─── Accent: mature money-green ───────────────────────────────────────────────
+ * Re-tints the entire UI by overriding the single accent triplet (plus the few
+ * non-rgb accent tokens for coherence). Because the @theme accent tokens and
+ * every decorative gold literal now resolve through --scent-accent-rgb, this one
+ * block turns gold hairlines, glows, rings, accent text, and accent fills green
+ * across the whole app — with the gold default untouched when data-accent="gold".
+ * Hue: a deep, mature leaf/"money" green (not a bright lime). */
+[data-accent="green"] {
+  --scent-accent-rgb: 94 152 78;
+  --color-primary-foreground: #06140a;
+  --color-primary-border: #9cc888;
+  --color-accent-foreground: #06140a;
+  --color-secondary-border: #8fbd7e;
+  --color-border: #a9c79a;
+  --color-input: #a9c79a;
+  --color-ring: #bfe3ad;
+  --color-scent-gold-100: #e9f4e1;
+  --color-scent-gold-200: #c9e6b8;
+}
+
+/* ─── Light theme ──────────────────────────────────────────────────────────────
+ * Flips the foundational token layer (backgrounds, surfaces, text, borders) plus
+ * the always-on chrome (page canvas, the dark atmospheric overlay, top bar). All
+ * token-driven surfaces and the active accent follow automatically. Dark stays
+ * the default; this only applies under [data-theme="light"]. */
+[data-theme="light"] {
+  color-scheme: light;
+
+  --color-background: #f6f3ec;
+  --color-foreground: #1d1a16;
+  --color-card: #ffffff;
+  --color-card-foreground: #1d1a16;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #1d1a16;
+  --color-secondary: #ece7dd;
+  --color-secondary-foreground: #1d1a16;
+  --color-muted: #ece9e2;
+  --color-muted-foreground: #57514a;
+
+  --color-scent-bg: #f1ede4;
+  --color-scent-surface: #ffffff;
+  --color-scent-border: #e4ded2;
+  --color-scent-text-primary: #1d1a16;
+  --color-scent-text-secondary: #3a352e;
+  --color-scent-text-muted: #5c554b;
+  --color-scent-text-subtle: #7a7063;
+}
+
+/* The :root sets the page text to the accent and the canvas to scent-bg; in light
+ * those tokens already flip, but body's hard #000 fallback and the shell's dark
+ * vignette must be neutralized so content sits on the light canvas. */
+[data-theme="light"] body {
+  background-color: var(--color-scent-bg);
+}
+
+[data-theme="light"] .scent-app-shell {
+  color: var(--color-scent-text-primary);
+}
+
+/* The fixed dark gradient vignette (radial blacks) would muddy a light canvas. */
+[data-theme="light"] .scent-app-shell::before {
+  display: none;
+}
+
+/* Top bar: the dark near-opaque fill → a light, near-opaque fill with a hairline. */
+[data-theme="light"] .scent-topbar {
+  background: rgba(250, 248, 243, 0.97);
+  box-shadow: 0 1px 0 rgba(20, 16, 12, 0.06), 0 12px 34px rgba(20, 16, 12, 0.08);
+}
+
+[data-theme="light"] .scent-brandmark {
+  color: #1d1a16;
+  text-shadow: 0 0 14px rgb(var(--scent-accent-rgb) / 0.18);
 }
 
 html, body {
@@ -114,7 +194,7 @@ body {
 }
 
 ::selection {
-  background: rgba(212, 175, 55, 0.3);
+  background: rgb(var(--scent-accent-rgb) / 0.3);
   color: #fff8ee;
 }
 
@@ -134,8 +214,8 @@ a {
   pointer-events: none;
   background:
     linear-gradient(180deg, rgba(0, 0, 0, 0.24), rgba(0, 0, 0, 0.08) 28%, rgba(0, 0, 0, 0.78)),
-    radial-gradient(ellipse at 24% 8%, rgba(212, 175, 55, 0.026), transparent 34rem),
-    radial-gradient(ellipse at 78% 38rem, rgba(212, 175, 55, 0.018), transparent 42rem),
+    radial-gradient(ellipse at 24% 8%, rgb(var(--scent-accent-rgb) / 0.026), transparent 34rem),
+    radial-gradient(ellipse at 78% 38rem, rgb(var(--scent-accent-rgb) / 0.018), transparent 42rem),
     radial-gradient(ellipse at 50% 30rem, rgba(0, 0, 0, 0.9), transparent 48rem);
   mix-blend-mode: normal;
 }
@@ -146,10 +226,10 @@ a {
   background: rgba(8, 5, 3, 0.82);
   /* backdrop-filter: blur(4px); */
   /* -webkit-backdrop-filter: blur(4px); */
-  border: 1px solid rgba(212, 175, 55, 0.28);
+  border: 1px solid rgb(var(--scent-accent-rgb) / 0.28);
   box-shadow:
     inset 0 1px 0 0 rgba(255, 230, 180, 0.09),
-    inset 0 0 70px 0 rgba(212, 175, 55, 0.02),
+    inset 0 0 70px 0 rgb(var(--scent-accent-rgb) / 0.02),
     0 22px 44px -16px rgba(0, 0, 0, 0.8);
 }
 
@@ -157,7 +237,7 @@ a {
   background: rgba(9, 6, 4, 0.88);
   /* backdrop-filter: blur(4px); */
   /* -webkit-backdrop-filter: blur(4px); */
-  border: 1px solid rgba(212, 175, 55, 0.28);
+  border: 1px solid rgb(var(--scent-accent-rgb) / 0.28);
   box-shadow: 
     var(--scent-card-glow),
     var(--scent-card-shadow);
@@ -165,8 +245,8 @@ a {
 
 .glass-shell {
   padding: 1px;
-  background: linear-gradient(135deg, rgba(212, 175, 55, 0.68), rgba(212, 175, 55, 0.2), rgba(212, 175, 55, 0.04));
-  box-shadow: 0 18px 48px -18px rgba(0, 0, 0, 0.95), 0 0 34px rgba(212, 175, 55, 0.08);
+  background: linear-gradient(135deg, rgb(var(--scent-accent-rgb) / 0.68), rgb(var(--scent-accent-rgb) / 0.2), rgb(var(--scent-accent-rgb) / 0.04));
+  box-shadow: 0 18px 48px -18px rgba(0, 0, 0, 0.95), 0 0 34px rgb(var(--scent-accent-rgb) / 0.08);
   overflow: hidden;
   border-radius: var(--radius-scent);
 }
@@ -178,7 +258,7 @@ a {
   padding: clamp(1.85rem, 4vw, 3rem) clamp(1rem, 5vw, 5.25rem) clamp(1.25rem, 3vw, 1.85rem);
   background:
     radial-gradient(95% 80% at 50% 8%, rgba(255, 255, 255, 0.018), transparent 58%),
-    radial-gradient(72% 68% at 50% 100%, rgba(212, 175, 55, 0.022), transparent 68%),
+    radial-gradient(72% 68% at 50% 100%, rgb(var(--scent-accent-rgb) / 0.022), transparent 68%),
     linear-gradient(180deg, rgba(1, 1, 1, 0.94), rgba(0, 0, 0, 0.98) 62%, #000);
   /* No projected gold drop-shadow: a gold-tinted, offset outer shadow pools a
      disgusting glow under the card. Keep only the neutral depth shadow + inset
@@ -187,7 +267,7 @@ a {
     0 28px 72px -36px rgba(0, 0, 0, 0.98),
     inset 0 1px 0 rgba(255, 232, 179, 0.1),
     inset 0 0 0 1px rgba(255, 225, 157, 0.025),
-    inset 0 0 80px rgba(212, 175, 55, 0.02);
+    inset 0 0 80px rgb(var(--scent-accent-rgb) / 0.02);
 }
 
 .scent-vault-panel::before {
@@ -219,13 +299,13 @@ a {
 .scent-signature-cta {
   position: relative;
   overflow: hidden;
-  border: 1px solid rgba(212, 175, 55, 0.34);
+  border: 1px solid rgb(var(--scent-accent-rgb) / 0.34);
   background:
-    radial-gradient(135% 165% at 50% -12%, rgba(212, 175, 55, 0.15), transparent 60%),
+    radial-gradient(135% 165% at 50% -12%, rgb(var(--scent-accent-rgb) / 0.15), transparent 60%),
     linear-gradient(180deg, rgba(255, 236, 183, 0.08), rgba(0, 0, 0, 0.64) 78%);
   box-shadow:
     inset 0 1px 0 rgba(255, 236, 183, 0.14),
-    inset 0 0 26px rgba(212, 175, 55, 0.045),
+    inset 0 0 26px rgb(var(--scent-accent-rgb) / 0.045),
     0 18px 48px rgba(0, 0, 0, 0.58);
   -webkit-backdrop-filter: blur(14px) saturate(135%);
   backdrop-filter: blur(14px) saturate(135%);
@@ -272,16 +352,16 @@ a {
 }
 
 .scent-signature-cta:hover {
-  border-color: rgba(212, 175, 55, 0.6);
+  border-color: rgb(var(--scent-accent-rgb) / 0.6);
   color: #fff7ec;
   background:
-    radial-gradient(135% 165% at 50% -12%, rgba(212, 175, 55, 0.24), transparent 62%),
+    radial-gradient(135% 165% at 50% -12%, rgb(var(--scent-accent-rgb) / 0.24), transparent 62%),
     linear-gradient(180deg, rgba(255, 236, 183, 0.14), rgba(0, 0, 0, 0.58) 78%);
   box-shadow:
     inset 0 1px 0 rgba(255, 236, 183, 0.22),
-    inset 0 0 30px rgba(212, 175, 55, 0.08),
+    inset 0 0 30px rgb(var(--scent-accent-rgb) / 0.08),
     0 22px 56px rgba(0, 0, 0, 0.6),
-    0 0 0 1px rgba(212, 175, 55, 0.14);
+    0 0 0 1px rgb(var(--scent-accent-rgb) / 0.14);
 }
 
 /* Press: settle the glass a touch. Shadow-only so framer-motion keeps sole
@@ -289,7 +369,7 @@ a {
 .scent-signature-cta:active {
   box-shadow:
     inset 0 1px 0 rgba(255, 236, 183, 0.16),
-    inset 0 0 22px rgba(212, 175, 55, 0.05),
+    inset 0 0 22px rgb(var(--scent-accent-rgb) / 0.05),
     0 12px 30px rgba(0, 0, 0, 0.55);
 }
 
@@ -297,11 +377,11 @@ a {
    Tailwind's ring utility — so compose the focus ring into the stack here to
    keep it keyboard-accessible. */
 .scent-signature-cta:focus-visible {
-  border-color: rgba(212, 175, 55, 0.6);
+  border-color: rgb(var(--scent-accent-rgb) / 0.6);
   box-shadow:
     0 0 0 2px rgba(255, 230, 163, 0.6),
     inset 0 1px 0 rgba(255, 236, 183, 0.18),
-    inset 0 0 26px rgba(212, 175, 55, 0.05),
+    inset 0 0 26px rgb(var(--scent-accent-rgb) / 0.05),
     0 18px 48px rgba(0, 0, 0, 0.58);
 }
 
@@ -334,7 +414,7 @@ a {
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
   background:
-    radial-gradient(135% 165% at 50% -12%, rgba(212, 175, 55, 0.12), transparent 60%),
+    radial-gradient(135% 165% at 50% -12%, rgb(var(--scent-accent-rgb) / 0.12), transparent 60%),
     linear-gradient(180deg, rgba(26, 20, 10, 0.94), rgba(0, 0, 0, 0.94));
 }
 
@@ -549,7 +629,7 @@ a {
 .forecast-day-tile {
   position: relative;
   isolation: isolate;
-  border: 1px solid rgba(212, 175, 55, 0.16);
+  border: 1px solid rgb(var(--scent-accent-rgb) / 0.16);
   border-radius: 13px;
   background: linear-gradient(180deg, rgba(8, 8, 7, 0.96), #000 100%);
   box-shadow:
@@ -576,7 +656,7 @@ a {
 }
 
 .forecast-day-tile.is-active {
-  border-color: rgba(212, 175, 55, 0.55);
+  border-color: rgb(var(--scent-accent-rgb) / 0.55);
   background:
     radial-gradient(82% 52% at 50% 0%, rgba(255, 237, 190, 0.05), transparent 72%),
     linear-gradient(180deg, rgba(14, 12, 8, 0.98), #000 100%);
@@ -647,7 +727,7 @@ a {
   top: 0;
   bottom: 0;
   width: 0;
-  border-left: 1px dashed rgba(212, 175, 55, 0.56);
+  border-left: 1px dashed rgb(var(--scent-accent-rgb) / 0.56);
 }
 
 .bottle-frame-guide__width {
@@ -687,7 +767,7 @@ a {
 
 .bottle-frame-guide__baseline {
   bottom: 0;
-  border-top: 2px solid rgba(212, 175, 55, 0.84);
+  border-top: 2px solid rgb(var(--scent-accent-rgb) / 0.84);
   color: rgba(255, 214, 154, 0.88);
 }
 
@@ -703,7 +783,7 @@ a {
 /* ─── Depth & Lighting Effects ────────────────────────────────────────────── */
 
 .pedestal {
-  background: radial-gradient(circle at center, rgba(212, 175, 55, 0.16) 0%, transparent 70%);
+  background: radial-gradient(circle at center, rgb(var(--scent-accent-rgb) / 0.16) 0%, transparent 70%);
   position: relative;
 }
 
@@ -715,7 +795,7 @@ a {
   transform: translateX(-50%);
   width: 120%;
   height: 60px;
-  background: radial-gradient(ellipse at center, rgba(212, 175, 55, 0.22) 0%, transparent 70%);
+  background: radial-gradient(ellipse at center, rgb(var(--scent-accent-rgb) / 0.22) 0%, transparent 70%);
   filter: blur(20px);
   pointer-events: none;
 }
@@ -749,14 +829,14 @@ a {
 
 .scent-brandmark {
   color: #fff7ec;
-  text-shadow: 0 0 14px rgba(212, 175, 55, 0.22);
+  text-shadow: 0 0 14px rgb(var(--scent-accent-rgb) / 0.22);
 }
 
 .scent-lux-input {
   background: rgba(0, 0, 0, 0.88);
-  border: 1px solid rgba(212, 175, 55, 0.56);
+  border: 1px solid rgb(var(--scent-accent-rgb) / 0.56);
   border-radius: var(--radius-scent);
-  box-shadow: inset 0 1px 0 rgba(255, 226, 174, 0.06), inset 0 0 28px rgba(212, 175, 55, 0.025), 0 16px 34px -22px rgba(0, 0, 0, 0.9);
+  box-shadow: inset 0 1px 0 rgba(255, 226, 174, 0.06), inset 0 0 28px rgb(var(--scent-accent-rgb) / 0.025), 0 16px 34px -22px rgba(0, 0, 0, 0.9);
   transition:
     border-color var(--scent-transition-fast) var(--scent-ease-out),
     box-shadow var(--scent-transition-base) var(--scent-ease-out),
@@ -765,8 +845,8 @@ a {
 
 .scent-lux-input:focus,
 .scent-lux-input:focus-visible {
-  border-color: rgba(212, 175, 55, 0.9);
-  box-shadow: inset 0 1px 0 rgba(255, 226, 174, 0.08), inset 0 0 30px rgba(212, 175, 55, 0.04), 0 0 0 3px rgba(212, 175, 55, 0.12), 0 18px 38px -22px rgba(0, 0, 0, 0.95);
+  border-color: rgb(var(--scent-accent-rgb) / 0.9);
+  box-shadow: inset 0 1px 0 rgba(255, 226, 174, 0.08), inset 0 0 30px rgb(var(--scent-accent-rgb) / 0.04), 0 0 0 3px rgb(var(--scent-accent-rgb) / 0.12), 0 18px 38px -22px rgba(0, 0, 0, 0.95);
   outline: none;
 }
 
@@ -778,7 +858,7 @@ a {
   border-color: rgba(232, 181, 90, 0.72);
   box-shadow:
     inset 0 1px 0 rgba(255, 236, 183, 0.08),
-    inset 0 0 28px rgba(212, 175, 55, 0.018),
+    inset 0 0 28px rgb(var(--scent-accent-rgb) / 0.018),
     0 14px 30px -22px rgba(0, 0, 0, 0.94);
 }
 
@@ -787,8 +867,8 @@ a {
   border-color: rgba(255, 214, 128, 0.92);
   box-shadow:
     inset 0 1px 0 rgba(255, 236, 183, 0.12),
-    inset 0 0 32px rgba(212, 175, 55, 0.035),
-    0 0 0 2px rgba(212, 175, 55, 0.12),
+    inset 0 0 32px rgb(var(--scent-accent-rgb) / 0.035),
+    0 0 0 2px rgb(var(--scent-accent-rgb) / 0.12),
     0 18px 38px -24px rgba(0, 0, 0, 0.96);
 }
 
@@ -803,7 +883,7 @@ a {
     linear-gradient(180deg, rgba(9, 9, 6, 0.78), rgba(4, 4, 3, 0.92));
   box-shadow:
     inset 0 1px 0 rgba(255, 229, 170, 0.055),
-    inset 0 0 36px rgba(212, 175, 55, 0.018),
+    inset 0 0 36px rgb(var(--scent-accent-rgb) / 0.018),
     0 24px 52px -36px rgba(0, 0, 0, 0.96);
 }
 
@@ -819,7 +899,7 @@ a {
   content: "";
   width: clamp(3rem, 9vw, 7rem);
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(212, 175, 55, 0.68), transparent);
+  background: linear-gradient(90deg, transparent, rgb(var(--scent-accent-rgb) / 0.68), transparent);
 }
 
 .scent-vault-result-card {
@@ -831,11 +911,11 @@ a {
   color: #fff7ec;
   background:
     radial-gradient(78% 78% at 50% 7%, rgba(255, 247, 225, 0.035), transparent 60%),
-    radial-gradient(85% 90% at 50% 105%, rgba(212, 175, 55, 0.035), transparent 68%),
+    radial-gradient(85% 90% at 50% 105%, rgb(var(--scent-accent-rgb) / 0.035), transparent 68%),
     linear-gradient(180deg, rgba(28, 27, 22, 0.74), rgba(10, 10, 8, 0.9));
   box-shadow:
     inset 0 1px 0 rgba(255, 232, 179, 0.12),
-    inset 0 0 34px rgba(212, 175, 55, 0.03),
+    inset 0 0 34px rgb(var(--scent-accent-rgb) / 0.03),
     0 16px 36px -25px rgba(0, 0, 0, 0.94);
 }
 
@@ -858,7 +938,7 @@ a {
   border-color: rgba(255, 216, 128, 0.78);
   box-shadow:
     inset 0 1px 0 rgba(255, 238, 192, 0.14),
-    inset 0 0 38px rgba(212, 175, 55, 0.04),
+    inset 0 0 38px rgb(var(--scent-accent-rgb) / 0.04),
     0 18px 42px -26px rgba(0, 0, 0, 0.98);
 }
 
@@ -869,12 +949,12 @@ a {
   border-color: rgba(255, 226, 150, 0.98);
   background:
     radial-gradient(78% 78% at 50% 7%, rgba(255, 247, 225, 0.07), transparent 60%),
-    radial-gradient(85% 90% at 50% 105%, rgba(212, 175, 55, 0.075), transparent 68%),
+    radial-gradient(85% 90% at 50% 105%, rgb(var(--scent-accent-rgb) / 0.075), transparent 68%),
     linear-gradient(180deg, rgba(42, 38, 27, 0.84), rgba(14, 13, 9, 0.92));
   box-shadow:
     inset 0 0 0 1px rgba(255, 226, 150, 0.5),
     inset 0 1px 0 rgba(255, 244, 205, 0.22),
-    inset 0 0 54px rgba(212, 175, 55, 0.085),
+    inset 0 0 54px rgb(var(--scent-accent-rgb) / 0.085),
     0 0 0 1px rgba(255, 216, 128, 0.46),
     0 18px 42px -26px rgba(0, 0, 0, 0.98);
 }
@@ -885,7 +965,7 @@ a {
   color: #1a1205;
   background: linear-gradient(180deg, #f8e3a6 0%, #dcb457 100%);
   box-shadow:
-    0 2px 12px rgba(212, 175, 55, 0.45),
+    0 2px 12px rgb(var(--scent-accent-rgb) / 0.45),
     inset 0 1px 0 rgba(255, 255, 255, 0.55);
 }
 
@@ -906,8 +986,8 @@ a {
     rgba(3, 3, 2, 0.5);
   box-shadow:
     inset 0 1px 0 rgba(255, 238, 191, 0.12),
-    0 0 22px rgba(212, 175, 55, 0.08);
-  text-shadow: 0 0 12px rgba(212, 175, 55, 0.24);
+    0 0 22px rgb(var(--scent-accent-rgb) / 0.08);
+  text-shadow: 0 0 12px rgb(var(--scent-accent-rgb) / 0.24);
 }
 
 .scent-vault-outline-button {
@@ -920,7 +1000,7 @@ a {
     rgba(2, 2, 2, 0.74);
   box-shadow:
     inset 0 1px 0 rgba(255, 236, 183, 0.09),
-    inset 0 0 24px rgba(212, 175, 55, 0.018),
+    inset 0 0 24px rgb(var(--scent-accent-rgb) / 0.018),
     0 18px 42px -30px rgba(0, 0, 0, 0.98);
 }
 
@@ -928,23 +1008,23 @@ a {
   border-color: rgba(255, 230, 160, 0.98);
   box-shadow:
     inset 0 1px 0 rgba(255, 243, 202, 0.13),
-    inset 0 0 30px rgba(212, 175, 55, 0.03),
+    inset 0 0 30px rgb(var(--scent-accent-rgb) / 0.03),
     0 18px 42px -30px rgba(0, 0, 0, 0.98);
 }
 
 .scent-vault-outline-button:focus-visible {
   outline: none;
   box-shadow:
-    0 0 0 3px rgba(212, 175, 55, 0.18),
+    0 0 0 3px rgb(var(--scent-accent-rgb) / 0.18),
     inset 0 1px 0 rgba(255, 243, 202, 0.13),
-    inset 0 0 30px rgba(212, 175, 55, 0.03);
+    inset 0 0 30px rgb(var(--scent-accent-rgb) / 0.03);
 }
 
 .scent-vault-outline-button-label {
   color: #e8be62;
   text-shadow:
     0 1px 0 rgba(0, 0, 0, 0.9),
-    0 0 18px rgba(212, 175, 55, 0.12);
+    0 0 18px rgb(var(--scent-accent-rgb) / 0.12);
   transition: color var(--scent-transition-base, 0.18s) var(--scent-ease-out, ease);
 }
 
@@ -952,7 +1032,7 @@ a {
   color: #fff7ec;
   text-shadow:
     0 1px 0 rgba(0, 0, 0, 0.9),
-    0 0 20px rgba(212, 175, 55, 0.28);
+    0 0 20px rgb(var(--scent-accent-rgb) / 0.28);
 }
 
 .scent-primary-button {
@@ -1074,7 +1154,7 @@ a {
   outline: none;
   box-shadow:
     0 0 0 1px rgba(10, 5, 1, 0.9),
-    0 0 0 3px rgba(212, 175, 55, 0.3),
+    0 0 0 3px rgb(var(--scent-accent-rgb) / 0.3),
     0 0 0 5px rgba(255, 232, 172, 0.14),
     0 3px 9px rgba(0, 0, 0, 0.6),
     inset 0 1px 0 rgba(255, 248, 207, 0.66),
@@ -1117,7 +1197,7 @@ a {
   align-items: center;
   gap: 1.4rem;
   width: 100%;
-  color: #D4AF37;
+  color: rgb(var(--scent-accent-rgb));
 }
 
 .scent-entry-count::before,
@@ -1131,9 +1211,9 @@ a {
   background: linear-gradient(
     to right,
     transparent,
-    rgba(212, 175, 55, 0.28) 38%,
-    #D4AF37 50%,
-    rgba(212, 175, 55, 0.28) 62%,
+    rgb(var(--scent-accent-rgb) / 0.28) 38%,
+    rgb(var(--scent-accent-rgb)) 50%,
+    rgb(var(--scent-accent-rgb) / 0.28) 62%,
     transparent
   );
   background-size: 240% 100%;
@@ -1244,7 +1324,7 @@ a {
     inset 0 3px 9px rgba(0, 0, 0, 0.5),
     inset 0 -3px 11px rgba(0, 0, 0, 0.4),
     /* faint gold rim atmosphere */
-    inset 0 0 26px rgba(212, 175, 55, 0.06);
+    inset 0 0 26px rgb(var(--scent-accent-rgb) / 0.06);
   transition:
     border-color var(--scent-transition-base) var(--scent-ease-out),
     box-shadow var(--scent-transition-base) var(--scent-ease-out);
@@ -1318,7 +1398,7 @@ a {
       inset 4px 5px 10px -4px rgba(0, 0, 0, 0.55),
       inset 0 3px 9px rgba(0, 0, 0, 0.5),
       inset 0 -3px 11px rgba(0, 0, 0, 0.4),
-      inset 0 0 32px rgba(212, 175, 55, 0.1);
+      inset 0 0 32px rgb(var(--scent-accent-rgb) / 0.1);
   }
 
   .scent-fragrance-card:hover .scent-card-frame::before {
@@ -1540,10 +1620,10 @@ a {
 
 .scent-vault-grid-toggle__button[aria-pressed="true"] {
   color: #fff7ec;
-  background: rgba(212, 175, 55, 0.16);
+  background: rgb(var(--scent-accent-rgb) / 0.16);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    0 0 0 1px rgba(212, 175, 55, 0.18);
+    0 0 0 1px rgb(var(--scent-accent-rgb) / 0.18);
 }
 
 @media (max-width: 639px) {
@@ -1618,8 +1698,8 @@ a {
   min-height: 2rem;
   align-items: center;
   overflow: hidden;
-  border-block: 1px solid rgba(212, 175, 55, 0.14);
-  background: linear-gradient(90deg, transparent, rgba(212, 175, 55, 0.045), transparent);
+  border-block: 1px solid rgb(var(--scent-accent-rgb) / 0.14);
+  background: linear-gradient(90deg, transparent, rgb(var(--scent-accent-rgb) / 0.045), transparent);
   contain: paint;
   /* A generous edge fade so the looping text dissolves into the band at both
      ends rather than reading as a hard left/right crop on narrow screens. The
@@ -1644,7 +1724,7 @@ a {
 
 .scent-marquee-text {
   color: rgba(255, 244, 225, 0.9);
-  text-shadow: 0 0 18px rgba(212, 175, 55, 0.22);
+  text-shadow: 0 0 18px rgb(var(--scent-accent-rgb) / 0.22);
 }
 
 .scent-marquee-track-row {
@@ -1746,7 +1826,7 @@ a {
   width: clamp(1rem, 2vw, 1.6rem);
   height: 1px;
   transform: translateY(0.06em);
-  background: linear-gradient(90deg, rgba(212, 175, 55, 0), rgba(212, 175, 55, 0.55), rgba(212, 175, 55, 0));
+  background: linear-gradient(90deg, rgb(var(--scent-accent-rgb) / 0), rgb(var(--scent-accent-rgb) / 0.55), rgb(var(--scent-accent-rgb) / 0));
   opacity: 0.55;
 }
 
@@ -1879,7 +1959,7 @@ a {
 
 .scent-weather-value {
   color: #fff7ec;
-  text-shadow: 0 0 24px rgba(212, 175, 55, 0.24);
+  text-shadow: 0 0 24px rgb(var(--scent-accent-rgb) / 0.24);
 }
 
 .scent-hero-zone {
@@ -1897,7 +1977,7 @@ a {
   pointer-events: none;
   border-radius: calc(var(--radius-scent) + 0.5rem);
   background:
-    radial-gradient(78% 62% at 50% 0%, rgba(212, 175, 55, 0.13), transparent 64%),
+    radial-gradient(78% 62% at 50% 0%, rgb(var(--scent-accent-rgb) / 0.13), transparent 64%),
     radial-gradient(110% 82% at 50% 100%, rgba(255, 255, 255, 0.035), transparent 70%),
     linear-gradient(180deg, rgba(0, 0, 0, 0.28), rgba(0, 0, 0, 0.24) 52%, transparent 100%);
   /* No projected gold glow pooling under the hero (see $no-projected-gold-glow). */
@@ -1927,7 +2007,7 @@ a {
 .scent-atmosphere-marquee {
   position: relative;
   overflow: hidden;
-  border-block: 1px solid rgba(212, 175, 55, 0.18);
+  border-block: 1px solid rgb(var(--scent-accent-rgb) / 0.18);
   background: linear-gradient(180deg, rgba(0, 0, 0, 0.94), rgba(0, 0, 0, 0.98));
   box-shadow: inset 0 1px 0 rgba(255, 226, 174, 0.06), 0 18px 44px -28px rgba(0, 0, 0, 0.95);
   contain: paint;
@@ -1994,7 +2074,7 @@ a {
   width: clamp(11rem, 18vw, 14rem);
   max-width: clamp(11rem, 18vw, 14rem);
   padding: clamp(0.5rem, 1.4vw, 0.7rem) clamp(0.95rem, 2vw, 1.35rem);
-  border-left: 1px solid rgba(212, 175, 55, 0.12);
+  border-left: 1px solid rgb(var(--scent-accent-rgb) / 0.12);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2015,7 +2095,7 @@ a {
   align-items: stretch;
   gap: 0;
   overflow: hidden;
-  border: 1px solid rgba(212, 175, 55, 0.18);
+  border: 1px solid rgb(var(--scent-accent-rgb) / 0.18);
   border-radius: var(--radius-scent);
   background: linear-gradient(180deg, rgba(0, 0, 0, 0.88), rgba(0, 0, 0, 0.94));
   box-shadow: inset 0 1px 0 rgba(255, 226, 174, 0.06), 0 18px 44px -28px rgba(0, 0, 0, 0.95);
@@ -2029,7 +2109,7 @@ a {
 .scent-atmosphere-cell {
   min-width: 0;
   padding: 1.1rem 1.25rem;
-  border-left: 1px solid rgba(212, 175, 55, 0.12);
+  border-left: 1px solid rgb(var(--scent-accent-rgb) / 0.12);
 }
 
 .scent-atmosphere-cell:first-child {
@@ -2101,7 +2181,7 @@ a {
   height: 0.72em;
   overflow: hidden;
   border-radius: 999px;
-  background: linear-gradient(90deg, rgba(255, 247, 236, 0.08), rgba(212, 175, 55, 0.1), rgba(255, 247, 236, 0.08));
+  background: linear-gradient(90deg, rgba(255, 247, 236, 0.08), rgb(var(--scent-accent-rgb) / 0.1), rgba(255, 247, 236, 0.08));
   box-shadow: inset 0 0 0 1px rgba(255, 247, 236, 0.045);
 }
 
@@ -2140,7 +2220,7 @@ a {
   }
 
   .scent-atmosphere-cell {
-    border-top: 1px solid rgba(212, 175, 55, 0.12);
+    border-top: 1px solid rgb(var(--scent-accent-rgb) / 0.12);
   }
 
   .scent-atmosphere-cell:nth-child(-n + 2) {
@@ -2156,8 +2236,8 @@ a {
   .scent-app-shell::before {
     background:
       linear-gradient(180deg, rgba(0, 0, 0, 0.28), rgba(0, 0, 0, 0.1) 28%, rgba(0, 0, 0, 0.82)),
-      radial-gradient(ellipse at 26% 8%, rgba(212, 175, 55, 0.022), transparent 22rem),
-      radial-gradient(ellipse at 72% 24rem, rgba(212, 175, 55, 0.014), transparent 28rem),
+      radial-gradient(ellipse at 26% 8%, rgb(var(--scent-accent-rgb) / 0.022), transparent 22rem),
+      radial-gradient(ellipse at 72% 24rem, rgb(var(--scent-accent-rgb) / 0.014), transparent 28rem),
       radial-gradient(ellipse at 50% 25rem, rgba(0, 0, 0, 0.92), transparent 30rem);
   }
 
@@ -2168,7 +2248,7 @@ a {
   .scent-atmosphere-cell,
   .scent-atmosphere-cell:nth-child(-n + 2) {
     border-left: 0;
-    border-top: 1px solid rgba(212, 175, 55, 0.12);
+    border-top: 1px solid rgb(var(--scent-accent-rgb) / 0.12);
     padding: 0.95rem 1rem;
   }
 
@@ -2527,9 +2607,9 @@ a {
   z-index: -1;
   pointer-events: none;
   background:
-    radial-gradient(48% 28% at 50% 25%, rgba(212, 175, 55, 0.022), transparent 78%),
-    radial-gradient(44% 24% at 50% 82%, rgba(212, 175, 55, 0.016), transparent 82%),
-    linear-gradient(90deg, rgba(212, 175, 55, 0.008), transparent 28%, transparent 72%, rgba(212, 175, 55, 0.008));
+    radial-gradient(48% 28% at 50% 25%, rgb(var(--scent-accent-rgb) / 0.022), transparent 78%),
+    radial-gradient(44% 24% at 50% 82%, rgb(var(--scent-accent-rgb) / 0.016), transparent 82%),
+    linear-gradient(90deg, rgb(var(--scent-accent-rgb) / 0.008), transparent 28%, transparent 72%, rgb(var(--scent-accent-rgb) / 0.008));
 }
 
 .community-fragrance-detail__scroll {
@@ -2574,7 +2654,7 @@ a {
   text-align: center;
   text-transform: uppercase;
   white-space: nowrap;
-  text-shadow: 0 0 10px rgba(212, 175, 55, 0.14);
+  text-shadow: 0 0 10px rgb(var(--scent-accent-rgb) / 0.14);
 }
 
 .community-fragrance-detail__x {
@@ -2630,7 +2710,7 @@ a {
   /* Drives the inner hairline radius below; the inset subtracts from this so the
      corner curve stays parallel to the outer border. */
   --hero-frame-radius: 1.5rem;
-  border: 1px solid rgba(212, 175, 55, 0.5);
+  border: 1px solid rgb(var(--scent-accent-rgb) / 0.5);
   border-radius: var(--hero-frame-radius);
   background:
     radial-gradient(78% 42% at 50% 6%, rgba(255, 237, 190, 0.02), transparent 70%),
@@ -2758,7 +2838,7 @@ a {
   text-transform: none;
   text-shadow:
     0 1px 0 rgba(0, 0, 0, 0.72),
-    0 0 12px rgba(212, 175, 55, 0.1);
+    0 0 12px rgb(var(--scent-accent-rgb) / 0.1);
 }
 
 .community-fragrance-detail__brand[data-len="medium"] {
@@ -2795,18 +2875,18 @@ a {
   gap: 0.58rem;
   width: min(10.8rem, 66%);
   margin-top: 0.74rem;
-  color: rgba(212, 175, 55, 0.78);
+  color: rgb(var(--scent-accent-rgb) / 0.78);
 }
 
 .community-fragrance-detail__rule::before,
 .community-fragrance-detail__rule::after {
   content: "";
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(212, 175, 55, 0.58));
+  background: linear-gradient(90deg, transparent, rgb(var(--scent-accent-rgb) / 0.58));
 }
 
 .community-fragrance-detail__rule::after {
-  background: linear-gradient(90deg, rgba(212, 175, 55, 0.58), transparent);
+  background: linear-gradient(90deg, rgb(var(--scent-accent-rgb) / 0.58), transparent);
 }
 
 .community-fragrance-detail__rule span {
@@ -2814,7 +2894,7 @@ a {
   height: 0.5rem;
   border: 1px solid currentColor;
   transform: rotate(45deg);
-  box-shadow: 0 0 8px rgba(212, 175, 55, 0.16);
+  box-shadow: 0 0 8px rgb(var(--scent-accent-rgb) / 0.16);
 }
 
 .community-fragrance-detail__message {
@@ -2866,7 +2946,7 @@ a {
 .community-fragrance-detail__notes {
   width: clamp(18rem, 80vw, 30rem);
   overflow: hidden;
-  border: 1px solid rgba(212, 175, 55, 0.16);
+  border: 1px solid rgb(var(--scent-accent-rgb) / 0.16);
   border-radius: 0.72rem;
   background:
     linear-gradient(180deg, rgba(255, 235, 179, 0.012), rgba(0, 0, 0, 0.78) 34%, rgba(0, 0, 0, 0.9));
@@ -2880,7 +2960,7 @@ a {
   align-items: center;
   min-height: 3.12rem;
   padding: 0.58rem 0.94rem;
-  border-top: 1px solid rgba(212, 175, 55, 0.12);
+  border-top: 1px solid rgb(var(--scent-accent-rgb) / 0.12);
 }
 
 .community-fragrance-detail__note-row:first-child {
@@ -2900,7 +2980,7 @@ a {
 .community-fragrance-detail__note-row > span {
   width: 1px;
   height: 1.5rem;
-  background: rgba(212, 175, 55, 0.26);
+  background: rgb(var(--scent-accent-rgb) / 0.26);
 }
 
 .community-fragrance-detail__note-row div {
@@ -2962,7 +3042,7 @@ a {
   text-transform: uppercase;
   text-shadow:
     0 1px 0 rgba(0, 0, 0, 0.88),
-    0 0 10px rgba(212, 175, 55, 0.14);
+    0 0 10px rgb(var(--scent-accent-rgb) / 0.14);
 }
 
 .community-fragrance-detail__close:hover,
@@ -3193,7 +3273,7 @@ a {
      focus to the trigger. Lifting the resting edge and routing the brighter
      state through :focus-visible (below) makes the gold outline the default,
      not a post-click artefact. */
-  border-color: rgba(212, 175, 55, 0.34);
+  border-color: rgb(var(--scent-accent-rgb) / 0.34);
   background: #050403;
   box-shadow: inset 0 1px 0 rgba(255, 236, 183, 0.055);
 }
@@ -3210,7 +3290,7 @@ a {
 
 @media (hover: hover) and (pointer: fine) {
   .scent-community-marquee .scent-community-marquee-card:hover {
-    border-color: rgba(212, 175, 55, 0.42);
+    border-color: rgb(var(--scent-accent-rgb) / 0.42);
     box-shadow: inset 0 1px 0 rgba(255, 236, 183, 0.08);
   }
 }
@@ -3221,9 +3301,9 @@ a {
    users. :focus-visible is input-modality aware, so it shows for keyboard
    navigation but not for the restore-focus after a tap. */
 .scent-community-marquee .scent-community-marquee-card:focus-visible {
-  border-color: rgba(212, 175, 55, 0.52);
+  border-color: rgb(var(--scent-accent-rgb) / 0.52);
   box-shadow:
-    0 0 0 2px rgba(212, 175, 55, 0.12),
+    0 0 0 2px rgb(var(--scent-accent-rgb) / 0.12),
     inset 0 1px 0 rgba(255, 236, 183, 0.08);
 }
 
@@ -3461,7 +3541,7 @@ a {
 }
 
 .scent-beam-avatar::after {
-  background: radial-gradient(circle, rgba(212, 175, 55, 0.28), transparent 62%);
+  background: radial-gradient(circle, rgb(var(--scent-accent-rgb) / 0.28), transparent 62%);
 }
 
 .scent-beam-avatar[data-thinking="true"]::before {
@@ -3859,7 +3939,7 @@ textarea:focus-visible,
   outline: 2px solid rgba(255, 232, 172, 0.94);
   outline-offset: 3px;
   box-shadow:
-    0 0 0 5px rgba(212, 175, 55, 0.24),
+    0 0 0 5px rgb(var(--scent-accent-rgb) / 0.24),
     0 0 22px rgba(255, 232, 172, 0.22);
 }
 

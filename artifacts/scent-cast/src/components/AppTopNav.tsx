@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { isIpadSafariPerformanceMode, isLowRenderBudget, isTouchPerformanceMode } from '@/lib/platform';
+import { useTranslation } from '@/i18n';
 
 interface AppTopNavProps {
   authToken: string | null;
@@ -88,13 +89,14 @@ const AccountMenu: React.FC<AccountMenuProps> = ({
 }) => {
   const displayName = authUsername?.trim() || authEmail || null;
   const touchPerformanceMode = React.useRef(isTouchPerformanceMode()).current;
+  const { t } = useTranslation();
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className="flex h-11 w-11 items-center justify-center rounded-full border border-scent-accent/35 bg-black/35 shadow-[0_0_18px_rgba(212,175,55,0.12)] transition-colors hover:border-scent-accent/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55"
-          aria-label="Open account menu"
+          className="flex h-11 w-11 items-center justify-center rounded-full border border-scent-accent/35 bg-black/35 shadow-[0_0_18px_rgb(var(--scent-accent-rgb)/0.12)] transition-colors hover:border-scent-accent/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55"
+          aria-label={t('account.menuLabel')}
         >
           <Avatar className="h-10 w-10 border border-white/10 bg-scent-surface">
             {authPictureUrl ? (
@@ -129,14 +131,14 @@ const AccountMenu: React.FC<AccountMenuProps> = ({
           onSelect={onEditProfile}
         >
           <Settings size={15} />
-          Settings
+          {t('account.settings')}
         </DropdownMenuItem>
         <DropdownMenuItem
           className="cursor-pointer rounded-[6px] px-3 py-2.5 text-[13px] font-semibold uppercase tracking-[0.14em] text-[#f4debd] focus:bg-scent-accent/15 focus:text-white"
           onSelect={onShare}
         >
           <Share2 size={15} />
-          Share
+          {t('account.share')}
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
           <Link
@@ -144,7 +146,7 @@ const AccountMenu: React.FC<AccountMenuProps> = ({
             className="cursor-pointer rounded-[6px] px-3 py-2.5 text-[13px] font-semibold uppercase tracking-[0.14em] text-[#f4debd] focus:bg-scent-accent/15 focus:text-white"
           >
             <ShieldCheck size={15} />
-            Privacy &amp; Cookies
+            {t('account.privacy')}
           </Link>
         </DropdownMenuItem>
         <DropdownMenuSeparator className="bg-scent-accent/15" />
@@ -153,7 +155,7 @@ const AccountMenu: React.FC<AccountMenuProps> = ({
           onSelect={onSignOut}
         >
           <LogOut size={15} />
-          Sign Out
+          {t('account.signOut')}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

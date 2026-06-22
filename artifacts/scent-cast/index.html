@@ -6,6 +6,27 @@
          1.4.4 (Resize Text) and iOS Safari ignores it anyway for accessibility.
          `viewport-fit=cover` is retained for the edge-to-edge safe-area layout. -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!--
+      No-flash theme/accent/language bootstrap. Runs before first paint so the
+      saved preferences are applied to <html> with no flicker. Defaults match the
+      historical look exactly (dark + gold), so a first-time or storage-blocked
+      visitor sees the signature theme. The React providers (ThemeProvider /
+      I18nProvider) read the same localStorage keys and stay in sync from here.
+    -->
+    <script>
+      (function () {
+        try {
+          var d = document.documentElement;
+          var theme = localStorage.getItem('scent_theme') === 'light' ? 'light' : 'dark';
+          var accent = localStorage.getItem('scent_accent') === 'green' ? 'green' : 'gold';
+          var locale = localStorage.getItem('scent_locale');
+          d.setAttribute('data-theme', theme);
+          d.setAttribute('data-accent', accent);
+          d.style.colorScheme = theme;
+          if (locale && /^(en|es|fr|de)$/.test(locale)) d.setAttribute('lang', locale);
+        } catch (e) {}
+      })();
+    </script>
     <title>ScentBeam</title>
     <meta name="description" content="Your scent. Perfected." />
     <!--
