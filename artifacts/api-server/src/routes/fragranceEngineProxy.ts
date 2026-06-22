@@ -15,6 +15,10 @@ const ENGINE_BASE = (
   .trim()
   .replace(/\/+$/, "");
 
+// Slightly above the engine's internal ~18s work budget so we only abort on a
+// genuinely stalled connection, not normal slow-but-progressing requests.
+const PROXY_TIMEOUT_MS = 20_000;
+
 const HOP_BY_HOP = new Set([
   "connection",
   "keep-alive",
@@ -26,6 +30,11 @@ const HOP_BY_HOP = new Set([
   "upgrade",
   "host",
   "content-length",
+  // The engine is a separate public service that ignores caller credentials.
+  // Don't forward the SPA's bearer token / cookies to it — that needlessly
+  // spills user credentials to a third system.
+  "authorization",
+  "cookie",
   // Node's fetch (undici) transparently decompresses the upstream body, so
   // `await upstream.arrayBuffer()` is already plain bytes. Forwarding the
   // upstream `content-encoding` would mislabel that decompressed body as still
@@ -60,7 +69,14 @@ async function proxyToEngine(req: Request, res: Response) {
   }
 
   try {
-    const upstream = await fetch(targetUrl, init);
+    // undici's fetch has no default timeout. Without this, a stalled engine
+    // (cold start, OOM restart mid-response, a hung upstream leg) would hold the
+    // browser request open indefinitely. The engine's own work budget is ~18s,
+    // so cap slightly above it and surface a clean 504 instead of hanging.
+    const upstream = await fetch(targetUrl, {
+      ...init,
+      signal: AbortSignal.timeout(PROXY_TIMEOUT_MS),
+    });
     res.status(upstream.status);
     upstream.headers.forEach((value, key) => {
       if (!HOP_BY_HOP.has(key.toLowerCase())) {
@@ -70,11 +86,13 @@ async function proxyToEngine(req: Request, res: Response) {
     const body = Buffer.from(await upstream.arrayBuffer());
     res.send(body);
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
     logger.warn({ err, targetUrl }, "fragrance engine proxy failed");
-    res.status(502).json({
-      error: "Fragrance engine unreachable",
-      detail: message,
+    const timedOut =
+      err instanceof DOMException && err.name === "TimeoutError";
+    res.status(timedOut ? 504 : 502).json({
+      error: timedOut
+        ? "Fragrance engine timed out"
+        : "Fragrance engine unreachable",
     });
   }
 }

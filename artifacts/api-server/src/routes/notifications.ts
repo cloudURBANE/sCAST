@@ -122,10 +122,21 @@ router.delete("/notifications/:id", requireAuth, async (req: AuthRequest, res) =
 });
 
 // ─── helpers ───────────────────────────────────────────────────────────
-/** Detect Postgres "undefined_table" (42P01) or "undefined_column" (42703). */
+/**
+ * Detect Postgres "undefined_table" (42P01) or "undefined_column" (42703).
+ * drizzle-orm wraps driver errors in DrizzleQueryError and exposes the pg
+ * `code` on `.cause`, so walk the cause chain rather than reading only the top
+ * level — otherwise the guard never fires and the route 500s on every load when
+ * in_app_notifications hasn't been migrated yet.
+ */
 function isTableMissing(err: unknown): boolean {
-  const code = (err as { code?: string })?.code;
-  return code === "42P01" || code === "42703";
+  let current: unknown = err;
+  for (let depth = 0; depth < 4 && current && typeof current === "object"; depth += 1) {
+    const code = (current as { code?: unknown }).code;
+    if (code === "42P01" || code === "42703") return true;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return false;
 }
 
 export default router;
