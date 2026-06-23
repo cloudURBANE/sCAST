@@ -257,7 +257,7 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
                       aria-controls="community-composer-panel"
                       aria-label={composerOpen ? 'Close the composer' : 'Start a community room'}
                       className={[
-                        'inline-flex min-h-8 min-w-0 flex-1 items-center gap-2 rounded-full border px-3 py-1.5 scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 sm:min-h-10 sm:flex-none sm:px-4 sm:py-2',
+                        'inline-flex min-h-10 min-w-0 flex-1 items-center gap-2 rounded-full border px-3 py-1.5 scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 sm:flex-none sm:px-4 sm:py-2',
                         composerOpen
                           ? 'border-scent-accent/48 bg-scent-accent/[0.08] text-[#fff7ec]'
                           : 'border-scent-accent/24 bg-black/40 text-scent-text-muted hover:border-scent-accent/46 hover:text-[#fff7ec]',
@@ -277,7 +277,7 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
                       aria-controls="community-search-panel"
                       aria-label={filtersOpen ? 'Close search and filters' : 'Search rooms and filter'}
                       className={[
-                        'inline-flex min-h-8 shrink-0 items-center gap-2 rounded-full border px-3 py-1.5 scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 sm:min-h-10 sm:px-4 sm:py-2',
+                        'inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full border px-3 py-1.5 scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 sm:px-4 sm:py-2',
                         filtersOpen
                           ? 'border-scent-accent/48 bg-scent-accent/[0.08] text-[#fff7ec]'
                           : 'border-scent-accent/24 bg-black/40 text-scent-text-muted hover:border-scent-accent/46 hover:text-[#fff7ec]',
