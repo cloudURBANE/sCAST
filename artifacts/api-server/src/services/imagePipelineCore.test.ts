@@ -84,6 +84,9 @@ test("image object storage refuses silent local persistence without durable stor
     nodeEnv: process.env.NODE_ENV,
     allowLocal: process.env.IMAGE_ALLOW_LOCAL_OBJECT_STORAGE,
     firebaseBucket: process.env.FIREBASE_STORAGE_BUCKET,
+    firebaseProject: process.env.FIREBASE_PROJECT_ID,
+    firebaseEmail: process.env.FIREBASE_CLIENT_EMAIL,
+    firebaseKey: process.env.FIREBASE_PRIVATE_KEY,
     supabaseUrl: process.env.SUPABASE_URL,
     supabaseKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
     supabaseBucket: process.env.SUPABASE_IMAGE_BUCKET,
@@ -93,6 +96,9 @@ test("image object storage refuses silent local persistence without durable stor
     process.env.NODE_ENV = "production";
     process.env.IMAGE_ALLOW_LOCAL_OBJECT_STORAGE = "true";
     process.env.FIREBASE_STORAGE_BUCKET = "";
+    process.env.FIREBASE_PROJECT_ID = "";
+    process.env.FIREBASE_CLIENT_EMAIL = "";
+    process.env.FIREBASE_PRIVATE_KEY = "";
     process.env.SUPABASE_URL = "";
     process.env.SUPABASE_SERVICE_ROLE_KEY = "";
     process.env.SUPABASE_IMAGE_BUCKET = "";
@@ -102,9 +108,40 @@ test("image object storage refuses silent local persistence without durable stor
     restoreEnvValue("NODE_ENV", previous.nodeEnv);
     restoreEnvValue("IMAGE_ALLOW_LOCAL_OBJECT_STORAGE", previous.allowLocal);
     restoreEnvValue("FIREBASE_STORAGE_BUCKET", previous.firebaseBucket);
+    restoreEnvValue("FIREBASE_PROJECT_ID", previous.firebaseProject);
+    restoreEnvValue("FIREBASE_CLIENT_EMAIL", previous.firebaseEmail);
+    restoreEnvValue("FIREBASE_PRIVATE_KEY", previous.firebaseKey);
     restoreEnvValue("SUPABASE_URL", previous.supabaseUrl);
     restoreEnvValue("SUPABASE_SERVICE_ROLE_KEY", previous.supabaseKey);
     restoreEnvValue("SUPABASE_IMAGE_BUCKET", previous.supabaseBucket);
+  }
+});
+
+test("image object storage derives the Firebase bucket from project id when only the bucket var is missing", async () => {
+  const { getImageObjectStorage } = await import("./imageObjectStorage.ts");
+  const previous = {
+    firebaseBucket: process.env.FIREBASE_STORAGE_BUCKET,
+    firebaseProject: process.env.FIREBASE_PROJECT_ID,
+    firebaseEmail: process.env.FIREBASE_CLIENT_EMAIL,
+    firebaseKey: process.env.FIREBASE_PRIVATE_KEY,
+  };
+
+  try {
+    // All three Firebase credentials present, but FIREBASE_STORAGE_BUCKET unset —
+    // the exact production misconfiguration that rendered every tile "No image".
+    // Storage must still resolve (to a derived bucket) instead of throwing.
+    delete process.env.FIREBASE_STORAGE_BUCKET;
+    process.env.FIREBASE_PROJECT_ID = "scentcast-demo";
+    process.env.FIREBASE_CLIENT_EMAIL = "svc@scentcast-demo.iam.gserviceaccount.com";
+    process.env.FIREBASE_PRIVATE_KEY = "-----BEGIN PRIVATE KEY-----\\nfake\\n-----END PRIVATE KEY-----";
+
+    const storage = getImageObjectStorage() as { provider?: string };
+    assert.equal(storage.provider, "firebase");
+  } finally {
+    restoreEnvValue("FIREBASE_STORAGE_BUCKET", previous.firebaseBucket);
+    restoreEnvValue("FIREBASE_PROJECT_ID", previous.firebaseProject);
+    restoreEnvValue("FIREBASE_CLIENT_EMAIL", previous.firebaseEmail);
+    restoreEnvValue("FIREBASE_PRIVATE_KEY", previous.firebaseKey);
   }
 });
 
