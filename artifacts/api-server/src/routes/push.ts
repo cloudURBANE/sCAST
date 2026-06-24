@@ -71,12 +71,13 @@ router.get("/push/preferences", requireAuth, async (req: AuthRequest, res) => {
 });
 
 router.put("/push/preferences", requireAuth, async (req: AuthRequest, res) => {
-  const body = (req.body ?? {}) as { weather?: unknown; community?: unknown };
-  const patch: { weather?: boolean; community?: boolean } = {};
+  const body = (req.body ?? {}) as { weather?: unknown; community?: unknown; curation?: unknown };
+  const patch: { weather?: boolean; community?: boolean; curation?: boolean } = {};
   if (typeof body.weather === "boolean") patch.weather = body.weather;
   if (typeof body.community === "boolean") patch.community = body.community;
-  if (patch.weather === undefined && patch.community === undefined) {
-    res.status(400).json({ error: "Provide at least one of `weather` or `community` (boolean)." });
+  if (typeof body.curation === "boolean") patch.curation = body.curation;
+  if (patch.weather === undefined && patch.community === undefined && patch.curation === undefined) {
+    res.status(400).json({ error: "Provide at least one of `weather`, `community`, or `curation` (boolean)." });
     return;
   }
   const preferences = await setPushPreferences(req.user!.id, patch);

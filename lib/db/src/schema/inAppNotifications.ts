@@ -38,6 +38,11 @@ export const inAppNotificationsTable = pgTable(
     url: text("url"),
     category: text("category").notNull().default("system"),
     read: boolean("read").notNull().default(false),
+    // When the row was marked read (NULL while unread). Additive + nullable, so a
+    // deploy stays a trivially additive `drizzle-kit push`; until the migration
+    // lands the routes catch 42703 and fall back to setting `read` alone, exactly
+    // like the notifyCuration column in user_settings.
+    readAt: timestamp("read_at"),
     // Optional coalescing key. When set, a row is unique per (user, dedupeKey) so
     // a single logical event that would otherwise fan out into many notifications
     // (e.g. a Beam agent run that queues several fragrances for enrichment) lands

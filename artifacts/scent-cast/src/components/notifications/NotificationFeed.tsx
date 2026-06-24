@@ -8,10 +8,14 @@ import {
   CloudSun,
   MessageSquare,
   Sparkles,
+  LoaderCircle,
+  WifiOff,
   X
 } from "lucide-react";
 
 import { useAuth } from "@/context/AuthContext";
+import { useTranslation } from "@/i18n";
+import { clearAppBadgeAndServer } from "@/lib/pushNotifications";
 import {
   Popover,
   PopoverTrigger,
@@ -41,28 +45,38 @@ export interface InAppNotification {
   createdAt: string;
 }
 
-const TABS: { value: string; label: string }[] = [
-  { value: "all", label: "All" },
-  { value: "weather", label: "Weather" },
-  { value: "community", label: "Community" },
-  { value: "system", label: "Updates" },
+// The list page plus a server-authoritative unread total (counts ALL of the
+// user's unread rows, not just the 50 returned in `notifications`).
+interface FeedData {
+  notifications: InAppNotification[];
+  unreadCount: number;
+}
+
+const TABS: { value: string; labelKey: string }[] = [
+  { value: "all", labelKey: "notificationFeed.tabAll" },
+  { value: "weather", labelKey: "notificationFeed.tabWeather" },
+  { value: "community", labelKey: "notificationFeed.tabCommunity" },
+  { value: "system", labelKey: "notificationFeed.tabUpdates" },
 ];
 
 export function NotificationFeed() {
   const { authToken } = useAuth();
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<string>("all");
   const [isOpen, setIsOpen] = useState(false);
 
+  const feedKey = ["notifications", authToken] as const;
+
   // 1. Query: Fetch notifications from API. Firing is entirely server-driven —
   // there is no client-side notification generation, so React Query's keyed cache
   // is the dedupe boundary (one in-flight request per token, shared across the
   // desktop + mobile triggers below).
-  const { data: notifications = [] } = useQuery<InAppNotification[]>({
-    queryKey: ["notifications", authToken],
+  const { data, isLoading, isError, refetch, isFetching } = useQuery<FeedData>({
+    queryKey: feedKey,
     queryFn: async () => {
-      if (!authToken) return [];
+      if (!authToken) return { notifications: [], unreadCount: 0 };
       const res = await fetch("/api/notifications", {
         headers: {
           Authorization: `Bearer ${authToken}`
@@ -70,7 +84,10 @@ export function NotificationFeed() {
       });
       if (!res.ok) throw new Error("Failed to fetch notifications");
       const json = await res.json();
-      return json.notifications || [];
+      return {
+        notifications: (json.notifications || []) as InAppNotification[],
+        unreadCount: typeof json.unreadCount === "number" ? json.unreadCount : 0,
+      };
     },
     enabled: !!authToken,
     refetchInterval: 15000, // Poll every 15s to keep feed fresh
@@ -78,58 +95,101 @@ export function NotificationFeed() {
     refetchOnWindowFocus: false // the 15s poll already keeps it fresh; avoid focus-storm refetches
   });
 
-  // 2. Mutations
+  // Optimistic cache helpers — every mutation updates the cache immediately so a
+  // tap feels instant, then rolls back on error and reconciles on settle. Without
+  // this the unread dot / item styling lingered for a full network round-trip.
+  const patchFeed = (updater: (prev: FeedData) => FeedData) =>
+    queryClient.setQueryData<FeedData>(feedKey, (prev) => (prev ? updater(prev) : prev));
+
+  const beginOptimistic = async (updater: (prev: FeedData) => FeedData) => {
+    await queryClient.cancelQueries({ queryKey: feedKey });
+    const previous = queryClient.getQueryData<FeedData>(feedKey);
+    patchFeed(updater);
+    return { previous };
+  };
+
+  const rollback = (ctx: { previous?: FeedData } | undefined) => {
+    if (ctx?.previous) queryClient.setQueryData(feedKey, ctx.previous);
+  };
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["notifications"] });
+
+  // 2. Mutations (all optimistic)
   const markReadMutation = useMutation({
     mutationFn: async (id: string) => {
       const res = await fetch(`/api/notifications/${id}/read`, {
         method: "PATCH",
-        headers: {
-          Authorization: `Bearer ${authToken}`
-        }
+        headers: { Authorization: `Bearer ${authToken}` }
       });
       if (!res.ok) throw new Error("Failed to mark notification as read");
       return res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["notifications"] });
-    }
+    onMutate: (id: string) =>
+      beginOptimistic((prev) => {
+        let decrement = 0;
+        const notifications = prev.notifications.map((n) => {
+          if (n.id === id && !n.read) {
+            decrement = 1;
+            return { ...n, read: true };
+          }
+          return n;
+        });
+        return { notifications, unreadCount: Math.max(0, prev.unreadCount - decrement) };
+      }),
+    onError: (_e, _id, ctx) => rollback(ctx),
+    onSettled: invalidate
   });
 
   const markAllReadMutation = useMutation({
     mutationFn: async () => {
       const res = await fetch("/api/notifications/read-all", {
         method: "PATCH",
-        headers: {
-          Authorization: `Bearer ${authToken}`
-        }
+        headers: { Authorization: `Bearer ${authToken}` }
       });
       if (!res.ok) throw new Error("Failed to mark all as read");
       return res.json();
     },
+    onMutate: () =>
+      beginOptimistic((prev) => ({
+        notifications: prev.notifications.map((n) => ({ ...n, read: true })),
+        unreadCount: 0,
+      })),
+    onError: (_e, _v, ctx) => rollback(ctx),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["notifications"] });
-    }
+      // Reconcile the OS app-icon badge with the feed: clearing the feed's unread
+      // state should also zero the server badge + OS badge, otherwise the icon
+      // badge lingers until the next foreground BadgeClearer pass.
+      if (authToken) void clearAppBadgeAndServer(authToken);
+    },
+    onSettled: invalidate
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       const res = await fetch(`/api/notifications/${id}`, {
         method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${authToken}`
-        }
+        headers: { Authorization: `Bearer ${authToken}` }
       });
       if (!res.ok) throw new Error("Failed to delete notification");
       return res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["notifications"] });
-    }
+    onMutate: (id: string) =>
+      beginOptimistic((prev) => {
+        const target = prev.notifications.find((n) => n.id === id);
+        const decrement = target && !target.read ? 1 : 0;
+        return {
+          notifications: prev.notifications.filter((n) => n.id !== id),
+          unreadCount: Math.max(0, prev.unreadCount - decrement),
+        };
+      }),
+    onError: (_e, _id, ctx) => rollback(ctx),
+    onSettled: invalidate
   });
 
   if (!authToken) return null;
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const notifications = data?.notifications ?? [];
+  const unreadCount = data?.unreadCount ?? 0;
   const hasUnread = unreadCount > 0;
 
   // Filter list based on active tab
@@ -176,13 +236,13 @@ export function NotificationFeed() {
     try {
       const date = new Date(dateStr);
       const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
-      if (seconds < 60) return "Just now";
+      if (seconds < 60) return t("notificationFeed.timeJustNow");
       const minutes = Math.floor(seconds / 60);
-      if (minutes < 60) return `${minutes}m ago`;
+      if (minutes < 60) return t("notificationFeed.timeMinutes", { count: minutes });
       const hours = Math.floor(minutes / 60);
-      if (hours < 24) return `${hours}h ago`;
+      if (hours < 24) return t("notificationFeed.timeHours", { count: hours });
       const days = Math.floor(hours / 24);
-      return `${days}d ago`;
+      return t("notificationFeed.timeDays", { count: days });
     } catch {
       return "";
     }
@@ -192,7 +252,7 @@ export function NotificationFeed() {
   // operable), with the delete control as a sibling button so the two never nest.
   const NotificationItem = ({ item }: { item: InAppNotification }) => (
     <div
-      className={`group relative rounded-[14px] border transition-colors duration-300 ${
+      className={`group relative rounded-[12px] border transition-colors duration-300 ${
         item.read
           ? "border-white/6 bg-transparent hover:bg-white/[0.02]"
           : "border-scent-accent/18 bg-white/[0.035] hover:bg-white/[0.05]"
@@ -201,7 +261,7 @@ export function NotificationFeed() {
       <button
         type="button"
         onClick={() => handleNotificationClick(item)}
-        className="flex w-full items-start gap-3 rounded-[14px] p-3 pr-9 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
+        className="flex w-full items-start gap-3 rounded-[12px] p-3 pr-9 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
       >
         <span
           className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border bg-black/40 ${
@@ -235,14 +295,16 @@ export function NotificationFeed() {
         </div>
       </button>
 
+      {/* Delete: always visible on touch (no hover to reveal it there), reveals on
+          hover/focus on pointer devices. */}
       <button
         type="button"
         onClick={(e) => {
           e.stopPropagation();
           deleteMutation.mutate(item.id);
         }}
-        aria-label="Delete notification"
-        className="absolute right-2 top-2 rounded-full p-1 text-scent-text-subtle/45 opacity-0 transition-opacity duration-200 hover:bg-white/5 hover:text-[#e7a98f] focus:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 group-hover:opacity-100"
+        aria-label={t("notificationFeed.deleteAria")}
+        className="absolute right-2 top-2 rounded-full p-1 text-scent-text-subtle/55 opacity-100 transition-opacity duration-200 hover:bg-white/5 hover:text-destructive focus:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
       >
         <Trash2 size={13} />
       </button>
@@ -251,19 +313,104 @@ export function NotificationFeed() {
 
   const HeaderActions = () => (
     <div className="flex items-center justify-between border-b border-scent-accent/12 pb-3">
-      <h3 className="font-serif text-base italic text-scent-text-primary">Notifications</h3>
+      <h3 className="font-serif text-base italic text-scent-text-primary">
+        {t("notificationFeed.title")}
+      </h3>
       {hasUnread && (
         <button
           type="button"
           onClick={() => markAllReadMutation.mutate()}
-          className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.14em] text-scent-accent/80 transition-colors hover:text-scent-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 rounded-sm"
+          disabled={markAllReadMutation.isPending}
+          className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.14em] text-scent-accent/80 transition-colors hover:text-scent-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 rounded-sm disabled:opacity-50"
         >
           <CheckCheck size={12} />
-          <span>Mark all read</span>
+          <span>{t("notificationFeed.markAllRead")}</span>
         </button>
       )}
     </div>
   );
+
+  // Loading (first load), error, and empty are distinct states so a slow fetch no
+  // longer flashes the "all caught up" empty copy and a failed fetch no longer
+  // silently masquerades as empty.
+  const StatusBlock = ({
+    icon,
+    title,
+    body,
+    action,
+  }: {
+    icon: React.ReactNode;
+    title: string;
+    body: string;
+    action?: React.ReactNode;
+  }) => (
+    <div className="flex flex-col items-center justify-center py-14 text-center">
+      <span className="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-full border border-scent-accent/20 bg-black/40 text-scent-accent/70">
+        {icon}
+      </span>
+      <p className="text-[12px] font-semibold text-scent-text-muted">{title}</p>
+      <p className="mt-1 max-w-[14rem] text-[10px] leading-relaxed text-scent-text-subtle/70">
+        {body}
+      </p>
+      {action}
+    </div>
+  );
+
+  const ListBody = () => {
+    if (isLoading) {
+      return (
+        <StatusBlock
+          icon={<LoaderCircle size={20} strokeWidth={1.75} className="animate-spin" />}
+          title={t("notificationFeed.loading")}
+          body=""
+        />
+      );
+    }
+    if (isError) {
+      return (
+        <StatusBlock
+          icon={<WifiOff size={20} strokeWidth={1.75} />}
+          title={t("notificationFeed.errorTitle")}
+          body={t("notificationFeed.errorBody")}
+          action={
+            <button
+              type="button"
+              onClick={() => void refetch()}
+              disabled={isFetching}
+              className="mt-3 inline-flex items-center gap-1 rounded-full border border-scent-accent/30 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-scent-accent/85 transition-colors hover:border-scent-accent/60 hover:text-scent-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:opacity-50"
+            >
+              {isFetching && <LoaderCircle size={11} className="animate-spin" />}
+              <span>{t("notificationFeed.retry")}</span>
+            </button>
+          }
+        />
+      );
+    }
+    if (filteredNotifications.length === 0) {
+      return (
+        <StatusBlock
+          icon={<Bell size={20} strokeWidth={1.75} />}
+          title={
+            activeTab === "all"
+              ? t("notificationFeed.emptyAllTitle")
+              : t("notificationFeed.emptyFilteredTitle")
+          }
+          body={
+            activeTab === "all"
+              ? t("notificationFeed.emptyAllBody")
+              : t("notificationFeed.emptyFilteredBody")
+          }
+        />
+      );
+    }
+    return (
+      <>
+        {filteredNotifications.map((notification) => (
+          <NotificationItem key={notification.id} item={notification} />
+        ))}
+      </>
+    );
+  };
 
   const FeedContent = () => (
     <div className="flex h-full flex-col">
@@ -277,31 +424,13 @@ export function NotificationFeed() {
               value={tab.value}
               className="truncate rounded-full px-1.5 py-1 text-[10px] font-bold uppercase tracking-[0.04em] text-scent-text-subtle transition-colors data-[state=active]:bg-scent-accent/15 data-[state=active]:text-scent-accent data-[state=active]:shadow-none"
             >
-              {tab.label}
+              {t(tab.labelKey)}
             </TabsTrigger>
           ))}
         </TabsList>
 
         <div className="scrollbar-thin mt-4 flex-1 space-y-2 overflow-y-auto pr-1.5">
-          {filteredNotifications.length > 0 ? (
-            filteredNotifications.map(notification => (
-              <NotificationItem key={notification.id} item={notification} />
-            ))
-          ) : (
-            <div className="flex flex-col items-center justify-center py-14 text-center">
-              <span className="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-full border border-scent-accent/20 bg-black/40 text-scent-accent/70">
-                <Bell size={20} strokeWidth={1.75} />
-              </span>
-              <p className="text-[12px] font-semibold text-scent-text-muted">
-                {activeTab === "all" ? "You're all caught up" : "Nothing here yet"}
-              </p>
-              <p className="mt-1 max-w-[14rem] text-[10px] leading-relaxed text-scent-text-subtle/70">
-                {activeTab === "all"
-                  ? "Weather cues, community replies, and curation updates will appear here."
-                  : "No notifications in this category yet."}
-              </p>
-            </div>
-          )}
+          <ListBody />
         </div>
       </Tabs>
     </div>
@@ -310,13 +439,17 @@ export function NotificationFeed() {
   const triggerClassName =
     "relative flex h-11 w-11 items-center justify-center rounded-full border border-scent-accent/30 bg-black/35 shadow-[0_0_18px_rgba(0,0,0,0.4)] transition-colors hover:border-scent-accent/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55";
 
+  // Numeric unread badge (was a presence-only dot — 1 and 30 unread looked
+  // identical). Caps at 9+ to stay inside the pill on small triggers.
   const unreadBadge = hasUnread ? (
-    <span className="absolute right-2.5 top-2.5 flex h-2 w-2 shrink-0 rounded-full bg-scent-accent ring-2 ring-[#0b0805]" />
+    <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-scent-accent px-1 text-[9px] font-bold leading-none text-[#1a1206] ring-2 ring-[#090604]">
+      {unreadCount > 9 ? "9+" : unreadCount}
+    </span>
   ) : null;
 
   const triggerLabel = hasUnread
-    ? `Open notifications, ${unreadCount} unread`
-    : "Open notifications";
+    ? t("notificationFeed.openUnread", { count: unreadCount })
+    : t("notificationFeed.open");
 
   return (
     <>
@@ -332,7 +465,7 @@ export function NotificationFeed() {
           <PopoverContent
             align="end"
             sideOffset={10}
-            className="h-[28rem] w-[22rem] rounded-[18px] border-scent-accent/20 bg-[#0b0805]/96 p-4 text-scent-text-primary shadow-[0_22px_60px_rgba(0,0,0,0.7)] backdrop-blur-md"
+            className="h-[28rem] w-[22rem] rounded-[18px] border-scent-accent/20 bg-[#090604]/95 p-4 text-scent-text-primary shadow-[0_22px_60px_rgba(0,0,0,0.7)] backdrop-blur-md"
           >
             <FeedContent />
           </PopoverContent>
@@ -348,12 +481,12 @@ export function NotificationFeed() {
               {unreadBadge}
             </button>
           </DrawerTrigger>
-          <DrawerContent className="flex max-h-[85vh] flex-col border-scent-accent/18 bg-[#0b0805]/97 px-4 pb-8 text-scent-text-primary backdrop-blur-md">
+          <DrawerContent className="flex max-h-[85vh] flex-col border-scent-accent/18 bg-[#090604]/97 px-4 pb-[max(2rem,env(safe-area-inset-bottom))] text-scent-text-primary backdrop-blur-md">
             <div className="flex w-full justify-end pt-2">
               <DrawerClose asChild>
                 <button
                   type="button"
-                  aria-label="Close notifications"
+                  aria-label={t("notificationFeed.closeAria")}
                   className="rounded-full p-1 text-scent-text-subtle transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
                 >
                   <X size={16} />

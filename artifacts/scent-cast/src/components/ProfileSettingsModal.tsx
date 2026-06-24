@@ -154,7 +154,7 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [pushState, setPushState] = useState<PushState>('unknown');
   const [pushBusy, setPushBusy] = useState(false);
-  const [pushPrefs, setPushPrefs] = useState<PushPreferences>({ weather: true, community: true });
+  const [pushPrefs, setPushPrefs] = useState<PushPreferences>({ weather: true, community: true, curation: true });
   const [prefBusy, setPrefBusy] = useState<null | keyof PushPreferences>(null);
   const modalRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -647,6 +647,13 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                               checked={pushPrefs.community}
                               busy={prefBusy === 'community'}
                               onToggle={() => void handleToggleCategory('community')}
+                            />
+                            <NotificationToggle
+                              label={t('notifications.curationLabel')}
+                              description={t('notifications.curationDescription')}
+                              checked={pushPrefs.curation}
+                              busy={prefBusy === 'curation'}
+                              onToggle={() => void handleToggleCategory('curation')}
                             />
                           </div>
                         )}
