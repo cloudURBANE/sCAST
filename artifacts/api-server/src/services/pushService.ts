@@ -386,7 +386,10 @@ export async function sendCategoryPushToUser(
   payload: PushPayload,
   opts?: { dedupeKey?: string },
 ): Promise<{ sent: number; pruned: number; skipped?: boolean }> {
-  if (!configured) return { sent: 0, pruned: 0 };
+  // NOTE: the persistent in-app feed row below is written REGARDLESS of whether
+  // web push (VAPID) is configured — the feed is a cross-device history that must
+  // work even with no push subscription. Only the actual web-push send at the end
+  // is gated on `configured`.
   const prefs = await getPushPreferences(userId);
   const allowed = prefs[category];
   if (!allowed) return { sent: 0, pruned: 0, skipped: true };
@@ -448,6 +451,10 @@ export async function sendCategoryPushToUser(
     // Another job in this run already produced the coalesced notification.
     return { sent: 0, pruned: 0, skipped: true };
   }
+
+  // The feed row is persisted; the web push itself needs VAPID. With no keys the
+  // in-app feed still reflects this notification, we just can't deliver a push.
+  if (!configured) return { sent: 0, pruned: 0 };
 
   // Only consume a badge increment for a notification we are actually sending.
   const badgeCount = await bumpBadge(userId);

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import {
@@ -52,6 +52,31 @@ interface FeedData {
   unreadCount: number;
 }
 
+// Desktop (Popover) vs mobile (Drawer) must be mutually exclusive at the React
+// level — NOT via CSS `hidden`/`md:hidden`. Both Radix Popover and vaul Drawer
+// portal their content (and the Drawer's full-screen scrim) to document.body,
+// so a wrapper div's `hidden` class never reaches the portaled node. Gating both
+// on one `isOpen` therefore opened BOTH surfaces at once: the Popover panel plus
+// the Drawer's bg-black/80 overlay that swallowed every click. Resolving the
+// breakpoint in JS and mounting exactly one primitive is the fix.
+const DESKTOP_QUERY = "(min-width: 768px)"; // Tailwind `md`
+function useIsDesktop(): boolean {
+  const [isDesktop, setIsDesktop] = useState(() =>
+    typeof window !== "undefined" && typeof window.matchMedia === "function"
+      ? window.matchMedia(DESKTOP_QUERY).matches
+      : true,
+  );
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
+    const mql = window.matchMedia(DESKTOP_QUERY);
+    const onChange = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
+    setIsDesktop(mql.matches);
+    mql.addEventListener("change", onChange);
+    return () => mql.removeEventListener("change", onChange);
+  }, []);
+  return isDesktop;
+}
+
 const TABS: { value: string; labelKey: string }[] = [
   { value: "all", labelKey: "notificationFeed.tabAll" },
   { value: "weather", labelKey: "notificationFeed.tabWeather" },
@@ -66,6 +91,7 @@ export function NotificationFeed() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<string>("all");
   const [isOpen, setIsOpen] = useState(false);
+  const isDesktop = useIsDesktop();
 
   const feedKey = ["notifications", authToken] as const;
 
@@ -451,54 +477,54 @@ export function NotificationFeed() {
     ? t("notificationFeed.openUnread", { count: unreadCount })
     : t("notificationFeed.open");
 
-  return (
-    <>
-      {/* Desktop View: Dropdown Popover */}
-      <div className="hidden md:block">
-        <Popover open={isOpen} onOpenChange={setIsOpen}>
-          <PopoverTrigger asChild>
-            <button type="button" className={triggerClassName} aria-label={triggerLabel}>
-              <Bell size={18} className="text-[#f4debd]/85 transition-colors" />
-              {unreadBadge}
-            </button>
-          </PopoverTrigger>
-          <PopoverContent
-            align="end"
-            sideOffset={10}
-            className="h-[28rem] w-[22rem] rounded-[18px] border-scent-accent/20 bg-[#090604]/95 p-4 text-scent-text-primary shadow-[0_22px_60px_rgba(0,0,0,0.7)] backdrop-blur-md"
-          >
-            <FeedContent />
-          </PopoverContent>
-        </Popover>
-      </div>
+  // Render EXACTLY ONE surface for the active breakpoint. Mounting both (even with
+  // CSS `hidden`) opened the Popover and the Drawer's full-screen scrim at the same
+  // time because both portal to document.body — that scrim was the unclickable,
+  // faded-out second screen. See `useIsDesktop` above.
+  if (isDesktop) {
+    return (
+      <Popover open={isOpen} onOpenChange={setIsOpen}>
+        <PopoverTrigger asChild>
+          <button type="button" className={triggerClassName} aria-label={triggerLabel}>
+            <Bell size={18} className="text-[#f4debd]/85 transition-colors" />
+            {unreadBadge}
+          </button>
+        </PopoverTrigger>
+        <PopoverContent
+          align="end"
+          sideOffset={10}
+          className="h-[28rem] w-[22rem] rounded-[18px] border-scent-accent/20 bg-[#090604]/95 p-4 text-scent-text-primary shadow-[0_22px_60px_rgba(0,0,0,0.7)] backdrop-blur-md"
+        >
+          <FeedContent />
+        </PopoverContent>
+      </Popover>
+    );
+  }
 
-      {/* Mobile View: Bottom Drawer */}
-      <div className="md:hidden">
-        <Drawer open={isOpen} onOpenChange={setIsOpen}>
-          <DrawerTrigger asChild>
-            <button type="button" className={triggerClassName} aria-label={triggerLabel}>
-              <Bell size={18} className="text-[#f4debd]/85 transition-colors" />
-              {unreadBadge}
+  return (
+    <Drawer open={isOpen} onOpenChange={setIsOpen}>
+      <DrawerTrigger asChild>
+        <button type="button" className={triggerClassName} aria-label={triggerLabel}>
+          <Bell size={18} className="text-[#f4debd]/85 transition-colors" />
+          {unreadBadge}
+        </button>
+      </DrawerTrigger>
+      <DrawerContent className="flex max-h-[85vh] flex-col border-scent-accent/18 bg-[#090604]/97 px-4 pb-[max(2rem,env(safe-area-inset-bottom))] text-scent-text-primary backdrop-blur-md">
+        <div className="flex w-full justify-end pt-2">
+          <DrawerClose asChild>
+            <button
+              type="button"
+              aria-label={t("notificationFeed.closeAria")}
+              className="rounded-full p-1 text-scent-text-subtle transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
+            >
+              <X size={16} />
             </button>
-          </DrawerTrigger>
-          <DrawerContent className="flex max-h-[85vh] flex-col border-scent-accent/18 bg-[#090604]/97 px-4 pb-[max(2rem,env(safe-area-inset-bottom))] text-scent-text-primary backdrop-blur-md">
-            <div className="flex w-full justify-end pt-2">
-              <DrawerClose asChild>
-                <button
-                  type="button"
-                  aria-label={t("notificationFeed.closeAria")}
-                  className="rounded-full p-1 text-scent-text-subtle transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
-                >
-                  <X size={16} />
-                </button>
-              </DrawerClose>
-            </div>
-            <div className="min-h-0 flex-1 overflow-hidden">
-              <FeedContent />
-            </div>
-          </DrawerContent>
-        </Drawer>
-      </div>
-    </>
+          </DrawerClose>
+        </div>
+        <div className="min-h-0 flex-1 overflow-hidden">
+          <FeedContent />
+        </div>
+      </DrawerContent>
+    </Drawer>
   );
 }
