@@ -3,7 +3,6 @@ import { eq, and, desc, sql } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { inAppNotificationsTable } from "@workspace/db/schema";
 import { AuthRequest, requireAuth } from "../middlewares/auth";
-import { getTenantId } from "../middlewares/tenant";
 
 const router = Router();
 
@@ -23,10 +22,12 @@ const router = Router();
 // 50-row page), so the bell badge can show a real number that isn't capped at
 // the page size.
 router.get("/notifications", requireAuth, async (req: AuthRequest, res) => {
-  const scope = and(
-    eq(inAppNotificationsTable.userId, req.user!.id),
-    eq(inAppNotificationsTable.tenantId, getTenantId(req)),
-  );
+  // Scope by userId ONLY. Producer rows (sendCategoryPushToUser) are written with
+  // tenantId = null whenever the user has no push subscription, and `tenant_id =
+  // '<uuid>'` is FALSE for NULL in Postgres — adding a tenant predicate here hid
+  // every such notification from the feed. userId is sufficient ownership (the
+  // per-id read/delete paths already prove this).
+  const scope = eq(inAppNotificationsTable.userId, req.user!.id);
   try {
     const [rows, unreadRows] = await Promise.all([
       db
@@ -79,10 +80,9 @@ router.patch("/notifications/:id/read", requireAuth, async (req: AuthRequest, re
 
 // PATCH /notifications/read-all — mark all notifications as read for the user.
 router.patch("/notifications/read-all", requireAuth, async (req: AuthRequest, res) => {
-  const where = and(
-    eq(inAppNotificationsTable.userId, req.user!.id),
-    eq(inAppNotificationsTable.tenantId, getTenantId(req)),
-  );
+  // userId-only scope — see GET /notifications for why a tenant predicate would
+  // skip null-tenant rows and leave them perpetually unread.
+  const where = eq(inAppNotificationsTable.userId, req.user!.id);
   try {
     await markRead(where, false);
     res.json({ ok: true });
