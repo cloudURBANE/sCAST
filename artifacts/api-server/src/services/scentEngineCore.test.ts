@@ -816,6 +816,90 @@ test("5A: a usable crawled image URL is processed before any paid Serper search"
   assert.equal(result.imageUrl, "https://cdn.example.com/from-crawl.webp");
 });
 
+// --- new-add regression: forwarded engine image heals a deferred add --------
+// Reproduces the "no image on new fragrance adds" fix. The capture/add flow
+// runs buildProfile in `imageResolution: "deferred"` and now forwards the
+// engine's already-resolved image as `fallback.imageUrl`. This proves the
+// background pass resolves that image via the FREE crawled-URL path (never a
+// paid Serper search) and pushes it into the user's wardrobe rows via BE-2, so
+// a fresh add self-heals even when a Serper image search would have found
+// nothing.
+test("deferred add with a forwarded engine image: background uses the free crawled URL (not Serper) and BE-2 backfills user rows", async () => {
+  const backfillCalls: Array<{ brand: string; name: string; image: { imageUrl?: string } }> = [];
+  const { deps, calls } = makeDeps({
+    findDatasetFragrance: () => ({
+      name: "Sauvage",
+      brand: "Dior",
+      family: "Fresh Spicy",
+      notes: ["bergamot"],
+      description: "",
+    }),
+    // Fresh fragrance: nothing in the image cache yet for the synchronous pass.
+    resolveCachedFragranceImage: async () => null,
+    resolveProcessedFragranceImage: async (opts) => {
+      const o = opts as { sourceUrl?: string; searchQuery?: string };
+      // Crawled (sourceUrl) path succeeds; the Serper (searchQuery) path would
+      // also succeed but must never be reached.
+      if (o.sourceUrl) {
+        return {
+          imageUrl: "https://cdn.example.com/from-crawl.webp",
+          storagePath: "images/processed/from-crawl.webp",
+          imageHash: "crawl",
+          storageProvider: "supabase",
+          sourceProvider: "manual",
+        };
+      }
+      return { imageUrl: "https://cdn.example.com/from-serper.webp" };
+    },
+  });
+  // BE-2 backfill is an optional dep not wrapped by makeDeps — attach directly.
+  deps.backfillUserFragranceImages = async (brand, name, image) => {
+    backfillCalls.push({ brand, name, image });
+  };
+
+  const result = await buildProfileWithDeps(
+    deps,
+    "Sauvage",
+    "Dior",
+    { imageUrl: "https://crawled.example/bottle.jpg" },
+    { imageResolution: "deferred" },
+  );
+  ok(result);
+
+  // Deferred-by-design: the synchronous add response is imageless and only the
+  // image cache was consulted up front (no synchronous Serper spend).
+  assert.equal(result.imageUrl, undefined);
+  assert.deepEqual(calls.resolveCachedFragranceImage, [["Dior", "Sauvage"]]);
+
+  // Let the fire-and-forget background pass settle.
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  // Background pass resolved the FREE crawled URL — the paid Serper search
+  // (searchQuery) must never run when the forwarded engine image resolves.
+  assert.equal(calls.resolveProcessedFragranceImage.length, 1);
+  assert.equal(
+    calls.resolveProcessedFragranceImage[0].sourceUrl,
+    "https://crawled.example/bottle.jpg",
+  );
+  assert.equal(
+    calls.resolveProcessedFragranceImage.some((o) => typeof o.searchQuery === "string"),
+    false,
+    "paid Serper search must not run when the forwarded engine image resolves",
+  );
+
+  // BE-2: the resolved image was pushed into the user's wardrobe rows so the
+  // tile self-heals, and the catalog was re-saved with the image.
+  assert.equal(backfillCalls.length, 1);
+  assert.equal(backfillCalls[0].brand, "Dior");
+  assert.equal(backfillCalls[0].name, "Sauvage");
+  assert.equal(backfillCalls[0].image.imageUrl, "https://cdn.example.com/from-crawl.webp");
+  assert.equal(calls.saveCatalogEntry.length, 2);
+  assert.equal(
+    calls.saveCatalogEntry[1].profile.imageUrl,
+    "https://cdn.example.com/from-crawl.webp",
+  );
+});
+
 test("5A: falls back to the paid Serper search when the crawled URL fails to resolve", async () => {
   const { deps, calls } = makeDeps({
     resolveCachedFragranceImage: async () => null,
