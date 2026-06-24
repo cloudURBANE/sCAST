@@ -242,8 +242,50 @@ class SupabaseImageObjectStorage implements ImageObjectStorage {
   }
 }
 
+let warnedDerivedFirebaseBucket = false;
+
+/**
+ * Resolve the Firebase Storage bucket name.
+ *
+ * Prefer the explicit `FIREBASE_STORAGE_BUCKET`, but when it is unset and the
+ * Firebase *credentials* (project id, client email, private key) ARE present,
+ * derive the conventional default bucket from the project id. Without this, a
+ * deploy that configured the Firebase service account but forgot the one bucket
+ * var falls all the way through `getImageObjectStorage()` to
+ * `ImageObjectStorageConfigurationError`, which the deferred image path swallows
+ * — so every fragrance silently renders "No image" even though storage is one
+ * variable away from working. That was the production failure mode.
+ *
+ * Newer Firebase projects default to `<projectId>.firebasestorage.app`; set
+ * `FIREBASE_STORAGE_BUCKET` explicitly to override (e.g. a legacy
+ * `<projectId>.appspot.com` bucket). The derived value is logged once so a wrong
+ * guess is visible in logs instead of failing silently.
+ */
+function resolveFirebaseStorageBucket(): string | undefined {
+  const explicit = process.env.FIREBASE_STORAGE_BUCKET?.trim();
+  if (explicit) return explicit;
+
+  const projectId = process.env.FIREBASE_PROJECT_ID?.trim();
+  const hasFirebaseCredentials =
+    !!projectId &&
+    !!process.env.FIREBASE_CLIENT_EMAIL?.trim() &&
+    !!process.env.FIREBASE_PRIVATE_KEY?.trim();
+  if (!hasFirebaseCredentials) return undefined;
+
+  const derived = `${projectId}.firebasestorage.app`;
+  if (!warnedDerivedFirebaseBucket) {
+    warnedDerivedFirebaseBucket = true;
+    console.warn(
+      `[imageObjectStorage] FIREBASE_STORAGE_BUCKET is not set; defaulting to "${derived}" ` +
+        `derived from FIREBASE_PROJECT_ID. Set FIREBASE_STORAGE_BUCKET explicitly if your ` +
+        `bucket differs (e.g. "${projectId}.appspot.com").`,
+    );
+  }
+  return derived;
+}
+
 export function getImageObjectStorage(): ImageObjectStorage {
-  const firebaseBucket = process.env.FIREBASE_STORAGE_BUCKET?.trim();
+  const firebaseBucket = resolveFirebaseStorageBucket();
   if (firebaseBucket) return new FirebaseImageObjectStorage(firebaseBucket);
 
   const supabaseUrl = process.env.SUPABASE_URL?.trim();
