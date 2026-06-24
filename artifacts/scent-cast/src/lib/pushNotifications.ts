@@ -118,6 +118,7 @@ export async function subscribeToPush(authToken: string): Promise<{ ok: boolean;
 export interface PushPreferences {
   weather: boolean;
   community: boolean;
+  curation: boolean;
 }
 
 /** Read the user's per-category opt-ins + current server badge count. */
