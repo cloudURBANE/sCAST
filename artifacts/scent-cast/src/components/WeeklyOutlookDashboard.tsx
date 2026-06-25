@@ -216,7 +216,7 @@ function ForecastHero({
               type="button"
               onClick={onSelect ? () => onSelect(fragrance) : undefined}
               disabled={!onSelect}
-              className="group forecast-hero-bottle relative h-full w-[52%] max-w-[13.5rem] shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:cursor-default sm:w-[50%] sm:max-w-[15rem]"
+              className="group forecast-hero-bottle relative h-full w-[52%] max-w-[13.5rem] shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:cursor-default sm:w-[50%] sm:max-w-[15rem] md:max-w-[16.5rem]"
               aria-label={onSelect ? `Open ${pick.name} by ${pick.brand}` : `${pick.name} by ${pick.brand}`}
             >
               <BottleImage
@@ -237,15 +237,15 @@ function ForecastHero({
                 name like "Silver Mountain Water" breaks after "Mountain", while a
                 tighter name like "Green Irish Tweed" stays balanced on one line.
                 NON-INTERACTIVE by design: the name is not a tap target (see above). */}
-            <div className="flex min-w-0 w-[48%] max-w-[12.5rem] flex-col items-center justify-center self-center text-center sm:w-[50%] sm:max-w-[14rem]">
-              <p className="scent-type-label text-[10px] tracking-[0.3em] text-scent-accent/80 [text-indent:0.3em] sm:text-[12px]">
+            <div className="flex min-w-0 w-[48%] max-w-[12.5rem] flex-col items-center justify-center self-center text-center sm:w-[50%] sm:max-w-[14rem] md:max-w-[20rem]">
+              <p className="scent-type-label text-[10px] tracking-[0.3em] text-scent-accent/80 [text-indent:0.3em] sm:text-[12px] md:text-[13px]">
                 {pick.brand}
               </p>
-              <p className="mt-1 font-serif text-[clamp(1.35rem,5.6vw,2.1rem)] leading-[1.07] text-[#fff7ec] [overflow-wrap:break-word]">
+              <p className="mt-1 font-serif text-[clamp(1.35rem,5.6vw,2.1rem)] leading-[1.07] text-[#fff7ec] [overflow-wrap:break-word] md:mt-1.5 md:text-[clamp(2.1rem,4.4vw,2.85rem)] md:leading-[1.05]">
                 {pick.name}
               </p>
               {notes.length > 0 ? (
-                <p className="mt-1.5 line-clamp-2 font-serif text-[clamp(0.8rem,3vw,1.05rem)] italic leading-snug text-scent-accent/85 sm:mt-2">
+                <p className="mt-1.5 line-clamp-2 font-serif text-[clamp(0.8rem,3vw,1.05rem)] italic leading-snug text-scent-accent/85 sm:mt-2 md:mt-2.5 md:text-[clamp(1rem,1.7vw,1.2rem)]">
                   {notes.join(' · ')}
                 </p>
               ) : null}
@@ -333,7 +333,7 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
               so title→hero→pill→rail read as one tuned system. The hero is the focal
               point: a taller slot + larger bottle give the recommendation real
               product authority. The bottle and title share one centered row. */}
-          <div className="relative mx-auto mt-[var(--fc-title-hero)] flex h-[12.5rem] w-full max-w-[27rem] items-center justify-between gap-1.5 sm:h-[14rem] sm:gap-3">
+          <div className="relative mx-auto mt-[var(--fc-title-hero)] flex h-[12.5rem] w-full max-w-[27rem] items-center justify-between gap-1.5 sm:h-[14rem] sm:gap-3 md:h-[16.5rem] md:max-w-[42rem] md:gap-5 lg:max-w-[46rem]">
             <ForecastChevron direction="prev" onClick={() => go(selected - 1)} />
             <div className="relative h-full flex-1 overflow-hidden">
               <ForecastHero
@@ -351,9 +351,9 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
               calendar rather than drifting beside the title. */}
           {activeMeta.length > 0 ? (
             <div className="mt-[var(--fc-hero-pill)] flex justify-center">
-              <div className="inline-flex items-center gap-2 rounded-full border border-scent-accent/20 bg-black/25 px-3.5 py-1.5 text-[#cdbfa9]">
+              <div className="inline-flex items-center gap-2 rounded-full border border-scent-accent/20 bg-black/25 px-3.5 py-1.5 text-[#cdbfa9] md:gap-2.5 md:px-5 md:py-2">
                 <WeatherGlyph day={activePlan.day} size={14} />
-                <span className="text-[11px] font-medium uppercase tracking-[0.14em] sm:text-[12px]">
+                <span className="text-[11px] font-medium uppercase tracking-[0.14em] sm:text-[12px] md:text-[13px]">
                   {activeMeta.join(' · ')}
                 </span>
               </div>
@@ -372,7 +372,7 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
           <div
             role="tablist"
             aria-label="Days this week"
-            className="mx-auto mt-[var(--fc-pill-rail)] grid w-full max-w-[28.5rem] grid-cols-7 gap-1 sm:gap-2"
+            className="mx-auto mt-[var(--fc-pill-rail)] grid w-full max-w-[28.5rem] grid-cols-7 gap-1 sm:gap-2 md:max-w-[34rem] md:gap-3"
           >
             {outlook.slice(0, 7).map((plan, index) => {
               const isActive = index === selected;
@@ -384,14 +384,14 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
                   type="button"
                   onClick={() => go(index)}
                   title={`${dayLabel(plan.day.date)} — ${plan.day.condition ?? 'Forecast'}`}
-                  className={`forecast-day-tile flex w-full h-[4.75rem] flex-col items-center justify-between py-2 text-[#f1e7da] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/60 sm:h-[6.5rem] sm:py-3.5 ${
+                  className={`forecast-day-tile flex w-full h-[4.75rem] flex-col items-center justify-between py-2 text-[#f1e7da] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/60 sm:h-[6.5rem] sm:py-3.5 md:h-[7.25rem] md:py-4 ${
                     isActive ? 'is-active' : ''
                   }`}
                 >
-                  <span className={`text-[8px] font-semibold uppercase tracking-[0.16em] sm:text-[10px] ${isActive ? 'text-scent-accent/90' : 'text-[#cdbfa9]'}`}>
+                  <span className={`text-[8px] font-semibold uppercase tracking-[0.16em] sm:text-[10px] md:text-[11px] ${isActive ? 'text-scent-accent/90' : 'text-[#cdbfa9]'}`}>
                     {dayLabel(plan.day.date)}
                   </span>
-                  <span className="font-serif text-[1.2rem] leading-none sm:text-[1.8rem]">
+                  <span className="font-serif text-[1.2rem] leading-none sm:text-[1.8rem] md:text-[2.1rem]">
                     {dayNumber(plan.day.date)}
                   </span>
                   <span className={`flex items-center justify-center h-[18px] w-full sm:h-[22px] ${isActive ? 'text-scent-accent' : 'text-[#cdbfa9]'}`}>
@@ -414,9 +414,9 @@ function ForecastChevron({ direction, onClick }: { direction: 'prev' | 'next'; o
       type="button"
       onClick={onClick}
       aria-label={direction === 'prev' ? 'Previous day' : 'Next day'}
-      className="flex h-9 w-7 shrink-0 items-center justify-center text-scent-accent/80 transition-colors hover:text-[#ffe8a5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/50"
+      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-scent-accent/80 transition-colors hover:text-[#ffe8a5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/50 md:h-14 md:w-14"
     >
-      <Icon size={22} strokeWidth={1.5} aria-hidden />
+      <Icon size={24} strokeWidth={1.5} aria-hidden className="md:h-7 md:w-7" />
     </button>
   );
 }

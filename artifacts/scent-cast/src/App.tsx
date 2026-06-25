@@ -177,12 +177,6 @@ interface AtmosphereBarProps {
   weatherLoading: boolean;
 }
 
-const ATMOSPHERE_TRACK_COPIES_DEFAULT = 4;
-const ATMOSPHERE_TRACK_COPIES_LOW = 2;
-const ATMOSPHERE_SCROLL_PIXELS_PER_SECOND = 14;
-const ATMOSPHERE_SCROLL_MIN_SECONDS = 72;
-const ATMOSPHERE_SCROLL_MAX_SECONDS = 160;
-const ATMOSPHERE_SCROLL_REDUCED_MOTION_SECONDS = 240;
 const HERO_TRACK_COPIES_DEFAULT = 4;
 const HERO_TRACK_COPIES_LOW = 2;
 const HERO_SCROLL_PIXELS_PER_SECOND = 14;
@@ -511,17 +505,6 @@ const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({
   weather,
   weatherLoading,
 }) => {
-  const sectionRef = useRef<HTMLElement>(null);
-  const trackRef = useRef<HTMLDivElement>(null);
-  const groupRef = useRef<HTMLDivElement>(null);
-  const lowBudgetMarquee = useLowBudgetMarqueeMode();
-  const trackCopies = lowBudgetMarquee ? ATMOSPHERE_TRACK_COPIES_LOW : ATMOSPHERE_TRACK_COPIES_DEFAULT;
-
-  useMarqueeSwipe(trackRef, {
-    distanceVar: '--atmosphere-marquee-distance',
-    durationVar: '--atmosphere-marquee-duration',
-  });
-
   const firstFiniteNumber = (fallback: number, ...values: unknown[]): number => {
     for (const value of values) {
       if (typeof value === 'number' && Number.isFinite(value)) return value;
@@ -571,14 +554,6 @@ const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({
   const location = pendingWeather || !locationText
     ? <AtmospherePlaceholder label="location" active={pendingWeather} />
     : locationText;
-  const atmosphereDisplayKey = [
-    pendingWeather ? 'pending' : 'ready',
-    tempMissing ? 'temp-missing' : `temp:${Math.round(tempValue)}`,
-    humidityMissing ? 'humidity-missing' : `humidity:${humidityValue}`,
-    conditionText || 'condition-missing',
-    locationText || 'location-missing',
-  ].join('|');
-  usePauseMarqueeWhenHidden(sectionRef, trackRef, atmosphereDisplayKey);
   const metrics = [
     { label: 'Conditions', value: condition },
     { label: 'Humidity', value: humidity },
@@ -587,88 +562,19 @@ const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({
     { label: 'Location', value: location },
   ];
 
-  useEffect(() => {
-    const track = trackRef.current;
-    const group = groupRef.current;
-    if (!track || !group) return;
-    let cancelled = false;
-    let animationFrame = 0;
-    let pendingReady = false;
-
-    const updateDistance = (ready = true) => {
-      if (cancelled) return;
-      const distance = group.getBoundingClientRect().width;
-      if (distance <= 0) return;
-
-      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      const duration = prefersReducedMotion
-        ? ATMOSPHERE_SCROLL_REDUCED_MOTION_SECONDS
-        : Math.min(
-            ATMOSPHERE_SCROLL_MAX_SECONDS,
-            Math.max(ATMOSPHERE_SCROLL_MIN_SECONDS, distance / ATMOSPHERE_SCROLL_PIXELS_PER_SECOND),
-          );
-
-      track.style.setProperty('--atmosphere-marquee-distance', `${distance}px`);
-      track.style.setProperty('--atmosphere-marquee-duration', `${duration}s`);
-      if (ready) {
-        track.dataset.marqueeReady = 'true';
-      }
-    };
-
-    const scheduleDistanceUpdate = (ready = true) => {
-      pendingReady = pendingReady || ready;
-      if (animationFrame) return;
-      animationFrame = window.requestAnimationFrame(() => {
-        animationFrame = 0;
-        const readyForFrame = pendingReady;
-        pendingReady = false;
-        updateDistance(readyForFrame);
-      });
-    };
-
-    if (track.dataset.marqueeReady !== 'true') {
-      track.dataset.marqueeReady = 'false';
-    }
-
-    const startWhenFontsSettle = () => scheduleDistanceUpdate(true);
-
-    if (document.fonts?.ready) {
-      document.fonts.ready.then(startWhenFontsSettle);
-    } else {
-      startWhenFontsSettle();
-    }
-
-    const handleResize = () => scheduleDistanceUpdate(track.dataset.marqueeReady === 'true');
-    const resizeObserver = new ResizeObserver(handleResize);
-    resizeObserver.observe(group);
-    window.addEventListener('resize', handleResize, { passive: true });
-
-    return () => {
-      cancelled = true;
-      if (animationFrame) window.cancelAnimationFrame(animationFrame);
-      resizeObserver.disconnect();
-      window.removeEventListener('resize', handleResize);
-    };
-  }, [atmosphereDisplayKey]);
-
+  // One contained, non-repeating context bar. On iPad/desktop the five metrics
+  // lay out as a single five-column row (Conditions · Humidity · Time ·
+  // Temperature · Location); on phones the row scrolls horizontally with an edge
+  // fade so a partially-revealed cell dissolves instead of reading as a hard
+  // crop. No duplicated copies, no auto-scroll — the old full-bleed marquee that
+  // repeated the metrics across the width is gone.
   return (
-    <section ref={sectionRef} className="scent-atmosphere-marquee relative" aria-label="Current atmosphere" aria-busy={pendingWeather}>
-      <div className="scent-atmosphere-marquee-track" ref={trackRef}>
-        {[...Array(trackCopies)].map((_, copyIndex) => (
-          <div
-            className="scent-atmosphere-marquee-group"
-            key={copyIndex}
-            ref={copyIndex === 0 ? groupRef : undefined}
-            aria-hidden={copyIndex > 0}
-          >
-            {metrics.map((metric) => (
-              <div key={metric.label} className="scent-atmosphere-marquee-cell">
-                <span className="scent-atmosphere-label">
-                  <span className="scent-atmosphere-label-text">{metric.label}</span>
-                </span>
-                <span className="scent-atmosphere-value">{metric.value}</span>
-              </div>
-            ))}
+    <section className="scent-weather-context" aria-label="Current atmosphere" aria-busy={pendingWeather}>
+      <div className="scent-weather-context-row">
+        {metrics.map((metric) => (
+          <div key={metric.label} className="scent-weather-cell">
+            <span className="scent-weather-label">{metric.label}</span>
+            <span className="scent-weather-value">{metric.value}</span>
           </div>
         ))}
       </div>
@@ -687,7 +593,7 @@ const HomepageAtmosphereChrome: React.FC = React.memo(() => {
   const { weather, weatherLoading } = useWeather();
 
   return (
-    <div className="scent-full-bleed">
+    <div className="mx-auto w-full min-w-0 max-w-[52rem]">
       <AtmosphereBar
         weather={weather}
         weatherLoading={weatherLoading}
@@ -1107,7 +1013,7 @@ function DashboardView() {
             min-height + padding relax to the original stacked rhythm. The Vault of
             Aromas is no longer part of this screen — it lives one scroll down as
             the "second page". */}
-        <div className="flex min-h-[calc(100svh-var(--topbar-h))] flex-col gap-4 pt-0 pb-[calc(var(--bottomnav-h)+0.5rem)] sm:min-h-0 sm:gap-12 sm:pt-0 sm:pb-0">
+        <div className="flex min-h-[calc(100svh-var(--topbar-h))] flex-col gap-4 pt-0 pb-[calc(var(--bottomnav-h)+0.5rem)] sm:min-h-0 sm:gap-8 sm:pt-0 sm:pb-0 lg:gap-10">
           {/* The hero ticker sits flush against the fixed top bar (no padding
               above it) so it visually replaces the bar's old bottom hairline. */}
           <HomepageHeroMarquee />
