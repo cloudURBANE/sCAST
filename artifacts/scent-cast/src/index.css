@@ -1713,7 +1713,7 @@ a {
      ends rather than reading as a hard left/right crop on narrow screens. The
      floor is widened so a paused/at-rest marquee never exposes a partial word
      flush against either edge on phone widths. */
-  --hero-edge-fade: clamp(3.5rem, 9vw, 5rem);
+  --hero-edge-fade: clamp(3.5rem, 9vw, 6rem);
   -webkit-mask-image: linear-gradient(
     90deg,
     transparent 0,
@@ -2010,6 +2010,119 @@ a {
   width: 100vw;
   margin-left: calc(50% - 50vw);
   margin-right: calc(50% - 50vw);
+}
+
+/*
+ * Contained weather context bar (HomepageAtmosphereChrome → AtmosphereBar).
+ * Replaces the old full-bleed, auto-scrolling atmosphere marquee that repeated
+ * the five metrics across the viewport width. This is ONE bounded bar:
+ *   • iPad / desktop (>=768px): a single five-column grid — Conditions ·
+ *     Humidity · Time · Temperature · Location — no scroll, no repeat.
+ *   • phones: a compact horizontal-scroll row with an edge-fade mask so a
+ *     partially-scrolled cell dissolves rather than reading as a hard crop.
+ * Luxury framing matches the old bar: deep near-black fill, one gold hairline
+ * border, quiet inset sheen — no projected glow.
+ */
+.scent-weather-context {
+  overflow: hidden;
+  border: 1px solid rgb(var(--scent-accent-rgb) / 0.18);
+  border-radius: var(--radius-scent);
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0.96));
+  box-shadow: inset 0 1px 0 rgba(255, 226, 174, 0.06), 0 18px 44px -28px rgba(0, 0, 0, 0.95);
+}
+
+.scent-weather-context-row {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  --weather-edge-fade: 2rem;
+  -webkit-mask-image: linear-gradient(
+    90deg,
+    transparent 0,
+    #000 var(--weather-edge-fade),
+    #000 calc(100% - var(--weather-edge-fade)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    90deg,
+    transparent 0,
+    #000 var(--weather-edge-fade),
+    #000 calc(100% - var(--weather-edge-fade)),
+    transparent 100%
+  );
+}
+
+.scent-weather-context-row::-webkit-scrollbar {
+  display: none;
+}
+
+.scent-weather-cell {
+  flex: 0 0 auto;
+  min-width: clamp(8rem, 38vw, 10rem);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: 0.85rem 1rem;
+  text-align: center;
+  scroll-snap-align: center;
+  border-left: 1px solid rgb(var(--scent-accent-rgb) / 0.12);
+}
+
+.scent-weather-cell:first-child {
+  border-left: 0;
+}
+
+.scent-weather-label {
+  color: rgba(224, 188, 86, 0.95);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.scent-weather-value {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  color: #fff7ec;
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: clamp(1.15rem, 4.6vw, 1.5rem);
+  line-height: 1.05;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (min-width: 768px) {
+  .scent-weather-context-row {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    overflow: visible;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+
+  .scent-weather-cell {
+    flex: initial;
+    min-width: 0;
+    gap: 0.3rem;
+    padding: 1.1rem 1.25rem;
+  }
+
+  .scent-weather-label {
+    font-size: 0.72rem;
+    letter-spacing: 0.22em;
+  }
+
+  .scent-weather-value {
+    font-size: clamp(1.3rem, 2vw, 1.75rem);
+  }
 }
 
 .scent-atmosphere-marquee {
