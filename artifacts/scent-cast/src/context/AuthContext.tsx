@@ -160,10 +160,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setAuthEmail(null);
     setAuthPictureUrl(null);
     setAuthUsernameState(null);
+    // Reset the guest-nudge flags (these persist to localStorage) so a fresh
+    // guest session on a shared device isn't silently denied the sign-in prompt
+    // because the previous account had dismissed/acknowledged it.
+    setGuestPromptDismissed(false);
+    setGuestModeAcknowledged(false);
+    setGuestModeActive(false);
     // Evict cached authenticated API responses (wardrobe/profile) from the
     // service worker so the next user on this device never sees them.
     clearPwaApiCache();
-  }, []);
+  }, [setGuestPromptDismissed, setGuestModeAcknowledged]);
 
   // Reconcile the username with the server whenever the token changes. The
   // seeded value covers the first paint; this corrects it if the user set a

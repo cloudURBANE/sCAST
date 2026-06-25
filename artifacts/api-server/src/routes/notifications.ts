@@ -70,7 +70,9 @@ router.patch("/notifications/:id/read", requireAuth, async (req: AuthRequest, re
     }
     res.json({ ok: true });
   } catch (err: unknown) {
-    if (isMissingTableOrColumn(err)) {
+    // A non-UUID :id makes Postgres raise invalid_text_representation (22P02) on
+    // the uuid column; treat it as a clean 404 rather than letting it 500.
+    if (isMissingTableOrColumn(err) || isInvalidUuidInput(err)) {
       res.status(404).json({ error: "Notification not found." });
       return;
     }
@@ -117,7 +119,9 @@ router.delete("/notifications/:id", requireAuth, async (req: AuthRequest, res) =
       .returning({ id: inAppNotificationsTable.id });
     res.json({ ok: true, deleted: Boolean(deleted) });
   } catch (err: unknown) {
-    if (isMissingTableOrColumn(err)) {
+    // Non-UUID :id (22P02) or un-migrated table/column: nothing to delete, stay
+    // idempotent rather than 500-ing on malformed input.
+    if (isMissingTableOrColumn(err) || isInvalidUuidInput(err)) {
       res.json({ ok: true, deleted: false });
       return;
     }
@@ -189,6 +193,11 @@ function isMissingTableOrColumn(err: unknown): boolean {
 /** Postgres "undefined_column" (42703) only — an un-migrated additive column. */
 function isUndefinedColumn(err: unknown): boolean {
   return pgErrorCode(err) === "42703";
+}
+
+/** Postgres "invalid_text_representation" (22P02) — e.g. a non-UUID :id param. */
+function isInvalidUuidInput(err: unknown): boolean {
+  return pgErrorCode(err) === "22P02";
 }
 
 export default router;
