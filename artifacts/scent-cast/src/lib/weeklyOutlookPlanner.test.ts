@@ -4,10 +4,16 @@ import { test } from "node:test";
 import {
   idealWarmth,
   thermalHarmony,
+  seasonWeightsForClimate,
+  seasonHarmony,
   planWeeklyOutlook,
   type OutlookCandidate,
   type OutlookDayInput,
+  type SeasonAffinity,
 } from "./weeklyOutlookPlanner.ts";
+
+const WINTER: SeasonAffinity = [1, 0, 0, 0];
+const SUMMER: SeasonAffinity = [0, 0, 1, 0];
 
 const fresh: OutlookCandidate = { id: "fresh", warmth: 0.1, freshness: 0.9, projection: 0.4 };
 const warm: OutlookCandidate = { id: "warm", warmth: 0.9, freshness: 0.1, projection: 0.7 };
@@ -81,6 +87,62 @@ test("a strongly-fitting bottle still leads despite the variety penalty", () => 
   }));
   const plan = planWeeklyOutlook(candidates, days);
   assert.equal(candidates[plan[0].candidateIndex].id, "warm", "best bottle leads day 1");
+});
+
+test("season weights track temperature: cold → winter, hot → summer", () => {
+  const cold = seasonWeightsForClimate({ temperature_f: 30, humidity: 40 });
+  const hot = seasonWeightsForClimate({ temperature_f: 90, humidity: 60 });
+  // [winter, spring, summer, fall]
+  assert.ok(cold[0] > cold[2], "cold day weights winter over summer");
+  assert.ok(hot[2] > hot[0], "hot day weights summer over winter");
+});
+
+test("seasonHarmony rewards a fragrance voted for the day's season", () => {
+  const coldDay = { temperature_f: 32, humidity: 40 };
+  const winterFrag: OutlookCandidate = { id: "w", warmth: 0.5, freshness: 0.5, projection: 0.5, seasonAffinity: WINTER };
+  const summerFrag: OutlookCandidate = { id: "s", warmth: 0.5, freshness: 0.5, projection: 0.5, seasonAffinity: SUMMER };
+  assert.ok(seasonHarmony(winterFrag, coldDay) > seasonHarmony(summerFrag, coldDay));
+  // No season data → neutral, never a hard penalty.
+  const unknown: OutlookCandidate = { id: "u", warmth: 0.5, freshness: 0.5, projection: 0.5 };
+  assert.equal(seasonHarmony(unknown, coldDay), 0.5);
+});
+
+test("community season votes steer the pick on equal base/thermal", () => {
+  // Both fragrances are thermally neutral; only their voted seasons differ.
+  const candidates: OutlookCandidate[] = [
+    { id: "winter", warmth: 0.5, freshness: 0.5, projection: 0.5, seasonAffinity: WINTER },
+    { id: "summer", warmth: 0.5, freshness: 0.5, projection: 0.5, seasonAffinity: SUMMER },
+  ];
+  const baseScores = [80, 80];
+  const plan = planWeeklyOutlook(candidates, [
+    { climate: { temperature_f: 30, humidity: 40 }, baseScores },
+    { climate: { temperature_f: 90, humidity: 60 }, baseScores },
+  ]);
+  assert.equal(candidates[plan[0].candidateIndex].id, "winter", "freezing day → winter-voted scent");
+  assert.equal(candidates[plan[1].candidateIndex].id, "summer", "hot day → summer-voted scent");
+});
+
+test("crowd-consensus quality breaks ties toward the beloved bottle", () => {
+  const candidates: OutlookCandidate[] = [
+    { id: "ok", warmth: 0.5, freshness: 0.5, projection: 0.5, quality: 0.3 },
+    { id: "loved", warmth: 0.5, freshness: 0.5, projection: 0.5, quality: 0.95 },
+  ];
+  const plan = planWeeklyOutlook(candidates, [
+    { climate: { temperature_f: 68, humidity: 50 }, baseScores: [80, 80] },
+  ]);
+  assert.equal(candidates[plan[0].candidateIndex].id, "loved", "quality wins an otherwise-equal day");
+});
+
+test("quality does NOT override clear weather fit", () => {
+  // A beloved summer scent should still lose a freezing day to a fitting winter one.
+  const candidates: OutlookCandidate[] = [
+    { id: "winter-good", warmth: 0.9, freshness: 0.1, projection: 0.5, seasonAffinity: WINTER, quality: 0.5 },
+    { id: "summer-loved", warmth: 0.1, freshness: 0.9, projection: 0.5, seasonAffinity: SUMMER, quality: 0.99 },
+  ];
+  const plan = planWeeklyOutlook(candidates, [
+    { climate: { temperature_f: 28, humidity: 40 }, baseScores: [80, 80] },
+  ]);
+  assert.equal(candidates[plan[0].candidateIndex].id, "winter-good", "weather beats popularity");
 });
 
 test("empty vault yields empty assignments, never throws", () => {

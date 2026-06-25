@@ -32,9 +32,18 @@ export interface OutlookDayClimate {
 }
 
 /**
- * The weather-relevant distillation of one vault fragrance. All axes are 0..1.
- * The caller derives these from the fragrance's families/accords/profile vector
- * (see `WardrobeContext`), keeping this module free of app data shapes.
+ * Day-of-year season weights, fixed order [winter, spring, summer, fall]. Used to
+ * compare a day's climate against a fragrance's community-voted season suitability.
+ */
+export type SeasonAffinity = [number, number, number, number];
+
+/**
+ * The weather-relevant distillation of one vault fragrance. The core axes are
+ * 0..1. The caller derives these from the fragrance's real metric systems —
+ * weighted main accords, performance scores, community season votes, crowd
+ * consensus (see `WardrobeContext`) — keeping this module free of app data
+ * shapes. Metric-backed fields are optional so the planner degrades gracefully
+ * to the note-derived axes when a fragrance has not been enriched yet.
  */
 export interface OutlookCandidate {
   /** Stable identity used to de-duplicate picks across the week. */
@@ -43,8 +52,18 @@ export interface OutlookCandidate {
   warmth: number;
   /** Fresh/clean character: citrus, aquatic, green, clean musk → high. */
   freshness: number;
-  /** Projection strength from sillage + longevity + concentration. */
+  /** Projection strength from real sillage/longevity percentages (or labels). */
   projection: number;
+  /**
+   * Community-voted season suitability [winter, spring, summer, fall], 0..1 each.
+   * Omitted when the fragrance has no `wear_profile.primary_seasons` data, in
+   * which case the season term is treated as neutral (rank-safe).
+   */
+  seasonAffinity?: SeasonAffinity;
+  /** Crowd-consensus quality (0..1) — surfaces genuinely beloved fragrances. */
+  quality?: number;
+  /** 0..1 share of structured metric systems present — drives confidence. */
+  confidence?: number;
 }
 
 export interface OutlookDayInput {
@@ -73,10 +92,34 @@ export interface PlanWeeklyOutlookOptions {
   repeatPenalty?: number;
   /** How much the continuous thermal-harmony term can swing a day's score. */
   weatherFitWeight?: number;
+  /** How much community season suitability can swing a day's score. */
+  seasonFitWeight?: number;
+  /** How much crowd-consensus quality can boost a candidate. */
+  qualityWeight?: number;
+  /** How much metric completeness (confidence) can nudge a candidate. */
+  confidenceWeight?: number;
+}
+
+interface ScoreWeights {
+  weatherFitWeight: number;
+  seasonFitWeight: number;
+  qualityWeight: number;
+  confidenceWeight: number;
 }
 
 const DEFAULT_REPEAT_PENALTY = 18;
 const DEFAULT_WEATHER_FIT_WEIGHT = 30;
+// Community season votes are a direct, data-backed signal, weighted alongside
+// the note-derived thermal term so the two reinforce each other.
+const DEFAULT_SEASON_FIT_WEIGHT = 24;
+// Crowd-consensus quality is a moderate bonus: it picks the BEST-smelling option
+// among weather-appropriate bottles without letting a beloved summer scent win a
+// freezing day (the season + thermal swing is far larger).
+const DEFAULT_QUALITY_WEIGHT = 14;
+// A gentle nudge toward well-documented bottles, so the forecast leans on
+// fragrances it understands — confidence over guessing — without burying a good
+// pick that simply has not been enriched yet.
+const DEFAULT_CONFIDENCE_WEIGHT = 6;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -137,17 +180,78 @@ export function thermalHarmony(candidate: OutlookCandidate, climate: OutlookDayC
 }
 
 /**
+ * Translate a day's temperature into community-season weights
+ * [winter, spring, summer, fall], so a fragrance's voted seasons can be matched
+ * against the actual conditions. Adjacent seasons overlap deliberately — a 50°F
+ * day flatters both late-fall and winter scents — so the signal stays smooth.
+ */
+export function seasonWeightsForClimate(climate: OutlookDayClimate): SeasonAffinity {
+  const temperature = finiteOr(climate.temperature_f, 70);
+  // [winter, spring, summer, fall]
+  if (temperature < 40) return [1.0, 0.15, 0.0, 0.5];
+  if (temperature < 52) return [0.8, 0.4, 0.05, 0.8];
+  if (temperature < 64) return [0.35, 0.85, 0.25, 0.7];
+  if (temperature < 74) return [0.1, 0.85, 0.6, 0.45];
+  if (temperature < 84) return [0.0, 0.5, 0.9, 0.2];
+  return [0.0, 0.2, 1.0, 0.05];
+}
+
+/**
+ * 0..1 overlap between a fragrance's community-voted season suitability and the
+ * day's season weights. Neutral (0.5) when the fragrance has no season votes, so
+ * an un-enriched bottle is treated as a question mark rather than wrong.
+ */
+export function seasonHarmony(candidate: OutlookCandidate, climate: OutlookDayClimate): number {
+  const affinity = candidate.seasonAffinity;
+  if (!affinity) return 0.5;
+  const dayWeights = seasonWeightsForClimate(climate);
+
+  let dot = 0;
+  let dayNorm = 0;
+  let fragNorm = 0;
+  for (let i = 0; i < 4; i += 1) {
+    const day = dayWeights[i];
+    const frag = clamp(affinity[i], 0, 1);
+    dot += day * frag;
+    dayNorm += day * day;
+    fragNorm += frag * frag;
+  }
+  if (dayNorm === 0 || fragNorm === 0) return 0.5;
+  // Cosine similarity keeps the term scale-free w.r.t. how many seasons a
+  // fragrance was voted into.
+  return clamp(dot / Math.sqrt(dayNorm * fragNorm), 0, 1);
+}
+
+/**
  * Final per-(day, candidate) score: the engine's family alignment plus the
- * continuous thermal term. Exposed for reuse by callers that score a single
- * fragrance for a single day (e.g. the home recommendation).
+ * data-backed weather terms — continuous thermal harmony, community season
+ * suitability, crowd-consensus quality, and a confidence nudge. Exposed for
+ * reuse by callers that score a single fragrance for a single day (e.g. the home
+ * recommendation).
  */
 export function dayCandidateScore(
   baseScore: number,
   candidate: OutlookCandidate,
   climate: OutlookDayClimate,
-  weatherFitWeight: number = DEFAULT_WEATHER_FIT_WEIGHT,
+  weights: Partial<ScoreWeights> = {},
 ): number {
-  return baseScore + thermalHarmony(candidate, climate) * weatherFitWeight;
+  const w: ScoreWeights = {
+    weatherFitWeight: weights.weatherFitWeight ?? DEFAULT_WEATHER_FIT_WEIGHT,
+    seasonFitWeight: weights.seasonFitWeight ?? DEFAULT_SEASON_FIT_WEIGHT,
+    qualityWeight: weights.qualityWeight ?? DEFAULT_QUALITY_WEIGHT,
+    confidenceWeight: weights.confidenceWeight ?? DEFAULT_CONFIDENCE_WEIGHT,
+  };
+
+  let score = baseScore;
+  score += thermalHarmony(candidate, climate) * w.weatherFitWeight;
+  score += seasonHarmony(candidate, climate) * w.seasonFitWeight;
+  if (typeof candidate.quality === "number" && Number.isFinite(candidate.quality)) {
+    score += clamp(candidate.quality, 0, 1) * w.qualityWeight;
+  }
+  if (typeof candidate.confidence === "number" && Number.isFinite(candidate.confidence)) {
+    score += clamp(candidate.confidence, 0, 1) * w.confidenceWeight;
+  }
+  return score;
 }
 
 /**
@@ -166,7 +270,12 @@ export function planWeeklyOutlook(
   options: PlanWeeklyOutlookOptions = {},
 ): OutlookAssignment[] {
   const repeatPenalty = options.repeatPenalty ?? DEFAULT_REPEAT_PENALTY;
-  const weatherFitWeight = options.weatherFitWeight ?? DEFAULT_WEATHER_FIT_WEIGHT;
+  const weights: ScoreWeights = {
+    weatherFitWeight: options.weatherFitWeight ?? DEFAULT_WEATHER_FIT_WEIGHT,
+    seasonFitWeight: options.seasonFitWeight ?? DEFAULT_SEASON_FIT_WEIGHT,
+    qualityWeight: options.qualityWeight ?? DEFAULT_QUALITY_WEIGHT,
+    confidenceWeight: options.confidenceWeight ?? DEFAULT_CONFIDENCE_WEIGHT,
+  };
   const usageCount = new Array(candidates.length).fill(0);
 
   return days.map((day, dayIndex): OutlookAssignment => {
@@ -180,7 +289,7 @@ export function planWeeklyOutlook(
     for (let i = 0; i < candidates.length; i += 1) {
       const base = day.baseScores[i] ?? 0;
       const score =
-        dayCandidateScore(base, candidates[i], day.climate, weatherFitWeight) -
+        dayCandidateScore(base, candidates[i], day.climate, weights) -
         usageCount[i] * repeatPenalty;
       // Strict `>` keeps the lowest stable index on ties for reproducibility.
       if (score > bestScore) {
@@ -196,7 +305,7 @@ export function planWeeklyOutlook(
       day.baseScores[bestIndex] ?? 0,
       candidates[bestIndex],
       day.climate,
-      weatherFitWeight,
+      weights,
     );
     return { dayIndex, candidateIndex: bestIndex, score: reportedScore };
   });
