@@ -123,6 +123,13 @@ async function upsertRefreshImageCatalog(
 router.get("/weather", async (req, res) => {
   const { lat, lon } = req.query as { lat?: string; lon?: string };
   const data = await getWeather({ lat, lon });
+  // Live readings are server-cached ~5 min; let the browser/CDN reuse them too,
+  // with stale-while-revalidate so a poll never blocks on a cold upstream call.
+  if (data.isLive) {
+    res.setHeader("Cache-Control", "public, max-age=300, stale-while-revalidate=600");
+  } else {
+    res.setHeader("Cache-Control", "no-store");
+  }
   res.json(data);
 });
 
