@@ -2393,16 +2393,25 @@ export const Wardrobe: React.FC<{
                       >
                         <div className="flex flex-col p-4 space-y-3">
                           <div
-                            className={`relative h-56 ${stackedDetailMode ? 'sm:h-60' : 'sm:h-72 lg:h-64'} min-h-0 w-full shrink-0`}
+                            className={`relative flex items-center justify-center h-56 ${stackedDetailMode ? 'sm:h-60' : 'sm:h-72 lg:h-64'} min-h-0 w-full shrink-0`}
                           >
                             <div
                               aria-hidden
                               className="pointer-events-none absolute inset-0 overflow-hidden rounded-lg border border-white/5 bg-white/[0.01]"
                             />
+                            {/* The morph target is a centered SQUARE that matches the grid
+                                card's square image slot (VaultCard: `aspect-square`). The
+                                shared-element `layoutId` morph therefore interpolates
+                                square → square — a UNIFORM scale — so the bottle no longer
+                                stretches mid-flight (non-uniform x/y scale) or snap back via
+                                object-fit when the transform is removed at the end. The bottle
+                                renders identically (object-fit: contain, bottom-anchored); the
+                                full-width border backdrop above stays put. This is the WebKit
+                                morph-jitter / "glitchy settling" fix on iPhone + iPad. */}
                             <motion.div
                               layoutId={detailBottleLayoutId ?? `wardrobe-bottle-${selectedItem.id}`}
                               transition={bottleMorphTransition}
-                              className="absolute inset-0 cursor-pointer"
+                              className="relative h-full aspect-square cursor-pointer"
                               onClick={() => detailBottleUrl && setEnlargeOpen(true)}
                             >
                               <BottleImage
