@@ -8,7 +8,7 @@
     "build": "vite build --config vite.config.ts",
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
     "perf:lhci": "lhci autorun --config=./lighthouserc.cjs",
-    "test": "node --experimental-strip-types --test src/lib/fragranceApi.test.ts src/lib/fragranceNotes.test.ts src/lib/imageProxy.test.ts src/lib/platform.test.ts src/lib/shareLinks.test.ts src/lib/noteAccordLinks.test.ts src/lib/wardrobeReconcile.test.ts src/lib/wardrobeShelves.test.ts src/lib/scentMissionClient.test.ts src/lib/curationClient.test.ts src/lib/wardrobeSearchSuggest.test.ts src/lib/beamMessageFormat.test.ts src/components/arena/arenaBattleMapper.test.ts src/components/arena/arenaTwists.test.ts src/lib/beamAnswerContract.test.ts src/components/arena/arenaFamilyResolver.test.ts src/components/arena/arenaBeamGameCore.test.ts",
+    "test": "node --experimental-strip-types --test src/lib/fragranceApi.test.ts src/lib/fragranceNotes.test.ts src/lib/imageProxy.test.ts src/lib/platform.test.ts src/lib/shareLinks.test.ts src/lib/noteAccordLinks.test.ts src/lib/wardrobeReconcile.test.ts src/lib/wardrobeShelves.test.ts src/lib/weeklyOutlookPlanner.test.ts src/lib/scentMissionClient.test.ts src/lib/curationClient.test.ts src/lib/wardrobeSearchSuggest.test.ts src/lib/beamMessageFormat.test.ts src/components/arena/arenaBattleMapper.test.ts src/components/arena/arenaTwists.test.ts src/lib/beamAnswerContract.test.ts src/components/arena/arenaFamilyResolver.test.ts src/components/arena/arenaBeamGameCore.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {

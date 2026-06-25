@@ -13,6 +13,13 @@ import {
   type ScentWeatherRecommendation,
 } from '@/lib/scentWeatherEngine';
 import {
+  planWeeklyOutlook,
+  thermalHarmony,
+  type OutlookCandidate,
+  type OutlookDayClimate,
+  type OutlookDayInput,
+} from '@/lib/weeklyOutlookPlanner';
+import {
   collectMainAccordDisplayRows,
   getFragranceDetails,
   isBackgroundEnrichmentQueued,
@@ -503,6 +510,80 @@ const getFragranceSillage = (item: Fragrance): string | undefined => {
   return mapSillageToEngineLabel(record.sillage ?? record.projection ?? performance?.sillage);
 };
 
+// Token families used to place a fragrance on the continuous warm/heavy ↔
+// fresh/light axis the weekly planner scores against. Kept consistent with the
+// engine's HEAVY_SIGNALS/FRESH_SIGNALS so the forecast's thermal reasoning and
+// the engine's family verdicts never disagree about what "warm" vs "fresh" means.
+const WARM_HEAVY_SIGNALS = [
+  'oud', 'agarwood', 'amber', 'resin', 'resinous', 'labdanum', 'incense', 'smoke', 'smoky',
+  'leather', 'leathery', 'suede', 'tobacco', 'cigar', 'vanilla', 'tonka', 'caramel', 'honey',
+  'boozy', 'gourmand', 'praline', 'chocolate', 'coffee', 'cinnamon', 'clove', 'cardamom',
+  'saffron', 'spice', 'spicy', 'pepper', 'wood', 'woody', 'cedar', 'sandalwood', 'patchouli',
+  'balsam', 'myrrh', 'benzoin',
+];
+
+const FRESH_LIGHT_SIGNALS = [
+  'fresh', 'freshness', 'clean', 'laundry', 'soap', 'citrus', 'bergamot', 'lemon', 'lime',
+  'orange', 'grapefruit', 'mandarin', 'aquatic', 'marine', 'ocean', 'sea', 'water', 'watery',
+  'ozonic', 'green', 'grass', 'leaf', 'leafy', 'herbal', 'mint', 'lavender', 'tea', 'cucumber',
+  'melon', 'musk', 'musky',
+];
+
+const countSignalHits = (traits: readonly string[], signals: readonly string[]): number =>
+  traits.reduce(
+    (count, trait) => (signals.some((signal) => trait.includes(signal)) ? count + 1 : count),
+    0,
+  );
+
+/** 0..1 projection strength from sillage label, longevity, and concentration. */
+const estimateProjectionStrength = (item: Fragrance): number => {
+  let strength = 0.5;
+
+  const sillage = getFragranceSillage(item);
+  if (sillage === 'strong') strength = 0.85;
+  else if (sillage === 'light') strength = 0.3;
+
+  const longevity = getFragranceLongevity(item);
+  if (typeof longevity === 'number' && Number.isFinite(longevity)) {
+    // Longevity is reported in hours; 12h+ reads as a powerhouse.
+    strength = (strength + Math.max(0, Math.min(1, longevity / 12))) / 2;
+  } else if (typeof longevity === 'string') {
+    const text = longevity.toLowerCase();
+    if (/(eternal|very long|long lasting|long-lasting|beast)/.test(text)) strength = Math.max(strength, 0.8);
+    else if (/(weak|poor|short)/.test(text)) strength = Math.min(strength, 0.35);
+  }
+
+  const concentration = normalizeTrait(item.concentration);
+  if (/(parfum|extrait)/.test(concentration) && !/eau de parfum/.test(concentration)) {
+    strength = Math.min(1, strength + 0.1);
+  } else if (/(cologne|edc|eau de cologne)/.test(concentration)) {
+    strength = Math.max(0, strength - 0.1);
+  }
+
+  return Math.max(0, Math.min(1, strength));
+};
+
+/**
+ * Distill a vault fragrance into the weather-relevant axes the weekly planner
+ * scores against. `warmth`/`freshness` are complementary fractions of the
+ * fragrance's matched warm-heavy vs fresh-light notes (a scent with both reads
+ * as flexible, ~0.5 on each), so the planner can rank the whole vault smoothly
+ * against a day's temperature rather than only at the engine's thresholds.
+ */
+const buildOutlookCandidate = (item: Fragrance): OutlookCandidate => {
+  const traits = getFragranceTraitTexts(item);
+  const warmHits = countSignalHits(traits, WARM_HEAVY_SIGNALS);
+  const freshHits = countSignalHits(traits, FRESH_LIGHT_SIGNALS);
+  const total = warmHits + freshHits;
+
+  return {
+    id: String(item.id ?? item._dbId ?? `${wardrobeEntryBrand(item)}:${wardrobeEntryName(item)}`),
+    warmth: total > 0 ? warmHits / total : 0.5,
+    freshness: total > 0 ? freshHits / total : 0.5,
+    projection: estimateProjectionStrength(item),
+  };
+};
+
 const buildEngineInput = (
   item: Fragrance,
   intent: { destination: DestinationType; energy: EnergyState },
@@ -568,7 +649,30 @@ const calculateRecommendationDisplayScore = (
   );
 };
 
-const scoreRecommendationCandidate = (
+// Distill a loose weather object into the climate axes the planner scores
+// against. Mirrors the keys `buildEngineInput` reads so the forecast's thermal
+// reasoning and the engine see the same numbers.
+const buildOutlookClimate = (weather: any): OutlookDayClimate => {
+  const condition = getWeatherString(weather, ['condition', 'description']);
+  const normalizedCondition = condition.toLowerCase();
+  return {
+    temperature_f: getWeatherNumber(weather, ['temperature_f', 'temperature', 'temp'], 72),
+    humidity: getWeatherNumber(weather, ['humidity_percent', 'humidity'], 50),
+    wind_speed_mph: getWeatherNumber(weather, ['wind_speed_mph', 'windSpeed'], 0),
+    is_raining: RAIN_CONDITION_SIGNALS.some((signal) => normalizedCondition.includes(signal)),
+    condition,
+  };
+};
+
+// How much the continuous thermal-harmony term can swing a candidate's score.
+// Large enough to reorder the vault as the temperature moves (the whole point
+// of the fix), but smaller than a clear family best/avoid swing so the engine's
+// verdicts still lead.
+const WEATHER_FIT_WEIGHT = 30;
+
+// Engine family-alignment for one fragrance on one day, WITHOUT the continuous
+// thermal term. This is the `baseScore` the weekly planner builds on.
+const scoreFamilyAlignment = (
   item: Fragrance,
   recommendation: ScentWeatherRecommendation,
   intent: { destination: DestinationType; energy: EnergyState },
@@ -591,17 +695,31 @@ const scoreRecommendationCandidate = (
   );
 };
 
+const scoreRecommendationCandidate = (
+  item: Fragrance,
+  recommendation: ScentWeatherRecommendation,
+  intent: { destination: DestinationType; energy: EnergyState },
+  climate?: OutlookDayClimate,
+): number => {
+  const base = scoreFamilyAlignment(item, recommendation, intent);
+  if (!climate) return base;
+  // The continuous term that makes a 58°F day rank the vault differently from a
+  // 78°F day — the missing gradient that left every forecast day identical.
+  return base + thermalHarmony(buildOutlookCandidate(item), climate) * WEATHER_FIT_WEIGHT;
+};
+
 const calculateEngineAlignment = (
   items: Fragrance[],
   intent: { destination: DestinationType; energy: EnergyState },
   weather: any,
 ) => {
+  const climate = buildOutlookClimate(weather);
   const candidates = items.map((item, index) => {
     const recommendation = calculateScentWeatherRecommendation(buildEngineInput(item, intent, weather));
     return {
       item,
       recommendation,
-      score: scoreRecommendationCandidate(item, recommendation, intent),
+      score: scoreRecommendationCandidate(item, recommendation, intent, climate),
       index,
     };
   });
@@ -647,6 +765,57 @@ export function recommendFragranceForWeather(
     recommendation: winner.recommendation,
     score: winner.score,
   };
+}
+
+/**
+ * Plan a whole week of forecast picks at once.
+ *
+ * Scoring each day in isolation (as the dashboard used to) collapsed to one
+ * repeated bottle: in the common temperate band the engine emits the same
+ * family verdict every day, and ties broke on wardrobe index. This runs the
+ * engine per (fragrance, day) for family alignment, layers on the continuous
+ * thermal-harmony term so each day's temperature reorders the vault, and hands
+ * the matrix to `planWeeklyOutlook` which assigns each day its best-fit bottle
+ * while spreading picks across the collection. Returns one entry per climate
+ * (null only when the vault is empty), aligned to the input order.
+ */
+export function planWeeklyScentOutlook(
+  items: Fragrance[],
+  climates: OutlookDayClimate[],
+  intent: { destination: DestinationType; energy: EnergyState } = NEUTRAL_OUTLOOK_INTENT,
+): (WeatherOutlookPick | null)[] {
+  if (!items || items.length === 0) return climates.map(() => null);
+
+  const candidates = items.map(buildOutlookCandidate);
+
+  // Engine recommendation + family alignment for every (fragrance, day) cell.
+  // Cached so the planner's report step and the rendered recommendation reuse
+  // the exact same engine verdict.
+  const recommendations = climates.map((climate) =>
+    items.map((item) =>
+      calculateScentWeatherRecommendation(buildEngineInput(item, intent, climate)),
+    ),
+  );
+
+  const days: OutlookDayInput[] = climates.map((climate, dayIndex) => ({
+    climate,
+    baseScores: items.map((item, i) =>
+      scoreFamilyAlignment(item, recommendations[dayIndex][i], intent),
+    ),
+  }));
+
+  return planWeeklyOutlook(candidates, days).map((assignment) => {
+    const i = assignment.candidateIndex;
+    if (i < 0) return null;
+    const item = items[i];
+    return {
+      item,
+      name: wardrobeEntryName(item),
+      brand: wardrobeEntryBrand(item),
+      recommendation: recommendations[assignment.dayIndex][i],
+      score: assignment.score,
+    };
+  });
 }
 
 interface WardrobeContextType {
