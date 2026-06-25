@@ -15,7 +15,7 @@ import {
 import { BottleImage } from '@/components/BottleImage';
 import type { Fragrance } from '@/components/Wardrobe';
 import type { WeatherData, WeatherForecastDay } from '@/context/WeatherContext';
-import { recommendFragranceForWeather, type WeatherOutlookPick } from '@/context/WardrobeContext';
+import { planWeeklyScentOutlook, type WeatherOutlookPick } from '@/context/WardrobeContext';
 import type { ScentWeatherRecommendation } from '@/lib/scentWeatherEngine';
 
 interface WeeklyOutlookDashboardProps {
@@ -276,19 +276,23 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
   const [selected, setSelected] = useState(0);
   const [direction, setDirection] = useState(0);
 
-  const outlook = useMemo<OutlookDay[]>(
-    () =>
+  // Plan the whole week in one pass so each day gets its best-fit bottle AND the
+  // week shows variety. Scoring days independently (the old approach) collapsed
+  // to one repeated bottle: in ordinary weather the engine emits the same family
+  // verdict every day and ties broke on wardrobe index. `planWeeklyScentOutlook`
+  // layers a continuous thermal term on top of the engine and de-dupes across
+  // the week. Picks are returned aligned to `forecast`.
+  const outlook = useMemo<OutlookDay[]>(() => {
+    const picks = planWeeklyScentOutlook(
+      items,
       forecast.map((day) => ({
-        day,
-        pick:
-          recommendFragranceForWeather(items, {
-            temperature_f: day.temp ?? day.high,
-            humidity: day.humidity ?? undefined,
-            condition: day.condition ?? undefined,
-          }) ?? null,
+        temperature_f: day.temp ?? day.high,
+        humidity: day.humidity,
+        condition: day.condition,
       })),
-    [forecast, items],
-  );
+    );
+    return forecast.map((day, index) => ({ day, pick: picks[index] ?? null }));
+  }, [forecast, items]);
 
   useEffect(() => {
     setSelected((current) => Math.min(current, Math.max(0, outlook.length - 1)));
