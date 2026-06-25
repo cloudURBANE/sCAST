@@ -3229,6 +3229,22 @@ a {
   }
 }
 
+/* Phones: match the morph target to the SQUARE source slot used by the feed
+   marquee card (BottleMarquee is `aspect-square` below `sm`). A landscape target
+   here made the shared-element bottle morph scale non-uniformly (stretch in
+   flight + object-fit snap on landing) — the same WebKit glitch fixed on the
+   Wardrobe detail. Sizing the square by the existing height keeps the card's
+   vertical rhythm; the bottle still renders identically (object-fit: contain),
+   and the loved hero-card chrome (border/fills live on the hero, not this box)
+   is untouched. Scoped to `< sm` because the desktop/iPad source is `flex-1`,
+   not square — that path keeps the existing landscape fill. */
+@media (max-width: 639px) {
+  .community-fragrance-detail__bottle {
+    width: auto;
+    aspect-ratio: 1 / 1;
+  }
+}
+
 @media (min-width: 640px) {
   .community-fragrance-detail__shell {
     padding-inline: 2.25rem;
