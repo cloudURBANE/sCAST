@@ -60,7 +60,7 @@ interface VaultCardProps {
  * component owns only the visual shell: the `.scent-fragrance-card` frame, flex
  * column, brand label, sized image slot, and title row.
  */
-export function VaultCard({ tone, compact, brand, name, children }: VaultCardProps) {
+function VaultCardComponent({ tone, compact, brand, name, children }: VaultCardProps) {
   const preset = tonePreset(tone, compact);
   return (
     <div
@@ -90,3 +90,11 @@ export function VaultCard({ tone, compact, brand, name, children }: VaultCardPro
     </div>
   );
 }
+
+/**
+ * Memoized so the shared vault shell only re-renders when its own props change.
+ * In the Wardrobe grid each tile passes a stable `children` element (built once
+ * per item inside the memoized {@link VaultGridTile}), so unrelated Wardrobe
+ * state changes no longer reconcile every card's shell.
+ */
+export const VaultCard = React.memo(VaultCardComponent);
