@@ -1084,6 +1084,14 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     appStateRefreshInFlightRef.current = false;
     detailRefreshBackoffRef.current.clear();
     detailRefreshIdleUntilRef.current = 0;
+    // Clear the post-mutation cooldown and the conditional-poll ETag so a fresh
+    // account's initial load (the effect below) is never short-circuited by the
+    // previous user's recent mutation or suppressed by a stale If-None-Match.
+    // Without this, switching accounts within 5s of a save/delete leaves the new
+    // user with an empty vault until the next background poll.
+    isMutatingRef.current = false;
+    lastMutationRef.current = 0;
+    wardrobeEtagRef.current = null;
     // Clear admin until app-state reconfirms it for the new token (and on sign-out).
     setIsAdmin(false);
   }, [authToken]);

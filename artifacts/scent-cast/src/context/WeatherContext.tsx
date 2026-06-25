@@ -224,7 +224,7 @@ export const WeatherProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (!shouldAdoptServerPreference) return;
         writeStoredWeatherLocation(serverPreference);
         setLocationStatus('granted');
-        void fetchWeather(serverPreference.lat, serverPreference.lon);
+        void fetchWeather(serverPreference.lat, serverPreference.lon, abortController.signal);
       })
       .catch(() => {
         /* aborted/offline/migration-lag - local preference or fallback stays active */
