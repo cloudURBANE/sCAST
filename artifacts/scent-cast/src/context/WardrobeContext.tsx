@@ -13,8 +13,8 @@ import {
   type ScentWeatherRecommendation,
 } from '@/lib/scentWeatherEngine';
 import {
+  dayCandidateScore,
   planWeeklyOutlook,
-  thermalHarmony,
   type OutlookCandidate,
   type OutlookDayClimate,
   type OutlookDayInput,
@@ -25,6 +25,7 @@ import {
   isBackgroundEnrichmentQueued,
   isSourceCoverageComplete,
   normalizeFragranceDetail,
+  type DerivedMetrics,
   type FragranceDetail,
   type FragranceDetailRequestPayload,
 } from '@/lib/fragranceApi';
@@ -563,24 +564,144 @@ const estimateProjectionStrength = (item: Fragrance): number => {
   return Math.max(0, Math.min(1, strength));
 };
 
+const getFragranceDerivedMetrics = (item: Fragrance): DerivedMetrics | null =>
+  item.raw_engine_detail?.derived_metrics ?? item.derived_metrics ?? null;
+
+const percentOrNull = (...values: unknown[]): number | null => {
+  for (const value of values) {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return Math.max(0, Math.min(1, value > 1 ? value / 100 : value));
+    }
+  }
+  return null;
+};
+
+// Normalize one accord row to a 0..1 prominence weight, tolerating the engine's
+// `pct` (0-100), 0-10 axis `score`, and 0-1 model `score` shapes.
+const accordWeight = (row: { score?: number; pct?: number }): number => {
+  if (typeof row.pct === 'number' && Number.isFinite(row.pct)) {
+    return Math.max(0, Math.min(1, row.pct / 100));
+  }
+  if (typeof row.score === 'number' && Number.isFinite(row.score)) {
+    if (row.score <= 1) return Math.max(0, row.score);
+    if (row.score <= 10) return row.score / 10;
+    return Math.max(0, Math.min(1, row.score / 100));
+  }
+  return 0.5;
+};
+
 /**
- * Distill a vault fragrance into the weather-relevant axes the weekly planner
- * scores against. `warmth`/`freshness` are complementary fractions of the
- * fragrance's matched warm-heavy vs fresh-light notes (a scent with both reads
- * as flexible, ~0.5 on each), so the planner can rank the whole vault smoothly
- * against a day's temperature rather than only at the engine's thresholds.
+ * Warm/heavy ↔ fresh/light placement (each 0..1), preferring the WEIGHTED main
+ * accords from `derived_metrics` so a fragrance that is 40% vanilla + 30% amber
+ * reads as genuinely warm — rather than counting raw note text where a trace
+ * note weighs the same as a dominant one. Falls back to note-text matching only
+ * when no scored accords exist.
  */
-const buildOutlookCandidate = (item: Fragrance): OutlookCandidate => {
+const deriveWarmFreshAxis = (
+  item: Fragrance,
+  metrics: DerivedMetrics | null,
+): { warmth: number; freshness: number; fromAccords: boolean } => {
+  const rows = collectMainAccordDisplayRows(metrics?.main_accords);
+  let warmSum = 0;
+  let freshSum = 0;
+  for (const row of rows) {
+    const label = normalizeTrait(row.label);
+    if (!label) continue;
+    const weight = accordWeight(row);
+    if (WARM_HEAVY_SIGNALS.some((signal) => label.includes(signal))) warmSum += weight;
+    else if (FRESH_LIGHT_SIGNALS.some((signal) => label.includes(signal))) freshSum += weight;
+  }
+
+  if (warmSum + freshSum > 0) {
+    const total = warmSum + freshSum;
+    return { warmth: warmSum / total, freshness: freshSum / total, fromAccords: true };
+  }
+
+  // Fallback: unweighted note-text counting.
   const traits = getFragranceTraitTexts(item);
   const warmHits = countSignalHits(traits, WARM_HEAVY_SIGNALS);
   const freshHits = countSignalHits(traits, FRESH_LIGHT_SIGNALS);
   const total = warmHits + freshHits;
+  return {
+    warmth: total > 0 ? warmHits / total : 0.5,
+    freshness: total > 0 ? freshHits / total : 0.5,
+    fromAccords: false,
+  };
+};
+
+/** Real 0..1 projection from sillage/longevity percentages, else label heuristic. */
+const deriveProjection = (
+  item: Fragrance,
+  metrics: DerivedMetrics | null,
+): { projection: number; fromMetrics: boolean } => {
+  const perf = metrics?.performance_score ?? null;
+  const sillage = percentOrNull(perf?.sillage_percent, perf?.sillage_pct);
+  const longevity = percentOrNull(perf?.longevity_percent, perf?.longevity_pct);
+  if (sillage !== null || longevity !== null) {
+    const s = sillage ?? longevity ?? 0.5;
+    const l = longevity ?? sillage ?? 0.5;
+    // Sillage drives projection; longevity refines it.
+    return { projection: Math.max(0, Math.min(1, s * 0.6 + l * 0.4)), fromMetrics: true };
+  }
+  return { projection: estimateProjectionStrength(item), fromMetrics: false };
+};
+
+/** Community season votes → [winter, spring, summer, fall] affinity, or undefined. */
+const deriveSeasonAffinity = (
+  metrics: DerivedMetrics | null,
+): [number, number, number, number] | undefined => {
+  const seasons = metrics?.wear_profile?.primary_seasons?.filter(Boolean) ?? [];
+  if (seasons.length === 0) return undefined;
+  const affinity: [number, number, number, number] = [0, 0, 0, 0];
+  for (const raw of seasons) {
+    const season = normalizeTrait(raw);
+    if (season.includes('winter')) affinity[0] = 1;
+    if (season.includes('spring')) affinity[1] = 1;
+    if (season.includes('summer')) affinity[2] = 1;
+    if (season.includes('autumn') || season.includes('fall')) affinity[3] = 1;
+  }
+  return affinity.some((value) => value > 0) ? affinity : undefined;
+};
+
+/** Crowd-consensus quality 0..1 (blends overall consensus and community interest). */
+const deriveQuality = (metrics: DerivedMetrics | null): number | undefined => {
+  const consensus = percentOrNull(metrics?.headline?.crowd_consensus_score);
+  const interest = percentOrNull(metrics?.community_interest_score?.score);
+  if (consensus !== null && interest !== null) return consensus * 0.8 + interest * 0.2;
+  return consensus ?? interest ?? undefined;
+};
+
+/**
+ * Distill a vault fragrance into the axes the weekly planner scores against,
+ * sourced from the app's real metric systems — weighted main accords, sillage/
+ * longevity performance scores, community-voted seasons, and crowd consensus —
+ * so each day's pick is data-driven rather than guessed. Every metric degrades
+ * gracefully to a heuristic when a fragrance has not been enriched yet, and the
+ * `confidence` axis records how much structured data actually backed the pick.
+ */
+const buildOutlookCandidate = (item: Fragrance): OutlookCandidate => {
+  const metrics = getFragranceDerivedMetrics(item);
+  const { warmth, freshness, fromAccords } = deriveWarmFreshAxis(item, metrics);
+  const { projection, fromMetrics: projectionFromMetrics } = deriveProjection(item, metrics);
+  const seasonAffinity = deriveSeasonAffinity(metrics);
+  const quality = deriveQuality(metrics);
+
+  // Confidence: share of the four structured metric systems that backed this
+  // candidate. Drives the planner's gentle lean toward well-understood bottles.
+  const present =
+    (fromAccords ? 1 : 0) +
+    (projectionFromMetrics ? 1 : 0) +
+    (seasonAffinity ? 1 : 0) +
+    (quality !== undefined ? 1 : 0);
 
   return {
     id: String(item.id ?? item._dbId ?? `${wardrobeEntryBrand(item)}:${wardrobeEntryName(item)}`),
-    warmth: total > 0 ? warmHits / total : 0.5,
-    freshness: total > 0 ? freshHits / total : 0.5,
-    projection: estimateProjectionStrength(item),
+    warmth,
+    freshness,
+    projection,
+    seasonAffinity,
+    quality,
+    confidence: present / 4,
   };
 };
 
@@ -664,12 +785,6 @@ const buildOutlookClimate = (weather: any): OutlookDayClimate => {
   };
 };
 
-// How much the continuous thermal-harmony term can swing a candidate's score.
-// Large enough to reorder the vault as the temperature moves (the whole point
-// of the fix), but smaller than a clear family best/avoid swing so the engine's
-// verdicts still lead.
-const WEATHER_FIT_WEIGHT = 30;
-
 // Engine family-alignment for one fragrance on one day, WITHOUT the continuous
 // thermal term. This is the `baseScore` the weekly planner builds on.
 const scoreFamilyAlignment = (
@@ -703,9 +818,11 @@ const scoreRecommendationCandidate = (
 ): number => {
   const base = scoreFamilyAlignment(item, recommendation, intent);
   if (!climate) return base;
-  // The continuous term that makes a 58°F day rank the vault differently from a
-  // 78°F day — the missing gradient that left every forecast day identical.
-  return base + thermalHarmony(buildOutlookCandidate(item), climate) * WEATHER_FIT_WEIGHT;
+  // Layer the data-backed weather terms (continuous thermal harmony, community
+  // season suitability, crowd-consensus quality, confidence) on top of the
+  // engine's family verdict — the gradient that makes a 58°F day rank the vault
+  // differently from a 78°F day instead of every forecast day looking identical.
+  return dayCandidateScore(base, buildOutlookCandidate(item), climate);
 };
 
 const calculateEngineAlignment = (
