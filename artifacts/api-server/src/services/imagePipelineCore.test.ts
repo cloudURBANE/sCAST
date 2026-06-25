@@ -225,6 +225,35 @@ test("acceptsImageCacheForRequest: backgroundRemoved=false rejected when removeB
   assert.equal(acceptsImageCacheForRequest({ backgroundRemoved: true }, false), true);
 });
 
+test("acceptsImageCacheForRequest: a deterministic fallback row satisfies a bg-removal request (C1)", async () => {
+  // image-pipeline audit C1: when bg removal is requested but the source can't be
+  // cut out, the pipeline stores a white-bg row stamped removeBgStatus:"fallback".
+  // That row MUST satisfy a later bg-removal request so the source is not
+  // re-Serper'd + re-Poof'd + re-uploaded on every page load. A plain white-bg
+  // row (no fallback stamp — produced by a no-bg request) must still be rejected.
+  const { acceptsImageCacheForRequest } = await import("./imagePipelineCachePolicy.ts");
+
+  // Deterministic fallback white-bg row — accept for a bg-removal request.
+  assert.equal(
+    acceptsImageCacheForRequest({ backgroundRemoved: false, removeBgStatus: "fallback" }, true),
+    true,
+  );
+  // Plain white-bg row (no-bg request's output) — still reject for bg-removal.
+  assert.equal(
+    acceptsImageCacheForRequest({ backgroundRemoved: false, removeBgStatus: "skipped" }, true),
+    false,
+  );
+  assert.equal(
+    acceptsImageCacheForRequest({ backgroundRemoved: false, removeBgStatus: null }, true),
+    false,
+  );
+  // The fallback stamp is irrelevant when bg removal isn't requested — accept.
+  assert.equal(
+    acceptsImageCacheForRequest({ backgroundRemoved: false, removeBgStatus: "fallback" }, false),
+    true,
+  );
+});
+
 test("positive cache isolation: a no-bg entry does not satisfy a bg-removal request", async () => {
   // Mirrors the WHERE clause in getReadyCachedImageBySourceHash. The image_cache
   // unique key is (source_url_hash, pipeline_version, background_removed), so the

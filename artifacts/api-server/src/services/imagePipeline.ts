@@ -35,7 +35,8 @@ import { shouldNegativeCacheImageFailure } from "./imagePipelineFailureClassifie
 import { safeImageUrlForResponse } from "./persistenceGuards";
 import { fetchExternalImage, parseAndValidateExternalImageUrl } from "./safeImageFetch";
 import { searchSerperImageCandidates, type SerperImageCandidate } from "./serperService";
-export { acceptsImageCacheForRequest, shouldUseImageLookupCaches } from "./imagePipelineCachePolicy";
+import { acceptsImageCacheForRequest, shouldUseImageLookupCaches } from "./imagePipelineCachePolicy";
+export { acceptsImageCacheForRequest, shouldUseImageLookupCaches };
 
 const MAX_OUTPUT_DIMENSION = 1024;
 const WEBP_QUALITY = 82;
@@ -368,8 +369,9 @@ async function processCandidate(input: {
 }): Promise<ProcessedImageResult | null> {
   const cached = await getReadyCachedImageBySourceHash(input.source.sourceUrlHash, input.removeBackground);
   if (cached) {
-    // Skip cache when BG removal is requested but the cached image has a white background.
-    if (!input.removeBackground || cached.backgroundRemoved) {
+    // Serve when the cache satisfies the request: a bg-removed cutout, OR a
+    // deterministic white-bg fallback for a source that can't be cut out.
+    if (acceptsImageCacheForRequest(cached, input.removeBackground)) {
       return { ...cached, sourceProvider: input.sourceProvider, pipelineVersion: IMAGE_PIPELINE_VERSION };
     }
   }
@@ -385,10 +387,10 @@ async function processCandidate(input: {
     try {
       const doubleCheck = await getReadyCachedImageBySourceHash(input.source.sourceUrlHash, input.removeBackground);
       if (doubleCheck) {
-        if (!input.removeBackground || doubleCheck.backgroundRemoved) {
+        if (acceptsImageCacheForRequest(doubleCheck, input.removeBackground)) {
           return { ...doubleCheck, sourceProvider: input.sourceProvider, pipelineVersion: IMAGE_PIPELINE_VERSION };
         }
-        // Cached entry lacks BG removal; fall through to reprocess.
+        // Cached entry lacks BG removal and isn't a deterministic fallback; reprocess.
       }
 
       const optimized = await processSourceToWebp(input.source, input.removeBackground, input.poofOptions);
@@ -535,7 +537,7 @@ async function resolveProcessedFragranceImageInner(
 
   if (input.allowLookupCache !== false && !input.sourceUrl) {
     const cachedByLookup = await getLatestReadyCachedImageByLookupKey(lookupKey);
-    if (cachedByLookup && (!removeBackground || cachedByLookup.backgroundRemoved)) {
+    if (cachedByLookup && acceptsImageCacheForRequest(cachedByLookup, removeBackground)) {
       const result = { ...cachedByLookup, pipelineVersion: IMAGE_PIPELINE_VERSION };
       return attachTrace(result, makeTrace({ ...traceBase, final: result }));
     }
@@ -543,7 +545,7 @@ async function resolveProcessedFragranceImageInner(
 
   if (input.allowLookupCache !== false && !input.sourceUrl && searchQueryHash) {
     const cachedByQuery = await getLatestReadyCachedImageBySearchQueryHash(searchQueryHash);
-    if (cachedByQuery && (!removeBackground || cachedByQuery.backgroundRemoved)) {
+    if (cachedByQuery && acceptsImageCacheForRequest(cachedByQuery, removeBackground)) {
       const result = { ...cachedByQuery, pipelineVersion: IMAGE_PIPELINE_VERSION };
       return attachTrace(result, makeTrace({ ...traceBase, final: result }));
     }

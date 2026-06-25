@@ -181,7 +181,7 @@ The SPA does **not** get Fragrantica / Basenotes data from the Express API in th
 
 When `payload.origin === "app"` or the id starts with `catalog:` / `dataset:` / `local:`, `getFragranceDetails` routes to the local Express API instead (`/api/fragrances/details`, mounted by `routes/fragrances.ts`). All other detail fetches go to the external Python engine.
 
-**`source_coverage` contract** (set by the Python engine, enforced by the SPA in `lib/fragranceApi.ts:isSourceCoverageComplete`): a detail is considered "complete" only when `basenotes === true && fragrantica === true && (complete === true || derived_metrics === "complete"|"completed"|"full")`. The SPA gates spinners and "partial details" notices on this predicate — keep the engine's response shape stable.
+**`source_coverage` contract** (set by the Python engine, enforced by the SPA in `lib/fragranceApi.ts:isSourceCoverageComplete`): a detail is considered "complete" only when `basenotes === true && fragrantica === true && (complete === true || fragrantica_metrics_complete === true || derived_metrics === "complete"|"completed"|"full")`. The SPA gates spinners and "partial details" notices on this predicate — keep the engine's response shape stable. Note: the engine's `complete` flag is honest about metric completeness — it is only `true` when Fragrantica's 4 status-metric groups have all arrived (`fg_complete`) or the detail is Parfinity-backed, so it agrees with `derived_metrics === "full"` and `fragrantica_metrics_complete`; do not loosen it back to "any FG card present" or the SPA self-heal loop will stop refreshing genuinely-partial tiles.
 
 ### Enrichment queue (Pass 1 scaffolding only)
 
