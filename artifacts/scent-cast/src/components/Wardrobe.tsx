@@ -1178,6 +1178,26 @@ export const Wardrobe: React.FC<{
   const [refreshingId, setRefreshingId] = React.useState<string | null>(null);
   const [refreshError, setRefreshError] = React.useState<string | null>(null);
   const [bgFallbackWarning, setBgFallbackWarning] = React.useState<string | null>(null);
+  // Detail-editor image URLs that mounted and then failed every retry + proxy
+  // fallback (BottleImage's terminal `onError`). Used to degrade the editor
+  // gracefully: when a freshly-fetched preview can't be displayed (e.g. it
+  // points at a storage object that 404s), fall back to the saved bottle and
+  // surface an actionable note instead of a bare "Unavailable". Keyed by URL so
+  // a preview failure and a saved-image failure are tracked independently and
+  // never flip-flop the displayed source.
+  const [brokenDetailImageUrls, setBrokenDetailImageUrls] = React.useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const markDetailImageBroken = React.useCallback((url: string) => {
+    const trimmed = url.trim();
+    if (!trimmed) return;
+    setBrokenDetailImageUrls((prev) => {
+      if (prev.has(trimmed)) return prev;
+      const next = new Set(prev);
+      next.add(trimmed);
+      return next;
+    });
+  }, []);
   const [refreshCounts, setRefreshCounts] = React.useState<Record<string, number>>(() => {
     if (typeof sessionStorage === 'undefined') return {};
     try {
@@ -1398,6 +1418,8 @@ export const Wardrobe: React.FC<{
     if (!selectedItem?.id) return;
     setFrameDraft(normalizeBottleImageAdjustment(selectedItem.imageAdjustment));
     setClarifySolverId('');
+    // Fresh bottle → forget prior load failures so its images get a clean try.
+    setBrokenDetailImageUrls((prev) => (prev.size === 0 ? prev : new Set()));
   }, [selectedItem?.id]);
 
   const handleRefreshImage = async (item: Fragrance, solverId?: WardrobeImageSolverId) => {
@@ -1724,6 +1746,19 @@ export const Wardrobe: React.FC<{
   // savable, so it is never gated by the fallback-background check.
   const previewBlocked =
     !!pendingPreview?.isFallback && pendingPreview.source !== 'reimagine';
+
+  // Graceful degradation when the detail image can't be displayed. A
+  // freshly-fetched preview that fails to load (e.g. its storage object 404s)
+  // would otherwise blank the editor to a bare "Unavailable" — useless for
+  // judging the bottle. Instead, fall back to the previously-saved image when
+  // one exists, and surface an actionable note. The preview URL still drives
+  // save/enlarge so nothing about the pending-save contract changes.
+  const savedBottleUrl = selectedItem?.imageUrl?.trim() ?? '';
+  const previewFailedToDisplay =
+    hasPendingPreview && detailBottleUrl.trim() !== '' && brokenDetailImageUrls.has(detailBottleUrl);
+  const showSavedBottleInsteadOfPreview =
+    previewFailedToDisplay && savedBottleUrl !== '' && savedBottleUrl !== detailBottleUrl;
+  const detailDisplayUrl = showSavedBottleInsteadOfPreview ? savedBottleUrl : detailBottleUrl;
 
   const frameDirty =
     !!selectedItem && !bottleImageAdjustmentsEqual(frameDraft, selectedItem.imageAdjustment);
@@ -2412,16 +2447,16 @@ export const Wardrobe: React.FC<{
                               layoutId={detailBottleLayoutId ?? `wardrobe-bottle-${selectedItem.id}`}
                               transition={bottleMorphTransition}
                               className="relative h-full aspect-square cursor-pointer"
-                              onClick={() => detailBottleUrl && setEnlargeOpen(true)}
+                              onClick={() => detailDisplayUrl && setEnlargeOpen(true)}
                             >
                               <BottleImage
-                                key={detailBottleUrl || 'missing-image'}
+                                key={detailDisplayUrl || 'missing-image'}
                                 variant="detail"
-                                src={detailBottleUrl}
+                                src={detailDisplayUrl}
                                 alt={entryName(selectedItem)}
                                 adjustment={frameDraft}
                                 imageProperties={
-                                  pendingPreview?.itemId === selectedItem.id
+                                  pendingPreview?.itemId === selectedItem.id && !showSavedBottleInsteadOfPreview
                                     ? null
                                     : selectedItem.imageProperties
                                 }
@@ -2429,11 +2464,12 @@ export const Wardrobe: React.FC<{
                                 isSyncing={isImageSyncing?.(selectedItem)}
                                 className="absolute inset-0"
                                 imgClassName={reducedDetailMotion ? "" : "transition-all duration-300"}
+                                onError={() => markDetailImageBroken(detailDisplayUrl)}
                               />
                             </motion.div>
                           </div>
 
-                          {detailBottleUrl && !bottleImageToolsOpen ? (
+                          {detailDisplayUrl && !bottleImageToolsOpen ? (
                             <div className="flex w-full shrink-0 justify-center">
                               <button
                                 type="button"
@@ -2550,6 +2586,17 @@ export const Wardrobe: React.FC<{
                               <p className="text-center text-sm text-scent-text-muted leading-snug font-sans">
                                 Pick what looks wrong, then search — or reimagine the current bottle. Save when it looks right.
                               </p>
+
+                              {previewFailedToDisplay ? (
+                                <p
+                                  role="status"
+                                  className="rounded-md border border-yellow-200/15 bg-yellow-200/[0.04] px-3 py-2 text-center text-sm text-yellow-100/90 leading-snug"
+                                >
+                                  {showSavedBottleInsteadOfPreview
+                                    ? 'That new image couldn’t be displayed, so your saved bottle is shown above. Try another fix before saving.'
+                                    : 'That new image couldn’t be displayed. Try another fix, paste an image URL, or upload a photo.'}
+                                </p>
+                              ) : null}
 
                               <div className="space-y-3">
                                 <label htmlFor="wardrobe-clarify-solver" className="sr-only">
@@ -3239,7 +3286,7 @@ export const Wardrobe: React.FC<{
               </div>
             </motion.div>
             <AnimatePresence>
-              {enlargeOpen && detailBottleUrl ? (
+              {enlargeOpen && detailDisplayUrl ? (
                 <motion.div
                   ref={enlargeModalRef}
                   key="bottle-enlarge"
@@ -3267,18 +3314,20 @@ export const Wardrobe: React.FC<{
                     onClick={(e) => e.stopPropagation()}
                   >
                     <BottleImage
+                      key={detailDisplayUrl}
                       variant="detail"
-                      src={detailBottleUrl}
+                      src={detailDisplayUrl}
                       alt={entryName(selectedItem)}
                       adjustment={frameDraft}
                       imageProperties={
-                        pendingPreview?.itemId === selectedItem.id
+                        pendingPreview?.itemId === selectedItem.id && !showSavedBottleInsteadOfPreview
                           ? null
                           : selectedItem.imageProperties
                       }
                       className="absolute inset-0"
                       imgClassName="brightness-[1.08] scale-[1.02]"
                       loading="eager"
+                      onError={() => markDetailImageBroken(detailDisplayUrl)}
                     />
                   </div>
                   <p className="mt-5 scent-type-label font-sans">
