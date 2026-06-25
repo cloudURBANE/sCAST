@@ -1,5 +1,6 @@
 import axios from "axios";
 import { logger } from "../lib/logger";
+import { keepAliveHttpAgent, keepAliveHttpsAgent } from "../lib/keepAliveAgent";
 import {
   type Coordinates,
   type WeatherForecastDay,
@@ -59,6 +60,8 @@ async function getOpenMeteoWeather(coords: Coordinates): Promise<WeatherResponse
     const response = await axios.get<OpenMeteoResponse>(OPEN_METEO_FORECAST_URL, {
       params: apiParams,
       timeout: 8000,
+      httpAgent: keepAliveHttpAgent,
+      httpsAgent: keepAliveHttpsAgent,
     });
     return mapOpenMeteoWeather(response.data);
   } catch (err: any) {
@@ -112,6 +115,8 @@ async function resolveCityLabel(coords: Coordinates): Promise<string | null> {
     const response = await axios.get(OWM_REVERSE_GEO_URL, {
       params: { lat: coords.lat, lon: coords.lon, limit: 1, appid: apiKey },
       timeout: 4000,
+      httpAgent: keepAliveHttpAgent,
+      httpsAgent: keepAliveHttpsAgent,
     });
     const first = Array.isArray(response.data) ? response.data[0] : null;
     const label = first ? composeCityLabel(first.name, first.state, first.country) : null;
@@ -136,7 +141,12 @@ async function getOpenWeatherMapWeather(coords: Coordinates, label: string | nul
   const baseParams = { appid: apiKey, units: "imperial", lat: coords.lat, lon: coords.lon };
 
   try {
-    const response = await axios.get(OWM_ONECALL_URL, { params: baseParams, timeout: 8000 });
+    const response = await axios.get(OWM_ONECALL_URL, {
+      params: baseParams,
+      timeout: 8000,
+      httpAgent: keepAliveHttpAgent,
+      httpsAgent: keepAliveHttpsAgent,
+    });
     const current = response.data?.current;
     const weather = Array.isArray(current?.weather) ? current.weather[0] : null;
     const temp = finite(current?.temp);
@@ -161,7 +171,12 @@ async function getOpenWeatherMapWeather(coords: Coordinates, label: string | nul
       return null;
     }
     try {
-      const res = await axios.get(OWM_CURRENT_URL, { params: baseParams, timeout: 8000 });
+      const res = await axios.get(OWM_CURRENT_URL, {
+        params: baseParams,
+        timeout: 8000,
+        httpAgent: keepAliveHttpAgent,
+        httpsAgent: keepAliveHttpsAgent,
+      });
       const weather = Array.isArray(res.data?.weather) ? res.data.weather[0] : null;
       const temp = finite(res.data?.main?.temp);
       const humidity = finite(res.data?.main?.humidity);
@@ -184,6 +199,34 @@ async function getOpenWeatherMapWeather(coords: Coordinates, label: string | nul
   }
 }
 
+// Weather barely moves minute-to-minute, but the SPA polls on a timer, so every
+// poll previously triggered a live 8s upstream round-trip. Cache the assembled
+// payload per ~1km geo bucket for a few minutes so repeated polls (and multiple
+// users in the same area) are served from memory. Only live results are cached —
+// the simulated fallback must keep retrying the real providers. Bounded so a
+// busy multi-tenant server can't grow the map without limit.
+const WEATHER_PAYLOAD_TTL_MS = 5 * 60 * 1000;
+const WEATHER_PAYLOAD_CACHE_LIMIT = 500;
+const weatherPayloadCache = new Map<string, { value: WeatherResponse; expiresAt: number }>();
+
+function readWeatherCache(key: string): WeatherResponse | null {
+  const hit = weatherPayloadCache.get(key);
+  if (!hit) return null;
+  if (hit.expiresAt <= Date.now()) {
+    weatherPayloadCache.delete(key);
+    return null;
+  }
+  return hit.value;
+}
+
+function writeWeatherCache(key: string, value: WeatherResponse): void {
+  if (weatherPayloadCache.size >= WEATHER_PAYLOAD_CACHE_LIMIT) {
+    const oldest = weatherPayloadCache.keys().next().value;
+    if (oldest !== undefined) weatherPayloadCache.delete(oldest);
+  }
+  weatherPayloadCache.set(key, { value, expiresAt: Date.now() + WEATHER_PAYLOAD_TTL_MS });
+}
+
 /**
  * Current conditions plus the seven-day outlook with full provider redundancy.
  *
@@ -195,6 +238,10 @@ async function getOpenWeatherMapWeather(coords: Coordinates, label: string | nul
  */
 export async function getWeather(params?: { lat?: number | string; lon?: number | string }): Promise<WeatherResponse> {
   const coords = resolveCoordinates(params?.lat, params?.lon);
+  const cacheKey = geoCacheKey(coords);
+
+  const cached = readWeatherCache(cacheKey);
+  if (cached) return cached;
 
   const [primary, label] = await Promise.all([
     getOpenMeteoWeather(coords),
@@ -203,12 +250,16 @@ export async function getWeather(params?: { lat?: number | string; lon?: number 
 
   if (primary) {
     if (label) primary.location = label;
+    writeWeatherCache(cacheKey, primary);
     return primary;
   }
 
   // Open-Meteo failed — use the redundant OpenWeatherMap provider.
   const fallback = await getOpenWeatherMapWeather(coords, label);
-  if (fallback) return fallback;
+  if (fallback) {
+    writeWeatherCache(cacheKey, fallback);
+    return fallback;
+  }
 
   return fallbackWeather("Weather Service Interrupted");
 }

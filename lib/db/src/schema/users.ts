@@ -22,6 +22,11 @@ export const usersTable = pgTable(
   },
   (table) => [
     unique("users_tenant_email_unique").on(table.tenantId, table.email),
+    // Bearer-token auth looks the user up by token on EVERY authenticated
+    // request (middlewares/auth.ts), so this column must be indexed.
+    index("users_token_idx").on(table.token),
+    // OAuth login resolves an existing account by (provider, subject).
+    index("users_oauth_subject_idx").on(table.oauthProvider, table.oauthSubject),
     index("users_share_handle_idx").on(
       sql`coalesce(nullif(regexp_replace(regexp_replace(lower(split_part(${table.email}, '@', 1)), '[^a-z0-9]+', '-', 'g'), '(^-+|-+$)', '', 'g'), ''), 'user')`,
     ),

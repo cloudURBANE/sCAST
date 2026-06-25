@@ -52,11 +52,23 @@ function stripPgSslParams(url: string): string {
 
 const ssl = resolveSslConfig(databaseUrl);
 
+function parsePositiveInt(value: string | undefined, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
+}
+
 export const pool = new Pool({
   // node-postgres parses sslmode from connectionString after spreading config,
   // which can overwrite our explicit rejectUnauthorized override.
   connectionString: ssl ? stripPgSslParams(databaseUrl) : databaseUrl,
   ssl,
+  // Bound the pool so a burst of requests can't open unbounded connections
+  // against a shared/managed Postgres (Supabase) and exhaust its limit.
+  max: parsePositiveInt(process.env.DATABASE_POOL_MAX, 10),
+  // Fail fast instead of hanging a request forever when no connection is
+  // available, and release idle sockets so the pool doesn't pin connections.
+  connectionTimeoutMillis: parsePositiveInt(process.env.DATABASE_CONNECTION_TIMEOUT_MS, 10_000),
+  idleTimeoutMillis: parsePositiveInt(process.env.DATABASE_IDLE_TIMEOUT_MS, 30_000),
 });
 export const db = drizzle(pool, { schema });
 

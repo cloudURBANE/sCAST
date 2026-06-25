@@ -1,6 +1,7 @@
 import axios from "axios";
 import { logger } from "../lib/logger";
 import { KeyPool, registerKeyPool } from "../lib/keyPool";
+import { keepAliveHttpAgent, keepAliveHttpsAgent } from "../lib/keepAliveAgent";
 import type { SerperRefineMode } from "./imageSolvers";
 import { scoreSerperImageCandidate } from "./serperCandidateScoring";
 
@@ -157,6 +158,8 @@ async function searchSerperImageCandidatesViaSerper(
             "x-api-key": apiKey,
             "content-type": "application/json",
           },
+          httpAgent: keepAliveHttpAgent,
+          httpsAgent: keepAliveHttpsAgent,
           validateStatus: (status) => status >= 200 && status < 500,
         },
       );
@@ -214,6 +217,8 @@ export async function searchEngineImageCandidates(
   try {
     const response = await axios.get<EngineImageResponse>(url, {
       timeout: REQUEST_TIMEOUT_MS,
+      httpAgent: keepAliveHttpAgent,
+      httpsAgent: keepAliveHttpsAgent,
       validateStatus: (status) => status >= 200 && status < 500,
     });
 

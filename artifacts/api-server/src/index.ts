@@ -50,7 +50,7 @@ async function start() {
     process.exit(1);
   }
 
-  app.listen(port, "0.0.0.0", (err) => {
+  const server = app.listen(port, "0.0.0.0", (err) => {
     if (err) {
       logger.error({ err }, "Error listening on port");
       process.exit(1);
@@ -62,6 +62,13 @@ async function start() {
     // is set, so it stays dormant until enrichment is deliberately turned on.
     startEnrichmentWorker(enrichJobViaEngine);
   });
+
+  // Keep the server's keep-alive window wider than the upstream proxy idle
+  // timeout (Railway/Vercel ~60s). With Node's 5s default, the server can close
+  // a pooled connection mid-flight just as the proxy reuses it, surfacing as
+  // sporadic 502s. headersTimeout must exceed keepAliveTimeout.
+  server.keepAliveTimeout = 65_000;
+  server.headersTimeout = 66_000;
 }
 
 void start();
