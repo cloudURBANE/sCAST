@@ -800,7 +800,8 @@ a {
   pointer-events: none;
 }
 
-.scent-ipad-safari-perf .pedestal::before {
+.scent-ipad-safari-perf .pedestal::before,
+.scent-touch-perf .pedestal::before {
   filter: none;
   opacity: 0.62;
 }
@@ -2452,6 +2453,15 @@ a {
   background-position: 12% 18%, 78% 68%, 38% 50%, 62% 18%;
 }
 
+/* Touch/perf devices: the full-viewport drift animates background-position +
+   filter (both non-compositable, forcing a full-screen repaint every frame).
+   Freeze it on touch/perf hardware just like reduced-motion does below — the
+   gradient still renders, only the per-frame paint is dropped. */
+.scent-ipad-safari-perf .scent-lava-fallback--visible.scent-lava-fallback--animated,
+.scent-touch-perf .scent-lava-fallback--visible.scent-lava-fallback--animated {
+  animation: none;
+}
+
 .scent-beam-overlay {
   position: fixed;
   inset: 0;
@@ -2580,6 +2590,16 @@ a {
       scent-entry-count-line-glow-b 21s linear infinite;
     animation-delay: -11s, -5s;
   }
+}
+
+/* Touch/perf devices: the entry-count hairline runs four infinite
+   background-position shimmers (non-compositable, repaint every frame). Freeze
+   them on touch/perf hardware — the line still renders at its base position. */
+.scent-ipad-safari-perf .scent-entry-count::before,
+.scent-ipad-safari-perf .scent-entry-count::after,
+.scent-touch-perf .scent-entry-count::before,
+.scent-touch-perf .scent-entry-count::after {
+  animation: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
