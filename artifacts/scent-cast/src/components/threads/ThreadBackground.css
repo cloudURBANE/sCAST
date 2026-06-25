@@ -147,7 +147,13 @@
   animation-timing-function: linear;
   filter: none;
   opacity: 0;
-  will-change: transform;
+  /* No `will-change`: the scent-thread-travel-* keyframes animate
+     `transform: translate3d(...)`, which already promotes each line to its own
+     compositor layer. A permanent `will-change` on all ~20 always-mounted
+     ipad-optimized lines pins extra GPU buffers continuously (the MDN-cautioned
+     anti-pattern noted on the base class above) and — because this mode runs on
+     ALL iPads while the `.scent-ipad-safari-perf` reset excludes iPad
+     Chrome/Firefox/Edge — it was never being cleared on non-Safari iPad shells. */
 }
 
 .scent-thread-line--mode-static {

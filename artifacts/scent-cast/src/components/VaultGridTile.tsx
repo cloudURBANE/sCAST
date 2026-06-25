@@ -61,6 +61,17 @@ function VaultGridTileComponent({
   const handleClick = React.useCallback(() => onOpen(item), [onOpen, item]);
   const handleMouseEnter = React.useCallback(() => onPrefetch(item), [onPrefetch, item]);
 
+  // On touch/perf devices the visible animation is the Framer `layoutId` morph,
+  // which drives the OUTER wrapper's transform every frame. A `transition-transform`
+  // (and the hover-only `scent-hover-scale`) on the INNER <img> makes WebKit
+  // re-evaluate/repaint that child layer against the animating parent every frame —
+  // a competing transform transition inside a layout-animated ancestor, the classic
+  // iOS Safari morph-jitter source. Drop them here so only the morph animates; the
+  // hover scale is inert on touch anyway. Desktop keeps the full hover treatment.
+  const imgClassName = motionDisabled
+    ? 'brightness-[1.1]'
+    : 'scent-hover-scale brightness-[1.1] transition-transform duration-500 motion-reduce:transition-none';
+
   return (
     <motion.div
       initial={motionDisabled ? false : TILE_INITIAL}
@@ -90,7 +101,7 @@ function VaultGridTileComponent({
             imageProperties={item.imageProperties}
             isSyncing={isImageSyncing?.(item)}
             className="absolute inset-0"
-            imgClassName="scent-hover-scale brightness-[1.1] transition-transform duration-500 motion-reduce:transition-none"
+            imgClassName={imgClassName}
             loading={prioritizeImage ? 'eager' : 'lazy'}
             fetchPriority={prioritizeImage ? 'high' : undefined}
           />

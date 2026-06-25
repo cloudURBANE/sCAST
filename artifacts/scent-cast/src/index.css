@@ -1883,7 +1883,6 @@ a {
   .scent-marquee-key--lit::after {
     animation: brand-gold-sheen 1.9s ease-out 1 forwards;
     opacity: 1;
-    will-change: background-position;
   }
 }
 
@@ -2419,6 +2418,16 @@ a {
   .scent-type-label[data-thinking='true'] {
     animation: none;
   }
+}
+
+/* Touch/perf devices: this "thinking" label shimmer animates background-position
+   (non-compositable → full text-layer repaint every frame) and fires exactly while
+   the Beam agent is streaming tokens on iPhone/iPad, competing with React work on
+   the main thread. Freeze it on perf hardware, matching the entry-count shimmer
+   freeze below. The label still renders at its base gradient position. */
+.scent-ipad-safari-perf .scent-type-label[data-thinking='true'],
+.scent-touch-perf .scent-type-label[data-thinking='true'] {
+  animation: none;
 }
 
 .scent-type-meta {
@@ -3971,7 +3980,6 @@ a {
   .scent-brand-gold-shimmer:focus-visible::after {
     animation: brand-gold-sheen 1.9s ease-out 1 forwards;
     opacity: 1;
-    will-change: background-position;
   }
 }
 
@@ -3979,8 +3987,17 @@ a {
   .scent-brand-gold-label--viewport-sheen .scent-brand-gold-shimmer::after {
     animation: brand-gold-sheen 2.15s ease-out 0.18s 1 both;
     opacity: 0.92;
-    will-change: background-position;
   }
+}
+
+/* Touch/perf devices: the viewport-sheen fires a background-position repaint
+   (non-compositable) on every brand label as it scrolls through center. Across a
+   community/vault feed that is a rolling series of text-layer repaints during the
+   scroll itself. Suppress the scroll-triggered sheen on perf hardware (the label
+   still shows its base gold gradient); hover/focus sheen on desktop is untouched. */
+.scent-ipad-safari-perf .scent-brand-gold-label--viewport-sheen .scent-brand-gold-shimmer::after,
+.scent-touch-perf .scent-brand-gold-label--viewport-sheen .scent-brand-gold-shimmer::after {
+  animation: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -4003,8 +4020,12 @@ a {
 }
 
 /* Arena animations */
+/* Grow the result bar from the left using a compositable transform (scaleX) rather
+   than animating `width`, which forces layout + paint every frame on WebKit. The
+   segment keeps its final width via its inline style; scaleX animates inside it. */
 @keyframes arena-bar-fill {
-  from { width: 0%; }
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
 }
 
 @keyframes arena-fade-in {
@@ -4030,6 +4051,7 @@ a {
 }
 
 .arena-bar-segment {
+  transform-origin: left center;
   animation: arena-bar-fill 700ms var(--scent-ease-out) both;
 }
 
