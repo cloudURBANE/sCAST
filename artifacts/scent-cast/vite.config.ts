@@ -117,6 +117,16 @@ export default defineConfig(async () => {
     build: {
       outDir: path.resolve(import.meta.dirname, "dist/public"),
       emptyOutDir: true,
+      // Pin the transpile floor so esbuild emits modern syntax instead of the
+      // conservative default. es2020 + safari14 covers our installed-PWA target
+      // baseline (iOS 14+ Safari) while still allowing optional chaining, nullish
+      // coalescing, and dynamic import to ship untransformed — smaller, faster
+      // entry code.
+      target: ["es2020", "safari14"],
+      // Our vendor split intentionally produces a few chunks above the 500 KB
+      // default; raise the advisory threshold so the build log isn't noisy with
+      // warnings for chunks we've deliberately sized.
+      chunkSizeWarningLimit: 600,
       rollupOptions: {
         output: {
           manualChunks(id) {

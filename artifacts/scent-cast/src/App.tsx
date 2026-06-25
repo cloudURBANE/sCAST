@@ -32,8 +32,15 @@ import { CookieConsentBanner } from './components/legal/CookieConsentBanner';
 import { hasAnalyticsConsent, onConsentChange } from '@/lib/consent';
 import { loadRouteChunk } from '@/lib/routeChunkRecovery';
 import { initWebVitals, vaultSizeBucket } from '@/lib/webVitalsTelemetry';
-import { FragranceCapture } from './components/FragranceCapture';
 import { PreferenceSync } from './components/PreferenceSync';
+
+// User-triggered surface: FragranceCapture (~1.5k lines) pulls in the heavy
+// fragranceApi client and only renders inside the vault panel's search mode.
+// Lazy + route-chunk-recovered like the sibling modals/panels so it is kept
+// out of the home/entry bundle for a faster time-to-interactive.
+const FragranceCapture = React.lazy(() =>
+  loadRouteChunk(() => import('./components/FragranceCapture').then((module) => ({ default: module.FragranceCapture }))),
+);
 
 const Wardrobe = React.lazy(() =>
   loadRouteChunk(() => import('./components/Wardrobe').then((module) => ({ default: module.Wardrobe }))),
@@ -1224,13 +1231,15 @@ function DashboardView() {
                       exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 6 }}
                       transition={vaultContentTransition}
                     >
-                      <FragranceCapture
-                        onAdd={handleAddItem}
-                        onVaultSearchStateChange={handleVaultSearchStateChange}
-                        existingVaultKeys={vaultIdentityKeys}
-                        onViewVault={handleViewVault}
-                        embeddedInVaultPanel
-                      />
+                      <React.Suspense fallback={<SignaturePanelFallback />}>
+                        <FragranceCapture
+                          onAdd={handleAddItem}
+                          onVaultSearchStateChange={handleVaultSearchStateChange}
+                          existingVaultKeys={vaultIdentityKeys}
+                          onViewVault={handleViewVault}
+                          embeddedInVaultPanel
+                        />
+                      </React.Suspense>
                     </motion.div>
                   )}
                 </AnimatePresence>
