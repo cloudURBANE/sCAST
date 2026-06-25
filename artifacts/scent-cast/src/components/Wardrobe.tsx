@@ -45,6 +45,7 @@ import {
 } from '@/lib/bottleImageAdjustment';
 import { BottleImage } from '@/components/BottleImage';
 import { VaultCard } from '@/components/VaultCard';
+import { VaultGridTile } from '@/components/VaultGridTile';
 import { vaultIdentityKey } from '@/lib/vaultIdentity';
 import { betaVideoUrlForFragrance } from '@/lib/bottleVideoBeta';
 import { BrandGoldLabel } from '@/components/BrandGoldLabel';
@@ -1087,9 +1088,16 @@ export const Wardrobe: React.FC<{
   // devices; a cheap transform-only tween under the low-render budget (phone /
   // iPad WebKit) so it stays a single transform animation inside WebKit's
   // compositor budget on the memory-sensitive detail modal.
-  const bottleMorphTransition = reducedDetailMotion
-    ? ({ layout: { type: "tween", duration: 0.4, ease: [0.22, 1, 0.36, 1] } } as const)
-    : ({ layout: { type: "spring", stiffness: 260, damping: 30, mass: 0.9 } } as const);
+  // Memoized so its identity is stable across unrelated Wardrobe re-renders —
+  // it is passed to the memoized VaultGridTile, so a fresh object each render
+  // would defeat that memo and re-render every card on any state change.
+  const bottleMorphTransition = React.useMemo(
+    () =>
+      reducedDetailMotion
+        ? ({ layout: { type: "tween", duration: 0.4, ease: [0.22, 1, 0.36, 1] } } as const)
+        : ({ layout: { type: "spring", stiffness: 260, damping: 30, mass: 0.9 } } as const),
+    [reducedDetailMotion],
+  );
   const [detailDeferredContentReady, setDetailDeferredContentReady] = React.useState(false);
   const [detailExitInProgress, setDetailExitInProgress] = React.useState(false);
 
@@ -2172,48 +2180,17 @@ export const Wardrobe: React.FC<{
                     const prioritizeImage = gridItemIndex < prioritizedGridImageCount;
 
                     return (
-                      <motion.div
+                      <VaultGridTile
                         key={item.id}
-                        initial={lowMotionRenderMode || ipadSafariPerformanceMode ? false : { opacity: 0, y: 10 }}
-                        whileInView={lowMotionRenderMode || ipadSafariPerformanceMode ? undefined : { opacity: 1, y: 0 }}
-                        viewport={lowMotionRenderMode || ipadSafariPerformanceMode ? undefined : { once: true, margin: '0px 0px 15% 0px' }}
-                        transition={lowMotionRenderMode || ipadSafariPerformanceMode ? undefined : { duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
-                        className="group cursor-pointer relative h-full min-w-0"
-                        onClick={() => openDetail(item)}
-                        onMouseEnter={() => prefetchReviews(item)}
-                      >
-                        <VaultCard
-                          tone="wardrobe"
-                          compact={isCompactGrid}
-                          brand={entryBrand(item)}
-                          name={entryName(item)}
-                        >
-                          {/* Shared-bottle morph source: this fills the square
-                              image slot and carries the layoutId that the detail
-                              modal's bottle reuses, so tapping the card morphs the
-                              bottle open (and back on close) — the same effect as
-                              the Community feed. */}
-                          <motion.div
-                            layoutId={`wardrobe-bottle-${item.id}`}
-                            transition={bottleMorphTransition}
-                            className="absolute inset-0 z-10"
-                          >
-                            <BottleImage
-                              variant="grid"
-                              src={item.imageUrl}
-                              videoSrc={betaVideoUrlForFragrance(item)}
-                              alt={entryName(item)}
-                              adjustment={item.imageAdjustment}
-                              imageProperties={item.imageProperties}
-                              isSyncing={isImageSyncing?.(item)}
-                              className="absolute inset-0"
-                              imgClassName="scent-hover-scale brightness-[1.1] transition-transform duration-500 motion-reduce:transition-none"
-                              loading={prioritizeImage ? 'eager' : 'lazy'}
-                              fetchPriority={prioritizeImage ? 'high' : undefined}
-                            />
-                          </motion.div>
-                        </VaultCard>
-                      </motion.div>
+                        item={item}
+                        compact={isCompactGrid}
+                        prioritizeImage={prioritizeImage}
+                        motionDisabled={lowMotionRenderMode || ipadSafariPerformanceMode}
+                        bottleMorphTransition={bottleMorphTransition}
+                        isImageSyncing={isImageSyncing}
+                        onOpen={openDetail}
+                        onPrefetch={prefetchReviews}
+                      />
                     );
                   })}
                   {shelfIndex === addCardShelfIndex && (

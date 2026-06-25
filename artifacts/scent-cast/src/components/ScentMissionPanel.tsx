@@ -920,6 +920,218 @@ interface ScentMissionPanelProps {
   onCurateCollection?: CurateCollectionFn;
 }
 
+/* --------------------------------------------------------------------------
+ * Mission transcript row (memoized)
+ *
+ * The chat transcript previously rendered every message inline inside
+ * `messages.map`, so each streaming token / keystroke (a single `messages`
+ * state update) reconciled EVERY prior message — cost that grows with
+ * conversation length. This row is `React.memo`'d and keyed by `message.id`,
+ * and it receives only the per-row scalars it actually depends on:
+ *   - derived booleans (`isIntroGreeting`, `typing`, `isLatestAgent`, `showRecap`)
+ *     computed once by the parent, so the row never reads the whole `messages`
+ *     array or live run flags directly;
+ *   - per-row state pulled OUT of the parent's `Record`/`Set` containers
+ *     (`feedbackStatus`, `recapExpanded`, `kitAdded`) — passing those containers
+ *     whole would change identity on any update and defeat the memo;
+ *   - stable `useCallback` handlers from the parent.
+ * Result: a token landing on the newest turn re-renders only that one row.
+ * ------------------------------------------------------------------------ */
+interface MissionMessageRowProps {
+  message: PanelMessage;
+  calmMotion: boolean;
+  /** First agent row currently acting as the intro greeting. */
+  isIntroGreeting: boolean;
+  /** Intro greeting still showing the typing dots (pre-`introReady`). */
+  typing: boolean;
+  /** This row is the newest agent answer (carries the scroll anchor). */
+  isLatestAgent: boolean;
+  /** This row has frozen recap steps. */
+  hasRecap: boolean;
+  /** The recap child should be visible this beat. */
+  showRecap: boolean;
+  /** Whether this row may ever show the feedback affordance right now. */
+  showFeedback: boolean;
+  /** This row's feedback UI state, lifted out of the parent's record. */
+  feedbackStatus: AnswerFeedbackStatus;
+  /** This row's recap expanded flag, lifted out of the parent's record. */
+  recapExpanded: boolean;
+  /** This row's "added to vault" flag, lifted out of the parent's Set. */
+  kitAdded: boolean;
+  /** Resolved BeamCard handlers (undefined when the host capability is absent). */
+  onAddKitPicks?: (items: BeamProposalItem[], proposalId?: string) => void | Promise<void>;
+  onViewProposalItem?: (item: BeamProposalItem) => void;
+  onToggleRecap: (messageId: string) => void;
+  onOpenFeedback: (messageId: string) => void;
+  onSubmitFeedback: (answerLogId: string, messageId: string, reasonCode: string) => void;
+  /** Live spinner rotation for the recap trail. */
+  liveMotion: boolean;
+}
+
+function MissionMessageRowComponent({
+  message,
+  calmMotion,
+  isIntroGreeting,
+  typing,
+  isLatestAgent,
+  hasRecap,
+  showRecap,
+  showFeedback,
+  feedbackStatus,
+  recapExpanded,
+  kitAdded,
+  onAddKitPicks,
+  onViewProposalItem,
+  onToggleRecap,
+  onOpenFeedback,
+  onSubmitFeedback,
+  liveMotion,
+}: MissionMessageRowProps) {
+  // Native agent UI cards (radar / compare / kit board) render as their own
+  // conversation artifact, outside the text-bubble + recap machinery.
+  if (message.role === 'card' && message.card) {
+    return (
+      <motion.div
+        initial={calmMotion ? false : { opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.28, ease: SCENT_EASE }}
+        // min-w-0 lets the 92%-wide CardShell compute against the constrained
+        // scroll box instead of the card's intrinsic content width.
+        className="flex w-full min-w-0 flex-col box-border"
+      >
+        <BeamCard
+          card={message.card}
+          calmMotion={calmMotion}
+          onAddNewPicks={onAddKitPicks}
+          onViewItem={onViewProposalItem}
+          added={kitAdded}
+        />
+      </motion.div>
+    );
+  }
+
+  const recapSteps = message.role === 'agent' ? message.activity : undefined;
+  const bubble = (
+    <motion.div
+      // The newest agent reply carries the scroll-to-top anchor — unless a recap
+      // wrapper above takes it — so a long answer lands at its FIRST line.
+      data-scroll-anchor={isLatestAgent && !hasRecap ? 'latest-agent' : undefined}
+      // Only the greeting morphs its box: `layout="size"` animates the grow from
+      // thinking-pill to welcome-line. Other bubbles keep the simple fade/rise.
+      layout={isIntroGreeting && !calmMotion ? 'size' : false}
+      initial={calmMotion ? false : { opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{
+        duration: 0.24,
+        ease: SCENT_EASE,
+        layout: { duration: 0.52, ease: SCENT_EASE },
+      }}
+      className={`relative max-w-[92%] min-w-0 break-words [overflow-wrap:anywhere] rounded-[calc(var(--radius-scent)-10px)] border px-3.5 py-2.5 text-[13px] leading-relaxed shadow-[inset_0_1px_0_rgba(255,236,183,0.04),0_10px_24px_rgba(0,0,0,0.2)] sm:text-sm ${
+        message.role === 'user'
+          ? 'self-end border-scent-accent/18 bg-[linear-gradient(180deg,rgba(255,247,236,0.082),rgba(58,45,30,0.16))] text-[#fff7ec]'
+          : message.role === 'system'
+            ? 'self-start border-red-400/25 bg-red-500/10 text-red-100'
+            : 'self-start border-scent-accent/18 bg-[linear-gradient(180deg,rgba(255,236,183,0.052),rgba(212,175,55,0.025)_42%,rgba(0,0,0,0.22))] text-scent-text-muted'
+      }`}
+      aria-label={typing ? 'Beam Agent is typing' : message.role === 'user' ? 'You' : message.role === 'agent' ? 'Beam Agent' : undefined}
+    >
+      {message.role === 'system' ? (
+        <AlertTriangle size={13} className="mr-1.5 inline align-[-2px]" aria-hidden />
+      ) : null}
+      {isIntroGreeting ? (
+        <AnimatePresence mode="popLayout" initial={false}>
+          {typing ? (
+            <motion.span
+              key="intro-dots"
+              className="inline-flex items-center gap-1.5 py-0.5"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.18, ease: SCENT_EASE }}
+              aria-hidden
+            >
+              <BeamTypingDots />
+            </motion.span>
+          ) : (
+            // Fades up a beat into the box growth, so the text resolves as the
+            // bubble settles rather than appearing before it expands.
+            <motion.span
+              key="intro-text"
+              className="block"
+              initial={calmMotion ? false : { opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.36, ease: SCENT_EASE, delay: 0.08 }}
+            >
+              {message.text}
+            </motion.span>
+          )}
+        </AnimatePresence>
+      ) : message.role === 'agent' ? (
+        // Agent answers arrive as Markdown; render them through the structured
+        // renderer so no raw `**` / `##` / `---` reaches the screen.
+        <BeamMessage text={message.text} />
+      ) : (
+        message.text
+      )}
+    </motion.div>
+  );
+
+  // Feedback affordance: only on a delivered agent answer with a durable id,
+  // never on the newest turn while it's still settling, never on the greeting.
+  const feedbackNode =
+    showFeedback && message.answerLogId ? (
+      <AnswerFeedbackControl
+        status={feedbackStatus}
+        calmMotion={calmMotion}
+        onOpen={() => onOpenFeedback(message.id)}
+        onPick={(reasonCode) => onSubmitFeedback(message.answerLogId as string, message.id, reasonCode)}
+      />
+    ) : null;
+
+  if (!hasRecap) {
+    // Whether this message can EVER show feedback — a fixed property of the
+    // message, unlike `feedbackNode` which is null while the newest turn is
+    // still settling. Keying the wrapper off the live `feedbackNode` would
+    // remount the bubble and replay its entrance animation.
+    const canShowFeedback =
+      message.role === 'agent' && !!message.answerLogId && !isIntroGreeting;
+    if (!canShowFeedback) return bubble;
+    return (
+      <div className="flex w-full flex-col gap-1">
+        {bubble}
+        {feedbackNode}
+      </div>
+    );
+  }
+
+  // Per-turn recap sits ABOVE its answer, both left-aligned in a column. The
+  // wrapper carries the scroll anchor so a fresh reply lands on the "Thought for
+  // Ns" line, then the answer. The recap child is held back for one beat.
+  return (
+    <div
+      className="flex w-full flex-col gap-1.5"
+      data-scroll-anchor={isLatestAgent ? 'latest-agent' : undefined}
+    >
+      {showRecap ? (
+        <BeamActivityTrail
+          steps={recapSteps ?? []}
+          calmMotion={calmMotion}
+          spin={liveMotion}
+          running={false}
+          expanded={recapExpanded}
+          elapsedMs={message.elapsedMs ?? null}
+          outcome={message.outcome}
+          onToggleExpand={() => onToggleRecap(message.id)}
+        />
+      ) : null}
+      {bubble}
+      {feedbackNode}
+    </div>
+  );
+}
+
+const MissionMessageRow = React.memo(MissionMessageRowComponent);
+
 export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   items,
   weather,
@@ -1048,6 +1260,12 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       }
     },
     [authToken, setFeedbackFor],
+  );
+  // Stable single-arg adapter so the memoized transcript row can open the
+  // feedback chips without allocating a per-row closure each render.
+  const handleOpenFeedback = useCallback(
+    (messageId: string) => setFeedbackFor(messageId, 'open'),
+    [setFeedbackFor],
   );
   // Tap-to-answer chips the agent offered with its last reply (e.g. trip-vibe
   // follow-ups). When set, these replace the static facet cues.
@@ -2673,37 +2891,9 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
             turn (and the greeting itself, once introReady) renders real TEXT,
             never a permanent dots placeholder. */}
         {messages.map((message, index) => {
-          // Native agent UI cards (radar / compare / kit board) render as their
-          // own conversation artifact, outside the text-bubble + recap machinery.
-          if (message.role === 'card' && message.card) {
-            return (
-              <motion.div
-                key={message.id}
-                initial={calmMotion ? false : { opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.28, ease: SCENT_EASE }}
-                // min-w-0 lets the 92%-wide CardShell compute against the
-                // constrained scroll box instead of the card's intrinsic content
-                // width (the fixed 168px radar SVG / long names). Without it the
-                // wrapper grows to its content and the rounded overflow-hidden
-                // frame clips the card at the corners/edges. box-border keeps the
-                // px-1.5 scroll padding inside the frame so 92% never spills past it.
-                className="flex w-full min-w-0 flex-col box-border"
-              >
-                <BeamCard
-                  card={message.card}
-                  calmMotion={calmMotion}
-                  onAddNewPicks={onCurateCollection ? handleAddKitPicks : undefined}
-                  onViewItem={onViewProposalItem ? handleViewProposalItem : undefined}
-                  added={
-                    message.card.kind === 'travel_kit' && message.card.proposalId
-                      ? curatedKitIds.has(message.card.proposalId)
-                      : false
-                  }
-                />
-              </motion.div>
-            );
-          }
+          // Per-row derived flags computed here (cheap scalar reads) and handed
+          // to the memoized row so it never touches the whole `messages` array,
+          // the live run flags, or the parent's record/Set containers directly.
           const isIntroGreeting = index === 0 && message.role === 'agent';
           // Keep the stage empty until the greeting beat — the bubble (and its
           // dots) only mount once the open transition has settled (420ms).
@@ -2712,145 +2902,46 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
           // then morphs into its line. No other message is ever in "typing".
           const typing = isIntroGreeting && !introReady;
           const isLatestAgent = message.id === latestAgentId;
-          // A completed agent turn carries its own frozen "thinking" steps; we
-          // render them as a collapsible recap directly ABOVE this answer (the
-          // ChatGPT / Claude pattern). While the newest run is still settling
-          // (busy) the live trail below is animating out, so hold this recap one
-          // beat to keep the two from stacking for a frame.
           // `hasRecap` is a fixed property of the message (its frozen steps), so
-          // the wrapper structure never changes across a busy→settled flip and the
-          // answer bubble never remounts. `showRecap` only gates the recap's
+          // the wrapper structure never changes across a busy→settled flip and
+          // the answer bubble never remounts. `showRecap` only gates the recap's
           // visibility — held one beat on the newest turn while the live trail
           // below animates out, so the two never stack.
-          const recapSteps = message.role === 'agent' ? message.activity : undefined;
-          const hasRecap = !!recapSteps && recapSteps.length > 0;
+          const hasRecap =
+            message.role === 'agent' && !!message.activity && message.activity.length > 0;
           const showRecap = hasRecap && (!busy || !isLatestAgent);
-          const bubble = (
-            <motion.div
-              key={message.id}
-              // The newest agent reply carries the scroll-to-top anchor — unless a
-              // recap wrapper above takes it — so a long answer lands at its FIRST
-              // line rather than dropping the user mid-response (scroll effect).
-              data-scroll-anchor={isLatestAgent && !hasRecap ? 'latest-agent' : undefined}
-              // Only the greeting morphs its box: `layout="size"` animates the
-              // grow from thinking-pill to welcome-line without sliding the
-              // bubble when later turns push it down. Other bubbles keep the
-              // simple fade/rise and never run a layout pass.
-              layout={isIntroGreeting && !calmMotion ? 'size' : false}
-              initial={calmMotion ? false : { opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{
-                duration: 0.24,
-                ease: SCENT_EASE,
-                layout: { duration: 0.52, ease: SCENT_EASE },
-              }}
-              className={`relative max-w-[92%] min-w-0 break-words [overflow-wrap:anywhere] rounded-[calc(var(--radius-scent)-10px)] border px-3.5 py-2.5 text-[13px] leading-relaxed shadow-[inset_0_1px_0_rgba(255,236,183,0.04),0_10px_24px_rgba(0,0,0,0.2)] sm:text-sm ${
-                message.role === 'user'
-                  ? 'self-end border-scent-accent/18 bg-[linear-gradient(180deg,rgba(255,247,236,0.082),rgba(58,45,30,0.16))] text-[#fff7ec]'
-                  : message.role === 'system'
-                    ? 'self-start border-red-400/25 bg-red-500/10 text-red-100'
-                    : 'self-start border-scent-accent/18 bg-[linear-gradient(180deg,rgba(255,236,183,0.052),rgba(212,175,55,0.025)_42%,rgba(0,0,0,0.22))] text-scent-text-muted'
-              }`}
-              aria-label={typing ? 'Beam Agent is typing' : message.role === 'user' ? 'You' : message.role === 'agent' ? 'Beam Agent' : undefined}
-            >
-              {message.role === 'system' ? (
-                <AlertTriangle size={13} className="mr-1.5 inline align-[-2px]" aria-hidden />
-              ) : null}
-              {isIntroGreeting ? (
-                <AnimatePresence mode="popLayout" initial={false}>
-                  {typing ? (
-                    <motion.span
-                      key="intro-dots"
-                      className="inline-flex items-center gap-1.5 py-0.5"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.18, ease: SCENT_EASE }}
-                      aria-hidden
-                    >
-                      <BeamTypingDots />
-                    </motion.span>
-                  ) : (
-                    // Fades up a beat into the box growth, so the text resolves as
-                    // the bubble settles rather than appearing before it expands.
-                    <motion.span
-                      key="intro-text"
-                      className="block"
-                      initial={calmMotion ? false : { opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ duration: 0.36, ease: SCENT_EASE, delay: 0.08 }}
-                    >
-                      {message.text}
-                    </motion.span>
-                  )}
-                </AnimatePresence>
-              ) : message.role === 'agent' ? (
-                // Agent answers arrive as Markdown; render them through the
-                // structured renderer so no raw `**` / `##` / `---` reaches the
-                // screen and a long recommendation reads as a scannable card.
-                <BeamMessage text={message.text} />
-              ) : (
-                message.text
-              )}
-            </motion.div>
-          );
-          // Feedback affordance: only on a delivered agent answer that carries a
-          // durable id, and never on the newest turn while it's still settling
-          // (busy) — the verdict is about a finished answer. Held off the intro
-          // greeting too. Visually subordinate, rendered directly under the bubble.
-          const feedbackNode =
-            message.role === 'agent' && message.answerLogId && !isIntroGreeting && !(isLatestAgent && busy) ? (
-              <AnswerFeedbackControl
-                status={feedbackState[message.id] ?? 'idle'}
-                calmMotion={calmMotion}
-                onOpen={() => setFeedbackFor(message.id, 'open')}
-                onPick={(reasonCode) => submitAnswerFeedback(message.answerLogId as string, message.id, reasonCode)}
-              />
-            ) : null;
-          if (!hasRecap) {
-            // Whether this message can EVER show feedback — a fixed property of the
-            // message, unlike `feedbackNode` which is null while the newest turn is
-            // still settling (busy) and non-null once it clears. Keying the wrapper
-            // off the live `feedbackNode` would swap a bare `bubble` (key=message.id)
-            // for a `<div key="…-turn">` the instant busy flipped, remounting the
-            // bubble and replaying its entrance animation — the answer would fade
-            // out and jump right as the spinner stopped. Branch on the stable
-            // capability instead so the bubble's identity never changes.
-            const canShowFeedback =
-              message.role === 'agent' && !!message.answerLogId && !isIntroGreeting;
-            if (!canShowFeedback) return bubble;
-            return (
-              <div key={`${message.id}-turn`} className="flex w-full flex-col gap-1">
-                {bubble}
-                {feedbackNode}
-              </div>
-            );
-          }
-          // Per-turn recap sits ABOVE its answer, both left-aligned in a column.
-          // The wrapper carries the scroll anchor so a fresh reply lands on the
-          // "Thought for Ns" line, then the answer — not buried beneath it. The
-          // recap child is held back (showRecap) for one beat on the newest turn.
+          // Feedback shows only on a delivered agent answer with a durable id,
+          // never on the newest turn while it's still settling (busy), never on
+          // the greeting — the verdict is about a finished answer.
+          const showFeedback =
+            message.role === 'agent' && !!message.answerLogId && !isIntroGreeting && !(isLatestAgent && busy);
+          const kitAdded =
+            message.role === 'card' &&
+            message.card?.kind === 'travel_kit' &&
+            !!message.card.proposalId
+              ? curatedKitIds.has(message.card.proposalId)
+              : false;
           return (
-            <div
-              key={`${message.id}-turn`}
-              className="flex w-full flex-col gap-1.5"
-              data-scroll-anchor={isLatestAgent ? 'latest-agent' : undefined}
-            >
-              {showRecap ? (
-                <BeamActivityTrail
-                  steps={recapSteps ?? []}
-                  calmMotion={calmMotion}
-                  spin={liveMotion}
-                  running={false}
-                  expanded={!!expandedRecaps[message.id]}
-                  elapsedMs={message.elapsedMs ?? null}
-                  outcome={message.outcome}
-                  onToggleExpand={() => toggleRecap(message.id)}
-                />
-              ) : null}
-              {bubble}
-              {feedbackNode}
-            </div>
+            <MissionMessageRow
+              key={message.id}
+              message={message}
+              calmMotion={calmMotion}
+              liveMotion={liveMotion}
+              isIntroGreeting={isIntroGreeting}
+              typing={typing}
+              isLatestAgent={isLatestAgent}
+              hasRecap={hasRecap}
+              showRecap={showRecap}
+              showFeedback={showFeedback}
+              feedbackStatus={feedbackState[message.id] ?? 'idle'}
+              recapExpanded={!!expandedRecaps[message.id]}
+              kitAdded={kitAdded}
+              onAddKitPicks={onCurateCollection ? handleAddKitPicks : undefined}
+              onViewProposalItem={onViewProposalItem ? handleViewProposalItem : undefined}
+              onToggleRecap={toggleRecap}
+              onOpenFeedback={handleOpenFeedback}
+              onSubmitFeedback={submitAnswerFeedback}
+            />
           );
         })}
 
