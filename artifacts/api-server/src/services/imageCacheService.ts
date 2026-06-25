@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, or, sql } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { imageCacheTable } from "@workspace/db/schema";
 import { logger } from "../lib/logger";
@@ -250,12 +250,15 @@ export async function getReadyCachedImageBySourceHash(
   removeBackground: boolean,
   pipelineVersion = IMAGE_PIPELINE_VERSION,
 ): Promise<CachedImageReference | null> {
-  // Positive-cache variant isolation: when BG removal is requested, only a
-  // background-removed row may satisfy it (a white-bg row must not). When it is
-  // not requested, either variant is acceptable, but prefer the transparent one
-  // when both exist (ordering below) since it renders on any surface.
+  // Positive-cache variant isolation: when BG removal is requested, a
+  // background-removed row satisfies it OR a deterministic "fallback" row — one
+  // where removal was attempted on this source and produced an unusable cutout,
+  // so the stored white-bg image is the best obtainable (image-pipeline C1).
+  // A plain white-bg row (a no-bg request's output) must NOT satisfy it. When BG
+  // removal is not requested, either variant is acceptable, but prefer the
+  // transparent one when both exist (ordering below) since it renders anywhere.
   const variantFilter = positiveCacheRequiresBackgroundRemoved(removeBackground)
-    ? [eq(imageCacheTable.backgroundRemoved, true)]
+    ? [or(eq(imageCacheTable.backgroundRemoved, true), eq(imageCacheTable.removeBgStatus, "fallback"))]
     : [];
   let rows: (typeof imageCacheTable.$inferSelect)[];
   try {

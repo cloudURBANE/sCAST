@@ -4,10 +4,19 @@
 // relative imports used throughout imagePipeline.ts).
 
 export function acceptsImageCacheForRequest(
-  cached: { backgroundRemoved: boolean },
+  cached: { backgroundRemoved: boolean; removeBgStatus?: string | null },
   removeBackground: boolean,
 ): boolean {
-  return !removeBackground || cached.backgroundRemoved;
+  if (!removeBackground) return true;
+  if (cached.backgroundRemoved) return true;
+  // A "fallback" row means background removal WAS attempted on this exact source
+  // and the result was deterministically unusable (an empty/ghost cutout), so the
+  // stored white-background image is the best obtainable for it. Accepting it for
+  // a bg-removal request prevents re-running Serper + Poof + sharp + upload on
+  // every single request for a source that can never be cut out — the cost leak
+  // in image-pipeline audit finding C1. (A non-fallback white-bg row — one a
+  // no-bg request produced — is still rejected, preserving variant isolation.)
+  return cached.removeBgStatus === "fallback";
 }
 
 /**
