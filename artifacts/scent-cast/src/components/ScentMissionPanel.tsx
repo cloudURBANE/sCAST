@@ -2876,7 +2876,11 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         // page from scrolling under the (inline) Beam panel without pinning
         // <body> with position:fixed, whose teardown caused the iPhone
         // "tap Close -> gray screen" freeze. Same pattern as the cue lane above.
-        style={{ overscrollBehavior: 'contain' }}
+        // `WebkitOverflowScrolling: 'touch'` restores native momentum/inertial
+        // scrolling for this nested overflow container on older iOS / PWA WKWebView
+        // contexts, where its omission makes the transcript feel sticky. Matches the
+        // idiom already used on .scent-weather-context-row.
+        style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}
         role="log"
         aria-live="polite"
         aria-label="Beam Agent conversation"
