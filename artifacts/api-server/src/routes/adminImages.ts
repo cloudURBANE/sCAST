@@ -5,6 +5,7 @@ import {
   BackgroundRemovalFailedError,
   processAdminBottleImage,
 } from "../services/adminBottleImageUpload";
+import type { RemoveBgReason } from "../services/bgService";
 import { ImageObjectStorageConfigurationError } from "../services/imageObjectStorage";
 import { fetchExternalImage } from "../services/safeImageFetch";
 import { extractImageUrlsFromSourcePage } from "../services/sourcePageImage";
@@ -25,6 +26,39 @@ const RAW_IMAGE_TYPES = [
 function firstQueryValue(value: unknown): string {
   if (Array.isArray(value)) return typeof value[0] === "string" ? value[0] : "";
   return typeof value === "string" ? value : "";
+}
+
+// Background removal can fall short for several distinct reasons (service down,
+// out of credits, rate-limited, oversized source, or a photo the cut-out model
+// genuinely can't isolate). The SPA surfaces this route's `error` string
+// verbatim and ignores `reason`, so historically every cause collapsed into one
+// opaque "didn't succeed" message — leaving the admin (and us) unable to tell an
+// ops problem (key/credits) from a bad-source problem. Map each reason to an
+// actionable message so the cause is legible; `reason` is still returned in the
+// JSON for programmatic callers/logs.
+const UNCHECK_HINT =
+  "Uncheck “Remove background” to upload it as-is, or try a cleaner source photo.";
+
+function backgroundRemovalFailureMessage(reason: RemoveBgReason): string {
+  switch (reason) {
+    case "missing_api_key":
+      return `Background removal is unavailable — the removal service isn't configured on this server. ${UNCHECK_HINT}`;
+    case "poof_unauthorized":
+      return `The background-removal service rejected the request (key unauthorized or out of credits). ${UNCHECK_HINT}`;
+    case "poof_rate_limited":
+      return `The background-removal service is rate-limited right now. Wait a moment and try again. ${UNCHECK_HINT}`;
+    case "poof_payload_too_large":
+      return `This image is too large for background removal. Use a smaller source image. ${UNCHECK_HINT}`;
+    case "poof_server_error":
+    case "poof_non_200":
+      return `The background-removal service had a transient error. Try again in a moment. ${UNCHECK_HINT}`;
+    case "poof_empty_output":
+      return `Background removal returned an empty (fully transparent) result — the model couldn't isolate the bottle in this source. ${UNCHECK_HINT}`;
+    case "poof_white_background":
+      return `Background removal left the original backdrop in place for this source. Try a photo of the bottle on a plain background. ${UNCHECK_HINT}`;
+    default:
+      return `Background removal didn't succeed for this image. The original was kept — ${UNCHECK_HINT}`;
+  }
 }
 
 /**
@@ -125,9 +159,12 @@ router.post(
       });
     } catch (err) {
       if (err instanceof BackgroundRemovalFailedError) {
+        logger.warn(
+          { reason: err.reason },
+          "[admin-upload] background removal did not succeed",
+        );
         res.status(422).json({
-          error:
-            "Background removal didn't succeed for this image. The original was kept — uncheck “Remove background” to upload it as-is, or try a cleaner source.",
+          error: backgroundRemovalFailureMessage(err.reason),
           reason: err.reason,
         });
         return;
