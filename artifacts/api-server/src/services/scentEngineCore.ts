@@ -116,6 +116,20 @@ export interface ScentEngineDeps {
     context?: Record<string, unknown>,
   ) => void;
   /**
+   * BE-3: backoff schedule (ms) for re-attempting the deferred background image
+   * resolution when an earlier pass returned no image. A brand-new fragrance
+   * whose first Serper pass momentarily yields nothing used to stay imageless
+   * for the rest of the process: the wardrobe poll only re-reads the cache, it
+   * never re-resolves, and there is no search-query negative cache, so each
+   * retry re-queries Serper fresh and a transient cold-start/rate-limit miss can
+   * still recover without a re-add or manual "Find image". Each entry is the
+   * delay BEFORE the next retry; an empty/omitted array preserves the legacy
+   * single-attempt behavior. Production default is wired in scentEngine.ts.
+   */
+  deferredImageRetryDelaysMs?: number[];
+  /** Injected sleep so tests can exercise the retry loop without real timers. */
+  sleep?: (ms: number) => Promise<void>;
+  /**
    * Hybrid server-side resolve: fetch a not-yet-curated fragrance's real
    * notes/family/pyramid through the Python engine (which reaches Fragrantica
    * over Decodo's unblocked egress), so on-demand views render immediately
@@ -479,36 +493,52 @@ export async function buildProfileWithDeps(
   });
 
   if (imageResolution === "deferred" && !processedImage) {
-    void resolveImageNow()
-      .then(async (image) => {
-        if (!image?.imageUrl) return;
-        await deps.saveCatalogEntry(finalBrand, finalName, {
-          ...profile,
-          imageUrl: image.imageUrl,
-          storagePath: image.storagePath,
-          imageHash: image.imageHash ?? null,
-          storageProvider: image.storageProvider,
-          sourceProvider: image.sourceProvider,
-        });
-        // BE-2: the deferred save returned an empty image and the frontend has
-        // already persisted the wardrobe row(s) by now. Push the resolved image
-        // into any still-imageless user_fragrances rows for this fragrance so
-        // the user's tile self-heals without waiting for a full reload.
-        await deps
-          .backfillUserFragranceImages?.(finalBrand, finalName, image)
-          .catch((err) => {
-            deps.reportNonFatalError?.("scentEngine.userImageBackfill", err, {
-              brand: finalBrand,
-              name: finalName,
-            });
+    const retryDelays = deps.deferredImageRetryDelaysMs ?? [];
+    const sleep =
+      deps.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+    // BE-3: the deferred save returned no image. Re-attempt in the background on
+    // a bounded backoff so a transient first-pass miss (Serper cold start, rate
+    // limit, image published moments later) can still recover. resolveImageNow
+    // re-queries Serper each time — there is no search-query negative cache to
+    // defeat it — and we stop on the first success. An empty retry schedule
+    // keeps the legacy single-attempt behavior.
+    void (async () => {
+      const maxAttempts = retryDelays.length + 1;
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        if (attempt > 0) await sleep(retryDelays[attempt - 1]!);
+        try {
+          const image = await resolveImageNow();
+          if (!image?.imageUrl) continue;
+          await deps.saveCatalogEntry(finalBrand, finalName, {
+            ...profile,
+            imageUrl: image.imageUrl,
+            storagePath: image.storagePath,
+            imageHash: image.imageHash ?? null,
+            storageProvider: image.storageProvider,
+            sourceProvider: image.sourceProvider,
           });
-      })
-      .catch((err) => {
-        deps.reportNonFatalError?.("scentEngine.deferredImageResolution", err, {
-          brand: finalBrand,
-          name: finalName,
-        });
-      });
+          // BE-2: the frontend has already persisted the wardrobe row(s) by now.
+          // Push the resolved image into any still-imageless user_fragrances
+          // rows for this fragrance so the user's tile self-heals without
+          // waiting for a full reload.
+          await deps
+            .backfillUserFragranceImages?.(finalBrand, finalName, image)
+            .catch((err) => {
+              deps.reportNonFatalError?.("scentEngine.userImageBackfill", err, {
+                brand: finalBrand,
+                name: finalName,
+              });
+            });
+          return;
+        } catch (err) {
+          deps.reportNonFatalError?.("scentEngine.deferredImageResolution", err, {
+            brand: finalBrand,
+            name: finalName,
+            attempt,
+          });
+        }
+      }
+    })();
   }
 
   return profile;
