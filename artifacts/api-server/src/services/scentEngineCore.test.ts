@@ -15,6 +15,7 @@ type CallLog = {
   resolveCachedFragranceImage: Array<[string, string]>;
   resolveProcessedFragranceImage: Array<Record<string, unknown>>;
   usableImageUrlForResponse: Array<string | undefined>;
+  backfillUserFragranceImages: Array<{ brand: string; name: string; image: unknown }>;
   findDatasetFragrance: Array<[string, string]>;
   reportNonFatalError: Array<{ area: string; error: unknown; context?: Record<string, unknown> }>;
   parseFragrance: number;
@@ -50,6 +51,7 @@ function makeDeps(over: Partial<ScentEngineDeps> = {}): { deps: ScentEngineDeps;
     resolveCachedFragranceImage: [],
     resolveProcessedFragranceImage: [],
     usableImageUrlForResponse: [],
+    backfillUserFragranceImages: [],
     findDatasetFragrance: [],
     reportNonFatalError: [],
     parseFragrance: 0,
@@ -145,6 +147,14 @@ function makeDeps(over: Partial<ScentEngineDeps> = {}): { deps: ScentEngineDeps;
     // Optional: only wired when a test supplies it, so the default deps leave
     // the hybrid server-side resolve disabled (mirrors production opt-in).
     resolveProfileViaEngine: over.resolveProfileViaEngine,
+    backfillUserFragranceImages: async (brand, name, image) => {
+      calls.backfillUserFragranceImages.push({ brand, name, image });
+      await over.backfillUserFragranceImages?.(brand, name, image);
+    },
+    // BE-3: forwarded so deferred-image retry tests can shrink the backoff and
+    // skip real timers. Defaults stay unset → legacy single-attempt behavior.
+    deferredImageRetryDelaysMs: over.deferredImageRetryDelaysMs,
+    sleep: over.sleep,
   };
 
   return { deps, calls };
@@ -644,6 +654,97 @@ test("deferred image resolution returns profile before background pipeline finis
 
   assert.equal(calls.saveCatalogEntry.length, 2);
   assert.equal(calls.saveCatalogEntry[1].profile.imageUrl, "https://cdn.example.com/background.webp");
+});
+
+test("deferred image resolution retries a transient first-pass miss and self-heals", async () => {
+  let imageAttempts = 0;
+  const { deps, calls } = makeDeps({
+    findDatasetFragrance: () => ({
+      name: "Sauvage",
+      brand: "Dior",
+      family: "Fresh Spicy",
+      notes: ["bergamot"],
+      description: "",
+    }),
+    // First background pass finds nothing (transient miss); the second succeeds.
+    resolveProcessedFragranceImage: async () => {
+      imageAttempts++;
+      if (imageAttempts < 2) return null;
+      return {
+        imageUrl: "https://cdn.example.com/recovered.webp",
+        storagePath: "images/processed/recovered.webp",
+        imageHash: "recovered",
+        storageProvider: "supabase",
+        sourceProvider: "serper",
+      };
+    },
+    // One retry, no real delay, no real timer.
+    deferredImageRetryDelaysMs: [0],
+    sleep: async () => {},
+  });
+
+  const result = await buildProfileWithDeps(deps, "Sauvage", "Dior", undefined, {
+    imageResolution: "deferred",
+  });
+  ok(result);
+  // The deferred save still returns imageless immediately.
+  assert.equal(result.imageUrl, undefined);
+
+  // Drain the fire-and-forget background retry loop.
+  for (let i = 0; i < 50 && calls.backfillUserFragranceImages.length === 0; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  // Re-queried Serper after the first empty pass.
+  assert.equal(calls.resolveProcessedFragranceImage.length, 2);
+  // Recovered image is persisted to the catalog AND backfilled into the user's
+  // still-imageless wardrobe rows (so the tile self-heals without a re-add).
+  assert.equal(calls.saveCatalogEntry.length, 2);
+  assert.equal(calls.saveCatalogEntry[1].profile.imageUrl, "https://cdn.example.com/recovered.webp");
+  assert.equal(calls.backfillUserFragranceImages.length, 1);
+  assert.equal(
+    (calls.backfillUserFragranceImages[0].image as { imageUrl?: string }).imageUrl,
+    "https://cdn.example.com/recovered.webp",
+  );
+});
+
+test("deferred image resolution stops retrying once an image is found", async () => {
+  let imageAttempts = 0;
+  const { deps, calls } = makeDeps({
+    findDatasetFragrance: () => ({
+      name: "Sauvage",
+      brand: "Dior",
+      family: "Fresh Spicy",
+      notes: ["bergamot"],
+      description: "",
+    }),
+    resolveProcessedFragranceImage: async () => {
+      imageAttempts++;
+      return {
+        imageUrl: "https://cdn.example.com/first.webp",
+        storagePath: "images/processed/first.webp",
+        imageHash: "first",
+        storageProvider: "supabase",
+        sourceProvider: "serper",
+      };
+    },
+    // Generous retry budget that must NOT be spent once the first pass succeeds.
+    deferredImageRetryDelaysMs: [0, 0, 0],
+    sleep: async () => {},
+  });
+
+  const result = await buildProfileWithDeps(deps, "Sauvage", "Dior", undefined, {
+    imageResolution: "deferred",
+  });
+  ok(result);
+
+  for (let i = 0; i < 50 && calls.backfillUserFragranceImages.length === 0; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  assert.equal(imageAttempts, 1, "must not retry after a successful first pass");
+  assert.equal(calls.saveCatalogEntry.length, 2);
+  assert.equal(calls.backfillUserFragranceImages.length, 1);
 });
 
 test("serverSideResolve hit: engine notes build a full profile instead of a pending card", async () => {
