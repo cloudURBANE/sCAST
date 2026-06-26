@@ -285,15 +285,34 @@ function resolveFirebaseStorageBucket(): string | undefined {
 }
 
 export function getImageObjectStorage(): ImageObjectStorage {
-  const firebaseBucket = resolveFirebaseStorageBucket();
-  if (firebaseBucket) return new FirebaseImageObjectStorage(firebaseBucket);
+  // 1. An explicit Firebase bucket is an unambiguous operator choice — highest
+  //    priority.
+  const explicitFirebaseBucket = process.env.FIREBASE_STORAGE_BUCKET?.trim();
+  if (explicitFirebaseBucket) return new FirebaseImageObjectStorage(explicitFirebaseBucket);
 
+  // 2. Explicit Supabase Storage config. This MUST be checked before the derived
+  //    Firebase bucket below. Production stores processed images in Supabase
+  //    while ALSO setting FIREBASE_PROJECT_ID/CLIENT_EMAIL/PRIVATE_KEY for the
+  //    Firestore `bg_cache` (firebaseCache.ts). If we derived a Firebase Storage
+  //    bucket from those cache credentials first, every upload would be routed to
+  //    a `<projectId>.firebasestorage.app` bucket that production never
+  //    provisioned — uploads fail (or land where the stored URL can't serve) and
+  //    every tile renders "No image". Honoring an explicit Supabase store here
+  //    keeps the documented contract (IMAGE_STORAGE_CACHE_PLAN.md): Firebase only
+  //    wins when its bucket is explicitly set.
   const supabaseUrl = process.env.SUPABASE_URL?.trim();
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
   const supabaseBucket = process.env.SUPABASE_IMAGE_BUCKET?.trim();
   if (supabaseUrl && supabaseKey && supabaseBucket) {
     return new SupabaseImageObjectStorage(supabaseUrl, supabaseKey, supabaseBucket);
   }
+
+  // 3. Derived Firebase bucket: Firebase credentials are present but the bucket
+  //    var was forgotten AND no Supabase store is configured. Rescue the deploy
+  //    by guessing the conventional default bucket instead of throwing (the
+  //    original "every fragrance silently renders No image" failure mode).
+  const derivedFirebaseBucket = resolveFirebaseStorageBucket();
+  if (derivedFirebaseBucket) return new FirebaseImageObjectStorage(derivedFirebaseBucket);
 
   if (isLocalImageObjectUrlPersistable()) {
     return new LocalImageObjectStorage();
