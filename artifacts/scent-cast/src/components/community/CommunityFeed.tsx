@@ -165,7 +165,7 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
     return (
       <div
         role="alert"
-        className="mx-auto w-full max-w-[940px] rounded-[calc(var(--radius-scent)+2px)] border border-red-500/20 bg-red-500/[0.055] p-6 text-center"
+        className="mx-auto w-full max-w-[940px] rounded-[calc(var(--radius-scent)+2px)] border border-red-500/20 bg-red-500/[0.055] p-6 text-center shadow-[inset_0_1px_0_rgba(255,236,183,0.04)]"
       >
         <p className="font-serif text-xl italic text-red-100">The feed could not load.</p>
         <p className="mt-2 text-sm font-medium text-red-100/85">

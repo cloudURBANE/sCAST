@@ -346,7 +346,7 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
         </div>
       </main>
 
-      <footer className="relative z-10 border-t border-scent-accent/10 py-16 px-8 mt-24">
+      <footer className="relative z-10 border-t border-scent-accent/10 py-16 px-8 mt-12">
         <div className="max-w-[1400px] mx-auto text-center space-y-4">
           <div className="flex items-center justify-center opacity-30">
             <img

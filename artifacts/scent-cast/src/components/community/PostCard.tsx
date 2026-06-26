@@ -406,7 +406,7 @@ const CompactQuestionPostCard: React.FC<PostCardProps> = ({
           {post.tags.slice(0, 4).map((tag) => (
             <span
               key={tag}
-              className="max-w-full rounded-full border border-scent-accent/14 bg-black/48 px-2.5 py-1 scent-type-chip text-[10px] text-scent-text-muted"
+              className="max-w-full rounded-full border border-scent-accent/16 bg-black/48 px-2.5 py-1 scent-type-chip text-[10px] text-scent-text-muted"
             >
               #{tag}
             </span>
@@ -830,7 +830,7 @@ const StandardPostCard: React.FC<PostCardProps> = ({
             </p>
           </div>
         </div>
-        <span className="inline-flex min-h-10 w-fit shrink-0 items-center justify-center gap-2.5 rounded-full bg-scent-accent/[0.075] px-4 py-2 scent-type-chip text-scent-accent shadow-[inset_0_0_0_1px_rgba(212,175,55,0.20)]">
+        <span className="inline-flex min-h-10 w-fit shrink-0 items-center justify-center gap-2.5 rounded-full bg-scent-accent/[0.075] px-4 py-2 scent-type-chip text-scent-accent shadow-[inset_0_0_0_1px_rgba(212,175,55,0.18)]">
           <Icon size={17} strokeWidth={1.75} aria-hidden="true" />
           {detail.label}
         </span>

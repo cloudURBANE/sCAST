@@ -123,9 +123,7 @@ export const ReactionBar: React.FC<ReactionBarProps> = ({
       {errorNotice ? (
         <p
           role="alert"
-          className={`text-[12px] leading-snug text-red-200 font-sans ${
-            compact ? 'w-full text-center' : 'w-full text-center'
-          }`}
+          className="w-full text-center text-[12px] leading-snug text-red-100 font-sans"
         >
           {errorNotice}
         </p>
