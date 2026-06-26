@@ -147,6 +147,9 @@ function makeDeps(over: Partial<ScentEngineDeps> = {}): { deps: ScentEngineDeps;
     // Optional: only wired when a test supplies it, so the default deps leave
     // the hybrid server-side resolve disabled (mirrors production opt-in).
     resolveProfileViaEngine: over.resolveProfileViaEngine,
+    // A2-GAP1/3: optional coverage assessment. Off by default so legacy tests
+    // see the unflagged profile; opted into by the coverage tests below.
+    assessVectorCoverage: over.assessVectorCoverage,
     backfillUserFragranceImages: async (brand, name, image) => {
       calls.backfillUserFragranceImages.push({ brand, name, image });
       await over.backfillUserFragranceImages?.(brand, name, image);
@@ -856,6 +859,99 @@ test("serverSideResolve rejection is reported and remains non-fatal (falls throu
     brand: "Yves Saint Laurent",
     name: "Bleu Electrique",
   });
+});
+
+// --- A2-GAP1/3: vector provenance on the profile -----------------------------
+
+test("assessVectorCoverage dep: match_ratio + vector_confidence are attached to the profile", async () => {
+  const { deps } = makeDeps({
+    findDatasetFragrance: () => ({
+      name: "Sauvage",
+      brand: "Dior",
+      family: "Fresh Spicy",
+      notes: ["bergamot", "pepper", "ambroxan", "mystery"],
+      description: "",
+    }),
+    assessVectorCoverage: () => ({ matched_notes: 3, total_notes: 4, match_ratio: 0.75 }),
+  });
+
+  const result = await buildProfileWithDeps(deps, "Sauvage", "Dior");
+  ok(result);
+
+  assert.equal(result.match_ratio, 0.75);
+  assert.equal(result.vector_confidence, "ok");
+  assert.equal(result.metrics_source, "formula");
+});
+
+test("no assessVectorCoverage dep: profile omits provenance (legacy back-compat)", async () => {
+  const { deps } = makeDeps({
+    findDatasetFragrance: () => ({
+      name: "Sauvage",
+      brand: "Dior",
+      family: "Fresh Spicy",
+      notes: ["bergamot"],
+      description: "",
+    }),
+  });
+
+  const result = await buildProfileWithDeps(deps, "Sauvage", "Dior");
+  ok(result);
+
+  assert.equal(result.match_ratio, undefined);
+  assert.equal(result.vector_confidence, undefined);
+});
+
+// --- A2-GAP5: prefer engine-supplied metrics when coverage is complete --------
+
+test("engine metrics: complete derived_metrics override the keyword formula", async () => {
+  const { deps } = makeDeps({
+    calculatePerformance: () => ({ sillage: 3, longevity: 4 }), // formula would say this
+    findDatasetFragrance: () => undefined,
+  });
+
+  const result = await buildProfileWithDeps(
+    deps,
+    "Sauvage",
+    "Dior",
+    {
+      notes: ["bergamot", "pepper", "ambroxan"],
+      family: "Fresh Spicy",
+      metrics: { sillage: 8, longevity: 9, projection: 7 },
+      metricsComplete: true,
+    },
+    { preferEngineData: true },
+  );
+  ok(result);
+
+  assert.equal(result.performance.sillage, 8);
+  assert.equal(result.performance.longevity, 9);
+  assert.equal(result.performance.projection, 7);
+  assert.equal(result.metrics_source, "engine");
+});
+
+test("engine metrics: incomplete coverage falls back to the keyword formula", async () => {
+  const { deps } = makeDeps({
+    calculatePerformance: () => ({ sillage: 3, longevity: 4 }),
+    findDatasetFragrance: () => undefined,
+  });
+
+  const result = await buildProfileWithDeps(
+    deps,
+    "Sauvage",
+    "Dior",
+    {
+      notes: ["bergamot", "pepper", "ambroxan"],
+      family: "Fresh Spicy",
+      metrics: { sillage: 8, longevity: 9 },
+      metricsComplete: false, // source_coverage was NOT complete
+    },
+    { preferEngineData: true },
+  );
+  ok(result);
+
+  assert.equal(result.performance.sillage, 3);
+  assert.equal(result.performance.longevity, 4);
+  assert.equal(result.metrics_source, "formula");
 });
 
 test("identity normalization: uses resolveFragranceIdentity output for catalog lookup and search query", async () => {

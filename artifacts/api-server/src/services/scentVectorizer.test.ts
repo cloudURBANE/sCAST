@@ -4,6 +4,8 @@ import {
   calculateContext,
   calculatePerformance,
   vectorize,
+  assessVectorCoverage,
+  deriveVectorConfidence,
   type ScentVector,
 } from "./scentVectorizer.ts";
 import type { ParsedFragrance } from "./scentParser.ts";
@@ -144,7 +146,100 @@ test("vectorize: a single occurrence of a rule word adds the weight once, not pe
   assert.equal(single.freshness, triple.freshness);
 });
 
+// --- A2-GAP2: whole-token matching -------------------------------------------
+
+test("vectorize: whole-token matching no longer leaks across note boundaries", () => {
+  // "lukewarm" must NOT trigger the warmth "warm" rule; "seasonal" must NOT
+  // trigger the freshness "sea" rule (the old substring scan did both).
+  const v = vectorize(makeParsed({ notes: ["lukewarm", "seasonal"] }));
+  assert.equal(v.warmth, 0);
+  assert.equal(v.freshness, 0);
+});
+
+test("vectorize: expanded dictionary recognizes lavender/coconut/tea", () => {
+  // GAP1: these mapped to nothing before. Each is a single flat note → weight →
+  // +2.5 floor → a non-zero axis.
+  assert.ok(vectorize(makeParsed({ notes: ["lavender"] })).freshness > 0);
+  assert.ok(vectorize(makeParsed({ notes: ["coconut"] })).sweetness > 0);
+  assert.ok(vectorize(makeParsed({ notes: ["green tea"] })).freshness > 0);
+});
+
+// --- A2-GAP4: accord pass ----------------------------------------------------
+
+test("vectorize: parsed accords nudge their axes at a low weight", () => {
+  // No notes/pyramid/description — only accords. "gourmand"→sweetness,
+  // "leathery"→warmth, "chypre"→woodiness+freshness. Each adds 0.8 → +2.5 floor.
+  const v = vectorize(makeParsed({ accords: ["gourmand", "leathery", "chypre"] }));
+  assert.ok(v.sweetness > 0, "gourmand → sweetness");
+  assert.ok(v.warmth > 0, "leathery → warmth");
+  assert.ok(v.woodiness > 0, "chypre → woodiness");
+  assert.ok(v.freshness > 0, "chypre → freshness");
+  // An unmapped axis stays zero.
+  assert.equal(v.musk, 0);
+});
+
+test("vectorize: empty accords list leaves the vector untouched (back-compat)", () => {
+  assert.deepEqual(vectorize(makeParsed({ notes: ["bergamot"], accords: [] })), {
+    freshness: 5,
+    sweetness: 0,
+    woodiness: 0,
+    spice: 0,
+    warmth: 0,
+    musk: 0,
+  });
+});
+
+// --- A2-GAP1/3: coverage + confidence ----------------------------------------
+
+test("assessVectorCoverage: ratio of recognized notes to total notes", () => {
+  // 2 recognized (bergamot, vanilla) of 3 notes; "zorblax" is unknown.
+  const cov = assessVectorCoverage(makeParsed({ notes: ["bergamot", "vanilla", "zorblax"] }));
+  assert.equal(cov.total_notes, 3);
+  assert.equal(cov.matched_notes, 2);
+  assert.ok(Math.abs(cov.match_ratio - 2 / 3) < 1e-9);
+});
+
+test("assessVectorCoverage: no notes yields zero coverage", () => {
+  assert.deepEqual(assessVectorCoverage(makeParsed()), {
+    matched_notes: 0,
+    total_notes: 0,
+    match_ratio: 0,
+  });
+});
+
+test("assessVectorCoverage: prefers pyramid notes when present", () => {
+  const cov = assessVectorCoverage(makeParsed({
+    notes: ["ignored-flat"],
+    pyramidNotes: { top: ["bergamot"], heart: ["jasmine"], base: ["oud"] },
+  }));
+  assert.equal(cov.total_notes, 3);
+  assert.equal(cov.matched_notes, 3);
+});
+
+test("deriveVectorConfidence: none/low/ok bands", () => {
+  assert.equal(deriveVectorConfidence({ matched_notes: 0, total_notes: 4, match_ratio: 0 }), "none");
+  assert.equal(deriveVectorConfidence({ matched_notes: 2, total_notes: 8, match_ratio: 0.25 }), "low");
+  assert.equal(deriveVectorConfidence({ matched_notes: 5, total_notes: 6, match_ratio: 0.83 }), "ok");
+});
+
 // --- calculatePerformance ----------------------------------------------------
+
+test("calculatePerformance: note-less vector is de-rated when coverage proves no match", () => {
+  const zero: ScentVector = { freshness: 0, sweetness: 0, woodiness: 0, spice: 0, warmth: 0, musk: 0 };
+  // Without coverage: the legacy { sillage: 3, longevity: 4 } baseline.
+  assert.deepEqual(
+    calculatePerformance(zero, "Fresh", "Eau de Toilette"),
+    { sillage: 3, longevity: 4 },
+  );
+  // With zero-match coverage: de-rated one band so an empty profile cannot
+  // present confident performance.
+  assert.deepEqual(
+    calculatePerformance(zero, "Fresh", "Eau de Toilette", { matched_notes: 0, total_notes: 0, match_ratio: 0 }),
+    { sillage: 2, longevity: 3 },
+  );
+});
+
+
 
 const SAUVAGE_LIKE_VECTOR: ScentVector = {
   freshness: 5,

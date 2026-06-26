@@ -1,6 +1,6 @@
 import type { FragranceData } from "./datasetLoader";
 import { parseFragrance } from "./scentParser";
-import { vectorize, calculatePerformance, calculateContext } from "./scentVectorizer";
+import { vectorize, calculatePerformance, calculateContext, assessVectorCoverage } from "./scentVectorizer";
 import { getCatalogEntry, saveCatalogEntry, searchCatalog } from "./catalogService";
 import { backfillUserFragranceImages } from "./userImageBackfill";
 import { resolveCachedFragranceImage, resolveProcessedFragranceImage } from "./imagePipeline";
@@ -35,6 +35,7 @@ const DEPS: ScentEngineDeps = {
   vectorize,
   calculatePerformance,
   calculateContext,
+  assessVectorCoverage,
   resolveFragranceIdentity,
   findDatasetFragrance,
   getCatalogEntry,
