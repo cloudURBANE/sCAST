@@ -398,6 +398,29 @@ function detailRefreshPayloadFor(item: Fragrance): FragranceDetailRequestPayload
 
 const RAIN_CONDITION_SIGNALS = ['rain', 'drizzle', 'storm'];
 
+// Calendar season from the current month (Northern-Hemisphere mapping). The
+// engine accepts a `season` hint but no caller populated it, so its season-aware
+// explanation branch was unreachable. Month-based is a deliberate minimal
+// derivation; a hemisphere flip would need the user's latitude, which is not
+// available at this layer.
+const deriveSeason = (date = new Date()): ScentWeatherEngineInput['weather']['season'] => {
+  const month = date.getMonth(); // 0 = Jan
+  if (month === 11 || month <= 1) return 'winter';
+  if (month <= 4) return 'spring';
+  if (month <= 7) return 'summer';
+  return 'fall';
+};
+
+// Local part of day from the wall clock, so the engine can refine the wear
+// window against the real time instead of inferring day/night from the setting.
+const deriveTimeOfDay = (date = new Date()): ScentWeatherEngineInput['weather']['time_of_day'] => {
+  const hour = date.getHours();
+  if (hour >= 5 && hour <= 11) return 'morning';
+  if (hour >= 12 && hour <= 16) return 'afternoon';
+  if (hour >= 17 && hour <= 20) return 'evening';
+  return 'night';
+};
+
 // Resolve a destination to an engine setting type AND report whether it was
 // actually recognized. An unrecognized destination must NOT silently become
 // `indoor` (the most restrictive rule set) — that flips the whole
@@ -744,6 +767,10 @@ const buildEngineInput = (
     hasFiniteWeatherValue(weather, ['temperature_f', 'temperature', 'temp']) &&
     hasFiniteWeatherValue(weather, ['humidity_percent', 'humidity']);
   const setting = resolveEngineSetting(intent.destination);
+  const uvIndex =
+    weather && typeof weather.uv_index === 'number' && Number.isFinite(weather.uv_index)
+      ? weather.uv_index
+      : null;
 
   return {
     weather: {
@@ -751,6 +778,9 @@ const buildEngineInput = (
       humidity_percent: getWeatherNumber(weather, ['humidity_percent', 'humidity'], 50),
       wind_speed_mph: getWeatherNumber(weather, ['wind_speed_mph', 'windSpeed'], 0),
       is_raining: RAIN_CONDITION_SIGNALS.some((signal) => normalizedCondition.includes(signal)),
+      season: deriveSeason(),
+      uv_index: uvIndex,
+      time_of_day: deriveTimeOfDay(),
       condition,
       data_complete: weatherDataComplete,
     },
@@ -768,6 +798,10 @@ const buildEngineInput = (
       longevity: getFragranceLongevity(item),
       sillage: getFragranceSillage(item),
     },
+    // How much real structured data backs this fragrance (share of the four
+    // metric systems present). Caps engine confidence so thin/unenriched
+    // profiles can't surface as "high" just because weather+setting are known.
+    dataConfidence: buildOutlookCandidate(item).confidence,
   };
 };
 
@@ -1070,6 +1104,9 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [activeRecommendation, setActiveRecommendation] = useState<Fragrance | null>(null);
   const [activeEngineRecommendation, setActiveEngineRecommendation] = useState<ScentWeatherRecommendation | null>(null);
   const [recommendationReason, setRecommendationReason] = useState<string>('');
+  // The last intent the user submitted, so a weather refresh can re-score the
+  // surfaced pick without re-prompting. Null when no pick is displayed.
+  const lastIntentRef = useRef<{ destination: DestinationType; energy: EnergyState } | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [wardrobeRevertSnapshot, setWardrobeRevertSnapshot] = useState<Fragrance[] | null>(null);
   const [wardrobeFixBusy, setWardrobeFixBusy] = useState(false);
@@ -2295,12 +2332,30 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const winner = calculateEngineAlignment(items, intent, weather);
     if (!winner) return;
 
+    lastIntentRef.current = intent;
     setActiveEngineRecommendation(winner.recommendation);
     setRecommendationReason(winner.recommendation.explanation);
     setActiveRecommendation(winner.item);
   }, [items, weather]);
 
+  // Keep the surfaced pick honest when conditions move. The recommendation is
+  // computed once on intent submission; without this, a later weather refresh
+  // (temperature/humidity/rain/wind change) would leave a stale pick and stale
+  // spray/projection/window advice on screen that can contradict current air.
+  // Re-score against the same intent whenever weather (or the wardrobe) changes
+  // while a pick is displayed. Cleared on close so it no-ops otherwise.
+  useEffect(() => {
+    const intent = lastIntentRef.current;
+    if (!intent || items.length === 0) return;
+    const winner = calculateEngineAlignment(items, intent, weather);
+    if (!winner) return;
+    setActiveEngineRecommendation(winner.recommendation);
+    setRecommendationReason(winner.recommendation.explanation);
+    setActiveRecommendation(winner.item);
+  }, [weather, items]);
+
   const closeRecommendationOverlay = useCallback(() => {
+    lastIntentRef.current = null;
     setActiveRecommendation(null);
     setActiveEngineRecommendation(null);
   }, []);
