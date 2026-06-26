@@ -239,6 +239,43 @@ const DEFERRAL_PATTERN = new RegExp(
 );
 
 /**
+ * A capability-denial refusal: the agent claims it CANNOT access / see / read /
+ * retrieve the user's wardrobe (or vault / collection / fragrances) — a false
+ * statement, because `beam_get_wardrobe` returns exactly that. This is distinct
+ * from a legitimate "your wardrobe is empty": an empty vault is a real, valid
+ * result the agent SHOULD report.
+ *
+ * The free-tier orchestration model occasionally emits this from memory instead
+ * of calling the wardrobe tool. The loop uses this detector to force a bounded
+ * retrieval re-prompt so such a refusal is never shipped to the user. It is the
+ * data-access analogue of `DEFERRAL_PATTERN` (which only covers "can't *pick*"),
+ * and unlike `refusedToCommit` it is NOT gated on grounded picks — the whole
+ * point is that it fires when nothing was retrieved.
+ */
+const DATA_ACCESS_REFUSAL_PATTERN = new RegExp(
+  [
+    // "(I) can't / cannot / unable to / won't be able to <access-verb> … wardrobe"
+    String.raw`\b(?:can'?t|cannot|can\s?not|unable\s+to|not\s+able\s+to|won'?t\s+be\s+able\s+to)\s+(?:\w+\s+){0,4}?(?:access|see|view|read|retriev\w*|reach|pull\s+up|look\s+(?:up|at|into)|get\s+(?:to|at)|view|check)\b[^.!?]{0,40}?\b(?:wardrobe|vault|collection|fragrances?|bottles?)\b`,
+    // "I don't have access to / no access to / without access to … wardrobe"
+    String.raw`\b(?:don'?t\s+have\s+access|do\s+not\s+have\s+access|no\s+access|without\s+access|don'?t\s+have\s+(?:the\s+)?ability\s+to\s+(?:access|see|view|read))\b[^.!?]{0,40}?\b(?:wardrobe|vault|collection|fragrances?|bottles?)\b`,
+    // "I can't see / tell / access what you own / have"
+    String.raw`\b(?:can'?t|cannot|unable\s+to)\s+(?:see|tell|view|access)\b[^.!?]{0,40}?\bwhat\b[^.!?]{0,30}?\byou\s+(?:own|have)\b`,
+  ].join("|"),
+  "i",
+);
+
+/**
+ * True when `text` claims the agent cannot access the user's wardrobe/vault — a
+ * capability denial the loop must never ship (the wardrobe IS retrievable). An
+ * honest empty-vault statement ("your wardrobe is empty", "you haven't added any
+ * fragrances yet") does not match, so reporting an empty vault stays allowed.
+ */
+export function isDataAccessRefusal(text: string): boolean {
+  if (!text) return false;
+  return DATA_ACCESS_REFUSAL_PATTERN.test(text);
+}
+
+/**
  * Recommendation Commit Policy backstop. Once the user is owed a concrete pick
  * (they delegated the choice, stated a plain recommendation intent, or a travel
  * kit has enough context to fulfill), the agent must commit — never lead with a

@@ -4,10 +4,37 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { repairInstructionFor, runAnswerQualityGates } from "./answerQualityGates.ts";
+import { isDataAccessRefusal, repairInstructionFor, runAnswerQualityGates } from "./answerQualityGates.ts";
 
 const NO_EVIDENCE = { hadExternalEvidence: false };
 const WITH_EVIDENCE = { hadExternalEvidence: true };
+
+test("isDataAccessRefusal flags a false 'can't access your wardrobe' refusal", () => {
+  for (const refusal of [
+    "I'm sorry, but I can't access your wardrobe right now.",
+    "Unfortunately I cannot see your vault.",
+    "I don't have access to your collection.",
+    "I'm unable to retrieve your fragrances at the moment.",
+    "I can't pull up the bottles you own.",
+    "I have no access to your wardrobe data.",
+    "I can't see what you own.",
+  ]) {
+    assert.equal(isDataAccessRefusal(refusal), true, refusal);
+  }
+});
+
+test("isDataAccessRefusal does NOT flag an honest empty-vault or a normal answer", () => {
+  for (const ok of [
+    "Your wardrobe is empty — add a few fragrances from search and I'll tailor a pick.",
+    "You haven't added any fragrances to your vault yet.",
+    "I can't recommend a dense gourmand for this heat, so reach for Aventus.",
+    "I can't pick just yet — what occasion is this for?",
+    "Looking at your wardrobe, Aventus is the standout for today.",
+    "",
+  ]) {
+    assert.equal(isDataAccessRefusal(ok), false, ok);
+  }
+});
 
 test("a normal grounded recommendation passes", () => {
   const answer =
