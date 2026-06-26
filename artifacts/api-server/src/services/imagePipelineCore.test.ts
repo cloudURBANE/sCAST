@@ -145,6 +145,69 @@ test("image object storage derives the Firebase bucket from project id when only
   }
 });
 
+test("explicit Supabase storage wins over a derived Firebase bucket", async () => {
+  const { getImageObjectStorage } = await import("./imageObjectStorage.ts");
+  const previous = {
+    firebaseBucket: process.env.FIREBASE_STORAGE_BUCKET,
+    firebaseProject: process.env.FIREBASE_PROJECT_ID,
+    firebaseEmail: process.env.FIREBASE_CLIENT_EMAIL,
+    firebaseKey: process.env.FIREBASE_PRIVATE_KEY,
+    supabaseUrl: process.env.SUPABASE_URL,
+    supabaseKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
+    supabaseBucket: process.env.SUPABASE_IMAGE_BUCKET,
+  };
+
+  try {
+    // Production's real shape: Firebase credentials are set for the Firestore
+    // bg_cache, and Supabase is the configured image store. With FIREBASE_STORAGE_BUCKET
+    // unset, the derived Firebase bucket must NOT hijack image storage away from
+    // the explicitly-configured Supabase store.
+    delete process.env.FIREBASE_STORAGE_BUCKET;
+    process.env.FIREBASE_PROJECT_ID = "scentcast-demo";
+    process.env.FIREBASE_CLIENT_EMAIL = "svc@scentcast-demo.iam.gserviceaccount.com";
+    process.env.FIREBASE_PRIVATE_KEY = "-----BEGIN PRIVATE KEY-----\\nfake\\n-----END PRIVATE KEY-----";
+    process.env.SUPABASE_URL = "https://demo.supabase.co";
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role-key";
+    process.env.SUPABASE_IMAGE_BUCKET = "images";
+
+    const storage = getImageObjectStorage() as { provider?: string };
+    assert.equal(storage.provider, "supabase");
+  } finally {
+    restoreEnvValue("FIREBASE_STORAGE_BUCKET", previous.firebaseBucket);
+    restoreEnvValue("FIREBASE_PROJECT_ID", previous.firebaseProject);
+    restoreEnvValue("FIREBASE_CLIENT_EMAIL", previous.firebaseEmail);
+    restoreEnvValue("FIREBASE_PRIVATE_KEY", previous.firebaseKey);
+    restoreEnvValue("SUPABASE_URL", previous.supabaseUrl);
+    restoreEnvValue("SUPABASE_SERVICE_ROLE_KEY", previous.supabaseKey);
+    restoreEnvValue("SUPABASE_IMAGE_BUCKET", previous.supabaseBucket);
+  }
+});
+
+test("an explicit Firebase bucket still wins over Supabase", async () => {
+  const { getImageObjectStorage } = await import("./imageObjectStorage.ts");
+  const previous = {
+    firebaseBucket: process.env.FIREBASE_STORAGE_BUCKET,
+    supabaseUrl: process.env.SUPABASE_URL,
+    supabaseKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
+    supabaseBucket: process.env.SUPABASE_IMAGE_BUCKET,
+  };
+
+  try {
+    process.env.FIREBASE_STORAGE_BUCKET = "scentcast-demo.appspot.com";
+    process.env.SUPABASE_URL = "https://demo.supabase.co";
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role-key";
+    process.env.SUPABASE_IMAGE_BUCKET = "images";
+
+    const storage = getImageObjectStorage() as { provider?: string };
+    assert.equal(storage.provider, "firebase");
+  } finally {
+    restoreEnvValue("FIREBASE_STORAGE_BUCKET", previous.firebaseBucket);
+    restoreEnvValue("SUPABASE_URL", previous.supabaseUrl);
+    restoreEnvValue("SUPABASE_SERVICE_ROLE_KEY", previous.supabaseKey);
+    restoreEnvValue("SUPABASE_IMAGE_BUCKET", previous.supabaseBucket);
+  }
+});
+
 test("local image object diagnostics do not erase saved response references", async () => {
   const {
     imageReferenceDiagnostic,
