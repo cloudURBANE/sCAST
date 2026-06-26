@@ -65,7 +65,7 @@ test("premiumOrchestrationModel never returns the synthesis (strong) slug", () =
   try {
     // Premium orchestration must stay on its own cheap tier even when the strong
     // synthesis slug is overridden to an expensive Anthropic model.
-    assert.equal(premiumOrchestrationModel(), "google/gemma-4-31b-it:free");
+    assert.equal(premiumOrchestrationModel(), "tencent/hy3-preview:free");
   } finally {
     if (prevPremium === undefined) delete process.env.BEAM_AGENT_MODEL_PREMIUM;
     else process.env.BEAM_AGENT_MODEL_PREMIUM = prevPremium;

@@ -26,14 +26,19 @@ const OPENROUTER_TIMEOUT_MS = 45_000;
 
 /**
  * Default hot-path (concierge) tier, as an OpenRouter slug. The default is the
- * free Gemma concierge model — the cheap lane for normal fragrance chat. Override
- * per-deployment with BEAM_AGENT_MODEL. Confirm the exact slug in the OpenRouter
- * dashboard — model ids are provider-namespaced (`vendor/model`), drift over time
- * (recheck before production, brief §15), and are not interchangeable with the
- * Anthropic-direct ids used by `claudeProvider.ts`.
+ * free hy3-preview concierge model — the cheap lane for normal fragrance chat.
+ * Deliberately OFF the OpenAI "harmony"/gpt-oss family: those slugs emit tool
+ * calls as control markup in the plain `content` channel, which the tool-free
+ * synthesis turn scrubs to empty → the "I couldn't lock in a confident match"
+ * stall (`EMPTY_ANSWER_FALLBACK`). hy3 routes tools structurally, so the loop
+ * gets real `tool_use` blocks and a real answer. Override per-deployment with
+ * BEAM_AGENT_MODEL. Confirm the exact slug in the OpenRouter dashboard — model
+ * ids are provider-namespaced (`vendor/model`), drift over time (recheck before
+ * production, brief §15), and are not interchangeable with the Anthropic-direct
+ * ids used by `claudeProvider.ts`.
  */
 export function defaultOpenRouterModel(): string {
-  return process.env.BEAM_AGENT_MODEL?.trim() || "google/gemma-4-31b-it:free";
+  return process.env.BEAM_AGENT_MODEL?.trim() || "tencent/hy3-preview:free";
 }
 
 /**
@@ -55,16 +60,16 @@ export function strongOpenRouterModel(): string {
 
 /**
  * Premium *orchestration* tier: the model that drives the tool-calling loop on
- * the premium lane. Defaults to the same free Gemma concierge model as the
- * default lane — a cheap tool-router, NOT the synthesis closer. Pinning it to its
- * own env (`BEAM_AGENT_MODEL_PREMIUM`) is what prevents the premium lane from
- * inheriting a Sonnet `BEAM_AGENT_MODEL_STRONG` override for every orchestration
- * turn. The closing turn still escalates to the synthesis tier above, so premium
- * missions keep the quality where it counts (the final recommendation) without
- * paying closer prices for tool plumbing.
+ * the premium lane. Defaults to the same free hy3-preview concierge model as the
+ * default lane — a cheap, harmony-free tool-router, NOT the synthesis closer.
+ * Pinning it to its own env (`BEAM_AGENT_MODEL_PREMIUM`) is what prevents the
+ * premium lane from inheriting a Sonnet `BEAM_AGENT_MODEL_STRONG` override for
+ * every orchestration turn. The closing turn still escalates to the synthesis
+ * tier above, so premium missions keep the quality where it counts (the final
+ * recommendation) without paying closer prices for tool plumbing.
  */
 export function premiumOrchestrationModel(): string {
-  return process.env.BEAM_AGENT_MODEL_PREMIUM?.trim() || "google/gemma-4-31b-it:free";
+  return process.env.BEAM_AGENT_MODEL_PREMIUM?.trim() || "tencent/hy3-preview:free";
 }
 
 /**
