@@ -40,7 +40,7 @@ async function getOpenMeteoWeather(coords: Coordinates): Promise<WeatherResponse
   const apiParams: Record<string, unknown> = {
     latitude: coords.lat,
     longitude: coords.lon,
-    current: "temperature_2m,relative_humidity_2m,weather_code",
+    current: "temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m",
     hourly: "uv_index",
     forecast_hours: 1,
     daily: [
@@ -50,8 +50,12 @@ async function getOpenMeteoWeather(coords: Coordinates): Promise<WeatherResponse
       "temperature_2m_mean",
       "relative_humidity_2m_mean",
       "uv_index_max",
+      "wind_speed_10m_max",
     ].join(","),
     temperature_unit: "fahrenheit",
+    // Request wind directly in mph so it matches the engine's wind_speed_mph
+    // contract (and the °F temperature unit) without any client-side conversion.
+    wind_speed_unit: "mph",
     timezone: "auto",
     forecast_days: FORECAST_DAYS,
   };
@@ -158,6 +162,8 @@ async function getOpenWeatherMapWeather(coords: Coordinates, label: string | nul
       condition: typeof weather.description === "string" ? weather.description : "partly cloudy",
       icon: typeof weather.icon === "string" ? weather.icon : "02d",
       uv_index: finite(current?.uvi),
+      // units=imperial → wind_speed is already mph.
+      wind_speed_mph: finite(current?.wind_speed),
       location: label || timezoneCity(response.data?.timezone),
       forecast: mapOwmDailyForecast(response.data?.daily),
       isLive: true,
@@ -187,6 +193,8 @@ async function getOpenWeatherMapWeather(coords: Coordinates, label: string | nul
         condition: typeof weather.description === "string" ? weather.description : "partly cloudy",
         icon: typeof weather.icon === "string" ? weather.icon : "02d",
         uv_index: null,
+        // units=imperial → wind.speed is already mph.
+        wind_speed_mph: finite(res.data?.wind?.speed),
         location: label || (typeof res.data?.name === "string" ? res.data.name : "Current Location"),
         forecast: [] as WeatherForecastDay[],
         isLive: true,

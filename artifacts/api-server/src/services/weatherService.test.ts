@@ -22,6 +22,7 @@ test("normalizes Open-Meteo current conditions and seven-day columns", () => {
       temperature_2m: 58.1,
       relative_humidity_2m: 80,
       weather_code: 0,
+      wind_speed_10m: 9,
     },
     hourly: { uv_index: [0] },
     daily: {
@@ -32,6 +33,7 @@ test("normalizes Open-Meteo current conditions and seven-day columns", () => {
       temperature_2m_mean: [64.4],
       relative_humidity_2m_mean: [66],
       uv_index_max: [7.65],
+      wind_speed_10m_max: [12.3],
     },
   });
 
@@ -41,6 +43,7 @@ test("normalizes Open-Meteo current conditions and seven-day columns", () => {
     condition: "clear sky",
     icon: "01d",
     uv_index: 0,
+    wind_speed_mph: 9,
     location: "Chicago",
     forecast: [{
       date: "2026-06-19T12:00:00",
@@ -51,6 +54,7 @@ test("normalizes Open-Meteo current conditions and seven-day columns", () => {
       condition: "rain",
       icon: "10d",
       uv_index: 7.65,
+      wind_speed_mph: 12.3,
     }],
     isLive: true,
     provider: "open-meteo",
@@ -88,6 +92,7 @@ test("maps OpenWeatherMap daily forecast into the SPA shape", () => {
       temp: { max: 88.2, min: 70.1, day: 80.4 },
       humidity: 55,
       uvi: 8.1,
+      wind_speed: 7.5,
       weather: [{ description: "scattered clouds", icon: "03d" }],
     },
   ]);
@@ -97,5 +102,6 @@ test("maps OpenWeatherMap daily forecast into the SPA shape", () => {
   assert.equal(forecast[0].condition, "scattered clouds");
   assert.equal(forecast[0].icon, "03d");
   assert.equal(forecast[0].uv_index, 8.1);
+  assert.equal(forecast[0].wind_speed_mph, 7.5);
   assert.match(forecast[0].date, /T12:00:00$/);
 });

@@ -12,6 +12,7 @@ type OpenMeteoCurrent = {
   temperature_2m?: unknown;
   relative_humidity_2m?: unknown;
   weather_code?: unknown;
+  wind_speed_10m?: unknown;
 };
 
 type OpenMeteoHourly = {
@@ -26,6 +27,7 @@ type OpenMeteoDaily = {
   temperature_2m_mean?: unknown;
   relative_humidity_2m_mean?: unknown;
   uv_index_max?: unknown;
+  wind_speed_10m_max?: unknown;
 };
 
 export type OpenMeteoResponse = {
@@ -49,6 +51,7 @@ export type WeatherForecastDay = {
   condition: string;
   icon: string;
   uv_index: number | null;
+  wind_speed_mph: number | null;
 };
 
 export type WeatherResponse = {
@@ -57,6 +60,7 @@ export type WeatherResponse = {
   condition: string;
   icon: string;
   uv_index: number | null;
+  wind_speed_mph: number | null;
   location?: string;
   forecast: WeatherForecastDay[];
   isLive: boolean;
@@ -142,6 +146,7 @@ export function mapOpenMeteoWeather(payload: OpenMeteoResponse): WeatherResponse
           condition: weather.condition,
           icon: weather.icon,
           uv_index: finiteAt(daily.uv_index_max, index),
+          wind_speed_mph: finiteAt(daily.wind_speed_10m_max, index),
         }];
       })
     : [];
@@ -155,6 +160,7 @@ export function mapOpenMeteoWeather(payload: OpenMeteoResponse): WeatherResponse
     condition: currentWeather.condition,
     icon: currentWeather.icon,
     uv_index: finiteAt(payload.hourly?.uv_index, 0),
+    wind_speed_mph: finite(payload.current?.wind_speed_10m),
     location,
     forecast,
     isLive: true,
@@ -170,6 +176,7 @@ export function fallbackWeather(reason: string): WeatherResponse {
     condition: "Partly Cloudy (Simulated)",
     icon: "02d",
     uv_index: null,
+    wind_speed_mph: null,
     forecast: [],
     isLive: false,
     error: reason,
@@ -243,6 +250,7 @@ export function mapOwmDailyForecast(daily: unknown): WeatherForecastDay[] {
       condition: typeof weather?.description === "string" ? weather.description : "partly cloudy",
       icon: typeof weather?.icon === "string" ? weather.icon : "02d",
       uv_index: finite(day.uvi),
+      wind_speed_mph: finite(day.wind_speed),
     }];
   });
 }
