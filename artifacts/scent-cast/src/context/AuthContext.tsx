@@ -23,6 +23,9 @@ interface AuthContextType {
   guestModeActive: boolean;
   /** Persisted: the user dismissed the "browsing as guest" banner. */
   guestModeAcknowledged: boolean;
+  /** User-facing message when a Google OAuth round-trip failed (null otherwise). */
+  authError: string | null;
+  clearAuthError: () => void;
   setIsAuthModalOpen: (open: boolean) => void;
   setIsProfileModalOpen: (open: boolean) => void;
   setAuthUsername: (username: string | null) => void;
@@ -32,6 +35,25 @@ interface AuthContextType {
   handleAuth: (token: string, email: string, pictureUrl?: string | null) => void;
   handleSignOut: () => void;
 }
+
+/**
+ * Maps the `oauth_error` codes the backend redirects with (routes/oauth.ts)
+ * to a user-facing message. Without this, a failed sign-in silently bounces
+ * the user back to a signed-out app with no feedback — they assume the button
+ * is broken and retry in a loop.
+ */
+const OAUTH_ERROR_MESSAGES: Record<string, string> = {
+  no_code: 'Sign-in was cancelled before it finished. Please try again.',
+  token_exchange: "We couldn't complete sign-in with Google. Please try again.",
+  user_info: "We couldn't read your Google profile. Please try again.",
+  missing_email: 'Your Google account did not share an email address, which is required to sign in.',
+  unverified_email:
+    'Your Google email address is not verified. Verify it with Google, then sign in again.',
+  server_error: 'Something went wrong on our end during sign-in. Please try again in a moment.',
+};
+
+const mapOAuthError = (code: string): string =>
+  OAUTH_ERROR_MESSAGES[code] ?? 'Sign-in failed. Please try again.';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -82,7 +104,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  // Surface OAuth failures the backend signals via `?oauth_error=<code>`. The
+  // token initializer above only strips the URL when a *successful* token is
+  // present, so we read (and clear) the error param here on first paint.
+  const [authError, setAuthError] = useState<string | null>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('oauth_error');
+    if (!code) return null;
+    params.delete('oauth_error');
+    const qs = params.toString();
+    window.history.replaceState({}, '', window.location.pathname + (qs ? `?${qs}` : ''));
+    return mapOAuthError(code);
+  });
+
+  const clearAuthError = useCallback(() => setAuthError(null), []);
+
+  // Open the auth modal on first paint when sign-in failed so the message
+  // (rendered by AuthModal) is actually seen, instead of a silent bounce.
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(() => authError !== null);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   // Persisted so a guest who has waved off the save prompt isn't re-nagged on
   // every reload. Cleared on sign-in (the prompt becomes irrelevant once saved).
@@ -145,6 +184,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setAuthToken(token);
     setAuthEmail(email);
     setAuthPictureUrl(pictureUrl ?? null);
+    setAuthError(null);
     setIsAuthModalOpen(false);
     setGuestPromptDismissed(false);
     setGuestModeActive(false);
@@ -203,6 +243,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     guestPromptDismissed,
     guestModeActive,
     guestModeAcknowledged,
+    authError,
+    clearAuthError,
     setIsAuthModalOpen,
     setIsProfileModalOpen,
     setAuthUsername,
@@ -221,6 +263,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     guestPromptDismissed,
     guestModeActive,
     guestModeAcknowledged,
+    authError,
+    clearAuthError,
     setAuthUsername,
     setGuestModeAcknowledged,
     handleContinueAsGuest,

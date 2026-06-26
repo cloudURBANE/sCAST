@@ -1543,6 +1543,8 @@ function GlobalModals() {
     guestModeAcknowledged,
     setGuestModeAcknowledged,
     handleContinueAsGuest,
+    authError,
+    clearAuthError,
   } = useAuth();
 
   const { items, setItems, isShareModalOpen, setIsShareModalOpen, userId } = useWardrobe();
@@ -1574,8 +1576,13 @@ function GlobalModals() {
       onClose={() => {
         setIsAuthModalOpen(false);
         setGuestPromptDismissed(true);
+        clearAuthError();
       }}
-      onContinueAsGuest={handleContinueAsGuest}
+      onContinueAsGuest={() => {
+        clearAuthError();
+        handleContinueAsGuest();
+      }}
+      errorMessage={authError}
       allowDismiss
       title={items.length >= 2 ? 'Save your wardrobe before you lose it' : undefined}
       subtitle={
