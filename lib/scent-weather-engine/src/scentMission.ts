@@ -457,6 +457,11 @@ export function buildScentMissionEngineInput(
       humidity_percent: weather.humidity_percent ?? 50,
       wind_speed_mph: weather.wind_speed_mph ?? 0,
       is_raining: isRaining,
+      // Forward the live UV reading (already sanitized onto ScentMissionWeather
+      // but previously dropped here) so the engine's high_uv_rule fires on the
+      // chat-agent path too. time_of_day/season are intentionally omitted: this
+      // builder runs server-side where the wall clock is the wrong timezone.
+      uv_index: weather.uv_index ?? null,
       condition,
     },
     setting: {
