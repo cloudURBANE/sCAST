@@ -8,6 +8,8 @@ interface AuthModalProps {
   onContinueAsGuest?: () => void;
   title?: React.ReactNode;
   subtitle?: string;
+  /** Surfaced when a prior Google sign-in attempt failed. */
+  errorMessage?: string | null;
   allowDismiss?: boolean;
 }
 
@@ -16,6 +18,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onContinueAsGuest,
   title,
   subtitle,
+  errorMessage,
   allowDismiss = false,
 }) => {
   const modalRef = React.useRef<HTMLDivElement | null>(null);
@@ -76,6 +79,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </div>
 
           <div className="w-full space-y-4">
+            {errorMessage ? (
+              <p
+                role="alert"
+                className="text-center text-sm text-red-300 font-sans border border-red-400/40 bg-red-500/10 rounded-2xl px-4 py-3"
+              >
+                {errorMessage}
+              </p>
+            ) : null}
             <button
               ref={primaryActionRef}
               type="button"

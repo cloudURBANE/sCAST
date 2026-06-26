@@ -23,6 +23,14 @@ export type ScentWeatherEngineInput = {
     is_raining: boolean;
     season?: "spring" | "summer" | "fall" | "winter";
     condition?: string;
+    /**
+     * Explicit signal that the weather above is real (live API data) rather
+     * than caller-supplied neutral defaults. When `false`, confidence is
+     * demoted even though the numeric fields are finite — callers that fill
+     * missing data with defaults (e.g. 72°F/50%) MUST set this so the engine
+     * does not report a confident pick built on fabricated conditions.
+     */
+    data_complete?: boolean;
   };
 
   setting: {
@@ -37,6 +45,11 @@ export type ScentWeatherEngineInput = {
       | "night";
     indoor_percent?: number;
     outdoor_percent?: number;
+    /**
+     * Explicit signal that `type` was resolved from a recognized destination
+     * rather than a neutral fallback. When `false`, confidence is demoted.
+     */
+    recognized?: boolean;
   };
 
   fragrance?: {
@@ -270,6 +283,10 @@ function isRaining(input: ScentWeatherEngineInput): boolean {
 }
 
 function hasCompleteWeather(input: ScentWeatherEngineInput): boolean {
+  // A caller that fills missing fields with neutral defaults must flag the gap
+  // via data_complete:false — otherwise the finite-number checks below always
+  // pass and confidence is computed as if the weather were real.
+  if (input.weather.data_complete === false) return false;
   return (
     typeof input.weather.temperature_f === "number" &&
     Number.isFinite(input.weather.temperature_f) &&
@@ -281,8 +298,11 @@ function hasCompleteWeather(input: ScentWeatherEngineInput): boolean {
   );
 }
 
-function isKnownSetting(settingType: SettingType): boolean {
-  return SETTING_TYPES.includes(settingType);
+function isKnownSetting(input: ScentWeatherEngineInput): boolean {
+  // recognized:false means `type` is a neutral fallback for an unrecognized
+  // destination, not a real occasion — don't credit it toward confidence.
+  if (input.setting.recognized === false) return false;
+  return SETTING_TYPES.includes(input.setting.type);
 }
 
 function getBaseSprayCount(concentration: string | undefined): number {
@@ -775,7 +795,7 @@ function calculateConfidence(
   context: { windy: boolean; gym: boolean; indoorSetting: boolean },
 ): Confidence {
   const weatherComplete = hasCompleteWeather(input);
-  const settingKnown = isKnownSetting(input.setting.type);
+  const settingKnown = isKnownSetting(input);
   const traits = getTraitTexts(input.fragrance);
   const hasFamiliesOrAccords =
     (input.fragrance?.scent_families?.filter(Boolean).length ?? 0) > 0 ||

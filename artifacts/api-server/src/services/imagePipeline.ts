@@ -127,8 +127,15 @@ function inFlightKey(sourceUrlHash: string, removeBackground: boolean): string {
 // avoided. Writes are idempotent, so this is purely a cost optimization.
 const inFlightBySearchQuery = new Map<string, Promise<ProcessedImageResult | null>>();
 
-function searchQueryFlightKey(searchQueryHash: string, removeBackground: boolean): string {
-  return `${searchQueryHash}:${removeBackground ? "1" : "0"}`;
+// Keyed by lookupKey too: two different fragrances whose search queries
+// normalize to the same hash must NOT share one in-flight result, or the first
+// caller's bottle is handed to the second (and persisted for it).
+function searchQueryFlightKey(
+  lookupKey: string,
+  searchQueryHash: string,
+  removeBackground: boolean,
+): string {
+  return `${lookupKey}:${searchQueryHash}:${removeBackground ? "1" : "0"}`;
 }
 
 function preview(value: string | undefined, max = 140): string | undefined {
@@ -509,7 +516,8 @@ export async function resolveProcessedFragranceImage(
   }
 
   const removeBackground = input.removeBackground ?? true;
-  const flightKey = searchQueryFlightKey(searchQueryHash, removeBackground);
+  const lookupKey = makeLookupKey(input.brand, input.name);
+  const flightKey = searchQueryFlightKey(lookupKey, searchQueryHash, removeBackground);
   const existing = inFlightBySearchQuery.get(flightKey);
   if (existing) return existing;
 
@@ -544,7 +552,7 @@ async function resolveProcessedFragranceImageInner(
   }
 
   if (input.allowLookupCache !== false && !input.sourceUrl && searchQueryHash) {
-    const cachedByQuery = await getLatestReadyCachedImageBySearchQueryHash(searchQueryHash);
+    const cachedByQuery = await getLatestReadyCachedImageBySearchQueryHash(searchQueryHash, lookupKey);
     if (cachedByQuery && acceptsImageCacheForRequest(cachedByQuery, removeBackground)) {
       const result = { ...cachedByQuery, pipelineVersion: IMAGE_PIPELINE_VERSION };
       return attachTrace(result, makeTrace({ ...traceBase, final: result }));
