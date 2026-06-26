@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  abbreviateUsRegion,
   composeCityLabel,
   mapOpenMeteoWeather,
   mapOwmDailyForecast,
@@ -62,11 +63,22 @@ test("rejects incomplete current conditions", () => {
 
 test("resolves a precise US locality instead of the timezone city", () => {
   // The bug: Open-Meteo reports timezone "America/Chicago" for Forney, TX, so the
-  // dashboard showed "Chicago". The Geo lookup yields the real locality label.
-  assert.equal(composeCityLabel("Forney", "Texas", "US"), "Forney, Texas");
+  // dashboard showed "Chicago". The Geo lookup yields the real locality label,
+  // with the US state abbreviated to its USPS code so the chip stays compact.
+  assert.equal(composeCityLabel("Forney", "Texas", "US"), "Forney, TX");
+  assert.equal(composeCityLabel("Brooklyn", "New York", "US"), "Brooklyn, NY");
   assert.equal(composeCityLabel("London", "England", "GB"), "London");
   assert.equal(composeCityLabel("", "Texas", "US"), null);
   assert.equal(composeCityLabel(null, null, null), null);
+});
+
+test("abbreviates US states/territories and passes others through untouched", () => {
+  assert.equal(abbreviateUsRegion("California"), "CA");
+  assert.equal(abbreviateUsRegion("new york"), "NY"); // case-insensitive
+  assert.equal(abbreviateUsRegion("District of Columbia"), "DC");
+  assert.equal(abbreviateUsRegion("Puerto Rico"), "PR");
+  assert.equal(abbreviateUsRegion("tx"), "TX"); // already a code → normalized upper
+  assert.equal(abbreviateUsRegion("Ontario"), "Ontario"); // non-US region untouched
 });
 
 test("maps OpenWeatherMap daily forecast into the SPA shape", () => {
