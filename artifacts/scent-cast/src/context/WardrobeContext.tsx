@@ -398,17 +398,39 @@ function detailRefreshPayloadFor(item: Fragrance): FragranceDetailRequestPayload
 
 const RAIN_CONDITION_SIGNALS = ['rain', 'drizzle', 'storm'];
 
-const mapDestinationToEngineType = (
+// Resolve a destination to an engine setting type AND report whether it was
+// actually recognized. An unrecognized destination must NOT silently become
+// `indoor` (the most restrictive rule set) — that flips the whole
+// recommendation toward fresh/clean and flags richer scents as "avoid". We
+// fall back to neutral `mixed` and flag `recognized:false` so the engine
+// demotes confidence instead of presenting a confident wrong answer.
+const resolveEngineSetting = (
   destination: DestinationType | string,
-): ScentWeatherEngineInput['setting']['type'] => {
+): { type: ScentWeatherEngineInput['setting']['type']; recognized: boolean } => {
   const normalized = destination.trim().toLowerCase();
-  if (normalized === 'work') return 'work';
-  if (normalized === 'night out' || normalized === 'night') return 'night';
-  if (normalized === 'going out') return 'mixed';
-  if (normalized === 'date') return 'date';
-  if (normalized === 'gym') return 'gym';
-  return 'indoor';
+  switch (normalized) {
+    case 'work':
+      return { type: 'work', recognized: true };
+    case 'night out':
+    case 'night':
+      return { type: 'night', recognized: true };
+    case 'going out':
+      return { type: 'mixed', recognized: true };
+    case 'staying in':
+      return { type: 'indoor', recognized: true };
+    case 'date':
+      return { type: 'date', recognized: true };
+    case 'gym':
+      return { type: 'gym', recognized: true };
+    default:
+      return { type: 'mixed', recognized: false };
+  }
 };
+
+// True only when the live weather payload actually carried the field — used to
+// distinguish real data from the neutral defaults applied below.
+const hasFiniteWeatherValue = (weather: any, keys: string[]): boolean =>
+  keys.some((key) => Number.isFinite(weather?.[key]));
 
 const normalizeTrait = (value: unknown): string =>
   typeof value === 'string' ? value.trim().toLowerCase() : '';
@@ -712,6 +734,16 @@ const buildEngineInput = (
 ): ScentWeatherEngineInput => {
   const condition = getWeatherString(weather, ['condition', 'description']);
   const normalizedCondition = condition.toLowerCase();
+  // Whether the live weather payload actually supplied the conditions that
+  // drive scoring. Computed from the RAW weather, before the neutral defaults
+  // below mask the gap — temperature and humidity are the two fields that
+  // skew the heat/humidity scoring, so both must be present to count as
+  // complete. Threaded to the engine so a failed weather fetch can't yield a
+  // confident pick built on fabricated 72°F/50% conditions.
+  const weatherDataComplete =
+    hasFiniteWeatherValue(weather, ['temperature_f', 'temperature', 'temp']) &&
+    hasFiniteWeatherValue(weather, ['humidity_percent', 'humidity']);
+  const setting = resolveEngineSetting(intent.destination);
 
   return {
     weather: {
@@ -720,9 +752,11 @@ const buildEngineInput = (
       wind_speed_mph: getWeatherNumber(weather, ['wind_speed_mph', 'windSpeed'], 0),
       is_raining: RAIN_CONDITION_SIGNALS.some((signal) => normalizedCondition.includes(signal)),
       condition,
+      data_complete: weatherDataComplete,
     },
     setting: {
-      type: mapDestinationToEngineType(intent.destination),
+      type: setting.type,
+      recognized: setting.recognized,
     },
     fragrance: {
       name: wardrobeEntryName(item),
