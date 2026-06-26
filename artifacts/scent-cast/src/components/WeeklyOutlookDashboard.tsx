@@ -217,18 +217,68 @@ const WEAR_WINDOW_PHRASE: Record<ScentWeatherRecommendation['wear_window'], stri
   avoid_today: 'makes a confident statement',
 };
 
+/** Community-voted seasons for the bottle, lower-cased; [] when un-enriched. */
+function pickSeasons(item: Fragrance): string[] {
+  const metrics = item.raw_engine_detail?.derived_metrics ?? item.derived_metrics;
+  return (metrics?.wear_profile?.primary_seasons ?? [])
+    .map((season) => (typeof season === 'string' ? season.trim().toLowerCase() : ''))
+    .filter(Boolean);
+}
+
+/** The seasons a given temperature mood flatters, for matching against votes. */
+const MOOD_SEASONS: Record<string, string[]> = {
+  cold: ['winter'],
+  cool: ['fall', 'autumn', 'winter'],
+  mild: ['spring', 'fall', 'autumn'],
+  warm: ['spring', 'summer'],
+  hot: ['summer'],
+};
+
+/** Title-cased season the bottle is voted for that also fits today, or null. */
+function matchedSeasonLabel(item: Fragrance, mood: string | null): string | null {
+  if (!mood) return null;
+  const targets = MOOD_SEASONS[mood] ?? [];
+  const voted = pickSeasons(item);
+  const hit = voted.find((season) => targets.some((target) => season.includes(target)));
+  if (!hit) return null;
+  const canonical = hit.includes('autumn') ? 'fall' : hit;
+  return canonical.charAt(0).toUpperCase() + canonical.slice(1);
+}
+
+/** 0–100 crowd-consensus score the community gives the bottle, or null. */
+function crowdScore(item: Fragrance): number | null {
+  const metrics = item.raw_engine_detail?.derived_metrics ?? item.derived_metrics;
+  const score = metrics?.headline?.crowd_consensus_score;
+  return typeof score === 'number' && Number.isFinite(score) ? score : null;
+}
+
 /**
- * The single, centered "why this bottle today" sentence under the hero. It states
- * how the pick was factored for the user: its own olfactory character (family /
- * dominant axis) tied to the engine's wear verdict and the day's temperature mood.
- * Kept to one tidy clause so it always fits the centered forecast column; the
- * precise numbers (°, condition, spray load) live in the metadata pill above it.
+ * The single, centered "why this bottle today" sentence under the hero. It names
+ * the bottle's own character, then leads with the STRONGEST real factor behind the
+ * pick — in priority order: a community-voted season that matches today, a high
+ * crowd rating, otherwise the engine's wear verdict for the day's temperature.
+ * That mirrors exactly how `planWeeklyScentOutlook` scores the vault, so the copy
+ * is an honest explanation rather than decoration. Kept to one tidy clause that
+ * always fits the centered forecast column; the precise numbers (°, condition,
+ * spray load) live in the metadata pill above it.
  */
 function describeForecastPick(day: WeatherForecastDay, pick: WeatherOutlookPick): string {
   const weekday = forecastDate(day.date)?.toLocaleDateString(undefined, { weekday: 'long' }) ?? 'today';
   const character = pickCharacter(pick.item);
-  const verdict = WEAR_WINDOW_PHRASE[pick.recommendation.wear_window] ?? 'balances well today';
   const mood = temperatureMood(day);
+
+  const season = matchedSeasonLabel(pick.item, mood);
+  if (season) {
+    return `Picked for ${weekday}: a ${character} scent your community rates ideal for ${season}.`;
+  }
+
+  const crowd = crowdScore(pick.item);
+  if (crowd !== null && crowd >= 78) {
+    const tail = mood ? `${mood} air` : "today's conditions";
+    return `Picked for ${weekday}: a crowd-favorite ${character} scent matched to ${tail}.`;
+  }
+
+  const verdict = WEAR_WINDOW_PHRASE[pick.recommendation.wear_window] ?? 'balances well today';
   const tail = mood ? ` in ${mood} air` : '';
   return `Picked for ${weekday}: its ${character} character ${verdict}${tail}.`;
 }
@@ -455,11 +505,12 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
           ) : null}
 
           {/* One centered "why this bottle today" line — the plain-language factor
-              behind the pick (its character + how the engine wants it worn for the
-              day's conditions). Width-capped and centered so it always fits the
-              forecast column and never crowds the day rail below. */}
+              behind the pick (its character + the strongest real reason it was
+              chosen for the day). Width-capped, balance-wrapped, and clamped to two
+              lines so it stays optically centered and always fits the forecast
+              column without ever crowding the day rail below. */}
           {activeReason ? (
-            <p className="mx-auto mt-[var(--fc-hero-pill)] max-w-[30rem] px-4 font-serif text-[clamp(0.84rem,3.2vw,1rem)] italic leading-snug text-[#d8cab4] md:max-w-[34rem] md:text-[clamp(0.96rem,1.55vw,1.12rem)]">
+            <p className="mx-auto mt-[var(--fc-hero-pill)] max-w-[28rem] px-4 text-center font-serif text-[clamp(0.84rem,3.2vw,1rem)] italic leading-snug text-balance line-clamp-2 text-[#d8cab4] md:max-w-[32rem] md:text-[clamp(0.96rem,1.55vw,1.12rem)]">
               {activeReason}
             </p>
           ) : null}
