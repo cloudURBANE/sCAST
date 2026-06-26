@@ -325,6 +325,13 @@ export async function getLatestReadyCachedImageByLookupKey(
 
 export async function getLatestReadyCachedImageBySearchQueryHash(
   searchQueryHash: string,
+  // When provided, the lookup is scoped to this fragrance. The search-query
+  // hash only normalizes a query string, so two different fragrances whose
+  // queries collide would otherwise cross-serve each other's bottle. Callers
+  // resolving a specific fragrance MUST pass lookupKey; the hash then only
+  // disambiguates refine variants WITHIN that fragrance. (Optional so the
+  // reimagine path, which stores a self-scoping identity hash, is unaffected.)
+  lookupKey?: string,
   pipelineVersion = IMAGE_PIPELINE_VERSION,
 ): Promise<CachedImageReference | null> {
   let rows: (typeof imageCacheTable.$inferSelect)[];
@@ -335,6 +342,7 @@ export async function getLatestReadyCachedImageBySearchQueryHash(
       .where(
         and(
           eq(imageCacheTable.searchQueryHash, searchQueryHash),
+          ...(lookupKey ? [eq(imageCacheTable.lookupKey, lookupKey)] : []),
           eq(imageCacheTable.pipelineVersion, pipelineVersion),
           eq(imageCacheTable.processingStatus, "ready"),
         ),
