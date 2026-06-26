@@ -22,6 +22,10 @@ export type ScentWeatherEngineInput = {
     wind_speed_mph: number;
     is_raining: boolean;
     season?: "spring" | "summer" | "fall" | "winter";
+    /** Live UV index (0–11+). Strong sun nudges toward fresh, daytime scents. */
+    uv_index?: number | null;
+    /** Local part of day, used to refine the wear window against the real clock. */
+    time_of_day?: "morning" | "afternoon" | "evening" | "night";
     condition?: string;
     /**
      * Explicit signal that the weather above is real (live API data) rather
@@ -67,6 +71,15 @@ export type ScentWeatherEngineInput = {
     scentLastsOnMe?: "short" | "normal" | "long";
     projectionPreference?: "subtle" | "noticeable";
   };
+
+  /**
+   * Caller-supplied 0–1 measure of how complete/trustworthy the fragrance data
+   * is (e.g. source-coverage completeness + structured-metric coverage). When
+   * provided it caps `confidence` so a thin or partial profile cannot report
+   * high/medium confidence purely because weather + setting are known. Omitted
+   * by callers/tests that have no quality signal — behaviour is unchanged then.
+   */
+  dataConfidence?: number;
 };
 
 export type AtmosphereScores = {
@@ -534,6 +547,17 @@ export function calculateScentWeatherRecommendation(
     boostFamilies(["musky", "woody", "fresh", "citrus"], 16);
   }
 
+  // Strong UV means bright, high-sun daytime conditions that thin top notes and
+  // favour brighter, fresher profiles. UV is 0 at night, so this only fires in
+  // genuine daytime sun. Modest boost so it refines, not overrides, the thermal
+  // rules. Gated on uv_index being supplied, so callers/tests that omit it are
+  // unaffected.
+  const uvIndex = finiteNumber(input.weather.uv_index, 0);
+  if (uvIndex >= 8) {
+    rulesTriggered.push("high_uv_rule");
+    boostFamilies(["fresh", "citrus", "aquatic", "green"], 14);
+  }
+
   if (indoorSetting) {
     if (settingType === "indoor") rulesTriggered.push("indoor_rule");
     if (settingType === "work") rulesTriggered.push("work_rule");
@@ -753,21 +777,48 @@ function calculateProjectionRisk(
   return risk;
 }
 
+type WearWindowContext = {
+  hotHumid: boolean;
+  rainy: boolean;
+  gym: boolean;
+  indoorSetting: boolean;
+  nightDate: boolean;
+  hasFreshProfile: boolean;
+  hasSweetProfile: boolean;
+  hasHeavyProfile: boolean;
+  denseOrHeavyProfile: boolean;
+  smokyLeatherInRain: boolean;
+};
+
 function calculateWearWindow(
   input: ScentWeatherEngineInput,
   projectionRisk: ProjectionRisk,
-  context: {
-    hotHumid: boolean;
-    rainy: boolean;
-    gym: boolean;
-    indoorSetting: boolean;
-    nightDate: boolean;
-    hasFreshProfile: boolean;
-    hasSweetProfile: boolean;
-    hasHeavyProfile: boolean;
-    denseOrHeavyProfile: boolean;
-    smokyLeatherInRain: boolean;
-  },
+  context: WearWindowContext,
+): WearWindow {
+  const base = computeBaseWearWindow(input, projectionRisk, context);
+
+  // Refine against the real clock when the caller supplies it. "better_later"
+  // and "nighttime_better" both advise holding off for later in the day; if it
+  // is already evening or night there is nothing to wait for, so promote to
+  // "best_now" unless projection would be overpowering. No-op when time_of_day
+  // is omitted, so existing behaviour/tests are unchanged.
+  const tod = input.weather.time_of_day;
+  const isLateDay = tod === "evening" || tod === "night";
+  if (
+    isLateDay &&
+    (base === "better_later" || base === "nighttime_better") &&
+    projectionRisk !== "overpowering_risk"
+  ) {
+    return "best_now";
+  }
+
+  return base;
+}
+
+function computeBaseWearWindow(
+  input: ScentWeatherEngineInput,
+  projectionRisk: ProjectionRisk,
+  context: WearWindowContext,
 ): WearWindow {
   const traits = getTraitTexts(input.fragrance);
   const hotHumidAvoidFamily = hasAnyFamilySignal(traits, ["gourmand", "oud", "smoky", "leather", "tobacco"]);
@@ -805,6 +856,17 @@ function calculateConfidence(
   if (weatherComplete && settingKnown && hasFamiliesOrAccords) confidence = "high";
   else if (weatherComplete && settingKnown && traits.length > 0) confidence = "medium";
   else if (weatherComplete && settingKnown && input.fragrance) confidence = "medium";
+
+  // Honest confidence: the structural gates above only check that weather +
+  // setting are known and that *some* family/accord exists, so a single thin
+  // token previously earned "high". When the caller supplies a 0–1 data-quality
+  // signal, cap confidence by it so partial/cold-search profiles cannot read as
+  // confident. Omitted → unchanged behaviour.
+  const dataConfidence = input.dataConfidence;
+  if (typeof dataConfidence === "number" && Number.isFinite(dataConfidence)) {
+    if (dataConfidence < 0.5) confidence = "low";
+    else if (dataConfidence < 0.75 && confidence === "high") confidence = "medium";
+  }
 
   if (context.windy && !context.gym && !context.indoorSetting) {
     confidence = reduceConfidence(confidence);
