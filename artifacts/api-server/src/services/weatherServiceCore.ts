@@ -182,14 +182,46 @@ export function timezoneCity(timezone: unknown): string {
   return tz.split("/").at(-1)?.replaceAll("_", " ") || "Current Location";
 }
 
-/** Compose a human label from an OWM Geo / current record: "Forney, Texas". */
+// Full state/territory name → USPS two-letter code. Keyed lowercase so the lookup
+// is case-insensitive regardless of how the geocoder cases the region. Used to keep
+// the dashboard location chip short ("Forney, TX" not "Forney, Texas").
+const US_STATE_ABBREVIATIONS: Record<string, string> = {
+  alabama: "AL", alaska: "AK", arizona: "AZ", arkansas: "AR", california: "CA",
+  colorado: "CO", connecticut: "CT", delaware: "DE", "district of columbia": "DC",
+  florida: "FL", georgia: "GA", hawaii: "HI", idaho: "ID", illinois: "IL",
+  indiana: "IN", iowa: "IA", kansas: "KS", kentucky: "KY", louisiana: "LA",
+  maine: "ME", maryland: "MD", massachusetts: "MA", michigan: "MI", minnesota: "MN",
+  mississippi: "MS", missouri: "MO", montana: "MT", nebraska: "NE", nevada: "NV",
+  "new hampshire": "NH", "new jersey": "NJ", "new mexico": "NM", "new york": "NY",
+  "north carolina": "NC", "north dakota": "ND", ohio: "OH", oklahoma: "OK",
+  oregon: "OR", pennsylvania: "PA", "rhode island": "RI", "south carolina": "SC",
+  "south dakota": "SD", tennessee: "TN", texas: "TX", utah: "UT", vermont: "VT",
+  virginia: "VA", washington: "WA", "west virginia": "WV", wisconsin: "WI",
+  wyoming: "WY", "puerto rico": "PR", guam: "GU", "american samoa": "AS",
+  "u.s. virgin islands": "VI", "us virgin islands": "VI",
+  "northern mariana islands": "MP",
+};
+
+/**
+ * Abbreviate a US state/territory to its USPS code ("Texas" → "TX"). Returns the
+ * original region untouched when it is already a 2-letter code or not a known
+ * US state, so non-US regions and pre-abbreviated payloads pass through cleanly.
+ */
+export function abbreviateUsRegion(region: string): string {
+  const trimmed = region.trim();
+  if (/^[A-Za-z]{2}$/.test(trimmed)) return trimmed.toUpperCase();
+  return US_STATE_ABBREVIATIONS[trimmed.toLowerCase()] ?? trimmed;
+}
+
+/** Compose a human label from an OWM Geo / current record: "Forney, TX". */
 export function composeCityLabel(name: unknown, state: unknown, country: unknown): string | null {
   const city = typeof name === "string" && name.trim() ? name.trim() : null;
   if (!city) return null;
   const region = typeof state === "string" && state.trim() ? state.trim() : null;
   // Disambiguate US localities (there are several "Forney"/"Springfield"s) while
-  // keeping the label short enough for the truncated dashboard chip.
-  if (region && country === "US") return `${city}, ${region}`;
+  // keeping the label short enough for the truncated dashboard chip — the state
+  // is abbreviated to its two-letter USPS code so the weather chip stays compact.
+  if (region && country === "US") return `${city}, ${abbreviateUsRegion(region)}`;
   return city;
 }
 

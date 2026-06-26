@@ -1766,14 +1766,17 @@ a {
 
 .scent-ipad-safari-perf .scent-marquee-track-row,
 .scent-ipad-safari-perf .scent-atmosphere-marquee-track,
+.scent-ipad-safari-perf .scent-weather-marquee-track,
 .scent-low-render-perf .scent-marquee-track-row,
 .scent-low-render-perf .scent-atmosphere-marquee-track,
+.scent-low-render-perf .scent-weather-marquee-track,
 .scent-ipad-safari-perf .scent-community-marquee-track,
 .scent-ipad-safari-perf .scent-note-marquee-track,
 .scent-ipad-safari-perf .animate-infinite-scroll,
 .scent-ipad-safari-perf .animate-infinite-scroll-slow,
 .scent-touch-perf .scent-marquee-track-row,
 .scent-touch-perf .scent-atmosphere-marquee-track,
+.scent-touch-perf .scent-weather-marquee-track,
 .scent-touch-perf .scent-community-marquee-track,
 .scent-touch-perf .scent-note-marquee-track,
 .scent-touch-perf .animate-infinite-scroll,
@@ -1787,6 +1790,7 @@ a {
    a running transform animation would otherwise override the inline transform. */
 .scent-marquee-track-row[data-marquee-dragging="true"],
 .scent-atmosphere-marquee-track[data-marquee-dragging="true"],
+.scent-weather-marquee-track[data-marquee-dragging="true"],
 .scent-community-marquee-track[data-marquee-dragging="true"],
 .scent-cue-marquee-track[data-marquee-dragging="true"] {
   cursor: grabbing;
@@ -1795,7 +1799,8 @@ a {
 }
 
 .scent-marquee-track-row[data-marquee-paused="true"],
-.scent-atmosphere-marquee-track[data-marquee-paused="true"] {
+.scent-atmosphere-marquee-track[data-marquee-paused="true"],
+.scent-weather-marquee-track[data-marquee-paused="true"] {
   animation-play-state: paused;
 }
 
@@ -2012,15 +2017,14 @@ a {
 }
 
 /*
- * Contained weather context bar (HomepageAtmosphereChrome → AtmosphereBar).
- * Replaces the old full-bleed, auto-scrolling atmosphere marquee that repeated
- * the five metrics across the viewport width. This is ONE bounded bar:
- *   • iPad / desktop (>=768px): a single five-column grid — Conditions ·
- *     Humidity · Time · Temperature · Location — no scroll, no repeat.
- *   • phones: a compact horizontal-scroll row with an edge-fade mask so a
- *     partially-scrolled cell dissolves rather than reading as a hard crop.
- * Luxury framing matches the old bar: deep near-black fill, one gold hairline
- * border, quiet inset sheen — no projected glow.
+ * Weather context bar (HomepageAtmosphereChrome → AtmosphereBar).
+ * ONE bounded, gold-hairline box (the "new shape") whose five metrics —
+ * Conditions · Humidity · Time · Temperature · Location — gently auto-scroll as a
+ * looped marquee. The bordered/rounded frame stays put; only the metric track
+ * moves, so the band reads as a calm ticker rather than the old full-bleed strip.
+ * Luxury framing: deep near-black fill, one gold hairline border, quiet inset
+ * sheen — no projected glow. The track is swipe/drag scrubbable and pauses when
+ * offscreen or the tab is hidden (see AtmosphereBar + useMarqueeSwipe).
  */
 .scent-weather-context {
   overflow: hidden;
@@ -2028,15 +2032,16 @@ a {
   border-radius: var(--radius-scent);
   background: linear-gradient(180deg, rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0.96));
   box-shadow: inset 0 1px 0 rgba(255, 226, 174, 0.06), 0 18px 44px -28px rgba(0, 0, 0, 0.95);
+  contain: paint;
 }
 
+/* Marquee viewport: clips the moving track and feathers both ends so a metric
+   cell dissolves into the frame instead of reading as a hard crop at the rounded
+   edge. The horizontal mask leaves the top/bottom border untouched. */
 .scent-weather-context-row {
-  display: flex;
-  overflow-x: auto;
-  scroll-snap-type: x proximity;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
-  --weather-edge-fade: 2rem;
+  position: relative;
+  overflow: hidden;
+  --weather-edge-fade: clamp(2rem, 6vw, 3.25rem);
   -webkit-mask-image: linear-gradient(
     90deg,
     transparent 0,
@@ -2053,13 +2058,48 @@ a {
   );
 }
 
-.scent-weather-context-row::-webkit-scrollbar {
-  display: none;
+.scent-weather-marquee-track {
+  display: flex;
+  width: max-content;
+  --weather-marquee-distance: 0px;
+  --weather-marquee-duration: 96s;
+  touch-action: pan-y;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  will-change: transform;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  animation: weather-marquee-scroll var(--weather-marquee-duration) linear infinite;
+}
+
+/* Until the track measures one loop copy it must not animate (a 0px distance
+   would slam it to the start every frame). */
+.scent-weather-marquee-track:not([data-marquee-ready="true"]) {
+  animation: none;
+  transform: translate3d(0, 0, 0);
+}
+
+.scent-weather-marquee-track[data-marquee-dragging="true"] {
+  cursor: grabbing;
+  animation: none;
+  will-change: transform;
+}
+
+.scent-weather-marquee-track[data-marquee-paused="true"] {
+  animation-play-state: paused;
+}
+
+.scent-weather-marquee-group {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: stretch;
 }
 
 .scent-weather-cell {
   flex: 0 0 auto;
-  min-width: clamp(8rem, 38vw, 10rem);
+  width: clamp(8.5rem, 22vw, 11rem);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -2067,12 +2107,9 @@ a {
   gap: 0.25rem;
   padding: 0.85rem 1rem;
   text-align: center;
-  scroll-snap-align: center;
+  /* Hairline divider before every cell. The leading copy's first divider sits
+     under the edge-fade mask, so dividers read continuously across loop copies. */
   border-left: 1px solid rgb(var(--scent-accent-rgb) / 0.12);
-}
-
-.scent-weather-cell:first-child {
-  border-left: 0;
 }
 
 .scent-weather-label {
@@ -2099,17 +2136,8 @@ a {
 }
 
 @media (min-width: 768px) {
-  .scent-weather-context-row {
-    display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    overflow: visible;
-    -webkit-mask-image: none;
-    mask-image: none;
-  }
-
   .scent-weather-cell {
-    flex: initial;
-    min-width: 0;
+    width: clamp(10rem, 16vw, 13rem);
     gap: 0.3rem;
     padding: 1.1rem 1.25rem;
   }
@@ -2206,6 +2234,14 @@ a {
 
   .scent-atmosphere-marquee-track {
     --atmosphere-marquee-duration: 240s;
+  }
+
+  /* The weather band keeps a near-still crawl rather than freezing: the JS
+     already clamps the duration to 240s under reduced motion (matched here so a
+     pre-measure frame is calm too), so motion-sensitive users get a barely-there
+     drift instead of an abrupt stop. */
+  .scent-weather-marquee-track {
+    --weather-marquee-duration: 240s;
   }
 }
 
@@ -2515,6 +2551,11 @@ a {
 @keyframes atmosphere-marquee-scroll {
   from { transform: translate3d(0, 0, 0); }
   to { transform: translate3d(calc(var(--atmosphere-marquee-distance) * -1), 0, 0); }
+}
+
+@keyframes weather-marquee-scroll {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(calc(var(--weather-marquee-distance) * -1), 0, 0); }
 }
 
 @keyframes note-pyramid-marquee {

@@ -146,6 +146,93 @@ function forecastMeta(day: WeatherForecastDay, rec: ScentWeatherRecommendation |
   return parts;
 }
 
+/** Short, human descriptor of a fragrance's own character for the "why this pick"
+ *  line. Prefers the catalog family, then the dominant scent-vector axis, so the
+ *  sentence always names something true about THIS bottle (not the weather). */
+const FAMILY_DESCRIPTOR: Record<string, string> = {
+  woody: 'warm, woody',
+  fresh: 'fresh, airy',
+  floral: 'soft, floral',
+  oriental: 'rich, oriental',
+  amber: 'glowing, amber',
+  citrus: 'bright, citrus',
+  aromatic: 'crisp, aromatic',
+  gourmand: 'sweet, gourmand',
+  chypre: 'mossy, chypre',
+  'fougère': 'clean, fougère',
+  fougere: 'clean, fougère',
+  leather: 'supple, leather',
+  aquatic: 'cool, aquatic',
+  green: 'green, crisp',
+  spicy: 'spiced, bold',
+  sweet: 'sweet, inviting',
+  musky: 'soft, musky',
+  powdery: 'soft, powdery',
+  smoky: 'smoky, resinous',
+  oud: 'deep, oud-driven',
+  tobacco: 'warm, tobacco',
+};
+
+const VECTOR_DESCRIPTOR: Record<string, string> = {
+  freshness: 'fresh, airy',
+  sweetness: 'sweet, inviting',
+  woodiness: 'warm, woody',
+  spice: 'spiced, bold',
+  warmth: 'warm, enveloping',
+  musk: 'soft, musky',
+};
+
+function pickCharacter(item: Fragrance): string {
+  const family = item.family?.trim().toLowerCase();
+  if (family && FAMILY_DESCRIPTOR[family]) return FAMILY_DESCRIPTOR[family];
+  const vector = item.scent_vector;
+  if (vector) {
+    const axes = Object.keys(VECTOR_DESCRIPTOR) as (keyof typeof vector)[];
+    const top = axes
+      .map((axis) => ({ axis, value: typeof vector[axis] === 'number' ? vector[axis] : 0 }))
+      .sort((a, b) => b.value - a.value)[0];
+    if (top && top.value >= 3) return VECTOR_DESCRIPTOR[top.axis as string];
+  }
+  if (family) return family;
+  return 'signature';
+}
+
+/** Coarse temperature mood for the conditions clause. */
+function temperatureMood(day: WeatherForecastDay): string | null {
+  const t = day.temp ?? day.high ?? day.low;
+  if (typeof t !== 'number' || !Number.isFinite(t)) return null;
+  if (t <= 40) return 'cold';
+  if (t <= 55) return 'cool';
+  if (t <= 72) return 'mild';
+  if (t <= 84) return 'warm';
+  return 'hot';
+}
+
+/** How the engine wants the bottle worn today, phrased for a reader. */
+const WEAR_WINDOW_PHRASE: Record<ScentWeatherRecommendation['wear_window'], string> = {
+  best_now: 'lands cleanly right now',
+  better_later: 'blooms as the day warms',
+  daytime_safe: 'stays crisp through the day',
+  nighttime_better: 'deepens after dark',
+  avoid_today: 'makes a confident statement',
+};
+
+/**
+ * The single, centered "why this bottle today" sentence under the hero. It states
+ * how the pick was factored for the user: its own olfactory character (family /
+ * dominant axis) tied to the engine's wear verdict and the day's temperature mood.
+ * Kept to one tidy clause so it always fits the centered forecast column; the
+ * precise numbers (°, condition, spray load) live in the metadata pill above it.
+ */
+function describeForecastPick(day: WeatherForecastDay, pick: WeatherOutlookPick): string {
+  const weekday = forecastDate(day.date)?.toLocaleDateString(undefined, { weekday: 'long' }) ?? 'today';
+  const character = pickCharacter(pick.item);
+  const verdict = WEAR_WINDOW_PHRASE[pick.recommendation.wear_window] ?? 'balances well today';
+  const mood = temperatureMood(day);
+  const tail = mood ? ` in ${mood} air` : '';
+  return `Picked for ${weekday}: its ${character} character ${verdict}${tail}.`;
+}
+
 function ForecastHero({
   plan,
   direction,
@@ -310,6 +397,9 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
   const activeMeta = activePlan?.pick
     ? forecastMeta(activePlan.day, activePlan.pick.recommendation)
     : [];
+  const activeReason = activePlan?.pick
+    ? describeForecastPick(activePlan.day, activePlan.pick)
+    : null;
 
   return (
     <section
@@ -362,6 +452,16 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
                 </span>
               </div>
             </div>
+          ) : null}
+
+          {/* One centered "why this bottle today" line — the plain-language factor
+              behind the pick (its character + how the engine wants it worn for the
+              day's conditions). Width-capped and centered so it always fits the
+              forecast column and never crowds the day rail below. */}
+          {activeReason ? (
+            <p className="mx-auto mt-[var(--fc-hero-pill)] max-w-[30rem] px-4 font-serif text-[clamp(0.84rem,3.2vw,1rem)] italic leading-snug text-[#d8cab4] md:max-w-[34rem] md:text-[clamp(0.96rem,1.55vw,1.12rem)]">
+              {activeReason}
+            </p>
           ) : null}
 
           {/* Seven calendar tiles, each a MINI of the community fragrance-detail

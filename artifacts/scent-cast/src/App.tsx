@@ -183,6 +183,15 @@ const HERO_SCROLL_PIXELS_PER_SECOND = 14;
 const HERO_SCROLL_MIN_SECONDS = 60;
 const HERO_SCROLL_MAX_SECONDS = 180;
 const HERO_SCROLL_REDUCED_MOTION_SECONDS = 240;
+// Weather context bar marquee: the metrics gently auto-scroll inside the bounded,
+// gold-hairline "new shape" box. Same cadence as the hero ticker so the two bands
+// read as one calm system.
+const WEATHER_TRACK_COPIES_DEFAULT = 4;
+const WEATHER_TRACK_COPIES_LOW = 2;
+const WEATHER_SCROLL_PIXELS_PER_SECOND = 14;
+const WEATHER_SCROLL_MIN_SECONDS = 72;
+const WEATHER_SCROLL_MAX_SECONDS = 160;
+const WEATHER_SCROLL_REDUCED_MOTION_SECONDS = 240;
 
 function AtmospherePlaceholder({ label, active }: { label: string; active: boolean }) {
   return (
@@ -505,6 +514,17 @@ const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({
   weather,
   weatherLoading,
 }) => {
+  const sectionRef = useRef<HTMLElement>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const groupRef = useRef<HTMLDivElement>(null);
+  const lowBudgetMarquee = useLowBudgetMarqueeMode();
+  const trackCopies = lowBudgetMarquee ? WEATHER_TRACK_COPIES_LOW : WEATHER_TRACK_COPIES_DEFAULT;
+
+  useMarqueeSwipe(trackRef, {
+    distanceVar: '--weather-marquee-distance',
+    durationVar: '--weather-marquee-duration',
+  });
+
   const firstFiniteNumber = (fallback: number, ...values: unknown[]): number => {
     for (const value of values) {
       if (typeof value === 'number' && Number.isFinite(value)) return value;
@@ -554,6 +574,14 @@ const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({
   const location = pendingWeather || !locationText
     ? <AtmospherePlaceholder label="location" active={pendingWeather} />
     : locationText;
+  const atmosphereDisplayKey = [
+    pendingWeather ? 'pending' : 'ready',
+    tempMissing ? 'temp-missing' : `temp:${Math.round(tempValue)}`,
+    humidityMissing ? 'humidity-missing' : `humidity:${humidityValue}`,
+    conditionText || 'condition-missing',
+    locationText || 'location-missing',
+  ].join('|');
+  usePauseMarqueeWhenHidden(sectionRef, trackRef, atmosphereDisplayKey);
   const metrics = [
     { label: 'Conditions', value: condition },
     { label: 'Humidity', value: humidity },
@@ -562,21 +590,100 @@ const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({
     { label: 'Location', value: location },
   ];
 
-  // One contained, non-repeating context bar. On iPad/desktop the five metrics
-  // lay out as a single five-column row (Conditions · Humidity · Time ·
-  // Temperature · Location); on phones the row scrolls horizontally with an edge
-  // fade so a partially-revealed cell dissolves instead of reading as a hard
-  // crop. No duplicated copies, no auto-scroll — the old full-bleed marquee that
-  // repeated the metrics across the width is gone.
+  // Measure one looped copy and size the CSS keyframe distance/duration to it so
+  // the band cruises at a constant ~14px/s regardless of how wide the metric set
+  // renders. Re-measures on resize, font settle, and whenever the values change
+  // (a new locality/temperature changes the copy width). Mirrors the hero ticker
+  // so both bands share one motion system.
+  useEffect(() => {
+    const track = trackRef.current;
+    const group = groupRef.current;
+    if (!track || !group) return;
+    let cancelled = false;
+    let animationFrame = 0;
+    let pendingReady = false;
+
+    const updateDistance = (ready = true) => {
+      if (cancelled) return;
+      const distance = group.getBoundingClientRect().width;
+      if (distance <= 0) return;
+
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const duration = prefersReducedMotion
+        ? WEATHER_SCROLL_REDUCED_MOTION_SECONDS
+        : Math.min(
+            WEATHER_SCROLL_MAX_SECONDS,
+            Math.max(WEATHER_SCROLL_MIN_SECONDS, distance / WEATHER_SCROLL_PIXELS_PER_SECOND),
+          );
+
+      track.style.setProperty('--weather-marquee-distance', `${distance}px`);
+      track.style.setProperty('--weather-marquee-duration', `${duration}s`);
+      if (ready) {
+        track.dataset.marqueeReady = 'true';
+      }
+    };
+
+    const scheduleDistanceUpdate = (ready = true) => {
+      pendingReady = pendingReady || ready;
+      if (animationFrame) return;
+      animationFrame = window.requestAnimationFrame(() => {
+        animationFrame = 0;
+        const readyForFrame = pendingReady;
+        pendingReady = false;
+        updateDistance(readyForFrame);
+      });
+    };
+
+    if (track.dataset.marqueeReady !== 'true') {
+      track.dataset.marqueeReady = 'false';
+    }
+
+    const startWhenFontsSettle = () => scheduleDistanceUpdate(true);
+
+    if (document.fonts?.ready) {
+      document.fonts.ready.then(startWhenFontsSettle);
+    } else {
+      startWhenFontsSettle();
+    }
+
+    const handleResize = () => scheduleDistanceUpdate(track.dataset.marqueeReady === 'true');
+    const resizeObserver = new ResizeObserver(handleResize);
+    resizeObserver.observe(group);
+    window.addEventListener('resize', handleResize, { passive: true });
+
+    return () => {
+      cancelled = true;
+      if (animationFrame) window.cancelAnimationFrame(animationFrame);
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [atmosphereDisplayKey]);
+
+  // One bounded gold-hairline box (the "new shape") whose five metrics gently
+  // auto-scroll. The metric cells keep the new card styling (centered label +
+  // serif value, hairline dividers); the looped copies + measured keyframe
+  // distance restore the calm horizontal motion. The track is also swipe/drag
+  // scrubbable (useMarqueeSwipe) and pauses when offscreen or the tab is hidden.
   return (
-    <section className="scent-weather-context" aria-label="Current atmosphere" aria-busy={pendingWeather}>
+    <section ref={sectionRef} className="scent-weather-context" aria-label="Current atmosphere" aria-busy={pendingWeather}>
       <div className="scent-weather-context-row">
-        {metrics.map((metric) => (
-          <div key={metric.label} className="scent-weather-cell">
-            <span className="scent-weather-label">{metric.label}</span>
-            <span className="scent-weather-value">{metric.value}</span>
-          </div>
-        ))}
+        <div className="scent-weather-marquee-track" ref={trackRef}>
+          {[...Array(trackCopies)].map((_, copyIndex) => (
+            <div
+              key={copyIndex}
+              ref={copyIndex === 0 ? groupRef : undefined}
+              className="scent-weather-marquee-group"
+              aria-hidden={copyIndex > 0}
+            >
+              {metrics.map((metric) => (
+                <div key={metric.label} className="scent-weather-cell">
+                  <span className="scent-weather-label">{metric.label}</span>
+                  <span className="scent-weather-value">{metric.value}</span>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
       </div>
     </section>
   );
