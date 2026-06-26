@@ -6,7 +6,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useModalBehavior } from '@/hooks/use-modal-behavior';
 import { useWeather } from '@/context/WeatherContext';
 import { useTheme, type AccentName, type ThemeMode } from '@/context/ThemeContext';
-import { useTranslation, LOCALE_LABELS, SUPPORTED_LOCALES, type Locale } from '@/i18n';
+import { useTranslation, LOCALE_LABELS, DELIVERED_LOCALES, type Locale } from '@/i18n';
 import { savePreferences } from '@/lib/preferences';
 import {
   getPushSupport,
@@ -509,25 +509,31 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                   </div>
                 </section>
 
-                <section className="rounded-[12px] border border-white/10 bg-white/[0.025] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                  <div className="mb-4 flex items-center gap-3">
-                    <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-scent-accent/20 bg-scent-accent/[0.08] text-scent-accent">
-                      <Languages size={16} aria-hidden="true" />
-                    </span>
-                    <div className="min-w-0">
-                      <h3 className="text-[10px] font-bold uppercase tracking-[0.34em] text-[#fff7ec]">{t('language.title')}</h3>
-                      <p className="mt-0.5 text-[11px] text-white/35">{t('language.subtitle')}</p>
+                {/* Only surface the language picker when more than one locale is
+                    fully delivered (see DELIVERED_LOCALES). With a single
+                    delivered locale a picker would be a dead one-option control,
+                    so the section is hidden until another language is complete. */}
+                {DELIVERED_LOCALES.length > 1 ? (
+                  <section className="rounded-[12px] border border-white/10 bg-white/[0.025] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                    <div className="mb-4 flex items-center gap-3">
+                      <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-scent-accent/20 bg-scent-accent/[0.08] text-scent-accent">
+                        <Languages size={16} aria-hidden="true" />
+                      </span>
+                      <div className="min-w-0">
+                        <h3 className="text-[10px] font-bold uppercase tracking-[0.34em] text-[#fff7ec]">{t('language.title')}</h3>
+                        <p className="mt-0.5 text-[11px] text-white/35">{t('language.subtitle')}</p>
+                      </div>
                     </div>
-                  </div>
 
-                  <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.28em] text-white/30">{t('language.label')}</p>
-                  <SegmentedControl<Locale>
-                    ariaLabel={t('language.label')}
-                    value={locale}
-                    onChange={handleLocaleChange}
-                    options={SUPPORTED_LOCALES.map((code) => ({ value: code, label: LOCALE_LABELS[code] }))}
-                  />
-                </section>
+                    <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.28em] text-white/30">{t('language.label')}</p>
+                    <SegmentedControl<Locale>
+                      ariaLabel={t('language.label')}
+                      value={locale}
+                      onChange={handleLocaleChange}
+                      options={DELIVERED_LOCALES.map((code) => ({ value: code, label: LOCALE_LABELS[code] }))}
+                    />
+                  </section>
+                ) : null}
 
                 <section className="rounded-[12px] border border-scent-accent/20 bg-[linear-gradient(180deg,rgb(var(--scent-accent-rgb)/0.07),rgba(255,255,255,0.025))] p-4 shadow-[inset_0_1px_0_rgba(255,236,183,0.08)]">
                   <div className="mb-4 flex items-center gap-3">

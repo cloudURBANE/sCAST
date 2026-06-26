@@ -27,6 +27,16 @@ export type TranslationTree = DeepStringify<typeof en>;
 
 export const SUPPORTED_LOCALES: Locale[] = ['en', 'es', 'fr', 'de'];
 
+// Locales whose *app-wide* UI is actually translated and therefore safe to
+// offer to users. The es/fr/de dictionaries currently cover only the settings /
+// account / notifications chrome, so selecting one of them would leave the
+// wardrobe, forecast, capture, and community surfaces in English — a jarring
+// half-translated experience. Until a locale reaches full coverage we deliver
+// English only. This array is the single gate: add a code here once its
+// translation is complete. All locale files, types, and infrastructure stay
+// intact behind it, so re-enabling a language is a one-line change.
+export const DELIVERED_LOCALES: Locale[] = ['en'];
+
 export const DEFAULT_LOCALE: Locale = 'en';
 
 // Native endonyms for the picker, so each language reads in its own script.
@@ -43,6 +53,13 @@ export function isLocale(value: unknown): value is Locale {
   return typeof value === 'string' && SUPPORTED_LOCALES.includes(value as Locale);
 }
 
+/** True only for locales we currently deliver app-wide (see DELIVERED_LOCALES).
+ *  Detection and selection are gated on this so a stored or browser preference
+ *  for a not-yet-complete locale never produces a half-translated UI. */
+export function isDeliveredLocale(value: unknown): value is Locale {
+  return typeof value === 'string' && DELIVERED_LOCALES.includes(value as Locale);
+}
+
 /** Resolve the best supported locale from a BCP-47 tag like `es-419` → `es`. */
 function normalizeTag(tag: string | null | undefined): Locale | null {
   if (!tag) return null;
@@ -54,7 +71,7 @@ function detectInitialLocale(): Locale {
   if (typeof window === 'undefined') return DEFAULT_LOCALE;
   try {
     const stored = window.localStorage.getItem(STORAGE_KEY);
-    if (isLocale(stored)) return stored;
+    if (isDeliveredLocale(stored)) return stored;
   } catch {
     /* storage unavailable — fall through to navigator detection */
   }
@@ -63,7 +80,7 @@ function detectInitialLocale(): Locale {
     : [navigator.language];
   for (const tag of navLocales) {
     const match = normalizeTag(tag);
-    if (match) return match;
+    if (match && isDeliveredLocale(match)) return match;
   }
   return DEFAULT_LOCALE;
 }
@@ -109,7 +126,10 @@ export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [locale]);
 
   const setLocale = useCallback((next: Locale) => {
-    if (!isLocale(next)) return;
+    // Only adopt locales we actually deliver app-wide; a server- or
+    // localStorage-supplied locale for an unfinished language is ignored so the
+    // UI never falls into a half-translated state.
+    if (!isDeliveredLocale(next)) return;
     setLocaleState(next);
     try {
       window.localStorage.setItem(STORAGE_KEY, next);
