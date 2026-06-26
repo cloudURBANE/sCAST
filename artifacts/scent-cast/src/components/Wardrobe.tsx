@@ -1133,7 +1133,17 @@ export const Wardrobe: React.FC<{
     let secondFrame = 0;
     let readyTimer: number | null = null;
     let idleHandle: number | null = null;
-    const readyDelayMs = constrainedDetailMode ? 180 : 80;
+    // The bottle morph is a 0.4s Framer `layout` tween whose transform is computed
+    // on the MAIN THREAD each frame. On constrained phones (iPhone) the heavy
+    // deferred panels (the two ScentNotesInfographic pyramids) must NOT mount while
+    // that morph is running, or the mount's long task drops the morph's frames —
+    // the iPhone-only "glitchy movement + settle" (iPad never defers, so it mounts
+    // everything before the morph and stays smooth). Wait past the 400ms morph
+    // (+buffer) before revealing them so the morph owns a clean main thread, then
+    // the panels fade in once the bottle has landed. iOS Safari has no
+    // requestIdleCallback, so the setTimeout delay below is the path actually taken
+    // on iPhone — it must clear the morph window.
+    const readyDelayMs = constrainedDetailMode ? 460 : 80;
     const idleTimeoutMs = constrainedDetailMode ? 700 : 320;
 
     firstFrame = window.requestAnimationFrame(() => {
@@ -1142,9 +1152,12 @@ export const Wardrobe: React.FC<{
           crumb(`detail:deferred-ready#${detailOpenCountRef.current}`);
           setDetailDeferredContentReady(true);
         };
-        if (typeof window.requestIdleCallback === 'function') {
+        if (!constrainedDetailMode && typeof window.requestIdleCallback === 'function') {
           idleHandle = window.requestIdleCallback(markReady, { timeout: idleTimeoutMs });
         } else {
+          // Constrained phones take the fixed delay deterministically: an idle
+          // callback (Android Chrome) could fire early, mid-morph — exactly what we
+          // are avoiding. The fixed timeout guarantees we clear the morph window.
           readyTimer = window.setTimeout(markReady, readyDelayMs);
         }
       });
