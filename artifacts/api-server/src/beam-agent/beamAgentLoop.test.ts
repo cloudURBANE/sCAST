@@ -171,6 +171,52 @@ test("a mid-loop provider timeout with grounded evidence degrades gracefully, no
   assert.equal(summary?.outcome, "completed");
 });
 
+test("a false 'can't access your wardrobe' refusal is re-prompted, not shipped", async () => {
+  // The weak free-tier orchestration model can answer a vault question from memory
+  // with a data-access refusal instead of calling the tool. The loop must correct
+  // the premise and push it to actually retrieve — never ship that refusal.
+  const events: BeamRunEvent[] = [];
+  const toolCalls: { input: unknown }[] = [];
+  let completed: string | undefined;
+  const refusal = "I'm sorry, but I can't access your wardrobe right now.";
+  const { callModel, seen } = scriptedModel([
+    text(refusal), // opening turn: from-memory refusal → generic retrieval nudge
+    text(refusal), // still refusing → wardrobe-access nudge
+    { stop_reason: "tool_use", content: [{ type: "tool_use", id: "tu_1", name: "beam_get_wardrobe", input: {} }] },
+    text("draft"), // model now has evidence → orchestration draft → synthesis
+    text("Reach for **Aventus** today — its bright, smoky character is a confident all-day pick."),
+  ]);
+
+  await runBeamAgent({
+    ctx,
+    userMessage: "What should I wear from my collection?",
+    tools: [wardrobeTool(toolCalls)],
+    emit: (event) => events.push(event),
+    isModelConfigured: () => true,
+    callModel,
+    synthesisModel: "strong-model",
+    onComplete: (response) => (completed = response),
+  });
+
+  // The wardrobe tool was offered up front…
+  assert.ok(seen[0].tools.some((t) => t.name === "beam_get_wardrobe"), "wardrobe tool must be offered");
+  // …the loop pushed the wardrobe-access correction…
+  assert.ok(
+    seen.some((input) =>
+      input.messages.some(
+        (m) => typeof m.content === "string" && /You DO have access to the user's wardrobe/.test(m.content),
+      ),
+    ),
+    "the loop must correct the false 'no access' premise",
+  );
+  // …the re-prompt actually drove a real retrieval…
+  assert.equal(toolCalls.length, 1, "the model must be pushed to actually call beam_get_wardrobe");
+  // …and the shipped answer is a grounded pick, never the refusal.
+  assert.ok(completed, "the run must complete with an answer");
+  assert.doesNotMatch(completed!, /can'?t|cannot|unable to|no access/i);
+  assert.match(completed!, /Aventus/);
+});
+
 /**
  * A tool that resolves a single curated-match scent_profile card the way
  * beam_show_scent_profile does — grounding a real fragrance and emitting a

@@ -31,7 +31,7 @@ import {
 } from "./beamToolCore.ts";
 import type { ClaudeCallInput, ClaudeResponse } from "./types.ts";
 import { callModel as defaultCallModel, isModelConfigured as defaultIsModelConfigured } from "./provider.ts";
-import { buildGroundedCommitFallback, buildSafeClarification, repairInstructionFor, runAnswerQualityGates } from "./answerQualityGates.ts";
+import { buildGroundedCommitFallback, buildSafeClarification, isDataAccessRefusal, repairInstructionFor, runAnswerQualityGates } from "./answerQualityGates.ts";
 import { candidateMatchesAvoid, parseAvoidTerms } from "./avoidFilter.ts";
 import { estimateRunCostUsd, type ModelUsage } from "./costLedger.ts";
 import { beamSessionStatePrompt } from "./missionState.ts";
@@ -68,6 +68,15 @@ const TOOL_TIMEOUT_MS = 20_000;
  * re-prompts, so a model that insists on narrating still terminates.
  */
 const MAX_ACT_NUDGES = 2;
+
+/**
+ * Cap on "you claimed you can't access the wardrobe — actually retrieve it"
+ * re-prompts. A weak free-tier tool-caller can answer a vault question from
+ * memory with a false data-access refusal instead of calling beam_get_wardrobe;
+ * we push it to retrieve rather than shipping that refusal. Bounded so a model
+ * that keeps refusing still terminates (it then ships, honestly degraded).
+ */
+const MAX_WARDROBE_NUDGES = 2;
 
 /**
  * Conversation-flow gates police HOW a clarification is worded (re-asking a known
@@ -264,6 +273,21 @@ const ACT_NUDGE =
   "You stopped before finishing. If you still need data, call the tool(s) now — emit the " +
   "actual tool calls, do not just describe them. If you already have enough evidence, write " +
   "the final recommendation instead. Do not end your turn on a promise to act.";
+
+/**
+ * Sent when the model claims it can't access the user's wardrobe instead of
+ * calling the tool. The wardrobe IS retrievable, so we correct the false premise
+ * and push it to actually fetch — never letting a from-memory "I can't see your
+ * vault" reach the user. (An honest empty-vault result is a different thing and
+ * is allowed; see isDataAccessRefusal.)
+ */
+const WARDROBE_ACCESS_NUDGE =
+  "You DO have access to the user's wardrobe. Call beam_get_wardrobe now (and " +
+  "beam_get_user_context to ground families + weather), then answer from the " +
+  "results. Never tell the user you can't access, see, read, or retrieve their " +
+  "wardrobe or vault — the tool returns it. If beam_get_wardrobe comes back with " +
+  "zero bottles, the vault is genuinely empty: say it's empty and suggest adding " +
+  "a few from search. That honest empty result is fine; a 'no access' claim is not.";
 
 /** Last-turn instruction that converts grounded kit evidence into the required card. */
 const FINAL_KIT_PRESENTATION_NUDGE =
@@ -913,6 +937,11 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
     let usedTools = false;
     let retrievalNudged = false;
     let actNudges = 0;
+    // Set once beam_get_wardrobe / beam_get_user_context returns successfully (even
+    // empty). Until then a "can't access your wardrobe" reply is a false refusal we
+    // re-prompt; after a real retrieval, an honest empty-vault answer is accepted.
+    let wardrobeRetrieved = false;
+    let wardrobeNudges = 0;
     // Most recent non-empty assistant prose; shipped as the answer if we hit the
     // run budget mid-orchestration (better than a scripted-fallback non-sequitur).
     let lastText = "";
@@ -1333,6 +1362,18 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
           messages.push({ role: "user", content: ACT_NUDGE });
           continue;
         }
+        // Never ship a false "I can't access your wardrobe" refusal. If the model
+        // denies wardrobe access before actually retrieving it, correct the premise
+        // and push it to call beam_get_wardrobe. Bounded so a model that keeps
+        // refusing still terminates; only fires until a real retrieval happened, so
+        // an honest empty-vault answer is left untouched.
+        if (!wardrobeRetrieved && wardrobeNudges < MAX_WARDROBE_NUDGES && isDataAccessRefusal(text)) {
+          wardrobeNudges++;
+          retrievalNudged = true;
+          messages.push({ role: "assistant", content: response.content });
+          messages.push({ role: "user", content: WARDROBE_ACCESS_NUDGE });
+          continue;
+        }
         await finish(text);
         return;
       }
@@ -1447,6 +1488,12 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
           continue;
         }
         results.push({ type: "tool_result", tool_use_id: use.id, content: serialized });
+        // A successful wardrobe/context read (even an empty vault) means the agent
+        // HAS seen what the user owns — so a later "I can't access your wardrobe"
+        // reply can no longer be a false data-access refusal worth re-prompting.
+        if (def.name === "beam_get_wardrobe" || def.name === "beam_get_user_context") {
+          wardrobeRetrieved = true;
+        }
         // Register the fragrances this result actually grounds, so the closing
         // synthesis can be pinned to only naming fragrances we retrieved.
         addGroundedNames(collectGroundedFragranceNames(result));

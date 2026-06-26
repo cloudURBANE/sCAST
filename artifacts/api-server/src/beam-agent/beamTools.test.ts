@@ -309,6 +309,29 @@ test("beam_get_wardrobe maps the vault to owned packets", async () => {
   assert.equal(result.items[0].canonicalName, "Sauvage");
 });
 
+test("beam_get_wardrobe returns count===N with every owned item, in order", async () => {
+  const vault = [
+    { id: "v1", name: "Sauvage", brand: "Dior", families: ["fresh"], accords: ["pepper"] },
+    { id: "v2", name: "Aventus", brand: "Creed", families: ["fruity"], accords: ["smoky"] },
+    { id: "v3", name: "Oud Wood", brand: "Tom Ford", families: ["woody"], accords: ["oud"] },
+    { id: "v4", name: "Light Blue", brand: "Dolce & Gabbana", families: ["citrus"], accords: ["lemon"] },
+    { id: "v5", name: "Bleu de Chanel", brand: "Chanel", families: ["woody"], accords: ["incense"] },
+  ];
+  const tools = toolMap(makeDeps({ loadVault: async () => vault }));
+  const result = (await tools.get("beam_get_wardrobe")!.handler({}, CTX)) as {
+    count: number;
+    items: Array<{ owned: boolean; canonicalName: string }>;
+  };
+  assert.equal(result.count, vault.length, "count must equal the wardrobe row count");
+  assert.equal(result.items.length, vault.length);
+  assert.ok(result.items.every((item) => item.owned === true), "every packet is owned");
+  assert.deepEqual(
+    result.items.map((item) => item.canonicalName),
+    vault.map((v) => v.name),
+    "wardrobe items round-trip in order",
+  );
+});
+
 test("beam_get_user_context summarizes vault + weather", async () => {
   const tools = toolMap(makeDeps());
   const result = (await tools.get("beam_get_user_context")!.handler({}, CTX)) as {
