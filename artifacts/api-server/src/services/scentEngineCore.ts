@@ -15,7 +15,10 @@ import type {
   ScentVector,
   PerformanceMetrics,
   ContextProfile,
+  VectorCoverage,
+  VectorConfidence,
 } from "./scentVectorizer";
+import { deriveVectorConfidence } from "./scentVectorizer.ts";
 import type { FragranceData } from "./datasetLoader";
 import { resolvePyramidNotes } from "./fragranceNotes.ts";
 
@@ -35,6 +38,20 @@ export interface ScentProfile {
   storageProvider?: string;
   sourceProvider?: string;
   description?: string;
+  /**
+   * A2-GAP1/3: share of the note set that matched the keyword dictionary (0..1),
+   * and the coarse provenance flag derived from it. Carried on the persisted
+   * profile so downstream scoring can discount a vector that is mostly fabricated
+   * from unrecognized notes instead of trusting it like a fully-recognized one.
+   */
+  match_ratio?: number;
+  vector_confidence?: VectorConfidence;
+  /**
+   * A2-GAP5: when an authoritative source (the Python engine's complete
+   * `derived_metrics`) supplied the performance metrics, this records that the
+   * stored `performance` came from real data rather than the keyword formula.
+   */
+  metrics_source?: "engine" | "formula";
   error?: string;
 }
 
@@ -71,8 +88,16 @@ export interface ScentEngineDeps {
     vector: ScentVector,
     family: string,
     concentration: string,
+    coverage?: VectorCoverage,
   ) => PerformanceMetrics;
   calculateContext: (vector: ScentVector) => ContextProfile;
+  /**
+   * A2-GAP1/3: optional note-coverage assessment. When provided, the resulting
+   * `match_ratio` + `vector_confidence` are attached to the profile and the
+   * coverage gates `calculatePerformance` for note-less vectors. Omitting it
+   * preserves the legacy (ungated, unflagged) behavior.
+   */
+  assessVectorCoverage?: (parsed: ParsedFragrance) => VectorCoverage;
 
   // Identity resolution + dataset lookup
   resolveFragranceIdentity: (brand: string, name: string) => FragranceIdentity;
@@ -150,6 +175,17 @@ export interface BuildProfileFallback {
   imageUrl?: string;
   pyramid?: { top: string[]; heart: string[]; base: string[] };
   perfumer?: string;
+  /**
+   * A2-GAP5: authoritative performance metrics supplied by the Python engine's
+   * `derived_metrics`. Preferred over the keyword formula when
+   * `metricsComplete` is true (source_coverage was complete), so a fully-enriched
+   * fragrance is scored on real sillage/longevity/projection instead of a vector
+   * re-derived from a thin note list. Each field is optional; the formula fills
+   * any gap.
+   */
+  metrics?: { sillage?: number; longevity?: number; projection?: number };
+  /** True when the engine's source_coverage was complete (metrics are trustworthy). */
+  metricsComplete?: boolean;
 }
 
 export interface BuildProfileOpts {
@@ -277,9 +313,19 @@ export async function buildProfileWithDeps(
         imageUrl: fallback?.imageUrl ?? resolved.imageUrl,
         pyramid: resolved.pyramid ?? fallback?.pyramid,
         perfumer: resolved.perfumer ?? fallback?.perfumer,
+        // A2-GAP5: carry the engine's authoritative metrics through the fold so
+        // they can be preferred over the keyword formula below.
+        metrics: resolved.metrics ?? fallback?.metrics,
+        metricsComplete: resolved.metricsComplete ?? fallback?.metricsComplete,
       };
     }
   }
+
+  // A2-GAP5: the engine's authoritative metrics (and whether source_coverage was
+  // complete) ride on the engine-supplied fallback. Captured before the
+  // effective-fallback merge below narrows the object.
+  const engineMetrics = fallback?.metrics;
+  const engineMetricsComplete = Boolean(fallback?.metricsComplete);
 
   const engineFallbackComplete =
     preferEngineData &&
@@ -459,7 +505,43 @@ export async function buildProfileWithDeps(
   }
 
   const vector = deps.vectorize(parsed);
-  const performance = deps.calculatePerformance(vector, finalFamily, parsed.concentration);
+
+  // A2-GAP1/3: assess how much of the note set actually fed the vector, so the
+  // profile can carry an honest provenance flag and the note-less case is gated.
+  const coverage = deps.assessVectorCoverage?.(parsed);
+  const vectorConfidence = coverage ? deriveVectorConfidence(coverage) : undefined;
+
+  const formulaPerformance = deps.calculatePerformance(
+    vector,
+    finalFamily,
+    parsed.concentration,
+    coverage,
+  );
+
+  // A2-GAP5: when the engine supplied complete derived_metrics, prefer them over
+  // the keyword formula (the formula re-derives sillage/longevity from a thin
+  // vector and routinely disagrees with the crowd-voted reality). Fall back to
+  // the formula for any field the engine did not provide.
+  const useEngineMetrics =
+    engineMetricsComplete &&
+    engineMetrics != null &&
+    (Number.isFinite(engineMetrics.sillage) ||
+      Number.isFinite(engineMetrics.longevity) ||
+      Number.isFinite(engineMetrics.projection));
+  const clampMetric = (value: number) => Math.min(10, Math.max(1, Math.round(value)));
+  const performance: PerformanceMetrics = useEngineMetrics
+    ? {
+        sillage: Number.isFinite(engineMetrics!.sillage)
+          ? clampMetric(engineMetrics!.sillage!)
+          : formulaPerformance.sillage,
+        longevity: Number.isFinite(engineMetrics!.longevity)
+          ? clampMetric(engineMetrics!.longevity!)
+          : formulaPerformance.longevity,
+        ...(Number.isFinite(engineMetrics!.projection)
+          ? { projection: clampMetric(engineMetrics!.projection!) }
+          : {}),
+      }
+    : formulaPerformance;
   const context = deps.calculateContext(vector);
 
   const profile: ScentProfile = {
@@ -482,6 +564,8 @@ export async function buildProfileWithDeps(
     storageProvider: processedImage?.storageProvider,
     sourceProvider: processedImage?.sourceProvider,
     description: finalDescription,
+    ...(coverage ? { match_ratio: coverage.match_ratio, vector_confidence: vectorConfidence } : {}),
+    metrics_source: useEngineMetrics ? "engine" : "formula",
   };
 
   // 3. Save to global catalog so future users skip all the above work

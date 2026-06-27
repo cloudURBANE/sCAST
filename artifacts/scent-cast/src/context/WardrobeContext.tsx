@@ -523,6 +523,26 @@ const getFragranceLongevity = (item: Fragrance): string | number | undefined => 
   return numberFromValue(value);
 };
 
+/**
+ * Phase 2 (A2-GAP1/3): a 0..1 data-quality signal from the backend vector's
+ * provenance. The scent engine builds a 6-axis vector from a keyword dictionary;
+ * when most of a fragrance's notes were unrecognized (`vector_confidence: 'none'`
+ * / a low `match_ratio`) that vector is largely fabricated and must not lend the
+ * recommendation full confidence. Returns undefined for profiles that predate the
+ * provenance fields (older catalog rows / engine-only details) so they are not
+ * retroactively penalized.
+ */
+const getFragranceVectorConfidence = (item: Fragrance): number | undefined => {
+  const record = getFragranceRecord(item);
+  const flag = typeof record.vector_confidence === 'string' ? record.vector_confidence : undefined;
+  if (flag === 'none') return 0;
+  if (flag === 'low') return 0.4;
+  if (flag === 'ok') return 1;
+  const ratio = numberFromValue(record.match_ratio);
+  if (ratio !== undefined && Number.isFinite(ratio)) return Math.max(0, Math.min(1, ratio));
+  return undefined;
+};
+
 const getFragranceTraitTexts = (item: Fragrance): string[] => {
   const traits: string[] = [];
   traits.push(...getFragranceFamilies(item));
@@ -798,10 +818,17 @@ const buildEngineInput = (
       longevity: getFragranceLongevity(item),
       sillage: getFragranceSillage(item),
     },
-    // How much real structured data backs this fragrance (share of the four
-    // metric systems present). Caps engine confidence so thin/unenriched
-    // profiles can't surface as "high" just because weather+setting are known.
-    dataConfidence: buildOutlookCandidate(item).confidence,
+    // How much real structured data backs this fragrance. Blends the share of
+    // the four crowd metric systems present (buildOutlookCandidate.confidence)
+    // with the backend vector's note-coverage provenance (Phase 2) so a profile
+    // whose 6-axis vector was mostly fabricated from unrecognized notes can't
+    // surface as "high" just because weather+setting are known. Profiles without
+    // the newer provenance fields fall back to the structured-metric share alone.
+    dataConfidence: (() => {
+      const structured = buildOutlookCandidate(item).confidence ?? 0;
+      const vectorSignal = getFragranceVectorConfidence(item);
+      return vectorSignal === undefined ? structured : (structured + vectorSignal) / 2;
+    })(),
   };
 };
 

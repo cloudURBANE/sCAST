@@ -68,6 +68,61 @@ function asStringArray(value: unknown): string[] {
   return value.filter((v): v is string => typeof v === "string" && v.trim().length > 0);
 }
 
+function asFiniteNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+/**
+ * A2-GAP5: mirror the SPA's `isSourceCoverageComplete` predicate so the
+ * api-server only trusts engine `derived_metrics` when both authoritative
+ * sources resolved and the engine flagged the metrics complete. Loosening this
+ * would let a Basenotes-only / cold-search detail's partial metrics override the
+ * keyword formula with thin data.
+ */
+function isEngineCoverageComplete(coverage: unknown): boolean {
+  if (!coverage || typeof coverage !== "object") return false;
+  const c = coverage as Record<string, unknown>;
+  const derived = typeof c.derived_metrics === "string" ? c.derived_metrics.toLowerCase() : "";
+  return (
+    c.basenotes === true &&
+    c.fragrantica === true &&
+    (c.complete === true ||
+      c.fragrantica_metrics_complete === true ||
+      derived === "complete" ||
+      derived === "completed" ||
+      derived === "full")
+  );
+}
+
+/**
+ * A2-GAP5: pull authoritative sillage/longevity (0..10) out of the engine's
+ * `derived_metrics.performance_score`. The engine exposes a 0..10 `*_score` and a
+ * 0..100 `*_percent`; we prefer the score and fall back to percent/10. Projection
+ * is not a distinct engine field, so it is left for the keyword path / SPA to
+ * derive.
+ */
+function extractEngineMetrics(
+  derivedMetrics: unknown,
+): { sillage?: number; longevity?: number } | undefined {
+  if (!derivedMetrics || typeof derivedMetrics !== "object") return undefined;
+  const perf = (derivedMetrics as Record<string, unknown>).performance_score;
+  if (!perf || typeof perf !== "object") return undefined;
+  const p = perf as Record<string, unknown>;
+  const sillage =
+    asFiniteNumber(p.sillage_score) ??
+    (asFiniteNumber(p.sillage_percent) !== undefined ? asFiniteNumber(p.sillage_percent)! / 10 : undefined) ??
+    (asFiniteNumber(p.sillage_pct) !== undefined ? asFiniteNumber(p.sillage_pct)! / 10 : undefined);
+  const longevity =
+    asFiniteNumber(p.longevity_score) ??
+    (asFiniteNumber(p.longevity_percent) !== undefined ? asFiniteNumber(p.longevity_percent)! / 10 : undefined) ??
+    (asFiniteNumber(p.longevity_pct) !== undefined ? asFiniteNumber(p.longevity_pct)! / 10 : undefined);
+  if (sillage === undefined && longevity === undefined) return undefined;
+  return {
+    ...(sillage !== undefined ? { sillage } : {}),
+    ...(longevity !== undefined ? { longevity } : {}),
+  };
+}
+
 /**
  * Resolve `brand`/`name` to a full fallback (notes + family + pyramid + image)
  * via the engine, or null when nothing real could be obtained.
@@ -110,6 +165,8 @@ export async function resolveProfileViaEngine(
   const d = detail as {
     family?: unknown;
     image_url?: unknown;
+    source_coverage?: unknown;
+    derived_metrics?: unknown;
     raw?: {
       description?: unknown;
       notes?: { has_pyramid?: unknown; top?: unknown; heart?: unknown; base?: unknown; flat?: unknown };
@@ -138,11 +195,17 @@ export async function resolveProfileViaEngine(
     Boolean(rawNotes.has_pyramid) &&
     topNotes.length + heartNotes.length + baseNotes.length > 0;
 
+  // A2-GAP5: carry the engine's authoritative metrics when source_coverage is
+  // complete, so the scent engine prefers them over the keyword formula.
+  const metricsComplete = isEngineCoverageComplete(d.source_coverage);
+  const metrics = metricsComplete ? extractEngineMetrics(d.derived_metrics) : undefined;
+
   return {
     notes,
     ...(family ? { family } : {}),
     ...(description ? { description } : {}),
     ...(imageUrl ? { imageUrl } : {}),
     ...(hasPyramid ? { pyramid: { top: topNotes, heart: heartNotes, base: baseNotes } } : {}),
+    ...(metrics ? { metrics, metricsComplete: true } : {}),
   };
 }
