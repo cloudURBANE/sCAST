@@ -9,6 +9,7 @@
     "verify:image-pipeline": "tsx ./src/verify-image-pipeline.ts",
     "measure:image-load": "tsx ./src/measure-wardrobe-image-load.ts",
     "backfill:orientation": "tsx ./src/backfill-orientation.ts",
+    "repair:image-refs": "tsx ./src/repair-image-refs.ts",
     "verify:poof-paths": "tsx ../artifacts/api-server/src/services/verifyPoofPaths.ts",
     "qa:beam-live": "tsx ./qa/beam-live-qa.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"

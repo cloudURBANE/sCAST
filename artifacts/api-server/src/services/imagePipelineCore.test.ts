@@ -145,6 +145,31 @@ test("image object storage derives the Firebase bucket from project id when only
   }
 });
 
+test("image cache classifies the un-migrated ON CONFLICT index error (42P10) as tolerable", async () => {
+  const { isImageCacheConflictTargetMissing, isImageCacheRelationMissing } = await import(
+    "./imageCacheErrorClassifier.ts"
+  );
+
+  // The exact failure when migration 0001 (the 3-column unique index) has not
+  // been applied: every processed-image upsert throws 42P10. This must be
+  // tolerated (serve uncached) rather than blacking the image out.
+  assert.equal(isImageCacheConflictTargetMissing({ code: "42P10" }), true);
+  assert.equal(
+    isImageCacheConflictTargetMissing({
+      message: "there is no unique or exclusion constraint matching the ON CONFLICT specification",
+    }),
+    true,
+  );
+
+  // It must NOT swallow unrelated errors, and the two detectors stay disjoint.
+  assert.equal(isImageCacheConflictTargetMissing({ code: "23505" }), false);
+  assert.equal(isImageCacheConflictTargetMissing(new Error("connection refused")), false);
+  assert.equal(isImageCacheConflictTargetMissing({ code: "42P01" }), false);
+  assert.equal(isImageCacheRelationMissing({ code: "42P10" }), false);
+  // The table-missing detector still recognizes 42P01.
+  assert.equal(isImageCacheRelationMissing({ code: "42P01" }), true);
+});
+
 test("explicit Supabase storage wins over a derived Firebase bucket", async () => {
   const { getImageObjectStorage } = await import("./imageObjectStorage.ts");
   const previous = {
