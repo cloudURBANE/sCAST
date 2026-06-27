@@ -15,6 +15,10 @@ import {
   shouldRetryFailedImageStatus,
 } from "./imagePipelineCachePolicy";
 import { assertNoPersistedBase64Image, safeImageUrlForResponse } from "./persistenceGuards";
+import {
+  isImageCacheConflictTargetMissing,
+  isImageCacheRelationMissing,
+} from "./imageCacheErrorClassifier";
 export {
   buildProcessedImageStorageKey,
   hashBuffer,
@@ -101,13 +105,34 @@ function warnImageCacheMissingOnce(): void {
 }
 
 export function isImageCacheUnavailableError(err: unknown): boolean {
-  const value = err as { code?: unknown; message?: unknown } | null;
-  const isMissing =
-    value?.code === "42P01" ||
-    (typeof value?.message === "string" &&
-      /relation ["']?image_cache["']? does not exist/i.test(value.message));
+  const isMissing = isImageCacheRelationMissing(err);
   if (isMissing) warnImageCacheMissingOnce();
   return isMissing;
+}
+
+let imageCacheConflictIndexWarned = false;
+
+function warnImageCacheConflictIndexMissingOnce(): void {
+  if (imageCacheConflictIndexWarned) return;
+  imageCacheConflictIndexWarned = true;
+  logger.error(
+    "image_cache is missing the (source_url_hash, pipeline_version, background_removed) unique index, " +
+      "so every processed-image upsert fails (Postgres 42P10) and images cannot be cached — processed " +
+      "objects still upload and serve for the current request, but nothing persists. Apply migration " +
+      "lib/db/migrations/0001_image_cache_bg_variant_unique.sql (creates image_cache_source_pipeline_bg_unique_idx) " +
+      "against the production database to restore caching.",
+  );
+}
+
+/**
+ * Detects the un-migrated ON CONFLICT index error (SQLSTATE 42P10) and logs a
+ * one-time, actionable error. Pure detection lives in imageCacheErrorClassifier
+ * so it can be unit-tested without importing this module's db/logger deps.
+ */
+export function isImageCacheConflictTargetMissingError(err: unknown): boolean {
+  const matches = isImageCacheConflictTargetMissing(err);
+  if (matches) warnImageCacheConflictIndexMissingOnce();
+  return matches;
 }
 
 function rowToReference(row: typeof imageCacheTable.$inferSelect, cached: boolean): CachedImageReference | null {
@@ -502,7 +527,13 @@ export async function recordImageReady(input: {
       })
       .returning();
   } catch (err) {
-    if (isImageCacheUnavailableError(err)) return readyInputToReference(input);
+    // Either the table is missing (42P01) or the unique index the ON CONFLICT
+    // targets has not been migrated yet (42P10). In both cases caching is
+    // impossible, but the object already uploaded — serve it for this request
+    // instead of throwing into the deferred path's silent null ("No image").
+    if (isImageCacheUnavailableError(err) || isImageCacheConflictTargetMissingError(err)) {
+      return readyInputToReference(input);
+    }
     throw err;
   }
 
@@ -565,6 +596,10 @@ export async function recordImageFailure(input: {
         },
       });
   } catch (err) {
-    if (!isImageCacheUnavailableError(err)) throw err;
+    // A missing table (42P01) or un-migrated conflict index (42P10) just means
+    // the negative-cache write is a no-op; never let it surface as an error.
+    if (!isImageCacheUnavailableError(err) && !isImageCacheConflictTargetMissingError(err)) {
+      throw err;
+    }
   }
 }
