@@ -71,6 +71,25 @@ function parseImageCdnBases(raw: string | undefined): string[] {
 const IMAGE_CDN_BASES = parseImageCdnBases(import.meta.env?.VITE_IMAGE_CDN_BASES as string | undefined);
 
 /**
+ * Whether to render our processed objects DIRECTLY from the storage bucket
+ * (browser → CDN), skipping `/api/image-proxy`. This is the lowest-latency path,
+ * but it only works when the bucket object is publicly reachable from the browser
+ * (public-read rules, correct public host, valid download token, no CORS/CORP
+ * block). When any of those is off, the direct <img> 403/404s and the tile shows
+ * "Unavailable".
+ *
+ * Defaults to OFF so processed images load through the same-origin proxy, which
+ * reads the object with the server's storage credentials and is robust to bucket
+ * misconfiguration. Set `VITE_IMAGE_DIRECT_CDN=true` to opt back into direct CDN
+ * rendering once the bucket is confirmed publicly reachable.
+ */
+function envFlagEnabled(value: unknown): boolean {
+  return typeof value === "string" && value.trim().toLowerCase() === "true";
+}
+
+const DIRECT_CDN_ENABLED = envFlagEnabled(import.meta.env?.VITE_IMAGE_DIRECT_CDN);
+
+/**
  * True when `url` points at one of our already-processed image objects, which are
  * served from a CDN-backed bucket with long immutable Cache-Control. These never
  * need the proxy — sending them through `/api/image-proxy` only adds a full origin
@@ -111,15 +130,15 @@ export function proxiedImageUrl(url: string | undefined | null, options?: Proxie
 
   if (!/^https?:\/\//i.test(u)) return u;
 
-  // Phase 1: our own processed images are already served immutable from a
-  // CDN-backed bucket, so render them directly and skip the proxy entirely.
-  // The full URL (including any v= cache-buster) is preserved as-is, and the
-  // packshot trim is intentionally ignored — these are processed transparent
-  // WebPs that must not be JPEG-trimmed (the backend proxy skips trim for them
-  // too). Only third-party hotlink sources fall through to /api/image-proxy.
-  // `forceProxy` (Phase-4 fallback) intentionally skips this passthrough so a
-  // direct CDN URL that failed can be re-attempted through the proxy.
-  if (!options?.forceProxy && isProcessedStorageImageUrl(u)) return u;
+  const processed = isProcessedStorageImageUrl(u);
+
+  // Our own processed images are immutable WebPs. When direct-CDN rendering is
+  // explicitly enabled AND the object is publicly reachable, render them directly
+  // and skip the proxy entirely (lowest latency). By default direct CDN is OFF,
+  // so processed objects fall through to /api/image-proxy, which reads them with
+  // the server's storage credentials — robust to a non-public/misconfigured
+  // bucket. `forceProxy` (Phase-4 fallback) also routes through the proxy.
+  if (!options?.forceProxy && processed && DIRECT_CDN_ENABLED) return u;
 
   // Read v= from the upstream URL so the proxy URL itself can vary by version
   // (helps the browser and any in-front CDN treat each version as distinct).
@@ -135,6 +154,8 @@ export function proxiedImageUrl(url: string | undefined | null, options?: Proxie
     // malformed URL: use as-is without extracting version
   }
   const base = `${apiUrl("/api/image-proxy", apiBaseUrl)}?url=${encodeURIComponent(u)}${version !== null ? `&v=${encodeURIComponent(version)}` : ""}`;
-  if (options?.packshot) return `${base}&trim=1`;
+  // Never JPEG-trim our own processed objects — they are transparent WebPs and the
+  // backend skips trim for them anyway.
+  if (options?.packshot && !processed) return `${base}&trim=1`;
   return base;
 }

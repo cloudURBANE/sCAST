@@ -15,27 +15,27 @@ test("processed image objects render directly from API origin, even in packshot 
   assert.equal(url.includes("/api/image-proxy"), false);
 });
 
-test("processed Supabase CDN URLs render directly, bypassing the proxy in packshot mode", () => {
-  const url = proxiedImageUrl(
-    "https://abc.supabase.co/storage/v1/object/public/images/images/processed/brand/slug/hash-v3.webp?v=v3",
-    { apiBaseUrl: "https://api.example.com", packshot: true },
-  );
+test("processed Supabase CDN URLs route through the same-origin proxy by default (no trim re-encode)", () => {
+  const raw =
+    "https://abc.supabase.co/storage/v1/object/public/images/images/processed/brand/slug/hash-v3.webp?v=v3";
+  const url = proxiedImageUrl(raw, { apiBaseUrl: "https://api.example.com", packshot: true });
 
-  // Direct passthrough: same URL, no proxy wrapper, no trim re-encode, v= preserved.
+  // Default (VITE_IMAGE_DIRECT_CDN unset): processed objects go through the proxy,
+  // which reads them with the server's storage credentials. v= is preserved and
+  // trim is NOT appended (processed transparent WebPs must not be JPEG-trimmed).
   assert.equal(
     url,
-    "https://abc.supabase.co/storage/v1/object/public/images/images/processed/brand/slug/hash-v3.webp?v=v3",
+    "https://api.example.com/api/image-proxy?url=" + encodeURIComponent(raw) + "&v=v3",
   );
-  assert.equal(url.includes("/api/image-proxy"), false);
 });
 
-test("processed Firebase alt=media URLs (percent-encoded path) render directly", () => {
+test("processed Firebase alt=media URLs (percent-encoded path) route through the proxy by default", () => {
   const raw =
     "https://firebasestorage.googleapis.com/v0/b/my-bucket/o/images%2Fprocessed%2Fbrand%2Fslug%2Fhash-v3.webp?alt=media&token=abc";
   const url = proxiedImageUrl(raw, { apiBaseUrl: "https://api.example.com", packshot: true });
 
-  assert.equal(url, raw);
-  assert.equal(url.includes("/api/image-proxy"), false);
+  assert.equal(url, "https://api.example.com/api/image-proxy?url=" + encodeURIComponent(raw));
+  assert.equal(url.includes("&trim=1"), false);
 });
 
 test("isProcessedStorageImageUrl matches the configurable CDN-base allowlist", () => {
@@ -54,19 +54,17 @@ test("isProcessedStorageImageUrl matches the configurable CDN-base allowlist", (
   assert.equal(isProcessedStorageImageUrl("https://fimgs.net/mdimg/perfume/375x500.123.jpg", bases), false);
 });
 
-test("forceProxy routes a processed CDN object back through the proxy (Phase-4 fallback)", () => {
+test("processed CDN objects route through the proxy with cache version preserved", () => {
   const raw =
     "https://abc.supabase.co/storage/v1/object/public/images/images/processed/brand/slug/hash-v3.webp?v=v3";
-  // Without forceProxy it renders directly (Phase 1).
+  const expected =
+    "https://api.example.com/api/image-proxy?url=" + encodeURIComponent(raw) + "&v=v3";
+  // Default routing and the explicit Phase-4 forceProxy fallback produce the same
+  // same-origin proxy URL.
+  assert.equal(proxiedImageUrl(raw, { apiBaseUrl: "https://api.example.com" }), expected);
   assert.equal(
-    proxiedImageUrl(raw, { apiBaseUrl: "https://api.example.com" }),
-    raw,
-  );
-  // With forceProxy it is wrapped in /api/image-proxy so a failed direct fetch can be retried.
-  const forced = proxiedImageUrl(raw, { apiBaseUrl: "https://api.example.com", forceProxy: true });
-  assert.equal(
-    forced,
-    "https://api.example.com/api/image-proxy?url=" + encodeURIComponent(raw) + "&v=v3",
+    proxiedImageUrl(raw, { apiBaseUrl: "https://api.example.com", forceProxy: true }),
+    expected,
   );
 });
 

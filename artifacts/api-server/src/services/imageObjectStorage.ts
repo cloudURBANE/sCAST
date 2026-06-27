@@ -20,10 +20,30 @@ export type UploadedImageObject = {
   sizeBytes: number;
 };
 
+export type ProcessedObjectBytes = {
+  buffer: Buffer;
+  contentType: string;
+};
+
 export interface ImageObjectStorage {
   uploadProcessedImage(input: UploadProcessedImageInput): Promise<UploadedImageObject>;
   getPublicUrl(storagePath: string): Promise<string>;
+  /**
+   * Read a processed object's bytes via AUTHENTICATED provider access (service
+   * account / service-role key / local FS) rather than the public URL. This is
+   * what lets the API serve a processed image same-origin even when the bucket is
+   * not publicly readable, the public URL host is wrong, or the browser is blocked
+   * by CORS/CORP — the credentials used to upload the object can always read it
+   * back.
+   */
+  getObjectBytes(storagePath: string): Promise<ProcessedObjectBytes>;
   deleteObject?(storagePath: string): Promise<void>;
+}
+
+function contentTypeForKey(key: string): string {
+  if (/\.webp$/i.test(key)) return "image/webp";
+  if (/\.png$/i.test(key)) return "image/png";
+  return "image/jpeg";
 }
 
 const DEFAULT_CACHE_CONTROL = "public, max-age=31536000, immutable";
@@ -63,6 +83,47 @@ export function storagePathFromLocalImageObjectUrl(value: string): string | null
   }
 }
 
+/**
+ * Recover the `images/processed/...` storage key from ANY URL shape this app
+ * produces for a processed object:
+ *   - same-origin local route:  /api/image-objects/images/processed/...
+ *   - Supabase public/object:   .../storage/v1/object/public/<bucket>/images/processed/...
+ *   - Firebase download URL:    .../o/images%2Fprocessed%2F...?alt=media&token=...
+ *   - a custom CDN base:        https://cdn.example/images/processed/...
+ *
+ * Returns the validated key (so it always lives under images/processed) or null
+ * when the URL is not one of our processed objects. This is what lets the proxy
+ * serve a stored object by AUTHENTICATED key read regardless of the (possibly
+ * dead) public URL recorded for it.
+ */
+export function processedStoragePathFromUrl(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  const local = storagePathFromLocalImageObjectUrl(trimmed);
+  if (local) return local;
+
+  const candidates = [trimmed];
+  try {
+    candidates.push(decodeURIComponent(trimmed));
+  } catch {
+    /* malformed percent-encoding: only scan the literal form */
+  }
+
+  for (const candidate of candidates) {
+    const match = candidate.match(/images\/processed\/[a-z0-9/_-]+\.(?:webp|png|jpe?g)/i);
+    if (!match) continue;
+    try {
+      assertSafeStorageKey(match[0]);
+      return match[0];
+    } catch {
+      /* not a safe key; keep scanning */
+    }
+  }
+  return null;
+}
+
 function assertSafeStorageKey(key: string): void {
   if (!key || key.startsWith("/") || key.includes("\\") || key.includes("..")) {
     throw new Error("Unsafe image storage key");
@@ -94,6 +155,10 @@ class LocalImageObjectStorage implements ImageObjectStorage {
   async getPublicUrl(storagePath: string): Promise<string> {
     assertSafeStorageKey(storagePath);
     return `/api/image-objects/${encodeStoragePath(storagePath)}`;
+  }
+
+  async getObjectBytes(storagePath: string): Promise<ProcessedObjectBytes> {
+    return { buffer: await readLocalImageObject(storagePath), contentType: contentTypeForKey(storagePath) };
   }
 
   async deleteObject(storagePath: string): Promise<void> {
@@ -173,6 +238,14 @@ class FirebaseImageObjectStorage implements ImageObjectStorage {
     return `https://firebasestorage.googleapis.com/v0/b/${this.bucketName}/o/${encodeURIComponent(storagePath)}?alt=media&token=${token}`;
   }
 
+  async getObjectBytes(storagePath: string): Promise<ProcessedObjectBytes> {
+    assertSafeStorageKey(storagePath);
+    // Service-account download reads the object regardless of bucket public-read
+    // rules or download-token state.
+    const [buffer] = await this.getBucket().file(storagePath).download();
+    return { buffer, contentType: contentTypeForKey(storagePath) };
+  }
+
   async deleteObject(storagePath: string): Promise<void> {
     assertSafeStorageKey(storagePath);
     await this.getBucket().file(storagePath).delete({ ignoreNotFound: true });
@@ -227,6 +300,25 @@ class SupabaseImageObjectStorage implements ImageObjectStorage {
     const base = process.env.SUPABASE_IMAGE_PUBLIC_URL_BASE?.replace(/\/+$/, "");
     if (base) return `${base}/${encodeStoragePath(storagePath)}`;
     return `${this.supabaseUrl.replace(/\/+$/, "")}/storage/v1/object/public/${this.bucket}/${encodeStoragePath(storagePath)}`;
+  }
+
+  async getObjectBytes(storagePath: string): Promise<ProcessedObjectBytes> {
+    assertSafeStorageKey(storagePath);
+    // The non-`/public/` object endpoint authenticated with the service-role key
+    // reads the object even when the bucket is private.
+    const endpoint = `${this.supabaseUrl.replace(/\/+$/, "")}/storage/v1/object/${this.bucket}/${encodeStoragePath(storagePath)}`;
+    const response = await fetch(endpoint, {
+      headers: {
+        "Authorization": `Bearer ${this.serviceRoleKey}`,
+        "apikey": this.serviceRoleKey,
+      },
+    });
+    if (!response.ok) {
+      throw new Error(`Supabase Storage read failed with HTTP ${response.status}`);
+    }
+    const buffer = Buffer.from(await response.arrayBuffer());
+    const contentType = response.headers.get("content-type") || contentTypeForKey(storagePath);
+    return { buffer, contentType };
   }
 
   async deleteObject(storagePath: string): Promise<void> {
