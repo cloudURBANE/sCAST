@@ -1,9 +1,18 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { AlertOctagon, RotateCcw } from 'lucide-react';
 import { reloadForStaleRouteChunk } from '@/lib/routeChunkRecovery';
+import { crumb } from '@/lib/crashTrace';
 
 interface Props {
   children: ReactNode;
+  // When provided, render this instead of the full-screen "system disruption"
+  // overlay. Used by route-scoped boundaries so a secondary-feature crash
+  // degrades to a localized panel while the app shell (nav) stays mounted,
+  // rather than blanking the whole SPA and hard-navigating to "/".
+  fallback?: (error: Error, reset: () => void) => ReactNode;
+  // Short label so a caught render error is attributable to its subtree in the
+  // crashTrace breadcrumb trail.
+  scope?: string;
 }
 
 interface State {
@@ -23,6 +32,10 @@ export class ErrorBoundary extends Component<Props, State> {
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     if (reloadForStaleRouteChunk(error)) return;
+    // Persist a breadcrumb so caught React exceptions — the most diagnosable
+    // failures — leave a trail in crashTrace alongside the iOS WebContent-kill
+    // case it already records, instead of only an ephemeral console line.
+    crumb(`react-error${this.props.scope ? `:${this.props.scope}` : ''}: ${error.message}`);
     console.error('Uncaught error in boundary:', error, errorInfo);
   }
 
@@ -31,8 +44,17 @@ export class ErrorBoundary extends Component<Props, State> {
     window.location.href = '/';
   };
 
+  // Clear the error without leaving the current route. Used by the localized
+  // fallback so the user can retry the failed subtree in place.
+  private handleResetLocal = () => {
+    this.setState({ hasError: false, error: null });
+  };
+
   public render() {
     if (this.state.hasError) {
+      if (this.props.fallback && this.state.error) {
+        return this.props.fallback(this.state.error, this.handleResetLocal);
+      }
       return (
         <div role="alert" className="fixed inset-0 z-[999] flex items-center justify-center p-6 bg-[#080808]/90 backdrop-blur-sm text-white font-sans">
           <div className="relative w-full max-w-lg overflow-hidden border border-white/10 rounded-[var(--radius-scent)] bg-black/70 backdrop-blur-sm p-8 sm:p-12 shadow-2xl space-y-8">
@@ -77,4 +99,40 @@ export class ErrorBoundary extends Component<Props, State> {
 
     return this.props.children;
   }
+}
+
+// Localized fallback for route-scoped boundaries: a compact in-flow panel that
+// keeps the app shell (nav/footer) interactive so the user can navigate away or
+// retry the failed view in place, instead of the full-screen root overlay.
+export function RouteErrorFallback({
+  label,
+  error,
+  onRetry,
+}: {
+  label: string;
+  error: Error;
+  onRetry: () => void;
+}) {
+  return (
+    <div role="alert" className="mx-auto my-16 w-full max-w-md px-6 text-center text-white">
+      <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-red-500/10 border border-red-500/20 text-red-400">
+        <AlertOctagon size={26} strokeWidth={1.5} />
+      </div>
+      <h2 className="font-serif italic text-2xl text-[#fff7ec] tracking-tight">
+        {label} couldn't load
+      </h2>
+      <p className="mt-2 text-sm text-white/55 leading-relaxed">
+        Something went wrong rendering this view. The rest of the app is still here.
+      </p>
+      <p className="mt-3 text-xs text-white/35 font-mono break-words">{error.message}</p>
+      <button
+        type="button"
+        onClick={onRetry}
+        className="mt-6 inline-flex items-center justify-center gap-2 rounded-[var(--radius-scent)] border border-white/15 px-5 h-11 text-sm text-white/80 hover:bg-white/5 transition-colors"
+      >
+        <RotateCcw size={16} className="shrink-0" />
+        <span>Try again</span>
+      </button>
+    </div>
+  );
 }

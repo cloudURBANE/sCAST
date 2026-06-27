@@ -1471,7 +1471,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         })
         .then(d => { if (d.userId) setUserId(d.userId); })
         .catch((err) => {
-          if (err.name !== 'AbortError') {
+          if (!(err instanceof Error) || err.name !== 'AbortError') {
             console.error("Settings load failed", err);
           }
         });
@@ -2342,17 +2342,25 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // computed once on intent submission; without this, a later weather refresh
   // (temperature/humidity/rain/wind change) would leave a stale pick and stale
   // spray/projection/window advice on screen that can contradict current air.
-  // Re-score against the same intent whenever weather (or the wardrobe) changes
-  // while a pick is displayed. Cleared on close so it no-ops otherwise.
+  // Re-score against the same intent whenever weather changes while a pick is
+  // displayed. Cleared on close so it no-ops otherwise.
+  //
+  // We intentionally depend on `weather` ONLY (reading the current wardrobe via
+  // itemsRef). Depending on `items` re-ran this on every background mutation
+  // (60s reconcile poll, image backfill merge, enrichment write) and would
+  // reassign activeRecommendation to a possibly-different winner mid-view,
+  // silently swapping the fragrance the user is reading and resetting overlay
+  // scroll. Weather is the only signal that should re-score an open pick.
   useEffect(() => {
     const intent = lastIntentRef.current;
-    if (!intent || items.length === 0) return;
-    const winner = calculateEngineAlignment(items, intent, weather);
+    const currentItems = itemsRef.current;
+    if (!intent || currentItems.length === 0) return;
+    const winner = calculateEngineAlignment(currentItems, intent, weather);
     if (!winner) return;
     setActiveEngineRecommendation(winner.recommendation);
     setRecommendationReason(winner.recommendation.explanation);
     setActiveRecommendation(winner.item);
-  }, [weather, items]);
+  }, [weather]);
 
   const closeRecommendationOverlay = useCallback(() => {
     lastIntentRef.current = null;
