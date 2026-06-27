@@ -10,8 +10,35 @@ import {
   type ImageProxyPayload,
 } from "../services/imageProxyCache";
 import { fetchExternalImage, parseAndValidateExternalImageUrl } from "../services/safeImageFetch";
+import { getImageObjectStorage, processedStoragePathFromUrl } from "../services/imageObjectStorage";
 
 const router = Router();
+
+/**
+ * For one of our own processed objects, read the bytes via AUTHENTICATED provider
+ * access (service account / service-role key / local FS) keyed on the recovered
+ * `images/processed/...` path. This serves the image same-origin even when the
+ * recorded public URL is unreachable from the browser (private bucket, wrong
+ * public host, missing download token, CORS/CORP). Returns null when the URL is
+ * not a processed object or no provider can read it, so the caller falls back to
+ * the ordinary external fetch and behavior never regresses below today.
+ */
+async function readProcessedObjectBytes(
+  targetUrl: string,
+): Promise<{ body: Buffer; contentType: string } | null> {
+  const storagePath = processedStoragePathFromUrl(targetUrl);
+  if (!storagePath) return null;
+  try {
+    const { buffer, contentType } = await getImageObjectStorage().getObjectBytes(storagePath);
+    return { body: buffer, contentType };
+  } catch (err) {
+    logger.warn(
+      { err: err instanceof Error ? err.message : String(err), storagePath },
+      "image-proxy: authenticated processed-object read failed; falling back to direct fetch",
+    );
+    return null;
+  }
+}
 
 function wantsPackshotTrim(req: { query: Record<string, unknown> }): boolean {
   const v = req.query.trim;
@@ -74,6 +101,16 @@ router.get("/image-proxy", async (req, res) => {
 
   try {
     const payload = await imageProxyCache.getOrLoad(cacheKey, async (signal): Promise<ImageProxyPayload> => {
+      // Prefer an authenticated read for our own processed objects so a bucket
+      // that is not browser-reachable (private, wrong public host, dead token,
+      // CORS) still serves same-origin. Processed objects are already-normalized
+      // WebPs, so the packshot-trim branch below never applies to them.
+      const processed = await readProcessedObjectBytes(target.toString());
+      if (processed) {
+        throwIfSignalAborted(signal);
+        return processed;
+      }
+
       const upstream = await fetchExternalImage(target.toString(), { signal });
       throwIfSignalAborted(signal);
       let body = upstream.buffer;

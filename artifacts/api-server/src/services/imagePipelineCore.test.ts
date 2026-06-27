@@ -145,6 +145,37 @@ test("image object storage derives the Firebase bucket from project id when only
   }
 });
 
+test("processedStoragePathFromUrl recovers the storage key from every processed URL shape", async () => {
+  const { processedStoragePathFromUrl } = await import("./imageObjectStorage.ts");
+  const key = "images/processed/serper/creed-aventus/abc123.webp";
+
+  // Same-origin local route.
+  assert.equal(
+    processedStoragePathFromUrl(`/api/image-objects/${key}`),
+    key,
+  );
+  // Supabase public object URL.
+  assert.equal(
+    processedStoragePathFromUrl(`https://abc.supabase.co/storage/v1/object/public/images/${key}?v=v3`),
+    key,
+  );
+  // Firebase download URL with percent-encoded path + token.
+  assert.equal(
+    processedStoragePathFromUrl(
+      `https://firebasestorage.googleapis.com/v0/b/my-bucket/o/${encodeURIComponent(key)}?alt=media&token=abc`,
+    ),
+    key,
+  );
+  // Custom CDN base.
+  assert.equal(processedStoragePathFromUrl(`https://cdn.example.com/${key}`), key);
+
+  // Not one of our processed objects → null (so the proxy falls back to fetch).
+  assert.equal(processedStoragePathFromUrl("https://fimgs.net/mdimg/perfume/375x500.123.jpg"), null);
+  assert.equal(processedStoragePathFromUrl("https://evil.test/images/processed/../../etc/passwd"), null);
+  assert.equal(processedStoragePathFromUrl(""), null);
+  assert.equal(processedStoragePathFromUrl(null), null);
+});
+
 test("image cache classifies the un-migrated ON CONFLICT index error (42P10) as tolerable", async () => {
   const { isImageCacheConflictTargetMissing, isImageCacheRelationMissing } = await import(
     "./imageCacheErrorClassifier.ts"
