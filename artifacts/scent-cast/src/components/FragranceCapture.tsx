@@ -915,12 +915,12 @@ export const FragranceCapture: React.FC<{
       // Let the complete flourish finish before the veil begins its own exit.
       await sleep(reduceMotion ? REDUCED_MOTION_SETTLE_MS : SYNC_COMPLETE_SETTLE_MS);
       resetState();
-    } catch (err: any) {
-      if (err.name === 'AbortError') return;
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return;
       setErrorStatus(
         isFetchNetworkError(err)
           ? 'Fragrance sync is temporarily unavailable. Check your connection and try again.'
-          : err?.message || "Fragrance detail fetch failed. Please check your connection.",
+          : (err instanceof Error && err.message) || "Fragrance detail fetch failed. Please check your connection.",
       );
       setErrorPhase('sync');
     } finally {

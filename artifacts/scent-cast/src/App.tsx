@@ -21,6 +21,7 @@ import { WeatherProvider, useWeather } from './context/WeatherContext';
 import { WardrobeProvider, useWardrobe, useWardrobeItems, useWardrobeShareModalActions } from './context/WardrobeContext';
 import { Toaster } from './components/ui/toaster';
 import { PageTransitionOverlay, warmTransitionEmblem } from './components/PageTransitionOverlay';
+import { ErrorBoundary, RouteErrorFallback } from './components/ErrorBoundary';
 import { useModalBehavior } from '@/hooks/use-modal-behavior';
 import { useRenderBudget } from '@/hooks/useRenderBudget';
 import { useMarqueeSwipe } from '@/hooks/useMarqueeSwipe';
@@ -1708,12 +1709,48 @@ const AppContent = React.memo(function AppContent({ location }: { location: Loca
       <React.Suspense fallback={<RouteChunkFallback />}>
         <Routes location={location}>
           <Route path="/" element={<DashboardView />} />
-          <Route path="/community" element={<CommunityPageView />} />
-          <Route path="/arena" element={<ArenaPageView />} />
+          <Route
+            path="/community"
+            element={
+              <ErrorBoundary
+                scope="community"
+                fallback={(error, reset) => (
+                  <RouteErrorFallback label="The community feed" error={error} onRetry={reset} />
+                )}
+              >
+                <CommunityPageView />
+              </ErrorBoundary>
+            }
+          />
+          <Route
+            path="/arena"
+            element={
+              <ErrorBoundary
+                scope="arena"
+                fallback={(error, reset) => (
+                  <RouteErrorFallback label="The arena" error={error} onRetry={reset} />
+                )}
+              >
+                <ArenaPageView />
+              </ErrorBoundary>
+            }
+          />
           {import.meta.env.DEV && IpadFreezeLab ? (
             <Route path="/debug/ipad-freeze" element={<IpadFreezeLab />} />
           ) : null}
-          <Route path="/share/:userId" element={<SharePageView />} />
+          <Route
+            path="/share/:userId"
+            element={
+              <ErrorBoundary
+                scope="share"
+                fallback={(error, reset) => (
+                  <RouteErrorFallback label="This shared vault" error={error} onRetry={reset} />
+                )}
+              >
+                <SharePageView />
+              </ErrorBoundary>
+            }
+          />
           <Route path="/privacy" element={<PrivacyPage />} />
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/cookies" element={<CookiePolicyPage />} />

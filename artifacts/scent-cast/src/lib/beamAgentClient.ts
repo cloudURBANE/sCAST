@@ -184,6 +184,34 @@ export class BeamAgentError extends Error {
 
 type StartRunResponse = { runId: string; sessionId: string; eventsUrl: string };
 
+// Guarded reader for the run-start body. Throws BeamAgentError (not a raw
+// SyntaxError) on an empty/non-JSON 2xx, and validates that the three fields we
+// dereference downstream (runId, eventsUrl, sessionId) are present non-empty
+// strings before the caller interpolates them into follow-up request URLs.
+async function parseStartRunResponse(res: Response): Promise<StartRunResponse> {
+  const raw = await res.text();
+  if (!raw.trim()) {
+    throw new BeamAgentError('Beam Agent run started with an empty response.', res.status);
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new BeamAgentError('Beam Agent run returned a malformed response.', res.status);
+  }
+  const isNonEmptyString = (v: unknown): v is string => typeof v === 'string' && v.length > 0;
+  if (
+    !parsed ||
+    typeof parsed !== 'object' ||
+    !isNonEmptyString((parsed as StartRunResponse).runId) ||
+    !isNonEmptyString((parsed as StartRunResponse).eventsUrl) ||
+    !isNonEmptyString((parsed as StartRunResponse).sessionId)
+  ) {
+    throw new BeamAgentError('Beam Agent run returned an unexpected response shape.', res.status);
+  }
+  return parsed as StartRunResponse;
+}
+
 // Concierge-voiced progress copy. These read as a person curating, not a tool
 // loop — "Reading your calibration" / "Searching the catalog" exposed the
 // machinery underneath the luxury surface and made the wait read like a debug
@@ -251,7 +279,11 @@ export async function runBeamAgentMission(options: RunBeamAgentOptions): Promise
   if (!startRes.ok) {
     throw new BeamAgentError(`Beam Agent run could not start (${startRes.status}).`, startRes.status);
   }
-  const start = (await startRes.json()) as StartRunResponse;
+  // A 2xx with an empty/HTML body (Vercel edge stripping content-length, a
+  // cold-start gateway, a proxy error page) makes res.json() throw an opaque
+  // SyntaxError that is neither a BeamAgentError nor an AbortError, crashing the
+  // panel. Read the text first and validate the shape before trusting it.
+  const start = await parseStartRunResponse(startRes);
 
   let stopRequested = false;
   const stopRun = async (): Promise<void> => {

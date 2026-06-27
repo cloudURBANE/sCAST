@@ -1007,6 +1007,43 @@ function directFragranceEngineUrl(path: string): string | null {
 // from feeling sluggish (worst added latency ≈ 1.7s before falling through).
 const ENGINE_RETRY_BACKOFF_MS = [500, 1200] as const;
 
+// Wall-clock ceiling for a single engine fetch attempt. The external Python
+// engine is the flaky tier (Railway cold starts, upstream scrapes), and a
+// socket that connects but then stalls never rejects on its own. Without a
+// ceiling a hung request can pin a caller's in-flight guard indefinitely — e.g.
+// the wardrobe self-heal loop's `enrichmentRefreshInFlightRef`, which would
+// then stop refreshing for the life of the tab. Applied per attempt (on top of
+// the transient-retry budget), not across the whole loop.
+const ENGINE_FETCH_TIMEOUT_MS = 20_000;
+
+// Compose the caller's optional abort signal with a per-attempt timeout into a
+// single signal. Deliberately avoids AbortSignal.any/AbortSignal.timeout, which
+// have narrower WebKit support than this app targets. Returns the merged init
+// plus a cleanup that clears the timer and detaches the listener; callers must
+// run cleanup once the fetch settles.
+function withEngineTimeout(
+  init: RequestInit | undefined,
+  timeoutMs: number,
+): { init: RequestInit; cleanup: () => void } {
+  const controller = new AbortController();
+  const callerSignal = init?.signal ?? null;
+  if (callerSignal?.aborted) {
+    controller.abort(callerSignal.reason);
+  }
+  const onCallerAbort = () => controller.abort(callerSignal?.reason);
+  callerSignal?.addEventListener("abort", onCallerAbort, { once: true });
+  const timer = setTimeout(() => {
+    controller.abort(
+      new DOMException("Fragrance engine request timed out", "TimeoutError"),
+    );
+  }, timeoutMs);
+  const cleanup = () => {
+    clearTimeout(timer);
+    callerSignal?.removeEventListener("abort", onCallerAbort);
+  };
+  return { init: { ...init, signal: controller.signal }, cleanup };
+}
+
 type FragranceEngineFetchOptions = {
   retryBackoffMs?: readonly number[];
 };
@@ -1052,13 +1089,16 @@ async function fetchFragranceEngine(
   let lastError: unknown;
 
   for (let attempt = 0; attempt <= retryBackoffMs.length; attempt++) {
+    const { init: timedInit, cleanup } = withEngineTimeout(init, ENGINE_FETCH_TIMEOUT_MS);
     try {
-      const res = await fetch(primaryUrl, init);
+      const res = await fetch(primaryUrl, timedInit);
       if (res.ok || res.status < 500) return res;
       lastError = new Error(`Fragrance engine request failed: ${res.status}`);
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") throw err;
       lastError = err;
+    } finally {
+      cleanup();
     }
 
     // Retry the primary across a transient blip before falling through to the
@@ -1077,7 +1117,12 @@ async function fetchFragranceEngine(
   const fallbackUrl = directFragranceEngineUrl(pathname);
   const fallbackRequestUrl = fallbackUrl ? `${fallbackUrl}${querySuffix}` : null;
   if (fallbackRequestUrl && fallbackRequestUrl !== primaryUrl) {
-    return fetch(fallbackRequestUrl, init);
+    const { init: timedInit, cleanup } = withEngineTimeout(init, ENGINE_FETCH_TIMEOUT_MS);
+    try {
+      return await fetch(fallbackRequestUrl, timedInit);
+    } finally {
+      cleanup();
+    }
   }
 
   if (lastError instanceof Error) throw lastError;

@@ -1486,8 +1486,8 @@ export const Wardrobe: React.FC<{
           `This preview still has a fallback background.${reason} Try another image fix before saving.`,
         );
       }
-    } catch (err: any) {
-      setRefreshError(err.message || 'Image refresh failed');
+    } catch (err) {
+      setRefreshError(err instanceof Error ? err.message : 'Image refresh failed');
     } finally {
       setRefreshingId(null);
     }
@@ -1614,8 +1614,8 @@ export const Wardrobe: React.FC<{
       const merged = await onPersistWardrobeImage(selectedItem, pendingPreview.url, frameDraft);
       if (!merged) throw new Error('Could not save — try again or check your connection.');
       closeDetail();
-    } catch (err: any) {
-      setRefreshError(err.message || 'Save failed');
+    } catch (err) {
+      setRefreshError(err instanceof Error ? err.message : 'Save failed');
     } finally {
       setPersistBusy(false);
     }
@@ -1638,8 +1638,8 @@ export const Wardrobe: React.FC<{
       setPendingPreview(null);
       setBgFallbackWarning(null);
       setBottleImageToolsOpen(false);
-    } catch (err: any) {
-      setRefreshError(err.message || 'Frame save failed');
+    } catch (err) {
+      setRefreshError(err instanceof Error ? err.message : 'Frame save failed');
     } finally {
       setPersistBusy(false);
     }
