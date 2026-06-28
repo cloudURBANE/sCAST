@@ -30,6 +30,57 @@ test("calculateScentWeatherRecommendation does not recommend zero sprays for wea
   assert.equal(recommendation.spray_count.min, 1);
 });
 
+test("spray_count band stays coherent (min <= recommended <= max) for parfum + gym + hot-humid + subtle", () => {
+  // Parfum base=1, then gym caps contextualMax to 1, hot-humid/-subtle/strong
+  // sillage stack penalties that drive the raw recommended deeply negative. The
+  // band must still clamp into [wearableMinimum, contextualMax] and read 1-1-1.
+  const recommendation = calculateScentWeatherRecommendation({
+    weather: {
+      temperature_f: 92,
+      humidity_percent: 85,
+      wind_speed_mph: 0,
+      is_raining: false,
+      condition: "Hot and humid",
+    },
+    setting: { type: "gym" },
+    fragrance: {
+      name: "Quiet Parfum",
+      brand: "Example",
+      concentration: "parfum",
+      scent_families: ["fresh", "musky"],
+      accords: ["clean musk"],
+      sillage: "strong",
+    },
+    userPreference: { projectionPreference: "subtle" },
+  });
+
+  const { min, recommended, max } = recommendation.spray_count;
+  assert.ok(min <= recommended, "min must not exceed recommended");
+  assert.ok(recommended <= max, "recommended must not exceed max");
+  assert.equal(recommended, 1);
+  assert.equal(min, 1);
+  assert.equal(max, 1);
+});
+
+test("zero-trait fragrance does not earn medium confidence", () => {
+  // Real weather + recognized setting + a fragrance object with NO families,
+  // accords, or vector → no scent evidence, so confidence must floor to low even
+  // though the structural gates (weather+setting known) pass.
+  const recommendation = calculateScentWeatherRecommendation({
+    weather: {
+      temperature_f: 68,
+      humidity_percent: 45,
+      wind_speed_mph: 3,
+      is_raining: false,
+      condition: "Clear",
+      data_complete: true,
+    },
+    setting: { type: "work", recognized: true },
+    fragrance: { name: "Mystery", brand: "Example", concentration: "eau de parfum" },
+  });
+  assert.equal(recommendation.confidence, "low");
+});
+
 const richFragrance = {
   name: "Reference",
   brand: "Example",

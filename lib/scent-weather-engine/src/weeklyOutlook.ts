@@ -199,6 +199,16 @@ function finiteOr(value: number | null | undefined, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
+// Bounds of the temperature→warmth gradient. The cold floor is widened to 10°F
+// (from a previous 30°F) so genuinely cold days — a 12°F arctic morning vs a
+// 28°F frost — still produce DIFFERENT ideal warmths and therefore reorder the
+// vault, instead of collapsing every sub-freezing day to an identical ranking.
+// SPAN is derived from the two bounds so the divisor in idealWarmth can never
+// drift from them.
+const WARMTH_TEMP_MIN_F = 10;
+const WARMTH_TEMP_MAX_F = 95;
+const WARMTH_TEMP_SPAN_F = WARMTH_TEMP_MAX_F - WARMTH_TEMP_MIN_F;
+
 /**
  * The ideal "warmth" of a fragrance for a given day, on a 0..1 scale.
  *
@@ -210,11 +220,14 @@ function finiteOr(value: number | null | undefined, fallback: number): number {
  * engine's threshold rules alone would have treated both days the same.
  */
 export function idealWarmth(climate: OutlookDayClimate): number {
-  const temperature = clamp(finiteOr(climate.temperature_f, 70), 30, 95);
+  const temperature = clamp(finiteOr(climate.temperature_f, 70), WARMTH_TEMP_MIN_F, WARMTH_TEMP_MAX_F);
   const humidity = clamp(finiteOr(climate.humidity, 50), 0, 100);
 
-  // 1.0 at 30°F → 0.0 at 95°F. Temperature is the dominant driver.
-  let ideal = (95 - temperature) / 65;
+  // 1.0 at WARMTH_TEMP_MIN_F → 0.0 at WARMTH_TEMP_MAX_F. Temperature is the
+  // dominant driver. The divisor is the SPAN derived from the clamp constants,
+  // not a hand-copied magic number, so widening the cold floor below cannot
+  // silently desync the gradient.
+  let ideal = (WARMTH_TEMP_MAX_F - temperature) / WARMTH_TEMP_SPAN_F;
   // Humidity nudges toward fresh (lower warmth): muggy air makes heavy scents
   // cloying. Scaled modestly so it refines rather than overrides temperature.
   ideal -= ((humidity - 50) / 100) * 0.25;
