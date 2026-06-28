@@ -561,12 +561,21 @@ const getFragranceVectorConfidence = (item: Fragrance): number | undefined => {
   return undefined;
 };
 
+// WS-7: a profile-vector axis must reach >= 30% of the 0-10 range before it counts
+// as a present scent trait. Mirrors VECTOR_TRAIT_THRESHOLD in the scent-weather
+// engine so candidate hit-counting and the engine's family verdicts agree.
+const VECTOR_TRAIT_THRESHOLD = 3;
+
 const getFragranceTraitTexts = (item: Fragrance): string[] => {
   const traits: string[] = [];
   traits.push(...getFragranceFamilies(item));
   traits.push(...getFragranceAccords(item));
   for (const [key, value] of Object.entries(getFragranceProfileVector(item))) {
-    if (Number.isFinite(value) && value > 0) traits.push(key);
+    // WS-7: only count an axis as a present trait at meaningful magnitude (>= 30%
+    // of the 0-10 range), matching the engine's VECTOR_TRAIT_THRESHOLD. The
+    // vectorizer no longer applies a +2.5 floor, so a residual near-zero axis must
+    // not be promoted to a family signal for candidate hit-counting.
+    if (Number.isFinite(value) && value >= VECTOR_TRAIT_THRESHOLD) traits.push(key);
   }
   return traits.map(normalizeTrait).filter(Boolean);
 };

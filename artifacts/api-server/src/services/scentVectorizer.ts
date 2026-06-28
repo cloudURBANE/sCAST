@@ -39,7 +39,7 @@ export interface VectorCoverage {
 
 export type VectorConfidence = "none" | "low" | "ok";
 
-type VectorKey = keyof ScentVector;
+export type VectorKey = keyof ScentVector;
 
 interface Rule {
   words: string[];
@@ -197,19 +197,66 @@ function wordRegex(word: string): RegExp {
   return re;
 }
 
-function scoreText(text: string, rules: Rule[]): number {
-  let score = 0;
-  for (const rule of rules) {
-    for (const word of rule.words) {
-      if (wordRegex(word).test(text)) score += rule.weight;
-    }
+// WS-7: shared ingredients that legitimately appear in 2-3 axis rule lists
+// (oud in woodiness+spice, ambroxan in woodiness+warmth+musk, iso e super in
+// woodiness+musk). Left untagged they inflate every axis they appear in and a
+// clean woody scent reads as spicy/musky. Each is pinned to ONE primary axis;
+// the suppression below only drops its contribution to a NON-primary axis when
+// the match on that axis came solely from the shared ingredient (a real,
+// non-shared note on the same axis is preserved).
+const PRIMARY_AXIS: Record<string, VectorKey> = {
+  "oud": "woodiness",
+  "agarwood": "woodiness",
+  "oud wood": "woodiness",
+  "ambroxan": "warmth",
+  "iso e super": "woodiness",
+};
+
+const SHARED_WORDS = new Set(Object.keys(PRIMARY_AXIS));
+
+function primaryAxisFor(note: string): VectorKey | undefined {
+  for (const ing of SHARED_WORDS) {
+    if (wordRegex(ing).test(note)) return PRIMARY_AXIS[ing];
   }
-  return score;
+  return undefined;
 }
 
-function scoreLayer(notes: string[], positionWeight: number, rules: Rule[]): number {
-  const text = notes.join(" , ");
-  return scoreText(text, rules) * positionWeight;
+// True when this note's match on `key` is leakage from a shared ingredient:
+// `key` is not the ingredient's primary axis AND every word matching `key` for
+// this note is itself a shared ingredient (no genuine non-shared note matched).
+function isSharedAxisLeak(note: string, key: VectorKey, primary: VectorKey): boolean {
+  if (key === primary) return false;
+  for (const rule of RULES[key]) {
+    for (const word of rule.words) {
+      if (SHARED_WORDS.has(word)) continue;
+      if (wordRegex(word).test(note)) return false;
+    }
+  }
+  return true;
+}
+
+// WS-7: score a single distinct note. Each axis-rule fires at most ONCE per note
+// (we take the strongest matching weight for that axis), replacing the old
+// per-layer joined-text scan that double-counted shared tokens. Shared-ingredient
+// leakage into non-primary axes is suppressed via the primary-axis map.
+function scoreNote(note: string): Partial<Record<VectorKey, number>> {
+  const out: Partial<Record<VectorKey, number>> = {};
+  const primary = primaryAxisFor(note);
+  for (const key of Object.keys(RULES) as VectorKey[]) {
+    let best = 0;
+    for (const rule of RULES[key]) {
+      for (const word of rule.words) {
+        if (wordRegex(word).test(note)) {
+          if (rule.weight > best) best = rule.weight;
+          break;
+        }
+      }
+    }
+    if (best <= 0) continue;
+    if (primary && isSharedAxisLeak(note, key, primary)) continue;
+    out[key] = best;
+  }
+  return out;
 }
 
 // A2-GAP4: fold the parsed accords into the relevant axes at a low weight.
@@ -227,6 +274,12 @@ function scoreAccords(accords: string[] | undefined, key: VectorKey): number {
   return score;
 }
 
+// WS-7: gain that maps the normalized weighted note sum into the 0-10 range. Tuned
+// so a focused fragrance's dominant axis saturates near 10 while genuine-but-minor
+// signals land in the 2-6 band — replacing the old unconditional +2.5 floor that
+// collapsed dynamic range (any hit jumped to >=3).
+const VECTOR_GAIN = 2.4;
+
 export function vectorize(parsed: ParsedFragrance): ScentVector {
   const v: Record<VectorKey, number> = {
     freshness: 0, sweetness: 0, woodiness: 0, spice: 0, warmth: 0, musk: 0
@@ -235,27 +288,63 @@ export function vectorize(parsed: ParsedFragrance): ScentVector {
   const { top, heart, base } = parsed.pyramidNotes;
   const hasPyramid = top.length > 0 || heart.length > 0 || base.length > 0;
 
-  for (const key of Object.keys(v) as VectorKey[]) {
-    const rules = RULES[key];
-
-    if (hasPyramid) {
-      v[key] +=
-        scoreLayer(top, PYRAMID_WEIGHTS.top, rules) +
-        scoreLayer(heart, PYRAMID_WEIGHTS.heart, rules) +
-        scoreLayer(base, PYRAMID_WEIGHTS.base, rules);
-    } else {
-      v[key] += scoreLayer(parsed.notes, 1.0, rules);
+  // WS-7: collect DISTINCT notes with their highest position weight so a note that
+  // recurs across layers (or is duplicated) is scored once, at its strongest
+  // position. Pyramid layers keep their top/heart/base weighting.
+  const noteWeights = new Map<string, number>();
+  const addNotes = (notes: string[], positionWeight: number) => {
+    for (const raw of notes) {
+      const note = String(raw ?? "").trim().toLowerCase();
+      if (!note) continue;
+      noteWeights.set(note, Math.max(noteWeights.get(note) ?? 0, positionWeight));
     }
+  };
+  if (hasPyramid) {
+    addNotes(top, PYRAMID_WEIGHTS.top);
+    addNotes(heart, PYRAMID_WEIGHTS.heart);
+    addNotes(base, PYRAMID_WEIGHTS.base);
+  } else {
+    addNotes(parsed.notes, 1.0);
+  }
 
-    v[key] += scoreText(parsed.description, rules) * 0.5;
+  let matchedNoteCount = 0;
+  for (const [note, positionWeight] of noteWeights) {
+    const contrib = scoreNote(note);
+    let matched = false;
+    for (const key of Object.keys(contrib) as VectorKey[]) {
+      v[key] += contrib[key]! * positionWeight;
+      matched = true;
+    }
+    if (matched) matchedNoteCount += 1;
+  }
+
+  // WS-7: only score the marketing description when there are NO notes/pyramid at
+  // all (mirror the hasPyramid guard). Previously the description was scored on
+  // every axis unconditionally, contaminating note-backed vectors. Each axis-rule
+  // fires once over the description.
+  if (noteWeights.size === 0) {
+    for (const key of Object.keys(v) as VectorKey[]) {
+      for (const rule of RULES[key]) {
+        if (rule.words.some((word) => wordRegex(word).test(parsed.description))) {
+          v[key] += rule.weight * 0.5;
+        }
+      }
+    }
+  }
+
+  for (const key of Object.keys(v) as VectorKey[]) {
     v[key] += scoreAccords(parsed.accords, key);
   }
 
+  // WS-7: normalize the raw weighted sum by sqrt(matched note count) BEFORE
+  // scaling, so a long note list cannot saturate every axis while a focused
+  // fragrance keeps a strong dominant axis. No additive floor — magnitude and the
+  // zero/near-zero of unmatched axes are preserved for downstream consumers.
+  const denom = Math.sqrt(Math.max(1, matchedNoteCount));
   const vector: any = {};
   for (const key in v) {
-    let val = v[key as VectorKey];
-    if (val > 0) val += 2.5;
-    vector[key] = Math.min(10, Math.round(val));
+    const normalized = v[key as VectorKey] / denom;
+    vector[key] = Math.max(0, Math.min(10, Math.round(normalized * VECTOR_GAIN)));
   }
   return vector as ScentVector;
 }
