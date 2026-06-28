@@ -5,7 +5,11 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { FEEDBACK_REASON_CODES, validateBeamFeedbackInput } from "./beamFeedbackCore.ts";
+import {
+  FEEDBACK_REASON_CODES,
+  validateBeamFeedbackInput,
+  aggregateFeedbackPreferenceSignals,
+} from "./beamFeedbackCore.ts";
 
 test("accepts a valid downvote with a known reason code", () => {
   const result = validateBeamFeedbackInput({
@@ -55,4 +59,33 @@ test("the reason-code vocabulary covers the documented buckets", () => {
   for (const code of ["wrong_vibe", "ignored_budget", "ignored_dislike", "already_owned", "other"]) {
     assert.ok(FEEDBACK_REASON_CODES.has(code), `missing reason code ${code}`);
   }
+});
+
+// --- A5-GAP3: feedback → preference fold -------------------------------------
+
+test("aggregateFeedbackPreferenceSignals: repeated 'not bold enough' asks for more projection", () => {
+  const signals = aggregateFeedbackPreferenceSignals([
+    { rating: "down", reasonCode: "not_bold_enough" },
+    { rating: "down", reasonCode: "not_bold_enough" },
+  ]);
+  assert.equal(signals.projectionPreference, "noticeable");
+  assert.equal(signals.scentLastsOnMe, "long");
+});
+
+test("aggregateFeedbackPreferenceSignals: a single signal is below the floor (no change)", () => {
+  assert.deepEqual(
+    aggregateFeedbackPreferenceSignals([{ rating: "down", reasonCode: "not_bold_enough" }]),
+    {},
+  );
+});
+
+test("aggregateFeedbackPreferenceSignals: up-votes and other reasons do not move preferences", () => {
+  assert.deepEqual(
+    aggregateFeedbackPreferenceSignals([
+      { rating: "up", reasonCode: "not_bold_enough" },
+      { rating: "down", reasonCode: "too_generic" },
+      { rating: "down", reasonCode: "wrong_vibe" },
+    ]),
+    {},
+  );
 });
