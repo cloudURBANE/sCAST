@@ -13,11 +13,38 @@ import {
   rankScentMissionRecommendations,
   SCENT_MISSION_NODE_ORDER,
 } from "./scentMission.ts";
-import { deriveOutlookCandidate } from "./weeklyOutlook.ts";
+import { deriveOutlookCandidate, idealWarmth } from "./weeklyOutlook.ts";
 import { familyAlignmentScore, recommendationDisplayScore } from "./recommendationScore.ts";
 import type { ScentWeatherRecommendation } from "./scentWeatherEngine.ts";
 
 // --- A6-GAP2: shared scoring source of truth ---------------------------------
+
+test("idealWarmth: monotonic, bounded, and gives genuinely cold days a gradient", () => {
+  // Non-increasing and within [0,1] across the whole range.
+  const temps = [0, 10, 20, 28, 40, 55, 70, 85, 95, 110];
+  let prev = Infinity;
+  for (const temperature_f of temps) {
+    const w = idealWarmth({ temperature_f, humidity: 50, is_raining: false });
+    assert.ok(w >= 0 && w <= 1, `idealWarmth(${temperature_f}) out of range: ${w}`);
+    assert.ok(w <= prev + 1e-9, `idealWarmth must not increase with temperature (${temperature_f})`);
+    prev = w;
+  }
+
+  // Before widening the cold floor, every sub-30°F day clamped to 30 → identical
+  // ideal warmth, so an arctic morning and a frost ranked the vault the same.
+  const arctic = idealWarmth({ temperature_f: 12, humidity: 50, is_raining: false });
+  const frost = idealWarmth({ temperature_f: 28, humidity: 50, is_raining: false });
+  assert.ok(arctic > frost, `colder day should want more warmth: ${arctic} vs ${frost}`);
+  assert.ok(arctic - frost > 0.02, "cold days must separate by a usable margin");
+
+  // Humidity and rain both nudge ideal warmth lower (toward fresh).
+  const dry = idealWarmth({ temperature_f: 70, humidity: 30, is_raining: false });
+  const muggy = idealWarmth({ temperature_f: 70, humidity: 90, is_raining: false });
+  assert.ok(muggy < dry, "muggy air should lower ideal warmth");
+  const clear = idealWarmth({ temperature_f: 55, humidity: 50, is_raining: false });
+  const rainy = idealWarmth({ temperature_f: 55, humidity: 50, is_raining: true });
+  assert.ok(rainy < clear, "rain should lower ideal warmth");
+});
 
 test("deriveOutlookCandidate places warm vs fresh traits on the thermal axis", () => {
   const warm = deriveOutlookCandidate({ id: "a", traits: ["amber", "oud", "vanilla"] });

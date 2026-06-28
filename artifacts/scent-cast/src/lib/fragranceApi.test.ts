@@ -4,6 +4,7 @@ import type { DerivedMetrics } from "./fragranceApi.ts";
 import {
   accordProminenceTier,
   collectMainAccordDisplayRows,
+  ENGINE_FALLBACK_SOURCE,
   getFragranceDetails,
   isBackgroundEnrichmentQueued,
   isFetchNetworkError,
@@ -1093,7 +1094,7 @@ test("searchFragrances falls back to app results when the engine proxy returns 5
   assert.equal(response.results[0]?.origin, "app");
 });
 
-test("searchFragrances caches non-empty supplemented responses", async (t) => {
+test("searchFragrances does not cache a degraded/fallback-sourced response (refetches to self-heal)", async (t) => {
   const previousFetch = globalThis.fetch;
   const previousApiUrl = process.env.VITE_FRAGRANCE_API_URL;
   const previousAppApiUrl = process.env.VITE_API_BASE_URL;
@@ -1180,7 +1181,12 @@ test("searchFragrances caches non-empty supplemented responses", async (t) => {
   const first = await searchFragrances("creed");
   const second = await searchFragrances("creed");
 
+  // The engine answered from a degraded path (diagnostics.fallback_source set),
+  // so the response is intentionally NOT cached: the second call refetches both
+  // tiers rather than replaying a fallback-sourced list for the full TTL.
   assert.deepEqual(requests, [
+    "https://engine.example.test/api/fragrances/search?q=creed",
+    "https://app-api.example.test/api/fragrances/search?q=creed",
     "https://engine.example.test/api/fragrances/search?q=creed",
     "https://app-api.example.test/api/fragrances/search?q=creed",
   ]);
@@ -1594,4 +1600,261 @@ test("isSearchResponseDegraded flags fallback-sourced answers only", () => {
   assert.equal(isSearchResponseDegraded({ diagnostics: undefined }), false);
   assert.equal(isSearchResponseDegraded(undefined), false);
   assert.equal(isSearchResponseDegraded(null), false);
+});
+
+test("searchFragrances caches a clean, sufficiently broad response (no refetch)", async (t) => {
+  const previousFetch = globalThis.fetch;
+  const previousApiUrl = process.env.VITE_FRAGRANCE_API_URL;
+  const previousAppApiUrl = process.env.VITE_API_BASE_URL;
+  const previousWindow = (globalThis as typeof globalThis & { window?: unknown }).window;
+  const requests: string[] = [];
+  const localStorageData = new Map<string, string>();
+  const localStorage = {
+    getItem: (key: string) => localStorageData.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      localStorageData.set(key, value);
+    },
+    removeItem: (key: string) => {
+      localStorageData.delete(key);
+    },
+    clear: () => {
+      localStorageData.clear();
+    },
+  };
+
+  process.env.VITE_FRAGRANCE_API_URL = "https://engine.example.test";
+  delete process.env.VITE_API_BASE_URL;
+  Object.defineProperty(globalThis, "window", { configurable: true, value: { localStorage } });
+  Object.defineProperty(globalThis, "fetch", {
+    configurable: true,
+    value: async (url: string) => {
+      requests.push(url);
+      return new Response(
+        JSON.stringify({
+          query: "Dior Sauvage",
+          results: [
+            { id: "source:https://www.fragrantica.com/perfume/Dior/Sauvage-31861.html", name: "Sauvage", house: "Dior" },
+            { id: "source:https://www.fragrantica.com/perfume/Dior/Sauvage-Elixir-66070.html", name: "Sauvage Elixir", house: "Dior" },
+            { id: "source:https://www.fragrantica.com/perfume/Dior/Sauvage-EDT-25324.html", name: "Sauvage Eau de Toilette", house: "Dior" },
+          ],
+          diagnostics: { result_count: 3 },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    },
+  });
+
+  t.after(() => {
+    Object.defineProperty(globalThis, "fetch", { configurable: true, value: previousFetch });
+    if (previousWindow === undefined) {
+      delete (globalThis as typeof globalThis & { window?: unknown }).window;
+    } else {
+      Object.defineProperty(globalThis, "window", { configurable: true, value: previousWindow });
+    }
+    if (previousApiUrl === undefined) delete process.env.VITE_FRAGRANCE_API_URL;
+    else process.env.VITE_FRAGRANCE_API_URL = previousApiUrl;
+    if (previousAppApiUrl === undefined) delete process.env.VITE_API_BASE_URL;
+    else process.env.VITE_API_BASE_URL = previousAppApiUrl;
+  });
+
+  const first = await searchFragrances("Dior Sauvage");
+  const second = await searchFragrances("Dior Sauvage");
+
+  // Clean (no fallback_source) and >= 3 results → cached; the second call is served
+  // from cache, so only the first call hit the network.
+  assert.equal(requests.length, 1);
+  assert.equal(first.results.length, 3);
+  assert.equal(second.results.length, 3);
+});
+
+test("searchFragrances honors an already-aborted signal on a cache hit", async (t) => {
+  const previousFetch = globalThis.fetch;
+  const previousApiUrl = process.env.VITE_FRAGRANCE_API_URL;
+  const previousAppApiUrl = process.env.VITE_API_BASE_URL;
+  const previousWindow = (globalThis as typeof globalThis & { window?: unknown }).window;
+  const localStorageData = new Map<string, string>();
+  const localStorage = {
+    getItem: (key: string) => localStorageData.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      localStorageData.set(key, value);
+    },
+    removeItem: (key: string) => {
+      localStorageData.delete(key);
+    },
+    clear: () => {
+      localStorageData.clear();
+    },
+  };
+
+  process.env.VITE_FRAGRANCE_API_URL = "https://engine.example.test";
+  delete process.env.VITE_API_BASE_URL;
+  Object.defineProperty(globalThis, "window", { configurable: true, value: { localStorage } });
+  Object.defineProperty(globalThis, "fetch", {
+    configurable: true,
+    value: async () =>
+      new Response(
+        JSON.stringify({
+          query: "Dior Sauvage",
+          results: [
+            { id: "source:https://www.fragrantica.com/perfume/Dior/Sauvage-31861.html", name: "Sauvage", house: "Dior" },
+            { id: "source:https://www.fragrantica.com/perfume/Dior/Sauvage-Elixir-66070.html", name: "Sauvage Elixir", house: "Dior" },
+            { id: "source:https://www.fragrantica.com/perfume/Dior/Sauvage-EDT-25324.html", name: "Sauvage Eau de Toilette", house: "Dior" },
+          ],
+          diagnostics: { result_count: 3 },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+  });
+
+  t.after(() => {
+    Object.defineProperty(globalThis, "fetch", { configurable: true, value: previousFetch });
+    if (previousWindow === undefined) {
+      delete (globalThis as typeof globalThis & { window?: unknown }).window;
+    } else {
+      Object.defineProperty(globalThis, "window", { configurable: true, value: previousWindow });
+    }
+    if (previousApiUrl === undefined) delete process.env.VITE_FRAGRANCE_API_URL;
+    else process.env.VITE_FRAGRANCE_API_URL = previousApiUrl;
+    if (previousAppApiUrl === undefined) delete process.env.VITE_API_BASE_URL;
+    else process.env.VITE_API_BASE_URL = previousAppApiUrl;
+  });
+
+  // Warm the cache, then a follow-up with an already-aborted signal must reject
+  // (a stale query must not resolve after the user moved on) rather than replay.
+  await searchFragrances("Dior Sauvage");
+  const controller = new AbortController();
+  controller.abort();
+  await assert.rejects(
+    () => searchFragrances("Dior Sauvage", { signal: controller.signal }),
+    (err: unknown) => err instanceof Error && err.name === "AbortError",
+  );
+});
+
+test("requeueFragranceDetails does not replay the POST after a transport failure", async (t) => {
+  const previousFetch = globalThis.fetch;
+  const previousApiUrl = process.env.VITE_FRAGRANCE_API_URL;
+  const previousAppApiUrl = process.env.VITE_API_BASE_URL;
+  const requests: string[] = [];
+
+  process.env.VITE_FRAGRANCE_API_URL = "https://engine.example.test";
+  process.env.VITE_API_BASE_URL = "https://app-api.example.test";
+  Object.defineProperty(globalThis, "fetch", {
+    configurable: true,
+    value: async (url: string) => {
+      requests.push(String(url));
+      // Engine connects but the response is lost in transit — the enqueue may
+      // already have landed server-side, so it must NOT be retried or re-POSTed.
+      throw new TypeError("Failed to fetch");
+    },
+  });
+
+  t.after(() => {
+    Object.defineProperty(globalThis, "fetch", { configurable: true, value: previousFetch });
+    if (previousApiUrl === undefined) delete process.env.VITE_FRAGRANCE_API_URL;
+    else process.env.VITE_FRAGRANCE_API_URL = previousApiUrl;
+    if (previousAppApiUrl === undefined) delete process.env.VITE_API_BASE_URL;
+    else process.env.VITE_API_BASE_URL = previousAppApiUrl;
+  });
+
+  await assert.rejects(() =>
+    requeueFragranceDetails({
+      id: "opaque-token",
+      source_url: "https://www.fragrantica.com/perfume/Dior/Sauvage-31861.html",
+    }),
+  );
+  // Exactly one POST attempt: no backoff retry, no direct-fallback re-POST.
+  assert.equal(requests.length, 1);
+});
+
+test("getFragranceDetails tags the local fallback with provenance on an engine 5xx", async (t) => {
+  const previousFetch = globalThis.fetch;
+  const previousApiUrl = process.env.VITE_FRAGRANCE_API_URL;
+  const previousAppApiUrl = process.env.VITE_API_BASE_URL;
+  const requests: string[] = [];
+
+  process.env.VITE_FRAGRANCE_API_URL = "https://engine.example.test";
+  process.env.VITE_API_BASE_URL = "https://app-api.example.test";
+  Object.defineProperty(globalThis, "fetch", {
+    configurable: true,
+    value: async (url: string) => {
+      requests.push(String(url));
+      if (String(url).startsWith("https://engine.example.test")) {
+        return new Response(JSON.stringify({ detail: "engine boom" }), {
+          status: 503,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ name: "Sauvage", house: "Dior" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    },
+  });
+
+  t.after(() => {
+    Object.defineProperty(globalThis, "fetch", { configurable: true, value: previousFetch });
+    if (previousApiUrl === undefined) delete process.env.VITE_FRAGRANCE_API_URL;
+    else process.env.VITE_FRAGRANCE_API_URL = previousApiUrl;
+    if (previousAppApiUrl === undefined) delete process.env.VITE_API_BASE_URL;
+    else process.env.VITE_API_BASE_URL = previousAppApiUrl;
+  });
+
+  const detail = await getFragranceDetails({
+    id: "opaque-token",
+    source_url: "https://www.fragrantica.com/perfume/Dior/Sauvage-31861.html",
+  });
+
+  assert.equal(detail.name, "Sauvage");
+  assert.equal((detail as { fallback_source?: string }).fallback_source, ENGINE_FALLBACK_SOURCE);
+  assert.ok(detail.enrichment?.message && detail.enrichment.message.length > 0);
+});
+
+test("getFragranceDetails surfaces the original engine error when the local fallback also fails", async (t) => {
+  const previousFetch = globalThis.fetch;
+  const previousApiUrl = process.env.VITE_FRAGRANCE_API_URL;
+  const previousAppApiUrl = process.env.VITE_API_BASE_URL;
+
+  process.env.VITE_FRAGRANCE_API_URL = "https://engine.example.test";
+  process.env.VITE_API_BASE_URL = "https://app-api.example.test";
+  Object.defineProperty(globalThis, "fetch", {
+    configurable: true,
+    value: async (url: string) => {
+      if (String(url).startsWith("https://engine.example.test")) {
+        return new Response(JSON.stringify({ detail: "engine exploded" }), {
+          status: 503,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      // Local fallback also fails — the engine fault is the real cause and must
+      // be the surfaced error, not the app-API status.
+      return new Response(JSON.stringify({ detail: "local also down" }), {
+        status: 502,
+        headers: { "Content-Type": "application/json" },
+      });
+    },
+  });
+
+  t.after(() => {
+    Object.defineProperty(globalThis, "fetch", { configurable: true, value: previousFetch });
+    if (previousApiUrl === undefined) delete process.env.VITE_FRAGRANCE_API_URL;
+    else process.env.VITE_FRAGRANCE_API_URL = previousApiUrl;
+    if (previousAppApiUrl === undefined) delete process.env.VITE_API_BASE_URL;
+    else process.env.VITE_API_BASE_URL = previousAppApiUrl;
+  });
+
+  // fetchFragranceEngine wraps a 5xx as "Fragrance engine request failed: <status>"
+  // and (for this POST) throws it without re-POSTing. When the local fallback also
+  // fails, that wrapped engine error — not the app-API 502 — is surfaced, so the
+  // banner blames the engine outage that actually drove the fallback.
+  await assert.rejects(
+    () =>
+      getFragranceDetails({
+        id: "opaque-token",
+        source_url: "https://www.fragrantica.com/perfume/Dior/Sauvage-31861.html",
+      }),
+    (err: unknown) =>
+      err instanceof Error &&
+      err.message.includes("Fragrance engine request failed: 503") &&
+      !err.message.includes("502"),
+  );
 });

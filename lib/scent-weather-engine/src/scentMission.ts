@@ -440,6 +440,13 @@ export function sanitizeScentMissionWeather(input: unknown): ScentMissionWeather
 
 const RAIN_SIGNALS = ["rain", "drizzle", "storm"];
 
+/** Ordinal for engine confidence, used as the tie-break above raw wardrobe index. */
+const CONFIDENCE_RANK: Record<ScentWeatherRecommendation["confidence"], number> = {
+  high: 2,
+  medium: 1,
+  low: 0,
+};
+
 export function destinationToSettingType(
   destination: ScentMissionDestination | undefined,
 ): ScentWeatherEngineInput["setting"]["type"] {
@@ -553,9 +560,17 @@ export function rankScentMissionRecommendations(
     };
   });
 
-  // Stable sort: Array.prototype.sort is stable in modern engines, so equal
-  // scores keep wardrobe order — preserving the original tie-break guarantee.
-  return ranked.sort((a, b) => b.score - a.score);
+  // Primary sort by score; break ties on a real quality signal (engine
+  // confidence: high > medium > low) BEFORE falling back to wardrobe order, so
+  // two equally-scoring bottles no longer resolve to "whichever sits at the
+  // lower array index" (which made the same bottle always win). Array sort is
+  // stable, so a genuine three-way tie (same score AND same confidence) still
+  // keeps deterministic wardrobe order.
+  return ranked.sort(
+    (a, b) =>
+      b.score - a.score ||
+      CONFIDENCE_RANK[b.engine.confidence] - CONFIDENCE_RANK[a.engine.confidence],
+  );
 }
 
 /**

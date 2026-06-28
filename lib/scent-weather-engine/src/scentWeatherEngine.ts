@@ -334,12 +334,17 @@ function reduceConfidence(confidence: Confidence): Confidence {
   return "low";
 }
 
-export function calculateAtmosphereScores(input: ScentWeatherEngineInput): AtmosphereScores {
+export function calculateAtmosphereScores(
+  input: ScentWeatherEngineInput,
+  traitTexts?: readonly string[],
+): AtmosphereScores {
   const temperature = finiteNumber(input.weather.temperature_f, 70);
   const humidity = finiteNumber(input.weather.humidity_percent, 50);
   const windSpeed = finiteNumber(input.weather.wind_speed_mph, 0);
   const settingType = input.setting.type;
-  const traits = getTraitTexts(input.fragrance);
+  // Trait texts are computed once per recommendation and threaded in; fall back
+  // to deriving them when called standalone (public API / tests).
+  const traits = traitTexts ?? getTraitTexts(input.fragrance);
   const rainy = isRaining(input);
 
   let heatAmplificationScore = 15;
@@ -423,12 +428,16 @@ export function calculateAtmosphereScores(input: ScentWeatherEngineInput): Atmos
 export function calculateScentWeatherRecommendation(
   input: ScentWeatherEngineInput,
 ): ScentWeatherRecommendation {
-  const scores = calculateAtmosphereScores(input);
+  // Compute trait texts ONCE per recommendation and thread them through every
+  // sub-function (atmosphere, projection, wear-window, confidence). Previously
+  // each derived them independently — ~5 redundant passes per call, multiplied
+  // across the vault×week matrix the planner builds. Behaviour is identical.
+  const traits = getTraitTexts(input.fragrance);
+  const scores = calculateAtmosphereScores(input, traits);
   const temperature = finiteNumber(input.weather.temperature_f, 70);
   const humidity = finiteNumber(input.weather.humidity_percent, 50);
   const windSpeed = finiteNumber(input.weather.wind_speed_mph, 0);
   const settingType = input.setting.type;
-  const traits = getTraitTexts(input.fragrance);
   const rainy = isRaining(input);
   const hotHumid = temperature >= 85 && humidity >= 65;
   const hotDry = temperature >= 85 && humidity < 50;
@@ -623,7 +632,7 @@ export function calculateScentWeatherRecommendation(
     strongSillage,
     weakSillage,
   });
-  const projectionRisk = calculateProjectionRisk(input, scores, {
+  const projectionRisk = calculateProjectionRisk(input, scores, traits, {
     hotHumid,
     gym,
     indoorSetting,
@@ -633,7 +642,7 @@ export function calculateScentWeatherRecommendation(
     hasSweetProfile,
     hasHeavyProfile,
   });
-  const wearWindow = calculateWearWindow(input, projectionRisk, {
+  const wearWindow = calculateWearWindow(input, projectionRisk, traits, {
     hotHumid,
     rainy,
     gym,
@@ -645,7 +654,7 @@ export function calculateScentWeatherRecommendation(
     denseOrHeavyProfile,
     smokyLeatherInRain,
   });
-  const confidence = calculateConfidence(input, { windy, gym, indoorSetting });
+  const confidence = calculateConfidence(input, traits, { windy, gym, indoorSetting });
   const explanation = buildExplanation(input, {
     hotHumid,
     coldWeather,
@@ -707,21 +716,38 @@ function calculateSprayCount(
   if (context.hotHumid) contextualMax = Math.min(contextualMax, 2);
 
   const wearableMinimum = contextualMax > 0 ? 1 : 0;
+
+  // Clamp the (possibly deeply-negative, stacked-penalty) raw value into the
+  // wearable band FIRST, then derive the display band as clamp(recommended ∓ 1)
+  // around that clamped value. Deriving min/max from the clamped `recommended`
+  // (not the raw value) guarantees a coherent band even if the bounds change.
   const boundedRecommended = Math.max(
     wearableMinimum,
     Math.min(contextualMax, Math.round(recommended)),
   );
+  const min = Math.max(wearableMinimum, boundedRecommended - 1);
+  const max = Math.min(contextualMax, boundedRecommended + 1);
+
+  // Invariant the band must always satisfy: min <= recommended <= max. Cheap
+  // guard so a future bounds change can never silently emit a degenerate band
+  // (e.g. min > recommended).
+  if (!(min <= boundedRecommended && boundedRecommended <= max)) {
+    throw new Error(
+      `spray_count band invariant violated: min=${min} recommended=${boundedRecommended} max=${max}`,
+    );
+  }
 
   return {
     recommended: boundedRecommended,
-    min: Math.max(wearableMinimum, boundedRecommended - 1),
-    max: Math.min(contextualMax, boundedRecommended + 1),
+    min,
+    max,
   };
 }
 
 function calculateProjectionRisk(
   input: ScentWeatherEngineInput,
   scores: AtmosphereScores,
+  traits: readonly string[],
   context: {
     hotHumid: boolean;
     gym: boolean;
@@ -733,7 +759,6 @@ function calculateProjectionRisk(
     hasHeavyProfile: boolean;
   },
 ): ProjectionRisk {
-  const traits = getTraitTexts(input.fragrance);
   const heavyRiskFamily = hasAnyFamilySignal(traits, ["oud", "smoky", "leather", "tobacco", "gourmand"]);
   const closeContactHeavy =
     input.setting.type === "close_contact" && heavyRiskFamily && context.strongSillage;
@@ -793,9 +818,10 @@ type WearWindowContext = {
 function calculateWearWindow(
   input: ScentWeatherEngineInput,
   projectionRisk: ProjectionRisk,
+  traits: readonly string[],
   context: WearWindowContext,
 ): WearWindow {
-  const base = computeBaseWearWindow(input, projectionRisk, context);
+  const base = computeBaseWearWindow(input, projectionRisk, traits, context);
 
   // Refine against the real clock when the caller supplies it. "better_later"
   // and "nighttime_better" both advise holding off for later in the day; if it
@@ -818,9 +844,9 @@ function calculateWearWindow(
 function computeBaseWearWindow(
   input: ScentWeatherEngineInput,
   projectionRisk: ProjectionRisk,
+  traits: readonly string[],
   context: WearWindowContext,
 ): WearWindow {
-  const traits = getTraitTexts(input.fragrance);
   const hotHumidAvoidFamily = hasAnyFamilySignal(traits, ["gourmand", "oud", "smoky", "leather", "tobacco"]);
 
   if (context.gym && context.denseOrHeavyProfile) return "avoid_today";
@@ -843,11 +869,11 @@ function computeBaseWearWindow(
 
 function calculateConfidence(
   input: ScentWeatherEngineInput,
+  traits: readonly string[],
   context: { windy: boolean; gym: boolean; indoorSetting: boolean },
 ): Confidence {
   const weatherComplete = hasCompleteWeather(input);
   const settingKnown = isKnownSetting(input);
-  const traits = getTraitTexts(input.fragrance);
   const hasFamiliesOrAccords =
     (input.fragrance?.scent_families?.filter(Boolean).length ?? 0) > 0 ||
     (input.fragrance?.accords?.filter(Boolean).length ?? 0) > 0;
@@ -856,6 +882,14 @@ function calculateConfidence(
   if (weatherComplete && settingKnown && hasFamiliesOrAccords) confidence = "high";
   else if (weatherComplete && settingKnown && traits.length > 0) confidence = "medium";
   else if (weatherComplete && settingKnown && input.fragrance) confidence = "medium";
+
+  // Zero-trait floor: a fragrance object with no resolvable trait signals at all
+  // (no families, no accords, no positive vector axes) carries no scent evidence,
+  // so the "medium just because `input.fragrance` exists" branch above is not
+  // honest. Demote to low — a generic weather pick should not read as a
+  // calibrated, fragrance-aware recommendation. dataConfidence (below) is an
+  // independent, caller-supplied cap; this covers the case where it is omitted.
+  if (traits.length === 0) confidence = "low";
 
   // Honest confidence: the structural gates above only check that weather +
   // setting are known and that *some* family/accord exists, so a single thin

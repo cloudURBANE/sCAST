@@ -886,9 +886,21 @@ function DashboardView() {
 
         onProgress({ index, total, name: item.name, status: 'adding' });
         const result = await handleAddItem(built).catch(() => ({ persisted: false }));
-        if (!result.persisted) {
+        // A guest add is stored locally (guestSaved) and a duplicate is already
+        // in the vault — both are successful outcomes for curation, not failures.
+        const succeeded =
+          result.persisted ||
+          (result as { guestSaved?: boolean }).guestSaved ||
+          (result as { duplicate?: boolean }).duplicate;
+        if (!succeeded) {
           failedItems.push(item);
           onProgress({ index, total, name: item.name, status: 'failed' });
+          continue;
+        }
+        // A duplicate already lives in the vault with its image — skip the
+        // image-curation hold below and report it ready immediately.
+        if ((result as { duplicate?: boolean }).duplicate) {
+          onProgress({ index, total, name: item.name, status: 'ready' });
           continue;
         }
         added++;
@@ -1708,12 +1720,30 @@ const AppContent = React.memo(function AppContent({ location }: { location: Loca
     <>
       <React.Suspense fallback={<RouteChunkFallback />}>
         <Routes location={location}>
-          <Route path="/" element={<DashboardView />} />
+          <Route
+            path="/"
+            element={
+              // Route-scoped boundary for the home shell so a DashboardView render
+              // error degrades to a localized panel (nav stays mounted) instead of
+              // nuking the whole SPA via the root boundary's hard reload. resetKeys
+              // soft-recovers it the moment the user navigates away.
+              <ErrorBoundary
+                scope="dashboard"
+                resetKeys={[location.pathname]}
+                fallback={(error, reset) => (
+                  <RouteErrorFallback label="The home view" error={error} onRetry={reset} />
+                )}
+              >
+                <DashboardView />
+              </ErrorBoundary>
+            }
+          />
           <Route
             path="/community"
             element={
               <ErrorBoundary
                 scope="community"
+                resetKeys={[location.pathname]}
                 fallback={(error, reset) => (
                   <RouteErrorFallback label="The community feed" error={error} onRetry={reset} />
                 )}
@@ -1727,6 +1757,7 @@ const AppContent = React.memo(function AppContent({ location }: { location: Loca
             element={
               <ErrorBoundary
                 scope="arena"
+                resetKeys={[location.pathname]}
                 fallback={(error, reset) => (
                   <RouteErrorFallback label="The arena" error={error} onRetry={reset} />
                 )}
@@ -1743,6 +1774,7 @@ const AppContent = React.memo(function AppContent({ location }: { location: Loca
             element={
               <ErrorBoundary
                 scope="share"
+                resetKeys={[location.pathname]}
                 fallback={(error, reset) => (
                   <RouteErrorFallback label="This shared vault" error={error} onRetry={reset} />
                 )}
