@@ -207,3 +207,30 @@ test("scorer rejects omitted flanker tokens while allowing concentration aliases
     false,
   );
 });
+
+test("WS-2: query-side flanker token does not match the base (symmetric guard)", () => {
+  // The headline bug: searching a flanker must not resolve to the base profile.
+  assert.equal(
+    scoreFragranceCandidate("Dior Sauvage Elixir", { brand: "Dior", name: "Sauvage" }).matched,
+    false,
+  );
+  assert.equal(
+    scoreFragranceCandidate("Chanel Bleu Parfum Intense", { brand: "Chanel", name: "Bleu de Chanel" })
+      .matched,
+    false,
+  );
+  // Concentration aliases in the query are still fine against the base name.
+  assert.equal(
+    scoreFragranceCandidate("Dior Sauvage EDT", { brand: "Dior", name: "Sauvage" }).matched,
+    true,
+  );
+  assert.equal(
+    scoreFragranceCandidate("Dior Sauvage Eau de Parfum", { brand: "Dior", name: "Sauvage" }).matched,
+    true,
+  );
+  // Exact identity (both carry the flanker) still matches.
+  assert.equal(
+    scoreFragranceCandidate("Dior Sauvage Elixir", { brand: "Dior", name: "Sauvage Elixir" }).matched,
+    true,
+  );
+});

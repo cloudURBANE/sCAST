@@ -73,8 +73,17 @@ export async function getCatalogEntry(brand: string, name: string): Promise<Scen
  * with a nearby flanker.
  */
 export async function searchCatalog(query: string, options: CatalogSearchOptions = {}): Promise<ScentProfile | null> {
-  const hits = await searchCatalogCandidates(query, { ...options, limit: 1 });
-  return hits[0]?.profile ?? null;
+  // WS-2: fetch the top two and apply the same runner-up margin rule
+  // bestDatasetMatch uses. When the two best candidates are within ~0.04 and
+  // neither is near-exact (>=0.97), the identity is ambiguous (e.g. a flanker and
+  // its base both scoring high) — return null so buildProfile falls through to
+  // the dataset/scrape path instead of silently substituting a nearby fragrance.
+  const hits = await searchCatalogCandidates(query, { ...options, limit: Math.max(2, options.limit ?? 2) });
+  const best = hits[0];
+  if (!best) return null;
+  const second = hits[1];
+  if (second && best.score < 0.97 && best.score - second.score < 0.04) return null;
+  return best.profile;
 }
 
 export async function searchCatalogCandidates(
