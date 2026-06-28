@@ -78,3 +78,26 @@ test("hasDetailRefreshPayload recognizes fact-only and raw detail updates", () =
   assert.equal(hasDetailRefreshPayload({ raw_engine_detail: {} }), true);
   assert.equal(hasDetailRefreshPayload({ imageUrl: "https://example.com/bottle.jpg" }), false);
 });
+
+test("hasDetailRefreshPayload recognizes a heal-version-only update (WS-9c)", () => {
+  assert.equal(hasDetailRefreshPayload({ accordHealVersion: 1 }), true);
+});
+
+test("detailRefreshPatchFromBody persists a valid accordHealVersion (WS-9c)", () => {
+  assert.equal(detailRefreshPatchFromBody({ accordHealVersion: 1 }).accordHealVersion, 1);
+  // truncates a float to an integer version
+  assert.equal(detailRefreshPatchFromBody({ accordHealVersion: 2.9 }).accordHealVersion, 2);
+  assert.equal(detailRefreshPatchFromBody({ accordHealVersion: 0 }).accordHealVersion, 0);
+});
+
+test("detailRefreshPatchFromBody rejects a malformed accordHealVersion (WS-9c)", () => {
+  for (const bad of ["1", -1, Number.NaN, Number.POSITIVE_INFINITY, null, {}, []]) {
+    assert.equal(
+      "accordHealVersion" in detailRefreshPatchFromBody({ accordHealVersion: bad as never }),
+      false,
+      `expected ${String(bad)} to be dropped`,
+    );
+  }
+  // absent key -> not present in the patch
+  assert.equal("accordHealVersion" in detailRefreshPatchFromBody({ year: "2020" }), false);
+});

@@ -28,6 +28,16 @@ function usefulDetailFactString(value: unknown, options?: { rejectUniversal?: bo
   return trimmed;
 }
 
+// WS-9c: heal-resync completion is persisted into fragrance_data as a small
+// integer so it is server-authoritative across devices/guests (a fresh device
+// loading the vault sees already-healed rows and does not re-fetch the whole
+// complete wardrobe). Only accept a finite, non-negative integer version.
+function usefulHealVersion(value: unknown): number | undefined {
+  if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
+  const version = Math.trunc(value);
+  return version >= 0 ? version : undefined;
+}
+
 function usefulDetailFactYear(value: unknown): number | undefined {
   const numberValue = typeof value === "number"
     ? value
@@ -85,7 +95,8 @@ export function hasDetailRefreshPayload(body: LooseRecord): boolean {
     hasOwn(body, "derived_metrics") ||
     hasOwn(body, "source_coverage") ||
     hasOwn(body, "enrichment") ||
-    hasOwn(body, "raw_engine_detail")
+    hasOwn(body, "raw_engine_detail") ||
+    hasOwn(body, "accordHealVersion")
   );
 }
 
@@ -126,5 +137,7 @@ export function detailRefreshPatchFromBody(body: LooseRecord): LooseRecord {
   if (hasOwn(body, "raw_engine_detail")) {
     detailPatch.raw_engine_detail = body.raw_engine_detail ?? null;
   }
+  const accordHealVersion = usefulHealVersion(body.accordHealVersion);
+  if (accordHealVersion !== undefined) detailPatch.accordHealVersion = accordHealVersion;
   return detailPatch;
 }
