@@ -3,6 +3,7 @@ import { Routes, Route, useLocation, useParams, type Location } from 'react-rout
 import type { Fragrance } from './components/Wardrobe';
 import type { BeamProposalItem } from '@/lib/beamAgentClient';
 import { vaultIdentityKey } from './lib/vaultIdentity';
+import { buildHeroTickerPhrases } from './lib/heroTickerPhrases';
 import { stableProposalItemId, type CurateCollectionResult } from './lib/collectionCuration';
 import { getPendingCuration, curationItemToFragrance, pickResumeCurationTarget } from './lib/curationClient';
 import { X } from 'lucide-react';
@@ -262,84 +263,12 @@ function usePauseMarqueeWhenHidden(
   }, [resetKey, sectionRef, trackRef]);
 }
 
+// Honest, share-based phrase selection lives in a pure leaf module so it can be
+// unit-tested away from this component tree. `Fragrance` is a structural
+// superset of `HeroTickerItem`, so it satisfies the selector's input directly.
+// The returned `HeroPhrase[]` shape and neutral fallback are unchanged.
 function getHeroTickerPhrases(items: Fragrance[]): HeroPhrase[] {
-  if (!items.length) {
-    return [
-      [{ text: 'Add scents to your vault and unlock deeper discovery' }],
-      [{ text: 'Atmospheric nuance is analyzed to guide each wear' }],
-      [{ text: 'Your signature profile is syncing with the current environment' }],
-    ];
-  }
-
-  const phrases: HeroPhrase[] = [];
-
-  const families = items.map(i => i.family).filter(Boolean) as string[];
-  if (families.length > 0) {
-    const fc: Record<string, number> = {};
-    families.forEach(f => { fc[f] = (fc[f] || 0) + 1; });
-    const topFamily = Object.entries(fc).sort((a, b) => b[1] - a[1])[0][0];
-    phrases.push([
-      { text: 'Predominantly ' },
-      { text: topFamily.toLowerCase(), key: true },
-      { text: ' olfactory signature' },
-    ]);
-  }
-
-  const allNotes = items.flatMap(i => i.notes || []);
-  if (allNotes.length > 0) {
-    const nc: Record<string, number> = {};
-    allNotes.forEach(n => { const k = n.toLowerCase(); nc[k] = (nc[k] || 0) + 1; });
-    const [topNote, topCount] = Object.entries(nc).sort((a, b) => b[1] - a[1])[0];
-    if (topCount > 1) phrases.push([
-      { text: 'Recurring molecule detected: ' },
-      { text: topNote, key: true },
-    ]);
-  }
-
-  const vectors = items.map(i => i.scent_vector).filter(Boolean) as NonNullable<Fragrance['scent_vector']>[];
-  if (vectors.length > 0) {
-    const dims = ['freshness', 'sweetness', 'woodiness', 'spice', 'warmth', 'musk'] as const;
-    const labels: Record<string, string> = {
-      freshness: 'fresh and airy', sweetness: 'sweet and gourmand',
-      woodiness: 'woody and grounded', spice: 'spiced and bold',
-      warmth: 'warm and enveloping', musk: 'musky and skin-close',
-    };
-    const top = dims
-      .map(d => ({ d, avg: vectors.reduce((s, v) => s + v[d], 0) / vectors.length }))
-      .sort((a, b) => b.avg - a.avg)[0];
-    if (top.avg >= 4.5) phrases.push([
-      { text: 'Your vault reads ' },
-      { text: labels[top.d], key: true },
-    ]);
-  }
-
-  const seasons = items.map(i => i.season).filter(Boolean) as string[];
-  if (seasons.length > 0) {
-    const sc: Record<string, number> = {};
-    seasons.forEach(s => { sc[s] = (sc[s] || 0) + 1; });
-    const [topSeason, topSeasonCount] = Object.entries(sc).sort((a, b) => b[1] - a[1])[0];
-    if (topSeasonCount > 1) phrases.push([
-      { text: 'Calibrated for ' },
-      { text: topSeason.toLowerCase(), key: true },
-      { text: ' conditions' },
-    ]);
-  }
-
-  const brands = new Set(items.map(i => i.brand).filter(Boolean));
-  if (brands.size > 1) phrases.push([
-    // Highlight the full key detail ("43 houses"), not just the bare count, so
-    // the gold sheen lands on a self-contained, meaningful tell as it crosses
-    // center — matching how every other phrase highlights its whole variable.
-    { text: `${brands.size} houses`, key: true },
-    { text: ' represented in your collection' },
-  ]);
-
-  if (phrases.length < 3) phrases.push(
-    [{ text: 'Olfactory intelligence active' }],
-    [{ text: 'Atmospheric pairing in progress' }],
-  );
-
-  return phrases;
+  return buildHeroTickerPhrases(items);
 }
 
 interface HeroMarqueeProps {
