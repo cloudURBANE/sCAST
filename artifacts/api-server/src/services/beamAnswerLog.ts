@@ -1,7 +1,8 @@
 import { db } from "@workspace/db";
-import { beamAnswerFeedbackTable, beamAnswerLogTable } from "@workspace/db/schema";
+import { beamAnswerFeedbackTable, beamAnswerLogTable, userSettingsTable } from "@workspace/db/schema";
 import { and, eq } from "drizzle-orm";
 import { logger } from "../lib/logger";
+import { aggregateFeedbackPreferenceSignals } from "../beam-agent/beamFeedbackCore";
 
 /**
  * Beam Agent — durable answer log + feedback persistence.
@@ -156,5 +157,77 @@ export async function recordBeamAnswerFeedback(input: RecordBeamAnswerFeedbackIn
       throw new BeamFeedbackUnavailableError();
     }
     throw err;
+  }
+}
+
+/**
+ * A5-GAP3: read a user's accumulated feedback back into their scent-taste profile,
+ * closing the previously write-only loop. Aggregates the down-vote reason codes
+ * (see aggregateFeedbackPreferenceSignals) and applies the derived engine
+ * preference axes to user_settings — but only fields the user has NOT explicitly
+ * set (null), so learning never silently overrides an explicit choice.
+ *
+ * Fully best-effort: any DB fault, a missing feedback table, or an un-migrated
+ * user_settings is swallowed so feedback recording is never blocked. Returns the
+ * applied signals (empty when nothing changed) for observability/tests.
+ */
+export async function applyFeedbackToScentPreferences(
+  userId: string,
+  tenantId?: string | null,
+): Promise<Record<string, unknown>> {
+  try {
+    const rows = await db
+      .select({
+        rating: beamAnswerFeedbackTable.rating,
+        reasonCode: beamAnswerFeedbackTable.reasonCode,
+      })
+      .from(beamAnswerFeedbackTable)
+      .where(eq(beamAnswerFeedbackTable.userId, userId))
+      .limit(200);
+
+    const signals = aggregateFeedbackPreferenceSignals(rows);
+    if (Object.keys(signals).length === 0) return {};
+
+    // Only fill fields the user hasn't explicitly chosen.
+    const [existing] = await db
+      .select({
+        lasts: userSettingsTable.scentLastsOnMe,
+        projection: userSettingsTable.projectionPreference,
+      })
+      .from(userSettingsTable)
+      .where(eq(userSettingsTable.userId, userId))
+      .limit(1);
+
+    const updates: Record<string, unknown> = {};
+    if (signals.projectionPreference && !existing?.projection) {
+      updates.projectionPreference = signals.projectionPreference;
+    }
+    if (signals.scentLastsOnMe && !existing?.lasts) {
+      updates.scentLastsOnMe = signals.scentLastsOnMe;
+    }
+    if (Object.keys(updates).length === 0) return {};
+
+    await db
+      .insert(userSettingsTable)
+      .values({ tenantId: tenantId ?? null, userId, ...updates })
+      .onConflictDoUpdate({
+        target: userSettingsTable.userId,
+        set: { ...updates, updatedAt: new Date() },
+      });
+    return updates;
+  } catch (err) {
+    if (
+      isTableMissingError(err, "beam_answer_feedback") ||
+      isTableMissingError(err, "user_settings")
+    ) {
+      return {};
+    }
+    // Undefined-column (pre-migration user_settings) and any other fault are
+    // non-fatal — learning is best-effort.
+    logger.warn(
+      { err: err instanceof Error ? err.message : String(err) },
+      "[beamAnswerLog] failed to fold feedback into scent preferences",
+    );
+    return {};
   }
 }

@@ -13,6 +13,76 @@ import {
   rankScentMissionRecommendations,
   SCENT_MISSION_NODE_ORDER,
 } from "./scentMission.ts";
+import { deriveOutlookCandidate } from "./weeklyOutlook.ts";
+import { familyAlignmentScore, recommendationDisplayScore } from "./recommendationScore.ts";
+import type { ScentWeatherRecommendation } from "./scentWeatherEngine.ts";
+
+// --- A6-GAP2: shared scoring source of truth ---------------------------------
+
+test("deriveOutlookCandidate places warm vs fresh traits on the thermal axis", () => {
+  const warm = deriveOutlookCandidate({ id: "a", traits: ["amber", "oud", "vanilla"] });
+  assert.ok(warm.warmth > warm.freshness, "amber/oud/vanilla → warm-leaning");
+
+  const fresh = deriveOutlookCandidate({ id: "b", traits: ["citrus", "aquatic", "bergamot"] });
+  assert.ok(fresh.freshness > fresh.warmth, "citrus/aquatic → fresh-leaning");
+
+  // No resolvable tokens → neutral 0.5/0.5 (rank-safe).
+  const neutral = deriveOutlookCandidate({ id: "c", traits: ["zorblax"] });
+  assert.equal(neutral.warmth, 0.5);
+  assert.equal(neutral.freshness, 0.5);
+});
+
+test("deriveOutlookCandidate: strong sillage + extrait lifts projection", () => {
+  const c = deriveOutlookCandidate({ id: "a", traits: ["amber"], sillage: "strong", concentration: "Extrait" });
+  assert.ok(c.projection > 0.8);
+  const light = deriveOutlookCandidate({ id: "b", traits: ["citrus"], sillage: "light", concentration: "Eau de Cologne" });
+  assert.ok(light.projection < 0.3);
+});
+
+test("familyAlignmentScore: display score + best/avoid/intent/energy weights", () => {
+  const rec = {
+    confidence: "high",
+    projection_risk: "low",
+    wear_window: "best_now",
+    best_scent_families: [],
+    avoid_scent_families: [],
+  } as unknown as ScentWeatherRecommendation;
+  // No hits → equals the display score (92 for high/low/best_now).
+  assert.equal(recommendationDisplayScore(rec), 92);
+  assert.equal(familyAlignmentScore({ recommendation: rec, traits: [] }), 92);
+  // Intent + energy tag bonuses add 4 + 3.
+  assert.equal(
+    familyAlignmentScore({ recommendation: rec, traits: [], intentMatch: true, energyMatch: true }),
+    99,
+  );
+});
+
+test("familyAlignmentScore: liked families lift, disliked families sink (A5-GAP2)", () => {
+  const rec = {
+    confidence: "high",
+    projection_risk: "low",
+    wear_window: "best_now",
+    best_scent_families: [],
+    avoid_scent_families: [],
+  } as unknown as ScentWeatherRecommendation;
+  const woodyTraits = ["woody", "cedar", "sandalwood"];
+
+  // A liked "woody" adds +10 over the 92 base.
+  assert.equal(
+    familyAlignmentScore({ recommendation: rec, traits: woodyTraits, preferredFamilies: ["woody"] }),
+    102,
+  );
+  // A disliked "woody" subtracts 18 from the 92 base.
+  assert.equal(
+    familyAlignmentScore({ recommendation: rec, traits: woodyTraits, dislikedFamilies: ["woody"] }),
+    74,
+  );
+  // A family the fragrance does not have moves nothing.
+  assert.equal(
+    familyAlignmentScore({ recommendation: rec, traits: woodyTraits, preferredFamilies: ["aquatic"] }),
+    92,
+  );
+});
 
 test("createScentMissionState starts with onboarding active and the rest locked", () => {
   const state = createScentMissionState();

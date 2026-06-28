@@ -120,7 +120,7 @@ type ProjectionRisk = ScentWeatherRecommendation["projection_risk"];
 type WearWindow = ScentWeatherRecommendation["wear_window"];
 type Confidence = ScentWeatherRecommendation["confidence"];
 
-const SCENT_FAMILIES: readonly ScentFamily[] = [
+export const SCENT_FAMILIES: readonly ScentFamily[] = [
   "fresh",
   "citrus",
   "aquatic",

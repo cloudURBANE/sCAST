@@ -52,3 +52,40 @@ export function validateBeamFeedbackInput(body: unknown): BeamFeedbackValidation
     typeof record.detail === "string" && record.detail.trim() ? record.detail.trim().slice(0, 1000) : null;
   return { ok: true, value: { answerLogId, rating, reasonCode, detail } };
 }
+
+/**
+ * A5-GAP3: fold a user's accumulated thumbs-down reason codes back into their
+ * scent-taste profile — the feedback loop was write-only. Pure + deterministic so
+ * it unit-tests without a DB. Only the reason codes that map cleanly to an engine
+ * preference axis are acted on; the rest are left for richer future signals (they
+ * lack the family context needed to safely adjust liked/disliked families here).
+ *
+ *   not_bold_enough → the user wants more presence → projectionPreference
+ *     "noticeable", plus a "long" skin-longevity lean so the spray-count math
+ *     reaches for more.
+ *
+ * Conservative: a signal must clear `minSignals` down-votes of a kind before it
+ * changes anything, so a single grumpy tap can't reshape someone's profile.
+ */
+export type FeedbackPreferenceSignals = {
+  projectionPreference?: "noticeable";
+  scentLastsOnMe?: "long";
+};
+
+export function aggregateFeedbackPreferenceSignals(
+  rows: ReadonlyArray<{ rating?: string | null; reasonCode?: string | null }>,
+  minSignals = 2,
+): FeedbackPreferenceSignals {
+  let notBoldEnough = 0;
+  for (const row of rows) {
+    if (row.rating !== "down") continue;
+    if (row.reasonCode === "not_bold_enough") notBoldEnough += 1;
+  }
+
+  const signals: FeedbackPreferenceSignals = {};
+  if (notBoldEnough >= minSignals) {
+    signals.projectionPreference = "noticeable";
+    signals.scentLastsOnMe = "long";
+  }
+  return signals;
+}

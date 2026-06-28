@@ -14,6 +14,7 @@ import {
 } from '@/lib/scentWeatherEngine';
 import {
   dayCandidateScore,
+  familyAlignmentScore,
   planWeeklyOutlook,
   type OutlookCandidate,
   type OutlookDayClimate,
@@ -532,6 +533,23 @@ const getFragranceLongevity = (item: Fragrance): string | number | undefined => 
  * provenance fields (older catalog rows / engine-only details) so they are not
  * retroactively penalized.
  */
+// A5-GAP5: how recently this fragrance was actually worn (accepted as a pick),
+// stamped into fragrance_data.lastWornAt. Returns a 0..1 recency factor — 1.0 if
+// worn just now, decaying linearly to 0 after RECENCY_WINDOW_DAYS — or 0 when the
+// bottle has no wear record (so an un-worn bottle is never penalized).
+const RECENCY_WINDOW_DAYS = 7;
+const RECENCY_PENALTY_WEIGHT = 25;
+const getFragranceRecencyFactor = (item: Fragrance, now: number): number => {
+  const record = getFragranceRecord(item);
+  const raw = record.lastWornAt;
+  const wornMs = typeof raw === 'string' ? Date.parse(raw) : typeof raw === 'number' ? raw : NaN;
+  if (!Number.isFinite(wornMs)) return 0;
+  const days = (now - wornMs) / 86_400_000;
+  if (!Number.isFinite(days) || days < 0) return 0;
+  if (days >= RECENCY_WINDOW_DAYS) return 0;
+  return 1 - days / RECENCY_WINDOW_DAYS;
+};
+
 const getFragranceVectorConfidence = (item: Fragrance): number | undefined => {
   const record = getFragranceRecord(item);
   const flag = typeof record.vector_confidence === 'string' ? record.vector_confidence : undefined;
@@ -770,10 +788,23 @@ const buildOutlookCandidate = (item: Fragrance): OutlookCandidate => {
   };
 };
 
+// Phase 4 (A5): the signed-in user's persisted scent-taste profile, fetched from
+// GET /api/me/scent-preferences and threaded into scoring. All fields optional so
+// a guest / pre-migration / not-yet-loaded state scores exactly as before.
+export interface UserScentPreferences {
+  preferredFamilies?: ScentFamily[];
+  dislikedFamilies?: ScentFamily[];
+  scentLastsOnMe?: 'short' | 'normal' | 'long';
+  projectionPreference?: 'subtle' | 'noticeable';
+}
+
+const EMPTY_SCENT_PREFERENCES: UserScentPreferences = {};
+
 const buildEngineInput = (
   item: Fragrance,
   intent: { destination: DestinationType; energy: EnergyState },
   weather: any,
+  preferences: UserScentPreferences = EMPTY_SCENT_PREFERENCES,
 ): ScentWeatherEngineInput => {
   const condition = getWeatherString(weather, ['condition', 'description']);
   const normalizedCondition = condition.toLowerCase();
@@ -829,40 +860,19 @@ const buildEngineInput = (
       const vectorSignal = getFragranceVectorConfidence(item);
       return vectorSignal === undefined ? structured : (structured + vectorSignal) / 2;
     })(),
+    // A5-GAP1: the engine consumes userPreference in its spray/projection math but
+    // the app never built it. Thread the user's skin-longevity + projection taste.
+    ...(preferences.scentLastsOnMe || preferences.projectionPreference
+      ? {
+          userPreference: {
+            ...(preferences.scentLastsOnMe ? { scentLastsOnMe: preferences.scentLastsOnMe } : {}),
+            ...(preferences.projectionPreference
+              ? { projectionPreference: preferences.projectionPreference }
+              : {}),
+          },
+        }
+      : {}),
   };
-};
-
-const calculateRecommendationDisplayScore = (
-  recommendation: ScentWeatherRecommendation,
-): number => {
-  const confidenceBaseScore: Record<ScentWeatherRecommendation['confidence'], number> = {
-    high: 92,
-    medium: 78,
-    low: 62,
-  };
-  const projectionPenalty: Record<ScentWeatherRecommendation['projection_risk'], number> = {
-    low: 0,
-    medium: 4,
-    high: 10,
-    overpowering_risk: 18,
-  };
-  const wearWindowPenalty: Record<ScentWeatherRecommendation['wear_window'], number> = {
-    best_now: 0,
-    daytime_safe: 2,
-    better_later: 8,
-    nighttime_better: 10,
-    avoid_today: 28,
-  };
-
-  return Math.max(
-    0,
-    Math.min(
-      100,
-      confidenceBaseScore[recommendation.confidence] -
-        projectionPenalty[recommendation.projection_risk] -
-        wearWindowPenalty[recommendation.wear_window],
-    ),
-  );
 };
 
 // Distill a loose weather object into the climate axes the planner scores
@@ -881,57 +891,60 @@ const buildOutlookClimate = (weather: any): OutlookDayClimate => {
 };
 
 // Engine family-alignment for one fragrance on one day, WITHOUT the continuous
-// thermal term. This is the `baseScore` the weekly planner builds on.
+// thermal term. This is the `baseScore` the weekly planner builds on. A6-GAP2:
+// delegates to the shared `familyAlignmentScore` so the home hero, the forecast
+// planner, and the API mission ranker score family alignment identically (the
+// display-score table and best/avoid/intent/energy weights are single-sourced).
 const scoreFamilyAlignment = (
   item: Fragrance,
   recommendation: ScentWeatherRecommendation,
   intent: { destination: DestinationType; energy: EnergyState },
-): number => {
-  const bestFamilyHits = recommendation.best_scent_families.filter((family) =>
-    fragranceHasFamilySignal(item, family),
-  ).length;
-  const avoidFamilyHits = recommendation.avoid_scent_families.filter((family) =>
-    fragranceHasFamilySignal(item, family),
-  ).length;
-  const intentBonus = item.intents?.includes(intent.destination) ? 4 : 0;
-  const energyBonus = item.energies?.includes(intent.energy) ? 3 : 0;
-
-  return (
-    calculateRecommendationDisplayScore(recommendation) +
-    bestFamilyHits * 8 -
-    avoidFamilyHits * 14 +
-    intentBonus +
-    energyBonus
-  );
-};
+  preferences: UserScentPreferences = EMPTY_SCENT_PREFERENCES,
+): number =>
+  familyAlignmentScore({
+    recommendation,
+    traits: getFragranceTraitTexts(item),
+    intentMatch: item.intents?.includes(intent.destination) ?? false,
+    energyMatch: item.energies?.includes(intent.energy) ?? false,
+    // A5-GAP2: steer toward liked families and away from disliked ones.
+    preferredFamilies: preferences.preferredFamilies,
+    dislikedFamilies: preferences.dislikedFamilies,
+  });
 
 const scoreRecommendationCandidate = (
   item: Fragrance,
   recommendation: ScentWeatherRecommendation,
   intent: { destination: DestinationType; energy: EnergyState },
   climate?: OutlookDayClimate,
+  preferences: UserScentPreferences = EMPTY_SCENT_PREFERENCES,
 ): number => {
-  const base = scoreFamilyAlignment(item, recommendation, intent);
-  if (!climate) return base;
+  const base = scoreFamilyAlignment(item, recommendation, intent, preferences);
+  // A5-GAP5: down-weight a bottle worn in the last week so the same pick doesn't
+  // resurface every similar day; the penalty decays to zero as the wear ages.
+  const recencyPenalty = getFragranceRecencyFactor(item, Date.now()) * RECENCY_PENALTY_WEIGHT;
+  if (!climate) return base - recencyPenalty;
   // Layer the data-backed weather terms (continuous thermal harmony, community
   // season suitability, crowd-consensus quality, confidence) on top of the
   // engine's family verdict — the gradient that makes a 58°F day rank the vault
   // differently from a 78°F day instead of every forecast day looking identical.
-  return dayCandidateScore(base, buildOutlookCandidate(item), climate);
+  return dayCandidateScore(base, buildOutlookCandidate(item), climate) - recencyPenalty;
 };
 
 const calculateEngineAlignment = (
   items: Fragrance[],
   intent: { destination: DestinationType; energy: EnergyState },
   weather: any,
+  preferences: UserScentPreferences = EMPTY_SCENT_PREFERENCES,
 ) => {
   const climate = buildOutlookClimate(weather);
   const candidates = items.map((item, index) => {
-    const recommendation = calculateScentWeatherRecommendation(buildEngineInput(item, intent, weather));
+    const recommendation = calculateScentWeatherRecommendation(
+      buildEngineInput(item, intent, weather, preferences),
+    );
     return {
       item,
       recommendation,
-      score: scoreRecommendationCandidate(item, recommendation, intent, climate),
+      score: scoreRecommendationCandidate(item, recommendation, intent, climate, preferences),
       index,
     };
   });
@@ -1068,6 +1081,12 @@ interface WardrobeContextType {
   setActiveRecommendation: (item: Fragrance | null) => void;
   setActiveEngineRecommendation: (rec: ScentWeatherRecommendation | null) => void;
   setRecommendationReason: (reason: string) => void;
+  /** Phase 4 (A5): the user's persisted scent-taste profile, threaded into scoring. */
+  scentPreferences: UserScentPreferences;
+  /** Persist a partial update to the taste profile (onboarding capture / settings). */
+  updateScentPreferences: (patch: Partial<UserScentPreferences>) => Promise<void>;
+  /** Phase 4 (A5-GAP5): record that a fragrance was worn/accepted (recency penalty). */
+  markFragranceWorn: (item: Pick<Fragrance, 'id' | '_dbId'>) => Promise<void>;
   setUserId: (id: string | null) => void;
   setVaultSearchUiActive: (active: boolean) => void;
   loadWardrobe: (token: string, signal?: AbortSignal) => Promise<void>;
@@ -1125,6 +1144,9 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [wardrobeLoaded, setWardrobeLoaded] = useState(false);
   const [onboardingCompleted, setOnboardingCompleted] = useState<boolean>(false);
   const [onboardingResolved, setOnboardingResolved] = useState<boolean>(false);
+  // Phase 4 (A5): the signed-in user's persisted scent-taste profile, threaded
+  // into every recommendation scoring path. Empty for guests / before load.
+  const [scentPreferences, setScentPreferences] = useState<UserScentPreferences>(EMPTY_SCENT_PREFERENCES);
   const [wardrobeError, setWardrobeError] = useState<string | null>(null);
   const [isIntentModalOpen, setIsIntentModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
@@ -1450,6 +1472,85 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return completed;
   }, []);
 
+  // A5: load the user's scent-taste profile. Tolerates the pre-migration 503/empty
+  // and guests (no token) by leaving preferences empty — scoring then behaves
+  // exactly as before personalization existed.
+  const loadScentPreferences = useCallback(async (token: string, signal?: AbortSignal) => {
+    try {
+      const res = await fetch('/api/me/scent-preferences', {
+        headers: { Authorization: `Bearer ${token}` },
+        signal,
+      });
+      if (!res.ok) return;
+      const data = (await res.json()) as {
+        scentPreferences?: {
+          preferredFamilies?: unknown;
+          dislikedFamilies?: unknown;
+          scentLastsOnMe?: unknown;
+          projectionPreference?: unknown;
+        };
+      };
+      const raw = data.scentPreferences ?? {};
+      const asFamilies = (v: unknown): ScentFamily[] =>
+        Array.isArray(v) ? (v.filter((x): x is ScentFamily => typeof x === 'string')) : [];
+      const lasts = raw.scentLastsOnMe;
+      const projection = raw.projectionPreference;
+      if (authTokenRef.current === token) {
+        setScentPreferences({
+          preferredFamilies: asFamilies(raw.preferredFamilies),
+          dislikedFamilies: asFamilies(raw.dislikedFamilies),
+          ...(lasts === 'short' || lasts === 'normal' || lasts === 'long' ? { scentLastsOnMe: lasts } : {}),
+          ...(projection === 'subtle' || projection === 'noticeable' ? { projectionPreference: projection } : {}),
+        });
+      }
+    } catch {
+      // Network/abort — keep whatever we have; personalization is best-effort.
+    }
+  }, []);
+
+  // A5-GAP6: persist a partial taste-profile update (onboarding family capture or
+  // the settings panel) and optimistically merge it into local scoring state.
+  const updateScentPreferences = useCallback(
+    async (patch: Partial<UserScentPreferences>) => {
+      setScentPreferences((prev) => ({ ...prev, ...patch }));
+      const token = authTokenRef.current;
+      if (!token) return; // guest: local-only, nothing to persist
+      try {
+        await fetch('/api/me/scent-preferences', {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify(patch),
+        });
+      } catch {
+        // Best-effort: a failed sync keeps the optimistic local value for this session.
+      }
+    },
+    [],
+  );
+
+  // A5-GAP5: record that the user wore/accepted a fragrance today. Optimistically
+  // stamps lastWornAt locally (so the recency penalty applies immediately) and
+  // best-effort persists to the wardrobe row's jsonb. Guests update locally only.
+  const markFragranceWorn = useCallback(async (item: Pick<Fragrance, 'id' | '_dbId'>) => {
+    const wornAt = new Date().toISOString();
+    setItems((prev) =>
+      prev.map((it) => (sameWardrobeEntry(it, item) ? ({ ...it, lastWornAt: wornAt } as Fragrance) : it)),
+    );
+    const token = authTokenRef.current;
+    if (!token) return;
+    const id = item._dbId ?? item.id;
+    if (!id) return;
+    try {
+      await fetch(`/api/wardrobe/${encodeURIComponent(String(id))}/worn`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ wornAt }),
+      });
+    } catch {
+      // Best-effort: the optimistic local stamp still rotates this session's picks.
+    }
+  }, []);
+
   const refreshOnboardingCompletionFromServer = useCallback(async (token: string) => {
     if (appStateRefreshInFlightRef.current) return;
     appStateRefreshInFlightRef.current = true;
@@ -1513,10 +1614,16 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // a slow or empty wardrobe load cannot flash the add-3 flow at a completed user.
   // Server state wins; a 401 here is left to the wardrobe loader's recovery path.
   useEffect(() => {
-    if (!authToken) return;
+    if (!authToken) {
+      // Guest / signed-out: reset to the empty taste profile so a previous user's
+      // preferences can't leak into a new session's scoring.
+      setScentPreferences(EMPTY_SCENT_PREFERENCES);
+      return;
+    }
     const abortController = new AbortController();
     setOnboardingResolved(false);
     setOnboardingCompleted(readOnboardingMarker(authToken));
+    void loadScentPreferences(authToken, abortController.signal);
 
     void (async () => {
       try {
@@ -1535,7 +1642,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     })();
 
     return () => abortController.abort();
-  }, [authToken, loadAppState]);
+  }, [authToken, loadAppState, loadScentPreferences]);
 
   // Completion is durable only after the server sees a persisted wardrobe count
   // at or above the threshold. This catches background/tab updates without
@@ -2356,14 +2463,14 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setIsIntentModalOpen(false);
     if (items.length === 0) return;
 
-    const winner = calculateEngineAlignment(items, intent, weather);
+    const winner = calculateEngineAlignment(items, intent, weather, scentPreferences);
     if (!winner) return;
 
     lastIntentRef.current = intent;
     setActiveEngineRecommendation(winner.recommendation);
     setRecommendationReason(winner.recommendation.explanation);
     setActiveRecommendation(winner.item);
-  }, [items, weather]);
+  }, [items, weather, scentPreferences]);
 
   // Keep the surfaced pick honest when conditions move. The recommendation is
   // computed once on intent submission; without this, a later weather refresh
@@ -2382,12 +2489,12 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const intent = lastIntentRef.current;
     const currentItems = itemsRef.current;
     if (!intent || currentItems.length === 0) return;
-    const winner = calculateEngineAlignment(currentItems, intent, weather);
+    const winner = calculateEngineAlignment(currentItems, intent, weather, scentPreferences);
     if (!winner) return;
     setActiveEngineRecommendation(winner.recommendation);
     setRecommendationReason(winner.recommendation.explanation);
     setActiveRecommendation(winner.item);
-  }, [weather]);
+  }, [weather, scentPreferences]);
 
   const closeRecommendationOverlay = useCallback(() => {
     lastIntentRef.current = null;
@@ -2463,6 +2570,9 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setActiveRecommendation,
     setActiveEngineRecommendation,
     setRecommendationReason,
+    scentPreferences,
+    updateScentPreferences,
+    markFragranceWorn,
     setUserId,
     setVaultSearchUiActive,
     loadWardrobe,

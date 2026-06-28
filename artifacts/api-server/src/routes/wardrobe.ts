@@ -333,6 +333,46 @@ router.patch("/wardrobe/:fragranceId/visibility", requireAuth, async (req: AuthR
   res.json({ id: fragranceId, shareHidden });
 });
 
+/**
+ * A5-GAP5: stamp `fragrance_data.lastWornAt` when the user accepts/wears a
+ * recommendation. Stored inside the existing jsonb (no migration), it powers the
+ * recency penalty in the recommender so the same bottle doesn't surface every
+ * similar day. Idempotent: always writes "now". Accepts an optional client
+ * timestamp but clamps it to a sane window (no future, no ancient backdating).
+ */
+router.patch("/wardrobe/:fragranceId/worn", requireAuth, async (req: AuthRequest, res) => {
+  const user = req.user!;
+  const tenantId = getTenantId(req);
+
+  const fragranceId = req.params.fragranceId as string;
+  const match = await findUserRow(tenantId, user.id, fragranceId);
+  if (!match) { res.status(404).json({ error: "Fragrance not found" }); return; }
+
+  const now = Date.now();
+  const raw = (req.body ?? {}) as { wornAt?: unknown };
+  const requested = typeof raw.wornAt === "string" ? Date.parse(raw.wornAt) : NaN;
+  // Clamp: never in the future, never more than ~2 days stale (a late sync).
+  const wornMs = Number.isFinite(requested)
+    ? Math.min(now, Math.max(now - 2 * 24 * 60 * 60_000, requested))
+    : now;
+  const lastWornAt = new Date(wornMs).toISOString();
+
+  const existing = match.fragranceData as Record<string, any>;
+  const updated = sanitizeFragrance({ ...existing, id: match.id, lastWornAt });
+  assertNoPersistedBase64Image(updated, "user_fragrances.fragrance_data");
+
+  await db
+    .update(userFragrancesTable)
+    .set({ fragranceData: updated as any })
+    .where(and(
+      eq(userFragrancesTable.tenantId, tenantId),
+      eq(userFragrancesTable.id, match.id),
+      eq(userFragrancesTable.userId, user.id),
+    ));
+
+  res.json({ id: fragranceId, lastWornAt });
+});
+
 router.patch("/wardrobe/detail-refresh/batch", requireAuth, async (req: AuthRequest, res) => {
   const user = req.user!;
   const tenantId = getTenantId(req);

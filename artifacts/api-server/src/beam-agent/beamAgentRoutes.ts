@@ -45,6 +45,7 @@ import { getScentFacts } from "../lib/scent-facts/engine";
 import { getBeamUserUsageSince, recordBeamRunUsage } from "../services/apiUsageLedger";
 import {
   BeamFeedbackUnavailableError,
+  applyFeedbackToScentPreferences,
   beamAnswerLogExistsForUser,
   recordBeamAnswerFeedback,
   recordBeamAnswerLog,
@@ -981,6 +982,12 @@ router.post("/feedback", feedbackRateLimit, requireAuth, async (req: AuthRequest
     { beam: { feedback: true, user: hashUser(req.user.id), rating, reasonCode } },
     "beam answer feedback recorded",
   );
+
+  // A5-GAP3: close the learning loop. Fold the user's accumulated feedback back
+  // into their scent-taste profile. Best-effort and fire-and-forget — it must
+  // never delay or fail the feedback response.
+  void applyFeedbackToScentPreferences(req.user.id, getTenantId(req)).catch(() => {});
+
   res.status(201).json({ ok: true });
 });
 
