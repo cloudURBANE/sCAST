@@ -41,6 +41,7 @@ import {
 } from "./beamToolCore.ts";
 import type { OverlapProfile } from "./beamToolCore.ts";
 import { combineSimilarity, scentVectorSimilarity, similarityBand } from "./similarityCore.ts";
+import { analyzeCollection, type CollectionItem } from "./collectionAnalysis.ts";
 import { annotateBudget } from "./budgetGate.ts";
 import { candidateMatchesAvoid } from "./avoidFilter.ts";
 import {
@@ -304,6 +305,42 @@ export function createBeamTools(deps: BeamToolDeps): BeamToolDefinition[] {
         const vault = await deps.loadVault(ctx);
         const items: CandidatePacket[] = vault.map((item) => packetFromOwnedItem(item));
         return { count: items.length, items };
+      },
+    },
+
+    {
+      name: "beam_analyze_collection",
+      description:
+        "Run a deterministic, evidence-gated analysis of the signed-in user's OWNED collection: family distribution + diversity, signature accords/notes (share-based, not raw counts), occasion/season coverage with explicit GAPS, and redundancy clusters. Call this FIRST for any 'what's in my collection', 'what are my gaps', 'what should I add', or 'is my collection well-rounded' question, then answer DIRECTLY from its fields — do not slot-fill an occasion like a trip and do not assert any gap, composition, or redundancy claim the report does not contain. When `reliable` is false there is too little enriched data to call gaps; say so honestly instead of guessing.",
+      inputSchema: { type: "object", properties: {}, additionalProperties: false },
+      handler: async (_input, ctx) => {
+        const [packetsRaw, vault] = await Promise.all([
+          deps.loadWardrobePackets ? deps.loadWardrobePackets(ctx) : Promise.resolve(null),
+          deps.loadVault(ctx),
+        ]);
+        // Clean, separate family list per bottle (packets fold families into
+        // accords; the vault keeps them distinct) keyed by normalized name.
+        const familiesByName = new Map<string, string[]>();
+        for (const v of vault) {
+          familiesByName.set(
+            v.name.trim().toLowerCase(),
+            (v.families ?? []).filter((f): f is string => typeof f === "string"),
+          );
+        }
+        const packets: CandidatePacket[] =
+          packetsRaw ?? vault.map((item) => packetFromOwnedItem(item));
+        const items: CollectionItem[] = packets.map((p) => ({
+          id: p.fragranceId,
+          name: p.canonicalName,
+          brand: p.brand,
+          families: familiesByName.get(p.canonicalName.trim().toLowerCase()) ?? [],
+          accords: p.accords,
+          notes: [...p.notes.top, ...p.notes.middle, ...p.notes.base],
+          longevity: p.performance.longevity,
+          sillage: p.performance.projection,
+          sourceConfidence: p.sourceConfidence,
+        }));
+        return analyzeCollection(items);
       },
     },
 

@@ -16,6 +16,11 @@
 export type BeamReadToolName =
   | "beam_get_user_context"
   | "beam_get_wardrobe"
+  // Deterministic, evidence-gated analysis of the OWNED collection (family
+  // distribution + diversity, signature accords, occasion/season coverage with
+  // explicit gaps, redundancy clusters). Grounds "what are my gaps / what should
+  // I add" in real math instead of a model guess. Always available (vault-only).
+  | "beam_analyze_collection"
   | "beam_search_catalog"
   | "beam_get_fragrance_details"
   | "beam_score_candidates"
