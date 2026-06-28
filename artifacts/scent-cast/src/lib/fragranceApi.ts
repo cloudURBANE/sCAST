@@ -1,6 +1,13 @@
 const FRAGRANCE_SEARCH_CACHE_STORAGE_KEY = "scentcast.fragranceSearchCache.v4";
-const FRAGRANCE_SEARCH_CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+// Fragrance coverage changes as the engine scrapes/links new sources, so a stale
+// replay is actively harmful (a thin/degraded result set otherwise lingers for
+// days). 6 hours keeps the cache useful for back-to-back navigation while letting
+// genuinely-improved coverage surface within the same day.
+const FRAGRANCE_SEARCH_CACHE_MAX_AGE_MS = 6 * 60 * 60 * 1000;
 const FRAGRANCE_SEARCH_CACHE_MAX_ENTRIES = 100;
+// Below this many results a cache entry is treated as too thin to replay — it is
+// refetched so a transient under-coverage search self-heals instead of sticking.
+const FRAGRANCE_SEARCH_CACHE_MIN_RESULTS = 3;
 const SUPPLEMENTAL_SEARCH_MIN_RESULTS = 8;
 const SEARCH_QUERY_BRAND_ALIASES: ReadonlyArray<readonly [string, string]> = [
   ["mfk", "Maison Francis Kurkdjian"],
@@ -462,6 +469,12 @@ function getCachedFragranceSearch(query: string): FragranceSearchResponse | null
 function cacheFragranceSearch(query: string, response: FragranceSearchResponse): void {
   const key = fragranceSearchCacheKey(query);
   if (!key || response.results.length === 0) return;
+  // Never persist a degraded/fallback-path answer or a sub-threshold result set:
+  // those are transient coverage conditions, and caching them replays a thin or
+  // fallback-sourced list for the full TTL while suppressing the app-search
+  // supplement that would otherwise widen it. Let them refetch and self-heal.
+  if (hasDegradedBreadth(response.diagnostics)) return;
+  if (response.results.length < FRAGRANCE_SEARCH_CACHE_MIN_RESULTS) return;
 
   const cache = readSearchCache();
   cache[key] = { cachedAt: Date.now(), response };
@@ -1046,6 +1059,11 @@ function withEngineTimeout(
 
 type FragranceEngineFetchOptions = {
   retryBackoffMs?: readonly number[];
+  // When false, neither the transient-retry backoff loop nor the direct-fallback
+  // re-POST fires: a request that may have succeeded server-side (an enqueue)
+  // must not be replayed, since the engine cannot dedupe a transport-lost POST.
+  // Defaults to true for the GET reads where replay is safe and self-healing.
+  idempotent?: boolean;
 };
 
 function abortableSleep(ms: number, signal?: AbortSignal | null): Promise<void> {
@@ -1085,7 +1103,11 @@ async function fetchFragranceEngine(
   const [pathname, query = ""] = path.split("?", 2);
   const querySuffix = query ? `?${query}` : "";
   const primaryUrl = `${fragranceEngineUrl(pathname)}${querySuffix}`;
-  const retryBackoffMs = options.retryBackoffMs ?? ENGINE_RETRY_BACKOFF_MS;
+  const idempotent = options.idempotent ?? true;
+  // A non-idempotent request must never be replayed: drop the retry backoff so
+  // the loop makes exactly one attempt and falls straight through.
+  const retryBackoffMs = idempotent ? options.retryBackoffMs ?? ENGINE_RETRY_BACKOFF_MS : [];
+  const method = (init?.method ?? "GET").toUpperCase();
   let lastError: unknown;
 
   for (let attempt = 0; attempt <= retryBackoffMs.length; attempt++) {
@@ -1114,7 +1136,12 @@ async function fetchFragranceEngine(
     break;
   }
 
-  const fallbackUrl = directFragranceEngineUrl(pathname);
+  // The direct-fallback re-POST replays the whole request against the engine's
+  // direct host. That is safe for an idempotent GET, but for a non-idempotent
+  // request (or any non-GET that opted out) it would double-apply a write that
+  // may have already landed server-side — so skip it and surface the error.
+  const allowDirectFallback = idempotent && method === "GET";
+  const fallbackUrl = allowDirectFallback ? directFragranceEngineUrl(pathname) : null;
   const fallbackRequestUrl = fallbackUrl ? `${fallbackUrl}${querySuffix}` : null;
   if (fallbackRequestUrl && fallbackRequestUrl !== primaryUrl) {
     const { init: timedInit, cleanup } = withEngineTimeout(init, ENGINE_FETCH_TIMEOUT_MS);
@@ -1472,7 +1499,15 @@ export async function searchFragrances(
   options?: { signal?: AbortSignal },
 ): Promise<FragranceSearchResponse> {
   const cached = getCachedFragranceSearch(query);
-  if (cached) return cached;
+  if (cached) {
+    // A synchronous cache hit must still honor a caller that has already moved
+    // on (e.g. the search box advanced from query A to query B). Without this
+    // guard a stale query A would resolve after B, racing the newer results.
+    if (options?.signal?.aborted) {
+      throw new DOMException("Aborted", "AbortError");
+    }
+    return cached;
+  }
 
   let response = await executeFragranceSearch(query, options);
 
@@ -1626,6 +1661,30 @@ export type FragranceDetailRequestPayload =
   | ({ id: string; source_url?: string } & FragranceDetailRequestOptions)
   | ({ source_url: string; id?: never } & FragranceDetailRequestOptions);
 
+// Provenance marker stamped on a detail that the engine could not serve, so the
+// SPA fell back to the local Express profile. Surfaced as `fallback_source` (a
+// stable machine field) plus a human enrichment message. Lets the UI say
+// "showing local/cached profile — engine temporarily unavailable" instead of
+// silently presenting a different-shaped profile (often without source_coverage,
+// which would otherwise read as a perpetual "Partial").
+export const ENGINE_FALLBACK_SOURCE = "local-engine-unavailable";
+const ENGINE_FALLBACK_MESSAGE =
+  "Showing a local/cached profile — the live fragrance engine is temporarily unavailable.";
+
+function tagEngineFallbackProvenance(detail: FragranceDetailResponse): FragranceDetailResponse {
+  // Do not overwrite a richer enrichment message the local profile already
+  // carried; only fill provenance the fallback is responsible for.
+  const existingEnrichment = detail.enrichment ?? null;
+  return {
+    ...detail,
+    fallback_source: ENGINE_FALLBACK_SOURCE,
+    enrichment: {
+      ...(existingEnrichment ?? {}),
+      message: existingEnrichment?.message?.trim() || ENGINE_FALLBACK_MESSAGE,
+    },
+  };
+}
+
 export async function getFragranceDetails(
   payload: FragranceDetailRequestPayload,
   options?: { signal?: AbortSignal },
@@ -1651,12 +1710,33 @@ export async function getFragranceDetails(
   };
 
   const fetchAppDetails = () => fetch(appApiUrl("/api/fragrances/details"), requestInit);
-  const parseAppDetailsFallback = async (): Promise<FragranceDetailResponse> => {
-    const fallbackRes = await fetchAppDetails();
-    if (fallbackRes.ok) {
-      return parseJsonResponse<FragranceDetailResponse>(fallbackRes, "Fragrance detail");
+  // When the engine itself failed, fall back to the local profile but (a) tag it
+  // with provenance so the UI can flag it as a temporary local view, and (b) if
+  // the local profile ALSO fails, surface the original engine error rather than
+  // masking it behind the app-API error — the engine fault is the real cause.
+  const parseAppDetailsFallback = async (
+    engineError?: unknown,
+  ): Promise<FragranceDetailResponse> => {
+    let fallbackRes: Response;
+    try {
+      fallbackRes = await fetchAppDetails();
+      if (!fallbackRes.ok) {
+        throw new Error(
+          await apiErrorMessage(fallbackRes, `Fragrance detail fetch failed: ${fallbackRes.status}`),
+        );
+      }
+      const fallbackDetail = await parseJsonResponse<FragranceDetailResponse>(
+        fallbackRes,
+        "Fragrance detail",
+      );
+      return tagEngineFallbackProvenance(fallbackDetail);
+    } catch (fallbackErr) {
+      if (fallbackErr instanceof Error && fallbackErr.name === "AbortError") throw fallbackErr;
+      // Preserve the original engine fault when both tiers failed; only the
+      // engine error explains why we left the authoritative source at all.
+      if (engineError instanceof Error && engineError.name !== "AbortError") throw engineError;
+      throw fallbackErr;
     }
-    throw new Error(await apiErrorMessage(fallbackRes, `Fragrance detail fetch failed: ${fallbackRes.status}`));
   };
   let res: Response;
   try {
@@ -1666,15 +1746,17 @@ export async function getFragranceDetails(
   } catch (err) {
     if (err instanceof Error && err.name === "AbortError") throw err;
     if (!useAppApi && isFragranceEngineTransportError(err)) {
-      res = await fetchAppDetails();
-    } else {
-      throw err;
+      return parseAppDetailsFallback(err);
     }
+    throw err;
   }
 
   if (!res.ok) {
     if (!useAppApi && res.status >= 500) {
-      return parseAppDetailsFallback();
+      const engineError = new Error(
+        await apiErrorMessage(res, `Fragrance detail fetch failed: ${res.status}`),
+      );
+      return parseAppDetailsFallback(engineError);
     }
     throw new Error(await apiErrorMessage(res, `Fragrance detail fetch failed: ${res.status}`));
   }
@@ -1683,7 +1765,7 @@ export async function getFragranceDetails(
     return await parseJsonResponse<FragranceDetailResponse>(res, "Fragrance detail");
   } catch (err) {
     if (!useAppApi && isResponseBodyError(err)) {
-      return parseAppDetailsFallback();
+      return parseAppDetailsFallback(err);
     }
     throw err;
   }
@@ -1699,18 +1781,25 @@ export async function requeueFragranceDetails(
     throw new Error("Fragrance refresh needs an engine id or source URL.");
   }
 
-  const res = await fetchFragranceEngine("/fragrances/details/requeue", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
+  const res = await fetchFragranceEngine(
+    "/fragrances/details/requeue",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        ...(id ? { id } : {}),
+        ...(sourceUrl ? { source_url: sourceUrl } : {}),
+        priority: typeof payload.priority === "number" ? payload.priority : 10,
+      }),
+      signal: options?.signal,
     },
-    body: JSON.stringify({
-      ...(id ? { id } : {}),
-      ...(sourceUrl ? { source_url: sourceUrl } : {}),
-      priority: typeof payload.priority === "number" ? payload.priority : 10,
-    }),
-    signal: options?.signal,
-  });
+    // An enqueue is a write: a transport-lost POST may already have queued the
+    // job server-side, so neither the backoff retry nor the direct-fallback
+    // re-POST may fire — that would double-enqueue.
+    { idempotent: false },
+  );
 
   if (!res.ok) {
     throw new Error(await apiErrorMessage(res, `Fragrance refresh requeue failed: ${res.status}`));
