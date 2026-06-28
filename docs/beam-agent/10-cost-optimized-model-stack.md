@@ -20,10 +20,17 @@ drift — re-verify in the OpenRouter dashboard before production (brief §15).*
 
 | Lane | OpenRouter default | Env var | When |
 |---|---|---|---|
-| Default concierge / orchestration | `google/gemma-4-31b-it:free` | `BEAM_AGENT_MODEL` | normal fragrance chat |
+| Default concierge / orchestration | `tencent/hy3-preview:free` | `BEAM_AGENT_MODEL` | normal fragrance chat |
 | Premium / synthesis | `tencent/hy3-preview` | `BEAM_AGENT_MODEL_STRONG` | the closing synthesis turn; the whole premium lane |
-| Premium-lane orchestration | `google/gemma-4-31b-it:free` | `BEAM_AGENT_MODEL_PREMIUM` | tool-calling turns on the premium lane (NOT the closer) |
+| Premium-lane orchestration | `tencent/hy3-preview:free` | `BEAM_AGENT_MODEL_PREMIUM` | tool-calling turns on the premium lane (NOT the closer) |
 | Deep strategy | `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free` | `BEAM_AGENT_MODEL_DEEP` | gated deep workflows only (hot path never auto-routes here) |
+
+**Do NOT point any lane at an OpenAI "harmony"/gpt-oss slug.** Those models emit
+tool calls as control markup in the plain `content` channel; on the tool-free
+synthesis turn that scrubs to an empty answer and the loop ships the
+"I couldn't lock in a confident match" stall (`EMPTY_ANSWER_FALLBACK`). hy3
+routes tools structurally, so it is the harmony-free default. `stripHarmonyTokens`
+(`openRouterProvider.ts`) only exists as a defensive scrub for stragglers.
 
 Code: `openRouterProvider.ts` (`defaultOpenRouterModel` / `strongOpenRouterModel`
 / `deepOpenRouterModel`), `provider.ts` (`resolveBeamModels(lane)`,

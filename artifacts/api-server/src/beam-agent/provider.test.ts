@@ -28,7 +28,7 @@ function withEnv(vars: Record<string, string | undefined>, fn: () => void): void
   }
 }
 
-test("OpenRouter premium lane keeps orchestration cheap (free Gemma) and synthesis strong", () => {
+test("OpenRouter premium lane keeps orchestration cheap (free hy3-preview) and synthesis strong", () => {
   withEnv(
     {
       BEAM_AGENT_PROVIDER: "openrouter",
@@ -41,14 +41,14 @@ test("OpenRouter premium lane keeps orchestration cheap (free Gemma) and synthes
     () => {
       const premium = resolveBeamModels("premium");
       assert.ok(premium);
-      assert.equal(premium!.model, "google/gemma-4-31b-it:free");
+      assert.equal(premium!.model, "tencent/hy3-preview:free");
       assert.equal(premium!.synthesisModel, "anthropic/claude-sonnet-4.6");
       // The blowup we are guarding against: premium orchestration == the closer.
       assert.notEqual(premium!.model, premium!.synthesisModel);
 
       const def = resolveBeamModels("default");
       assert.ok(def);
-      assert.equal(def!.model, "google/gemma-4-31b-it:free");
+      assert.equal(def!.model, "tencent/hy3-preview:free");
       assert.equal(def!.synthesisModel, "anthropic/claude-sonnet-4.6");
     },
   );
@@ -100,7 +100,7 @@ test("lane-aware synthesis override routes each lane's closer independently", ()
       const premium = resolveBeamModels("premium");
       assert.equal(def!.synthesisModel, "deepseek/deepseek-v4-flash");
       // Orchestration is untouched by the synthesis override.
-      assert.equal(def!.model, "google/gemma-4-31b-it:free");
+      assert.equal(def!.model, "tencent/hy3-preview:free");
       // Premium lane, no override → falls back to the strong slug (unchanged).
       assert.equal(premium!.synthesisModel, "anthropic/claude-sonnet-4.6");
     },
