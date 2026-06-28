@@ -45,6 +45,7 @@ function toolMap(deps: BeamToolDeps) {
 test("exposes exactly the Phase 1 read-only tools", () => {
   const names = createBeamTools(makeDeps()).map((tool) => tool.name).sort();
   assert.deepEqual(names, [
+    "beam_analyze_collection",
     "beam_compare_overlap",
     "beam_get_fragrance_details",
     "beam_get_user_context",
