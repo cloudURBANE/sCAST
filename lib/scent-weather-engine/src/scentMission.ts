@@ -145,6 +145,19 @@ export type ScentMissionResponse = {
   nodeUpdates?: ScentMissionNodeUpdate[];
   missionPatch?: Partial<ScentMissionState>;
   recommendation?: ScentMissionRecommendation;
+  /**
+   * A6-GAP3: the next-best 2–3 alternates after the winner. The full ranked list
+   * already exists in `rankScentMissionRecommendations`; surfacing the runners-up
+   * lets the client offer real choices instead of discarding everything but [0].
+   */
+  alternates?: ScentMissionRecommendation[];
+  /**
+   * A6-GAP5: true when even the winner does not really fit today (its wear-window
+   * is `avoid_today` or its score is below the usable floor). The client renders
+   * an honest "nothing fits today" state with an acquire CTA instead of spinning
+   * a poor pick as confident.
+   */
+  noGoodPick?: boolean;
   research?: unknown;
   premiumLock?: ScentMissionPremiumLock;
 };

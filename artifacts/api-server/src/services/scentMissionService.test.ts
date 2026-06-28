@@ -367,6 +367,22 @@ test("resolution-standard returns the engine winner and unlocks the premium gate
   ]);
 });
 
+test("resolution-standard attaches runner-up alternates after the winner (A6-GAP3)", async () => {
+  let mission = calibratedMission();
+  for (const nodeId of ["onboarding", "wardrobe-sync", "environment-scan"] as const) {
+    mission = completeScentMissionNode(mission, nodeId);
+  }
+
+  const resolved = await runNode("resolution-standard", mission);
+  // Winner is the fresh scent in hot/humid weather; the oud is the alternate.
+  assert.equal(resolved.recommendation?.fragranceId, "fresh");
+  assert.ok(Array.isArray(resolved.alternates));
+  assert.equal(resolved.alternates?.length, 1);
+  assert.equal(resolved.alternates?.[0].fragranceId, "heavy");
+  // The winner is never duplicated into the alternates list.
+  assert.ok(!resolved.alternates?.some((alt) => alt.fragranceId === "fresh"));
+});
+
 test("resolution-standard prefers the server wardrobe over client-sent items", async () => {
   let mission = calibratedMission();
   for (const nodeId of ["onboarding", "wardrobe-sync", "environment-scan"] as const) {

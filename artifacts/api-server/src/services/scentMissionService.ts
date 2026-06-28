@@ -9,7 +9,7 @@ import {
   sanitizeScentMissionState,
   sanitizeScentMissionWardrobe,
   sanitizeScentMissionWeather,
-  selectScentMissionRecommendation,
+  rankScentMissionRecommendations,
   type ScentMissionCalibration,
   type ScentMissionDestination,
   type ScentMissionEnergy,
@@ -35,6 +35,13 @@ import {
 
 const MAX_USER_MESSAGE_LENGTH = 2_000;
 const SESSION_ID_RE = /^[0-9a-zA-Z_-]{8,64}$/;
+
+// A6-GAP5: below this combined family-alignment + weather-fit score, even the
+// top-ranked bottle is not a real match for the day's conditions, so the client
+// shows an honest "nothing fits today" state. Tuned conservatively — a fine day
+// keeps a low-confidence pick well above this — so it only fires on genuinely
+// poor matches (low confidence + avoid-family hits + poor thermal fit).
+const NO_GOOD_PICK_SCORE_FLOOR = 50;
 
 // User-facing step names. These deliberately avoid internal mission-graph
 // vocabulary (no "calibration", "node", "environment scan", "resolution") so the
@@ -400,7 +407,14 @@ function lockedNodeMessage(nodeId: ScentMissionNodeId, status: string): string {
 
 type NodeExecutionResult = Pick<
   ScentMissionResponse,
-  "assistantMessage" | "nodeUpdates" | "missionPatch" | "recommendation" | "research" | "premiumLock"
+  | "assistantMessage"
+  | "nodeUpdates"
+  | "missionPatch"
+  | "recommendation"
+  | "alternates"
+  | "noGoodPick"
+  | "research"
+  | "premiumLock"
 >;
 
 async function executeNode(
@@ -458,11 +472,10 @@ async function executeNode(
     }
 
     case "resolution-standard": {
-      const recommendation = selectScentMissionRecommendation(
-        wardrobe,
-        mission.calibration,
-        weather,
-      );
+      // A6-GAP3: rank the whole vault so the runners-up can be surfaced, not just
+      // the winner. [0] is the pick; the next few are real alternates.
+      const ranked = rankScentMissionRecommendations(wardrobe, mission.calibration, weather);
+      const recommendation = ranked[0] ?? null;
       if (!recommendation) {
         const next: ScentMissionState = {
           ...mission,
@@ -474,6 +487,14 @@ async function executeNode(
           nodeUpdates: diffScentMissionNodes(mission, next),
         };
       }
+
+      const alternates = ranked.slice(1, 4);
+
+      // A6-GAP5: be honest when even the winner doesn't really fit today, instead
+      // of spinning an avoid_today / low-score pick as a confident match.
+      const noGoodPick =
+        recommendation.engine.wear_window === "avoid_today" ||
+        recommendation.score < NO_GOOD_PICK_SCORE_FLOOR;
 
       let research: unknown;
       if (deps.research) {
@@ -488,12 +509,19 @@ async function executeNode(
       }
 
       const next = completeScentMissionNode(mission, "resolution-standard");
+      const assistantMessage = noGoodPick
+        ? `Honestly, nothing in your collection is an ideal match for today's conditions. The closest is ${recommendation.name}${
+            recommendation.brand ? ` by ${recommendation.brand}` : ""
+          }, but you may want something better suited — consider adding a fragrance for this kind of weather.`
+        : `Today, reach for ${recommendation.name}${
+            recommendation.brand ? ` by ${recommendation.brand}` : ""
+          }. ${recommendation.reason}`;
       return {
-        assistantMessage: `Today, reach for ${recommendation.name}${
-          recommendation.brand ? ` by ${recommendation.brand}` : ""
-        }. ${recommendation.reason}`,
+        assistantMessage,
         nodeUpdates: diffScentMissionNodes(mission, next),
         recommendation,
+        ...(alternates.length > 0 ? { alternates } : {}),
+        ...(noGoodPick ? { noGoodPick: true } : {}),
         ...(research !== undefined ? { research } : {}),
       };
     }
