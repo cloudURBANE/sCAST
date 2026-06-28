@@ -199,10 +199,16 @@ async function removeBgByFile(buffer: Buffer, apiKey: string, opts?: RemoveBgOpt
           );
           return { ok: false, reason: "poof_empty_output", status: 200 };
         }
-        if (o?.poofType === "product" && (await hasOpaqueLightBackground(poofBuffer))) {
+        // Poof can return HTTP 200 while leaving the original product-shot white
+        // rectangle around the bottle. This is the documented failure mode of the
+        // `type=product` preset, but `auto` mode exhibits it too, so gate on the
+        // pixel evidence rather than the requested preset. hasOpaqueLightBackground
+        // only samples a thin outer border ring, so a correctly-removed
+        // (transparent-edge) result trivially passes regardless of poofType (WS-12).
+        if (await hasOpaqueLightBackground(poofBuffer)) {
           logger.warn(
-            { reason: "poof_white_background", poofType: o.poofType },
-            "[bgService] Poof type=product preserved an opaque light background; retrying fallback path",
+            { reason: "poof_white_background", poofType: o?.poofType ?? null },
+            "[bgService] Poof preserved an opaque light background; retrying fallback path",
           );
           return { ok: false, reason: "poof_white_background", status: 200 };
         }

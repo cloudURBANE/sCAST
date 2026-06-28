@@ -593,8 +593,14 @@ export async function buildProfileWithDeps(
         try {
           const image = await resolveImageNow();
           if (!image?.imageUrl) continue;
+          // WS-8: this background save can land seconds after the request-time
+          // snapshot was built. Re-read the latest stored row and overlay only the
+          // image fields so a notes/family enrichment that landed in between is not
+          // reverted to the stale snapshot. Falls back to the snapshot when the row
+          // somehow vanished.
+          const latest = (await deps.getCatalogEntry(finalBrand, finalName)) ?? profile;
           await deps.saveCatalogEntry(finalBrand, finalName, {
-            ...profile,
+            ...latest,
             imageUrl: image.imageUrl,
             storagePath: image.storagePath,
             imageHash: image.imageHash ?? null,

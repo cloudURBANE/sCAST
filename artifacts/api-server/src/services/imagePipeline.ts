@@ -42,6 +42,14 @@ const MAX_OUTPUT_DIMENSION = 1024;
 const WEBP_QUALITY = 82;
 const MAX_CANDIDATES_PER_ATTEMPT = 5;
 const EARLY_ACCEPT_PROCESSED_SCORE = 17;
+// A candidate can reach EARLY_ACCEPT_PROCESSED_SCORE on host-trust + dimensions
+// alone (large, well-shaped image from a trusted retailer) while only matching a
+// fraction of the fragrance's identity tokens — i.e. the brand's *other* flanker.
+// Require real identity coverage before short-circuiting the candidate loop so a
+// high-scoring-but-wrong bottle can't win before better-matching candidates are
+// even scored. `best` is still tracked, so a low-coverage candidate remains
+// eligible as the final fallback when nothing better turns up (WS-12).
+const EARLY_ACCEPT_MIN_IDENTITY_COVERAGE = 0.66;
 
 type ImageSourceProvider = "serper" | "manual";
 
@@ -720,7 +728,10 @@ async function resolveProcessedFragranceImageInner(
       best = { result, score: candidateScore, ordinal };
     }
 
-    if (candidateScore >= EARLY_ACCEPT_PROCESSED_SCORE) {
+    if (
+      candidateScore >= EARLY_ACCEPT_PROCESSED_SCORE &&
+      scoreBreakdown.identityCoverage >= EARLY_ACCEPT_MIN_IDENTITY_COVERAGE
+    ) {
       return attachTrace(
         best.result,
         makeTrace({

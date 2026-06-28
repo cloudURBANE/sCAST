@@ -17,6 +17,7 @@ import {
 // Brand canonicalization lives in the pure brandAliasCore (unit-tested in
 // isolation); re-exported below to keep catalogService's public API stable.
 import { canonicalizeBrand, brandSpellings } from "./brandAliasCore";
+import { catalogProfileIsMinimal, mergeCatalogProfilePreserveRicher } from "./catalogMergeCore.ts";
 import {
   catalogProfileSearchConcepts,
   catalogProfileSearchTerms,
@@ -72,8 +73,17 @@ export async function getCatalogEntry(brand: string, name: string): Promise<Scen
  * with a nearby flanker.
  */
 export async function searchCatalog(query: string, options: CatalogSearchOptions = {}): Promise<ScentProfile | null> {
-  const hits = await searchCatalogCandidates(query, { ...options, limit: 1 });
-  return hits[0]?.profile ?? null;
+  // WS-2: fetch the top two and apply the same runner-up margin rule
+  // bestDatasetMatch uses. When the two best candidates are within ~0.04 and
+  // neither is near-exact (>=0.97), the identity is ambiguous (e.g. a flanker and
+  // its base both scoring high) — return null so buildProfile falls through to
+  // the dataset/scrape path instead of silently substituting a nearby fragrance.
+  const hits = await searchCatalogCandidates(query, { ...options, limit: Math.max(2, options.limit ?? 2) });
+  const best = hits[0];
+  if (!best) return null;
+  const second = hits[1];
+  if (second && best.score < 0.97 && best.score - second.score < 0.04) return null;
+  return best.profile;
 }
 
 export async function searchCatalogCandidates(
@@ -221,18 +231,51 @@ export async function searchCatalogBrandCandidates(
 export async function saveCatalogEntry(brand: string, name: string, profile: ScentProfile): Promise<void> {
   const key = makeLookupKey(brand, name);
   assertNoPersistedBase64Image(profile, "global_fragrances.profile_data");
+
+  // WS-8: the catalog is shared across all users — a save must never downgrade
+  // a populated row. A minimal/pending profile (no notes, no real family, no
+  // image) is create-only: it seeds a row when absent but is forbidden from
+  // clobbering a richer one another path already wrote.
+  if (catalogProfileIsMinimal(profile)) {
+    await db
+      .insert(globalFragrancesTable)
+      .values({
+        lookupKey: key,
+        name: name.trim(),
+        brand: brand.trim(),
+        profileData: profile as any,
+      })
+      .onConflictDoNothing({ target: globalFragrancesTable.lookupKey });
+    return;
+  }
+
+  // A real save re-reads the current row and merges so a field the incoming save
+  // happens to lack (e.g. a notes enrichment with no image, or an image refresh
+  // with stale notes) can't blank out what the row already has. The in-flight
+  // build dedup (scentEngine.buildProfile) collapses concurrent identical builds,
+  // so the read→merge→write window is not a meaningful race for the same key.
+  const existingRows = await db
+    .select({ profileData: globalFragrancesTable.profileData })
+    .from(globalFragrancesTable)
+    .where(eq(globalFragrancesTable.lookupKey, key))
+    .limit(1);
+  const merged = existingRows.length
+    ? mergeCatalogProfilePreserveRicher(sanitizeCatalogProfile(existingRows[0].profileData), profile)
+    : profile;
+  assertNoPersistedBase64Image(merged, "global_fragrances.profile_data");
+
   await db
     .insert(globalFragrancesTable)
     .values({
       lookupKey: key,
       name: name.trim(),
       brand: brand.trim(),
-      profileData: profile as any,
+      profileData: merged as any,
     })
     .onConflictDoUpdate({
       target: globalFragrancesTable.lookupKey,
       set: {
-        profileData: profile as any,
+        profileData: merged as any,
         updatedAt: new Date(),
       },
     });

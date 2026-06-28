@@ -340,6 +340,19 @@ function candidateScore(
     score = Math.min(score, AMBIGUOUS_VARIANT_MAX_SCORE);
   }
 
+  // WS-2: the symmetric case — the *query* carries an extra meaningful variant
+  // token the candidate lacks ("Sauvage Elixir" searched against catalog base
+  // "Sauvage"). That is just as much a different fragrance as the reverse, so it
+  // earns the same ambiguous-variant cap (which sits below the match threshold).
+  // Concentration aliases (edt/edp/eau/parfum/extrait) live in EXTRA_WORDS_ALLOWED
+  // and pure numbers are ignored by unmatchedCandidateNameTokenCount, so a query
+  // like "Sauvage EDP" against "Sauvage" is untouched — only a genuine flanker
+  // token (Elixir, Intense, Rouge…) trips this.
+  const queryNameAddsVariant = unmatchedCandidateNameTokenCount(itemFull, rawName) > 0;
+  if (!inputHasNumber && !isExactName && queryNameAddsVariant) {
+    score = Math.min(score, AMBIGUOUS_VARIANT_MAX_SCORE);
+  }
+
   return Math.max(0, Math.min(1, score));
 }
 

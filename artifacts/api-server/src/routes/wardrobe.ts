@@ -234,18 +234,48 @@ router.post("/wardrobe", requireAuth, async (req: AuthRequest, res) => {
     return;
   }
 
-  let rowId: string;
-  if (isUuidish(clientId)) {
-    rowId = clientId;
-  } else {
-    rowId = randomUUID();
-  }
-  const cleanWithUuid = { ...clean, id: rowId };
+  const insertWithId = async (id: string) => {
+    const [inserted] = await db
+      .insert(userFragrancesTable)
+      .values({ id: id as any, tenantId, userId: user.id, fragranceData: { ...clean, id } })
+      .returning();
+    return inserted;
+  };
 
-  const [row] = await db
-    .insert(userFragrancesTable)
-    .values({ id: rowId as any, tenantId, userId: user.id, fragranceData: cleanWithUuid })
-    .returning();
+  // WS-5: a UUID-shaped client id is reused as the DB primary key on the happy
+  // path (keeps the canonical `_dbId` stable across the optimistic add), but the
+  // client never gets to *own* the global PK. If the insert hits a unique
+  // violation we recover instead of 500ing:
+  //   - same-user duplicate (the per-user (user_id, fragrance_data->>'id') unique
+  //     index, or a race against this request's own pre-check): treat as idempotent
+  //     and return the existing row merged with this payload.
+  //   - cross-user PK collision (auth-M4: another user already owns a row whose
+  //     primary key equals this client UUID): re-insert under a fresh server UUID.
+  const preferredId = isUuidish(clientId) ? clientId : randomUUID();
+  let row;
+  try {
+    row = await insertWithId(preferredId);
+  } catch (err) {
+    if (!isUniqueViolation(err)) throw err;
+    const dup = await findUserRowByClientId(tenantId, user.id, clientId);
+    if (dup) {
+      const existingData = normalizeFragrance(dup.fragranceData as Record<string, any>);
+      const merged = sanitizeFragrance({ ...existingData, ...clean, id: dup.id });
+      assertNoPersistedBase64Image(merged, "user_fragrances.fragrance_data");
+      await db
+        .update(userFragrancesTable)
+        .set({ fragranceData: merged as any })
+        .where(and(
+          eq(userFragrancesTable.tenantId, tenantId),
+          eq(userFragrancesTable.id, dup.id),
+          eq(userFragrancesTable.userId, user.id),
+        ));
+      const hydratedDup = await hydrateImageUrl(merged);
+      res.json({ ...hydratedDup, _dbId: dup.id });
+      return;
+    }
+    row = await insertWithId(randomUUID());
+  }
 
   const inserted = sanitizeFragrance(normalizeFragrance(row.fragranceData as Record<string, any>));
   const hydrated = await hydrateImageUrl(inserted);
@@ -275,6 +305,11 @@ router.post("/wardrobe/rebuild", requireAuth, async (req: AuthRequest, res) => {
  */
 function isUuidish(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
+/** Postgres unique_violation (SQLSTATE 23505), surfaced by node-postgres as `code`. */
+function isUniqueViolation(err: unknown): boolean {
+  return typeof err === "object" && err !== null && (err as { code?: unknown }).code === "23505";
 }
 
 async function findUserRow(tenantId: string, userId: string, idParam: string) {

@@ -2,8 +2,9 @@ import { Router } from "express";
 import { randomUUID } from "node:crypto";
 import { db } from "@workspace/db";
 import { usersTable } from "@workspace/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import { getTenantId } from "../middlewares/tenant";
+import { requireAuth, type AuthRequest } from "../middlewares/auth";
 
 const router = Router();
 
@@ -89,7 +90,11 @@ async function linkGoogleSubjectBestEffort(
         oauthSubject: subject,
         ...(pictureUrl ? { pictureUrl } : {}),
       })
-      .where(eq(usersTable.id, userId));
+      // WS-10: only bind a subject to a row that has none. This makes the link
+      // idempotent and, critically, makes it impossible to *rebind* an account
+      // that is already owned by a different Google subject — the account-hijack
+      // path. Callers must verify oauth_subject is null before relying on this.
+      .where(and(eq(usersTable.id, userId), isNull(usersTable.oauthSubject)));
   } catch (err) {
     // Do not fail login when optional OAuth-link columns are missing/unmigrated.
     req.log.warn({ err, userId }, "Skipping OAuth column update for user");
@@ -275,6 +280,19 @@ router.get("/auth/google/callback", async (req, res) => {
     if (!user) {
       const byEmail = await findUserByEmail(email, tenantId);
       if (byEmail) {
+        // WS-10: a row already exists for this verified email but was not found by
+        // subject above. Only adopt it when it has NO oauth_subject yet (a legacy /
+        // email-only / admin-created account the verified owner is now claiming).
+        // If it is already bound to a *different* Google subject, refuse rather than
+        // rebind it — that would hand one Google identity another's account/wardrobe.
+        if (byEmail.oauthSubject && byEmail.oauthSubject !== subject) {
+          req.log.warn(
+            { userId: byEmail.id },
+            "OAuth email already bound to a different subject; refusing to rebind",
+          );
+          res.redirect("/?oauth_error=account_conflict");
+          return;
+        }
         user = byEmail;
         await linkGoogleSubjectBestEffort(byEmail.id, subject, pictureUrl, req);
       } else {
@@ -309,6 +327,28 @@ router.get("/auth/google/callback", async (req, res) => {
     );
     res.redirect("/?oauth_error=server_error");
   }
+});
+
+/**
+ * WS-18: server-side sign-out. The bearer token is the long-lived `users.token`
+ * embedded in the OAuth redirect, so clearing it only client-side leaves a valid
+ * credential live (e.g. if it leaked into history/logs). Rotating the column
+ * invalidates the old token everywhere. Best-effort and idempotent — the client
+ * clears local state regardless of the response.
+ */
+router.post("/auth/logout", requireAuth, async (req: AuthRequest, res) => {
+  const user = req.user!;
+  try {
+    await db
+      .update(usersTable)
+      .set({ token: randomUUID() })
+      .where(eq(usersTable.id, user.id));
+  } catch (err) {
+    req.log.error({ err, userId: user.id }, "Failed to rotate token on logout");
+    res.status(500).json({ error: "Logout failed" });
+    return;
+  }
+  res.json({ ok: true });
 });
 
 export default router;

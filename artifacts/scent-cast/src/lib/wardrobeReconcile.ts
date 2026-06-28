@@ -41,11 +41,30 @@ function comparableItem<T extends WardrobeReconcileItem>(item: T): T {
   } as T;
 }
 
+/**
+ * Order-stable serialization (WS-15). Plain JSON.stringify is sensitive to key
+ * insertion order, so a server poll that returns the same content with a
+ * different key order (or a row rebuilt via object spread) compared unequal and
+ * forced a brand-new object identity every minute — re-rendering the tile and
+ * reloading its bottle image (the flicker). Sorting keys recursively keeps the
+ * comparison full-coverage (any real field change, e.g. `season`, still differs)
+ * while making equal *content* compare equal regardless of order.
+ */
+function stableSerialize(value: unknown): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value) ?? "null";
+  if (Array.isArray(value)) return `[${value.map(stableSerialize).join(",")}]`;
+  const obj = value as Record<string, unknown>;
+  return `{${Object.keys(obj)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${stableSerialize(obj[key])}`)
+    .join(",")}}`;
+}
+
 function sameMeaningfulItem<T extends WardrobeReconcileItem>(
   current: T,
   incoming: T,
 ): boolean {
-  return JSON.stringify(comparableItem(current)) === JSON.stringify(comparableItem(incoming));
+  return stableSerialize(comparableItem(current)) === stableSerialize(comparableItem(incoming));
 }
 
 function shouldKeepCurrentImageUrl(

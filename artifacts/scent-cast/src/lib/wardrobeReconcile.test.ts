@@ -118,6 +118,22 @@ test("reconcileWardrobeItems preserves the current hash when keeping a current i
   assert.equal((reconciled[0] as { season?: string })?.season, "Evening");
 });
 
+test("reconcileWardrobeItems ignores key order when content is unchanged (WS-15)", () => {
+  const current = [
+    { id: "oud", _dbId: "row-1", name: "Oud Wood", brand: "Tom Ford", imageUrl: "/oud.webp" },
+  ];
+  // Same content, different key insertion order (as a server re-serialization or
+  // spread-rebuilt row would produce).
+  const incoming = [
+    { imageUrl: "/oud.webp", brand: "Tom Ford", name: "Oud Wood", _dbId: "row-1", id: "oud" },
+  ];
+
+  const reconciled = reconcileWardrobeItems(current, incoming);
+
+  assert.equal(reconciled, current);
+  assert.equal(reconciled[0], current[0]);
+});
+
 test("reconcileWardrobeItems keeps incoming order while reusing unchanged rows", () => {
   const first = { id: "one", name: "One", brand: "A", imageUrl: "/one.webp" };
   const second = { id: "two", name: "Two", brand: "B", imageUrl: "/two.webp" };

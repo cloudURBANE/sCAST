@@ -12,6 +12,7 @@ import {
   resolveFragranceIdentity,
   searchFragranceDataset,
 } from "./fragranceNameResolver";
+import { makeLookupKey } from "./catalogService";
 import {
   buildProfileWithDeps,
   type BuildProfileFallback,
@@ -62,11 +63,46 @@ export function searchFragrances(query: string): FragranceData[] {
   return searchFragranceDataset(query);
 }
 
+// WS-8: collapse concurrent identical builds so two near-simultaneous adds of the
+// same fragrance don't both scrape, both spend on Serper, and race each other's
+// catalog write. Keyed on the canonical lookup key plus every opt that changes the
+// result shape (and whether a fallback supplied notes/image), so only genuinely
+// equivalent in-flight builds share a promise. Cleared on settle — this dedups
+// concurrency, it is not a result cache.
+const inflightProfileBuilds = new Map<string, Promise<ScentProfile | { error: string }>>();
+
+function buildProfileDedupKey(
+  name: string,
+  brand: string,
+  fallback: BuildProfileFallback | undefined,
+  opts: BuildProfileOpts | undefined,
+): string {
+  return [
+    makeLookupKey(brand, name),
+    opts?.preferEngineData ? 1 : 0,
+    opts?.imageResolution ?? "inline",
+    opts?.allowCatalogFuzzy === false ? 0 : 1,
+    opts?.allowMinimalFallback ? 1 : 0,
+    opts?.serverSideResolve ? 1 : 0,
+    opts?.concentrationOverride ?? "",
+    fallback?.notes?.length ?? 0,
+    fallback?.imageUrl ? 1 : 0,
+  ].join("|");
+}
+
 export async function buildProfile(
   name: string,
   brand: string,
   fallback?: BuildProfileFallback,
   opts?: BuildProfileOpts,
 ): Promise<ScentProfile | { error: string }> {
-  return buildProfileWithDeps(DEPS, name, brand, fallback, opts);
+  const key = buildProfileDedupKey(name, brand, fallback, opts);
+  const inflight = inflightProfileBuilds.get(key);
+  if (inflight) return inflight;
+
+  const build = buildProfileWithDeps(DEPS, name, brand, fallback, opts).finally(() => {
+    inflightProfileBuilds.delete(key);
+  });
+  inflightProfileBuilds.set(key, build);
+  return build;
 }

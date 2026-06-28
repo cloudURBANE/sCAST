@@ -1,5 +1,5 @@
 import { relations, sql } from "drizzle-orm";
-import { index, pgTable, uuid, jsonb, timestamp } from "drizzle-orm/pg-core";
+import { index, uniqueIndex, pgTable, uuid, jsonb, timestamp } from "drizzle-orm/pg-core";
 import { usersTable } from "./users";
 import { tenantsTable } from "./tenants";
 
@@ -29,7 +29,11 @@ export const userFragrancesTable = pgTable(
       table.tenantId,
       table.createdAt.desc(),
     ),
-    index("user_fragrances_user_client_id_idx").on(
+    // WS-5: one wardrobe row per (user, client fragrance id). The add route is
+    // idempotent (re-adds merge instead of duplicating) and this index is the DB
+    // backstop. Applied via migrations/0002 (dedup existing rows first); a blind
+    // `drizzle-kit push` is guarded — see CLAUDE.md / db-schema-safety.
+    uniqueIndex("user_fragrances_user_client_id_unique_idx").on(
       table.userId,
       sql`(${table.fragranceData}->>'id')`,
     ),
