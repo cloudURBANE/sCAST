@@ -533,6 +533,23 @@ const getFragranceLongevity = (item: Fragrance): string | number | undefined => 
  * provenance fields (older catalog rows / engine-only details) so they are not
  * retroactively penalized.
  */
+// A5-GAP5: how recently this fragrance was actually worn (accepted as a pick),
+// stamped into fragrance_data.lastWornAt. Returns a 0..1 recency factor — 1.0 if
+// worn just now, decaying linearly to 0 after RECENCY_WINDOW_DAYS — or 0 when the
+// bottle has no wear record (so an un-worn bottle is never penalized).
+const RECENCY_WINDOW_DAYS = 7;
+const RECENCY_PENALTY_WEIGHT = 25;
+const getFragranceRecencyFactor = (item: Fragrance, now: number): number => {
+  const record = getFragranceRecord(item);
+  const raw = record.lastWornAt;
+  const wornMs = typeof raw === 'string' ? Date.parse(raw) : typeof raw === 'number' ? raw : NaN;
+  if (!Number.isFinite(wornMs)) return 0;
+  const days = (now - wornMs) / 86_400_000;
+  if (!Number.isFinite(days) || days < 0) return 0;
+  if (days >= RECENCY_WINDOW_DAYS) return 0;
+  return 1 - days / RECENCY_WINDOW_DAYS;
+};
+
 const getFragranceVectorConfidence = (item: Fragrance): number | undefined => {
   const record = getFragranceRecord(item);
   const flag = typeof record.vector_confidence === 'string' ? record.vector_confidence : undefined;
@@ -902,12 +919,15 @@ const scoreRecommendationCandidate = (
   preferences: UserScentPreferences = EMPTY_SCENT_PREFERENCES,
 ): number => {
   const base = scoreFamilyAlignment(item, recommendation, intent, preferences);
-  if (!climate) return base;
+  // A5-GAP5: down-weight a bottle worn in the last week so the same pick doesn't
+  // resurface every similar day; the penalty decays to zero as the wear ages.
+  const recencyPenalty = getFragranceRecencyFactor(item, Date.now()) * RECENCY_PENALTY_WEIGHT;
+  if (!climate) return base - recencyPenalty;
   // Layer the data-backed weather terms (continuous thermal harmony, community
   // season suitability, crowd-consensus quality, confidence) on top of the
   // engine's family verdict — the gradient that makes a 58°F day rank the vault
   // differently from a 78°F day instead of every forecast day looking identical.
-  return dayCandidateScore(base, buildOutlookCandidate(item), climate);
+  return dayCandidateScore(base, buildOutlookCandidate(item), climate) - recencyPenalty;
 };
 
 const calculateEngineAlignment = (
@@ -1065,6 +1085,8 @@ interface WardrobeContextType {
   scentPreferences: UserScentPreferences;
   /** Persist a partial update to the taste profile (onboarding capture / settings). */
   updateScentPreferences: (patch: Partial<UserScentPreferences>) => Promise<void>;
+  /** Phase 4 (A5-GAP5): record that a fragrance was worn/accepted (recency penalty). */
+  markFragranceWorn: (item: Pick<Fragrance, 'id' | '_dbId'>) => Promise<void>;
   setUserId: (id: string | null) => void;
   setVaultSearchUiActive: (active: boolean) => void;
   loadWardrobe: (token: string, signal?: AbortSignal) => Promise<void>;
@@ -1505,6 +1527,29 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     },
     [],
   );
+
+  // A5-GAP5: record that the user wore/accepted a fragrance today. Optimistically
+  // stamps lastWornAt locally (so the recency penalty applies immediately) and
+  // best-effort persists to the wardrobe row's jsonb. Guests update locally only.
+  const markFragranceWorn = useCallback(async (item: Pick<Fragrance, 'id' | '_dbId'>) => {
+    const wornAt = new Date().toISOString();
+    setItems((prev) =>
+      prev.map((it) => (sameWardrobeEntry(it, item) ? ({ ...it, lastWornAt: wornAt } as Fragrance) : it)),
+    );
+    const token = authTokenRef.current;
+    if (!token) return;
+    const id = item._dbId ?? item.id;
+    if (!id) return;
+    try {
+      await fetch(`/api/wardrobe/${encodeURIComponent(String(id))}/worn`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ wornAt }),
+      });
+    } catch {
+      // Best-effort: the optimistic local stamp still rotates this session's picks.
+    }
+  }, []);
 
   const refreshOnboardingCompletionFromServer = useCallback(async (token: string) => {
     if (appStateRefreshInFlightRef.current) return;
@@ -2527,6 +2572,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setRecommendationReason,
     scentPreferences,
     updateScentPreferences,
+    markFragranceWorn,
     setUserId,
     setVaultSearchUiActive,
     loadWardrobe,
