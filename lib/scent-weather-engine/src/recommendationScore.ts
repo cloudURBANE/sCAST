@@ -1,5 +1,6 @@
 import {
   traitsMatchScentFamily,
+  type ScentFamily,
   type ScentWeatherRecommendation,
 } from "./scentWeatherEngine.ts";
 
@@ -42,6 +43,12 @@ export const FAMILY_ALIGNMENT_WEIGHTS = {
   avoidHit: 14,
   intentBonus: 4,
   energyBonus: 3,
+  // Phase 4 (A5-GAP2): per-user taste. A disliked family is weighted heavier than
+  // a liked one — actively steering away from a known dislike matters more than
+  // gently favoring a like, and the dislike weight tops the avoid-family weight so
+  // a personal dislike can override a weather-driven "best" suggestion.
+  preferredHit: 10,
+  dislikedHit: 18,
 } as const;
 
 /**
@@ -68,6 +75,10 @@ export interface FamilyAlignmentInput {
   intentMatch?: boolean;
   /** True when the fragrance is tagged for the active energy. */
   energyMatch?: boolean;
+  /** Phase 4: the signed-in user's liked scent families (steers toward). */
+  preferredFamilies?: readonly ScentFamily[];
+  /** Phase 4: the signed-in user's disliked scent families (steers away). */
+  dislikedFamilies?: readonly ScentFamily[];
 }
 
 /**
@@ -86,11 +97,20 @@ export function familyAlignmentScore(input: FamilyAlignmentInput): number {
     traitsMatchScentFamily(traits, family),
   ).length;
 
+  const preferredHits = (input.preferredFamilies ?? []).filter((family) =>
+    traitsMatchScentFamily(traits, family),
+  ).length;
+  const dislikedHits = (input.dislikedFamilies ?? []).filter((family) =>
+    traitsMatchScentFamily(traits, family),
+  ).length;
+
   return (
     recommendationDisplayScore(recommendation) +
     bestHits * FAMILY_ALIGNMENT_WEIGHTS.bestHit -
     avoidHits * FAMILY_ALIGNMENT_WEIGHTS.avoidHit +
     (input.intentMatch ? FAMILY_ALIGNMENT_WEIGHTS.intentBonus : 0) +
-    (input.energyMatch ? FAMILY_ALIGNMENT_WEIGHTS.energyBonus : 0)
+    (input.energyMatch ? FAMILY_ALIGNMENT_WEIGHTS.energyBonus : 0) +
+    preferredHits * FAMILY_ALIGNMENT_WEIGHTS.preferredHit -
+    dislikedHits * FAMILY_ALIGNMENT_WEIGHTS.dislikedHit
   );
 }

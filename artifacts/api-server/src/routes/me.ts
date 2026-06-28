@@ -7,6 +7,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { deriveAppState } from "../services/appStateCore";
 import { isAdminUser } from "../lib/adminAccess";
 import { logger } from "../lib/logger";
+import { SCENT_FAMILIES } from "@workspace/scent-weather-engine";
 
 const router = Router();
 
@@ -411,6 +412,144 @@ router.put("/me/preferences", requireAuth, async (req: AuthRequest, res) => {
       accent: accent === undefined ? null : accent,
       locale: locale === undefined ? null : locale,
     } satisfies PreferencesDto,
+  });
+});
+
+// ── Scent-taste profile (Phase 4 personalization spine) ────────────────────
+// The persisted per-user preference profile: liked/disliked families plus the
+// two engine `userPreference` axes (skin longevity, projection). Captured at
+// onboarding, refined by the feedback loop, and read by the recommendation
+// scorer. Same migration-lag tolerance as /me/preferences (catches 42703).
+
+const SCENT_FAMILY_SET = new Set<string>(SCENT_FAMILIES as readonly string[]);
+const SCENT_LASTS_VALUES = new Set(["short", "normal", "long"]);
+const PROJECTION_PREF_VALUES = new Set(["subtle", "noticeable"]);
+const MAX_PREFERRED_FAMILIES = 15;
+
+type ScentPreferencesDto = {
+  preferredFamilies: string[];
+  dislikedFamilies: string[];
+  scentLastsOnMe: string | null;
+  projectionPreference: string | null;
+};
+
+// Coerce an untrusted families payload into a bounded, de-duplicated list of
+// canonical ScentFamily names. Returns undefined when the field was omitted (so
+// a partial PUT leaves it unchanged) and [] for an explicit clear.
+function pickFamilies(value: unknown): string[] | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return [];
+  if (!Array.isArray(value)) return undefined;
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const entry of value) {
+    if (typeof entry !== "string") continue;
+    const family = entry.trim().toLowerCase();
+    if (!SCENT_FAMILY_SET.has(family) || seen.has(family)) continue;
+    seen.add(family);
+    out.push(family);
+    if (out.length >= MAX_PREFERRED_FAMILIES) break;
+  }
+  return out;
+}
+
+router.get("/me/scent-preferences", requireAuth, async (req: AuthRequest, res) => {
+  const user = req.user!;
+  let prefs: ScentPreferencesDto = {
+    preferredFamilies: [],
+    dislikedFamilies: [],
+    scentLastsOnMe: null,
+    projectionPreference: null,
+  };
+  try {
+    const [row] = await db
+      .select({
+        preferred: userSettingsTable.preferredFamilies,
+        disliked: userSettingsTable.dislikedFamilies,
+        lasts: userSettingsTable.scentLastsOnMe,
+        projection: userSettingsTable.projectionPreference,
+      })
+      .from(userSettingsTable)
+      .where(eq(userSettingsTable.userId, user.id))
+      .limit(1);
+    if (row) {
+      prefs = {
+        preferredFamilies: Array.isArray(row.preferred) ? row.preferred : [],
+        dislikedFamilies: Array.isArray(row.disliked) ? row.disliked : [],
+        scentLastsOnMe: row.lasts ?? null,
+        projectionPreference: row.projection ?? null,
+      };
+    }
+  } catch (err) {
+    if (!isUndefinedColumnError(err)) throw err;
+    logger.warn({ userId: user.id }, "user_settings scent-preference columns not yet migrated — reporting empties");
+  }
+  res.json({ scentPreferences: prefs });
+});
+
+router.put("/me/scent-preferences", requireAuth, async (req: AuthRequest, res) => {
+  const user = req.user!;
+  const tenantId = getTenantId(req);
+  const body = (req.body ?? {}) as {
+    preferredFamilies?: unknown;
+    dislikedFamilies?: unknown;
+    scentLastsOnMe?: unknown;
+    projectionPreference?: unknown;
+  };
+
+  const preferred = pickFamilies(body.preferredFamilies);
+  const disliked = pickFamilies(body.dislikedFamilies);
+  const lasts = pickEnum(body.scentLastsOnMe, SCENT_LASTS_VALUES);
+  const projection = pickEnum(body.projectionPreference, PROJECTION_PREF_VALUES);
+
+  if (
+    preferred === undefined &&
+    disliked === undefined &&
+    lasts === undefined &&
+    projection === undefined
+  ) {
+    res.status(400).json({
+      error: "Provide at least one of preferredFamilies, dislikedFamilies, scentLastsOnMe, projectionPreference.",
+    });
+    return;
+  }
+
+  const now = new Date();
+  const updates: Record<string, unknown> = { updatedAt: now };
+  if (preferred !== undefined) updates.preferredFamilies = preferred;
+  if (disliked !== undefined) updates.dislikedFamilies = disliked;
+  if (lasts !== undefined) updates.scentLastsOnMe = lasts;
+  if (projection !== undefined) updates.projectionPreference = projection;
+
+  try {
+    await db
+      .insert(userSettingsTable)
+      .values({
+        tenantId,
+        userId: user.id,
+        preferredFamilies: preferred === undefined ? null : preferred,
+        dislikedFamilies: disliked === undefined ? null : disliked,
+        scentLastsOnMe: lasts === undefined ? null : lasts,
+        projectionPreference: projection === undefined ? null : projection,
+      })
+      .onConflictDoUpdate({
+        target: userSettingsTable.userId,
+        set: { tenantId, ...updates },
+      });
+  } catch (err) {
+    if (!isUndefinedColumnError(err)) throw err;
+    logger.warn({ userId: user.id }, "Cannot save scent preferences before migration is applied");
+    res.status(503).json({ error: "Scent-preference sync is temporarily unavailable." });
+    return;
+  }
+
+  res.json({
+    scentPreferences: {
+      preferredFamilies: preferred ?? [],
+      dislikedFamilies: disliked ?? [],
+      scentLastsOnMe: lasts === undefined ? null : lasts,
+      projectionPreference: projection === undefined ? null : projection,
+    } satisfies ScentPreferencesDto,
   });
 });
 

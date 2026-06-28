@@ -57,6 +57,33 @@ test("familyAlignmentScore: display score + best/avoid/intent/energy weights", (
   );
 });
 
+test("familyAlignmentScore: liked families lift, disliked families sink (A5-GAP2)", () => {
+  const rec = {
+    confidence: "high",
+    projection_risk: "low",
+    wear_window: "best_now",
+    best_scent_families: [],
+    avoid_scent_families: [],
+  } as unknown as ScentWeatherRecommendation;
+  const woodyTraits = ["woody", "cedar", "sandalwood"];
+
+  // A liked "woody" adds +10 over the 92 base.
+  assert.equal(
+    familyAlignmentScore({ recommendation: rec, traits: woodyTraits, preferredFamilies: ["woody"] }),
+    102,
+  );
+  // A disliked "woody" subtracts 18 from the 92 base.
+  assert.equal(
+    familyAlignmentScore({ recommendation: rec, traits: woodyTraits, dislikedFamilies: ["woody"] }),
+    74,
+  );
+  // A family the fragrance does not have moves nothing.
+  assert.equal(
+    familyAlignmentScore({ recommendation: rec, traits: woodyTraits, preferredFamilies: ["aquatic"] }),
+    92,
+  );
+});
+
 test("createScentMissionState starts with onboarding active and the rest locked", () => {
   const state = createScentMissionState();
   assert.equal(state.nodes.onboarding, "active");

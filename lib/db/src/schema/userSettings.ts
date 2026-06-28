@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm";
-import { index, pgTable, uuid, boolean, integer, text, timestamp, doublePrecision } from "drizzle-orm/pg-core";
+import { index, pgTable, uuid, boolean, integer, text, timestamp, doublePrecision, jsonb } from "drizzle-orm/pg-core";
 import { usersTable } from "./users";
 import { tenantsTable } from "./tenants";
 
@@ -60,6 +60,19 @@ export const userSettingsTable = pgTable(
     themePreference: text("theme_preference"),
     accentPreference: text("accent_preference"),
     localePreference: text("locale_preference"),
+    // Phase 4 (A5-GAP1/2): the persisted per-user scent-taste profile — the spine
+    // for personalization, dislike memory, and the feedback learning loop. All
+    // additive + nullable with no DB default, exactly like the UI prefs above, so
+    // a deploy stays a trivially additive `drizzle-kit push` and reads tolerate a
+    // pre-migration live DB (routes/me.ts catches 42703 and falls back to empty).
+    //   preferredFamilies / dislikedFamilies: jsonb string[] of ScentFamily names
+    //     (e.g. ["Woody","Fresh"]). Captured at onboarding + refined by feedback.
+    //   scentLastsOnMe:        'short' | 'normal' | 'long'  (engine userPreference)
+    //   projectionPreference:  'subtle' | 'noticeable'      (engine userPreference)
+    preferredFamilies: jsonb("preferred_families").$type<string[]>(),
+    dislikedFamilies: jsonb("disliked_families").$type<string[]>(),
+    scentLastsOnMe: text("scent_lasts_on_me"),
+    projectionPreference: text("projection_preference"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
