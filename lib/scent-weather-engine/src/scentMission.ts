@@ -1,9 +1,14 @@
 import {
   calculateScentWeatherRecommendation,
-  traitsMatchScentFamily,
   type ScentWeatherEngineInput,
   type ScentWeatherRecommendation,
 } from "./scentWeatherEngine.ts";
+import { familyAlignmentScore } from "./recommendationScore.ts";
+import {
+  dayCandidateScore,
+  deriveOutlookCandidate,
+  type OutlookDayClimate,
+} from "./weeklyOutlook.ts";
 
 /**
  * Scent Mission — shared domain model for the embedded mission agent.
@@ -479,57 +484,51 @@ export function buildScentMissionEngineInput(
   };
 }
 
-function recommendationDisplayScore(recommendation: ScentWeatherRecommendation): number {
-  const confidenceBase = { high: 92, medium: 78, low: 62 } as const;
-  const projectionPenalty = { low: 0, medium: 4, high: 10, overpowering_risk: 18 } as const;
-  const wearWindowPenalty = {
-    best_now: 0,
-    daytime_safe: 2,
-    better_later: 8,
-    nighttime_better: 10,
-    avoid_today: 28,
-  } as const;
-
-  return Math.max(
-    0,
-    Math.min(
-      100,
-      confidenceBase[recommendation.confidence] -
-        projectionPenalty[recommendation.projection_risk] -
-        wearWindowPenalty[recommendation.wear_window],
-    ),
-  );
-}
-
 function itemTraitTexts(item: ScentMissionWardrobeItem): string[] {
   return [...(item.families ?? []), ...(item.accords ?? [])]
     .map((trait) => trait.trim().toLowerCase())
     .filter(Boolean);
 }
 
+function missionClimate(weather: ScentMissionWeather): OutlookDayClimate {
+  return {
+    temperature_f: weather.temperature_f ?? null,
+    humidity: weather.humidity_percent ?? null,
+    wind_speed_mph: weather.wind_speed_mph ?? null,
+    is_raining: weather.is_raining,
+    condition: weather.condition ?? null,
+  };
+}
+
 /**
  * Score every wardrobe item with the shared weather engine and return them
- * ranked best-first. Mirrors the frontend's vault alignment scoring: engine
- * display score plus best-family hits, minus avoid-family hits. Deterministic —
- * ties break by wardrobe order (a stable sort over the input order).
+ * ranked best-first. A6-GAP2: uses the SAME `familyAlignmentScore` +
+ * `dayCandidateScore` as the home hero and the forecast planner, so the chat
+ * agent cannot recommend a different bottle than the forecast for identical
+ * weather. The mission lacks the SPA's crowd `derived_metrics`, so its candidate
+ * is derived from families/accords/sillage via `deriveOutlookCandidate` — a
+ * coarser placement on the same thermal/season axis. Deterministic — ties break
+ * by wardrobe order (a stable sort over the input order).
  */
 export function rankScentMissionRecommendations(
   wardrobe: ScentMissionWardrobeItem[],
   calibration: ScentMissionCalibration,
   weather: ScentMissionWeather,
 ): ScentMissionRecommendation[] {
+  const climate = missionClimate(weather);
   const ranked: ScentMissionRecommendation[] = wardrobe.map((item) => {
     const engine = calculateScentWeatherRecommendation(
       buildScentMissionEngineInput(item, calibration, weather),
     );
     const traits = itemTraitTexts(item);
-    const bestHits = engine.best_scent_families.filter((family) =>
-      traitsMatchScentFamily(traits, family),
-    ).length;
-    const avoidHits = engine.avoid_scent_families.filter((family) =>
-      traitsMatchScentFamily(traits, family),
-    ).length;
-    const score = recommendationDisplayScore(engine) + bestHits * 8 - avoidHits * 14;
+    const base = familyAlignmentScore({ recommendation: engine, traits });
+    const candidate = deriveOutlookCandidate({
+      id: item.id,
+      traits,
+      sillage: item.sillage,
+      concentration: item.concentration,
+    });
+    const score = dayCandidateScore(base, candidate, climate);
     return {
       fragranceId: item.id,
       ...(item.dbId !== undefined ? { dbId: item.dbId } : {}),

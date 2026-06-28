@@ -14,6 +14,7 @@ import {
 } from '@/lib/scentWeatherEngine';
 import {
   dayCandidateScore,
+  familyAlignmentScore,
   planWeeklyOutlook,
   type OutlookCandidate,
   type OutlookDayClimate,
@@ -832,39 +833,6 @@ const buildEngineInput = (
   };
 };
 
-const calculateRecommendationDisplayScore = (
-  recommendation: ScentWeatherRecommendation,
-): number => {
-  const confidenceBaseScore: Record<ScentWeatherRecommendation['confidence'], number> = {
-    high: 92,
-    medium: 78,
-    low: 62,
-  };
-  const projectionPenalty: Record<ScentWeatherRecommendation['projection_risk'], number> = {
-    low: 0,
-    medium: 4,
-    high: 10,
-    overpowering_risk: 18,
-  };
-  const wearWindowPenalty: Record<ScentWeatherRecommendation['wear_window'], number> = {
-    best_now: 0,
-    daytime_safe: 2,
-    better_later: 8,
-    nighttime_better: 10,
-    avoid_today: 28,
-  };
-
-  return Math.max(
-    0,
-    Math.min(
-      100,
-      confidenceBaseScore[recommendation.confidence] -
-        projectionPenalty[recommendation.projection_risk] -
-        wearWindowPenalty[recommendation.wear_window],
-    ),
-  );
-};
-
 // Distill a loose weather object into the climate axes the planner scores
 // against. Mirrors the keys `buildEngineInput` reads so the forecast's thermal
 // reasoning and the engine see the same numbers.
@@ -881,29 +849,21 @@ const buildOutlookClimate = (weather: any): OutlookDayClimate => {
 };
 
 // Engine family-alignment for one fragrance on one day, WITHOUT the continuous
-// thermal term. This is the `baseScore` the weekly planner builds on.
+// thermal term. This is the `baseScore` the weekly planner builds on. A6-GAP2:
+// delegates to the shared `familyAlignmentScore` so the home hero, the forecast
+// planner, and the API mission ranker score family alignment identically (the
+// display-score table and best/avoid/intent/energy weights are single-sourced).
 const scoreFamilyAlignment = (
   item: Fragrance,
   recommendation: ScentWeatherRecommendation,
   intent: { destination: DestinationType; energy: EnergyState },
-): number => {
-  const bestFamilyHits = recommendation.best_scent_families.filter((family) =>
-    fragranceHasFamilySignal(item, family),
-  ).length;
-  const avoidFamilyHits = recommendation.avoid_scent_families.filter((family) =>
-    fragranceHasFamilySignal(item, family),
-  ).length;
-  const intentBonus = item.intents?.includes(intent.destination) ? 4 : 0;
-  const energyBonus = item.energies?.includes(intent.energy) ? 3 : 0;
-
-  return (
-    calculateRecommendationDisplayScore(recommendation) +
-    bestFamilyHits * 8 -
-    avoidFamilyHits * 14 +
-    intentBonus +
-    energyBonus
-  );
-};
+): number =>
+  familyAlignmentScore({
+    recommendation,
+    traits: getFragranceTraitTexts(item),
+    intentMatch: item.intents?.includes(intent.destination) ?? false,
+    energyMatch: item.energies?.includes(intent.energy) ?? false,
+  });
 
 const scoreRecommendationCandidate = (
   item: Fragrance,
