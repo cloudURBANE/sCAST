@@ -8,6 +8,40 @@ This document is the **fix plan**. It groups 33 raw findings into 11 production-
 
 ---
 
+## Implementation status (updated 2026-06-28)
+
+All 18 workstreams are implemented and merged/landed on `main` except the one
+operator-only DB step noted below. Verified this session: full `pnpm run
+typecheck` clean; api-server **821 pass / 0 fail**; scent-cast **206 pass / 0 fail**.
+
+| WS | Status | Notes |
+| -- | ------ | ----- |
+| WS-1 | ✅ Done | `lookupKey` threaded + scoped in the search-query cache and flight key. |
+| WS-2 | ✅ Done | Runner-up margin + symmetric query-adds-variant penalty in catalog match. |
+| WS-3 | ✅ Done | `weather.data_complete` from pre-default values + `setting.recognized`; default path can no longer yield "high". |
+| WS-4 | ✅ Done | Guest wardrobe migrated/uploaded on sign-in, deduped, once-guarded. |
+| WS-5 | ✅ Done (code) | Idempotent add + per-user unique index in schema. **Operator must apply `migrations/0002_user_fragrances_client_id_unique.sql`** (dedup-then-unique-index) — `drizzle push` is guarded; the route is deploy-safe before it lands. |
+| WS-6 | ✅ Done | `oauth_error` codes mapped to user-facing messages in `AuthContext`. |
+| WS-7 | ✅ Done | Tokenized whole-note matching, primary-axis assignment, magnitude-aware family inclusion. |
+| WS-8 | ✅ Done | Catalog don't-downgrade merge + per-key build dedup + image-only deferred merge. |
+| WS-9 | ✅ Done | (a) no-cache-degraded + abort-check + 6h TTL; (b) persisted client attempt cap; (c) **server-authoritative heal-resync via `accordHealVersion` in `fragrance_data`** (this session — no migration needed). |
+| WS-10 | ✅ Done | Email auto-link only when no existing `oauth_subject`; `linkGoogleSubject` guarded by `WHERE oauth_subject IS NULL`. |
+| WS-11 | ✅ Done | `/scent-profile` + `/search-scent` body validation + try/catch graceful failure (this session). |
+| WS-12 | ✅ Done | Identity-coverage gate on early-accept + center-region alpha + min-edge floor. |
+| WS-13 | ✅ Done | Trait texts + OutlookCandidate precomputed once; stable scoring signature. |
+| WS-14 | ✅ Done | Spray-count clamp+assert; warmth divisor from clamp constants + widened cold floor; zero-trait confidence demotion. |
+| WS-15 | ✅ Done | Route-scoped ErrorBoundary + order-stable reconcile serialization. |
+| WS-16 | ✅ Done | `requeueFragranceDetails` non-idempotent; engine-fallback provenance + preserved original error. |
+| WS-17 | ✅ Done | Per-row `rebuilt_at` stamp + opt-in resumable rebuild. |
+| WS-18 | ✅ Done | `POST /api/auth/logout` rotates token; admin-unconfigured returns 503. |
+
+**Remaining operator action:** apply migration `0002` to the shared Supabase DB
+per CLAUDE.md (`ALLOW_PROD_DB_PUSH` is not used for this — run the reviewed SQL
+directly; `CREATE/DROP INDEX CONCURRENTLY` must run outside a transaction).
+**Recommended spot-check:** WS-2 flanker/base matching against real traffic.
+
+---
+
 ## Severity model
 
 | Tier | Meaning |

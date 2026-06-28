@@ -133,6 +133,9 @@ export interface Fragrance {
   product?: { name?: string; brand?: string; perfumer?: string };
   /** Postgres row UUID — surfaced by GET /wardrobe; preferred for delete/patch (B9). */
   _dbId?: string;
+  /** WS-9c: heal-resync version this row's data reflects, persisted in
+   *  fragrance_data so completion is authoritative across devices/guests. */
+  accordHealVersion?: number | null;
 }
 
 /** Resolve the human-facing name/brand even if the row predates the flat shape. */

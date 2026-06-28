@@ -30,6 +30,7 @@ import {
   shouldSearchExternalFragranceSources,
 } from "../services/fragranceNameResolver";
 import type { Concentration } from "../services/scentParser";
+import { validateScentProfileBody, validateSearchScentBody } from "./scentAddValidation";
 
 const router = Router();
 
@@ -163,39 +164,53 @@ router.post("/scent-profile", async (req, res) => {
     return;
   }
 
+  // WS-11: validate the rest of the body shape before buildProfile so a
+  // malformed payload (e.g. notes as a string) gets a clear 400 instead of an
+  // opaque 500 from parseFragrance downstream.
+  const validation = validateScentProfileBody(req.body);
+  if (!validation.ok) {
+    res.status(400).json({ error: validation.error });
+    return;
+  }
+
   const normalizedHint = normalizeConcentrationHint(concentrationHint);
   const concentrationOverride = normalizedHint ? concentrationHintToOverride(normalizedHint) : undefined;
 
-  const result = await buildProfile(
-    name,
-    brand || "",
-    {
-      notes,
-      family,
-      description,
-      imageUrl,
-      pyramid,
-      perfumer,
-    },
-    {
-      preferEngineData: preferEngineData === true,
-      imageResolution: "deferred",
-      // Capture/add flow: a real selected fragrance that is not in the curated
-      // dataset and has not been scraped yet must still be addable as a pending
-      // card (background enrichment fills the pyramid), rather than hard-failing
-      // with "Could not identify this fragrance".
-      allowMinimalFallback: true,
-      // Hybrid resolve: before landing a pending card, try a synchronous
-      // server-side resolve through the engine (Decodo egress) so the freshly
-      // added fragrance renders real notes/family immediately when reachable.
-      serverSideResolve: true,
-      ...(concentrationOverride ? { concentrationOverride } : {}),
-    },
-  );
-  // Always return a flat shape ({ name, brand, ... } alongside `product`) so the
-  // client can rely on top-level keys when it persists this object verbatim.
-  if (!("product" in result)) { res.json(result); return; }
-  res.json(flattenProfile(result));
+  try {
+    const result = await buildProfile(
+      name,
+      brand || "",
+      {
+        notes,
+        family,
+        description,
+        imageUrl,
+        pyramid,
+        perfumer,
+      },
+      {
+        preferEngineData: preferEngineData === true,
+        imageResolution: "deferred",
+        // Capture/add flow: a real selected fragrance that is not in the curated
+        // dataset and has not been scraped yet must still be addable as a pending
+        // card (background enrichment fills the pyramid), rather than hard-failing
+        // with "Could not identify this fragrance".
+        allowMinimalFallback: true,
+        // Hybrid resolve: before landing a pending card, try a synchronous
+        // server-side resolve through the engine (Decodo egress) so the freshly
+        // added fragrance renders real notes/family immediately when reachable.
+        serverSideResolve: true,
+        ...(concentrationOverride ? { concentrationOverride } : {}),
+      },
+    );
+    // Always return a flat shape ({ name, brand, ... } alongside `product`) so the
+    // client can rely on top-level keys when it persists this object verbatim.
+    if (!("product" in result)) { res.json(result); return; }
+    res.json(flattenProfile(result));
+  } catch (err: any) {
+    logger.error({ err: err?.message }, "scent-profile build failed");
+    res.status(502).json({ error: "Could not build this fragrance profile right now. Please try again." });
+  }
 });
 
 // Cache-only shared-image lookup. Unlike POST /refresh-image this NEVER runs a
@@ -226,6 +241,13 @@ router.post("/search-scent", async (req, res) => {
     res.status(400).json({ error: "Query is required" });
     return;
   }
+  // WS-11: validate the rest of the body shape (concentrationHint type).
+  const validation = validateSearchScentBody(req.body);
+  if (!validation.ok) {
+    res.status(400).json({ error: validation.error });
+    return;
+  }
+  try {
   const normalizedHint = normalizeConcentrationHint(concentrationHint);
   const concentrationOverride = concentrationOverrideFromInput(query, normalizedHint);
   const resolvedQuery = resolveFragranceQuery(query);
@@ -345,6 +367,10 @@ router.post("/search-scent", async (req, res) => {
     imageResolution: "deferred",
   });
   res.json("product" in profile ? flattenProfile(profile) : profile);
+  } catch (err: any) {
+    logger.error({ err: err?.message }, "search-scent failed");
+    res.status(502).json({ error: "Search is temporarily unavailable. Please try again." });
+  }
 });
 
 router.post("/refresh-image", async (req, res) => {

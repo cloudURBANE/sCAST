@@ -134,6 +134,24 @@ test("reconcileWardrobeItems ignores key order when content is unchanged (WS-15)
   assert.equal(reconciled[0], current[0]);
 });
 
+test("reconcileWardrobeItems surfaces a newly persisted accordHealVersion from the server (WS-9c)", () => {
+  // A fresh device loads the server copy: the row already carries the
+  // heal-resync marker stamped by whichever device healed it. Reconcile must
+  // surface it (real field change), so the load-path gate can skip re-fetching
+  // an already-healed, already-complete vault.
+  const current = [
+    { id: "oud", _dbId: "row-1", name: "Oud Wood", brand: "Tom Ford", imageUrl: "/oud.webp" },
+  ];
+  const incoming = [
+    { id: "oud", _dbId: "row-1", name: "Oud Wood", brand: "Tom Ford", imageUrl: "/oud.webp", accordHealVersion: 1 },
+  ];
+
+  const reconciled = reconcileWardrobeItems(current, incoming);
+
+  assert.notEqual(reconciled, current);
+  assert.equal((reconciled[0] as { accordHealVersion?: number })?.accordHealVersion, 1);
+});
+
 test("reconcileWardrobeItems keeps incoming order while reusing unchanged rows", () => {
   const first = { id: "one", name: "One", brand: "A", imageUrl: "/one.webp" };
   const second = { id: "two", name: "Two", brand: "B", imageUrl: "/two.webp" };

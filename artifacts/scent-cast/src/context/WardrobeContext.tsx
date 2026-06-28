@@ -2387,6 +2387,10 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
               source_coverage: detail.source_coverage,
               enrichment: detail.enrichment ?? null,
               raw_engine_detail: detail,
+              // WS-9c: every row reaching this batch is complete, so stamp the
+              // current heal version into fragrance_data. The server persists it
+              // and it becomes the cross-device "already healed" marker.
+              accordHealVersion: ACCORD_HEAL_RESYNC_VERSION,
             };
           }),
         }),
@@ -2455,6 +2459,13 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     // skip still gets re-fetched once if it hasn't been re-synced for the
     // current heal version. After a successful persist it is marked done below.
     const needsAccordHealResync = (item: Fragrance): boolean => {
+      // WS-9c: server-authoritative skip. Once any device heal-resynced this row
+      // for the current version and persisted it, the marker rides in
+      // fragrance_data, so a fresh device / guest-after-sign-in sees it on load
+      // and does NOT re-fetch the whole already-complete vault.
+      if (typeof item.accordHealVersion === 'number' && item.accordHealVersion >= ACCORD_HEAL_RESYNC_VERSION) {
+        return false;
+      }
       if (accordHealResyncDoneRef.current.has(detailRefreshKeyFor(item))) return false;
       if (!(fgMetricsComplete(item) || sourceCoverageComplete(item))) return false;
       return hasFragranticaRefreshTarget(item);
