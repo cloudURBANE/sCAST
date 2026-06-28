@@ -194,6 +194,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [setGuestPromptDismissed, setGuestModeAcknowledged]);
 
   const handleSignOut = useCallback(() => {
+    // WS-18: revoke the bearer token server-side (rotates users.token) so the old
+    // credential can't be replayed if it ever leaked. Fire-and-forget — local
+    // sign-out must not block on or fail because of the network.
+    if (authToken) {
+      fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${authToken}` },
+        keepalive: true,
+      }).catch(() => {
+        /* best-effort: local state is cleared regardless */
+      });
+    }
     localStorage.removeItem(STORAGE_KEYS.TOKEN);
     localStorage.removeItem(STORAGE_KEYS.EMAIL);
     localStorage.removeItem(STORAGE_KEYS.PICTURE);
@@ -211,7 +223,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Evict cached authenticated API responses (wardrobe/profile) from the
     // service worker so the next user on this device never sees them.
     clearPwaApiCache();
-  }, [setGuestPromptDismissed, setGuestModeAcknowledged]);
+  }, [authToken, setGuestPromptDismissed, setGuestModeAcknowledged]);
 
   // Reconcile the username with the server whenever the token changes. The
   // seeded value covers the first paint; this corrects it if the user set a

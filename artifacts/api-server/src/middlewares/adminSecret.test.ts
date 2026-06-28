@@ -37,8 +37,11 @@ test("requireAdminSecret rejects when ADMIN_SECRET unset", () => {
   const saved = process.env.ADMIN_SECRET;
   delete process.env.ADMIN_SECRET;
   try {
-    const { getStatus } = runMiddleware({ "x-admin-secret": "secret" });
-    assert.equal(getStatus(), 401);
+    const { getStatus, getBody } = runMiddleware({ "x-admin-secret": "secret" });
+    // WS-18: a missing ADMIN_SECRET is a server misconfiguration (503), distinct
+    // from a wrong/missing caller secret (401).
+    assert.equal(getStatus(), 503);
+    assert.deepEqual(getBody(), { error: "Admin endpoints are not configured" });
   } finally {
     if (saved !== undefined) process.env.ADMIN_SECRET = saved;
     else delete process.env.ADMIN_SECRET;

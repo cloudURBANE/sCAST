@@ -17,11 +17,28 @@ function headerToString(value: string | string[] | undefined): string | undefine
   return value;
 }
 
+let warnedAdminSecretMissing = false;
+
 export function requireAdminSecret(req: Request, res: Response, next: NextFunction): void {
   const adminSecret = process.env.ADMIN_SECRET;
-  const provided = headerToString(req.headers["x-admin-secret"]);
 
-  if (!adminSecret || !provided || !timingSafeEqualStrings(provided, adminSecret)) {
+  // WS-18: an unset ADMIN_SECRET means admin auth is *not configured* — no secret
+  // could ever authenticate. Returning 401 here misleads the caller into thinking
+  // their secret is wrong; a 503 says the capability is unavailable. Warn once so
+  // the misconfiguration is visible in logs rather than silent.
+  if (!adminSecret) {
+    if (!warnedAdminSecretMissing) {
+      warnedAdminSecretMissing = true;
+      console.warn(
+        "[adminSecret] ADMIN_SECRET is not set; admin endpoints are disabled and return 503.",
+      );
+    }
+    res.status(503).json({ error: "Admin endpoints are not configured" });
+    return;
+  }
+
+  const provided = headerToString(req.headers["x-admin-secret"]);
+  if (!provided || !timingSafeEqualStrings(provided, adminSecret)) {
     res.status(401).json({ error: "Unauthorized" });
     return;
   }

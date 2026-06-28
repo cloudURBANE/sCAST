@@ -15,12 +15,27 @@ export type WardrobeRebuildResult = {
   total: number;
   rebuilt: number;
   skipped: number;
+  /** Rows skipped because they were already rebuilt within `resumeWithinMs`. */
+  resumed: number;
   failures: { id: string; reason: string }[];
+};
+
+export type WardrobeRebuildOptions = {
+  /**
+   * WS-17: resumability. When set, a row whose persisted `rebuilt_at` is newer
+   * than `now - resumeWithinMs` is treated as already done and skipped. This lets
+   * a rebuild that crashed partway be re-run and pick up where it left off
+   * (each row's update is committed individually and stamps `rebuilt_at`) without
+   * redoing — or paying Serper/engine cost for — the rows that already finished.
+   * Omitted (the default) means a full refresh: every row is rebuilt.
+   */
+  resumeWithinMs?: number;
 };
 
 export async function rebuildWardrobeForUser(
   tenantId: string,
   userId: string,
+  options: WardrobeRebuildOptions = {},
 ): Promise<WardrobeRebuildResult> {
   const rows = await db
     .select()
@@ -33,9 +48,23 @@ export async function rebuildWardrobeForUser(
   const failures: { id: string; reason: string }[] = [];
   let rebuilt = 0;
   let skipped = 0;
+  let resumed = 0;
+  const resumeCutoff =
+    typeof options.resumeWithinMs === "number" && options.resumeWithinMs > 0
+      ? Date.now() - options.resumeWithinMs
+      : null;
 
   for (const r of rows) {
     const data = normalizeFragrance(r.fragranceData as Record<string, any>);
+
+    if (resumeCutoff !== null) {
+      const rebuiltAt = typeof data.rebuilt_at === "string" ? Date.parse(data.rebuilt_at) : NaN;
+      if (Number.isFinite(rebuiltAt) && rebuiltAt >= resumeCutoff) {
+        resumed++;
+        continue;
+      }
+    }
+
     const name = (data.name as string | undefined) || (data.product?.name as string | undefined);
     const brand = (data.brand as string | undefined) || (data.product?.brand as string | undefined);
 
@@ -87,6 +116,8 @@ export async function rebuildWardrobeForUser(
         intents: data.intents,
         energies: data.energies,
         shareHidden: data.shareHidden,
+        // WS-17: per-row completion marker so a crashed rebuild can resume.
+        rebuilt_at: new Date().toISOString(),
       });
       assertNoPersistedBase64Image(merged, "user_fragrances.fragrance_data");
 
@@ -105,5 +136,5 @@ export async function rebuildWardrobeForUser(
     }
   }
 
-  return { total: rows.length, rebuilt, skipped, failures };
+  return { total: rows.length, rebuilt, skipped, resumed, failures };
 }

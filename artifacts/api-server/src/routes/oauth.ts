@@ -4,6 +4,7 @@ import { db } from "@workspace/db";
 import { usersTable } from "@workspace/db/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { getTenantId } from "../middlewares/tenant";
+import { requireAuth, type AuthRequest } from "../middlewares/auth";
 
 const router = Router();
 
@@ -326,6 +327,28 @@ router.get("/auth/google/callback", async (req, res) => {
     );
     res.redirect("/?oauth_error=server_error");
   }
+});
+
+/**
+ * WS-18: server-side sign-out. The bearer token is the long-lived `users.token`
+ * embedded in the OAuth redirect, so clearing it only client-side leaves a valid
+ * credential live (e.g. if it leaked into history/logs). Rotating the column
+ * invalidates the old token everywhere. Best-effort and idempotent — the client
+ * clears local state regardless of the response.
+ */
+router.post("/auth/logout", requireAuth, async (req: AuthRequest, res) => {
+  const user = req.user!;
+  try {
+    await db
+      .update(usersTable)
+      .set({ token: randomUUID() })
+      .where(eq(usersTable.id, user.id));
+  } catch (err) {
+    req.log.error({ err, userId: user.id }, "Failed to rotate token on logout");
+    res.status(500).json({ error: "Logout failed" });
+    return;
+  }
+  res.json({ ok: true });
 });
 
 export default router;
