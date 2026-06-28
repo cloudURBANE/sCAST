@@ -84,6 +84,31 @@ test("familyAlignmentScore: liked families lift, disliked families sink (A5-GAP2
   );
 });
 
+test("familyAlignmentScore: no taste profile == baseline (A5-GAP2 default-safe)", () => {
+  // Default-safety contract: a user with no taste profile MUST score identically
+  // to one with an empty/omitted profile, across a representative recommendation.
+  const rec = {
+    confidence: "medium",
+    projection_risk: "medium",
+    wear_window: "daytime_safe",
+    best_scent_families: ["woody"],
+    avoid_scent_families: ["aquatic"],
+  } as unknown as ScentWeatherRecommendation;
+  const traits = ["woody", "cedar", "spicy"];
+
+  const baseline = familyAlignmentScore({ recommendation: rec, traits, intentMatch: true });
+  // Omitting the fields entirely, passing empty arrays, and explicit empties all
+  // reproduce the exact baseline — the modifier is purely additive.
+  assert.equal(
+    familyAlignmentScore({ recommendation: rec, traits, intentMatch: true, preferredFamilies: [], dislikedFamilies: [] }),
+    baseline,
+  );
+  assert.equal(
+    familyAlignmentScore({ recommendation: rec, traits, intentMatch: true, preferredFamilies: undefined, dislikedFamilies: undefined }),
+    baseline,
+  );
+});
+
 test("createScentMissionState starts with onboarding active and the rest locked", () => {
   const state = createScentMissionState();
   assert.equal(state.nodes.onboarding, "active");
