@@ -39,6 +39,16 @@ import { acceptsImageCacheForRequest, shouldUseImageLookupCaches } from "./image
 export { acceptsImageCacheForRequest, shouldUseImageLookupCaches };
 
 const MAX_OUTPUT_DIMENSION = 1024;
+// Post-decode hard floor on the processed image's smaller edge. SERP candidates
+// frequently omit dimensions, so the candidate scorer's min-edge term (which
+// only *penalizes* sub-360px results) can still let a tiny thumbnail/favicon win
+// as `best` when nothing better turns up — and it would then be stored and shown
+// as a fragrance bottle. The resize uses `withoutEnlargement`, so a source
+// smaller than this stays smaller than this; reject it outright so a usable
+// candidate is tried instead. Conservative (200px): real packshots are 400px+,
+// so this only rejects genuinely unusable thumbnails and never a legitimate
+// bottle shot (WS-12 / image M4).
+const MIN_PROCESSED_EDGE = 200;
 const WEBP_QUALITY = 82;
 const MAX_CANDIDATES_PER_ATTEMPT = 5;
 const EARLY_ACCEPT_PROCESSED_SCORE = 17;
@@ -357,6 +367,14 @@ async function processSourceToWebp(
   const width = metadata.width ?? 0;
   const height = metadata.height ?? 0;
   if (!width || !height) throw new Error("Optimized image metadata missing dimensions");
+  // Reject genuinely unusable thumbnails post-decode. This is deterministic for
+  // the source (the resize never enlarges), so the candidate is skipped and a
+  // better one is selected instead of a blurry icon being stored as the bottle.
+  if (Math.min(width, height) < MIN_PROCESSED_EDGE) {
+    throw new Error(
+      `Optimized image below minimum edge: ${width}x${height} (min ${MIN_PROCESSED_EDGE}px)`,
+    );
+  }
 
   return {
     buffer: optimized,

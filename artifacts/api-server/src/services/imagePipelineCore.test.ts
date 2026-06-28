@@ -584,3 +584,26 @@ test("refresh-image does not upsert catalog when backgroundRemoved=false and BG 
   const shouldUpsert3 = skipBg2 || processed3.backgroundRemoved;
   assert.equal(shouldUpsert3, true, "must upsert catalog when BG removal was intentionally skipped");
 });
+
+test("min-edge floor rejects tiny thumbnails post-decode but keeps real packshots (WS-12 / image M4)", () => {
+  // Mirrors the predicate `Math.min(width, height) < MIN_PROCESSED_EDGE` in
+  // processSourceToWebp. SERP candidates routinely omit dimensions, so the
+  // candidate scorer's min-edge term only *penalizes* sub-360px results — a tiny
+  // favicon/thumbnail can still win as `best` when nothing better turns up. The
+  // floor is the hard backstop that stops a blurry icon being stored as a bottle.
+  // The resize uses withoutEnlargement, so a source under the floor stays under
+  // it; rejecting outright lets a usable candidate be selected instead.
+  const MIN_PROCESSED_EDGE = 200;
+  const belowFloor = (width: number, height: number) =>
+    Math.min(width, height) < MIN_PROCESSED_EDGE;
+
+  // Genuinely unusable thumbnails / icons are rejected.
+  assert.equal(belowFloor(64, 64), true, "favicon-sized icon rejected");
+  assert.equal(belowFloor(199, 768), true, "tall-but-thin thumbnail rejected on its short edge");
+  assert.equal(belowFloor(768, 150), true, "wide-but-short thumbnail rejected on its short edge");
+
+  // Real packshots (400px+) and the exact boundary are kept.
+  assert.equal(belowFloor(200, 200), false, "exact floor accepted");
+  assert.equal(belowFloor(768, 768), false, "standard square packshot accepted");
+  assert.equal(belowFloor(420, 560), false, "typical retailer bottle shot accepted");
+});
