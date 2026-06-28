@@ -89,3 +89,42 @@ test("aggregateFeedbackPreferenceSignals: up-votes and other reasons do not move
     {},
   );
 });
+
+test("aggregateFeedbackPreferenceSignals: a family ignored-disliked twice becomes a dislike signal", () => {
+  const signals = aggregateFeedbackPreferenceSignals([
+    { rating: "down", reasonCode: "ignored_dislike", avoidFamilies: ["oud"] },
+    { rating: "down", reasonCode: "ignored_dislike", avoidFamilies: ["Oud", "woody"] },
+  ]);
+  // 'oud' appears across two distinct down-votes → above the floor; 'woody' only
+  // once → below it. Casing is normalized.
+  assert.deepEqual(signals.dislikedFamilies, ["oud"]);
+});
+
+test("aggregateFeedbackPreferenceSignals: a single ignored-dislike is below the family floor", () => {
+  assert.deepEqual(
+    aggregateFeedbackPreferenceSignals([
+      { rating: "down", reasonCode: "ignored_dislike", avoidFamilies: ["oud"] },
+    ]),
+    {},
+  );
+});
+
+test("aggregateFeedbackPreferenceSignals: family context only counts for dislike-shaped reasons", () => {
+  // Same family surfaced twice but under generic reasons → no blacklist.
+  assert.deepEqual(
+    aggregateFeedbackPreferenceSignals([
+      { rating: "down", reasonCode: "wrong_vibe", avoidFamilies: ["oud"] },
+      { rating: "down", reasonCode: "too_generic", avoidFamilies: ["oud"] },
+    ]),
+    {},
+  );
+});
+
+test("aggregateFeedbackPreferenceSignals: a single answer listing a family twice counts once", () => {
+  assert.deepEqual(
+    aggregateFeedbackPreferenceSignals([
+      { rating: "down", reasonCode: "ignored_dislike", avoidFamilies: ["oud", "oud"] },
+    ]),
+    {},
+  );
+});

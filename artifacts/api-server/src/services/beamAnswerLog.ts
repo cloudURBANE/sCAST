@@ -1,8 +1,9 @@
 import { db } from "@workspace/db";
 import { beamAnswerFeedbackTable, beamAnswerLogTable, userSettingsTable } from "@workspace/db/schema";
 import { and, eq } from "drizzle-orm";
+import { SCENT_FAMILIES, type ScentFamily } from "@workspace/scent-weather-engine";
 import { logger } from "../lib/logger";
-import { aggregateFeedbackPreferenceSignals } from "../beam-agent/beamFeedbackCore";
+import { aggregateFeedbackPreferenceSignals, type FeedbackRow } from "../beam-agent/beamFeedbackCore";
 
 /**
  * Beam Agent — durable answer log + feedback persistence.
@@ -160,39 +161,86 @@ export async function recordBeamAnswerFeedback(input: RecordBeamAnswerFeedbackIn
   }
 }
 
+/** Canonical engine families, lowercased, for cheap membership tests. */
+const SCENT_FAMILY_SET = new Set<string>(SCENT_FAMILIES as readonly string[]);
+/** Upper bound on a learned dislike list so accumulated feedback can't bloat it. */
+const MAX_DISLIKED_FAMILIES = 15;
+
+/**
+ * Extract the canonical scent families a turn explicitly asked to AVOID, off the
+ * answer log's `derivedState.slots.avoid` (a comma-joined free-text list). Only
+ * tokens that resolve to a real ScentFamily survive — free-text notes ("no
+ * vanilla", "oud") that aren't families are dropped, never guessed into one.
+ */
+function avoidFamiliesFromDerivedState(derivedState: unknown): string[] {
+  const state = derivedState as { slots?: { avoid?: unknown } } | null;
+  const avoidRaw = state?.slots?.avoid;
+  if (typeof avoidRaw !== "string" || !avoidRaw.trim()) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const part of avoidRaw.split(/[,;]/)) {
+    const fam = part.trim().toLowerCase();
+    if (!fam || seen.has(fam) || !SCENT_FAMILY_SET.has(fam)) continue;
+    seen.add(fam);
+    out.push(fam);
+  }
+  return out;
+}
+
 /**
  * A5-GAP3: read a user's accumulated feedback back into their scent-taste profile,
- * closing the previously write-only loop. Aggregates the down-vote reason codes
+ * closing the previously write-only loop. Joins each down-vote to its
+ * `beam_answer_log` row so the families the answer was scored against (the turn's
+ * explicit `avoid` slot) come back as candidate dislike context, then aggregates
  * (see aggregateFeedbackPreferenceSignals) and applies the derived engine
- * preference axes to user_settings — but only fields the user has NOT explicitly
- * set (null), so learning never silently overrides an explicit choice.
+ * preference axes + learned disliked families to user_settings.
  *
- * Fully best-effort: any DB fault, a missing feedback table, or an un-migrated
+ * Non-destructive: the engine-preference axes only fill fields the user has NOT
+ * explicitly set (null), and learned dislikes are MERGED into the existing
+ * dislikedFamilies (deduped, capped) and never added to a family the user has
+ * explicitly marked as preferred — so learning refines, never overrides, an
+ * explicit choice.
+ *
+ * Fully best-effort: any DB fault, a missing feedback/log table, or an un-migrated
  * user_settings is swallowed so feedback recording is never blocked. Returns the
- * applied signals (empty when nothing changed) for observability/tests.
+ * applied updates (empty when nothing changed) for observability/tests.
  */
 export async function applyFeedbackToScentPreferences(
   userId: string,
   tenantId?: string | null,
 ): Promise<Record<string, unknown>> {
   try {
+    // LEFT JOIN so a down-vote whose log row has rotated out of the 30-day buffer
+    // still counts for the reason-code-only signals (it just carries no families).
     const rows = await db
       .select({
         rating: beamAnswerFeedbackTable.rating,
         reasonCode: beamAnswerFeedbackTable.reasonCode,
+        derivedState: beamAnswerLogTable.derivedState,
       })
       .from(beamAnswerFeedbackTable)
+      .leftJoin(beamAnswerLogTable, eq(beamAnswerFeedbackTable.answerLogId, beamAnswerLogTable.id))
       .where(eq(beamAnswerFeedbackTable.userId, userId))
       .limit(200);
 
-    const signals = aggregateFeedbackPreferenceSignals(rows);
+    const feedbackRows: FeedbackRow[] = rows.map((row) => ({
+      rating: row.rating,
+      reasonCode: row.reasonCode,
+      avoidFamilies: avoidFamiliesFromDerivedState(row.derivedState),
+    }));
+
+    const signals = aggregateFeedbackPreferenceSignals(feedbackRows);
     if (Object.keys(signals).length === 0) return {};
 
-    // Only fill fields the user hasn't explicitly chosen.
+    // Read the current profile: engine axes (only fill when unset) and the
+    // existing liked/disliked families (so a merge can't override an explicit
+    // like or duplicate an existing dislike).
     const [existing] = await db
       .select({
         lasts: userSettingsTable.scentLastsOnMe,
         projection: userSettingsTable.projectionPreference,
+        preferred: userSettingsTable.preferredFamilies,
+        disliked: userSettingsTable.dislikedFamilies,
       })
       .from(userSettingsTable)
       .where(eq(userSettingsTable.userId, userId))
@@ -205,6 +253,34 @@ export async function applyFeedbackToScentPreferences(
     if (signals.scentLastsOnMe && !existing?.lasts) {
       updates.scentLastsOnMe = signals.scentLastsOnMe;
     }
+
+    if (signals.dislikedFamilies && signals.dislikedFamilies.length > 0) {
+      const preferredSet = new Set<string>(
+        (Array.isArray(existing?.preferred) ? existing.preferred : []).map((f) => f.toLowerCase()),
+      );
+      const merged: string[] = [];
+      const seen = new Set<string>();
+      // Keep existing dislikes first (stable order), then append new ones.
+      for (const fam of Array.isArray(existing?.disliked) ? existing.disliked : []) {
+        const norm = String(fam).toLowerCase();
+        if (!SCENT_FAMILY_SET.has(norm) || seen.has(norm)) continue;
+        seen.add(norm);
+        merged.push(norm);
+      }
+      let changed = false;
+      for (const fam of signals.dislikedFamilies) {
+        // Never blacklist a family the user explicitly likes; never duplicate.
+        if (preferredSet.has(fam) || seen.has(fam)) continue;
+        seen.add(fam);
+        merged.push(fam);
+        changed = true;
+        if (merged.length >= MAX_DISLIKED_FAMILIES) break;
+      }
+      if (changed) {
+        updates.dislikedFamilies = merged.slice(0, MAX_DISLIKED_FAMILIES) as ScentFamily[];
+      }
+    }
+
     if (Object.keys(updates).length === 0) return {};
 
     await db

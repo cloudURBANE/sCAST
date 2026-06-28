@@ -228,6 +228,10 @@ const FAMILY_SIGNALS: Record<ScentFamily, readonly string[]> = {
   powdery: ["powder", "powdery", "iris", "orris", "violet", "makeup"],
 };
 
+// WS-7: a profile-vector axis must reach >= 30% of the 0-10 range before it counts
+// as a present scent trait. Mirrored in the SPA's WardrobeContext consumer.
+const VECTOR_TRAIT_THRESHOLD = 3;
+
 const RAIN_CONDITION_SIGNALS = ["rain", "drizzle", "storm"];
 const RESTRICTIVE_SETTINGS: readonly SettingType[] = ["indoor", "work", "close_contact", "gym"];
 const INDOOR_RULE_SETTINGS: readonly SettingType[] = ["indoor", "work", "close_contact"];
@@ -255,7 +259,11 @@ function getTraitTexts(fragrance: ScentWeatherEngineInput["fragrance"]): string[
 
   if (fragrance.profile_vector) {
     for (const [key, value] of Object.entries(fragrance.profile_vector)) {
-      if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+      // WS-7: only treat an axis as a present trait when it carries meaningful
+      // magnitude (>= 30% of the 0-10 range). With the vectorizer's old +2.5 floor
+      // gone, near-zero residual axes no longer warrant a family signal — a
+      // barely-woody scent must not read as "woody" just because the axis is > 0.
+      if (typeof value === "number" && Number.isFinite(value) && value >= VECTOR_TRAIT_THRESHOLD) {
         values.push(key);
       }
     }

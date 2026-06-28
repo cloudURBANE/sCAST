@@ -37,7 +37,8 @@ test("vectorize: empty parsed fragrance yields a zero vector with no +2.5 floor"
 });
 
 test("vectorize: a single citrus note in the flat list scores freshness only", () => {
-  // citrus rule weight 2.0 → 2.0 * 1.0 (flat) = 2.0 → +2.5 floor → 4.5 → round 5
+  // WS-7: citrus weight 2.0 * positionWeight 1.0; one matched note → denom
+  // sqrt(1)=1; * VECTOR_GAIN 2.4 = 4.8 → round 5. No additive floor.
   assert.deepEqual(vectorize(makeParsed({ notes: ["bergamot"] })), {
     freshness: 5,
     sweetness: 0,
@@ -59,27 +60,29 @@ test("vectorize: pyramid layer weights are top=0.7, heart=1.0, base=1.4", () => 
     pyramidNotes: { top: [], heart: [], base: ["bergamot"] },
   }));
 
-  // 2.0 * 0.7 = 1.4 → +2.5 → 3.9 → round 4
-  assert.equal(inTop.freshness, 4);
-  // 2.0 * 1.0 = 2.0 → +2.5 → 4.5 → round 5
+  // WS-7: one matched note → denom sqrt(1)=1, gain 2.4. No additive floor, so the
+  // top/heart/base position weighting is now visible across the full range.
+  // top:  2.0 * 0.7 * 2.4 = 3.36 → round 3
+  assert.equal(inTop.freshness, 3);
+  // heart: 2.0 * 1.0 * 2.4 = 4.8 → round 5
   assert.equal(inHeart.freshness, 5);
-  // 2.0 * 1.4 = 2.8 → +2.5 → 5.3 → round 5
-  assert.equal(inBase.freshness, 5);
+  // base: 2.0 * 1.4 * 2.4 = 6.72 → round 7
+  assert.equal(inBase.freshness, 7);
 });
 
-test("vectorize: description contributes at 0.5x and triggers the +2.5 floor when positive", () => {
-  // No notes, no pyramid → hasPyramid is false, parsed.notes is [] → flat layer contributes 0.
-  // Description "bergamot" → freshness scoreText = 2.0 → * 0.5 = 1.0
-  // 1.0 > 0 → +2.5 → 3.5 → round 4
+test("vectorize: description is scored at 0.5x only when there are no notes/pyramid", () => {
+  // WS-7: with no notes and no pyramid the description IS the only signal source.
+  // "bergamot" → freshness rule weight 2.0 * 0.5 = 1.0; matchedNoteCount is 0 so
+  // denom is sqrt(1)=1; 1.0 * 2.4 = 2.4 → round 2. No additive floor.
   const v = vectorize(makeParsed({ description: "bergamot" }));
-  assert.equal(v.freshness, 4);
+  assert.equal(v.freshness, 2);
 });
 
-test("vectorize: description-only musk note builds via the +2.5 floor", () => {
-  // description "white musk" → musk rule matches "musk" and "white musk" → +2.5 + +2.5 = +5.0
-  //   times 0.5 = 2.5 → +2.5 floor = 5.0 → round 5
+test("vectorize: description-only musk note builds without the floor", () => {
+  // WS-7: "white musk" matches the musk rule once per axis (max weight 2.5) → * 0.5
+  // = 1.25; denom 1; 1.25 * 2.4 = 3.0 → round 3.
   const v = vectorize(makeParsed({ description: "white musk" }));
-  assert.equal(v.musk, 5);
+  assert.equal(v.musk, 3);
 });
 
 test("vectorize: pyramid presence disables the flat-notes branch even when pyramid has matches in only one layer", () => {
@@ -89,8 +92,8 @@ test("vectorize: pyramid presence disables the flat-notes branch even when pyram
     notes: ["vanilla", "amber", "oud"], // would dominate sweetness/warmth/woodiness IF used
     pyramidNotes: { top: ["bergamot"], heart: [], base: [] },
   }));
-  // freshness top contribution only: 2.0 * 0.7 = 1.4 → +2.5 → 3.9 → round 4
-  assert.equal(v.freshness, 4);
+  // WS-7: freshness top contribution only: 2.0 * 0.7 * 2.4 = 3.36 → round 3
+  assert.equal(v.freshness, 3);
   // sweetness, warmth, woodiness must NOT pick up the flat notes
   assert.equal(v.sweetness, 0);
   assert.equal(v.warmth, 0);
@@ -99,7 +102,9 @@ test("vectorize: pyramid presence disables the flat-notes branch even when pyram
 
 test("vectorize: Sauvage-like profile (bergamot/pepper/ambroxan) — snapshot", () => {
   // This locks the math for a canonical fresh-spicy fragrance shape.
-  // See per-axis trace in the test for any future revisions to RULES.
+  // WS-7: the description is NOT scored here because notes/pyramid exist; ambroxan
+  // is pinned to its primary axis (warmth) so it no longer leaks into woodiness
+  // (was 4) or musk (was 5). Three matched notes → denom sqrt(3) ≈ 1.732, gain 2.4.
   const v = vectorize(makeParsed({
     pyramidNotes: {
       top: ["bergamot"],
@@ -109,19 +114,19 @@ test("vectorize: Sauvage-like profile (bergamot/pepper/ambroxan) — snapshot", 
     description: "fresh spicy fragrance",
   }));
 
-  // freshness: top "bergamot" citrus +2.0 * 0.7 = 1.4; description "fresh" +2.0 * 0.5 = 1.0 → 2.4 → +2.5 = 4.9 → 5
-  // sweetness: nothing matches → 0
-  // woodiness: base "ambroxan" iso-e-super rule +1.0 * 1.4 = 1.4 → +2.5 = 3.9 → 4
-  // spice: heart "pepper" rule +2.5 * 1.0 = 2.5; description "spicy"+"spice" (substring) +1.2+1.2 = 2.4 * 0.5 = 1.2 → 3.7 → +2.5 = 6.2 → 6
-  // warmth: base "ambroxan" ambroxan-rule +2.0 * 1.4 = 2.8 → +2.5 = 5.3 → 5
-  // musk: base "ambroxan" ambroxan-rule +1.8 * 1.4 = 2.52 → +2.5 = 5.02 → 5
+  // freshness: "bergamot" citrus 2.0 * top 0.7 = 1.4 → /1.732 * 2.4 = 1.94 → round 2
+  // sweetness: nothing → 0
+  // woodiness: ambroxan leak suppressed (primary is warmth) → 0
+  // spice:     "pepper" 2.5 * heart 1.0 = 2.5 → /1.732 * 2.4 = 3.46 → round 3
+  // warmth:    "ambroxan" 2.0 * base 1.4 = 2.8 → /1.732 * 2.4 = 3.88 → round 4
+  // musk:      ambroxan leak suppressed (primary is warmth) → 0
   assert.deepEqual(v, {
-    freshness: 5,
+    freshness: 2,
     sweetness: 0,
-    woodiness: 4,
-    spice: 6,
-    warmth: 5,
-    musk: 5,
+    woodiness: 0,
+    spice: 3,
+    warmth: 4,
+    musk: 0,
   });
 });
 
@@ -139,7 +144,7 @@ test("vectorize: dense base-layer woodiness clamps at 10", () => {
 });
 
 test("vectorize: a single occurrence of a rule word adds the weight once, not per-occurrence", () => {
-  // scoreText uses `text.includes(word)` → either 0 or weight, regardless of frequency.
+  // WS-7: scoring is per DISTINCT note, so repeated identical notes collapse to one.
   // notes "bergamot bergamot bergamot" contributes the same as "bergamot".
   const single = vectorize(makeParsed({ notes: ["bergamot"] }));
   const triple = vectorize(makeParsed({ notes: ["bergamot", "bergamot", "bergamot"] }));
@@ -157,8 +162,8 @@ test("vectorize: whole-token matching no longer leaks across note boundaries", (
 });
 
 test("vectorize: expanded dictionary recognizes lavender/coconut/tea", () => {
-  // GAP1: these mapped to nothing before. Each is a single flat note → weight →
-  // +2.5 floor → a non-zero axis.
+  // GAP1: these mapped to nothing before. Each is a single flat note → weight ×
+  // gain → a non-zero axis (WS-7: no additive floor).
   assert.ok(vectorize(makeParsed({ notes: ["lavender"] })).freshness > 0);
   assert.ok(vectorize(makeParsed({ notes: ["coconut"] })).sweetness > 0);
   assert.ok(vectorize(makeParsed({ notes: ["green tea"] })).freshness > 0);
@@ -168,7 +173,8 @@ test("vectorize: expanded dictionary recognizes lavender/coconut/tea", () => {
 
 test("vectorize: parsed accords nudge their axes at a low weight", () => {
   // No notes/pyramid/description — only accords. "gourmand"→sweetness,
-  // "leathery"→warmth, "chypre"→woodiness+freshness. Each adds 0.8 → +2.5 floor.
+  // "leathery"→warmth, "chypre"→woodiness+freshness. Each adds 0.8 × gain (WS-7:
+  // no additive floor) → a non-zero axis.
   const v = vectorize(makeParsed({ accords: ["gourmand", "leathery", "chypre"] }));
   assert.ok(v.sweetness > 0, "gourmand → sweetness");
   assert.ok(v.warmth > 0, "leathery → warmth");
@@ -187,6 +193,132 @@ test("vectorize: empty accords list leaves the vector untouched (back-compat)", 
     warmth: 0,
     musk: 0,
   });
+});
+
+// --- WS-7: golden reference vectors (dominant axis + no cross-axis leakage) ---
+//
+// These lock the post-WS-7 behavior for a reference set spanning the major scent
+// shapes. They are the reviewable before→after of the recommendation-shifting
+// change. Recorded BASELINE (old per-layer scan + unconditional +2.5 floor +
+// always-scored description), for review of the shift:
+//   pure_oud             {"freshness":0,"sweetness":3,"woodiness":10,"spice":7,"warmth":0,"musk":0}
+//   aquatic_marine       {"freshness":10,"sweetness":0,"woodiness":4,"spice":0,"warmth":5,"musk":9}
+//   gourmand             {"freshness":4,"sweetness":10,"woodiness":0,"spice":0,"warmth":0,"musk":0}
+//   citrus               {"freshness":10,"sweetness":0,"woodiness":0,"spice":0,"warmth":0,"musk":10}
+//   mixed_woody_aromatic {"freshness":5,"sweetness":0,"woodiness":10,"spice":9,"warmth":5,"musk":5}
+//   mixed_spicy_amber    {"freshness":0,"sweetness":6,"woodiness":0,"spice":10,"warmth":10,"musk":0}
+//
+// In every old vector a clean scent picked up 2-3 inflated axes (oud→spice 7,
+// ambroxan→musk 9 / warmth 5, white musk→musk 10). The new vectors below keep the
+// correct dominant axis and hold leaked axes to <=3 (≤30% of the 0-10 range).
+
+const MAX_LEAK = 3;
+
+type GoldenRef = {
+  id: string;
+  parsed: ParsedFragrance;
+  expected: ScentVector;
+  dominant: keyof ScentVector;
+  mustStayLow: Array<keyof ScentVector>;
+};
+
+const GOLDEN: GoldenRef[] = [
+  {
+    id: "pure_oud",
+    parsed: makeParsed({
+      pyramidNotes: { top: ["saffron"], heart: ["rose", "oud"], base: ["oud", "agarwood", "sandalwood"] },
+    }),
+    expected: { freshness: 0, sweetness: 1, woodiness: 10, spice: 2, warmth: 0, musk: 0 },
+    dominant: "woodiness",
+    mustStayLow: ["spice", "warmth", "musk", "freshness"], // oud no longer leaks to spice (was 7)
+  },
+  {
+    id: "aquatic_marine",
+    parsed: makeParsed({
+      pyramidNotes: { top: ["bergamot", "sea salt"], heart: ["marine", "ozone"], base: ["ambroxan", "musk"] },
+    }),
+    expected: { freshness: 7, sweetness: 0, woodiness: 0, spice: 0, warmth: 3, musk: 3 },
+    dominant: "freshness",
+    mustStayLow: ["woodiness", "spice", "sweetness"], // ambroxan no longer inflates musk (was 9)/warmth (was 5)
+  },
+  {
+    id: "gourmand",
+    parsed: makeParsed({
+      pyramidNotes: { top: ["bergamot"], heart: ["caramel", "praline"], base: ["vanilla", "tonka bean"] },
+    }),
+    expected: { freshness: 2, sweetness: 10, woodiness: 0, spice: 0, warmth: 0, musk: 0 },
+    dominant: "sweetness",
+    mustStayLow: ["woodiness", "spice", "warmth", "musk"],
+  },
+  {
+    id: "citrus",
+    parsed: makeParsed({
+      pyramidNotes: { top: ["lemon", "bergamot", "grapefruit"], heart: ["neroli", "petitgrain"], base: ["white musk"] },
+    }),
+    expected: { freshness: 8, sweetness: 0, woodiness: 0, spice: 0, warmth: 0, musk: 3 },
+    dominant: "freshness",
+    mustStayLow: ["woodiness", "spice", "warmth", "sweetness"], // white musk no longer ties the dominant (was 10)
+  },
+  {
+    id: "mixed_woody_aromatic",
+    parsed: makeParsed({
+      pyramidNotes: { top: ["bergamot", "pepper"], heart: ["lavender", "sichuan pepper", "geranium"], base: ["ambroxan", "cedar", "vetiver"] },
+    }),
+    expected: { freshness: 2, sweetness: 0, woodiness: 5, spice: 4, warmth: 3, musk: 0 },
+    dominant: "woodiness",
+    mustStayLow: ["musk", "sweetness", "freshness"], // ambroxan no longer inflates musk (was 5)
+  },
+  {
+    id: "mixed_spicy_amber",
+    parsed: makeParsed({
+      pyramidNotes: { top: ["cardamom", "pink pepper"], heart: ["cinnamon", "clove"], base: ["amber", "labdanum", "vanilla"] },
+    }),
+    expected: { freshness: 0, sweetness: 3, woodiness: 0, spice: 6, warmth: 6, musk: 0 },
+    dominant: "spice", // genuinely spice+amber; both are real, no fabricated axes
+    mustStayLow: ["woodiness", "musk", "freshness"],
+  },
+];
+
+function dominantAxis(v: ScentVector): keyof ScentVector {
+  let best: keyof ScentVector = "freshness";
+  for (const key of Object.keys(v) as Array<keyof ScentVector>) {
+    if (v[key] > v[best]) best = key;
+  }
+  return best;
+}
+
+for (const ref of GOLDEN) {
+  test(`WS-7 golden vector — ${ref.id}`, () => {
+    const v = vectorize(ref.parsed);
+    assert.deepEqual(v, ref.expected, `vector for ${ref.id}`);
+    assert.equal(dominantAxis(v), ref.dominant, `dominant axis for ${ref.id}`);
+    assert.ok(v[ref.dominant] >= 5, `dominant axis ${ref.dominant} should be strong (got ${v[ref.dominant]})`);
+    for (const axis of ref.mustStayLow) {
+      assert.ok(v[axis] <= MAX_LEAK, `${ref.id}: ${axis} inflated to ${v[axis]} (expected <= ${MAX_LEAK})`);
+      assert.ok(v[axis] < v[ref.dominant], `${ref.id}: ${axis} (${v[axis]}) should be below dominant ${ref.dominant} (${v[ref.dominant]})`);
+    }
+  });
+}
+
+test("WS-7: shared ingredient oud does not leak into spice without a real spice note", () => {
+  const v = vectorize(makeParsed({ notes: ["oud", "agarwood"] }));
+  assert.equal(dominantAxis(v), "woodiness");
+  assert.equal(v.spice, 0, "oud must not contribute to spice");
+});
+
+test("WS-7: a genuine spice note alongside oud still scores spice", () => {
+  const v = vectorize(makeParsed({ notes: ["oud", "black pepper", "saffron"] }));
+  assert.ok(v.woodiness > 0, "oud feeds woodiness");
+  assert.ok(v.spice > 0, "real spice notes still feed spice");
+});
+
+test("WS-7: description does not contaminate a note-backed vector", () => {
+  const v = vectorize(makeParsed({
+    notes: ["cedar"],
+    description: "vanilla caramel honey sweet gourmand chocolate",
+  }));
+  assert.equal(v.sweetness, 0, "description sweetness must not leak into a note-backed vector");
+  assert.ok(v.woodiness > 0);
 });
 
 // --- A2-GAP1/3: coverage + confidence ----------------------------------------
