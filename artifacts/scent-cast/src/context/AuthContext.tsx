@@ -50,6 +50,8 @@ const OAUTH_ERROR_MESSAGES: Record<string, string> = {
   unverified_email:
     'Your Google email address is not verified. Verify it with Google, then sign in again.',
   server_error: 'Something went wrong on our end during sign-in. Please try again in a moment.',
+  account_conflict:
+    'This email is already linked to a different Google account. Sign in with the original account, or contact support.',
 };
 
 const mapOAuthError = (code: string): string =>
