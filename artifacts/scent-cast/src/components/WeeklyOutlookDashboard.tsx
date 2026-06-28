@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import {
   ChevronLeft,
@@ -413,6 +413,57 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
   const [selected, setSelected] = useState(0);
   const [direction, setDirection] = useState(0);
 
+  // The full vault × week engine matrix is expensive. `items` gets a new array
+  // reference on unrelated wardrobe churn (a lastWornAt stamp, an image-url swap,
+  // a background poll that touched one row), each of which would otherwise force
+  // a complete re-score of every bottle on every day. Gate the heavy recompute on
+  // a SCORING signature — only the fields the planner actually reads — so those
+  // unrelated re-renders no longer re-run the matrix. (Engine-internal trait-text
+  // memoization is handled separately.)
+  const itemsScoringSignature = useMemo(
+    () =>
+      items
+        .map((item) => {
+          const dm = item.raw_engine_detail?.derived_metrics ?? item.derived_metrics ?? null;
+          const lastWornAt = (item as { lastWornAt?: unknown }).lastWornAt;
+          return [
+            item.id ?? item._dbId ?? '',
+            item.concentration ?? '',
+            // Presence of structured metrics flips scoring; cheap proxy for "has
+            // this bottle been enriched since the last score" without deep-hashing.
+            dm ? '1' : '0',
+            typeof lastWornAt === 'string' || typeof lastWornAt === 'number' ? String(lastWornAt) : '',
+          ].join(':');
+        })
+        .join('|'),
+    [items],
+  );
+
+  // Climate inputs the planner scores against — keyed off the forecast so a
+  // weather refresh that returns the same numbers doesn't re-score either.
+  const climates = useMemo(
+    () =>
+      forecast.map((day) => ({
+        temperature_f: day.temp ?? day.high,
+        humidity: day.humidity,
+        condition: day.condition,
+      })),
+    [forecast],
+  );
+  const climateSignature = useMemo(
+    () => climates.map((c) => `${c.temperature_f ?? ''}:${c.humidity ?? ''}:${c.condition ?? ''}`).join('|'),
+    [climates],
+  );
+
+  // Latest values for the gated memo to read without listing them as deps (which
+  // would defeat the signature gate and recompute on every identity change).
+  const itemsRef = useRef(items);
+  const climatesRef = useRef(climates);
+  const forecastRef = useRef(forecast);
+  itemsRef.current = items;
+  climatesRef.current = climates;
+  forecastRef.current = forecast;
+
   // Plan the whole week in one pass so each day gets its best-fit bottle AND the
   // week shows variety. Scoring days independently (the old approach) collapsed
   // to one repeated bottle: in ordinary weather the engine emits the same family
@@ -420,16 +471,11 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
   // layers a continuous thermal term on top of the engine and de-dupes across
   // the week. Picks are returned aligned to `forecast`.
   const outlook = useMemo<OutlookDay[]>(() => {
-    const picks = planWeeklyScentOutlook(
-      items,
-      forecast.map((day) => ({
-        temperature_f: day.temp ?? day.high,
-        humidity: day.humidity,
-        condition: day.condition,
-      })),
-    );
-    return forecast.map((day, index) => ({ day, pick: picks[index] ?? null }));
-  }, [forecast, items]);
+    const currentForecast = forecastRef.current;
+    const picks = planWeeklyScentOutlook(itemsRef.current, climatesRef.current);
+    return currentForecast.map((day, index) => ({ day, pick: picks[index] ?? null }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [itemsScoringSignature, climateSignature]);
 
   useEffect(() => {
     setSelected((current) => Math.min(current, Math.max(0, outlook.length - 1)));

@@ -5,6 +5,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { Fragrance, DestinationType, EnergyState } from '@/components/Wardrobe';
 import type { BottleImageAdjustment } from '@/lib/bottleImageAdjustment';
 import { reconcileWardrobeItems } from '@/lib/wardrobeReconcile';
+import { vaultIdentityKey } from '@/lib/vaultIdentity';
 import {
   calculateScentWeatherRecommendation,
   traitsMatchScentFamily,
@@ -94,6 +95,12 @@ type LooseRecord = Record<string, unknown>;
 // status payload never fully decodes, so a permanently-partial item does not
 // poll forever. Counted off enrichment.requested_count.
 const MAX_ENRICHMENT_ATTEMPTS = 8;
+// Client-side durable brake. The in-memory backoff map below resets on every
+// reload, so a row the engine can never complete (no usable requested_count
+// brake) would poll forever — fresh attempts every session. We persist the
+// per-row attempt count to localStorage and stop scheduling once a row has been
+// attempted this many times across reloads, independent of the engine's count.
+const MAX_CLIENT_DETAIL_REFRESH_ATTEMPTS = 12;
 const DETAIL_REFRESH_POLL_MS = 15_000;
 const DETAIL_REFRESH_EMPTY_BACKOFF_MS = 3 * 60_000;
 const DETAIL_REFRESH_BASE_BACKOFF_MS = 60_000;
@@ -273,6 +280,54 @@ function writeAccordHealResyncDone(token: string, ids: Set<string>): void {
     );
   } catch {
     /* storage unavailable (private mode / quota) - resync just retries next load */
+  }
+}
+
+// Durable per-token detail-refresh backoff. Persists the in-memory backoff map
+// so an un-completable row's attempt count survives reloads and the client brake
+// (MAX_CLIENT_DETAIL_REFRESH_ATTEMPTS) actually bounds polling across sessions
+// instead of resetting to zero on every page load.
+function detailRefreshBackoffStorageKey(token: string): string {
+  return `scent_detail_refresh_backoff_${token}`;
+}
+
+function readDetailRefreshBackoff(token: string): Map<string, DetailRefreshBackoffMeta> {
+  const map = new Map<string, DetailRefreshBackoffMeta>();
+  if (typeof localStorage === 'undefined' || !token) return map;
+  try {
+    const raw = localStorage.getItem(detailRefreshBackoffStorageKey(token));
+    if (!raw) return map;
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== 'object') return map;
+    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+      if (!value || typeof value !== 'object') continue;
+      const meta = value as Partial<DetailRefreshBackoffMeta>;
+      if (typeof meta.attemptCount !== 'number') continue;
+      map.set(key, {
+        attemptCount: meta.attemptCount,
+        nextEligibleAt: typeof meta.nextEligibleAt === 'number' ? meta.nextEligibleAt : 0,
+        lastStatus: typeof meta.lastStatus === 'string' ? meta.lastStatus : '',
+      });
+    }
+  } catch {
+    /* storage unavailable / malformed - start from an empty in-memory map */
+  }
+  return map;
+}
+
+function writeDetailRefreshBackoff(token: string, map: Map<string, DetailRefreshBackoffMeta>): void {
+  if (typeof localStorage === 'undefined' || !token) return;
+  try {
+    if (map.size === 0) {
+      localStorage.removeItem(detailRefreshBackoffStorageKey(token));
+      return;
+    }
+    localStorage.setItem(
+      detailRefreshBackoffStorageKey(token),
+      JSON.stringify(Object.fromEntries(map)),
+    );
+  } catch {
+    /* storage unavailable (private mode / quota) - in-memory brake still applies this session */
   }
 }
 
@@ -1090,7 +1145,7 @@ interface WardrobeContextType {
   setUserId: (id: string | null) => void;
   setVaultSearchUiActive: (active: boolean) => void;
   loadWardrobe: (token: string, signal?: AbortSignal) => Promise<void>;
-  handleAddItem: (item: any) => Promise<{ persisted: boolean; requiresAuth?: boolean; error?: string }>;
+  handleAddItem: (item: any) => Promise<{ persisted: boolean; requiresAuth?: boolean; error?: string; duplicate?: boolean; guestSaved?: boolean }>;
   handlePersistWardrobeImage: (target: Fragrance, imageUrl?: string, imageAdjustment?: BottleImageAdjustment, options?: { suppressToast?: boolean }) => Promise<Fragrance | null>;
   /** Admin-only: re-host an uploaded file / URL and return a persistable image URL. */
   uploadAdminBottleImage: (input: {
@@ -1192,6 +1247,9 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const itemsRef = useRef(items);
   const authTokenRef = useRef(authToken);
   const previousGuestPersistenceAuthRef = useRef(authToken);
+  // Once-per-sign-in guard so the guest→server wardrobe migration runs exactly
+  // once for a given token, even if the load effect re-runs.
+  const guestMigrationTokenRef = useRef<string | null>(null);
   itemsRef.current = items;
   authTokenRef.current = authToken;
 
@@ -1254,9 +1312,30 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     signal?: AbortSignal,
     opts?: { conditional?: boolean },
   ) => {
-    if (isMutatingRef.current) return;
+    // A mutation is in flight or just landed: skip this load so an in-flight poll
+    // can't stomp the optimistic state. But never strand the user on a skeleton —
+    // mark the wardrobe loaded (we already have the optimistic items) and schedule
+    // a one-shot retry once the 5s cooldown clears, so server state is still
+    // reconciled. Conditional background polls don't need the retry (the 60s tick
+    // already reschedules them) and must not flip wardrobeLoaded on their own.
+    const scheduleCooldownRetry = () => {
+      if (opts?.conditional) return;
+      setWardrobeLoaded(true);
+      window.setTimeout(() => {
+        if (authTokenRef.current === token && !isMutatingRef.current) {
+          void loadWardrobe(token);
+        }
+      }, 5200);
+    };
+    if (isMutatingRef.current) {
+      scheduleCooldownRetry();
+      return;
+    }
     const now = Date.now();
-    if (now - lastMutationRef.current < 5000) return;
+    if (now - lastMutationRef.current < 5000) {
+      scheduleCooldownRetry();
+      return;
+    }
 
     setWardrobeError(null);
     try {
@@ -1577,18 +1656,137 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     isMutatingRef.current = false;
     lastMutationRef.current = 0;
     wardrobeEtagRef.current = null;
+    // On sign-out, allow a future sign-in to migrate a freshly-built guest vault
+    // again. Only reset on null so this effect can't clear the guard for the very
+    // token the load effect is about to migrate.
+    if (!authToken) {
+      guestMigrationTokenRef.current = null;
+    }
     // Clear admin until app-state reconfirms it for the new token (and on sign-out).
     setIsAdmin(false);
   }, [authToken]);
+
+  // Migrate a guest's locally-held wardrobe into the freshly-signed-in account.
+  // Without this, signing in discards everything a guest built in localStorage —
+  // defeating the app's own "sign in to save your vault" prompt. Runs once per
+  // token (guard ref), AFTER the initial server load so it can de-dupe each guest
+  // entry against the loaded server rows by brand+name identity. Confirmed uploads
+  // are merged optimistically; the guest storage key is cleared only after every
+  // item that needed uploading was either uploaded or already present on the server.
+  const migrateGuestWardrobe = useCallback(async (token: string, guestItems: Fragrance[]) => {
+    if (guestItems.length === 0) {
+      writeGuestWardrobeItems([]);
+      return;
+    }
+
+    // De-dupe against what the server already returned (now in itemsRef) so a
+    // guest item that also exists on the account is not re-added.
+    const serverKeys = new Set(
+      itemsRef.current
+        .map((existing) =>
+          vaultIdentityKey(
+            existing.brand ?? (existing as { house?: string }).house ?? existing.product?.brand,
+            existing.name ?? existing.product?.name,
+          ),
+        )
+        .filter(Boolean),
+    );
+
+    let allHandled = true;
+    const seen = new Set<string>(serverKeys);
+    for (const guestItem of guestItems) {
+      // Token changed mid-migration (signed out / switched account) — abandon and
+      // keep the remaining guest items so nothing is lost.
+      if (authTokenRef.current !== token) {
+        allHandled = false;
+        break;
+      }
+      const key = vaultIdentityKey(
+        guestItem.brand ?? (guestItem as { house?: string }).house ?? guestItem.product?.brand,
+        guestItem.name ?? guestItem.product?.name,
+      );
+      if (key && seen.has(key)) continue; // already on server or earlier in this batch
+      if (key) seen.add(key);
+
+      const newItem: Fragrance = { ...guestItem };
+      isMutatingRef.current = true;
+      try {
+        const res = await fetch('/api/wardrobe', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ ...guestItem }),
+        });
+        const saved = (await res.json().catch(() => null)) as Partial<Fragrance> | null;
+        if (!res.ok || !saved) {
+          allHandled = false;
+          continue;
+        }
+        const savedItem: Fragrance = {
+          ...newItem,
+          ...saved,
+          id: typeof saved.id === 'string' && saved.id ? saved.id : newItem.id,
+        };
+        // Merge optimistically (de-duped) so there is no empty flash and a
+        // concurrent server poll can't double-insert.
+        setItems((prev) => {
+          const savedKey = vaultIdentityKey(
+            savedItem.brand ?? (savedItem as { house?: string }).house ?? savedItem.product?.brand,
+            savedItem.name ?? savedItem.product?.name,
+          );
+          if (
+            savedKey &&
+            prev.some(
+              (existing) =>
+                vaultIdentityKey(
+                  existing.brand ?? (existing as { house?: string }).house ?? existing.product?.brand,
+                  existing.name ?? existing.product?.name,
+                ) === savedKey,
+            )
+          ) {
+            return prev;
+          }
+          return [savedItem, ...prev];
+        });
+      } catch {
+        allHandled = false;
+      } finally {
+        isMutatingRef.current = false;
+        lastMutationRef.current = Date.now();
+      }
+    }
+
+    // Only clear the guest storage once everything was handled, so a partial
+    // failure (network blip, token flip) leaves the un-migrated items for a retry.
+    if (allHandled && authTokenRef.current === token) {
+      writeGuestWardrobeItems([]);
+    }
+  }, []);
 
   // Load wardrobe & share settings on login
   useEffect(() => {
     const abortController = new AbortController();
 
     if (authToken) {
+      // Capture the guest wardrobe BEFORE it is cleared, so sign-in can migrate it
+      // into the account instead of discarding it.
+      const guestItems =
+        guestMigrationTokenRef.current !== authToken ? readGuestWardrobeItems() : [];
       setWardrobeLoaded(false);
       setItems([]);
-      loadWardrobe(authToken, abortController.signal);
+      void (async () => {
+        await loadWardrobe(authToken, abortController.signal);
+        if (
+          guestMigrationTokenRef.current !== authToken &&
+          authTokenRef.current === authToken &&
+          !abortController.signal.aborted
+        ) {
+          guestMigrationTokenRef.current = authToken;
+          await migrateGuestWardrobe(authToken, guestItems);
+        }
+      })();
       fetch('/api/share-settings', {
         headers: { Authorization: `Bearer ${authToken}` },
         signal: abortController.signal,
@@ -1608,7 +1806,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
 
     return () => abortController.abort();
-  }, [authToken, loadWardrobe, toast]);
+  }, [authToken, loadWardrobe, migrateGuestWardrobe, toast]);
 
   // Durable onboarding/discovery state. Fetched independently of /api/wardrobe so
   // a slow or empty wardrobe load cannot flash the add-3 flow at a completed user.
@@ -1690,8 +1888,31 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const handleAddItem = useCallback(async (
     item: any,
-  ): Promise<{ persisted: boolean; requiresAuth?: boolean; error?: string }> => {
+  ): Promise<{ persisted: boolean; requiresAuth?: boolean; error?: string; duplicate?: boolean; guestSaved?: boolean }> => {
     const newItem: Fragrance = { ...item };
+
+    // Client-side duplicate guard. The search overlay flags already-saved results
+    // via `existingVaultKeys`, but the Beam curate loop, a double-tap, or a
+    // curation deep-link all reach handleAddItem directly with no such check —
+    // each one creating a duplicate tile + row. Short-circuit on the same
+    // brand+name identity used everywhere else so those paths can't duplicate.
+    // (A backend unique index is being added separately as the durable guard.)
+    const addKey = vaultIdentityKey(
+      newItem.brand ?? (newItem as { house?: string }).house ?? newItem.product?.brand,
+      newItem.name ?? newItem.product?.name,
+    );
+    if (addKey) {
+      const alreadyInVault = itemsRef.current.some(
+        (existing) =>
+          vaultIdentityKey(
+            existing.brand ?? (existing as { house?: string }).house ?? existing.product?.brand,
+            existing.name ?? existing.product?.name,
+          ) === addKey,
+      );
+      if (alreadyInVault) {
+        return { persisted: false, duplicate: true };
+      }
+    }
 
     let nextCount = 0;
     setItems((prev) => {
@@ -1781,12 +2002,16 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       scheduleImageBackfillRehydrate(newItem, null);
     }
 
+    // The guest item IS saved (in localStorage) at this point — report that as a
+    // distinct `guestSaved` success so callers (Beam curate loop, search add)
+    // don't count a successfully-stored guest add as a failure. `persisted`
+    // stays false because nothing was written to the server.
     if (nextCount >= GUEST_SAVE_PROMPT_THRESHOLD && !guestPromptDismissed) {
       setIsAuthModalOpen(true);
-      return { persisted: false, requiresAuth: true };
+      return { persisted: false, guestSaved: true, requiresAuth: true };
     }
 
-    return { persisted: false, requiresAuth: !authToken };
+    return { persisted: false, guestSaved: true, requiresAuth: !authToken };
   }, [authToken, guestPromptDismissed, loadAppState, onboardingCompleted, scheduleImageBackfillRehydrate, setIsAuthModalOpen, toast]);
 
   const handlePersistWardrobeImage = useCallback(async (
@@ -2203,9 +2428,12 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   }, [authToken]);
 
-  // Load (or reset on version bump) the per-token accord-heal re-sync progress.
+  // Load (or reset on version bump) the per-token accord-heal re-sync progress,
+  // and rehydrate the durable detail-refresh backoff map so a row's cross-reload
+  // attempt count survives and the client brake can actually bound polling.
   useEffect(() => {
     accordHealResyncDoneRef.current = readAccordHealResyncDone(authToken ?? '');
+    detailRefreshBackoffRef.current = readDetailRefreshBackoff(authToken ?? '');
   }, [authToken]);
 
   // Background detail enrichments scheduler
@@ -2239,10 +2467,15 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         lastStatus: status,
         nextEligibleAt: Date.now() + detailRefreshBackoffDelay(attemptCount),
       });
+      // Persist so the attempt count survives reloads and the client brake below
+      // actually stops an un-completable row from re-polling every session.
+      writeDetailRefreshBackoff(authToken, detailRefreshBackoffRef.current);
     };
 
     const clearBackoff = (item: Fragrance) => {
-      detailRefreshBackoffRef.current.delete(detailRefreshKeyFor(item));
+      if (detailRefreshBackoffRef.current.delete(detailRefreshKeyFor(item))) {
+        writeDetailRefreshBackoff(authToken, detailRefreshBackoffRef.current);
+      }
     };
 
     const refreshPendingDetails = async () => {
@@ -2254,6 +2487,10 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         .filter((item) => wardrobeNeedsEnrichmentRefresh(item) || needsAccordHealResync(item))
         .filter((item) => {
           const meta = detailRefreshBackoffRef.current.get(detailRefreshKeyFor(item));
+          // Durable client brake: once a row has been attempted this many times
+          // across reloads (persisted backoff), stop scheduling it — it is not
+          // completable and must not poll forever regardless of the engine count.
+          if (meta && meta.attemptCount >= MAX_CLIENT_DETAIL_REFRESH_ATTEMPTS) return false;
           return !meta || meta.nextEligibleAt <= now;
         })
         .slice(0, 3);

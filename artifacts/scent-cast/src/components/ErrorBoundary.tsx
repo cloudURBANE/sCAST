@@ -13,6 +13,12 @@ interface Props {
   // Short label so a caught render error is attributable to its subtree in the
   // crashTrace breadcrumb trail.
   scope?: string;
+  // When any value in this array changes between renders, a currently-caught
+  // error is cleared automatically. Route-scoped boundaries pass the current
+  // pathname so navigating away from a crashed view soft-recovers it in place —
+  // no full-page reload, and the boundary is ready for the next route. Compared
+  // shallowly (===) in declaration order.
+  resetKeys?: unknown[];
 }
 
 interface State {
@@ -28,6 +34,21 @@ export class ErrorBoundary extends Component<Props, State> {
 
   public static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error };
+  }
+
+  // Auto-clear a caught error when a watched reset key changes (e.g. the route
+  // pathname). This makes a route-scoped crash recover the moment the user
+  // navigates away, instead of the localized fallback sticking until manual retry.
+  public componentDidUpdate(prevProps: Props) {
+    if (!this.state.hasError) return;
+    const prev = prevProps.resetKeys;
+    const next = this.props.resetKeys;
+    if (!prev || !next) return;
+    const changed =
+      prev.length !== next.length || next.some((value, index) => !Object.is(value, prev[index]));
+    if (changed) {
+      this.setState({ hasError: false, error: null });
+    }
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
