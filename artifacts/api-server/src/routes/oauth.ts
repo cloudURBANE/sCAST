@@ -2,7 +2,7 @@ import { Router } from "express";
 import { randomUUID } from "node:crypto";
 import { db } from "@workspace/db";
 import { usersTable } from "@workspace/db/schema";
-import { eq, and, isNull } from "drizzle-orm";
+import { eq, and, isNull, sql } from "drizzle-orm";
 import { getTenantId } from "../middlewares/tenant";
 import { requireAuth, type AuthRequest } from "../middlewares/auth";
 
@@ -108,8 +108,20 @@ async function createGoogleUserWithFallback(
   tenantId: string,
   req: import("express").Request,
 ): Promise<UserRow> {
+  // WS-10: atomic find-or-create. A double-clicked / racing first login can run
+  // two callbacks for the same (tenant, email) concurrently; a plain insert would
+  // make the loser throw on `users_tenant_email_unique` and surface a transient
+  // server_error. `onConflictDoUpdate` on that unique target collapses the race to
+  // a single row and always RETURNINGs it (inserted or pre-existing).
+  //
+  // Hijack-safety: this path is only reached when no row matched by subject OR by
+  // email, so the only possible conflict is a concurrent insert for the same new
+  // account. Even so, the SET uses coalesce(existing, excluded) so it can NEVER
+  // overwrite an already-bound oauth_subject — mirrors linkGoogleSubjectBestEffort's
+  // `WHERE oauth_subject IS NULL` guard and keeps the email-only account-claim
+  // semantics owned by the caller, not this upsert.
   try {
-    const [created] = await db
+    const [upserted] = await db
       .insert(usersTable)
       .values({
         tenantId,
@@ -118,25 +130,44 @@ async function createGoogleUserWithFallback(
         oauthSubject: subject,
         ...(pictureUrl ? { pictureUrl } : {}),
       })
+      .onConflictDoUpdate({
+        target: [usersTable.tenantId, usersTable.email],
+        set: {
+          oauthProvider: sql`coalesce(${usersTable.oauthProvider}, excluded.oauth_provider)`,
+          oauthSubject: sql`coalesce(${usersTable.oauthSubject}, excluded.oauth_subject)`,
+          ...(pictureUrl
+            ? { pictureUrl: sql`coalesce(${usersTable.pictureUrl}, excluded.picture_url)` }
+            : {}),
+        },
+      })
       .returning();
-    if (created) return created;
+    if (upserted) return upserted;
   } catch (err) {
-    req.log.warn({ err, email }, "Creating OAuth-linked user failed, retrying email-only user");
+    // Some migrated DBs may not yet have the oauth columns; fall back to an atomic
+    // email-only upsert so a concurrent insert still resolves to one row instead
+    // of 500ing.
+    req.log.warn({ err, email }, "OAuth-linked upsert failed, retrying email-only upsert");
   }
 
   try {
-    const [createdEmailOnly] = await db
+    const [emailOnly] = await db
       .insert(usersTable)
       .values({ tenantId, email })
+      .onConflictDoUpdate({
+        target: [usersTable.tenantId, usersTable.email],
+        // No-op set (write the same email) so the conflicting row is RETURNINGed
+        // without mutating any auth-bearing column.
+        set: { email },
+      })
       .returning();
 
-    if (createdEmailOnly) {
-      return createdEmailOnly;
+    if (emailOnly) {
+      return emailOnly;
     }
   } catch (err) {
     req.log.warn(
       { err, email },
-      "Email-only user create failed during OAuth callback; retrying existing lookup",
+      "Email-only upsert failed during OAuth callback; retrying existing lookup",
     );
   }
 

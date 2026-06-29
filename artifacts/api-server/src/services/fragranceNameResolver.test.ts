@@ -208,6 +208,89 @@ test("scorer rejects omitted flanker tokens while allowing concentration aliases
   );
 });
 
+test("WS-2 regression guard: real flanker/base pairs never cross-substitute", () => {
+  // Permanent guard derived from real flanker/base traffic. Each pair is the
+  // exact substitution the catalog match must refuse in BOTH directions: a
+  // flanker query must never resolve to the base profile, and a base query must
+  // never resolve to the flanker. scoreFragranceCandidate is the gate
+  // searchCatalog/searchCatalogCandidates run before returning a hit.
+  const flankerBasePairs: ReadonlyArray<readonly [string, string, string, string]> = [
+    // [brand, baseName, flankerName, label]
+    // Distinct flanker NAME tokens (Elixir/Cologne/etc. that are NOT bare
+    // concentration aliases) — caught by the symmetric variant-token guard.
+    // The concentration-only conflict (e.g. BdC Parfum vs BdC EDP) is asserted
+    // separately below; a bare-"Parfum" query against a no-concentration base is
+    // intentionally NOT hard-rejected because "Parfum" doubles as a concentration
+    // alias (mirrors the long-standing "Sauvage EDP → Sauvage" behavior).
+    ["Dior", "Sauvage", "Sauvage Elixir", "Sauvage / Sauvage Elixir"],
+    ["Yves Saint Laurent", "L'Homme", "La Nuit de l'Homme", "L'Homme / La Nuit de l'Homme"],
+    ["Creed", "Aventus", "Aventus Cologne", "Aventus / Aventus Cologne"],
+    ["Paco Rabanne", "1 Million", "1 Million Elixir", "1 Million / 1 Million Elixir"],
+    ["Giorgio Armani", "Acqua di Gio", "Acqua di Gio Profumo", "Acqua di Gio / ADG Profumo"],
+  ];
+
+  for (const [brand, baseName, flankerName, label] of flankerBasePairs) {
+    // Flanker query must NOT resolve to the base catalog row.
+    assert.equal(
+      scoreFragranceCandidate(`${brand} ${flankerName}`, { brand, name: baseName }).matched,
+      false,
+      `flanker→base: ${label}`,
+    );
+    // Base query must NOT resolve to the flanker catalog row.
+    assert.equal(
+      scoreFragranceCandidate(`${brand} ${baseName}`, { brand, name: flankerName }).matched,
+      false,
+      `base→flanker: ${label}`,
+    );
+    // Each side still matches its own exact identity.
+    assert.equal(
+      scoreFragranceCandidate(`${brand} ${baseName}`, { brand, name: baseName }).matched,
+      true,
+      `base→base: ${label}`,
+    );
+    assert.equal(
+      scoreFragranceCandidate(`${brand} ${flankerName}`, { brand, name: flankerName }).matched,
+      true,
+      `flanker→flanker: ${label}`,
+    );
+  }
+});
+
+test("WS-2 concentration agreement: conflicting concentrations never substitute", () => {
+  // A query naming an explicit concentration must not resolve to a same-line
+  // catalog row carrying a DIFFERENT explicit concentration (genuinely distinct
+  // products). Concentration tokens are otherwise ignored by the variant checks,
+  // so this is the only guard that separates them.
+  assert.equal(
+    scoreFragranceCandidate("Chanel Bleu de Chanel Parfum", {
+      brand: "Chanel",
+      name: "Bleu de Chanel Eau de Parfum",
+    }).matched,
+    false,
+  );
+  assert.equal(
+    scoreFragranceCandidate("Chanel Bleu de Chanel Eau de Parfum", {
+      brand: "Chanel",
+      name: "Bleu de Chanel Eau de Toilette",
+    }).matched,
+    false,
+  );
+  // Same concentration class (EDP vs spelled-out Eau de Parfum) still matches.
+  assert.equal(
+    scoreFragranceCandidate("Chanel Bleu de Chanel EDP", {
+      brand: "Chanel",
+      name: "Bleu de Chanel Eau de Parfum",
+    }).matched,
+    true,
+  );
+  // Candidate with no stated concentration stays Unknown → no conflict → the
+  // long-standing "Sauvage EDP resolves to the Sauvage base row" alias holds.
+  assert.equal(
+    scoreFragranceCandidate("Dior Sauvage Eau de Parfum", { brand: "Dior", name: "Sauvage" }).matched,
+    true,
+  );
+});
+
 test("WS-2: query-side flanker token does not match the base (symmetric guard)", () => {
   // The headline bug: searching a flanker must not resolve to the base profile.
   assert.equal(

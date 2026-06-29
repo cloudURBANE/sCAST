@@ -1,5 +1,6 @@
 import fragrancesRaw from "../data/fragrances.json" with { type: "json" };
 import type { FragranceData } from "./datasetLoader";
+import { concentrationsConflict, detectConcentration } from "./concentrationConflict.ts";
 
 export type ResolvedFragranceIdentity = {
   brand: string;
@@ -334,9 +335,17 @@ function candidateScore(
     score = Math.min(score, AMBIGUOUS_VARIANT_MAX_SCORE);
   }
 
-  const inputHasNumber = inputWords.some((word) => /\d/.test(word));
+  // WS-2: The candidate name carries a meaningful token the query lacks (a flanker
+  // word like Elixir/Profumo/Intense). unmatchedCandidateNameTokenCount already
+  // excludes pure-number tokens (size/edition numbers like "540" are part of an
+  // identity, not a flanker) and concentration aliases live in
+  // EXTRA_WORDS_ALLOWED, so what survives is a genuine variant word — cap it.
+  // NOTE: this is intentionally NOT gated on "the query has no digit". A base
+  // query that happens to contain a number ("1 Million") must still be barred
+  // from resolving to its flanker ("1 Million Elixir"); the old inputHasNumber
+  // exemption let exactly that substitution through (WS-2 residual gap).
   const candidateNameAddsVariant = unmatchedCandidateNameTokenCount(rawFull, itemName) > 0;
-  if (!inputHasNumber && candidateNameAddsVariant) {
+  if (candidateNameAddsVariant) {
     score = Math.min(score, AMBIGUOUS_VARIANT_MAX_SCORE);
   }
 
@@ -349,7 +358,25 @@ function candidateScore(
   // like "Sauvage EDP" against "Sauvage" is untouched — only a genuine flanker
   // token (Elixir, Intense, Rouge…) trips this.
   const queryNameAddsVariant = unmatchedCandidateNameTokenCount(itemFull, rawName) > 0;
-  if (!inputHasNumber && !isExactName && queryNameAddsVariant) {
+  if (!isExactName && queryNameAddsVariant) {
+    score = Math.min(score, AMBIGUOUS_VARIANT_MAX_SCORE);
+  }
+
+  // WS-2: concentration agreement. Concentration tokens (edt/edp/eau/parfum/
+  // extrait/elixir) live in EXTRA_WORDS_ALLOWED so the variant-token checks above
+  // ignore them on BOTH sides — which means a *conflicting* concentration alone
+  // could not lower the score. But a query carrying an explicit concentration
+  // ("Bleu de Chanel Parfum") and a candidate carrying a different explicit one
+  // ("Bleu de Chanel Eau de Parfum") are different products: same line, distinct
+  // juice, distinct performance, distinct catalog row. When both sides name a
+  // concentration and they conflict, cap to the ambiguous-variant ceiling (below
+  // the match threshold) so the wrong concentration can't be substituted. Only a
+  // genuine conflict trips this — if either side omits the concentration (the
+  // common "Sauvage EDP" against a base "Sauvage" catalog row) it stays Unknown
+  // and matches unchanged, preserving the existing alias behavior.
+  const queryConcentration = detectConcentration(`${brand} ${name}`);
+  const candidateConcentration = detectConcentration(`${candidateBrand} ${candidateName}`);
+  if (concentrationsConflict(queryConcentration, candidateConcentration)) {
     score = Math.min(score, AMBIGUOUS_VARIANT_MAX_SCORE);
   }
 

@@ -49,11 +49,20 @@ router.get("/admin/buy-links/freshness", requireAdminSecret, (_req, res) => {
 });
 
 router.post("/admin/wardrobe/rebuild", requireAdminSecret, async (req, res) => {
-  const { email } = req.body as { email?: string };
+  const { email, resumeWithinMs } = req.body as { email?: string; resumeWithinMs?: unknown };
   if (!email || !email.trim()) {
     res.status(400).json({ error: "Email is required" });
     return;
   }
+
+  // WS-17: opt-in resume. When an operator re-runs a rebuild that crashed partway,
+  // passing `resumeWithinMs` skips rows whose per-row `rebuilt_at` was stamped
+  // inside that window so the re-run does not redo (or re-pay Serper/engine cost
+  // for) the rows that already finished. Omitted = full rebuild (default).
+  const resume =
+    typeof resumeWithinMs === "number" && Number.isFinite(resumeWithinMs) && resumeWithinMs > 0
+      ? resumeWithinMs
+      : undefined;
 
   const normalizedEmail = email.trim().toLowerCase();
 
@@ -69,7 +78,9 @@ router.post("/admin/wardrobe/rebuild", requireAdminSecret, async (req, res) => {
   }
 
   const tenantId = existing[0].tenantId ?? (await getDefaultTenantId());
-  const summary = await rebuildWardrobeForUser(tenantId, existing[0].id);
+  const summary = await rebuildWardrobeForUser(tenantId, existing[0].id, {
+    ...(resume !== undefined ? { resumeWithinMs: resume } : {}),
+  });
   res.json(summary);
 });
 

@@ -38,7 +38,42 @@ typecheck` clean; api-server **821 pass / 0 fail**; scent-cast **206 pass / 0 fa
 **Remaining operator action:** apply migration `0002` to the shared Supabase DB
 per CLAUDE.md (`ALLOW_PROD_DB_PUSH` is not used for this — run the reviewed SQL
 directly; `CREATE/DROP INDEX CONCURRENTLY` must run outside a transaction).
-**Recommended spot-check:** WS-2 flanker/base matching against real traffic.
+
+### Finishing pass (2026-06-28) — residual gaps closed
+
+A three-domain re-audit of the "remaining follow-ups" found and fixed three
+genuine residual gaps the original pass left open; the rest were verified
+already-solid. Full `pnpm run typecheck` clean; api-server **824 pass / 0 fail**,
+scent-cast **206 pass / 0 fail**, scent-weather-engine **30 pass / 0 fail**.
+
+- **WS-2 (now closed in code, not just tests):** the flanker→base guard was
+  missing real **concentration agreement** — concentration tokens live in
+  `EXTRA_WORDS_ALLOWED`, so "Bleu de Chanel Parfum" matched a "…Eau de Parfum"
+  catalog row, and EDP↔EDT likewise. Added a concentration-conflict cap (reusing
+  `concentrationConflict.ts`) and removed an over-broad `inputHasNumber` exemption
+  that let "1 Million" → "1 Million Elixir" through. The "spot-check against real
+  traffic" is now a permanent table-driven regression guard over real flanker/base
+  pairs (`fragranceNameResolver.test.ts`).
+- **WS-10 (hardened):** `createGoogleUserWithFallback` was a non-atomic
+  insert+catch; replaced with an atomic `onConflictDoUpdate` on `(tenantId,email)`
+  using `coalesce(existing, excluded)` so a racing first-login collapses to one row
+  and can never rebind an already-bound `oauth_subject` (hijack-safe).
+- **WS-17 (now reachable):** the resumable-rebuild path existed but no caller
+  passed `resumeWithinMs`; wired it as an opt-in body param on
+  `POST /api/admin/wardrobe/rebuild` so a crashed rebuild is genuinely re-runnable.
+- **WS-12 (now closed in code):** the planned post-decode **min-edge floor** was
+  never implemented (only a scoring penalty), so a dimensionless SERP thumbnail
+  could still win and be stored as a bottle. Added a `MIN_PROCESSED_EDGE = 200`
+  rejection in `processSourceToWebp` + a boundary test.
+
+WS-11's optional generated-Zod validation was assessed and intentionally **not**
+added: the hand-rolled `validateScentProfileBody`/`validateSearchScentBody` already
+cover every malformed-payload case (15 tests) and both routes are try/catch-graceful;
+generated Zod would require modelling these bodies in `openapi.yaml` and only
+duplicate existing coverage.
+
+**Recommended spot-check:** WS-2 flanker/base matching against real traffic (now
+also covered by the regression guard above).
 
 ---
 
