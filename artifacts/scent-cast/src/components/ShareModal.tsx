@@ -314,7 +314,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                       onChange={e => setSearch(e.target.value)}
                       placeholder="Search fragrances..."
                       aria-label="Search fragrances"
-                      className="w-full bg-white/[0.03] border border-white/10 pl-8 pr-4 py-2.5 text-[11px] text-white placeholder:text-white/35 focus:border-white/20 outline-none transition-colors font-sans"
+                      className="w-full bg-white/[0.03] border border-white/10 pl-8 pr-4 py-2.5 text-[16px] text-white placeholder:text-white/35 focus:border-white/20 outline-none transition-colors font-sans"
                     />
                   </div>
                 )}

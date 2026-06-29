@@ -303,7 +303,7 @@ const AnswerFeedbackControl: React.FC<{
             type="button"
             disabled={submitting}
             onClick={() => onPick(reason.code)}
-            className="min-h-8 rounded-full border border-scent-accent/18 px-3 py-1 scent-type-chip text-[11px] text-scent-text-muted transition-colors hover:border-scent-accent/40 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40 disabled:opacity-45"
+            className="min-h-10 rounded-full border border-scent-accent/18 px-3 py-1.5 scent-type-chip text-[11px] text-scent-text-muted transition-colors hover:border-scent-accent/40 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40 disabled:opacity-45"
           >
             {reason.label}
           </button>
@@ -2386,7 +2386,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
           placeholder={busy ? 'Composing your recommendation…' : composerFocused ? '' : composerPlaceholder}
           aria-label="Message the Beam Agent"
           autoComplete="off"
-          className={`min-w-0 flex-1 bg-transparent px-1 ${composer ? 'text-left' : 'text-center'} text-[13px] font-medium tracking-[0.015em] text-[#fff7ec] caret-[#f5bd69] outline-none placeholder:text-[#d8c9b5]/72 disabled:cursor-not-allowed disabled:placeholder:text-[#d8c9b5]/55 sm:text-[15px]`}
+          className={`min-w-0 flex-1 bg-transparent px-1 ${composer ? 'text-left' : 'text-center'} text-[16px] font-medium tracking-[0.015em] text-[#fff7ec] caret-[#f5bd69] outline-none placeholder:text-[#d8c9b5]/72 disabled:cursor-not-allowed disabled:placeholder:text-[#d8c9b5]/55`}
         />
         <button
           type="submit"
@@ -2420,7 +2420,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                         type="button"
                         onClick={() => setAgentMode(id)}
                         aria-pressed={selected}
-                        className={`inline-flex min-h-8 items-center gap-1.5 rounded-full border px-3 py-1 scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40 ${
+                        className={`inline-flex min-h-10 items-center gap-1.5 rounded-full border px-3 py-1.5 scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40 ${
                           selected
                             ? 'border-scent-accent/78 bg-scent-accent/13 text-[#fff7ec]'
                             : 'border-white/20 text-scent-text-muted hover:border-scent-accent/45 hover:text-[#fff7ec]'
@@ -2444,7 +2444,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                         type="button"
                         onClick={() => setTone(id)}
                         aria-pressed={selected}
-                        className={`min-h-8 rounded-full border px-3 py-1 scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40 ${
+                        className={`min-h-10 rounded-full border px-3 py-1.5 scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40 ${
                           selected
                             ? 'border-scent-accent/70 text-[#fff7ec]'
                             : 'border-white/18 text-scent-text-muted hover:border-scent-accent/42 hover:text-[#fff7ec]'
