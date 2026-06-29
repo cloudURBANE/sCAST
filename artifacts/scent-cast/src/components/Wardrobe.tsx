@@ -2054,7 +2054,7 @@ export const Wardrobe: React.FC<{
                 }}
                 placeholder="Search vault (e.g. sauvage)..."
                 autoComplete="off"
-                className="scent-lux-input scent-vault-search-input w-full h-[58px] px-14 text-center text-[#fff7ec] font-sans text-[15px] outline-none transition-all placeholder:text-scent-text-subtle sm:h-[68px] sm:px-16 sm:text-base"
+                className="scent-lux-input scent-vault-search-input w-full h-[58px] px-14 text-center text-[#fff7ec] font-sans text-[16px] outline-none transition-all placeholder:text-scent-text-subtle sm:h-[68px] sm:px-16"
               />
               <AnimatePresence>
                 {searchDropdownOpen ? (
@@ -3025,7 +3025,7 @@ export const Wardrobe: React.FC<{
                                       type="button"
                                       onClick={() => updateFrameDraft({ scale: frameDraft.scale - 0.1 })}
                                       disabled={imageToolbarBusy || !detailBottleUrl?.trim()}
-                                      className="min-h-[30px] rounded-md border border-white/10 bg-white/[0.035] scent-type-chip text-scent-text-muted flex items-center justify-center gap-1.5 disabled:opacity-30 hover:bg-white/[0.06] hover:text-white"
+                                      className="min-h-10 rounded-md border border-white/10 bg-white/[0.035] scent-type-chip text-scent-text-muted flex items-center justify-center gap-1.5 transition-transform active:scale-[0.98] disabled:opacity-30 hover:bg-white/[0.06] hover:text-white"
                                     >
                                       <ZoomOut size={10} strokeWidth={1.75} /> 10%
                                     </button>
@@ -3033,7 +3033,7 @@ export const Wardrobe: React.FC<{
                                       type="button"
                                       onClick={() => updateFrameDraft({ scale: frameDraft.scale + 0.1 })}
                                       disabled={imageToolbarBusy || !detailBottleUrl?.trim()}
-                                      className="min-h-[30px] rounded-md border border-white/10 bg-white/[0.035] scent-type-chip text-scent-text-muted flex items-center justify-center gap-1.5 disabled:opacity-30 hover:bg-white/[0.06] hover:text-white"
+                                      className="min-h-10 rounded-md border border-white/10 bg-white/[0.035] scent-type-chip text-scent-text-muted flex items-center justify-center gap-1.5 transition-transform active:scale-[0.98] disabled:opacity-30 hover:bg-white/[0.06] hover:text-white"
                                     >
                                       <ZoomIn size={10} strokeWidth={1.75} /> 10%
                                     </button>
@@ -3041,7 +3041,7 @@ export const Wardrobe: React.FC<{
                                       type="button"
                                       onClick={() => updateFrameDraft({ x: 0, y: 0 })}
                                       disabled={imageToolbarBusy || !detailBottleUrl?.trim()}
-                                      className="min-h-[30px] rounded-md border border-white/10 bg-white/[0.035] scent-type-chip text-scent-text-muted flex items-center justify-center gap-1.5 disabled:opacity-30 hover:bg-white/[0.06] hover:text-white"
+                                      className="min-h-10 rounded-md border border-white/10 bg-white/[0.035] scent-type-chip text-scent-text-muted flex items-center justify-center gap-1.5 transition-transform active:scale-[0.98] disabled:opacity-30 hover:bg-white/[0.06] hover:text-white"
                                     >
                                       <MoveHorizontal size={10} strokeWidth={1.75} /> Center
                                     </button>
@@ -3069,7 +3069,7 @@ export const Wardrobe: React.FC<{
                                         })
                                       }
                                       disabled={imageToolbarBusy || !detailBottleUrl?.trim()}
-                                      className="min-h-[30px] rounded-md border border-white/10 bg-white/[0.035] scent-type-chip text-scent-text-muted flex items-center justify-center gap-1.5 disabled:opacity-30 hover:bg-white/[0.06] hover:text-white"
+                                      className="min-h-10 rounded-md border border-white/10 bg-white/[0.035] scent-type-chip text-scent-text-muted flex items-center justify-center gap-1.5 transition-transform active:scale-[0.98] disabled:opacity-30 hover:bg-white/[0.06] hover:text-white"
                                     >
                                       <Crop size={10} strokeWidth={1.75} /> Tight
                                     </button>

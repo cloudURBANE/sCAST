@@ -222,7 +222,13 @@ export function useMarqueeSwipe(
       if (event.pointerId !== pointerId) return;
       pointerId = null;
       pending = false;
-      if (!dragging) return;
+      if (!dragging) {
+        // No real drag committed: clear any stale suppression so the next
+        // genuine tap (e.g. a cue/queue chip) is never swallowed. A real drag
+        // keeps suppressClick set below so the click after release is eaten.
+        suppressClick = false;
+        return;
+      }
       if (dragFrame) {
         cancelAnimationFrame(dragFrame);
         flushDragMove();
