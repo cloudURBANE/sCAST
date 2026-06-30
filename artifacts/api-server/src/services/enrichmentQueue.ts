@@ -363,8 +363,20 @@ export function startEnrichmentWorker(process: EnrichmentWorkerProcessor<Enrichm
   const deps = defaultWorkerDeps(process);
   const pollMs = workerPollMs();
   const batch = workerBatchSize();
+  // Reentrancy guard: if a tick's batch (claim + engine round-trips) runs longer
+  // than pollMs, the next interval fires while the prior is still in flight. Row
+  // claiming uses FOR UPDATE SKIP LOCKED so overlapping ticks can't double-claim,
+  // but they would still stack engine calls beyond the intended batch size. Skip
+  // a tick while the previous one is still running.
+  let tickRunning = false;
   const timer = setInterval(() => {
-    runEnrichmentWorkerOnce(deps, batch).catch((err) => logger.error({ err }, "enrichment worker tick error"));
+    if (tickRunning) return;
+    tickRunning = true;
+    runEnrichmentWorkerOnce(deps, batch)
+      .catch((err) => logger.error({ err }, "enrichment worker tick error"))
+      .finally(() => {
+        tickRunning = false;
+      });
   }, pollMs);
   timer.unref();
   logger.info({ pollMs, batch }, "enrichment worker started");

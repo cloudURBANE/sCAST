@@ -1,6 +1,7 @@
 // Must run before `./app` — ES modules evaluate imports before other statements,
 // so dotenv side effects live in this dependency-free module.
 import "./env-bootstrap";
+import sharp from "sharp";
 import app from "./app";
 import { logger } from "./lib/logger";
 import { startEnrichmentFailedJobRetrySweeper, startEnrichmentWorker } from "./services/enrichmentQueue";
@@ -25,6 +26,21 @@ if (Number.isNaN(port) || port <= 0) {
 }
 
 async function start() {
+  // Cap libvips' worker-thread pool. sharp/libvips otherwise default `concurrency`
+  // to the host core count and spins that many threads per in-flight image op; on a
+  // small shared web dyno several concurrent fragrance-image builds oversubscribe the
+  // cores and raise event-loop latency for *all* routes (including cheap JSON ones).
+  // `cache({ files: 0 })` disables the on-disk operation cache (we only process
+  // in-memory buffers, so it buys nothing and just holds file descriptors).
+  const sharpConcurrencyRaw = Number(process.env["SHARP_CONCURRENCY"]);
+  const sharpConcurrency =
+    Number.isFinite(sharpConcurrencyRaw) && sharpConcurrencyRaw >= 0
+      ? Math.floor(sharpConcurrencyRaw)
+      : 2;
+  sharp.concurrency(sharpConcurrency);
+  sharp.cache({ files: 0 });
+  logger.info({ sharpConcurrency: sharp.concurrency() }, "sharp/libvips concurrency capped");
+
   // Build the API-key pools at boot (env is already loaded) so their health is
   // visible on GET /api/admin/key-pools before the first image request. Done
   // here rather than at module load so offline scripts (e.g. verify:poof-paths)
