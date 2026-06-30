@@ -585,6 +585,68 @@ test("refresh-image does not upsert catalog when backgroundRemoved=false and BG 
   assert.equal(shouldUpsert3, true, "must upsert catalog when BG removal was intentionally skipped");
 });
 
+test("data-URI decode tolerates RFC 2045 line-wrapped base64 (image M3)", () => {
+  // Mirrors the (now whitespace-tolerant) predicate in imagePipeline.decodeDataImage
+  // / bgService.decodeDataImage. imagePipeline.ts uses extensionless relative
+  // imports the bare node:test runner cannot resolve, so the predicate is mirrored
+  // here exactly (same regex + whitespace strip + Buffer.from validation).
+  const decodeDataImage = (input: string): Buffer | null => {
+    const match = input.match(/^data:image\/(?:png|jpe?g|webp);base64,([a-z0-9+/=\s]+)$/i);
+    if (!match?.[1]) return null;
+    const payload = match[1].replace(/\s+/g, "");
+    if (!payload || payload.length > 6_000_000) return null;
+    try {
+      return Buffer.from(payload, "base64");
+    } catch {
+      return null;
+    }
+  };
+
+  // A 1x1 PNG, base64-encoded, then wrapped at 16 chars with CRLF — exactly the
+  // shape a generator that follows RFC 2045 produces. Before the fix this failed
+  // the strict regex and was rejected (then 6h negative-cached).
+  const oneByOnePng =
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC";
+  const wrapped = oneByOnePng.replace(/(.{16})/g, "$1\r\n");
+  const flat = `data:image/png;base64,${oneByOnePng}`;
+  const wrappedUri = `data:image/png;base64,${wrapped}`;
+
+  const flatBuf = decodeDataImage(flat);
+  const wrappedBuf = decodeDataImage(wrappedUri);
+  assert.ok(flatBuf, "flat base64 still decodes");
+  assert.ok(wrappedBuf, "wrapped base64 now decodes (was rejected before the fix)");
+  assert.deepEqual(wrappedBuf, flatBuf, "wrapped and flat decode to identical bytes");
+
+  // Garbage / wrong mime / empty payload are still rejected.
+  assert.equal(decodeDataImage("data:image/gif;base64,AAAA"), null, "unsupported mime rejected");
+  assert.equal(decodeDataImage("data:image/png;base64,"), null, "empty payload rejected");
+  assert.equal(decodeDataImage("not a data uri"), null, "non-data-uri rejected");
+});
+
+test("search-query flight key isolates two distinct fragrances that share a query hash (cross-serve)", () => {
+  // Mirrors searchQueryFlightKey in imagePipeline.ts: the in-flight dedup key is
+  // composed of (lookupKey, searchQueryHash, bg-flag). Two different fragrances
+  // whose refined search queries normalize to the SAME hash must produce DIFFERENT
+  // flight keys so the first caller's resolved bottle is never handed to (and
+  // persisted for) the second. This is the in-flight twin of the lookupKey filter
+  // in getLatestReadyCachedImageBySearchQueryHash.
+  const searchQueryFlightKey = (
+    lookupKey: string,
+    searchQueryHash: string,
+    removeBackground: boolean,
+  ): string => `${lookupKey}:${searchQueryHash}:${removeBackground ? "1" : "0"}`;
+
+  const sharedHash = "deadbeefdeadbeef";
+  const keyA = searchQueryFlightKey("Dior::Sauvage", sharedHash, true);
+  const keyB = searchQueryFlightKey("Creed::Aventus", sharedHash, true);
+  assert.notEqual(keyA, keyB, "distinct lookupKeys must not collapse to one in-flight result");
+
+  // Same fragrance + same query + same bg-flag → same key (intended dedup).
+  assert.equal(keyA, searchQueryFlightKey("Dior::Sauvage", sharedHash, true));
+  // Same fragrance, different bg-flag → different slot (variant isolation).
+  assert.notEqual(keyA, searchQueryFlightKey("Dior::Sauvage", sharedHash, false));
+});
+
 test("min-edge floor rejects tiny thumbnails post-decode but keeps real packshots (WS-12 / image M4)", () => {
   // Mirrors the predicate `Math.min(width, height) < MIN_PROCESSED_EDGE` in
   // processSourceToWebp. SERP candidates routinely omit dimensions, so the

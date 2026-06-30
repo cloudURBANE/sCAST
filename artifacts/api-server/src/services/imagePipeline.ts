@@ -60,6 +60,14 @@ const EARLY_ACCEPT_PROCESSED_SCORE = 17;
 // even scored. `best` is still tracked, so a low-coverage candidate remains
 // eligible as the final fallback when nothing better turns up (WS-12).
 const EARLY_ACCEPT_MIN_IDENTITY_COVERAGE = 0.66;
+// Wall-clock budget across the whole candidate loop. Each candidate can run a
+// download + Poof call + sharp + upload (each individually timeout-bounded), but
+// nothing bounded the *sum* — a run of slow candidates could keep the caller's
+// request open far past any reasonable deadline. After a candidate finishes, if
+// the elapsed time exceeds this budget we stop STARTING new candidates and return
+// the current `best` (or null). This only prevents beginning more expensive work;
+// it never abandons an in-progress candidate or a result already in hand (image L2).
+const CANDIDATE_LOOP_BUDGET_MS = 45_000;
 
 type ImageSourceProvider = "serper" | "manual";
 
@@ -211,11 +219,16 @@ function attachTrace(result: ProcessedImageResult, trace: ImagePipelineTrace): P
 }
 
 function decodeDataImage(input: string): Buffer | null {
-  const match = input.match(/^data:image\/(?:png|jpe?g|webp);base64,([a-z0-9+/=]+)$/i);
+  // Accept RFC 2045 line-wrapped base64: strip ASCII whitespace (CR/LF/space/tab)
+  // from the payload before validating. Without this, a perfectly valid but
+  // wrapped data URI fails the strict regex, returns null → "Invalid data image",
+  // and gets 6h negative-cached as if the source itself were bad (image M3).
+  const match = input.match(/^data:image\/(?:png|jpe?g|webp);base64,([a-z0-9+/=\s]+)$/i);
   if (!match?.[1]) return null;
-  if (match[1].length > 6_000_000) return null;
+  const payload = match[1].replace(/\s+/g, "");
+  if (!payload || payload.length > 6_000_000) return null;
   try {
-    return Buffer.from(match[1], "base64");
+    return Buffer.from(payload, "base64");
   } catch {
     return null;
   }
@@ -601,9 +614,28 @@ async function resolveProcessedFragranceImageInner(
   const maxCandidates = Math.max(1, Math.min(input.maxCandidates ?? MAX_CANDIDATES_PER_ATTEMPT, 8));
   const candidateTraces: ImagePipelineCandidateTrace[] = [];
   let best: { result: ProcessedImageResult; score: number; ordinal: number } | null = null;
+  const loopStartedAt = Date.now();
 
   for (const [index, candidate] of candidates.slice(0, maxCandidates).entries()) {
     const ordinal = index + 1;
+    // Wall-clock budget: stop STARTING new candidates once the loop has run long
+    // enough. The first candidate (index 0) always runs so a single slow source
+    // never short-circuits to "no image"; subsequent ones are skipped when the
+    // budget is spent and the current `best` (if any) is returned below (image L2).
+    if (index > 0 && Date.now() - loopStartedAt > CANDIDATE_LOOP_BUDGET_MS) {
+      logger.warn(
+        {
+          lookupKey,
+          fixtureId: input.fixtureId ?? null,
+          traceId: input.traceId ?? null,
+          elapsedMs: Date.now() - loopStartedAt,
+          processedCandidates: ordinal - 1,
+          haveBest: !!best,
+        },
+        "[imagePipeline] candidate loop budget exceeded; stopping before next candidate",
+      );
+      break;
+    }
     const candidateTrace: ImagePipelineCandidateTrace = {
       ordinal,
       sourceProvider,
