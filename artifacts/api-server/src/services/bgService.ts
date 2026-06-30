@@ -234,11 +234,14 @@ async function removeBgByFile(buffer: Buffer, apiKey: string, opts?: RemoveBgOpt
 
 function decodeDataImage(input: string): Buffer | null {
   if (!input.startsWith("data:image/")) return null;
-  const match = input.match(/^data:image\/(?:png|jpe?g|webp);base64,([a-z0-9+/=]+)$/i);
+  // Accept RFC 2045 line-wrapped base64: strip ASCII whitespace from the payload
+  // before validating so a valid-but-wrapped data URI is not rejected (image M3).
+  const match = input.match(/^data:image\/(?:png|jpe?g|webp);base64,([a-z0-9+/=\s]+)$/i);
   if (!match?.[1]) return null;
-  if (match[1].length > 6_000_000) return null;
+  const payload = match[1].replace(/\s+/g, "");
+  if (!payload || payload.length > 6_000_000) return null;
   try {
-    return Buffer.from(match[1], "base64");
+    return Buffer.from(payload, "base64");
   } catch {
     return null;
   }
