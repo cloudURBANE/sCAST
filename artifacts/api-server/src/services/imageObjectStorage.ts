@@ -47,6 +47,25 @@ function contentTypeForKey(key: string): string {
 }
 
 const DEFAULT_CACHE_CONTROL = "public, max-age=31536000, immutable";
+// Wall-clock bound for a single Supabase Storage HTTP call. Without it a hung
+// Supabase Storage endpoint (e.g. the 402 egress outage) would block the
+// image-pipeline request indefinitely with no AbortController to release it
+// (image L3). 25s comfortably covers a real upload/read while still failing fast.
+const STORAGE_FETCH_TIMEOUT_MS = 25_000;
+
+async function fetchWithTimeout(
+  input: string,
+  init: RequestInit,
+  timeoutMs = STORAGE_FETCH_TIMEOUT_MS,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
 const STORAGE_NOT_CONFIGURED_MESSAGE =
   "Image object storage is not configured. Set FIREBASE_STORAGE_BUCKET or SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, and SUPABASE_IMAGE_BUCKET. For local development only, set IMAGE_ALLOW_LOCAL_OBJECT_STORAGE=true.";
 const LOCAL_STORAGE_ROOT = path.resolve(
@@ -271,7 +290,7 @@ class SupabaseImageObjectStorage implements ImageObjectStorage {
   async uploadProcessedImage(input: UploadProcessedImageInput): Promise<UploadedImageObject> {
     assertSafeStorageKey(input.key);
     const endpoint = `${this.supabaseUrl.replace(/\/+$/, "")}/storage/v1/object/${this.bucket}/${input.key}`;
-    const response = await fetch(endpoint, {
+    const response = await fetchWithTimeout(endpoint, {
       method: "PUT",
       headers: {
         "Authorization": `Bearer ${this.serviceRoleKey}`,
@@ -307,7 +326,7 @@ class SupabaseImageObjectStorage implements ImageObjectStorage {
     // The non-`/public/` object endpoint authenticated with the service-role key
     // reads the object even when the bucket is private.
     const endpoint = `${this.supabaseUrl.replace(/\/+$/, "")}/storage/v1/object/${this.bucket}/${encodeStoragePath(storagePath)}`;
-    const response = await fetch(endpoint, {
+    const response = await fetchWithTimeout(endpoint, {
       headers: {
         "Authorization": `Bearer ${this.serviceRoleKey}`,
         "apikey": this.serviceRoleKey,
@@ -324,7 +343,7 @@ class SupabaseImageObjectStorage implements ImageObjectStorage {
   async deleteObject(storagePath: string): Promise<void> {
     assertSafeStorageKey(storagePath);
     const endpoint = `${this.supabaseUrl.replace(/\/+$/, "")}/storage/v1/object/${this.bucket}/${storagePath}`;
-    await fetch(endpoint, {
+    await fetchWithTimeout(endpoint, {
       method: "DELETE",
       headers: {
         "Authorization": `Bearer ${this.serviceRoleKey}`,
