@@ -833,7 +833,16 @@ a {
   text-shadow: 0 0 14px rgb(var(--scent-accent-rgb) / 0.22);
 }
 
+/* Same iOS/iPadOS WebKit stability treatment as .scent-beam-composer:
+   transitioning box-shadow on focus can micro-jitter a rounded input capsule,
+   so promote the field to its own compositing layer. Visually inert. */
 .scent-lux-input {
+  position: relative;
+  isolation: isolate;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
   background: rgba(0, 0, 0, 0.88);
   border: 1px solid rgb(var(--scent-accent-rgb) / 0.56);
   border-radius: var(--radius-scent);
