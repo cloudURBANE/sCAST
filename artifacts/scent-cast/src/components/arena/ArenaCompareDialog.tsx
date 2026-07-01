@@ -70,7 +70,7 @@ export const ArenaCompareDialog: React.FC<ArenaCompareDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[calc(100vw-1.5rem)] max-w-2xl gap-0 overflow-hidden rounded-lg border border-scent-accent/18 bg-[rgba(5,4,3,0.97)] p-0 text-foreground shadow-[0_28px_90px_-48px_rgba(0,0,0,0.9),inset_0_1px_0_rgba(255,236,183,0.08)]">
+      <DialogContent className="w-[calc(100vw-1.5rem)] max-w-2xl gap-0 overflow-x-hidden overflow-y-auto rounded-lg border border-scent-accent/18 bg-[rgba(5,4,3,0.97)] p-0 text-foreground shadow-[0_28px_90px_-48px_rgba(0,0,0,0.9),inset_0_1px_0_rgba(255,236,183,0.08)]">
         <div className="p-4 sm:p-6">
           <DialogHeader className="space-y-2 text-center">
             <p className="scent-type-label text-scent-accent">Head to head</p>
