@@ -62,10 +62,13 @@ async function proxyToEngine(req: Request, res: Response) {
   };
 
   if (req.method !== "GET" && req.method !== "HEAD") {
+    // Body is always re-serialized as JSON, so the content-type MUST advertise
+    // JSON — overwrite any content-type copied from the original request above,
+    // otherwise the engine receives a JSON body mislabeled with the caller's
+    // (possibly non-JSON) content-type. content-length is hop-by-hop (stripped),
+    // so undici derives the correct length from this serialized body.
     init.body = JSON.stringify(req.body ?? {});
-    if (!headers.has("content-type")) {
-      headers.set("content-type", "application/json");
-    }
+    headers.set("content-type", "application/json");
   }
 
   try {
