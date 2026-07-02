@@ -95,7 +95,10 @@ const AccountMenu: React.FC<AccountMenuProps> = ({
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className="flex h-11 w-11 items-center justify-center rounded-full border border-scent-accent/35 bg-black/35 shadow-[0_0_18px_rgb(var(--scent-accent-rgb)/0.12)] transition-colors hover:border-scent-accent/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55"
+          // No gold halo radiating off the disc — the vault monogram sets the
+          // precedent ("no projected gold halo around the disc"); the gold
+          // hairline border carries the accent on its own.
+          className="flex h-11 w-11 items-center justify-center rounded-full border border-scent-accent/35 bg-black/35 transition-colors hover:border-scent-accent/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55"
           aria-label={t('account.menuLabel')}
         >
           <Avatar className="h-10 w-10 border border-white/10 bg-scent-surface">

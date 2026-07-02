@@ -1130,7 +1130,11 @@ function DashboardView() {
               above it) so it visually replaces the bar's old bottom hairline. */}
           <HomepageHeroMarquee />
 
-          <section className="relative mx-auto w-full max-w-[60rem] min-w-0 text-center">
+          {/* 52rem matches every sibling in this column (mission header, the
+              Discover CTA that "shares the exact box" of the card, atmosphere
+              bar, forecast), so the card edges align down the whole stack on
+              wide viewports. It was 60rem — drift from a larger refactor. */}
+          <section className="relative mx-auto w-full max-w-[52rem] min-w-0 text-center">
             {/* Beam Agent header strip — title, progress, and close live ABOVE
                 the bordered card so the card itself only holds the conversation
                 and composer. Mounted only in agent mode. */}
@@ -1401,7 +1405,7 @@ function DashboardView() {
               style={{ paddingTop: 'max(1.25rem, env(safe-area-inset-top))' }}
             >
               <p className="scent-type-label text-scent-accent">Strategic Alignment Found</p>
-              <button ref={recommendationCloseRef} type="button" onClick={closeRecommendationOverlay} className="-m-1 inline-flex min-h-11 min-w-11 items-center justify-center rounded-full text-scent-text-subtle hover:text-white hover:bg-white/10 transition-all active:scale-95" aria-label="Close recommendation">
+              <button ref={recommendationCloseRef} type="button" onClick={closeRecommendationOverlay} className="-m-1 inline-flex min-h-11 min-w-11 items-center justify-center rounded-full text-scent-text-subtle hover:text-white hover:bg-white/10 transition-[color,background-color,transform] duration-200 active:scale-95" aria-label="Close recommendation">
                 <X size={20} strokeWidth={1.75} />
               </button>
             </div>
