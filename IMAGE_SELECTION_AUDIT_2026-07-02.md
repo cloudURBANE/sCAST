@@ -254,6 +254,14 @@ of them filtered before processing → 404 again.
 
 ## 5. Improvement plan (prioritized)
 
+> **Status update (2026-07-02, second pass):** Tier 1 items 1–3 and Tier 2
+> items 5, 7, 8 are now **implemented** (see §6). Tier 1 item 4 (scoring the
+> crawled fallback URL) is deliberately deferred: crawled `fimgs.net` URLs
+> carry no title/source text, so a text-based identity gate would reject every
+> legitimate Fragrantica image and double Serper spend — it needs the Tier 3
+> vision gate instead. Tier 2 item 6 (flanker-conflict detection) and all of
+> Tier 3 remain open.
+
 ### Tier 1 — direct bug fixes (small, surgical, high confidence)
 
 1. **Fix suffix composition** (S1, W2): in `applySerperRefinement`, drop
@@ -313,6 +321,37 @@ of them filtered before processing → 404 again.
     flags (they only change Poof/frontend behavior), and drop solvers whose
     queries can't work (see S4 fixes). A shorter honest list beats 19 options
     where most do nothing.
+
+---
+
+## 6. Fixes applied (2026-07-02, second pass)
+
+| Finding | Fix | Files |
+|---|---|---|
+| S1 (contradictory solver queries) | `SERPER_SUFFIX_SOLVER` no longer contains "no sample no tester"; tester/sample filtering stays in `BLOCKED_TEXT_HINTS` post-search. A composed-query test asserts no solver both asserts and negates a term. | `serperQueryCore.ts` (new), `serperService.ts` |
+| W2 (32-word overflow, double suffix) | All composed queries capped at 32 words (`capQueryWords`); the refresh route and the auto path now send the bare fragrance line and the Serper layer owns the single default suffix (trimmed 40→20 words). `DEFAULT_REFRESH_QUERY_SUFFIX` (the route-level second suffix) is removed. | `serperQueryCore.ts`, `imageSolvers.ts`, `scentEngineCore.ts` |
+| S2 (solver refresh returns the identical cached image) | "Wrong picture" solvers exclude the source URL hash of the currently stored catalog image (`excludeSourceUrlHashes`, trace skipReason `current_image`); re-processing solvers (`transparent_glass`, `hand_interference`) bypass the per-source positive cache (`bypassSourceCache`) so their Poof `product` mode actually runs. New `solverPrefersDifferentImage` / `solverWantsFreshProcessing` categorize the 19 solvers. | `imagePipeline.ts`, `imageSolvers.ts`, `routes/scent.ts` |
+| S3 (throttle exhausts mid-experiment) | Solver-path ceiling raised 10→20 (`REFRESH_MAX_SOLVER_ATTEMPTS`); responses now carry `attemptsRemaining` (success, 404, and 429) so exhaustion is legible. | `refreshImageThrottle.ts`, `routes/scent.ts` |
+| S4 (`decant` `-ml`) | `-ml` removed from the decant solver query (it excluded nearly every retail listing). | `imageSolvers.ts` |
+| W3 (early-accept lets wrong flanker win) | `EARLY_ACCEPT_MIN_IDENTITY_COVERAGE` raised 0.66→0.8: a 2/3-token match (the wrong flanker) can no longer short-circuit the candidate loop; `best`-tracking fallback behavior unchanged. | `imagePipeline.ts` |
+| W5 (substring identity inflation) | Coverage token matching replaced with exact-or-short-prefix (`tokensMatch`): "oud"≠"loud", "noir"≠"renoir"; plurals ("sauvages") still match. | `imageCandidateRanking.ts` |
+| W6 (silent identity rewrite) | Refresh responses include `searchedAs: { brand, name, corrected }` so canonicalization is visible to the client. | `routes/scent.ts` |
+
+404s on exclusion runs now say "No different image found for this fragrance —
+try another option or paste an image URL." instead of the misleading "No image
+found".
+
+Verification run: full api-server suite **838/838 pass** (new tests:
+`imageCandidateRanking.test.ts`, composed-query contradiction + word-cap tests
+in `serperService.test.ts`, solver categorization tests in
+`imageSolvers.test.ts`, solver-ceiling tests in `refreshImageThrottle.test.ts`);
+workspace-wide `pnpm run typecheck` clean; `verify:image-pipeline` contract
+script passes. Query composition was also spot-checked: every solver's composed
+query is ≤ 32 words with no assert+negate contradictions.
+
+Remaining open items: Tier 1 #4 (validate crawled/engine fallback images —
+needs the vision gate), Tier 2 #6 (flanker-word conflict detection), Tier 3
+#9–11 (candidate picker UI, Gemini vision gate, solver list pruning).
 
 ### Verification hooks already in place
 

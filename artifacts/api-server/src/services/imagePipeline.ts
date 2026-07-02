@@ -60,7 +60,11 @@ const EARLY_ACCEPT_PROCESSED_SCORE = 17;
 // high-scoring-but-wrong bottle can't win before better-matching candidates are
 // even scored. `best` is still tracked, so a low-coverage candidate remains
 // eligible as the final fallback when nothing better turns up (WS-12).
-const EARLY_ACCEPT_MIN_IDENTITY_COVERAGE = 0.66;
+// 0.8 (was 0.66): at 0.66 a 3-token target ("Dior Homme Intense") early-accepted
+// a candidate matching only 2/3 tokens — i.e. exactly the wrong flanker ("Dior
+// Homme") — before the correct candidate was even downloaded (audit W3). At 0.8
+// a candidate may miss one token only for targets of 5+ tokens.
+const EARLY_ACCEPT_MIN_IDENTITY_COVERAGE = 0.8;
 // Wall-clock budget across the whole candidate loop. Each candidate can run a
 // download + Poof call + sharp + upload (each individually timeout-bounded), but
 // nothing bounded the *sum* — a run of slow candidates could keep the caller's
@@ -101,6 +105,21 @@ export type ResolveProcessedFragranceImageInput = {
   poofOptions?: RemoveBgOptions;
   serperRefine?: Parameters<typeof searchSerperImageCandidates>[1];
   maxCandidates?: number;
+  /**
+   * Serper candidates whose source URL hashes to one of these are skipped
+   * (trace skipReason "current_image"). Used by the manual refresh route so a
+   * solver run can never hand back the identical already-stored image and look
+   * like a no-op. Ignored on the `sourceUrl` (manual) path.
+   */
+  excludeSourceUrlHashes?: string[];
+  /**
+   * Skip the per-source processed-image cache and re-run download + Poof +
+   * sharp for each candidate. Used by solvers whose purpose is re-PROCESSING
+   * the same source with different Poof options (e.g. transparent_glass) —
+   * with the cache in play those options would never actually run. Negative
+   * (failure) caching still applies.
+   */
+  bypassSourceCache?: boolean;
   fixtureId?: string | null;
   traceId?: string | null;
 };
@@ -114,7 +133,7 @@ export type ImagePipelineCandidateTrace = {
   titlePreview?: string;
   sourcePreview?: string;
   skipped?: boolean;
-  skipReason?: "low_identity" | "source_rejected" | "processing_failed";
+  skipReason?: "low_identity" | "source_rejected" | "processing_failed" | "current_image";
   rejectionReason?: string;
   score?: ImageCandidateScoreBreakdown;
   backgroundRemoved?: boolean;
@@ -427,13 +446,22 @@ async function processCandidate(input: {
   fragranceId?: string | null;
   removeBackground: boolean;
   poofOptions?: RemoveBgOptions;
+  bypassSourceCache?: boolean;
 }): Promise<ProcessedImageResult | null> {
-  const cached = await getReadyCachedImageBySourceHash(input.source.sourceUrlHash, input.removeBackground);
-  if (cached) {
-    // Serve when the cache satisfies the request: a bg-removed cutout, OR a
-    // deterministic white-bg fallback for a source that can't be cut out.
-    if (acceptsImageCacheForRequest(cached, input.removeBackground)) {
-      return { ...cached, sourceProvider: input.sourceProvider, pipelineVersion: IMAGE_PIPELINE_VERSION };
+  // bypassSourceCache: skip the positive per-source cache (and the in-flight
+  // join, which would otherwise hand back another caller's cached-path result)
+  // so the source is genuinely re-downloaded and re-processed with the caller's
+  // Poof options. The negative (failure) cache below still applies — a
+  // deterministically bad source stays bad regardless of processing options.
+  const bypassCache = input.bypassSourceCache === true;
+  if (!bypassCache) {
+    const cached = await getReadyCachedImageBySourceHash(input.source.sourceUrlHash, input.removeBackground);
+    if (cached) {
+      // Serve when the cache satisfies the request: a bg-removed cutout, OR a
+      // deterministic white-bg fallback for a source that can't be cut out.
+      if (acceptsImageCacheForRequest(cached, input.removeBackground)) {
+        return { ...cached, sourceProvider: input.sourceProvider, pipelineVersion: IMAGE_PIPELINE_VERSION };
+      }
     }
   }
 
@@ -441,12 +469,16 @@ async function processCandidate(input: {
   if (status === "failed") return null;
 
   const flightKey = inFlightKey(input.source.sourceUrlHash, input.removeBackground);
-  const existing = inFlightBySource.get(flightKey);
-  if (existing) return existing;
+  if (!bypassCache) {
+    const existing = inFlightBySource.get(flightKey);
+    if (existing) return existing;
+  }
 
   const promise = (async (): Promise<ProcessedImageResult | null> => {
     try {
-      const doubleCheck = await getReadyCachedImageBySourceHash(input.source.sourceUrlHash, input.removeBackground);
+      const doubleCheck = bypassCache
+        ? null
+        : await getReadyCachedImageBySourceHash(input.source.sourceUrlHash, input.removeBackground);
       if (doubleCheck) {
         if (acceptsImageCacheForRequest(doubleCheck, input.removeBackground)) {
           return { ...doubleCheck, sourceProvider: input.sourceProvider, pipelineVersion: IMAGE_PIPELINE_VERSION };
@@ -540,11 +572,14 @@ async function processCandidate(input: {
       }
       return null;
     } finally {
-      inFlightBySource.delete(flightKey);
+      if (!bypassCache) inFlightBySource.delete(flightKey);
     }
   })();
 
-  inFlightBySource.set(flightKey, promise);
+  // Bypass runs stay out of the in-flight map entirely: registering one would
+  // hand a fresh-processing promise to unrelated cached-path callers, and its
+  // finally-delete would evict a legitimate concurrent entry.
+  if (!bypassCache) inFlightBySource.set(flightKey, promise);
   return promise;
 }
 
@@ -630,6 +665,9 @@ async function resolveProcessedFragranceImageInner(
   if (candidates.length === 0) return null;
 
   const maxCandidates = Math.max(1, Math.min(input.maxCandidates ?? MAX_CANDIDATES_PER_ATTEMPT, 8));
+  const excludedSourceHashes = new Set(
+    (input.excludeSourceUrlHashes ?? []).filter((hash) => typeof hash === "string" && hash.length > 0),
+  );
   const candidateTraces: ImagePipelineCandidateTrace[] = [];
   let best: { result: ProcessedImageResult; score: number; ordinal: number } | null = null;
   const loopStartedAt = Date.now();
@@ -712,6 +750,26 @@ async function resolveProcessedFragranceImageInner(
       continue;
     }
 
+    // Manual-refresh exclusion: the candidate that produced the CURRENTLY
+    // stored image cannot satisfy a "find me a different image" request — the
+    // per-source cache would echo the identical WebP back and the refresh
+    // would look like a no-op (image selection audit S2). Serper path only.
+    if (sourceProvider === "serper" && excludedSourceHashes.has(source.sourceUrlHash)) {
+      candidateTrace.skipped = true;
+      candidateTrace.skipReason = "current_image";
+      logger.info(
+        {
+          lookupKey,
+          fixtureId: input.fixtureId ?? null,
+          traceId: input.traceId ?? null,
+          ordinal,
+          sourceUrlHash: source.sourceUrlHash,
+        },
+        "[imagePipeline] skipped candidate matching the currently stored image",
+      );
+      continue;
+    }
+
     await pipelineLimiter.acquire();
     let result: ProcessedImageResult | null;
     try {
@@ -724,6 +782,7 @@ async function resolveProcessedFragranceImageInner(
         fragranceId: input.fragranceId ?? null,
         removeBackground,
         poofOptions: input.poofOptions,
+        bypassSourceCache: input.bypassSourceCache,
       });
     } finally {
       pipelineLimiter.release();

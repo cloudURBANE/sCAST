@@ -1,6 +1,62 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { scoreSerperImageCandidate } from "./serperCandidateScoring.ts";
+import { applySerperRefinement, capQueryWords } from "./serperQueryCore.ts";
+import { IMAGE_SOLVER_IDS, resolveRefreshSerperInput } from "./imageSolvers.ts";
+
+test("composed refresh queries never both assert and negate the same term (audit S1)", () => {
+  // The old solver suffix ended in "no sample no tester", re-adding the literal
+  // words that four solvers negate (`-sample`, `-tester`) — a self-contradictory
+  // Google query that returns few or zero image results. Verify the FINAL
+  // composed query (solver tokens + Serper suffix) for every solver.
+  for (const solverId of IMAGE_SOLVER_IDS) {
+    const r = resolveRefreshSerperInput({
+      asciiBrand: "Dior",
+      asciiName: "Sauvage",
+      concentrationText: "EDP",
+      solverId,
+    });
+    const composed = applySerperRefinement(r.query, r.refine);
+    const words = composed.split(/\s+/).filter(Boolean);
+    const negated = new Set(
+      words.filter((w) => w.startsWith("-")).map((w) => w.replace(/^-/, "").replace(/"/g, "").toLowerCase()),
+    );
+    const positive = words.filter((w) => !w.startsWith("-")).map((w) => w.replace(/"/g, "").toLowerCase());
+    for (const p of positive) {
+      assert.ok(
+        !negated.has(p),
+        `solver ${solverId}: "${p}" is both asserted and negated in composed query: ${composed}`,
+      );
+    }
+  }
+});
+
+test("composed refresh queries stay within Google's 32-word truncation limit (audit W2)", () => {
+  const longBase = resolveRefreshSerperInput({
+    asciiBrand: "Maison Francis Kurkdjian",
+    asciiName: "Baccarat Rouge 540 Extrait de Parfum Limited Edition",
+    concentrationText: "Extrait",
+  });
+  for (const { query, refine } of [
+    longBase,
+    resolveRefreshSerperInput({
+      asciiBrand: "Dior",
+      asciiName: "Sauvage",
+      concentrationText: "",
+      solverId: "tester_bottle",
+    }),
+  ]) {
+    const composed = applySerperRefinement(query, refine);
+    const wordCount = composed.split(/\s+/).filter(Boolean).length;
+    assert.ok(wordCount <= 32, `composed query has ${wordCount} words (> 32): ${composed}`);
+  }
+});
+
+test("capQueryWords keeps the leading base words and trims only the tail", () => {
+  assert.equal(capQueryWords("a b c", 32), "a b c");
+  assert.equal(capQueryWords("one two three four", 3), "one two three");
+  assert.equal(capQueryWords("  spaced   out  ", 32), "spaced out");
+});
 
 test("scoreSerperImageCandidate accepts retailer EDP titles without perfume/bottle words", () => {
   const retailerPackshot = scoreSerperImageCandidate({

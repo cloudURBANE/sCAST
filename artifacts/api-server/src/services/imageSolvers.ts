@@ -39,10 +39,6 @@ export function isImageSolverId(value: unknown): value is ImageSolverId {
   return typeof value === "string" && SOLVER_ID_SET.has(value);
 }
 
-/** Middle segment for normal refresh (matches legacy scent route wording; Serper layer still adds its refine suffix when mode is default). */
-export const DEFAULT_REFRESH_QUERY_SUFFIX =
-  "single fragrance bottle bottle only no box no tester no sample no vial no decant centered product photo studio packshot no plants no text overlay";
-
 export function buildBaseFragranceLine(asciiBrand: string, asciiName: string, concentrationText: string): string {
   return [asciiBrand, asciiName, concentrationText].filter(Boolean).join(" ").trim();
 }
@@ -53,6 +49,13 @@ export type RefreshSerperInput = { query: string; refine: SerperRefineMode };
  * Merge policy: solver-specific tokens are appended after the base fragrance line.
  * Serper refine mode: `default` = full packshot suffix (see serperService); `solver` = shorter suffix
  * so negative keywords are not drowned by repeated "no box" style tokens; `none` = send query as-is after trim.
+ *
+ * The refinement suffix itself is owned by ONE layer — serperService's
+ * applySerperRefinement. Returning the bare fragrance line with `refine:
+ * "default"` (instead of pre-appending a route-level suffix that the Serper
+ * layer then suffixes AGAIN) keeps the composed query inside Google's 32-word
+ * limit; the old double suffix pushed refresh queries to ~74 words, silently
+ * truncating every refinement token past word 32.
  */
 export function resolveRefreshSerperInput(params: {
   asciiBrand: string;
@@ -61,7 +64,7 @@ export function resolveRefreshSerperInput(params: {
   solverId?: ImageSolverId;
 }): RefreshSerperInput {
   const baseLine = buildBaseFragranceLine(params.asciiBrand, params.asciiName, params.concentrationText);
-  const qDefault = `${baseLine} ${DEFAULT_REFRESH_QUERY_SUFFIX}`.trim();
+  const qDefault = baseLine;
 
   if (!params.solverId) {
     return { query: qDefault, refine: "default" };
@@ -113,7 +116,9 @@ export function resolveRefreshSerperInput(params: {
     case "text_overlay":
       return { query: `${baseLine} -ad -poster -text -promotional -banner -watermark -sample -tester`.trim(), refine: "solver" };
     case "decant":
-      return { query: `${baseLine} -decant -sample -vial -travel -mini -ml -split`.trim(), refine: "solver" };
+      // No `-ml` here: retail listing titles almost always contain "ml", so
+      // negating it excluded practically the entire legitimate SERP.
+      return { query: `${baseLine} -decant -sample -vial -travel -mini -split`.trim(), refine: "solver" };
     case "cropped_image":
       return { query: `${baseLine} "full bottle" -macro -closeup`.trim(), refine: "solver" };
     default: {
@@ -130,4 +135,39 @@ export function solverWantsPoofProductType(solverId?: ImageSolverId): PoofProduc
 
 export function solverSkipsBgRemoval(solverId?: ImageSolverId): boolean {
   return solverId === "manual_fallback";
+}
+
+/**
+ * True when picking this solver means "the current picture is the WRONG picture
+ * — find me a different one". The refresh route then excludes the candidate
+ * whose source URL produced the currently stored image, so the pipeline cannot
+ * hand back the identical cached WebP and look like a no-op (audit S2).
+ *
+ * False for the solvers that mean "the picture is right but its PROCESSING is
+ * wrong" (re-run the same source with different Poof/trim settings):
+ * transparent_glass (glass erased by bg removal), manual_fallback (skip AI
+ * trim), dark_edge_bleed (frontend rendering tweak). No solver (plain refresh
+ * via API) keeps legacy behavior: no exclusion.
+ */
+export function solverPrefersDifferentImage(solverId?: ImageSolverId): boolean {
+  if (!solverId) return false;
+  switch (solverId) {
+    case "transparent_glass":
+    case "manual_fallback":
+    case "dark_edge_bleed":
+      return false;
+    default:
+      return true;
+  }
+}
+
+/**
+ * True when the solver's whole point is to RE-PROCESS a source with different
+ * background-removal settings (Poof `product` mode). For these, the pipeline
+ * must bypass the per-source processed cache — otherwise the previously stored
+ * cut-out is returned untouched and the new Poof options never run (audit S2's
+ * "guaranteed no-op" class).
+ */
+export function solverWantsFreshProcessing(solverId?: ImageSolverId): boolean {
+  return solverId === "transparent_glass" || solverId === "hand_interference";
 }

@@ -131,6 +131,20 @@ function candidateEvidenceText(candidate: Pick<SerperImageCandidate, "imageUrl" 
   return `${candidate.title ?? ""} ${candidate.source ?? ""} ${urlText}`.trim();
 }
 
+/**
+ * Token equivalence for identity coverage. Exact match, or a prefix match that
+ * only tolerates short inflectional tails (plural/genitive: "sauvage" ~
+ * "sauvages"). The old bidirectional substring test credited unrelated words —
+ * "oud" matched "loud", "noir" matched "renoir", "rose" matched "rosewood" —
+ * inflating coverage for wrong-product candidates (image selection audit W5).
+ */
+function tokensMatch(a: string, b: string): boolean {
+  if (a === b) return true;
+  if (a.length < 4 || b.length < 4) return false;
+  const [short, long] = a.length <= b.length ? [a, b] : [b, a];
+  return long.startsWith(short) && long.length - short.length <= 2;
+}
+
 export function computeFragranceIdentityCoverage(
   brand: string,
   name: string,
@@ -144,7 +158,7 @@ export function computeFragranceIdentityCoverage(
   if (hayTokens.length === 0) return 0;
 
   const matched = targetTokens.filter((token) =>
-    hayTokens.some((hay) => hay === token || hay.includes(token) || token.includes(hay)),
+    hayTokens.some((hay) => tokensMatch(hay, token)),
   ).length;
 
   return matched / targetTokens.length;

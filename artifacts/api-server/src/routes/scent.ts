@@ -6,14 +6,16 @@ import { searchCatalog, getCatalogEntry, saveCatalogEntry, flattenProfile } from
 import {
   isImageSolverId,
   resolveRefreshSerperInput,
+  solverPrefersDifferentImage,
   solverSkipsBgRemoval,
+  solverWantsFreshProcessing,
   solverWantsPoofProductType,
   type ImageSolverId,
 } from "../services/imageSolvers";
 import { logger } from "../lib/logger";
 import { rateLimitMiddleware } from "../lib/rateLimit";
 import { resolveConcentrationFast } from "../services/concentrationResolver";
-import { resolveProcessedFragranceImage } from "../services/imagePipeline";
+import { resolveCachedFragranceImage, resolveProcessedFragranceImage } from "../services/imagePipeline";
 import { reimagineBottleImage, isSupportedReimagineModel, ReimagineBusyError } from "../services/reimagineService";
 import { imageReferenceDiagnostic, usableImageUrlForResponse } from "../services/imageReference";
 import { resolveSharedImageReference } from "../services/imageHydration";
@@ -22,6 +24,7 @@ import {
   RefreshAttemptCounter,
   decideRefreshThrottle,
   refreshAttemptKey,
+  refreshAttemptsRemaining,
 } from "../services/refreshImageThrottle";
 import {
   asciiForImageSearch,
@@ -513,12 +516,14 @@ router.post("/refresh-image", async (req, res) => {
     const priorAttempts =
       refreshAttemptCounter.record(refreshAttemptKey(req.ip || "unknown", imageBrand, imageName)) - 1;
     const throttle = decideRefreshThrottle(priorAttempts, Boolean(solverId));
+    const attemptsRemaining = refreshAttemptsRemaining(priorAttempts + 1, Boolean(solverId));
     if (!throttle.allowed) {
       res.status(429).json({
         error:
           throttle.reason === "needs-solver"
             ? "Automatic image regeneration paused. Choose what looks wrong and try with a hint."
-            : "Too many image regeneration attempts for this session.",
+            : "Too many image regeneration attempts for this fragrance. Try again in about an hour.",
+        attemptsRemaining: 0,
       });
       return;
     }
@@ -549,6 +554,21 @@ router.post("/refresh-image", async (req, res) => {
       solverId,
     });
 
+    // "This picture is wrong — find a different one" solvers must not be
+    // satisfied by the candidate that produced the currently stored image;
+    // exclude its source hash so the pipeline can't echo the identical cached
+    // WebP back as a perceived no-op (image selection audit S2). After a save,
+    // the user's tile is hydrated from the latest catalog image, so the latest
+    // lookup-key cache row is the image the user is looking at.
+    let excludeSourceUrlHashes: string[] | undefined;
+    if (solverPrefersDifferentImage(solverId)) {
+      const current = await resolveCachedFragranceImage(imageBrand, imageName).catch(() => null);
+      if (current?.sourceUrlHash) excludeSourceUrlHashes = [current.sourceUrlHash];
+    }
+    // Re-processing solvers (Poof `product` mode) must actually re-run Poof on
+    // the candidates instead of being served the previously stored cut-out.
+    const bypassSourceCache = solverWantsFreshProcessing(solverId);
+
     logger.info(
       {
         solverId: solverId ?? null,
@@ -557,6 +577,8 @@ router.post("/refresh-image", async (req, res) => {
         refine,
         skipBg,
         poofType: poofType ?? null,
+        excludeSourceUrlHashes: excludeSourceUrlHashes ?? null,
+        bypassSourceCache,
         fixtureId: fixtureId ?? null,
         traceId: traceId ?? null,
         qPreview: serperQuery.slice(0, 220),
@@ -573,12 +595,19 @@ router.post("/refresh-image", async (req, res) => {
       poofOptions: removeBgOpts,
       serperRefine: { refine },
       maxCandidates: solverId ? 6 : 4,
+      excludeSourceUrlHashes,
+      bypassSourceCache,
       fixtureId,
       traceId,
     });
 
     if (!processed) {
-      res.status(404).json({ error: "No image found for this fragrance" });
+      res.status(404).json({
+        error: excludeSourceUrlHashes
+          ? "No different image found for this fragrance — try another option or paste an image URL."
+          : "No image found for this fragrance",
+        attemptsRemaining,
+      });
       return;
     }
 
@@ -603,6 +632,15 @@ router.post("/refresh-image", async (req, res) => {
       removeBgStatus: processed.removeBgStatus ?? (processed.backgroundRemoved ? "removed" : "fallback"),
       removeBgReason: processed.removeBgReason ?? (processed.backgroundRemoved ? "removed" : "local_trim_fallback"),
       imagePipelineTrace: processed.imagePipelineTrace,
+      attemptsRemaining,
+      // Surface identity canonicalization so a silent brand/name rewrite is
+      // visible to the client instead of an unexplained off-target search
+      // (image selection audit W6).
+      searchedAs: {
+        brand: imageBrand,
+        name: imageName,
+        corrected: resolvedIdentity.corrected,
+      },
     });
   } catch (err: any) {
     logger.error({ err: err.message }, "refresh-image failed");
