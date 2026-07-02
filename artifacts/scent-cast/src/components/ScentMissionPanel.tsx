@@ -2373,10 +2373,15 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
           onFocus={() => setComposerFocused(true)}
           onBlur={() => {
             setComposerFocused(false);
-            // Skip viewport recovery when the blur was forced by the field
-            // disabling itself as generation starts (busy) — that would yank the
-            // page to the top mid-turn. Only recover on a genuine user dismiss.
-            if (!busy) recoverViewportAfterKeyboard();
+            // Always recover the viewport once the keyboard settles — including
+            // the send path, where the field disabling itself (busy) forces this
+            // blur. Skipping that case left the page stranded wherever the iOS
+            // keyboard had displaced it ("stuck cropped after send"): nothing
+            // else ever restored scroll, because busy never re-runs recovery
+            // when it clears. recoverViewportAfterKeyboard waits for the
+            // visualViewport resize to settle before its instant correction, so
+            // it does not yank the page mid-dismiss.
+            recoverViewportAfterKeyboard();
           }}
           // While the concierge is composing, lock the field and swap the
           // placeholder to a calm status line so it never looks like the user is

@@ -4167,6 +4167,19 @@ textarea:focus-visible,
   outline-offset: 2px;
 }
 
+/* The gold capsule fields already signal focus through their own border
+   treatment (.scent-beam-composer:focus-within, .scent-vault-search-input:focus
+   above), so the global gold focus rectangle doubles the indicator there — on
+   iOS every tap into a text field matches :focus-visible, painting a stray
+   rectangle around the rounded capsule. Suppress only the inner input's
+   outline; the capsule border change keeps focus visibly indicated. */
+.scent-beam-composer input:focus-visible,
+.scent-vault-search-input input:focus-visible,
+input.scent-vault-search-input:focus-visible,
+input.scent-lux-input:focus-visible {
+  outline: none;
+}
+
 .community-fragrance-detail__x:focus,
 .community-fragrance-detail__x:focus-visible {
   outline: none;

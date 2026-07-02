@@ -585,7 +585,7 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
                   type="button"
                   onClick={() => go(index)}
                   title={`${dayLabel(plan.day.date)} — ${plan.day.condition ?? 'Forecast'}`}
-                  className={`forecast-day-tile flex w-full h-[4.75rem] flex-col items-center justify-between py-2 text-[#f1e7da] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/60 sm:h-[6.5rem] sm:py-3.5 md:h-[7.25rem] md:py-4 ${
+                  className={`forecast-day-tile flex w-full h-[4.75rem] flex-col items-center justify-between py-2 text-[#f1e7da] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55 sm:h-[6.5rem] sm:py-3.5 md:h-[7.25rem] md:py-4 ${
                     isActive ? 'is-active' : ''
                   }`}
                 >
@@ -615,7 +615,7 @@ function ForecastChevron({ direction, onClick }: { direction: 'prev' | 'next'; o
       type="button"
       onClick={onClick}
       aria-label={direction === 'prev' ? 'Previous day' : 'Next day'}
-      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-scent-accent/80 transition-colors hover:text-[#ffe8a5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/50 md:h-14 md:w-14"
+      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-scent-accent/80 transition-[color,transform] duration-200 hover:text-[#ffe8a5] active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55 md:h-14 md:w-14"
     >
       <Icon size={24} strokeWidth={1.5} aria-hidden className="md:h-7 md:w-7" />
     </button>
