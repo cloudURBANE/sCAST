@@ -2141,9 +2141,19 @@ export const Wardrobe: React.FC<{
                 <div className="pedestal p-1">
                   <motion.div
                     initial={{ scale: 0.98, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-                    className="glass-acrylic glass-acrylic-animate rounded-scent p-20 aspect-[3/4] flex flex-col items-center relative overflow-hidden cursor-pointer"
+                    className="glass-acrylic glass-acrylic-animate rounded-scent p-20 aspect-[3/4] flex flex-col items-center relative overflow-hidden cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`${entryName(featuredItem)} by ${entryBrand(featuredItem)}`}
                     onClick={() => openDetail(featuredItem)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        openDetail(featuredItem);
+                      }
+                    }}
                     onMouseEnter={() => prefetchReviews(featuredItem)}
+                    onFocus={() => prefetchReviews(featuredItem)}
                   >
                     <div className="absolute top-10 left-10 scent-type-label text-scent-text-muted z-20 pointer-events-none">Recommended Manifest</div>
                     <div className={bottleFeaturedSlotClass()}>

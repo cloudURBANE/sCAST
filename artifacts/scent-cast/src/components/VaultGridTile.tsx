@@ -60,6 +60,12 @@ function VaultGridTileComponent({
   const name = entryName(item);
   const handleClick = React.useCallback(() => onOpen(item), [onOpen, item]);
   const handleMouseEnter = React.useCallback(() => onPrefetch(item), [onPrefetch, item]);
+  const handleKeyDown = React.useCallback((event: React.KeyboardEvent) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      onOpen(item);
+    }
+  }, [onOpen, item]);
 
   // On touch/perf devices the visible animation is the Framer `layoutId` morph,
   // which drives the OUTER wrapper's transform every frame. A `transition-transform`
@@ -78,9 +84,14 @@ function VaultGridTileComponent({
       whileInView={motionDisabled ? undefined : TILE_WHILE_IN_VIEW}
       viewport={motionDisabled ? undefined : TILE_VIEWPORT}
       transition={motionDisabled ? undefined : TILE_TRANSITION}
-      className="group cursor-pointer relative h-full min-w-0"
+      className="group cursor-pointer relative h-full min-w-0 outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
+      role="button"
+      tabIndex={0}
+      aria-label={`${name} by ${entryBrand(item)}`}
       onClick={handleClick}
+      onKeyDown={handleKeyDown}
       onMouseEnter={handleMouseEnter}
+      onFocus={handleMouseEnter}
     >
       <VaultCard tone="wardrobe" compact={compact} brand={entryBrand(item)} name={name}>
         {/* Shared-bottle morph source: this fills the square image slot and
