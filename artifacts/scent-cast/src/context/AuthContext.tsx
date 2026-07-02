@@ -57,6 +57,34 @@ const OAUTH_ERROR_MESSAGES: Record<string, string> = {
 const mapOAuthError = (code: string): string =>
   OAUTH_ERROR_MESSAGES[code] ?? 'Sign-in failed. Please try again.';
 
+// localStorage can throw (private mode / quota / blocked storage). The guarded
+// setters below already degrade to in-memory state; these helpers give the
+// token/email/picture paths the same guarantee — a throw inside the authToken
+// initializer would otherwise crash the whole first render on the OAuth redirect.
+const safeStorageGet = (key: string): string | null => {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+};
+
+const safeStorageSet = (key: string, value: string): void => {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* storage unavailable (private mode / quota) — keep in-memory state only */
+  }
+};
+
+const safeStorageRemove = (key: string): void => {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    /* storage unavailable (private mode / quota) — keep in-memory state only */
+  }
+};
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -66,33 +94,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const oauthEmail = params.get('oauth_email');
     const oauthPicture = params.get('oauth_picture');
     if (oauthToken && oauthEmail) {
-      localStorage.setItem(STORAGE_KEYS.TOKEN, oauthToken);
-      localStorage.setItem(STORAGE_KEYS.EMAIL, oauthEmail);
+      safeStorageSet(STORAGE_KEYS.TOKEN, oauthToken);
+      safeStorageSet(STORAGE_KEYS.EMAIL, oauthEmail);
       if (oauthPicture) {
-        localStorage.setItem(STORAGE_KEYS.PICTURE, oauthPicture);
+        safeStorageSet(STORAGE_KEYS.PICTURE, oauthPicture);
       } else {
-        localStorage.removeItem(STORAGE_KEYS.PICTURE);
+        safeStorageRemove(STORAGE_KEYS.PICTURE);
       }
       window.history.replaceState({}, '', window.location.pathname);
       return oauthToken;
     }
-    return localStorage.getItem(STORAGE_KEYS.TOKEN);
+    return safeStorageGet(STORAGE_KEYS.TOKEN);
   });
 
   // authToken's initializer already wrote oauth_email/oauth_picture to localStorage
   // and cleared the URL via replaceState — read from storage only.
   const [authEmail, setAuthEmail] = useState<string | null>(() =>
-    localStorage.getItem(STORAGE_KEYS.EMAIL),
+    safeStorageGet(STORAGE_KEYS.EMAIL),
   );
 
   const [authPictureUrl, setAuthPictureUrl] = useState<string | null>(() =>
-    localStorage.getItem(STORAGE_KEYS.PICTURE),
+    safeStorageGet(STORAGE_KEYS.PICTURE),
   );
 
   // The chosen community display name. Seeded from storage for an instant nav
   // label, then reconciled against the server (GET /api/me/profile) on sign-in.
   const [authUsername, setAuthUsernameState] = useState<string | null>(() =>
-    localStorage.getItem(STORAGE_KEYS.USERNAME),
+    safeStorageGet(STORAGE_KEYS.USERNAME),
   );
 
   const setAuthUsername = useCallback((username: string | null) => {
@@ -176,12 +204,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const handleAuth = useCallback((token: string, email: string, pictureUrl?: string | null) => {
-    localStorage.setItem(STORAGE_KEYS.TOKEN, token);
-    localStorage.setItem(STORAGE_KEYS.EMAIL, email);
+    safeStorageSet(STORAGE_KEYS.TOKEN, token);
+    safeStorageSet(STORAGE_KEYS.EMAIL, email);
     if (pictureUrl) {
-      localStorage.setItem(STORAGE_KEYS.PICTURE, pictureUrl);
+      safeStorageSet(STORAGE_KEYS.PICTURE, pictureUrl);
     } else {
-      localStorage.removeItem(STORAGE_KEYS.PICTURE);
+      safeStorageRemove(STORAGE_KEYS.PICTURE);
     }
     setAuthToken(token);
     setAuthEmail(email);
@@ -206,10 +234,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         /* best-effort: local state is cleared regardless */
       });
     }
-    localStorage.removeItem(STORAGE_KEYS.TOKEN);
-    localStorage.removeItem(STORAGE_KEYS.EMAIL);
-    localStorage.removeItem(STORAGE_KEYS.PICTURE);
-    localStorage.removeItem(STORAGE_KEYS.USERNAME);
+    safeStorageRemove(STORAGE_KEYS.TOKEN);
+    safeStorageRemove(STORAGE_KEYS.EMAIL);
+    safeStorageRemove(STORAGE_KEYS.PICTURE);
+    safeStorageRemove(STORAGE_KEYS.USERNAME);
     setAuthToken(null);
     setAuthEmail(null);
     setAuthPictureUrl(null);

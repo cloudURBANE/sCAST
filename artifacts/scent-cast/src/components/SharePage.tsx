@@ -651,7 +651,12 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
     setBuyLinks({});
     fetch(`/api/share/${userId}`)
       .then(async (r) => {
-        return r.json();
+        // Infrastructure failures (edge proxy 502/503, backend down) return HTML,
+        // not JSON — surface a human message instead of the raw parse error.
+        if (!r.ok) throw new Error('This shared vault could not be loaded right now. Please try again.');
+        return r.json().catch(() => {
+          throw new Error('This shared vault could not be loaded right now. Please try again.');
+        });
       })
       .then(d => {
         if (d.error) throw new Error(d.error);
@@ -797,8 +802,17 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                     initial={{ opacity: 0, y: 24 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: i * 0.05 }}
-                    className="group cursor-pointer relative h-full min-w-0"
+                    className="group cursor-pointer relative h-full min-w-0 outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`${name} by ${brand}`}
                     onClick={() => setSelectedItemId(fragranceId)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        setSelectedItemId(fragranceId);
+                      }
+                    }}
                   >
                     <VaultCard tone="share" compact={isCompactGrid} brand={brand} name={name}>
                       {!data.hideImages ? (

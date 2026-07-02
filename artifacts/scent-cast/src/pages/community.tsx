@@ -164,6 +164,13 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
         pendingComposerOpenRef.current = null;
         composerRef.current?.close();
         setComposerOpen(false);
+      } else {
+        // The panel is the only place active filters are visible; the toggle is
+        // labelled "Close search and filters", so closing must also reset them —
+        // otherwise the feed stays silently filtered with no indicator.
+        setPostType(null);
+        setPostTag(null);
+        setPostQuery('');
       }
       return !open;
     });

@@ -274,10 +274,17 @@ export function NotificationFeed() {
     }
   };
 
-  // Sub-component: Notification Item. The card body is a real <button> (keyboard
+  // Notification item card. The card body is a real <button> (keyboard
   // operable), with the delete control as a sibling button so the two never nest.
-  const NotificationItem = ({ item }: { item: InAppNotification }) => (
+  //
+  // NOTE: this and the render helpers below are plain functions/JSX values, NOT
+  // components declared inside the parent body. Inline component types get a new
+  // identity every render, which makes React unmount/remount the whole subtree —
+  // and this panel re-renders every 15s poll (`isFetching` flips) and on every
+  // optimistic mutation, so scroll position and focus were being destroyed.
+  const renderNotificationItem = (item: InAppNotification) => (
     <div
+      key={item.id}
       className={`group relative rounded-[12px] border transition-colors duration-300 ${
         item.read
           ? "border-white/6 bg-transparent hover:bg-white/[0.02]"
@@ -337,7 +344,7 @@ export function NotificationFeed() {
     </div>
   );
 
-  const HeaderActions = () => (
+  const headerActions = (
     <div className="flex items-center justify-between border-b border-scent-accent/12 pb-3">
       <h3 className="font-serif text-base italic text-scent-text-primary">
         {t("notificationFeed.title")}
@@ -359,7 +366,7 @@ export function NotificationFeed() {
   // Loading (first load), error, and empty are distinct states so a slow fetch no
   // longer flashes the "all caught up" empty copy and a failed fetch no longer
   // silently masquerades as empty.
-  const StatusBlock = ({
+  const renderStatusBlock = ({
     icon,
     title,
     body,
@@ -382,23 +389,20 @@ export function NotificationFeed() {
     </div>
   );
 
-  const ListBody = () => {
+  const renderListBody = () => {
     if (isLoading) {
-      return (
-        <StatusBlock
-          icon={<LoaderCircle size={20} strokeWidth={1.75} className="animate-spin" />}
-          title={t("notificationFeed.loading")}
-          body=""
-        />
-      );
+      return renderStatusBlock({
+        icon: <LoaderCircle size={20} strokeWidth={1.75} className="animate-spin" />,
+        title: t("notificationFeed.loading"),
+        body: "",
+      });
     }
     if (isError) {
-      return (
-        <StatusBlock
-          icon={<WifiOff size={20} strokeWidth={1.75} />}
-          title={t("notificationFeed.errorTitle")}
-          body={t("notificationFeed.errorBody")}
-          action={
+      return renderStatusBlock({
+        icon: <WifiOff size={20} strokeWidth={1.75} />,
+        title: t("notificationFeed.errorTitle"),
+        body: t("notificationFeed.errorBody"),
+        action: (
             <button
               type="button"
               onClick={() => void refetch()}
@@ -408,39 +412,28 @@ export function NotificationFeed() {
               {isFetching && <LoaderCircle size={11} className="animate-spin" />}
               <span>{t("notificationFeed.retry")}</span>
             </button>
-          }
-        />
-      );
+        ),
+      });
     }
     if (filteredNotifications.length === 0) {
-      return (
-        <StatusBlock
-          icon={<Bell size={20} strokeWidth={1.75} />}
-          title={
-            activeTab === "all"
-              ? t("notificationFeed.emptyAllTitle")
-              : t("notificationFeed.emptyFilteredTitle")
-          }
-          body={
-            activeTab === "all"
-              ? t("notificationFeed.emptyAllBody")
-              : t("notificationFeed.emptyFilteredBody")
-          }
-        />
-      );
+      return renderStatusBlock({
+        icon: <Bell size={20} strokeWidth={1.75} />,
+        title:
+          activeTab === "all"
+            ? t("notificationFeed.emptyAllTitle")
+            : t("notificationFeed.emptyFilteredTitle"),
+        body:
+          activeTab === "all"
+            ? t("notificationFeed.emptyAllBody")
+            : t("notificationFeed.emptyFilteredBody"),
+      });
     }
-    return (
-      <>
-        {filteredNotifications.map((notification) => (
-          <NotificationItem key={notification.id} item={notification} />
-        ))}
-      </>
-    );
+    return <>{filteredNotifications.map((notification) => renderNotificationItem(notification))}</>;
   };
 
-  const FeedContent = () => (
+  const feedContent = (
     <div className="flex h-full flex-col">
-      <HeaderActions />
+      {headerActions}
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-3 flex min-h-0 flex-1 flex-col">
         <TabsList className="grid h-8 grid-cols-4 gap-0.5 rounded-full border border-scent-accent/15 bg-black/40 p-0.5">
@@ -456,7 +449,7 @@ export function NotificationFeed() {
         </TabsList>
 
         <div className="scrollbar-thin mt-4 flex-1 space-y-2 overflow-y-auto pr-1.5">
-          <ListBody />
+          {renderListBody()}
         </div>
       </Tabs>
     </div>
@@ -495,7 +488,7 @@ export function NotificationFeed() {
           sideOffset={10}
           className="h-[28rem] w-[22rem] rounded-[18px] border-scent-accent/20 bg-[#090604]/95 p-4 text-scent-text-primary shadow-[0_22px_60px_rgba(0,0,0,0.7)] backdrop-blur-md"
         >
-          <FeedContent />
+          {feedContent}
         </PopoverContent>
       </Popover>
     );
@@ -522,7 +515,7 @@ export function NotificationFeed() {
           </DrawerClose>
         </div>
         <div className="min-h-0 flex-1 overflow-hidden">
-          <FeedContent />
+          {feedContent}
         </div>
       </DrawerContent>
     </Drawer>

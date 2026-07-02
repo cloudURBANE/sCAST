@@ -906,7 +906,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
 
         <div
           className="grid grid-cols-2 gap-2 sm:grid-cols-4"
-          role="listbox"
+          role="group"
           aria-label="Room type"
         >
           {ROOMS.map(({ type, label, shortLabel, Icon }) => (
@@ -919,9 +919,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
                 // (e.g. a battle validation error) so it doesn't linger.
                 clearStatus();
               }}
-              role="option"
               aria-label={label}
-              aria-selected={postType === type}
               aria-pressed={postType === type}
               className={[
                 'inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full border px-3 py-2 text-center scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35',
