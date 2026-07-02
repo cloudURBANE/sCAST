@@ -253,7 +253,11 @@ a {
 
 .scent-vault-panel {
   position: relative;
-  border: 1px solid rgba(232, 181, 90, 0.72);
+  /* Hairline resolves through the accent token (see :root) so the green
+     re-theme re-tints it with the rest of the UI; alpha is nudged up a touch
+     to keep the same perceived weight the old warmer literal had. The vault
+     family below follows the same rule. */
+  border: 1px solid rgb(var(--scent-accent-rgb) / 0.75);
   border-radius: calc(var(--radius-scent) + 12px);
   padding: clamp(1.85rem, 4vw, 3rem) clamp(1rem, 5vw, 5.25rem) clamp(1.25rem, 3vw, 1.85rem);
   background:
@@ -447,10 +451,10 @@ a {
   }
 
   .scent-vault-panel {
-    /* Mobile: a quieter gold hairline (was 0.72 alpha — too dominant against the
+    /* Mobile: a quieter gold hairline (was 0.75 alpha — too dominant against the
        compact card) and tighter vertical padding so the search module supports
        the forecast hero below instead of competing with it. */
-    border-color: rgba(232, 181, 90, 0.46);
+    border-color: rgb(var(--scent-accent-rgb) / 0.48);
     border-radius: calc(var(--radius-scent) + 4px);
     padding: 0.95rem 0.75rem 0.7rem;
   }
@@ -865,7 +869,7 @@ a {
   background:
     radial-gradient(130% 160% at 50% 0%, rgba(255, 255, 255, 0.014), transparent 44%),
     rgba(0, 0, 0, 0.92);
-  border-color: rgba(232, 181, 90, 0.72);
+  border-color: rgb(var(--scent-accent-rgb) / 0.75);
   box-shadow:
     inset 0 1px 0 rgba(255, 236, 183, 0.08),
     inset 0 0 28px rgb(var(--scent-accent-rgb) / 0.018),
@@ -886,7 +890,7 @@ a {
   display: flex;
   flex-direction: column;
   min-height: clamp(19rem, 30vw, 25.25rem);
-  border: 1px solid rgba(202, 151, 72, 0.46);
+  border: 1px solid rgb(var(--scent-accent-rgb) / 0.4);
   border-radius: calc(var(--radius-scent) + 5px);
   background:
     radial-gradient(85% 70% at 50% 0%, rgba(255, 244, 212, 0.018), transparent 58%),
@@ -918,7 +922,7 @@ a {
   overflow: hidden;
   /* Calmer resting border so hover (0.78) and the committed-selection state
      (0.98) have clear contrast to step up into — a legible interaction ladder. */
-  border: 1px solid rgba(232, 181, 90, 0.5);
+  border: 1px solid rgb(var(--scent-accent-rgb) / 0.52);
   border-radius: calc(var(--radius-scent) - 6px);
   color: #fff7ec;
   background:
@@ -994,7 +998,7 @@ a {
 }
 
 .scent-vault-monogram {
-  border: 1px solid rgba(232, 181, 90, 0.72);
+  border: 1px solid rgb(var(--scent-accent-rgb) / 0.75);
   color: #e9c06a;
   background:
     radial-gradient(circle at 50% 22%, rgba(255, 243, 200, 0.09), transparent 44%),
