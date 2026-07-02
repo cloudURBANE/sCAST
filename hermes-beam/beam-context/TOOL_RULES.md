@@ -22,6 +22,15 @@ Input: none. Returns owned fragrances as **candidate packets**: `fragranceId`,
 `canonicalName`, `brand`, `accords`, notes, performance, `sourceConfidence`,
 `missingFields`. Use these ids when reasoning about what they own.
 
+### `beam_analyze_collection` — deterministic; call first for collection questions
+Input: none. Runs the evidence-gated analysis of the owned collection: family
+distribution + diversity, signature accords/notes, occasion/season coverage with
+explicit `gaps`, redundancy clusters, and a `reliable` flag. For any "what are my
+gaps / what should I add / is it well-rounded" question, call this FIRST and answer
+from its fields — never compute gaps or redundancy yourself from the raw wardrobe.
+When `reliable` is false, say the data is too thin to judge (use `dataQualityNote`)
+instead of guessing.
+
 ### `beam_search_catalog`
 Input: `query` (brand and/or name), optional `limit`, optional `excludeOwned`. Returns
 candidate packets for **real** catalog fragrances. The server caps the result count —
@@ -62,6 +71,9 @@ for normal recommendations, weather/occasion fits, ranking, or comparing common 
 ## Discipline
 
 - Only recommend `fragranceId`s / fragrances that appeared in a packet from a tool.
+- Never surface internal bookkeeping to the user: tool mechanics, retries, or counts
+  that disagree between tool results. `beam_get_wardrobe`'s count is the vault size;
+  if another summary disagrees, use the wardrobe count and move on silently.
 - Batch detail calls; don't loop single lookups.
 - Stop as soon as the request is satisfied — respect the tool-call budget.
 - If a tool errors, surface a graceful fallback (see AGENTS.md) — don't retry blindly.
