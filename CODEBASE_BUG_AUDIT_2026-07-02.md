@@ -4,8 +4,9 @@
 > maps the two coupled repositories (`sCAST` web app + `srt-scent-engine` Python
 > engine), records every **verifiable** latent defect found during a diligent
 > evidence-based audit, and explicitly lists candidates that were **refuted** so no
-> team re-burns time on them. Nothing here has been fixed yet — each finding names an
-> owning area and a one-line fix direction only.
+> team re-burns time on them. Each finding names an owning area and a one-line fix
+> direction only. **Status note (2026-07-02):** all Part A findings (A1–A5) have since
+> landed on `main` via PR #508 — see the per-finding status lines. Part B remains open.
 >
 > **How to use this.** Pick a finding, open the exact `file:line`, reproduce the
 > failure scenario, then fix under the repo's own doctrine (`CLAUDE.md`,
@@ -34,6 +35,10 @@ makes the candidate safe. Tests referenced are the in-repo `*.test.ts` / `test_*
 
 ### A1. Unauthenticated SSRF via TOCTOU / DNS-rebinding in the image proxy — **Confirmed · High**
 
+> **Status: FIXED on `main`** (`9f63538`, PR #508). `safeImageFetch` now resolves once
+> via a pinned custom `lookup`, rejects private addresses, and connects only to the
+> validated addresses. Fixed together with A2.
+
 - **Where:** `artifacts/api-server/src/services/safeImageFetch.ts:263` (validate) vs `:267`
   (`fetch(current.toString())`); reachable anonymously through
   `artifacts/api-server/src/routes/imageProxy.ts:61` (`GET /api/image-proxy?url=…`),
@@ -53,6 +58,9 @@ makes the candidate safe. Tests referenced are the in-repo `*.test.ts` / `test_*
 
 ### A2. IPv4-mapped IPv6 private ranges bypass the SSRF guard — **Confirmed · High**
 
+> **Status: FIXED on `main`** (`9f63538`, PR #508). IPv4-mapped IPv6 is normalized to
+> its embedded IPv4 and run through the IPv4 predicate; missing ranges added.
+
 - **Where:** `artifacts/api-server/src/services/safeImageFetch.ts:128-140`
   (`isPrivateIpAddress`, IPv6 branch).
 - **Symptom:** The IPv4 branch correctly blocks `169.254.0.0/16` (metadata),
@@ -70,6 +78,10 @@ makes the candidate safe. Tests referenced are the in-repo `*.test.ts` / `test_*
 
 ### A3. Google OAuth has no `state` / PKCE → login-CSRF — **Confirmed · Medium**
 
+> **Status: FIXED on `main`** (`cd7ae87`, PR #508). `/auth/google` now mints a random
+> `state` + PKCE S256 challenge, carried in short-lived httpOnly SameSite=Lax cookies
+> and verified constant-time on the callback.
+
 - **Where:** `artifacts/api-server/src/routes/oauth.ts:222-240` (`/auth/google`),
   `:242-361` (callback).
 - **Symptom:** The authorization request carries no `state` (nor PKCE
@@ -85,6 +97,9 @@ makes the candidate safe. Tests referenced are the in-repo `*.test.ts` / `test_*
 
 ### A4. Community search `q` allows LIKE-wildcard injection — **Confirmed · Low**
 
+> **Status: FIXED on `main`** (`b6edaf0`, PR #508). LIKE metacharacters are escaped
+> before the pattern is built.
+
 - **Where:** `artifacts/api-server/src/routes/communityPosts.ts:890-913`.
 - **Symptom:** `` `%${q}%` `` interpolates the raw query into an `ILIKE` pattern
   without escaping `%`, `_`, `\`. Not SQL injection (values are parameterized), but a
@@ -94,6 +109,9 @@ makes the candidate safe. Tests referenced are the in-repo `*.test.ts` / `test_*
 - **Owner / fix:** escape LIKE metacharacters before building the pattern (or `ESCAPE`).
 
 ### A5. Engine-proxy forwards original `content-type` on re-serialized body — **Plausible · Low**
+
+> **Status: FIXED on `main`** (`4a61ec0`, PR #508). `content-type: application/json`
+> is set unconditionally when the body is re-serialized.
 
 - **Where:** `artifacts/api-server/src/routes/fragranceEngineProxy.ts:53-66`.
 - **Symptom:** For a non-GET request whose original `content-type` is not JSON, the
