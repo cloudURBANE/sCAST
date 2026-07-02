@@ -37,7 +37,45 @@ export async function isEffectivelyTransparent(buffer: Buffer): Promise<boolean>
     const stats = await sharp(buffer).stats();
     const alpha = stats.channels[stats.channels.length - 1];
     if (!alpha) return false;
-    return alpha.max <= 4 || alpha.mean <= 5.0;
+    // Whole-image guard (original): fully invisible, or a near-empty ghost whose
+    // average alpha is below the floor.
+    if (alpha.max <= 4 || alpha.mean <= 5.0) return true;
+    // Center/subject-region guard: a real packshot always carries the bottle in
+    // the middle of the frame, so the CENTER's mean alpha is high. A whole-image
+    // mean can clear the 5.0 floor on a Poof "ghost" whose only opaque pixels are
+    // a small speck off to one side; sampling the center region instead catches
+    // those (image-pipeline transparency guard fix). Conservative: any failure to
+    // measure the center falls through to "not transparent".
+    return await isCenterRegionTransparent(buffer);
+  } catch {
+    return false;
+  }
+}
+
+// Fraction of the frame (centered) inspected for subject alpha. The bottle is
+// centered in every normalized packshot, so a transparent center means there is
+// effectively no visible subject regardless of stray edge pixels.
+const CENTER_REGION_FRACTION = 0.5;
+// Mean alpha (0–255) the center crop must clear to count as "has a subject".
+// Real centered bottles measure well above this; ghost outputs measure ~0–4.
+const CENTER_REGION_ALPHA_MIN = 8.0;
+
+async function isCenterRegionTransparent(buffer: Buffer): Promise<boolean> {
+  try {
+    const meta = await sharp(buffer).metadata();
+    const w = meta.width ?? 0;
+    const h = meta.height ?? 0;
+    if (w <= 0 || h <= 0) return false;
+    const cw = Math.max(1, Math.floor(w * CENTER_REGION_FRACTION));
+    const ch = Math.max(1, Math.floor(h * CENTER_REGION_FRACTION));
+    const left = Math.floor((w - cw) / 2);
+    const top = Math.floor((h - ch) / 2);
+    const stats = await sharp(buffer)
+      .extract({ left, top, width: cw, height: ch })
+      .stats();
+    const alpha = stats.channels[stats.channels.length - 1];
+    if (!alpha) return false;
+    return alpha.max <= 4 || alpha.mean <= CENTER_REGION_ALPHA_MIN;
   } catch {
     return false;
   }

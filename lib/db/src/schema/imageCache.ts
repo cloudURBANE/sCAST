@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
   doublePrecision,
@@ -68,11 +69,24 @@ export const imageCacheTable = pgTable(
     // clobber each other on upsert (a bg-removed reprocess overwriting the no-bg
     // row, or vice versa), and a negative-cache "failed" row for one variant
     // suppressed retries for the other.
-    sourcePipelineBgUnique: uniqueIndex("image_cache_source_pipeline_bg_unique_idx").on(
-      table.sourceUrlHash,
-      table.pipelineVersion,
-      table.backgroundRemoved,
-    ),
+    //
+    // Provider-split uniqueness (image-pipeline H1/H3 — source-hash cache
+    // poisoning): a Serper search for two DIFFERENT fragrances can return the
+    // SAME image URL, which hashes to the same `source_url_hash`. Under a single
+    // (source_url_hash, pipeline_version, background_removed) key those two
+    // fragrances collapse to ONE row, so they cross-serve each other's bottle and
+    // each upsert rebinds the row's `lookup_key` (last writer wins). To keep each
+    // fragrance's Serper-sourced row isolated, SERPER rows add `lookup_key` to the
+    // key. MANUAL / reimagine / openai rows keep PURE-BYTES dedup (no lookup_key)
+    // because a manually supplied or generated source URL is fragrance-specific by
+    // construction and SHOULD coalesce across callers. Two partial indexes (split
+    // on source_provider) so each upsert targets the right one via targetWhere.
+    sourcePipelineBgSerperUnique: uniqueIndex("image_cache_source_pipeline_bg_serper_unique_idx")
+      .on(table.sourceUrlHash, table.pipelineVersion, table.backgroundRemoved, table.lookupKey)
+      .where(sql`${table.sourceProvider} = 'serper'`),
+    sourcePipelineBgNonSerperUnique: uniqueIndex("image_cache_source_pipeline_bg_nonserper_unique_idx")
+      .on(table.sourceUrlHash, table.pipelineVersion, table.backgroundRemoved)
+      .where(sql`${table.sourceProvider} <> 'serper'`),
     lookupKeyIdx: index("image_cache_lookup_key_idx").on(table.lookupKey),
     userIdIdx: index("image_cache_user_id_idx").on(table.userId),
     sourceUrlHashIdx: index("image_cache_source_url_hash_idx").on(table.sourceUrlHash),

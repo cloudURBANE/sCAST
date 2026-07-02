@@ -175,8 +175,19 @@ const PIPELINE_MAX_CONCURRENCY =
     : 4;
 const pipelineLimiter = new Semaphore(PIPELINE_MAX_CONCURRENCY);
 
-function inFlightKey(sourceUrlHash: string, removeBackground: boolean): string {
-  return `${sourceUrlHash}:${removeBackground ? "1" : "0"}`;
+// Serper in-flight dedup is scoped to the fragrance (image-pipeline H1/H3): two
+// fragrances whose Serper search returns the same image URL share a
+// sourceUrlHash, so an unscoped key would hand the first caller's processed
+// bottle to the second. Manual/etc. sources keep the bare source-hash key
+// (pure-bytes dedup) since their URL is fragrance-specific by construction.
+function inFlightKey(
+  sourceUrlHash: string,
+  removeBackground: boolean,
+  sourceProvider?: string,
+  lookupKey?: string | null,
+): string {
+  const scope = sourceProvider === "serper" && lookupKey ? `:${lookupKey}` : "";
+  return `${sourceUrlHash}:${removeBackground ? "1" : "0"}${scope}`;
 }
 
 // Search-query-level in-flight dedup. `inFlightBySource` only converges AFTER
@@ -454,8 +465,17 @@ async function processCandidate(input: {
   // Poof options. The negative (failure) cache below still applies — a
   // deterministically bad source stays bad regardless of processing options.
   const bypassCache = input.bypassSourceCache === true;
+  // Source-hash cache reads are scoped to this fragrance for Serper rows
+  // (image-pipeline H1/H3): two fragrances whose Serper search returned the same
+  // image URL share a source_url_hash but must not cross-serve each other's
+  // bottle, and a negative-cache failure for one must not suppress the other.
+  const cacheScope = { sourceProvider: input.sourceProvider, lookupKey: input.lookupKey };
   if (!bypassCache) {
-    const cached = await getReadyCachedImageBySourceHash(input.source.sourceUrlHash, input.removeBackground);
+    const cached = await getReadyCachedImageBySourceHash(
+      input.source.sourceUrlHash,
+      input.removeBackground,
+      cacheScope,
+    );
     if (cached) {
       // Serve when the cache satisfies the request: a bg-removed cutout, OR a
       // deterministic white-bg fallback for a source that can't be cut out.
@@ -465,10 +485,19 @@ async function processCandidate(input: {
     }
   }
 
-  const status = await getCachedImageStatusBySourceHash(input.source.sourceUrlHash, input.removeBackground);
+  const status = await getCachedImageStatusBySourceHash(
+    input.source.sourceUrlHash,
+    input.removeBackground,
+    cacheScope,
+  );
   if (status === "failed") return null;
 
-  const flightKey = inFlightKey(input.source.sourceUrlHash, input.removeBackground);
+  const flightKey = inFlightKey(
+    input.source.sourceUrlHash,
+    input.removeBackground,
+    input.sourceProvider,
+    input.lookupKey,
+  );
   if (!bypassCache) {
     const existing = inFlightBySource.get(flightKey);
     if (existing) return existing;
@@ -478,7 +507,11 @@ async function processCandidate(input: {
     try {
       const doubleCheck = bypassCache
         ? null
-        : await getReadyCachedImageBySourceHash(input.source.sourceUrlHash, input.removeBackground);
+        : await getReadyCachedImageBySourceHash(
+            input.source.sourceUrlHash,
+            input.removeBackground,
+            cacheScope,
+          );
       if (doubleCheck) {
         if (acceptsImageCacheForRequest(doubleCheck, input.removeBackground)) {
           return { ...doubleCheck, sourceProvider: input.sourceProvider, pipelineVersion: IMAGE_PIPELINE_VERSION };
