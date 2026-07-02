@@ -33,6 +33,45 @@ import { IMAGE_PIPELINE_VERSION } from "./imageIdentity";
 const DEFAULT_FAILED_STATUS_RETRY_MS = 6 * 60 * 60 * 1000;
 const CACHE_HIT_FLUSH_DELAY_MS = 1500;
 
+/**
+ * Cache uniqueness is provider-split (image-pipeline H1/H3). A Serper search for
+ * two DIFFERENT fragrances can return the SAME image URL — under a key that
+ * ignores the fragrance they would collapse to one row and cross-serve each
+ * other's bottle. SERPER rows therefore key on
+ * (source_url_hash, pipeline_version, background_removed, lookup_key); all other
+ * providers (manual / reimagine / openai) keep pure-bytes dedup. The two
+ * matching PARTIAL unique indexes are split on `source_provider`, so every upsert
+ * must scope its ON CONFLICT to the matching partial index via `targetWhere`.
+ */
+function isSerperSourceProvider(sourceProvider: string): boolean {
+  return sourceProvider === "serper";
+}
+
+function imageCacheConflictTarget(sourceProvider: string): {
+  target: any[];
+  targetWhere: ReturnType<typeof sql>;
+} {
+  if (isSerperSourceProvider(sourceProvider)) {
+    return {
+      target: [
+        imageCacheTable.sourceUrlHash,
+        imageCacheTable.pipelineVersion,
+        imageCacheTable.backgroundRemoved,
+        imageCacheTable.lookupKey,
+      ],
+      targetWhere: sql`${imageCacheTable.sourceProvider} = 'serper'`,
+    };
+  }
+  return {
+    target: [
+      imageCacheTable.sourceUrlHash,
+      imageCacheTable.pipelineVersion,
+      imageCacheTable.backgroundRemoved,
+    ],
+    targetWhere: sql`${imageCacheTable.sourceProvider} <> 'serper'`,
+  };
+}
+
 function failedStatusRetryMs(): number {
   const raw = process.env.IMAGE_FAILED_STATUS_RETRY_MS;
   if (!raw) return DEFAULT_FAILED_STATUS_RETRY_MS;
@@ -116,10 +155,11 @@ function warnImageCacheConflictIndexMissingOnce(): void {
   if (imageCacheConflictIndexWarned) return;
   imageCacheConflictIndexWarned = true;
   logger.error(
-    "image_cache is missing the (source_url_hash, pipeline_version, background_removed) unique index, " +
+    "image_cache is missing the provider-split unique indexes " +
+      "(image_cache_source_pipeline_bg_serper_unique_idx / _nonserper_unique_idx), " +
       "so every processed-image upsert fails (Postgres 42P10) and images cannot be cached — processed " +
       "objects still upload and serve for the current request, but nothing persists. Apply migration " +
-      "lib/db/migrations/0001_image_cache_bg_variant_unique.sql (creates image_cache_source_pipeline_bg_unique_idx) " +
+      "lib/db/migrations/0003_image_cache_serper_lookup_scope.sql (and 0001 if not yet applied) " +
       "against the production database to restore caching.",
   );
 }
@@ -273,8 +313,18 @@ function markCacheHitDeferred(id: string): void {
 export async function getReadyCachedImageBySourceHash(
   sourceUrlHash: string,
   removeBackground: boolean,
+  // Serper-row scope (image-pipeline H1/H3). When the request is Serper-sourced,
+  // a row only satisfies it if it belongs to the SAME fragrance — two fragrances
+  // whose Serper search returned the same image URL share a source_url_hash but
+  // must NOT cross-serve. Pass { sourceProvider: "serper", lookupKey } to scope
+  // the read; manual/reimagine/openai callers omit it for pure-bytes dedup.
+  scope?: { sourceProvider?: string; lookupKey?: string | null },
   pipelineVersion = IMAGE_PIPELINE_VERSION,
 ): Promise<CachedImageReference | null> {
+  const serperScopeFilter =
+    scope?.sourceProvider === "serper" && scope.lookupKey
+      ? [eq(imageCacheTable.sourceProvider, "serper"), eq(imageCacheTable.lookupKey, scope.lookupKey)]
+      : [];
   // Positive-cache variant isolation: when BG removal is requested, a
   // background-removed row satisfies it OR a deterministic "fallback" row — one
   // where removal was attempted on this source and produced an unusable cutout,
@@ -296,6 +346,7 @@ export async function getReadyCachedImageBySourceHash(
           eq(imageCacheTable.pipelineVersion, pipelineVersion),
           eq(imageCacheTable.processingStatus, "ready"),
           ...variantFilter,
+          ...serperScopeFilter,
         ),
       )
       .orderBy(desc(imageCacheTable.backgroundRemoved))
@@ -391,12 +442,21 @@ export async function getLatestReadyCachedImageBySearchQueryHash(
 export async function getCachedImageStatusBySourceHash(
   sourceUrlHash: string,
   removeBackground: boolean,
+  // Serper-row scope (image-pipeline H1/H3): a negative-cache "failed" row for
+  // fragrance A must not suppress retries for fragrance B that happens to share
+  // the same Serper image URL. Scope the status read to the requesting fragrance
+  // for Serper rows; manual/etc. callers omit it (pure-bytes dedup).
+  scope?: { sourceProvider?: string; lookupKey?: string | null },
   pipelineVersion = IMAGE_PIPELINE_VERSION,
 ): Promise<"ready" | "failed" | "processing" | null> {
   // Negative-cache variant isolation: a "failed" row is keyed on the requested
   // background-removal variant, so only check the slot for THIS request's
   // variant. A failure recorded for the other variant must not suppress this
   // one (matches recordImageFailure's `backgroundRemoved` write value).
+  const serperScopeFilter =
+    scope?.sourceProvider === "serper" && scope.lookupKey
+      ? [eq(imageCacheTable.sourceProvider, "serper"), eq(imageCacheTable.lookupKey, scope.lookupKey)]
+      : [];
   let rows: { processingStatus: string; updatedAt: Date | null }[];
   try {
     rows = await db
@@ -407,6 +467,7 @@ export async function getCachedImageStatusBySourceHash(
           eq(imageCacheTable.sourceUrlHash, sourceUrlHash),
           eq(imageCacheTable.pipelineVersion, pipelineVersion),
           eq(imageCacheTable.backgroundRemoved, removeBackground),
+          ...serperScopeFilter,
         ),
       )
       .limit(1);
@@ -455,6 +516,7 @@ export async function recordImageReady(input: {
   assertNoPersistedBase64Image(input.sourceUrl, "image_cache.source_url");
 
   const pipelineVersion = input.pipelineVersion ?? IMAGE_PIPELINE_VERSION;
+  const conflict = imageCacheConflictTarget(input.sourceProvider);
   // Flatten the Orientation Engine metadata to columns. Written on both insert
   // and conflict-update so re-processing a source upgrades a legacy row in place.
   const o = input.orientation ?? null;
@@ -497,14 +559,13 @@ export async function recordImageReady(input: {
         updatedAt: new Date(),
       })
       .onConflictDoUpdate({
-        // Conflict key matches the (source_url_hash, pipeline_version,
-        // background_removed) unique index so re-processing the SAME variant
-        // upgrades its row in place, while the OTHER variant keeps its own row.
-        target: [
-          imageCacheTable.sourceUrlHash,
-          imageCacheTable.pipelineVersion,
-          imageCacheTable.backgroundRemoved,
-        ],
+        // Conflict key matches the provider-split partial unique index (Serper
+        // rows include lookup_key; others do not — see imageCacheConflictTarget)
+        // so re-processing the SAME variant upgrades its row in place, while the
+        // OTHER variant — and, for Serper, the OTHER fragrance sharing this source
+        // URL — keeps its own row.
+        target: conflict.target,
+        targetWhere: conflict.targetWhere,
         set: {
           lookupKey: input.lookupKey ?? null,
           contentHash: input.contentHash,
@@ -559,6 +620,7 @@ export async function recordImageFailure(input: {
 }): Promise<void> {
   assertNoPersistedBase64Image(input.sourceUrl, "image_cache.source_url");
   const pipelineVersion = input.pipelineVersion ?? IMAGE_PIPELINE_VERSION;
+  const conflict = imageCacheConflictTarget(input.sourceProvider);
   try {
     await db
       .insert(imageCacheTable)
@@ -579,11 +641,8 @@ export async function recordImageFailure(input: {
         updatedAt: new Date(),
       })
       .onConflictDoUpdate({
-        target: [
-          imageCacheTable.sourceUrlHash,
-          imageCacheTable.pipelineVersion,
-          imageCacheTable.backgroundRemoved,
-        ],
+        target: conflict.target,
+        targetWhere: conflict.targetWhere,
         set: {
           processingStatus: "failed",
           failureReason: input.failureReason.slice(0, 500),

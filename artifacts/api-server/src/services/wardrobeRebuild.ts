@@ -100,35 +100,62 @@ export async function rebuildWardrobeForUser(
       const rebuiltName = typeof flat.name === "string" && flat.name.trim() ? flat.name : name;
       const rebuiltBrand = typeof flat.brand === "string" && flat.brand.trim() ? flat.brand : brand;
       const flatImageUrl = await usableImageUrlForResponse(flat.imageUrl);
-      const merged = sanitizeFragrance({
-        ...data,
-        ...flat,
-        name: rebuiltName,
-        brand: rebuiltBrand,
-        product: {
-          ...(typeof flat.product === "object" && flat.product ? flat.product : {}),
+
+      // Per-row transaction: buildProfile above can run for a long time, during
+      // which the user may have edited (or deleted) this row. Re-read the row's
+      // LATEST fragrance_data inside the transaction and merge the rebuilt
+      // profile onto that, so the write never reverts a concurrent user edit to
+      // the loop-start snapshot — and a crash mid-loop leaves each processed row
+      // either fully rebuilt+stamped or untouched, never half-written.
+      const wrote = await db.transaction(async (tx) => {
+        const [fresh] = await tx
+          .select()
+          .from(userFragrancesTable)
+          .where(and(
+            eq(userFragrancesTable.tenantId, tenantId),
+            eq(userFragrancesTable.id, r.id),
+          ))
+          .limit(1);
+        if (!fresh) return false; // row deleted mid-rebuild; skip cleanly.
+
+        const freshData = normalizeFragrance(fresh.fragranceData as Record<string, any>);
+        const merged = sanitizeFragrance({
+          ...freshData,
+          ...flat,
           name: rebuiltName,
           brand: rebuiltBrand,
-        },
-        imageUrl: flatImageUrl ?? "",
-        id: r.id,
-        season: typeof data.season === "string" && data.season ? data.season : "Universal",
-        intents: data.intents,
-        energies: data.energies,
-        shareHidden: data.shareHidden,
-        // WS-17: per-row completion marker so a crashed rebuild can resume.
-        rebuilt_at: new Date().toISOString(),
-      });
-      assertNoPersistedBase64Image(merged, "user_fragrances.fragrance_data");
+          product: {
+            ...(typeof flat.product === "object" && flat.product ? flat.product : {}),
+            name: rebuiltName,
+            brand: rebuiltBrand,
+          },
+          imageUrl: flatImageUrl ?? "",
+          id: r.id,
+          season: typeof freshData.season === "string" && freshData.season ? freshData.season : "Universal",
+          intents: freshData.intents,
+          energies: freshData.energies,
+          shareHidden: freshData.shareHidden,
+          // WS-17: per-row completion marker so a crashed rebuild can resume.
+          rebuilt_at: new Date().toISOString(),
+        });
+        assertNoPersistedBase64Image(merged, "user_fragrances.fragrance_data");
 
-      await db
-        .update(userFragrancesTable)
-        .set({ fragranceData: merged as any })
-        .where(and(
-          eq(userFragrancesTable.tenantId, tenantId),
-          eq(userFragrancesTable.id, r.id),
-        ));
-      rebuilt++;
+        await tx
+          .update(userFragrancesTable)
+          .set({ fragranceData: merged as any })
+          .where(and(
+            eq(userFragrancesTable.tenantId, tenantId),
+            eq(userFragrancesTable.id, r.id),
+          ));
+        return true;
+      });
+
+      if (wrote) {
+        rebuilt++;
+      } else {
+        skipped++;
+        failures.push({ id: r.id, reason: "row deleted during rebuild" });
+      }
     } catch (err: any) {
       logger.warn({ err: err?.message, id: r.id }, "wardrobe/rebuild: row failed");
       skipped++;

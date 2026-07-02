@@ -222,17 +222,38 @@ class FirebaseImageObjectStorage implements ImageObjectStorage {
     const bucket = this.getBucket();
     const token = randomUUID();
     const file = bucket.file(input.key);
-    await file.save(input.buffer, {
-      resumable: false,
-      contentType: input.contentType,
-      metadata: {
-        cacheControl: input.cacheControl ?? DEFAULT_CACHE_CONTROL,
-        contentType: input.contentType,
-        metadata: {
-          firebaseStorageDownloadTokens: token,
-        },
-      },
-    });
+    // The firebase-admin Storage SDK does not accept an AbortSignal, so bound the
+    // upload with a timeout race (mirrors the Supabase fetchWithTimeout above): a
+    // stalled save must not hang the candidate's in-flight promise — and, via
+    // inFlightBySource, every concurrent request for that source — indefinitely.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        file.save(input.buffer, {
+          resumable: false,
+          contentType: input.contentType,
+          metadata: {
+            cacheControl: input.cacheControl ?? DEFAULT_CACHE_CONTROL,
+            contentType: input.contentType,
+            metadata: {
+              firebaseStorageDownloadTokens: token,
+            },
+          },
+        }),
+        new Promise<never>((_resolve, reject) => {
+          timer = setTimeout(
+            () =>
+              reject(
+                new Error(`Firebase Storage upload timed out after ${STORAGE_FETCH_TIMEOUT_MS}ms`),
+              ),
+            STORAGE_FETCH_TIMEOUT_MS,
+          );
+          timer.unref?.();
+        }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
 
     return {
       publicUrl: await this.getPublicUrlWithToken(input.key, token),
