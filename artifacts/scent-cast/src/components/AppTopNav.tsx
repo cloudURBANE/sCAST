@@ -407,7 +407,7 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
                 end={item.to === '/'}
                 className={({ isActive }) =>
                   [
-                    'inline-flex min-h-11 flex-col items-center justify-center gap-px rounded-full px-2 text-[9.5px] font-semibold uppercase tracking-[0.1em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55',
+                    'inline-flex min-h-11 flex-col items-center justify-center gap-px rounded-full px-2 text-[9.5px] font-semibold uppercase tracking-[0.1em] transition-colors duration-200 active:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55',
                     isActive
                       ? 'bg-gradient-to-b from-[#E6CB6E] to-[#C9A436] text-[#1a1206] shadow-[inset_0_1px_0_rgba(255,247,236,0.4)]'
                       : 'text-scent-text-muted hover:text-foreground',

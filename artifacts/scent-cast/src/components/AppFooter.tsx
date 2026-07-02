@@ -15,8 +15,11 @@ const legalLinks = [
   { to: "/cookies", label: "Cookie Policy" },
 ];
 
+// min-h + flex centering give each legal link a ~44px touch target (they were
+// bare ~16px line boxes, easy to mis-tap); the visual text treatment is
+// unchanged and the extra height is absorbed by the footer's generous padding.
 const linkClassName =
-  "text-[11px] font-semibold uppercase tracking-[0.18em] text-scent-text-subtle transition-colors hover:text-scent-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 rounded-sm";
+  "inline-flex min-h-11 items-center text-[11px] font-semibold uppercase tracking-[0.18em] text-scent-text-subtle transition-colors hover:text-scent-accent active:text-scent-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55 rounded-sm";
 
 export const AppFooter: React.FC<{ className?: string }> = ({ className = "" }) => {
   return (

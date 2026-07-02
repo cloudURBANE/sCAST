@@ -7,7 +7,7 @@ import { buildHeroTickerPhrases } from './lib/heroTickerPhrases';
 import { stableProposalItemId, type CurateCollectionResult } from './lib/collectionCuration';
 import { getPendingCuration, curationItemToFragrance, pickResumeCurationTarget } from './lib/curationClient';
 import { X } from 'lucide-react';
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { AnimatePresence, animate, motion, useMotionValue, useReducedMotion } from 'framer-motion';
 import { ThreadBackground, type ThreadBackgroundMode } from './components/threads/ThreadBackground';
 import { AppTopNav } from './components/AppTopNav';
 import { WeeklyOutlookDashboard } from './components/WeeklyOutlookDashboard';
@@ -754,10 +754,27 @@ function DashboardView() {
   const handleMissionStatus = useCallback((status: ScentMissionStatus) => {
     setMissionStatus(status);
   }, []);
+  // With `layout` FLIP disabled on calm devices (every phone), the hero box
+  // used to snap instantly between the short search card and the tall Beam
+  // panel — the crossfade played over a hard height jump. Instead, right
+  // before the view swap the inner wrapper is pinned to its current pixel
+  // height, then tweened to the incoming view's height and released back to
+  // `auto`. This is a plain height tween (the same technique the mission
+  // header's exit collapse already uses safely on iOS) — no FLIP transforms,
+  // and `auto` outside the swap means streaming content never fights an
+  // animated height. Driven through a MotionValue so no React re-renders.
+  const heroInnerHeight = useMotionValue<number | 'auto'>('auto');
+  const heroMeasureRef = useRef<HTMLDivElement | null>(null);
+  const beginHeroHeightTween = useCallback(() => {
+    if (!calmLayout || reduceMotion) return;
+    const el = heroMeasureRef.current;
+    if (el) heroInnerHeight.set(el.offsetHeight);
+  }, [calmLayout, reduceMotion, heroInnerHeight]);
   const handleExitMission = useCallback(() => {
+    beginHeroHeightTween();
     setViewState('search');
     setMissionStatus(null);
-  }, []);
+  }, [beginHeroHeightTween]);
   const heroVaultRef = useRef<HTMLDivElement | null>(null);
   const signatureSectionRef = useRef<HTMLDivElement | null>(null);
   const recommendationOverlayRef = useRef<HTMLDivElement | null>(null);
@@ -887,22 +904,64 @@ function DashboardView() {
     }
   }, [discoveryReady, viewState]);
 
+  // Runs the hero height tween armed by beginHeroHeightTween(). Fires after the
+  // view swap has committed to the DOM (the measure wrapper already holds the
+  // incoming view), animates the pinned height to the new natural height, then
+  // releases back to 'auto'. When the value is 'auto' (desktop FLIP path, or no
+  // swap in flight) this is a no-op.
+  useLayoutEffect(() => {
+    if (heroInnerHeight.get() === 'auto') return;
+    const el = heroMeasureRef.current;
+    if (!el) return;
+    const controls = animate(heroInnerHeight, el.offsetHeight, {
+      duration: 0.42,
+      ease: [0.16, 1, 0.3, 1],
+      onComplete: () => heroInnerHeight.set('auto'),
+    });
+    return () => controls.stop();
+  }, [viewState, heroInnerHeight]);
+
+  // While the swap tween is in flight, retarget it if the incoming content
+  // resizes mid-animation (e.g. the lazy panel chunk resolves and replaces the
+  // Suspense skeleton), so a late resolve glides instead of snapping. Inert
+  // whenever the height is 'auto'.
+  useEffect(() => {
+    const el = heroMeasureRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => {
+      if (heroInnerHeight.get() === 'auto') return;
+      const target = el.offsetHeight;
+      if (heroInnerHeight.get() === target) return;
+      animate(heroInnerHeight, target, {
+        duration: 0.42,
+        ease: [0.16, 1, 0.3, 1],
+        onComplete: () => heroInnerHeight.set('auto'),
+      });
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [heroInnerHeight]);
+
   useEffect(() => {
     if (viewState !== 'agent') return;
     // The Beam Agent replaces the search card inside the hero box, so bring that
-    // box into view on open. `block: 'nearest'` avoids a hard page jump.
-    const id = window.requestAnimationFrame(() => {
+    // box into view on open. `block: 'nearest'` avoids a hard page jump. Wait
+    // for the swap/height tween (0.42s) to finish first so the smooth scroll
+    // measures the panel's final height and never competes with the swap
+    // animation for frames on iOS.
+    const id = window.setTimeout(() => {
       heroVaultRef.current?.scrollIntoView({
         behavior: reduceMotion ? 'auto' : 'smooth',
         block: 'nearest',
       });
-    });
-    return () => window.cancelAnimationFrame(id);
+    }, reduceMotion ? 0 : 460);
+    return () => window.clearTimeout(id);
   }, [reduceMotion, viewState]);
 
   const handleOpenMission = useCallback(() => {
+    beginHeroHeightTween();
     setViewState('agent');
-  }, []);
+  }, [beginHeroHeightTween]);
 
   // Warm the Beam Agent chunk during idle time once the Discover CTA is actually
   // reachable, so touch users (no hover to prefetch on) get an instant, flash-free
@@ -1050,7 +1109,11 @@ function DashboardView() {
 
       <div style={{ height: 'var(--topbar-h)' }} />
 
-      <main className="relative z-10 px-4 sm:px-8 sm:pb-24 max-w-[1760px] mx-auto">
+      {/* Gutters respect the horizontal safe-area insets (viewport-fit=cover):
+          in landscape on a notched phone the content column stays clear of the
+          notch/rounded corners like the fixed bars already do. Portrait is
+          unchanged (insets are 0, so max() resolves to the original 1rem/2rem). */}
+      <main className="relative z-10 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] sm:pl-[max(2rem,env(safe-area-inset-left))] sm:pr-[max(2rem,env(safe-area-inset-right))] sm:pb-24 max-w-[1760px] mx-auto">
         {/* Home — first viewport. On phones this column fills the space below the
             top bar (min-h = 100svh − topbar) and reserves the floating tab bar as
             real bottom PADDING (bottomnav-h + breathing room). Padding — not a
@@ -1117,7 +1180,7 @@ function DashboardView() {
                       // tap from being read as a scroll-start during the busy
                       // close frame, so a single tap reliably triggers the exit.
                       style={{ touchAction: 'manipulation' }}
-                      className="absolute right-0 top-1/2 inline-flex min-h-11 -translate-y-1/2 items-center justify-center gap-1.5 rounded-full px-3 text-scent-text-subtle transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
+                      className="absolute right-0 top-1/2 inline-flex min-h-11 -translate-y-1/2 items-center justify-center gap-1.5 rounded-full px-3 text-scent-text-subtle transition-colors duration-200 active:bg-white/10 hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55"
                       aria-label="Close and return to fragrance search"
                     >
                       <X size={18} strokeWidth={1.75} aria-hidden />
@@ -1150,7 +1213,11 @@ function DashboardView() {
               style={{ scrollMarginTop: 'calc(var(--topbar-h) + 1rem)' }}
               data-view-state={viewState}
             >
-              <div className="scent-vault-panel-inner min-w-0">
+              {/* Height rides the swap MotionValue ('auto' outside a swap); the
+                  plain wrapper below is the natural-height measure target for
+                  the tween. See heroInnerHeight above. */}
+              <motion.div className="scent-vault-panel-inner min-w-0" style={{ height: heroInnerHeight }}>
+                <div ref={heroMeasureRef} className="min-w-0">
                 {/* popLayout pops the outgoing surface out of flow so the panel
                     resizes in a single smooth stage while the two views
                     crossfade — instead of the old wait-mode swap, which let the
@@ -1198,7 +1265,8 @@ function DashboardView() {
                     </motion.div>
                   )}
                 </AnimatePresence>
-              </div>
+                </div>
+              </motion.div>
             </motion.div>
 
             {/* One stable lower action slot owns both states: search mode shows
@@ -1238,6 +1306,10 @@ function DashboardView() {
                       type="button"
                       onClick={handleOpenMission}
                       onPointerEnter={prefetchScentMissionPanel}
+                      // pointerdown fires ~80-120ms before click on touch, where
+                      // pointerenter/focus never warm the chunk — a free head
+                      // start against the Suspense skeleton on a cold open.
+                      onPointerDown={prefetchScentMissionPanel}
                       onFocus={prefetchScentMissionPanel}
                       initial={reduceMotion ? false : { opacity: 0, y: -4 }}
                       animate={{ opacity: 1, y: 0 }}
