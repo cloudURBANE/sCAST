@@ -888,27 +888,33 @@ router.get("/community/posts", optionalAuth, async (req: AuthRequest, res, next)
       );
     }
     if (q) {
-      const pattern = `%${q}%`;
+      // Escape LIKE metacharacters (\, %, _) so a user typing them searches for
+      // the literal character instead of getting over-broad matches or driving a
+      // pathologically expensive pattern over the EXISTS subqueries. The backslash
+      // must be escaped first; the explicit ESCAPE '\' on each ILIKE makes the
+      // backslash the binding escape character. Values remain parameterized.
+      const escapedQ = q.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+      const pattern = `%${escapedQ}%`;
       // Match what the search box promises ("rooms, fragrances, tags, or notes"):
       // title/body plus tenant-scoped EXISTS over the post's tags and the
       // catalog-fragrance snapshot's name/brand (jsonb). Parameterized throughout.
       conditions.push(
         or(
-          sql`${communityPostsTable.title} ILIKE ${pattern}`,
-          sql`${communityPostsTable.body} ILIKE ${pattern}`,
+          sql`${communityPostsTable.title} ILIKE ${pattern} ESCAPE '\\'`,
+          sql`${communityPostsTable.body} ILIKE ${pattern} ESCAPE '\\'`,
           sql`exists (
             select 1 from ${communityTagsTable}
             where ${communityTagsTable.tenantId} = ${tenantId}
               and ${communityTagsTable.postId} = ${communityPostsTable.id}
-              and ${communityTagsTable.tag} ILIKE ${pattern}
+              and ${communityTagsTable.tag} ILIKE ${pattern} ESCAPE '\\'
           )`,
           sql`exists (
             select 1 from ${communityPostFragrancesTable}
             where ${communityPostFragrancesTable.tenantId} = ${tenantId}
               and ${communityPostFragrancesTable.postId} = ${communityPostsTable.id}
               and (
-                ${communityPostFragrancesTable.fragrance}->>'name' ILIKE ${pattern}
-                or ${communityPostFragrancesTable.fragrance}->>'brand' ILIKE ${pattern}
+                ${communityPostFragrancesTable.fragrance}->>'name' ILIKE ${pattern} ESCAPE '\\'
+                or ${communityPostFragrancesTable.fragrance}->>'brand' ILIKE ${pattern} ESCAPE '\\'
               )
           )`,
         )!,
