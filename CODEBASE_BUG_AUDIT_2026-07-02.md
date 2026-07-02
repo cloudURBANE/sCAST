@@ -34,6 +34,12 @@ makes the candidate safe. Tests referenced are the in-repo `*.test.ts` / `test_*
 
 ### A1. Unauthenticated SSRF via TOCTOU / DNS-rebinding in the image proxy — **Confirmed · High**
 
+> **Status: FIXED** (`claude/diamond-file-improvement-shafsl`). `safeImageFetch.ts` now
+> connects via `node:http`/`node:https` with a custom `lookup` (`pinnedPublicLookup`)
+> that resolves once, rejects the whole connection if ANY resolved address is private,
+> and hands the socket exactly the validated addresses — so the connected-to address
+> can no longer differ from the validated one. Fixed together with A2.
+
 - **Where:** `artifacts/api-server/src/services/safeImageFetch.ts:263` (validate) vs `:267`
   (`fetch(current.toString())`); reachable anonymously through
   `artifacts/api-server/src/routes/imageProxy.ts:61` (`GET /api/image-proxy?url=…`),
@@ -53,6 +59,16 @@ makes the candidate safe. Tests referenced are the in-repo `*.test.ts` / `test_*
 
 ### A2. IPv4-mapped IPv6 private ranges bypass the SSRF guard — **Confirmed · High**
 
+> **Status: FIXED** (`claude/diamond-file-improvement-shafsl`). `isPrivateIpAddress`
+> now normalizes IPv4-mapped/-compatible IPv6 (dotted and hex forms) to its embedded
+> IPv4 and runs the IPv4 predicate, and blocks all IPv6 multicast (`ff00::/8`); the
+> IPv4 predicate gained CGNAT (`100.64/10`) and reserved (`240/4`)/broadcast. Also
+> closed a compounding hole the audit implied at `:165`: `URL.hostname` keeps IPv6
+> literals **bracketed** (`[::1]`), so `net.isIP("[::1]")` was `0` and the literal-IP
+> guard was skipped for every IPv6 literal — `parseAndValidateExternalImageUrl` now
+> strips the brackets before validating. Covered by new unit tests in
+> `safeImageFetch.test.ts`.
+
 - **Where:** `artifacts/api-server/src/services/safeImageFetch.ts:128-140`
   (`isPrivateIpAddress`, IPv6 branch).
 - **Symptom:** The IPv4 branch correctly blocks `169.254.0.0/16` (metadata),
@@ -69,6 +85,14 @@ makes the candidate safe. Tests referenced are the in-repo `*.test.ts` / `test_*
   exploitable, unauthenticated internal-metadata SSRF.
 
 ### A3. Google OAuth has no `state` / PKCE → login-CSRF — **Confirmed · Medium**
+
+> **Status: FIXED** (`claude/diamond-file-improvement-shafsl`). `/auth/google` now mints
+> a random `state` and a PKCE `code_verifier`, stores both in short-lived httpOnly
+> `SameSite=Lax` cookies scoped to `/api/auth`, and sends `state` + S256
+> `code_challenge`. The callback constant-time-compares the returned `state` against
+> the cookie (rejecting to `?oauth_error=invalid_state` on any mismatch/missing
+> cookie), clears the single-use cookies, and forwards `code_verifier` in the token
+> exchange. No global middleware added — the cookie is read via a local header parse.
 
 - **Where:** `artifacts/api-server/src/routes/oauth.ts:222-240` (`/auth/google`),
   `:242-361` (callback).

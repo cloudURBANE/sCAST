@@ -1,5 +1,8 @@
-import { lookup } from "node:dns/promises";
+import { lookup as dnsLookup } from "node:dns";
+import http from "node:http";
+import https from "node:https";
 import net from "node:net";
+import type { Readable } from "node:stream";
 
 const DEFAULT_MAX_BYTES = 8 * 1024 * 1024;
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -111,32 +114,59 @@ function ipToNumber(ip: string): number {
   return ip.split(".").reduce((acc, part) => (acc << 8) + Number(part), 0) >>> 0;
 }
 
+function isPrivateIpv4(address: string): boolean {
+  const n = ipToNumber(address);
+  return (
+    (n >= ipToNumber("0.0.0.0") && n <= ipToNumber("0.255.255.255")) ||
+    (n >= ipToNumber("10.0.0.0") && n <= ipToNumber("10.255.255.255")) ||
+    (n >= ipToNumber("100.64.0.0") && n <= ipToNumber("100.127.255.255")) || // CGNAT
+    (n >= ipToNumber("127.0.0.0") && n <= ipToNumber("127.255.255.255")) ||
+    (n >= ipToNumber("169.254.0.0") && n <= ipToNumber("169.254.255.255")) || // link-local incl. cloud metadata
+    (n >= ipToNumber("172.16.0.0") && n <= ipToNumber("172.31.255.255")) ||
+    (n >= ipToNumber("192.168.0.0") && n <= ipToNumber("192.168.255.255")) ||
+    (n >= ipToNumber("224.0.0.0") && n <= ipToNumber("239.255.255.255")) || // multicast
+    (n >= ipToNumber("240.0.0.0") && n <= ipToNumber("255.255.255.255")) // reserved + broadcast
+  );
+}
+
+/**
+ * Extract the embedded IPv4 from an IPv4-mapped/-compatible IPv6 address, in either
+ * the dotted (`::ffff:169.254.169.254`) or hex (`::ffff:a9fe:a9fe`) form, so the
+ * IPv4 private-range predicate can be applied. Returns null for a genuine IPv6.
+ */
+function extractMappedIpv4(normalized: string): string | null {
+  const dotted = normalized.match(/(?:^|:)((?:\d{1,3}\.){3}\d{1,3})$/);
+  if (dotted && net.isIPv4(dotted[1])) return dotted[1];
+
+  const hex = normalized.match(/^::(?:ffff:)?([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+  if (hex) {
+    const hi = parseInt(hex[1], 16);
+    const lo = parseInt(hex[2], 16);
+    return `${(hi >> 8) & 0xff}.${hi & 0xff}.${(lo >> 8) & 0xff}.${lo & 0xff}`;
+  }
+  return null;
+}
+
 export function isPrivateIpAddress(address: string): boolean {
   if (net.isIPv4(address)) {
-    const n = ipToNumber(address);
-    return (
-      (n >= ipToNumber("0.0.0.0") && n <= ipToNumber("0.255.255.255")) ||
-      (n >= ipToNumber("10.0.0.0") && n <= ipToNumber("10.255.255.255")) ||
-      (n >= ipToNumber("127.0.0.0") && n <= ipToNumber("127.255.255.255")) ||
-      (n >= ipToNumber("169.254.0.0") && n <= ipToNumber("169.254.255.255")) ||
-      (n >= ipToNumber("172.16.0.0") && n <= ipToNumber("172.31.255.255")) ||
-      (n >= ipToNumber("192.168.0.0") && n <= ipToNumber("192.168.255.255")) ||
-      (n >= ipToNumber("224.0.0.0") && n <= ipToNumber("239.255.255.255"))
-    );
+    return isPrivateIpv4(address);
   }
 
   if (net.isIPv6(address)) {
     const normalized = address.toLowerCase();
+    // An IPv4-mapped/-compatible address (e.g. `::ffff:169.254.169.254`) reaches the
+    // SAME host as its embedded IPv4, so it must be judged by the IPv4 predicate —
+    // otherwise mapped metadata/loopback/private ranges slip past the IPv6 checks.
+    const mapped = extractMappedIpv4(normalized);
+    if (mapped) return isPrivateIpv4(mapped);
+
     return (
-      normalized === "::1" ||
-      normalized === "::" ||
-      normalized.startsWith("fc") ||
+      normalized === "::1" || // loopback
+      normalized === "::" || // unspecified
+      normalized.startsWith("fc") || // unique local (fc00::/7)
       normalized.startsWith("fd") ||
-      normalized.startsWith("fe80") ||
-      normalized.startsWith("::ffff:127.") ||
-      normalized.startsWith("::ffff:10.") ||
-      normalized.startsWith("::ffff:192.168.") ||
-      /^::ffff:172\.(1[6-9]|2\d|3[0-1])\./.test(normalized)
+      normalized.startsWith("fe80") || // link-local
+      normalized.startsWith("ff") // multicast (ff00::/8)
     );
   }
 
@@ -162,34 +192,63 @@ export function parseAndValidateExternalImageUrl(raw: string): URL {
   if (!hostname || BLOCKED_HOSTS.has(hostname) || hostname.endsWith(".local")) {
     throw new UnsafeImageUrlError("Local image hosts are not allowed");
   }
-  if (net.isIP(hostname) && isPrivateIpAddress(hostname)) {
+  // `URL.hostname` keeps IPv6 literals bracketed (e.g. `[::1]`, `[::ffff:a9fe:a9fe]`),
+  // and `net.isIP("[::1]")` is 0 — so without stripping the brackets the literal-IP
+  // guard is silently skipped for EVERY IPv6 literal (loopback, ULA, mapped metadata).
+  // The socket connects to the un-bracketed address, so validate that same form here.
+  const bareHost = hostname.startsWith("[") && hostname.endsWith("]") ? hostname.slice(1, -1) : hostname;
+  if (net.isIP(bareHost) && isPrivateIpAddress(bareHost)) {
     throw new UnsafeImageUrlError("Private network image URLs are not allowed");
   }
 
   return parsed;
 }
 
-async function assertPublicDnsTarget(hostname: string): Promise<void> {
-  if (net.isIP(hostname)) {
-    if (isPrivateIpAddress(hostname)) {
-      throw new UnsafeImageUrlError("Private network image URLs are not allowed");
+/**
+ * A `net.LookupFunction` that resolves the hostname ONCE, rejects the whole
+ * connection if ANY resolved address is private, and hands the socket exactly the
+ * addresses it validated. Because Node connects to what this callback returns (it
+ * does not re-resolve), the address we approved is the address the socket reaches —
+ * which closes the TOCTOU / DNS-rebinding window that a separate "validate then
+ * fetch(hostname)" sequence leaves open (attacker DNS can return a public IP to the
+ * validator and a private IP to the connect). Literal-IP hosts are already rejected
+ * up-front by `parseAndValidateExternalImageUrl`; this re-checks resolved records.
+ */
+const pinnedPublicLookup: net.LookupFunction = (hostname, options, callback) => {
+  dnsLookup(hostname, { all: true, verbatim: false }, (err, addresses) => {
+    if (err) {
+      // DNS can fail intermittently; treat a non-resolving host as transient so
+      // the pipeline retries on the next request instead of negative-caching it.
+      callback(new UnsafeImageUrlError("Image host did not resolve", { transient: true }), "", 0);
+      return;
     }
-    return;
-  }
 
-  const addresses = await lookup(hostname, { all: true, verbatim: false });
-  if (addresses.length === 0) {
-    // DNS can fail intermittently; treat a non-resolving host as transient so
-    // the pipeline retries on the next request instead of negative-caching it.
-    throw new UnsafeImageUrlError("Image host did not resolve", { transient: true });
-  }
-
-  for (const record of addresses) {
-    if (isPrivateIpAddress(record.address)) {
-      throw new UnsafeImageUrlError("Image host resolves to a private network address");
+    const records = Array.isArray(addresses) ? addresses : [];
+    if (records.length === 0) {
+      callback(new UnsafeImageUrlError("Image host did not resolve", { transient: true }), "", 0);
+      return;
     }
-  }
-}
+
+    for (const record of records) {
+      if (isPrivateIpAddress(record.address)) {
+        callback(
+          new UnsafeImageUrlError("Image host resolves to a private network address"),
+          "",
+          0,
+        );
+        return;
+      }
+    }
+
+    // Node's default Happy-Eyeballs (autoSelectFamily) calls this with `all: true`
+    // and expects the full validated list; otherwise return the first validated hit.
+    if (options && typeof options === "object" && (options as { all?: boolean }).all) {
+      callback(null, records);
+    } else {
+      callback(null, records[0].address, records[0].family);
+    }
+  });
+};
 
 function normalizeContentType(value: string | null): string {
   return (value ?? "").split(";")[0].trim().toLowerCase();
@@ -223,27 +282,66 @@ function anyAbortSignal(signals: AbortSignal[]): AbortSignal {
   return controller.signal;
 }
 
-async function readLimitedBody(response: Response, maxBytes: number, signal?: AbortSignal): Promise<Buffer> {
-  if (!response.body) return Buffer.alloc(0);
-
+async function readLimitedBody(stream: Readable, maxBytes: number, signal?: AbortSignal): Promise<Buffer> {
   const chunks: Buffer[] = [];
   let total = 0;
-  const reader = response.body.getReader();
 
-  while (true) {
-    throwIfAborted(signal);
-    const { done, value } = await reader.read();
-    if (done) break;
-    throwIfAborted(signal);
-    const chunk = Buffer.from(value);
-    total += chunk.length;
-    if (total > maxBytes) {
-      throw new UnsafeImageUrlError(`Image exceeds ${maxBytes} bytes`);
+  try {
+    for await (const value of stream) {
+      throwIfAborted(signal);
+      const chunk = Buffer.isBuffer(value) ? value : Buffer.from(value);
+      total += chunk.length;
+      if (total > maxBytes) {
+        throw new UnsafeImageUrlError(`Image exceeds ${maxBytes} bytes`);
+      }
+      chunks.push(chunk);
     }
-    chunks.push(chunk);
+  } finally {
+    // Free the socket promptly on early exit (size cap / abort / validation reject).
+    stream.destroy();
   }
 
   return Buffer.concat(chunks, total);
+}
+
+type RawImageResponse = {
+  status: number;
+  headers: http.IncomingHttpHeaders;
+  stream: http.IncomingMessage;
+};
+
+/**
+ * Issue a single (non-redirect-following) GET pinned to a validated public address
+ * via {@link pinnedPublicLookup}. Uses `node:http`/`node:https` directly rather than
+ * global `fetch` because only the low-level agent lets us supply a custom `lookup`,
+ * which is what pins the connection to the address we validated.
+ */
+function requestImageOnce(url: URL, signal: AbortSignal): Promise<RawImageResponse> {
+  const transport = url.protocol === "https:" ? https : http;
+  return new Promise<RawImageResponse>((resolve, reject) => {
+    const request = transport.request(
+      url,
+      {
+        method: "GET",
+        signal,
+        lookup: pinnedPublicLookup,
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          Accept: "image/avif,image/webp,image/png,image/jpeg,image/gif;q=0.95,*/*;q=0.1",
+          Referer: `${url.origin}/`,
+        },
+      },
+      (response) => {
+        resolve({
+          status: response.statusCode ?? 0,
+          headers: response.headers,
+          stream: response,
+        });
+      },
+    );
+    request.on("error", reject);
+    request.end();
+  });
 }
 
 export async function fetchExternalImage(
@@ -260,28 +358,21 @@ export async function fetchExternalImage(
 
   for (let redirect = 0; redirect <= MAX_REDIRECTS; redirect += 1) {
     throwIfAborted(options?.signal);
-    await assertPublicDnsTarget(current.hostname);
 
     const timeoutSignal = AbortSignal.timeout(timeoutMs);
     const signal = options?.signal ? anyAbortSignal([options.signal, timeoutSignal]) : timeoutSignal;
-    const response = await fetch(current.toString(), {
-      redirect: "manual",
-      signal,
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Accept": "image/avif,image/webp,image/png,image/jpeg,image/gif;q=0.95,*/*;q=0.1",
-        "Referer": `${current.origin}/`,
-      },
-    });
+    const response = await requestImageOnce(current, signal);
 
     if (response.status >= 300 && response.status < 400) {
-      const location = response.headers.get("location");
+      const location = response.headers.location;
+      response.stream.destroy();
       if (!location) throw new UnsafeImageUrlError("Image redirect missing location");
       current = parseAndValidateExternalImageUrl(new URL(location, current).toString());
       continue;
     }
 
-    if (!response.ok) {
+    if (response.status < 200 || response.status >= 300) {
+      response.stream.destroy();
       // 5xx and 429 are upstream-side and usually recover; mark them transient
       // so they are not negative-cached. 4xx (404/403/410/…) are deterministic.
       const transient = response.status >= 500 || response.status === 429;
@@ -290,22 +381,27 @@ export async function fetchExternalImage(
       });
     }
 
-    const contentLength = Number(response.headers.get("content-length") ?? "0");
+    const contentLength = Number(response.headers["content-length"] ?? "0");
     if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+      response.stream.destroy();
       throw new UnsafeImageUrlError(`Image exceeds ${maxBytes} bytes`);
     }
 
-    const declaredType = normalizeContentType(response.headers.get("content-type"));
+    const contentTypeHeader = response.headers["content-type"];
+    const declaredType = normalizeContentType(
+      Array.isArray(contentTypeHeader) ? contentTypeHeader[0] ?? null : contentTypeHeader ?? null,
+    );
     const resolvedType = JPEG_CONTENT_TYPE_ALIASES.has(declaredType) ? "image/jpeg" : declaredType;
 
     const isAllowedDeclared = ALLOWED_IMAGE_MIME_TYPES.has(resolvedType);
     // Fast-reject obviously-non-image types (e.g. text/html from a social crawler page)
     // before downloading the body. Ambiguous types fall through to magic-byte sniffing.
     if (!isAllowedDeclared && !SNIFFABLE_CONTENT_TYPES.has(resolvedType)) {
+      response.stream.destroy();
       throw new UnsafeImageUrlError(`Unsupported image content type: ${resolvedType || "unknown"}`);
     }
 
-    const buffer = await readLimitedBody(response, maxBytes, signal);
+    const buffer = await readLimitedBody(response.stream, maxBytes, signal);
 
     // A real image is never empty. An empty 200 body (some retailers/WAFs return
     // one behind an image content-type) decodes to naturalWidth === 0 in the
