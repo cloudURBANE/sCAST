@@ -36,6 +36,13 @@ import { Semaphore } from "./imageProxyCache";
 import { safeImageUrlForResponse } from "./persistenceGuards";
 import { fetchExternalImage, parseAndValidateExternalImageUrl } from "./safeImageFetch";
 import { searchSerperImageCandidates, type SerperImageCandidate } from "./serperService";
+import {
+  peekVisionGateVerdict,
+  verifyAutomaticImageWinnerByUrl,
+  verifyAutomaticImageWinnerBytes,
+  visionGateCacheKey,
+} from "./imageVisionGate";
+import { pickVisionApprovedWinner } from "./imageVisionGateCore";
 import { acceptsImageCacheForRequest, shouldUseImageLookupCaches } from "./imagePipelineCachePolicy";
 export { acceptsImageCacheForRequest, shouldUseImageLookupCaches };
 
@@ -120,6 +127,19 @@ export type ResolveProcessedFragranceImageInput = {
    * (failure) caching still applies.
    */
   bypassSourceCache?: boolean;
+  /**
+   * Vision validation gate (image selection audit Tier 3 #10 / Tier 1 #4):
+   * when true, a winning candidate must pass a Gemini "single product bottle
+   * of {brand} {name}?" check before being returned/persisted. Rejections are
+   * recorded in the trace as skipReason "vision_rejected"; a rejected manual/
+   * crawled source yields null so the caller can fall back to Serper, and a
+   * rejected Serper winner falls through to the next-best candidate. Fail-open:
+   * with no Gemini key, or on any model/network error or timeout, the gate is
+   * a no-op pass-through. Set ONLY by the automatic resolution paths
+   * (scentEngine deps wiring); user-curated paths (admin upload/paste-URL,
+   * stripBgOnly, the manual refresh preview) keep unconditional accept.
+   */
+  visionGate?: boolean;
   fixtureId?: string | null;
   traceId?: string | null;
 };
@@ -133,7 +153,12 @@ export type ImagePipelineCandidateTrace = {
   titlePreview?: string;
   sourcePreview?: string;
   skipped?: boolean;
-  skipReason?: "low_identity" | "source_rejected" | "processing_failed" | "current_image";
+  skipReason?:
+    | "low_identity"
+    | "source_rejected"
+    | "processing_failed"
+    | "current_image"
+    | "vision_rejected";
   rejectionReason?: string;
   score?: ImageCandidateScoreBreakdown;
   backgroundRemoved?: boolean;
@@ -458,6 +483,24 @@ async function processCandidate(input: {
   removeBackground: boolean;
   poofOptions?: RemoveBgOptions;
   bypassSourceCache?: boolean;
+  /**
+   * Pre-persistence vision check for the single manual/crawled candidate:
+   * runs on the freshly processed bytes BEFORE upload + image_cache record,
+   * so a vision-rejected image never becomes a ready row. (A recorded manual
+   * row outranks serper rows in getLatestReadyCachedImageByLookupKey and
+   * would poison every later resolution for this fragrance.) Returns false to
+   * reject → processCandidate returns null with nothing recorded (no negative
+   * cache either: the verdict is fragrance-specific while the negative cache
+   * is keyed per-source, and the same source may be the correct image for a
+   * different fragrance). Never set for the serper candidate loop — serper
+   * winners are gated at arbitration so only presumptive winners spend a
+   * model call.
+   */
+  visionCheckBeforeRecord?: (image: {
+    buffer: Buffer;
+    contentHash: string;
+    mimeType: string;
+  }) => Promise<boolean>;
 }): Promise<ProcessedImageResult | null> {
   // bypassSourceCache: skip the positive per-source cache (and the in-flight
   // join, which would otherwise hand back another caller's cached-path result)
@@ -520,6 +563,24 @@ async function processCandidate(input: {
       }
 
       const optimized = await processSourceToWebp(input.source, input.removeBackground, input.poofOptions);
+      if (input.visionCheckBeforeRecord) {
+        const approved = await input.visionCheckBeforeRecord({
+          buffer: optimized.buffer,
+          contentHash: optimized.contentHash,
+          mimeType: optimized.mimeType,
+        });
+        if (!approved) {
+          logger.info(
+            {
+              lookupKey: input.lookupKey,
+              sourceProvider: input.sourceProvider,
+              sourceUrlHash: input.source.sourceUrlHash,
+            },
+            "[imagePipeline] vision gate rejected manual/crawled candidate before persistence",
+          );
+          return null;
+        }
+      }
       const storage = getImageObjectStorage();
       // Include the content hash in the storage key so different processed
       // outputs (e.g. an old white-bg fallback vs. a fresh transparent packshot
@@ -665,19 +726,55 @@ async function resolveProcessedFragranceImageInner(
     traceId: input.traceId,
   };
 
+  // Vision validation gate (audit Tier 3 #10 / Tier 1 #4). Opt-in per request;
+  // fail-open inside imageVisionGate, so with no Gemini key or on any error
+  // this always approves and behavior is unchanged.
+  const visionGateActive = input.visionGate === true;
+  const visionApproveByUrl = async (ref: {
+    imageUrl: string;
+    imageHash?: string | null;
+  }): Promise<boolean> => {
+    if (!visionGateActive) return true;
+    const verdict = await verifyAutomaticImageWinnerByUrl({
+      brand: input.brand,
+      name: input.name,
+      lookupKey,
+      imageUrl: ref.imageUrl,
+      imageHash: ref.imageHash ?? null,
+    });
+    return verdict !== "reject";
+  };
+
   if (input.allowLookupCache !== false && !input.sourceUrl) {
     const cachedByLookup = await getLatestReadyCachedImageByLookupKey(lookupKey);
     if (cachedByLookup && acceptsImageCacheForRequest(cachedByLookup, removeBackground)) {
-      const result = { ...cachedByLookup, pipelineVersion: IMAGE_PIPELINE_VERSION };
-      return attachTrace(result, makeTrace({ ...traceBase, final: result }));
+      // Gate cached returns too when the gate is on: an automatic run whose
+      // winner was vision-rejected still recorded processed candidates as
+      // ready rows, and without this check a later automatic resolution would
+      // hand one straight back (verdict is memoized, so this is normally a
+      // no-cost map lookup).
+      if (await visionApproveByUrl(cachedByLookup)) {
+        const result = { ...cachedByLookup, pipelineVersion: IMAGE_PIPELINE_VERSION };
+        return attachTrace(result, makeTrace({ ...traceBase, final: result }));
+      }
+      logger.info(
+        { lookupKey, imageHash: cachedByLookup.imageHash },
+        "[imagePipeline] vision gate rejected lookup-cached image; continuing to search",
+      );
     }
   }
 
   if (input.allowLookupCache !== false && !input.sourceUrl && searchQueryHash) {
     const cachedByQuery = await getLatestReadyCachedImageBySearchQueryHash(searchQueryHash, lookupKey);
     if (cachedByQuery && acceptsImageCacheForRequest(cachedByQuery, removeBackground)) {
-      const result = { ...cachedByQuery, pipelineVersion: IMAGE_PIPELINE_VERSION };
-      return attachTrace(result, makeTrace({ ...traceBase, final: result }));
+      if (await visionApproveByUrl(cachedByQuery)) {
+        const result = { ...cachedByQuery, pipelineVersion: IMAGE_PIPELINE_VERSION };
+        return attachTrace(result, makeTrace({ ...traceBase, final: result }));
+      }
+      logger.info(
+        { lookupKey, imageHash: cachedByQuery.imageHash },
+        "[imagePipeline] vision gate rejected query-cached image; continuing to search",
+      );
     }
   }
 
@@ -702,7 +799,48 @@ async function resolveProcessedFragranceImageInner(
     (input.excludeSourceUrlHashes ?? []).filter((hash) => typeof hash === "string" && hash.length > 0),
   );
   const candidateTraces: ImagePipelineCandidateTrace[] = [];
-  let best: { result: ProcessedImageResult; score: number; ordinal: number } | null = null;
+  // Successfully processed serper candidates. The presumptive winner is the
+  // highest score (earliest ordinal on ties — same semantics as the previous
+  // incremental `best` tracking); with the vision gate active, a rejected
+  // winner is removed from this pool and the next-best takes its place.
+  type ScoredEntry = {
+    result: ProcessedImageResult;
+    score: number;
+    ordinal: number;
+    trace: ImagePipelineCandidateTrace;
+  };
+  const scored: ScoredEntry[] = [];
+  const bestScored = (): ScoredEntry | null => {
+    let top: ScoredEntry | null = null;
+    for (const entry of scored) {
+      if (!top || entry.score > top.score) top = entry;
+    }
+    return top;
+  };
+  const markVisionRejected = (entry: ScoredEntry): void => {
+    entry.trace.skipped = true;
+    entry.trace.skipReason = "vision_rejected";
+    const idx = scored.indexOf(entry);
+    if (idx >= 0) scored.splice(idx, 1);
+    logger.info(
+      {
+        lookupKey,
+        fixtureId: input.fixtureId ?? null,
+        traceId: input.traceId ?? null,
+        ordinal: entry.ordinal,
+        score: entry.score,
+      },
+      "[imagePipeline] vision gate rejected serper winner; trying next candidate",
+    );
+  };
+  const winnerTrace = (winner: ScoredEntry): ImagePipelineTrace =>
+    makeTrace({
+      ...traceBase,
+      candidates: candidateTraces,
+      selectedOrdinal: winner.ordinal,
+      selectedScore: winner.score,
+      final: winner.result,
+    });
   const loopStartedAt = Date.now();
 
   for (const [index, candidate] of candidates.slice(0, maxCandidates).entries()) {
@@ -719,7 +857,7 @@ async function resolveProcessedFragranceImageInner(
           traceId: input.traceId ?? null,
           elapsedMs: Date.now() - loopStartedAt,
           processedCandidates: ordinal - 1,
-          haveBest: !!best,
+          haveBest: scored.length > 0,
         },
         "[imagePipeline] candidate loop budget exceeded; stopping before next candidate",
       );
@@ -803,6 +941,56 @@ async function resolveProcessedFragranceImageInner(
       continue;
     }
 
+    // Manual/crawled path with the gate on: if this source's processed output
+    // was already vision-rejected for this fragrance (memoized by source URL
+    // hash), skip the download/Poof/sharp re-run entirely — the deferred
+    // retry loop would otherwise re-process the same rejected fallback on
+    // every attempt.
+    if (sourceProvider !== "serper" && visionGateActive) {
+      const remembered = peekVisionGateVerdict(
+        visionGateCacheKey(lookupKey, source.sourceUrlHash),
+      );
+      if (remembered === "reject") {
+        candidateTrace.skipped = true;
+        candidateTrace.skipReason = "vision_rejected";
+        logger.info(
+          {
+            lookupKey,
+            fixtureId: input.fixtureId ?? null,
+            traceId: input.traceId ?? null,
+            ordinal,
+            sourceUrlHash: source.sourceUrlHash,
+          },
+          "[imagePipeline] skipped manual candidate with remembered vision rejection",
+        );
+        continue;
+      }
+    }
+
+    // Pre-persistence gate for the single manual/crawled candidate (see
+    // processCandidate.visionCheckBeforeRecord). Serper candidates are gated
+    // at winner arbitration instead so only presumptive winners spend a call.
+    let candidateVisionRejected = false;
+    const visionCheckBeforeRecord =
+      sourceProvider !== "serper" && visionGateActive
+        ? async (image: { buffer: Buffer; contentHash: string; mimeType: string }) => {
+            const verdict = await verifyAutomaticImageWinnerBytes({
+              brand: input.brand,
+              name: input.name,
+              lookupKey,
+              buffer: image.buffer,
+              mimeType: image.mimeType,
+              contentHash: image.contentHash,
+              sourceUrlHash: source.sourceUrlHash,
+            });
+            if (verdict === "reject") {
+              candidateVisionRejected = true;
+              return false;
+            }
+            return true;
+          }
+        : undefined;
+
     await pipelineLimiter.acquire();
     let result: ProcessedImageResult | null;
     try {
@@ -816,13 +1004,14 @@ async function resolveProcessedFragranceImageInner(
         removeBackground,
         poofOptions: input.poofOptions,
         bypassSourceCache: input.bypassSourceCache,
+        visionCheckBeforeRecord,
       });
     } finally {
       pipelineLimiter.release();
     }
     if (!result) {
       candidateTrace.skipped = true;
-      candidateTrace.skipReason = "processing_failed";
+      candidateTrace.skipReason = candidateVisionRejected ? "vision_rejected" : "processing_failed";
       logger.info(
         {
           lookupKey,
@@ -845,6 +1034,26 @@ async function resolveProcessedFragranceImageInner(
     candidateTrace.cached = result.cached;
 
     if (sourceProvider !== "serper") {
+      // A freshly processed candidate already passed the pre-record bytes
+      // gate above (its verdict is memoized by content hash, so this check is
+      // free). This URL-based check exists for per-source CACHED rows, which
+      // skip processing entirely — e.g. a row recorded before the gate
+      // shipped.
+      if (!(await visionApproveByUrl(result))) {
+        candidateTrace.skipped = true;
+        candidateTrace.skipReason = "vision_rejected";
+        logger.info(
+          {
+            lookupKey,
+            fixtureId: input.fixtureId ?? null,
+            traceId: input.traceId ?? null,
+            ordinal,
+            sourceUrlHash: source.sourceUrlHash,
+          },
+          "[imagePipeline] vision gate rejected manual/crawled winner",
+        );
+        continue;
+      }
       return attachTrace(
         result,
         makeTrace({
@@ -890,28 +1099,40 @@ async function resolveProcessedFragranceImageInner(
       "[imagePipeline] scored serper candidate",
     );
 
-    if (!best || candidateScore > best.score) {
-      best = { result, score: candidateScore, ordinal };
-    }
+    scored.push({ result, score: candidateScore, ordinal, trace: candidateTrace });
 
     if (
       candidateScore >= EARLY_ACCEPT_PROCESSED_SCORE &&
       scoreBreakdown.identityCoverage >= EARLY_ACCEPT_MIN_IDENTITY_COVERAGE
     ) {
-      return attachTrace(
-        best.result,
-        makeTrace({
-          ...traceBase,
-          candidates: candidateTraces,
-          selectedOrdinal: best.ordinal,
-          selectedScore: best.score,
-          final: best.result,
-        }),
-      );
+      // The early-accept licence comes from THIS candidate; the returned
+      // winner is the best-scored so far. With the vision gate active, gate
+      // the presumptive winner and fall to the next-best on rejection. Once
+      // the licence-granting candidate itself is vision-rejected the early
+      // accept is void — resume the loop for the remaining candidates.
+      for (;;) {
+        const winner = bestScored();
+        if (!winner) break;
+        if (await visionApproveByUrl(winner.result)) {
+          return attachTrace(winner.result, winnerTrace(winner));
+        }
+        markVisionRejected(winner);
+        if (winner.ordinal === ordinal) break;
+      }
     }
   }
 
-  if (!best) {
+  // Final winner arbitration: highest score first (earliest ordinal on ties,
+  // matching the legacy `best` tracking); with the vision gate active a
+  // rejected winner falls through to the next-best. With the gate off this
+  // returns the top-scored candidate unchanged.
+  const winner = await pickVisionApprovedWinner(
+    scored.map((entry) => ({ value: entry, score: entry.score, ordinal: entry.ordinal })),
+    (candidate) => visionApproveByUrl(candidate.value.result),
+    (candidate) => markVisionRejected(candidate.value),
+  );
+
+  if (!winner) {
     logger.info(
       {
         lookupKey,
@@ -926,14 +1147,5 @@ async function resolveProcessedFragranceImageInner(
     return null;
   }
 
-  return attachTrace(
-    best.result,
-    makeTrace({
-      ...traceBase,
-      candidates: candidateTraces,
-      selectedOrdinal: best.ordinal,
-      selectedScore: best.score,
-      final: best.result,
-    }),
-  );
+  return attachTrace(winner.value.result, winnerTrace(winner.value));
 }
