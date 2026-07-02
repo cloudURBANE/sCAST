@@ -32,6 +32,7 @@ import {
   storagePathFromLocalImageObjectUrl,
 } from "./imageObjectStorage";
 import { shouldNegativeCacheImageFailure } from "./imagePipelineFailureClassifier";
+import { Semaphore } from "./imageProxyCache";
 import { safeImageUrlForResponse } from "./persistenceGuards";
 import { fetchExternalImage, parseAndValidateExternalImageUrl } from "./safeImageFetch";
 import { searchSerperImageCandidates, type SerperImageCandidate } from "./serperService";
@@ -140,6 +141,20 @@ export type ImagePipelineTrace = {
 };
 
 const inFlightBySource = new Map<string, Promise<ProcessedImageResult | null>>();
+
+// Global concurrency gate for the PROCESSING stage (paid Serper search + Poof
+// background removal + CPU-bound sharp encode). The in-flight maps above only
+// collapse DUPLICATE work for the same fragrance; they do nothing to bound N
+// *distinct* fragrances processed at once (e.g. a wardrobe rebuild or a burst of
+// new adds), which otherwise fans out unbounded Serper/Poof calls and saturates
+// libvips. This caps that fan-out. Unbounded queue (default) so callers wait
+// rather than being rejected — every acquire() is paired with a finally release.
+const PIPELINE_MAX_CONCURRENCY_RAW = Number(process.env["IMAGE_PIPELINE_MAX_CONCURRENCY"]);
+const PIPELINE_MAX_CONCURRENCY =
+  Number.isFinite(PIPELINE_MAX_CONCURRENCY_RAW) && PIPELINE_MAX_CONCURRENCY_RAW >= 1
+    ? Math.floor(PIPELINE_MAX_CONCURRENCY_RAW)
+    : 4;
+const pipelineLimiter = new Semaphore(PIPELINE_MAX_CONCURRENCY);
 
 function inFlightKey(sourceUrlHash: string, removeBackground: boolean): string {
   return `${sourceUrlHash}:${removeBackground ? "1" : "0"}`;
@@ -602,10 +617,13 @@ async function resolveProcessedFragranceImageInner(
   if (input.sourceUrl) {
     candidates.push({ imageUrl: input.sourceUrl, score: 0 });
   } else if (input.searchQuery?.trim()) {
-    const serperCandidates: SerperImageCandidate[] = await searchSerperImageCandidates(
-      input.searchQuery,
-      input.serperRefine,
-    );
+    await pipelineLimiter.acquire();
+    let serperCandidates: SerperImageCandidate[];
+    try {
+      serperCandidates = await searchSerperImageCandidates(input.searchQuery, input.serperRefine);
+    } finally {
+      pipelineLimiter.release();
+    }
     candidates.push(...serperCandidates);
   }
 
@@ -694,16 +712,22 @@ async function resolveProcessedFragranceImageInner(
       continue;
     }
 
-    const result = await processCandidate({
-      source,
-      sourceProvider,
-      lookupKey,
-      searchQueryHash,
-      userId: input.userId ?? null,
-      fragranceId: input.fragranceId ?? null,
-      removeBackground,
-      poofOptions: input.poofOptions,
-    });
+    await pipelineLimiter.acquire();
+    let result: ProcessedImageResult | null;
+    try {
+      result = await processCandidate({
+        source,
+        sourceProvider,
+        lookupKey,
+        searchQueryHash,
+        userId: input.userId ?? null,
+        fragranceId: input.fragranceId ?? null,
+        removeBackground,
+        poofOptions: input.poofOptions,
+      });
+    } finally {
+      pipelineLimiter.release();
+    }
     if (!result) {
       candidateTrace.skipped = true;
       candidateTrace.skipReason = "processing_failed";

@@ -762,6 +762,13 @@ export const FragranceCapture: React.FC<{
       // local-profile fallback below keeps the add from failing either way.
       const POLL_INTERVAL_MS = 1000;
       const MAX_POLL_ATTEMPTS = 2; // ~2s ceiling, down from ~30s
+      // Each re-check fetch can otherwise block the full engine timeout
+      // (ENGINE_FETCH_TIMEOUT_MS ~20s) if the engine connects-then-stalls, turning
+      // this "couple of quick re-checks" into a ~40s frozen "Fetching Intelligence…".
+      // Bound each grace re-check on its own short deadline; on timeout we keep the
+      // detail we already have and proceed to the local-profile fallback (the 15s
+      // background self-heal loop upgrades the tile later).
+      const GRACE_RECHECK_TIMEOUT_MS = 4000;
       for (
         let attempt = 0;
         attempt < MAX_POLL_ATTEMPTS &&
@@ -772,9 +779,25 @@ export const FragranceCapture: React.FC<{
       ) {
         await sleep(POLL_INTERVAL_MS);
         if (controller.signal.aborted) break;
-        detail = normalizeFragranceDetail(
-          (await getFragranceDetails(detailsRequest, { signal: controller.signal })) as FragranceDetail,
-        );
+        // Compose the outer abort signal with a per-attempt timeout (deliberately
+        // not AbortSignal.any/timeout — older iOS Safari lacks them).
+        const graceController = new AbortController();
+        const graceTimer = setTimeout(() => graceController.abort(), GRACE_RECHECK_TIMEOUT_MS);
+        const forwardAbort = () => graceController.abort();
+        controller.signal.addEventListener('abort', forwardAbort, { once: true });
+        try {
+          detail = normalizeFragranceDetail(
+            (await getFragranceDetails(detailsRequest, { signal: graceController.signal })) as FragranceDetail,
+          );
+        } catch (graceErr) {
+          // A genuine outer cancellation (the whole add was aborted) must still
+          // propagate; a grace-only timeout just stops the polling early.
+          if (controller.signal.aborted) throw graceErr;
+          break;
+        } finally {
+          clearTimeout(graceTimer);
+          controller.signal.removeEventListener('abort', forwardAbort);
+        }
       }
 
       const metricNotes = detail.derived_metrics?.notes;

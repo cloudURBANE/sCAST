@@ -75,6 +75,20 @@ export function useRenderBudget(): RenderBudget {
     };
     update();
 
+    // `resize` fires repeatedly during iOS address-bar show/hide and window
+    // drags. Only the viewport-size-dependent budget input (the 920px
+    // shortest-side threshold) can change here, so coalesce bursts into a single
+    // trailing rAF probe instead of running readBudget()'s platform probes on
+    // every event. matchMedia `change` events are rare and stay immediate.
+    let rafId: number | null = null;
+    const scheduleUpdate = () => {
+      if (rafId !== null) return;
+      rafId = window.requestAnimationFrame(() => {
+        rafId = null;
+        update();
+      });
+    };
+
     for (const query of queries) {
       if (typeof query.addEventListener === "function") {
         query.addEventListener("change", update);
@@ -82,10 +96,11 @@ export function useRenderBudget(): RenderBudget {
         query.addListener(update);
       }
     }
-    window.addEventListener("resize", update, { passive: true });
+    window.addEventListener("resize", scheduleUpdate, { passive: true });
 
     return () => {
-      window.removeEventListener("resize", update);
+      if (rafId !== null) window.cancelAnimationFrame(rafId);
+      window.removeEventListener("resize", scheduleUpdate);
       for (const query of queries) {
         if (typeof query.removeEventListener === "function") {
           query.removeEventListener("change", update);
