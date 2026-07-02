@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { randomUUID } from "node:crypto";
+import { randomUUID, randomBytes, createHash, timingSafeEqual } from "node:crypto";
 import { db } from "@workspace/db";
 import { usersTable } from "@workspace/db/schema";
 import { eq, and, isNull, sql } from "drizzle-orm";
@@ -219,12 +219,80 @@ async function updateUserPictureBestEffort(
   }
 }
 
+// --- Login-CSRF / auth-code-injection defense (state + PKCE) ---------------
+//
+// The authorization request now carries a cryptographically random `state` and a
+// PKCE `code_challenge` (S256). Both the state and the matching `code_verifier`
+// are stashed in a short-lived, HttpOnly, SameSite=Lax cookie before redirecting
+// to Google. The callback verifies the returned `state` against the cookie
+// (constant-time) and sends the `code_verifier` on the token exchange, so a code
+// minted for an attacker cannot be replayed into a victim's session, and a code
+// intercepted from the redirect cannot be exchanged without the verifier.
+const OAUTH_STATE_COOKIE = "sc_oauth_state";
+const OAUTH_STATE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const OAUTH_COOKIE_PATH = "/api/auth/google";
+
+function oauthCookieOptions(): {
+  httpOnly: true;
+  sameSite: "lax";
+  secure: boolean;
+  path: string;
+  maxAge?: number;
+} {
+  return {
+    httpOnly: true,
+    sameSite: "lax",
+    // Secure in production; relaxed in dev so the flow works over http://localhost.
+    secure: process.env.NODE_ENV === "production",
+    path: OAUTH_COOKIE_PATH,
+  };
+}
+
+function base64Url(buf: Buffer): string {
+  return buf.toString("base64url");
+}
+
+/** Read a single cookie value from the raw request header (no cookie-parser dep). */
+function readRequestCookie(req: import("express").Request, name: string): string | null {
+  const header = req.headers.cookie;
+  if (!header) return null;
+  for (const part of header.split(";")) {
+    const eq = part.indexOf("=");
+    if (eq === -1) continue;
+    if (part.slice(0, eq).trim() !== name) continue;
+    try {
+      return decodeURIComponent(part.slice(eq + 1).trim());
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+function constantTimeEqual(a: string, b: string): boolean {
+  const ab = Buffer.from(a);
+  const bb = Buffer.from(b);
+  if (ab.length !== bb.length) return false;
+  return timingSafeEqual(ab, bb);
+}
+
 router.get("/auth/google", (req, res) => {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   if (!clientId) {
     res.status(503).json({ error: "Google OAuth is not configured" });
     return;
   }
+
+  const state = base64Url(randomBytes(32));
+  const codeVerifier = base64Url(randomBytes(32));
+  const codeChallenge = base64Url(createHash("sha256").update(codeVerifier).digest());
+
+  // Bind state + PKCE verifier to this browser via a short-lived cookie. The `.`
+  // separator is safe because both halves are base64url (no `.` in that alphabet).
+  res.cookie(OAUTH_STATE_COOKIE, `${state}.${codeVerifier}`, {
+    ...oauthCookieOptions(),
+    maxAge: OAUTH_STATE_TTL_MS,
+  });
 
   const redirectUri = `${getBaseUrl(req)}/api/auth/google/callback`;
   const params = new URLSearchParams({
@@ -234,6 +302,9 @@ router.get("/auth/google", (req, res) => {
     scope: "openid email profile",
     access_type: "offline",
     prompt: "select_account",
+    state,
+    code_challenge: codeChallenge,
+    code_challenge_method: "S256",
   });
 
   res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params}`);
@@ -254,6 +325,25 @@ router.get("/auth/google/callback", async (req, res) => {
     return;
   }
 
+  // Login-CSRF / auth-code-injection defense: the returned `state` must match the
+  // value bound to this browser in the pre-redirect cookie. The cookie is single
+  // use — clear it before doing anything else so it cannot be replayed.
+  const stateCookie = readRequestCookie(req, OAUTH_STATE_COOKIE);
+  res.clearCookie(OAUTH_STATE_COOKIE, oauthCookieOptions());
+  const returnedState = typeof req.query.state === "string" ? req.query.state : "";
+  const [expectedState, codeVerifier] = stateCookie ? stateCookie.split(".") : [];
+  if (
+    !stateCookie ||
+    !expectedState ||
+    !codeVerifier ||
+    !returnedState ||
+    !constantTimeEqual(expectedState, returnedState)
+  ) {
+    req.log.warn("Google OAuth callback state mismatch or missing; rejecting");
+    res.redirect("/?oauth_error=invalid_state");
+    return;
+  }
+
   try {
     const redirectUri = `${getBaseUrl(req)}/api/auth/google/callback`;
 
@@ -266,6 +356,7 @@ router.get("/auth/google/callback", async (req, res) => {
         client_secret: clientSecret,
         redirect_uri: redirectUri,
         grant_type: "authorization_code",
+        code_verifier: codeVerifier,
       }),
     });
 
