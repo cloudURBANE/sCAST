@@ -355,7 +355,11 @@ export async function buildProfileWithDeps(
 
   // 2. Resolve image through metadata/object cache. This checks image_cache
   // before Serper and writes only object references to Postgres.
-  const searchQuery = `${profileBrand} ${profileName} single fragrance bottle no box HQ product photo studio no plants`;
+  // Bare identity only: the Serper layer (applySerperRefinement, refine
+  // "default") owns the packshot refinement suffix. Pre-appending a second
+  // suffix here composed ~60-word queries that Google truncates at 32 words,
+  // silently dropping most of the refinement (image selection audit W2).
+  const searchQuery = `${profileBrand} ${profileName}`.trim();
   const imageSearchContext = {
     brand: profileBrand,
     name: profileName,

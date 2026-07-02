@@ -4,9 +4,13 @@ import { KeyPool, registerKeyPool } from "../lib/keyPool";
 import { keepAliveHttpAgent, keepAliveHttpsAgent } from "../lib/keepAliveAgent";
 import type { SerperRefineMode } from "./imageSolvers";
 import { scoreSerperImageCandidate } from "./serperCandidateScoring";
+// Query composition (packshot suffixes, Google's 32-word cap) lives in the
+// dependency-free serperQueryCore.ts so it can be unit-tested without axios.
+import { applySerperRefinement } from "./serperQueryCore";
 
 export type { SerperRefineMode } from "./imageSolvers";
 export { scoreSerperImageCandidate } from "./serperCandidateScoring";
+export { applySerperRefinement, capQueryWords, MAX_QUERY_WORDS, SERPER_SUFFIX_DEFAULT, SERPER_SUFFIX_SOLVER } from "./serperQueryCore";
 
 const DEFAULT_SERPER_IMAGES_URL = "https://google.serper.dev/images";
 const REQUEST_TIMEOUT_MS = 12000;
@@ -88,13 +92,6 @@ function rankImageCandidates(results: SerperImageResult[]): SerperImageCandidate
     .map((item) => ({ ...item.candidate, imageUrl: item.candidate.imageUrl, score: item.score }));
 }
 
-/** Full packshot refinement appended for normal refresh paths. */
-const SERPER_SUFFIX_DEFAULT =
-  "single fragrance bottle bottle only no box no carton no packaging no gift set no coffret no tester no sample no vial no decant centered product packshot front view plain background no plants no lifestyle no text overlay studio shot";
-
-/** Shorter suffix on clarify/solver paths so negative keywords stay meaningful. */
-const SERPER_SUFFIX_SOLVER = "single fragrance bottle packshot isolated product photo no sample no tester";
-
 // Pool of Serper.dev keys. Prefer the plural SERPER_API_KEYS (comma-separated
 // pool) and fall back to the legacy single SERPER_API_KEY so existing deploys
 // keep working. Lazily built so dotenv has loaded by first use.
@@ -108,13 +105,6 @@ export function getSerperPool(): KeyPool {
   return serperPool;
 }
 
-function applySerperRefinement(rawQuery: string, refine: SerperRefineMode): string {
-  const q = rawQuery.trim();
-  if (!q) return q;
-  if (refine === "none") return q;
-  if (refine === "solver") return `${q} ${SERPER_SUFFIX_SOLVER}`.trim();
-  return `${q} ${SERPER_SUFFIX_DEFAULT}`.trim();
-}
 
 /**
  * Resolve bottle-image candidates. Dispatches to the configured provider

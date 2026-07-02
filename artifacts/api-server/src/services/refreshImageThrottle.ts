@@ -7,13 +7,18 @@
 // fragrance — makes the caps unbypassable while preserving the exact thresholds
 // and the two distinct refusal messages the route emitted before.
 
-// Caps preserved from the original client-trusted gate, expressed in terms of
-// PRIOR attempts (the client's `refreshCount` was the number of attempts already
-// made, so `> N` blocked starting on attempt N+2):
+// Caps expressed in terms of PRIOR attempts (the client's `refreshCount` was
+// the number of attempts already made, so `> N` blocked starting on attempt N+2):
 //   - without an explicit solver, auto-regeneration pauses after 3 prior attempts
-//   - an absolute ceiling of 10 prior attempts regardless of solver
+//   - a ceiling of 10 prior attempts without a solver
+//   - a higher ceiling of 20 prior attempts WITH a solver: the clarify dropdown
+//     offers 19 distinct options, and the old shared ceiling of 10 meant a user
+//     methodically trying options hit a blanket 429 on attempt 12 — making every
+//     remaining option indistinguishable from "broken" for the rest of the hour
+//     (image selection audit S3).
 export const REFRESH_AUTO_PAUSE_ATTEMPTS = 3;
 export const REFRESH_MAX_ATTEMPTS = 10;
+export const REFRESH_MAX_SOLVER_ATTEMPTS = 20;
 
 const DEFAULT_WINDOW_MS = 60 * 60 * 1000; // 1 hour rolling session window
 const SWEEP_INTERVAL = 64;
@@ -31,13 +36,24 @@ export function decideRefreshThrottle(
   priorAttempts: number,
   hasSolver: boolean,
 ): RefreshThrottleDecision {
-  if (priorAttempts > REFRESH_MAX_ATTEMPTS) {
+  const ceiling = hasSolver ? REFRESH_MAX_SOLVER_ATTEMPTS : REFRESH_MAX_ATTEMPTS;
+  if (priorAttempts > ceiling) {
     return { allowed: false, reason: "exhausted" };
   }
   if (!hasSolver && priorAttempts > REFRESH_AUTO_PAUSE_ATTEMPTS) {
     return { allowed: false, reason: "needs-solver" };
   }
   return { allowed: true };
+}
+
+/**
+ * How many further attempts remain before `decideRefreshThrottle` starts
+ * refusing, for surfacing in API responses so exhaustion is legible to the
+ * client instead of looking like a broken solver.
+ */
+export function refreshAttemptsRemaining(priorAttempts: number, hasSolver: boolean): number {
+  const ceiling = hasSolver ? REFRESH_MAX_SOLVER_ATTEMPTS : REFRESH_MAX_ATTEMPTS;
+  return Math.max(0, ceiling - priorAttempts);
 }
 
 /** Stable per-client + per-fragrance key. */

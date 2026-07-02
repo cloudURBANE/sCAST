@@ -4,8 +4,10 @@ import {
   RefreshAttemptCounter,
   REFRESH_AUTO_PAUSE_ATTEMPTS,
   REFRESH_MAX_ATTEMPTS,
+  REFRESH_MAX_SOLVER_ATTEMPTS,
   decideRefreshThrottle,
   refreshAttemptKey,
+  refreshAttemptsRemaining,
 } from "./refreshImageThrottle.ts";
 
 test("decideRefreshThrottle: pauses auto-regeneration after 3 prior attempts without a solver", () => {
@@ -17,13 +19,31 @@ test("decideRefreshThrottle: pauses auto-regeneration after 3 prior attempts wit
   });
 });
 
-test("decideRefreshThrottle: a chosen solver bypasses the auto-pause but not the absolute ceiling", () => {
+test("decideRefreshThrottle: a chosen solver bypasses the auto-pause but not the solver ceiling", () => {
   assert.deepEqual(decideRefreshThrottle(REFRESH_AUTO_PAUSE_ATTEMPTS + 1, true), { allowed: true });
   assert.deepEqual(decideRefreshThrottle(REFRESH_MAX_ATTEMPTS, true), { allowed: true });
-  assert.deepEqual(decideRefreshThrottle(REFRESH_MAX_ATTEMPTS + 1, true), {
+  // The solver ceiling (20) is higher than the no-solver ceiling (10): the
+  // clarify dropdown offers 19 options, and the old shared ceiling of 10 made a
+  // user methodically trying options hit a blanket 429 on attempt 12 (audit S3).
+  assert.deepEqual(decideRefreshThrottle(REFRESH_MAX_ATTEMPTS + 1, true), { allowed: true });
+  assert.deepEqual(decideRefreshThrottle(REFRESH_MAX_SOLVER_ATTEMPTS, true), { allowed: true });
+  assert.deepEqual(decideRefreshThrottle(REFRESH_MAX_SOLVER_ATTEMPTS + 1, true), {
     allowed: false,
     reason: "exhausted",
   });
+  // Without a solver the lower ceiling still applies.
+  assert.deepEqual(decideRefreshThrottle(REFRESH_MAX_ATTEMPTS + 1, false), {
+    allowed: false,
+    reason: "exhausted",
+  });
+});
+
+test("refreshAttemptsRemaining counts down to zero against the matching ceiling", () => {
+  assert.equal(refreshAttemptsRemaining(0, true), REFRESH_MAX_SOLVER_ATTEMPTS);
+  assert.equal(refreshAttemptsRemaining(REFRESH_MAX_SOLVER_ATTEMPTS, true), 0);
+  assert.equal(refreshAttemptsRemaining(REFRESH_MAX_SOLVER_ATTEMPTS + 5, true), 0);
+  assert.equal(refreshAttemptsRemaining(0, false), REFRESH_MAX_ATTEMPTS);
+  assert.equal(refreshAttemptsRemaining(REFRESH_MAX_ATTEMPTS, false), 0);
 });
 
 test("RefreshAttemptCounter: count only climbs — a client cannot reset it", () => {

@@ -542,7 +542,7 @@ test("image pipeline: free crawled sourceUrl is tried first; on failure falls ba
   assert.equal(calls.resolveProcessedFragranceImage[0].sourceProvider, "manual");
   assert.equal(calls.resolveProcessedFragranceImage[0].allowLookupCache, false);
   // Second call: paid search-query (Serper) fallback.
-  assert.equal(calls.resolveProcessedFragranceImage[1].searchQuery, "Dior Sauvage single fragrance bottle no box HQ product photo studio no plants");
+  assert.equal(calls.resolveProcessedFragranceImage[1].searchQuery, "Dior Sauvage");
   assert.equal(calls.resolveProcessedFragranceImage[1].sourceUrl, undefined);
 
   assert.equal(result.imageUrl, "https://cdn.example.com/fallback.webp");
@@ -975,7 +975,7 @@ test("identity normalization: uses resolveFragranceIdentity output for catalog l
   // Image search-query is constructed from normalized identity
   assert.equal(
     calls.resolveProcessedFragranceImage[0].searchQuery,
-    "Dior Sauvage single fragrance bottle no box HQ product photo studio no plants",
+    "Dior Sauvage",
   );
 });
 
@@ -1120,7 +1120,7 @@ test("5A: falls back to the paid Serper search when the crawled URL fails to res
   assert.equal(calls.resolveProcessedFragranceImage[0].sourceUrl, "https://crawled.example/bottle.jpg");
   assert.equal(
     calls.resolveProcessedFragranceImage[1].searchQuery,
-    "Dior Sauvage single fragrance bottle no box HQ product photo studio no plants",
+    "Dior Sauvage",
   );
   assert.equal(result.imageUrl, "https://cdn.example.com/from-serper.webp");
 });
