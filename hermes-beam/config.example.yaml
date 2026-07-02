@@ -28,6 +28,11 @@ mcp_servers:
       include:
         - beam_get_user_context
         - beam_get_wardrobe
+        # Deterministic collection report (family distribution, coverage GAPS,
+        # redundancy clusters). Without it, a "what are my gaps?" question has no
+        # grounded tool and the model free-styles a verbose audit over the raw
+        # wardrobe — the walls-of-text failure mode.
+        - beam_analyze_collection
         - beam_search_catalog
         - beam_get_fragrance_details
         # Verify a pick's ENRICHMENT STATE (none/partial/full) before presenting or

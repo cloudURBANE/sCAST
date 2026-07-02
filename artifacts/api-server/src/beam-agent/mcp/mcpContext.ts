@@ -28,7 +28,11 @@ export const ALL_READ_SCOPES: BeamScope[] = [
  */
 export const SCOPE_TOOL_MAP: Record<BeamScope, readonly string[]> = {
   "beam:user-context:read": ["beam_get_user_context"],
-  "beam:wardrobe:read": ["beam_get_wardrobe"],
+  // `beam_analyze_collection` is a deterministic read over the OWNED collection
+  // (families, coverage gaps, redundancy), so it rides the wardrobe-read scope.
+  // Without it, a Hermes "what are my gaps?" question has no gap tool and the
+  // model free-styles a verbose audit over the raw wardrobe list.
+  "beam:wardrobe:read": ["beam_get_wardrobe", "beam_analyze_collection"],
   // `beam_find_similar` ("smells like X") and `beam_discover_external` (hybrid-
   // corpus engine discovery) are catalog-scoped reads. find_similar is built when
   // `resolveCatalogEntry` is wired (always, on MCP); discover_external only when

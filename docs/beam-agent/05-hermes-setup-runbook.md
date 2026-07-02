@@ -152,6 +152,7 @@ mcp_servers:
       include:
         - beam_get_user_context
         - beam_get_wardrobe
+        - beam_analyze_collection
         - beam_search_catalog
         - beam_get_fragrance_details
         - beam_score_candidates

@@ -279,7 +279,11 @@ export function createBeamTools(deps: BeamToolDeps): BeamToolDefinition[] {
         "Get a compact summary of the signed-in user's situation: how many fragrances they own, the dominant scent families in their vault, and today's weather context. Call this first to ground recommendations.",
       inputSchema: { type: "object", properties: {}, additionalProperties: false },
       handler: async (_input, ctx) => {
-        const [vault, weather] = await Promise.all([deps.loadVault(ctx), deps.getWeather(ctx)]);
+        // Count from the UNCAPPED ownership read: the mission loader clamps to
+        // MAX_WARDROBE_ITEMS for the scorer, and a clamped count here disagrees
+        // with beam_get_wardrobe's real total — a mismatch models narrate back
+        // to the user ("count says 60, but 152 items returned").
+        const [vault, weather] = await Promise.all([loadOwnershipVault(ctx), deps.getWeather(ctx)]);
         return {
           wardrobeSummary: { count: vault.length, topFamilies: topFamilies(vault) },
           weather: {

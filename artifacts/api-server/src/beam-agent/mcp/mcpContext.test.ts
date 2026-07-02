@@ -17,6 +17,7 @@ test("a full owner token unlocks every read + presentation tool", () => {
   assert.deepEqual(
     [...names].sort(),
     [
+      "beam_analyze_collection",
       "beam_check_enrichment_state",
       "beam_compare_fragrances",
       "beam_compare_overlap",
@@ -49,7 +50,7 @@ test("the overlap and research scopes each unlock only their tool", () => {
 
 test("a narrow token only unlocks its scope's tools", () => {
   const names = allowedToolNames(["beam:wardrobe:read"]);
-  assert.deepEqual([...names], ["beam_get_wardrobe"]);
+  assert.deepEqual([...names].sort(), ["beam_analyze_collection", "beam_get_wardrobe"]);
   assert.equal(names.has("beam_search_catalog"), false);
 });
 
