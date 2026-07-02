@@ -4,6 +4,7 @@ import {
   concentrationsConflict,
   detectConcentration,
 } from "./concentrationConflict.ts";
+import { detectFlankerMismatch, hasConfidentFlankerMismatch } from "./flankerConflict.ts";
 import type { SerperImageCandidate } from "./serperService";
 
 const IMAGE_TOKEN_STOPWORDS = new Set([
@@ -59,6 +60,7 @@ export type ImageCandidateScoreBreakdown = {
   identityBonus: number;
   phraseBonus: number;
   concentrationPenalty: number;
+  flankerPenalty: number;
   minEdge: number;
   minEdgeBonus: number;
   aspectRatio: number;
@@ -103,6 +105,34 @@ function concentrationPenaltyFor(
   return concentrationsAmbiguouslyAdjacent(target, candidateConcentration)
     ? CONCENTRATION_AMBIGUOUS_PENALTY
     : CONCENTRATION_CONFLICT_PENALTY;
+}
+
+// A confident flanker-word mismatch (candidate asserts "Elixir"/"Sport"/… that
+// the target name lacks, or asserts the opposite gender) names a DIFFERENT
+// bottle in the same line, so like a confident concentration conflict it is
+// disqualifying (audit W4). The identity tokenizer strips concentration words
+// as stopwords and detectConcentration is silent when the target has none, so
+// without this check "Sauvage" vs "Sauvage Elixir" were indistinguishable.
+const FLANKER_CONFLICT_PENALTY = -10;
+// Penalty-grade flanker signals: a soft assert ("extrait"/"summer" — words
+// retailers also use honestly or decoratively), or the weak direction where the
+// candidate merely LACKS a flanker word the target has (possibly just a terse
+// title). Sized to outweigh the +5 trusted-host bonus so the plain bottle no
+// longer beats the flanker it is standing in for, without disqualifying a
+// correct-but-terse candidate when nothing better exists.
+const FLANKER_SOFT_PENALTY = -6;
+
+function flankerPenaltyFor(
+  brand: string,
+  name: string,
+  candidate: Pick<SerperImageCandidate, "imageUrl" | "title" | "source">,
+): number {
+  const mismatch = detectFlankerMismatch(`${brand} ${name}`, candidateEvidenceText(candidate));
+  if (hasConfidentFlankerMismatch(mismatch)) return FLANKER_CONFLICT_PENALTY;
+  let penalty = 0;
+  if (mismatch.candidateAsserts.length > 0) penalty += FLANKER_SOFT_PENALTY;
+  if (mismatch.candidateLacks.length > 0) penalty += FLANKER_SOFT_PENALTY;
+  return penalty;
 }
 
 function tokenize(value: string): string[] {
@@ -177,6 +207,17 @@ export function shouldSkipSerperCandidateByIdentity(
   // so the correct packshot for "Le Parfum" survives (BE-8).
   if (concentrationPenaltyFor(brand, name, candidate) <= CONCENTRATION_CONFLICT_PENALTY) return true;
 
+  // Likewise a confident flanker mismatch: the candidate confidently ASSERTS a
+  // variant word the target lacks ("Sauvage Elixir" for target "Sauvage",
+  // "Allure Homme Sport" for "Allure Homme") or the opposite gender — that is
+  // a different bottle no matter how well the line tokens cover (audit W4).
+  // The weak direction (candidate merely lacking a word the target has) never
+  // hard-skips — it is only penalised in scoring, because a terse retailer
+  // title legitimately omits flanker words.
+  if (hasConfidentFlankerMismatch(detectFlankerMismatch(`${brand} ${name}`, candidateEvidenceText(candidate)))) {
+    return true;
+  }
+
   const targetTokens = uniqueTokens(`${brand} ${name}`);
   if (targetTokens.length < 2) return false;
 
@@ -201,6 +242,7 @@ export function scoreProcessedSerperCandidateBreakdown(
   const identityBonus = identityCoverage * 12;
   const phraseBonus = phraseSequenceBonus(input.name, candidateEvidenceText(input.serperCandidate));
   const concentrationPenalty = concentrationPenaltyFor(input.brand, input.name, input.serperCandidate);
+  const flankerPenalty = flankerPenaltyFor(input.brand, input.name, input.serperCandidate);
 
   let minEdgeBonus = 0;
   if (minEdge >= 640) minEdgeBonus = 2;
@@ -222,6 +264,7 @@ export function scoreProcessedSerperCandidateBreakdown(
     identityBonus,
     phraseBonus,
     concentrationPenalty,
+    flankerPenalty,
     minEdge,
     minEdgeBonus,
     aspectRatio: aspect,
@@ -233,6 +276,7 @@ export function scoreProcessedSerperCandidateBreakdown(
       identityBonus +
       phraseBonus +
       concentrationPenalty +
+      flankerPenalty +
       minEdgeBonus +
       aspectBonus +
       backgroundRemovalBonus +
