@@ -2209,17 +2209,17 @@ export const Wardrobe: React.FC<{
                 <div
                   key={i}
                   className={`scent-fragrance-card w-full ${
-                    isCompactGrid ? 'min-h-[18rem]' : 'min-h-[32rem]'
-                  } sm:min-h-[32rem] relative overflow-hidden flex flex-col`}
+                    isCompactGrid ? 'min-h-[17.5rem]' : 'min-h-[26rem]'
+                  } sm:min-h-[26rem] relative overflow-hidden flex flex-col`}
                 >
                   <div className="scent-card-frame" aria-hidden />
                   <div className={`relative z-[1] flex h-full flex-col items-center ${
-                    isCompactGrid ? 'px-3 py-4' : 'px-6 py-7'
-                  } sm:px-8 sm:py-9`}>
+                    isCompactGrid ? 'px-3 py-4' : 'px-6 py-5'
+                  } sm:px-8 sm:py-6`}>
                     <div className="h-4 w-2/3 bg-white/10 rounded animate-pulse mt-2" />
                     <div className={`relative flex-1 w-full ${
-                      isCompactGrid ? 'my-3' : 'my-5'
-                    } sm:my-6 min-h-0 flex items-center justify-center`}>
+                      isCompactGrid ? 'my-2' : 'my-3'
+                    } sm:my-4 min-h-0 flex items-center justify-center`}>
                       <div className="w-24 h-48 bg-white/5 rounded-full animate-pulse opacity-50" />
                     </div>
                     <div className="h-6 w-3/4 bg-white/10 rounded animate-pulse shrink-0 mb-2" />
@@ -2261,8 +2261,8 @@ export const Wardrobe: React.FC<{
                       aria-label="Add a fragrance to your vault"
                       title="Add a fragrance to your vault"
                       className={`scent-fragrance-card ${
-                        isCompactGrid ? 'min-h-[17.5rem] p-4' : 'min-h-[28rem] p-8'
-                        } sm:min-h-[28rem] sm:p-8 flex flex-col items-center justify-center text-center group cursor-pointer border-dashed border-scent-accent/26 hover:bg-white/5 transition-all w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/50`}
+                        isCompactGrid ? 'min-h-[17.5rem] p-4' : 'min-h-[26rem] p-8'
+                        } sm:min-h-[26rem] sm:p-8 flex flex-col items-center justify-center text-center group cursor-pointer border-dashed border-scent-accent/26 hover:bg-white/5 transition-colors w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/50`}
                     >
                       <div className="w-12 h-12 border border-dashed border-scent-accent/35 flex items-center justify-center group-hover:rotate-90 transition-transform mb-4 rounded-full">
                         <span className="text-scent-accent text-3xl">+</span>
@@ -2273,7 +2273,12 @@ export const Wardrobe: React.FC<{
                 </div>
               </div>
             ))
-          ) : !activeSearchQuery && (
+          ) : activeSearchQuery ? (
+            <div className="rounded-scent border border-dashed border-scent-text-subtle/25 bg-scent-text-subtle/[0.04] px-6 py-16 text-center">
+              <p className="font-serif italic text-2xl text-scent-text-primary">No bottles match &ldquo;{activeSearchQuery.trim()}&rdquo;</p>
+              <p className="mt-2 text-sm leading-relaxed text-scent-text-muted">Try a shorter name, or search by brand alone.</p>
+            </div>
+          ) : (
             <div className="relative overflow-hidden rounded-[var(--radius-scent)] border border-scent-accent/26 bg-[linear-gradient(180deg,rgba(255,247,236,0.05),rgba(255,247,236,0.014)_38%,rgba(0,0,0,0.34))] px-5 py-10 text-center shadow-[inset_0_1px_0_rgba(255,236,183,0.1),0_30px_78px_-56px_rgba(0,0,0,0.85)] sm:px-8 sm:py-14 lg:px-12">
               <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-scent-accent/50 to-transparent" aria-hidden />
               <div className="pointer-events-none absolute inset-x-10 bottom-0 h-px bg-gradient-to-r from-transparent via-white/12 to-transparent" aria-hidden />

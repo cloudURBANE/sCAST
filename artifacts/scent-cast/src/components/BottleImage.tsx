@@ -275,7 +275,7 @@ const BottleImageComponent: React.FC<BottleImageProps> = ({
           //    backend image never arrives (the BottleImage spinner-gap bug).
           // The pulsing skeleton (`showSkeleton`) remains the affordance for a live URL.
           showFetchingPlaceholder ? (
-            <div className="flex h-full w-full min-h-0 flex-col items-center justify-center gap-1.5 rounded-sm border border-dashed border-white/15 bg-white/[0.03] px-1">
+            <div className="flex h-full w-full min-h-0 flex-col items-center justify-center gap-1.5 rounded-sm border border-dashed border-scent-text-subtle/25 bg-scent-text-subtle/[0.04] px-1">
               <Spinner className="size-3 text-scent-text-subtle" />
               <span className="text-center scent-type-placeholder">
                 Fetching
@@ -284,7 +284,7 @@ const BottleImageComponent: React.FC<BottleImageProps> = ({
           ) : broken ? (
             // An <img> mounted and errored after retries — keep it textual.
             // A bottle silhouette here would imply "still coming", which is wrong.
-            <div className="flex h-full w-full min-h-0 items-center justify-center rounded-sm border border-dashed border-white/15 bg-white/[0.03] px-1">
+            <div className="flex h-full w-full min-h-0 items-center justify-center rounded-sm border border-dashed border-scent-text-subtle/25 bg-scent-text-subtle/[0.04] px-1">
               <span className="text-center scent-type-placeholder">
                 Unavailable
               </span>
@@ -295,7 +295,7 @@ const BottleImageComponent: React.FC<BottleImageProps> = ({
             // silhouette rather than bare "No image" text — a brand-agnostic
             // placeholder that reads as an intentional empty packshot. Inline SVG
             // (no asset fetch, never persisted) so it can't reintroduce a spinner.
-            <div className="flex h-full w-full min-h-0 flex-col items-center justify-center gap-1.5 rounded-sm border border-dashed border-white/15 bg-white/[0.03] px-1">
+            <div className="flex h-full w-full min-h-0 flex-col items-center justify-center gap-1.5 rounded-sm border border-dashed border-scent-text-subtle/25 bg-scent-text-subtle/[0.04] px-1">
               <svg
                 viewBox="0 0 24 24"
                 fill="none"

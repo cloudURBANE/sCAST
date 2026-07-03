@@ -84,7 +84,7 @@ function VaultGridTileComponent({
       whileInView={motionDisabled ? undefined : TILE_WHILE_IN_VIEW}
       viewport={motionDisabled ? undefined : TILE_VIEWPORT}
       transition={motionDisabled ? undefined : TILE_TRANSITION}
-      className="group cursor-pointer relative h-full min-w-0 outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
+      className="group cursor-pointer relative h-full min-w-0 rounded-scent outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
       role="button"
       tabIndex={0}
       aria-label={`${name} by ${entryBrand(item)}`}

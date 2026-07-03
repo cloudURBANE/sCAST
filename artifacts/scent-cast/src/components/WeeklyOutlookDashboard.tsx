@@ -378,7 +378,7 @@ function ForecastHero({
               <p className="scent-type-label text-[10px] tracking-[0.3em] text-scent-accent/80 [text-indent:0.3em] sm:text-[12px] md:text-[13px]">
                 {pick.brand}
               </p>
-              <p className="mt-1 font-serif text-[clamp(1.35rem,5.6vw,2.1rem)] leading-[1.07] text-[#fff7ec] [overflow-wrap:break-word] md:mt-1.5 md:text-[clamp(2.1rem,4.4vw,2.85rem)] md:leading-[1.05]">
+              <p className="mt-1 font-serif text-[clamp(1.35rem,5.6vw,2.1rem)] leading-[1.07] text-scent-text-primary [overflow-wrap:break-word] md:mt-1.5 md:text-[clamp(2.1rem,4.4vw,2.85rem)] md:leading-[1.05]">
                 {pick.name}
               </p>
               {notes.length > 0 ? (
@@ -391,7 +391,7 @@ function ForecastHero({
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-3 px-12 text-center">
             <Sparkles size={24} strokeWidth={1.5} className="text-scent-accent/75" aria-hidden />
-            <p className="font-serif text-lg italic leading-relaxed text-[#e9dece]">
+            <p className="font-serif text-lg italic leading-relaxed text-scent-text-secondary">
               Add fragrances to your vault for a daily scent forecast.
             </p>
           </div>
@@ -504,7 +504,7 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
     >
       {/* text-indent matches the tracking so the uppercase title's trailing
           letter-spacing doesn't pull it optically left of the centered axis. */}
-      <h2 className="scent-type-label text-[10px] tracking-[0.34em] text-[#efe4d6] [text-indent:0.34em] sm:text-[12px]">
+      <h2 className="scent-type-label text-[10px] tracking-[0.34em] text-scent-text-secondary [text-indent:0.34em] sm:text-[12px]">
         Scent Forecast
       </h2>
 
@@ -541,7 +541,7 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
               calendar rather than drifting beside the title. */}
           {activeMeta.length > 0 ? (
             <div className="mt-[var(--fc-hero-pill)] flex justify-center">
-              <div className="inline-flex items-center gap-2 rounded-full border border-scent-accent/20 bg-black/25 px-3.5 py-1.5 text-[#cdbfa9] md:gap-2.5 md:px-5 md:py-2">
+              <div className="inline-flex items-center gap-2 rounded-full border border-scent-accent/20 bg-black/25 px-3.5 py-1.5 text-scent-text-muted md:gap-2.5 md:px-5 md:py-2">
                 <WeatherGlyph day={activePlan.day} size={14} />
                 <span className="text-[11px] font-medium uppercase tracking-[0.14em] sm:text-[12px] md:text-[13px]">
                   {activeMeta.join(' · ')}
@@ -556,7 +556,7 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
               lines so it stays optically centered and always fits the forecast
               column without ever crowding the day rail below. */}
           {activeReason ? (
-            <p className="mx-auto mt-[var(--fc-hero-pill)] max-w-[28rem] px-4 text-center font-serif text-[clamp(0.84rem,3.2vw,1rem)] italic leading-snug text-balance line-clamp-2 text-[#d8cab4] md:max-w-[32rem] md:text-[clamp(0.96rem,1.55vw,1.12rem)]">
+            <p className="mx-auto mt-[var(--fc-hero-pill)] max-w-[28rem] px-4 text-center font-serif text-[clamp(0.84rem,3.2vw,1rem)] italic leading-snug text-balance line-clamp-2 text-scent-text-muted md:max-w-[32rem] md:text-[clamp(0.96rem,1.55vw,1.12rem)]">
               {activeReason}
             </p>
           ) : null}
@@ -615,7 +615,7 @@ function ForecastChevron({ direction, onClick }: { direction: 'prev' | 'next'; o
       type="button"
       onClick={onClick}
       aria-label={direction === 'prev' ? 'Previous day' : 'Next day'}
-      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-scent-accent/80 transition-[color,transform] duration-200 hover:text-[#ffe8a5] active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55 md:h-14 md:w-14"
+      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-scent-accent/80 transition-[color,transform] duration-200 hover:text-scent-gold-200 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55 md:h-14 md:w-14"
     >
       <Icon size={24} strokeWidth={1.5} aria-hidden className="md:h-7 md:w-7" />
     </button>
