@@ -244,7 +244,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                   type="button"
                   onClick={() => void handleCopy()}
                   disabled={!shareUrl}
-                  className="px-4 py-3 bg-white text-black text-[9px] uppercase tracking-[0.3em] font-bold flex items-center gap-2 hover:bg-white/90 active:scale-[0.97] transition-all shrink-0 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="px-4 py-3 bg-white text-black text-[9px] uppercase tracking-[0.3em] font-bold flex items-center gap-2 hover:bg-white/90 active:scale-[0.97] transition-all shrink-0 disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950"
                 >
                   {copied ? <><Check size={11} strokeWidth={1.75} /> Copied</> : <><Link size={11} strokeWidth={1.75} /> Copy</>}
                 </button>
@@ -254,7 +254,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                   href={shareUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-2 w-full py-2.5 border border-white/8 text-white/50 hover:text-white hover:border-white/20 transition-colors text-[9px] uppercase tracking-[0.35em] font-bold"
+                  className="flex items-center justify-center gap-2 w-full py-2.5 border border-white/8 text-white/50 hover:text-white hover:border-white/20 transition-colors text-[9px] uppercase tracking-[0.35em] font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
                 >
                   <ExternalLink size={10} strokeWidth={1.75} />
                   Preview Shared Page
@@ -272,7 +272,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                 type="button"
                 onClick={() => void handleToggleImagesOnSharePage()}
                 disabled={!authToken || hideImagesBusy}
-                className="w-full py-2.5 border border-white/8 bg-white/[0.02] disabled:opacity-45 disabled:cursor-not-allowed text-[9px] uppercase tracking-[0.3em] font-bold transition-all flex items-center justify-center gap-2 text-white/70 hover:text-white hover:border-white/20"
+                className="w-full py-2.5 border border-white/8 bg-white/[0.02] disabled:opacity-45 disabled:cursor-not-allowed text-[9px] uppercase tracking-[0.3em] font-bold transition-all flex items-center justify-center gap-2 text-white/70 hover:text-white hover:border-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
               >
                 {hideImages ? <EyeOff size={11} strokeWidth={1.75} /> : <Eye size={11} strokeWidth={1.75} />}
                 {hideImages ? 'Shared images hidden' : 'Shared images visible'}
@@ -289,7 +289,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                     <button
                       type="button"
                       onClick={handleShowAll}
-                      className="-my-2 inline-flex min-h-11 items-center px-1 text-[9px] uppercase tracking-[0.3em] text-white/45 hover:text-white/80 transition-colors font-bold"
+                      className="-my-2 inline-flex min-h-11 items-center rounded-sm px-1 text-[9px] uppercase tracking-[0.3em] text-white/45 hover:text-white/80 transition-colors font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
                     >
                       Show All
                     </button>
@@ -297,7 +297,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                     <button
                       type="button"
                       onClick={handleHideAll}
-                      className="-my-2 inline-flex min-h-11 items-center px-1 text-[9px] uppercase tracking-[0.3em] text-white/45 hover:text-white/80 transition-colors font-bold"
+                      className="-my-2 inline-flex min-h-11 items-center rounded-sm px-1 text-[9px] uppercase tracking-[0.3em] text-white/45 hover:text-white/80 transition-colors font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
                     >
                       Hide All
                     </button>
@@ -321,7 +321,9 @@ export const ShareModal: React.FC<ShareModalProps> = ({
               </div>
 
               {/* Scrollable cologne list */}
-              <div className="overflow-y-auto flex-1 px-6 pb-6 space-y-1.5 scrollbar-hide">
+              {/* pb honors the home-indicator safe area — on phones this modal is
+                  a bottom sheet, so the last row must not sit under the inset. */}
+              <div className="overflow-y-auto flex-1 px-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] space-y-1.5 scrollbar-hide">
                 {filtered.length === 0 && (
                   <p className="text-center text-white/45 font-serif italic text-sm py-8">No fragrances found</p>
                 )}
@@ -337,7 +339,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                       type="button"
                       onClick={() => !isPending && handleToggle(item)}
                       disabled={isPending}
-                      className={`w-full flex items-center gap-3 px-4 py-3 border transition-all duration-200 text-left group ${
+                      className={`w-full flex items-center gap-3 px-4 py-3 border transition-all duration-200 text-left group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/40 ${
                         isHidden
                           ? 'bg-white/[0.01] border-white/5 opacity-50 hover:opacity-70'
                           : 'bg-white/[0.04] border-white/10 hover:border-white/20'

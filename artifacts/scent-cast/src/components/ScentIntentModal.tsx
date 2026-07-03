@@ -87,7 +87,7 @@ export const ScentIntentModal: React.FC<ScentIntentModalProps> = ({ isOpen, onCl
             ref={closeButtonRef}
             type="button"
             onClick={handleClose}
-            className="-m-1 inline-flex min-h-11 min-w-11 items-center justify-center rounded-full text-white/40 hover:text-white hover:bg-white/10 transition-all active:scale-95"
+            className="-m-1 inline-flex min-h-11 min-w-11 items-center justify-center rounded-full text-white/40 hover:text-white hover:bg-white/10 transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
             aria-label="Close discovery flow"
           >
             <X size={20} strokeWidth={1.75} />
@@ -135,7 +135,7 @@ export const ScentIntentModal: React.FC<ScentIntentModalProps> = ({ isOpen, onCl
                         key={d.type}
                         onClick={() => setDestination(d.type)}
                         aria-pressed={selected}
-                        className={`p-3 sm:p-5 border text-left flex items-start gap-3 transition-all duration-200 active:scale-[0.97] group ${
+                        className={`p-3 sm:p-5 border text-left flex items-start gap-3 transition-all duration-200 active:scale-[0.97] group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-black ${
                           selected
                             ? 'bg-white border-white'
                             : 'bg-white/[0.03] border-white/10 hover:border-white/30 hover:bg-white/[0.06]'
@@ -187,7 +187,7 @@ export const ScentIntentModal: React.FC<ScentIntentModalProps> = ({ isOpen, onCl
                         key={e.type}
                         onClick={() => setEnergy(e.type)}
                         aria-pressed={selected}
-                        className={`p-3 sm:p-5 border text-left flex items-start gap-3 transition-all duration-200 active:scale-[0.97] group ${
+                        className={`p-3 sm:p-5 border text-left flex items-start gap-3 transition-all duration-200 active:scale-[0.97] group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-black ${
                           selected
                             ? 'bg-white border-white'
                             : 'bg-white/[0.03] border-white/10 hover:border-white/30 hover:bg-white/[0.06]'
@@ -224,7 +224,7 @@ export const ScentIntentModal: React.FC<ScentIntentModalProps> = ({ isOpen, onCl
             <button
               type="button"
               onClick={() => setStep(step - 1)}
-              className="-mx-2 inline-flex min-h-11 items-center px-2 text-[10px] uppercase tracking-[0.3em] text-white/55 hover:text-white transition-colors"
+              className="-mx-2 inline-flex min-h-11 items-center rounded-sm px-2 text-[10px] uppercase tracking-[0.3em] text-white/55 hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
             >
               Back
             </button>
@@ -236,7 +236,7 @@ export const ScentIntentModal: React.FC<ScentIntentModalProps> = ({ isOpen, onCl
             type="button"
             onClick={handleNext}
             disabled={(step === 1 && !destination) || (step === 2 && !energy)}
-            className="px-6 sm:px-8 py-3 sm:py-4 bg-white text-black uppercase tracking-[0.3em] text-[10px] font-bold disabled:opacity-35 disabled:cursor-not-allowed flex items-center gap-3 hover:bg-white/90 active:scale-[0.97] transition-all duration-200"
+            className="px-6 sm:px-8 py-3 sm:py-4 bg-white text-black uppercase tracking-[0.3em] text-[10px] font-bold disabled:opacity-35 disabled:cursor-not-allowed flex items-center gap-3 hover:bg-white/90 active:scale-[0.97] transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
           >
             {step === 2 ? 'Find My Match' : 'Proceed'}
             <ArrowRight size={13} strokeWidth={1.75} />

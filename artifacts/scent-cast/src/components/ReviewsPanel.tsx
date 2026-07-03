@@ -225,7 +225,7 @@ export function ReviewsPanel({ name, brand, reviews }: ReviewsPanelProps) {
           <button
             type="button"
             onClick={() => setRetryCount((c) => c + 1)}
-            className="flex h-8 items-center justify-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.025] px-4 text-[9px] font-bold uppercase tracking-[0.24em] text-white/44 transition-colors hover:border-scent-accent/32 hover:bg-scent-accent/[0.06] hover:text-scent-accent"
+            className="flex h-8 items-center justify-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.025] px-4 text-[9px] font-bold uppercase tracking-[0.24em] text-white/44 transition-colors hover:border-scent-accent/32 hover:bg-scent-accent/[0.06] hover:text-scent-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/22"
           >
             <RefreshCw size={11} strokeWidth={1.75} className="text-inherit" />
             <span>Retry</span>
@@ -284,7 +284,7 @@ export function ReviewsPanel({ name, brand, reviews }: ReviewsPanelProps) {
       <ReviewsHeader />
 
       <div
-        className={`relative flex w-full flex-col items-center overflow-hidden px-4 py-5 sm:px-5 sm:py-5 transition-colors duration-200 ${
+        className={`relative flex w-full flex-col items-center overflow-hidden px-4 py-5 sm:px-5 sm:py-5 transition-colors duration-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-white/22 ${
           !showControls && hasMultiple ? "cursor-pointer hover:bg-white/[0.01]" : ""
         }`}
         onClick={() => {
@@ -387,7 +387,7 @@ export function ReviewsPanel({ name, brand, reviews }: ReviewsPanelProps) {
                       e.stopPropagation();
                       selectReview(index);
                     }}
-                    className="group grid w-full grid-cols-[2.5rem_minmax(0,1fr)] items-start gap-3 px-1 py-4 text-left transition-colors hover:bg-white/[0.018] sm:grid-cols-[3.5rem_minmax(0,1fr)] sm:px-3 lg:px-10"
+                    className="group grid w-full grid-cols-[2.5rem_minmax(0,1fr)] items-start gap-3 px-1 py-4 text-left transition-colors hover:bg-white/[0.018] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-white/22 sm:grid-cols-[3.5rem_minmax(0,1fr)] sm:px-3 lg:px-10"
                     aria-current={index === currentIndex ? "true" : undefined}
                   >
                     <span

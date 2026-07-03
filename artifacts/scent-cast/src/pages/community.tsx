@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Plus, Search, X } from 'lucide-react';
 import { AppTopNav } from '@/components/AppTopNav';
+import { AppFooter } from '@/components/AppFooter';
 import { CommunityHero } from '@/components/community/CommunityHero';
 import { CommunityLoadingState } from '@/components/community/CommunityLoadingState';
 import { useCommunityFragrances } from '@/components/community/communityData';
@@ -353,22 +354,10 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
         </div>
       </main>
 
-      <footer className="relative z-10 border-t border-scent-accent/10 py-16 px-8 mt-12">
-        <div className="max-w-[1400px] mx-auto text-center space-y-4">
-          <div className="flex items-center justify-center opacity-30">
-            <img
-              src="/nav/scentbeam-nav-logo.png"
-              srcSet="/nav/scentbeam-nav-logo.png 1x, /nav/scentbeam-nav-logo@2x.png 2x"
-              alt="ScentBeam"
-              width={69}
-              height={20}
-              className="h-5 w-auto"
-              draggable={false}
-            />
-          </div>
-          <p className="scent-type-label">&copy; 2026 Olfactory Intelligence Systems</p>
-        </div>
-      </footer>
+      {/* Shared chrome footer — same wordmark + legal links + dynamic year as
+          Home and the legal pages, replacing this page's ad-hoc copy (which
+          carried a hardcoded year and no legal links). */}
+      <AppFooter className="mt-12" />
     </div>
   );
 };

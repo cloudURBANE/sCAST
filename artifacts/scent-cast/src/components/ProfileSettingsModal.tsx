@@ -402,7 +402,9 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
               </button>
             </div>
 
-            <div className="max-h-[calc(92svh-5.5rem)] overflow-y-auto px-5 py-5 sm:px-6 sm:py-6">
+            {/* pb honors the home-indicator safe area — on phones this modal is
+                a bottom sheet, so the last card must not sit under the inset. */}
+            <div className="max-h-[calc(92svh-5.5rem)] overflow-y-auto px-5 pt-5 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] sm:px-6 sm:pt-6 sm:pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))]">
               <div className="space-y-4">
                 <section className="rounded-[12px] border border-white/10 bg-white/[0.025] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
                   <div className="mb-4 flex items-center gap-3">

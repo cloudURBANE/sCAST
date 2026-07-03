@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { LoaderCircle, Swords } from 'lucide-react';
 import { AppTopNav } from '@/components/AppTopNav';
+import { AppFooter } from '@/components/AppFooter';
 import { ArenaBattleStage } from '@/components/arena/ArenaBattleStage';
 import { ArenaNextRail } from '@/components/arena/ArenaNextRail';
 import { mapCommunityPostToArenaBattle } from '@/components/arena/arenaBattleMapper';
@@ -97,7 +98,9 @@ export const ArenaPage: React.FC<ArenaPageProps> = ({
 
   return (
     <div className="min-h-[100svh] overflow-x-hidden pb-[calc(var(--bottomnav-h)+2rem)] md:pb-0">
-      <div className="fixed inset-0 z-0 bg-[radial-gradient(ellipse_at_50%_0%,rgba(212,175,55,0.04),transparent_60%)]" aria-hidden="true" />
+      {/* Accent wash resolves through the accent token so data-accent="green"
+          tints this page the same way it tints the rest of the app. */}
+      <div className="fixed inset-0 z-0 bg-[radial-gradient(ellipse_at_50%_0%,rgb(var(--scent-accent-rgb)/0.04),transparent_60%)]" aria-hidden="true" />
       <AppTopNav
         authToken={authToken}
         authEmail={authEmail}
@@ -166,20 +169,10 @@ export const ArenaPage: React.FC<ArenaPageProps> = ({
         )}
       </main>
 
-      <footer className="relative z-10 border-t border-scent-accent/10 px-8 py-10 sm:py-12">
-        <div className="mx-auto max-w-4xl space-y-4 text-center">
-          <div className="flex items-center justify-center opacity-30">
-            <img
-              src="/nav/scentbeam-nav-logo.png"
-              srcSet="/nav/scentbeam-nav-logo.png 1x, /nav/scentbeam-nav-logo@2x.png 2x"
-              alt="ScentBeam"
-              className="h-5 w-auto"
-              draggable={false}
-            />
-          </div>
-          <p className="scent-type-label">&copy; 2026 Olfactory Intelligence Systems</p>
-        </div>
-      </footer>
+      {/* Shared chrome footer — same wordmark + legal links + dynamic year as
+          Home and the legal pages, replacing this page's ad-hoc copy (which
+          carried a hardcoded year and no legal links). */}
+      <AppFooter />
     </div>
   );
 };
