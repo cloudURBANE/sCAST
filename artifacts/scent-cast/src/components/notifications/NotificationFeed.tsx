@@ -95,6 +95,15 @@ export function NotificationFeed() {
 
   const feedKey = ["notifications", authToken] as const;
 
+  // Conditional-GET memo: Express auto-ETags every res.json body and answers a
+  // matching If-None-Match with an empty 304 (the Vercel /api proxy forwards
+  // both), so replaying the last 200's ETag turns the steady-state poll — by far
+  // the most common case, nothing changed — from a full 50-row JSON page into a
+  // bodyless 304. We keep the last 200 payload alongside its ETag (scoped to the
+  // token so a sign-in switch can't replay another user's snapshot) and hand it
+  // back on 304, which is byte-identical to what the server would have re-sent.
+  const conditionalRef = React.useRef<{ token: string; etag: string; data: FeedData } | null>(null);
+
   // 1. Query: Fetch notifications from API. Firing is entirely server-driven —
   // there is no client-side notification generation, so React Query's keyed cache
   // is the dedupe boundary (one in-flight request per token, shared across the
@@ -103,22 +112,33 @@ export function NotificationFeed() {
     queryKey: feedKey,
     queryFn: async () => {
       if (!authToken) return { notifications: [], unreadCount: 0 };
-      const res = await fetch("/api/notifications", {
-        headers: {
-          Authorization: `Bearer ${authToken}`
-        }
-      });
+      const headers: Record<string, string> = {
+        Authorization: `Bearer ${authToken}`
+      };
+      const prior = conditionalRef.current;
+      const canRevalidate = prior !== null && prior.token === authToken;
+      if (canRevalidate) headers["If-None-Match"] = prior.etag;
+      const res = await fetch("/api/notifications", { headers });
+      if (res.status === 304 && canRevalidate) return prior.data;
       if (!res.ok) throw new Error("Failed to fetch notifications");
       const json = await res.json();
-      return {
+      const next: FeedData = {
         notifications: (json.notifications || []) as InAppNotification[],
         unreadCount: typeof json.unreadCount === "number" ? json.unreadCount : 0,
       };
+      const etag = res.headers.get("etag");
+      conditionalRef.current = etag ? { token: authToken, etag, data: next } : null;
+      return next;
     },
     enabled: !!authToken,
-    refetchInterval: 15000, // Poll every 15s to keep feed fresh
-    staleTime: 15000, // align freshness window with the poll cadence
-    refetchOnWindowFocus: false // the 15s poll already keeps it fresh; avoid focus-storm refetches
+    // Poll fast (15s) only while the panel is actually open; relax to 60s while
+    // it is closed — the badge count tolerates a minute of staleness and the
+    // closed state is where sessions spend nearly all their time, so this cuts
+    // steady-state poll traffic ~4x. refetchIntervalInBackground stays at its
+    // default (false), so hidden tabs never poll at all.
+    refetchInterval: isOpen ? 15000 : 60000,
+    staleTime: 15000, // align freshness window with the fastest poll cadence
+    refetchOnWindowFocus: false // the poll already keeps it fresh; avoid focus-storm refetches
   });
 
   // Optimistic cache helpers — every mutation updates the cache immediately so a
@@ -139,6 +159,14 @@ export function NotificationFeed() {
   };
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["notifications"] });
+
+  // Opening the panel revalidates immediately (a bodyless 304 when nothing
+  // changed), so the relaxed 60s closed-state cadence never makes the opened
+  // list staler than the old always-15s poll did.
+  const handleOpenChange = (open: boolean) => {
+    setIsOpen(open);
+    if (open) void refetch();
+  };
 
   // 2. Mutations (all optimistic)
   const markReadMutation = useMutation({
@@ -476,7 +504,7 @@ export function NotificationFeed() {
   // faded-out second screen. See `useIsDesktop` above.
   if (isDesktop) {
     return (
-      <Popover open={isOpen} onOpenChange={setIsOpen}>
+      <Popover open={isOpen} onOpenChange={handleOpenChange}>
         <PopoverTrigger asChild>
           <button type="button" className={triggerClassName} aria-label={triggerLabel}>
             <Bell size={18} className="text-[#f4debd]/85 transition-colors" />
@@ -495,7 +523,7 @@ export function NotificationFeed() {
   }
 
   return (
-    <Drawer open={isOpen} onOpenChange={setIsOpen}>
+    <Drawer open={isOpen} onOpenChange={handleOpenChange}>
       <DrawerTrigger asChild>
         <button type="button" className={triggerClassName} aria-label={triggerLabel}>
           <Bell size={18} className="text-[#f4debd]/85 transition-colors" />
