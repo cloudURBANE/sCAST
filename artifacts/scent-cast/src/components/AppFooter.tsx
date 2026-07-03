@@ -27,7 +27,11 @@ export const AppFooter: React.FC<{ className?: string }> = ({ className = "" }) 
       className={`relative z-10 border-t border-scent-accent/10 px-6 py-14 ${className}`.trim()}
     >
       <div className="mx-auto flex max-w-[1400px] flex-col items-center gap-6 text-center">
-        <Link to="/" aria-label="Go to home" className="inline-flex opacity-40 transition-opacity hover:opacity-70">
+        <Link
+          to="/"
+          aria-label="Go to home"
+          className="inline-flex rounded-sm opacity-40 transition-opacity hover:opacity-70 focus-visible:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55"
+        >
           <img
             src="/nav/scentbeam-nav-logo.png"
             srcSet="/nav/scentbeam-nav-logo.png 1x, /nav/scentbeam-nav-logo@2x.png 2x"

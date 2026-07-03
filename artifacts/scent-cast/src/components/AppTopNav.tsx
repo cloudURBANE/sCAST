@@ -41,14 +41,20 @@ const navBaseClassName =
   'text-[11px] tracking-[0.10em] min-[360px]:text-[13px] min-[360px]:tracking-[0.16em] font-semibold uppercase whitespace-nowrap';
 
 const topLevelNavClassName =
-  'relative inline-flex min-h-[44px] items-center justify-center rounded-full px-2';
-const inactiveNavClassName = `${navBaseClassName} ${topLevelNavClassName} text-[#f4debd]/85 hover:text-white transition-colors`;
-const activeNavClassName = `${navBaseClassName} ${topLevelNavClassName} text-[#fff7ec]`;
+  'relative inline-flex min-h-[44px] items-center justify-center rounded-full px-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55';
+// Token-driven text colors (not hardcoded creams) so the links stay readable on
+// the light theme's near-white topbar — the same pattern the mobile tab bar
+// below already uses. In dark these resolve to the previous warm cream values.
+const inactiveNavClassName = `${navBaseClassName} ${topLevelNavClassName} text-scent-text-muted hover:text-foreground transition-colors`;
+const activeNavClassName = `${navBaseClassName} ${topLevelNavClassName} text-foreground`;
 
 const ActiveDot: React.FC = () => (
   <span
     aria-hidden="true"
-    className="h-1.5 w-1.5 shrink-0 rounded-full bg-scent-accent/75 shadow-[0_0_10px_rgba(212,175,55,0.34)]"
+    // No projected accent glow off the dot (owner-rejected site-wide); the
+    // accent-token fill also keeps the dot correct under data-accent="green",
+    // where the old hardcoded gold shadow clashed.
+    className="h-1.5 w-1.5 shrink-0 rounded-full bg-scent-accent/75"
   />
 );
 

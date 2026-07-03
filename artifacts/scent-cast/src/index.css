@@ -677,6 +677,18 @@ a {
   transform: scale(0.97);
 }
 
+/* Desktop-only hover for the not-yet-selected tiles: the border warms a step
+   toward the active state (border + existing inset sheen only — no projected
+   glow), so the rail reads as interactive before the first click. */
+@media (hover: hover) and (pointer: fine) {
+  .forecast-day-tile:not(.is-active):hover {
+    border-color: rgb(var(--scent-accent-rgb) / 0.34);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 232, 168, 0.08),
+      0 1px 2px rgba(0, 0, 0, 0.6);
+  }
+}
+
 @media (min-width: 640px) {
   .forecast-day-tile {
     border-radius: 18px;
@@ -1626,7 +1638,20 @@ a {
   transition:
     color var(--scent-transition-fast) var(--scent-ease-out),
     background var(--scent-transition-fast) var(--scent-ease-out),
-    box-shadow var(--scent-transition-fast) var(--scent-ease-out);
+    box-shadow var(--scent-transition-fast) var(--scent-ease-out),
+    transform var(--scent-transition-fast) var(--scent-ease-out);
+}
+
+/* Tactile press feedback — this control is mobile-only (hidden ≥sm), where the
+   color/background transitions alone read as unresponsive under a thumb. */
+.scent-vault-grid-toggle__button:active {
+  transform: scale(0.92);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scent-vault-grid-toggle__button:active {
+    transform: none;
+  }
 }
 
 .scent-vault-grid-toggle__button:hover {
