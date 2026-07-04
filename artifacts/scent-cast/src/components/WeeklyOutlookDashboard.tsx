@@ -382,8 +382,18 @@ function ForecastHero({
                 {pick.name}
               </p>
               {notes.length > 0 ? (
+                // Notes render as per-note spans (not one joined string) so the
+                // third note — and its leading separator — can drop out below
+                // 360px instead of line-clamp cutting the joined string mid-way
+                // and stranding a "Bergamot ·…" dangling-separator ellipsis on
+                // SE-class screens. Wider viewports see the identical joined line.
                 <p className="mt-1.5 line-clamp-2 font-serif text-[clamp(0.8rem,3vw,1.05rem)] italic leading-snug text-scent-accent/85 sm:mt-2 md:mt-2.5 md:text-[clamp(1rem,1.7vw,1.2rem)]">
-                  {notes.join(' · ')}
+                  {notes.map((note, index) => (
+                    <span key={note} className={index >= 2 ? 'hidden min-[360px]:inline' : undefined}>
+                      {index > 0 ? ' · ' : ''}
+                      {note}
+                    </span>
+                  ))}
                 </p>
               ) : null}
             </div>
@@ -506,8 +516,9 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
       aria-label="Scent forecast"
     >
       {/* text-indent matches the tracking so the uppercase title's trailing
-          letter-spacing doesn't pull it optically left of the centered axis. */}
-      <h2 className="scent-type-label text-[10px] tracking-[0.34em] text-scent-text-secondary [text-indent:0.34em] sm:text-[12px]">
+          letter-spacing doesn't pull it optically left of the centered axis.
+          .forecast-title adds the two fading gold hairlines flanking the label. */}
+      <h2 className="forecast-title scent-type-label text-[10px] tracking-[0.34em] text-scent-text-secondary [text-indent:0.34em] sm:text-[12px]">
         Scent Forecast
       </h2>
 
@@ -526,7 +537,16 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
               so title→hero→pill→rail read as one tuned system. The hero is the focal
               point: a taller slot + larger bottle give the recommendation real
               product authority. The bottle and title share one centered row. */}
-          <div className="relative mx-auto mt-[var(--fc-title-hero)] flex h-[12.5rem] w-full max-w-[27rem] items-center justify-between gap-1.5 sm:h-[14rem] sm:gap-3 md:h-[16.5rem] md:max-w-[42rem] md:gap-5 lg:max-w-[46rem]">
+          {/* SLOT HEIGHT IS WIDTH-AWARE: below md the bottle is a square capped
+              by its column WIDTH (~96px at 320w, ~132px at 390w), so any extra
+              slot height becomes fixed dead bands above and below the packshot —
+              measured 34–52px of void per side at the old h-[12.5rem]. The base
+              height is trimmed to what the bottle + text stack actually fills;
+              the bottle renders at the exact same size. sm gains max-w-[34rem]
+              for the same reason: at 640–767px the old 27rem cap starved the
+              bottle column (a 141px bottle in a 224px slot); the wider row lets
+              the square genuinely earn the sm slot height. */}
+          <div className="relative mx-auto mt-[var(--fc-title-hero)] flex h-[11.5rem] w-full max-w-[27rem] items-center justify-between gap-1.5 sm:h-[14rem] sm:max-w-[34rem] sm:gap-3 md:h-[16.5rem] md:max-w-[42rem] md:gap-5 lg:max-w-[46rem]">
             <ForecastChevron direction="prev" onClick={() => go(selected - 1)} />
             <div className="relative h-full flex-1 overflow-hidden">
               <ForecastHero
@@ -544,8 +564,13 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
               calendar rather than drifting beside the title. */}
           {activeMeta.length > 0 ? (
             <div className="mt-[var(--fc-hero-pill)] flex justify-center">
-              <div className="inline-flex items-center gap-2 rounded-full border border-scent-accent/20 bg-black/25 px-3.5 py-1.5 text-scent-text-muted md:gap-2.5 md:px-5 md:py-2">
-                <WeatherGlyph day={activePlan.day} size={14} />
+              {/* .forecast-meta-pill carries the shared near-black + gold-hairline
+                  material; the glyph takes the accent tint (like an active tile's
+                  glyph) so the pill's one pictorial element ties it to the rail. */}
+              <div className="forecast-meta-pill inline-flex items-center gap-2 px-3.5 py-1.5 text-scent-text-muted md:gap-2.5 md:px-5 md:py-2">
+                <span className="flex items-center text-scent-accent/75" aria-hidden>
+                  <WeatherGlyph day={activePlan.day} size={14} />
+                </span>
                 <span className="text-[11px] font-medium uppercase tracking-[0.14em] sm:text-[12px] md:text-[13px]">
                   {activeMeta.join(' · ')}
                 </span>
@@ -618,7 +643,7 @@ function ForecastChevron({ direction, onClick }: { direction: 'prev' | 'next'; o
       type="button"
       onClick={onClick}
       aria-label={direction === 'prev' ? 'Previous day' : 'Next day'}
-      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-scent-accent/80 transition-[color,transform] duration-200 hover:text-scent-gold-200 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55 md:h-14 md:w-14"
+      className="forecast-chevron flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-scent-accent/80 hover:text-scent-gold-200 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55 md:h-14 md:w-14"
     >
       <Icon size={24} strokeWidth={1.5} aria-hidden className="md:h-7 md:w-7" />
     </button>
