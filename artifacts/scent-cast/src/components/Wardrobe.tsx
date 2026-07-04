@@ -1,6 +1,7 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import { m, AnimatePresence, useReducedMotion } from 'framer-motion';
+import { SCENT_EASE_OUT } from '@/lib/motion';
 import {
   X,
   Trash2,
@@ -475,7 +476,7 @@ function PriceValueSignal({
     <span className={`${baseClass} flex-col items-center gap-0.5`} aria-label={label}>
       <span className="inline-flex items-center">
         {symbols.split("").map((symbol, index) => (
-          <motion.span
+          <m.span
             key={`${symbol}-${index}`}
             aria-hidden="true"
             className="inline-block"
@@ -493,7 +494,7 @@ function PriceValueSignal({
             }
           >
             {symbol}
-          </motion.span>
+          </m.span>
         ))}
       </span>
       {/* The dollar glyphs alone don't say whether the price is good or bad —
@@ -1097,7 +1098,7 @@ export const Wardrobe: React.FC<{
   const bottleMorphTransition = React.useMemo(
     () =>
       reducedDetailMotion
-        ? ({ layout: { type: "tween", duration: 0.4, ease: [0.22, 1, 0.36, 1] } } as const)
+        ? ({ layout: { type: "tween", duration: 0.4, ease: SCENT_EASE_OUT } } as const)
         : ({ layout: { type: "spring", stiffness: 260, damping: 30, mass: 0.9 } } as const),
     [reducedDetailMotion],
   );
@@ -2054,11 +2055,11 @@ export const Wardrobe: React.FC<{
                 }}
                 placeholder="Search vault (e.g. sauvage)..."
                 autoComplete="off"
-                className="scent-lux-input scent-vault-search-input w-full h-[58px] px-14 text-center text-[#fff7ec] font-sans text-[16px] outline-none transition-all placeholder:text-scent-text-subtle sm:h-[68px] sm:px-16"
+                className="scent-lux-input scent-vault-search-input w-full h-[58px] px-14 text-center text-[#fff7ec] font-sans text-[16px] outline-none transition-[color,background-color,border-color,box-shadow] placeholder:text-scent-text-subtle sm:h-[68px] sm:px-16"
               />
               <AnimatePresence>
                 {searchDropdownOpen ? (
-                  <motion.ul
+                  <m.ul
                     initial={{ opacity: 0, y: -6 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -4 }}
@@ -2104,7 +2105,7 @@ export const Wardrobe: React.FC<{
                         </li>
                       );
                     })}
-                  </motion.ul>
+                  </m.ul>
                 ) : null}
               </AnimatePresence>
 
@@ -2139,7 +2140,7 @@ export const Wardrobe: React.FC<{
             <div className="flex justify-center relative z-10">
               <div className="relative group max-w-sm w-full">
                 <div className="pedestal p-1">
-                  <motion.div
+                  <m.div
                     initial={{ scale: 0.98, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
                     className="glass-acrylic glass-acrylic-animate rounded-scent p-20 aspect-[3/4] flex flex-col items-center relative overflow-hidden cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
                     role="button"
@@ -2174,7 +2175,7 @@ export const Wardrobe: React.FC<{
                       <p className="scent-type-label font-sans">{entryBrand(featuredItem)}</p>
                       <h4 className="font-serif italic text-3xl sm:text-5xl text-white tracking-tighter">{entryName(featuredItem)}</h4>
                     </div>
-                  </motion.div>
+                  </m.div>
                 </div>
               </div>
             </div>
@@ -2360,7 +2361,7 @@ export const Wardrobe: React.FC<{
             aria-modal="true"
             aria-labelledby="fragrance-detail-title"
           >
-            <motion.div
+            <m.div
               initial={reducedDetailMotion ? false : { opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -2368,11 +2369,11 @@ export const Wardrobe: React.FC<{
               onClick={closeDetail}
               className="absolute inset-0 bg-black/95"
             />
-            <motion.div
+            <m.div
               initial={reducedDetailMotion ? false : { opacity: 0, scale: 0.985 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={reducedDetailMotion ? { opacity: 0 } : { opacity: 0, scale: 0.99 }}
-              transition={{ duration: stackedDetailMode ? 0 : reducedDetailMotion ? 0.08 : 0.24, ease: [0.22, 1, 0.36, 1] }}
+              transition={{ duration: stackedDetailMode ? 0 : reducedDetailMotion ? 0.08 : 0.24, ease: SCENT_EASE_OUT }}
               className={detailPanelClassName}
             >
               <div
@@ -2446,7 +2447,7 @@ export const Wardrobe: React.FC<{
                           <button
                             type="button"
                             onClick={() => setBottleImageToolsOpen((o) => !o)}
-                            className={`p-1.5 rounded-md border border-white/10 bg-white/[0.04] text-scent-text-muted hover:text-white hover:bg-white/[0.08] transition-all flex items-center justify-center ${
+                            className={`p-1.5 rounded-md border border-white/10 bg-white/[0.04] text-scent-text-muted hover:text-white hover:bg-white/[0.08] transition-colors flex items-center justify-center ${
                               bottleImageToolsOpen ? 'text-scent-accent border-scent-accent/30 bg-scent-accent/5' : ''
                             }`}
                             title="Adjust bottle image and settings"
@@ -2474,7 +2475,7 @@ export const Wardrobe: React.FC<{
                                 renders identically (object-fit: contain, bottom-anchored); the
                                 full-width border backdrop above stays put. This is the WebKit
                                 morph-jitter / "glitchy settling" fix on iPhone + iPad. */}
-                            <motion.div
+                            <m.div
                               layoutId={detailBottleLayoutId ?? `wardrobe-bottle-${selectedItem.id}`}
                               transition={bottleMorphTransition}
                               className="relative h-full aspect-square cursor-pointer"
@@ -2494,10 +2495,10 @@ export const Wardrobe: React.FC<{
                                 showFrameGuide={bottleImageToolsOpen}
                                 isSyncing={isImageSyncing?.(selectedItem)}
                                 className="absolute inset-0"
-                                imgClassName={reducedDetailMotion ? "" : "transition-all duration-300"}
+                                imgClassName={reducedDetailMotion ? "" : "transition-[opacity,filter] duration-300"}
                                 onError={() => markDetailImageBroken(detailDisplayUrl)}
                               />
-                            </motion.div>
+                            </m.div>
                           </div>
 
                           {detailDisplayUrl && !bottleImageToolsOpen ? (
@@ -2660,7 +2661,7 @@ export const Wardrobe: React.FC<{
                                     title={
                                       !clarifySolverId ? 'Select an issue first' : undefined
                                     }
-                                    className="flex-1 min-h-[38px] py-2 bg-white text-black scent-type-chip hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 disabled:opacity-45 disabled:cursor-not-allowed rounded-lg"
+                                    className="flex-1 min-h-[38px] py-2 bg-white text-black scent-type-chip hover:opacity-90 active:scale-[0.98] transition-[opacity,transform] flex items-center justify-center gap-1.5 disabled:opacity-45 disabled:cursor-not-allowed rounded-lg"
                                   >
                                     {refreshingId === selectedItem.id ? (
                                       <>
@@ -2685,7 +2686,7 @@ export const Wardrobe: React.FC<{
                                           ? 'Another bottle is being reimagined — wait for it to finish'
                                           : 'Reimagine this bottle on a transparent background (1–3 min)'
                                     }
-                                    className="flex-1 min-h-[38px] py-2 bg-white/[0.06] text-white scent-type-chip border border-white/15 hover:bg-white/[0.1] active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 disabled:opacity-35 disabled:cursor-not-allowed rounded-lg"
+                                    className="flex-1 min-h-[38px] py-2 bg-white/[0.06] text-white scent-type-chip border border-white/15 hover:bg-white/[0.1] active:scale-[0.98] transition-[background-color,opacity,transform] flex items-center justify-center gap-1.5 disabled:opacity-35 disabled:cursor-not-allowed rounded-lg"
                                   >
                                     {selectedReimagining ? (
                                       <>
@@ -3095,7 +3096,7 @@ export const Wardrobe: React.FC<{
                                       type="button"
                                       onClick={() => void handleSaveImageFrame()}
                                       disabled={imageToolbarBusy || !onPersistWardrobeImage}
-                                      className="w-full min-h-[36px] rounded-lg bg-scent-accent text-black scent-type-chip hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+                                      className="w-full min-h-[36px] rounded-lg bg-scent-accent text-black scent-type-chip hover:opacity-90 active:scale-[0.98] transition-[opacity,transform] flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
                                     >
                                       {persistBusy ? (
                                         <>
@@ -3138,7 +3139,7 @@ export const Wardrobe: React.FC<{
                                               ? 'This preview used a fallback background — try another fix first'
                                               : undefined
                                         }
-                                        className="flex-1 min-h-[38px] py-2 bg-scent-accent text-black scent-type-chip hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg"
+                                        className="flex-1 min-h-[38px] py-2 bg-scent-accent text-black scent-type-chip hover:opacity-90 active:scale-[0.98] transition-[opacity,transform] flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg"
                                       >
                                         {persistBusy ? (
                                           <>
@@ -3255,7 +3256,7 @@ export const Wardrobe: React.FC<{
                     disabled={imageToolbarBusy || deleteBusy}
                     aria-busy={deleteBusy}
                     aria-label={deleteBusy ? "Deleting from vault" : deleteConfirming ? "Confirm delete from vault" : "Delete from vault"}
-                    className={`scent-no-mobile-focus-ring group flex min-h-[46px] items-center justify-center gap-2 px-3 py-3 scent-type-chip transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 disabled:cursor-not-allowed ${
+                    className={`scent-no-mobile-focus-ring group flex min-h-[46px] items-center justify-center gap-2 px-3 py-3 scent-type-chip transition-[color,background-color,opacity] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 disabled:cursor-not-allowed ${
                       deleteBusy ? 'disabled:opacity-80' : 'disabled:opacity-25'
                     } ${
                       deleteConfirming || deleteBusy
@@ -3303,7 +3304,7 @@ export const Wardrobe: React.FC<{
                     disabled={imageToolbarBusy || addBusy || !onAdd}
                     aria-busy={addBusy}
                     aria-label={addBusy ? 'Adding to vault' : 'Add to vault'}
-                    className="scent-no-mobile-focus-ring group flex min-h-[46px] items-center justify-center gap-2 px-3 py-3 scent-type-chip text-scent-accent transition-all hover:bg-scent-accent/[0.08] hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="scent-no-mobile-focus-ring group flex min-h-[46px] items-center justify-center gap-2 px-3 py-3 scent-type-chip text-scent-accent transition-[color,background-color,opacity] hover:bg-scent-accent/[0.08] hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     {addBusy ? (
                       <RefreshCw size={14} strokeWidth={1.75} className="animate-spin" aria-hidden />
@@ -3315,10 +3316,10 @@ export const Wardrobe: React.FC<{
                   )}
                 </div>
               </div>
-            </motion.div>
+            </m.div>
             <AnimatePresence>
               {enlargeOpen && detailDisplayUrl ? (
-                <motion.div
+                <m.div
                   ref={enlargeModalRef}
                   key="bottle-enlarge"
                   role="dialog"
@@ -3364,7 +3365,7 @@ export const Wardrobe: React.FC<{
                   <p className="mt-5 scent-type-label font-sans">
                     Tap outside or Esc to close
                   </p>
-                </motion.div>
+                </m.div>
               ) : null}
             </AnimatePresence>
           </div>

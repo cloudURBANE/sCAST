@@ -1,6 +1,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import { m, AnimatePresence } from "framer-motion";
+import { SCENT_EASE_OUT_EXPO } from "@/lib/motion";
 import { Cookie, ShieldCheck, X } from "lucide-react";
 
 import { Switch } from "@/components/ui/switch";
@@ -61,14 +62,14 @@ export function CookieConsentBanner() {
     <>
       <AnimatePresence>
         {mode === "banner" ? (
-          <motion.div
+          <m.div
             key="cookie-banner"
             role="region"
             aria-label="Cookie consent"
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 24 }}
-            transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
+            transition={{ duration: 0.32, ease: SCENT_EASE_OUT_EXPO }}
             className="fixed inset-x-0 z-[120] flex justify-center px-[max(0.75rem,env(safe-area-inset-left,0px))] bottom-[max(0.75rem,calc(env(safe-area-inset-bottom,0px)+0.75rem))] md:bottom-6"
           >
             <div className="pointer-events-auto w-full max-w-2xl rounded-[18px] border border-scent-accent/22 bg-[#0b0805]/95 p-4 text-scent-text-primary shadow-[0_22px_60px_rgba(0,0,0,0.66)] backdrop-blur-md sm:p-5">
@@ -121,7 +122,7 @@ export function CookieConsentBanner() {
                 </div>
               </div>
             </div>
-          </motion.div>
+          </m.div>
         ) : null}
       </AnimatePresence>
 
@@ -158,7 +159,7 @@ function ConsentManager({ onClose }: { onClose: () => void }) {
       aria-modal="true"
       aria-labelledby="cookie-manager-title"
     >
-      <motion.div
+      <m.div
         initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-lg rounded-[20px] border border-scent-accent/22 bg-[#0b0805]/97 p-5 text-scent-text-primary shadow-[0_28px_70px_rgba(0,0,0,0.72)] sm:p-7"
@@ -229,7 +230,7 @@ function ConsentManager({ onClose }: { onClose: () => void }) {
             <span>Save preferences</span>
           </button>
         </div>
-      </motion.div>
+      </m.div>
     </div>
   );
 }

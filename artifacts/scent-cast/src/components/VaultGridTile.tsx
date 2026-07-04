@@ -1,5 +1,6 @@
 import React from 'react';
-import { motion, type Transition } from 'framer-motion';
+import { m, type Transition } from 'framer-motion';
+import { SCENT_EASE_OUT_EXPO } from '@/lib/motion';
 import { VaultCard } from '@/components/VaultCard';
 import { BottleImage } from '@/components/BottleImage';
 import { betaVideoUrlForFragrance } from '@/lib/bottleVideoBeta';
@@ -20,7 +21,7 @@ import type { Fragrance } from '@/components/Wardrobe';
 const TILE_INITIAL = { opacity: 0, y: 10 } as const;
 const TILE_WHILE_IN_VIEW = { opacity: 1, y: 0 } as const;
 const TILE_VIEWPORT = { once: true, margin: '0px 0px 15% 0px' } as const;
-const TILE_TRANSITION: Transition = { duration: 0.28, ease: [0.16, 1, 0.3, 1] };
+const TILE_TRANSITION: Transition = { duration: 0.28, ease: SCENT_EASE_OUT_EXPO };
 
 /** Resolve the human-facing name/brand even if the row predates the flat shape. */
 function entryName(item: { name?: string; product?: { name?: string } }): string {
@@ -79,7 +80,7 @@ function VaultGridTileComponent({
     : 'scent-hover-scale brightness-[1.1] transition-transform duration-500 motion-reduce:transition-none';
 
   return (
-    <motion.div
+    <m.div
       initial={motionDisabled ? false : TILE_INITIAL}
       whileInView={motionDisabled ? undefined : TILE_WHILE_IN_VIEW}
       viewport={motionDisabled ? undefined : TILE_VIEWPORT}
@@ -98,7 +99,7 @@ function VaultGridTileComponent({
             carries the layoutId that the detail modal's bottle reuses, so
             tapping the card morphs the bottle open (and back on close) — the
             same effect as the Community feed. */}
-        <motion.div
+        <m.div
           layoutId={`wardrobe-bottle-${item.id}`}
           transition={bottleMorphTransition}
           className="absolute inset-0 z-10"
@@ -116,9 +117,9 @@ function VaultGridTileComponent({
             loading={prioritizeImage ? 'eager' : 'lazy'}
             fetchPriority={prioritizeImage ? 'high' : undefined}
           />
-        </motion.div>
+        </m.div>
       </VaultCard>
-    </motion.div>
+    </m.div>
   );
 }
 

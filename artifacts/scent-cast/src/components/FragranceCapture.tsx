@@ -1,7 +1,9 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, Search } from 'lucide-react';
-import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import { m, AnimatePresence, useReducedMotion } from 'framer-motion';
+import { useCalmMotion } from '@/hooks/useCalmMotion';
+import { SCENT_EASE_OUT } from '@/lib/motion';
 import { ScentIntelligenceLoader } from './ScentIntelligenceLoader';
 import {
   collectMainAccordDisplayRows,
@@ -357,8 +359,9 @@ export const FragranceCapture: React.FC<{
   const [syncComplete, setSyncComplete] = useState(false);
   const [loadingSurface, setLoadingSurface] = useState<LoadingSurface>(null);
   const reduceMotion = useReducedMotion();
-  const ipadSafariPerformanceMode = useRef(isIpadSafariPerformanceMode()).current;
-  const reducedAddMotion = reduceMotion || ipadSafariPerformanceMode;
+  // Canonical calm-motion gate (reduced-motion, phone-class touch, iPad Safari
+  // performance mode) for the add-flow's height-collapse exits.
+  const reducedAddMotion = useCalmMotion();
   // Render budget for the in-card intelligence loader: phone-class or iPad
   // Safari. Sampled once (device class is stable). Drives the loader's
   // GPU-surface gating so a single search doesn't flood WebKit's compositor.
@@ -1061,11 +1064,11 @@ export const FragranceCapture: React.FC<{
 
   /* Sync overlay — full-screen portal, separate from the search overlay. */
   const syncVeil = uploading && loadingSurface === 'sync' ? (
-    <motion.div
+    <m.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+      transition={{ duration: 0.32, ease: SCENT_EASE_OUT }}
       className="fixed inset-0 z-[130] flex flex-col items-center justify-center px-6 py-[max(2rem,env(safe-area-inset-top))]"
       style={{
         background:
@@ -1079,7 +1082,7 @@ export const FragranceCapture: React.FC<{
         complete={syncComplete}
         lightweight={loaderLightweight}
       />
-    </motion.div>
+    </m.div>
   ) : null;
 
   /* Search overlay — lives *inside* the card, positioned absolute but with
@@ -1090,11 +1093,11 @@ export const FragranceCapture: React.FC<{
      the card flow, the card grows to accommodate the full animation. */
   const SEARCH_LOADER_MIN_H = 320; // px – enough for 132px orb zone + margins + text
   const searchVeil = uploading && loadingSurface === 'search' ? (
-    <motion.div
+    <m.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+      transition={{ duration: 0.32, ease: SCENT_EASE_OUT }}
       className="absolute inset-0 z-50 flex flex-col items-center justify-center p-8"
       style={{
         minHeight: SEARCH_LOADER_MIN_H,
@@ -1127,14 +1130,14 @@ export const FragranceCapture: React.FC<{
         {reduceMotion ? (
           <div className="h-full w-2/3 rounded-full bg-scent-accent/80" />
         ) : (
-          <motion.div
+          <m.div
             className="h-full w-1/3 rounded-full bg-scent-accent/85"
             animate={{ x: ['-110%', '320%'] }}
             transition={{ duration: 1.15, repeat: Infinity, ease: 'easeInOut' }}
           />
         )}
       </div>
-    </motion.div>
+    </m.div>
   ) : null;
 
   /* Mobile action bar — a fixed, viewport-pinned CTA only after the user selects
@@ -1142,12 +1145,12 @@ export const FragranceCapture: React.FC<{
      panel root is overflow:hidden, which traps a CSS `position: sticky` bar. The
      desktop CTA stays inline (`sm:block`); this is `sm:hidden`. */
   const mobileActionBar = matches.length > 0 && hasSelectedMatch && !uploading ? (
-    <motion.div
+    <m.div
       key="mobile-action-bar"
       initial={reduceMotion ? false : { opacity: 0, y: 24 }}
       animate={{ opacity: 1, y: 0 }}
       exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 24 }}
-      transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
+      transition={{ duration: 0.26, ease: SCENT_EASE_OUT }}
       className="fixed inset-x-0 bottom-[calc(var(--mobile-nav-offset,var(--bottomnav-h))+0.35rem)] z-[120] bg-gradient-to-t from-scent-bg via-scent-bg/95 to-transparent px-4 pb-2 pt-6 sm:hidden transition-[bottom] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]"
     >
       <div className="mx-auto w-full max-w-[39.75rem]">
@@ -1161,7 +1164,7 @@ export const FragranceCapture: React.FC<{
           </span>
         </button>
       </div>
-    </motion.div>
+    </m.div>
   ) : null;
 
   return (
@@ -1188,7 +1191,7 @@ export const FragranceCapture: React.FC<{
 
         <AnimatePresence>
           {errorStatus && (
-            <motion.div
+            <m.div
               initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
               className="mb-4 rounded-scent border border-scent-accent/40 bg-scent-accent/[0.07] p-3 text-center"
               role="status"
@@ -1204,7 +1207,7 @@ export const FragranceCapture: React.FC<{
               >
                 Try Again
               </button>
-            </motion.div>
+            </m.div>
           )}
         </AnimatePresence>
 
@@ -1242,7 +1245,7 @@ export const FragranceCapture: React.FC<{
               aria-label="Look up a brand or fragrance"
               className="scent-lux-input scent-vault-search-input relative z-0 h-[56px] w-full text-center font-sans text-base font-medium text-[#fff7ec] outline-none transition-colors placeholder:text-scent-text-subtle placeholder:font-medium sm:h-[64px] scroll-mt-28 px-16 sm:px-[4.35rem]"
             />
-            <motion.button
+            <m.button
               type="submit"
               disabled={uploading || !trimmedQuery}
               whileHover={uploading ? undefined : { scale: 1.06 }}
@@ -1251,15 +1254,15 @@ export const FragranceCapture: React.FC<{
               className="absolute right-3.5 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-scent-accent shadow-none outline-none transition-colors hover:text-[#fff7ec] focus-visible:ring-2 focus-visible:ring-scent-accent/35 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent disabled:pointer-events-none disabled:opacity-45 group-focus-within:text-scent-accent"
               aria-label="Search"
             >
-              <motion.span
+              <m.span
                 className="relative inline-flex"
                 aria-hidden
                 animate={reduceMotion || uploading ? undefined : { opacity: [0.74, 1, 0.74] }}
                 transition={reduceMotion || uploading ? undefined : { duration: 3.4, repeat: Infinity, ease: 'easeInOut' }}
               >
                 <Search size={18} strokeWidth={1.75} className="drop-shadow-[0_0_12px_rgba(212,175,55,0.22)]" />
-              </motion.span>
-            </motion.button>
+              </m.span>
+            </m.button>
           </form>
         </div>
 
@@ -1281,7 +1284,7 @@ export const FragranceCapture: React.FC<{
               claiming "No Olfactory Matches", which would misattribute an engine
               outage to an absent fragrance. */}
           {hasSearched && matches.length === 0 && !uploading && !errorStatus && (
-            <motion.div
+            <m.div
               initial={{ opacity: 0 }} animate={{ opacity: 1 }}
               className="mt-10 py-10 border-t border-white/10 flex flex-col items-center text-center"
             >
@@ -1312,16 +1315,16 @@ export const FragranceCapture: React.FC<{
                   )}
                 </div>
               )}
-            </motion.div>
+            </m.div>
           )}
 
           {matches.length > 0 && (
-            <motion.div
+            <m.div
               ref={resultsRef}
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.34, ease: [0.22, 1, 0.36, 1] }}
+              transition={{ duration: 0.34, ease: SCENT_EASE_OUT }}
               className={`mx-auto mt-5 w-full scroll-mt-24 sm:mt-7 sm:pb-0 ${hasSelectedMatch ? 'pb-[7rem]' : 'pb-2'}`}
             >
               <div className="flex min-h-0 flex-col">
@@ -1418,10 +1421,10 @@ export const FragranceCapture: React.FC<{
                       </div>
                     ) : (
                       <div className="grid w-full grid-cols-1 gap-2 sm:gap-3">
-                        {visibleMatches.map((m) => {
-                          const key = matchKey(m);
+                        {visibleMatches.map((match) => {
+                          const key = matchKey(match);
                           const isSelected = key === selectedId;
-                          const inVault = matchInVault(m);
+                          const inVault = matchInVault(match);
                           return (
                             <button
                               key={key}
@@ -1447,33 +1450,33 @@ export const FragranceCapture: React.FC<{
                               aria-pressed={isSelected}
                               aria-label={
                                 inVault
-                                  ? `${m.name} — already in your vault, tap to view`
+                                  ? `${match.name} — already in your vault, tap to view`
                                   : isSelected
-                                    ? `Add ${m.name} to your vault`
-                                    : `Select ${m.name}`
+                                    ? `Add ${match.name} to your vault`
+                                    : `Select ${match.name}`
                               }
                             >
                               {/* Monogram disc — the row's visual anchor; left-aligned so
                                   the eye lands on a consistent column instead of three
                                   centered, ragged lines. Doubles as a ≥44px target. */}
                               <span className="scent-vault-monogram flex h-11 w-11 shrink-0 items-center justify-center rounded-full font-serif text-[0.95rem] font-semibold leading-none sm:h-12 sm:w-12 sm:text-[1.05rem]">
-                                {matchMonogram(m)}
+                                {matchMonogram(match)}
                               </span>
                               {/* Text column — single-line truncation keeps every row the
                                   same height for a clean vertical rhythm. */}
                               <span className="flex min-w-0 flex-1 flex-col">
                                 <span
                                   className="truncate font-serif text-[1.05rem] italic leading-tight text-[#fff7ec] sm:text-[1.2rem]"
-                                  title={m.name}
+                                  title={match.name}
                                 >
-                                  {m.name}
+                                  {match.name}
                                 </span>
                                 <span className="mt-1 flex items-center gap-2">
                                   <span
                                     className="min-w-0 truncate font-sans text-[10px] font-bold uppercase tracking-[0.18em] text-[#f3dca6] sm:text-[11px] sm:tracking-[0.2em]"
-                                    title={m.brand || 'House unavailable'}
+                                    title={match.brand || 'House unavailable'}
                                   >
-                                    {truncateMatchLine(m.brand || 'House unavailable', MATCH_LINE_MAX_CHARS)}
+                                    {truncateMatchLine(match.brand || 'House unavailable', MATCH_LINE_MAX_CHARS)}
                                   </span>
                                   {inVault && (
                                     <span className="pointer-events-none inline-flex shrink-0 items-center gap-1 rounded-full border border-scent-accent/35 bg-scent-bg/70 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em] text-scent-accent sm:px-2 sm:text-[10px]">
@@ -1486,7 +1489,7 @@ export const FragranceCapture: React.FC<{
                               {/* Selected check — pinned to the row end (not the corner)
                                   so it never overlaps the name or the thumb's tap zone. */}
                               {isSelected && (
-                                <motion.span
+                                <m.span
                                   initial={reduceMotion ? false : { scale: 0.5, opacity: 0 }}
                                   animate={{ scale: 1, opacity: 1 }}
                                   transition={{ type: 'spring', stiffness: 520, damping: 24 }}
@@ -1494,7 +1497,7 @@ export const FragranceCapture: React.FC<{
                                   aria-hidden
                                 >
                                   <Check size={16} strokeWidth={3} />
-                                </motion.span>
+                                </m.span>
                               )}
                             </button>
                           );
@@ -1510,21 +1513,21 @@ export const FragranceCapture: React.FC<{
                 <div ref={actionBarRef} className="mx-auto mt-5 hidden w-full max-w-[49.75rem] shrink-0 pb-[max(0.15rem,env(safe-area-inset-bottom))] sm:mt-6 sm:block">
                   <AnimatePresence>
                     {hasSelectedMatch ? (
-                      <motion.p
+                      <m.p
                         initial={{ opacity: 0, y: 5 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -4 }}
                         className="text-center scent-type-label text-scent-accent"
                       >
                         {selectedInVault ? 'Already in your vault' : 'Selected — ready to add'}
-                      </motion.p>
+                      </m.p>
                     ) : null}
                   </AnimatePresence>
                   <button
                     type="button"
                     onClick={handlePrimaryAction}
                     disabled={uploading || !hasSelectedMatch}
-                    className="scent-vault-outline-button mt-3 flex h-[60px] w-full items-center justify-center px-4 font-serif italic text-base transition-all hover:scale-[1.01] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55 sm:mt-5 sm:h-[74px] sm:text-lg disabled:pointer-events-none disabled:opacity-62"
+                    className="scent-vault-outline-button mt-3 flex h-[60px] w-full items-center justify-center px-4 font-serif italic text-base transition-[color,background-color,border-color,box-shadow,opacity,transform] hover:scale-[1.01] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55 sm:mt-5 sm:h-[74px] sm:text-lg disabled:pointer-events-none disabled:opacity-62"
                   >
                     <span className="scent-vault-outline-button-label font-serif italic text-[1.35rem] leading-tight text-center sm:text-[1.8rem]">
                       {selectedInVault ? 'View in vault' : hasSelectedMatch ? 'Add to Vault' : 'Select a Result'}
@@ -1532,7 +1535,7 @@ export const FragranceCapture: React.FC<{
                   </button>
                 </div>
               </div>
-            </motion.div>
+            </m.div>
           )}
         </AnimatePresence>
       </div>
@@ -1545,11 +1548,11 @@ export const FragranceCapture: React.FC<{
           grows; on exit it collapses under the veil's fade so nothing clips. */}
       <AnimatePresence>
         {loadingSurface === 'search' && uploading && (
-          <motion.div
+          <m.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={reducedAddMotion ? { opacity: 0 } : { opacity: 0, height: 0 }}
-            transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.32, ease: SCENT_EASE_OUT }}
             aria-hidden
             style={{ pointerEvents: 'none', minHeight: SEARCH_LOADER_MIN_H }}
             className="mx-auto mt-6 w-full overflow-hidden sm:mt-7"
@@ -1575,7 +1578,7 @@ export const FragranceCapture: React.FC<{
                 </div>
               </div>
             ) : null}
-          </motion.div>
+          </m.div>
         )}
       </AnimatePresence>
       {typeof document !== 'undefined'

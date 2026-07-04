@@ -145,9 +145,13 @@ export default defineConfig(async () => {
             if (normalizedId.includes("/@tanstack/")) {
               return "vendor-query";
             }
-            if (normalizedId.includes("framer-motion") || normalizedId.includes("motion-dom")) {
-              return "vendor-motion";
-            }
+            // framer-motion is deliberately NOT pinned to a vendor chunk: the
+            // app renders `m.*` inside <LazyMotion strict> and loads the domMax
+            // feature set through the dynamic import in src/lib/motionFeatures.ts.
+            // Pinning every framer-motion module into one chunk would fold the
+            // async feature bundle back into the eagerly-loaded vendor chunk and
+            // silently undo that split — let Rollup place the small static core
+            // in the entry and the features behind the dynamic-import boundary.
             if (normalizedId.includes("/@radix-ui/")) {
               // Radix primitives are used across many always-loaded components;
               // isolating them keeps the rarely-changing UI vendor code in a

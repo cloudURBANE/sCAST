@@ -107,7 +107,7 @@ export class ErrorBoundary extends Component<Props, State> {
               <button
                 type="button"
                 onClick={this.handleReset}
-                className="scent-primary-button w-full h-14 flex items-center justify-center gap-3 transition-all rounded-[var(--radius-scent)] hover:opacity-90 font-serif italic text-lg text-black bg-scent-accent"
+                className="scent-primary-button w-full h-14 flex items-center justify-center gap-3 transition-opacity rounded-[var(--radius-scent)] hover:opacity-90 font-serif italic text-lg text-black bg-scent-accent"
               >
                 <RotateCcw size={18} className="shrink-0" />
                 <span>Calibrate Matrix & Reload</span>

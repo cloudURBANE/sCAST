@@ -42,7 +42,7 @@ export const ArenaReasonPicker: React.FC<ArenaReasonPickerProps> = ({
                 setShowMore(false);
               }}
               className={[
-                "inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-3.5 py-2 text-center scent-type-chip shadow-[inset_0_0_0_1px_rgba(212,175,55,0.14)] transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55",
+                "inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-3.5 py-2 text-center scent-type-chip shadow-[inset_0_0_0_1px_rgba(212,175,55,0.14)] transition-[color,background-color,box-shadow] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55",
                 active
                   ? "bg-scent-accent text-black shadow-[0_0_16px_rgba(212,175,55,0.18)]"
                   : "bg-black/48 text-scent-text-muted hover:bg-scent-accent/[0.08] hover:text-foreground",

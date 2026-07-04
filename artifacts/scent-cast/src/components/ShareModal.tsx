@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m, AnimatePresence } from 'framer-motion';
+import { SCENT_EASE_OUT_EXPO } from '@/lib/motion';
 import { X, Link, Check, Eye, EyeOff, ExternalLink, Search } from 'lucide-react';
 import { BottleImage } from '@/components/BottleImage';
 import type { BottleImageAdjustment } from '@/lib/bottleImageAdjustment';
@@ -194,19 +195,19 @@ export const ShareModal: React.FC<ShareModalProps> = ({
     <AnimatePresence>
       {isOpen && (
         <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center">
-          <motion.div
+          <m.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
             className="absolute inset-0 bg-black/90"
           />
-          <motion.div
+          <m.div
             ref={modalRef}
             initial={{ opacity: 0, y: 40 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 40 }}
-            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+            transition={{ duration: 0.25, ease: SCENT_EASE_OUT_EXPO }}
             className="relative w-full sm:max-w-lg mx-0 sm:mx-6 bg-neutral-950 border-t sm:border border-white/10 sm:rounded-[1.5rem] overflow-hidden shadow-2xl flex flex-col"
             style={{ maxHeight: '90dvh' }}
             role="dialog"
@@ -244,7 +245,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                   type="button"
                   onClick={() => void handleCopy()}
                   disabled={!shareUrl}
-                  className="px-4 py-3 bg-white text-black text-[9px] uppercase tracking-[0.3em] font-bold flex items-center gap-2 hover:bg-white/90 active:scale-[0.97] transition-all shrink-0 disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950"
+                  className="px-4 py-3 bg-white text-black text-[9px] uppercase tracking-[0.3em] font-bold flex items-center gap-2 hover:bg-white/90 active:scale-[0.97] transition-[background-color,opacity,transform] shrink-0 disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950"
                 >
                   {copied ? <><Check size={11} strokeWidth={1.75} /> Copied</> : <><Link size={11} strokeWidth={1.75} /> Copy</>}
                 </button>
@@ -272,7 +273,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                 type="button"
                 onClick={() => void handleToggleImagesOnSharePage()}
                 disabled={!authToken || hideImagesBusy}
-                className="w-full py-2.5 border border-white/8 bg-white/[0.02] disabled:opacity-45 disabled:cursor-not-allowed text-[9px] uppercase tracking-[0.3em] font-bold transition-all flex items-center justify-center gap-2 text-white/70 hover:text-white hover:border-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                className="w-full py-2.5 border border-white/8 bg-white/[0.02] disabled:opacity-45 disabled:cursor-not-allowed text-[9px] uppercase tracking-[0.3em] font-bold transition-[color,border-color,opacity] flex items-center justify-center gap-2 text-white/70 hover:text-white hover:border-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
               >
                 {hideImages ? <EyeOff size={11} strokeWidth={1.75} /> : <Eye size={11} strokeWidth={1.75} />}
                 {hideImages ? 'Shared images hidden' : 'Shared images visible'}
@@ -333,13 +334,13 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                   const isPending = pendingIds.has(rowOrItemId);
 
                   return (
-                    <motion.button
+                    <m.button
                       key={rowOrItemId}
                       layout
                       type="button"
                       onClick={() => !isPending && handleToggle(item)}
                       disabled={isPending}
-                      className={`w-full flex items-center gap-3 px-4 py-3 border transition-all duration-200 text-left group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/40 ${
+                      className={`w-full flex items-center gap-3 px-4 py-3 border transition-colors duration-200 text-left group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/40 ${
                         isHidden
                           ? 'bg-white/[0.01] border-white/5 opacity-50 hover:opacity-70'
                           : 'bg-white/[0.04] border-white/10 hover:border-white/20'
@@ -380,12 +381,12 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                           <Eye size={15} strokeWidth={1.75} className="text-white/50 group-hover:text-white transition-colors" />
                         )}
                       </div>
-                    </motion.button>
+                    </m.button>
                   );
                 })}
               </div>
             </div>
-          </motion.div>
+          </m.div>
         </div>
       )}
     </AnimatePresence>

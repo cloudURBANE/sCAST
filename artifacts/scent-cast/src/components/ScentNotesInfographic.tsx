@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { motion, useReducedMotion } from 'framer-motion';
+import { m, useReducedMotion } from 'framer-motion';
 import {
   type DerivedMetrics,
   type MainAccordDisplayRow,
@@ -358,7 +358,7 @@ function AccordPanel({
         className={`flex flex-1 flex-col ${densityStyle.bodyPadding}`}
         style={{ contain: "layout paint" }}
       >
-        <motion.ul
+        <m.ul
           className="flex flex-1 flex-col justify-evenly"
           layout={false}
           role="list"
@@ -378,7 +378,7 @@ function AccordPanel({
               : intensity.glow;
 
             return (
-              <motion.li
+              <m.li
                 key={row.label}
                 className={`grid items-center gap-x-3 sm:gap-x-4 ${densityStyle.maxGap}`}
                 style={{
@@ -410,7 +410,7 @@ function AccordPanel({
                 <div
                   className={`relative ${densityStyle.trackHeight} overflow-hidden rounded-full bg-black/30 ring-1 ring-inset ${isPyramidMatch ? "ring-[#fc9d19]/40" : "ring-white/[0.05]"} shadow-[inset_0_1px_2px_rgba(0,0,0,0.6),inset_0_-1px_0_rgba(255,255,255,0.03)]`}
                 >
-                  <motion.div
+                  <m.div
                     className="relative h-full min-w-[3px] origin-left rounded-full bg-gradient-to-r from-[#b07a24] via-scent-accent to-[#ecd49d]"
                     // Width is static; the reveal animates `scaleX` (origin-left)
                     // instead of `width` so up to 10 bars don't trigger per-frame
@@ -453,9 +453,9 @@ function AccordPanel({
                       className="pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-white/25 to-transparent"
                       aria-hidden
                     />
-                  </motion.div>
+                  </m.div>
                   {isPyramidMatch ? (
-                    <motion.span
+                    <m.span
                       className="pointer-events-none absolute top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#fc9d19]"
                       style={{ left: `${fillPct}%` }}
                       initial={false}
@@ -469,7 +469,7 @@ function AccordPanel({
                     />
                   ) : null}
                 </div>
-                <motion.p
+                <m.p
                   className={`text-right leading-none text-white/90 tracking-tight ${densityStyle.valueFont}`}
                   initial={false}
                   animate={{
@@ -482,11 +482,11 @@ function AccordPanel({
                   aria-label={`${accordProminenceTier(fillPct)} prominence`}
                 >
                   {accordProminenceTier(fillPct)}
-                </motion.p>
-              </motion.li>
+                </m.p>
+              </m.li>
             );
           })}
-        </motion.ul>
+        </m.ul>
       </div>
     </Panel>
   );

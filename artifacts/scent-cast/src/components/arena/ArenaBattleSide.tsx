@@ -121,7 +121,7 @@ export const ArenaBattleSide: React.FC<ArenaBattleSideProps> = ({
       onPointerCancel={handlePointerCancel}
       style={{ touchAction: "pan-y" }}
       className={[
-        "relative flex h-full min-w-0 overflow-hidden rounded-lg bg-[rgba(4,3,2,0.9)] p-2 shadow-[0_22px_50px_-40px_rgba(0,0,0,0.8),inset_0_1px_0_rgba(255,236,183,0.08)] transition-all duration-200 hover:bg-[rgba(8,6,4,0.94)] hover:shadow-[0_34px_80px_-50px_rgba(0,0,0,0.85),inset_0_1px_0_rgba(255,236,183,0.12)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/58 sm:p-3 md:p-4",
+        "relative flex h-full min-w-0 overflow-hidden rounded-lg bg-[rgba(4,3,2,0.9)] p-2 shadow-[0_22px_50px_-40px_rgba(0,0,0,0.8),inset_0_1px_0_rgba(255,236,183,0.08)] transition-[background-color,box-shadow] duration-200 hover:bg-[rgba(8,6,4,0.94)] hover:shadow-[0_34px_80px_-50px_rgba(0,0,0,0.85),inset_0_1px_0_rgba(255,236,183,0.12)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/58 sm:p-3 md:p-4",
         disabled ? "" : "cursor-pointer",
         selected ? "bg-scent-accent/[0.022]" : "",
       ].join(" ")}

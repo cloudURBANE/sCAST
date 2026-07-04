@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { MotionConfig, motion } from 'framer-motion';
+import { MotionConfig, m } from 'framer-motion';
+import { SCENT_EASE_OUT } from '@/lib/motion';
 import { BottleImage } from '@/components/BottleImage';
 import { BrandGoldLabel } from '@/components/BrandGoldLabel';
 import { CommunityFragranceOverlay } from '@/components/community/CommunityFragranceOverlay';
@@ -220,14 +221,14 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
             >
               {visibleItems.map((item) => (
                 <div key={`${copyIndex}:${item.id}`} className="scent-community-marquee-cell">
-                  <motion.button
+                  <m.button
                     type="button"
                     aria-label={`${item.name} by ${item.brand}, curated by ${item.curator}`}
                     tabIndex={copyIndex > 0 ? -1 : 0}
                     className="scent-fragrance-card scent-community-marquee-card group relative flex h-full w-full cursor-pointer flex-col justify-center p-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 sm:justify-start sm:p-6"
                     whileHover={cardHoverMotion}
                     whileTap={cardTapMotion}
-                    transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
+                    transition={{ duration: 0.42, ease: SCENT_EASE_OUT }}
                     onClick={(event) => openItem(item, copyIndex, event.currentTarget)}
                     onKeyDown={(event) => {
                       if (event.key === 'Enter' || event.key === ' ') {
@@ -251,7 +252,7 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
                      * justify-center balances the remaining slack. Desktop keeps the
                      * original flex-1 fill (curator + brand are visible there).
                      */}
-                    <motion.div
+                    <m.div
                       layoutId={`bottle-image-${copyIndex}-${item.id}`}
                       transition={imageLayoutTransition}
                       className="relative z-10 my-1 min-h-0 aspect-square sm:my-3 sm:aspect-auto sm:flex-1"
@@ -270,14 +271,14 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
                         onLoad={copyIndex === 0 ? requestMarqueeMeasure : undefined}
                         onError={copyIndex === 0 ? requestMarqueeMeasure : undefined}
                       />
-                    </motion.div>
+                    </m.div>
                     <div className="relative z-10 mt-2 hidden text-center sm:block">
                       <BrandGoldLabel as="span" brand={item.brand} className="scent-card-brand block" />
                     </div>
                     <div className="scent-card-title-row relative z-10 mt-1 sm:mt-2">
                       <h3 className="scent-card-title" title={item.name}>{item.name}</h3>
                     </div>
-                  </motion.button>
+                  </m.button>
                 </div>
               ))}
             </div>

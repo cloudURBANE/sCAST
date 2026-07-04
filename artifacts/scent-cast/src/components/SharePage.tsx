@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { AnimatePresence, m, useReducedMotion } from 'framer-motion';
 import {
   Activity,
   CalendarDays,
@@ -392,7 +392,7 @@ function PriceValueSignal({
     <span className={`${baseClass} flex-col items-center gap-0.5`} aria-label={label}>
       <span className="inline-flex items-center">
         {symbols.split("").map((symbol, index) => (
-          <motion.span
+          <m.span
             key={`${symbol}-${index}`}
             aria-hidden="true"
             className="inline-block"
@@ -410,7 +410,7 @@ function PriceValueSignal({
             }
           >
             {symbol}
-          </motion.span>
+          </m.span>
         ))}
       </span>
       {/* Make the verdict legible — the dollar glyphs alone are ambiguous. */}
@@ -797,7 +797,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                 const brand = entryBrand(item);
 
                 return (
-                  <motion.div
+                  <m.div
                     key={fragranceId}
                     initial={{ opacity: 0, y: 24 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -834,7 +834,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                         </div>
                       )}
                     </VaultCard>
-                  </motion.div>
+                  </m.div>
                 );
               })}
             </div>
@@ -871,14 +871,14 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
             aria-modal="true"
             aria-labelledby="share-fragrance-detail-title"
           >
-            <motion.div
+            <m.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={closeSelectedDetail}
               className="absolute inset-0 bg-black/95"
             />
-            <motion.div
+            <m.div
               initial={{ opacity: 0, y: 18, scale: 0.985 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 10, scale: 0.99 }}
@@ -910,7 +910,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                   type="button"
                   onClick={closeSelectedDetail}
                   aria-label="Close profile"
-                  className="shrink-0 inline-flex min-h-11 min-w-11 items-center justify-center bg-white/5 hover:bg-white/10 transition-all rounded-full border border-white/10 text-white group"
+                  className="shrink-0 inline-flex min-h-11 min-w-11 items-center justify-center bg-white/5 hover:bg-white/10 transition-colors rounded-full border border-white/10 text-white group"
                 >
                   <X size={18} strokeWidth={1.75} className="group-hover:rotate-90 transition-transform duration-300" />
                 </button>
@@ -973,7 +973,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                                 adjustment={selectedItem.imageAdjustment}
                                 imageProperties={selectedItem.imageProperties}
                                 className="absolute inset-0"
-                                imgClassName="transition-all duration-300"
+                                imgClassName="transition-[opacity,filter] duration-300"
                                 loading="eager"
                               />
                             ) : (
@@ -1050,11 +1050,11 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                   {APP_BRAND_MARK} may earn a commission from purchases made through this link.
                 </p>
               </div>
-            </motion.div>
+            </m.div>
 
             <AnimatePresence>
               {enlargeOpen && selectedItem.imageUrl && !data?.hideImages ? (
-                <motion.div
+                <m.div
                   ref={enlargeModalRef}
                   key="share-bottle-enlarge"
                   role="dialog"
@@ -1094,7 +1094,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                   <p className="mt-5 text-[10px] uppercase tracking-[0.35em] text-white/35 font-bold font-sans">
                     Tap outside or Esc to close
                   </p>
-                </motion.div>
+                </m.div>
               ) : null}
             </AnimatePresence>
           </div>

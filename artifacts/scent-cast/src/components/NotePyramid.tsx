@@ -1,5 +1,5 @@
 import React from 'react';
-import { AnimatePresence, motion, useReducedMotion, type Transition } from 'framer-motion';
+import { AnimatePresence, m, useReducedMotion, type Transition } from 'framer-motion';
 import { type MainAccordDisplayRow } from '@/lib/fragranceApi';
 import { resolveNoteAccordLinks, type NoteAccordLink } from '@/lib/noteAccordLinks';
 import { isIpadSafariPerformanceMode, isLowRenderBudget } from '@/lib/platform';
@@ -137,7 +137,7 @@ const PYRAMID_Y = {
 // Horizontal bands that slice the artwork into its three tiers. Each cut falls
 // inside a transparent gap between tiers (top↔heart ≈ y153, heart↔base ≈ y265),
 // so the picture reassembles seamlessly when closed and the per-tier slices ride
-// their own <motion.g> when the pyramid opens. Full SVG viewBox height is 420.
+// their own <m.g> when the pyramid opens. Full SVG viewBox height is 420.
 const TIER_CLIP_BANDS: Record<ActiveLayer, { y: number; height: number }> = {
   top: { y: 0, height: 153 },
   heart: { y: 153, height: 112 },
@@ -361,7 +361,7 @@ function LayerNotesText({
   } as React.CSSProperties;
 
   return (
-    <motion.div
+    <m.div
       initial={{ opacity: 0, y: 5 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -3 }}
@@ -390,7 +390,7 @@ function LayerNotesText({
           {!isComplete ? <span className="scent-note-type-caret" aria-hidden="true" /> : null}
         </p>
       )}
-    </motion.div>
+    </m.div>
   );
 }
 
@@ -429,7 +429,7 @@ function LayerNotesList({
   transition: Transition;
 }) {
   return (
-    <motion.div
+    <m.div
       initial={{ opacity: 0, y: 5 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -3 }}
@@ -456,7 +456,7 @@ function LayerNotesList({
           </span>
         );
       })}
-    </motion.div>
+    </m.div>
   );
 }
 
@@ -492,7 +492,7 @@ function LayerAccordEcho({
   if (matches.length === 0) return null;
 
   return (
-    <motion.div
+    <m.div
       initial={{ opacity: 0, y: 5 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -3 }}
@@ -511,7 +511,7 @@ function LayerAccordEcho({
               {link.row.label}
             </span>
             <span className="relative h-[2px] sm:h-[3px] overflow-hidden rounded-full bg-white/[0.08]">
-              <motion.span
+              <m.span
                 className="absolute inset-y-0 left-0 origin-left rounded-full bg-gradient-to-r from-[#9f6a1f] via-[#fc9d19] to-[#ffe1a3]"
                 // Fill is full-width and revealed via `scaleX` (origin-left) so a
                 // selection change tweens a GPU transform, not `width` (layout).
@@ -543,7 +543,7 @@ function LayerAccordEcho({
           </div>
         );
       })}
-    </motion.div>
+    </m.div>
   );
 }
 
@@ -1064,7 +1064,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
       className={`relative flex h-full min-h-0 flex-col items-center justify-center overflow-hidden px-3 py-5 sm:px-5 ${className}`}
       onClick={() => setActiveLayer(null)}
     >
-      <motion.div
+      <m.div
         className="relative z-10 w-full max-w-[24rem] aspect-[1/1.08] shrink-0 overflow-visible sm:max-w-[26rem]"
         onClick={(event) => event.stopPropagation()}
         initial={prefersReducedMotion ? false : { opacity: 0, y: 12, scale: 0.97 }}
@@ -1413,7 +1413,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
 
           {/* Ambient depth field — soft gold air + slow-drifting starfield. No grid, no reticles. */}
           <g aria-hidden pointerEvents="none" className={lightweightEffects ? '' : 'mix-blend-screen'}>
-            <motion.circle
+            <m.circle
               cx="180"
               cy="210"
               r="190"
@@ -1441,7 +1441,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
           )}
 
           {/* Ground horizon line — grounds the structure with a soft luminous footing */}
-          <motion.path
+          <m.path
             d={`M22 ${PYRAMID_Y.baseBottom + 9} L338 ${PYRAMID_Y.baseBottom + 9}`}
             stroke={fill('ground-line')}
             strokeWidth="0.7"
@@ -1473,7 +1473,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
             const guideDashTrace = [guideDashLength, 0, 0, 0];
 
             return (
-              <motion.g
+              <m.g
                 key={layer.key}
                 role={isEmpty ? undefined : 'button'}
                 tabIndex={isEmpty ? -1 : 0}
@@ -1547,7 +1547,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                 <g filter={isActive ? filterRef('piece-active-shadow') : isEngaged ? filterRef('piece-engaged-shadow') : filterRef('piece-shadow')}>
                   {/* The fragrance-note artwork, sliced into its three tiers by a
                       horizontal clip band whose cuts fall inside the transparent
-                      gaps between tiers. Each slice lives in its tier's <motion.g>,
+                      gaps between tiers. Each slice lives in its tier's <m.g>,
                       so the picture opens up tier-by-tier exactly like the original
                       procedural pyramid — the full image reassembles seamlessly at
                       rest and separates cleanly when a tier is selected. */}
@@ -1562,7 +1562,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                     pointerEvents="none"
                   />
 
-                  <motion.path
+                  <m.path
                     d={layer.hitPath}
                     fill={fill('active-sheen')}
                     initial={false}
@@ -1585,7 +1585,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                 {/* Outer outlining effect — a dynamic gold rim that traces each
                     tier's silhouette and brightens on hover/active, restored to sit
                     directly on the artwork's baked border. */}
-                <motion.path
+                <m.path
                   d={layer.hitPath}
                   fill="none"
                   stroke={fill('outer-rim')}
@@ -1601,7 +1601,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                   vectorEffect="non-scaling-stroke"
                 />
 
-                <motion.path
+                <m.path
                   d={layer.hitPath}
                   fill="none"
                   stroke={fill('active-edge-gold')}
@@ -1633,7 +1633,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                     closed hit-path, so the outline lands on the exact shape every time;
                     the sequence runs top → heart → base one tier at a time. */}
                 {guideVisualsMounted && (
-                  <motion.path
+                  <m.path
                     d={layer.hitPath}
                     fill="none"
                     stroke="#fc9d19"
@@ -1666,7 +1666,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                 )}
 
                 {guideVisualsMounted && (
-                  <motion.path
+                  <m.path
                     d={layer.hitPath}
                     fill="none"
                     stroke={fill('outer-rim')}
@@ -1710,14 +1710,14 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                   strokeLinejoin="miter"
                   vectorEffect="non-scaling-stroke"
                 />
-              </motion.g>
+              </m.g>
             );
           })}
 
           <AnimatePresence>
             {gapDots.map((dot) =>
               dot.isVisible ? (
-                <motion.g
+                <m.g
                   key={dot.key}
                   aria-hidden
                   pointerEvents="none"
@@ -1730,7 +1730,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                     transformOrigin: `${PYRAMID_CENTER_X}px ${dot.y}px`,
                   }}
                 >
-                  <motion.circle
+                  <m.circle
                     cx={PYRAMID_CENTER_X}
                     cy={dot.y}
                     r="11.5"
@@ -1743,7 +1743,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                     transition={pulseTransition}
                   />
 
-                  <motion.circle
+                  <m.circle
                     cx={PYRAMID_CENTER_X}
                     cy={dot.y}
                     r="2.85"
@@ -1767,12 +1767,12 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                     strokeWidth="0.4"
                     vectorEffect="non-scaling-stroke"
                   />
-                </motion.g>
+                </m.g>
               ) : null,
             )}
           </AnimatePresence>
 
-          <motion.g
+          <m.g
             aria-hidden
             pointerEvents="none"
             filter={filterRef('glyph-soft')}
@@ -1785,7 +1785,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
             }}
           >
             {/* Soft pedestal underlight — a wide, flat halo resting on the glossy black surface */}
-            <motion.ellipse
+            <m.ellipse
               cx="180"
               cy="403"
               rx="96"
@@ -1819,7 +1819,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
             />
 
             {/* Gentle traveling sheen drifting along the reflection */}
-            <motion.g
+            <m.g
               animate={prefersReducedMotion ? { opacity: 0 } : { opacity: [0, 0.5, 0], x: [-30, 30, 30] }}
               transition={{ duration: 4.8, ease: SOFT_EASE, repeat: DECORATIVE_REPEAT_COUNT, repeatDelay: 1.4 }}
               style={{
@@ -1836,10 +1836,10 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                 fill="none"
                 vectorEffect="non-scaling-stroke"
               />
-            </motion.g>
+            </m.g>
 
             {/* Center orb — small, refined, seated into the reflection base */}
-            <motion.circle
+            <m.circle
               cx="180"
               cy="400"
               r="13"
@@ -1857,7 +1857,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
               opacity="0.5"
             />
 
-            <motion.circle
+            <m.circle
               cx="180"
               cy="400"
               r="6.4"
@@ -1879,13 +1879,13 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
             />
 
             <circle cx="178" cy="397.4" r="1.4" fill="#fff8e8" opacity="0.85" />
-          </motion.g>
+          </m.g>
         </svg>
 
         {/* Enhanced Hovering Glassmorphic Text UI */}
         <AnimatePresence mode="wait">
           {selectedLayer ? (
-            <motion.div
+            <m.div
               key={selectedLayer.key}
               initial={lightweightEffects ? { opacity: 0, y: 8, scale: 0.985 } : { opacity: 0, y: 8, scale: 0.985, filter: 'blur(3px)' }}
               animate={lightweightEffects ? { opacity: 1, y: 0, scale: 1 } : { opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
@@ -1903,7 +1903,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
               />
 
               <div className="relative flex flex-col items-center justify-center space-y-1.5 sm:space-y-2 text-center">
-                <motion.div
+                <m.div
                    initial={{ opacity: 0, y: 4 }}
                    animate={{ opacity: 1, y: 0 }}
                    exit={{ opacity: 0, y: -3 }}
@@ -1913,7 +1913,7 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                   <h3 className="bg-gradient-to-br from-[#fff3d4] via-[#fc9d19] to-[#8c5a1a] bg-clip-text text-[9.5px] sm:text-[10.5px] font-bold uppercase tracking-[0.38em] text-transparent drop-shadow-[0_2px_10px_rgba(252,157,25,0.4)]">
                     {selectedLayer.title}
                   </h3>
-                </motion.div>
+                </m.div>
 
                 {(() => {
                   const tierNotes = selectedLayer.notes;
@@ -1953,10 +1953,10 @@ export const NotePyramid: React.FC<NotePyramidProps> = ({
                   );
                 })()}
               </div>
-            </motion.div>
+            </m.div>
           ) : null}
         </AnimatePresence>
-      </motion.div>
+      </m.div>
     </section>
   );
 };

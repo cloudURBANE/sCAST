@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import { m, AnimatePresence, useReducedMotion } from 'framer-motion';
 
 /**
  * Premium loading state for the fragrance search / add-to-vault flow.
@@ -53,7 +53,7 @@ const Orbit: React.FC<{
   fade: boolean; // true = completion → dissolve the orbit
   glow: boolean; // false = low render budget (no blurred boxShadow halo)
 }> = ({ diameter, dotSize, duration, reverse = false, spin, fade, glow }) => (
-  <motion.div
+  <m.div
     aria-hidden
     className="absolute"
     style={{ width: diameter, height: diameter, borderRadius: '50%', willChange: 'transform' }}
@@ -77,7 +77,7 @@ const Orbit: React.FC<{
         boxShadow: glow ? `0 0 ${Math.round(dotSize * 1.7)}px ${gold(0.5)}` : 'none',
       }}
     />
-  </motion.div>
+  </m.div>
 );
 
 function emblemFilter(complete: boolean, lightweight: boolean): string {
@@ -115,7 +115,7 @@ export const ScentIntelligenceLoader: React.FC<ScentIntelligenceLoaderProps> = (
       {/* Orbital zone */}
       <div className="relative mb-7 grid h-[132px] w-[132px] place-items-center overflow-visible">
         {/* Radial warmth */}
-        <motion.div
+        <m.div
           aria-hidden
           className="absolute"
           style={{
@@ -138,14 +138,14 @@ export const ScentIntelligenceLoader: React.FC<ScentIntelligenceLoaderProps> = (
         />
 
         {/* Static thin gold rings (brighten on complete; no rotation = no snap) */}
-        <motion.div
+        <m.div
           aria-hidden
           className="absolute"
           style={{ width: 118, height: 118, borderRadius: '50%', border: `1px solid ${gold(0.16)}` }}
           animate={{ opacity: complete ? 0.5 : 0.28 }}
           transition={{ duration: 0.5, ease: EASE_OUT }}
         />
-        <motion.div
+        <m.div
           aria-hidden
           className="absolute"
           style={{ width: 82, height: 82, borderRadius: '50%', border: `1px solid ${gold(0.22)}` }}
@@ -160,7 +160,7 @@ export const ScentIntelligenceLoader: React.FC<ScentIntelligenceLoaderProps> = (
         {/* One-shot completion bloom */}
         <AnimatePresence>
           {complete && !calm && (
-            <motion.div
+            <m.div
               key="bloom"
               aria-hidden
               className="absolute"
@@ -180,13 +180,13 @@ export const ScentIntelligenceLoader: React.FC<ScentIntelligenceLoaderProps> = (
             with `initial={{ scale: 0.72 }}` made it jump 0.72 -> 1 instantly
             instead of easing in. Splitting the two motions keeps the reveal
             smooth. */}
-        <motion.div
+        <m.div
           className="absolute flex items-center justify-center"
           initial={{ opacity: 0, scale: 0.72 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: calm ? 0.3 : 0.7, ease: EASE_OUT }}
         >
-          <motion.img
+          <m.img
             src={EMBLEM}
             alt=""
             aria-hidden
@@ -210,7 +210,7 @@ export const ScentIntelligenceLoader: React.FC<ScentIntelligenceLoaderProps> = (
             }
             style={{ width: 46, height: 46, userSelect: 'none', pointerEvents: 'none', willChange: 'transform' }}
           />
-        </motion.div>
+        </m.div>
       </div>
 
       {/* Status — cross-fades, fixed min-height kills the width/height jolt.
@@ -218,7 +218,7 @@ export const ScentIntelligenceLoader: React.FC<ScentIntelligenceLoaderProps> = (
           FragranceCapture deliberately carries no role to avoid double-announce. */}
       <div className="flex min-h-[2.1rem] items-center justify-center px-4" aria-live="polite" aria-atomic="true">
         <AnimatePresence mode="wait">
-          <motion.h3
+          <m.h3
             key={status}
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
@@ -227,7 +227,7 @@ export const ScentIntelligenceLoader: React.FC<ScentIntelligenceLoaderProps> = (
             className="font-serif italic text-xl text-[#fff7ec] drop-shadow-[0_0_22px_rgba(212,175,55,0.16)]"
           >
             {status}
-          </motion.h3>
+          </m.h3>
         </AnimatePresence>
       </div>
 
@@ -235,7 +235,7 @@ export const ScentIntelligenceLoader: React.FC<ScentIntelligenceLoaderProps> = (
       <div className="mt-2 flex min-h-[0.9rem] items-center justify-center">
         <AnimatePresence>
           {substatus && !complete && (
-            <motion.p
+            <m.p
               key="substatus"
               aria-hidden
               initial={{ opacity: 0 }}
@@ -245,7 +245,7 @@ export const ScentIntelligenceLoader: React.FC<ScentIntelligenceLoaderProps> = (
               className="text-[10px] uppercase tracking-[0.3em] font-sans font-bold italic text-scent-accent/45"
             >
               {substatus}
-            </motion.p>
+            </m.p>
           )}
         </AnimatePresence>
       </div>

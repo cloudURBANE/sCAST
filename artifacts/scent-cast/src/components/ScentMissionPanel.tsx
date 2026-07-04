@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { AnimatePresence, m, useReducedMotion } from 'framer-motion';
 import type { LucideIcon } from 'lucide-react';
 import {
   AlertTriangle,
@@ -73,7 +73,8 @@ import type { CurateCollectionResult } from '@/lib/collectionCuration';
 import { useDragToScroll } from '@/hooks/useDragToScroll';
 import { useMarqueeSwipe } from '@/hooks/useMarqueeSwipe';
 import { isBodyScrollLockActive } from '@/hooks/use-modal-behavior';
-import { isConstrainedTouchDevice, isIpadSafariPerformanceMode } from '@/lib/platform';
+import { useCalmMotion } from '@/hooks/useCalmMotion';
+import { SCENT_EASE_OUT } from '@/lib/motion';
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)
   ?.trim()
@@ -204,7 +205,7 @@ const PROGRESS_COPY: Record<ScentMissionNodeId, string> = {
 
 // Shared "settle" easing for the panel's motion — a gentle decel that reads as
 // expensive rather than springy. Matches the curve used across the Beam Agent.
-const SCENT_EASE = [0.22, 1, 0.36, 1] as const;
+const SCENT_EASE = SCENT_EASE_OUT;
 
 // Minimum time the agent's typing bubble stays up on a chat turn. The API can
 // answer in well under a second, which made the reply + cues snap in before the
@@ -233,7 +234,7 @@ const BEAM_TYPING_BUBBLE_CLASS =
 const BeamTypingDots: React.FC = () => (
   <>
     {[0, 1, 2].map((dot) => (
-      <motion.span
+      <m.span
         key={dot}
         className="h-1.5 w-1.5 rounded-full bg-scent-accent/70"
         animate={{ opacity: [0.3, 1, 0.3], y: [0, -3, 0], scale: [1, 1.18, 1] }}
@@ -287,7 +288,7 @@ const AnswerFeedbackControl: React.FC<{
   // open / submitting / error: the reason chips.
   const submitting = status === 'submitting';
   return (
-    <motion.div
+    <m.div
       initial={calmMotion ? false : { opacity: 0, y: -2 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2, ease: SCENT_EASE }}
@@ -312,7 +313,7 @@ const AnswerFeedbackControl: React.FC<{
       {status === 'error' ? (
         <span className="text-[11px] text-red-300/80">Couldn’t send that — tap a reason to try again.</span>
       ) : null}
-    </motion.div>
+    </m.div>
   );
 };
 
@@ -517,7 +518,7 @@ const BeamActivityTrail: React.FC<{
   );
 
   return (
-    <motion.div
+    <m.div
       layout={calmMotion ? false : 'position'}
       initial={calmMotion ? false : { opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
@@ -561,7 +562,7 @@ const BeamActivityTrail: React.FC<{
           calmMotion ? (
             <div id={ACTIVITY_TRAIL_BODY_ID}>{body}</div>
           ) : (
-            <motion.div
+            <m.div
               id={ACTIVITY_TRAIL_BODY_ID}
               key="activity-body"
               initial={{ height: 0, opacity: 0 }}
@@ -571,11 +572,11 @@ const BeamActivityTrail: React.FC<{
               className="overflow-hidden"
             >
               {body}
-            </motion.div>
+            </m.div>
           )
         ) : null}
       </AnimatePresence>
-    </motion.div>
+    </m.div>
   );
 };
 
@@ -991,7 +992,7 @@ function MissionMessageRowComponent({
   // conversation artifact, outside the text-bubble + recap machinery.
   if (message.role === 'card' && message.card) {
     return (
-      <motion.div
+      <m.div
         initial={calmMotion ? false : { opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.28, ease: SCENT_EASE }}
@@ -1006,13 +1007,13 @@ function MissionMessageRowComponent({
           onViewItem={onViewProposalItem}
           added={kitAdded}
         />
-      </motion.div>
+      </m.div>
     );
   }
 
   const recapSteps = message.role === 'agent' ? message.activity : undefined;
   const bubble = (
-    <motion.div
+    <m.div
       // The newest agent reply carries the scroll-to-top anchor — unless a recap
       // wrapper above takes it — so a long answer lands at its FIRST line.
       data-scroll-anchor={isLatestAgent && !hasRecap ? 'latest-agent' : undefined}
@@ -1041,7 +1042,7 @@ function MissionMessageRowComponent({
       {isIntroGreeting ? (
         <AnimatePresence mode="popLayout" initial={false}>
           {typing ? (
-            <motion.span
+            <m.span
               key="intro-dots"
               className="inline-flex items-center gap-1.5 py-0.5"
               initial={{ opacity: 0 }}
@@ -1051,11 +1052,11 @@ function MissionMessageRowComponent({
               aria-hidden
             >
               <BeamTypingDots />
-            </motion.span>
+            </m.span>
           ) : (
             // Fades up a beat into the box growth, so the text resolves as the
             // bubble settles rather than appearing before it expands.
-            <motion.span
+            <m.span
               key="intro-text"
               className="block"
               initial={calmMotion ? false : { opacity: 0 }}
@@ -1063,7 +1064,7 @@ function MissionMessageRowComponent({
               transition={{ duration: 0.36, ease: SCENT_EASE, delay: 0.08 }}
             >
               {message.text}
-            </motion.span>
+            </m.span>
           )}
         </AnimatePresence>
       ) : message.role === 'agent' ? (
@@ -1073,7 +1074,7 @@ function MissionMessageRowComponent({
       ) : (
         message.text
       )}
-    </motion.div>
+    </m.div>
   );
 
   // Feedback affordance: only on a delivered agent answer with a durable id,
@@ -1144,14 +1145,13 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   onCurateCollection,
 }) => {
   const reduceMotion = useReducedMotion();
-  const ipadPerformanceMode = useRef(isIpadSafariPerformanceMode()).current;
   // Phone-class coarse-pointer devices (iPhone / small Android) carry the lowest
   // compositor budget. Running the panel's heavy spring + `layout` + staggered
   // reveal motion there is the same layer-churn profile tied to the iOS
   // "A problem repeatedly occurred" modal OOM — so they join iPad performance
-  // mode in dropping it. iPads are intentionally excluded by isConstrainedTouchDevice.
-  const constrainedTouch = useRef(isConstrainedTouchDevice()).current;
-  const calmMotion = Boolean(reduceMotion) || ipadPerformanceMode || constrainedTouch;
+  // mode and OS reduced-motion in dropping it. useCalmMotion is that canonical
+  // gate (iPads keep full fidelity unless they are in performance mode).
+  const calmMotion = useCalmMotion();
   // calmMotion drops the heavy layout / spring / reveal transitions on iPad,
   // phone-class touch devices, and for OS reduced-motion. The tiny live-progress affordances — the working
   // spinner and the "thinking" dots — are a single small rotating/pulsing icon,
@@ -2405,12 +2405,12 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
 
       <AnimatePresence initial={false}>
         {settingsOpen ? (
-          <motion.div
+          <m.div
             id="scent-mission-settings"
             initial={calmMotion ? false : { opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={calmMotion ? { opacity: 0 } : { opacity: 0, y: 6 }}
-            transition={calmMotion ? { duration: 0.18, ease: [0.22, 1, 0.36, 1] } : { type: 'spring', stiffness: 380, damping: 30 }}
+            transition={calmMotion ? { duration: 0.18, ease: SCENT_EASE } : { type: 'spring', stiffness: 380, damping: 30 }}
             className="absolute bottom-full left-0 right-0 z-20 mb-3 rounded-[calc(var(--radius-scent)-10px)] border border-scent-accent/22 bg-[#0c0a07]/95 p-3 text-center shadow-[0_-10px_34px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,236,183,0.06)]"
           >
             <div className="grid gap-3 sm:grid-cols-2">
@@ -2462,7 +2462,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                 </div>
               </div>
             </div>
-          </motion.div>
+          </m.div>
         ) : null}
       </AnimatePresence>
     </div>
@@ -2635,7 +2635,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       visibleQuickReplies.length === 0 &&
       !hasActionRow &&
       !hasStagedCue) ? null : (
-      <motion.div
+      <m.div
         initial={calmMotion ? false : { opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
         exit={calmMotion ? { opacity: 0 } : { opacity: 0, y: 6 }}
@@ -2672,7 +2672,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
             </p>
             <div className="mt-1.5 flex flex-wrap items-center justify-center gap-1.5">
               {agentSuggestions.map((suggestion, index) => (
-                <motion.button
+                <m.button
                   key={`${suggestion.label}-${index}`}
                   type="button"
                   onClick={() => handleAgentSuggestion(suggestion)}
@@ -2684,7 +2684,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                   title={suggestion.label}
                 >
                   {suggestion.label}
-                </motion.button>
+                </m.button>
               ))}
             </div>
           </div>
@@ -2779,7 +2779,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
             >
               <AnimatePresence initial={false} mode="popLayout">
                 {visibleQuickReplies.map((reply) => (
-                  <motion.button
+                  <m.button
                     key={`${reply.facet}-${reply.value}`}
                     type="button"
                     onClick={() => handleQuickReply(reply)}
@@ -2788,12 +2788,12 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                     initial={calmMotion ? false : { opacity: 0, scale: 0.94 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={calmMotion ? { opacity: 0 } : { opacity: 0, scale: 0.94 }}
-                    transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                    transition={{ duration: 0.18, ease: SCENT_EASE }}
                     className={cueChipClass}
                     title={`${FACET_LABELS[reply.facet]}: ${reply.value}`}
                   >
                     {reply.label}
-                  </motion.button>
+                  </m.button>
                 ))}
               </AnimatePresence>
             </div>
@@ -2834,7 +2834,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         ) : null}
           </>
         )}
-      </motion.div>
+      </m.div>
     );
 
   // Anchor the scroll-to-top behavior on the newest agent reply (its top is
@@ -2976,7 +2976,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                 onToggleExpand={() => setActivityExpanded((v) => !v)}
               />
             ) : busy && liveMotion ? (
-              <motion.div
+              <m.div
                 key="agent-typing"
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -2986,7 +2986,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                 aria-label="Beam Agent is typing"
               >
                 <BeamTypingDots />
-              </motion.div>
+              </m.div>
             ) : null
           ) : null}
         </AnimatePresence>
@@ -2997,7 +2997,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
             still curates the full collection; nothing is written until tapped. */}
         <AnimatePresence initial={false}>
           {proposal && proposalReveal && !busy && !curating ? (
-            <motion.div
+            <m.div
               key="beam-proposal"
               data-scroll-anchor="beam-proposal"
               variants={revealContainer}
@@ -3010,22 +3010,22 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
               role="group"
               aria-label={`Beam recommends ${proposalReveal.fragrance.name}`}
             >
-              <motion.p variants={revealItem} className="scent-type-label text-scent-accent/90">
+              <m.p variants={revealItem} className="scent-type-label text-scent-accent/90">
                 Your match
-              </motion.p>
+              </m.p>
               {proposalReveal.fragrance.brand ? (
-                <motion.p variants={revealItem} className="mt-2 font-serif text-xs uppercase tracking-[0.2em] text-scent-text-muted">
+                <m.p variants={revealItem} className="mt-2 font-serif text-xs uppercase tracking-[0.2em] text-scent-text-muted">
                   {proposalReveal.fragrance.brand}
-                </motion.p>
+                </m.p>
               ) : null}
-              <motion.p variants={revealItem} className="font-serif italic text-2xl leading-tight text-[#fff7ec]">
+              <m.p variants={revealItem} className="font-serif italic text-2xl leading-tight text-[#fff7ec]">
                 {proposalReveal.fragrance.name}
-              </motion.p>
-              <motion.p variants={revealItem} className="mt-2 text-sm italic leading-relaxed text-scent-text-muted">
+              </m.p>
+              <m.p variants={revealItem} className="mt-2 text-sm italic leading-relaxed text-scent-text-muted">
                 {proposalReveal.reason}
-              </motion.p>
+              </m.p>
 
-              <motion.div variants={revealItem} className="mt-4 flex flex-wrap items-center gap-2.5">
+              <m.div variants={revealItem} className="mt-4 flex flex-wrap items-center gap-2.5">
                 <button
                   type="button"
                   onClick={handleRevealProposalHero}
@@ -3046,10 +3046,10 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                     <span>View</span>
                   </button>
                 ) : null}
-              </motion.div>
+              </m.div>
 
               {proposal.items.length > 1 ? (
-                <motion.div variants={revealItem} className="mt-4">
+                <m.div variants={revealItem} className="mt-4">
                   <div className="mb-3 h-px bg-gradient-to-r from-transparent via-scent-accent/12 to-transparent" />
                   <p className="scent-type-label text-scent-text-subtle">Also lined up</p>
                   <ul className="mt-1.5 flex flex-col gap-1.5">
@@ -3076,10 +3076,10 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                       +{proposal.items.length - 4} more
                     </p>
                   ) : null}
-                </motion.div>
+                </m.div>
               ) : null}
 
-              <motion.div variants={revealItem} className="mt-4 flex items-center gap-2">
+              <m.div variants={revealItem} className="mt-4 flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => void handleConfirmProposal()}
@@ -3095,11 +3095,11 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                 >
                   Not now
                 </button>
-              </motion.div>
+              </m.div>
               {!onCurateCollection ? (
-                <motion.p variants={revealItem} className="mt-2 scent-type-label text-scent-text-subtle/70">Sign in to save to your vault.</motion.p>
+                <m.p variants={revealItem} className="mt-2 scent-type-label text-scent-text-subtle/70">Sign in to save to your vault.</m.p>
               ) : null}
-            </motion.div>
+            </m.div>
           ) : null}
         </AnimatePresence>
 
@@ -3107,7 +3107,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
             we wait until it's image + profile ready before reporting back. */}
         <AnimatePresence initial={false}>
           {curating ? (
-            <motion.div
+            <m.div
               key="beam-curating"
               initial={calmMotion ? false : { opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
@@ -3134,13 +3134,13 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                     ? `${CURATE_STATUS_COPY[curating.progress.status]} ${curating.progress.name} (${Math.min(curating.progress.index + 1, curating.total)}/${curating.total})`
                     : 'Preparing your collection…'}
               </p>
-            </motion.div>
+            </m.div>
           ) : null}
         </AnimatePresence>
 
         <AnimatePresence initial={false}>
           {resolved ? (
-            <motion.div
+            <m.div
               key="resolved"
               // The reveal is the payoff; align its top to the box top so the
               // user reads the curated match from the brand line down.
@@ -3152,20 +3152,20 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
               className="scent-match-reveal max-w-[92%] self-start rounded-[calc(var(--radius-scent)-10px)] border border-scent-accent/32 bg-[linear-gradient(180deg,rgba(212,175,55,0.07),rgba(0,0,0,0.28))] p-4 text-left"
               data-calm={calmMotion ? 'true' : undefined}
             >
-              <motion.p variants={revealItem} className="scent-type-label text-scent-accent/90">Curated match</motion.p>
+              <m.p variants={revealItem} className="scent-type-label text-scent-accent/90">Curated match</m.p>
               {resolved.recommendation.brand ? (
-                <motion.p variants={revealItem} className="mt-2 font-serif text-xs uppercase tracking-[0.2em] text-scent-text-muted">
+                <m.p variants={revealItem} className="mt-2 font-serif text-xs uppercase tracking-[0.2em] text-scent-text-muted">
                   {resolved.recommendation.brand}
-                </motion.p>
+                </m.p>
               ) : null}
-              <motion.p variants={revealItem} className="font-serif italic text-2xl leading-tight text-[#fff7ec]">
+              <m.p variants={revealItem} className="font-serif italic text-2xl leading-tight text-[#fff7ec]">
                 {resolved.recommendation.name}
-              </motion.p>
-              <motion.p variants={revealItem} className="mt-2 text-sm italic leading-relaxed text-scent-text-muted">
+              </m.p>
+              <m.p variants={revealItem} className="mt-2 text-sm italic leading-relaxed text-scent-text-muted">
                 {resolved.recommendation.reason}
-              </motion.p>
+              </m.p>
               {resolved.item ? (
-                <motion.button
+                <m.button
                   variants={revealItem}
                   type="button"
                   onClick={handleReveal}
@@ -3173,13 +3173,13 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                 >
                   <Sparkles size={15} aria-hidden />
                   <span className="font-serif italic text-base">Reveal Match</span>
-                </motion.button>
+                </m.button>
               ) : (
-                <motion.p variants={revealItem} className="mt-3 text-[12px] text-scent-text-subtle">
+                <m.p variants={revealItem} className="mt-3 text-[12px] text-scent-text-subtle">
                   This pick is no longer in your local vault, so the full overlay is unavailable.
-                </motion.p>
+                </m.p>
               )}
-            </motion.div>
+            </m.div>
           ) : null}
         </AnimatePresence>
       </div>

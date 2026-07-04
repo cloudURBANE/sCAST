@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m, AnimatePresence } from 'framer-motion';
+import { SCENT_EASE_OUT_EXPO } from '@/lib/motion';
 import { BellRing, Check, CloudSun, Languages, LocateFixed, LoaderCircle, Palette, UserRound, X } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
@@ -364,19 +365,19 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
     <AnimatePresence>
       {isOpen && (
         <div className="fixed inset-0 z-[200] flex items-end justify-center sm:items-center">
-          <motion.div
+          <m.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
             className="absolute inset-0 bg-black/90"
           />
-          <motion.div
+          <m.div
             ref={modalRef}
             initial={{ opacity: 0, y: 40 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 40 }}
-            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+            transition={{ duration: 0.25, ease: SCENT_EASE_OUT_EXPO }}
             className="relative max-h-[92svh] w-full overflow-hidden border-t border-white/10 bg-neutral-950 shadow-2xl sm:mx-6 sm:max-w-xl sm:rounded-[1.5rem] sm:border"
             role="dialog"
             aria-modal="true"
@@ -440,7 +441,7 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                         autoCapitalize="none"
                         autoCorrect="off"
                         spellCheck={false}
-                        className="mt-2 w-full rounded-[10px] border border-white/10 bg-black/30 px-4 py-3 font-sans text-base text-white outline-none transition-all placeholder:text-white/35 focus:border-scent-accent/45 focus:ring-2 focus:ring-scent-accent/10"
+                        className="mt-2 w-full rounded-[10px] border border-white/10 bg-black/30 px-4 py-3 font-sans text-base text-white outline-none transition-[border-color,box-shadow] placeholder:text-white/35 focus:border-scent-accent/45 focus:ring-2 focus:ring-scent-accent/10"
                       />
                     </label>
 
@@ -675,7 +676,7 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                 )}
               </div>
             </div>
-          </motion.div>
+          </m.div>
         </div>
       )}
     </AnimatePresence>
