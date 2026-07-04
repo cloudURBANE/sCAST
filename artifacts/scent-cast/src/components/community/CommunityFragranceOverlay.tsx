@@ -262,11 +262,14 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
                     transition={imageLayoutTransition}
                     className="community-fragrance-detail__bottle"
                   >
+                    {/* Same proxied URL as the marquee card: the raw third-party
+                        URL 403s on hotlink-blocking hosts (fimgs.net et al.) and
+                        rendered "Unavailable" here, and matching the card's URL
+                        makes the shared-layout morph a warm cache hit. */}
                     <BottleImage
                       src={item.imageUrl}
                       alt={`${item.name} by ${item.brand}`}
                       variant="detail"
-                      proxy={false}
                       loading="eager"
                       fetchPriority="high"
                       className="absolute inset-0"
