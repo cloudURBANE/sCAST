@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   IMAGE_SOLVER_IDS,
+  isImageSolverId,
+  isLegacyImageSolverId,
   resolveRefreshSerperInput,
   solverPrefersDifferentImage,
   solverSkipsBgRemoval,
@@ -22,15 +24,47 @@ test("default refresh sends the bare fragrance line and lets the Serper layer ow
   assert.equal(r.refine, "default");
 });
 
-test("dupe_interference uses quoted brand line and solver refine", () => {
+test("dupe_interference keeps clone negatives without demanding an exact-phrase title match", () => {
   const r = resolveRefreshSerperInput({
     asciiBrand: "Dior",
     asciiName: "Sauvage",
     concentrationText: "",
     solverId: "dupe_interference",
   });
-  assert.ok(r.query.includes('"Dior Sauvage"'));
+  // The old exact phrase `"Dior Sauvage"` failed whenever a page title styled
+  // the name differently ("Sauvage by Dior") — audit S4. No quoted phrases.
+  assert.ok(!r.query.includes('"'), `query still demands an exact phrase: ${r.query}`);
+  assert.ok(r.query.includes("Dior Sauvage"));
   assert.ok(r.query.includes("-inspired"));
+  assert.ok(r.query.includes("-clone"));
+  assert.equal(r.refine, "solver");
+});
+
+test("orientation no longer requires the double exact-phrase match (audit S4)", () => {
+  const r = resolveRefreshSerperInput({
+    asciiBrand: "Chanel",
+    asciiName: "Bleu",
+    concentrationText: "",
+    solverId: "orientation",
+  });
+  // Requiring BOTH "standing upright" AND "front profile" verbatim returned
+  // near-zero image results. Loose positive tokens + tilt negatives instead.
+  assert.ok(!r.query.includes('"'), `query still demands exact phrases: ${r.query}`);
+  assert.ok(r.query.includes("upright"));
+  assert.ok(r.query.includes("-tilted"));
+  assert.equal(r.refine, "solver");
+});
+
+test("cropped_image no longer requires the exact phrase 'full bottle' (audit S4)", () => {
+  const r = resolveRefreshSerperInput({
+    asciiBrand: "Chanel",
+    asciiName: "Bleu",
+    concentrationText: "",
+    solverId: "cropped_image",
+  });
+  assert.ok(!r.query.includes('"'), `query still demands an exact phrase: ${r.query}`);
+  assert.ok(r.query.includes("full bottle"));
+  assert.ok(r.query.includes("-macro"));
   assert.equal(r.refine, "solver");
 });
 
@@ -84,16 +118,32 @@ test("solverPrefersDifferentImage: wrong-picture solvers yes, reprocessing solve
   // "Picture is right, processing is wrong" solvers keep the current source.
   assert.equal(solverPrefersDifferentImage("transparent_glass"), false);
   assert.equal(solverPrefersDifferentImage("manual_fallback"), false);
-  assert.equal(solverPrefersDifferentImage("dark_edge_bleed"), false);
   // No solver (plain API refresh) preserves legacy behavior: no exclusion.
   assert.equal(solverPrefersDifferentImage(undefined), false);
 });
 
-test("solverWantsFreshProcessing only for the Poof product-mode solvers", () => {
+test("solverWantsFreshProcessing only for the re-processing solvers", () => {
   assert.equal(solverWantsFreshProcessing("transparent_glass"), true);
   assert.equal(solverWantsFreshProcessing("hand_interference"), true);
+  // manual_fallback ("skip AI trim") must re-process the source raw — the
+  // no-removal cache check accepts ANY cached variant, so without the bypass
+  // it hands back the same trimmed cut-out the user is trying to escape.
+  assert.equal(solverWantsFreshProcessing("manual_fallback"), true);
   assert.equal(solverWantsFreshProcessing("group_shot"), false);
   assert.equal(solverWantsFreshProcessing(undefined), false);
+});
+
+test("pruned no-op solver ids are recognized as legacy, not valid or 400-worthy", () => {
+  // abstract_query (unbuilt phase-2 stub) and dark_edge_bleed (promised
+  // frontend tweak that was never implemented) sent the unchanged default
+  // query with no processing flag — guaranteed end-to-end no-ops (audit #11).
+  for (const legacy of ["abstract_query", "dark_edge_bleed"]) {
+    assert.equal(isImageSolverId(legacy), false, `${legacy} should no longer be a valid solver id`);
+    assert.equal(isLegacyImageSolverId(legacy), true, `${legacy} should be tolerated as a legacy id`);
+  }
+  assert.equal(isLegacyImageSolverId("group_shot"), false);
+  assert.equal(isLegacyImageSolverId("nonsense"), false);
+  assert.equal(isLegacyImageSolverId(undefined), false);
 });
 
 test("no solver query negates a term that its own tokens also assert", () => {

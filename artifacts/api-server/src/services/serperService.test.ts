@@ -32,20 +32,24 @@ test("composed refresh queries never both assert and negate the same term (audit
 });
 
 test("composed refresh queries stay within Google's 32-word truncation limit (audit W2)", () => {
-  const longBase = resolveRefreshSerperInput({
-    asciiBrand: "Maison Francis Kurkdjian",
-    asciiName: "Baccarat Rouge 540 Extrait de Parfum Limited Edition",
-    concentrationText: "Extrait",
-  });
-  for (const { query, refine } of [
-    longBase,
+  const inputs = [
     resolveRefreshSerperInput({
-      asciiBrand: "Dior",
-      asciiName: "Sauvage",
-      concentrationText: "",
-      solverId: "tester_bottle",
+      asciiBrand: "Maison Francis Kurkdjian",
+      asciiName: "Baccarat Rouge 540 Extrait de Parfum Limited Edition",
+      concentrationText: "Extrait",
     }),
-  ]) {
+    // Every solver, on a typical base line: solver tokens + suffix must fit so
+    // the refinement actually reaches Google instead of being truncated away.
+    ...IMAGE_SOLVER_IDS.map((solverId) =>
+      resolveRefreshSerperInput({
+        asciiBrand: "Dior",
+        asciiName: "Sauvage",
+        concentrationText: "EDP",
+        solverId,
+      }),
+    ),
+  ];
+  for (const { query, refine } of inputs) {
     const composed = applySerperRefinement(query, refine);
     const wordCount = composed.split(/\s+/).filter(Boolean).length;
     assert.ok(wordCount <= 32, `composed query has ${wordCount} words (> 32): ${composed}`);

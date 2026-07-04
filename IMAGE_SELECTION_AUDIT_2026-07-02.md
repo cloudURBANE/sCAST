@@ -261,6 +261,10 @@ of them filtered before processing → 404 again.
 > legitimate Fragrantica image and double Serper spend — it needs the Tier 3
 > vision gate instead. Tier 2 item 6 (flanker-conflict detection) and all of
 > Tier 3 remain open.
+>
+> **Status update (2026-07-04, third pass):** Tier 1 #4, Tier 2 #6, and
+> Tier 3 #10–11 are now **implemented** (see §7). The only remaining open item
+> is Tier 3 #9 (candidate-picker UI), which is with the UI team.
 
 ### Tier 1 — direct bug fixes (small, surgical, high confidence)
 
@@ -349,9 +353,32 @@ workspace-wide `pnpm run typecheck` clean; `verify:image-pipeline` contract
 script passes. Query composition was also spot-checked: every solver's composed
 query is ≤ 32 words with no assert+negate contradictions.
 
-Remaining open items: Tier 1 #4 (validate crawled/engine fallback images —
-needs the vision gate), Tier 2 #6 (flanker-word conflict detection), Tier 3
-#9–11 (candidate picker UI, Gemini vision gate, solver list pruning).
+Remaining open items after the second pass: Tier 1 #4, Tier 2 #6, Tier 3
+#9–11 — all but #9 closed in the third pass below.
+
+---
+
+## 7. Fixes applied (2026-07-04, third pass)
+
+| Finding | Fix | Files |
+|---|---|---|
+| W4 / Tier 2 #6 (flanker variants indistinguishable) | New `flankerConflict.ts` mirroring `concentrationConflict.ts`, direction-aware: a candidate that **asserts** a hard flanker word the target lacks (intense/elixir/noir/absolu/sport/nuit/extreme, accent- and cross-language-folded) or the opposing gender (homme vs femme etc.) is hard-skipped in `shouldSkipSerperCandidateByIdentity`; a candidate merely **lacking** the target's flanker word takes a soft −6 `flankerPenalty` (sized to beat the +5 trusted-host bonus; URL slugs count as evidence so terse titles with correct slugs pay nothing). `extrait` and `summer` are penalty-only (niche mainlines are honestly titled "Extrait de Parfum"). `IMAGE_TOKEN_STOPWORDS` deliberately unchanged — concentration synonyms stay with `concentrationConflict`. | `flankerConflict.ts` (new), `imageCandidateRanking.ts` |
+| W1 / Tier 1 #4 + Tier 3 #10 (vision validation gate) | Opt-in `visionGate` flag on the pipeline, enabled only for the **automatic** paths via the `scentEngine.ts` DEPS wrapper (crawled `fallback.imageUrl` + auto-Serper, incl. deferred background retries). Gemini 2.5 Flash is asked "single bottle of {brand} {name}? yes/no" on the processed bytes — for the crawled/manual candidate **before** the row is persisted (so a rejected fallback can't poison the catalog and scentEngineCore's null→Serper fall-through fires), for Serper only on presumptive winners (early-accept + final arbitration; reject → next-best), and on lookup-key/query-cache early returns. **Fail-open**: no key, `IMAGE_VISION_GATE=off`, HTTP error, 8s timeout, or unparseable answer → pass-through, byte-identical legacy behavior. Bounded in-process verdict cache; rejections traced as `skipReason: "vision_rejected"`. User-curated paths (admin upload/paste-URL, stripBgOnly, manual refresh preview) keep unconditional accept. | `imageVisionGateCore.ts` (new), `imageVisionGate.ts` (new), `imagePipeline.ts`, `scentEngine.ts`, `.env.example` |
+| S4 remainder (over-restrictive solver queries) | `orientation` → `bottle upright front view -tilted -lying -sideways` (was two exact phrases → near-zero results); `cropped_image` → unquoted `full bottle -macro -closeup -cropped`; `dupe_interference` → unquoted base + `original -inspired -clone -type -impression -dupe` (exact `"{brand} {name}"` phrase failed on restyled titles). | `imageSolvers.ts` |
+| Tier 3 #11 (prune the solver list) | Per-solver end-to-end audit of all 20 server ids. **Dropped** the two true no-ops: `abstract_query` (phase-2 LLM parse never built, never in the dropdown) and `dark_edge_bleed` (byte-identical to plain refresh; promised frontend tweak has no implementation). Stale clients sending a legacy id get a logged graceful fallback to the default refresh, not a 500. `manual_fallback`'s residual S2 no-op fixed: it now bypasses the per-source cache (`solverWantsFreshProcessing`) so "skip background removal" actually re-processes instead of returning the cached cutout. Dropdown is now 18 honest options; all kept ids unchanged (`transparent_glass`/`hand_interference` remain as real re-processing flags via `bypassSourceCache` + Poof product mode from the S2 pass). | `imageSolvers.ts`, `routes/scent.ts`, `refreshImageThrottle.ts`, scent-cast `imageRefreshSolvers.ts` |
+
+Verification (third pass): api-server suite **873/873 pass** (838 → 849 → 864 →
+873 across the three commits; new suites `flankerConflict.test.ts`,
+`imageVisionGateCore.test.ts`, extended `imageSolvers.test.ts` /
+`serperService.test.ts` — the 32-word-cap and assert/negate-contradiction tests
+now iterate every solver); workspace `pnpm run typecheck` clean;
+`verify:image-pipeline` passes. Branch rebased onto main after PRs #510–#514.
+
+Remaining open item: **Tier 3 #9 (candidate picker UI) — owned by the UI team.**
+Known residuals: loosened solver queries are unvalidated against live Serper
+(tokens are one-line tunable); the vision-gate verdict cache is per-process;
+`resolveCachedFragranceImage` (the deferred flow's initial cache read) is not
+gated to keep request-path latency flat.
 
 ### Verification hooks already in place
 

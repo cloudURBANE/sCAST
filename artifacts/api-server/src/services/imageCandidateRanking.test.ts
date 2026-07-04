@@ -40,6 +40,26 @@ test("exact-match identity coverage is unchanged", () => {
   assert.equal(coverage, 1);
 });
 
+test("wrong-flanker candidates are hard-skipped even at full token coverage (audit W4)", () => {
+  // "elixir" is a coverage stopword, so this candidate reads as a perfect
+  // identity match — only the flanker-conflict check can tell the bottles apart.
+  const wrongFlanker = shouldSkipSerperCandidateByIdentity("Dior", "Sauvage", {
+    imageUrl: "https://cdn.sephora.com/dior-sauvage-elixir.png",
+    title: "Dior Sauvage Elixir 60ml",
+    source: "Sephora",
+  });
+  assert.equal(wrongFlanker, true);
+
+  // The reverse (candidate merely lacking "elixir") is weaker evidence and
+  // must NOT hard-skip — it is handled by the scoring penalty instead.
+  const plainForFlankerTarget = shouldSkipSerperCandidateByIdentity("Dior", "Sauvage Elixir", {
+    imageUrl: "https://cdn.sephora.com/dior-sauvage.png",
+    title: "Dior Sauvage 100ml spray",
+    source: "Sephora",
+  });
+  assert.equal(plainForFlankerTarget, false);
+});
+
 test("low-identity candidates are still hard-skipped below the 0.34 floor", () => {
   const skip = shouldSkipSerperCandidateByIdentity("Maison Francis Kurkdjian", "Baccarat Rouge 540", {
     imageUrl: "https://cdn.example.com/random.png",

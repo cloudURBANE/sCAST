@@ -5,6 +5,7 @@ import { deepScrapeFragrance } from "../services/fallbackIntelligence";
 import { searchCatalog, getCatalogEntry, saveCatalogEntry, flattenProfile } from "../services/catalogService";
 import {
   isImageSolverId,
+  isLegacyImageSolverId,
   resolveRefreshSerperInput,
   solverPrefersDifferentImage,
   solverSkipsBgRemoval,
@@ -501,6 +502,11 @@ router.post("/refresh-image", async (req, res) => {
       solverId = undefined;
     } else if (isImageSolverId(rawSolver)) {
       solverId = rawSolver;
+    } else if (isLegacyImageSolverId(rawSolver)) {
+      // Removed solver ids (pruned end-to-end no-ops, audit Tier 3 #11) from
+      // stale clients degrade to a plain default refresh instead of erroring.
+      logger.info({ legacySolverId: rawSolver }, "refresh-image received removed solver id; using default refresh");
+      solverId = undefined;
     } else {
       res.status(400).json({ error: "Invalid solverId" });
       return;

@@ -43,7 +43,17 @@ const DEPS: ScentEngineDeps = {
   searchCatalog,
   saveCatalogEntry,
   resolveCachedFragranceImage,
-  resolveProcessedFragranceImage,
+  // Automatic resolution paths (the engine-crawled fallback and the auto
+  // Serper search — the only callers of this dep) opt into the vision
+  // validation gate (image selection audit Tier 3 #10 / Tier 1 #4): the
+  // winner must pass a Gemini "single bottle of {brand} {name}?" check before
+  // being persisted to image_cache / the catalog. Fail-open — with no Gemini
+  // key or on any error the gate is a pass-through. User-curated paths
+  // (admin upload/paste-URL, stripBgOnly, manual refresh preview) call
+  // resolveProcessedFragranceImage directly and stay ungated: the human is
+  // the curator there.
+  resolveProcessedFragranceImage: (opts) =>
+    resolveProcessedFragranceImage({ ...opts, visionGate: true }),
   usableImageUrlForResponse,
   backfillUserFragranceImages,
   resolveProfileViaEngine,

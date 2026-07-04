@@ -11,7 +11,6 @@ export type PoofProductType = "auto" | "product";
 export const IMAGE_SOLVER_IDS = [
   "low_contrast",
   "box_interference",
-  "abstract_query",
   "group_shot",
   "watermark",
   "transparent_glass",
@@ -23,7 +22,6 @@ export const IMAGE_SOLVER_IDS = [
   "orientation",
   "refill_format",
   "text_overlay",
-  "dark_edge_bleed",
   "dupe_interference",
   "decant",
   "cropped_image",
@@ -35,8 +33,26 @@ export type ImageSolverId = (typeof IMAGE_SOLVER_IDS)[number];
 
 const SOLVER_ID_SET = new Set<string>(IMAGE_SOLVER_IDS);
 
+/**
+ * Solver ids that used to exist but were removed because they were guaranteed
+ * end-to-end no-ops (image selection audit Tier 3 #11):
+ *   - `abstract_query`: phase-2 "LLM parses free text" stub that was never
+ *     built — it sent the unchanged default query and was never even offered
+ *     in the dropdown.
+ *   - `dark_edge_bleed`: documented as a "frontend rendering tweak; search
+ *     unchanged", but no frontend handling was ever implemented — picking it
+ *     was byte-for-byte identical to a plain refresh.
+ * Stale clients may still send these ids; the refresh route treats them as a
+ * plain default refresh instead of rejecting with 400.
+ */
+const LEGACY_SOLVER_ID_SET = new Set<string>(["abstract_query", "dark_edge_bleed"]);
+
 export function isImageSolverId(value: unknown): value is ImageSolverId {
   return typeof value === "string" && SOLVER_ID_SET.has(value);
+}
+
+export function isLegacyImageSolverId(value: unknown): boolean {
+  return typeof value === "string" && LEGACY_SOLVER_ID_SET.has(value);
 }
 
 export function buildBaseFragranceLine(asciiBrand: string, asciiName: string, concentrationText: string): string {
@@ -71,19 +87,17 @@ export function resolveRefreshSerperInput(params: {
   }
 
   switch (params.solverId) {
-    case "abstract_query":
-      // Phase 2: LLM parse; until then behave like a normal refresh.
-      return { query: qDefault, refine: "default" };
-    case "dark_edge_bleed":
-      // Doc: frontend-only tweak; search unchanged.
-      return { query: qDefault, refine: "default" };
     case "manual_fallback":
       return { query: qDefault, refine: "default" };
     case "transparent_glass":
       return { query: qDefault, refine: "default" };
     case "dupe_interference":
+      // No exact-phrase `"{brand} {name}"`: page titles style names differently
+      // ("Sauvage by Dior", "Dior — Sauvage EDP") so the quoted phrase returned
+      // near-zero image results (audit S4). Loose tokens + clone negatives keep
+      // the intent (exclude dupe/inspired listings) while matching real titles.
       return {
-        query: `"${params.asciiBrand} ${params.asciiName}" -inspired -clone -type -impression`.trim(),
+        query: `${baseLine} original -inspired -clone -type -impression -dupe`.trim(),
         refine: "solver",
       };
     case "niche_scraping":
@@ -110,7 +124,11 @@ export function resolveRefreshSerperInput(params: {
     case "gift_set":
       return { query: `${baseLine} -set -lotion -wash -bundle -gift`.trim(), refine: "solver" };
     case "orientation":
-      return { query: `${baseLine} "standing upright" "front profile"`.trim(), refine: "solver" };
+      // Loosened from requiring BOTH exact phrases "standing upright" AND
+      // "front profile" in the document — that conjunction returned near-zero
+      // image results (audit S4). Plain positive tokens plus negatives for the
+      // tilted/lying shots the solver is trying to escape.
+      return { query: `${baseLine} bottle upright front view -tilted -lying -sideways`.trim(), refine: "solver" };
     case "refill_format":
       return { query: `${baseLine} -refill -travel -vial -canister -pouch`.trim(), refine: "solver" };
     case "text_overlay":
@@ -120,7 +138,10 @@ export function resolveRefreshSerperInput(params: {
       // negating it excluded practically the entire legitimate SERP.
       return { query: `${baseLine} -decant -sample -vial -travel -mini -split`.trim(), refine: "solver" };
     case "cropped_image":
-      return { query: `${baseLine} "full bottle" -macro -closeup`.trim(), refine: "solver" };
+      // Unquoted: the exact phrase "full bottle" rarely appears verbatim in
+      // listing titles (audit S4); loose tokens keep the intent (whole bottle,
+      // not a cap/nozzle macro) without demanding the literal phrase.
+      return { query: `${baseLine} full bottle -macro -closeup -cropped`.trim(), refine: "solver" };
     default: {
       const _exhaustive: never = params.solverId;
       return _exhaustive;
@@ -146,15 +167,13 @@ export function solverSkipsBgRemoval(solverId?: ImageSolverId): boolean {
  * False for the solvers that mean "the picture is right but its PROCESSING is
  * wrong" (re-run the same source with different Poof/trim settings):
  * transparent_glass (glass erased by bg removal), manual_fallback (skip AI
- * trim), dark_edge_bleed (frontend rendering tweak). No solver (plain refresh
- * via API) keeps legacy behavior: no exclusion.
+ * trim). No solver (plain refresh via API) keeps legacy behavior: no exclusion.
  */
 export function solverPrefersDifferentImage(solverId?: ImageSolverId): boolean {
   if (!solverId) return false;
   switch (solverId) {
     case "transparent_glass":
     case "manual_fallback":
-    case "dark_edge_bleed":
       return false;
     default:
       return true;
@@ -163,11 +182,16 @@ export function solverPrefersDifferentImage(solverId?: ImageSolverId): boolean {
 
 /**
  * True when the solver's whole point is to RE-PROCESS a source with different
- * background-removal settings (Poof `product` mode). For these, the pipeline
- * must bypass the per-source processed cache — otherwise the previously stored
- * cut-out is returned untouched and the new Poof options never run (audit S2's
- * "guaranteed no-op" class).
+ * background-removal settings. For these, the pipeline must bypass the
+ * per-source processed cache — otherwise the previously stored cut-out is
+ * returned untouched and the new processing options never run (audit S2's
+ * "guaranteed no-op" class):
+ *   - transparent_glass / hand_interference: re-run Poof in `product` mode.
+ *   - manual_fallback: skip bg removal entirely — but `acceptsImageCacheForRequest`
+ *     accepts ANY cached variant when removal is not requested, so without the
+ *     bypass the same trimmed cut-out the user is trying to escape is served
+ *     right back instead of the raw image.
  */
 export function solverWantsFreshProcessing(solverId?: ImageSolverId): boolean {
-  return solverId === "transparent_glass" || solverId === "hand_interference";
+  return solverId === "transparent_glass" || solverId === "hand_interference" || solverId === "manual_fallback";
 }
