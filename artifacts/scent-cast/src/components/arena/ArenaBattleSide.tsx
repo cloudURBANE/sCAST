@@ -135,7 +135,9 @@ export const ArenaBattleSide: React.FC<ArenaBattleSideProps> = ({
             clips), so the bottle below never shifts between picked/unpicked and
             the A/B cards stay aligned. Depth comes from inset + hairline shadows
             only — no projected gold glow pooling under the card. */}
-        <div className="relative z-10 mb-1.5 flex min-h-5 items-center justify-center px-6 sm:mb-2.5 sm:min-h-6">
+        {/* px tightens below sm so "Contender A/B" never wraps inside the narrow
+            phone card (the old px-6 left ~110px for an ~105px label). */}
+        <div className="relative z-10 mb-1.5 flex min-h-5 items-center justify-center px-2 sm:mb-2.5 sm:min-h-6 sm:px-6">
           {selected ? (
             <span
               aria-hidden="true"
@@ -152,7 +154,7 @@ export const ArenaBattleSide: React.FC<ArenaBattleSideProps> = ({
               Your Pick
             </span>
           ) : (
-            <span className="inline-flex items-center scent-type-label text-[10px] tracking-[0.1em] text-scent-accent/78 sm:text-[12px] sm:tracking-[0.14em]">
+            <span className="inline-flex items-center whitespace-nowrap scent-type-label text-[10px] tracking-[0.1em] text-scent-accent/78 sm:text-[12px] sm:tracking-[0.14em]">
               {`Contender ${contenderLabel}`}
             </span>
           )}
@@ -222,7 +224,7 @@ export const ArenaBattleSide: React.FC<ArenaBattleSideProps> = ({
             className="scent-no-mobile-focus-ring mt-2 inline-flex min-h-9 w-full items-center justify-center gap-1.5 rounded-md border border-scent-accent/22 bg-scent-accent/[0.12] px-2 py-2 text-[10px] font-bold uppercase tracking-[0.1em] text-scent-accent shadow-[inset_0_1px_0_rgba(255,236,183,0.08)] transition-colors hover:border-scent-accent/42 hover:bg-scent-accent/[0.16] hover:text-[#f0cf70] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/60 sm:min-h-10 sm:text-xs"
           >
             <Sparkles size={13} strokeWidth={1.9} aria-hidden="true" />
-            <span>{signedIn ? "Add Beam Power" : "Sign in to add"}</span>
+            <span className="whitespace-nowrap">{signedIn ? "Add Beam Power" : "Sign in to add"}</span>
           </button>
         </div>
 
@@ -233,10 +235,16 @@ export const ArenaBattleSide: React.FC<ArenaBattleSideProps> = ({
             type="button"
             onClick={onVote}
             disabled={disabled}
+            aria-label={`Vote Contender ${contenderLabel}`}
             className="scent-no-mobile-focus-ring mt-3 inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-md bg-scent-accent px-2 py-2 text-[11px] font-bold uppercase tracking-[0.1em] text-black shadow-[0_14px_30px_-24px_rgba(0,0,0,0.7)] transition-colors duration-300 hover:bg-[#f0cf70] active:bg-[#d7ad32] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/70 disabled:pointer-events-none disabled:opacity-60 sm:min-h-12 sm:gap-2 sm:px-5 sm:py-3 sm:text-sm sm:tracking-[0.16em]"
           >
             <Sparkles size={16} strokeWidth={1.8} aria-hidden="true" />
-            <span>{`Vote Contender ${contenderLabel}`}</span>
+            {/* Full "Vote Contender A" needs ~150px; below 480px the half-width
+                card can't give it that, so the short form keeps it one clean
+                line instead of a three-line stack (the aria-label above keeps
+                the full wording for assistive tech). */}
+            <span aria-hidden="true" className="whitespace-nowrap min-[480px]:hidden">{`Vote ${contenderLabel}`}</span>
+            <span aria-hidden="true" className="hidden whitespace-nowrap min-[480px]:inline">{`Vote Contender ${contenderLabel}`}</span>
           </button>
         ) : null}
       </div>

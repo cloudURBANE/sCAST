@@ -389,9 +389,12 @@ function ForecastHero({
             </div>
           </div>
         ) : (
-          <div className="flex h-full flex-col items-center justify-center gap-3 px-12 text-center">
+          // px relaxes below sm: between the two 44px chevrons a 320px viewport
+          // leaves ~120px for this message under the old px-12, which stacked
+          // it into a one-word-per-line column.
+          <div className="flex h-full flex-col items-center justify-center gap-3 px-2 text-center sm:px-12">
             <Sparkles size={24} strokeWidth={1.5} className="text-scent-accent/75" aria-hidden />
-            <p className="font-serif text-lg italic leading-relaxed text-scent-text-secondary">
+            <p className="max-w-[17rem] font-serif text-lg italic leading-relaxed text-balance text-scent-text-secondary sm:max-w-none">
               Add fragrances to your vault for a daily scent forecast.
             </p>
           </div>
