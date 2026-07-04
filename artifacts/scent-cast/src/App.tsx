@@ -7,7 +7,7 @@ import { buildHeroTickerPhrases } from './lib/heroTickerPhrases';
 import { stableProposalItemId, type CurateCollectionResult } from './lib/collectionCuration';
 import { getPendingCuration, curationItemToFragrance, pickResumeCurationTarget } from './lib/curationClient';
 import { X } from 'lucide-react';
-import { AnimatePresence, animate, motion, useMotionValue, useReducedMotion } from 'framer-motion';
+import { AnimatePresence, animate, m, useMotionValue, useReducedMotion } from 'framer-motion';
 import { ThreadBackground, type ThreadBackgroundMode } from './components/threads/ThreadBackground';
 import { AppTopNav } from './components/AppTopNav';
 import { WeeklyOutlookDashboard } from './components/WeeklyOutlookDashboard';
@@ -25,6 +25,8 @@ import { PageTransitionOverlay, warmTransitionEmblem } from './components/PageTr
 import { ErrorBoundary, RouteErrorFallback } from './components/ErrorBoundary';
 import { useModalBehavior } from '@/hooks/use-modal-behavior';
 import { useRenderBudget } from '@/hooks/useRenderBudget';
+import { useCalmMotion } from '@/hooks/useCalmMotion';
+import { SCENT_EASE_OUT_EXPO } from '@/lib/motion';
 import { useMarqueeSwipe } from '@/hooks/useMarqueeSwipe';
 import { isIpadSafariPerformanceMode, isLowRenderBudget } from '@/lib/platform';
 import NotFound from '@/pages/not-found';
@@ -719,8 +721,7 @@ function DashboardView() {
   // gated only on the OS reduce-motion flag (false by default), so it ran at
   // full fidelity on every phone/tablet. Treat low-render-budget and iPad-Safari
   // as "calm" too, so those devices get a plain crossfade instead of FLIP.
-  const calmLayout =
-    reduceMotion || isLowRenderBudget() || isIpadSafariPerformanceMode();
+  const calmLayout = useCalmMotion();
   const [isMounted, setIsMounted] = useState(false);
   useEffect(() => {
     setIsMounted(true);
@@ -886,7 +887,7 @@ function DashboardView() {
   const agentActive = viewState === 'agent';
   const vaultContentTransition = reduceMotion
     ? { duration: 0.01 }
-    : { duration: 0.42, ease: [0.16, 1, 0.3, 1] as const };
+    : { duration: 0.42, ease: SCENT_EASE_OUT_EXPO };
 
   // NOTE: the Beam agent panel deliberately does NOT lock body scroll. It is
   // inline content that replaces the search card within the page flow (not a
@@ -915,7 +916,7 @@ function DashboardView() {
     if (!el) return;
     const controls = animate(heroInnerHeight, el.offsetHeight, {
       duration: 0.42,
-      ease: [0.16, 1, 0.3, 1],
+      ease: SCENT_EASE_OUT_EXPO,
       onComplete: () => heroInnerHeight.set('auto'),
     });
     return () => controls.stop();
@@ -934,7 +935,7 @@ function DashboardView() {
       if (heroInnerHeight.get() === target) return;
       animate(heroInnerHeight, target, {
         duration: 0.42,
-        ease: [0.16, 1, 0.3, 1],
+        ease: SCENT_EASE_OUT_EXPO,
         onComplete: () => heroInnerHeight.set('auto'),
       });
     });
@@ -1145,11 +1146,11 @@ function DashboardView() {
                 everything upward once it finally unmounts. */}
             <AnimatePresence initial={false} mode="popLayout">
               {agentActive ? (
-                <motion.div
+                <m.div
                   key="mission-header"
-                  initial={reduceMotion ? false : { opacity: 0, y: 6, ...missionHeaderMargins }}
+                  initial={calmLayout ? false : { opacity: 0, y: 6, ...missionHeaderMargins }}
                   animate={{ opacity: 1, y: 0, ...missionHeaderMargins }}
-                  exit={reduceMotion ? { opacity: 0 } : { opacity: 0, height: 0, marginTop: 0, marginBottom: 0 }}
+                  exit={calmLayout ? { opacity: 0 } : { opacity: 0, height: 0, marginTop: 0, marginBottom: 0 }}
                   transition={vaultContentTransition}
                   // The pull-up margins (toward the hero marquee, so the agent
                   // does not open with a dead gap above "A scent for today.")
@@ -1200,7 +1201,7 @@ function DashboardView() {
                   <p className="mx-auto mt-1 hidden max-w-xl text-sm leading-6 text-scent-text-muted sm:block">
                     {missionStatus?.contextLine ?? 'Weather context ready when available'}
                   </p>
-                </motion.div>
+                </m.div>
               ) : null}
             </AnimatePresence>
 
@@ -1209,7 +1210,7 @@ function DashboardView() {
                 replaces the search card in place, so the card's details are not
                 duplicated above the panel; closing (the header X) returns the
                 search card. */}
-            <motion.div
+            <m.div
               ref={heroVaultRef}
               layout={isMounted ? !calmLayout : false}
               transition={vaultContentTransition}
@@ -1220,7 +1221,7 @@ function DashboardView() {
               {/* Height rides the swap MotionValue ('auto' outside a swap); the
                   plain wrapper below is the natural-height measure target for
                   the tween. See heroInnerHeight above. */}
-              <motion.div className="scent-vault-panel-inner min-w-0" style={{ height: heroInnerHeight }}>
+              <m.div className="scent-vault-panel-inner min-w-0" style={{ height: heroInnerHeight }}>
                 <div ref={heroMeasureRef} className="min-w-0">
                 {/* popLayout pops the outgoing surface out of flow so the panel
                     resizes in a single smooth stage while the two views
@@ -1228,7 +1229,7 @@ function DashboardView() {
                     card visibly grow/bounce after the fade completed. */}
                 <AnimatePresence initial={false} mode="popLayout">
                   {agentActive ? (
-                    <motion.div
+                    <m.div
                       key="agent"
                       initial={reduceMotion ? false : { opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
@@ -1248,9 +1249,9 @@ function DashboardView() {
                           onCurateCollection={handleCurateCollection}
                         />
                       </React.Suspense>
-                    </motion.div>
+                    </m.div>
                   ) : (
-                    <motion.div
+                    <m.div
                       key="search"
                       initial={reduceMotion ? false : { opacity: 0, y: -6 }}
                       animate={{ opacity: 1, y: 0 }}
@@ -1266,19 +1267,19 @@ function DashboardView() {
                           embeddedInVaultPanel
                         />
                       </React.Suspense>
-                    </motion.div>
+                    </m.div>
                   )}
                 </AnimatePresence>
                 </div>
-              </motion.div>
-            </motion.div>
+              </m.div>
+            </m.div>
 
             {/* One stable lower action slot owns both states: search mode shows
                 the Discover CTA, agent mode hosts the portaled cue / Confirm
                 lane. Keeping the slot mounted prevents the CTA and card from
                 visibly reattaching on close. */}
             {(agentActive || (discoveryReady && stateSettled && !vaultSearchUiActive)) ? (
-              <motion.div
+              <m.div
                 ref={signatureSectionRef}
                 layout={isMounted ? !calmLayout : false}
                 transition={vaultContentTransition}
@@ -1305,7 +1306,7 @@ function DashboardView() {
                 />
                 <AnimatePresence initial={false} mode="popLayout">
                   {agentActive ? null : (
-                    <motion.button
+                    <m.button
                       key="signature-cta"
                       type="button"
                       onClick={handleOpenMission}
@@ -1328,10 +1329,10 @@ function DashboardView() {
                           letter-spacing so the trailing tracking gap doesn't pull
                           the glyphs optically left of center. */}
                       <span className="[text-indent:0.11em] sm:[text-indent:0.14em]">Discover With Beam Agent</span>
-                    </motion.button>
+                    </m.button>
                   )}
                 </AnimatePresence>
-              </motion.div>
+              </m.div>
             ) : null}
           </section>
 

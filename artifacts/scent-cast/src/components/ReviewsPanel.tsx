@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import { m, AnimatePresence } from "framer-motion";
 import { ChevronLeft, ChevronRight, RefreshCw, ChevronDown, ChevronUp } from "lucide-react";
 import {
   summarizeReviews,
@@ -8,15 +8,14 @@ import {
   type FragranceRawReview,
   type SummarizedComment,
 } from "@/lib/fragranceApi";
-import { isIpadSafariPerformanceMode, isLowRenderBudget } from "@/lib/platform";
+import { useCalmMotion } from "@/hooks/useCalmMotion";
+import { SCENT_EASE_OUT as REVIEW_EASE } from "@/lib/motion";
 
 interface ReviewsPanelProps {
   name?: string;
   brand?: string;
   reviews: FragranceRawReview[];
 }
-
-const REVIEW_EASE = [0.22, 1, 0.36, 1] as const;
 
 function formatReviewPosition(index: number, total: number) {
   const width = Math.max(2, String(total).length);
@@ -49,7 +48,7 @@ function FeaturedQuote({
   reduced: boolean;
 }) {
   return (
-    <motion.figure
+    <m.figure
       key={comment.text}
       initial={reduced ? { opacity: 1 } : { opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
@@ -73,7 +72,7 @@ function FeaturedQuote({
       <figcaption className="mt-3 text-[9px] font-semibold uppercase tracking-[0.3em] text-white/36">
         Featured Impression
       </figcaption>
-    </motion.figure>
+    </m.figure>
   );
 }
 
@@ -121,15 +120,11 @@ export function ReviewsPanel({ name, brand, reviews }: ReviewsPanelProps) {
   const [retryCount, setRetryCount] = useState(0);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
-  const prefersReducedMotion = useReducedMotion();
   // `reduced` switches the controls/summary reveals from height-auto layout
-  // reflow tweens to an opacity-only fallback. Fold in the render budget so
-  // phones and iPad Safari (where the height reflow stutters) get the cheap
-  // path too — device class is stable, so sample once.
-  const constrainedBudget = React.useRef(
-    isLowRenderBudget() || isIpadSafariPerformanceMode(),
-  ).current;
-  const reduced = (prefersReducedMotion ?? false) || constrainedBudget;
+  // reflow tweens to an opacity-only fallback. useCalmMotion folds in the
+  // render budget so phones and iPad Safari (where the height reflow stutters)
+  // get the cheap path too.
+  const reduced = useCalmMotion();
 
   const reviewsKey = useMemo(
     () => reviews.map((r) => r.text).join("|").slice(0, 6000),
@@ -313,7 +308,7 @@ export function ReviewsPanel({ name, brand, reviews }: ReviewsPanelProps) {
         </div>
 
         {hasMultiple && showControls ? (
-          <motion.div
+          <m.div
             key="reviews-controls"
             initial={reduced ? { opacity: 1 } : { opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
@@ -366,12 +361,12 @@ export function ReviewsPanel({ name, brand, reviews }: ReviewsPanelProps) {
                 <ChevronUp size={11} strokeWidth={1.75} className="opacity-70" />
               </button>
             </div>
-          </motion.div>
+          </m.div>
         ) : null}
 
         <AnimatePresence initial={false}>
           {expanded ? (
-            <motion.ol
+            <m.ol
               key="review-ledger"
               initial={reduced ? { opacity: 1 } : { opacity: 0, y: -8 }}
               animate={{ opacity: 1, y: 0 }}
@@ -409,7 +404,7 @@ export function ReviewsPanel({ name, brand, reviews }: ReviewsPanelProps) {
                   </button>
                 </li>
               ))}
-            </motion.ol>
+            </m.ol>
           ) : null}
         </AnimatePresence>
       </div>

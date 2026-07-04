@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, m } from 'framer-motion';
 import { Check, LoaderCircle, Plus, X } from 'lucide-react';
 import { BottleImage } from '@/components/BottleImage';
 import { BrandGoldLabel } from '@/components/BrandGoldLabel';
@@ -192,7 +192,7 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
   return createPortal(
     <AnimatePresence mode="wait" onExitComplete={handleExitComplete}>
       {item ? (
-        <motion.div
+        <m.div
           key="community-fragrance-overlay"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -231,7 +231,7 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
                 </button>
               </header>
 
-              <motion.div
+              <m.div
                 className="community-fragrance-detail__content"
                 initial="hidden"
                 animate="visible"
@@ -257,7 +257,7 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
                     <span>{alreadyInWardrobe || addState === 'saved' ? 'Saved' : 'Save'}</span>
                   </button>
 
-                  <motion.div
+                  <m.div
                     layoutId={sharedImageLayoutId}
                     transition={imageLayoutTransition}
                     className="community-fragrance-detail__bottle"
@@ -274,9 +274,9 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
                       adjustment={item.imageAdjustment}
                       imageProperties={item.imageProperties}
                     />
-                  </motion.div>
+                  </m.div>
 
-                  <motion.div
+                  <m.div
                     className="community-fragrance-detail__identity"
                     variants={{
                       hidden: { opacity: 0, y: 10 },
@@ -290,11 +290,11 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
                     <div className="community-fragrance-detail__rule" aria-hidden="true">
                       <span />
                     </div>
-                  </motion.div>
+                  </m.div>
                 </section>
 
                 {addMessage ? (
-                  <motion.p
+                  <m.p
                     className={addState === 'error' ? 'community-fragrance-detail__message community-fragrance-detail__message--error' : 'community-fragrance-detail__message'}
                     variants={{
                       hidden: { opacity: 0, y: 8 },
@@ -302,10 +302,10 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
                     }}
                   >
                     {addMessage}
-                  </motion.p>
+                  </m.p>
                 ) : null}
 
-                <motion.section
+                <m.section
                   className="community-fragrance-detail__family"
                   variants={{
                     hidden: { opacity: 0, y: 12 },
@@ -314,9 +314,9 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
                 >
                   <p>Fragrance Family</p>
                   <h3>{item.family ?? 'Signature'}</h3>
-                </motion.section>
+                </m.section>
 
-                <motion.div
+                <m.div
                   className="community-fragrance-detail__notes"
                   variants={{
                     hidden: { opacity: 0, y: 12 },
@@ -330,9 +330,9 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
                       <div>{formatNotes(item[key])}</div>
                     </div>
                   ))}
-                </motion.div>
+                </m.div>
 
-                <motion.button
+                <m.button
                   type="button"
                   onClick={closeOverlay}
                   className="community-fragrance-detail__close"
@@ -342,11 +342,11 @@ export const CommunityFragranceOverlay: React.FC<CommunityFragranceOverlayProps>
                   }}
                 >
                   <span>Close Details</span>
-                </motion.button>
-              </motion.div>
+                </m.button>
+              </m.div>
             </div>
           </div>
-        </motion.div>
+        </m.div>
       ) : null}
     </AnimatePresence>,
     document.body,

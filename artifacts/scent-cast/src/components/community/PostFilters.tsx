@@ -40,7 +40,7 @@ const TAGS = [
 
 function roomButtonClass(active: boolean, extra = '') {
   return [
-    'group flex min-h-12 w-full items-center justify-center gap-2.5 rounded-full border px-3 py-2 text-center scent-type-chip transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80',
+    'group flex min-h-12 w-full items-center justify-center gap-2.5 rounded-full border px-3 py-2 text-center scent-type-chip transition-[color,background-color,border-color,box-shadow] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80',
     active
       ? 'border-scent-accent/70 bg-scent-accent/[0.18] font-bold text-[#fff7ec] shadow-[inset_0_1px_0_rgba(255,244,210,0.14)]'
       : 'border-scent-accent/14 bg-black/30 text-scent-text-muted hover:border-scent-accent/42 hover:bg-scent-accent/[0.055] hover:text-[#fff7ec]',
@@ -62,7 +62,7 @@ function roomMenuItemClass(active: boolean) {
 
 function tagButtonClass(active: boolean) {
   return [
-    'inline-flex h-10 min-w-max items-center justify-center rounded-full border px-3 text-center text-xs font-bold uppercase tracking-[0.12em] transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80',
+    'inline-flex h-10 min-w-max items-center justify-center rounded-full border px-3 text-center text-xs font-bold uppercase tracking-[0.12em] transition-[color,background-color,border-color,box-shadow] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80',
     active
       ? 'border-scent-accent/76 bg-scent-accent/[0.18] text-[#fff7ec] shadow-[inset_0_1px_0_rgba(255,244,210,0.14)]'
       : 'border-scent-accent/16 bg-black/30 text-[#d9c099] hover:border-scent-accent/46 hover:bg-scent-accent/[0.065] hover:text-[#fff7ec]',

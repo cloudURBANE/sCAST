@@ -1,5 +1,5 @@
 import React from 'react';
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { AnimatePresence, m, useReducedMotion } from 'framer-motion';
 
 export type CyclingPart = { primary: string; secondary: string };
 
@@ -80,7 +80,7 @@ export function CyclingTilePair({ parts, primaryClass, secondaryClass }: Cycling
 
       <div className="absolute inset-0 flex items-center justify-center overflow-visible" aria-hidden="true">
         <AnimatePresence initial={false}>
-          <motion.div
+          <m.div
             key={phase}
             initial={initial}
             animate={animate}
@@ -89,7 +89,7 @@ export function CyclingTilePair({ parts, primaryClass, secondaryClass }: Cycling
             className="absolute inset-0 flex w-full flex-col items-center justify-center motion-safe:[transform:translateZ(0)] motion-safe:[backface-visibility:hidden] motion-safe:[will-change:transform,opacity]"
           >
             <CyclingTileContent part={current} primaryClass={primaryClass} secondaryClass={secondaryClass} />
-          </motion.div>
+          </m.div>
         </AnimatePresence>
       </div>
     </div>

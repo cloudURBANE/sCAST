@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { AnimatePresence, m, useReducedMotion } from 'framer-motion';
 import {
   ChevronLeft,
   ChevronRight,
@@ -309,7 +309,7 @@ function ForecastHero({
     // plain crossfade keeps the in/out overlap that reads as a smooth slide without
     // the layout-projection cost of popLayout stacking GPU-promoted bottle layers.
     <AnimatePresence initial={false} custom={direction}>
-      <motion.div
+      <m.div
         key={contentKey}
         custom={direction}
         initial={{ opacity: 0, x: prefersReducedMotion ? 0 : direction * 22 }}
@@ -399,7 +399,7 @@ function ForecastHero({
             </p>
           </div>
         )}
-      </motion.div>
+      </m.div>
     </AnimatePresence>
   );
 }

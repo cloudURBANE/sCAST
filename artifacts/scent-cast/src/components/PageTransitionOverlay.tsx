@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, type CSSProperties } from 'react';
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { AnimatePresence, m, useReducedMotion } from 'framer-motion';
+import { SCENT_EASE_OUT } from '@/lib/motion';
 import { isIpadSafariPerformanceMode, isLowRenderBudget } from '@/lib/platform';
 
 const EMBLEM = '/icons/transparent-emblem/scentbeam-emblem-192x192.png';
@@ -150,7 +151,7 @@ export const PageTransitionOverlay: React.FC<PageTransitionOverlayProps> = ({
   }, [visible]);
 
   const reducedContent = (
-    <motion.div
+    <m.div
       key={animationKey}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -170,11 +171,11 @@ export const PageTransitionOverlay: React.FC<PageTransitionOverlayProps> = ({
         fetchPriority="high"
         style={{ width: 78, height: 78, userSelect: 'none' }}
       />
-    </motion.div>
+    </m.div>
   );
 
   const fullContent = (
-    <motion.div
+    <m.div
       key={animationKey}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -187,7 +188,7 @@ export const PageTransitionOverlay: React.FC<PageTransitionOverlayProps> = ({
       role="presentation"
     >
           {profile.showBloom ? (
-            <motion.div
+            <m.div
               initial={{ scale: profile.bloomScale[0], opacity: 0 }}
               animate={{
                 scale: profile.bloomScale,
@@ -208,14 +209,14 @@ export const PageTransitionOverlay: React.FC<PageTransitionOverlayProps> = ({
             />
           ) : null}
 
-          <motion.div
+          <m.div
             initial={{ scale: profile.innerRingScale[0], opacity: 0, rotate: -96 }}
             animate={{
               scale: profile.innerRingScale,
               opacity: profile.innerRingOpacity,
               rotate: [-96, 48, 156],
             }}
-            transition={{ duration: profile.duration, times: [0, 0.46, 1], ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: profile.duration, times: [0, 0.46, 1], ease: SCENT_EASE_OUT }}
             aria-hidden="true"
             style={{
               position: 'absolute',
@@ -232,7 +233,7 @@ export const PageTransitionOverlay: React.FC<PageTransitionOverlayProps> = ({
           />
 
           {profile.showOuterRing ? (
-            <motion.div
+            <m.div
               initial={{ scale: profile.outerRingScale[0], opacity: 0, rotate: 34 }}
               animate={{
                 scale: profile.outerRingScale,
@@ -255,10 +256,10 @@ export const PageTransitionOverlay: React.FC<PageTransitionOverlayProps> = ({
             />
           ) : null}
 
-          <motion.div
+          <m.div
             initial={{ opacity: 0, scale: 0.92 }}
             animate={{ opacity: [0, 1, 1], scale: [0.92, 1.01, 1] }}
-            transition={{ duration: profile.duration, times: [0, 0.24, 1], ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: profile.duration, times: [0, 0.24, 1], ease: SCENT_EASE_OUT }}
             style={{
               position: 'relative',
               zIndex: 1,
@@ -272,7 +273,7 @@ export const PageTransitionOverlay: React.FC<PageTransitionOverlayProps> = ({
               willChange: 'transform, opacity',
             }}
           >
-            <motion.img
+            <m.img
               src={EMBLEM}
               alt=""
               draggable={false}
@@ -304,8 +305,8 @@ export const PageTransitionOverlay: React.FC<PageTransitionOverlayProps> = ({
                 willChange: 'transform, opacity',
               }}
             />
-          </motion.div>
-    </motion.div>
+          </m.div>
+    </m.div>
   );
 
   return (

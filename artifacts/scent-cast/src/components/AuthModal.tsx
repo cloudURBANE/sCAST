@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion } from 'framer-motion';
+import { m } from 'framer-motion';
 import { useModalBehavior } from '@/hooks/use-modal-behavior';
 
 interface AuthModalProps {
@@ -51,7 +51,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       aria-modal="true"
       aria-labelledby="auth-modal-title"
     >
-      <motion.div
+      <m.div
         initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-md px-8"
@@ -112,7 +112,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             ) : null}
           </div>
         </div>
-      </motion.div>
+      </m.div>
     </div>
   );
 };
