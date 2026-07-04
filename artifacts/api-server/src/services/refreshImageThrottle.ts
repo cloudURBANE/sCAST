@@ -12,7 +12,7 @@
 //   - without an explicit solver, auto-regeneration pauses after 3 prior attempts
 //   - a ceiling of 10 prior attempts without a solver
 //   - a higher ceiling of 20 prior attempts WITH a solver: the clarify dropdown
-//     offers 19 distinct options, and the old shared ceiling of 10 meant a user
+//     offers 18 distinct options, and the old shared ceiling of 10 meant a user
 //     methodically trying options hit a blanket 429 on attempt 12 — making every
 //     remaining option indistinguishable from "broken" for the rest of the hour
 //     (image selection audit S3).

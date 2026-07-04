@@ -1,6 +1,9 @@
 /**
  * Labels for wardrobe clarify flow — IDs must match ImageSolverId on the API
- * (artifacts/api-server/src/services/imageSolvers.ts). Omits abstract_query (phase 2).
+ * (artifacts/api-server/src/services/imageSolvers.ts). Removed ids
+ * (abstract_query, dark_edge_bleed) were end-to-end no-ops and were pruned
+ * (image selection audit Tier 3 #11); the API treats them as a plain refresh
+ * if a stale client still sends one.
  */
 export type WardrobeImageSolverId =
   | 'low_contrast'
@@ -16,7 +19,6 @@ export type WardrobeImageSolverId =
   | 'orientation'
   | 'refill_format'
   | 'text_overlay'
-  | 'dark_edge_bleed'
   | 'dupe_interference'
   | 'decant'
   | 'cropped_image'
@@ -39,7 +41,6 @@ export const WARDROBE_CLARIFY_SOLVERS: { id: WardrobeImageSolverId; label: strin
   { id: 'orientation', label: 'Tilted or lying bottle' },
   { id: 'refill_format', label: 'Refill / travel / odd format' },
   { id: 'text_overlay', label: 'Promotional text / ad' },
-  { id: 'dark_edge_bleed', label: 'Dark bottle blends into background' },
   { id: 'dupe_interference', label: 'Clone / dupe listing' },
   { id: 'decant', label: 'Decant / sample vial' },
   { id: 'cropped_image', label: 'Too cropped / macro only' },
