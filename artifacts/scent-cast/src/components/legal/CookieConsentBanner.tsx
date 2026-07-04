@@ -90,25 +90,30 @@ export function CookieConsentBanner() {
                     </Link>
                     .
                   </p>
-                  <div className="mt-4 flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:items-center">
+                  {/* Phone-class viewports: the two decision buttons share one
+                      row (grid) so the banner covers one less row of an already
+                      small screen; below 360px they stack again because the
+                      tracked uppercase labels stop fitting side by side. sm+
+                      keeps the original inline row. */}
+                  <div className="mt-4 grid grid-cols-1 items-center gap-2.5 min-[360px]:grid-cols-2 sm:flex sm:flex-row sm:flex-wrap">
                     <button
                       type="button"
                       onClick={handleAcceptAll}
-                      className="scent-primary-button inline-flex min-h-11 items-center justify-center rounded-full px-5 text-[11px] font-bold uppercase tracking-[0.16em]"
+                      className="scent-primary-button inline-flex min-h-11 items-center justify-center rounded-full px-3 text-[11px] font-bold uppercase tracking-[0.16em] sm:px-5"
                     >
                       <span>Accept all</span>
                     </button>
                     <button
                       type="button"
                       onClick={handleEssentialOnly}
-                      className="inline-flex min-h-11 items-center justify-center rounded-full border border-white/14 px-5 text-[11px] font-bold uppercase tracking-[0.16em] text-scent-text-muted transition-colors hover:border-scent-accent/45 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
+                      className="inline-flex min-h-11 items-center justify-center rounded-full border border-white/14 px-3 text-[11px] font-bold uppercase tracking-[0.16em] text-scent-text-muted transition-colors hover:border-scent-accent/45 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 sm:px-5"
                     >
                       Essential only
                     </button>
                     <button
                       type="button"
                       onClick={() => setMode("manage")}
-                      className="inline-flex min-h-11 items-center justify-center rounded-full px-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-scent-text-subtle transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 sm:ml-auto"
+                      className="col-span-full inline-flex min-h-11 items-center justify-center rounded-full px-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-scent-text-subtle transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 sm:col-auto sm:ml-auto"
                     >
                       Manage
                     </button>
