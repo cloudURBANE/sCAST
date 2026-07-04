@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Plus, Search, X } from 'lucide-react';
 import { AppTopNav } from '@/components/AppTopNav';
 import { AppFooter } from '@/components/AppFooter';
@@ -6,13 +7,20 @@ import { CommunityHero } from '@/components/community/CommunityHero';
 import { CommunityLoadingState } from '@/components/community/CommunityLoadingState';
 import { useCommunityFragrances } from '@/components/community/communityData';
 import type { PostComposerHandle } from '@/components/community/PostComposer';
-import type { CommunityPostType } from '@/components/community/communityPosts';
+import { prefetchCommunityPosts, type CommunityPostType } from '@/components/community/communityPosts';
 
+// Warmable import thunks. Dynamic imports are cached by the module loader, so
+// kicking these off on mount downloads the chunks in parallel with the
+// body-wake delay instead of serially after it. Before this, the marquee — the
+// page's top visual — painted LAST: wake delay → data fetch → only then the
+// chunk download → render → images.
+const bottleMarqueeImport = () => import('@/components/community/BottleMarquee');
+const communityFeedImport = () => import('@/components/community/CommunityFeed');
 const BottleMarquee = React.lazy(() =>
-  import('@/components/community/BottleMarquee').then((module) => ({ default: module.BottleMarquee })),
+  bottleMarqueeImport().then((module) => ({ default: module.BottleMarquee })),
 );
 const CommunityFeed = React.lazy(() =>
-  import('@/components/community/CommunityFeed').then((module) => ({ default: module.CommunityFeed })),
+  communityFeedImport().then((module) => ({ default: module.CommunityFeed })),
 );
 const PostComposer = React.lazy(() =>
   import('@/components/community/PostComposer').then((module) => ({ default: module.PostComposer })),
@@ -130,8 +138,22 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
   onEditProfile,
 }) => {
   const communityBodyReady = useAfterInitialRoutePaint();
-  const { data, isLoading, isError } = useCommunityFragrances(communityBodyReady);
+  // Fetch immediately on mount: the JSON round-trip mounts no images by itself,
+  // so it can overlap the body-wake delay. The marquee then usually has data the
+  // moment the body wakes, instead of only STARTING its fetch at that point.
+  const { data, isLoading, isError } = useCommunityFragrances();
   const communityMarqueeReady = communityBodyReady && (!isLoading || isError);
+
+  // Warm the deferred chunks alongside the data fetch (download only — React
+  // still mounts them behind the same readiness gates as before), and seed the
+  // first posts page so the feed request also overlaps the wake delay instead
+  // of leaving the browser only after CommunityFeed mounts.
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    void bottleMarqueeImport();
+    void communityFeedImport();
+    void prefetchCommunityPosts(queryClient, { limit: 12 }, authToken);
+  }, [queryClient, authToken]);
   const [postType, setPostType] = useState<CommunityPostType | null>(null);
   const [postTag, setPostTag] = useState<string | null>(null);
   const [postQuery, setPostQuery] = useState('');
