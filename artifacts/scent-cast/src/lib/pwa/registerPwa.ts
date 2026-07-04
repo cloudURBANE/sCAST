@@ -20,6 +20,34 @@ export interface PwaCallbacks {
   onOfflineReady?: () => void;
 }
 
+// Browsers only re-check the SW script on navigations (plus a ~24h heuristic).
+// An installed PWA is resumed, not re-navigated, so without explicit checks it
+// can keep serving a build many deploys behind what the same URL shows in a
+// browser tab. Re-check on every resume (throttled) and hourly while open so
+// the "refresh" prompt appears close to each deploy instead of days later.
+const UPDATE_CHECK_MIN_GAP_MS = 15 * 60 * 1000;
+const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
+
+function scheduleUpdateChecks(registration: ServiceWorkerRegistration): void {
+  let lastCheck = Date.now();
+
+  const check = () => {
+    if (!navigator.onLine) return;
+    lastCheck = Date.now();
+    registration.update().catch(() => {
+      /* transient network failures are fine — the next check retries */
+    });
+  };
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible") return;
+    if (Date.now() - lastCheck < UPDATE_CHECK_MIN_GAP_MS) return;
+    check();
+  });
+
+  window.setInterval(check, UPDATE_CHECK_INTERVAL_MS);
+}
+
 export function setupPwa(callbacks: PwaCallbacks = {}): void {
   if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
   // Guard against double registration (e.g. React 18 StrictMode double-effects).
@@ -27,6 +55,9 @@ export function setupPwa(callbacks: PwaCallbacks = {}): void {
 
   updateSW = registerSW({
     immediate: true,
+    onRegisteredSW(_swUrl, registration) {
+      if (registration) scheduleUpdateChecks(registration);
+    },
     onNeedRefresh() {
       callbacks.onNeedRefresh?.();
     },
