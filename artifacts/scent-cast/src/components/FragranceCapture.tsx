@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, Search } from 'lucide-react';
+import { Award, Check, Search } from 'lucide-react';
 import { m, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { useCalmMotion } from '@/hooks/useCalmMotion';
-import { SCENT_EASE_OUT } from '@/lib/motion';
+import { SCENT_EASE_OUT, SCENT_EASE_OUT_EXPO } from '@/lib/motion';
+import { markHouseLogoFailed, resolveHouseLogoUrl } from '@/lib/houseMark';
 import { ScentIntelligenceLoader } from './ScentIntelligenceLoader';
 import {
   collectMainAccordDisplayRows,
@@ -151,6 +152,96 @@ function matchMonogram(m: FragranceMatch): string {
   }
   return cleaned.slice(0, 2).toUpperCase();
 }
+
+/**
+ * Secondary facts worth surfacing on a result row, in display order. Each is
+ * rendered only when the engine actually supplied it, so rows never show
+ * placeholder noise: release year, gender bucket (same vocabulary as the
+ * filter chips), and the Basenotes community sentiment — gated on a minimum
+ * vote count so a 3-vote "100% liked" never masquerades as consensus.
+ */
+const RATING_MIN_VOTES = 25;
+
+interface MatchMetaItem {
+  key: string;
+  label: string;
+  /** Compact variant for phone widths; falls back to `label`. */
+  shortLabel?: string;
+  /** Drop on phone widths where the house name needs the room. */
+  hideOnMobile?: boolean;
+}
+
+function matchMetaItems(m: FragranceMatch): MatchMetaItem[] {
+  const items: MatchMetaItem[] = [];
+
+  const year = typeof m.year === 'number' && Number.isFinite(m.year) ? Math.trunc(m.year) : null;
+  if (year && year >= 1700 && year <= new Date().getFullYear() + 1) {
+    items.push({ key: 'year', label: String(year) });
+  }
+
+  const gender = genderLabel(m.gender);
+  if (gender) items.push({ key: 'gender', label: gender, hideOnMobile: true });
+
+  const votes = m.bn_vote_count ?? 0;
+  const pct = m.bn_positive_pct;
+  if (typeof pct === 'number' && Number.isFinite(pct) && votes >= RATING_MIN_VOTES) {
+    const rounded = Math.round(Math.min(100, Math.max(0, pct)));
+    items.push({ key: 'rating', label: `${rounded}% liked`, shortLabel: `${rounded}%` });
+  }
+
+  return items;
+}
+
+/**
+ * Row anchor disc: the house's actual mark when we can resolve one from the
+ * curated domain map (see lib/houseMark.ts), layered over the serif monogram
+ * so there is never an empty or broken frame — the monogram stays until the
+ * mark has fully loaded, and returns on any failure (offline PWA included).
+ */
+const HouseMarkDisc: React.FC<{ house?: string; monogram: string }> = ({ house, monogram }) => {
+  const logoUrl = useMemo(() => resolveHouseLogoUrl(house), [house]);
+  const [logoState, setLogoState] = useState<'loading' | 'loaded' | 'failed'>('loading');
+
+  useEffect(() => {
+    setLogoState('loading');
+  }, [logoUrl]);
+
+  const showLogo = logoUrl !== null && logoState !== 'failed';
+
+  return (
+    <span
+      className="scent-vault-monogram relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full font-serif text-[0.95rem] font-semibold leading-none sm:h-12 sm:w-12 sm:text-[1.05rem]"
+      aria-hidden
+    >
+      <span
+        className={`transition-opacity duration-300 ${showLogo && logoState === 'loaded' ? 'opacity-0' : 'opacity-100'}`}
+      >
+        {monogram}
+      </span>
+      {showLogo && (
+        <img
+          src={logoUrl}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          referrerPolicy="no-referrer"
+          draggable={false}
+          onLoad={() => setLogoState('loaded')}
+          onError={() => {
+            markHouseLogoFailed(logoUrl);
+            setLogoState('failed');
+          }}
+          // Cream medallion behind the mark so dark-on-transparent favicons
+          // stay legible against the near-black disc; the gold ring and inset
+          // highlight of .scent-vault-monogram continue to frame it.
+          className={`absolute inset-0 m-auto h-[72%] w-[72%] rounded-full bg-[#f5eedd] object-contain p-[3px] transition-opacity duration-300 ${
+            logoState === 'loaded' ? 'opacity-100' : 'opacity-0'
+          }`}
+        />
+      )}
+    </span>
+  );
+};
 
 /**
  * Stable identity for a result row. Selection, filtering, and React keys all
@@ -989,13 +1080,6 @@ export const FragranceCapture: React.FC<{
     setLoadingStatus("");
   }, [loadingSurface]);
 
-  // "Back to search" — return focus to the field without discarding results or
-  // the current query, so users can refine and re-run without scrolling up.
-  const scrollToSearch = () => {
-    searchInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    searchInputRef.current?.focus({ preventScroll: true });
-  };
-
   // Close (×) / Esc — dismiss the results surface entirely and return the user to
   // the search field. Unlike "New search" this does NOT auto-focus the input, so
   // closing on mobile doesn't pop the keyboard back open; it just clears and
@@ -1029,14 +1113,21 @@ export const FragranceCapture: React.FC<{
   }, [searchSurfaceOpen, loadingSurface, handleDismissResults]);
 
   // Bring freshly-arrived results into view so the list isn't stranded below the
-  // fold on tall mobile layouts. Runs once per result set, after the overlay clears.
+  // fold on tall mobile layouts. Runs once per result set — deferred until the
+  // entrance fade has settled, because a smooth programmatic scroll running
+  // concurrently with the entrance animation (and the panel's height change)
+  // is exactly the compound motion that reads as jitter on iPhone PWA.
+  // `block: 'nearest'` makes it a no-op when the list is already in view.
   useEffect(() => {
     if (matches.length === 0 || uploading) return;
-    const id = window.requestAnimationFrame(() => {
-      resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    });
-    return () => window.cancelAnimationFrame(id);
-  }, [matches.length, uploading]);
+    const id = window.setTimeout(() => {
+      resultsRef.current?.scrollIntoView({
+        behavior: reduceMotion ? 'auto' : 'smooth',
+        block: 'nearest',
+      });
+    }, reducedAddMotion ? 360 : 440);
+    return () => window.clearTimeout(id);
+  }, [matches.length, uploading, reduceMotion, reducedAddMotion]);
 
   const chipClass = (active: boolean): string =>
     `inline-flex max-w-[11rem] items-center truncate rounded-full border px-3 py-1.5 scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 ${
@@ -1173,7 +1264,11 @@ export const FragranceCapture: React.FC<{
         {searchVeil}
       </AnimatePresence>
       <div
-        className={`scent-vault-panel-inner min-w-0 ${
+        // transition-opacity: the interior used to snap invisible/visible in a
+        // single frame when the embedded search veil took over — a hard cut
+        // right at the start of the open gesture. Fading it under the veil's
+        // own 0.32s fade turns the swap into one continuous cross-fade.
+        className={`scent-vault-panel-inner min-w-0 transition-opacity duration-300 ease-out ${
           embeddedInVaultPanel && loadingSurface === 'search' && uploading
             ? 'pointer-events-none opacity-0'
             : ''
@@ -1321,10 +1416,16 @@ export const FragranceCapture: React.FC<{
           {matches.length > 0 && (
             <m.div
               ref={resultsRef}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.34, ease: SCENT_EASE_OUT }}
+              // Calm devices (all iPhones — see useCalmMotion) get a pure
+              // cross-fade: the panel's height change is instantaneous there,
+              // so an extra y-translate on the content reads as two competing
+              // motions (the "jagged" open). Desktop keeps the gentle rise,
+              // retimed to the parent hero box's height tween (0.42s expo in
+              // App.tsx) so panel and content move as one gesture.
+              initial={reducedAddMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
+              animate={reducedAddMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+              exit={reducedAddMotion ? { opacity: 0 } : { opacity: 0, y: -8 }}
+              transition={{ duration: reducedAddMotion ? 0.34 : 0.42, ease: SCENT_EASE_OUT_EXPO }}
               className={`mx-auto mt-5 w-full scroll-mt-24 sm:mt-7 sm:pb-0 ${hasSelectedMatch ? 'pb-[7rem]' : 'pb-2'}`}
             >
               <div className="flex min-h-0 flex-col">
@@ -1339,32 +1440,24 @@ export const FragranceCapture: React.FC<{
                   // own max-height below.
                   style={{ minHeight: 0 }}
                 >
-                  {/* Results-nav header: count on the left, a refinement
-                      affordance on the right. Lives outside the
+                  {/* Results header: a single centered masthead line — count set
+                      into the card between symmetric gold hairlines (the
+                      .scent-vault-results-heading flourish). Lives outside the
                       scroll area below, so it stays put while the list scrolls.
-                      Dismissal is handled by Esc and the mobile action bar's
-                      "Back to search", so no redundant New-search/× buttons. */}
-                  <div className="mb-4 flex shrink-0 items-center justify-between gap-3 px-1">
-                    <p className="min-w-0 truncate whitespace-nowrap scent-type-label text-scent-accent">
-                      Search Results
-                      <span className="mx-1.5 text-scent-accent/60" aria-hidden>·</span>
-                      <span className="tabular-nums tracking-[0.12em] text-scent-accent">
-                        {filtersActive
-                          ? `${visibleMatches.length} of ${matches.length}`
-                          : matches.length}
+                      Dismissal is handled by Esc, and re-focusing the field is a
+                      tap on the input itself — no separate "Refine" affordance. */}
+                  <div className="mb-4 flex shrink-0 items-center justify-center px-1 sm:mb-5">
+                    <p className="scent-vault-results-heading min-w-0 max-w-full scent-type-label text-scent-accent">
+                      <span className="whitespace-nowrap">
+                        Search Results
+                        <span className="mx-1.5 text-scent-accent/60" aria-hidden>·</span>
+                        <span className="tabular-nums tracking-[0.12em]">
+                          {filtersActive
+                            ? `${visibleMatches.length} of ${matches.length}`
+                            : matches.length}
+                        </span>
                       </span>
                     </p>
-                    <div className="flex shrink-0 items-center gap-3">
-                      <button
-                        type="button"
-                        onClick={scrollToSearch}
-                        className="inline-flex min-h-[38px] shrink-0 items-center gap-1.5 rounded-full border border-white/30 px-3 py-1 scent-type-chip text-scent-text-muted transition-colors hover:border-scent-accent/45 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 sm:min-h-[44px] sm:px-3.5 sm:py-1.5"
-                      >
-                        <Search size={12} strokeWidth={2.2} aria-hidden className="sm:hidden" />
-                        <span className="hidden sm:inline">Refine search</span>
-                        <span className="sm:hidden">Refine</span>
-                      </button>
-                    </div>
                   </div>
 
                   {showFilterBar && (
@@ -1456,48 +1549,80 @@ export const FragranceCapture: React.FC<{
                                     : `Select ${match.name}`
                               }
                             >
-                              {/* Monogram disc — the row's visual anchor; left-aligned so
+                              {/* House-mark disc — the row's visual anchor; left-aligned so
                                   the eye lands on a consistent column instead of three
-                                  centered, ragged lines. Doubles as a ≥44px target. */}
-                              <span className="scent-vault-monogram flex h-11 w-11 shrink-0 items-center justify-center rounded-full font-serif text-[0.95rem] font-semibold leading-none sm:h-12 sm:w-12 sm:text-[1.05rem]">
-                                {matchMonogram(match)}
-                              </span>
-                              {/* Text column — single-line truncation keeps every row the
-                                  same height for a clean vertical rhythm. */}
+                                  centered, ragged lines. Shows the house's real mark when
+                                  resolvable, monogram otherwise. Doubles as a ≥44px target. */}
+                              <HouseMarkDisc house={firstString(match.brand, match.house)} monogram={matchMonogram(match)} />
+                              {/* Text column — name over a single inline credential line
+                                  (house · year · gender · sentiment), so secondary facts
+                                  read as one quiet strip instead of extra stacked rows.
+                                  Single-line truncation keeps every row the same height. */}
                               <span className="flex min-w-0 flex-1 flex-col">
-                                <span
-                                  className="truncate font-serif text-[1.05rem] italic leading-tight text-[#fff7ec] sm:text-[1.2rem]"
-                                  title={match.name}
-                                >
-                                  {match.name}
+                                <span className="flex min-w-0 items-center gap-1.5">
+                                  <span
+                                    className="min-w-0 truncate font-serif text-[1.05rem] italic leading-tight text-[#fff7ec] sm:text-[1.2rem]"
+                                    title={match.name}
+                                  >
+                                    {match.name}
+                                  </span>
+                                  {isVetted(match) && (
+                                    <span className="shrink-0" title="Community-vetted classic">
+                                      <Award size={13} strokeWidth={2.1} className="block text-scent-accent/85" aria-hidden />
+                                    </span>
+                                  )}
                                 </span>
-                                <span className="mt-1 flex items-center gap-2">
+                                <span className="mt-1 flex min-w-0 items-center">
                                   <span
                                     className="min-w-0 truncate font-sans text-[10px] font-bold uppercase tracking-[0.18em] text-[#f3dca6] sm:text-[11px] sm:tracking-[0.2em]"
                                     title={match.brand || 'House unavailable'}
                                   >
                                     {truncateMatchLine(match.brand || 'House unavailable', MATCH_LINE_MAX_CHARS)}
                                   </span>
-                                  {inVault && (
-                                    <span className="pointer-events-none inline-flex shrink-0 items-center gap-1 rounded-full border border-scent-accent/35 bg-scent-bg/70 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em] text-scent-accent sm:px-2 sm:text-[10px]">
+                                  {matchMetaItems(match).map((item) => (
+                                    <span
+                                      key={item.key}
+                                      className={`${item.hideOnMobile ? 'hidden sm:inline-flex' : 'inline-flex'} shrink-0 items-baseline`}
+                                    >
+                                      <span aria-hidden className="mx-1.5 text-scent-accent/50">·</span>
+                                      <span className="whitespace-nowrap font-sans text-[9px] font-semibold uppercase tracking-[0.14em] tabular-nums text-scent-text-muted sm:text-[10px]">
+                                        {item.shortLabel ? (
+                                          <>
+                                            <span className="sm:hidden">{item.shortLabel}</span>
+                                            <span className="hidden sm:inline">{item.label}</span>
+                                          </>
+                                        ) : (
+                                          item.label
+                                        )}
+                                      </span>
+                                    </span>
+                                  ))}
+                                </span>
+                              </span>
+                              {/* Status slot — pinned to the row end and vertically centered,
+                                  so ownership ("In vault") and selection (check) never crowd
+                                  the name/house column. Selection supersedes the pill: the
+                                  CTA already reads "View in vault" for owned rows. */}
+                              {(inVault || isSelected) && (
+                                <span className="ml-auto flex shrink-0 items-center self-center pl-1.5">
+                                  {inVault && !isSelected && (
+                                    <span className="pointer-events-none inline-flex shrink-0 items-center gap-1 rounded-full border border-scent-accent/35 bg-scent-bg/70 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em] text-scent-accent sm:px-2.5 sm:text-[10px]">
                                       <Check size={9} strokeWidth={3} aria-hidden />
                                       In vault
                                     </span>
                                   )}
+                                  {isSelected && (
+                                    <m.span
+                                      initial={reduceMotion ? false : { scale: 0.5, opacity: 0 }}
+                                      animate={{ scale: 1, opacity: 1 }}
+                                      transition={{ type: 'spring', stiffness: 520, damping: 24 }}
+                                      className="scent-vault-result-check pointer-events-none flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
+                                      aria-hidden
+                                    >
+                                      <Check size={16} strokeWidth={3} />
+                                    </m.span>
+                                  )}
                                 </span>
-                              </span>
-                              {/* Selected check — pinned to the row end (not the corner)
-                                  so it never overlaps the name or the thumb's tap zone. */}
-                              {isSelected && (
-                                <m.span
-                                  initial={reduceMotion ? false : { scale: 0.5, opacity: 0 }}
-                                  animate={{ scale: 1, opacity: 1 }}
-                                  transition={{ type: 'spring', stiffness: 520, damping: 24 }}
-                                  className="scent-vault-result-check pointer-events-none ml-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
-                                  aria-hidden
-                                >
-                                  <Check size={16} strokeWidth={3} />
-                                </m.span>
                               )}
                             </button>
                           );
@@ -1551,7 +1676,17 @@ export const FragranceCapture: React.FC<{
           <m.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            exit={reducedAddMotion ? { opacity: 0 } : { opacity: 0, height: 0 }}
+            // Calm devices can't animate the height release (layout tweens are
+            // the documented jank source there), but the old lingering opacity
+            // exit held this block's reserved height for ~320ms after results
+            // mounted and then dropped it in a second, separate snap. Releasing
+            // it instantly instead means the panel's height changes exactly
+            // once — in the same frame the results mount — under their fade.
+            exit={
+              reducedAddMotion
+                ? { opacity: 0, transition: { duration: 0.01 } }
+                : { opacity: 0, height: 0 }
+            }
             transition={{ duration: 0.32, ease: SCENT_EASE_OUT }}
             aria-hidden
             style={{ pointerEvents: 'none', minHeight: SEARCH_LOADER_MIN_H }}
@@ -1559,20 +1694,24 @@ export const FragranceCapture: React.FC<{
           >
             {!embeddedInVaultPanel ? (
               <div className="scent-vault-results-panel mx-auto w-full max-w-[50.5rem] px-4 py-7 sm:px-9 sm:py-9">
-                <div className="mb-4 flex items-center justify-between px-1">
-                  <span className="h-3.5 w-32 animate-pulse rounded-full bg-white/10" />
-                  <span className="h-7 w-7 animate-pulse rounded-full bg-white/5" />
+                {/* Mirrors the real results anatomy — centered masthead line,
+                    then disc-anchored rows — so the cross-fade into results
+                    swaps content in place instead of re-arranging the layout. */}
+                <div className="mb-4 flex items-center justify-center px-1">
+                  <span className="h-3.5 w-40 animate-pulse rounded-full bg-white/10" />
                 </div>
                 <div className="grid w-full grid-cols-1 gap-3">
                   {[0, 1, 2].map((i) => (
                     <div
                       key={i}
-                      className="scent-vault-result-card mx-auto w-full max-w-[39.75rem] min-h-[60px] animate-pulse px-3.5 py-2 sm:min-h-[70px] sm:px-4 sm:py-2.5"
+                      className="scent-vault-result-card mx-auto flex w-full max-w-[39.75rem] min-h-[64px] animate-pulse items-center gap-3 px-3 py-2.5 sm:min-h-[74px] sm:gap-4 sm:px-4 sm:py-3"
                       style={{ animationDelay: `${i * 120}ms` }}
                     >
-                      <span className="mx-auto mb-0.5 flex h-6 w-6 rounded-full bg-white/10 sm:mb-1 sm:h-7 sm:w-7" />
-                      <span className="mx-auto block h-4 w-44 max-w-[70%] rounded-full bg-white/10" />
-                      <span className="mx-auto mt-1 block h-2.5 w-28 max-w-[50%] rounded-full bg-white/5 sm:mt-1.5" />
+                      <span className="h-11 w-11 shrink-0 rounded-full bg-white/10 sm:h-12 sm:w-12" />
+                      <span className="flex min-w-0 flex-1 flex-col gap-1.5">
+                        <span className="block h-4 w-44 max-w-[70%] rounded-full bg-white/10" />
+                        <span className="block h-2.5 w-28 max-w-[50%] rounded-full bg-white/5" />
+                      </span>
                     </div>
                   ))}
                 </div>
