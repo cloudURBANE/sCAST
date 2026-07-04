@@ -276,7 +276,20 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
                       ) : (
                         <Plus size={15} strokeWidth={2} aria-hidden="true" />
                       )}
-                      <span className="truncate">{composerOpen ? 'Close' : 'Start a room'}</span>
+                      {/* Below 360px the flex-1 track can't fit "Start a room"
+                          beside the Search control and the ellipsis landed
+                          mid-word ("START A R…"); the short form reads clean
+                          on iPhone SE-class widths. */}
+                      <span className="truncate">
+                        {composerOpen ? (
+                          'Close'
+                        ) : (
+                          <>
+                            <span className="min-[360px]:hidden">New room</span>
+                            <span className="hidden min-[360px]:inline">Start a room</span>
+                          </>
+                        )}
+                      </span>
                     </button>
                     <button
                       type="button"
