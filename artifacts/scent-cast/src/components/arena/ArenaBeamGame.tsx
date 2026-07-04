@@ -9,16 +9,26 @@ import {
 } from "@/components/ui/dialog";
 import { BottleImage } from "@/components/BottleImage";
 import { BrandGoldLabel } from "@/components/BrandGoldLabel";
+import { useAuth } from "@/context/AuthContext";
 import type { ArenaBattleSide } from "@/components/arena/arenaBattleMapper";
 import {
   ARENA_BEAM_BOARD_SIZE,
   ARENA_BEAM_TARGET_SCORE,
+  beamPowerForScore,
+  beamTickMs,
+  cashOutBeamRun,
   createInitialBeamGameState,
   pointsEqual,
   stepBeamGame,
   turnBeamSnake,
   type BeamDirection,
 } from "@/components/arena/arenaBeamGameCore";
+import {
+  readBeamRunStats,
+  recordBeamPowerClaim,
+  recordBeamRunEnd,
+  type BeamRunStats,
+} from "@/components/arena/arenaBeamRunStore";
 
 const KEY_TO_DIRECTION: Record<string, BeamDirection | undefined> = {
   ArrowUp: "up",
@@ -34,6 +44,13 @@ const KEY_TO_DIRECTION: Record<string, BeamDirection | undefined> = {
   d: "right",
   D: "right",
 };
+
+const EMPTY_STATS: BeamRunStats = { bestScore: 0, totalRuns: 0, totalBeamPower: 0 };
+
+// Beam trail base tone (#b9912f) — head stays solid scent-accent, the body
+// fades from near-solid amber toward a deep dark tail against the board.
+const TRAIL_ALPHA_HEAD = 0.95;
+const TRAIL_ALPHA_TAIL = 0.35;
 
 function createRunId(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -76,32 +93,68 @@ export const ArenaBeamGame: React.FC<ArenaBeamGameProps> = ({
   onSignIn,
   signedIn,
 }) => {
+  const { authEmail, authUsername } = useAuth();
   const [game, setGame] = useState(createInitialBeamGameState);
   const [runId, setRunId] = useState(createRunId);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [stats, setStats] = useState<BeamRunStats>(EMPTY_STATS);
+  const [isNewBest, setIsNewBest] = useState(false);
+  const [cashedOut, setCashedOut] = useState(false);
+  const [reducedMotion, setReducedMotion] = useState(false);
   const rafRef = useRef<number | null>(null);
   const lastTickRef = useRef<number | null>(null);
   const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
+  const sparksEatenRef = useRef(0);
+  const runEndRecordedRef = useRef(false);
   const finePointer = useFinePointer(open);
 
-  const occupied = useMemo(() => new Set(game.snake.map((point) => `${point.x}:${point.y}`)), [game.snake]);
+  const userKey = signedIn && authEmail ? authEmail : "guest";
+
+  const playerName = useMemo(() => {
+    if (!signedIn) return null;
+    const fromUsername = authUsername?.trim().split(/\s+/)[0];
+    if (fromUsername) return fromUsername;
+    const localPart = authEmail?.split("@")[0]?.trim();
+    return localPart || null;
+  }, [signedIn, authUsername, authEmail]);
+
+  // Map "x:y" → segment index (0 = head) so the trail gradient can be
+  // computed per cell in a single pass.
+  const segmentByCell = useMemo(() => {
+    const map = new Map<string, number>();
+    game.snake.forEach((point, index) => {
+      const key = `${point.x}:${point.y}`;
+      if (!map.has(key)) map.set(key, index);
+    });
+    return map;
+  }, [game.snake]);
+
+  useEffect(() => {
+    sparksEatenRef.current = game.sparksEaten;
+  }, [game.sparksEaten]);
 
   useEffect(() => {
     if (!open) return;
     setGame(createInitialBeamGameState());
     setRunId(createRunId());
     setLocalError(null);
-  }, [open, side?.key]);
+    setIsNewBest(false);
+    setCashedOut(false);
+    runEndRecordedRef.current = false;
+    setStats(readBeamRunStats(userKey));
+    setReducedMotion(
+      typeof window !== "undefined" &&
+        !!window.matchMedia &&
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    );
+  }, [open, side?.key, userKey]);
 
   useEffect(() => {
     if (!open || game.status !== "playing") return;
-    const tickMs = typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches
-      ? 210
-      : 145;
 
     const loop = (time: number) => {
       if (lastTickRef.current === null) lastTickRef.current = time;
-      if (time - lastTickRef.current >= tickMs) {
+      if (time - lastTickRef.current >= beamTickMs(sparksEatenRef.current, reducedMotion)) {
         lastTickRef.current = time;
         setGame((current) => stepBeamGame(current));
       }
@@ -114,7 +167,18 @@ export const ArenaBeamGame: React.FC<ArenaBeamGameProps> = ({
       rafRef.current = null;
       lastTickRef.current = null;
     };
-  }, [open, game.status]);
+  }, [open, game.status, reducedMotion]);
+
+  // Record each run end exactly once (guarded by ref; reset on open/retry).
+  useEffect(() => {
+    if (!open) return;
+    if (game.status !== "won" && game.status !== "lost") return;
+    if (runEndRecordedRef.current) return;
+    runEndRecordedRef.current = true;
+    const result = recordBeamRunEnd(userKey, game.score);
+    setStats(result.stats);
+    setIsNewBest(result.isNewBest);
+  }, [open, game.status, game.score, userKey]);
 
   useEffect(() => {
     if (!open) return;
@@ -147,6 +211,16 @@ export const ArenaBeamGame: React.FC<ArenaBeamGameProps> = ({
     setGame(createInitialBeamGameState());
     setRunId(createRunId());
     setLocalError(null);
+    setIsNewBest(false);
+    setCashedOut(false);
+    runEndRecordedRef.current = false;
+  };
+
+  const bankRun = () => {
+    if (game.status === "playing" && game.score >= ARENA_BEAM_TARGET_SCORE) {
+      setCashedOut(true);
+    }
+    setGame((current) => cashOutBeamRun(current));
   };
 
   const claim = async () => {
@@ -157,6 +231,7 @@ export const ArenaBeamGame: React.FC<ArenaBeamGameProps> = ({
     try {
       setLocalError(null);
       await onClaim(game.score, runId);
+      recordBeamPowerClaim(userKey, beamPowerForScore(game.score));
       onOpenChange(false);
     } catch (err) {
       setLocalError(err instanceof Error ? err.message : "Beam Power could not be claimed.");
@@ -180,11 +255,32 @@ export const ArenaBeamGame: React.FC<ArenaBeamGameProps> = ({
 
   if (!side) return null;
 
+  const beamPower = beamPowerForScore(game.score);
+  const claimable = beamPower > 0;
+  const ended = game.status === "won" || game.status === "lost";
+  const crashed = game.status === "lost" || (game.status === "won" && !cashedOut);
+  const liveBest = Math.max(stats.bestScore, game.score);
+  const beatingBest = stats.bestScore > 0 && game.score > stats.bestScore;
+
   const message = (() => {
-    if (game.status === "won") return "Beam target reached. Claim the run for this contender.";
-    if (game.status === "lost") return "The beam broke. Run it back for a clean trail.";
-    if (game.status === "playing") return "Collect scent sparks without crossing the trail.";
-    return "Guide the beam to earn score-based Beam Power.";
+    if (game.status === "won") {
+      return cashedOut
+        ? `Run banked: +${beamPower} Beam Power at ${game.score} sparks.`
+        : `The beam broke at ${game.score} — your +${beamPower} Beam Power stays banked.`;
+    }
+    if (game.status === "lost") {
+      const shortfall = ARENA_BEAM_TARGET_SCORE - game.score;
+      return `The beam broke ${shortfall} spark${shortfall === 1 ? "" : "s"} short of claimable. Run it back.`;
+    }
+    if (game.status === "playing") {
+      return claimable
+        ? "Every 4 sparks banks another Beam Power — crash-safe."
+        : `Reach ${ARENA_BEAM_TARGET_SCORE} to make the run claimable.`;
+    }
+    const greeting = playerName ? `Ready to run the beam, ${playerName}?` : "Ready to run the beam?";
+    return stats.bestScore > 0
+      ? `${greeting} Beat ${stats.bestScore} to set a new personal best.`
+      : greeting;
   })();
 
   return (
@@ -196,7 +292,10 @@ export const ArenaBeamGame: React.FC<ArenaBeamGameProps> = ({
             <DialogTitle className="text-pretty text-balance text-xl font-bold leading-tight text-foreground sm:text-2xl">
               Add Beam Power
             </DialogTitle>
-            <DialogDescription className="mx-auto max-w-md text-xs font-medium leading-5 text-scent-text-muted sm:text-sm">
+            <DialogDescription
+              aria-live="polite"
+              className="mx-auto max-w-md text-xs font-medium leading-5 text-scent-text-muted sm:text-sm"
+            >
               {message}
             </DialogDescription>
           </DialogHeader>
@@ -227,13 +326,46 @@ export const ArenaBeamGame: React.FC<ArenaBeamGameProps> = ({
                   <strong className="text-sm text-foreground">{game.score}</strong>
                 </div>
                 <div className="rounded-md border border-white/8 bg-black/24 px-2 py-1.5">
-                  <span className="block text-[8px] uppercase tracking-[0.08em] text-scent-text-subtle">Target</span>
-                  <strong className="text-sm text-scent-accent">{ARENA_BEAM_TARGET_SCORE}</strong>
+                  <span
+                    className={`block text-[8px] uppercase tracking-[0.08em] transition-colors ${beatingBest ? "text-scent-accent/90" : "text-scent-text-subtle"}`}
+                  >
+                    {beatingBest ? "New best" : "Best"}
+                  </span>
+                  <strong className={`text-sm transition-colors ${beatingBest ? "text-scent-accent" : "text-foreground"}`}>
+                    {liveBest}
+                  </strong>
                 </div>
                 <div className="rounded-md border border-white/8 bg-black/24 px-2 py-1.5">
-                  <span className="block text-[8px] uppercase tracking-[0.08em] text-scent-text-subtle">Run</span>
-                  <strong className="text-sm capitalize text-foreground">{game.status}</strong>
+                  <span className="block text-[8px] uppercase tracking-[0.08em] text-scent-text-subtle">Beam Power</span>
+                  <strong className={`text-sm transition-colors ${beamPower > 0 ? "text-scent-accent" : "text-foreground"}`}>
+                    {beamPower}
+                  </strong>
                 </div>
+              </div>
+
+              <div className="mb-2 flex min-h-[18px] items-center justify-center">
+                {claimable ? (
+                  <p className="text-center text-[11px] font-semibold text-scent-accent/90">
+                    Claimable —{" "}
+                    <span
+                      key={beamPower}
+                      className={`inline-block ${reducedMotion ? "" : "animate-in zoom-in-75 fade-in duration-300"}`}
+                    >
+                      +{beamPower}
+                    </span>{" "}
+                    Beam Power banked
+                  </p>
+                ) : (
+                  <div
+                    aria-hidden="true"
+                    className="h-[3px] w-full overflow-hidden rounded-full bg-white/[0.07] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.03)]"
+                  >
+                    <div
+                      className="h-full rounded-full bg-scent-accent/80 transition-[width] duration-300"
+                      style={{ width: `${Math.min(100, (game.score / ARENA_BEAM_TARGET_SCORE) * 100)}%` }}
+                    />
+                  </div>
+                )}
               </div>
 
               <div
@@ -249,25 +381,57 @@ export const ArenaBeamGame: React.FC<ArenaBeamGameProps> = ({
               >
                 {Array.from({ length: ARENA_BEAM_BOARD_SIZE * ARENA_BEAM_BOARD_SIZE }).map((_, index) => {
                   const point = { x: index % ARENA_BEAM_BOARD_SIZE, y: Math.floor(index / ARENA_BEAM_BOARD_SIZE) };
-                  const isHead = pointsEqual(point, game.snake[0]);
-                  const isSnake = occupied.has(`${point.x}:${point.y}`);
-                  const isFood = pointsEqual(point, game.food);
+                  const cellKey = `${point.x}:${point.y}`;
+                  const segmentIndex = segmentByCell.get(cellKey);
+                  const isHead = segmentIndex === 0;
+                  const isBody = segmentIndex !== undefined && segmentIndex > 0;
+                  const isFood = segmentIndex === undefined && pointsEqual(point, game.food);
+                  const isRich = isFood && game.food.kind === "rich";
+
+                  let cellClass = "m-[1px] rounded-[2px] bg-white/[0.035]";
+                  let cellStyle: React.CSSProperties | undefined;
+                  if (isHead) {
+                    cellClass = crashed
+                      ? `m-[1px] rounded-[3px] bg-[#a3574c] ${reducedMotion ? "" : "animate-in fade-in duration-300"}`
+                      : "m-[1px] rounded-[3px] bg-scent-accent shadow-[inset_0_1px_0_rgba(255,247,219,0.6)]";
+                  } else if (isBody && segmentIndex !== undefined) {
+                    const t = segmentIndex / Math.max(game.snake.length - 1, 1);
+                    const alpha = TRAIL_ALPHA_HEAD - (TRAIL_ALPHA_HEAD - TRAIL_ALPHA_TAIL) * t;
+                    cellClass = "m-[1px] rounded-[2px]";
+                    cellStyle = { backgroundColor: `rgba(185, 145, 47, ${alpha.toFixed(3)})` };
+                  } else if (isRich) {
+                    cellClass = "m-0 rounded-[3px] bg-[#ffe9b3] ring-1 ring-scent-accent/80 shadow-[inset_0_0_6px_rgba(212,175,55,0.55)]";
+                  } else if (isFood) {
+                    cellClass = `m-[1px] rounded-full bg-white ${reducedMotion ? "" : "animate-pulse"}`;
+                  }
+
                   return (
-                    <span
-                      key={`${point.x}:${point.y}`}
-                      className={[
-                        "m-[1px] rounded-[2px] transition-colors",
-                        isHead ? "bg-scent-accent" : isSnake ? "bg-[#b9912f]" : isFood ? "bg-white" : "bg-white/[0.035]",
-                        isFood ? "shadow-[0_0_0_1px_rgba(212,175,55,0.65),inset_0_0_8px_rgba(212,175,55,0.5)]" : "",
-                      ].join(" ")}
-                    />
+                    <span key={cellKey} className={`transition-colors ${cellClass}`} style={cellStyle} />
                   );
                 })}
               </div>
 
-              {finePointer ? (
+              {game.status === "playing" && claimable ? (
+                <div className="mt-2 flex justify-center">
+                  <button
+                    type="button"
+                    onClick={bankRun}
+                    className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md border border-scent-accent/30 bg-scent-accent/[0.08] px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.1em] text-scent-accent transition-colors hover:bg-scent-accent/[0.14] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/60"
+                  >
+                    Bank +{beamPower}
+                  </button>
+                </div>
+              ) : finePointer && !claimable ? (
                 <p className="mt-2 text-center text-[11px] font-medium text-scent-text-subtle">
                   Use arrow keys or WASD
+                </p>
+              ) : null}
+
+              {ended && isNewBest ? (
+                <p
+                  className={`mt-2 text-center text-[11px] font-bold uppercase tracking-[0.1em] text-scent-accent ${reducedMotion ? "" : "animate-in zoom-in-95 fade-in duration-300"}`}
+                >
+                  New personal best!
                 </p>
               ) : null}
 
@@ -304,7 +468,7 @@ export const ArenaBeamGame: React.FC<ArenaBeamGameProps> = ({
                       className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-scent-accent px-3 py-2 text-xs font-bold uppercase tracking-[0.1em] text-black transition-colors hover:bg-[#f0cf70] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/70 disabled:pointer-events-none disabled:opacity-60"
                     >
                       {submitting ? <LoaderCircle size={14} className="animate-spin" aria-hidden="true" /> : <Sparkles size={14} aria-hidden="true" />}
-                      {signedIn ? "Claim Beam Power" : "Sign in"}
+                      {signedIn ? `Claim +${beamPower} Beam Power` : "Sign in"}
                     </button>
                   </>
                 ) : game.status === "lost" ? (
