@@ -137,6 +137,17 @@ router.get("/community/fragrances", async (req, res, next) => {
     const seenIdentity = new Set<string>();
     const fragrances = hydrated
       .filter((entry): entry is Record<string, any> => entry !== null)
+      // Never showcase fallback artwork on the community wall: keep only entries
+      // whose hydrated image is our own normalized square packshot (Orientation
+      // Engine geometry present — the same signal the SPA uses to render the
+      // uniform `data-normalized` frame). Entries that fell back to a raw
+      // row/catalog URL are hotlinked search results with arbitrary aspect
+      // ratios and backgrounds; they read as badly framed cards and usually
+      // mark a fragrance whose image pipeline never completed.
+      .filter((entry) => {
+        const props = entry.imageProperties as { orientationVersion?: string | null } | null | undefined;
+        return Boolean(props?.orientationVersion);
+      })
       .filter((entry) => {
         const identity = [entry.brand, entry.name]
           .map((value) => String(value).trim().toLowerCase().replace(/[^a-z0-9]+/g, ""))
