@@ -276,6 +276,27 @@ export function useCommunityPosts(filters: CommunityPostFilters, authToken: stri
   });
 }
 
+/**
+ * Seed the first feed page into the cache before <CommunityFeed> mounts. The
+ * community page defers the feed ~1.3s behind the body-wake gate; without this
+ * the posts request only leaves the browser AFTER that gate flips. Keyed and
+ * normalized identically to useCommunityPosts, so the hook mounts straight
+ * into fresh data (staleTime matches) instead of starting its fetch then.
+ */
+export function prefetchCommunityPosts(
+  queryClient: QueryClient,
+  filters: CommunityPostFilters,
+  authToken: string | null,
+): Promise<void> {
+  const normalizedFilters = normalizeFilters(filters);
+  return queryClient.prefetchInfiniteQuery({
+    queryKey: [...COMMUNITY_POSTS_ROOT_KEY, normalizedFilters, authToken ?? null],
+    queryFn: ({ pageParam }) => fetchCommunityPostsPage(normalizedFilters, pageParam as string | null, authToken),
+    initialPageParam: null as string | null,
+    staleTime: 30 * 1000,
+  });
+}
+
 export function useCommunityPostDetail(postId: string, enabled: boolean, authToken: string | null) {
   return useQuery({
     queryKey: [...COMMUNITY_POST_DETAIL_ROOT_KEY, postId, authToken ?? null],
@@ -600,9 +621,12 @@ export function useSubmitBeamPower(authToken: string | null) {
       const token = requireAuthToken(authToken);
       return submitBeamPower(input, token);
     },
-    onSuccess: async (result) => {
+    // Patch-in-place only, like the reaction/vote mutations above:
+    // applyBeamPowerToPost reconciles to the server's authoritative
+    // beamPower/supporters/totals, so a blanket feed invalidation here only
+    // refetched every cached page to repaint one card.
+    onSuccess: (result) => {
       patchPostEverywhere(queryClient, result.postId, (post) => applyBeamPowerToPost(post, result));
-      await queryClient.invalidateQueries({ queryKey: COMMUNITY_POSTS_ROOT_KEY });
     },
   });
 }

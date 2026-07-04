@@ -131,7 +131,21 @@ router.get("/community/fragrances", async (req, res, next) => {
     const hydrated = normalizedRows.map((row, i) =>
       toCommunityFragrance({ ...row, fragrance: hydratedFragrances[i]! }),
     );
-    const fragrances = hydrated.filter((entry): entry is Record<string, any> => entry !== null).slice(0, limit);
+    // De-dupe by fragrance identity: many users vault the same bottle, and the
+    // marquee otherwise repeats it back-to-back. FETCH_MULTIPLIER over-fetches
+    // precisely so the feed still fills `limit` after dropping duplicates.
+    const seenIdentity = new Set<string>();
+    const fragrances = hydrated
+      .filter((entry): entry is Record<string, any> => entry !== null)
+      .filter((entry) => {
+        const identity = [entry.brand, entry.name]
+          .map((value) => String(value).trim().toLowerCase().replace(/[^a-z0-9]+/g, ""))
+          .join(":");
+        if (seenIdentity.has(identity)) return false;
+        seenIdentity.add(identity);
+        return true;
+      })
+      .slice(0, limit);
 
     // Public, non-personalized data: let the CDN/edge serve it for a minute and
     // keep serving stale while it revalidates, so a Community tap on iPad does
