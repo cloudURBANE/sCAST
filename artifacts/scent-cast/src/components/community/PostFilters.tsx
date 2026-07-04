@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   BadgeDollarSign,
   ChevronDown,
@@ -15,6 +15,7 @@ import {
   sanitizeCommunityTag,
   usePopularCommunityTags,
 } from '@/components/community/communityPosts';
+import { useMarqueeSwipe } from '@/hooks/useMarqueeSwipe';
 
 interface RoomDefinition {
   type: CommunityPostType;
@@ -68,6 +69,102 @@ function tagButtonClass(active: boolean) {
       : 'border-scent-accent/16 bg-black/30 text-[#d9c099] hover:border-scent-accent/46 hover:bg-scent-accent/[0.065] hover:text-[#fff7ec]',
   ].join(' ');
 }
+
+// Cruise speed for the popular-tags lane. The old fixed 34s loop meant the
+// lane's speed depended on how many tags the tenant happened to have; a px/s
+// target keeps the read pace steady and gives useMarqueeSwipe the px
+// distance/duration pair it needs for direct manipulation.
+const TAG_MARQUEE_PIXELS_PER_SECOND = 24;
+const TAG_MARQUEE_MIN_SECONDS = 18;
+const TAG_MARQUEE_MAX_SECONDS = 64;
+const TAG_MARQUEE_REDUCED_MOTION_SECONDS = 90;
+
+interface TagFilterMarqueeProps {
+  tags: string[];
+  activeTag: string | null;
+  onTagChange: (tag: string | null) => void;
+}
+
+// Desktop/iPad popular-tags lane. Swipe/drag control mirrors the bottle
+// marquee: a committed horizontal drag scrubs the lane under the finger,
+// momentum hands back to the CSS cruise at the matching loop position, and the
+// click after a drag is suppressed — so a moving chip can be caught and tapped
+// instead of chased.
+const TagFilterMarquee: React.FC<TagFilterMarqueeProps> = ({ tags, activeTag, onTagChange }) => {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const groupRef = useRef<HTMLDivElement>(null);
+  const resetKey = tags.join('|');
+
+  useMarqueeSwipe(trackRef, {
+    distanceVar: '--tag-marquee-distance',
+    durationVar: '--tag-marquee-duration',
+    resetKey,
+  });
+
+  useLayoutEffect(() => {
+    const track = trackRef.current;
+    const group = groupRef.current;
+    if (!track || !group) return undefined;
+
+    const measure = () => {
+      const distance = group.getBoundingClientRect().width;
+      if (distance <= 0) return;
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const duration = prefersReducedMotion
+        ? TAG_MARQUEE_REDUCED_MOTION_SECONDS
+        : Math.min(
+            TAG_MARQUEE_MAX_SECONDS,
+            Math.max(TAG_MARQUEE_MIN_SECONDS, distance / TAG_MARQUEE_PIXELS_PER_SECOND),
+          );
+      track.style.setProperty('--tag-marquee-distance', `${distance}px`);
+      track.style.setProperty('--tag-marquee-duration', `${duration}s`);
+      track.dataset.marqueeReady = 'true';
+    };
+
+    measure();
+    // Chip widths settle when fonts load and change when popular tags refresh.
+    const resizeObserver = new ResizeObserver(measure);
+    resizeObserver.observe(group);
+    return () => resizeObserver.disconnect();
+  }, [resetKey]);
+
+  return (
+    <div className="scent-community-tag-marquee mt-3 w-full min-w-0 max-w-full" aria-label="Popular tag filters">
+      <div className="scent-community-tag-marquee-track" ref={trackRef}>
+        {[0, 1].map((copyIndex) => (
+          <div
+            className="scent-community-tag-marquee-group"
+            key={copyIndex}
+            ref={copyIndex === 0 ? groupRef : undefined}
+            aria-hidden={copyIndex > 0}
+          >
+            {tags.map((candidate) => {
+              const normalized = sanitizeCommunityTag(candidate);
+              const active = activeTag === normalized;
+              return (
+                <button
+                  key={`${copyIndex}:${candidate}`}
+                  type="button"
+                  tabIndex={copyIndex > 0 ? -1 : 0}
+                  onClick={() => onTagChange(active ? null : normalized)}
+                  aria-label={
+                    active
+                      ? `Clear #${candidate} tag filter`
+                      : `Filter by #${candidate}`
+                  }
+                  aria-pressed={active}
+                  className={tagButtonClass(active)}
+                >
+                  #{candidate}
+                </button>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
 
 interface PostFiltersProps {
   type: CommunityPostType | null;
@@ -229,35 +326,7 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
           </button>
 
           {tagMenuOpen && hasTags ? (
-            <div className="scent-community-tag-marquee mt-3 w-full min-w-0 max-w-full" aria-label="Popular tag filters">
-              <div className="scent-community-tag-marquee-track">
-                {[0, 1].map((copyIndex) => (
-                  <div className="scent-community-tag-marquee-group" key={copyIndex} aria-hidden={copyIndex > 0}>
-                    {tags.map((candidate) => {
-                      const normalized = sanitizeCommunityTag(candidate);
-                      const active = tag === normalized;
-                      return (
-                        <button
-                          key={`${copyIndex}:${candidate}`}
-                          type="button"
-                          tabIndex={copyIndex > 0 ? -1 : 0}
-                          onClick={() => onTagChange(active ? null : normalized)}
-                          aria-label={
-                            active
-                              ? `Clear #${candidate} tag filter`
-                              : `Filter by #${candidate}`
-                          }
-                          aria-pressed={active}
-                          className={tagButtonClass(active)}
-                        >
-                          #{candidate}
-                        </button>
-                      );
-                    })}
-                  </div>
-                ))}
-              </div>
-            </div>
+            <TagFilterMarquee tags={tags} activeTag={tag} onTagChange={onTagChange} />
           ) : null}
         </div>
 

@@ -49,8 +49,19 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
   const imageLayoutTransition = lowRenderBudget
     ? COMMUNITY_IMAGE_LAYOUT_TRANSITION_LOW_RENDER
     : COMMUNITY_IMAGE_LAYOUT_TRANSITION;
-  const cardHoverMotion = lowRenderBudget ? undefined : { y: -8, scale: 1.04 };
-  const cardTapMotion = lowRenderBudget ? undefined : { scale: 0.985 };
+  // Hover/tap card motion is a pointer affordance, not a touch one: framer's
+  // tap gesture arms on pointer-down, so on touch devices every page-scroll
+  // flick or marquee swipe that happened to land on a card made that single
+  // card shrink and spring back "by itself". `lowRenderBudget` already covers
+  // iPad Safari/PWA; the hover+fine-pointer gate also covers iPad Chrome-class
+  // shells and other touch browsers that fall outside the perf modes.
+  const finePointer = useRef(
+    typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(hover: hover) and (pointer: fine)').matches,
+  ).current;
+  const cardHoverMotion = lowRenderBudget || !finePointer ? undefined : { y: -8, scale: 1.04 };
+  const cardTapMotion = lowRenderBudget || !finePointer ? undefined : { scale: 0.985 };
   const trackKey = useMemo(
     () => visibleItems.map((item) => `${item.id}:${item.imageUrl}`).join('|'),
     [visibleItems],

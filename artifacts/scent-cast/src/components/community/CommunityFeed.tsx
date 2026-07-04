@@ -206,9 +206,9 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
               type="button"
               onClick={() => onStartRoom({ type: filters.type, tag: filters.tag })}
               aria-label={actionAriaLabel}
-              className="scent-primary-button inline-flex min-h-11 items-center justify-center gap-2 rounded-[var(--radius-scent)] px-6 py-3 text-sm font-bold uppercase tracking-[0.18em] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80"
+              className="scent-primary-button inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-6 text-[11px] font-bold uppercase tracking-[0.16em] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80"
             >
-              <Plus size={16} strokeWidth={1.8} aria-hidden="true" />
+              <Plus size={15} strokeWidth={1.8} aria-hidden="true" />
               <span>{actionLabel}</span>
             </button>
           )}
@@ -267,13 +267,18 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
                 ? `Keep #${filters.tag} moving. ${endCopy.body}`
                 : endCopy.body}
             </p>
+            {/* Same gold pill as the empty-state CTA and the legal/cookie primaries:
+                the community page's control language is the pill (toolbar chips,
+                Load more, filters), so the old square-radius slab with the larger
+                uppercase face read as a foreign element at the end of the feed on
+                iPad/iPhone. */}
             <button
               type="button"
               onClick={() => onStartRoom({ type: filters.type, tag: filters.tag })}
               aria-label={endCopy.ariaLabel}
-              className="scent-primary-button inline-flex min-h-11 items-center justify-center gap-2 rounded-[var(--radius-scent)] px-6 py-3 text-sm font-bold uppercase tracking-[0.18em] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80"
+              className="scent-primary-button inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-6 text-[11px] font-bold uppercase tracking-[0.16em] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80"
             >
-              <Plus size={16} strokeWidth={1.8} aria-hidden="true" />
+              <Plus size={15} strokeWidth={1.8} aria-hidden="true" />
               <span>{endCopy.label}</span>
             </button>
           </div>
