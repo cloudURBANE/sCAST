@@ -1518,6 +1518,12 @@ export const FragranceCapture: React.FC<{
                           const key = matchKey(match);
                           const isSelected = key === selectedId;
                           const inVault = matchInVault(match);
+                          // When the row-end status slot (pill/check) is present, a
+                          // 320px viewport can't fit disc + house + credentials +
+                          // slot: the shrink-0 credentials would squeeze the house
+                          // name to nothing. The credentials yield on phones there
+                          // (they return at sm:); the house name never does.
+                          const hasStatusSlot = inVault || isSelected;
                           return (
                             <button
                               key={key}
@@ -1572,7 +1578,7 @@ export const FragranceCapture: React.FC<{
                                     </span>
                                   )}
                                 </span>
-                                <span className="mt-1 flex min-w-0 items-center">
+                                <span className="mt-1 flex min-w-0 items-center overflow-hidden">
                                   <span
                                     className="min-w-0 truncate font-sans text-[10px] font-bold uppercase tracking-[0.18em] text-[#f3dca6] sm:text-[11px] sm:tracking-[0.2em]"
                                     title={match.brand || 'House unavailable'}
@@ -1582,7 +1588,7 @@ export const FragranceCapture: React.FC<{
                                   {matchMetaItems(match).map((item) => (
                                     <span
                                       key={item.key}
-                                      className={`${item.hideOnMobile ? 'hidden sm:inline-flex' : 'inline-flex'} shrink-0 items-baseline`}
+                                      className={`${item.hideOnMobile || hasStatusSlot ? 'hidden sm:inline-flex' : 'inline-flex'} shrink-0 items-baseline`}
                                     >
                                       <span aria-hidden className="mx-1.5 text-scent-accent/50">·</span>
                                       <span className="whitespace-nowrap font-sans text-[9px] font-semibold uppercase tracking-[0.14em] tabular-nums text-scent-text-muted sm:text-[10px]">
@@ -1603,7 +1609,7 @@ export const FragranceCapture: React.FC<{
                                   so ownership ("In vault") and selection (check) never crowd
                                   the name/house column. Selection supersedes the pill: the
                                   CTA already reads "View in vault" for owned rows. */}
-                              {(inVault || isSelected) && (
+                              {hasStatusSlot && (
                                 <span className="ml-auto flex shrink-0 items-center self-center pl-1.5">
                                   {inVault && !isSelected && (
                                     <span className="pointer-events-none inline-flex shrink-0 items-center gap-1 rounded-full border border-scent-accent/35 bg-scent-bg/70 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em] text-scent-accent sm:px-2.5 sm:text-[10px]">
