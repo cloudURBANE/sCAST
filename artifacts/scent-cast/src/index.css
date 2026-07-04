@@ -1897,6 +1897,7 @@ a {
 .scent-atmosphere-marquee-track[data-marquee-dragging="true"],
 .scent-weather-marquee-track[data-marquee-dragging="true"],
 .scent-community-marquee-track[data-marquee-dragging="true"],
+.scent-community-tag-marquee-track[data-marquee-dragging="true"],
 .scent-cue-marquee-track[data-marquee-dragging="true"] {
   cursor: grabbing;
   animation: none;
@@ -3527,10 +3528,12 @@ a {
   animation-play-state: paused;
 }
 
-.scent-community-marquee-track:active {
-  animation-play-state: paused;
-}
-
+/* Pause is a hover affordance only. The old `:active` pause also fired for
+   every touch that merely LANDED on the track — page-scroll flicks, taps — so
+   on iPad the row visibly froze and lurched back into motion on each touch
+   (the reported jitter). Touch control is direct manipulation instead: a
+   committed horizontal drag stops the keyframes via [data-marquee-dragging]
+   (useMarqueeSwipe) and hands back at the matching loop position. */
 @media (hover: hover) {
   .scent-community-marquee-track:hover {
     animation-play-state: paused;
@@ -3631,8 +3634,9 @@ a {
    title are rasterised once and then merely translated by the scrolling track.
    Without this the moving parent forces WebKit to re-rasterise the gold
    background-clip sheen and the title every frame, which reads as a flicker on
-   the names while the row scrolls. The cell count is small and capped, and iPad
-   perf mode pauses the marquee, so this does not inflate the layer budget. */
+   the names while the row scrolls. The cell count is small and capped (iPad
+   perf mode renders at most 8 items × 2 copies), so this stays inside the
+   compositor layer budget. */
 .scent-community-marquee-cell {
   transform: translateZ(0);
   backface-visibility: hidden;
@@ -3712,10 +3716,22 @@ a {
   display: flex;
   width: max-content;
   max-width: none;
-  animation: scent-community-tag-marquee-scroll 34s linear infinite;
+  --tag-marquee-duration: 34s;
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  animation: scent-community-tag-marquee-scroll var(--tag-marquee-duration) linear infinite;
   will-change: transform;
   transform: translateZ(0);
   backface-visibility: hidden;
+}
+
+/* No loop distance until PostFilters has measured one group — hold still so the
+   lane never animates against a 0px keyframe target. */
+.scent-community-tag-marquee-track:not([data-marquee-ready="true"]) {
+  animation: none;
+  transform: translate3d(0, 0, 0);
 }
 
 .scent-community-tag-marquee-group {
@@ -3731,9 +3747,12 @@ a {
   }
 }
 
+/* Pixel-based loop distance (one duplicated group), mirroring the bottle
+   marquee: useMarqueeSwipe needs a px distance/duration pair to scrub the lane
+   under the finger and hand back to the CSS cruise at the matching position. */
 @keyframes scent-community-tag-marquee-scroll {
   from { transform: translate3d(0, 0, 0); }
-  to { transform: translate3d(-50%, 0, 0); }
+  to { transform: translate3d(calc(var(--tag-marquee-distance, 0px) * -1), 0, 0); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -3741,8 +3760,10 @@ a {
     --community-marquee-duration: 640s;
   }
 
+  /* PostFilters also measures this per-track (inline var wins); this is the
+     pre-measure fallback so a reduced-motion user never sees the 34s cruise. */
   .scent-community-tag-marquee-track {
-    animation-duration: 90s;
+    --tag-marquee-duration: 90s;
   }
 }
 
