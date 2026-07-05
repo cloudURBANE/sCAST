@@ -1319,6 +1319,11 @@ function DashboardView() {
                       initial={reduceMotion ? false : { opacity: 0, y: -4 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -4 }}
+                      // Press feedback lives here, not in CSS :active — the
+                      // stylesheet cedes transform to framer-motion so the
+                      // enter/exit y-shift and the press scale can't clobber
+                      // each other's transform.
+                      whileTap={reduceMotion ? undefined : { scale: 0.98 }}
                       transition={vaultContentTransition}
                       className="scent-signature-cta group flex h-[46px] w-full max-w-[52rem] items-center justify-center rounded-full px-6 text-[11.5px] font-bold uppercase tracking-[0.11em] text-scent-accent focus-visible:outline-none sm:h-[60px] sm:text-[13px] sm:tracking-[0.14em]"
                       aria-label="Discover with Beam Agent"
