@@ -40,18 +40,33 @@ const BeamBlockView: React.FC<{ block: BeamBlock; index: number }> = ({ block, i
   }
 
   if (block.type === 'list') {
+    // Ordered lists keep their ranking: "1. / 2. / 3." picks read as a ranked
+    // shortlist, so the number renders as a quiet gold marker instead of being
+    // flattened into the same dot every unordered row gets. Semantic <ol>/<ul>
+    // so assistive tech announces the ordering too (custom markers, list-style
+    // suppressed by the preflight reset).
+    const ListTag = block.ordered ? 'ol' : 'ul';
     return (
-      <ul className={`flex flex-col gap-1.5 ${index === 0 ? '' : 'mt-2'}`}>
+      <ListTag className={`flex flex-col gap-1.5 ${index === 0 ? '' : 'mt-2'}`}>
         {block.items.map((item, i) => (
           <li key={i} className="flex items-start gap-2 leading-relaxed">
-            <span
-              aria-hidden
-              className="mt-[0.5em] h-1 w-1 shrink-0 rounded-full bg-scent-accent/60"
-            />
+            {block.ordered ? (
+              <span
+                aria-hidden
+                className="min-w-[1.1em] shrink-0 text-right font-serif text-[0.85em] italic leading-relaxed text-scent-accent/75"
+              >
+                {i + 1}.
+              </span>
+            ) : (
+              <span
+                aria-hidden
+                className="mt-[0.5em] h-1 w-1 shrink-0 rounded-full bg-scent-accent/60"
+              />
+            )}
             <span className="min-w-0">{renderSegments(item)}</span>
           </li>
         ))}
-      </ul>
+      </ListTag>
     );
   }
 
