@@ -289,6 +289,16 @@ test("add-ready tools fail closed when vault ownership cannot be loaded", async 
   );
 });
 
+test("beam_present_travel_kit deduplicates repeated owned picks", async () => {
+  const kit = toolMap(cardDeps()).get("beam_present_travel_kit")!;
+  const result = (await kit.handler(
+    { owned: [{ name: "Aventus", brand: "Creed" }, { name: "Aventus", brand: "Creed" }] },
+    CTX,
+  )) as { ownedCount: number; card: { ownedPicks: unknown[] } };
+  assert.equal(result.ownedCount, 1, "a repeated owned bottle must not render twice on the kit board");
+  assert.equal(result.card.ownedPicks.length, 1);
+});
+
 test("beam_present_travel_kit deduplicates repeated new picks", async () => {
   const kit = toolMap(cardDeps()).get("beam_present_travel_kit")!;
   const result = (await kit.handler(

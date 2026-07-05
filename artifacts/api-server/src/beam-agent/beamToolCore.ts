@@ -331,6 +331,33 @@ export function extractAgentCues(text: string): { text: string; cues: string[] }
 export function summarizeToolResult(name: string, result: unknown): string {
   if (result && typeof result === "object") {
     const record = result as Record<string, unknown>;
+    // UI-creation tools (cards + proposals) first, name-gated so the generic
+    // shape probes below can't shadow them. Crucially, a refused card
+    // (`resolved: false` — no catalog match / no chartable data) must NOT read
+    // as a generic "done": the trail row gets a check either way, so the copy
+    // is the only honest signal that nothing was actually shown.
+    if (
+      name === "beam_show_scent_profile" ||
+      name === "beam_compare_fragrances" ||
+      name === "beam_present_travel_kit"
+    ) {
+      if (record.resolved === false) return "no catalog match";
+      if (name === "beam_show_scent_profile") {
+        const shown = record.shown as { name?: unknown } | undefined;
+        return typeof shown?.name === "string" ? `charted ${shown.name}` : "profile charted";
+      }
+      if (name === "beam_compare_fragrances") {
+        return typeof record.overlapPercent === "number"
+          ? `${record.overlapPercent}% overlap`
+          : "compared";
+      }
+      const ownedCount = typeof record.ownedCount === "number" ? record.ownedCount : 0;
+      const newCount = typeof record.newCount === "number" ? record.newCount : 0;
+      return `${ownedCount} from your vault + ${newCount} new`;
+    }
+    if (name === "beam_propose_collection" && Array.isArray(record.items)) {
+      return record.items.length > 0 ? `lined up ${record.items.length}` : "nothing to line up";
+    }
     if (Array.isArray(record.sources)) {
       const n = record.sources.length;
       return record.synthesizedFact ? `researched (${n} source(s))` : "no live result";

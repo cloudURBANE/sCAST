@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { Check, Eye, Plus, Sparkles } from 'lucide-react';
+import { BottleImage } from '@/components/BottleImage';
 import type {
   BeamCard as BeamCardData,
   BeamCardFragrance,
@@ -112,13 +113,19 @@ function ScentRadar({ vector, size = 168 }: { vector: BeamScentVector; size?: nu
     const rings = [0.33, 0.66, 1].map((scale) =>
       AXES.map((_, i) => pointAt(i, r * scale).join(',')).join(' '),
     );
-    const valuePoints = AXES.map((axis, i) => pointAt(i, r * clamp01(vector[axis.key]))).map((p) => p.join(','));
+    const valueVertices = AXES.map((axis, i) => pointAt(i, r * clamp01(vector[axis.key])));
+    const valuePoints = valueVertices.map((p) => p.join(','));
     const labels = AXES.map((axis, i) => {
       const [lx, ly] = pointAt(i, r + 11);
       return { label: axis.label, x: lx, y: ly };
     });
-    return { rings, valuePoints: valuePoints.join(' '), labels, pointAt };
+    return { rings, valuePoints: valuePoints.join(' '), valueVertices, labels, pointAt };
   }, [cx, cy, r, vector]);
+
+  // Spell the six values out for assistive tech — the polygon alone is silent.
+  const radarDescription = AXES.map(
+    (axis) => `${axis.label} ${Math.round(clamp01(vector[axis.key]) * 100)}%`,
+  ).join(', ');
 
   return (
     // Cap the radar at its natural 168px but let it shrink with the card so it
@@ -128,7 +135,7 @@ function ScentRadar({ vector, size = 168 }: { vector: BeamScentVector; size?: nu
       viewBox={`0 0 ${size} ${size}`}
       className="mx-auto mt-3 block h-auto w-full max-w-[168px]"
       role="img"
-      aria-label="Scent profile radar across six axes"
+      aria-label={`Scent profile radar: ${radarDescription}`}
     >
       {geometry.rings.map((ring, i) => (
         <polygon
@@ -150,6 +157,11 @@ function ScentRadar({ vector, size = 168 }: { vector: BeamScentVector; size?: nu
         strokeWidth={1.5}
         strokeLinejoin="round"
       />
+      {/* Vertex markers anchor each axis reading so the shape is legible even
+          where the polygon hugs the center. Static dots — no motion cost. */}
+      {geometry.valueVertices.map(([vx, vy], i) => (
+        <circle key={AXES[i].key} cx={vx} cy={vy} r={2} fill="rgba(212,175,55,0.9)" />
+      ))}
       {geometry.labels.map((l) => (
         <text
           key={l.label}
@@ -174,19 +186,51 @@ function AxisBars({ vector }: { vector: BeamScentVector }): React.ReactElement {
     <ul className="mt-2 flex flex-col gap-1">
       {AXES.map((axis) => {
         const value = clamp01(vector[axis.key]);
+        const percent = Math.round(value * 100);
         return (
-          <li key={axis.key} className="flex items-center gap-1.5">
-            <span className="w-9 shrink-0 scent-type-label text-[9px] text-scent-text-subtle">{axis.label}</span>
-            <span className="relative h-1 flex-1 overflow-hidden rounded-full bg-white/[0.06]">
+          // The label + filled track only communicate visually; give assistive
+          // tech the reading directly and hide the decorative spans.
+          <li key={axis.key} className="flex items-center gap-1.5" aria-label={`${axis.label} ${percent}%`}>
+            <span aria-hidden className="w-9 shrink-0 scent-type-label text-[9px] text-scent-text-subtle">{axis.label}</span>
+            <span aria-hidden className="relative h-1 flex-1 overflow-hidden rounded-full bg-white/[0.06]">
               <span
                 className="absolute inset-y-0 left-0 rounded-full bg-scent-accent/70"
-                style={{ width: `${Math.round(value * 100)}%` }}
+                style={{ width: `${percent}%` }}
               />
             </span>
           </li>
         );
       })}
     </ul>
+  );
+}
+
+/**
+ * Server-resolved bottle packshot for a card. Every card payload already
+ * carries `imageUrl` (proxied, bg-removed, resized by the image pipeline) —
+ * rendering it is what makes these cards read as the product, not a text log.
+ * Renders nothing when the record has no image, so a chat card never shows the
+ * dashed "No image" placeholder `BottleImage` uses on vault tiles.
+ */
+function CardPackshot({
+  imageUrl,
+  name,
+  brand,
+  className,
+}: {
+  imageUrl?: string;
+  name: string;
+  brand: string;
+  className: string;
+}): React.ReactElement | null {
+  if (!imageUrl || !imageUrl.trim()) return null;
+  return (
+    <BottleImage
+      src={imageUrl}
+      alt={`${brand} ${name}`.trim()}
+      variant="thumb"
+      className={className}
+    />
   );
 }
 
@@ -231,6 +275,12 @@ function ScentProfileCard({ card }: { card: Extract<BeamCardData, { kind: 'scent
 
   return (
     <CardShell label="Scent profile" testId="beam-card-scent-profile" ariaLabel={`Scent profile for ${fragrance.name}`}>
+      <CardPackshot
+        imageUrl={fragrance.imageUrl}
+        name={fragrance.name}
+        brand={fragrance.brand}
+        className="mx-auto mt-3 h-24 w-24"
+      />
       <FragranceHeading fragrance={fragrance} />
       {hasVector ? <ScentRadar vector={fragrance.scentVector!} /> : null}
       {hasAccords ? <AccordChips accords={fragrance.accords} /> : null}
@@ -258,10 +308,29 @@ function ScentProfileCard({ card }: { card: Extract<BeamCardData, { kind: 'scent
   );
 }
 
-function CompareColumn({ fragrance }: { fragrance: BeamCardFragrance }): React.ReactElement {
+function CompareColumn({
+  fragrance,
+  imageSlot,
+}: {
+  fragrance: BeamCardFragrance;
+  /** Keep both columns vertically aligned when EITHER side has a packshot. */
+  imageSlot: boolean;
+}): React.ReactElement {
   return (
     <div className="min-w-0 flex-1 text-center">
-      <p className="truncate font-serif italic text-[13px] leading-tight text-[#fff7ec] sm:text-[15px]">{fragrance.name}</p>
+      {imageSlot ? (
+        <div className="mx-auto mb-1.5 h-16 w-16">
+          <CardPackshot
+            imageUrl={fragrance.imageUrl}
+            name={fragrance.name}
+            brand={fragrance.brand}
+            className="h-full w-full"
+          />
+        </div>
+      ) : null}
+      {/* Two-line clamp instead of a hard truncate: niche names ("Ombré Leather
+          Parfum") stay legible without letting one column stretch the row. */}
+      <p className="line-clamp-2 break-words font-serif italic text-[13px] leading-tight text-[#fff7ec] sm:text-[15px]">{fragrance.name}</p>
       <p className="truncate scent-type-label text-[9px] text-scent-text-subtle">{fragrance.brand}</p>
       {fragrance.owned ? (
         <p className="mt-1 scent-type-label text-[9px] text-scent-accent">In your vault</p>
@@ -275,13 +344,28 @@ function CompareColumn({ fragrance }: { fragrance: BeamCardFragrance }): React.R
   );
 }
 
+/** Case-insensitive dedupe preserving first casing — a term can arrive as both a shared note AND a shared accord. */
+function dedupeSharedTerms(terms: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const term of terms) {
+    const key = term.trim().toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(term.trim());
+  }
+  return out;
+}
+
 function CompareCard({ card }: { card: Extract<BeamCardData, { kind: 'compare' }> }): React.ReactElement {
+  const imageSlot = Boolean(card.a.imageUrl?.trim() || card.b.imageUrl?.trim());
+  const sharedTerms = dedupeSharedTerms([...card.sharedNotes, ...card.sharedAccords]).slice(0, 6);
   return (
     <CardShell label="Side by side" testId="beam-card-compare" ariaLabel={`Comparing ${card.a.name} and ${card.b.name}`}>
       <div className="mt-2 flex items-start gap-3">
-        <CompareColumn fragrance={card.a} />
+        <CompareColumn fragrance={card.a} imageSlot={imageSlot} />
         <div className="w-px self-stretch bg-gradient-to-b from-transparent via-scent-accent/20 to-transparent" aria-hidden />
-        <CompareColumn fragrance={card.b} />
+        <CompareColumn fragrance={card.b} imageSlot={imageSlot} />
       </div>
       <div className="mt-3 flex items-center justify-center gap-2 border-t border-scent-accent/12 pt-2.5">
         <span
@@ -291,10 +375,10 @@ function CompareCard({ card }: { card: Extract<BeamCardData, { kind: 'compare' }
           {card.overlapPercent}% · {BAND_COPY[card.band]}
         </span>
       </div>
-      {card.sharedNotes.length || card.sharedAccords.length ? (
+      {sharedTerms.length > 0 ? (
         <p className="mt-2 break-words text-center text-[11.5px] text-scent-text-muted">
           <span className="scent-type-label text-[9px] text-scent-text-subtle">Shared&nbsp;</span>
-          {[...card.sharedNotes, ...card.sharedAccords].slice(0, 6).join(', ')}
+          {sharedTerms.join(', ')}
         </p>
       ) : null}
       {card.verdict ? (
@@ -317,6 +401,11 @@ function TravelKitCard({
   onViewItem?: (item: BeamProposalItem) => void;
   added?: boolean;
 }): React.ReactElement {
+  // Per-lane image slots: rows only reserve the packshot column when at least
+  // one pick in that lane actually has artwork, so an art-less kit keeps the
+  // original tight text alignment.
+  const ownedLaneHasImages = card.ownedPicks.some((pick) => pick.imageUrl?.trim());
+  const newLaneHasImages = card.newPicks.some((pick) => pick.imageUrl?.trim());
   return (
     <CardShell
       label={card.title ? `${card.title} kit` : 'Your kit'}
@@ -328,7 +417,12 @@ function TravelKitCard({
           <p className="scent-type-label text-[9px] text-scent-text-subtle">From your vault</p>
           <ul className="mt-1.5 flex flex-col gap-1.5">
             {card.ownedPicks.map((pick, index) => (
-              <li key={`owned-${pick.brand}-${pick.name}-${index}`} className="flex min-w-0 items-baseline justify-between gap-3">
+              <li key={`owned-${pick.brand}-${pick.name}-${index}`} className="flex min-w-0 items-center justify-between gap-3">
+                {ownedLaneHasImages ? (
+                  <span className="h-9 w-8 shrink-0">
+                    <CardPackshot imageUrl={pick.imageUrl} name={pick.name} brand={pick.brand} className="h-full w-full" />
+                  </span>
+                ) : null}
                 <span className="min-w-0 flex-1 truncate font-serif italic text-[13px] text-[#fff7ec]">{pick.name}</span>
                 <span className="max-w-[45%] shrink-0 truncate scent-type-label text-[9px] text-scent-text-subtle">{pick.brand}</span>
               </li>
@@ -342,7 +436,12 @@ function TravelKitCard({
           <p className="scent-type-label text-[9px] text-scent-text-subtle">New to try</p>
           <ul className="mt-1.5 flex flex-col gap-1.5">
             {card.newPicks.map((pick, index) => (
-              <li key={`new-${pick.brand}-${pick.name}-${index}`} className="flex min-w-0 items-baseline justify-between gap-2 sm:gap-3">
+              <li key={`new-${pick.brand}-${pick.name}-${index}`} className="flex min-w-0 items-center justify-between gap-2 sm:gap-3">
+                {newLaneHasImages ? (
+                  <span className="h-9 w-8 shrink-0">
+                    <CardPackshot imageUrl={pick.imageUrl} name={pick.name} brand={pick.brand} className="h-full w-full" />
+                  </span>
+                ) : null}
                 <span className="min-w-0 flex-1 truncate font-serif italic text-[13px] text-[#fff7ec]">{pick.name}</span>
                 <span className="max-w-[35%] shrink-0 truncate scent-type-label text-[9px] text-scent-text-subtle">{pick.brand}</span>
                 {onViewItem ? (

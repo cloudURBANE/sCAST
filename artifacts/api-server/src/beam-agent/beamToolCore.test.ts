@@ -204,6 +204,28 @@ test("summarizeToolResult produces safe one-liners", () => {
   assert.equal(summarizeToolResult("x", "whatever"), "done");
 });
 
+test("summarizeToolResult narrates the UI-creation tools honestly", () => {
+  // A refused card must NOT read as a generic "done" — the trail row gets a
+  // check either way, so the copy is the only signal nothing was shown.
+  assert.equal(summarizeToolResult("beam_show_scent_profile", { resolved: false, note: "x" }), "no catalog match");
+  assert.equal(summarizeToolResult("beam_compare_fragrances", { resolved: false }), "no catalog match");
+  assert.equal(summarizeToolResult("beam_present_travel_kit", { resolved: false }), "no catalog match");
+  assert.equal(
+    summarizeToolResult("beam_show_scent_profile", { resolved: true, shown: { name: "Aventus" }, card: {} }),
+    "charted Aventus",
+  );
+  assert.equal(
+    summarizeToolResult("beam_compare_fragrances", { resolved: true, overlapPercent: 62, card: {} }),
+    "62% overlap",
+  );
+  assert.equal(
+    summarizeToolResult("beam_present_travel_kit", { resolved: true, ownedCount: 3, newCount: 2, card: {} }),
+    "3 from your vault + 2 new",
+  );
+  assert.equal(summarizeToolResult("beam_propose_collection", { proposalId: "p", items: [1, 2] }), "lined up 2");
+  assert.equal(summarizeToolResult("beam_propose_collection", { proposalId: "p", items: [] }), "nothing to line up");
+});
+
 test("extractAgentCues splits a trailing cues block from the answer", () => {
   const text =
     "Tell me the vibe and I'll line up your Tokyo picks.\n\n```cues\nTemple mornings\nShibuya nights\nBusiness meetings\n```";

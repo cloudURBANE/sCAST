@@ -966,19 +966,28 @@ export function createBeamTools(deps: BeamToolDeps): BeamToolDefinition[] {
         const ownedNames = buildOwnedFragranceIndex(vault);
 
         const ownedPicks: BeamCardFragrance[] = [];
+        // Dedupe the owned lane too (the new lane already has `seenNew`): a model
+        // that repeats a bottle must not render it twice on the kit board.
+        const seenOwned = new Set<string>();
+        const pushOwned = (card: BeamCardFragrance): void => {
+          const identity = fragranceIdentityKey(card.brand, card.name);
+          if (seenOwned.has(identity)) return;
+          seenOwned.add(identity);
+          ownedPicks.push(card);
+        };
         for (const entry of ownedReq.slice(0, BEAM_LIMITS.maxKitPicks)) {
           const e = (typeof entry === "object" && entry !== null ? entry : {}) as Record<string, unknown>;
           const name = asString(e.name);
           if (!name) continue;
           const resolved = await resolveCardEntry(name, asString(e.brand), ownedNames);
           if (resolved?.card.owned) {
-            ownedPicks.push(resolved.card);
+            pushOwned(resolved.card);
             continue;
           }
           // Catalog missed (or matched an unowned record) but the bottle is
           // genuinely in the vault → show it from the vault row (no vector).
           const match = findOwnedVaultItem(vault, asString(e.brand), name);
-          if (match) ownedPicks.push(cardFragranceFromVaultItem(match));
+          if (match) pushOwned(cardFragranceFromVaultItem(match));
         }
 
         const newPicks: BeamProposalItem[] = [];
