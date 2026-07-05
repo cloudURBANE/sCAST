@@ -255,10 +255,22 @@ function readyInputToReference(input: {
   };
 }
 
+// Trust ladder for lookup-key reads: generated > human-curated manual > serper
+// (the scored search winner, tier 0) > the engine-crawled Fragrantica og:image
+// fallback. "crawled" ranks BELOW serper by design — it is a convenience
+// fallback, never the optimal packshot. Legacy rows from the window where the
+// crawled leg was stamped "manual" are recognized by their Fragrantica source
+// URL and demoted the same way (a NULL source_url falls through to the plain
+// manual tier). Mirrors isCrawledImageProvenance in imageProvenanceCore.ts and
+// the batch-hydration ORDER BY in fragrancePayload.ts.
 function sourceProviderPrioritySql() {
   return sql<number>`case
     when ${imageCacheTable.sourceProvider} in ('openai', 'openai-reimagine', 'openai_reimagine')
       or ${imageCacheTable.sourceUrl} like 'openai-reimagine:%' then 2
+    when ${imageCacheTable.sourceProvider} = 'crawled'
+      or (${imageCacheTable.sourceProvider} = 'manual'
+        and (${imageCacheTable.sourceUrl} ilike '%fimgs.net%'
+          or ${imageCacheTable.sourceUrl} ilike '%fragrantica.%')) then -1
     when ${imageCacheTable.sourceProvider} = 'manual' then 1
     else 0
   end`;

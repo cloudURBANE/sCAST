@@ -123,6 +123,92 @@ test("chooseHydratedImageUrlWithMetadata treats processed manual paths as saved 
   );
 });
 
+// --- crawled Fragrantica fallback demotion ----------------------------------
+// The engine-crawled og:image ("crawled" provider; legacy copies stamped
+// "manual" with a Fragrantica source URL) is never authoritative: a saved
+// fallback upgrades to any non-crawled shared image, and a crawled cache row
+// can never replace a row's non-crawled image or ride the manual fast-path.
+
+test("chooseHydratedImageUrlWithMetadata upgrades a saved crawled fallback to the shared serper winner", () => {
+  assert.equal(
+    chooseHydratedImageUrlWithMetadata(
+      { imageUrl: "https://cdn.example.com/serper.webp", sourceProvider: "serper" },
+      { imageUrl: "https://cdn.example.com/fg-fallback.webp", sourceProvider: "crawled" },
+    ),
+    "https://cdn.example.com/serper.webp",
+  );
+});
+
+test("chooseHydratedImageUrlWithMetadata detects a crawled row image by its storage path", () => {
+  assert.equal(
+    chooseHydratedImageUrlWithMetadata(
+      { imageUrl: "https://cdn.example.com/serper.webp", sourceProvider: "serper" },
+      {
+        imageUrl: "https://storage.example.com/images/processed/crawled/dior-sauvage/abc-v5.webp",
+        storagePath: "images/processed/crawled/dior-sauvage/abc-v5.webp",
+      },
+    ),
+    "https://cdn.example.com/serper.webp",
+  );
+});
+
+test("chooseHydratedImageUrlWithMetadata never lets a legacy crawled cache row (manual + Fragrantica URL) override a row image or ride the manual fast-path", () => {
+  assert.equal(
+    chooseHydratedImageUrlWithMetadata(
+      {
+        imageUrl: "https://cdn.example.com/fg-fallback.webp",
+        sourceProvider: "manual",
+        sourceUrl: "https://fimgs.net/mdimg/perfume/375x500.31861.jpg",
+        storagePath: "images/processed/manual/dior-sauvage/abc-v5.webp",
+      },
+      { imageUrl: "https://cdn.example.com/serper.webp", sourceProvider: "serper" },
+    ),
+    "https://cdn.example.com/serper.webp",
+  );
+});
+
+test("chooseHydratedImageUrlWithMetadata keeps a genuinely manual shared image over a crawled row image", () => {
+  assert.equal(
+    chooseHydratedImageUrlWithMetadata(
+      {
+        imageUrl: "https://cdn.example.com/curated.webp",
+        sourceProvider: "manual",
+        sourceUrl: "admin-upload:user-1:abc",
+      },
+      { imageUrl: "https://cdn.example.com/fg-fallback.webp", sourceProvider: "crawled" },
+    ),
+    "https://cdn.example.com/curated.webp",
+  );
+});
+
+test("chooseHydratedImageUrlWithMetadata keeps the row image when both candidates are crawled", () => {
+  assert.equal(
+    chooseHydratedImageUrlWithMetadata(
+      {
+        imageUrl: "https://cdn.example.com/fg-shared.webp",
+        sourceProvider: "manual",
+        sourceUrl: "https://fimgs.net/mdimg/perfume/375x500.31861.jpg",
+      },
+      { imageUrl: "https://cdn.example.com/fg-row.webp", sourceProvider: "crawled" },
+    ),
+    "https://cdn.example.com/fg-row.webp",
+  );
+});
+
+test("chooseHydratedImageUrlWithMetadata keeps serper trust for a scored fimgs.net winner (serper is never demoted as crawled)", () => {
+  assert.equal(
+    chooseHydratedImageUrlWithMetadata(
+      {
+        imageUrl: "https://cdn.example.com/serper-fimgs.webp",
+        sourceProvider: "serper",
+        sourceUrl: "https://fimgs.net/himg/o.31861.jpg",
+      },
+      { imageUrl: "https://cdn.example.com/fg-fallback.webp", sourceProvider: "crawled" },
+    ),
+    "https://cdn.example.com/serper-fimgs.webp",
+  );
+});
+
 // Regression guard for the "no image after successful add" bug: the external
 // Python engine and some legacy/search payloads carry the bottle image as
 // snake_case `image_url` (or bare `image`), while every persistence/render path
