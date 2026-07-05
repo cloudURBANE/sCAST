@@ -341,7 +341,15 @@ export function summarizeToolResult(name: string, result: unknown): string {
       name === "beam_compare_fragrances" ||
       name === "beam_present_travel_kit"
     ) {
-      if (record.resolved === false) return "no catalog match";
+      // Refusals carry a `note` explaining WHY no card was shown. Only claim a
+      // catalog miss when that's what actually happened — a bottle can resolve
+      // fine and still have nothing to chart. Unknown reasons stay neutral.
+      if (record.resolved === false) {
+        const note = typeof record.note === "string" ? record.note : "";
+        if (note.includes("No catalog match")) return "no catalog match";
+        if (note.includes("no scent-profile data")) return "nothing to chart yet";
+        return "no card shown";
+      }
       if (name === "beam_show_scent_profile") {
         const shown = record.shown as { name?: unknown } | undefined;
         return typeof shown?.name === "string" ? `charted ${shown.name}` : "profile charted";

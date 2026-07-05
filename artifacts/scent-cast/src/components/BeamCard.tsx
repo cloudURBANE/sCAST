@@ -417,7 +417,12 @@ function TravelKitCard({
           <p className="scent-type-label text-[9px] text-scent-text-subtle">From your vault</p>
           <ul className="mt-1.5 flex flex-col gap-1.5">
             {card.ownedPicks.map((pick, index) => (
-              <li key={`owned-${pick.brand}-${pick.name}-${index}`} className="flex min-w-0 items-center justify-between gap-3">
+              <li
+                key={`owned-${pick.brand}-${pick.name}-${index}`}
+                // Center only when a packshot sits in the row; art-less lanes
+                // keep the original baseline alignment untouched.
+                className={`flex min-w-0 ${ownedLaneHasImages ? 'items-center' : 'items-baseline'} justify-between gap-3`}
+              >
                 {ownedLaneHasImages ? (
                   <span className="h-9 w-8 shrink-0">
                     <CardPackshot imageUrl={pick.imageUrl} name={pick.name} brand={pick.brand} className="h-full w-full" />
@@ -436,7 +441,10 @@ function TravelKitCard({
           <p className="scent-type-label text-[9px] text-scent-text-subtle">New to try</p>
           <ul className="mt-1.5 flex flex-col gap-1.5">
             {card.newPicks.map((pick, index) => (
-              <li key={`new-${pick.brand}-${pick.name}-${index}`} className="flex min-w-0 items-center justify-between gap-2 sm:gap-3">
+              <li
+                key={`new-${pick.brand}-${pick.name}-${index}`}
+                className={`flex min-w-0 ${newLaneHasImages ? 'items-center' : 'items-baseline'} justify-between gap-2 sm:gap-3`}
+              >
                 {newLaneHasImages ? (
                   <span className="h-9 w-8 shrink-0">
                     <CardPackshot imageUrl={pick.imageUrl} name={pick.name} brand={pick.brand} className="h-full w-full" />

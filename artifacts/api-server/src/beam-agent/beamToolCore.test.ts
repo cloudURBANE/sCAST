@@ -206,10 +206,25 @@ test("summarizeToolResult produces safe one-liners", () => {
 
 test("summarizeToolResult narrates the UI-creation tools honestly", () => {
   // A refused card must NOT read as a generic "done" — the trail row gets a
-  // check either way, so the copy is the only signal nothing was shown.
-  assert.equal(summarizeToolResult("beam_show_scent_profile", { resolved: false, note: "x" }), "no catalog match");
-  assert.equal(summarizeToolResult("beam_compare_fragrances", { resolved: false }), "no catalog match");
-  assert.equal(summarizeToolResult("beam_present_travel_kit", { resolved: false }), "no catalog match");
+  // check either way, so the copy is the only signal nothing was shown. The
+  // copy must also match the actual refusal reason: a resolvable bottle with
+  // no chartable data is NOT a catalog miss.
+  assert.equal(
+    summarizeToolResult("beam_show_scent_profile", { resolved: false, note: 'No catalog match for "X".' }),
+    "no catalog match",
+  );
+  assert.equal(
+    summarizeToolResult("beam_show_scent_profile", {
+      resolved: false,
+      note: '"X" has no scent-profile data to chart yet.',
+    }),
+    "nothing to chart yet",
+  );
+  assert.equal(
+    summarizeToolResult("beam_compare_fragrances", { resolved: false, note: "No catalog match for Y." }),
+    "no catalog match",
+  );
+  assert.equal(summarizeToolResult("beam_present_travel_kit", { resolved: false }), "no card shown");
   assert.equal(
     summarizeToolResult("beam_show_scent_profile", { resolved: true, shown: { name: "Aventus" }, card: {} }),
     "charted Aventus",
