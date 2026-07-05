@@ -28,7 +28,7 @@ export default function NotFound() {
         <div className="mt-10 flex w-full max-w-sm flex-col gap-3 sm:flex-row sm:justify-center">
           <Link to="/" className="scent-primary-button inline-flex min-h-12 items-center justify-center gap-2 rounded-[var(--radius-scent)] px-6">
             <Home size={16} aria-hidden="true" />
-            Home
+            <span>Home</span>
           </Link>
           <Link
             to="/community"

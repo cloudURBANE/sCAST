@@ -84,6 +84,23 @@
   opacity: 0.8;
 }
 
+/* ─── Light theme ──────────────────────────────────────────────────────────────
+ * The field's opaque near-black base and the black vignette washes are what hold
+ * the whole canvas dark; index.css flips the token layer (text becomes dark ink)
+ * under [data-theme="light"], so the base must yield to the light canvas or every
+ * thread-backed route renders dark ink on a dark field. Keep only a faint gold
+ * atmosphere: transparent base, no black vignette, and the whole field dimmed so
+ * the thread strands read as a subtle warm texture on the light canvas. The
+ * attribute selector outranks the mode/media re-declarations above and below. */
+[data-theme="light"] .scent-thread-field {
+  background: transparent;
+  opacity: 0.5;
+}
+
+[data-theme="light"] .scent-thread-field::after {
+  display: none;
+}
+
 .scent-thread-line {
   --thread-angle: 90deg;
   --thread-aura-inset: -5px -12px;

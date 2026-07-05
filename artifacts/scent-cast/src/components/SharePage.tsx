@@ -755,7 +755,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
               onClick={() => setRetryTrigger(t => t + 1)}
               className="scent-primary-button px-8 py-3 rounded-scent font-serif italic text-lg"
             >
-              Retry
+              <span>Retry</span>
             </button>
           </div>
         )}
@@ -765,7 +765,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
             <div className="text-center space-y-7 sm:space-y-8">
               <div className="space-y-3">
                 <p className="text-[10px] uppercase tracking-[0.6em] text-white/40 font-bold">Shared Vault</p>
-                <h2 className="font-serif italic text-[clamp(2.65rem,8vw,5.35rem)] text-[#fff7ec] tracking-normal leading-none">Vault of Aromas</h2>
+                <h2 className="font-serif italic text-[clamp(2.65rem,8vw,5.35rem)] text-foreground tracking-normal leading-none">Vault of Aromas</h2>
               </div>
               <VaultGridModeToggle
                 mode={gridMode}
