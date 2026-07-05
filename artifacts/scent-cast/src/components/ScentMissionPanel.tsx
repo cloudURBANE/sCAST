@@ -232,17 +232,23 @@ const BEAM_TYPING_BUBBLE_CLASS =
   'inline-flex max-w-[92%] items-center gap-1.5 self-start rounded-[calc(var(--radius-scent)-10px)] border border-scent-accent/18 bg-[linear-gradient(180deg,rgba(255,236,183,0.055),rgba(212,175,55,0.028)_42%,rgba(0,0,0,0.2))] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,236,183,0.055),0_10px_24px_rgba(0,0,0,0.22)]';
 
 // Three dots with an organic, staggered shimmer so the agent reads as genuinely
-// "thinking" rather than mechanically blinking.
-const BeamTypingDots: React.FC = () => (
+// "thinking" rather than mechanically blinking. `still` renders them static for
+// OS reduced-motion, so those users keep a visible busy indicator without the
+// pulse.
+const BeamTypingDots: React.FC<{ still?: boolean }> = ({ still }) => (
   <>
-    {[0, 1, 2].map((dot) => (
-      <m.span
-        key={dot}
-        className="h-1.5 w-1.5 rounded-full bg-scent-accent/70"
-        animate={{ opacity: [0.3, 1, 0.3], y: [0, -3, 0], scale: [1, 1.18, 1] }}
-        transition={{ duration: 1.2, repeat: Infinity, ease: 'easeInOut', delay: dot * 0.22 }}
-      />
-    ))}
+    {[0, 1, 2].map((dot) =>
+      still ? (
+        <span key={dot} className="h-1.5 w-1.5 rounded-full bg-scent-accent/70" />
+      ) : (
+        <m.span
+          key={dot}
+          className="h-1.5 w-1.5 rounded-full bg-scent-accent/70"
+          animate={{ opacity: [0.3, 1, 0.3], y: [0, -3, 0], scale: [1, 1.18, 1] }}
+          transition={{ duration: 1.2, repeat: Infinity, ease: 'easeInOut', delay: dot * 0.22 }}
+        />
+      ),
+    )}
   </>
 );
 
@@ -514,13 +520,19 @@ const BeamActivityTrail: React.FC<{
 
   const activeCount = steps.filter((s) => s.state === 'active').length;
   const currentStep = [...steps].reverse().find((s) => s.state === 'active') ?? steps[steps.length - 1];
-  const showSpinner = running && activeCount > 0;
+  // While the run is live the header must always read as in-progress. Between a
+  // tool completing and the next event — and during final answer synthesis,
+  // often the longest phase — every row is momentarily 'done'; gating the
+  // spinner on `activeCount > 0` flashed a check + "Answered" mid-run.
+  const showSpinner = running;
   const elapsedSeconds = elapsedMs != null ? Math.max(1, Math.round(elapsedMs / 1000)) : null;
   // A completed tool trail is not necessarily a completed recommendation. The
   // settled label is keyed off the turn's real outcome (answered vs pending vs
   // clarifying), never the bare fact that the run finished.
-  const summaryLabel = showSpinner
-    ? currentStep.label
+  const summaryLabel = running
+    ? activeCount > 0
+      ? currentStep.label
+      : 'Composing your reply…'
     : recapLabelForOutcome(outcome ?? 'answered', elapsedSeconds);
 
   const body = (
@@ -1021,7 +1033,6 @@ function MissionMessageRowComponent({
       >
         <BeamCard
           card={message.card}
-          calmMotion={calmMotion}
           onAddNewPicks={onAddKitPicks}
           onViewItem={onViewProposalItem}
           added={kitAdded}
@@ -1905,6 +1916,16 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                     : {}),
                 },
           );
+          return { handled: true };
+        }
+        // The user's Stop races the server's cooperative stop: if the stream's
+        // `failed { code: 'stopped' }` frame lands before the local abort
+        // settles, this branch would append a SECOND "Stopped there" line and
+        // flip the flow state to error ("Try again") after a deliberate stop.
+        // The stop handler already appended the calm confirmation — settle
+        // silently, exactly like the abort path below.
+        if (result.code === 'stopped' && stopIssuedRef.current) {
+          setAgentSuggestions([]);
           return { handled: true };
         }
         if (shouldUseScriptedFallbackForBeamFailure(result.code)) {
@@ -3078,19 +3099,23 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                 elapsedMs={null}
                 onToggleExpand={() => setActivityExpanded((v) => !v)}
               />
-            ) : busy && liveMotion ? (
+            ) : (
+              // Always show the typing bubble while a turn runs and no trail has
+              // started — including under OS reduced-motion, where the dots hold
+              // still but the busy state stays visible (previously nothing at
+              // all rendered in the transcript for those users).
               <m.div
                 key="agent-typing"
-                initial={{ opacity: 0, y: 8 }}
+                initial={calmMotion ? false : { opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -4 }}
+                exit={calmMotion ? { opacity: 0 } : { opacity: 0, y: -4 }}
                 transition={{ duration: 0.24, ease: SCENT_EASE }}
                 className={BEAM_TYPING_BUBBLE_CLASS}
                 aria-label="Beam Agent is typing"
               >
-                <BeamTypingDots />
+                <BeamTypingDots still={!liveMotion} />
               </m.div>
-            ) : null
+            )
           ) : null}
         </AnimatePresence>
 

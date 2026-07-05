@@ -19,8 +19,6 @@ import type {
 
 type BeamCardProps = {
   card: BeamCardData;
-  /** Reduced-motion / iPad performance mode: drop the entrance animation. */
-  calmMotion?: boolean;
   /** Add the travel-kit's new lane to the vault (host owns the wardrobe write). */
   onAddNewPicks?: (items: BeamProposalItem[], proposalId?: string) => void;
   /** Open one new pick in the wardrobe detail card (host-provided). */
