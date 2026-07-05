@@ -36,7 +36,11 @@ export const ArenaNextRail: React.FC<ArenaNextRailProps> = ({ battles, activeId,
       {/* Centered to sit on the same axis as the stage above — the whole arena
           page reads down one centered spine. */}
       <p className="mb-4 text-center scent-type-label text-scent-accent/80">Next in arena</p>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      {/* auto-fit tracks with a bounded max keep the cards centered on the
+          page spine at every count — a lone upcoming battle sits centered at a
+          deliberate width instead of shrinking into the left column of a
+          three-track grid. */}
+      <div className="grid gap-3 sm:justify-center sm:[grid-template-columns:repeat(auto-fit,minmax(17rem,23rem))]">
         {upcomingBattles.map(({ battle, index }) => {
           const leftVotes = Math.max(0, Number(battle.votes[battle.left.key]) || 0);
           const rightVotes = Math.max(0, Number(battle.votes[battle.right.key]) || 0);
