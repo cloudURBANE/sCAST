@@ -21,6 +21,7 @@ import type {
 import { deriveVectorConfidence } from "./scentVectorizer.ts";
 import type { FragranceData } from "./datasetLoader";
 import { resolvePyramidNotes } from "./fragranceNotes.ts";
+import { CRAWLED_SOURCE_PROVIDER, isCrawledImageProvenance } from "./imageProvenanceCore.ts";
 
 export interface ScentProfile {
   product: { name: string; brand: string; perfumer?: string };
@@ -61,6 +62,12 @@ export interface ProcessedImageRef {
   imageHash?: string | null;
   storageProvider?: string;
   sourceProvider?: string;
+  /**
+   * Original source URL of the processed bytes when the implementation knows it
+   * (image_cache reads do). Lets crawled-provenance detection recognize legacy
+   * rows where the engine-crawled Fragrantica image was stamped "manual".
+   */
+  sourceUrl?: string | null;
 }
 
 export interface ResolveImageOpts {
@@ -68,7 +75,7 @@ export interface ResolveImageOpts {
   name: string;
   searchQuery?: string;
   sourceUrl?: string;
-  sourceProvider?: "manual" | "serper";
+  sourceProvider?: "manual" | "serper" | "crawled";
   allowLookupCache?: boolean;
   removeBackground?: boolean;
 }
@@ -384,9 +391,12 @@ export async function buildProfileWithDeps(
     });
   };
 
-  // The engine's already-crawled/direct image URL — processing it costs NO paid
-  // Serper image search (the `sourceUrl` path skips Serper entirely). Tried
-  // before the Serper search below.
+  // The engine's already-crawled/direct image URL (the Fragrantica og:image).
+  // Free — the `sourceUrl` path skips Serper entirely — but typically a mid-res
+  // share image, so it is only the FALLBACK for when the scored Serper search
+  // yields nothing usable. Stamped "crawled" (never "manual") so cache priority
+  // and hydration rank it below a Serper winner instead of letting it
+  // masquerade as a human-curated image.
   const resolveImageFromCrawledUrl = async (): Promise<ProcessedImageRef | null> => {
     if (!effectiveFallback?.imageUrl) return null;
     const crawledUrl = effectiveFallback.imageUrl;
@@ -395,7 +405,7 @@ export async function buildProfileWithDeps(
         brand: profileBrand,
         name: profileName,
         sourceUrl: crawledUrl,
-        sourceProvider: "manual",
+        sourceProvider: CRAWLED_SOURCE_PROVIDER,
         allowLookupCache: false,
         removeBackground: true,
       })
@@ -403,7 +413,7 @@ export async function buildProfileWithDeps(
         deps.reportNonFatalError?.("scentEngine.imageResolution", err, {
           brand: profileBrand,
           name: profileName,
-          mode: "manual",
+          mode: "crawled",
           sourceUrl: crawledUrl,
         });
         return null;
@@ -426,19 +436,18 @@ export async function buildProfileWithDeps(
         return null;
       });
 
-  // Free crawled URL before the paid Serper search. When the engine already
-  // handed us a usable direct image URL we process that (no Serper call); only
-  // when it is absent or fails to resolve do we fall back to the Serper search,
-  // which itself still consults the lookup-key and search-query caches before
-  // spending a call — so that cache behavior is unchanged. (The deferred path
-  // already checks the cache up front via resolveCachedImage, so re-checking it
-  // here would be redundant.)
+  // Optimal image first: the Serper search runs the full candidate scorer +
+  // vision gate, so its winner is the best packshot obtainable. The engine's
+  // crawled Fragrantica og:image is only the safety net for when that search
+  // yields nothing usable — without it, an empty Serper result would leave the
+  // new add permanently imageless. This deliberately reverses the earlier
+  // free-crawled-first ordering, which made the mid-res Fragrantica fallback
+  // the default image on EVERY new save (owner-rejected). The Serper leg still
+  // consults the lookup-key and search-query caches before spending a call.
   const resolveImageNow = async (): Promise<ProcessedImageRef | null> => {
-    if (effectiveFallback?.imageUrl) {
-      const fromCrawl = await resolveImageFromCrawledUrl();
-      if (fromCrawl) return fromCrawl;
-    }
-    return resolveImageFromSerper();
+    const fromSerper = await resolveImageFromSerper();
+    if (fromSerper) return fromSerper;
+    return resolveImageFromCrawledUrl();
   };
 
   const processedImage =
@@ -580,22 +589,38 @@ export async function buildProfileWithDeps(
     });
   });
 
-  if (imageResolution === "deferred" && !processedImage) {
+  // A deferred save that landed the crawled Fragrantica fallback (or a cached/
+  // catalog copy of it, including legacy copies stamped "manual") is displayable
+  // but not final: kick the same background pass in Serper-only mode so the
+  // scored optimal image replaces the fallback in the catalog/cache, and
+  // hydration upgrades the tile on the next wardrobe read.
+  const deferredImageNeedsUpgrade =
+    imageResolution === "deferred" &&
+    processedImage != null &&
+    isCrawledImageProvenance(processedImage);
+
+  if (imageResolution === "deferred" && (!processedImage || deferredImageNeedsUpgrade)) {
     const retryDelays = deps.deferredImageRetryDelaysMs ?? [];
     const sleep =
       deps.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
-    // BE-3: the deferred save returned no image. Re-attempt in the background on
-    // a bounded backoff so a transient first-pass miss (Serper cold start, rate
-    // limit, image published moments later) can still recover. resolveImageNow
-    // re-queries Serper each time — there is no search-query negative cache to
-    // defeat it — and we stop on the first success. An empty retry schedule
-    // keeps the legacy single-attempt behavior.
+    // BE-3: the deferred save returned no image (or only the crawled fallback).
+    // Re-attempt in the background on a bounded backoff so a transient
+    // first-pass miss (Serper cold start, rate limit, image published moments
+    // later) can still recover. The resolver re-queries Serper each time —
+    // there is no search-query negative cache to defeat it — and we stop on
+    // the first success. An empty retry schedule keeps the legacy
+    // single-attempt behavior. In upgrade mode only the Serper leg runs: the
+    // crawled fallback is already in hand, so re-resolving it would just
+    // return the same image and end the loop early.
+    const attemptResolveImage = deferredImageNeedsUpgrade
+      ? resolveImageFromSerper
+      : resolveImageNow;
     void (async () => {
       const maxAttempts = retryDelays.length + 1;
       for (let attempt = 0; attempt < maxAttempts; attempt++) {
         if (attempt > 0) await sleep(retryDelays[attempt - 1]!);
         try {
-          const image = await resolveImageNow();
+          const image = await attemptResolveImage();
           if (!image?.imageUrl) continue;
           // WS-8: this background save can land seconds after the request-time
           // snapshot was built. Re-read the latest stored row and overlay only the

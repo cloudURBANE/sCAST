@@ -4,8 +4,10 @@
  * Lives separately from fragrancePayload.ts so the bare node:test runner
  * (--experimental-strip-types) can import these helpers without following the
  * extensionless-import chain in fragrancePayload.ts. Matches the *Core pattern
- * used by scentEngineCore.ts and imagePipelineCore.ts.
+ * used by scentEngineCore.ts and imagePipelineCore.ts. (Importing sibling pure
+ * cores with explicit .ts extensions is fine for the bare runner.)
  */
+import { isFragranticaImageUrl } from "./imageProvenanceCore.ts";
 
 /**
  * Bump when the persisted user_fragrances payload shape changes in a way that
@@ -102,6 +104,31 @@ function isManualImage(candidate: HydratedImageCandidate): boolean {
   );
 }
 
+/**
+ * The engine-crawled Fragrantica og:image fallback (see imageProvenanceCore).
+ * Post-fix candidates carry sourceProvider "crawled" / a storage path under
+ * images/processed/crawled/; legacy cache rows were stamped "manual" and are
+ * recognized by their Fragrantica source URL. A "serper" candidate is never
+ * crawled — the scorer may legitimately pick a fimgs.net candidate as the best
+ * available packshot, and that scored choice keeps serper trust.
+ */
+function isCrawledImage(candidate: HydratedImageCandidate): boolean {
+  const provider = normalizedSourceProvider(candidate.sourceProvider);
+  if (provider === "crawled") return true;
+  const text = candidateText(candidate);
+  if (
+    text.includes("/images/processed/crawled/") ||
+    text.includes("images/processed/crawled/")
+  ) {
+    return true;
+  }
+  if (provider === "serper") return false;
+  return (
+    isFragranticaImageUrl(nonEmptyString(candidate.sourceUrl) ?? undefined) &&
+    isManualImage(candidate)
+  );
+}
+
 function isManualOrGeneratedImage(candidate: HydratedImageCandidate): boolean {
   if (isManualImage(candidate) || isOpenAiReimaginedImage(candidate)) return true;
   const text = candidateText(candidate);
@@ -113,7 +140,9 @@ function isManualOrGeneratedImage(candidate: HydratedImageCandidate): boolean {
 
 /**
  * Row images are normally authoritative, but stale Serper/catalog row images
- * should not hide a newer generated/manual cache result for the same fragrance.
+ * should not hide a newer generated/manual cache result for the same fragrance —
+ * and the crawled Fragrantica fallback is never authoritative: a row that saved
+ * the fallback upgrades to a non-crawled shared image the moment one exists.
  */
 export function chooseHydratedImageUrlWithMetadata(
   shared: HydratedImageCandidate | null | undefined,
@@ -128,17 +157,30 @@ export function chooseHydratedImageUrlWithMetadata(
   const currentCand = { ...(current ?? {}), imageUrl: currentImageUrl };
   const sharedCand = { ...(shared ?? {}), imageUrl: sharedImageUrl };
 
-  const currentIsManual = isManualImage(currentCand);
-  const sharedIsManual = isManualImage(sharedCand);
+  // Legacy crawled copies were stamped "manual"; strip that mislabel before the
+  // manual (human-curated) preference so the Fragrantica fallback can never
+  // ride the curated fast-path.
+  const currentIsCrawled = isCrawledImage(currentCand);
+  const sharedIsCrawled = isCrawledImage(sharedCand);
+  const currentIsManual = isManualImage(currentCand) && !currentIsCrawled;
+  const sharedIsManual = isManualImage(sharedCand) && !sharedIsCrawled;
 
   if (sharedIsManual && !currentIsManual) return sharedImageUrl;
   if (currentIsManual && !sharedIsManual) return currentImageUrl;
 
-  if (isManualOrGeneratedImage(currentCand)) {
+  // Crawled demotion: a saved crawled fallback yields to any non-crawled shared
+  // image (the deferred Serper upgrade lands in the cache first), and a row's
+  // non-crawled image survives a crawled cache row.
+  if (currentIsCrawled && !sharedIsCrawled) return sharedImageUrl;
+  if (sharedIsCrawled && !currentIsCrawled) return currentImageUrl;
+
+  // The mislabel strip applies here too: a legacy crawled copy stamped "manual"
+  // must not win the generated/manual preference either.
+  if (isManualOrGeneratedImage(currentCand) && !currentIsCrawled) {
     return currentImageUrl;
   }
 
-  if (isManualOrGeneratedImage(sharedCand)) {
+  if (isManualOrGeneratedImage(sharedCand) && !sharedIsCrawled) {
     return sharedImageUrl;
   }
 

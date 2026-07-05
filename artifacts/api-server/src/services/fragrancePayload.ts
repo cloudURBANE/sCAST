@@ -282,7 +282,15 @@ export async function batchHydrateImageUrls(
           ),
         )
         .orderBy(
+          // Same trust ladder as imageCacheService.sourceProviderPrioritySql:
+          // the engine-crawled Fragrantica fallback ("crawled", plus legacy
+          // copies stamped "manual" but pointing at a Fragrantica URL) ranks
+          // below the scored serper winner, never above it.
           desc(sql<number>`case
+            when ${imageCacheTable.sourceProvider} = 'crawled'
+              or (${imageCacheTable.sourceProvider} = 'manual'
+                and (${imageCacheTable.sourceUrl} ilike '%fimgs.net%'
+                  or ${imageCacheTable.sourceUrl} ilike '%fragrantica.%')) then -1
             when ${imageCacheTable.sourceProvider} = 'manual' then 3
             when ${imageCacheTable.sourceProvider} in ('openai', 'openai-reimagine', 'openai_reimagine')
               or ${imageCacheTable.sourceUrl} like 'openai-reimagine:%' then 2

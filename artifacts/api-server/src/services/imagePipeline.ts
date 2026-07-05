@@ -81,7 +81,12 @@ const EARLY_ACCEPT_MIN_IDENTITY_COVERAGE = 0.8;
 // it never abandons an in-progress candidate or a result already in hand (image L2).
 const CANDIDATE_LOOP_BUDGET_MS = 45_000;
 
-type ImageSourceProvider = "serper" | "manual";
+// "crawled" = the engine-harvested Fragrantica og:image passthrough (see
+// imageProvenanceCore.ts). It follows the same single-sourceUrl processing path
+// as "manual" (vision gate active, unscoped byte dedup) but keeps its own
+// provider so cache priority and hydration never treat it as human-curated —
+// its storage path lands under images/processed/crawled/ via imageIdentity.
+type ImageSourceProvider = "serper" | "manual" | "crawled";
 
 type PipelineSource = {
   sourceUrlForProcessing: string;
