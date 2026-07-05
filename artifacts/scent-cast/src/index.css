@@ -319,8 +319,29 @@ a {
   transition:
     border-color var(--scent-transition-base) var(--scent-ease-out),
     box-shadow var(--scent-transition-base) var(--scent-ease-out),
-    background var(--scent-transition-base) var(--scent-ease-out),
     color var(--scent-transition-base) var(--scent-ease-out);
+}
+
+/* Hover/press gold wash on its own layer. Gradient background-images are not
+   interpolable, so transitioning `background` on the button itself snapped
+   between states; fading this overlay's opacity gives the eased brightening
+   the transition always intended, and stays compositor-only. */
+.scent-signature-cta::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(135% 165% at 50% -12%, rgb(var(--scent-accent-rgb) / 0.12), transparent 62%),
+    linear-gradient(180deg, rgba(255, 236, 183, 0.07), transparent 78%);
+  opacity: 0;
+  transition: opacity var(--scent-transition-base) var(--scent-ease-out);
+}
+
+.scent-signature-cta:hover::before,
+.scent-signature-cta:focus-visible::before {
+  opacity: 1;
 }
 
 /* One-shot gold light sweep that plays each time the CTA mounts (i.e. when the
@@ -361,9 +382,6 @@ a {
 .scent-signature-cta:hover {
   border-color: rgb(var(--scent-accent-rgb) / 0.6);
   color: #fff7ec;
-  background:
-    radial-gradient(135% 165% at 50% -12%, rgb(var(--scent-accent-rgb) / 0.24), transparent 62%),
-    linear-gradient(180deg, rgba(255, 236, 183, 0.14), rgba(0, 0, 0, 0.58) 78%);
   box-shadow:
     inset 0 1px 0 rgba(255, 236, 183, 0.22),
     inset 0 0 30px rgb(var(--scent-accent-rgb) / 0.08),
