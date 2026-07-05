@@ -204,6 +204,43 @@ test("summarizeToolResult produces safe one-liners", () => {
   assert.equal(summarizeToolResult("x", "whatever"), "done");
 });
 
+test("summarizeToolResult narrates the UI-creation tools honestly", () => {
+  // A refused card must NOT read as a generic "done" — the trail row gets a
+  // check either way, so the copy is the only signal nothing was shown. The
+  // copy must also match the actual refusal reason: a resolvable bottle with
+  // no chartable data is NOT a catalog miss.
+  assert.equal(
+    summarizeToolResult("beam_show_scent_profile", { resolved: false, note: 'No catalog match for "X".' }),
+    "no catalog match",
+  );
+  assert.equal(
+    summarizeToolResult("beam_show_scent_profile", {
+      resolved: false,
+      note: '"X" has no scent-profile data to chart yet.',
+    }),
+    "nothing to chart yet",
+  );
+  assert.equal(
+    summarizeToolResult("beam_compare_fragrances", { resolved: false, note: "No catalog match for Y." }),
+    "no catalog match",
+  );
+  assert.equal(summarizeToolResult("beam_present_travel_kit", { resolved: false }), "no card shown");
+  assert.equal(
+    summarizeToolResult("beam_show_scent_profile", { resolved: true, shown: { name: "Aventus" }, card: {} }),
+    "charted Aventus",
+  );
+  assert.equal(
+    summarizeToolResult("beam_compare_fragrances", { resolved: true, overlapPercent: 62, card: {} }),
+    "62% overlap",
+  );
+  assert.equal(
+    summarizeToolResult("beam_present_travel_kit", { resolved: true, ownedCount: 3, newCount: 2, card: {} }),
+    "3 from your vault + 2 new",
+  );
+  assert.equal(summarizeToolResult("beam_propose_collection", { proposalId: "p", items: [1, 2] }), "lined up 2");
+  assert.equal(summarizeToolResult("beam_propose_collection", { proposalId: "p", items: [] }), "nothing to line up");
+});
+
 test("extractAgentCues splits a trailing cues block from the answer", () => {
   const text =
     "Tell me the vibe and I'll line up your Tokyo picks.\n\n```cues\nTemple mornings\nShibuya nights\nBusiness meetings\n```";

@@ -67,6 +67,7 @@ import {
 } from '@/lib/beamAnswerContract';
 import { BeamMessage } from '@/components/BeamMessage';
 import { BeamCard } from '@/components/BeamCard';
+import { BottleImage } from '@/components/BottleImage';
 import type { Fragrance } from '@/components/Wardrobe';
 import type { WeatherData } from '@/context/WeatherContext';
 import type { CurateCollectionResult } from '@/lib/collectionCuration';
@@ -3013,6 +3014,20 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
               <m.p variants={revealItem} className="scent-type-label text-scent-accent/90">
                 Your match
               </m.p>
+              {/* Hero packshot: the proposal item already carries the pipeline-
+                  processed image, so the match reads as a bottle — not a caption.
+                  Skipped entirely when the catalog record has no artwork (no
+                  dashed placeholder in the conversation). */}
+              {proposalReveal.fragrance.imageUrl?.trim() ? (
+                <m.div variants={revealItem} className="mx-auto mt-2 h-28 w-28">
+                  <BottleImage
+                    src={proposalReveal.fragrance.imageUrl}
+                    alt={`${proposalReveal.fragrance.brand ?? ''} ${proposalReveal.fragrance.name}`.trim()}
+                    variant="thumb"
+                    className="h-full w-full"
+                  />
+                </m.div>
+              ) : null}
               {proposalReveal.fragrance.brand ? (
                 <m.p variants={revealItem} className="mt-2 font-serif text-xs uppercase tracking-[0.2em] text-scent-text-muted">
                   {proposalReveal.fragrance.brand}
