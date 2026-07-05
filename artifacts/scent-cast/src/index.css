@@ -257,10 +257,11 @@ a {
 .scent-vault-panel {
   position: relative;
   /* Hairline resolves through the accent token (see :root) so the green
-     re-theme re-tints it with the rest of the UI; alpha is nudged up a touch
-     to keep the same perceived weight the old warmer literal had. The vault
-     family below follows the same rule. */
-  border: 1px solid rgb(var(--scent-accent-rgb) / 0.75);
+     re-theme re-tints it with the rest of the UI. The vault family below
+     follows the same rule. Alpha sits deliberately BELOW the search input's
+     border: the card is a passive container, so its frame recedes and lets
+     the input (the primary action) carry the strong gold. */
+  border: 1px solid rgb(var(--scent-accent-rgb) / 0.45);
   border-radius: calc(var(--radius-scent) + 12px);
   padding: clamp(1.85rem, 4vw, 3rem) clamp(1rem, 5vw, 5.25rem) clamp(1.25rem, 3vw, 1.85rem);
   background:
@@ -306,13 +307,16 @@ a {
 .scent-signature-cta {
   position: relative;
   overflow: hidden;
-  border: 1px solid rgb(var(--scent-accent-rgb) / 0.34);
+  /* Deliberately one step QUIETER than the search input above it: search is
+     the primary top action, the agent is the premium secondary. Softer
+     border, thinner gold wash, calmer inset sheen. */
+  border: 1px solid rgb(var(--scent-accent-rgb) / 0.24);
   background:
-    radial-gradient(135% 165% at 50% -12%, rgb(var(--scent-accent-rgb) / 0.15), transparent 60%),
-    linear-gradient(180deg, rgba(255, 236, 183, 0.08), rgba(0, 0, 0, 0.64) 78%);
+    radial-gradient(135% 165% at 50% -12%, rgb(var(--scent-accent-rgb) / 0.09), transparent 60%),
+    linear-gradient(180deg, rgba(255, 236, 183, 0.05), rgba(0, 0, 0, 0.64) 78%);
   box-shadow:
-    inset 0 1px 0 rgba(255, 236, 183, 0.14),
-    inset 0 0 26px rgb(var(--scent-accent-rgb) / 0.045),
+    inset 0 1px 0 rgba(255, 236, 183, 0.1),
+    inset 0 0 26px rgb(var(--scent-accent-rgb) / 0.028),
     0 18px 48px rgba(0, 0, 0, 0.58);
   -webkit-backdrop-filter: blur(14px) saturate(135%);
   backdrop-filter: blur(14px) saturate(135%);
@@ -333,8 +337,8 @@ a {
   z-index: 0;
   pointer-events: none;
   background:
-    radial-gradient(135% 165% at 50% -12%, rgb(var(--scent-accent-rgb) / 0.12), transparent 62%),
-    linear-gradient(180deg, rgba(255, 236, 183, 0.07), transparent 78%);
+    radial-gradient(135% 165% at 50% -12%, rgb(var(--scent-accent-rgb) / 0.09), transparent 62%),
+    linear-gradient(180deg, rgba(255, 236, 183, 0.05), transparent 78%);
   opacity: 0;
   transition: opacity var(--scent-transition-base) var(--scent-ease-out);
 }
@@ -358,9 +362,9 @@ a {
   background: linear-gradient(
     105deg,
     transparent 32%,
-    rgba(255, 247, 201, 0.14) 46%,
-    rgba(255, 247, 201, 0.34) 50%,
-    rgba(255, 247, 201, 0.14) 54%,
+    rgba(255, 247, 201, 0.09) 46%,
+    rgba(255, 247, 201, 0.22) 50%,
+    rgba(255, 247, 201, 0.09) 54%,
     transparent 68%
   );
   transform: translateX(-130%);
@@ -380,13 +384,13 @@ a {
 }
 
 .scent-signature-cta:hover {
-  border-color: rgb(var(--scent-accent-rgb) / 0.6);
+  border-color: rgb(var(--scent-accent-rgb) / 0.48);
   color: #fff7ec;
   box-shadow:
-    inset 0 1px 0 rgba(255, 236, 183, 0.22),
-    inset 0 0 30px rgb(var(--scent-accent-rgb) / 0.08),
+    inset 0 1px 0 rgba(255, 236, 183, 0.16),
+    inset 0 0 30px rgb(var(--scent-accent-rgb) / 0.055),
     0 22px 56px rgba(0, 0, 0, 0.6),
-    0 0 0 1px rgb(var(--scent-accent-rgb) / 0.14);
+    0 0 0 1px rgb(var(--scent-accent-rgb) / 0.1);
 }
 
 /* Press: settle the glass a touch. Shadow-only so framer-motion keeps sole
@@ -439,7 +443,7 @@ a {
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
   background:
-    radial-gradient(135% 165% at 50% -12%, rgb(var(--scent-accent-rgb) / 0.12), transparent 60%),
+    radial-gradient(135% 165% at 50% -12%, rgb(var(--scent-accent-rgb) / 0.08), transparent 60%),
     linear-gradient(180deg, rgba(26, 20, 10, 0.94), rgba(0, 0, 0, 0.94));
 }
 
@@ -472,10 +476,11 @@ a {
   }
 
   .scent-vault-panel {
-    /* Mobile: a quieter gold hairline (was 0.75 alpha — too dominant against the
-       compact card) and tighter vertical padding so the search module supports
-       the forecast hero below instead of competing with it. */
-    border-color: rgb(var(--scent-accent-rgb) / 0.48);
+    /* Mobile: an even quieter gold hairline (passive container — the input
+       inside carries the strong gold) and tighter vertical padding so the
+       search module supports the forecast hero below instead of competing
+       with it. */
+    border-color: rgb(var(--scent-accent-rgb) / 0.32);
     border-radius: calc(var(--radius-scent) + 4px);
     padding: 0.95rem 0.75rem 0.7rem;
   }
@@ -690,9 +695,11 @@ a {
  * glyphs. Hover warms the ring one step, exactly like an inactive day tile.
  */
 .forecast-chevron {
-  border: 1px solid rgb(var(--scent-accent-rgb) / 0.14);
+  /* Discoverable, not competing: the faintest ring on the page — two fewer
+     "gold circles" fighting the hero. Hover still warms it a step. */
+  border: 1px solid rgb(var(--scent-accent-rgb) / 0.1);
   background: linear-gradient(180deg, rgba(10, 9, 7, 0.55), rgba(0, 0, 0, 0.7));
-  box-shadow: inset 0 1px 0 rgba(255, 232, 168, 0.05);
+  box-shadow: inset 0 1px 0 rgba(255, 232, 168, 0.04);
   transition:
     border-color var(--scent-transition-base) var(--scent-ease-out),
     color var(--scent-transition-base) var(--scent-ease-out),
@@ -701,7 +708,7 @@ a {
 
 @media (hover: hover) and (pointer: fine) {
   .forecast-chevron:hover {
-    border-color: rgb(var(--scent-accent-rgb) / 0.34);
+    border-color: rgb(var(--scent-accent-rgb) / 0.28);
   }
 }
 
@@ -748,17 +755,19 @@ a {
 }
 
 .forecast-day-tile.is-active {
-  border-color: rgb(var(--scent-accent-rgb) / 0.55);
+  /* Clearly selected, but one register QUIETER than the bottom nav's filled
+     gold pill — the calendar is supportive chrome, not a primary control. */
+  border-color: rgb(var(--scent-accent-rgb) / 0.44);
   background:
-    radial-gradient(82% 52% at 50% 0%, rgba(255, 237, 190, 0.05), transparent 72%),
+    radial-gradient(82% 52% at 50% 0%, rgba(255, 237, 190, 0.035), transparent 72%),
     linear-gradient(180deg, rgba(14, 12, 8, 0.98), #000 100%);
   box-shadow:
-    inset 0 1px 0 rgba(255, 245, 212, 0.1),
+    inset 0 1px 0 rgba(255, 245, 212, 0.08),
     0 1px 2px rgba(0, 0, 0, 0.7);
 }
 
 .forecast-day-tile.is-active::before {
-  border-color: rgba(255, 222, 149, 0.24);
+  border-color: rgba(255, 222, 149, 0.17);
 }
 
 .forecast-day-tile:active {
@@ -969,10 +978,13 @@ a {
   background:
     radial-gradient(130% 160% at 50% 0%, rgba(255, 255, 255, 0.014), transparent 44%),
     rgba(0, 0, 0, 0.92);
-  border-color: rgb(var(--scent-accent-rgb) / 0.75);
+  /* One clean hairline — still the strongest gold in the search block (the
+     primary action outranks its passive card frame), but no longer fighting
+     the old equally-bright outer card border. */
+  border-color: rgb(var(--scent-accent-rgb) / 0.62);
   box-shadow:
-    inset 0 1px 0 rgba(255, 236, 183, 0.08),
-    inset 0 0 28px rgb(var(--scent-accent-rgb) / 0.018),
+    inset 0 1px 0 rgba(255, 236, 183, 0.07),
+    inset 0 0 28px rgb(var(--scent-accent-rgb) / 0.014),
     0 14px 30px -22px rgba(0, 0, 0, 0.94);
 }
 

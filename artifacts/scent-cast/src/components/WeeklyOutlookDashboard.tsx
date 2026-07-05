@@ -74,6 +74,18 @@ function dayLabel(iso: string): string {
   return forecastDate(iso)?.toLocaleDateString(undefined, { weekday: 'short' }) ?? '—';
 }
 
+/** True when the forecast day is today's local calendar date. */
+function isTodayForecastDay(iso: string): boolean {
+  const date = forecastDate(iso);
+  if (!date) return false;
+  const now = new Date();
+  return (
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate()
+  );
+}
+
 function dayNumber(iso: string): string {
   return forecastDate(iso)?.toLocaleDateString(undefined, { day: 'numeric' }) ?? '—';
 }
@@ -234,15 +246,40 @@ const MOOD_SEASONS: Record<string, string[]> = {
   hot: ['summer'],
 };
 
-/** Title-cased season the bottle is voted for that also fits today, or null. */
-function matchedSeasonLabel(item: Fragrance, mood: string | null): string | null {
+/**
+ * Calendar season for a forecast date (northern-hemisphere month mapping — the
+ * WeatherData surface carries no latitude, so months are the best signal we
+ * have; the mood cross-check below keeps southern-hemisphere claims from
+ * slipping through, because an out-of-season month and its real temperature
+ * never agree on the same season).
+ */
+function calendarSeason(iso: string): string | null {
+  const month = forecastDate(iso)?.getMonth();
+  if (typeof month !== 'number') return null;
+  if (month === 11 || month <= 1) return 'winter';
+  if (month <= 4) return 'spring';
+  if (month <= 7) return 'summer';
+  return 'fall';
+}
+
+/**
+ * Title-cased season the bottle is voted for that fits today, or null.
+ * A season is only ever claimed when THREE things agree: the community voted
+ * the bottle for it, the day's temperature mood flatters it, AND it is the
+ * actual calendar season of the selected date. Previously the calendar was
+ * ignored, so a mild 68° July day happily rendered "ideal for Spring" —
+ * technically mood-matched, instantly trust-breaking on screen.
+ */
+function matchedSeasonLabel(item: Fragrance, mood: string | null, dateIso: string): string | null {
   if (!mood) return null;
+  const actual = calendarSeason(dateIso);
+  if (!actual) return null;
+  const matchesActual = (season: string) =>
+    season.includes(actual) || (actual === 'fall' && season.includes('autumn'));
   const targets = MOOD_SEASONS[mood] ?? [];
-  const voted = pickSeasons(item);
-  const hit = voted.find((season) => targets.some((target) => season.includes(target)));
-  if (!hit) return null;
-  const canonical = hit.includes('autumn') ? 'fall' : hit;
-  return canonical.charAt(0).toUpperCase() + canonical.slice(1);
+  if (!targets.some(matchesActual)) return null;
+  if (!pickSeasons(item).some(matchesActual)) return null;
+  return actual.charAt(0).toUpperCase() + actual.slice(1);
 }
 
 /** 0–100 crowd-consensus score the community gives the bottle, or null. */
@@ -267,7 +304,7 @@ function describeForecastPick(day: WeatherForecastDay, pick: WeatherOutlookPick)
   const character = pickCharacter(pick.item);
   const mood = temperatureMood(day);
 
-  const season = matchedSeasonLabel(pick.item, mood);
+  const season = matchedSeasonLabel(pick.item, mood, day.date);
   if (season) {
     return `Picked for ${weekday}: a ${character} scent your community rates ideal for ${season}.`;
   }
@@ -353,7 +390,7 @@ function ForecastHero({
               type="button"
               onClick={onSelect ? () => onSelect(fragrance) : undefined}
               disabled={!onSelect}
-              className="group forecast-hero-bottle relative h-full w-[52%] max-w-[13.5rem] shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:cursor-default sm:w-[50%] sm:max-w-[15rem] md:max-w-[16.5rem]"
+              className="group forecast-hero-bottle relative h-full w-[54%] max-w-[14rem] shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:cursor-default sm:w-[52%] sm:max-w-[15.5rem] md:max-w-[17rem]"
               aria-label={onSelect ? `Open ${pick.name} by ${pick.brand}` : `${pick.name} by ${pick.brand}`}
             >
               <BottleImage
@@ -374,7 +411,7 @@ function ForecastHero({
                 name like "Silver Mountain Water" breaks after "Mountain", while a
                 tighter name like "Green Irish Tweed" stays balanced on one line.
                 NON-INTERACTIVE by design: the name is not a tap target (see above). */}
-            <div className="flex min-w-0 w-[48%] max-w-[12.5rem] flex-col items-center justify-center self-center text-center sm:w-[50%] sm:max-w-[14rem] md:max-w-[20rem]">
+            <div className="flex min-w-0 w-[46%] max-w-[12.5rem] flex-col items-center justify-center self-center text-center sm:w-[48%] sm:max-w-[14rem] md:max-w-[20rem]">
               <p className="scent-type-label text-[10px] tracking-[0.3em] text-scent-accent/80 [text-indent:0.3em] sm:text-[12px] md:text-[13px]">
                 {pick.brand}
               </p>
@@ -387,7 +424,7 @@ function ForecastHero({
                 // 360px instead of line-clamp cutting the joined string mid-way
                 // and stranding a "Bergamot ·…" dangling-separator ellipsis on
                 // SE-class screens. Wider viewports see the identical joined line.
-                <p className="mt-1.5 line-clamp-2 font-serif text-[clamp(0.8rem,3vw,1.05rem)] italic leading-snug text-scent-accent/85 sm:mt-2 md:mt-2.5 md:text-[clamp(1rem,1.7vw,1.2rem)]">
+                <p className="mt-1.5 line-clamp-2 font-serif text-[clamp(0.8rem,3vw,1.05rem)] italic leading-snug text-scent-accent/95 sm:mt-2 md:mt-2.5 md:text-[clamp(1rem,1.7vw,1.2rem)]">
                   {notes.map((note, index) => (
                     <span key={note} className={index >= 2 ? 'hidden min-[360px]:inline' : undefined}>
                       {index > 0 ? ' · ' : ''}
@@ -566,13 +603,19 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
             <div className="mt-[var(--fc-hero-pill)] flex justify-center">
               {/* .forecast-meta-pill carries the shared near-black + gold-hairline
                   material; the glyph takes the accent tint (like an active tile's
-                  glyph) so the pill's one pictorial element ties it to the rail. */}
-              <div className="forecast-meta-pill inline-flex items-center gap-2 px-3.5 py-1.5 text-scent-text-muted md:gap-2.5 md:px-5 md:py-2">
+                  glyph) so the pill's one pictorial element ties it to the rail.
+                  The leading accent day token ("TODAY" / "SUN") pins the pill to
+                  the SELECTED forecast day, so its weather can never read as
+                  contradicting the current-conditions marquee up top. */}
+              <div className="forecast-meta-pill inline-flex items-center gap-2 px-3.5 py-1.5 text-scent-text-secondary md:gap-2.5 md:px-5 md:py-2">
                 <span className="flex items-center text-scent-accent/75" aria-hidden>
                   <WeatherGlyph day={activePlan.day} size={14} />
                 </span>
                 <span className="text-[11px] font-medium uppercase tracking-[0.14em] sm:text-[12px] md:text-[13px]">
-                  {activeMeta.join(' · ')}
+                  <span className="text-scent-accent/85">
+                    {isTodayForecastDay(activePlan.day.date) ? 'Today' : dayLabel(activePlan.day.date)}
+                  </span>
+                  {` · ${activeMeta.join(' · ')}`}
                 </span>
               </div>
             </div>
@@ -584,7 +627,7 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
               lines so it stays optically centered and always fits the forecast
               column without ever crowding the day rail below. */}
           {activeReason ? (
-            <p className="mx-auto mt-[var(--fc-hero-pill)] max-w-[28rem] px-4 text-center font-serif text-[clamp(0.84rem,3.2vw,1rem)] italic leading-snug text-balance line-clamp-2 text-scent-text-muted md:max-w-[32rem] md:text-[clamp(0.96rem,1.55vw,1.12rem)]">
+            <p className="mx-auto mt-[var(--fc-hero-pill)] max-w-[28rem] px-4 text-center font-serif text-[clamp(0.84rem,3.2vw,1rem)] italic leading-snug text-balance line-clamp-2 text-scent-text-secondary md:max-w-[32rem] md:text-[clamp(0.96rem,1.55vw,1.12rem)]">
               {activeReason}
             </p>
           ) : null}
@@ -643,9 +686,9 @@ function ForecastChevron({ direction, onClick }: { direction: 'prev' | 'next'; o
       type="button"
       onClick={onClick}
       aria-label={direction === 'prev' ? 'Previous day' : 'Next day'}
-      className="forecast-chevron flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-scent-accent/80 hover:text-scent-gold-200 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55 md:h-14 md:w-14"
+      className="forecast-chevron flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-scent-accent/60 hover:text-scent-gold-200 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55 md:h-[3.25rem] md:w-[3.25rem]"
     >
-      <Icon size={24} strokeWidth={1.5} aria-hidden className="md:h-7 md:w-7" />
+      <Icon size={22} strokeWidth={1.5} aria-hidden className="md:h-[26px] md:w-[26px]" />
     </button>
   );
 }
