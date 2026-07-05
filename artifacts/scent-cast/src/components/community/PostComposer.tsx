@@ -377,11 +377,18 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
   // composer and the search panel mutually exclusive.
   const onOpenChangeRef = useRef(onOpenChange);
   onOpenChangeRef.current = onOpenChange;
+  // Mirror of composerOpen for the notify-on-change check. The parent must be
+  // notified from the event handler itself — NOT from inside the state
+  // updater, which React runs while rendering this component; calling the
+  // page's setState there trips "Cannot update a component while rendering a
+  // different component" and can drop the page-side update.
+  const composerOpenValueRef = useRef(false);
   const setComposerOpen = useCallback((next: boolean) => {
-    setComposerOpenState((current) => {
-      if (current !== next) onOpenChangeRef.current?.(next);
-      return next;
-    });
+    if (composerOpenValueRef.current !== next) {
+      composerOpenValueRef.current = next;
+      onOpenChangeRef.current?.(next);
+    }
+    setComposerOpenState(next);
   }, []);
   const [postType, setPostType] = useState<CommunityPostType>('question');
   const [title, setTitle] = useState('');
@@ -862,7 +869,14 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
         className="w-full overflow-hidden border-b border-scent-accent/14 p-3 sm:p-6"
         style={{ scrollMarginTop: 'calc(var(--topbar-h) + 1rem)' }}
       >
-        <p className="mx-auto max-w-2xl rounded-[14px] border border-scent-accent/12 bg-black/58 px-4 py-3 text-center text-sm text-scent-text-muted sm:text-base">
+        {/* Same tone + live-region semantics as the in-form status line, so the
+            post-submit confirmation keeps its success styling and gets announced
+            after the form collapses. */}
+        <p
+          role="status"
+          aria-live="polite"
+          className={`mx-auto max-w-2xl rounded-[14px] border px-4 py-3 text-center text-sm sm:text-base ${STATUS_TONE_CLASSES[statusTone]}`}
+        >
           {statusMessage}
         </p>
       </section>

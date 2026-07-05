@@ -39,9 +39,13 @@ const TAGS = [
   'fresh',
 ];
 
+// No `w-full`: in the lg+ grid the buttons stretch to their tracks anyway,
+// while in the sm..lg wrapping row they must size to their labels — a forced
+// full width is what made "ALL ROOMS"/"PRICE CHECKS" overflow their pills on
+// iPad-portrait-class viewports.
 function roomButtonClass(active: boolean, extra = '') {
   return [
-    'group flex min-h-12 w-full items-center justify-center gap-2.5 rounded-full border px-3 py-2 text-center scent-type-chip transition-[color,background-color,border-color,box-shadow] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80',
+    'group flex min-h-12 items-center justify-center gap-2.5 rounded-full border px-3 py-2 text-center scent-type-chip transition-[color,background-color,border-color,box-shadow] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80',
     active
       ? 'border-scent-accent/70 bg-scent-accent/[0.18] font-bold text-[#fff7ec] shadow-[inset_0_1px_0_rgba(255,244,210,0.14)]'
       : 'border-scent-accent/14 bg-black/30 text-scent-text-muted hover:border-scent-accent/42 hover:bg-scent-accent/[0.055] hover:text-[#fff7ec]',
@@ -196,7 +200,6 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
 
   const activeRoom = ROOMS.find((room) => room.type === type) ?? null;
   const ActiveRoomIcon = activeRoom?.Icon ?? Grid2X2;
-  const activeRoomLabel = activeRoom?.label ?? 'All rooms';
 
   const toggleRoomMenu = () => {
     setRoomMenuOpen((open) => !open);
@@ -205,10 +208,6 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
   const toggleTagMenu = () => {
     setTagMenuOpen((open) => !open);
     setRoomMenuOpen(false);
-  };
-  const closeMenus = () => {
-    setRoomMenuOpen(false);
-    setTagMenuOpen(false);
   };
   const selectRoom = (roomType: CommunityPostType | null) => {
     onTypeChange(roomType);
@@ -260,7 +259,9 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
             onChange={(event) => setDraftQuery(event.target.value)}
             placeholder="Search rooms, fragrances, tags, or notes"
             aria-label="Search community rooms"
-            className="scent-lux-input h-[3.25rem] w-full rounded-full px-14 text-center text-base text-[#fff7ec] placeholder:text-scent-text-subtle"
+            // text-ellipsis so the long placeholder resolves with an ellipsis on
+            // narrow phones instead of clipping mid-word at the input edge.
+            className="scent-lux-input h-[3.25rem] w-full text-ellipsis rounded-full px-14 text-center text-base text-[#fff7ec] placeholder:text-scent-text-subtle"
           />
           {draftQuery ? (
             <button
@@ -274,9 +275,13 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
           ) : null}
         </div>
 
-        {/* Desktop: the full five-room grid stays a single horizontal bar. */}
+        {/* Desktop (lg+): the full five-room grid stays a single equal-width
+            bar. Between sm and lg the same equal-width tracks were too narrow
+            for the nowrap labels ("ALL ROOMS" spilled out of its pill, "PRICE
+            CHECKS" clipped at the panel edge on iPad portrait), so that range
+            gets a centered wrapping pill row sized to the labels instead. */}
         <div className="hidden w-full min-w-0 gap-2.5 sm:grid">
-          <div className="grid w-full min-w-0 grid-cols-5 gap-2.5">
+          <div className="flex w-full min-w-0 flex-wrap justify-center gap-2.5 lg:grid lg:grid-cols-5">
             <button
               type="button"
               onClick={() => onTypeChange(null)}
@@ -330,21 +335,30 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
           ) : null}
         </div>
 
-        {/* Mobile: two centered glassmorphic dropdowns sitting side by side. Each
-            sits in its own relative cell so an open panel can stretch across both
-            columns (200% of the half-width cell + the 0.75rem grid gap). */}
+        {/* Mobile: two centered dropdown toggles sitting side by side. Their
+            panels expand IN FLOW across both columns (col-span-2) — the same
+            expansion language as the composer and the desktop tag lane. They
+            must not be absolute overlays: the toolbar shell (community.tsx)
+            clips descendants with overflow-hidden, which left an overlay panel
+            ~9px visible and its chips untappable. */}
         <div className="grid grid-cols-2 gap-3 sm:hidden">
-          <div className="relative z-30 min-w-0">
+          <div className="min-w-0">
             <button
               type="button"
               onClick={toggleRoomMenu}
               aria-expanded={roomMenuOpen}
               aria-haspopup="listbox"
-              className="flex h-11 w-full min-w-0 items-center justify-between gap-2 rounded-full border border-scent-accent/24 bg-black/40 px-4 text-left transition-colors hover:border-scent-accent/46 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80"
+              className="flex h-11 w-full min-w-0 items-center justify-between gap-1.5 rounded-full border border-scent-accent/24 bg-black/40 px-3 text-left transition-colors hover:border-scent-accent/46 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80"
             >
-              <span className="flex min-w-0 items-center gap-2 text-[#fff7ec]">
+              <span className="flex min-w-0 items-center gap-1.5 text-[#fff7ec]">
                 <ActiveRoomIcon size={16} strokeWidth={1.65} className="shrink-0 text-scent-accent" aria-hidden="true" />
-                <span className="truncate text-xs font-bold uppercase tracking-[0.12em]">{activeRoomLabel}</span>
+                {/* Compact resting label: "All rooms"/"Popular tags" overflowed
+                    the half-width pills and rendered as "ALL RO…" even at rest
+                    on 320–430px phones. A selected room/tag still truncates —
+                    that state carries the icon/# prefix as context. */}
+                <span className="truncate text-xs font-bold uppercase tracking-[0.12em]">
+                  {activeRoom ? activeRoom.label : 'Rooms'}
+                </span>
               </span>
               <ChevronDown
                 size={16}
@@ -353,50 +367,18 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
                 className={`shrink-0 text-scent-accent transition-transform ${roomMenuOpen ? 'rotate-180' : ''}`}
               />
             </button>
-
-            {roomMenuOpen ? (
-              <div
-                className="absolute left-0 top-full z-30 mt-2 grid w-[calc(200%+0.75rem)] gap-1.5 rounded-[16px] border border-scent-accent/30 bg-[#0a0805]/95 p-2 shadow-[0_24px_48px_rgba(0,0,0,0.7)] backdrop-blur-md"
-                role="listbox"
-                aria-label="Room filters"
-              >
-                <button
-                  type="button"
-                  role="option"
-                  aria-selected={type === null}
-                  onClick={() => selectRoom(null)}
-                  className={roomMenuItemClass(type === null)}
-                >
-                  <Grid2X2 size={17} strokeWidth={1.65} aria-hidden="true" />
-                  <span className="whitespace-nowrap">All rooms</span>
-                </button>
-                {ROOMS.map(({ type: roomType, label, Icon }) => (
-                  <button
-                    key={roomType}
-                    type="button"
-                    role="option"
-                    aria-selected={type === roomType}
-                    onClick={() => selectRoom(roomType)}
-                    className={roomMenuItemClass(type === roomType)}
-                  >
-                    <Icon size={17} strokeWidth={1.65} aria-hidden="true" />
-                    <span className="whitespace-nowrap">{label}</span>
-                  </button>
-                ))}
-              </div>
-            ) : null}
           </div>
 
-          <div className="relative z-30 min-w-0">
+          <div className="min-w-0">
             <button
               type="button"
               onClick={toggleTagMenu}
               aria-expanded={tagMenuOpen}
               aria-haspopup="listbox"
-              className="flex h-11 w-full min-w-0 items-center justify-between gap-2 rounded-full border border-scent-accent/24 bg-black/40 px-4 text-left transition-colors hover:border-scent-accent/46 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80"
+              className="flex h-11 w-full min-w-0 items-center justify-between gap-1.5 rounded-full border border-scent-accent/24 bg-black/40 px-3 text-left transition-colors hover:border-scent-accent/46 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80"
             >
               <span className="truncate text-xs font-bold uppercase tracking-[0.12em] text-[#fff7ec]">
-                {tag ? `#${tag}` : 'Popular tags'}
+                {tag ? `#${tag}` : 'Tags'}
               </span>
               <ChevronDown
                 size={16}
@@ -405,41 +387,67 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
                 className={`shrink-0 text-scent-accent transition-transform ${tagMenuOpen ? 'rotate-180' : ''}`}
               />
             </button>
-
-            {tagMenuOpen && hasTags ? (
-              <div
-                className="absolute right-0 top-full z-30 mt-2 flex w-[calc(200%+0.75rem)] flex-wrap justify-center gap-2 rounded-[16px] border border-scent-accent/30 bg-[#0a0805]/95 p-3 shadow-[0_24px_48px_rgba(0,0,0,0.7)] backdrop-blur-md"
-                role="listbox"
-                aria-label="Popular tag filters"
-              >
-                {tags.map((candidate) => {
-                  const normalized = sanitizeCommunityTag(candidate);
-                  const active = tag === normalized;
-                  return (
-                    <button
-                      key={candidate}
-                      type="button"
-                      role="option"
-                      aria-selected={active}
-                      onClick={() => {
-                        onTagChange(active ? null : normalized);
-                        setTagMenuOpen(false);
-                      }}
-                      aria-label={active ? `Clear #${candidate} tag filter` : `Filter by #${candidate}`}
-                      className={tagButtonClass(active)}
-                    >
-                      #{candidate}
-                    </button>
-                  );
-                })}
-              </div>
-            ) : null}
           </div>
 
-          {/* Tap-out backdrop; lives inside the sm:hidden grid so it never
-              intercepts taps on desktop where the marquee owns tagMenuOpen. */}
-          {roomMenuOpen || tagMenuOpen ? (
-            <div className="fixed inset-0 z-20 bg-transparent" aria-hidden="true" onClick={closeMenus} />
+          {roomMenuOpen ? (
+            <div
+              className="col-span-2 grid gap-1.5 rounded-[16px] border border-scent-accent/30 bg-[#0a0805]/95 p-2"
+              role="listbox"
+              aria-label="Room filters"
+            >
+              <button
+                type="button"
+                role="option"
+                aria-selected={type === null}
+                onClick={() => selectRoom(null)}
+                className={roomMenuItemClass(type === null)}
+              >
+                <Grid2X2 size={17} strokeWidth={1.65} aria-hidden="true" />
+                <span className="whitespace-nowrap">All rooms</span>
+              </button>
+              {ROOMS.map(({ type: roomType, label, Icon }) => (
+                <button
+                  key={roomType}
+                  type="button"
+                  role="option"
+                  aria-selected={type === roomType}
+                  onClick={() => selectRoom(roomType)}
+                  className={roomMenuItemClass(type === roomType)}
+                >
+                  <Icon size={17} strokeWidth={1.65} aria-hidden="true" />
+                  <span className="whitespace-nowrap">{label}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+
+          {tagMenuOpen && hasTags ? (
+            <div
+              className="col-span-2 flex flex-wrap justify-center gap-2 rounded-[16px] border border-scent-accent/30 bg-[#0a0805]/95 p-3"
+              role="listbox"
+              aria-label="Popular tag filters"
+            >
+              {tags.map((candidate) => {
+                const normalized = sanitizeCommunityTag(candidate);
+                const active = tag === normalized;
+                return (
+                  <button
+                    key={candidate}
+                    type="button"
+                    role="option"
+                    aria-selected={active}
+                    onClick={() => {
+                      onTagChange(active ? null : normalized);
+                      setTagMenuOpen(false);
+                    }}
+                    aria-label={active ? `Clear #${candidate} tag filter` : `Filter by #${candidate}`}
+                    className={tagButtonClass(active)}
+                  >
+                    #{candidate}
+                  </button>
+                );
+              })}
+            </div>
           ) : null}
         </div>
 
