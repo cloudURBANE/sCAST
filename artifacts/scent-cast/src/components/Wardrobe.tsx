@@ -899,30 +899,126 @@ function framePercent(value: number): string {
   return `${Math.round(value * 100)}%`;
 }
 
-const EMPTY_VAULT_STEPS = [
-  {
-    icon: Search,
-    title: 'Search your first bottle',
-    description: 'Use the vault search to find any fragrance you own, wear, or want to compare.',
-  },
-  {
-    icon: Check,
-    title: 'Build a three-scent signal',
-    description: 'Three saved fragrances give the matcher enough taste context to recommend well.',
-  },
-  {
-    icon: Sparkles,
-    title: 'Unlock daily discovery',
-    description: 'Your vault becomes the source for practical, weather-aware scent picks.',
-  },
-] as const;
+// Three bottles is the point where the matcher has enough taste signal to
+// recommend daily. Every onboarding label/progress below derives from the real
+// vault count against this target — nothing is hardcoded to "0/3".
+const DISCOVERY_TARGET = 3;
+
+const discoverySteps = (count: number) =>
+  [
+    { label: 'Add your first bottle', done: count >= 1 },
+    { label: 'Add two more bottles', done: count >= DISCOVERY_TARGET },
+    { label: 'Unlock daily recommendations', done: count >= DISCOVERY_TARGET },
+  ] as const;
+
+// Segmented 3-slot signal bar + numbered step list, driven by the live vault
+// count. `variant="banner"` is the slim strip shown above the grid while the
+// vault holds 1–2 bottles; `variant="full"` is the stepper inside the
+// zero-state onboarding card. Inset hairlines only — no projected gold glow.
+const VaultDiscoveryProgress: React.FC<{
+  count: number;
+  variant: 'full' | 'banner';
+  className?: string;
+}> = ({ count, variant, className = '' }) => {
+  const progress = Math.min(count, DISCOVERY_TARGET);
+  const remaining = DISCOVERY_TARGET - progress;
+  const steps = discoverySteps(count);
+  const activeIndex = steps.findIndex((step) => !step.done);
+
+  const segments = (
+    <div
+      className="grid grid-cols-3 gap-1.5"
+      role="progressbar"
+      aria-valuemin={0}
+      aria-valuemax={DISCOVERY_TARGET}
+      aria-valuenow={progress}
+      aria-label="Bottles added toward daily recommendations"
+    >
+      {[0, 1, 2].map((slot) => (
+        <span
+          key={slot}
+          className={`h-1.5 rounded-full ${
+            slot < progress
+              ? 'bg-gradient-to-r from-scent-accent to-[#e7c45f] shadow-[inset_0_1px_0_rgba(255,244,204,0.4)]'
+              : 'bg-white/10'
+          }`}
+        />
+      ))}
+    </div>
+  );
+
+  const header = (
+    <div className="flex items-center justify-between gap-4">
+      <span className="scent-type-label text-scent-accent/80">Discovery signal</span>
+      <span className="font-mono text-[11px] font-semibold tabular-nums text-scent-accent">
+        {progress}/{DISCOVERY_TARGET}
+      </span>
+    </div>
+  );
+
+  if (variant === 'banner') {
+    return (
+      <div
+        className={`rounded-[calc(var(--radius-scent)-8px)] border border-scent-accent/18 bg-black/32 px-4 py-3.5 shadow-[inset_0_1px_0_rgba(255,236,183,0.07)] sm:px-5 ${className}`.trim()}
+      >
+        {header}
+        <div className="mt-2.5">{segments}</div>
+        <p className="mt-2.5 text-[13px] leading-snug text-scent-text-muted">
+          {remaining === 1
+            ? 'One more bottle unlocks daily recommendations.'
+            : `${remaining} more bottles unlock daily recommendations.`}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className={className}>
+      {header}
+      <div className="mt-2.5">{segments}</div>
+      <ol className="mt-5 space-y-3 text-left">
+        {steps.map((step, index) => {
+          const active = index === activeIndex;
+          return (
+            <li key={step.label} className="flex items-center gap-3">
+              <span
+                className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border font-mono text-[10px] font-semibold tabular-nums ${
+                  step.done
+                    ? 'border-scent-accent/60 bg-scent-accent/[0.14] text-scent-accent'
+                    : active
+                      ? 'border-scent-accent/45 bg-black/40 text-scent-accent'
+                      : 'border-white/14 bg-black/30 text-scent-text-subtle'
+                }`}
+                aria-hidden
+              >
+                {step.done ? <Check size={12} strokeWidth={2.4} /> : index + 1}
+              </span>
+              <span
+                className={`text-sm leading-snug ${
+                  step.done
+                    ? 'text-scent-text-muted'
+                    : active
+                      ? 'text-[#fff7ec]'
+                      : 'text-scent-text-subtle'
+                }`}
+              >
+                {step.label}
+                {step.done ? <span className="sr-only"> (done)</span> : null}
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+    </div>
+  );
+};
 
 const VaultEmptyEmblem: React.FC = () => (
   <svg
     viewBox="0 0 112 112"
     role="img"
     aria-label="Empty fragrance vault"
-    className="h-28 w-28 text-scent-accent sm:h-32 sm:w-32"
+    className="h-10 w-10 text-scent-accent sm:h-11 sm:w-11"
   >
     <defs>
       <linearGradient id="vault-empty-gold" x1="24" y1="9" x2="88" y2="100" gradientUnits="userSpaceOnUse">
@@ -1927,6 +2023,13 @@ export const Wardrobe: React.FC<{
   const searchDropdownOpen =
     vaultSearchUnlocked && searchFocused && activeSearchQuery.trim().length > 0 && searchSuggestions.length > 0;
 
+  // Count-driven vault states: 0 bottles → focused onboarding card; 1–2 →
+  // normal grid with a slim discovery-progress strip; 3+ → normal grid only.
+  const vaultCount = items.length;
+  const showEmptyVaultState = wardrobeLoaded && !wardrobeError && vaultCount === 0;
+  const showDiscoveryBanner =
+    wardrobeLoaded && !wardrobeError && vaultCount > 0 && vaultCount < DISCOVERY_TARGET && !activeSearchQuery;
+
   const cancelSearchBlur = () => {
     if (searchBlurTimerRef.current !== null) {
       window.clearTimeout(searchBlurTimerRef.current);
@@ -1944,10 +2047,22 @@ export const Wardrobe: React.FC<{
 
   return (
     <div className="relative">
-      <div className="space-y-12 sm:space-y-16 relative z-10">
-        <div className="flex flex-col items-center justify-center text-center gap-7 sm:gap-8">
-          <div className="space-y-3">
-            <h2 className="font-serif italic text-[clamp(2.65rem,8vw,5.35rem)] text-[#fff7ec] tracking-normal leading-none">Vault of Aromas</h2>
+      <div className="space-y-8 sm:space-y-10 relative z-10">
+        <div className="flex flex-col items-center justify-center text-center gap-5 sm:gap-6">
+          {/* Header block: title, one-line purpose, live count badge. The old
+              full-bleed divider line with "0 Entries" perched on it read as a
+              template flourish; a compact badge keeps the count useful. */}
+          <div className="space-y-4">
+            <h2 className="font-serif italic text-[clamp(2.4rem,6.5vw,4.25rem)] text-[#fff7ec] tracking-normal leading-none">Vault of Aromas</h2>
+            <p className="mx-auto max-w-md text-[15px] leading-relaxed text-scent-text-muted sm:text-base">
+              Your collection — the signal behind every recommendation.
+            </p>
+            <div className="flex justify-center" role="status" aria-live="polite" aria-atomic="true">
+              <span className="inline-flex items-center gap-2 rounded-full border border-scent-accent/26 bg-black/38 px-4 py-1.5 shadow-[inset_0_1px_0_rgba(255,236,183,0.08)]">
+                <span className="font-mono text-[11px] font-semibold tabular-nums text-scent-accent">{filteredItems.length}</span>
+                <span className="scent-type-label text-scent-accent/80">{filteredItems.length === 1 ? 'Entry' : 'Entries'}</span>
+              </span>
+            </div>
           </div>
           <div className="flex flex-col items-center gap-6 w-full">
             {(wardrobeFixHint || revertAvailable || fixWardrobeBusy) && (
@@ -2111,21 +2226,13 @@ export const Wardrobe: React.FC<{
 
             </div>
             )}
-            <VaultGridModeToggle
-              mode={gridMode}
-              onChange={setGridMode}
-              className="sm:hidden"
-            />
-            <div className="scent-full-bleed w-full">
-              <div
-                className="scent-entry-count w-full font-serif italic text-xl sm:text-2xl whitespace-nowrap"
-                role="status"
-                aria-live="polite"
-                aria-atomic="true"
-              >
-                <span>{filteredItems.length} Entries</span>
-              </div>
-            </div>
+            {items.length > 0 && (
+              <VaultGridModeToggle
+                mode={gridMode}
+                onChange={setGridMode}
+                className="sm:hidden"
+              />
+            )}
           </div>
         </div>
 
@@ -2182,7 +2289,20 @@ export const Wardrobe: React.FC<{
           </section>
         )}
 
-        <div className="space-y-8 pb-[calc(var(--bottomnav-h)+2rem)] sm:pb-36">
+        <div
+          className={`space-y-8 ${
+            showEmptyVaultState
+              ? 'pb-[calc(var(--bottomnav-h)+1rem)] sm:pb-10'
+              : 'pb-[calc(var(--bottomnav-h)+2rem)] sm:pb-36'
+          }`}
+        >
+          {showDiscoveryBanner ? (
+            <VaultDiscoveryProgress
+              count={vaultCount}
+              variant="banner"
+              className="mx-auto w-full max-w-xl"
+            />
+          ) : null}
           {wardrobeError ? (
             <div className="py-24 px-4 text-center border border-white/10 bg-white/[0.02] rounded-scent flex flex-col items-center justify-center gap-6">
               <div className="space-y-2">
@@ -2280,70 +2400,38 @@ export const Wardrobe: React.FC<{
               <p className="mt-2 text-sm leading-relaxed text-scent-text-muted">Try a shorter name, or search by brand alone.</p>
             </div>
           ) : (
-            <div className="relative overflow-hidden rounded-[var(--radius-scent)] border border-scent-accent/26 bg-[linear-gradient(180deg,rgba(255,247,236,0.05),rgba(255,247,236,0.014)_38%,rgba(0,0,0,0.34))] px-5 py-10 text-center shadow-[inset_0_1px_0_rgba(255,236,183,0.1),0_30px_78px_-56px_rgba(0,0,0,0.85)] sm:px-8 sm:py-14 lg:px-12">
-              <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-scent-accent/50 to-transparent" aria-hidden />
-              <div className="pointer-events-none absolute inset-x-10 bottom-0 h-px bg-gradient-to-r from-transparent via-white/12 to-transparent" aria-hidden />
-              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(212,175,55,0.13),transparent_34%),radial-gradient(circle_at_12%_88%,rgba(255,247,236,0.04),transparent_26%)]" aria-hidden />
-              <div className="relative z-[1] mx-auto grid max-w-6xl gap-8 text-left lg:grid-cols-[minmax(0,1.08fr)_minmax(20rem,0.92fr)] lg:items-center">
-                <div className="flex min-w-0 flex-col items-center text-center lg:items-start lg:text-left">
-                  <div className="mb-5 flex h-32 w-32 items-center justify-center rounded-[calc(var(--radius-scent)+10px)] border border-scent-accent/24 bg-black/38 shadow-[inset_0_1px_0_rgba(255,236,183,0.1),0_24px_54px_-34px_rgba(0,0,0,0.7)] sm:h-36 sm:w-36" aria-hidden>
-                    <VaultEmptyEmblem />
-                  </div>
-                  <p className="scent-type-label text-scent-accent/85">Collection Vault</p>
-                  <h3 className="mt-3 max-w-[34rem] font-serif italic text-4xl leading-none text-[#fff7ec] sm:text-5xl">Start with the bottles you actually wear</h3>
-                  <p className="mt-4 max-w-[38rem] text-[15px] leading-relaxed text-scent-text-muted sm:text-base">
-                    Add three fragrances to turn an empty shelf into a usable taste profile. Once the vault has enough signal, ScentBeam can recommend what fits the day instead of guessing from a blank slate.
-                  </p>
-                  <div className="mt-6 w-full max-w-[28rem] rounded-[calc(var(--radius-scent)-8px)] border border-scent-accent/16 bg-black/30 p-3 shadow-[inset_0_1px_0_rgba(255,236,183,0.06)]">
-                    <div className="mb-2 flex items-center justify-between gap-4">
-                      <span className="scent-type-label text-scent-accent/80">Discovery signal</span>
-                      <span className="font-mono text-[11px] font-semibold tabular-nums text-scent-accent">0/3</span>
-                    </div>
-                    <div className="grid grid-cols-3 gap-2" role="progressbar" aria-valuemin={0} aria-valuemax={3} aria-valuenow={0} aria-label="Fragrances added toward discovery">
-                      {[0, 1, 2].map((slot) => (
-                        <span key={slot} className="h-2 rounded-full bg-white/12" />
-                      ))}
-                    </div>
-                  </div>
-                  {onExpandArchive && (
-                    <button
-                      type="button"
-                      onClick={() => onExpandArchive({ target: 'vault' })}
-                      className="scent-vault-outline-button mt-6 inline-flex min-h-[54px] items-center gap-2.5 px-7 py-3.5 transition-transform hover:scale-[1.02] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55"
-                    >
-                      <Search size={16} strokeWidth={1.75} className="text-scent-accent" aria-hidden />
-                      <span className="scent-vault-outline-button-label font-serif italic text-lg">Add your first fragrance</span>
-                    </button>
-                  )}
+            <div className="mx-auto w-full max-w-[30rem] sm:max-w-[34rem]">
+              {/* Zero-bottle onboarding: one compact centered card with a single
+                  reading path — emblem/label → headline → one line of copy →
+                  primary CTA → live discovery progress. No side panel, no
+                  nested mini-cards, no oversized hero. */}
+              <div className="relative overflow-hidden rounded-[var(--radius-scent)] border border-scent-accent/24 bg-[linear-gradient(180deg,rgba(255,247,236,0.045),rgba(255,247,236,0.012)_44%,rgba(0,0,0,0.3))] px-6 py-9 text-center shadow-[inset_0_1px_0_rgba(255,236,183,0.1),0_28px_64px_-44px_rgba(0,0,0,0.9)] sm:px-10 sm:py-11">
+                <div className="pointer-events-none absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-scent-accent/45 to-transparent" aria-hidden />
+                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full border border-scent-accent/24 bg-black/40 shadow-[inset_0_1px_0_rgba(255,236,183,0.09)]" aria-hidden>
+                  <VaultEmptyEmblem />
                 </div>
-
-                <div className="relative rounded-[calc(var(--radius-scent)-4px)] border border-white/10 bg-black/34 p-4 shadow-[inset_0_1px_0_rgba(255,236,183,0.07)] sm:p-5">
-                  <div className="mb-5 flex items-center justify-between gap-4">
-                    <div>
-                      <p className="scent-type-label text-scent-accent/85">How it becomes useful</p>
-                      <p className="mt-1 text-sm leading-relaxed text-scent-text-subtle">A simple path from empty vault to daily recommendation.</p>
-                    </div>
-                    <div className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-full border border-scent-accent/22 bg-scent-accent/[0.06] text-scent-accent sm:flex" aria-hidden>
-                      <Sparkles size={18} strokeWidth={1.75} />
-                    </div>
-                  </div>
-                  <div className="space-y-3">
-                    {EMPTY_VAULT_STEPS.map(({ icon: Icon, title, description }, index) => (
-                      <div key={title} className="grid grid-cols-[2.5rem_minmax(0,1fr)] gap-3 rounded-[calc(var(--radius-scent)-10px)] border border-white/8 bg-white/[0.025] p-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full border border-scent-accent/24 bg-black/34 text-scent-accent">
-                          <Icon size={16} strokeWidth={1.75} aria-hidden />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono text-[10px] font-semibold tabular-nums text-scent-accent/72">0{index + 1}</span>
-                            <p className="font-serif italic text-xl leading-tight text-[#fff7ec]">{title}</p>
-                          </div>
-                          <p className="mt-1 text-sm leading-relaxed text-scent-text-muted">{description}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                <p className="scent-type-label text-scent-accent/85">Collection Vault</p>
+                <h3 className="mx-auto mt-2.5 max-w-[22rem] font-serif italic text-[1.9rem] leading-tight text-[#fff7ec] sm:max-w-[26rem] sm:text-4xl">
+                  Start with the bottles you actually wear
+                </h3>
+                <p className="mx-auto mt-3 max-w-[26rem] text-[15px] leading-relaxed text-scent-text-muted">
+                  Add three you wear the most. ScentBeam uses them to understand your taste, compare overlap, and recommend what fits the day.
+                </p>
+                {onExpandArchive && (
+                  <button
+                    type="button"
+                    onClick={() => onExpandArchive({ target: 'vault' })}
+                    className="scent-primary-button mt-7 inline-flex min-h-[56px] w-full max-w-[22rem] items-center justify-center gap-2.5 rounded-scent px-8 py-3.5 transition-transform hover:scale-[1.01] active:scale-[0.99] focus-visible:outline-none"
+                  >
+                    <Search size={18} strokeWidth={1.75} aria-hidden />
+                    <span className="font-serif italic text-xl">Add your first fragrance</span>
+                  </button>
+                )}
+                <VaultDiscoveryProgress
+                  count={vaultCount}
+                  variant="full"
+                  className="mx-auto mt-8 max-w-[22rem] border-t border-white/8 pt-6"
+                />
               </div>
             </div>
           )}

@@ -1363,7 +1363,9 @@ function DashboardView() {
 
         {/* Page two: the Vault of Aromas, reached by scrolling one screen down
             from the home view above. */}
-        <div id="scent-vault-section" className="scent-deferred-section !mt-16 sm:!mt-72 lg:!mt-96" style={{ scrollMarginTop: 'var(--topbar-h)' }}>
+        {/* The home column above already fills the first viewport (min-h 100svh),
+            so this margin is pure separation — a moderate band, not a dead zone. */}
+        <div id="scent-vault-section" className="scent-deferred-section !mt-16 sm:!mt-28 lg:!mt-36" style={{ scrollMarginTop: 'var(--topbar-h)' }}>
             <React.Suspense fallback={<WardrobeFallback />}>
               <Wardrobe
                 items={items}
@@ -1492,7 +1494,7 @@ function DashboardView() {
           </div>
       ) : null}
 
-      <AppFooter className="mt-24" />
+      <AppFooter className="mt-12 sm:mt-16" />
     </div>
   );
 }
