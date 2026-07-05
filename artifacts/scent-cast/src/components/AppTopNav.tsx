@@ -109,7 +109,15 @@ const AccountMenu: React.FC<AccountMenuProps> = ({
         >
           <Avatar className="h-10 w-10 border border-white/10 bg-scent-surface">
             {authPictureUrl ? (
-              <AvatarImage src={authPictureUrl} alt="" referrerPolicy="no-referrer" />
+              // Muted so an arbitrary (often colorful) Google photo sits inside
+              // the controlled black/gold chrome instead of shouting over the
+              // logo; the gold hairline ring stays the accent.
+              <AvatarImage
+                src={authPictureUrl}
+                alt=""
+                referrerPolicy="no-referrer"
+                className="brightness-[0.88] saturate-[0.72]"
+              />
             ) : null}
             <AvatarFallback className="bg-scent-surface text-[13px] font-semibold text-scent-accent">
               {getAvatarFallback(authUsername, authEmail)}
@@ -417,8 +425,11 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
                 className={({ isActive }) =>
                   [
                     'inline-flex min-h-11 flex-col items-center justify-center gap-px rounded-full px-2 text-[9.5px] font-semibold uppercase tracking-[0.1em] transition-colors duration-200 active:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55',
+                    // The filled gold pill stays the ONE strong selected state on
+                    // screen, but a half-step darker than before so the forecast
+                    // hero — not the nav — wins the page.
                     isActive
-                      ? 'bg-gradient-to-b from-[#E6CB6E] to-[#C9A436] text-[#1a1206] shadow-[inset_0_1px_0_rgba(255,247,236,0.4)]'
+                      ? 'bg-gradient-to-b from-[#DCC05F] to-[#B8952F] text-[#1a1206] shadow-[inset_0_1px_0_rgba(255,247,236,0.3)]'
                       : 'text-scent-text-muted hover:text-foreground',
                   ].join(' ')
                 }

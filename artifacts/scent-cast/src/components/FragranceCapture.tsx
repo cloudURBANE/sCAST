@@ -1280,7 +1280,10 @@ export const FragranceCapture: React.FC<{
           <p className="sr-only">
             Add perfumes to your vault. Example fragrance names rotate above the search field.
           </p>
-          <h2 className="mx-auto max-w-[38rem] text-balance font-serif italic text-[clamp(1.6rem,5.2vw,4.15rem)] leading-[1.03] tracking-normal text-[#fff7ec] drop-shadow-[0_4px_14px_rgba(0,0,0,0.72)] sm:leading-[1.01]">
+          {/* Sized one notch below the old clamp so this utility heading stays
+              elegant without competing with the Scent Forecast hero below —
+              the forecast fragrance, not the search prompt, is the page star. */}
+          <h2 className="mx-auto max-w-[38rem] text-balance font-serif italic text-[clamp(1.45rem,4.7vw,3.6rem)] leading-[1.03] tracking-normal text-[#fff7ec] drop-shadow-[0_4px_14px_rgba(0,0,0,0.72)] sm:leading-[1.01]">
             Search any fragrance or brand.
           </h2>
         </header>
