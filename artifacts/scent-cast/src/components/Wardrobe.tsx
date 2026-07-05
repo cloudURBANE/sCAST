@@ -2053,7 +2053,7 @@ export const Wardrobe: React.FC<{
               full-bleed divider line with "0 Entries" perched on it read as a
               template flourish; a compact badge keeps the count useful. */}
           <div className="space-y-4">
-            <h2 className="font-serif italic text-[clamp(2.4rem,6.5vw,4.25rem)] text-[#fff7ec] tracking-normal leading-none">Vault of Aromas</h2>
+            <h2 className="font-serif italic text-[clamp(2.4rem,6.5vw,4.25rem)] text-foreground tracking-normal leading-none">Vault of Aromas</h2>
             <p className="mx-auto max-w-md text-[15px] leading-relaxed text-scent-text-muted sm:text-base">
               Your collection — the signal behind every recommendation.
             </p>
@@ -2315,7 +2315,7 @@ export const Wardrobe: React.FC<{
                   onClick={onRetryLoadWardrobe}
                   className="scent-primary-button px-8 py-3 rounded-scent font-serif italic text-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55"
                 >
-                  Retry Load
+                  <span>Retry Load</span>
                 </button>
               )}
             </div>
@@ -2411,7 +2411,7 @@ export const Wardrobe: React.FC<{
                   <VaultEmptyEmblem />
                 </div>
                 <p className="scent-type-label text-scent-accent/85">Collection Vault</p>
-                <h3 className="mx-auto mt-2.5 max-w-[22rem] font-serif italic text-[1.9rem] leading-tight text-[#fff7ec] sm:max-w-[26rem] sm:text-4xl">
+                <h3 className="mx-auto mt-2.5 max-w-[22rem] font-serif italic text-[1.9rem] leading-tight text-foreground sm:max-w-[26rem] sm:text-4xl">
                   Start with the bottles you actually wear
                 </h3>
                 <p className="mx-auto mt-3 max-w-[26rem] text-[15px] leading-relaxed text-scent-text-muted">
