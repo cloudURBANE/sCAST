@@ -27,6 +27,12 @@ type BeamCardProps = {
   onViewItem?: (item: BeamProposalItem) => void;
   /** This kit's new lane has already been curated — flip Add to an "Added" state. */
   added?: boolean;
+  /**
+   * A vault curation is currently in flight (this kit's or another's). The Add
+   * button disables so it never reads as tappable while the host handler would
+   * silently drop the tap.
+   */
+  adding?: boolean;
 };
 
 const AXES: Array<{ key: keyof BeamScentVector; label: string }> = [
@@ -395,11 +401,13 @@ function TravelKitCard({
   onAddNewPicks,
   onViewItem,
   added,
+  adding,
 }: {
   card: Extract<BeamCardData, { kind: 'travel_kit' }>;
   onAddNewPicks?: (items: BeamProposalItem[], proposalId?: string) => void;
   onViewItem?: (item: BeamProposalItem) => void;
   added?: boolean;
+  adding?: boolean;
 }): React.ReactElement {
   // Per-lane image slots: rows only reserve the packshot column when at least
   // one pick in that lane actually has artwork, so an art-less kit keeps the
@@ -477,7 +485,8 @@ function TravelKitCard({
                 <button
                   type="button"
                   onClick={() => onAddNewPicks(card.newPicks, card.proposalId)}
-                  className="inline-flex min-h-11 max-w-full items-center justify-center gap-1.5 rounded-full border border-scent-accent/42 px-4 py-2 text-center scent-type-chip text-[11px] text-[#fff7ec] transition-colors hover:bg-scent-accent/12"
+                  disabled={adding}
+                  className="inline-flex min-h-11 max-w-full items-center justify-center gap-1.5 rounded-full border border-scent-accent/42 px-4 py-2 text-center scent-type-chip text-[11px] text-[#fff7ec] transition-colors hover:bg-scent-accent/12 disabled:cursor-not-allowed disabled:opacity-45"
                 >
                   <Plus size={14} aria-hidden className="shrink-0" />
                   <span className="min-w-0 break-words">
@@ -497,14 +506,22 @@ function TravelKitCard({
 }
 
 /** Dispatch a card payload to its renderer. Unknown kinds render nothing. */
-function BeamCardImpl({ card, onAddNewPicks, onViewItem, added }: BeamCardProps): React.ReactElement | null {
+function BeamCardImpl({ card, onAddNewPicks, onViewItem, added, adding }: BeamCardProps): React.ReactElement | null {
   switch (card.kind) {
     case 'scent_profile':
       return <ScentProfileCard card={card} />;
     case 'compare':
       return <CompareCard card={card} />;
     case 'travel_kit':
-      return <TravelKitCard card={card} onAddNewPicks={onAddNewPicks} onViewItem={onViewItem} added={added} />;
+      return (
+        <TravelKitCard
+          card={card}
+          onAddNewPicks={onAddNewPicks}
+          onViewItem={onViewItem}
+          added={added}
+          adding={adding}
+        />
+      );
     default:
       return null;
   }

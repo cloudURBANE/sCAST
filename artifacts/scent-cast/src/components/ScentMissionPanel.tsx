@@ -15,6 +15,7 @@ import {
   Send,
   SlidersHorizontal,
   Sparkles,
+  Square,
   ThumbsDown,
   Wand2,
   Zap,
@@ -261,8 +262,10 @@ const AnswerFeedbackControl: React.FC<{
   status: AnswerFeedbackStatus;
   onOpen: () => void;
   onPick: (reasonCode: string) => void;
+  /** Close the reason chips without submitting (an accidental open backs out). */
+  onDismiss: () => void;
   calmMotion: boolean;
-}> = ({ status, onOpen, onPick, calmMotion }) => {
+}> = ({ status, onOpen, onPick, onDismiss, calmMotion }) => {
   if (status === 'submitted') {
     return (
       <p className="mt-1 inline-flex items-center gap-1.5 pl-1 text-[11px] text-scent-text-muted/70">
@@ -310,6 +313,16 @@ const AnswerFeedbackControl: React.FC<{
             {reason.label}
           </button>
         ))}
+        {/* A borderless escape hatch: an accidental thumbs-down tap shouldn't
+            trap the chips on screen with no way back but submitting a verdict. */}
+        <button
+          type="button"
+          disabled={submitting}
+          onClick={onDismiss}
+          className="min-h-10 rounded-full px-2.5 py-1.5 text-[11px] text-scent-text-muted/55 transition-colors hover:text-scent-text-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-scent-accent/40 disabled:opacity-45"
+        >
+          Never mind
+        </button>
       </div>
       {status === 'error' ? (
         <span className="text-[11px] text-red-300/80">Couldn’t send that — tap a reason to try again.</span>
@@ -960,11 +973,14 @@ interface MissionMessageRowProps {
   recapExpanded: boolean;
   /** This row's "added to vault" flag, lifted out of the parent's Set. */
   kitAdded: boolean;
+  /** A curation is in flight somewhere — kit Add buttons disable for its duration. */
+  kitAdding: boolean;
   /** Resolved BeamCard handlers (undefined when the host capability is absent). */
   onAddKitPicks?: (items: BeamProposalItem[], proposalId?: string) => void | Promise<void>;
   onViewProposalItem?: (item: BeamProposalItem) => void;
   onToggleRecap: (messageId: string) => void;
   onOpenFeedback: (messageId: string) => void;
+  onDismissFeedback: (messageId: string) => void;
   onSubmitFeedback: (answerLogId: string, messageId: string, reasonCode: string) => void;
   /** Live spinner rotation for the recap trail. */
   liveMotion: boolean;
@@ -982,10 +998,12 @@ function MissionMessageRowComponent({
   feedbackStatus,
   recapExpanded,
   kitAdded,
+  kitAdding,
   onAddKitPicks,
   onViewProposalItem,
   onToggleRecap,
   onOpenFeedback,
+  onDismissFeedback,
   onSubmitFeedback,
   liveMotion,
 }: MissionMessageRowProps) {
@@ -1007,6 +1025,7 @@ function MissionMessageRowComponent({
           onAddNewPicks={onAddKitPicks}
           onViewItem={onViewProposalItem}
           added={kitAdded}
+          adding={kitAdding}
         />
       </m.div>
     );
@@ -1086,6 +1105,7 @@ function MissionMessageRowComponent({
         status={feedbackStatus}
         calmMotion={calmMotion}
         onOpen={() => onOpenFeedback(message.id)}
+        onDismiss={() => onDismissFeedback(message.id)}
         onPick={(reasonCode) => onSubmitFeedback(message.answerLogId as string, message.id, reasonCode)}
       />
     ) : null;
@@ -1250,7 +1270,12 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   );
   const submitAnswerFeedback = useCallback(
     async (answerLogId: string, messageId: string, reasonCode: string) => {
-      if (!authToken) return;
+      if (!authToken) {
+        // The session lost its token between answer and verdict (sign-out in
+        // another tab). Show the retry line instead of silently eating the tap.
+        setFeedbackFor(messageId, 'error');
+        return;
+      }
       setFeedbackFor(messageId, 'submitting');
       try {
         await submitBeamFeedback({ answerLogId, reasonCode, authToken, apiBaseUrl: API_BASE_URL });
@@ -1268,12 +1293,17 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
     (messageId: string) => setFeedbackFor(messageId, 'open'),
     [setFeedbackFor],
   );
+  // Back out of the reason chips without a verdict (the "Never mind" escape).
+  const handleDismissFeedback = useCallback(
+    (messageId: string) => setFeedbackFor(messageId, 'idle'),
+    [setFeedbackFor],
+  );
   // Tap-to-answer chips the agent offered with its last reply (e.g. trip-vibe
   // follow-ups). When set, these replace the static facet cues.
   const [agentSuggestions, setAgentSuggestions] = useState<BeamSuggestion[]>([]);
   // A collection the agent proposed adding to the vault, awaiting the user's
-  // explicit Confirm. `curating` holds the per-item add/enrich progress; once it
-  // finishes it becomes a short completion summary.
+  // explicit Confirm. `curating` holds the per-item add/enrich progress while a
+  // confirmed add runs; the completion summary lands as an agent chat line.
   const [proposal, setProposal] = useState<{ proposalId: string; items: BeamProposalItem[] } | null>(null);
   const [agentCardDelivered, setAgentCardDelivered] = useState(false);
   // Travel-kit cards whose "new" lane has been curated into the vault, keyed by
@@ -1282,7 +1312,6 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   const [curating, setCurating] = useState<{
     total: number;
     progress: CollectionCurateProgress | null;
-    done: { added: number; total: number } | null;
   } | null>(null);
   const [sessionId, setSessionId] = useState<string | undefined>(undefined);
   const [resolved, setResolved] = useState<{
@@ -1312,12 +1341,18 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   const [scrollEdges, setScrollEdges] = useState({ top: false, bottom: false });
 
   const abortRef = useRef<AbortController | null>(null);
+  // True once the user tapped Stop for the CURRENT turn — dedupes a double-tap
+  // so the calm confirmation line lands exactly once. Reset when a run begins.
+  const stopIssuedRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const quickReplyScrollRef = useRef<HTMLDivElement | null>(null);
   const cueTrackRef = useRef<HTMLDivElement | null>(null);
   const cueGroupRef = useRef<HTMLDivElement | null>(null);
   const composerRef = useRef<HTMLInputElement | null>(null);
   const composerFormRef = useRef<HTMLFormElement | null>(null);
+  // The composer region (form + settings popover) — outside-tap dismissal for
+  // the settings surface tests containment against this node.
+  const settingsRegionRef = useRef<HTMLDivElement | null>(null);
   const sessionIdRef = useRef<string | undefined>(undefined);
   // Separate ref for the beam agent session — the scripted fallback path updates
   // sessionIdRef with its own session ID (via applyResponse), which would corrupt
@@ -1367,6 +1402,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   useEffect(() => {
     if (busy) {
       runStartedAtRef.current = Date.now();
+      stopIssuedRef.current = false;
       setActivityExpanded(false);
     }
   }, [busy]);
@@ -1452,6 +1488,29 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       setPendingCueFacet(null);
     }
   }, [composer, pendingCueFacet]);
+
+  // Dismiss the settings popover like any transient surface: a tap/click outside
+  // the composer region, or an Escape press, closes it — it no longer sits over
+  // the conversation until the toggle is found again. Capture-phase pointerdown
+  // so a tap that another handler swallows still dismisses.
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const region = settingsRegionRef.current;
+      if (region && event.target instanceof Node && !region.contains(event.target)) {
+        setSettingsOpen(false);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSettingsOpen(false);
+    };
+    document.addEventListener('pointerdown', onPointerDown, true);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown, true);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [settingsOpen]);
 
   const progress = missionProgress(mission);
   const enoughContext = hasEnoughContext(facets, mission, agentMode);
@@ -1849,13 +1908,24 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
           return { handled: true };
         }
         if (shouldUseScriptedFallbackForBeamFailure(result.code)) {
+          setAgentSuggestions([]);
           return { handled: false };
         }
+        // The turn ended without an answer. Any chips streamed mid-run belong to
+        // an answer that never arrived — clearing them keeps the cue lane's
+        // "Answer this question…" header from framing a failure message. Marking
+        // the outcome `pending` flips the completion contract to its error state,
+        // so the primary CTA reads "Try again" instead of a stale "Recommend now".
+        setAgentSuggestions([]);
+        setLastTurnOutcome('pending');
         pushAgentText(beamTerminalFailureMessage(result.code));
         return { handled: true };
       } catch (err) {
-        // A supersede-abort (newer turn replaced this one) must stay silent and
-        // NOT trigger the fallback. A timeout-abort or network error falls back.
+        // A supersede-abort (newer turn replaced this one) or an explicit
+        // user-stop must stay silent and NOT trigger the fallback. A
+        // timeout-abort or network error falls back to the scripted path; either
+        // way, chips from the broken run would frame the wrong reply — drop them.
+        setAgentSuggestions([]);
         if (controller.signal.aborted && !didTimeout) {
           return { handled: true };
         }
@@ -2032,10 +2102,10 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   const handleConfirmProposal = useCallback(async () => {
     if (!proposal || !onCurateCollection || curating) return;
     const collection = proposal.items;
-    setCurating({ total: collection.length, progress: null, done: null });
+    setCurating({ total: collection.length, progress: null });
     try {
       const result = await onCurateCollection(collection, (p) => {
-        setCurating((prev) => ({ total: collection.length, done: prev?.done ?? null, progress: p }));
+        setCurating({ total: collection.length, progress: p });
       });
       setCurating(null);
       setProposal(result.failedItems.length > 0 ? { ...proposal, items: result.failedItems } : null);
@@ -2053,7 +2123,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   }, [proposal, onCurateCollection, curating, appendMessage]);
 
   const handleDeclineProposal = useCallback(() => {
-    if (curating && !curating.done) return;
+    if (curating) return;
     setProposal(null);
     appendMessage('agent', "No problem — I'll hold off. Tell me what to change and I'll line up a different set.");
   }, [curating, appendMessage]);
@@ -2065,10 +2135,10 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
     async (items: BeamProposalItem[], proposalId?: string) => {
       if (!onCurateCollection || curating || items.length === 0) return;
       if (proposalId && curatedKitIds.has(proposalId)) return; // already added — don't double-write
-      setCurating({ total: items.length, progress: null, done: null });
+      setCurating({ total: items.length, progress: null });
       try {
         const result = await onCurateCollection(items, (p) => {
-          setCurating((prev) => ({ total: items.length, done: prev?.done ?? null, progress: p }));
+          setCurating({ total: items.length, progress: p });
         });
         setCurating(null);
         if (proposalId && result.failedItems.length === 0) setCuratedKitIds((prev) => new Set(prev).add(proposalId));
@@ -2096,7 +2166,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   const submitMessage = useCallback(
     async (rawText: string, opts?: { echoUser?: boolean }) => {
       const trimmed = rawText.trim();
-      if (!trimmed || busy || (curating !== null && curating.done === null)) return;
+      if (!trimmed || busy || curating !== null) return;
       const echoUser = opts?.echoUser ?? true;
 
       // A fresh turn clears any prior catalog-failure recovery state.
@@ -2185,12 +2255,27 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
     async (event: React.FormEvent<HTMLFormElement>) => {
       event.preventDefault();
       const trimmed = composer.trim();
-      if (!trimmed || busy || (curating !== null && curating.done === null)) return;
+      if (!trimmed || busy || curating !== null) return;
       setComposer('');
+      setSettingsOpen(false);
       await submitMessage(trimmed, { echoUser: true });
     },
     [busy, composer, curating, submitMessage],
   );
+
+  // The user halts the current turn (the send control becomes Stop while the
+  // agent works). Aborting the controller cancels the run POST / SSE stream, and
+  // the client's abort path fires the cooperative server stop
+  // (`POST /runs/:id/stop`) so the backend loop doesn't keep working a turn the
+  // user walked away from. The aborted promise settles through the existing
+  // silent supersede path (no error bubble); the calm confirmation line is
+  // appended here instead, once, and the session is preserved for the next note.
+  const handleStopTurn = useCallback(() => {
+    if (!busy || stopIssuedRef.current) return;
+    stopIssuedRef.current = true;
+    abortRef.current?.abort();
+    appendMessage('agent', BEAM_TERMINAL_FAILURE_COPY.stopped);
+  }, [busy, appendMessage]);
 
   // ── State-aware recovery / refinement actions ──────────────────────────────
   // Catalog-failure recovery: re-run the same turn, curate from the vault, or
@@ -2317,7 +2402,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         : 'Tap a cue below, or describe your day');
 
   const actionControls = (
-    <div className="relative mx-auto mt-4 w-full max-w-[52rem] sm:mt-5">
+    <div ref={settingsRegionRef} className="relative mx-auto mt-4 w-full max-w-[52rem] sm:mt-5">
       <div className="mb-2 flex min-h-[1.25rem] items-center justify-end gap-2 pr-1">
         {/* No status text lives next to the avatar anymore. It used to echo the
             exact live phase ("Reading your vault", "Searching the catalog") that
@@ -2394,14 +2479,29 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
           autoComplete="off"
           className={`min-w-0 flex-1 bg-transparent px-1 ${composer ? 'text-left' : 'text-center'} text-[16px] font-medium tracking-[0.015em] text-[#fff7ec] caret-[#f5bd69] outline-none placeholder:text-[#d8c9b5]/72 disabled:cursor-not-allowed disabled:placeholder:text-[#d8c9b5]/55`}
         />
-        <button
-          type="submit"
-          disabled={busy || !composer.trim() || (curating !== null && curating.done === null)}
-          className="scent-beam-composer-control inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-scent-accent focus-visible:outline-none disabled:opacity-40 sm:h-11 sm:w-11"
-          aria-label="Send message"
-        >
-          {busy ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Send size={16} aria-hidden />}
-        </button>
+        {busy ? (
+          // While a turn runs the slot becomes a live Stop control (the standard
+          // chat pattern): the user can halt a long run instead of being locked
+          // out for the full timeout with only a spinner to look at.
+          <button
+            type="button"
+            onClick={handleStopTurn}
+            className="scent-beam-composer-control inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-scent-accent focus-visible:outline-none sm:h-11 sm:w-11"
+            aria-label="Stop this response"
+            title="Stop"
+          >
+            <Square size={13} fill="currentColor" aria-hidden />
+          </button>
+        ) : (
+          <button
+            type="submit"
+            disabled={!composer.trim() || curating !== null}
+            className="scent-beam-composer-control inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-scent-accent focus-visible:outline-none disabled:opacity-40 sm:h-11 sm:w-11"
+            aria-label="Send message"
+          >
+            <Send size={16} aria-hidden />
+          </button>
+        )}
       </form>
 
       <AnimatePresence initial={false}>
@@ -2946,10 +3046,12 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
               feedbackStatus={feedbackState[message.id] ?? 'idle'}
               recapExpanded={!!expandedRecaps[message.id]}
               kitAdded={kitAdded}
+              kitAdding={curating !== null}
               onAddKitPicks={onCurateCollection ? handleAddKitPicks : undefined}
               onViewProposalItem={onViewProposalItem ? handleViewProposalItem : undefined}
               onToggleRecap={toggleRecap}
               onOpenFeedback={handleOpenFeedback}
+              onDismissFeedback={handleDismissFeedback}
               onSubmitFeedback={submitAnswerFeedback}
             />
           );
@@ -3133,21 +3235,13 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
               aria-label="Curating your collection"
             >
               <div className="flex items-center gap-2">
-                {curating.done ? (
-                  <Check size={13} className="text-scent-accent" aria-hidden />
-                ) : (
-                  <Loader2 size={13} className={liveMotion ? 'animate-spin text-scent-accent' : 'text-scent-accent'} aria-hidden />
-                )}
-                <span className="scent-type-label text-scent-accent">
-                  {curating.done ? 'Collection curated' : 'Curating your collection…'}
-                </span>
+                <Loader2 size={13} className={liveMotion ? 'animate-spin text-scent-accent' : 'text-scent-accent'} aria-hidden />
+                <span className="scent-type-label text-scent-accent">Curating your collection…</span>
               </div>
               <p className="mt-1.5 text-[12.5px] text-scent-text-muted">
-                {curating.done
-                  ? `Added ${curating.done.added} of ${curating.done.total} to your vault.`
-                  : curating.progress
-                    ? `${CURATE_STATUS_COPY[curating.progress.status]} ${curating.progress.name} (${Math.min(curating.progress.index + 1, curating.total)}/${curating.total})`
-                    : 'Preparing your collection…'}
+                {curating.progress
+                  ? `${CURATE_STATUS_COPY[curating.progress.status]} ${curating.progress.name} (${Math.min(curating.progress.index + 1, curating.total)}/${curating.total})`
+                  : 'Preparing your collection…'}
               </p>
             </m.div>
           ) : null}
