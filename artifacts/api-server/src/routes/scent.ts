@@ -42,6 +42,33 @@ const router = Router();
 // `refreshCount`, which a client could reset to bypass the regeneration caps.
 const refreshAttemptCounter = new RefreshAttemptCounter();
 
+// Per-IP fixed-window caps on the (intentionally unauthenticated) guest
+// add-flow endpoints. Each MISS on the catalog/global cache bills real spend —
+// engine scrapes, Serper searches, image processing — and unlike
+// /reviews/summarize and /scent-mission these routes previously had no per-IP
+// throttle at all. Defaults are far above legitimate single-user rates (an add
+// is one /search-scent fallback + one /scent-profile; refresh-image is one
+// user-initiated click per tile), so ordinary use never sees a 429.
+function envRateLimit(envVar: string, fallback: number): number {
+  const raw = Number(process.env[envVar]?.trim());
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : fallback;
+}
+const scentProfileRateLimit = rateLimitMiddleware({
+  name: "scent-profile",
+  limit: envRateLimit("SCENT_PROFILE_RATE_LIMIT", 30),
+  windowMs: 5 * 60_000,
+});
+const searchScentRateLimit = rateLimitMiddleware({
+  name: "search-scent",
+  limit: envRateLimit("SEARCH_SCENT_RATE_LIMIT", 60),
+  windowMs: 5 * 60_000,
+});
+const refreshImageRateLimit = rateLimitMiddleware({
+  name: "refresh-image",
+  limit: envRateLimit("REFRESH_IMAGE_RATE_LIMIT", 20),
+  windowMs: 5 * 60_000,
+});
+
 type ConcentrationHint = "edt" | "edp" | "parfum" | "extrait" | "elixir";
 
 const CONCENTRATION_HINT_SET = new Set<ConcentrationHint>([
@@ -138,7 +165,7 @@ router.get("/weather", async (req, res) => {
   res.json(data);
 });
 
-router.post("/scent-profile", async (req, res) => {
+router.post("/scent-profile", scentProfileRateLimit, async (req, res) => {
   const {
     name,
     brand,
@@ -239,7 +266,7 @@ router.get("/shared-image", async (req, res) => {
   });
 });
 
-router.post("/search-scent", async (req, res) => {
+router.post("/search-scent", searchScentRateLimit, async (req, res) => {
   const { query, concentrationHint } = req.body as { query?: string; concentrationHint?: ConcentrationHint };
   if (!query) {
     res.status(400).json({ error: "Query is required" });
@@ -377,7 +404,7 @@ router.post("/search-scent", async (req, res) => {
   }
 });
 
-router.post("/refresh-image", async (req, res) => {
+router.post("/refresh-image", refreshImageRateLimit, async (req, res) => {
   const body = req.body as {
     name?: string;
     brand?: string;
