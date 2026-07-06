@@ -4,6 +4,22 @@ Date: 2026-07-06. Scope: remove Vercel entirely and host the stack on AWS, as si
 possible. This document covers the web app (this repo). The Python engine has its own
 companion plan at `srt-scent-engine/docs/AWS_MIGRATION_PLAN.md`.
 
+## Implementation status (2026-07-06)
+
+Repo-side work is DONE; what remains is AWS account work (Phases 0-3) and the
+post-cutover cleanup (Phase 4, deliberately NOT done yet — Vercel/Railway are live).
+
+- **`Dockerfile`**: `ARG VITE_GIT_SHA` now feeds the SPA build (Phase 2 step 1), so
+  the telemetry build tag survives without `VITE_VERCEL_GIT_COMMIT_SHA`. Empty
+  default keeps Railway builds unchanged.
+- **`.github/workflows/tests.yml`**: Phase 5 deploy job added behind the existing
+  typecheck/test/Lighthouse gates. It stays skipped until the repo variable
+  `AWS_DEPLOY_ENABLED=true` is set (plus `AWS_REGION`, `AWS_DEPLOY_ROLE_ARN`,
+  `ECR_REPOSITORY`, optional `APPRUNNER_SERVICE_ARN`), so Vercel/Railway git-push
+  deploys remain authoritative during the parallel run.
+- The engine repo's half (its Dockerfile + gated pipeline) is landed on its side —
+  see the companion plan's own implementation-status section.
+
 ---
 
 ## 1. Current topology (audited)

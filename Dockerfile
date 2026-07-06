@@ -20,6 +20,13 @@ COPY scripts ./scripts
 # Install devDependencies (TypeScript, Vite, etc.) required by root `pnpm run build`.
 RUN NODE_ENV=development CI=true pnpm install --frozen-lockfile
 
+# Build-time SPA version tag (a git SHA, not a secret): webVitalsTelemetry.ts
+# reads VITE_GIT_SHA when Vercel's injected VITE_VERCEL_GIT_COMMIT_SHA is
+# absent (docs/AWS_MIGRATION_PLAN.md, Phase 2). Empty default keeps Railway
+# builds byte-identical to before.
+ARG VITE_GIT_SHA=""
+ENV VITE_GIT_SHA=${VITE_GIT_SHA}
+
 # Typecheck + workspace builds; production mode for app bundles where applicable.
 RUN NODE_ENV=production pnpm run build
 

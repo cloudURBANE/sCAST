@@ -29,3 +29,45 @@ jobs:
       - run: pnpm --filter @workspace/scent-cast run build
 
       - run: pnpm --filter @workspace/scent-cast run perf:lhci
+
+  deploy:
+    # AWS cutover switch (docs/AWS_MIGRATION_PLAN.md, Phase 5): skipped until
+    # the repo variable AWS_DEPLOY_ENABLED is set to 'true', so Vercel/Railway
+    # git-push deploys stay the production path during the parallel run.
+    # Required repo variables once enabled: AWS_REGION, AWS_DEPLOY_ROLE_ARN
+    # (OIDC role — no long-lived keys), ECR_REPOSITORY, and optionally
+    # APPRUNNER_SERVICE_ARN (omit if the App Runner service auto-deploys on
+    # ECR push). VITE_API_BASE_URL stays unset on purpose: the container
+    # serves the SPA and /api from one origin (app.ts), so browser calls are
+    # same-origin and engine calls go through /api/engine.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.AWS_DEPLOY_ENABLED == 'true'
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: ecr
+
+      - name: Build and push image
+        run: |
+          IMAGE="${{ steps.ecr.outputs.registry }}/${{ vars.ECR_REPOSITORY }}"
+          docker build \
+            --build-arg VITE_GIT_SHA="${{ github.sha }}" \
+            -t "$IMAGE:${{ github.sha }}" \
+            -t "$IMAGE:latest" \
+            .
+          docker push "$IMAGE:${{ github.sha }}"
+          docker push "$IMAGE:latest"
+
+      - name: Start App Runner deployment
+        if: vars.APPRUNNER_SERVICE_ARN != ''
+        run: aws apprunner start-deployment --service-arn "${{ vars.APPRUNNER_SERVICE_ARN }}"
