@@ -166,9 +166,11 @@
   display: none;
 }
 
-/* Top bar: the dark near-opaque fill → a light, near-opaque fill with a hairline. */
+/* Top bar: the dark opaque fill → a light opaque fill with a hairline.
+   Opaque for the same reason as dark: scrolled content must never ghost
+   through the fixed bar. */
 [data-theme="light"] .scent-topbar {
-  background: rgba(250, 248, 243, 0.97);
+  background: rgb(250, 248, 243);
   box-shadow: 0 1px 0 rgba(20, 16, 12, 0.06), 0 12px 34px rgba(20, 16, 12, 0.08);
 }
 
@@ -920,13 +922,14 @@ a {
 }
 
 .scent-topbar {
-  /* Near-opaque so content scrolling beneath the fixed bar doesn't ghost
-     through (the logo/title used to read as a faint stacked layer at 0.86).
+  /* Fully opaque so content scrolling beneath the fixed bar can never ghost
+     through — at 0.97 a bright gold pill or heart still bled a visible
+     phantom through the bar on OLED phones (0.86 before that was worse).
      Kept as a flat fill rather than restoring backdrop-filter: the blur added
      almost nothing visually while forcing a full-width re-blur on every
      scroll/animation frame — the dominant scroll-jank source over the animated
      nexus background. */
-  background: rgba(5, 3, 2, 0.97);
+  background: rgb(5, 3, 2);
   /* No bottom hairline: on the home screen the scrolling marketing marquee sits
      flush against the bar and acts as the divider; the soft drop-shadow below
      still separates the bar from content on every route. */
@@ -3667,6 +3670,20 @@ a {
 .scent-community-marquee-card .scent-card-title-row {
   opacity: 0.78;
   transition: opacity var(--scent-transition-base) var(--scent-ease-out);
+}
+
+/* The fragrance name is the tile's primary content, so it must never die in a
+   mid-word ellipsis ("Vetyver And Whi…"). Wrap to two lines and clamp — the
+   same treatment the compact vault grid already uses — instead of the base
+   .scent-card-title single-line nowrap ellipsis. The image slot above is
+   min-h-0/flex, so a second line shrinks the packshot slightly rather than
+   overflowing the fixed-height marquee cell. */
+.scent-community-marquee-card .scent-card-title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+  overflow: hidden;
 }
 
 .scent-community-marquee-card:focus-visible .scent-card-title-row {
