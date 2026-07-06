@@ -125,15 +125,15 @@ export const ArenaPage: React.FC<ArenaPageProps> = ({
           </div>
         ) : isError ? (
           <div role="alert" className="mx-auto grid min-h-[62svh] max-w-xl place-items-center text-center">
-            <div className="rounded-[var(--radius-scent)] border border-red-500/24 bg-red-500/[0.055] p-6">
-              <p className="font-serif text-2xl text-red-100">Arena could not load.</p>
-              <p className="mt-3 text-sm leading-6 text-red-100/82">
+            <div className="scent-error-panel rounded-[var(--radius-scent)] border p-6">
+              <p className="font-serif text-2xl">Arena could not load.</p>
+              <p className="scent-error-body mt-3 text-sm leading-6">
                 {error instanceof Error ? error.message : 'Battle data is unavailable.'}
               </p>
               <button
                 type="button"
                 onClick={() => void refetch()}
-                className="mt-5 inline-flex min-h-11 items-center justify-center rounded-full border border-red-200/38 px-5 py-2 scent-type-chip text-red-100 transition-colors hover:border-red-200/70 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200/70"
+                className="scent-error-action mt-5 inline-flex min-h-11 items-center justify-center rounded-full px-5 py-2 scent-type-chip focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current"
               >
                 Try again
               </button>
@@ -158,7 +158,7 @@ export const ArenaPage: React.FC<ArenaPageProps> = ({
           </>
         ) : (
           <div className="mx-auto grid min-h-[62svh] max-w-2xl place-items-center text-center">
-            <div className="rounded-[var(--radius-scent)] border border-scent-accent/24 bg-black/68 px-6 py-8 shadow-[inset_0_1px_0_rgba(255,236,183,0.06),0_18px_44px_-34px_rgba(0,0,0,0.9)] sm:py-10">
+            <div className="rounded-[var(--radius-scent)] border border-scent-accent/24 bg-scent-surface/68 px-6 py-8 shadow-[inset_0_1px_0_rgba(255,236,183,0.06),0_18px_44px_-34px_rgba(0,0,0,0.9)] sm:py-10">
               <Swords className="mx-auto h-10 w-10 text-scent-accent" aria-hidden="true" />
               <p className="mt-5 font-serif text-3xl text-foreground">No battles are ready yet.</p>
               <p className="mx-auto mt-4 max-w-md text-base leading-7 text-scent-text-muted">

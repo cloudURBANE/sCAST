@@ -135,21 +135,21 @@ export function RouteErrorFallback({
   onRetry: () => void;
 }) {
   return (
-    <div role="alert" className="mx-auto my-16 w-full max-w-md px-6 text-center text-white">
-      <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-red-500/10 border border-red-500/20 text-red-400">
+    <div role="alert" className="mx-auto my-16 w-full max-w-md px-6 text-center text-foreground">
+      <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-red-500/10 border border-red-500/20 text-destructive">
         <AlertOctagon size={26} strokeWidth={1.5} />
       </div>
-      <h2 className="font-serif italic text-2xl text-[#fff7ec] tracking-tight">
+      <h2 className="font-serif italic text-2xl text-foreground tracking-tight">
         {label} couldn't load
       </h2>
-      <p className="mt-2 text-sm text-white/55 leading-relaxed">
+      <p className="mt-2 text-sm text-scent-text-muted leading-relaxed">
         Something went wrong rendering this view. The rest of the app is still here.
       </p>
-      <p className="mt-3 text-xs text-white/35 font-mono break-words">{error.message}</p>
+      <p className="mt-3 text-xs text-scent-text-subtle/80 font-mono break-words">{error.message}</p>
       <button
         type="button"
         onClick={onRetry}
-        className="mt-6 inline-flex items-center justify-center gap-2 rounded-[var(--radius-scent)] border border-white/15 px-5 h-11 text-sm text-white/80 hover:bg-white/5 transition-colors"
+        className="mt-6 inline-flex items-center justify-center gap-2 rounded-[var(--radius-scent)] border border-scent-text-subtle/30 px-5 h-11 text-sm text-scent-text-muted hover:bg-scent-text-subtle/10 transition-colors"
       >
         <RotateCcw size={16} className="shrink-0" />
         <span>Try again</span>

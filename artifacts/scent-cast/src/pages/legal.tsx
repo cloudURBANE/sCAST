@@ -32,7 +32,7 @@ function LegalLayout({
   children: React.ReactNode;
 }) {
   return (
-    <main className="relative z-10 min-h-[100svh] w-full text-white">
+    <main className="relative z-10 min-h-[100svh] w-full text-foreground">
       <div className="mx-auto w-full max-w-3xl px-6 pt-[calc(var(--topbar-h)+1.5rem)] pb-20 sm:px-8">
         <div className="flex items-center justify-between">
           <Link to="/" aria-label="Go to home" className="inline-flex opacity-80 transition-opacity hover:opacity-100">
@@ -46,7 +46,7 @@ function LegalLayout({
           </Link>
           <Link
             to="/"
-            className="inline-flex min-h-10 items-center gap-2 rounded-full px-3 text-[10px] font-bold uppercase tracking-[0.2em] text-scent-text-subtle transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
+            className="inline-flex min-h-10 items-center gap-2 rounded-full px-3 text-[10px] font-bold uppercase tracking-[0.2em] text-scent-text-subtle transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
           >
             <ArrowLeft size={14} aria-hidden="true" />
             Home
@@ -55,7 +55,7 @@ function LegalLayout({
 
         <header className="mt-12 border-b border-scent-accent/12 pb-8">
           <p className="scent-type-label text-scent-accent/80">{eyebrow}</p>
-          <h1 className="mt-3 font-serif text-4xl italic leading-tight text-[#fff7ec] sm:text-5xl">
+          <h1 className="mt-3 font-serif text-4xl italic leading-tight text-foreground sm:text-5xl">
             {title}
           </h1>
           <p className="mt-5 max-w-2xl text-[15px] leading-7 text-scent-text-muted">{intro}</p>

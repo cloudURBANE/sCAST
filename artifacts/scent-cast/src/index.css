@@ -4368,3 +4368,73 @@ input.scent-lux-input:focus-visible {
     box-shadow: none;
   }
 }
+
+/* ─── Canvas error panels ─────────────────────────────────────────────────────
+ * Shared "could not load" surface for error states that sit directly on the
+ * page canvas (arena, community feed, route fallbacks). Dark keeps the
+ * established red-tinted panel with pale-rose ink; light flips the ink to a
+ * deep red so the copy stays readable on the light canvas. Always-dark
+ * surfaces (the fragrance detail modal, cookie banner) keep their literal
+ * red-100 utilities and are not affected by these classes. */
+.scent-error-panel {
+  --scent-error-ink: #fee2e2;
+  --scent-error-ink-soft: rgb(254 226 226 / 0.84);
+  --scent-error-ink-hover: #fff7ec;
+  --scent-error-edge: rgb(254 202 202 / 0.4);
+  --scent-error-edge-hover: rgb(254 202 202 / 0.7);
+  color: var(--scent-error-ink);
+  border-color: rgb(239 68 68 / 0.22);
+  background-color: rgb(239 68 68 / 0.055);
+}
+
+[data-theme="light"] .scent-error-panel {
+  --scent-error-ink: #7f1d1d;
+  --scent-error-ink-soft: rgb(127 29 29 / 0.86);
+  --scent-error-ink-hover: #450a0a;
+  --scent-error-edge: rgb(153 27 27 / 0.42);
+  --scent-error-edge-hover: rgb(153 27 27 / 0.72);
+  border-color: rgb(185 28 28 / 0.26);
+  background-color: rgb(220 38 38 / 0.06);
+}
+
+.scent-error-body {
+  color: var(--scent-error-ink-soft);
+}
+
+.scent-error-action {
+  color: var(--scent-error-ink);
+  border: 1px solid var(--scent-error-edge);
+  transition:
+    color var(--scent-transition-fast) var(--scent-ease-out),
+    border-color var(--scent-transition-fast) var(--scent-ease-out);
+}
+
+.scent-error-action:hover {
+  color: var(--scent-error-ink-hover);
+  border-color: var(--scent-error-edge-hover);
+}
+
+/* ─── Vault onboarding card ───────────────────────────────────────────────────
+ * The zero-bottle Collection Vault card. The dark face is a faint cream sheen
+ * dissolving into black; on the light canvas that black tail read as a muddy
+ * gray smear, so light swaps it for a clean white card fade. */
+.scent-onboarding-card {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 247, 236, 0.045),
+    rgba(255, 247, 236, 0.012) 44%,
+    rgba(0, 0, 0, 0.3)
+  );
+}
+
+[data-theme="light"] .scent-onboarding-card {
+  background: linear-gradient(180deg, #ffffff, rgba(255, 255, 255, 0.72) 44%, rgba(255, 255, 255, 0.4));
+}
+
+/* ─── Consent surfaces (always dark) ──────────────────────────────────────────
+ * The cookie banner and preferences modal keep their warm-black face in both
+ * themes, so their eyebrow labels must keep the dark-theme ink; without this
+ * pin the flipped light token renders the label dark-on-dark. */
+.scent-consent-surface .scent-type-label {
+  color: #ead8bd;
+}

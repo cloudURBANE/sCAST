@@ -940,7 +940,7 @@ const VaultDiscoveryProgress: React.FC<{
           className={`h-1.5 rounded-full ${
             slot < progress
               ? 'bg-gradient-to-r from-scent-accent to-[#e7c45f] shadow-[inset_0_1px_0_rgba(255,244,204,0.4)]'
-              : 'bg-white/10'
+              : 'bg-scent-text-subtle/25'
           }`}
         />
       ))}
@@ -959,7 +959,7 @@ const VaultDiscoveryProgress: React.FC<{
   if (variant === 'banner') {
     return (
       <div
-        className={`rounded-[calc(var(--radius-scent)-8px)] border border-scent-accent/18 bg-black/32 px-4 py-3.5 shadow-[inset_0_1px_0_rgba(255,236,183,0.07)] sm:px-5 ${className}`.trim()}
+        className={`rounded-[calc(var(--radius-scent)-8px)] border border-scent-accent/18 bg-scent-surface/40 px-4 py-3.5 shadow-[inset_0_1px_0_rgba(255,236,183,0.07)] sm:px-5 ${className}`.trim()}
       >
         {header}
         <div className="mt-2.5">{segments}</div>
@@ -986,8 +986,8 @@ const VaultDiscoveryProgress: React.FC<{
                   step.done
                     ? 'border-scent-accent/60 bg-scent-accent/[0.14] text-scent-accent'
                     : active
-                      ? 'border-scent-accent/45 bg-black/40 text-scent-accent'
-                      : 'border-white/14 bg-black/30 text-scent-text-subtle'
+                      ? 'border-scent-accent/45 bg-scent-surface/50 text-scent-accent'
+                      : 'border-scent-text-subtle/30 bg-scent-surface/40 text-scent-text-subtle'
                 }`}
                 aria-hidden
               >
@@ -998,7 +998,7 @@ const VaultDiscoveryProgress: React.FC<{
                   step.done
                     ? 'text-scent-text-muted'
                     : active
-                      ? 'text-[#fff7ec]'
+                      ? 'text-foreground'
                       : 'text-scent-text-subtle'
                 }`}
               >
@@ -2058,7 +2058,7 @@ export const Wardrobe: React.FC<{
               Your collection — the signal behind every recommendation.
             </p>
             <div className="flex justify-center" role="status" aria-live="polite" aria-atomic="true">
-              <span className="inline-flex items-center gap-2 rounded-full border border-scent-accent/26 bg-black/38 px-4 py-1.5 shadow-[inset_0_1px_0_rgba(255,236,183,0.08)]">
+              <span className="inline-flex items-center gap-2 rounded-full border border-scent-accent/26 bg-scent-surface/50 px-4 py-1.5 shadow-[inset_0_1px_0_rgba(255,236,183,0.08)]">
                 <span className="font-mono text-[11px] font-semibold tabular-nums text-scent-accent">{filteredItems.length}</span>
                 <span className="scent-type-label text-scent-accent/80">{filteredItems.length === 1 ? 'Entry' : 'Entries'}</span>
               </span>
@@ -2405,9 +2405,9 @@ export const Wardrobe: React.FC<{
                   reading path — emblem/label → headline → one line of copy →
                   primary CTA → live discovery progress. No side panel, no
                   nested mini-cards, no oversized hero. */}
-              <div className="relative overflow-hidden rounded-[var(--radius-scent)] border border-scent-accent/24 bg-[linear-gradient(180deg,rgba(255,247,236,0.045),rgba(255,247,236,0.012)_44%,rgba(0,0,0,0.3))] px-6 py-9 text-center shadow-[inset_0_1px_0_rgba(255,236,183,0.1),0_28px_64px_-44px_rgba(0,0,0,0.9)] sm:px-10 sm:py-11">
+              <div className="scent-onboarding-card relative overflow-hidden rounded-[var(--radius-scent)] border border-scent-accent/24 px-6 py-9 text-center shadow-[inset_0_1px_0_rgba(255,236,183,0.1),0_28px_64px_-44px_rgba(0,0,0,0.9)] sm:px-10 sm:py-11">
                 <div className="pointer-events-none absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-scent-accent/45 to-transparent" aria-hidden />
-                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full border border-scent-accent/24 bg-black/40 shadow-[inset_0_1px_0_rgba(255,236,183,0.09)]" aria-hidden>
+                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full border border-scent-accent/24 bg-scent-surface/50 shadow-[inset_0_1px_0_rgba(255,236,183,0.09)]" aria-hidden>
                   <VaultEmptyEmblem />
                 </div>
                 <p className="scent-type-label text-scent-accent/85">Collection Vault</p>
@@ -2430,7 +2430,7 @@ export const Wardrobe: React.FC<{
                 <VaultDiscoveryProgress
                   count={vaultCount}
                   variant="full"
-                  className="mx-auto mt-8 max-w-[22rem] border-t border-white/8 pt-6"
+                  className="mx-auto mt-8 max-w-[22rem] border-t border-scent-text-subtle/20 pt-6"
                 />
               </div>
             </div>
