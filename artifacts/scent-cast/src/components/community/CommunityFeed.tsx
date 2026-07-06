@@ -165,16 +165,16 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
     return (
       <div
         role="alert"
-        className="mx-auto w-full max-w-[940px] rounded-[calc(var(--radius-scent)+2px)] border border-red-500/20 bg-red-500/[0.055] p-6 text-center shadow-[inset_0_1px_0_rgba(255,236,183,0.04)]"
+        className="scent-error-panel mx-auto w-full max-w-[940px] rounded-[calc(var(--radius-scent)+2px)] border p-6 text-center shadow-[inset_0_1px_0_rgba(255,236,183,0.04)]"
       >
-        <p className="font-serif text-xl italic text-red-100">The feed could not load.</p>
-        <p className="mt-2 text-sm font-medium text-red-100/85">
+        <p className="font-serif text-xl italic">The feed could not load.</p>
+        <p className="scent-error-body mt-2 text-sm font-medium">
           {error instanceof Error ? error.message : 'Community feed is unavailable.'}
         </p>
         <button
           type="button"
           onClick={() => void refetch()}
-          className="mt-5 inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-red-200/40 px-5 py-2 scent-type-chip text-red-100 transition-colors hover:border-red-200/70 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200/80"
+          className="scent-error-action mt-5 inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-5 py-2 scent-type-chip focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current"
         >
           Try again
         </button>
@@ -187,8 +187,8 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
     const shouldClearFilters = Boolean(filters.q);
     const { title, body, actionLabel, actionAriaLabel } = emptyStateCopy(filters);
     return (
-      <div className="mx-auto w-full max-w-[940px] rounded-[calc(var(--radius-scent)+2px)] border border-scent-accent/18 bg-black/46 px-6 py-12 text-center shadow-[inset_0_1px_0_rgba(255,236,183,0.04)]">
-        <p className="font-serif text-2xl italic text-[#fff7ec]">{title}</p>
+      <div className="mx-auto w-full max-w-[940px] rounded-[calc(var(--radius-scent)+2px)] border border-scent-accent/18 bg-scent-surface/46 px-6 py-12 text-center shadow-[inset_0_1px_0_rgba(255,236,183,0.04)]">
+        <p className="font-serif text-2xl italic text-foreground">{title}</p>
         <p className="mx-auto mt-4 max-w-lg text-base leading-7 text-scent-text-muted">{body}</p>
         <div className="mt-6 flex justify-center">
           {shouldClearFilters ? (
@@ -196,7 +196,7 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
               type="button"
               onClick={onClearFilters}
               aria-label={actionAriaLabel}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-scent-accent/22 bg-black/58 px-5 py-2 scent-type-chip text-scent-text-muted transition-colors hover:border-scent-accent/42 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-scent-accent/22 bg-scent-surface/58 px-5 py-2 scent-type-chip text-scent-text-muted transition-colors hover:border-scent-accent/42 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80"
             >
               <X size={15} strokeWidth={1.8} aria-hidden="true" />
               {actionLabel}
@@ -217,7 +217,7 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
           <button
             type="button"
             onClick={onClearFilters}
-            className="mt-4 inline-flex min-h-10 items-center justify-center gap-2 rounded-full px-4 py-2 scent-type-chip text-scent-text-muted transition-colors hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80"
+            className="mt-4 inline-flex min-h-10 items-center justify-center gap-2 rounded-full px-4 py-2 scent-type-chip text-scent-text-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80"
           >
             <X size={14} strokeWidth={1.8} aria-hidden="true" />
             Clear filters

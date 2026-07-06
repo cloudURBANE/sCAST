@@ -72,14 +72,16 @@ export function CookieConsentBanner() {
             transition={{ duration: 0.32, ease: SCENT_EASE_OUT_EXPO }}
             className="fixed inset-x-0 z-[120] flex justify-center px-[max(0.75rem,env(safe-area-inset-left,0px))] bottom-[max(0.75rem,calc(env(safe-area-inset-bottom,0px)+0.75rem))] md:bottom-6"
           >
-            <div className="pointer-events-auto w-full max-w-2xl rounded-[18px] border border-scent-accent/22 bg-[#0b0805]/95 p-4 text-scent-text-primary shadow-[0_22px_60px_rgba(0,0,0,0.66)] backdrop-blur-md sm:p-5">
+            {/* Always-dark surface: ink is pinned to the dark-theme literals so the
+                light theme's flipped text tokens can't go dark-on-dark here. */}
+            <div className="scent-consent-surface pointer-events-auto w-full max-w-2xl rounded-[18px] border border-scent-accent/22 bg-[#0b0805]/95 p-4 text-[#fff7ec] shadow-[0_22px_60px_rgba(0,0,0,0.66)] backdrop-blur-md sm:p-5">
               <div className="flex items-start gap-3.5">
                 <span className="mt-0.5 hidden h-10 w-10 shrink-0 items-center justify-center rounded-full border border-scent-accent/30 bg-black/40 text-scent-accent sm:inline-flex">
                   <Cookie size={18} strokeWidth={1.75} aria-hidden="true" />
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="scent-type-label text-scent-accent/80">Your privacy</p>
-                  <p className="mt-1.5 text-[13px] leading-relaxed text-scent-text-muted">
+                  <p className="mt-1.5 text-[13px] leading-relaxed text-[#ead8bd]">
                     We use essential storage to run ScentBeam and keep you signed in. With your
                     consent we also measure anonymous performance to improve the experience — no
                     advertising or cross-site tracking, ever. Read our{" "}
@@ -107,14 +109,14 @@ export function CookieConsentBanner() {
                     <button
                       type="button"
                       onClick={handleEssentialOnly}
-                      className="inline-flex min-h-11 items-center justify-center rounded-full border border-white/14 px-3 text-[11px] font-bold uppercase tracking-[0.16em] text-scent-text-muted transition-colors hover:border-scent-accent/45 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 sm:px-5"
+                      className="inline-flex min-h-11 items-center justify-center rounded-full border border-white/14 px-3 text-[11px] font-bold uppercase tracking-[0.16em] text-[#ead8bd] transition-colors hover:border-scent-accent/45 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 sm:px-5"
                     >
                       Essential only
                     </button>
                     <button
                       type="button"
                       onClick={() => setMode("manage")}
-                      className="col-span-full inline-flex min-h-11 items-center justify-center rounded-full px-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-scent-text-subtle transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 sm:col-auto sm:ml-auto"
+                      className="col-span-full inline-flex min-h-11 items-center justify-center rounded-full px-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#bfae98] transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 sm:col-auto sm:ml-auto"
                     >
                       Manage
                     </button>
@@ -162,14 +164,14 @@ function ConsentManager({ onClose }: { onClose: () => void }) {
       <m.div
         initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-lg rounded-[20px] border border-scent-accent/22 bg-[#0b0805]/97 p-5 text-scent-text-primary shadow-[0_28px_70px_rgba(0,0,0,0.72)] sm:p-7"
+        className="scent-consent-surface w-full max-w-lg rounded-[20px] border border-scent-accent/22 bg-[#0b0805]/97 p-5 text-[#fff7ec] shadow-[0_28px_70px_rgba(0,0,0,0.72)] sm:p-7"
       >
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="scent-type-label text-scent-accent/80">Cookie preferences</p>
             <h2
               id="cookie-manager-title"
-              className="mt-1.5 font-serif text-2xl italic leading-tight text-scent-text-primary"
+              className="mt-1.5 font-serif text-2xl italic leading-tight text-[#fff7ec]"
             >
               Choose what we store
             </h2>
@@ -178,7 +180,7 @@ function ConsentManager({ onClose }: { onClose: () => void }) {
             type="button"
             onClick={onClose}
             aria-label="Close cookie preferences"
-            className="-m-1 inline-flex min-h-10 min-w-10 items-center justify-center rounded-full text-scent-text-subtle transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
+            className="-m-1 inline-flex min-h-10 min-w-10 items-center justify-center rounded-full text-[#bfae98] transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
           >
             <X size={18} strokeWidth={1.75} aria-hidden="true" />
           </button>
@@ -217,7 +219,7 @@ function ConsentManager({ onClose }: { onClose: () => void }) {
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex min-h-11 items-center justify-center rounded-full border border-white/14 px-5 text-[11px] font-bold uppercase tracking-[0.16em] text-scent-text-muted transition-colors hover:border-scent-accent/45 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
+            className="inline-flex min-h-11 items-center justify-center rounded-full border border-white/14 px-5 text-[11px] font-bold uppercase tracking-[0.16em] text-[#ead8bd] transition-colors hover:border-scent-accent/45 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
           >
             Cancel
           </button>
@@ -252,8 +254,8 @@ function PreferenceRow({
         {icon}
       </span>
       <div className="min-w-0 flex-1">
-        <p className="text-[13px] font-semibold tracking-[0.02em] text-scent-text-primary">{title}</p>
-        <p className="mt-1 text-[12px] leading-relaxed text-scent-text-subtle">{description}</p>
+        <p className="text-[13px] font-semibold tracking-[0.02em] text-[#fff7ec]">{title}</p>
+        <p className="mt-1 text-[12px] leading-relaxed text-[#bfae98]">{description}</p>
       </div>
       <div className="shrink-0 pt-1">{control}</div>
     </div>

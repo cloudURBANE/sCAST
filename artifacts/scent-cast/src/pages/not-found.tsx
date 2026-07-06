@@ -15,7 +15,7 @@ export default function NotFound() {
         />
         {/* No projected gold glow off the disc (owner-rejected site-wide) — a
             subtle inset highlight carries the depth instead. */}
-        <div className="mt-12 flex h-16 w-16 items-center justify-center rounded-full border border-scent-accent/25 bg-black/35 text-scent-accent shadow-[inset_0_1px_0_rgba(255,236,183,0.12)]">
+        <div className="mt-12 flex h-16 w-16 items-center justify-center rounded-full border border-scent-accent/25 bg-scent-surface/50 text-scent-accent shadow-[inset_0_1px_0_rgba(255,236,183,0.12)]">
           <Compass size={28} aria-hidden="true" />
         </div>
         <p className="mt-8 text-[10px] font-bold uppercase tracking-[0.42em] text-scent-accent/80">404</p>
