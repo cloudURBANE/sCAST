@@ -4431,6 +4431,20 @@ input.scent-lux-input:focus-visible {
   background: linear-gradient(180deg, #ffffff, rgba(255, 255, 255, 0.72) 44%, rgba(255, 255, 255, 0.4));
 }
 
+/* ─── Night panels (always dark) ──────────────────────────────────────────────
+ * Community surfaces (hero, toolbar panel, post cards) keep their warm-black
+ * face in both themes, but their copy is token-driven (scent-type-meta /
+ * scent-type-caption / text-scent-text-*). In light theme those ink tokens flip
+ * to dark values and vanish on the #050403 face, so this class re-pins the ink
+ * tokens to their dark-theme literals for everything inside the panel. */
+[data-theme="light"] .scent-night-panel {
+  --color-scent-text-primary: #fff7ec;
+  --color-scent-text-secondary: #ead8bd;
+  --color-scent-text-muted: #d8c4a8;
+  --color-scent-text-subtle: #bfae98;
+  --color-foreground: #fff7ec;
+}
+
 /* ─── Consent surfaces (always dark) ──────────────────────────────────────────
  * The cookie banner and preferences modal keep their warm-black face in both
  * themes, so their eyebrow labels must keep the dark-theme ink; without this

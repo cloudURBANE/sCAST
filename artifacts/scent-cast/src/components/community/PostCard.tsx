@@ -180,7 +180,7 @@ const PostActionsFooter: React.FC<{
       }
     >
       <MessageCircle size={15} strokeWidth={1.75} aria-hidden="true" />
-      <span className="text-[10px] font-bold uppercase tracking-[0.12em] sm:text-xs">
+      <span className="text-[11px] font-bold uppercase tracking-[0.12em] sm:text-xs">
         {post.counts.comments > 0 ? `${post.counts.comments}` : 'Comment'}
       </span>
       {commentsOpen ? (
@@ -227,7 +227,7 @@ const CompactBattlePostCard: React.FC<PostCardProps> = ({
   return (
     <article
       aria-labelledby={headingId}
-      className="mx-auto w-full max-w-[940px] overflow-hidden rounded-[18px] border border-scent-accent/34 bg-[#050403] p-3 text-left shadow-[inset_0_1px_0_rgba(255,236,183,0.06)] sm:rounded-[24px] sm:p-6"
+      className="scent-night-panel mx-auto w-full max-w-[940px] overflow-hidden rounded-[calc(var(--radius-scent)+2px)] border border-scent-accent/34 bg-[#050403] p-4 text-left shadow-[inset_0_1px_0_rgba(255,236,183,0.06)] sm:p-6"
     >
       <header className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
@@ -245,7 +245,7 @@ const CompactBattlePostCard: React.FC<PostCardProps> = ({
             >
               {authorName}
             </Link>
-            <p className="mt-1 scent-type-meta text-[10px] uppercase text-scent-muted sm:mt-1.5 sm:text-xs">
+            <p className="mt-1 scent-type-meta text-[11px] uppercase text-scent-muted sm:mt-1.5 sm:text-xs">
               {formatCommunityTime(post.createdAt)}
             </p>
           </div>
@@ -303,7 +303,7 @@ const CompactBattlePostCard: React.FC<PostCardProps> = ({
                   style={{ width: `${Math.max(pctA, pctB)}%` }}
                 />
               </div>
-              <p className="font-mono text-[10px] uppercase tracking-[0.1em] text-scent-accent sm:text-[11px]">
+              <p className="font-mono text-[11px] uppercase tracking-[0.1em] text-scent-accent sm:text-xs">
                 {Math.max(pctA, pctB)}% · {totalVotes} {totalVotes === 1 ? 'vote' : 'votes'}
               </p>
             </div>
@@ -335,7 +335,7 @@ const CompactBattlePostCard: React.FC<PostCardProps> = ({
         </div>
         <Link
           to="/arena"
-          className="scent-no-mobile-focus-ring inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 rounded-full border border-scent-accent/55 px-4 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-scent-accent transition-colors hover:border-scent-accent/80 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/60 sm:min-h-10 sm:px-5 sm:py-2 sm:text-xs"
+          className="scent-no-mobile-focus-ring inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 rounded-full border border-scent-accent/55 px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-scent-accent transition-colors hover:border-scent-accent/80 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/60 sm:min-h-10 sm:px-5 sm:py-2 sm:text-xs"
         >
           <span>Open arena</span>
           <ArrowRight size={14} strokeWidth={1.8} aria-hidden="true" />
@@ -358,7 +358,7 @@ const CompactQuestionPostCard: React.FC<PostCardProps> = ({
   return (
     <article
       aria-labelledby={headingId}
-      className="mx-auto w-full max-w-[940px] overflow-hidden rounded-[calc(var(--radius-scent)-2px)] border border-scent-accent/34 bg-[#050403] p-4 text-left sm:p-5"
+      className="scent-night-panel mx-auto w-full max-w-[940px] overflow-hidden rounded-[calc(var(--radius-scent)+2px)] border border-scent-accent/34 bg-[#050403] p-4 text-left sm:p-6"
     >
       <header className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
@@ -406,7 +406,7 @@ const CompactQuestionPostCard: React.FC<PostCardProps> = ({
           {post.tags.slice(0, 4).map((tag) => (
             <span
               key={tag}
-              className="max-w-full rounded-full border border-scent-accent/16 bg-black/48 px-2.5 py-1 scent-type-chip text-[10px] text-scent-text-muted"
+              className="max-w-full rounded-full border border-scent-accent/16 bg-black/48 px-2.5 py-1 scent-type-chip text-[11px] text-scent-text-muted"
             >
               #{tag}
             </span>
@@ -652,7 +652,7 @@ const ScentOfDayPostCard: React.FC<PostCardProps> = ({
   return (
     <article
       aria-labelledby={headingId}
-      className="mx-auto w-full max-w-[940px] overflow-hidden rounded-[calc(var(--radius-scent)+2px)] border border-scent-accent/34 bg-[#050403] p-4 text-left sm:p-5"
+      className="scent-night-panel mx-auto w-full max-w-[940px] overflow-hidden rounded-[calc(var(--radius-scent)+2px)] border border-scent-accent/34 bg-[#050403] p-4 text-left sm:p-6"
     >
       <header className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
@@ -702,7 +702,7 @@ const ScentOfDayPostCard: React.FC<PostCardProps> = ({
                 <Sparkles size={12} strokeWidth={1.8} aria-hidden="true" />
                 Today
               </span>
-              <span className="rounded-full border border-white/10 bg-white/[0.035] px-2.5 py-1 font-mono text-[9px] uppercase text-[#fff7ec]/52">
+              <span className="rounded-full border border-white/10 bg-white/[0.035] px-2.5 py-1 font-mono text-[10px] uppercase text-[#fff7ec]/52">
                 Beam
               </span>
             </div>
@@ -724,10 +724,13 @@ const ScentOfDayPostCard: React.FC<PostCardProps> = ({
               )}
             </div>
             <BrandGoldLabel as="span" brand={brand} className="scent-card-brand relative z-10 block" />
+            {/* Not a heading: the identity h3 beside the packshot is this
+                article's labelled heading; a second h3 with the same text
+                duplicated it in the outline. */}
             <div className="scent-card-title-row relative z-10 mt-2">
-              <h3 className="scent-card-title" title={heading}>
+              <p className="scent-card-title" title={heading}>
                 {heading}
-              </h3>
+              </p>
             </div>
           </div>
         </div>
@@ -735,7 +738,7 @@ const ScentOfDayPostCard: React.FC<PostCardProps> = ({
         <div className="flex min-w-0 flex-col justify-center py-1 text-left">
           <div className="hidden w-fit items-center gap-2 self-start rounded-full border border-scent-accent/18 bg-black/46 px-3 py-1.5 text-scent-accent sm:inline-flex">
             <Bot size={15} strokeWidth={1.75} aria-hidden="true" />
-            <span className="scent-type-chip text-[10px] uppercase">
+            <span className="scent-type-chip text-[11px] uppercase">
               Beam Agent generated
             </span>
           </div>
@@ -763,7 +766,7 @@ const ScentOfDayPostCard: React.FC<PostCardProps> = ({
               {fragments.map((fragment) => (
                 <span
                   key={fragment}
-                  className="rounded-full border border-scent-accent/16 bg-black/52 px-3 py-1 scent-type-chip text-[10px] text-scent-text-muted"
+                  className="rounded-full border border-scent-accent/16 bg-black/52 px-3 py-1 scent-type-chip text-[11px] text-scent-text-muted"
                 >
                   {fragment}
                 </span>
@@ -807,7 +810,7 @@ const StandardPostCard: React.FC<PostCardProps> = ({
   return (
     <article
       aria-labelledby={headingId}
-      className="mx-auto w-full max-w-[940px] overflow-hidden rounded-[calc(var(--radius-scent)+2px)] border border-scent-accent/34 bg-[#050403] p-4 text-left sm:p-7"
+      className="scent-night-panel mx-auto w-full max-w-[940px] overflow-hidden rounded-[calc(var(--radius-scent)+2px)] border border-scent-accent/34 bg-[#050403] p-4 text-left sm:p-6"
     >
       <header className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
         <div className="flex min-w-0 items-center gap-4 sm:gap-5">

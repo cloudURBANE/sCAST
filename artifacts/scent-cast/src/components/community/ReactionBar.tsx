@@ -109,7 +109,7 @@ export const ReactionBar: React.FC<ReactionBarProps> = ({
               aria-hidden="true"
               className={active ? 'fill-current' : undefined}
             />
-            <span className={compact ? 'sr-only' : 'not-sr-only text-[10px] font-bold uppercase tracking-[0.12em] sm:text-xs'}>
+            <span className={compact ? 'sr-only' : 'not-sr-only text-[11px] font-bold uppercase tracking-[0.12em] sm:text-xs'}>
               {label}
             </span>
             {count > 0 ? (
