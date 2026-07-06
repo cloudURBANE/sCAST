@@ -640,7 +640,22 @@ function recoverViewportAfterKeyboard(): void {
     // after an iOS screen-lock freezes the keyboard-dismiss resize/timer and the
     // recovery lands late. Defer to the lock entirely in that window.
     if (isBodyScrollLockActive()) return;
-    if (window.scrollY > 0) window.scrollTo({ top: 0 });
+    if (window.scrollY > 0) {
+      window.scrollTo({ top: 0 });
+      return;
+    }
+    // `scrollY` can already be 0 while the VISUAL viewport is still panned —
+    // iOS lifts the focused composer with a visual-viewport pan (it sits inside
+    // a translateZ(0) containing block), and that pan sometimes survives the
+    // keyboard dismissal. `scrollTo(0,0)` is then a no-op and the page stays
+    // shifted/cropped ("stuck zoomed-in"). A 1px scroll bump forces WebKit to
+    // re-clamp the visual viewport to the layout viewport; both writes land in
+    // the same frame, so nothing visibly moves.
+    const vv = window.visualViewport;
+    if (vv && (vv.offsetTop > 1 || vv.offsetLeft > 1)) {
+      window.scrollTo({ top: 1 });
+      window.scrollTo({ top: 0 });
+    }
   };
   const vv = window.visualViewport;
   if (!vv) {
@@ -1372,6 +1387,18 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   // so the calm confirmation line lands exactly once. Reset when a run begins.
   const stopIssuedRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  // Whether the transcript should auto-follow new content. True while the user
+  // sits at (or near) the bottom; flips false the moment they scroll up to read
+  // earlier turns, so the streaming/anchor effects below stop yanking the box
+  // back down mid-read (the "starting messages won't scroll / snap back" bug).
+  // Re-armed on every user-initiated send, and again when the user returns to
+  // the bottom on their own.
+  const followStreamRef = useRef(true);
+  // Set while a programmatic scroll is in flight so its own scroll events are
+  // not misread as the user scrolling away — a smooth scroll passes through
+  // "not near bottom" positions before it settles.
+  const programmaticScrollRef = useRef(false);
+  const programmaticScrollTimerRef = useRef<number | null>(null);
   const quickReplyScrollRef = useRef<HTMLDivElement | null>(null);
   const cueTrackRef = useRef<HTMLDivElement | null>(null);
   const cueGroupRef = useRef<HTMLDivElement | null>(null);
@@ -1404,7 +1431,29 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
     if (!el) return;
     const top = el.scrollTop > 6;
     const bottom = el.scrollTop + el.clientHeight < el.scrollHeight - 6;
+    // Only user-driven scrolls change the follow state; programmatic scrolls
+    // (which pass through mid positions while smooth-animating) are excluded.
+    if (!programmaticScrollRef.current) {
+      followStreamRef.current = el.scrollTop + el.clientHeight >= el.scrollHeight - 48;
+    }
     setScrollEdges((prev) => (prev.top === top && prev.bottom === bottom ? prev : { top, bottom }));
+  }, []);
+
+  // All auto-scrolls of the transcript go through here so the scroll events
+  // they raise never flip `followStreamRef` off (see updateScrollEdges). The
+  // guard window outlives a smooth scroll; an instant one clears next tick.
+  const scrollTranscriptTo = useCallback((top: number, behavior: ScrollBehavior) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    programmaticScrollRef.current = true;
+    if (programmaticScrollTimerRef.current !== null) {
+      window.clearTimeout(programmaticScrollTimerRef.current);
+    }
+    el.scrollTo({ top, behavior });
+    programmaticScrollTimerRef.current = window.setTimeout(() => {
+      programmaticScrollRef.current = false;
+      programmaticScrollTimerRef.current = null;
+    }, behavior === 'smooth' ? 480 : 80);
   }, []);
 
   useEffect(() => () => abortRef.current?.abort(), []);
@@ -1449,6 +1498,10 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
+    // Respect the reader: when the user has scrolled up (follow off), a new
+    // message/anchor must not yank the box. Follow re-arms on their next send
+    // or when they return to the bottom themselves.
+    if (!followStreamRef.current) return;
     const behavior: ScrollBehavior = calmMotion ? 'auto' : 'smooth';
     const anchor =
       el.querySelector<HTMLElement>('[data-scroll-anchor="beam-proposal"]') ??
@@ -1456,14 +1509,14 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       el.querySelector<HTMLElement>('[data-scroll-anchor="latest-agent"]');
     if (anchor) {
       const top = anchor.getBoundingClientRect().top - el.getBoundingClientRect().top + el.scrollTop;
-      el.scrollTo({ top: Math.max(top - 10, 0), behavior });
+      scrollTranscriptTo(Math.max(top - 10, 0), behavior);
     } else {
-      el.scrollTo({ top: el.scrollHeight, behavior });
+      scrollTranscriptTo(el.scrollHeight, behavior);
     }
     // Re-measure the fade hints once the (possibly smooth) scroll has settled.
     const id = window.setTimeout(updateScrollEdges, calmMotion ? 0 : 280);
     return () => window.clearTimeout(id);
-  }, [messages, resolved, proposal, busy, calmMotion, updateScrollEdges]);
+  }, [messages, resolved, proposal, busy, calmMotion, updateScrollEdges, scrollTranscriptTo]);
 
   // Keep the live agent output pinned in frame WHILE a turn is running. The
   // activity trail (and the typing bubble before it) is the last child of the
@@ -1477,10 +1530,15 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
     if (!busy) return;
     const el = scrollRef.current;
     if (!el) return;
-    el.scrollTo({ top: el.scrollHeight, behavior: calmMotion ? 'auto' : 'smooth' });
+    // Same reader-respect guard as the answer-anchoring effect above: while the
+    // user is reading earlier turns, each streamed activity step must not re-pin
+    // the box to the bottom (this repin was why the opening queue of messages
+    // felt frozen — every drag was instantly overridden).
+    if (!followStreamRef.current) return;
+    scrollTranscriptTo(el.scrollHeight, calmMotion ? 'auto' : 'smooth');
     const id = window.setTimeout(updateScrollEdges, calmMotion ? 0 : 280);
     return () => window.clearTimeout(id);
-  }, [busy, activity.length, progressNote, calmMotion, updateScrollEdges]);
+  }, [busy, activity.length, progressNote, calmMotion, updateScrollEdges, scrollTranscriptTo]);
 
   useEffect(() => {
     if (greetingMounted) return;
@@ -2061,6 +2119,9 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       startingFacets = facets,
     ) => {
       if (busy) return;
+      // A deliberate user action starts this turn — re-arm transcript follow so
+      // the run's output is kept in frame even if they had scrolled up before.
+      followStreamRef.current = true;
       if (items.length === 0) {
         appendMessage('agent', firstMissingPrompt(startingFacets, startingMission, agentMode, items.length));
         return;
@@ -2163,6 +2224,9 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   // report back. This is the only place the flow writes to the vault.
   const handleConfirmProposal = useCallback(async () => {
     if (!proposal || !onCurateCollection || curating) return;
+    // Confirming the proposal is a deliberate user action — keep its progress
+    // and result in frame.
+    followStreamRef.current = true;
     const collection = proposal.items;
     setCurating({ total: collection.length, progress: null });
     try {
@@ -2230,6 +2294,9 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       const trimmed = rawText.trim();
       if (!trimmed || busy || curating !== null) return;
       const echoUser = opts?.echoUser ?? true;
+      // The user just sent a message — re-arm transcript follow so their turn
+      // (and the streaming reply) is kept in frame even if they had scrolled up.
+      followStreamRef.current = true;
 
       // A fresh turn clears any prior catalog-failure recovery state.
       setCatalogFailure(false);
@@ -2661,16 +2728,33 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
     if (!track || !group) return;
     let cancelled = false;
     let raf = 0;
+    // A hidden portal host or a mid-transition frame can measure the group at
+    // 0 width. Retry across a few frames instead of silently leaving the track
+    // un-armed (`marqueeReady` stuck false no-ops useMarqueeSwipe's pointerdown
+    // while `touch-action: pan-y` blocks native horizontal panning — the lane
+    // would freeze under the finger). The ResizeObserver below still covers
+    // later size changes beyond this bounded window.
+    let zeroWidthRetries = 0;
 
     const measure = () => {
       if (cancelled) return;
       const distance = group.getBoundingClientRect().width;
-      if (distance <= 0) return;
+      if (distance <= 0) {
+        if (zeroWidthRetries < 20) {
+          zeroWidthRetries += 1;
+          raf = window.requestAnimationFrame(measure);
+        }
+        return;
+      }
       track.style.setProperty('--cue-marquee-distance', `${distance}px`);
       track.dataset.marqueeReady = 'true';
     };
 
     track.dataset.marqueeReady = 'false';
+    // Arm the swipe hook against the CURRENT layout immediately — waiting for
+    // fonts.ready + rAF left a window where the first touch found the track
+    // un-armed. The font-settle re-measure below only refines the distance.
+    measure();
     const start = () => {
       raf = window.requestAnimationFrame(measure);
     };
@@ -3037,7 +3121,12 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         // by the bottom fade overlay (h-8) or pinned behind the composer below it
         // — the "last line hidden behind the input" mobile clip. Honors the iOS
         // safe-area inset so it also clears the home indicator on notched phones.
-        className="flex w-full min-h-[13.5rem] max-h-[min(55dvh,29rem)] flex-col gap-3 overflow-y-auto px-1.5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-3 text-left scrollbar-hide sm:min-h-[15.5rem] sm:max-h-[min(57dvh,33rem)] sm:px-2 sm:pb-9 sm:pt-4"
+        // `svh` (not `dvh`) for the cap: dvh re-resolves live while iOS Safari
+        // collapses/expands its toolbar on composer focus, so the whole box
+        // visibly grew/shrank under the keyboard ("the screen swims"). svh is
+        // frozen at the small-viewport size, stable across focus/blur; in the
+        // installed PWA the two units are identical, so nothing changes there.
+        className="flex w-full min-h-[13.5rem] max-h-[min(55svh,29rem)] flex-col gap-3 overflow-y-auto px-1.5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-3 text-left scrollbar-hide sm:min-h-[15.5rem] sm:max-h-[min(57svh,33rem)] sm:px-2 sm:pb-9 sm:pt-4"
         // Contain the transcript's scroll so dragging it past its top/bottom does
         // NOT chain to the document and drag the page behind the panel. This is
         // the iOS-safe replacement for the old body scroll-lock: it keeps the
