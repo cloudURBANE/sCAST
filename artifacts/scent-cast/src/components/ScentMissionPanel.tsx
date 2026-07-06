@@ -406,6 +406,19 @@ function beamActivityDetail(tool: string, summary: string): string | undefined {
   if (s.startsWith('picked ')) return `Top match · ${s.slice('picked '.length)}`;
   if (s === 'no match') return 'No clear match yet';
   if (s === 'scored vault') return 'Ranked your vault';
+  // Card/kit tool summaries. "compared" is the no-overlap-number fallback for a
+  // card whose row label ("Setting them side by side") already says it all;
+  // "kit incomplete — retrying" and "lined up N" read as internal transcript.
+  if (s === 'compared') return undefined;
+  if (s === 'kit incomplete — retrying') return 'Completing the kit';
+  const linedUp = s.match(/^lined up (\d+)$/);
+  if (linedUp) {
+    const n = Number(linedUp[1]);
+    return `${n} ${n === 1 ? 'pick' : 'picks'} ready`;
+  }
+  // "charted Aventus" → surface just the bottle name after the row label
+  // ("Charting the scent profile · Aventus"), not the lowercase verb echo.
+  if (s.startsWith('charted ')) return s.slice('charted '.length);
   const sources = s.match(/^researched \((\d+) source\(s\)\)$/);
   if (sources) {
     const n = Number(sources[1]);
@@ -499,8 +512,6 @@ const BeamActivityStepRow: React.FC<{ step: BeamActivityStep; spin: boolean }> =
  * the ChatGPT / Claude pattern. The full tool-by-tool list only renders when the
  * user expands it, so the conversation never gets buried under the trail.
  */
-const ACTIVITY_TRAIL_BODY_ID = 'beam-activity-steps';
-
 const BeamActivityTrail: React.FC<{
   steps: BeamActivityStep[];
   calmMotion: boolean;
@@ -516,6 +527,11 @@ const BeamActivityTrail: React.FC<{
   outcome?: BeamTurnOutcome;
   onToggleExpand: () => void;
 }> = ({ steps, calmMotion, spin, running, expanded, elapsedMs, outcome, onToggleExpand }) => {
+  // Per-instance body id: a transcript renders one trail per settled turn (the
+  // recaps) plus the live one, so a shared constant id would duplicate across
+  // the document and point every toggle's aria-controls at the first recap.
+  const bodyId = React.useId();
+
   if (steps.length === 0) return null;
 
   const activeCount = steps.filter((s) => s.state === 'active').length;
@@ -571,7 +587,7 @@ const BeamActivityTrail: React.FC<{
           type="button"
           onClick={onToggleExpand}
           aria-expanded={expanded}
-          aria-controls={ACTIVITY_TRAIL_BODY_ID}
+          aria-controls={bodyId}
           className="-mr-1 flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-scent-accent/62 transition-colors hover:text-scent-accent focus:outline-none focus-visible:ring-1 focus-visible:ring-scent-accent/50"
         >
           <span>{expanded ? 'Hide actions' : 'View agent actions'}</span>
@@ -586,10 +602,10 @@ const BeamActivityTrail: React.FC<{
       <AnimatePresence initial={false}>
         {expanded ? (
           calmMotion ? (
-            <div id={ACTIVITY_TRAIL_BODY_ID}>{body}</div>
+            <div id={bodyId}>{body}</div>
           ) : (
             <m.div
-              id={ACTIVITY_TRAIL_BODY_ID}
+              id={bodyId}
               key="activity-body"
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
@@ -1492,6 +1508,21 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
     return () => window.clearTimeout(id);
   }, [cuesReady, introReady]);
 
+  // The greeting is created in the useState initializer, but the wardrobe loads
+  // asynchronously after sign-in — a user who opens the agent before that fetch
+  // lands gets the empty-vault "add a few fragrances first" line even though
+  // they own bottles (and it never corrects). Until the conversation starts
+  // (the transcript is still just the untouched intro), keep the greeting
+  // truthful to the live vault count.
+  useEffect(() => {
+    setMessages((prev) => {
+      if (prev.length !== 1 || prev[0].role !== 'agent') return prev;
+      const nextText = initialAgentMessage(items.length);
+      if (prev[0].text === nextText) return prev;
+      return [{ ...prev[0], text: nextText }];
+    });
+  }, [items.length]);
+
   // Re-arm the cue lane once the staged choice leaves the composer (sent or
   // cleared), so the next question's impressions can surface.
   useEffect(() => {
@@ -1634,7 +1665,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         : `${place} travel context${countPhrase}`;
     }
     const weatherParts = [
-      typeof weather?.temperature === 'number' ? `${Math.round(weather.temperature)}F` : null,
+      typeof weather?.temperature === 'number' ? `${Math.round(weather.temperature)}°F` : null,
       typeof weather?.humidity === 'number' ? `${Math.round(weather.humidity)}% humidity` : null,
       typeof weather?.condition === 'string' ? weather.condition : null,
     ].filter(Boolean);
@@ -1873,6 +1904,16 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         sessionIdRef.current = result.sessionId;
         setSessionId(result.sessionId);
         if (result.status === 'completed') {
+          // The user's Stop can also race a run that finishes anyway: if the
+          // stream's completed frame lands before the local abort settles, the
+          // full answer (and its recap + outcome flip) would render right after
+          // the "Stopped there" confirmation — the agent visibly talking past
+          // the stop. Settle silently, exactly like the stopped-frame race
+          // below; the session keeps the turn server-side for the next note.
+          if (stopIssuedRef.current) {
+            setAgentSuggestions([]);
+            return { handled: true };
+          }
           // Freeze this run's trail onto the reply: seal any still-active row (the
           // run is over) and capture the elapsed time, so the answer carries its
           // own collapsible "Thought for Ns" recap above it.
