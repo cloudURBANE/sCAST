@@ -52,7 +52,7 @@ type CommunityComposerPreset = {
 // rest of the app (home / route transitions) instead of the old grey skeletons.
 function CommunityPanelFallback() {
   return (
-    <div className="mx-auto h-12 w-full max-w-[940px] overflow-hidden rounded-[calc(var(--radius-scent)-2px)] border border-scent-accent/14 bg-[#050403] shadow-[inset_0_1px_0_rgba(255,236,183,0.04)]" />
+    <div className="scent-night-panel mx-auto h-12 w-full max-w-[940px] overflow-hidden rounded-[calc(var(--radius-scent)-2px)] border border-scent-accent/14 bg-[#050403] shadow-[inset_0_1px_0_rgba(255,236,183,0.04)]" />
   );
 }
 
@@ -268,7 +268,7 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
           <section className="scent-deferred-section w-full space-y-3 sm:space-y-7" aria-label="Community forum">
             {communityBodyReady ? (
               <>
-                <div className="mx-auto w-full max-w-[940px] overflow-hidden rounded-[calc(var(--radius-scent)-2px)] border border-scent-accent/14 bg-[#050403] shadow-[inset_0_1px_0_rgba(255,236,183,0.04)]">
+                <div className="scent-night-panel mx-auto w-full max-w-[940px] overflow-hidden rounded-[calc(var(--radius-scent)-2px)] border border-scent-accent/14 bg-[#050403] shadow-[inset_0_1px_0_rgba(255,236,183,0.04)]">
                   {/* ONE deliberate toolbar: compose on the left, search/filter on
                       the right. The two are mutually exclusive — opening either
                       retracts the other — so this never reads as duplicate UI. */}

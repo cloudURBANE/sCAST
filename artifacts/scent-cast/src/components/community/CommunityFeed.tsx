@@ -234,6 +234,11 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
       className="mx-auto w-full max-w-[940px] space-y-5 sm:space-y-6"
       aria-busy={isRefetching || isFetchingNextPage || isPlaceholderData}
     >
+      {/* The server orders rooms createdAt-descending (communityPosts.ts); this
+          quiet line is the only place that ordering is communicated. */}
+      <p className="px-1 text-left scent-type-meta text-[11px] uppercase text-scent-text-muted/85">
+        Latest rooms first
+      </p>
       <div
         className={`transition-opacity duration-200 motion-reduce:transition-none ${
           isPlaceholderData ? 'opacity-55' : 'opacity-100'
