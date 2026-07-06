@@ -8,6 +8,7 @@ import { CommunityLoadingState } from '@/components/community/CommunityLoadingSt
 import { useCommunityFragrances } from '@/components/community/communityData';
 import type { PostComposerHandle } from '@/components/community/PostComposer';
 import { prefetchCommunityPosts, type CommunityPostType } from '@/components/community/communityPosts';
+import { loadRouteChunk } from '@/lib/routeChunkRecovery';
 
 // Warmable import thunks. Dynamic imports are cached by the module loader, so
 // kicking these off on mount downloads the chunks in parallel with the
@@ -17,16 +18,20 @@ import { prefetchCommunityPosts, type CommunityPostType } from '@/components/com
 const bottleMarqueeImport = () => import('@/components/community/BottleMarquee');
 const communityFeedImport = () => import('@/components/community/CommunityFeed');
 const BottleMarquee = React.lazy(() =>
-  bottleMarqueeImport().then((module) => ({ default: module.BottleMarquee })),
+  loadRouteChunk(() => bottleMarqueeImport().then((module) => ({ default: module.BottleMarquee }))),
 );
 const CommunityFeed = React.lazy(() =>
-  communityFeedImport().then((module) => ({ default: module.CommunityFeed })),
+  loadRouteChunk(() => communityFeedImport().then((module) => ({ default: module.CommunityFeed }))),
 );
 const PostComposer = React.lazy(() =>
-  import('@/components/community/PostComposer').then((module) => ({ default: module.PostComposer })),
+  loadRouteChunk(() =>
+    import('@/components/community/PostComposer').then((module) => ({ default: module.PostComposer })),
+  ),
 );
 const PostFilters = React.lazy(() =>
-  import('@/components/community/PostFilters').then((module) => ({ default: module.PostFilters })),
+  loadRouteChunk(() =>
+    import('@/components/community/PostFilters').then((module) => ({ default: module.PostFilters })),
+  ),
 );
 
 interface CommunityPageProps {

@@ -27,6 +27,59 @@
         } catch (e) {}
       })();
     </script>
+    <!--
+      Boot watchdog: self-heal instead of a dead white screen. If the entry
+      module never executes (stale/evicted service-worker precache serving a
+      shell whose hashed chunks are gone — the installed-PWA failure mode on
+      iOS), nothing can render and no React error boundary exists yet. 4s after
+      `load`, if the app hasn't booted (flag set by src/main.tsx) and #root is
+      still empty: attempt 1 reloads; attempt 2 unregisters the service worker,
+      purges CacheStorage, and reloads clean from the network. The attempt
+      counter is capped (and skipped entirely if storage is unavailable) so
+      this can never reload-loop.
+    -->
+    <script>
+      (function () {
+        var KEY = 'scent_boot_recovery_attempts';
+        function getAttempts() {
+          try { return Number(sessionStorage.getItem(KEY) || '0'); } catch (e) { return NaN; }
+        }
+        function setAttempts(n) {
+          try { sessionStorage.setItem(KEY, String(n)); return true; } catch (e) { return false; }
+        }
+        function recover() {
+          var root = document.getElementById('root');
+          if (window.__SCENT_APP_BOOTED || (root && root.childElementCount > 0)) {
+            try { sessionStorage.removeItem(KEY); } catch (e) {}
+            return;
+          }
+          var attempts = getAttempts();
+          if (!isFinite(attempts) || attempts >= 2) return;
+          if (!setAttempts(attempts + 1)) return;
+          if (attempts === 0) {
+            location.reload();
+            return;
+          }
+          var cleanup = [];
+          if ('serviceWorker' in navigator) {
+            cleanup.push(
+              navigator.serviceWorker.getRegistrations().then(function (regs) {
+                return Promise.all(regs.map(function (reg) { return reg.unregister(); }));
+              }).catch(function () {})
+            );
+          }
+          if (window.caches && caches.keys) {
+            cleanup.push(
+              caches.keys().then(function (keys) {
+                return Promise.all(keys.map(function (key) { return caches.delete(key); }));
+              }).catch(function () {})
+            );
+          }
+          Promise.all(cleanup).then(function () { location.reload(); }, function () { location.reload(); });
+        }
+        window.addEventListener('load', function () { setTimeout(recover, 4000); });
+      })();
+    </script>
     <title>ScentBeam</title>
     <meta name="description" content="Your scent. Perfected." />
     <!--

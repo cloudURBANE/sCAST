@@ -108,6 +108,15 @@ if (existsSync(frontendStaticDir) && existsSync(frontendIndexPath)) {
       next();
       return;
     }
+    // A hashed asset that no longer exists (stale client after a redeploy)
+    // must 404, not fall through to the HTML shell: serving text/html for a
+    // module script makes browsers throw an unrecoverable MIME-type error
+    // instead of the network failure the SPA's stale-chunk reload recovery
+    // recognizes.
+    if (req.path.startsWith("/assets/")) {
+      res.status(404).type("text/plain").send("Not Found");
+      return;
+    }
     res.setHeader("Cache-Control", SPA_SHELL_CACHE);
     res.sendFile(frontendIndexPath, (err) => {
       if (err) next(err);
