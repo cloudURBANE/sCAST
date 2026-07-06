@@ -265,23 +265,19 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
             {isFetchingNextPage ? 'Loading' : 'Load more'}
           </button>
         ) : (
-          <div className="flex w-full flex-col items-center gap-4 rounded-[calc(var(--radius-scent)+2px)] border border-scent-accent/18 bg-black/46 px-6 py-10 text-center shadow-[inset_0_1px_0_rgba(255,236,183,0.04)]">
-            <p className="font-serif text-xl italic text-[#fff7ec]">You&rsquo;ve reached the end.</p>
-            <p className="max-w-md text-sm leading-6 text-scent-text-muted">
-              {filters.tag
-                ? `Keep #${filters.tag} moving. ${endCopy.body}`
-                : endCopy.body}
+          // End-of-feed is a terminator, not content: no bordered card, no
+          // gradient primary (the toolbar already owns the strong "Start a
+          // room"). A quiet caption — the bookend to "Latest rooms first" at
+          // the top — plus the same ghost pill as "Load more".
+          <div className="flex w-full flex-col items-center gap-4 px-6 py-6 text-center">
+            <p className="scent-type-meta text-[11px] uppercase text-scent-text-muted/70">
+              You&rsquo;ve reached the end
             </p>
-            {/* Same gold pill as the empty-state CTA and the legal/cookie primaries:
-                the community page's control language is the pill (toolbar chips,
-                Load more, filters), so the old square-radius slab with the larger
-                uppercase face read as a foreign element at the end of the feed on
-                iPad/iPhone. */}
             <button
               type="button"
               onClick={() => onStartRoom({ type: filters.type, tag: filters.tag })}
               aria-label={endCopy.ariaLabel}
-              className="scent-primary-button inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-6 text-[11px] font-bold uppercase tracking-[0.16em] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-scent-accent/22 bg-black/58 px-5 py-2 scent-type-chip text-scent-text-muted transition-colors hover:border-scent-accent/42 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80"
             >
               <Plus size={15} strokeWidth={1.8} aria-hidden="true" />
               <span>{endCopy.label}</span>
