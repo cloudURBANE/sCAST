@@ -1,5 +1,9 @@
 # Production Readiness Gap Audit — 2026-07-07
 
+> **Remediation plan:** each gap below has a concrete solution planned in
+> `docs/PRODUCTION_READINESS_PLAN_2026-07-07.md` (updated for the AWS
+> S3 + CloudFront migration that landed after this audit).
+
 Scope: full monorepo sweep — Express API (`artifacts/api-server`), SPA
 (`artifacts/scent-cast`), DB layer (`lib/db`), deploy surface (Dockerfile,
 `railway.json`, `vercel.json`, `middleware.js`), CI (`.github/workflows/tests.yml`).
