@@ -1,0 +1,458 @@
+CREATE TYPE "public"."community_post_type" AS ENUM('question', 'sotd', 'battle', 'worth_it');--> statement-breakpoint
+CREATE TYPE "public"."community_reaction_target_type" AS ENUM('post', 'comment');--> statement-breakpoint
+CREATE TABLE "tenants" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"name" text NOT NULL,
+	"slug" text NOT NULL,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "tenants_slug_unique" UNIQUE("slug")
+);
+--> statement-breakpoint
+CREATE TABLE "users" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"tenant_id" uuid,
+	"email" text NOT NULL,
+	"token" uuid DEFAULT gen_random_uuid() NOT NULL,
+	"oauth_provider" text,
+	"oauth_subject" text,
+	"picture_url" text,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "users_tenant_email_unique" UNIQUE("tenant_id","email")
+);
+--> statement-breakpoint
+CREATE TABLE "user_fragrances" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"tenant_id" uuid,
+	"user_id" uuid NOT NULL,
+	"fragrance_data" jsonb NOT NULL,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "global_fragrances" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"lookup_key" text NOT NULL,
+	"name" text NOT NULL,
+	"brand" text NOT NULL,
+	"profile_data" jsonb NOT NULL,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "global_fragrances_lookup_key_unique" UNIQUE("lookup_key")
+);
+--> statement-breakpoint
+CREATE TABLE "image_cache" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"user_id" uuid,
+	"fragrance_id" text,
+	"lookup_key" text,
+	"source_provider" text DEFAULT 'serper' NOT NULL,
+	"source_url" text NOT NULL,
+	"source_url_hash" text NOT NULL,
+	"search_query_hash" text,
+	"pipeline_version" text NOT NULL,
+	"content_hash" text,
+	"perceptual_hash" text,
+	"storage_provider" text NOT NULL,
+	"storage_path" text NOT NULL,
+	"public_url" text,
+	"mime_type" text,
+	"width" integer,
+	"height" integer,
+	"size_bytes" integer,
+	"original_width" integer,
+	"original_height" integer,
+	"bounding_box" jsonb,
+	"aspect_ratio" double precision,
+	"orientation_version" text,
+	"baseline_alignment" double precision,
+	"background_removed" boolean DEFAULT false NOT NULL,
+	"remove_bg_status" text,
+	"remove_bg_reason" text,
+	"processing_status" text DEFAULT 'ready' NOT NULL,
+	"failure_reason" text,
+	"hit_count" integer DEFAULT 0 NOT NULL,
+	"last_used_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "user_settings" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"tenant_id" uuid,
+	"user_id" uuid NOT NULL,
+	"username" text,
+	"share_hide_images" boolean DEFAULT false NOT NULL,
+	"weather_latitude" double precision,
+	"weather_longitude" double precision,
+	"weather_location_label" text,
+	"weather_location_updated_at" timestamp,
+	"wardrobe_onboarding_completed" boolean DEFAULT false NOT NULL,
+	"wardrobe_onboarding_completed_at" timestamp,
+	"notify_weather" boolean DEFAULT true NOT NULL,
+	"notify_community" boolean DEFAULT true NOT NULL,
+	"notify_curation" boolean DEFAULT true NOT NULL,
+	"notification_badge_count" integer DEFAULT 0 NOT NULL,
+	"theme_preference" text,
+	"accent_preference" text,
+	"locale_preference" text,
+	"preferred_families" jsonb,
+	"disliked_families" jsonb,
+	"scent_lasts_on_me" text,
+	"projection_preference" text,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "user_settings_user_id_unique" UNIQUE("user_id")
+);
+--> statement-breakpoint
+CREATE TABLE "push_subscriptions" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"tenant_id" uuid,
+	"user_id" uuid NOT NULL,
+	"endpoint" text NOT NULL,
+	"p256dh" text NOT NULL,
+	"auth" text NOT NULL,
+	"user_agent" text,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "push_subscriptions_endpoint_unique" UNIQUE("endpoint")
+);
+--> statement-breakpoint
+CREATE TABLE "affiliate_links" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"fragrance_id" uuid NOT NULL,
+	"provider" text DEFAULT 'cj' NOT NULL,
+	"advertiser_id" text,
+	"advertiser_name" text,
+	"product_title" text,
+	"product_brand" text,
+	"destination_url" text,
+	"affiliate_url" text NOT NULL,
+	"image_url" text,
+	"price" numeric,
+	"currency" text,
+	"match_score" real,
+	"status" text DEFAULT 'active' NOT NULL,
+	"fetched_at" timestamp,
+	"last_verified_at" timestamp,
+	"click_count" integer DEFAULT 0 NOT NULL,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "enrichment_jobs" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"job_key" text NOT NULL,
+	"job_type" text DEFAULT 'detail_only' NOT NULL,
+	"query" text,
+	"normalized_query" text,
+	"name" text,
+	"house" text,
+	"year" integer,
+	"bn_url" text,
+	"fg_url" text,
+	"source_id" text,
+	"status" text DEFAULT 'pending' NOT NULL,
+	"priority" integer DEFAULT 0 NOT NULL,
+	"requested_count" integer DEFAULT 1 NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"last_requested_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"claimed_at" timestamp with time zone,
+	"claim_expires_at" timestamp with time zone,
+	"completed_at" timestamp with time zone,
+	"failed_at" timestamp with time zone,
+	"ignored_at" timestamp with time zone,
+	"last_error" text,
+	"metadata_json" jsonb
+);
+--> statement-breakpoint
+CREATE TABLE "api_usage_ledger" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"tenant_id" uuid,
+	"user_id" uuid,
+	"provider" text NOT NULL,
+	"operation" text NOT NULL,
+	"model" text NOT NULL,
+	"size" text,
+	"quality" text,
+	"image_count" integer DEFAULT 1 NOT NULL,
+	"input_tokens" integer,
+	"output_tokens" integer,
+	"estimated_cost_usd" numeric(12, 6) DEFAULT '0' NOT NULL,
+	"status" text NOT NULL,
+	"failure_reason" text,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "beam_research_cache" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"normalized_query" text NOT NULL,
+	"entity_type" text DEFAULT 'general' NOT NULL,
+	"mode" text NOT NULL,
+	"synthesized_fact" text NOT NULL,
+	"sources" jsonb DEFAULT '[]'::jsonb NOT NULL,
+	"confidence" real,
+	"model" text,
+	"engine" text,
+	"cost_usd" real DEFAULT 0 NOT NULL,
+	"hit_count" integer DEFAULT 0 NOT NULL,
+	"retrieved_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"expires_at" timestamp with time zone NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "fragrance_review_summaries" (
+	"lookup_key" text PRIMARY KEY NOT NULL,
+	"comments" jsonb NOT NULL,
+	"source_hash" text NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "community_posts" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"tenant_id" uuid NOT NULL,
+	"user_id" uuid NOT NULL,
+	"post_type" "community_post_type" NOT NULL,
+	"title" text,
+	"body" text NOT NULL,
+	"metadata" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "community_comments" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"tenant_id" uuid NOT NULL,
+	"post_id" uuid NOT NULL,
+	"parent_comment_id" uuid,
+	"user_id" uuid NOT NULL,
+	"body" text NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "community_reactions" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"tenant_id" uuid NOT NULL,
+	"target_type" "community_reaction_target_type" NOT NULL,
+	"target_id" uuid NOT NULL,
+	"user_id" uuid NOT NULL,
+	"reaction" text NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "community_post_fragrances" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"tenant_id" uuid NOT NULL,
+	"post_id" uuid NOT NULL,
+	"fragrance" jsonb NOT NULL,
+	"position" integer DEFAULT 0 NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "community_tags" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"tenant_id" uuid NOT NULL,
+	"post_id" uuid NOT NULL,
+	"tag" text NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "community_votes" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"tenant_id" uuid NOT NULL,
+	"post_id" uuid NOT NULL,
+	"user_id" uuid NOT NULL,
+	"choice" text NOT NULL,
+	"reason" text,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "beam_answer_log" (
+	"id" text PRIMARY KEY NOT NULL,
+	"tenant_id" uuid,
+	"user_id" uuid,
+	"session_id" text,
+	"user_message" text NOT NULL,
+	"derived_state" jsonb,
+	"lane" text,
+	"orchestration_model" text,
+	"synthesis_model" text,
+	"grounded_candidates" jsonb DEFAULT '[]'::jsonb NOT NULL,
+	"final_answer" text DEFAULT '' NOT NULL,
+	"gate_passed" boolean DEFAULT true NOT NULL,
+	"gate_violations" jsonb DEFAULT '[]'::jsonb NOT NULL,
+	"shipped_with_soft_violations" boolean DEFAULT false NOT NULL,
+	"outcome" text,
+	"failure_code" text,
+	"input_tokens" integer,
+	"output_tokens" integer,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"expires_at" timestamp with time zone
+);
+--> statement-breakpoint
+CREATE TABLE "beam_answer_feedback" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"answer_log_id" text NOT NULL,
+	"tenant_id" uuid,
+	"user_id" uuid,
+	"rating" text DEFAULT 'down' NOT NULL,
+	"reason_code" text,
+	"detail" text,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "arena_crowd_predictions" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"tenant_id" uuid NOT NULL,
+	"user_id" uuid NOT NULL,
+	"post_id" uuid NOT NULL,
+	"predicted_choice" text NOT NULL,
+	"own_pick" text NOT NULL,
+	"leader_at_reveal" text,
+	"tally_total_at_reveal" integer NOT NULL,
+	"was_correct" boolean NOT NULL,
+	"streak_after" integer NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "arena_crowd_stats" (
+	"tenant_id" uuid NOT NULL,
+	"user_id" uuid NOT NULL,
+	"current_streak" integer DEFAULT 0 NOT NULL,
+	"best_streak" integer DEFAULT 0 NOT NULL,
+	"total_reads" integer DEFAULT 0 NOT NULL,
+	"correct_reads" integer DEFAULT 0 NOT NULL,
+	"last_played_on" date,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "arena_crowd_stats_tenant_id_user_id_pk" PRIMARY KEY("tenant_id","user_id")
+);
+--> statement-breakpoint
+CREATE TABLE "arena_beam_grants" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"tenant_id" uuid NOT NULL,
+	"user_id" uuid NOT NULL,
+	"post_id" uuid NOT NULL,
+	"fragrance_id" text NOT NULL,
+	"run_id" text NOT NULL,
+	"beam_power" integer NOT NULL,
+	"game_score" integer NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "in_app_notifications" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"tenant_id" uuid,
+	"user_id" uuid NOT NULL,
+	"title" text NOT NULL,
+	"body" text NOT NULL,
+	"url" text,
+	"category" text DEFAULT 'system' NOT NULL,
+	"read" boolean DEFAULT false NOT NULL,
+	"read_at" timestamp,
+	"dedupe_key" text,
+	"created_at" timestamp DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+ALTER TABLE "users" ADD CONSTRAINT "users_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "user_fragrances" ADD CONSTRAINT "user_fragrances_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "user_fragrances" ADD CONSTRAINT "user_fragrances_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "image_cache" ADD CONSTRAINT "image_cache_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "user_settings" ADD CONSTRAINT "user_settings_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "user_settings" ADD CONSTRAINT "user_settings_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "push_subscriptions" ADD CONSTRAINT "push_subscriptions_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "push_subscriptions" ADD CONSTRAINT "push_subscriptions_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "affiliate_links" ADD CONSTRAINT "affiliate_links_fragrance_id_user_fragrances_id_fk" FOREIGN KEY ("fragrance_id") REFERENCES "public"."user_fragrances"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "api_usage_ledger" ADD CONSTRAINT "api_usage_ledger_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "api_usage_ledger" ADD CONSTRAINT "api_usage_ledger_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "community_posts" ADD CONSTRAINT "community_posts_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "community_posts" ADD CONSTRAINT "community_posts_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "community_comments" ADD CONSTRAINT "community_comments_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "community_comments" ADD CONSTRAINT "community_comments_post_id_community_posts_id_fk" FOREIGN KEY ("post_id") REFERENCES "public"."community_posts"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "community_comments" ADD CONSTRAINT "community_comments_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "community_reactions" ADD CONSTRAINT "community_reactions_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "community_reactions" ADD CONSTRAINT "community_reactions_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "community_post_fragrances" ADD CONSTRAINT "community_post_fragrances_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "community_post_fragrances" ADD CONSTRAINT "community_post_fragrances_post_id_community_posts_id_fk" FOREIGN KEY ("post_id") REFERENCES "public"."community_posts"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "community_tags" ADD CONSTRAINT "community_tags_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "community_tags" ADD CONSTRAINT "community_tags_post_id_community_posts_id_fk" FOREIGN KEY ("post_id") REFERENCES "public"."community_posts"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "community_votes" ADD CONSTRAINT "community_votes_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "community_votes" ADD CONSTRAINT "community_votes_post_id_community_posts_id_fk" FOREIGN KEY ("post_id") REFERENCES "public"."community_posts"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "community_votes" ADD CONSTRAINT "community_votes_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "beam_answer_log" ADD CONSTRAINT "beam_answer_log_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "beam_answer_log" ADD CONSTRAINT "beam_answer_log_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "beam_answer_feedback" ADD CONSTRAINT "beam_answer_feedback_answer_log_id_beam_answer_log_id_fk" FOREIGN KEY ("answer_log_id") REFERENCES "public"."beam_answer_log"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "beam_answer_feedback" ADD CONSTRAINT "beam_answer_feedback_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "beam_answer_feedback" ADD CONSTRAINT "beam_answer_feedback_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "arena_crowd_predictions" ADD CONSTRAINT "arena_crowd_predictions_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "arena_crowd_predictions" ADD CONSTRAINT "arena_crowd_predictions_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "arena_crowd_predictions" ADD CONSTRAINT "arena_crowd_predictions_post_id_community_posts_id_fk" FOREIGN KEY ("post_id") REFERENCES "public"."community_posts"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "arena_crowd_stats" ADD CONSTRAINT "arena_crowd_stats_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "arena_crowd_stats" ADD CONSTRAINT "arena_crowd_stats_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "arena_beam_grants" ADD CONSTRAINT "arena_beam_grants_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "arena_beam_grants" ADD CONSTRAINT "arena_beam_grants_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "arena_beam_grants" ADD CONSTRAINT "arena_beam_grants_post_id_community_posts_id_fk" FOREIGN KEY ("post_id") REFERENCES "public"."community_posts"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "in_app_notifications" ADD CONSTRAINT "in_app_notifications_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "in_app_notifications" ADD CONSTRAINT "in_app_notifications_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "users_token_idx" ON "users" USING btree ("token");--> statement-breakpoint
+CREATE INDEX "users_oauth_subject_idx" ON "users" USING btree ("oauth_provider","oauth_subject");--> statement-breakpoint
+CREATE INDEX "users_share_handle_idx" ON "users" USING btree (coalesce(nullif(regexp_replace(regexp_replace(lower(split_part("email", '@', 1)), '[^a-z0-9]+', '-', 'g'), '(^-+|-+$)', '', 'g'), ''), 'user'));--> statement-breakpoint
+CREATE INDEX "user_fragrances_user_id_idx" ON "user_fragrances" USING btree ("user_id");--> statement-breakpoint
+CREATE INDEX "user_fragrances_tenant_user_idx" ON "user_fragrances" USING btree ("tenant_id","user_id");--> statement-breakpoint
+CREATE INDEX "user_fragrances_tenant_created_at_idx" ON "user_fragrances" USING btree ("tenant_id","created_at" DESC NULLS LAST);--> statement-breakpoint
+CREATE UNIQUE INDEX "user_fragrances_user_client_id_unique_idx" ON "user_fragrances" USING btree ("user_id",("fragrance_data"->>'id'));--> statement-breakpoint
+CREATE INDEX "global_fragrances_search_trgm_idx" ON "global_fragrances" USING gin (lower("brand" || ' ' || "name") gin_trgm_ops);--> statement-breakpoint
+CREATE INDEX "global_fragrances_lookup_key_trgm_idx" ON "global_fragrances" USING gin (lower("lookup_key") gin_trgm_ops);--> statement-breakpoint
+CREATE INDEX "global_fragrances_brand_trgm_idx" ON "global_fragrances" USING gin (lower("brand") gin_trgm_ops);--> statement-breakpoint
+CREATE UNIQUE INDEX "image_cache_source_pipeline_bg_serper_unique_idx" ON "image_cache" USING btree ("source_url_hash","pipeline_version","background_removed","lookup_key") WHERE "image_cache"."source_provider" = 'serper';--> statement-breakpoint
+CREATE UNIQUE INDEX "image_cache_source_pipeline_bg_nonserper_unique_idx" ON "image_cache" USING btree ("source_url_hash","pipeline_version","background_removed") WHERE "image_cache"."source_provider" <> 'serper';--> statement-breakpoint
+CREATE INDEX "image_cache_lookup_key_idx" ON "image_cache" USING btree ("lookup_key");--> statement-breakpoint
+CREATE INDEX "image_cache_user_id_idx" ON "image_cache" USING btree ("user_id");--> statement-breakpoint
+CREATE INDEX "image_cache_source_url_hash_idx" ON "image_cache" USING btree ("source_url_hash");--> statement-breakpoint
+CREATE INDEX "image_cache_content_hash_idx" ON "image_cache" USING btree ("content_hash");--> statement-breakpoint
+CREATE INDEX "image_cache_search_query_hash_idx" ON "image_cache" USING btree ("search_query_hash");--> statement-breakpoint
+CREATE INDEX "image_cache_processing_status_idx" ON "image_cache" USING btree ("processing_status");--> statement-breakpoint
+CREATE INDEX "user_settings_tenant_user_idx" ON "user_settings" USING btree ("tenant_id","user_id");--> statement-breakpoint
+CREATE INDEX "push_subscriptions_tenant_user_idx" ON "push_subscriptions" USING btree ("tenant_id","user_id");--> statement-breakpoint
+CREATE INDEX "affiliate_links_fragrance_provider_idx" ON "affiliate_links" USING btree ("fragrance_id","provider");--> statement-breakpoint
+CREATE INDEX "affiliate_links_status_idx" ON "affiliate_links" USING btree ("status");--> statement-breakpoint
+CREATE UNIQUE INDEX "enrichment_jobs_job_key_unique_idx" ON "enrichment_jobs" USING btree ("job_key");--> statement-breakpoint
+CREATE INDEX "enrichment_jobs_status_idx" ON "enrichment_jobs" USING btree ("status");--> statement-breakpoint
+CREATE INDEX "enrichment_jobs_fg_url_idx" ON "enrichment_jobs" USING btree ("fg_url");--> statement-breakpoint
+CREATE INDEX "enrichment_jobs_status_priority_idx" ON "enrichment_jobs" USING btree ("status","priority");--> statement-breakpoint
+CREATE INDEX "api_usage_ledger_created_at_idx" ON "api_usage_ledger" USING btree ("created_at");--> statement-breakpoint
+CREATE INDEX "api_usage_ledger_provider_operation_idx" ON "api_usage_ledger" USING btree ("provider","operation");--> statement-breakpoint
+CREATE INDEX "api_usage_ledger_user_id_idx" ON "api_usage_ledger" USING btree ("user_id");--> statement-breakpoint
+CREATE INDEX "api_usage_ledger_tenant_id_idx" ON "api_usage_ledger" USING btree ("tenant_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "beam_research_cache_query_entity_unique_idx" ON "beam_research_cache" USING btree ("normalized_query","entity_type");--> statement-breakpoint
+CREATE INDEX "beam_research_cache_expires_at_idx" ON "beam_research_cache" USING btree ("expires_at");--> statement-breakpoint
+CREATE INDEX "beam_research_cache_entity_type_idx" ON "beam_research_cache" USING btree ("entity_type");--> statement-breakpoint
+CREATE INDEX "community_posts_tenant_created_at_idx" ON "community_posts" USING btree ("tenant_id","created_at");--> statement-breakpoint
+CREATE INDEX "community_posts_post_type_idx" ON "community_posts" USING btree ("post_type");--> statement-breakpoint
+CREATE INDEX "community_posts_user_id_idx" ON "community_posts" USING btree ("user_id");--> statement-breakpoint
+CREATE INDEX "community_comments_post_created_at_idx" ON "community_comments" USING btree ("post_id","created_at");--> statement-breakpoint
+CREATE UNIQUE INDEX "community_reactions_user_target_reaction_unique_idx" ON "community_reactions" USING btree ("user_id","target_type","target_id","reaction");--> statement-breakpoint
+CREATE INDEX "community_reactions_target_idx" ON "community_reactions" USING btree ("tenant_id","target_type","target_id");--> statement-breakpoint
+CREATE INDEX "community_post_fragrances_post_position_idx" ON "community_post_fragrances" USING btree ("post_id","position");--> statement-breakpoint
+CREATE INDEX "community_tags_tag_idx" ON "community_tags" USING btree ("tag");--> statement-breakpoint
+CREATE INDEX "community_tags_post_idx" ON "community_tags" USING btree ("post_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "community_votes_user_post_unique_idx" ON "community_votes" USING btree ("user_id","post_id");--> statement-breakpoint
+CREATE INDEX "community_votes_post_idx" ON "community_votes" USING btree ("post_id");--> statement-breakpoint
+CREATE INDEX "beam_answer_log_user_created_idx" ON "beam_answer_log" USING btree ("user_id","created_at");--> statement-breakpoint
+CREATE INDEX "beam_answer_log_created_at_idx" ON "beam_answer_log" USING btree ("created_at");--> statement-breakpoint
+CREATE INDEX "beam_answer_log_expires_at_idx" ON "beam_answer_log" USING btree ("expires_at");--> statement-breakpoint
+CREATE INDEX "beam_answer_feedback_answer_log_idx" ON "beam_answer_feedback" USING btree ("answer_log_id");--> statement-breakpoint
+CREATE INDEX "beam_answer_feedback_created_at_idx" ON "beam_answer_feedback" USING btree ("created_at");--> statement-breakpoint
+CREATE INDEX "beam_answer_feedback_user_idx" ON "beam_answer_feedback" USING btree ("user_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "arena_crowd_predictions_user_post_unique_idx" ON "arena_crowd_predictions" USING btree ("user_id","post_id");--> statement-breakpoint
+CREATE INDEX "arena_crowd_predictions_post_idx" ON "arena_crowd_predictions" USING btree ("post_id");--> statement-breakpoint
+CREATE INDEX "arena_crowd_predictions_user_idx" ON "arena_crowd_predictions" USING btree ("user_id");--> statement-breakpoint
+CREATE INDEX "arena_beam_grants_tenant_fragrance_idx" ON "arena_beam_grants" USING btree ("tenant_id","fragrance_id");--> statement-breakpoint
+CREATE INDEX "arena_beam_grants_tenant_post_idx" ON "arena_beam_grants" USING btree ("tenant_id","post_id");--> statement-breakpoint
+CREATE INDEX "arena_beam_grants_user_idx" ON "arena_beam_grants" USING btree ("user_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "arena_beam_grants_user_post_run_unique_idx" ON "arena_beam_grants" USING btree ("user_id","post_id","run_id");--> statement-breakpoint
+CREATE INDEX "in_app_notifications_tenant_user_idx" ON "in_app_notifications" USING btree ("tenant_id","user_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "in_app_notifications_user_dedupe_uniq" ON "in_app_notifications" USING btree ("user_id","dedupe_key");
