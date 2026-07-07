@@ -1,6 +1,7 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import * as schema from "./schema";
+import { resolveSslConfig } from "./sslConfig";
 
 const { Pool } = pg;
 const databaseUrl = process.env.DATABASE_URL;
@@ -9,33 +10,6 @@ if (!databaseUrl) {
   throw new Error(
     "DATABASE_URL must be set. Did you forget to provision a database?",
   );
-}
-
-function parseSslMode(url: string): string | null {
-  try {
-    const parsed = new URL(url);
-    return parsed.searchParams.get("sslmode");
-  } catch {
-    return null;
-  }
-}
-
-function resolveSslConfig(url: string): pg.PoolConfig["ssl"] | undefined {
-  const override = process.env.DATABASE_SSL_REJECT_UNAUTHORIZED
-    ?.trim()
-    .toLowerCase();
-  if (override === "true") return { rejectUnauthorized: true };
-  if (override === "false") return { rejectUnauthorized: false };
-
-  const sslMode = parseSslMode(url)?.toLowerCase();
-  if (!sslMode || sslMode === "disable") {
-    return undefined;
-  }
-
-  // Most managed Postgres providers expose a public CA chain that may not
-  // validate cleanly in all runtimes. Treat sslmode hints as TLS-on with
-  // relaxed verification unless explicitly overridden above.
-  return { rejectUnauthorized: false };
 }
 
 function stripPgSslParams(url: string): string {
@@ -50,7 +24,18 @@ function stripPgSslParams(url: string): string {
   }
 }
 
-const ssl = resolveSslConfig(databaseUrl);
+// TLS verification policy lives in sslConfig.ts (pure + unit-tested).
+// Production target: DATABASE_SSL_CA set → rejectUnauthorized:true against the
+// provider CA. TLS-without-CA keeps working but warns at boot.
+const { ssl, warning: sslWarning } = resolveSslConfig(databaseUrl, {
+  DATABASE_SSL_CA: process.env.DATABASE_SSL_CA,
+  DATABASE_SSL_REJECT_UNAUTHORIZED: process.env.DATABASE_SSL_REJECT_UNAUTHORIZED,
+});
+if (sslWarning) {
+  // console (not pino): this package is dependency-light and loads before any
+  // app logger exists; the message must reach ops regardless of consumer.
+  console.warn(`[db] ${sslWarning}`);
+}
 
 function parsePositiveInt(value: string | undefined, fallback: number): number {
   const parsed = Number(value);

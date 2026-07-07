@@ -4,6 +4,10 @@
     "composite": true,
     "declarationMap": true,
     "emitDeclarationOnly": true,
+    // Tests import sibling sources with .ts suffixes (required at runtime by
+    // node --experimental-strip-types); legal for tsc because this project is
+    // emitDeclarationOnly.
+    "allowImportingTsExtensions": true,
     "outDir": "dist",
     "rootDir": "src",
     "types": ["node"]
