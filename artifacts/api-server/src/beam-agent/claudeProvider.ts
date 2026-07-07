@@ -204,6 +204,13 @@ async function streamClaudeText(
         }
       }
     }
+    // Flush a final frame that arrived without its trailing blank-line
+    // terminator, so the tail text delta / final usage event is never dropped.
+    buffer += decoder.decode();
+    for (const rawLine of buffer.split("\n")) {
+      const line = rawLine.replace(/\r$/, "");
+      if (line.startsWith("data:")) handleData(line.slice(5).replace(/^ /, ""));
+    }
   } finally {
     reader.cancel().catch(() => {});
   }

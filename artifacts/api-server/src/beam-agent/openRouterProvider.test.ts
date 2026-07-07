@@ -6,7 +6,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { __test, modelSupportsCaching, premiumOrchestrationModel, stripHarmonyTokens } from "./openRouterProvider.ts";
+import { __test, callOpenRouter, modelSupportsCaching, premiumOrchestrationModel, stripHarmonyTokens } from "./openRouterProvider.ts";
 import { readInvalidArgs } from "./beamToolCore.ts";
 import type { ClaudeCallInput, ClaudeMessage } from "./types.ts";
 
@@ -227,4 +227,45 @@ test("openAiResponseToClaude scrubs harmony markup from content", () => {
     choices: [{ finish_reason: "stop", message: { content: "<|channel|>commentary to=functions.x <|message|>{}<|call|>" } }],
   });
   assert.deepEqual(res.content, []);
+});
+
+test("streaming flushes a final SSE frame that lacks its trailing blank-line terminator", async (t) => {
+  // Some backends end the stream right after the last `data:` line. The tail
+  // used to be dropped, losing the final text chunk and the include_usage frame
+  // (zeroing the run's token/cost accounting).
+  const frames = [
+    'data: {"choices":[{"delta":{"content":"Hello"}}]}\n\n',
+    // Terminated frame + a FINAL frame with no trailing "\n\n".
+    'data: {"choices":[{"delta":{"content":" world"},"finish_reason":"stop"}]}\n\n' +
+      'data: {"usage":{"prompt_tokens":10,"completion_tokens":2},"choices":[]}',
+  ];
+  const encoder = new TextEncoder();
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const frame of frames) controller.enqueue(encoder.encode(frame));
+      controller.close();
+    },
+  });
+  const originalFetch = globalThis.fetch;
+  const originalKey = process.env.OPENROUTER_API_KEY;
+  process.env.OPENROUTER_API_KEY = "test-key";
+  globalThis.fetch = (async () => new Response(body, { status: 200 })) as typeof fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+    if (originalKey === undefined) delete process.env.OPENROUTER_API_KEY;
+    else process.env.OPENROUTER_API_KEY = originalKey;
+  });
+
+  const deltas: string[] = [];
+  const res = await callOpenRouter({
+    system: "s",
+    messages: [{ role: "user", content: "hi" }],
+    tools: [],
+    maxTokens: 32,
+    onDelta: (chunk) => deltas.push(chunk),
+  });
+  assert.equal(deltas.join(""), "Hello world");
+  assert.deepEqual(res.content, [{ type: "text", text: "Hello world" }]);
+  assert.equal(res.stop_reason, "end_turn");
+  assert.deepEqual(res.usage, { inputTokens: 10, outputTokens: 2 });
 });

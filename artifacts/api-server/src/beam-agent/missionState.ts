@@ -5,9 +5,20 @@ const EMPTY_STATE: BeamSessionState = { slots: {} };
 const MONTHS: Array<[RegExp, string]> = [
   [/\bjan(?:uary)?\.?\b/i, "January"],
   [/\bfeb(?:ruary)?\.?\b/i, "February"],
-  [/\bmar(?:ch)?\.?\b/i, "March"],
+  // "march" is also a verb ("march me through my options") — reject the
+  // verb-object phrasings so they can't become false timing state.
+  [/\bmar(?:ch)?\.?\b(?!\s+(?:me|us|him|her|them|on|onwards?|through|into|forward|past)\b)/i, "March"],
   [/\bapr(?:il)?\.?\b/i, "April"],
-  [/\bmay\b/i, "May"],
+  // "may" is overwhelmingly the MODAL in chat ("I may go out tonight"), which
+  // used to poison the month slot with a false "May". Accept it as a month only
+  // when anchored: a time preposition/qualifier before it, or a date-like /
+  // trip-like word after it. Bare "May" as a terse answer to "which month?" is
+  // recovered by the pending-month branch in deriveBeamSessionState, and
+  // "Tokyo May" via MONTH_TOKEN in validatePlaceBeforeTime.
+  [
+    /\b(?:in|during|for|by|until|late|early|mid|this|next|of|come|over)[- ]may\b|\bmay\s+(?:\d{1,2}(?:st|nd|rd|th)?\b|\d{4}\b|trip\b|travel\b|vacation\b|visit\b|holiday\b|wedding\b|weather\b|weekend\b)/i,
+    "May",
+  ],
   [/\bjun(?:e)?\.?\b/i, "June"],
   [/\bjul(?:y)?\.?\b/i, "July"],
   [/\baug(?:ust)?\.?\b/i, "August"],
@@ -16,6 +27,26 @@ const MONTHS: Array<[RegExp, string]> = [
   [/\bnov(?:ember)?\.?\b/i, "November"],
   [/\bdec(?:ember)?\.?\b/i, "December"],
 ];
+
+/**
+ * A SINGLE bare token that names a month ("May", "aug", "October."). Used where
+ * position already disambiguates the modal/verb readings the anchored MONTHS
+ * patterns guard against: the token right after a place ("Tokyo May") and a
+ * terse whole-message answer to a pending "which month?" question.
+ */
+const MONTH_TOKEN =
+  /^(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t|tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?$/i;
+
+const MONTH_BY_PREFIX: Record<string, string> = {
+  jan: "January", feb: "February", mar: "March", apr: "April", may: "May", jun: "June",
+  jul: "July", aug: "August", sep: "September", oct: "October", nov: "November", dec: "December",
+};
+
+/** Canonical month name for a bare month token, or undefined. */
+function monthFromToken(token: string): string | undefined {
+  if (!MONTH_TOKEN.test(token.trim())) return undefined;
+  return MONTH_BY_PREFIX[token.trim().slice(0, 3).toLowerCase()];
+}
 
 // Capitalized tokens that look like a proper noun but are never a city — command
 // verbs that open a sentence ("Recommend August scents"), determiners/pronouns
@@ -227,7 +258,8 @@ function parseDestination(text: string): string | undefined {
   for (const pattern of patterns) {
     const match = pattern.exec(text);
     const destination = match?.[1] ? clampToPlaceTokens(cleanCapture(match[1])) : "";
-    const isMonth = MONTHS.some(([monthPattern]) => monthPattern.test(destination));
+    const isMonth =
+      MONTHS.some(([monthPattern]) => monthPattern.test(destination)) || MONTH_TOKEN.test(destination);
     const isOccasion = OCCASIONS.some(([occasionPattern]) => occasionPattern.test(destination));
     const isRelativeTime = /^(?:(?:a|an|the|this|next|last|one|two|three|four|five)\s+)?(?:morning|afternoon|evening|night|weekend|day|week|month|year)s?$/i.test(destination);
     // Common trip-TYPE words that are not places, so "<Type> trip" never fabricates
@@ -275,15 +307,20 @@ function parsePlaceBeforeTime(text: string): string | undefined {
 /** Validate a captured (place, trailingWord) pair: trailing must be a month/season,
  * place must be a proper noun that is not a month/occasion/stopword. */
 function validatePlaceBeforeTime(rawPlace: string, rawTime: string): string | undefined {
+  // A bare month token is checked positionally (MONTH_TOKEN) because the general
+  // May/March patterns are deliberately anchored against modal/verb readings.
   const trailingIsTime =
-    MONTHS.some(([pattern]) => pattern.test(rawTime)) || /^(?:spring|summer|autumn|fall|winter)$/i.test(rawTime);
+    MONTH_TOKEN.test(rawTime) || /^(?:spring|summer|autumn|fall|winter)$/i.test(rawTime);
   if (!trailingIsTime) return undefined;
   const candidate = cleanCapture(rawPlace);
   // Proper-noun guard: cities are capitalized; "the office" / "a meeting" are not.
   if (!/^[A-Z]/.test(candidate)) return undefined;
   if (NON_PLACE_WORDS.has(candidate.toLowerCase())) return undefined;
-  if (MONTHS.some(([pattern]) => pattern.test(candidate))) return undefined;
+  if (MONTHS.some(([pattern]) => pattern.test(candidate)) || MONTH_TOKEN.test(candidate)) return undefined;
   if (OCCASIONS.some(([pattern]) => pattern.test(candidate))) return undefined;
+  // A capitalized scent word is a fragrance reference, never a city — without
+  // this, "wear Wood this summer" stored destination="Wood".
+  if (FAMILY_PATTERNS.some(([pattern]) => pattern.test(candidate))) return undefined;
   return candidate || undefined;
 }
 
@@ -579,8 +616,11 @@ function normalizeForDelegation(message: string): string {
  * pick") never trip it.
  */
 const DELEGATION_PATTERNS: RegExp[] = [
-  // 1. "I don't know — you tell me" — punting the decision outright.
-  /\b(?:idk|i\s+don'?t\s+know|i\s+have\s+no\s+idea|you\s+tell\s+me)\b/,
+  // 1. "I don't know — you tell me" — punting the decision outright. The
+  //    lookahead keeps STATEMENTS of uncertainty ("I don't know much about
+  //    niche houses", "idk if I like oud") from registering as a hand-off:
+  //    those continue the conversation, they don't punt the choice.
+  /\b(?:idk|i\s+don'?t\s+know|i\s+have\s+no\s+idea)\b(?!\s+(?:if|whether|much|many|a\s+lot|anything|that|how|what|where|when|why|which|who|about|enough|the|his|her|their|its|this|these|those))|\byou\s+tell\s+me\b/,
   // 2. Direct hand-off aimed at "you": you decide / you choose / you pick / you
   //    call it / (I want) you to decide. The negative lookbehind blocks the
   //    interrogative "how/do/can/would you decide" (a question about HOW Beam
@@ -594,7 +634,11 @@ const DELEGATION_PATTERNS: RegExp[] = [
   // 5. Commit-now framing: recommend now, make the call|decision, just pick/choose/
   //    recommend/decide, just go ahead/for it, go ahead. ("just go" is scoped to
   //    go-ahead/for-it/with-it so a narrative "I just go for whatever" never trips.)
-  /\brecommend\s+now\b|\bmake\s+the\s+(?:call|decision)\b|\bjust\s+(?:pick|choose|recommend|decide)\b|\bjust\s+go\s+(?:ahead|for\s+it|with\s+(?:it|one|that))\b|\bgo\s+ahead\b/,
+  //    The bare "go ahead" arm is a hand-off only when it is addressed TO Beam:
+  //    a first-person subject ("should I go ahead and buy it?", "I'll go ahead
+  //    and order it") is the USER's own action, not a delegation, so it is
+  //    excluded via lookbehind.
+  /\brecommend\s+now\b|\bmake\s+the\s+(?:call|decision)\b|\bjust\s+(?:pick|choose|recommend|decide)\b|\bjust\s+go\s+(?:ahead|for\s+it|with\s+(?:it|one|that))\b|(?<!\b(?:should|shall|can|could|do|did|will|would|might|may|if)\s+(?:i|we)\s+)(?<!\b(?:i|we)\s+(?:will\s+|would\s+|can\s+|could\s+|should\s+|might\s+)?)(?<!\bi'll\s+)\bgo\s+ahead\b/,
   // 6. "pick/choose/recommend (something) for me" / "give me the answer|pick|best"
   //    — explicit ask for the conclusion. The "choose the best" arm is anchored to
   //    a hand-off subject (clause-start imperative or "you choose the best") so the
@@ -838,6 +882,14 @@ export function deriveBeamSessionState(
   if (month) slots.month = month;
   const destination = parseDestination(text);
   if (destination) slots.destination = destination;
+  // "<Place> May" — a bare month token right after a validated place is a real
+  // month even though the anchored May pattern (modal guard) skips it alone.
+  if (destination && !slots.month) {
+    const escaped = destination.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const trailing = new RegExp(String.raw`\b${escaped}\s+(?:in\s+|this\s+|next\s+)?([A-Za-z]+)`, "i").exec(text)?.[1];
+    const trailingMonth = trailing ? monthFromToken(trailing) : undefined;
+    if (trailingMonth) slots.month = trailingMonth;
+  }
   const occasion = parseOccasion(text);
   if (occasion) slots.occasion = occasion;
   const vibe = parseVibe(text);
@@ -873,6 +925,13 @@ export function deriveBeamSessionState(
   if (pendingSlot === "month" && !slots.month) {
     const season = /^(?:this\s+)?(spring|summer|autumn|fall|winter)$/i.exec(concise)?.[1];
     if (season) slots.month = season.toLowerCase() === "fall" ? "Autumn" : season[0].toUpperCase() + season.slice(1).toLowerCase();
+    // A terse bare-month answer ("May", "in May") to the month question. Position
+    // disambiguates the modal reading the anchored May pattern guards against.
+    if (!slots.month) {
+      const bareMonth = /^(?:in\s+|this\s+|next\s+)?([A-Za-z]+)$/i.exec(concise)?.[1];
+      const month = bareMonth ? monthFromToken(bareMonth) : undefined;
+      if (month) slots.month = month;
+    }
   }
   if (pendingSlot === "budget" && !slots.budget) {
     const qualitativeBudget = /^(budget-friendly|mid-range|premium|no limit)$/i.exec(concise)?.[1];

@@ -41,13 +41,31 @@ export function parseAvoidTerms(avoid: string | undefined): string[] {
 }
 
 /**
+ * Keys stripped from a flattened profile before the avoid match runs. The
+ * 6-axis scent vector's JSON KEYS ("musk", "spice", …) appear on EVERY
+ * vector-bearing candidate, so serializing them made avoid=musk/spicy match the
+ * whole pool — `excludeAvoidedHits`'s never-return-empty backstop then returned
+ * everything unfiltered, silently disabling the hard exclusion (the same
+ * vector-key footgun the catalog SQL search already excludes). `raw` is the
+ * unbounded source blob (reviews can say "not musky at all"), so it is dropped
+ * too; the descriptive fields (name/brand/family/accords/notes/pyramid/
+ * description) remain the haystack.
+ */
+const AVOID_MATCH_EXCLUDED_KEYS = ["scent_vector", "scentVector", "raw"] as const;
+
+/**
  * Does this candidate's profile feature an avoided term? Matches whole words
  * against the candidate's searchable text (name/brand/family/accords/notes — we
  * stringify the flattened profile so the check is robust to its exact shape).
  */
 export function candidateMatchesAvoid(flat: Record<string, unknown>, avoidTerms: string[]): boolean {
   if (avoidTerms.length === 0) return false;
-  const haystack = JSON.stringify(flat).toLowerCase();
+  let searchable = flat;
+  if (AVOID_MATCH_EXCLUDED_KEYS.some((key) => key in flat)) {
+    searchable = { ...flat };
+    for (const key of AVOID_MATCH_EXCLUDED_KEYS) delete searchable[key];
+  }
+  const haystack = JSON.stringify(searchable).toLowerCase();
   for (const term of avoidTerms) {
     const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     if (new RegExp(`\\b${escaped}\\b`).test(haystack)) return true;

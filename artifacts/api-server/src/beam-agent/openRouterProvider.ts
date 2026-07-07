@@ -469,6 +469,15 @@ async function streamOpenAiText(
         }
       }
     }
+    // Flush a final frame that arrived without its trailing blank-line
+    // terminator (some backends end the stream right after the last `data:`
+    // line). Dropping it lost the tail text chunk and — worse — the
+    // include_usage frame, silently zeroing the run's token/cost accounting.
+    buffer += decoder.decode();
+    for (const rawLine of buffer.split("\n")) {
+      const line = rawLine.replace(/\r$/, "");
+      if (line.startsWith("data:")) handleData(line.slice(5).replace(/^ /, ""));
+    }
   } finally {
     reader.cancel().catch(() => {});
   }

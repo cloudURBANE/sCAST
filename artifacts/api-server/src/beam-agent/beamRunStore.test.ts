@@ -40,10 +40,18 @@ class FakeRedis implements RedisLike {
   async del(key: string): Promise<number> {
     return this.kv.delete(key) ? 1 : 0;
   }
-  // Implements only the `SET key val PX ttl NX` script the run store ships.
-  async eval(_script: string, _numKeys: number, ...args: (string | number)[]): Promise<unknown> {
+  // Implements the two scripts the run store ships: `SET key val PX ttl NX`
+  // (acquire) and the GET-compare-DEL (owner-checked release).
+  async eval(script: string, _numKeys: number, ...args: (string | number)[]): Promise<unknown> {
     const key = String(args[0]);
     const value = String(args[1]);
+    if (script.includes("'DEL'")) {
+      if (this.kv.get(key) === value) {
+        this.kv.delete(key);
+        return 1;
+      }
+      return 0;
+    }
     if (this.kv.has(key)) return null;
     this.kv.set(key, value);
     return "OK";
@@ -94,7 +102,8 @@ const throwing: RedisLike = {
 };
 
 test("createRunMeta → loadRunMeta round-trips the run context", async () => {
-  __setRunStoreRedisForTests(async () => new FakeRedis());
+  const redis = new FakeRedis();
+  __setRunStoreRedisForTests(async () => redis);
   const c = ctx();
   await createRunMeta(c);
   const meta = await loadRunMeta(c.runId);
@@ -104,7 +113,8 @@ test("createRunMeta → loadRunMeta round-trips the run context", async () => {
 });
 
 test("appendRunEvent persists structural events in order and tails after a watermark", async () => {
-  __setRunStoreRedisForTests(async () => new FakeRedis());
+  const redis = new FakeRedis();
+  __setRunStoreRedisForTests(async () => redis);
   const c = ctx({ runId: "run_order" });
   const events: BeamRunEvent[] = [
     { type: "status", label: "thinking" },
@@ -122,7 +132,8 @@ test("appendRunEvent persists structural events in order and tails after a water
 });
 
 test("appendRunEvent skips message_delta (not mirrored cross-replica)", async () => {
-  __setRunStoreRedisForTests(async () => new FakeRedis());
+  const redis = new FakeRedis();
+  __setRunStoreRedisForTests(async () => redis);
   const c = ctx({ runId: "run_delta" });
   await appendRunEvent(c.runId, { type: "status", label: "go" });
   await appendRunEvent(c.runId, { type: "message_delta", text: "tok" });
@@ -136,7 +147,8 @@ test("appendRunEvent skips message_delta (not mirrored cross-replica)", async ()
 });
 
 test("done / stopped flags are independently set and read", async () => {
-  __setRunStoreRedisForTests(async () => new FakeRedis());
+  const redis = new FakeRedis();
+  __setRunStoreRedisForTests(async () => redis);
   const c = ctx({ runId: "run_flags" });
   assert.equal(await isRunDone(c.runId), false);
   assert.equal(await isRunStopped(c.runId), false);
@@ -150,7 +162,8 @@ test("done / stopped flags are independently set and read", async () => {
 });
 
 test("tryAcquireActiveSession enforces one active run per session, released on clear", async () => {
-  __setRunStoreRedisForTests(async () => new FakeRedis());
+  const redis = new FakeRedis();
+  __setRunStoreRedisForTests(async () => redis);
   const c = ctx({ runId: "run_a" });
   assert.equal(await tryAcquireActiveSession(c), true, "first acquire wins");
   assert.equal(
@@ -161,6 +174,27 @@ test("tryAcquireActiveSession enforces one active run per session, released on c
 
   await clearActiveSession(c);
   assert.equal(await tryAcquireActiveSession(ctx({ runId: "run_c" })), true, "lock released");
+});
+
+test("a stale producer cannot release the lock a newer run of the same session holds", async () => {
+  // A producer that outlived the lock TTL used to DEL unconditionally on its
+  // terminal event, releasing the lock the NEWER run had since acquired — which
+  // let a third run start concurrently on the same session.
+  const redis = new FakeRedis();
+  __setRunStoreRedisForTests(async () => redis);
+  const stale = ctx({ runId: "run_stale" });
+  const newer = ctx({ runId: "run_newer" });
+  assert.equal(await tryAcquireActiveSession(newer), true, "newer run holds the lock");
+
+  await clearActiveSession(stale); // stale terminal event — must be a no-op
+  assert.equal(
+    await tryAcquireActiveSession(ctx({ runId: "run_third" })),
+    false,
+    "the newer run's lock must survive a stale release",
+  );
+
+  await clearActiveSession(newer); // the owner releases normally
+  assert.equal(await tryAcquireActiveSession(ctx({ runId: "run_third" })), true);
 });
 
 test("no-Redis: every function degrades to a safe no-op / default", async () => {

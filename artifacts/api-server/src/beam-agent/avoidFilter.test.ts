@@ -52,3 +52,29 @@ test("drops avoided candidates but never returns an empty pool", () => {
   // No avoid slot is a no-op.
   assert.equal(excludeAvoidedHits(hits, undefined).length, 3);
 });
+
+test("scent-vector JSON keys never defeat the avoid filter (musk/spice key collision)", () => {
+  // Every vector-bearing profile carries the KEYS "musk" and "spice"; matching
+  // them made avoid=musk flag the whole pool, and the never-return-empty
+  // backstop then disabled the exclusion entirely.
+  const vector = { freshness: 0.9, sweetness: 0.1, woodiness: 0.2, spice: 0.1, warmth: 0.1, musk: 0.05 };
+  const citrus = { flat: { name: "Light Citrus", brand: "X", accords: ["citrus", "green"], scent_vector: vector } };
+  const muskBomb = { flat: { name: "Musk Bomb", brand: "Y", accords: ["musk", "amber"], scent_vector: vector } };
+
+  assert.equal(candidateMatchesAvoid(citrus.flat, parseAvoidTerms("musk")), false);
+  assert.equal(candidateMatchesAvoid(muskBomb.flat, parseAvoidTerms("musk")), true);
+  assert.equal(candidateMatchesAvoid(citrus.flat, parseAvoidTerms("spicy")), false);
+
+  const kept = excludeAvoidedHits([citrus, muskBomb], "musk");
+  assert.deepEqual(kept.map((h) => h.flat.name), ["Light Citrus"]);
+});
+
+test("the raw source blob does not trigger avoid matches (review-text false positive)", () => {
+  const flat = {
+    name: "Clean Cologne",
+    accords: ["citrus"],
+    raw: { review: "surprisingly not musky at all, zero oud here" },
+  };
+  assert.equal(candidateMatchesAvoid(flat, parseAvoidTerms("musk")), false);
+  assert.equal(candidateMatchesAvoid(flat, parseAvoidTerms("oud")), false);
+});
