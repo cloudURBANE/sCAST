@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 import { clearPwaApiCache } from '@/lib/pwa/registerPwa';
 
@@ -252,6 +252,45 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // service worker so the next user on this device never sees them.
     clearPwaApiCache();
   }, [authToken, setGuestPromptDismissed, setGuestModeAcknowledged]);
+
+  // C3: exchange a one-time OAuth handoff code for the bearer token. The callback
+  // now redirects with `?oauth_code=…` (single-use, 60s) instead of the token +
+  // email in the URL, so we POST it to /api/auth/exchange and receive the token in
+  // the response body. The legacy `?oauth_token=…` path in the authToken
+  // initializer above is kept for one release. Runs once (guarded by the ref) so a
+  // StrictMode double-mount can't burn the single-use code on the second pass.
+  const oauthExchangeStartedRef = useRef(false);
+  useEffect(() => {
+    if (oauthExchangeStartedRef.current) return;
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('oauth_code');
+    if (!code) return;
+    oauthExchangeStartedRef.current = true;
+    // Scrub the code from the URL immediately (before the network call) so it's
+    // never left in history/referrers even if the exchange is slow.
+    params.delete('oauth_code');
+    const qs = params.toString();
+    window.history.replaceState({}, '', window.location.pathname + (qs ? `?${qs}` : ''));
+
+    fetch('/api/auth/exchange', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code }),
+    })
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error('exchange_failed'))))
+      .then((data) => {
+        if (data && typeof data.token === 'string' && typeof data.email === 'string') {
+          handleAuth(data.token, data.email, typeof data.picture === 'string' ? data.picture : null);
+        } else {
+          setAuthError(mapOAuthError('server_error'));
+          setIsAuthModalOpen(true);
+        }
+      })
+      .catch(() => {
+        setAuthError(mapOAuthError('server_error'));
+        setIsAuthModalOpen(true);
+      });
+  }, [handleAuth]);
 
   // Reconcile the username with the server whenever the token changes. The
   // seeded value covers the first paint; this corrects it if the user set a

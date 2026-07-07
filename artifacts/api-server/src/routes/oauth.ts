@@ -6,6 +6,7 @@ import { eq, and, isNull, sql } from "drizzle-orm";
 import { getTenantId } from "../middlewares/tenant";
 import { requireAuth, isUndefinedColumnError, type AuthRequest } from "../middlewares/auth";
 import { hashToken } from "../lib/tokenAuth";
+import { mintHandoffCode, redeemHandoffCode } from "../lib/oauthCodeStore";
 
 const router = Router();
 
@@ -467,15 +468,15 @@ router.get("/auth/google/callback", async (req, res) => {
       throw new Error("OAuth callback resolved user without token/email");
     }
 
-    const params = new URLSearchParams({
-      oauth_token: user.token,
-      oauth_email: user.email,
+    // C3: hand the SPA a single-use 60s code instead of the bearer token +
+    // email in the redirect URL, so the live credential never lands in history,
+    // Referer, or SPA-origin logs. The SPA POSTs it to /api/auth/exchange.
+    const handoffCode = mintHandoffCode({
+      token: user.token,
+      email: user.email,
+      ...(pictureUrl ? { pictureUrl } : {}),
     });
-    if (pictureUrl) {
-      params.set("oauth_picture", pictureUrl);
-    }
-
-    res.redirect(`/?${params}`);
+    res.redirect(`/?oauth_code=${encodeURIComponent(handoffCode)}`);
   } catch (err) {
     req.log.error(
       { err, query: req.query, resolvedBaseUrl: getBaseUrl(req) },
@@ -526,6 +527,30 @@ router.post("/auth/logout", requireAuth, async (req: AuthRequest, res) => {
     }
   }
   res.json({ ok: true });
+});
+
+/**
+ * C3: exchange a one-time handoff code (minted by the OAuth callback) for the
+ * bearer token + email. Single-use and 60s-lived (enforced by the store), so a
+ * leaked redirect URL is worthless. The token is returned in the response body,
+ * never in a URL. A rate limit is applied at mount (routes/index.ts).
+ */
+router.post("/auth/exchange", (req, res) => {
+  const code = typeof req.body?.code === "string" ? req.body.code : "";
+  if (!code) {
+    res.status(400).json({ error: "Missing code" });
+    return;
+  }
+  const handoff = redeemHandoffCode(code);
+  if (!handoff) {
+    res.status(401).json({ error: "Invalid or expired code" });
+    return;
+  }
+  res.json({
+    token: handoff.token,
+    email: handoff.email,
+    ...(handoff.pictureUrl ? { picture: handoff.pictureUrl } : {}),
+  });
 });
 
 export default router;
