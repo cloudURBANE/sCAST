@@ -778,3 +778,25 @@ test("commit policy: repairInstructionFor explains the commit_refusal fix", () =
   assert.match(msg, /deferral|hedging/i);
   assert.match(msg, /confident named pick|commit/i);
 });
+
+test("echoing the user's own stated budget is not an unsupported price claim", () => {
+  const state = { slots: { budget: "$80" } };
+  const echo = "Reach for **Tam Dao** — a woody, quiet pick that keeps you under your $80 cap.";
+  const gate = runAnswerQualityGates(echo, { ...NO_EVIDENCE, sessionState: state });
+  assert.equal(gate.violations.includes("price_without_evidence"), false, gate.violations.join(","));
+
+  // A range budget exempts both bounds.
+  const rangeState = { slots: { budget: "$50-100" } };
+  const rangeEcho = "Both sit inside your $50-100 range; the $100 end buys the better bottle.";
+  const rangeGate = runAnswerQualityGates(rangeEcho, { ...NO_EVIDENCE, sessionState: rangeState });
+  assert.equal(rangeGate.violations.includes("price_without_evidence"), false, rangeGate.violations.join(","));
+
+  // Any OTHER figure is still an unsupported price claim.
+  const claim = "It's $79.99 at Sephora right now, well under your $80 cap.";
+  const claimGate = runAnswerQualityGates(claim, { ...NO_EVIDENCE, sessionState: state });
+  assert.equal(claimGate.violations.includes("price_without_evidence"), true);
+
+  // Without a budget slot the gate behaves exactly as before.
+  const bare = runAnswerQualityGates("It costs $80.", NO_EVIDENCE);
+  assert.equal(bare.violations.includes("price_without_evidence"), true);
+});

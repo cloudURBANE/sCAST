@@ -418,7 +418,22 @@ export function runAnswerQualityGates(answerText: string, input: QualityGateInpu
   const violations: string[] = [];
 
   if (!input.hadExternalEvidence) {
-    if (PRICE_PATTERN.test(text)) violations.push("price_without_evidence");
+    // The user's OWN stated budget is not an external price claim. Echoing it
+    // back ("keeps you under your $80 cap") used to trip the price gate and
+    // force a repair rewrite of an otherwise good grounded answer. Blank out
+    // the exact budget-slot figures before the price test; any OTHER number
+    // ("$79.99 at Sephora") still fails as before.
+    let priceText = text;
+    const budgetSlot = input.sessionState?.slots.budget;
+    if (budgetSlot) {
+      for (const amount of new Set(budgetSlot.match(/\d{1,5}/g) ?? [])) {
+        priceText = priceText.replace(
+          new RegExp(String.raw`(?<![\d])[$€£¥]?\s?${amount}(?!\.?\d)`, "g"),
+          " ",
+        );
+      }
+    }
+    if (PRICE_PATTERN.test(priceText)) violations.push("price_without_evidence");
     if (AVAILABILITY_PATTERN.test(text)) violations.push("availability_without_evidence");
     if (REVIEW_PATTERN.test(text)) violations.push("review_claim_without_evidence");
   }
