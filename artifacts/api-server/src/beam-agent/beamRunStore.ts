@@ -234,12 +234,23 @@ export async function tryAcquireActiveSession(ctx: BeamRunContext): Promise<bool
   }
 }
 
-/** Release the active-session lock on a terminal event. Best-effort. */
+/**
+ * Release the active-session lock on a terminal event. Best-effort. Deletes the
+ * key ONLY when this run still owns it (compare-and-delete): a producer that
+ * outlived the lock TTL would otherwise release the lock a NEWER run of the same
+ * session had since acquired, letting a third run start concurrently — the exact
+ * duplicate-turn interleaving the lock exists to prevent.
+ */
 export async function clearActiveSession(ctx: BeamRunContext): Promise<void> {
   const redis = await client();
   if (!redis) return;
   try {
-    await redis.del(activeKey(ctx));
+    await redis.eval(
+      "if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) else return 0 end",
+      1,
+      activeKey(ctx),
+      ctx.runId,
+    );
   } catch (err) {
     logger.warn({ err }, "beam run store: clearActiveSession failed");
   }
