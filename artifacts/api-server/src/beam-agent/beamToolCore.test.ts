@@ -101,6 +101,15 @@ test("collectGroundedFragranceNames pulls names from each tool-result shape", ()
     collectGroundedFragranceNames({ proposed: [{ name: "Silver Mountain Water" }] }),
     ["Silver Mountain Water"],
   );
+  // travel kit — both server-verified lanes ground their names (they were the
+  // one grounded-gate shape the allowlist collector skipped).
+  assert.deepEqual(
+    collectGroundedFragranceNames({
+      owned: [{ name: "Terre d'Hermes", brand: "Hermes" }],
+      newProposed: [{ name: "Wulong Cha", brand: "Nishane" }],
+    }),
+    ["Terre d'Hermes", "Wulong Cha"],
+  );
 });
 
 test("collectGroundedFragranceNames does NOT ground an un-found details lookup", () => {

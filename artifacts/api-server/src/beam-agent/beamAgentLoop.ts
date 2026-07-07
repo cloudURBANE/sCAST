@@ -582,7 +582,10 @@ export function toolInputForMission(
 ): unknown {
   const mission = state?.mission;
   const needsNewLane = mission?.intent === "travel_kit" && (mission.newCount ?? 0) > 0;
-  if (needsNewLane && tool === "beam_search_catalog") {
+  // beam_find_similar gets the same enforcement as beam_search_catalog: without
+  // it, a "like X" retrieval on a new-lane mission could surface owned vault
+  // bottles (grounded as unowned) into the discovery lane.
+  if (needsNewLane && (tool === "beam_search_catalog" || tool === "beam_find_similar")) {
     const record = input && typeof input === "object" && !Array.isArray(input) ? input as Record<string, unknown> : {};
     return { ...record, excludeOwned: true };
   }
@@ -907,7 +910,16 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
   const flushDeliverableCards = (): void => {
     if (pendingDeliverables.length === 0) return;
     for (const event of pendingDeliverables) {
-      if (event.type === "card" || event.type === "proposal") emit(event);
+      if (event.type === "card" || event.type === "proposal") {
+        emit(event);
+        // The user IS seeing this kit board even though the prose failed — record
+        // that on the mission (the route persists the mutated state for failed
+        // runs) so the next turn is treated as a refinement of the presented kit,
+        // not a fresh creation that re-arms the count gates and re-builds it.
+        if (event.type === "card" && event.card.kind === "travel_kit" && input.sessionState?.mission) {
+          input.sessionState.mission.kitPresented = true;
+        }
+      }
     }
     pendingDeliverables.length = 0;
   };
@@ -1244,9 +1256,15 @@ export async function runBeamAgent(input: RunBeamAgentInput): Promise<void> {
         return;
       }
       // Out of wall-clock budget. Ship the best grounded draft we have rather than
-      // dead-spinning until the client's 60s timeout fires and falls back.
+      // dead-spinning until the client's 60s timeout fires and falls back. Same
+      // recovery condition as the mid-call abort path below: a search-heavy
+      // runaway emits only tool calls, so `lastText` can be empty while grounded
+      // names and a buffered, mission-validated card are on hand — gating on the
+      // inline prose alone used to discard both and fail the run.
       if (Date.now() >= deadline) {
-        if (usedTools && lastText) await finish(lastText, { skipSynthesis: true });
+        const haveGroundedToShip =
+          usedTools && (lastText !== "" || groundedNames.size > 0 || pendingDeliverables.length > 0);
+        if (haveGroundedToShip) await finish(lastText, { skipSynthesis: true });
         else fail("run_timeout", "The agent ran out of time before finishing.");
         return;
       }

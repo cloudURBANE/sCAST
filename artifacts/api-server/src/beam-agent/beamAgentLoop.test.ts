@@ -61,6 +61,12 @@ test("new-only mission suppresses owned profile cards and incomplete travel card
     query: "citrus",
     excludeOwned: true,
   });
+  // beam_find_similar gets the same new-lane ownership enforcement: without it a
+  // "like X" retrieval could ground owned vault bottles into the discovery lane.
+  assert.deepEqual(toolInputForMission("beam_find_similar", { query: "Aventus" }, state), {
+    query: "Aventus",
+    excludeOwned: true,
+  });
   assert.match(
     missionToolResultError("beam_present_travel_kit", { ownedCount: 0, newCount: 1 }, state) ?? "",
     /required 0 owned and 2 new/i,
@@ -1928,4 +1934,44 @@ test("a session state that throws during prompt assembly degrades to a graceful 
     events.some((e) => e.type === "failed" && e.code === "agent_error"),
     "prompt-assembly failure degraded to a graceful failed event instead of a rejected promise",
   );
+});
+
+test("hitting the run deadline with grounded evidence but no inline prose ships instead of run_timeout", async (t) => {
+  // A search-heavy runaway emits only tool calls, so `lastText` is empty when the
+  // wall-clock budget runs out at the TOP of the loop. That path used to gate
+  // recovery on the inline prose alone and fail with run_timeout, discarding the
+  // grounded evidence — while the mid-call abort path already shipped it. Both
+  // paths must now use the same recovery condition.
+  t.mock.timers.enable({ apis: ["Date"], now: 1_000_000 });
+  const events: BeamRunEvent[] = [];
+  let summary: BeamRunSummary | undefined;
+  const slowVaultTool: BeamToolDefinition = {
+    name: "beam_get_wardrobe",
+    description: "List the user's wardrobe",
+    inputSchema: { type: "object", properties: {} },
+    handler: async () => {
+      // The tool "takes" the rest of the run budget (clock jumps past the deadline).
+      t.mock.timers.setTime(1_000_000 + 120_000);
+      return { items: [{ id: "f1", canonicalName: "Aventus", brand: "Creed" }] };
+    },
+  };
+  const { callModel } = scriptedModel([
+    { stop_reason: "tool_use", content: [{ type: "tool_use", id: "tu_1", name: "beam_get_wardrobe", input: {} }] },
+    // No further scripted turns: any extra model call would throw.
+  ]);
+
+  await runBeamAgent({
+    ctx,
+    userMessage: "find me something",
+    tools: [slowVaultTool],
+    emit: (event) => events.push(event),
+    isModelConfigured: () => true,
+    callModel,
+    onSummary: (value) => (summary = value),
+  });
+
+  assert.equal(events.some((e) => e.type === "failed"), false, JSON.stringify(events.filter((e) => e.type === "failed")));
+  const completed = events.find((e) => e.type === "completed");
+  assert.ok(completed && completed.type === "completed" && completed.response.trim().length > 0);
+  assert.equal(summary?.outcome, "completed");
 });

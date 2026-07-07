@@ -682,6 +682,14 @@ router.post("/runs", runRateLimit, requireAuth, async (req: AuthRequest, res) =>
       // record a user feedback report attaches to, and the reproducible input →
       // candidates → answer a downvote becomes a regression fixture from. Best-
       // effort + non-blocking: a logging failure must never affect the run.
+      // A failed run skips onComplete/appendSessionTurn, but the loop may still
+      // have mutated the shared session state in a way the user SAW — e.g. a
+      // validated travel-kit card flushed before a prose gate failure sets
+      // mission.kitPresented. Re-persist so the next turn treats the presented
+      // kit as presented instead of re-running creation gates. Best-effort.
+      if (summary.outcome === "failed") {
+        void saveSessionState(ctx, sessionState).catch(() => {});
+      }
       void recordBeamAnswerLog({
         id: summary.runId,
         tenantId: ctx.tenantId,

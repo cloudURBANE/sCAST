@@ -438,7 +438,11 @@ export function collectGroundedFragranceNames(result: unknown): string[] {
   const detailItems = Array.isArray(record.items) && record.items.some(
     (it) => it && typeof it === "object" && "found" in (it as object),
   );
-  for (const key of ["items", "picks", "proposed"] as const) {
+  // `owned` / `newProposed` are the travel-kit result lanes — server-verified
+  // against the vault/catalog, so they ground their names exactly like `items`
+  // does (collectGroundedFragrancesForGate already reads them; skipping them
+  // here left the allowlist/grounded-name count inconsistent with the gate set).
+  for (const key of ["items", "picks", "proposed", "owned", "newProposed"] as const) {
     const arr = record[key];
     if (Array.isArray(arr)) for (const entry of arr) fromEntry(entry, key === "items" && detailItems);
   }
