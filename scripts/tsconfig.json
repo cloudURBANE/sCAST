@@ -2,7 +2,13 @@
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "dist",
-    "types": ["node"]
+    "types": ["node"],
+    // Scripts import api-server sources, which use .ts-suffixed specifiers
+    // (required at runtime by node --experimental-strip-types). Scripts run via
+    // tsx, which resolves them the same way; typecheck is --noEmit so this is
+    // legal for tsc too.
+    "noEmit": true,
+    "allowImportingTsExtensions": true
   },
   "include": ["src"]
 }

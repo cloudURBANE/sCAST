@@ -62,6 +62,27 @@ variable "github_deploy_refs" {
   ]
 }
 
+variable "csp_connect_origins" {
+  description = "Origins (scheme://host) the SPA may fetch/XHR/beacon to besides its own, used in the CSP connect-src directive. Must include the Python fragrance engine (VITE_FRAGRANCE_API_URL) and any VITE_API_BASE_URL / metrics endpoints."
+  type        = list(string)
+  default     = ["https://srt-scent-engine-production.up.railway.app"]
+}
+
+variable "csp_img_origins" {
+  description = "Origins the SPA may load images from besides its own, used in the CSP img-src directive. Include object-storage public bases (Firebase/Supabase), any VITE_IMAGE_CDN_BASES origin, and Fragrantica's image host."
+  type        = list(string)
+  default = [
+    "https://firebasestorage.googleapis.com",
+    "https://fimgs.net",
+  ]
+}
+
+variable "csp_enforce" {
+  description = "false (default) ships the CSP as Content-Security-Policy-Report-Only; true enforces it. Flip only after ≥1 week of violation-free reports from real traffic AND after removing index.html's inline onload handler (violates script-src 'self')."
+  type        = bool
+  default     = false
+}
+
 variable "cloudfront_price_class" {
   description = "CloudFront price class. PriceClass_100 = US/CA/EU edges only (cheapest); PriceClass_All = all edges worldwide."
   type        = string

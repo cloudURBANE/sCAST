@@ -8,6 +8,7 @@
     "./schema": "./src/schema/index.ts"
   },
   "scripts": {
+    "test": "node --experimental-strip-types --test \"src/**/*.test.ts\"",
     "push": "node ./scripts/preflight-push.mjs && drizzle-kit push --config ./drizzle.config.ts",
     "push-force": "node ./scripts/preflight-push.mjs && drizzle-kit push --force --config ./drizzle.config.ts"
   },

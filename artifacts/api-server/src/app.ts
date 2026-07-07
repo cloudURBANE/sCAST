@@ -2,12 +2,14 @@ import path from "node:path";
 import { existsSync } from "node:fs";
 import express, { type ErrorRequestHandler, type Express, type RequestHandler, type Response } from "express";
 import cors from "cors";
+import helmet from "helmet";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import cjRedirectRouter from "./routes/cjRedirect";
 import { mountBeamAgent, isModelConfigured, resolveProvider } from "./beam-agent";
 import { resolveTenant } from "./middlewares/tenant";
 import { logger } from "./lib/logger";
+import { parseAllowedOrigins } from "./lib/corsOrigins.ts";
 import { frontendStaticDir } from "./paths";
 
 const app: Express = express();
@@ -39,6 +41,34 @@ function resolveTrustProxyHops(): number {
 // middleware → Railway. Configurable via TRUST_PROXY_HOPS; defaults to 1.
 app.set("trust proxy", resolveTrustProxyHops());
 
+// Security headers (defense-in-depth on /api/* and the whole story for the
+// self-hosted path). In production the CloudFront response-headers policies
+// (infra/cloudfront.tf) are the primary source for the SPA's headers; helmet
+// covers API responses and self-hosted deployments.
+// - CSP off here: the CSP rollout is driven from CloudFront as Report-Only
+//   first (see the production-readiness plan B2); enabling helmet's default CSP
+//   now would enforce an unproven policy on the self-hosted SPA.
+// - COEP off: it requires every cross-origin image to send CORP, which the
+//   proxied fragrance images don't.
+// - CORP off: deployments that set VITE_API_BASE_URL load /api/image-proxy
+//   images cross-origin; helmet's default `same-origin` would block those
+//   <img> loads.
+// - HSTS off unless explicitly enabled: Express usually sits behind TLS-
+//   terminating proxies (CloudFront/Railway) where the edge header wins; a
+//   self-hosted deploy that terminates TLS itself can set HSTS_ENABLED=true.
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: false,
+    frameguard: { action: "deny" },
+    strictTransportSecurity:
+      process.env["HSTS_ENABLED"] === "true"
+        ? { maxAge: 31_536_000, includeSubDomains: true }
+        : false,
+  }),
+);
+
 app.use(
   pinoHttp({
     logger,
@@ -58,7 +88,20 @@ app.use(
     },
   }),
 );
-app.use(cors());
+// CORS allowlist. In the production topology the SPA and API are same-origin
+// (CloudFront proxies /api/*), so browsers send no CORS preflight at all — this
+// allowlist exists to stop third-party websites driving the cost-bearing
+// endpoints (image pipeline, Beam turns) from victims' browsers. Unset env →
+// `origin: false` (no CORS headers; same-origin requests are unaffected).
+// Comma-separated exact origins, e.g. "https://app.example.com,http://localhost:5173".
+// routes/imageProxy.ts keeps its own explicit ACAO:* for cross-origin <img> use.
+const allowedOrigins = parseAllowedOrigins(process.env["CORS_ALLOWED_ORIGINS"]);
+if (allowedOrigins === false) {
+  logger.info(
+    "CORS_ALLOWED_ORIGINS unset — no cross-origin browser access (same-origin SPA unaffected)",
+  );
+}
+app.use(cors({ origin: allowedOrigins, credentials: false }));
 
 // Body limits. A single 10mb limit on every route is a cheap memory-amplification
 // vector: an unauthenticated caller can force the server to buffer 10mb per request

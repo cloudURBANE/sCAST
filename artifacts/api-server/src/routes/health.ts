@@ -8,7 +8,7 @@ const router: IRouter = Router();
 
 // Liveness: proves the event loop is alive and the process is serving. Touches
 // no external dependency on purpose, so a transient DB/Redis blip never trips a
-// container restart. Used by the Docker HEALTHCHECK and the Railway deploy gate.
+// container restart. Used by the Docker HEALTHCHECK.
 router.get("/healthz", (_req, res) => {
   const data = HealthCheckResponse.parse({ status: "ok" });
   res.json(data);
@@ -34,8 +34,9 @@ function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
 // Readiness: the instance can actually serve. The database is the one hard
 // dependency, so a failed `SELECT 1` returns 503. Redis is optional (rate limits
 // and Beam session memory degrade gracefully when it's absent), so its status is
-// reported but never fails the check. Intended for an external uptime monitor and
-// load-balancer readiness gating.
+// reported but never fails the check. Gates Railway deploys (railway.json
+// healthcheckPath) so a misconfigured build never receives traffic; also the
+// endpoint for external uptime monitoring.
 router.get("/readyz", async (_req, res) => {
   const checks: {
     db: "ok" | "error";

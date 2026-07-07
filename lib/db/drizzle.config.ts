@@ -46,8 +46,16 @@ function parseDatabaseUrl(url: string) {
 }
 
 export default defineConfig({
-  schema: "./src/schema/*.ts",
+  schema: "./src/schema/index.ts",
   dialect: "postgresql",
+  // The schema surface is the runtime barrel (index.ts), NOT a glob over the
+  // directory: conversations.ts / messages.ts exist on disk but are deliberately
+  // unwired, and must not be created by migrations or dragged into push diffs.
+  // Versioned migrations (drizzle-kit generate → SQL files + meta/_journal.json).
+  // Prod applies ONLY these reviewed files (src/migrate.ts); `push` stays a
+  // local-dev convenience behind the preflight guard. pre-baseline/ holds the
+  // historical hand-applied SQL from the push era — not part of the journal.
+  out: "./migrations",
   // Only ever manage our own tables (see SAFETY note above).
   tablesFilter: appTables,
   dbCredentials: parseDatabaseUrl(process.env.DATABASE_URL),
