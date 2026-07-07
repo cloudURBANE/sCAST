@@ -433,3 +433,46 @@ test("a known occasion captured this turn is not re-marked pending after an occa
   assert.equal(state.slots.occasion, "dinner");
   assert.notEqual(state.pendingSlotUnanswered, true);
 });
+
+test("modal 'may' and verb 'march' never poison the month slot", () => {
+  // "may" as a modal verb used to store month=May, which suppressed the
+  // legitimate "when?" clarification and injected false timing into the prompt.
+  for (const message of [
+    "I may go out tonight, what should I wear?",
+    "You may want to recommend something fresh",
+    "march me through my options",
+  ]) {
+    const state = deriveBeamSessionState(undefined, message);
+    assert.equal(state.slots.month, undefined, `"${message}" must not capture a month`);
+  }
+});
+
+test("anchored, dated, place-adjacent, and terse-answer May phrasings still resolve", () => {
+  assert.equal(deriveBeamSessionState(undefined, "Going to Tokyo in May").slots.month, "May");
+  assert.equal(deriveBeamSessionState(undefined, "Trip to Tokyo, May 15").slots.month, "May");
+  const placeAdjacent = deriveBeamSessionState(undefined, "Tokyo May");
+  assert.equal(placeAdjacent.slots.destination, "Tokyo");
+  assert.equal(placeAdjacent.slots.month, "May");
+  // Terse answer to the pending "which month?" question.
+  assert.equal(deriveBeamSessionState(undefined, "May", "month").slots.month, "May");
+});
+
+test("a capitalized scent word before a season is never stored as a destination", () => {
+  const state = deriveBeamSessionState(undefined, "I just want to wear Wood this summer");
+  assert.equal(state.slots.destination, undefined);
+  assert.equal(state.slots.month, "Summer");
+});
+
+test("first-person 'go ahead' and uncertainty statements are not delegation", () => {
+  for (const phrase of [
+    "Should I go ahead and buy it?",
+    "I'll go ahead and order it",
+    "I don't know much about niche houses",
+    "idk if I like oud",
+  ]) {
+    assert.equal(isDelegationPhrase(phrase), false, `should NOT delegate: ${phrase}`);
+  }
+  for (const phrase of ["go ahead", "go ahead and pick", "can you go ahead", "I don't know, you pick"]) {
+    assert.equal(isDelegationPhrase(phrase), true, `should delegate: ${phrase}`);
+  }
+});
