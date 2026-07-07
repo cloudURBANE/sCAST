@@ -1,5 +1,6 @@
 import axios from "axios";
 import * as cheerio from "cheerio";
+import { logger } from "../lib/logger.ts";
 
 const DEFAULT_BASE_URL = "https://api.linksynergy.com";
 const REQUEST_TIMEOUT_MS = 12000;
@@ -359,7 +360,7 @@ export class RakutenAdvertisingProvider {
     });
 
     if (response.status !== 200) {
-      console.warn("[rakuten] advertiser lookup failed", { status: response.status, advertiserId });
+      logger.warn({ status: response.status, advertiserId }, "[rakuten] advertiser lookup failed");
       return null;
     }
 
@@ -405,7 +406,7 @@ export class RakutenAdvertisingProvider {
     });
 
     if (response.status !== 200) {
-      console.warn("[rakuten] product search failed", { status: response.status });
+      logger.warn({ status: response.status }, "[rakuten] product search failed");
       return [];
     }
 
@@ -507,10 +508,13 @@ export class RakutenAdvertisingProvider {
         return { status: "active", product: { ...product, affiliateUrl } };
       } catch (err: any) {
         product.affiliateUnavailableReason = err?.message || "DEEP_LINK_FAILED";
-        console.info("[rakuten] deep link unavailable for product candidate", {
-          advertiserId: product.advertiserId,
-          reason: product.affiliateUnavailableReason,
-        });
+        logger.info(
+          {
+            advertiserId: product.advertiserId,
+            reason: product.affiliateUnavailableReason,
+          },
+          "[rakuten] deep link unavailable for product candidate",
+        );
       }
     }
 

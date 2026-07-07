@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
+import { logger } from "../lib/logger.ts";
 
 export type ImageStorageProvider = "firebase" | "supabase" | "local";
 
@@ -407,7 +408,7 @@ function resolveFirebaseStorageBucket(): string | undefined {
   const derived = `${projectId}.firebasestorage.app`;
   if (!warnedDerivedFirebaseBucket) {
     warnedDerivedFirebaseBucket = true;
-    console.warn(
+    logger.warn(
       `[imageObjectStorage] FIREBASE_STORAGE_BUCKET is not set; defaulting to "${derived}" ` +
         `derived from FIREBASE_PROJECT_ID. Set FIREBASE_STORAGE_BUCKET explicitly if your ` +
         `bucket differs (e.g. "${projectId}.appspot.com").`,

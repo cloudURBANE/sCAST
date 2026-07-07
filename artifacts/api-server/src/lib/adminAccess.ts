@@ -8,9 +8,16 @@
  * system — just an allowlist check against the already-authenticated user.
  */
 
-/** Parse the comma/whitespace-separated `ADMIN_EMAILS` env into a lowercase set. */
+/**
+ * Parse the comma/whitespace-separated `ADMIN_EMAILS` env into a lowercase set.
+ *
+ * The allowlist is entirely env-driven — no address is hardcoded here. Baking an
+ * owner address into source shipped PII in the repo and granted that account
+ * admin on *every* deployment of this code with no way to revoke it via config.
+ * Set `ADMIN_EMAILS` in the runtime environment (Railway variables / `.env`).
+ */
 export function getAdminEmailAllowlist(): Set<string> {
-  const raw = (process.env.ADMIN_EMAILS ?? "") + ",dkyleaustin@gmail.com";
+  const raw = process.env.ADMIN_EMAILS ?? "";
   return new Set(
     raw
       .split(/[,\s]+/)

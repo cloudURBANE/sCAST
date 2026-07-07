@@ -6,6 +6,8 @@
   },
   "deploy": {
     "startCommand": "pnpm start",
+    "healthcheckPath": "/api/healthz",
+    "healthcheckTimeout": 30,
     "restartPolicyType": "ON_FAILURE",
     "numReplicas": 1
   }

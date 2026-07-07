@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import type { NextFunction, Request, Response } from "express";
+import { logger } from "../lib/logger.ts";
 
 function timingSafeEqualStrings(a: string, b: string): boolean {
   const aBuf = Buffer.from(a, "utf8");
@@ -29,7 +30,7 @@ export function requireAdminSecret(req: Request, res: Response, next: NextFuncti
   if (!adminSecret) {
     if (!warnedAdminSecretMissing) {
       warnedAdminSecretMissing = true;
-      console.warn(
+      logger.warn(
         "[adminSecret] ADMIN_SECRET is not set; admin endpoints are disabled and return 503.",
       );
     }
