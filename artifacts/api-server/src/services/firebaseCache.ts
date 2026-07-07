@@ -2,6 +2,7 @@ import { createHash } from "crypto";
 import { createRequire } from "node:module";
 import type { Firestore } from "firebase-admin/firestore";
 import { safeImageUrlForResponse } from "./persistenceGuards";
+import { logger } from "../lib/logger.ts";
 
 let firestoreDb: Firestore | null = null;
 let initAttempted = false;
@@ -53,7 +54,7 @@ function getDb(): Firestore | null {
   const privateKey = process.env.FIREBASE_PRIVATE_KEY;
 
   if (!projectId || !clientEmail || !privateKey) {
-    console.error("[firebaseCache] Missing env vars — cache disabled");
+    logger.error("[firebaseCache] Missing env vars — cache disabled");
     return null;
   }
 
@@ -69,10 +70,10 @@ function getDb(): Firestore | null {
           }),
         });
     firestoreDb = app.firestore();
-    console.log("[firebaseCache] Firestore connected ✓");
+    logger.info("[firebaseCache] Firestore connected ✓");
     return firestoreDb;
   } catch (err) {
-    console.error("[firebaseCache] init failed:", err);
+    logger.error({ err }, "[firebaseCache] init failed");
     return null;
   }
 }
@@ -88,7 +89,7 @@ async function readFromFirestore(
     const value = data?.publicUrl ?? data?.imageUrl;
     return isValidImageReference(value) ? value : null;
   } catch (err) {
-    console.error("[firebaseCache] read error:", err);
+    logger.error({ err }, "[firebaseCache] read error");
     return null;
   }
 }
@@ -108,9 +109,9 @@ async function writeToFirestore(
       name: name.trim(),
       createdAt: new Date().toISOString(),
     });
-    console.log(`[firebaseCache] stored — ${brand} ${name}`);
+    logger.info({ brand, name }, "[firebaseCache] stored");
   } catch (err) {
-    console.error("[firebaseCache] write error:", err);
+    logger.error({ err }, "[firebaseCache] write error");
   }
 }
 
@@ -130,7 +131,7 @@ export async function getOrCreateCachedImage(
   // Fast path: already an in-flight request for this key — join it
   const existing = inFlight.get(key);
   if (existing) {
-    console.log(`[firebaseCache] joining in-flight — ${brand} ${name}`);
+    logger.info({ brand, name }, "[firebaseCache] joining in-flight");
     return existing;
   }
 
@@ -140,7 +141,7 @@ export async function getOrCreateCachedImage(
       if (db) {
         const cached = await readFromFirestore(db, key);
         if (cached) {
-          console.log(`[firebaseCache] HIT — ${brand} ${name}`);
+          logger.info({ brand, name }, "[firebaseCache] HIT");
           return cached;
         }
       }
@@ -172,8 +173,8 @@ export async function deleteCachedImage(brand: string, name: string): Promise<vo
   const key = normalizeKey(brand, name);
   try {
     await db.collection("bg_cache").doc(key).delete();
-    console.log(`[firebaseCache] deleted - ${brand} ${name}`);
+    logger.info({ brand, name }, "[firebaseCache] deleted");
   } catch (err) {
-    console.error("[firebaseCache] delete error:", err);
+    logger.error({ err }, "[firebaseCache] delete error");
   }
 }

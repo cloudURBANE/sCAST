@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { isAdminEmail, isAdminUser } from "./adminAccess";
+import { isAdminEmail, isAdminUser } from "./adminAccess.ts";
 
 function withAdminEmails<T>(value: string | undefined, fn: () => T): T {
   const saved = process.env.ADMIN_EMAILS;

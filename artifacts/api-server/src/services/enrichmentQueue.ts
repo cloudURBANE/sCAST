@@ -158,6 +158,8 @@ export async function maybeReopenFailedEnrichmentJob(
   return updated ?? job;
 }
 
+let failedJobSweeperTimer: NodeJS.Timeout | null = null;
+
 /** Background sweeper; no-op when automatic retry is disabled. */
 export function startEnrichmentFailedJobRetrySweeper(): void {
   const retryAfterMs = failedEnrichmentRetryMs();
@@ -170,6 +172,15 @@ export function startEnrichmentFailedJobRetrySweeper(): void {
     });
   }, sweepMs);
   timer.unref();
+  failedJobSweeperTimer = timer;
+}
+
+/** Stop the failed-job retry sweeper. Used by graceful shutdown. */
+export function stopEnrichmentFailedJobRetrySweeper(): void {
+  if (failedJobSweeperTimer) {
+    clearInterval(failedJobSweeperTimer);
+    failedJobSweeperTimer = null;
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -347,6 +358,7 @@ function defaultWorkerDeps(process: EnrichmentWorkerProcessor<EnrichmentJob>): E
 }
 
 let enrichmentWorkerStarted = false;
+let enrichmentWorkerTimer: NodeJS.Timeout | null = null;
 
 /**
  * Start the background worker; no-op unless ENRICHMENT_WORKER_ENABLED is set, and
@@ -379,7 +391,17 @@ export function startEnrichmentWorker(process: EnrichmentWorkerProcessor<Enrichm
       });
   }, pollMs);
   timer.unref();
+  enrichmentWorkerTimer = timer;
   logger.info({ pollMs, batch }, "enrichment worker started");
+}
+
+/** Stop the enrichment worker loop. Used by graceful shutdown. */
+export function stopEnrichmentWorker(): void {
+  if (enrichmentWorkerTimer) {
+    clearInterval(enrichmentWorkerTimer);
+    enrichmentWorkerTimer = null;
+  }
+  enrichmentWorkerStarted = false;
 }
 
 export type UpsertEnrichmentJobResult = {

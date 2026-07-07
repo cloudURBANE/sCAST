@@ -34,6 +34,12 @@ ENV PORT=8080
 
 EXPOSE 8080
 
+# Container liveness probe. Uses Node (always present) rather than wget/curl,
+# which aren't guaranteed in bookworm-slim. Hits the dependency-free /api/healthz
+# liveness route so a transient DB blip never trips a restart.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
+  CMD node -e "require('http').get('http://127.0.0.1:'+(process.env.PORT||8080)+'/api/healthz',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
+
 # Default command = the Express API only (unchanged). The Beam MCP listener runs
 # as a SEPARATE Railway service from this same image with an overridden start
 # command: `pnpm --filter @workspace/api-server run start:beam-mcp` (binds

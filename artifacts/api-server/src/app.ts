@@ -16,7 +16,28 @@ const HASHED_STATIC_CACHE = "public, max-age=31536000, immutable";
 const PUBLIC_MEDIA_CACHE = "public, max-age=86400, stale-while-revalidate=604800";
 const SPA_SHELL_CACHE = "no-cache, max-age=0, must-revalidate";
 
-app.set("trust proxy", true);
+// Number of reverse proxies in front of Express, used for `trust proxy` so
+// `req.ip` (and thus per-IP rate limiting) reads the real client IP instead of a
+// client-forgeable X-Forwarded-For entry. 1 = direct Railway; 2 = Vercel edge
+// middleware → Railway. Override with TRUST_PROXY_HOPS when the topology differs.
+function resolveTrustProxyHops(): number {
+  const raw = process.env["TRUST_PROXY_HOPS"];
+  if (raw === undefined || raw.trim() === "") return 1;
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    logger.warn({ TRUST_PROXY_HOPS: raw }, "Invalid TRUST_PROXY_HOPS; defaulting to 1 proxy hop");
+    return 1;
+  }
+  return parsed;
+}
+
+// `trust proxy` decides which value of the X-Forwarded-For chain becomes
+// `req.ip`. Trusting the WHOLE chain (`true`) lets a client forge its own IP by
+// prepending an X-Forwarded-For header, which defeats every per-IP rate limit
+// (rateLimit.ts keys on req.ip). Trust only the number of proxies actually in
+// front of us: 1 for a direct Railway deploy, 2 behind the Vercel edge
+// middleware → Railway. Configurable via TRUST_PROXY_HOPS; defaults to 1.
+app.set("trust proxy", resolveTrustProxyHops());
 
 app.use(
   pinoHttp({
@@ -38,8 +59,24 @@ app.use(
   }),
 );
 app.use(cors());
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+
+// Body limits. A single 10mb limit on every route is a cheap memory-amplification
+// vector: an unauthenticated caller can force the server to buffer 10mb per request
+// on endpoints that only ever need a few hundred bytes. Default to a tight 256kb
+// and grant the larger budget only to the two routes that legitimately accept a
+// `data:image` preview inline (up to ~4mb — see services/incomingImageUrl.ts).
+// Raw image uploads (routes/adminImages.ts) use their own express.raw parser with
+// an image/* content-type, which these JSON/urlencoded parsers skip untouched.
+const DEFAULT_BODY_LIMIT = "256kb";
+const DATA_URL_BODY_LIMIT = "5mb";
+const DATA_URL_JSON_PATHS = new Set(["/api/refresh-image", "/api/reimagine-bottle-image"]);
+
+const jsonDefault = express.json({ limit: DEFAULT_BODY_LIMIT });
+const jsonLarge = express.json({ limit: DATA_URL_BODY_LIMIT });
+app.use((req, res, next) => {
+  (DATA_URL_JSON_PATHS.has(req.path) ? jsonLarge : jsonDefault)(req, res, next);
+});
+app.use(express.urlencoded({ extended: true, limit: DEFAULT_BODY_LIMIT }));
 
 // Bind every request to a tenant (host-based, default-tenant fallback) before
 // any route runs, so authenticated and public endpoints alike are isolated.

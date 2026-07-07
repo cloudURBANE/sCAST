@@ -1,10 +1,17 @@
 // Must run before `./app` — ES modules evaluate imports before other statements,
 // so dotenv side effects live in this dependency-free module.
 import "./env-bootstrap";
+import type { Server } from "node:http";
 import sharp from "sharp";
+import { pool } from "@workspace/db";
 import app from "./app";
 import { logger } from "./lib/logger";
-import { startEnrichmentFailedJobRetrySweeper, startEnrichmentWorker } from "./services/enrichmentQueue";
+import {
+  startEnrichmentFailedJobRetrySweeper,
+  startEnrichmentWorker,
+  stopEnrichmentFailedJobRetrySweeper,
+  stopEnrichmentWorker,
+} from "./services/enrichmentQueue";
 import { enrichJobViaEngine } from "./services/enrichmentProcessor";
 import { ensureTenantBaseline } from "./services/tenants";
 import { getSerperPool } from "./services/serperService";
@@ -85,6 +92,79 @@ async function start() {
   // sporadic 502s. headersTimeout must exceed keepAliveTimeout.
   server.keepAliveTimeout = 65_000;
   server.headersTimeout = 66_000;
+
+  installGracefulShutdown(server);
+}
+
+// How long to wait for in-flight requests to drain before forcing exit. Kept
+// under a typical platform SIGKILL grace window (~30s on Railway) so we always
+// exit on our own terms with the pool closed rather than being hard-killed.
+const SHUTDOWN_TIMEOUT_MS = 10_000;
+
+let shuttingDown = false;
+
+/**
+ * Drain gracefully on SIGTERM/SIGINT: stop the background workers, stop
+ * accepting new connections, let in-flight requests finish, close the pg pool,
+ * then exit. A watchdog forces exit if draining stalls. Without this, every
+ * Railway redeploy hard-kills in-flight requests (502/ECONNRESET) and can sever
+ * an enrichment job mid-write.
+ */
+function installGracefulShutdown(server: Server): void {
+  const drainPoolAndExit = (code: number, watchdog: NodeJS.Timeout): void => {
+    pool
+      .end()
+      .then(() => {
+        logger.info("Drained cleanly; exiting");
+        clearTimeout(watchdog);
+        process.exit(code);
+      })
+      .catch((poolErr) => {
+        logger.error({ err: poolErr }, "Error closing database pool");
+        clearTimeout(watchdog);
+        process.exit(1);
+      });
+  };
+
+  const shutdown = (signal: string): void => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    logger.info({ signal }, "Received shutdown signal; draining");
+
+    const watchdog = setTimeout(() => {
+      logger.error({ timeoutMs: SHUTDOWN_TIMEOUT_MS }, "Drain timed out; forcing exit");
+      process.exit(1);
+    }, SHUTDOWN_TIMEOUT_MS);
+    watchdog.unref();
+
+    stopEnrichmentWorker();
+    stopEnrichmentFailedJobRetrySweeper();
+
+    server.close((err) => {
+      if (err) logger.error({ err }, "Error while closing HTTP server");
+      drainPoolAndExit(err ? 1 : 0, watchdog);
+    });
+    // Release idle keep-alive sockets so `server.close` doesn't wait out the 65s
+    // keepAliveTimeout on connections that aren't mid-request; active requests
+    // are left to finish.
+    server.closeIdleConnections();
+  };
+
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
+
+  // Last-resort handlers so an unhandled rejection or thrown error is logged as a
+  // structured pino line (not just Node's default stderr trace) before the
+  // process exits. ON_FAILURE restart policy brings it back; this preserves the
+  // evidence. Exit so we never keep serving from an unknown/corrupt state.
+  process.on("uncaughtException", (err) => {
+    logger.fatal({ err }, "uncaughtException; exiting");
+    process.exit(1);
+  });
+  process.on("unhandledRejection", (reason) => {
+    logger.fatal({ err: reason }, "unhandledRejection; exiting");
+    process.exit(1);
+  });
 }
 
 void start();
