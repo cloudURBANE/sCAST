@@ -4,7 +4,8 @@ import { db } from "@workspace/db";
 import { usersTable } from "@workspace/db/schema";
 import { eq, and, isNull, sql } from "drizzle-orm";
 import { getTenantId } from "../middlewares/tenant";
-import { requireAuth, type AuthRequest } from "../middlewares/auth";
+import { requireAuth, isUndefinedColumnError, type AuthRequest } from "../middlewares/auth";
+import { hashToken } from "../lib/tokenAuth";
 
 const router = Router();
 
@@ -200,6 +201,38 @@ async function ensureUserToken(
   }
 
   return updated;
+}
+
+/**
+ * Backfill the token-hardening columns for the resolved user (production-
+ * readiness C1/C2). Stamps token_hash = SHA-256(token) so auth can authenticate
+ * by hash, sets token_issued_at on first stamp (coalesce keeps the original
+ * issue time on later logins), and refreshes token_last_used_at. This is the
+ * rolling backfill: every login stamps the row, so legacy plaintext-only rows
+ * gain a hash without a bulk migration. Best-effort — if the columns aren't on
+ * the live DB yet (42703) auth still works via the plaintext token fallback, so
+ * a stamp failure must never block login.
+ */
+async function stampTokenSecurity(user: UserRow, req: import("express").Request): Promise<UserRow> {
+  if (!user.token) return user;
+  const desiredHash = hashToken(user.token);
+  if (user.tokenHash === desiredHash && user.tokenIssuedAt) return user;
+  try {
+    const [updated] = await db
+      .update(usersTable)
+      .set({
+        tokenHash: desiredHash,
+        tokenIssuedAt: sql`coalesce(${usersTable.tokenIssuedAt}, now())`,
+        tokenLastUsedAt: sql`now()`,
+      })
+      .where(eq(usersTable.id, user.id))
+      .returning();
+    return updated ?? user;
+  } catch (err) {
+    if (!isUndefinedColumnError(err)) throw err;
+    req.log.warn({ userId: user.id }, "Skipping token_hash stamp — columns not migrated yet");
+    return user;
+  }
 }
 
 async function updateUserPictureBestEffort(
@@ -427,6 +460,7 @@ router.get("/auth/google/callback", async (req, res) => {
     }
 
     user = await ensureUserToken(user, req);
+    user = await stampTokenSecurity(user, req);
     await updateUserPictureBestEffort(user.id, pictureUrl, req);
 
     if (!user.token) {
@@ -460,15 +494,36 @@ router.get("/auth/google/callback", async (req, res) => {
  */
 router.post("/auth/logout", requireAuth, async (req: AuthRequest, res) => {
   const user = req.user!;
+  const nextToken = randomUUID();
   try {
+    // Rotate the hash alongside the plaintext token. Skipping token_hash would
+    // leave the OLD hash live — auth's hash-first lookup would keep accepting the
+    // logged-out credential, defeating server-side sign-out.
     await db
       .update(usersTable)
-      .set({ token: randomUUID() })
+      .set({
+        token: nextToken,
+        tokenHash: hashToken(nextToken),
+        tokenIssuedAt: sql`now()`,
+        tokenLastUsedAt: sql`now()`,
+      })
       .where(eq(usersTable.id, user.id));
   } catch (err) {
-    req.log.error({ err, userId: user.id }, "Failed to rotate token on logout");
-    res.status(500).json({ error: "Logout failed" });
-    return;
+    if (!isUndefinedColumnError(err)) {
+      req.log.error({ err, userId: user.id }, "Failed to rotate token on logout");
+      res.status(500).json({ error: "Logout failed" });
+      return;
+    }
+    // Live DB without the token-hash columns yet: rotate the plaintext token
+    // only. The old token still dies (plaintext lookup no longer matches) and no
+    // stale hash exists to accept it.
+    try {
+      await db.update(usersTable).set({ token: nextToken }).where(eq(usersTable.id, user.id));
+    } catch (fallbackErr) {
+      req.log.error({ err: fallbackErr, userId: user.id }, "Failed to rotate token on logout");
+      res.status(500).json({ error: "Logout failed" });
+      return;
+    }
   }
   res.json({ ok: true });
 });

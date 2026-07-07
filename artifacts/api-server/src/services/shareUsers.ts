@@ -24,7 +24,15 @@ type ShareUserRow = {
 };
 
 function shareUserFromRow(row: ShareUserRow): typeof usersTable.$inferSelect {
-  return { ...row, pictureUrl: null };
+  // This projection intentionally omits the picture/token-hardening columns (not
+  // needed for share resolution); fill them with nulls to satisfy the row type.
+  return {
+    ...row,
+    pictureUrl: null,
+    tokenHash: null,
+    tokenIssuedAt: null,
+    tokenLastUsedAt: null,
+  };
 }
 
 export function shareHandleSql() {
