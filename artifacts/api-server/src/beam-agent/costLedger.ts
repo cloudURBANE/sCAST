@@ -48,9 +48,16 @@ const PRICE_TABLE: Record<string, Rate> = {
  */
 const DEFAULT_RATE: Rate = { inputPerM: 0.3, outputPerM: 1.2 };
 
+/** OpenRouter `:free` variants bill nothing — pricing them at the conservative
+ * default made every free-lane run accrue PHANTOM spend in the usage ledger,
+ * which counts toward the per-user daily USD cap (BEAM_USER_DAILY_SPEND_USD)
+ * and could 429-block users whose real model cost was $0. */
+const FREE_RATE: Rate = { inputPerM: 0, outputPerM: 0 };
+
 function rateFor(model: string): Rate {
   const slug = (model || "").trim().toLowerCase();
   if (!slug) return DEFAULT_RATE;
+  if (slug.endsWith(":free")) return FREE_RATE;
   if (PRICE_TABLE[slug]) return PRICE_TABLE[slug];
   // Longest-prefix match so version/variant suffixes (":free", ":extended", a
   // date stamp) still price against the base slug.

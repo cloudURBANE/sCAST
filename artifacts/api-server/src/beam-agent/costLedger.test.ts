@@ -38,3 +38,15 @@ test("estimateRunCostUsd sums per-model usage", () => {
 test("empty usage is zero", () => {
   assert.equal(estimateRunCostUsd([]), 0);
 });
+
+test("':free' variants price at zero — no phantom spend toward the daily USD cap", () => {
+  // The production defaults are free slugs (e.g. tencent/hy3-preview:free);
+  // pricing them at the conservative default accrued phantom ledger spend that
+  // could 429-block users under BEAM_USER_DAILY_SPEND_USD with $0 real cost.
+  assert.equal(estimateCallCostUsd("tencent/hy3-preview:free", 30_000, 2_000), 0);
+  assert.equal(estimateCallCostUsd("google/gemma-4-31b-it:FREE", 1_000_000, 1_000_000), 0);
+  // A known PAID base slug with a :free variant is still free (the suffix wins).
+  assert.equal(estimateCallCostUsd("minimax/minimax-m3:free", 1_000_000, 0), 0);
+  // The paid sibling keeps its real rate.
+  assert.ok(estimateCallCostUsd("tencent/hy3-preview", 30_000, 2_000) > 0);
+});
