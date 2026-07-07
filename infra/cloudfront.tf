@@ -70,7 +70,37 @@ resource "aws_cloudfront_cache_policy" "static_long" {
 
 ###############################################################################
 # Response-headers policies — reproduce the exact Cache-Control the browser sees
+# and attach the security-header baseline (HSTS, nosniff, frame DENY, referrer
+# policy) to every response. The HTML policy additionally carries
+# Permissions-Policy and the STAGED Content-Security-Policy:
+#   1. ships as Content-Security-Policy-Report-Only (never blocks),
+#   2. watch violation reports for ≥1 week of real traffic,
+#   3. flip csp_enforce=true only when legit traffic is violation-free.
+# Known blocker for enforcing: index.html's inline `onload` font-loading hook
+# violates script-src 'self' — refactor it (or add 'unsafe-hashes' + hash)
+# before enforcing.
 ###############################################################################
+
+locals {
+  # Draft CSP from the SPA's actual needs (enumerated from artifacts/scent-cast
+  # sources): Google Fonts CSS+woff2, Firebase Storage / Fragrantica images,
+  # data:/blob: images (canvas + PWA), the Python fragrance engine for direct
+  # browser calls, and same-origin everything else. frame-ancestors mirrors
+  # X-Frame-Options: DENY.
+  csp_value = join("; ", [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com",
+    "img-src 'self' data: blob: ${join(" ", var.csp_img_origins)}",
+    "connect-src 'self' ${join(" ", var.csp_connect_origins)}",
+    "manifest-src 'self'",
+    "worker-src 'self' blob:",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+  ])
+}
 
 # /assets/* : public, max-age=31536000, immutable
 resource "aws_cloudfront_response_headers_policy" "immutable_assets" {
@@ -82,6 +112,25 @@ resource "aws_cloudfront_response_headers_policy" "immutable_assets" {
       header   = "Cache-Control"
       value    = "public, max-age=31536000, immutable"
       override = true
+    }
+  }
+
+  security_headers_config {
+    strict_transport_security {
+      access_control_max_age_sec = 31536000
+      include_subdomains         = true
+      override                   = true
+    }
+    content_type_options {
+      override = true
+    }
+    frame_options {
+      frame_option = "DENY"
+      override     = true
+    }
+    referrer_policy {
+      referrer_policy = "strict-origin-when-cross-origin"
+      override        = true
     }
   }
 }
@@ -100,6 +149,25 @@ resource "aws_cloudfront_response_headers_policy" "browser_short" {
       override = true
     }
   }
+
+  security_headers_config {
+    strict_transport_security {
+      access_control_max_age_sec = 31536000
+      include_subdomains         = true
+      override                   = true
+    }
+    content_type_options {
+      override = true
+    }
+    frame_options {
+      frame_option = "DENY"
+      override     = true
+    }
+    referrer_policy {
+      referrer_policy = "strict-origin-when-cross-origin"
+      override        = true
+    }
+  }
 }
 
 # index.html / SPA shell / manifest / community / arena / debug / share :
@@ -113,6 +181,40 @@ resource "aws_cloudfront_response_headers_policy" "no_cache_html" {
       header   = "Cache-Control"
       value    = "no-cache, max-age=0, must-revalidate"
       override = true
+    }
+    items {
+      # Documents only (this policy serves the HTML shell): lock down the
+      # powerful browser features the app never uses. geolocation stays
+      # self-allowed — WeatherContext.tsx uses it for local weather.
+      header   = "Permissions-Policy"
+      value    = "camera=(), microphone=(), geolocation=(self)"
+      override = true
+    }
+    items {
+      # Staged CSP — see the banner comment above. Report-Only until
+      # csp_enforce is flipped after a clean bake period.
+      header   = var.csp_enforce ? "Content-Security-Policy" : "Content-Security-Policy-Report-Only"
+      value    = local.csp_value
+      override = true
+    }
+  }
+
+  security_headers_config {
+    strict_transport_security {
+      access_control_max_age_sec = 31536000
+      include_subdomains         = true
+      override                   = true
+    }
+    content_type_options {
+      override = true
+    }
+    frame_options {
+      frame_option = "DENY"
+      override     = true
+    }
+    referrer_policy {
+      referrer_policy = "strict-origin-when-cross-origin"
+      override        = true
     }
   }
 }

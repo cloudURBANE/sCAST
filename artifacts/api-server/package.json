@@ -16,7 +16,6 @@
     "beam:mint-token": "node --experimental-strip-types src/beam-agent/mcp/mintOwnerToken.ts"
   },
   "dependencies": {
-    "dotenv": "^16.6.1",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@workspace/api-zod": "workspace:*",
     "@workspace/db": "workspace:*",
@@ -25,10 +24,12 @@
     "cheerio": "^1.0.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2",
+    "dotenv": "^16.6.1",
     "drizzle-orm": "catalog:",
     "express": "^5",
     "firebase-admin": "^13.8.0",
     "form-data": "^4.0.0",
+    "helmet": "^8.2.0",
     "ioredis": "^5.4.1",
     "pino": "^9",
     "pino-http": "^10",
