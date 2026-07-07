@@ -345,7 +345,15 @@ a {
   transition: opacity var(--scent-transition-base) var(--scent-ease-out);
 }
 
-.scent-signature-cta:hover::before,
+/* Hover effects are gated to hover-capable pointers: on touch, WebKit keeps
+   :hover applied after a tap until the next tap elsewhere, so the hover state
+   would visibly stick to the button. Keyboard focus stays unguarded. */
+@media (hover: hover) {
+  .scent-signature-cta:hover::before {
+    opacity: 1;
+  }
+}
+
 .scent-signature-cta:focus-visible::before {
   opacity: 1;
 }
@@ -385,14 +393,16 @@ a {
   }
 }
 
-.scent-signature-cta:hover {
-  border-color: rgb(var(--scent-accent-rgb) / 0.48);
-  color: #fff7ec;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 236, 183, 0.16),
-    inset 0 0 30px rgb(var(--scent-accent-rgb) / 0.055),
-    0 22px 56px rgba(0, 0, 0, 0.6),
-    0 0 0 1px rgb(var(--scent-accent-rgb) / 0.1);
+@media (hover: hover) {
+  .scent-signature-cta:hover {
+    border-color: rgb(var(--scent-accent-rgb) / 0.48);
+    color: #fff7ec;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 236, 183, 0.16),
+      inset 0 0 30px rgb(var(--scent-accent-rgb) / 0.055),
+      0 22px 56px rgba(0, 0, 0, 0.6),
+      0 0 0 1px rgb(var(--scent-accent-rgb) / 0.1);
+  }
 }
 
 /* Press: settle the glass a touch. Shadow-only so framer-motion keeps sole
@@ -1064,7 +1074,18 @@ a {
    committed-selection state below so the two never read as the same thing —
    the old shared rule made "what's under my cursor" indistinguishable from
    "what I've actually chosen". */
-.scent-vault-result-card:hover,
+/* Hover half is gated to hover-capable pointers so the lift can't stick to a
+   tapped result on touch; keyboard focus keeps it everywhere. */
+@media (hover: hover) {
+  .scent-vault-result-card:hover {
+    border-color: rgba(255, 216, 128, 0.78);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 238, 192, 0.14),
+      inset 0 0 38px rgb(var(--scent-accent-rgb) / 0.04),
+      0 18px 42px -26px rgba(0, 0, 0, 0.98);
+  }
+}
+
 .scent-vault-result-card:focus-visible {
   border-color: rgba(255, 216, 128, 0.78);
   box-shadow:
@@ -1140,12 +1161,14 @@ a {
     0 18px 42px -30px rgba(0, 0, 0, 0.98);
 }
 
-.scent-vault-outline-button:hover {
-  border-color: rgba(255, 230, 160, 0.98);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 243, 202, 0.13),
-    inset 0 0 30px rgb(var(--scent-accent-rgb) / 0.03),
-    0 18px 42px -30px rgba(0, 0, 0, 0.98);
+@media (hover: hover) {
+  .scent-vault-outline-button:hover {
+    border-color: rgba(255, 230, 160, 0.98);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 243, 202, 0.13),
+      inset 0 0 30px rgb(var(--scent-accent-rgb) / 0.03),
+      0 18px 42px -30px rgba(0, 0, 0, 0.98);
+  }
 }
 
 .scent-vault-outline-button:focus-visible {
@@ -1164,11 +1187,13 @@ a {
   transition: color var(--scent-transition-base, 0.18s) var(--scent-ease-out, ease);
 }
 
-.scent-vault-outline-button:hover .scent-vault-outline-button-label {
-  color: #fff7ec;
-  text-shadow:
-    0 1px 0 rgba(0, 0, 0, 0.9),
-    0 0 20px rgb(var(--scent-accent-rgb) / 0.28);
+@media (hover: hover) {
+  .scent-vault-outline-button:hover .scent-vault-outline-button-label {
+    color: #fff7ec;
+    text-shadow:
+      0 1px 0 rgba(0, 0, 0, 0.9),
+      0 0 20px rgb(var(--scent-accent-rgb) / 0.28);
+  }
 }
 
 .scent-primary-button {
@@ -1250,24 +1275,29 @@ a {
     opacity var(--scent-transition-base) var(--scent-ease-out);
 }
 
-.scent-primary-button:hover {
-  filter: saturate(1.03) brightness(1.04);
-  background:
-    linear-gradient(126deg, rgba(255, 248, 201, 0.82) 0%, rgba(213, 161, 58, 0.54) 13%, rgba(55, 39, 12, 0.94) 29%, rgba(255, 225, 139, 0.62) 43%, rgba(9, 7, 4, 0.98) 58%, rgba(201, 143, 43, 0.52) 74%, rgba(255, 244, 196, 0.7) 100%);
-  border-color: rgba(255, 235, 173, 0.96);
-  box-shadow:
-    0 0 0 1px rgba(10, 5, 1, 0.9),
-    0 3px 9px rgba(0, 0, 0, 0.6),
-    inset 0 1px 0 rgba(255, 248, 207, 0.66),
-    inset 0 -1px 0 rgba(65, 37, 8, 0.72);
-}
+/* Hover treatment only on hover-capable pointers — on touch a tap otherwise
+   leaves the brightened gold gradient stuck until the next tap elsewhere.
+   Touch feedback stays with :active below. */
+@media (hover: hover) {
+  .scent-primary-button:hover {
+    filter: saturate(1.03) brightness(1.04);
+    background:
+      linear-gradient(126deg, rgba(255, 248, 201, 0.82) 0%, rgba(213, 161, 58, 0.54) 13%, rgba(55, 39, 12, 0.94) 29%, rgba(255, 225, 139, 0.62) 43%, rgba(9, 7, 4, 0.98) 58%, rgba(201, 143, 43, 0.52) 74%, rgba(255, 244, 196, 0.7) 100%);
+    border-color: rgba(255, 235, 173, 0.96);
+    box-shadow:
+      0 0 0 1px rgba(10, 5, 1, 0.9),
+      0 3px 9px rgba(0, 0, 0, 0.6),
+      inset 0 1px 0 rgba(255, 248, 207, 0.66),
+      inset 0 -1px 0 rgba(65, 37, 8, 0.72);
+  }
 
-.scent-primary-button:hover::before {
-  filter: brightness(1.06) saturate(1.04);
-}
+  .scent-primary-button:hover::before {
+    filter: brightness(1.06) saturate(1.04);
+  }
 
-.scent-primary-button:hover::after {
-  opacity: 0.76;
+  .scent-primary-button:hover::after {
+    opacity: 0.76;
+  }
 }
 
 .scent-primary-button:active {
@@ -1306,8 +1336,10 @@ a {
   filter: saturate(0.74);
 }
 
-.scent-primary-button[disabled]:hover {
-  filter: saturate(0.74);
+@media (hover: hover) {
+  .scent-primary-button[disabled]:hover {
+    filter: saturate(0.74);
+  }
 }
 
 .scent-beam-confirm-button {
@@ -1760,9 +1792,14 @@ a {
   }
 }
 
-.scent-vault-grid-toggle__button:hover {
-  color: rgba(255, 244, 225, 0.76);
-  background: rgba(255, 255, 255, 0.055);
+/* Hover only where a real hover pointer exists. This control renders on the
+   phone-class grid (hidden ≥sm), so without the gate every tap left the pale
+   hover wash stuck on the button it toggled. */
+@media (hover: hover) {
+  .scent-vault-grid-toggle__button:hover {
+    color: rgba(255, 244, 225, 0.76);
+    background: rgba(255, 255, 255, 0.055);
+  }
 }
 
 .scent-vault-grid-toggle__button:focus-visible {
@@ -1923,15 +1960,11 @@ a {
 .scent-low-render-perf .scent-weather-marquee-track,
 .scent-ipad-safari-perf .scent-community-marquee-track,
 .scent-ipad-safari-perf .scent-note-marquee-track,
-.scent-ipad-safari-perf .animate-infinite-scroll,
-.scent-ipad-safari-perf .animate-infinite-scroll-slow,
 .scent-touch-perf .scent-marquee-track-row,
 .scent-touch-perf .scent-atmosphere-marquee-track,
 .scent-touch-perf .scent-weather-marquee-track,
 .scent-touch-perf .scent-community-marquee-track,
-.scent-touch-perf .scent-note-marquee-track,
-.scent-touch-perf .animate-infinite-scroll,
-.scent-touch-perf .animate-infinite-scroll-slow {
+.scent-touch-perf .scent-note-marquee-track {
   will-change: auto;
   backface-visibility: visible;
 }
@@ -2676,8 +2709,13 @@ a {
   pointer-events: none;
   transition: background-color 150ms ease;
 }
-.hover-elevate:hover::after {
-  background-color: rgb(255 255 255 / 0.08);
+/* Hover brighten only for hover-capable pointers — on touch the veil stuck to
+   every tapped button/badge until the next tap; :active feedback below covers
+   the press itself. */
+@media (hover: hover) {
+  .hover-elevate:hover::after {
+    background-color: rgb(255 255 255 / 0.08);
+  }
 }
 .active-elevate-2:active::after {
   background-color: rgb(255 255 255 / 0.16);
@@ -2688,11 +2726,6 @@ a {
 @keyframes glass-aura-pulsate {
   0%, 100% { opacity: 0.6; }
   50% { opacity: 0.9; }
-}
-
-@keyframes infinite-scroll {
-  from { transform: translate3d(0, 0, 0); }
-  to { transform: translate3d(-50%, 0, 0); }
 }
 
 @keyframes hero-marquee-scroll {
@@ -2718,12 +2751,6 @@ a {
 @keyframes scent-note-caret-blink {
   0%, 45% { opacity: 1; }
   46%, 100% { opacity: 0; }
-}
-
-@keyframes float {
-  0% { transform: translate3d(0, 0px, 0); }
-  50% { transform: translate3d(0, -10px, 0); }
-  100% { transform: translate3d(0, 0px, 0); }
 }
 
 @keyframes scent-lava-fallback-drift {
@@ -2863,34 +2890,10 @@ a {
   }
 }
 
-/* Marquee rows: keep layout + compositing outside motion prefs so tickers
-   don’t break when reduced motion is on (common on mobile). Speed scales down. */
-.animate-infinite-scroll,
-.animate-infinite-scroll-slow {
-  display: flex;
-  width: max-content;
-  will-change: transform;
-  transform: translateZ(0);
-  backface-visibility: hidden;
-}
-
 @media (prefers-reduced-motion: no-preference) {
   .glass-acrylic-animate {
     animation: glass-aura-pulsate 8s ease-in-out infinite;
     will-change: opacity;
-  }
-
-  .animate-infinite-scroll {
-    animation: infinite-scroll 60s linear infinite;
-  }
-
-  .animate-infinite-scroll-slow {
-    animation: infinite-scroll 60s linear infinite;
-  }
-
-  .animate-float {
-    animation: float 6s ease-in-out infinite;
-    will-change: transform;
   }
 
   .scent-entry-count::before {
@@ -2918,14 +2921,6 @@ a {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .animate-infinite-scroll {
-    animation: infinite-scroll 240s linear infinite;
-  }
-
-  .animate-infinite-scroll-slow {
-    animation: infinite-scroll 240s linear infinite;
-  }
-
   .scent-note-type-caret {
     animation: none;
   }
@@ -3015,7 +3010,12 @@ a {
     transform var(--scent-transition-fast) var(--scent-ease-out);
 }
 
-.community-fragrance-detail__x:hover,
+@media (hover: hover) {
+  .community-fragrance-detail__x:hover {
+    color: #ffe4a8;
+  }
+}
+
 .community-fragrance-detail__x:focus-visible {
   color: #ffe4a8;
   outline: none;
@@ -3119,7 +3119,13 @@ a {
     transform var(--scent-transition-fast) var(--scent-ease-out);
 }
 
-.community-fragrance-detail__save:not(:disabled):hover,
+@media (hover: hover) {
+  .community-fragrance-detail__save:not(:disabled):hover {
+    color: #fff7ec;
+    border-color: rgba(255, 232, 170, 0.96);
+  }
+}
+
 .community-fragrance-detail__save:focus-visible {
   color: #fff7ec;
   border-color: rgba(255, 232, 170, 0.96);
@@ -3387,7 +3393,13 @@ a {
     0 0 10px rgb(var(--scent-accent-rgb) / 0.14);
 }
 
-.community-fragrance-detail__close:hover,
+@media (hover: hover) {
+  .community-fragrance-detail__close:hover {
+    filter: brightness(1.08) saturate(1.06);
+    border-color: rgba(255, 234, 179, 1);
+  }
+}
+
 .community-fragrance-detail__close:focus-visible {
   filter: brightness(1.08) saturate(1.06);
   border-color: rgba(255, 234, 179, 1);
@@ -4026,16 +4038,20 @@ a {
     transform var(--scent-transition-fast) var(--scent-ease-out);
 }
 
-.scent-beam-composer-control:hover:not(:disabled) {
-  border-color: rgba(255, 202, 121, 0.95);
-  color: #ffd28d;
-  background:
-    radial-gradient(circle at 50% 18%, rgba(255, 225, 174, 0.14), transparent 52%),
-    linear-gradient(180deg, rgba(35, 25, 14, 0.98), rgba(10, 7, 4, 0.99));
-  box-shadow:
-    inset 0 1px 0 rgba(255, 245, 221, 0.2),
-    0 6px 15px rgba(0, 0, 0, 0.58);
-  transform: translateY(-1px);
+/* Hover lift only on hover-capable pointers: on touch the -1px raise stuck to
+   the control after every tap. The :active press below is the touch feedback. */
+@media (hover: hover) {
+  .scent-beam-composer-control:hover:not(:disabled) {
+    border-color: rgba(255, 202, 121, 0.95);
+    color: #ffd28d;
+    background:
+      radial-gradient(circle at 50% 18%, rgba(255, 225, 174, 0.14), transparent 52%),
+      linear-gradient(180deg, rgba(35, 25, 14, 0.98), rgba(10, 7, 4, 0.99));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 245, 221, 0.2),
+      0 6px 15px rgba(0, 0, 0, 0.58);
+    transform: translateY(-1px);
+  }
 }
 
 .scent-beam-composer-control:focus-visible {
@@ -4066,16 +4082,18 @@ a {
     transform var(--scent-transition-fast) var(--scent-ease-out);
 }
 
-.scent-beam-cue:hover:not(:disabled) {
-  border-color: rgba(250, 190, 105, 0.86);
-  color: #fff1db;
-  background:
-    radial-gradient(100% 140% at 50% 0%, rgba(255, 224, 172, 0.12), transparent 58%),
-    rgba(15, 10, 6, 0.97);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 240, 211, 0.14),
-    0 6px 16px -8px rgba(0, 0, 0, 0.98);
-  transform: translateY(-1px);
+@media (hover: hover) {
+  .scent-beam-cue:hover:not(:disabled) {
+    border-color: rgba(250, 190, 105, 0.86);
+    color: #fff1db;
+    background:
+      radial-gradient(100% 140% at 50% 0%, rgba(255, 224, 172, 0.12), transparent 58%),
+      rgba(15, 10, 6, 0.97);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 240, 211, 0.14),
+      0 6px 16px -8px rgba(0, 0, 0, 0.98);
+    transform: translateY(-1px);
+  }
 }
 
 .scent-beam-cue:focus-visible {
@@ -4372,7 +4390,10 @@ input.scent-lux-input:focus-visible {
   .scent-lux-input:focus-visible,
   .scent-vault-outline-button:focus-visible,
   .scent-primary-button:focus-visible,
-  [data-testid="scent-mission-cue-bar"] .scent-primary-button:focus-visible {
+  [data-testid="scent-mission-cue-bar"] .scent-primary-button:focus-visible,
+  /* The detail X strips outline+box-shadow and signals focus by color alone,
+     which forced-colors overrides — without this it has no indicator at all. */
+  .community-fragrance-detail__x:focus-visible {
     outline: 2px solid Highlight;
     outline-offset: 2px;
   }
@@ -4426,9 +4447,11 @@ input.scent-lux-input:focus-visible {
     border-color var(--scent-transition-fast) var(--scent-ease-out);
 }
 
-.scent-error-action:hover {
-  color: var(--scent-error-ink-hover);
-  border-color: var(--scent-error-edge-hover);
+@media (hover: hover) {
+  .scent-error-action:hover {
+    color: var(--scent-error-ink-hover);
+    border-color: var(--scent-error-edge-hover);
+  }
 }
 
 /* ─── Vault onboarding card ───────────────────────────────────────────────────
