@@ -17,6 +17,7 @@ import {
 } from "@workspace/db/schema";
 import { and, asc, desc, eq, inArray, lt, or, sql } from "drizzle-orm";
 import { AuthRequest, isUndefinedColumnError, optionalAuth, requireAuth } from "../middlewares/auth";
+import { communityWriteRateLimit } from "../middlewares/writeRateLimit";
 import { getTenantId } from "../middlewares/tenant";
 import { shareIdForUser } from "../services/shareIdentity";
 import { sendCategoryPushToUser } from "../services/pushService";
@@ -1039,7 +1040,7 @@ router.get("/community/posts/:id", optionalAuth, async (req: AuthRequest, res, n
   }
 });
 
-router.post("/community/posts", requireAuth, async (req: AuthRequest, res, next) => {
+router.post("/community/posts", requireAuth, communityWriteRateLimit, async (req: AuthRequest, res, next) => {
   try {
     const tenantId = getTenantId(req);
     const user = req.user!;
@@ -1121,7 +1122,7 @@ router.post("/community/posts", requireAuth, async (req: AuthRequest, res, next)
   }
 });
 
-router.post("/community/posts/:id/comments", requireAuth, async (req: AuthRequest, res, next) => {
+router.post("/community/posts/:id/comments", requireAuth, communityWriteRateLimit, async (req: AuthRequest, res, next) => {
   try {
     const tenantId = getTenantId(req);
     const user = req.user!;
@@ -1208,7 +1209,7 @@ router.post("/community/posts/:id/comments", requireAuth, async (req: AuthReques
   }
 });
 
-router.post("/community/reactions", requireAuth, async (req: AuthRequest, res, next) => {
+router.post("/community/reactions", requireAuth, communityWriteRateLimit, async (req: AuthRequest, res, next) => {
   try {
     const tenantId = getTenantId(req);
     const user = req.user!;
@@ -1285,7 +1286,7 @@ router.post("/community/reactions", requireAuth, async (req: AuthRequest, res, n
   }
 });
 
-router.post("/community/posts/:id/votes", requireAuth, async (req: AuthRequest, res, next) => {
+router.post("/community/posts/:id/votes", requireAuth, communityWriteRateLimit, async (req: AuthRequest, res, next) => {
   try {
     const tenantId = getTenantId(req);
     const user = req.user!;

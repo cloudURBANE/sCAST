@@ -7,8 +7,24 @@ import { getTenantId } from "../middlewares/tenant";
 import { requireAuth, isUndefinedColumnError, type AuthRequest } from "../middlewares/auth";
 import { hashToken } from "../lib/tokenAuth";
 import { mintHandoffCode, redeemHandoffCode } from "../lib/oauthCodeStore";
+import { rateLimitMiddleware } from "../lib/rateLimit";
 
 const router = Router();
+
+// Per-IP limit on the auth surface (production-readiness C4). Guards the OAuth
+// start/callback/exchange/logout endpoints against brute-force and flood: the
+// exchange codes are already single-use + random, and logout rotates a token, so
+// this is DoS/abuse protection rather than a credential guard. Generous window,
+// env-overridable (a corporate NAT may need more) — a normal login is ~3 hits.
+const OAUTH_RATE_LIMIT = (() => {
+  const parsed = Number(process.env["OAUTH_RATE_LIMIT"]);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 20;
+})();
+const oauthRateLimit = rateLimitMiddleware({
+  name: "oauth",
+  limit: OAUTH_RATE_LIMIT,
+  windowMs: 10 * 60 * 1000,
+});
 
 type UserRow = typeof usersTable.$inferSelect;
 
@@ -310,7 +326,7 @@ function constantTimeEqual(a: string, b: string): boolean {
   return timingSafeEqual(ab, bb);
 }
 
-router.get("/auth/google", (req, res) => {
+router.get("/auth/google", oauthRateLimit, (req, res) => {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   if (!clientId) {
     res.status(503).json({ error: "Google OAuth is not configured" });
@@ -344,7 +360,7 @@ router.get("/auth/google", (req, res) => {
   res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params}`);
 });
 
-router.get("/auth/google/callback", async (req, res) => {
+router.get("/auth/google/callback", oauthRateLimit, async (req, res) => {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
 
@@ -493,7 +509,7 @@ router.get("/auth/google/callback", async (req, res) => {
  * invalidates the old token everywhere. Best-effort and idempotent — the client
  * clears local state regardless of the response.
  */
-router.post("/auth/logout", requireAuth, async (req: AuthRequest, res) => {
+router.post("/auth/logout", oauthRateLimit, requireAuth, async (req: AuthRequest, res) => {
   const user = req.user!;
   const nextToken = randomUUID();
   try {
@@ -535,7 +551,7 @@ router.post("/auth/logout", requireAuth, async (req: AuthRequest, res) => {
  * leaked redirect URL is worthless. The token is returned in the response body,
  * never in a URL. A rate limit is applied at mount (routes/index.ts).
  */
-router.post("/auth/exchange", (req, res) => {
+router.post("/auth/exchange", oauthRateLimit, (req, res) => {
   const code = typeof req.body?.code === "string" ? req.body.code : "";
   if (!code) {
     res.status(400).json({ error: "Missing code" });
