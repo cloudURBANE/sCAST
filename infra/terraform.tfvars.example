@@ -1,0 +1,38 @@
+###############################################################################
+# Example variable values.
+#
+#   cp terraform.tfvars.example terraform.tfvars
+#   # then edit terraform.tfvars with your real values
+#
+# terraform.tfvars is git-ignored by convention — never commit real values.
+# Everything here is a plain string; no secrets are required (auth to AWS from
+# CI is via OIDC, and to AWS from your laptop is via your normal AWS credentials).
+###############################################################################
+
+# Region is locked to us-east-1 (CloudFront ACM requirement). You normally do not
+# need to set this; the default is us-east-1.
+# aws_region = "us-east-1"
+
+# Globally-unique S3 bucket name for the built SPA.
+frontend_bucket_name = "scentbeam-frontend-prod"
+
+# REQUIRED: bare hostname of the Railway Express backend that /api/* proxies to.
+# No scheme, no trailing slash. Get this from the Railway service's public domain.
+backend_origin_domain = "scentbeam-api.up.railway.app"
+
+# OPTIONAL custom domain for the SPA. Leave "" to use the default
+# *.cloudfront.net domain (no ACM cert, no aliases).
+domain_name = ""
+
+# OPTIONAL Route53 hosted zone ID. Set together with domain_name to fully
+# automate ACM DNS validation + the alias record. Leave "" if DNS lives
+# elsewhere (Cloudflare/Vercel/registrar) — then validate the cert manually.
+route53_zone_id = ""
+
+# GitHub repo + refs allowed to assume the deploy role (defaults shown).
+# github_owner       = "cloudURBANE"
+# github_repo        = "sCAST"
+# github_deploy_refs = ["refs/heads/main", "refs/heads/claude/vercel-aws-migration-mb8vae"]
+
+# CloudFront price class: PriceClass_100 (US/CA/EU, cheapest) | PriceClass_200 | PriceClass_All
+# cloudfront_price_class = "PriceClass_100"

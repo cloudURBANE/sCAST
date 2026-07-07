@@ -1,0 +1,150 @@
+# Deploy the ScentCast SPA (frontend) to AWS S3 + CloudFront.
+#
+# Replaces the old Vercel git integration: pushing to `main` runs the full
+# test/build gate and, only if it passes, deploys the built SPA to S3 and
+# invalidates the CloudFront HTML entry points. Auth to AWS is via GitHub OIDC
+# (no long-lived AWS access keys anywhere).
+#
+# ---------------------------------------------------------------------------
+# Required repository configuration (Settings -> Secrets and variables -> Actions).
+# All values come from the Terraform outputs in `infra/`:
+#
+#   Secret   AWS_DEPLOY_ROLE_ARN        = terraform output github_actions_role_arn
+#   Variable AWS_REGION                 = us-east-1
+#   Variable FRONTEND_S3_BUCKET         = terraform output frontend_bucket_name
+#   Variable CLOUDFRONT_DISTRIBUTION_ID = terraform output cloudfront_distribution_id
+# ---------------------------------------------------------------------------
+
+name: deploy-frontend
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# OIDC needs id-token: write to mint the token that assumes the AWS role.
+permissions:
+  id-token: write
+  contents: read
+
+# Cancel an in-flight deploy for the same ref when a newer push supersedes it,
+# so we never race two deploys onto the same bucket/distribution.
+concurrency:
+  group: deploy-frontend-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Static build output for @workspace/scent-cast (see MIGRATION_CONTRACT.md).
+  DIST_DIR: artifacts/scent-cast/dist/public
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Gate: typecheck + test + build. `deploy` needs: this, so a red gate blocks
+  # the deploy entirely.
+  # ---------------------------------------------------------------------------
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm run typecheck
+
+      - run: pnpm run test
+
+      - run: pnpm run build:web
+
+  # ---------------------------------------------------------------------------
+  # Deploy: only runs after `test` is green.
+  # ---------------------------------------------------------------------------
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Rebuild in this job so the artifact we upload is produced from the exact
+      # commit being deployed (jobs run on separate runners; no shared state).
+      - run: pnpm run build:web
+
+      # Assume the deploy role via OIDC. No access keys are stored anywhere;
+      # the short-lived credentials come from the GitHub OIDC token.
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      # Two-pass upload so cache-control is correct per file class.
+      #
+      # Pass 1 — upload EVERYTHING with the immutable long-cache header and
+      # `--delete` so files removed from the build are removed from the bucket.
+      # Vite fingerprints /assets/* (content-hashed), so those are safe to cache
+      # forever. This pass also (temporarily) stamps index.html/manifest with the
+      # immutable header; pass 2 overwrites those few entry points below.
+      - name: Sync immutable assets to S3
+        run: |
+          aws s3 sync "${DIST_DIR}" "s3://${FRONTEND_S3_BUCKET}" \
+            --delete \
+            --cache-control "public, max-age=31536000, immutable"
+        env:
+          FRONTEND_S3_BUCKET: ${{ vars.FRONTEND_S3_BUCKET }}
+
+      # Pass 2 — re-upload the HTML entry points and the web manifest with a
+      # no-cache header so clients always revalidate them (they reference the
+      # fingerprinted assets, so a new deploy must be picked up immediately).
+      # `cp --recursive` force-overwrites the objects, guaranteeing the header
+      # replaces the immutable one from pass 1 (plain `sync` would skip unchanged
+      # bytes and leave the wrong header). No `--delete` here — pass 1 already
+      # reconciled deletions.
+      - name: Re-upload HTML entry points with no-cache
+        run: |
+          # All *.html (index.html and any nested entry points).
+          aws s3 cp "${DIST_DIR}" "s3://${FRONTEND_S3_BUCKET}" \
+            --recursive \
+            --exclude "*" \
+            --include "*.html" \
+            --cache-control "no-cache, max-age=0, must-revalidate" \
+            --content-type "text/html; charset=utf-8"
+
+          # The PWA manifest, with its correct content-type (mimetypes does not
+          # know .webmanifest, so set it explicitly). Guarded in case the build
+          # does not emit one.
+          if [ -f "${DIST_DIR}/site.webmanifest" ]; then
+            aws s3 cp "${DIST_DIR}/site.webmanifest" "s3://${FRONTEND_S3_BUCKET}/site.webmanifest" \
+              --cache-control "no-cache, max-age=0, must-revalidate" \
+              --content-type "application/manifest+json"
+          fi
+        env:
+          FRONTEND_S3_BUCKET: ${{ vars.FRONTEND_S3_BUCKET }}
+
+      # Invalidate ONLY the no-cache HTML entry points (and the SPA routes that
+      # resolve to index.html). Hashed assets under /assets/* are immutable and
+      # never need invalidation, so we deliberately avoid the "/*" blanket
+      # invalidation (which is slower and costs extra invalidation paths).
+      - name: Invalidate CloudFront HTML entry points
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id "${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}" \
+            --paths "/index.html" "/" "/site.webmanifest" "/community" "/arena"
