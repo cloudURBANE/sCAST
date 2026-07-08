@@ -35,8 +35,33 @@ import {
   resolvePublicBuyLinksForRows,
 } from "../services/buyLinks";
 import { resolveShareUser } from "../services/shareUsers";
+import { rateLimitMiddleware } from "../lib/rateLimit";
 
 const router = Router();
+
+function envRateLimit(envVar: string, fallback: number): number {
+  const raw = Number(process.env[envVar]);
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : fallback;
+}
+
+// GET /fragrances/search and POST /fragrances/details fan out to PAID external
+// APIs (Serper, Jina, Poof) on unauthenticated requests. Every peer cost-bearing
+// public route (oauth, scent, scent-facts, reviews, engine proxy) is rate
+// limited; these two were the outliers, leaving an anonymous client free to
+// script varying queries and drain the free-tier key pools — a financial DoS.
+// Guard them per-IP, matching the search-scent budget on the search route and a
+// tighter budget on the detail route (each detail hit can trigger a synchronous
+// source-backed lookup and a background Jina read).
+const fragranceSearchRateLimit = rateLimitMiddleware({
+  name: "fragrance-search",
+  limit: envRateLimit("FRAGRANCE_SEARCH_RATE_LIMIT", 60),
+  windowMs: 5 * 60_000,
+});
+const fragranceDetailsRateLimit = rateLimitMiddleware({
+  name: "fragrance-details",
+  limit: envRateLimit("FRAGRANCE_DETAILS_RATE_LIMIT", 40),
+  windowMs: 5 * 60_000,
+});
 
 const SOURCE_SEARCH_RESPONSE_BUDGET_MS = 1200;
 const SOURCE_DETAIL_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -536,7 +561,7 @@ async function searchScentSourcesWithResponseBudget(
   }
 }
 
-router.get("/fragrances/search", async (req, res) => {
+router.get("/fragrances/search", fragranceSearchRateLimit, async (req, res) => {
   const query = cleanQueryParam(req.query.q ?? req.query.query);
   if (!query) {
     res.status(400).json({ error: "Query is required" });
@@ -620,7 +645,7 @@ router.get("/fragrances/search", async (req, res) => {
   });
 });
 
-router.post("/fragrances/details", async (req, res) => {
+router.post("/fragrances/details", fragranceDetailsRateLimit, async (req, res) => {
   const sourceUrl = sourceUrlFromDetailBody(req.body);
   const identityFromId = identityIdFromDetailBody(req.body);
 
