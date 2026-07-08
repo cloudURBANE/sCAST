@@ -6,6 +6,7 @@ import {
   reloadThroughFreshServiceWorker,
 } from '@/lib/routeChunkRecovery';
 import { crumb } from '@/lib/crashTrace';
+import { reportCaughtError } from '@/lib/errorReporting';
 
 interface Props {
   children: ReactNode;
@@ -61,6 +62,9 @@ export class ErrorBoundary extends Component<Props, State> {
     // failures — leave a trail in crashTrace alongside the iOS WebContent-kill
     // case it already records, instead of only an ephemeral console line.
     crumb(`react-error${this.props.scope ? `:${this.props.scope}` : ''}: ${error.message}`);
+    // Ship the caught render error to the error tracker (no-op without a DSN;
+    // queued if Sentry's lazy chunk hasn't loaded yet).
+    reportCaughtError(error, this.props.scope);
     console.error('Uncaught error in boundary:', error, errorInfo);
   }
 

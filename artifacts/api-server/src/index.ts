@@ -7,6 +7,7 @@ import { pool } from "@workspace/db";
 import { runMigrations } from "@workspace/db/migrate";
 import app from "./app";
 import { logger } from "./lib/logger";
+import { captureException, flushSentry, initSentry } from "./lib/sentry";
 import {
   startEnrichmentFailedJobRetrySweeper,
   startEnrichmentWorker,
@@ -18,6 +19,10 @@ import { ensureTenantBaseline } from "./services/tenants";
 import { getSerperPool } from "./services/serperService";
 import { getRemoveBgPool } from "./services/bgService";
 import { announceRedisMode, getRedis, isRedisConfigured } from "./lib/redisClient";
+
+// Error tracking first: env-bootstrap has evaluated (module bodies run after
+// all imports), so SENTRY_DSN is loaded; everything after this is covered.
+initSentry();
 
 const rawPort = process.env["PORT"];
 
@@ -174,13 +179,18 @@ function installGracefulShutdown(server: Server): void {
   // structured pino line (not just Node's default stderr trace) before the
   // process exits. ON_FAILURE restart policy brings it back; this preserves the
   // evidence. Exit so we never keep serving from an unknown/corrupt state.
+  // Report to Sentry (no-op when unconfigured) and give the event a bounded
+  // window to flush before exiting — pino already wrote the fatal line
+  // synchronously, so the evidence survives even if the flush doesn't.
   process.on("uncaughtException", (err) => {
     logger.fatal({ err }, "uncaughtException; exiting");
-    process.exit(1);
+    captureException(err);
+    void flushSentry().finally(() => process.exit(1));
   });
   process.on("unhandledRejection", (reason) => {
     logger.fatal({ err: reason }, "unhandledRejection; exiting");
-    process.exit(1);
+    captureException(reason);
+    void flushSentry().finally(() => process.exit(1));
   });
 }
 

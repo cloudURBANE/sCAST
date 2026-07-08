@@ -29,6 +29,18 @@ window.addEventListener("vite:preloadError", (event) => {
 // breadcrumbs; surfaces nothing unless the URL carries `?__mcdiag`. Temporary.
 initCrashTrace();
 
+// Error tracking (production-readiness D1). Dynamic import keeps the Sentry
+// SDK in a lazy chunk that is only ever fetched when a DSN is configured;
+// errors caught before it loads are queued by lib/errorReporting.
+const sentryDsn = (import.meta.env.VITE_SENTRY_DSN as string | undefined)?.trim();
+if (sentryDsn) {
+  void import("./lib/sentryClient")
+    .then((m) => m.initSentry(sentryDsn))
+    .catch(() => {
+      // Telemetry must never break the app (offline PWA, blocked CDN, ...).
+    });
+}
+
 // framer-motion runs in LazyMotion strict mode: components must render `m.*`
 // (never `motion.*` — strict mode throws on it), and the animation feature set
 // (domMax, needed for the wardrobe bottle `layoutId` morphs) loads as an async
