@@ -718,7 +718,16 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
   }, [userId, toast, retryTrigger]);
 
   return (
-    <div className="min-h-[100svh] relative overflow-x-hidden">
+    // The public share page is an intentionally all-dark, cinematic showcase:
+    // every surface and modal here is hardcoded dark with `text-white/*` copy.
+    // It renders inside the themed app shell, whose canvas (`bg-scent-bg`) goes
+    // light under `[data-theme="light"]` — and the ambient thread backdrop is
+    // `background: transparent` in light theme (ThreadBackground.css) — so
+    // without our own opaque floor the white copy would sit on the light shell
+    // and be illegible for light-theme visitors. Painting an opaque `#030201`
+    // floor (identical to the dark thread-field base) keeps dark theme
+    // pixel-identical while giving light theme a legible dark base.
+    <div className="min-h-[100svh] relative overflow-x-hidden bg-[#030201]">
       <nav className="fixed top-0 left-0 right-0 h-[calc(4rem+env(safe-area-inset-top))] sm:h-[calc(72px+env(safe-area-inset-top))] border-b border-white/5 bg-black/78 backdrop-blur-sm z-50 px-4 sm:px-8 pt-[env(safe-area-inset-top)]">
         <div className="max-w-[1400px] mx-auto h-16 sm:h-[72px] flex items-center justify-center">
           <button
@@ -765,7 +774,11 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
             <div className="text-center space-y-7 sm:space-y-8">
               <div className="space-y-3">
                 <p className="text-[10px] uppercase tracking-[0.6em] text-white/40 font-bold">Shared Vault</p>
-                <h2 className="font-serif italic text-[clamp(2.65rem,8vw,5.35rem)] text-foreground tracking-normal leading-none">Vault of Aromas</h2>
+                {/* Fixed warm-white (== dark-theme --color-foreground) so the
+                    hero stays legible now that the page floor is always dark;
+                    `text-foreground` would flip to dark ink under light theme
+                    and vanish against the dark base. */}
+                <h2 className="font-serif italic text-[clamp(2.65rem,8vw,5.35rem)] text-[#fff7ec] tracking-normal leading-none">Vault of Aromas</h2>
               </div>
               <VaultGridModeToggle
                 mode={gridMode}
