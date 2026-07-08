@@ -11,6 +11,16 @@ export const config = {
 };
 
 const NO_BODY_METHODS = new Set(["GET", "HEAD"]);
+// The edge proxy sits IN FRONT of the Express body limits (256 KB default / 5 MB
+// on the two data-URL routes), so it must bound the body itself — otherwise a
+// large upload is fully materialized in edge memory before Express ever gets to
+// reject it. Mirror the app's 5 MB ceiling.
+const MAX_PROXY_BODY_BYTES = 5 * 1024 * 1024;
+// undici/edge fetch has no default timeout. If the backend accepts the
+// connection but stalls (slow query, deadlock, saturated loop), the proxy would
+// hang until Vercel's platform edge limit instead of failing fast. Kept under
+// the platform edge limit so we return our own 504 first.
+const UPSTREAM_TIMEOUT_MS = 25_000;
 const HOP_BY_HOP = [
   "connection",
   "keep-alive",
@@ -96,8 +106,25 @@ export async function middleware(request) {
 
   let body;
   if (!NO_BODY_METHODS.has(request.method)) {
+    // Reject oversized bodies by declared length BEFORE buffering, so we never
+    // materialize them in edge memory.
+    const declaredLength = Number(request.headers.get("content-length"));
+    if (Number.isFinite(declaredLength) && declaredLength > MAX_PROXY_BODY_BYTES) {
+      return new Response(
+        JSON.stringify({ error: "Request body too large" }),
+        { status: 413, headers: { "content-type": "application/json" } },
+      );
+    }
     try {
       const buffered = await request.arrayBuffer();
+      // Also enforce the cap on the actual bytes, in case content-length was
+      // absent or understated.
+      if (buffered.byteLength > MAX_PROXY_BODY_BYTES) {
+        return new Response(
+          JSON.stringify({ error: "Request body too large" }),
+          { status: 413, headers: { "content-type": "application/json" } },
+        );
+      }
       body = buffered.byteLength > 0 ? buffered : undefined;
     } catch (err) {
       return new Response(
@@ -112,6 +139,7 @@ export async function middleware(request) {
     headers,
     body,
     redirect: "manual",
+    signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
   };
 
   try {
@@ -135,6 +163,17 @@ export async function middleware(request) {
     });
   } catch (err) {
     const message = err && err.message ? err.message : String(err);
+    // AbortSignal.timeout fires a TimeoutError; treat it as an upstream gateway
+    // timeout (504) rather than an unreachable-backend error (502).
+    if (err && (err.name === "TimeoutError" || err.name === "AbortError")) {
+      return new Response(
+        JSON.stringify({
+          error: "API backend timed out.",
+          detail: message,
+        }),
+        { status: 504, headers: { "content-type": "application/json" } },
+      );
+    }
     return new Response(
       JSON.stringify({
         error: "Could not reach API backend. Check BACKEND_ORIGIN on Vercel.",
