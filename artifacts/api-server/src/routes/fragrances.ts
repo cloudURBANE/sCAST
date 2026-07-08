@@ -231,8 +231,14 @@ function isDetailLocallyComplete(detail: Record<string, unknown>): boolean {
 
 /**
  * Producer hook for the enrichment queue. Fires a best-effort job for a detail
- * the backend's own source-coverage predicate (`isDetailLocallyComplete`, the
- * mirror of the SPA's `isSourceCoverageComplete`) judged INCOMPLETE. Idempotent
+ * the backend's own completeness predicate (`isDetailLocallyComplete`) judged
+ * INCOMPLETE. NOTE: this predicate is deliberately LOOSER than the SPA's
+ * `isSourceCoverageComplete` — for app-origin catalog/dataset details it treats
+ * a real `derived_metrics` payload as complete without requiring the
+ * `basenotes`/`fragrantica` source flags, which only exist on community-source
+ * (engine) details. Do not "align" it with the SPA predicate: that would mark
+ * metric-complete catalog items as incomplete and (once enrichment is enabled)
+ * attach a never-resolving "enrichment pending" marker to them. Idempotent
  * at the queue layer (upsert by canonical job key), terminal-status-skipping, and
  * strictly non-blocking — a queue failure can never affect the detail response.
  * Env-gated (off by default) so it adds no DB writes until enrichment is enabled.
