@@ -1276,7 +1276,7 @@ export const FragranceCapture: React.FC<{
         }`}
         aria-hidden={embeddedInVaultPanel && loadingSurface === 'search' && uploading}
       >
-        <header className="mx-auto mb-2 max-w-[43rem] px-1 text-center sm:mb-5">
+        <header className="mx-auto mb-1.5 max-w-[43rem] px-1 text-center sm:mb-4">
           <p className="sr-only">
             Add perfumes to your vault. Example fragrance names rotate above the search field.
           </p>

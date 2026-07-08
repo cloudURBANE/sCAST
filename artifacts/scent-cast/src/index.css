@@ -262,12 +262,16 @@ a {
      re-theme re-tints it with the rest of the UI. The vault family below
      follows the same rule. Alpha sits deliberately BELOW the search input's
      border: the card is a passive container, so its frame recedes and lets
-     the input (the primary action) carry the strong gold. Softened further
-     (was 0.45) in the restraint pass — the upper half carried too many
-     competing gold outlines, so the outermost frame recedes the most. */
-  border: 1px solid rgb(var(--scent-accent-rgb) / 0.3);
+     the input (the primary action) carry the strong gold. Softened to a near
+     whisper (was 0.45 → 0.3 → 0.16) in the restraint pass — the upper half
+     carried too many competing gold outlines, so the outermost frame recedes
+     the most; the input inside is the only strong frame in this block. */
+  border: 1px solid rgb(var(--scent-accent-rgb) / 0.16);
   border-radius: calc(var(--radius-scent) + 12px);
-  padding: clamp(1.85rem, 4vw, 3rem) clamp(1rem, 5vw, 5.25rem) clamp(1.25rem, 3vw, 1.85rem);
+  /* Tighter vertical padding (was 1.85–3rem top / 1.25–1.85rem bottom) so the
+     search block stops eating so much of the first viewport before the forecast
+     — the module is now an airy field, not a bulky box. */
+  padding: clamp(1.35rem, 3.2vw, 2.25rem) clamp(1rem, 5vw, 5.25rem) clamp(1rem, 2.4vw, 1.5rem);
   background:
     radial-gradient(95% 80% at 50% 8%, rgba(255, 255, 255, 0.018), transparent 58%),
     radial-gradient(72% 68% at 50% 100%, rgb(var(--scent-accent-rgb) / 0.022), transparent 68%),
@@ -677,39 +681,33 @@ a {
  * as one crafted set instead of three unrelated frames.
  */
 .forecast-meta-pill {
-  /* Border softened (was 0.2) + tighter padding in the JSX so the weather/spray
-     line reads as a quiet caption tying the hero to the calendar, not a loud
-     bordered control competing with the fragrance recommendation. */
-  border: 1px solid rgb(var(--scent-accent-rgb) / 0.14);
-  border-radius: 9999px;
-  background: linear-gradient(180deg, rgba(10, 9, 7, 0.92), rgba(0, 0, 0, 0.96));
-  box-shadow:
-    inset 0 1px 0 rgba(255, 232, 168, 0.07),
-    0 1px 2px rgba(0, 0, 0, 0.55);
+  /* No frame at all now. This was a bordered "pill" that read as one of the
+     loudest elements in the forecast — it competed with the fragrance
+     recommendation itself. Stripped to a borderless, background-less inline
+     caption: the glyph + "Today · 72° · Partly Cloudy · 2 Sprays" now reads as
+     quiet supporting data, exactly what it is. One fewer gold outline up top. */
+  border: 0;
+  background: none;
+  box-shadow: none;
 }
 
 /*
- * Forecast carousel chevrons — a barely-there hairline ring in the day-tile
- * rest grammar (quiet gold border + near-black fill + inset sheen) so the
- * controls anchor the hero's edges as crafted objects instead of floating
- * glyphs. Hover warms the ring one step, exactly like an inactive day tile.
+ * Forecast carousel chevrons — bare glyphs, no ring. The circular gold rings
+ * were two more "gold circles" cluttering the strongest part of the screen and
+ * reading as detached UI floating at the edges. Removing the border/fill/shadow
+ * leaves just the chevron itself: a quiet, discoverable control that lets the
+ * hero own the composition. The full 44px button keeps the tap target; the
+ * glyph carries a touch more presence (see the JSX text-scent-accent tint) now
+ * that it stands alone. The day tiles below are also tappable, so navigation is
+ * never solely dependent on these.
  */
 .forecast-chevron {
-  /* Discoverable, not competing: the faintest ring on the page — two fewer
-     "gold circles" fighting the hero. Hover still warms it a step. */
-  border: 1px solid rgb(var(--scent-accent-rgb) / 0.1);
-  background: linear-gradient(180deg, rgba(10, 9, 7, 0.55), rgba(0, 0, 0, 0.7));
-  box-shadow: inset 0 1px 0 rgba(255, 232, 168, 0.04);
+  border: 0;
+  background: none;
+  box-shadow: none;
   transition:
-    border-color var(--scent-transition-base) var(--scent-ease-out),
     color var(--scent-transition-base) var(--scent-ease-out),
     transform var(--scent-transition-fast) var(--scent-ease-out);
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .forecast-chevron:hover {
-    border-color: rgb(var(--scent-accent-rgb) / 0.28);
-  }
 }
 
 /*
@@ -728,12 +726,14 @@ a {
 .forecast-day-tile {
   position: relative;
   isolation: isolate;
-  border: 1px solid rgb(var(--scent-accent-rgb) / 0.16);
+  /* Inactive tiles are now nearly frameless — a whisper of a border (was 0.16)
+     and no drop shadow. Seven equally-bold bordered cells read as "seven mini
+     cards competing for attention"; letting the unselected days recede to bare
+     date + glyph means ONLY the selected day carries a real frame, so the rail
+     reads as one light strip with a single clear selection. */
+  border: 1px solid rgb(var(--scent-accent-rgb) / 0.05);
   border-radius: 13px;
-  background: linear-gradient(180deg, rgba(8, 8, 7, 0.96), #000 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 232, 168, 0.05),
-    0 1px 2px rgba(0, 0, 0, 0.55);
+  background: linear-gradient(180deg, rgba(6, 6, 5, 0.6), rgba(0, 0, 0, 0.75) 100%);
   transition:
     border-color var(--scent-transition-base) var(--scent-ease-out),
     background var(--scent-transition-base) var(--scent-ease-out),
@@ -741,26 +741,13 @@ a {
     transform var(--scent-transition-fast) var(--scent-ease-out);
 }
 
-/* The concentric inner hairline — invisible at rest, fades in only when active,
-   mirroring the detail card's single quiet inset line. */
-.forecast-day-tile::before {
-  content: "";
-  position: absolute;
-  inset: 0.26rem;
-  z-index: -1;
-  pointer-events: none;
-  border: 1px solid rgba(255, 222, 149, 0);
-  border-radius: calc(13px - 0.26rem);
-  transition: border-color var(--scent-transition-base) var(--scent-ease-out);
-}
-
 .forecast-day-tile.is-active {
   /* Clearly selected, but one register QUIETER than the bottom nav's filled
      gold pill — the calendar is supportive chrome, not a primary control.
-     Restraint pass: the selected tile now reads through ONE clean, slightly
-     brighter border plus its quiet top sheen — the concentric inner hairline
-     (the ::before below) was removed because the double-outline read as
-     "overbuilt". A single crisp frame is the more refined selected state. */
+     Restraint pass: the selected tile is the ONLY framed day now (inactive
+     tiles are near-frameless above), reading through one clean border + a quiet
+     top sheen. The old concentric inner-hairline ::before was removed entirely
+     — the double-outline read as "overbuilt". */
   border-color: rgb(var(--scent-accent-rgb) / 0.5);
   background:
     radial-gradient(82% 52% at 50% 0%, rgba(255, 237, 190, 0.035), transparent 72%),
@@ -779,21 +766,13 @@ a {
    glow), so the rail reads as interactive before the first click. */
 @media (hover: hover) and (pointer: fine) {
   .forecast-day-tile:not(.is-active):hover {
-    border-color: rgb(var(--scent-accent-rgb) / 0.34);
-    box-shadow:
-      inset 0 1px 0 rgba(255, 232, 168, 0.08),
-      0 1px 2px rgba(0, 0, 0, 0.6);
+    border-color: rgb(var(--scent-accent-rgb) / 0.2);
   }
 }
 
 @media (min-width: 640px) {
   .forecast-day-tile {
     border-radius: 18px;
-  }
-
-  .forecast-day-tile::before {
-    inset: 0.34rem;
-    border-radius: calc(18px - 0.34rem);
   }
 }
 
@@ -2271,6 +2250,7 @@ a {
 }
 
 .scent-weather-cell {
+  position: relative;
   flex: 0 0 auto;
   width: clamp(8.5rem, 22vw, 11rem);
   display: flex;
@@ -2280,12 +2260,22 @@ a {
   gap: 0.38rem;
   padding: 0.85rem 1rem;
   text-align: center;
-  /* Hairline divider before every cell. The leading copy's first divider sits
-     under the edge-fade mask, so dividers read continuously across loop copies.
-     Softened (was 0.12) so the row reads as a luxury module, not a dashboard
-     widget; the slightly wider label→value gap also lifts the serif number off
-     its baseline so it no longer sits low in the cell. */
-  border-left: 1px solid rgb(var(--scent-accent-rgb) / 0.07);
+}
+
+/* Divider before every cell — a SHORT, vertically-centered hairline rather than
+   a full-height rule. A floor-to-ceiling border read as a dashboard grid; a
+   ~54%-height centered line reads as a refined separator between luxury data
+   points. The leading copy's first divider sits under the marquee edge-fade
+   mask, so dividers still read continuously across loop copies. */
+.scent-weather-cell::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  height: 54%;
+  width: 1px;
+  transform: translateY(-50%);
+  background: rgb(var(--scent-accent-rgb) / 0.1);
 }
 
 .scent-weather-label {
