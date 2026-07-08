@@ -1,0 +1,22 @@
+# Dependency update PRs (production-readiness F2).
+#
+# Note the interplay with pnpm-workspace.yaml's `minimumReleaseAge: 1440`:
+# a Dependabot PR for a version younger than 1 day will fail to resolve until
+# the supply-chain cooldown passes — that's intended; the two are complementary.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
