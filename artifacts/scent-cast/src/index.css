@@ -262,8 +262,10 @@ a {
      re-theme re-tints it with the rest of the UI. The vault family below
      follows the same rule. Alpha sits deliberately BELOW the search input's
      border: the card is a passive container, so its frame recedes and lets
-     the input (the primary action) carry the strong gold. */
-  border: 1px solid rgb(var(--scent-accent-rgb) / 0.45);
+     the input (the primary action) carry the strong gold. Softened further
+     (was 0.45) in the restraint pass — the upper half carried too many
+     competing gold outlines, so the outermost frame recedes the most. */
+  border: 1px solid rgb(var(--scent-accent-rgb) / 0.3);
   border-radius: calc(var(--radius-scent) + 12px);
   padding: clamp(1.85rem, 4vw, 3rem) clamp(1rem, 5vw, 5.25rem) clamp(1.25rem, 3vw, 1.85rem);
   background:
@@ -656,33 +658,16 @@ a {
 }
 
 /*
- * Forecast eyebrow — the "Scent Forecast" label flanked by two gold hairlines
- * that fade toward the outer edges, the same gradient-hairline grammar as
- * .scent-marquee-divider. Pseudo-elements so the markup stays one <h2>; the
- * lines never touch the text (flex gap) and inherit nothing from the label.
+ * Forecast eyebrow — just the tracked "Scent Forecast" label, centered. The
+ * two flanking gold hairlines were removed in the restraint pass: they read as
+ * decorative rather than necessary and spread the title area wider than it
+ * needed to be, adding to the upper-half "border fatigue". The bare label is
+ * the more effortless, Apple-clean treatment.
  */
 .forecast-title {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.8rem;
-}
-
-.forecast-title::before,
-.forecast-title::after {
-  content: "";
-  flex: 0 0 auto;
-  width: clamp(1.4rem, 5vw, 2.4rem);
-  height: 1px;
-  transform: translateY(0.05em);
-}
-
-.forecast-title::before {
-  background: linear-gradient(90deg, rgb(var(--scent-accent-rgb) / 0), rgb(var(--scent-accent-rgb) / 0.5));
-}
-
-.forecast-title::after {
-  background: linear-gradient(90deg, rgb(var(--scent-accent-rgb) / 0.5), rgb(var(--scent-accent-rgb) / 0));
 }
 
 /*
@@ -692,7 +677,10 @@ a {
  * as one crafted set instead of three unrelated frames.
  */
 .forecast-meta-pill {
-  border: 1px solid rgb(var(--scent-accent-rgb) / 0.2);
+  /* Border softened (was 0.2) + tighter padding in the JSX so the weather/spray
+     line reads as a quiet caption tying the hero to the calendar, not a loud
+     bordered control competing with the fragrance recommendation. */
+  border: 1px solid rgb(var(--scent-accent-rgb) / 0.14);
   border-radius: 9999px;
   background: linear-gradient(180deg, rgba(10, 9, 7, 0.92), rgba(0, 0, 0, 0.96));
   box-shadow:
@@ -768,18 +756,18 @@ a {
 
 .forecast-day-tile.is-active {
   /* Clearly selected, but one register QUIETER than the bottom nav's filled
-     gold pill — the calendar is supportive chrome, not a primary control. */
-  border-color: rgb(var(--scent-accent-rgb) / 0.44);
+     gold pill — the calendar is supportive chrome, not a primary control.
+     Restraint pass: the selected tile now reads through ONE clean, slightly
+     brighter border plus its quiet top sheen — the concentric inner hairline
+     (the ::before below) was removed because the double-outline read as
+     "overbuilt". A single crisp frame is the more refined selected state. */
+  border-color: rgb(var(--scent-accent-rgb) / 0.5);
   background:
     radial-gradient(82% 52% at 50% 0%, rgba(255, 237, 190, 0.035), transparent 72%),
     linear-gradient(180deg, rgba(14, 12, 8, 0.98), #000 100%);
   box-shadow:
     inset 0 1px 0 rgba(255, 245, 212, 0.08),
     0 1px 2px rgba(0, 0, 0, 0.7);
-}
-
-.forecast-day-tile.is-active::before {
-  border-color: rgba(255, 222, 149, 0.17);
 }
 
 .forecast-day-tile:active {
@@ -2289,12 +2277,15 @@ a {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.25rem;
+  gap: 0.38rem;
   padding: 0.85rem 1rem;
   text-align: center;
   /* Hairline divider before every cell. The leading copy's first divider sits
-     under the edge-fade mask, so dividers read continuously across loop copies. */
-  border-left: 1px solid rgb(var(--scent-accent-rgb) / 0.12);
+     under the edge-fade mask, so dividers read continuously across loop copies.
+     Softened (was 0.12) so the row reads as a luxury module, not a dashboard
+     widget; the slightly wider label→value gap also lifts the serif number off
+     its baseline so it no longer sits low in the cell. */
+  border-left: 1px solid rgb(var(--scent-accent-rgb) / 0.07);
 }
 
 .scent-weather-label {

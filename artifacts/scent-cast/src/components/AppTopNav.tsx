@@ -425,11 +425,13 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
                 className={({ isActive }) =>
                   [
                     'inline-flex min-h-11 flex-col items-center justify-center gap-px rounded-full px-2 text-[9.5px] font-semibold uppercase tracking-[0.1em] transition-colors duration-200 active:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55',
-                    // The filled gold pill stays the ONE strong selected state on
-                    // screen, but a half-step darker than before so the forecast
-                    // hero — not the nav — wins the page.
+                    // The filled gold pill stays the selected state, but toned
+                    // down another half-step (was #DCC05F→#B8952F) so an already-
+                    // active Home tab reads as a quiet "you are here" marker
+                    // rather than the loudest CTA on the page — the forecast
+                    // hero, not the nav, wins.
                     isActive
-                      ? 'bg-gradient-to-b from-[#DCC05F] to-[#B8952F] text-[#1a1206] shadow-[inset_0_1px_0_rgba(255,247,236,0.3)]'
+                      ? 'bg-gradient-to-b from-[#C6A94F] to-[#A5852E] text-[#1a1206] shadow-[inset_0_1px_0_rgba(255,247,236,0.24)]'
                       : 'text-scent-text-muted hover:text-foreground',
                   ].join(' ')
                 }
