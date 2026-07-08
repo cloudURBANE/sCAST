@@ -104,7 +104,13 @@ test.skip("seats the bottle base on the baseline (offset px from bottom)", async
   if (!r.ok) return;
   const box = await alphaBox(r.buffer);
   const fromBottom = box.height - 1 - box.maxY;
-  assert.ok(Math.abs(fromBottom - 26) <= 4, `base ${fromBottom}px from bottom, expected ~26`);
+  // The 2px anti-clip safety margin on the detected bbox scales with the bottle
+  // (~2.1x here → ~4-5px of transparent slack below the base), so the visible
+  // base intentionally seats slightly ABOVE the requested offset — same accepted
+  // drift the "~88% height" test documents. Never below the offset, and never
+  // more than the scaled margin (2px x scale, +2px downscale-scan rounding) above.
+  assert.ok(fromBottom >= 25, `base ${fromBottom}px from bottom, clipped below the 26px baseline`);
+  assert.ok(fromBottom <= 33, `base ${fromBottom}px from bottom, floats too far above the 26px baseline`);
 });
 
 test("caps a very wide flat-lay at maxWidthPct", async () => {
