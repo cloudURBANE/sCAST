@@ -411,11 +411,21 @@ function ForecastHero({
                 name like "Silver Mountain Water" breaks after "Mountain", while a
                 tighter name like "Green Irish Tweed" stays balanced on one line.
                 NON-INTERACTIVE by design: the name is not a tap target (see above). */}
-            <div className="flex min-w-0 w-[46%] max-w-[12.5rem] flex-col items-center justify-center self-center text-center sm:w-[48%] sm:max-w-[14rem] md:max-w-[20rem]">
+            {/* translate-y nudges the block down a hair from the geometric
+                center: the bottle is vertically centered in its frame, but a
+                bottle's visual mass sits in its lower body, so a dead-centered
+                text column reads as floating slightly HIGH beside it. The small
+                downward shift seats brand/name/notes against the bottle's real
+                optical center so the two halves lock as one unit. */}
+            <div className="flex min-w-0 w-[46%] max-w-[12.5rem] translate-y-[0.3rem] flex-col items-center justify-center self-center text-center sm:w-[48%] sm:max-w-[14rem] sm:translate-y-[0.45rem] md:max-w-[20rem] md:translate-y-[0.6rem]">
               <p className="scent-type-label text-[10px] tracking-[0.3em] text-scent-accent/80 [text-indent:0.3em] sm:text-[12px] md:text-[13px]">
                 {pick.brand}
               </p>
-              <p className="mt-1 font-serif text-[clamp(1.35rem,5.6vw,2.1rem)] leading-[1.07] text-scent-text-primary [overflow-wrap:break-word] md:mt-1.5 md:text-[clamp(2.1rem,4.4vw,2.85rem)] md:leading-[1.05]">
+              {/* Name sized one notch smaller with tighter leading (was
+                  1.35–2.1rem / 1.07) so a 3-line wrap like "Silver Mountain
+                  Water" stacks shorter and no longer out-weighs the bottle
+                  beside it — the bottle stays the hero, the name supports it. */}
+              <p className="mt-1 font-serif text-[clamp(1.22rem,5vw,1.9rem)] leading-[1.02] text-scent-text-primary [overflow-wrap:break-word] md:mt-1.5 md:text-[clamp(2.1rem,4.4vw,2.85rem)] md:leading-[1.05]">
                 {pick.name}
               </p>
               {notes.length > 0 ? (
