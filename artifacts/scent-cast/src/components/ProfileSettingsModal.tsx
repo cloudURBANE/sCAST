@@ -1,12 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { m, AnimatePresence } from 'framer-motion';
 import { SCENT_EASE_OUT_EXPO } from '@/lib/motion';
-import { BellRing, Check, CloudSun, Download, Languages, LocateFixed, LoaderCircle, Palette, ShieldAlert, Trash2, UserRound, X } from 'lucide-react';
+import { BellRing, Check, CloudSun, Download, Languages, LocateFixed, LoaderCircle, Palette, ShieldAlert, SlidersHorizontal, Trash2, UserRound, X } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { useModalBehavior } from '@/hooks/use-modal-behavior';
 import { useWeather } from '@/context/WeatherContext';
 import { useAuth } from '@/context/AuthContext';
+import { useWardrobe, type UserScentPreferences } from '@/context/WardrobeContext';
+import { SCENT_FAMILIES, type ScentFamily } from '@workspace/scent-weather-engine';
 import { useTheme, type AccentName, type ThemeMode } from '@/context/ThemeContext';
 import { useTranslation, LOCALE_LABELS, DELIVERED_LOCALES, type Locale } from '@/i18n';
 import { savePreferences } from '@/lib/preferences';
@@ -139,6 +141,36 @@ function SegmentedControl<T extends string>({
   );
 }
 
+/** Engine scent families are stored lowercase ("woody"); render them Title Case. */
+const formatFamily = (family: string): string => family.charAt(0).toUpperCase() + family.slice(1);
+
+/** Toggle pill for the scent-taste family pickers. `tone` shifts the active
+ *  colour so "love" (accent) and "avoid" (muted red) read differently. */
+const TasteChip: React.FC<{
+  label: string;
+  active: boolean;
+  tone: 'love' | 'avoid';
+  onToggle: () => void;
+}> = ({ label, active, tone, onToggle }) => {
+  const activeClass =
+    tone === 'love'
+      ? 'border-scent-accent/60 bg-scent-accent/[0.14] text-[#fff7ec]'
+      : 'border-red-400/50 bg-red-500/[0.12] text-red-100';
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={active}
+      onClick={onToggle}
+      className={`inline-flex min-h-9 items-center rounded-full border px-3 py-1.5 text-[12px] font-semibold leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40 ${
+        active ? activeClass : 'border-white/10 bg-black/20 text-white/70 hover:border-white/20'
+      }`}
+    >
+      {label}
+    </button>
+  );
+};
+
 export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
   isOpen,
   onClose,
@@ -152,6 +184,7 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
   const { t, locale, setLocale } = useTranslation();
   const { theme, accent, setTheme, setAccent } = useTheme();
   const { handleSignOut } = useAuth();
+  const { scentPreferences, updateScentPreferences } = useWardrobe();
   const [dataBusy, setDataBusy] = useState<'idle' | 'exporting' | 'deleting'>('idle');
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [value, setValue] = useState('');
@@ -255,6 +288,45 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
       title: t('language.savedTitle'),
       description: t('language.savedDescription', { language: LOCALE_LABELS[next] }),
     });
+  };
+
+  // Scent taste: instant local apply (optimistic) + best-effort account sync,
+  // mirroring the appearance/language pattern. `updateScentPreferences` already
+  // no-ops the network sync for guests, so the section stays useful offline and
+  // for signed-out sessions (it steers the current session's picks locally).
+  const preferredFamilies = scentPreferences.preferredFamilies ?? [];
+  const dislikedFamilies = scentPreferences.dislikedFamilies ?? [];
+
+  const toggleFamily = (family: ScentFamily, bucket: 'preferred' | 'disliked') => {
+    const inPreferred = preferredFamilies.includes(family);
+    const inDisliked = dislikedFamilies.includes(family);
+    const patch: Partial<UserScentPreferences> = {};
+    if (bucket === 'preferred') {
+      patch.preferredFamilies = inPreferred
+        ? preferredFamilies.filter((f) => f !== family)
+        : [...preferredFamilies, family];
+      // A family can't be both loved and avoided — clear the opposite bucket.
+      if (!inPreferred && inDisliked) {
+        patch.dislikedFamilies = dislikedFamilies.filter((f) => f !== family);
+      }
+    } else {
+      patch.dislikedFamilies = inDisliked
+        ? dislikedFamilies.filter((f) => f !== family)
+        : [...dislikedFamilies, family];
+      if (!inDisliked && inPreferred) {
+        patch.preferredFamilies = preferredFamilies.filter((f) => f !== family);
+      }
+    }
+    void updateScentPreferences(patch);
+  };
+
+  const handleLastsChange = (next: 'short' | 'normal' | 'long') => {
+    if (next === scentPreferences.scentLastsOnMe) return;
+    void updateScentPreferences({ scentLastsOnMe: next });
+  };
+  const handleProjectionChange = (next: 'subtle' | 'noticeable') => {
+    if (next === scentPreferences.projectionPreference) return;
+    void updateScentPreferences({ projectionPreference: next });
   };
 
   const handleSave = async () => {
@@ -557,6 +629,77 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                         options={[
                           { value: 'gold', label: t('appearance.accentGold'), hint: t('appearance.accentGoldHint'), swatch: '#d4af37' },
                           { value: 'green', label: t('appearance.accentGreen'), hint: t('appearance.accentGreenHint'), swatch: '#5e984e' },
+                        ]}
+                      />
+                    </div>
+                  </div>
+                </section>
+
+                <section className="rounded-[12px] border border-white/10 bg-white/[0.025] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                  <div className="mb-4 flex items-center gap-3">
+                    <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-scent-accent/20 bg-scent-accent/[0.08] text-scent-accent">
+                      <SlidersHorizontal size={16} aria-hidden="true" />
+                    </span>
+                    <div className="min-w-0">
+                      <h3 className="text-[10px] font-bold uppercase tracking-[0.34em] text-[#fff7ec]">{t('scentTaste.title')}</h3>
+                      <p className="mt-0.5 text-[11px] text-white/35">{t('scentTaste.subtitle')}</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div>
+                      <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.28em] text-white/30">{t('scentTaste.loveLabel')}</p>
+                      <div className="flex flex-wrap gap-2" role="group" aria-label={t('scentTaste.loveLabel')}>
+                        {SCENT_FAMILIES.map((family) => (
+                          <TasteChip
+                            key={`love-${family}`}
+                            label={formatFamily(family)}
+                            tone="love"
+                            active={preferredFamilies.includes(family)}
+                            onToggle={() => toggleFamily(family, 'preferred')}
+                          />
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.28em] text-white/30">{t('scentTaste.avoidLabel')}</p>
+                      <div className="flex flex-wrap gap-2" role="group" aria-label={t('scentTaste.avoidLabel')}>
+                        {SCENT_FAMILIES.map((family) => (
+                          <TasteChip
+                            key={`avoid-${family}`}
+                            label={formatFamily(family)}
+                            tone="avoid"
+                            active={dislikedFamilies.includes(family)}
+                            onToggle={() => toggleFamily(family, 'disliked')}
+                          />
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.28em] text-white/30">{t('scentTaste.longevityLabel')}</p>
+                      <SegmentedControl<'short' | 'normal' | 'long'>
+                        ariaLabel={t('scentTaste.longevityLabel')}
+                        value={(scentPreferences.scentLastsOnMe ?? '') as 'short' | 'normal' | 'long'}
+                        onChange={handleLastsChange}
+                        options={[
+                          { value: 'short', label: t('scentTaste.longevityShort'), hint: t('scentTaste.longevityShortHint') },
+                          { value: 'normal', label: t('scentTaste.longevityNormal'), hint: t('scentTaste.longevityNormalHint') },
+                          { value: 'long', label: t('scentTaste.longevityLong'), hint: t('scentTaste.longevityLongHint') },
+                        ]}
+                      />
+                    </div>
+
+                    <div>
+                      <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.28em] text-white/30">{t('scentTaste.projectionLabel')}</p>
+                      <SegmentedControl<'subtle' | 'noticeable'>
+                        ariaLabel={t('scentTaste.projectionLabel')}
+                        value={(scentPreferences.projectionPreference ?? '') as 'subtle' | 'noticeable'}
+                        onChange={handleProjectionChange}
+                        options={[
+                          { value: 'subtle', label: t('scentTaste.projectionSubtle'), hint: t('scentTaste.projectionSubtleHint') },
+                          { value: 'noticeable', label: t('scentTaste.projectionNoticeable'), hint: t('scentTaste.projectionNoticeableHint') },
                         ]}
                       />
                     </div>
